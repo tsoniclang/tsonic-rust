@@ -12,7 +12,7 @@ import { createRustPlanBuilder } from "../../../dist/analysis/facts/plan-store.j
 import { rustBindingProjectionFactKey } from "../../../dist/analysis/facts/keys.js";
 import { recordRustBindingPatternFacts } from "../../../dist/analysis/control-flow/binding-patterns.js";
 import { resolveArrayLiteralCarrier } from "../../../dist/analysis/operations/inputs.js";
-import { selectRustFixedArrayLengthProperty } from "../../../dist/analysis/operations/provider/structural-properties.js";
+import { selectRustFixedArrayElementAccess, selectRustFixedArrayLengthProperty } from "../../../dist/analysis/operations/provider/structural-properties.js";
 import {
   resolveRustTargetTypeRef,
   resolveRustTargetTypeSyntax,
@@ -325,8 +325,63 @@ test("large fixed-array value types and finite indexes emit exact native extents
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /pub fn left\(values: \[i32; 9007199254740992\]\)/u);
   assert.match(output, /pub fn right\(values: \[i32; 9007199254740993\]\)/u);
-  assert.match(output, /values\[rt::conversions::i32_to_usize\(0\)\?\]/u);
+  assert.match(output, /values\[0\]/u);
   assert.doesNotMatch(output, /usize_to_i32|as f64/u);
+});
+
+test("fixed-array ordinals preserve exact native integers beyond floating precision", () => {
+  const { result } = compileRust({ files: { "index.ts": `
+    import type { FixedArray, int32 } from "@tsonic/core/types.js";
+    export function last(values: FixedArray<int32, 9007199254740994n>): int32 {
+      return values[9007199254740993];
+    }
+  ` } });
+  assert.deepEqual(result.diagnostics, []);
+  const output = artifactText(result, "src/index.rs");
+  assert.match(output, /values\[9007199254740993\]/u);
+  assert.doesNotMatch(output, /values\[9007199254740992\]|i32_to_usize|as f64/u);
+});
+
+test("fixed-array ordinal validation rejects inconsistent and malformed checker evidence", () => {
+  const expression = Object.freeze({});
+  const argument = Object.freeze({});
+  const carrier = rustFixedArrayTargetType(element, integer(2));
+  const context = {
+    extensionId: "tsonic.rust.policy",
+    ast: {
+      kindName: () => "KindNumericLiteral",
+      is: { IsParenthesizedExpression: () => false, IsPrefixUnaryExpression: () => false },
+      authoredRange: () => ({ kind: "synthetic" }),
+      text: () => "1",
+    },
+  };
+  for (const selected of [NaN, Infinity, -Infinity, 0.5, -1, 0, 2, 9007199254740992]) {
+    const result = selectRustFixedArrayElementAccess({ expression, argument,
+      sourceSelectedElementIndex: selected }, carrier, context, {});
+    assert.equal(result.kind, "reject", String(selected));
+    assert.equal(result.diagnostic.extensionCode, "RUST_FIXED_ARRAY_INDEX_NOT_PROVEN");
+    assert.equal(result.diagnostic.nodeOrSpan, expression);
+  }
+});
+
+test("fixed-array literals reject out-of-range ordinals without enabling dynamic non-Copy reads", () => {
+  for (const [index, code] of [
+    ["-1", "RUST_FIXED_ARRAY_INDEX_NOT_PROVEN"],
+    ["2", "RUST_FIXED_ARRAY_INDEX_NOT_PROVEN"],
+    ["9007199254740993", "RUST_FIXED_ARRAY_INDEX_NOT_PROVEN"],
+    ["index", "RUST_FIXED_ARRAY_DYNAMIC_INDEX_REQUIRES_COPY"],
+    ["1.5", "RUST_FIXED_ARRAY_DYNAMIC_INDEX_REQUIRES_COPY"],
+  ]) {
+    const { result } = compileRust({ files: { "index.ts": `
+      import type { FixedArray, int32 } from "@tsonic/core/types.js";
+      export function select(values: FixedArray<string, 2>, index: int32): string {
+        return values[${index}];
+      }
+    ` } });
+    assert.ok(result.diagnostics.some(diagnostic => diagnostic.code === code),
+      `${index}: ${JSON.stringify(result.diagnostics)}`);
+    assert.equal(result.artifacts.length, 0);
+  }
 });
 
 for (const length of ["2n", "9007199254740993n"]) {

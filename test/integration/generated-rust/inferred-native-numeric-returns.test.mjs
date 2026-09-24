@@ -94,6 +94,8 @@ export function main(): void {
   const retainedArray: FixedArray<string, 2> = ["first", "second"];
   const first = retainedArray[0];
   check(first === "first" && retainedArray[0] === "first" && retainedArray[1] === "second");
+  retainedArray[1] = "changed";
+  check(retainedArray[1] === "changed");
   const ownedArray: FixedArray<string, 2> = ["discarded", "selected"];
   const selectedElement = ownedArray[1];
   check(selectedElement === "selected");

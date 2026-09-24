@@ -129,8 +129,8 @@ function planElementAccessInner(node: Node, context: RustPlanContext): RustExpr 
         ? { kind: "index", receiver, index: { kind: "int-literal", text: String(fact.index) } }
         : { kind: "method-call", receiver: {
             kind: "method-call", receiver: { kind: "method-call", receiver, method: "into_iter", args: [] },
-            method: fact.index === 0 ? "next" : "nth",
-            args: fact.index === 0 ? [] : [{ kind: "int-literal", text: String(fact.index) }],
+            method: fact.index === 0n ? "next" : "nth",
+            args: fact.index === 0n ? [] : [{ kind: "int-literal", text: String(fact.index) }],
           }, method: "unwrap", args: [] });
   }
   if (fact !== undefined && fact.kind === "tuple-index") {

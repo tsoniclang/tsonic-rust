@@ -534,7 +534,7 @@ export type RustTargetOperationFact =
       )[];
     }
   | { readonly kind: "fixed-array-literal"; readonly operationId: string }
-  | { readonly kind: "fixed-index"; readonly operationId: string; readonly index: number }
+  | { readonly kind: "fixed-index"; readonly operationId: string; readonly index: bigint }
   | {
       readonly kind: "tuple-literal";
       readonly operationId: string;

@@ -11,6 +11,7 @@ import {
 import { rustInt32ToUsizeValueConversion } from "../../../target-model/conversions/model.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectTsonicFixedArrayFromSource } from "@tsonic/source-core/facts";
+import { sourceIntegerLiteralValue } from "@tsonic/target-api/source";
 import { selectedValueCarrier } from "../selected-values.js";
 import type {
   RustCheckedElementSelectionInput,
@@ -481,7 +482,13 @@ export function selectRustFixedArrayElementAccess(
       "The selected FixedArray index access has no exact fixed-array receiver carrier.",
     );
   }
-  const index = request.sourceSelectedElementIndex;
+  const selectedIndex = request.sourceSelectedElementIndex;
+  if (selectedIndex !== undefined && !Number.isSafeInteger(selectedIndex)) {
+    return rejectSelectedOperation(request.expression, context, "RUST_FIXED_ARRAY_INDEX_NOT_PROVEN",
+      "The selected fixed-array ordinal is not an exact checker integer.");
+  }
+  const literalIndex = sourceIntegerLiteralValue(context.ast, request.argument);
+  const index = selectedIndex === undefined ? literalIndex : BigInt(selectedIndex);
   if (index !== undefined) {
     const length = rustTargetConstInteger(fixedArray.length);
     if (length === undefined) {
@@ -492,12 +499,12 @@ export function selectRustFixedArrayElementAccess(
         "Fixed-array element access requires one closed integer extent.",
       );
     }
-    if (!Number.isSafeInteger(index) || index < 0 || BigInt(index) >= length) {
+    if (index < 0n || index >= length || literalIndex !== undefined && literalIndex !== index) {
       return rejectSelectedOperation(
         request.expression,
         context,
         "RUST_FIXED_ARRAY_INDEX_NOT_PROVEN",
-        "Fixed-array element access carries a TSTS-selected ordinal outside the finalized array bounds.",
+        "Fixed-array element access requires an exact ordinal within the finalized bounds and consistent source evidence.",
       );
     }
     return acceptRustMemberOperation(request, "indexer", {
