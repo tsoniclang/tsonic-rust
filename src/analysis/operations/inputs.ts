@@ -284,16 +284,21 @@ export function resolveArrayLiteralCarrier(
       presentElements.length,
     );
     if (omittedOptionalElementIndexes !== undefined) {
-      for (const [index, element] of presentElements.entries()) {
-        resolveExpressionCarrier(walk, element, sourceFile, selected.elements[index]);
-      }
+      const inferred = expected === undefined && omittedOptionalElementIndexes.length === 0 &&
+        !presentElements.some(element => ast.is.IsSpreadElement(element));
+      const carriers = presentElements.map((element, index) => resolveExpressionCarrier(
+        walk, element, sourceFile, inferred ? undefined : selected.elements[index],
+      ));
+      if (carriers.some(carrier => carrier === undefined)) return undefined;
+      const resultCarrier = inferred
+        ? { ...selected, elements: carriers as readonly TargetTypeRef[] } : selected;
       setRustOperationFact(walk, expression, {
         kind: "tuple-literal",
         operationId: "tsonic.rust.tuple.literal",
-        resultCarrier: selected,
+        resultCarrier,
         omittedOptionalElementIndexes,
       });
-      return setCarrierFact(walk, expression, selected);
+      return setCarrierFact(walk, expression, resultCarrier);
     }
   }
   let expectedElement: TargetTypeRef | undefined;
