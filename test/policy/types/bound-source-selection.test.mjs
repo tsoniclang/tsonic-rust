@@ -27,6 +27,7 @@ function fixture() {
         typeArguments: type => type.arguments,
         isUnion: type => type.kind === "union",
         unionOrIntersectionTypes: type => type.members,
+        couldContainTypeVariables: type => type.kind === "parameter" || type.open === true,
       },
     },
   };
@@ -58,4 +59,20 @@ test("bound source components reject foreign declarations, wrong arguments, ambi
   assert.equal(rustSourceSelectionUsesExactBindings(recursive, recursive, context), false);
   assert.equal(rustSourceSelectionUsesExactBindings(parameter, scalar,
     { ...context, sourceTypeParameterSubstitutions: new Map() }), false);
+});
+
+test("unhandled open compounds do not enter the checker identity relation", () => {
+  const { parameter, scalar, application, union, context } = fixture();
+  const open = { open: true };
+  const closed = {};
+  const identity = context.currentSemantics.types.isIdentical;
+  context.currentSemantics.types.isIdentical = (left, right) => {
+    assert.notEqual(left, open);
+    assert.notEqual(right, open);
+    return identity(left, right);
+  };
+  assert.equal(rustSourceSelectionUsesExactBindings(application(union(parameter, open)),
+    application(union(scalar, closed)), context), false);
+  assert.equal(rustSourceSelectionUsesExactBindings(application(union(parameter, closed)),
+    application(union(scalar, open)), context), false);
 });

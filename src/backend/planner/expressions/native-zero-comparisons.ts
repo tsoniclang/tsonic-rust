@@ -37,13 +37,16 @@ export function planRustNativeZeroComparison(
   }
   const operation = rustOperationFact(selected.node, context);
   const expression = selected.expression;
-  if (operation?.kind !== "provider-operation") return undefined;
+  const comparison: RustExpr | undefined = selected.operator === "<=" || selected.operator === ">"
+    ? { kind: "binary", operator: selected.operator === "<=" ? "==" : "!=", left: expression, right: { kind: "int-literal", text: "0" } }
+    : undefined;
+  if (operation?.kind !== "provider-operation") return comparison;
   const { abi } = operation;
   if (abi.operationKind !== "property" || abi.effects.invocation !== "infallible" || abi.effects.evaluation !== "pure" ||
     abi.result.kind !== "sync" || abi.result.conversion.kind !== "identity" ||
     abi.target.form !== "receiver-method" || abi.target.emptyTestMethod === undefined ||
     abi.sourceReceiver.kind !== "receiver" ||
-    expression.kind !== "method-call" || expression.method !== abi.target.name || expression.args.length !== 0) return undefined;
+    expression.kind !== "method-call" || expression.method !== abi.target.name || expression.args.length !== 0) return comparison;
   const empty = selected.operator === "==" || selected.operator === "<=";
   const nonempty = selected.operator === "!=" || selected.operator === ">";
   if (!empty && !nonempty) return undefined;

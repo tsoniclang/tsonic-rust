@@ -61,6 +61,22 @@ test("unsigned zero-bound folding preserves evaluation and never folds signed or
   }
 });
 
+test("unsigned zero comparisons canonicalize native fields and effectful calls without a collection contract", () => {
+  const effect = { kind: "call", path: "next", args: [] };
+  for (const [operator, reversed, normalized] of [["<=", ">=", "=="], [">", "<", "!="]]) {
+    const expected = { kind: "binary", operator: normalized, left: effect, right: { kind: "int-literal", text: "0" } };
+    for (const name of ["uint8", "uint32", "uint64", "native-uint"]) {
+      const selected = context({ kind: "source-primitive", name });
+      assert.deepEqual(planRustNativeZeroComparison(operator, effect, zero, subject, literal, selected), expected);
+      assert.deepEqual(planRustNativeZeroComparison(reversed, zero, effect, literal, subject, selected), expected);
+    }
+    for (const name of ["int32", "int64", "float64"]) {
+      assert.equal(planRustNativeZeroComparison(operator, effect, zero, subject, literal,
+        context({ kind: "source-primitive", name })), undefined);
+    }
+  }
+});
+
 test("bottom arguments retain receiver and earlier temporary owners without executing later arguments", () => {
   const names = { reserved: new Set(), nextSuffixByBase: new Map() };
   const receiver = { kind: "call", path: "receiver", args: [] };
@@ -91,6 +107,7 @@ export function main(): void {
   values.push(3);
   if (!(values.length > 0) || values.length <= 0 || !(0 < values.length)) throw new Error("nonempty");
   if (next() < 0 || !(next() >= 0) || calls !== 2) throw new Error("effects");
+  if (next() <= 0 || !(0 < next()) || calls !== 4) throw new Error("native zero equality");
   if (!signed(-1) || !floating(-0.5)) throw new Error("signed controls");
 }
 ` } });

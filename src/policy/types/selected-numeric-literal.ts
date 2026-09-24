@@ -11,11 +11,26 @@ import {
   rustPostCheckUnaryMinusOperationId,
   rustPostCheckUnaryPlusOperationId,
 } from "../../target-model/operations/model.js";
+import { rustNumericPromotionKind } from "../../target-model/conversions/numeric-promotion.js";
 
 type SourcePrimitiveName = Extract<
   TargetTypeRef,
   { readonly kind: "source-primitive" }
 >["name"];
+
+export function selectedIntegerLiteralJoin(
+  node: Node, carrier: TargetTypeRef | undefined, ast: AstReader,
+): TargetTypeRef | undefined {
+  if (carrier?.kind !== "source-primitive" || sourceIntegerLiteralValue(ast, node) === undefined ||
+    !["int8", "uint8", "int16", "uint16", "int32", "uint32", "int64", "uint64", "int128", "uint128", "native-int", "native-uint"].includes(carrier.name)) return undefined;
+  if (selectedSourceLiteralIsRepresentable(node, carrier.name, ast)) return carrier;
+  for (const name of ["int32", "int64", "int128"] as const) {
+    if (rustNumericPromotionKind(carrier.name, name) === name && selectedSourceLiteralIsRepresentable(node, name, ast)) {
+      return { kind: "source-primitive", name };
+    }
+  }
+  return undefined;
+}
 
 export function selectedSourceLiteralIsRepresentable(
   node: Node,

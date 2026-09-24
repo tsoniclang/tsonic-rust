@@ -114,6 +114,8 @@ export function read(values: (string | undefined)[]): string {
     ...[undefined, 0, -1, 1, 3, 0.5, NaN, Infinity].map(leftOptionDepth => ({ leftOptionDepth })),
     ...[undefined, -1, 1, 0.5, NaN, Infinity].map(rightOptionDepth => ({ rightOptionDepth })),
     ...[undefined, "raw", "invalid"].map(rightValueForm => ({ rightValueForm })),
+    ...[undefined, { kind: "source-primitive", name: "int32" }].map(leftValueCarrier => ({ leftValueCarrier })),
+    { leftConversion: { kind: "numeric-promotion", source: "int32", target: "int64" } },
   ];
   for (const mutation of mutations) {
     const selected = context({ ...program.facts, getFact: (subject, key) =>

@@ -16,16 +16,16 @@ export function rustNumericPromotionKind(
   if (left === "float32" || right === "float32") {
     return "float32";
   }
-  if (left === "native-int" || right === "native-int" ||
-    left === "native-uint" || right === "native-uint") {
-    return undefined;
-  }
   if (left === "uint128" || right === "uint128") {
     const other = left === "uint128" ? right : left;
     return unsignedKinds.has(other) ? "uint128" : undefined;
   }
   if (left === "int128" || right === "int128") {
     return "int128";
+  }
+  if (left === "native-int" || right === "native-int" ||
+    left === "native-uint" || right === "native-uint") {
+    return undefined;
   }
   if (left === "uint64" || right === "uint64") {
     const other = left === "uint64" ? right : left;

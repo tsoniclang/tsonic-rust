@@ -39,7 +39,8 @@ export function bindRustSourceAliasArguments(
   const authoredApplication = authoredType === undefined ? undefined : context.currentSemantics.types.aliasApplication(authoredType);
   if (authoredApplication !== undefined && authoredApplication.declaration !== application.declaration) return undefined;
   const parameters = context.ast.typeParameters(application.declaration);
-  const argumentNodes = authoredTypeNode === undefined || authoredApplication === undefined ? [] : context.ast.typeArguments(authoredTypeNode);
+  const argumentNodes = authoredTypeNode !== undefined && authoredApplication !== undefined &&
+    context.ast.is.IsTypeReferenceNode(authoredTypeNode) ? context.ast.typeArguments(authoredTypeNode) : [];
   const substitutions = new Map(context.sourceTypeParameterSubstitutions);
   for (const binding of application.bindings) {
     const owner = context.ast.parent(binding.declaration);

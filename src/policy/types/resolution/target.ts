@@ -458,7 +458,9 @@ export function resolveStructuralObjectType(
   if (new Set(fields.map((field) => field.sourceName)).size !== fields.length) {
     return undefined;
   }
-  const aliasDeclaration = semantics.types.aliasApplication(type)?.declaration;
+  const selectedAlias = semantics.types.aliasApplication(type)?.declaration;
+  const aliasDeclaration = selectedAlias !== undefined && context.source.navigation.isProjectDeclaration(selectedAlias)
+    ? selectedAlias : undefined;
   const ownerNodes = aliasDeclaration !== undefined ? [aliasDeclaration] : authoredTypeRoot !== undefined
     ? [authoredTypeRoot]
     : [...fields.flatMap((field) => field.declarations),

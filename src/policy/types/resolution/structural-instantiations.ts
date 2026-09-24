@@ -38,7 +38,7 @@ export function retainRustStructuralInstantiation(
     const arguments_ = context.currentSemantics.types.typeArguments(sourceType);
     const elementNode = authoredTypeNode === undefined ? undefined :
       context.ast.kindName(authoredTypeNode) === "KindArrayType" ? ArrayTypeNode_ElementType(context.ast, authoredTypeNode)
-      : context.ast.typeArguments(authoredTypeNode)[0];
+      : context.ast.is.IsTypeReferenceNode(authoredTypeNode) ? context.ast.typeArguments(authoredTypeNode)[0] : undefined;
     return arguments_.length === 1 && arguments_[0] !== undefined &&
       retainRustStructuralInstantiation(arguments_[0], templateElement, element, context, options, resolving, elementNode);
   }

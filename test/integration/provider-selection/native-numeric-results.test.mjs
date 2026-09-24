@@ -6,6 +6,57 @@ import { nativeSurfaceResultsSource, nativeNodeResultsSource } from "../../../..
 import { nativeCharacterInputsSource } from "../../../../tsonic/test/fixtures/native-character-inputs.mjs";
 import { nativeNumericArraysSource } from "../../../../tsonic/test/fixtures/native-numeric-arrays.mjs";
 
+test("optional native integers and negative sentinels join without floating transport", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"],
+    target: { id: "rust", options: { outputType: "bin", crateName: "native_optional_integers" } },
+    files: { "index.ts": `
+import type { uint64, uint32 } from "@tsonic/core/types.js";
+function read(wide: uint64 | undefined, small: uint32 | undefined): boolean {
+  const value = wide ?? -1;
+  const count = small ?? -1;
+  if (wide === undefined) return value === -1 && count === -1;
+  return value === 18446744073709551615n && count === 4294967295;
+}
+function unexpected(): never { throw new Error("eager fallback"); }
+export function main(): void {
+  const maximum: uint64 = 18446744073709551615n;
+  const count: uint32 = 4294967295;
+  const matches = "abc".match(/a/);
+  const absent = "abc".match(/z/);
+  if (!read(maximum, count) || !read(undefined, undefined) ||
+      (matches?.length ?? -1) !== 1 || (absent?.length ?? -1) !== -1 ||
+      (matches?.length ?? unexpected()) !== 1) throw new Error("incorrect native join");
+}
+` } });
+  assert.deepEqual(result.diagnostics, []);
+  const text = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
+  assert.match(text, /value: i128/u);
+  assert.match(text, /count: i64/u);
+  assert.doesNotMatch(text, /(?:u64|usize)_to_f64|as f64|JsNumeric/u);
+  validateGeneratedProject("native_optional_integers", result.artifacts, { run: true });
+});
+
+test("Atomics preserves native provider integers through storage, comparison and return", { timeout: 300_000 }, async () => {
+  const { result } = compileRust({ surfaces: ["js"], capabilities: [await nodejsCapability()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "native_atomic_inputs" } },
+    files: { "index.ts": `
+import { cpuUsage } from "node:process";
+export function main(): void {
+  const cpu = cpuUsage();
+  cpu.user = 9007199254740993;
+  const values = new Int32Array(new SharedArrayBuffer(4));
+  const stored = Atomics.store(values, 0, cpu.user);
+  if (stored !== cpu.user || Atomics.load(values, 0) !== 1) throw new Error("lost integer bits");
+  if (Atomics.wait(values, 0, cpu.user, 0) !== "timed-out") throw new Error("lost wait bits");
+}
+` } });
+  assert.deepEqual(result.diagnostics, []);
+  const text = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
+  assert.match(text, /stored: i64/u);
+  assert.doesNotMatch(text, /i64_to_f64|as f64/u);
+  validateGeneratedProject("native_atomic_inputs", result.artifacts, { run: true });
+});
+
 test("numeric array construction and copy retain native element bits", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     surfaces: ["js"], packages: [acmeTestingPackage()],

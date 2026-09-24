@@ -148,7 +148,7 @@ export function main(): void {
   assert.match(source, /left & right/u);
   assert.match(source, /rt::native_shift_left\(one, width\)/u);
   assert.match(source, /rt::native_unsigned_shift_right\(negative_one, one\)/u);
-  assert.match(source, /rt::native_shift_left\(high_byte as i32, one\)/u);
+  assert.match(source, /rt::native_shift_left\(rt::conversions::u8_to_i32\(high_byte\), one\)/u);
   validateGeneratedProject("native-bitwise", result.artifacts, { run: true });
 });
 

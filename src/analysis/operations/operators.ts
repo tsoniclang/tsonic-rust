@@ -71,7 +71,8 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustOptionNestingDepth } from "../../target-model/types/carriers/optional.js";
 import { rustValueCarrierBeforeContextualConversion, rustValueCarrierBeforeOptionProjection } from "../facts/value-carrier-queries.js";
 import { rustRuntimeUnionContract, rustRuntimeUnionProjection } from "../../target-model/types/carriers/runtime-unions.js";
-import { selectedSourceLiteralIsRepresentable } from "../../policy/types/selected-numeric-literal.js";
+import { selectedIntegerLiteralJoin, selectedSourceLiteralIsRepresentable } from "../../policy/types/selected-numeric-literal.js";
+import { rustNumericPromotionConversion } from "../../policy/operations/numeric-promotion.js";
 import { setCarrierFact, setRustOperationFact } from "./project-calls.js";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { RustAssignmentOperator } from "../../target-model/syntax/tokens.js";
@@ -191,7 +192,7 @@ export function resolveBinaryOperandCarriers(
     left = resolveLeft(leftSemanticCarrier);
   }
   const initialRightExpectation = operatorKind === KindQuestionQuestionToken
-    ? isRustOptionCarrier(left) ? rustOptionValueCarrier(left) : expected
+    ? isRustOptionCarrier(left) ? selectedIntegerLiteralJoin(rightNode, rustOptionValueCarrier(left), walk.context.ast) ?? rustOptionValueCarrier(left) : expected
     : operatorKind === KindEqualsToken
       ? selectedAssignmentValueCarrier ??
         (useAssignmentReadCarrier ? left : undefined)
@@ -411,15 +412,21 @@ export function resolvePostCheckBinaryCarrier(
   } else if (operatorKind === KindQuestionQuestionToken) {
     const inner = isRustOptionCarrier(left) ? rustOptionValueCarrier(left) : undefined;
     const leftOptionDepth = rustOptionNestingDepth(left, inner);
+    const integerJoin = selectedIntegerLiteralJoin(rightNode, inner, walk.context.ast);
+    const leftConversion = inner?.kind === "source-primitive" && integerJoin?.kind === "source-primitive"
+      ? rustNumericPromotionConversion(inner.name, integerJoin.name) : undefined;
     if (inner !== undefined && right !== undefined &&
-      leftOptionDepth !== undefined && (rustTargetTypeRefEquals(inner, right) || isRustNeverCarrier(right))) {
+      leftOptionDepth !== undefined && (rustTargetTypeRefEquals(inner, right) || isRustNeverCarrier(right) ||
+        leftConversion !== undefined && rustTargetTypeRefEquals(integerJoin, right))) {
       fact = {
         kind: "option-coalesce",
         operationId: "tsonic.rust.option.coalesce",
         leftOptionDepth,
         rightOptionDepth: 0,
         rightValueForm: "value",
-        resultCarrier: inner,
+        leftValueCarrier: inner,
+        ...(leftConversion === undefined ? {} : { leftConversion }),
+        resultCarrier: leftConversion === undefined ? inner : integerJoin!,
       };
     } else if (inner !== undefined && right !== undefined && leftOptionDepth !== undefined &&
       isRustOptionCarrier(right) && rustTargetTypeRefEquals(inner, rustOptionValueCarrier(right))) {
@@ -431,6 +438,7 @@ export function resolvePostCheckBinaryCarrier(
         leftOptionDepth,
         rightOptionDepth: rawDepth ?? rustOptionNestingDepth(right, inner)!,
         rightValueForm: rawDepth === undefined ? "value" : "raw",
+        leftValueCarrier: inner,
         resultCarrier: rustOptionTargetType(inner),
       };
     } else if (inner !== undefined && isRustDefinitelyNullishCarrier(right) && leftOptionDepth !== undefined) {
@@ -443,6 +451,7 @@ export function resolvePostCheckBinaryCarrier(
           leftOptionDepth,
           rightOptionDepth: 1,
           rightValueForm: "value",
+          leftValueCarrier: inner,
           resultCarrier,
         };
       }

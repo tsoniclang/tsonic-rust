@@ -71,7 +71,7 @@ test("wide and pointer-width primitives extend one symmetric closed promotion po
   const expectedRows = new Map([
     ["int128", [
       "int128", "int128", "int128", "int128", "int128", "int128", "int128",
-      "int128", "float32", "float64", "int128", undefined, undefined, undefined,
+      "int128", "float32", "float64", "int128", undefined, "int128", "int128",
     ]],
     ["uint128", [
       undefined, "uint128", undefined, "uint128", undefined, "uint128", undefined,
@@ -79,11 +79,11 @@ test("wide and pointer-width primitives extend one symmetric closed promotion po
     ]],
     ["native-int", [
       undefined, undefined, undefined, undefined, undefined, undefined, undefined,
-      undefined, "float32", "float64", undefined, undefined, "native-int", undefined,
+      undefined, "float32", "float64", "int128", undefined, "native-int", undefined,
     ]],
     ["native-uint", [
       undefined, undefined, undefined, undefined, undefined, undefined, undefined,
-      undefined, "float32", "float64", undefined, undefined, undefined, "native-uint",
+      undefined, "float32", "float64", "int128", undefined, undefined, "native-uint",
     ]],
   ]);
 

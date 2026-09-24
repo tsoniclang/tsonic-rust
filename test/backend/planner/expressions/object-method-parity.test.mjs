@@ -174,7 +174,9 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.equal((source.match(/method_implementation: rt::Callable/gu) ?? []).length, 1);
+  const implementations = [...source.matchAll(/method_implementation: ([A-Z][A-Za-z0-9_]*)/gu)];
+  assert.equal(implementations.length, 1);
+  assert.match(source, new RegExp(`type ${implementations[0][1]} = rt::Callable`, "u"));
   assert.equal((source.match(/\.method_implementation\.clone\(\)/gu) ?? []).length, 2);
   assert.match(source, /Some\(radix\)/u);
   assert.match(source, /None/u);

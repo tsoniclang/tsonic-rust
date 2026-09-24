@@ -582,6 +582,8 @@ export type RustTargetOperationFact =
   | {
       readonly kind: "option-coalesce";
       readonly operationId: string;
+      readonly leftValueCarrier: TargetTypeRef;
+      readonly leftConversion?: RustValueConversion;
       readonly leftOptionDepth: number;
       readonly rightOptionDepth: number;
       readonly rightValueForm: "raw" | "value";

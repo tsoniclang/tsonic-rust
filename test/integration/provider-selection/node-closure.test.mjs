@@ -357,8 +357,8 @@ export function closeStreams(inputPath: string, outputPath: string): void {
   });
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /tsonic_rust_node::fs::create_read_stream\(input_path\.as_str\(\)\)\?/u);
-  assert.match(text, /tsonic_rust_node::fs::create_write_stream\(output_path\.as_str\(\)\)\?/u);
+  assert.match(text, /tsonic_rust_node::fs::create_read_stream\(input_path\)\?/u);
+  assert.match(text, /tsonic_rust_node::fs::create_write_stream\(output_path\)\?/u);
   assert.match(text, /readable\.close\(\)/u);
   assert.match(text, /writable\.close\(\)\?/u);
   validateGeneratedProject("r9-node-stream-constructors", result.artifacts);

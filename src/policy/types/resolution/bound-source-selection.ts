@@ -62,6 +62,7 @@ export function rustSourceSelectionUsesExactBindings(
         }
         return combine(results);
       }
+      if (types.couldContainTypeVariables(left) || types.couldContainTypeVariables(right)) return undefined;
       return types.isIdentical(left, right) ? "identity" : undefined;
     } finally {
       pairs.delete(right);

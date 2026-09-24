@@ -142,13 +142,13 @@ test("RegExp operations lower through the complete runtime engine", async () => 
     surfaces: ["js"],
     files: {
       "index.ts": `
-import type { int32 } from "@tsonic/core/types.js";
+import type { nativeInt } from "@tsonic/core/types.js";
 
-export function scrub(text: string): int32 {
+export function scrub(text: string): nativeInt {
   const spaces = /\\s+/g;
   const joined = text.replace(spaces, "-");
   const parts = joined.split(/[-]/);
-  const at: int32 = joined.search(/x/);
+  const at: nativeInt = joined.search(/x/);
   if (spaces.test(text) && parts.length > 0) {
     return at;
   }
