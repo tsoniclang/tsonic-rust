@@ -46,12 +46,28 @@ test("closed native unions do not substitute native equality for coercing equali
   assert.equal(result.artifacts.length, 0);
 });
 
-test("nullable native unions cannot erase a nullish coalescing operation", () => {
-  const { result } = compileRust({ surfaces: ["js"], files: {
-    "index.ts": `export function coalesce(left: string | number | null, right: string | number | null): string | number | null {
-  return left ?? right;
+test("nullable native unions coalesce lazily without losing present values", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"], packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin" } }, files: {
+    "index.ts": `
+import { check } from "@acme/testing";
+let calls = 0;
+function right(value: string | number | null | undefined): string | number | null | undefined {
+  calls += 1;
+  return value;
+}
+function coalesce(left: string | number | null | undefined, value: string | number | null | undefined): string | number | null | undefined {
+  return left ?? right(value);
+}
+export function main(): void {
+  check(coalesce("", "fallback") === "" && calls === 0);
+  check(coalesce(0, 3) === 0 && calls === 0);
+  check(coalesce(null, "fallback") === "fallback" && calls === 1);
+  check(coalesce(undefined, 7) === 7 && calls === 2);
+  check(coalesce(null, undefined) === null && calls === 3);
+  check(coalesce(undefined, null) === undefined && calls === 4);
 }`,
   } });
-  assert.ok(result.diagnostics.some(diagnostic => diagnostic.category === "error"));
-  assert.equal(result.artifacts.length, 0);
+  assert.deepEqual(result.diagnostics, []);
+  validateGeneratedProject("nullable-native-union-coalescing", result.artifacts, { run: true });
 });

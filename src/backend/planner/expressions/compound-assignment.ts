@@ -22,8 +22,9 @@ import { planRustAssignmentWrite } from "../statements/expression-statements.js"
 import { selectedOperatorMatches } from "../statements/iteration.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { planExpression } from "./entry.js";
-import { expressionCarrier, requireExpressionCarrier } from "./fundamentals.js";
+import { effectivePlannedExpressionCarrier, expressionCarrier, requireExpressionCarrier } from "./fundamentals.js";
 import { planRustDirectStorage } from "./updates/target.js";
+import { directStorageRemainsSelected } from "./updates/direct-storage.js";
 import { prepareRustComputedMemberEvaluation } from "./computed-members.js";
 import { rustComputedMemberFactKey } from "../../../analysis/facts/operations/keys.js";
 
@@ -70,10 +71,17 @@ export function planCompoundAssignmentExpression(
       if (operand === undefined || context.expressionOverrides?.has(operand)) continue;
       const storage = operand === receiver && rustTargetOperationIsDirectLocation(target)
         ? planRustDirectStorage(operand, context) : undefined;
+      if (storage?.kind === "path") {
+        if (!directStorageRemainsSelected(operand, [...(index === undefined ? [] : [index]), right], false, context)) return undefined;
+        const carrier = expressionCarrier(operand, context);
+        if (carrier === undefined) return undefined;
+        overrides.set(operand, { expression: storage, carrier, valueForm: "storage" });
+        continue;
+      }
       const value = storage === undefined
         ? planExpression(operand, context)
         : { kind: "reference" as const, expr: storage };
-      const carrier = expressionCarrier(operand, context);
+      const carrier = storage === undefined ? effectivePlannedExpressionCarrier(operand, context) : expressionCarrier(operand, context);
       if (value === undefined || carrier === undefined) return undefined;
       const name = allocateRustSyntheticName(names, operand === receiver ? "assignment_receiver" : "assignment_index");
       bindings.push({ name, value });

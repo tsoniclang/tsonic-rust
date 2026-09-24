@@ -323,7 +323,7 @@ test("project-source call consumption accepts only proven target-finalized infer
   }, member.returnType, normalize), false);
 });
 
-test("compile-time provider arguments never require runtime carrier or passing facts", () => {
+test("evaluation-only provider arguments do not require native parameter-passing facts", () => {
   const jsValue = { kind: "target-named", id: "rust.js.JsValue" };
   const sourceNullish = { kind: "target-named", id: "rust.native.absence" };
   const float64 = { kind: "source-primitive", name: "float64" };
@@ -339,7 +339,7 @@ test("compile-time provider arguments never require runtime carrier or passing f
     },
     sourceArgumentCarriers: [jsValue, sourceNullish, float64],
     declaredSourceArgumentCarriers: [jsValue],
-    compileTimeSourceArgumentIndexes: [1, 2],
+    evaluationOnlySourceArgumentIndexes: [1, 2],
     resultCarrier: string,
     isAsync: false,
     isFallible: true,
@@ -348,8 +348,8 @@ test("compile-time provider arguments never require runtime carrier or passing f
   });
   assert.ok(abi);
   const runtimeArgument = {};
-  const compileTimeNull = {};
-  const compileTimeIndent = {};
+  const omittedNull = {};
+  const omittedIndent = {};
   const context = {
     diagnostics: [],
     input: {
@@ -381,7 +381,7 @@ test("compile-time provider arguments never require runtime carrier or passing f
   assert.equal(requireProviderArgumentPassingFacts(
     context,
     fact,
-    [runtimeArgument, compileTimeNull, compileTimeIndent],
+    [runtimeArgument, omittedNull, omittedIndent],
   ), true);
   assert.deepEqual(context.diagnostics, []);
 });

@@ -611,7 +611,7 @@ export function normalizeSelectedOperationInputCarrier(
   if (isRustAbsenceCarrier(direct)) {
     return expected;
   }
-  const inner = normalizeSelectedLiteralCarrier(
+  const inner = normalizeSelectedOperationInputCarrier(
     subject,
     direct,
     optionElement,
@@ -684,6 +684,7 @@ export function selectedArgumentMatchScore(
     if (optionElement !== undefined &&
       (isRustAbsenceCarrier(actual) ||
         rustTargetTypeRefEquals(actual, optionElement) ||
+        selectRustValueCarrierReconciliation(actual, optionElement, options.projectTypes, context.typeDefinitions).kind === "conversion" ||
         (optionElement.kind === "source-primitive" && isRustNumericCarrier(optionElement) &&
           sourceLiteralIsRepresentableAsPrimitive(node, optionElement.name, context)))) {
       return 1;

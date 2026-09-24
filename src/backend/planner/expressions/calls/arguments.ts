@@ -561,7 +561,7 @@ export function requireProviderArgumentPassingFacts(
       valid = false;
       continue;
     }
-    if (sourceArgument.disposition === "compile-time") {
+    if (sourceArgument.disposition === "evaluation-only") {
       continue;
     }
     if (requiresSelectedParameterPassingFact) {

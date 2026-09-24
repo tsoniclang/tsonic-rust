@@ -70,14 +70,14 @@ export function validateRustFinalizedOperationAbi(candidate: unknown, definition
   }
   const sequenceForm = rustRestSequenceForm(abi.target);
   if (abi.sourceArguments.some((argument, index) => {
-    const expectedRole: RustFinalizedSourceArgumentRole = argument.disposition === "compile-time"
-      ? "compile-time"
+    const expectedRole: RustFinalizedSourceArgumentRole = argument.disposition === "evaluation-only"
+      ? "evaluation-only"
       : (abi.operationKind === "indexer" || abi.operationKind === "index-set") && index === 0
         ? "index"
         : "parameter";
     return argument.sourceIndex !== index ||
       (argument.mode !== "value" && argument.mode !== "ref" && argument.mode !== "mut-ref") ||
-      (argument.disposition !== "runtime" && argument.disposition !== "compile-time") ||
+      (argument.disposition !== "runtime" && argument.disposition !== "evaluation-only") ||
       (argument.form === "spread-sequence" &&
         (argument.disposition !== "runtime" || sequenceForm === undefined ||
           index < sequenceForm.leadingArguments.length)) ||
@@ -96,7 +96,7 @@ export function validateRustFinalizedOperationAbi(candidate: unknown, definition
     if (input.source.kind === "argument") {
       const argument = abi.sourceArguments[input.source.sourceIndex];
       if (argument === undefined || argument.disposition !== "runtime" ||
-        argument.role === "compile-time" || argument.mode !== input.mode ||
+        argument.role === "evaluation-only" || argument.mode !== input.mode ||
         !rustTargetTypeRefEquals(argument.carrier, input.sourceCarrier)) {
         return false;
       }
@@ -225,8 +225,9 @@ function isRustFinalizedOperationAbiShape(value: unknown): value is RustFinalize
 
 export const operationKinds = new Set<unknown>(["method", "constructor", "property", "indexer", "property-set", "index-set"]);
 const argumentModes = new Set<unknown>(["value", "ref", "mut-ref"]);
-const argumentRoles = new Set<unknown>(["parameter", "index", "compile-time"]);
+const argumentRoles = new Set<unknown>(["parameter", "index", "evaluation-only"]);
 const dispositions = new Set<unknown>(["runtime", "compile-time"]);
+const argumentDispositions = new Set<unknown>(["runtime", "evaluation-only"]);
 
 function isSourceReceiver(value: unknown): value is RustFinalizedOperationAbi["sourceReceiver"] {
   return isRecord(value) && (value.kind === "none"
@@ -241,7 +242,7 @@ function isSourceArgument(value: unknown): value is RustFinalizedSourceArgument 
     (value.form === "value" || value.form === "spread-sequence") &&
     Number.isSafeInteger(value.sourceIndex) && (value.sourceIndex as number) >= 0 &&
     isRustTargetTypeRef(value.carrier) && argumentModes.has(value.mode) && argumentRoles.has(value.role) &&
-    dispositions.has(value.disposition);
+    argumentDispositions.has(value.disposition);
 }
 
 function isTargetReceiver(value: unknown): value is RustFinalizedOperationAbi["targetReceiver"] {

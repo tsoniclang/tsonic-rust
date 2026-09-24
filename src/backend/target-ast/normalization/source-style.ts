@@ -17,6 +17,7 @@ import { collapseRustForwardingClosure } from "./forwarding-closures.js";
 import { nameRustSignatureTypes } from "./signature-aliases.js";
 import { rustItemsReferenceModuleAlias } from "../inspection/source-module-usage.js";
 import { rustTypeEquals } from "../inspection/type-equality.js";
+import { mergeRustAdjacentConditionalBranches } from "./conditional-branches.js";
 
 export function finalizeRustSourceStyle(
   model: RustSourceFileModel,
@@ -437,7 +438,7 @@ function finalizeRustExpressionStyle(expression: RustExpr): RustExpr {
         whenFalse.kind === "tuple-literal" && whenFalse.elements.length === 0) {
         return { kind: "evaluate-then", effect: condition, discard: "value", value: whenTrue };
       }
-      result = {
+      result = mergeRustAdjacentConditionalBranches(condition, whenTrue, whenFalse) ?? {
         ...expression,
         condition,
         whenTrue,

@@ -104,6 +104,10 @@ export function main(): void {
   const values = [3n];
   const indexed = values[0] <<= 2n;
   check(indexed === 12n && values[0] === 12n);
+  let indexReads = 0;
+  const index = (): number => { indexReads += 1; return 0; };
+  const accumulated = values[index()] += values[0];
+  check(accumulated === 24n && values[0] === 24n && indexReads === 1);
 }
 ` },
     });

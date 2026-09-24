@@ -611,9 +611,9 @@ export function finalizeProviderOperationFact(
     sourceArgumentCarriers,
     ...(spreadSourceArgumentIndexes === undefined ? {} : { spreadSourceArgumentIndexes }),
     declaredSourceArgumentCarriers: template.parameterCarriers,
-    ...(template.compileTimeSourceArgumentIndexes === undefined
+    ...(template.evaluationOnlySourceArgumentIndexes === undefined
       ? {}
-      : { compileTimeSourceArgumentIndexes: template.compileTimeSourceArgumentIndexes }),
+      : { evaluationOnlySourceArgumentIndexes: template.evaluationOnlySourceArgumentIndexes }),
     resultCarrier: template.resultCarrier,
     ...(template.targetGenericArguments === undefined
       ? {}

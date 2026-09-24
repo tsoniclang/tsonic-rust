@@ -32,10 +32,10 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
     (options.declaredSourceArgumentCarriers !== undefined &&
       (!isDenseDataArray(options.declaredSourceArgumentCarriers) ||
         options.declaredSourceArgumentCarriers.some((carrier) => carrier !== undefined && !isRustTargetTypeRef(carrier)))) ||
-    (options.compileTimeSourceArgumentIndexes !== undefined &&
-      (!isDenseDataArray(options.compileTimeSourceArgumentIndexes) ||
-        new Set(options.compileTimeSourceArgumentIndexes).size !== options.compileTimeSourceArgumentIndexes.length ||
-        options.compileTimeSourceArgumentIndexes.some((index) =>
+    (options.evaluationOnlySourceArgumentIndexes !== undefined &&
+      (!isDenseDataArray(options.evaluationOnlySourceArgumentIndexes) ||
+        new Set(options.evaluationOnlySourceArgumentIndexes).size !== options.evaluationOnlySourceArgumentIndexes.length ||
+        options.evaluationOnlySourceArgumentIndexes.some((index) =>
           !Number.isSafeInteger(index) || index < 0 || index >= options.sourceArgumentCarriers.length))) ||
     (options.targetGenericArguments !== undefined &&
       (!isDenseDataArray(options.targetGenericArguments) || options.targetGenericArguments.length === 0 ||
@@ -64,7 +64,7 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
     (options.isUnsafe !== undefined && typeof options.isUnsafe !== "boolean")) {
     return undefined;
   }
-  const compileTimeIndexes = new Set(options.compileTimeSourceArgumentIndexes ?? []);
+  const evaluationOnlyIndexes = new Set(options.evaluationOnlySourceArgumentIndexes ?? []);
   if (options.spreadSourceArgumentIndexes !== undefined &&
     !isDenseDataArray(options.spreadSourceArgumentIndexes)) return undefined;
   const spreadIndexes = new Set(options.spreadSourceArgumentIndexes ?? []);
@@ -74,10 +74,10 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
       sequenceForm === undefined ||
       options.spreadSourceArgumentIndexes.some(index => !Number.isSafeInteger(index) ||
         index < sequenceForm.leadingArguments.length ||
-        index >= options.sourceArgumentCarriers.length || compileTimeIndexes.has(index)))) return undefined;
+        index >= options.sourceArgumentCarriers.length || evaluationOnlyIndexes.has(index)))) return undefined;
   const runtimeSourceIndexes = options.sourceArgumentCarriers
     .map((_carrier, index) => index)
-    .filter((index) => !compileTimeIndexes.has(index));
+    .filter((index) => !evaluationOnlyIndexes.has(index));
   if (rustProviderOperationFormContractViolation(
     options.operationKind,
     options.form,
@@ -118,7 +118,7 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
     options.operationKind,
     options.sourceArgumentCarriers,
     mapping,
-    options.compileTimeSourceArgumentIndexes,
+    options.evaluationOnlySourceArgumentIndexes,
     spreadIndexes,
   );
   if (sourceArguments === undefined) {

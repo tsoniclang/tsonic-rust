@@ -23,6 +23,7 @@ import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagno
 import { negateRustBooleanExpression, rustBorrowedStringView, rustStringConcat } from "../../target-ast/expressions.js";
 import { foldRustIntegerComparison } from "../../target-ast/integer-comparisons.js";
 import { planRustNativeZeroComparison } from "./native-zero-comparisons.js";
+import { planRustNativeIntegerIdentity } from "./native-integer-identities.js";
 import { planExpression, planExpressionBeforeValueProjections } from "./entry.js";
 import type { RustExpressionResultUse } from "./entry.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
@@ -490,6 +491,8 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
     }
     const integerComparison = foldRustIntegerComparison(fact.operator, comparisonLeft, comparisonRight);
     if (integerComparison !== undefined) return integerComparison;
+    const integerIdentity = planRustNativeIntegerIdentity(fact.operator, comparisonLeft, comparisonRight, fact.resultCarrier);
+    if (integerIdentity !== undefined) return integerIdentity;
     const zeroComparison = planRustNativeZeroComparison(
       fact.operator, comparisonLeft, comparisonRight, leftNode, rightNode, context);
     if (zeroComparison !== undefined) return zeroComparison;

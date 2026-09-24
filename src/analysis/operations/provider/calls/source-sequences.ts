@@ -14,10 +14,10 @@ export function selectedCallSourceParameterCarriers(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): ReadonlyMap<number, TargetTypeRef | undefined> | undefined {
-  const compileTimeIndexes = new Set(fact.compileTimeSourceArgumentIndexes ?? []);
+  const evaluationOnlyIndexes = new Set(fact.evaluationOnlySourceArgumentIndexes ?? []);
   const runtimeIndexes = selectedCallArgumentNodes(request)
     .map((_argument, index) => index)
-    .filter((index) => !compileTimeIndexes.has(index));
+    .filter((index) => !evaluationOnlyIndexes.has(index));
   const declaredBySourceIndex = new Map<number, TargetTypeRef | undefined>();
   const sequenceForm = rustRestSequenceForm(fact.target);
   for (const sourceIndex of runtimeIndexes) {

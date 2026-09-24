@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { acmeTestingPackage, compileRust, nodejsCapability } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
-import { nativeNodeSpawnSource } from "../../../../tsonic/test/fixtures/native-node-spawn.mjs";
+import { nativeNodeSpawnSource, incompatibleNodeStdioSource } from "../../../../tsonic/test/fixtures/native-node-spawn.mjs";
 
 test("shared Node spawn proof preserves byte views, options and absent results", { timeout: 300_000 }, async () => {
   const { result } = compileRust({
@@ -33,7 +33,7 @@ export function main(): void {
   options.cwd = "/";
   options.env = environment;
   options.input = new Uint8Array([0, 255, 42]);
-  const stdio: Array<"pipe" | "ignore" | number> = ["pipe", "ignore", "pipe"];
+  const stdio: Array<"pipe" | "ignore" | number | null | undefined> = ["pipe", "ignore", "pipe"];
   options.stdio = stdio;
   stdio[1] = "pipe";
   const result = spawnSync("/bin/cat", [], options);
@@ -57,4 +57,11 @@ export function main(): void {
   });
   assert.deepEqual(result.diagnostics, []);
   validateGeneratedProject("compiler-provider-spawn", result.artifacts, { run: true });
+});
+
+test("shared mutable arrays cannot silently widen their native element storage", async () => {
+  const { result } = compileRust({ surfaces: ["js"], capabilities: [await nodejsCapability()],
+    files: { "index.ts": incompatibleNodeStdioSource } });
+  assert.equal(result.artifacts.length, 0);
+  assert.ok(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_PROVIDER_SET_VALUE_MISMATCH"));
 });

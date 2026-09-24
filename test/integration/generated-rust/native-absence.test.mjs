@@ -2,7 +2,16 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
-import { nativeAbsenceSource, nativeAbsenceJsSource, nativeAbsenceArraySource } from "../../../../tsonic/test/fixtures/native-absence.mjs";
+import { nativeAbsenceSource, nativeAbsenceJsSource, nativeAbsenceArraySource, nativeAbsenceJsonSource } from "../../../../tsonic/test/fixtures/native-absence.mjs";
+
+test("JSON absence selections retain every authored argument effect", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"],
+    target: { id: "rust", options: { outputType: "bin" } },
+    files: { "index.ts": `${nativeAbsenceJsonSource}\nexport function main(): void { if (!run()) throw new Error("JSON absence"); }` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  validateGeneratedProject("native-absence-json", result.artifacts, { run: true });
+});
 
 test("generic absence arrays retain native storage and aliases", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"],

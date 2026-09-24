@@ -400,11 +400,11 @@ export function selectJsSurfaceOperation(request: JsOperationRequest, definition
         row.jsonValueSourceArgumentIndexes?.includes(index) === true
           ? request.argumentCarriers?.[index]
           : carrier);
-  const compileTimeSourceArgumentIndexes = new Set(
-    row.compileTimeSourceArgumentIndexes ?? [],
+  const evaluationOnlySourceArgumentIndexes = new Set(
+    row.evaluationOnlySourceArgumentIndexes ?? [],
   );
   const declaredRuntimeParameterCarriers = selectedParameterCarriers?.filter(
-    (_carrier, index) => !compileTimeSourceArgumentIndexes.has(index),
+    (_carrier, index) => !evaluationOnlySourceArgumentIndexes.has(index),
   );
   const operationId = `tsonic.rust.js.${row.owner}.${row.member}.${row.operationKind}${row.variant === undefined ? "" : `.${row.variant}`}${discardResult ? ".discarded" : ""}`;
   if (row.shape.op === "set") {
@@ -478,11 +478,11 @@ export function selectJsSurfaceOperation(request: JsOperationRequest, definition
       ...(declaredRuntimeParameterCarriers === undefined
         ? {}
         : { parameterCarriers: declaredRuntimeParameterCarriers }),
-      ...(row.compileTimeSourceArgumentIndexes === undefined
+      ...(row.evaluationOnlySourceArgumentIndexes === undefined
         ? {}
         : {
-            compileTimeSourceArgumentIndexes:
-              row.compileTimeSourceArgumentIndexes,
+            evaluationOnlySourceArgumentIndexes:
+              row.evaluationOnlySourceArgumentIndexes,
           }),
       isAsync: row.asynchronous === true,
       isFallible: row.fallible === true,

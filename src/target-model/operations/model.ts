@@ -444,7 +444,7 @@ export interface RustProviderOperationTemplate<
   readonly carrierRequirements?: readonly RustOperationCarrierRequirement[];
   readonly targetGenericArguments?: readonly RustTargetGenericArgument[];
   readonly resultConversion?: RustValueConversion;
-  readonly compileTimeSourceArgumentIndexes?: readonly number[];
+  readonly evaluationOnlySourceArgumentIndexes?: readonly number[];
   readonly isAsync: boolean;
   readonly isFallible: boolean;
   readonly returnedFuture?: {

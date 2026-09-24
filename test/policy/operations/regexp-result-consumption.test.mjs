@@ -20,7 +20,7 @@ function needle(): string { calls += 1; return "res"; }
 export function main(): void {
   const optional: (string | undefined)[] = [undefined, "present"];
   check(optional?.[0]?.length === undefined);
-  check(optional?.[0]?.length !== null);
+  check(optional?.[0]?.length === null);
   check(optional?.[1]?.length === 7);
   check(optional?.[9]?.length === undefined);
   check((optional[0])?.length === undefined);
@@ -32,7 +32,7 @@ export function main(): void {
   check(calls === 1);
   const nullable: (string | null)[] = [null, "present"];
   check(nullable?.[0]?.length === undefined);
-  check(nullable?.[0]?.length !== null);
+  check(nullable?.[0]?.length === null);
   check(nullable?.[1]?.length === 7);
   const native = /(a)?(b)/d.exec("b");
   check(native?.[1] === undefined);

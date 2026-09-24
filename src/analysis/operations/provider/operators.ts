@@ -512,6 +512,7 @@ function mapSelectedProviderAssignment(
       context,
       "RUST_PROVIDER_SET_VALUE_MISMATCH",
       `Selected provider declaration '${providerIdentityText(identity)}' has source inputs that do not match its finalized Rust ${operationKind} carriers.`,
+      [{ message: `actual=${JSON.stringify(rawArgumentCarriers)}; expected=${JSON.stringify(template.parameterCarriers)}` }],
     );
   }
   const abi = finalizeRustProviderOperationAbi({

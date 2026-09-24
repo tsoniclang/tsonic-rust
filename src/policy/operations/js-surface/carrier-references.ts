@@ -229,7 +229,7 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
       return rustStringTargetType();
     case "js-string":
       return rustJsStringTargetType();
-    case "undefined":
+    case "absence":
       return rustAbsenceTargetType();
     case "element":
       return bindings.element;
@@ -327,8 +327,6 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
         [rustStringTargetType(), rustJsValueTargetType()],
         rustJsValueTargetType(),
       );
-    case "null":
-      return rustAbsenceTargetType();
     case "source-result":
       return bindings.sourceResult;
     case "argument":

@@ -139,7 +139,7 @@ export type JsCarrierRef =
   | { readonly ref: "option-of-float64" | "option-of-uint16" | "option-of-uint32" | "option-of-native-uint" }
   | { readonly ref: "string" }
   | { readonly ref: "js-string" }
-  | { readonly ref: "undefined" }
+  | { readonly ref: "absence" }
   | { readonly ref: "element" }
   | { readonly ref: "option-of-element" }
   | { readonly ref: "receiver" }
@@ -171,7 +171,6 @@ export type JsCarrierRef =
   | { readonly ref: "promise-of-settled-input-output-array" }
   | { readonly ref: "promise-finally-callback" }
   | { readonly ref: "json-replacer-callback" }
-  | { readonly ref: "null" }
   | { readonly ref: "source-result" }
   | { readonly ref: "argument"; readonly index: number }
   | { readonly ref: "numeric-argument"; readonly index: number };
@@ -196,7 +195,7 @@ export interface JsOperationRowData {
     readonly awaiting: "infallible" | "fallible";
     readonly errorBoundary: "none" | "source-program";
   };
-  readonly compileTimeSourceArgumentIndexes?: readonly number[];
+  readonly evaluationOnlySourceArgumentIndexes?: readonly number[];
   readonly jsonValueSourceArgumentIndexes?: readonly number[];
   readonly variadic?: true;
   readonly numericRest?: true;
@@ -248,7 +247,7 @@ export function defineJsOperationRows(rows: readonly JsOperationRowData[]): read
       row.jsonValueSourceArgumentIndexes.some((index) =>
         !Number.isSafeInteger(index) || index < 0 ||
         index >= (row.shape.params?.length ?? 0) ||
-        row.compileTimeSourceArgumentIndexes?.includes(index) === true)
+        row.evaluationOnlySourceArgumentIndexes?.includes(index) === true)
     )) {
       throw new Error(
         `JavaScript operation row '${row.owner}.${row.member}' has an invalid JSON-value source projection.`,

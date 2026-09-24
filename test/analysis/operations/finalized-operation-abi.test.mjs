@@ -446,7 +446,7 @@ test("provider receivers distinguish runtime values from compile-time owner iden
   }), false);
 });
 
-test("compile-time source arguments must be declared explicitly and remain in the source ABI", () => {
+test("evaluation-only source arguments remain explicit and cannot enter the target ABI", () => {
   const options = {
     operationKind: "method",
     form: {
@@ -468,15 +468,27 @@ test("compile-time source arguments must be declared explicitly and remain in th
   assert.equal(finalizeRustProviderOperationAbi(options), undefined);
   const abi = finalizeRustProviderOperationAbi({
     ...options,
-    compileTimeSourceArgumentIndexes: [1, 2],
+    evaluationOnlySourceArgumentIndexes: [1, 2],
   });
   assert.ok(abi);
   assert.deepEqual(abi.sourceArguments.map(({ sourceIndex, role, disposition }) => ({ sourceIndex, role, disposition })), [
     { sourceIndex: 0, role: "parameter", disposition: "runtime" },
-    { sourceIndex: 1, role: "compile-time", disposition: "compile-time" },
-    { sourceIndex: 2, role: "compile-time", disposition: "compile-time" },
+    { sourceIndex: 1, role: "evaluation-only", disposition: "evaluation-only" },
+    { sourceIndex: 2, role: "evaluation-only", disposition: "evaluation-only" },
   ]);
   assert.equal(abi.targetArguments.length, 2);
+  assert.equal(validateRustFinalizedOperationAbi({ ...abi,
+    sourceArguments: abi.sourceArguments.map((argument, index) => index === 1
+      ? { ...argument, disposition: "compile-time" } : argument),
+  }), false);
+  assert.equal(finalizeRustProviderOperationAbi({ ...options,
+    evaluationOnlySourceArgumentIndexes: [0, 1, 2],
+  }), undefined);
+  for (const indexes of [[1, 1], [-1], [3], [1.5], [NaN]]) {
+    assert.equal(finalizeRustProviderOperationAbi({ ...options,
+      evaluationOnlySourceArgumentIndexes: indexes,
+    }), undefined);
+  }
   assert.deepEqual(abi.targetArguments[1], {
     source: { kind: "constant", value: { kind: "string", value: "  " } },
   });
@@ -600,7 +612,7 @@ test("variadic value slices convert each source value exactly and always pass on
     operationKind: "method",
     form,
     sourceArgumentCarriers: [string, int32],
-    compileTimeSourceArgumentIndexes: [1],
+    evaluationOnlySourceArgumentIndexes: [1],
     resultCarrier: string,
     isAsync: false,
     isFallible: false,
@@ -1041,7 +1053,7 @@ test("operation forms fail closed for missing discriminant data, unknown variant
     ...base,
     form: { form: "call", path: "acme::run" },
     sourceArgumentCarriers: [int32, int32],
-    compileTimeSourceArgumentIndexes: sparseTwo,
+    evaluationOnlySourceArgumentIndexes: sparseTwo,
   }), undefined);
 });
 

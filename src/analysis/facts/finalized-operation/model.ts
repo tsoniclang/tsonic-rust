@@ -12,7 +12,7 @@ import type {
   TargetTypeRef,
 } from "../../../target-model/types/model.js";
 
-export type RustFinalizedSourceArgumentRole = "parameter" | "index" | "compile-time";
+export type RustFinalizedSourceArgumentRole = "parameter" | "index" | "evaluation-only";
 
 export interface RustFinalizedSourceArgument {
   readonly sourceIndex: number;
@@ -20,7 +20,7 @@ export interface RustFinalizedSourceArgument {
   readonly carrier: TargetTypeRef;
   readonly mode: RustArgumentMode;
   readonly role: RustFinalizedSourceArgumentRole;
-  readonly disposition: "runtime" | "compile-time";
+  readonly disposition: "runtime" | "evaluation-only";
 }
 
 export type RustFinalizedValueConversion =
@@ -130,7 +130,7 @@ export interface FinalizeRustProviderOperationAbiOptions<
   readonly sourceArgumentCarriers: readonly TargetTypeRef[];
   readonly spreadSourceArgumentIndexes?: readonly number[];
   readonly declaredSourceArgumentCarriers?: readonly (TargetTypeRef | undefined)[];
-  readonly compileTimeSourceArgumentIndexes?: readonly number[];
+  readonly evaluationOnlySourceArgumentIndexes?: readonly number[];
   readonly resultCarrier: TargetTypeRef;
   readonly targetGenericArguments?: readonly RustTargetGenericArgument[];
   readonly resultConversion?: RustValueConversion;
