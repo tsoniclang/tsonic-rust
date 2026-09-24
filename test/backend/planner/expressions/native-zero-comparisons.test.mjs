@@ -61,6 +61,39 @@ test("unsigned zero-bound folding preserves evaluation and never folds signed or
   }
 });
 
+test("native one-boundary comparisons reuse exact emptiness and retain adverse controls", () => {
+  for (const text of ["1", "1u64", "1usize"]) {
+    const one = { kind: "int-literal", text };
+    for (const [operator, reversed, empty] of [["<", ">", true], [">=", "<=", false]]) {
+      const selected = context(nativeUint, lengthFact);
+      const call = { ...length, method: "is_empty" };
+      const expected = empty ? call : { kind: "unary", operator: "!", operand: call };
+      assert.deepEqual(planRustNativeZeroComparison(operator, length, one, subject, literal, selected), expected);
+      assert.deepEqual(planRustNativeZeroComparison(reversed, one, length, literal, subject, selected), expected);
+      for (const fact of [undefined,
+        { ...lengthFact, abi: { ...lengthFact.abi, target: { form: "receiver-method", name: "len" } } },
+        { ...lengthFact, abi: { ...lengthFact.abi, effects: { invocation: "fallible", evaluation: "pure" } } },
+        { ...lengthFact, abi: { ...lengthFact.abi, effects: { invocation: "infallible", evaluation: "observable" } } },
+      ]) {
+        assert.deepEqual(planRustNativeZeroComparison(operator, length, one, subject, literal, context(nativeUint, fact)), {
+          kind: "binary", operator: empty ? "==" : "!=", left: length, right: { kind: "int-literal", text: "0" },
+        });
+      }
+      for (const name of ["int32", "int64", "float64"]) {
+        assert.equal(planRustNativeZeroComparison(operator, length, one, subject, literal,
+          context({ kind: "source-primitive", name }, lengthFact)), undefined);
+      }
+    }
+    for (const operator of ["==", "!=", ">", "<="]) {
+      assert.equal(planRustNativeZeroComparison(operator, length, one, subject, literal, context(nativeUint, lengthFact)), undefined);
+    }
+  }
+  assert.equal(planRustNativeZeroComparison("<", length, { kind: "int-literal", text: "2" }, subject, literal,
+    context(nativeUint, lengthFact)), undefined);
+  assert.equal(planRustNativeZeroComparison("<", length, { kind: "float-literal", value: 1 }, subject, literal,
+    context(nativeUint, lengthFact)), undefined);
+});
+
 test("unsigned zero comparisons canonicalize native fields and effectful calls without a collection contract", () => {
   const effect = { kind: "call", path: "next", args: [] };
   for (const [operator, reversed, normalized] of [["<=", ">=", "=="], [">", "<", "!="]]) {
@@ -100,6 +133,7 @@ import type { int32, nativeUint } from "@tsonic/core/types.js";
 let calls: int32 = 0;
 function callCount(): int32 { return calls; }
 function next(): nativeUint { calls++; return 3; }
+function observe(values: int32[]): int32[] { calls++; return values; }
 function signed(value: int32): boolean { return value < 0; }
 function floating(value: number): boolean { return value < 0; }
 export function main(): void {
@@ -109,12 +143,17 @@ export function main(): void {
   if (!(values.length > 0) || values.length <= 0 || !(0 < values.length)) throw new Error("nonempty");
   if (next() < 0 || !(next() >= 0) || callCount() !== 2) throw new Error("effects");
   if (next() <= 0 || !(0 < next()) || callCount() !== 4) throw new Error("native zero equality");
+  if (!(observe(values).length >= 1) || !(1 <= observe(values).length) || callCount() !== 6) throw new Error("nonempty once");
+  const empty: int32[] = [];
+  if (!(observe(empty).length < 1) || !(1 > observe(empty).length) || callCount() !== 8) throw new Error("empty once");
+  if (next() < 1 || !(next() >= 1) || callCount() !== 10) throw new Error("native one equality");
   if (!signed(-1) || !floating(-0.5)) throw new Error("signed controls");
 }
 ` } });
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /values\.is_empty\(\)/u);
+  assert.doesNotMatch(output, /\.len\(\) (?:>=|<) 1\b/u);
   assert.doesNotMatch(output, /allow\([^)]*(?:len_zero|unused_comparisons|absurd_extreme)/u);
   validateGeneratedProject("native-zero-comparisons", result.artifacts, { run: true });
 });
