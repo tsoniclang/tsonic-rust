@@ -19,6 +19,8 @@ import { planRustProjectDowncastValue } from "../objects/project-downcasts.js";
 import { planRustProgramErrorFlowRead } from "./error-operations.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
+import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
+import { planRustOptionalStorageOperation } from "./optional-storage.js";
 import { rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
 import {
   allocateRustSyntheticName,
@@ -107,6 +109,10 @@ export function planRustFlowReadProjection(
     ] }, node, context);
   }
   if (fact.kind === "option-value") {
+    if (rustOptionalStorageValue(fact.sourceCarrier) !== undefined) {
+      return planRustOptionalStorageOperation(fact.sourceCarrier, ownsValue ? "into_present" : "clone_present",
+        [ownsValue ? expression : { kind: "reference", expr: expression }], context);
+    }
     if (!ownsValue && !rustCarrierSupportsClone(fact.selectedCarrier, context.input.program.typeDefinitions) &&
       (context.callableDeclaration === undefined ||
         !requireRustCarrierRequirements(fact.selectedCarrier, ["clone"], node, context))) {

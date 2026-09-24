@@ -12,7 +12,7 @@ import {
   rustJsArrayTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
-  rustUndefinedTargetType,
+  rustAbsenceTargetType,
   rustVecTargetType,
 } from "../../../dist/target-model/types/index.js";
 
@@ -101,7 +101,7 @@ test("array index rows distinguish checked source and runtime result carriers", 
 
   assert.equal(selected?.fact.kind, "provider-operation");
   assert.deepEqual(selected?.fact.sourceResultCarrier, elementCarrier);
-  assert.deepEqual(selected?.fact.sourceAbsenceCarrier, rustUndefinedTargetType());
+  assert.deepEqual(selected?.fact.sourceAbsenceCarrier, rustAbsenceTargetType());
   assert.deepEqual(selected?.fact.resultCarrier, {
     kind: "target-named",
     id: "rust.std.Option",
@@ -446,7 +446,7 @@ export function probe(name: string): boolean {
   assert.match(text, /js_string::to_upper_case\(name\)/u);
   assert.match(text, /js_string::starts_with_from_start\(&upper, "A"\)/u);
   assert.match(text, /js_string::includes_from_start\(&upper, "B"\)/u);
-  assert.match(text, /js_string::js_len\(name\) > 0/u);
+  assert.match(text, /js_string::js_len\(name\) != 0/u);
   assert.doesNotMatch(text, /usize_to_(?:i32|f64)/u);
 });
 

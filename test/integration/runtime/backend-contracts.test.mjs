@@ -325,7 +325,7 @@ test("project-source call consumption accepts only proven target-finalized infer
 
 test("compile-time provider arguments never require runtime carrier or passing facts", () => {
   const jsValue = { kind: "target-named", id: "rust.js.JsValue" };
-  const sourceNullish = { kind: "target-specific", target: "rust", name: "source-nullish" };
+  const sourceNullish = { kind: "target-named", id: "rust.native.absence" };
   const float64 = { kind: "source-primitive", name: "float64" };
   const string = { kind: "target-named", id: "rust.std.String" };
   const abi = finalizeRustProviderOperationAbi({

@@ -65,8 +65,8 @@ export function planRustDirectStorageCore(
 ): RustExpr | undefined {
   const { ast } = context.input.program.source;
   const storageOverride = context.expressionOverrides?.get(operand);
-  if (storageOverride?.valueForm === "storage") {
-    return storageOverride.expression;
+  if (storageOverride !== undefined) {
+    return storageOverride.valueForm === "storage" ? storageOverride.expression : undefined;
   }
   if (ast.kindName(operand) === KindIdentifier) {
     const binding = context.input.program.facts.getFact(operand, rustSourceBindingFactKey);

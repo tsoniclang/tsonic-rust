@@ -287,7 +287,7 @@ export async function roundtrip(dir: string, file: string): Promise<int32> {
   validateGeneratedProject("r7-async-fs-lib", result.artifacts);
 });
 
-test("process env writes retain native environment identity and stringify undefined", { timeout: 300_000 }, async () => {
+test("process env writes retain native environment identity and remove absent values", { timeout: 300_000 }, async () => {
   const { result } = compileRust({
     surfaces: ["js"],
     capabilities: [await nodejsCapability()],
@@ -304,7 +304,7 @@ export function main(): void {
   env[name] = "1";
   check(env[name] === "1");
   env[name] = undefined;
-  check(env[name] === "undefined");
+  check(env[name] === undefined);
   if (previous !== undefined) env[name] = previous;
 }
 `,

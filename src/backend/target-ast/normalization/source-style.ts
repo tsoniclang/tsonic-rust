@@ -16,7 +16,7 @@ import { rustBlockReferencesPath } from "../inspection/source-usage.js";
 import { collapseRustForwardingClosure } from "./forwarding-closures.js";
 import { nameRustSignatureTypes } from "./signature-aliases.js";
 import { rustItemsReferenceModuleAlias } from "../inspection/source-module-usage.js";
-import { emptyRustGenerics } from "../nodes.js";
+import { rustTypeEquals } from "../inspection/type-equality.js";
 
 export function finalizeRustSourceStyle(
   model: RustSourceFileModel,
@@ -119,7 +119,7 @@ function finalizeRustImplFunctionStyle(
 }
 
 function hasErasedGenericParameter(fn: RustImplFunction): boolean {
-  const usage: RustItem = { ...fn, kind: "function", generics: emptyRustGenerics };
+  const usage: RustItem = { ...fn, kind: "function" };
   return fn.generics.parameters.some(parameter => parameter.kind === "type" &&
     !rustItemsReferenceModuleAlias([usage], parameter.name));
 }
@@ -408,14 +408,26 @@ function finalizeRustExpressionStyle(expression: RustExpr): RustExpr {
         end: finalizeRustExpressionStyle(expression.end),
       };
       break;
-    case "conditional":
+    case "conditional": {
+      const whenTrue = finalizeRustExpressionStyle(expression.whenTrue);
+      const whenFalse = finalizeRustExpressionStyle(expression.whenFalse);
+      const condition = finalizeRustExpressionStyle(expression.condition);
+      if (whenTrue.kind === "none" && whenFalse.kind === "none" ||
+        whenTrue.kind === "associated-value" && whenFalse.kind === "associated-value" &&
+        whenTrue.name === whenFalse.name && rustTypeEquals(whenTrue.owner, whenFalse.owner) &&
+        rustTypeEquals(whenTrue.trait, whenFalse.trait) ||
+        whenTrue.kind === "tuple-literal" && whenTrue.elements.length === 0 &&
+        whenFalse.kind === "tuple-literal" && whenFalse.elements.length === 0) {
+        return { kind: "evaluate-then", effect: condition, discard: "value", value: whenTrue };
+      }
       result = {
         ...expression,
-        condition: finalizeRustExpressionStyle(expression.condition),
-        whenTrue: finalizeRustExpressionStyle(expression.whenTrue),
-        whenFalse: finalizeRustExpressionStyle(expression.whenFalse),
+        condition,
+        whenTrue,
+        whenFalse,
       };
       break;
+    }
     case "match":
       result = {
         ...expression,
@@ -482,6 +494,10 @@ function finalizeRustExpressionStyle(expression: RustExpr): RustExpr {
       result = { ...expression, expression: finalizeRustExpressionStyle(expression.expression) };
       break;
     case "evaluate-then":
+      if (expression.discard === "unit" &&
+        expression.effect.kind === "tuple-literal" && expression.effect.elements.length === 0) {
+        return finalizeRustExpressionStyle(expression.value);
+      }
       result = {
         ...expression,
         effect: finalizeRustExpressionStyle(expression.effect),

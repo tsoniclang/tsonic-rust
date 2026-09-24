@@ -25,7 +25,7 @@ import {
   rustSourceParameterAbiFactKey,
 } from "../facts/keys.js";
 import {
-  rustOptionTargetType,
+  rustSourceOptionalTargetType,
   rustCallableProtocol,
   rustClosureProtocol,
   rustCallableTargetType,
@@ -78,7 +78,7 @@ export function resolveFunctionExpressionCarrier(
   const fallbackParameterCarriers = resolvedSourceCallable?.parameters.map((carrier, index) =>
     Node_Initializer(ast, parameters[index]) === undefined
       ? carrier
-      : rustOptionTargetType(carrier));
+      : rustSourceOptionalTargetType(carrier));
   const selectedExpected = expected ?? (sourceSelected === undefined ||
       resolvedSourceCallable === undefined || fallbackParameterCarriers === undefined
     ? undefined

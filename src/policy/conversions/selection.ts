@@ -8,8 +8,7 @@ import {
   rustJsNumericTargetType,
   rustJsStringNumberTargetType,
   isRustNeverCarrier,
-  isRustNullCarrier,
-  isRustUndefinedCarrier,
+  isRustAbsenceCarrier,
   rustCarrierSupportsClone,
   rustCarrierCanEnterTsValue,
   rustCarrierSupportsTrait,
@@ -39,10 +38,9 @@ import {
   rustIsizeToInt32ValueConversion,
   rustJsValueCloneConversion,
   rustTsValueCloneConversion,
-  rustNullToJsValueConversion,
+  rustAbsenceToJsValueConversion,
   rustStringToJsValueConversion,
   rustSymbolToJsValueConversion,
-  rustUndefinedToJsValueConversion,
   rustUint32ToInt32ValueConversion,
   rustUint64ToFloat64ValueConversion,
   rustUint8ToInt32ValueConversion,
@@ -83,8 +81,6 @@ export function selectRustSourceValueConversion(
     if (rustTargetTypeRefEquals(source, stringCarrier)) return { kind: "semantic-conversion", id: "js-string-number-from-string" };
     if (rustTargetTypeRefEquals(source, float64Carrier)) return { kind: "semantic-conversion", id: "js-string-number-from-number" };
     if (rustTargetTypeRefEquals(source, int32Carrier)) return { kind: "semantic-conversion", id: "js-string-number-from-int32" };
-    if (isRustNullCarrier(source)) return { kind: "semantic-conversion", id: "js-string-number-from-null" };
-    if (isRustUndefinedCarrier(source)) return { kind: "semantic-conversion", id: "js-string-number-from-undefined" };
   }
   const sourceOptionElement = rustOptionElementCarrier(source);
   const targetOptionElement = rustOptionElementCarrier(target);
@@ -149,17 +145,14 @@ export function selectRustSourceValueConversion(
     if (numberBoxing !== undefined) {
       return Object.freeze({ kind: "semantic-conversion", id: numberBoxing });
     }
-    if (isRustNullCarrier(source)) {
-      return rustNullToJsValueConversion;
+    if (isRustAbsenceCarrier(source)) {
+      return rustAbsenceToJsValueConversion;
     }
     if (rustTargetTypeRefEquals(source, stringCarrier)) {
       return rustStringToJsValueConversion;
     }
     if (rustTargetTypeRefEquals(source, symbolCarrier)) {
       return rustSymbolToJsValueConversion;
-    }
-    if (isRustUndefinedCarrier(source)) {
-      return rustUndefinedToJsValueConversion;
     }
     if (rustCarrierSupportsClone(source, definitions) &&
       rustCarrierSupportsTrait(source, rustJsClosedValueCarrierTraitPath, undefined, undefined, definitions)) {

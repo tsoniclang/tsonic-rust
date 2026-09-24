@@ -52,8 +52,7 @@ import {
   rustRegExpNamedIndicesTargetId,
   rustRegExpStringIteratorTargetId,
   isRustCallableCarrier,
-  rustNullTargetType,
-  rustUndefinedTargetType,
+  rustAbsenceTargetType,
   rustUnitTargetType,
 } from "../../../target-model/types/index.js";
 import { selectJsArrayConstruction } from "./array-construction.js";
@@ -473,8 +472,8 @@ export function selectJsSurfaceOperation(request: JsOperationRequest, definition
         ? {}
         : {
             sourceAbsenceCarrier: row.shape.sourceAbsence === "undefined"
-              ? rustUndefinedTargetType()
-              : rustNullTargetType(),
+              ? rustAbsenceTargetType()
+              : rustAbsenceTargetType(),
           }),
       ...(declaredRuntimeParameterCarriers === undefined
         ? {}

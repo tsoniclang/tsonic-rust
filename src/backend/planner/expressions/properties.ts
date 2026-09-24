@@ -484,11 +484,13 @@ export function sourceFieldSelectedOperationMatches(
   fact: Extract<RustTargetOperationFact, { readonly kind: "source-field" }>,
   context: RustPlanContext,
 ): boolean {
+  const resultCarrier = effectiveMemberResultCarrier(node, fact.resultCarrier, context);
+  if (resultCarrier === undefined) return false;
   return selectedOperationMatches(
     context.input.program.facts.getSelectedTargetProperty(node),
     fact.operationId,
     "property",
-    fact.resultCarrier,
+    resultCarrier,
   );
 }
 

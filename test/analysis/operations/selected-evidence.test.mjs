@@ -523,11 +523,11 @@ function isNull(value: Value): boolean {
 }
 
 function isExactlyUndefined(value: string | undefined): boolean {
-  return value === undefined && value !== null;
+  return value === undefined && value === null;
 }
 
 function isExactlyNull(value: string | null): boolean {
-  return value === null && value !== undefined;
+  return value === null && value === undefined;
 }
 
 function isAlwaysPresent(value: string): boolean {
@@ -547,8 +547,8 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /value: rt::Null/u);
-  assert.match(source, /rt::Null/u);
+  assert.match(source, /value: \(\)/u);
+  assert.doesNotMatch(source, /rt::(?:Null|Undefined)/u);
   assert.equal(validateGeneratedProject("project-null-state", result.artifacts, { run: true }).status, 0);
 });
 

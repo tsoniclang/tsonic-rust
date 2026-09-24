@@ -176,7 +176,7 @@ export function main(): void {
   const source = artifactText(result, "src/index.rs");
   const implementations = [...source.matchAll(/method_implementation: ([A-Z][A-Za-z0-9_]*)/gu)];
   assert.equal(implementations.length, 1);
-  assert.match(source, new RegExp(`type ${implementations[0][1]} = rt::Callable`, "u"));
+  assert.match(source, new RegExp(`type ${implementations[0][1]} =\\s+rt::Callable`, "u"));
   assert.equal((source.match(/\.method_implementation\.clone\(\)/gu) ?? []).length, 2);
   assert.match(source, /Some\(radix\)/u);
   assert.match(source, /None/u);

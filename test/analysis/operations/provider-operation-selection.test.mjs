@@ -9,7 +9,7 @@ import {
 } from "../../../dist/policy/evidence/selected-source.js";
 import { rustCallScopedElisionLifetime } from "../../../dist/target-model/lifetimes/index.js";
 import { selectRustCheckedOperator } from "../../../dist/analysis/operations/provider/operators.js";
-import { rustOptionTargetType, rustNullTargetType, rustUndefinedTargetType } from "../../../dist/target-model/types/index.js";
+import { rustOptionTargetType, rustAbsenceTargetType } from "../../../dist/target-model/types/index.js";
 
 const unit = { kind: "tuple", elements: [] };
 
@@ -33,7 +33,7 @@ test("provider optional argument inference preserves native carriers and absence
       assert.deepEqual(result.template.parameterCarriers, [rustOptionTargetType(carrier)]);
     }
   }
-  for (const absent of [rustNullTargetType(), rustUndefinedTargetType()]) {
+  for (const absent of [rustAbsenceTargetType()]) {
     const result = instantiateProviderOperationTemplate(template, { sourceParameterCarriers: [absent] });
     assert.deepEqual(result?.substitutions.types.get("Value"), float64);
     assert.equal(instantiateProviderOperationTemplate({ ...template,

@@ -53,6 +53,8 @@ export const rustLintAttributes = Object.freeze({
     '#[expect(unused_variables, reason = "authored binding drop scope")]',
   unusedTypeParameters:
     '#[expect(clippy::extra_unused_type_parameters, reason = "retains the checked generic callable contract")]',
+  unitArguments:
+    '#[expect(clippy::unit_arg, reason = "preserves evaluation and borrow scopes of zero-sized source arguments")]',
   reflexiveComparison:
     '#[expect(clippy::eq_op, reason = "authored reflexive comparison")]',
   unusedUnsafe:

@@ -92,7 +92,7 @@ export function applySelectedProjectSourceCall(
     );
     return undefined;
   }
-  const declarationParameters = ast.kindName(selectedDeclaration) === "KindClassDeclaration"
+  const declarationParameters = ast.is.IsClassDeclaration(selectedDeclaration) || ast.is.IsClassExpression(selectedDeclaration)
     ? []
     : ast.parameters(selectedDeclaration);
   const storageContext = bindRustSelectedCallTypeArguments(

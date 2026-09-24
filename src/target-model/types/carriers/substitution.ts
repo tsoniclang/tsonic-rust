@@ -10,6 +10,7 @@ import type {
 import { rustLifetimeKey } from "../../lifetimes/index.js";
 import type { RustLifetimeRef } from "../../lifetimes/index.js";
 import { rustGenericCallableCarrier, rustGenericCallableValue } from "./generic-callables.js";
+import { rustSourceOptionalTargetType } from "../projections.js";
 
 export function substituteRustTargetTypeParameters(
   type: TargetTypeRef,
@@ -45,6 +46,10 @@ function substituteCarrierParts(
   switch (type.kind) {
     case "type-parameter":
       return (() => {
+        if (type.optionalStorageValue !== undefined) {
+          return rustSourceOptionalTargetType(substituteRustTargetGenerics(type.optionalStorageValue,
+            substitutions, lifetimeSubstitutions, constSubstitutions, normalize));
+        }
         const replacement = substitutions.get(type.name);
         return replacement === undefined ? type : normalize === undefined
           ? replacement : mapRustTargetTypes(replacement, normalize);

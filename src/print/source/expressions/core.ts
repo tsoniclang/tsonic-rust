@@ -95,8 +95,7 @@ export function printRustExpr(expression: RustExpr): string {
     case "unsafe":
       return `unsafe { ${printRustExpr(expression.expression)} }`;
     case "evaluate-then": {
-      const effect = printRustExpr(expression.effect);
-      const statement = expression.discard === "unit" ? `${effect};` : `let _ = ${effect};`;
+      const statement = printRustDiscard(expression);
       if (expression.value.kind === "tuple-literal" && expression.value.elements.length === 0) {
         return `{ ${statement} }`;
       }
@@ -208,11 +207,16 @@ function printConditionalArm(expression: RustExpr, allowInnerAttributes = true):
     return printRustBlockExpressionContents(expression, (value) => printConditionalArm(value, false));
   }
   if (expression.kind === "evaluate-then") {
-    const effect = printRustExpr(expression.effect);
-    const statement = expression.discard === "unit" ? `${effect};` : `let _ = ${effect};`;
+    const statement = printRustDiscard(expression);
     return `${statement} ${printConditionalArm(expression.value, false)}`;
   }
   return printRustExpr(expression);
+}
+
+function printRustDiscard(expression: Extract<RustExpr, { readonly kind: "evaluate-then" }>): string {
+  const effect = printRustExpr(expression.effect);
+  return expression.discard === "value" ? `let _ = ${effect};`
+    : expression.effect.kind === "path" ? `let () = ${effect};` : `${effect};`;
 }
 
 function printRustBlockExpressionContents(

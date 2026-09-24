@@ -36,9 +36,8 @@ import {
   rustJsArrayTargetType,
   rustCallableTargetType,
   rustClosureTargetType,
-  rustNullTargetType,
+  rustAbsenceTargetType,
   rustOptionTargetType,
-  rustUndefinedTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
   rustUnitTargetType,
@@ -231,7 +230,7 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
     case "js-string":
       return rustJsStringTargetType();
     case "undefined":
-      return rustUndefinedTargetType();
+      return rustAbsenceTargetType();
     case "element":
       return bindings.element;
     case "option-of-element":
@@ -245,7 +244,7 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
     case "array-entry-result":
       return bindings.element === undefined ? undefined : rustIteratorResultTargetType({
         yieldType: rustJsArrayEntryTargetType(bindings.element),
-        returnType: rustUndefinedTargetType(),
+        returnType: rustAbsenceTargetType(),
       });
     case "receiver":
       return bindings.receiver;
@@ -329,7 +328,7 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
         rustJsValueTargetType(),
       );
     case "null":
-      return rustNullTargetType();
+      return rustAbsenceTargetType();
     case "source-result":
       return bindings.sourceResult;
     case "argument":

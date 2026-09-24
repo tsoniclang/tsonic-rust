@@ -21,6 +21,7 @@ import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import type { RustLifetimeRef } from "../../../../target-model/lifetimes/index.js";
 import { rustDeclarationAssociatedPredicates } from "../../types/associated-bounds.js";
 import { rustTypeParameterBounds } from "../../types/generic-bounds.js";
+import { rustOptionalStorageParameters, rustOptionalStorageTypeArguments } from "../../types/type-projections.js";
 
 export function rustProjectDispatchTraitName(
   definition: RustProjectTypeDefinition,
@@ -95,6 +96,7 @@ function rustProjectGenericsWithTypeOutlives(
           name: parameter.targetName,
           bounds: boundsFor(parameter),
         });
+  parameters.push(...rustOptionalStorageParameters(contract.optionalStorage.filter(entry => inScope(entry.carrier)), context));
   return rustGenericsWithAssociatedBounds(parameters,
     rustDeclarationAssociatedPredicates(definition.declaration, context, inScope));
 }
@@ -210,6 +212,7 @@ function rustProjectGeneratedType(
     if (type === undefined) return undefined;
     genericArguments.push({ kind: "type", type });
   }
+  genericArguments.push(...rustOptionalStorageTypeArguments(carrier, context));
   return {
     kind: "named",
     path,

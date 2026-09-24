@@ -474,7 +474,7 @@ export function planRustCallableExpressionBody(
         if (defaultValue === undefined) {
           return undefined;
         }
-        initializer = rustOptionDefaultValue(initializer, defaultValue);
+        initializer = rustOptionDefaultValue(initializer, defaultValue, parameter.carrier, callableClosureContext);
       }
       bindingStatements.push({
         kind: "let",

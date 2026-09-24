@@ -11,8 +11,9 @@ import {
   isRustJsValueCarrier,
   rustJsErrorTargetType,
   rustOptionElementCarrier,
-  rustOptionTargetType,
-  rustNullishSourceTargetType,
+  rustSourceOptionalTargetType,
+  rustAbsenceTargetType,
+  rustStructuralObjectCarrierValue,
 } from "../../target-model/types/index.js";
 import {
   rustRuntimeUnionContract,
@@ -241,6 +242,14 @@ function resolveSelectedFlowReadCarrier(
     return operation.sourceResultCarrier;
   }
   const typeNode = Node_Type(walk.context.ast, declaration);
+  const semanticCarrier = resolveRustTargetTypeRef(
+    selectedType, rustResolutionContext(walk, expression), walk.operationOptions,
+  );
+  const dispatchCarrier = rustOptionElementCarrier(sourceCarrier) ?? sourceCarrier;
+  if (semanticCarrier !== undefined && rustStructuralObjectCarrierValue(semanticCarrier)?.bases?.some(base =>
+    rustTargetTypeRefEquals(base, dispatchCarrier))) {
+    return semanticCarrier;
+  }
   const typeSourceFile = typeNode === undefined
     ? undefined
     : walk.context.ast.getSourceFile(typeNode);
@@ -279,11 +288,6 @@ function resolveSelectedFlowReadCarrier(
       );
     }
   }
-  const semanticCarrier = resolveRustTargetTypeRef(
-    selectedType,
-    rustResolutionContext(walk, expression),
-    walk.operationOptions,
-  );
   const optionalElement = rustOptionElementCarrier(sourceCarrier);
   if (optionalElement === undefined) {
     return semanticCarrier !== undefined &&
@@ -321,8 +325,8 @@ function combineSelectedFlowReadCarriers(
     : walk.context.projectTypes.commonSupertype(distinct);
   if (valueCarrier === undefined) {
     return includesNullish && distinct.length === 0
-      ? rustNullishSourceTargetType()
+      ? rustAbsenceTargetType()
       : undefined;
   }
-  return includesNullish ? rustOptionTargetType(valueCarrier) : valueCarrier;
+  return includesNullish ? rustSourceOptionalTargetType(valueCarrier) : valueCarrier;
 }

@@ -58,10 +58,9 @@ export {
   isRustJsStringCarrier,
   isRustJsValueCarrier,
   isRustNeverCarrier,
-  isRustNullCarrier,
+  isRustAbsenceCarrier,
   isRustProgramErrorCarrier,
   isRustStringCarrier,
-  isRustUndefinedCarrier,
   isRustUnitCarrier,
   isRustVecCarrier,
   rustJsArrayConcatItemTargetType,
@@ -133,13 +132,12 @@ export {
   rustNamedTargetType,
   rustNamedTypeCarrierValue,
   rustNeverTargetType,
-  rustNullTargetType,
+  rustAbsenceTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
   rustStrTargetType,
   rustTsValueTargetType,
   rustTupleTargetType,
-  rustUndefinedTargetType,
   rustUnitTargetType,
   rustVecTargetType,
 } from "./carriers/native.js";
@@ -153,9 +151,7 @@ export type {
   RustNamedTypeTraitRequirement,
 } from "./model.js";
 export {
-  isRustDefinitelyNullishCarrier,
   isRustIntegerCarrier,
-  isRustNullishSourceCarrier,
   isRustNumericCarrier,
   isRustSignedNumericCarrier,
   isRustSliceMutRefCarrier,
@@ -163,7 +159,6 @@ export {
   rustFutureOutputCarrier,
   rustFutureTargetId,
   rustFutureTargetType,
-  rustNullishSourceTargetType,
   rustPrimitiveTypeName,
   rustSliceElementCarrier,
   rustSliceMutRefTargetType,
@@ -228,7 +223,7 @@ export {
   rustNamedTypeCarrierName,
   rustNativeScalarTargetId,
   rustNeverCarrierName,
-  rustNullTargetId,
+  rustAbsenceTargetId,
   rustOptionTargetId,
   rustProgramErrorTargetId,
   rustRegExpExecArrayTargetId,
@@ -248,7 +243,6 @@ export {
   rustStructuralObjectCarrierName,
   rustStructuralObjectCarrierValue,
   rustStructuralObjectTargetType,
-  rustUndefinedTargetId,
 } from "./carriers/source-types.js";
 export type {
   RustSourceTypeCarrierValue,
@@ -276,6 +270,7 @@ export {
   rustTargetTypeParameterNames,
 } from "./carriers/generic-references.js";
 export type { RustTargetGenericReferences } from "./carriers/generic-references.js";
+export { rustSourceOptionalTargetType } from "./projections.js";
 export {
   substituteRustTargetGenericArgument,
   substituteRustTargetGenerics,

@@ -12,12 +12,14 @@ export function rustOptionTargetType(value: TargetTypeRef): TargetTypeRef {
 }
 
 export function isRustOptionCarrier(carrier: TargetTypeRef | undefined): boolean {
-  return carrier?.kind === "target-named" && carrier.id === rustOptionTargetId;
+  return carrier?.kind === "type-parameter" && carrier.optionalStorageValue !== undefined ||
+    carrier?.kind === "target-named" && carrier.id === rustOptionTargetId;
 }
 
 export function rustOptionElementCarrier(
   carrier: TargetTypeRef | undefined,
 ): TargetTypeRef | undefined {
+  if (carrier?.kind === "type-parameter") return carrier.optionalStorageValue;
   if (carrier?.kind !== "target-named" || carrier.id !== rustOptionTargetId) return undefined;
   const arguments_ = rustOnlyTypeGenericArguments(carrier.genericArguments);
   return arguments_?.length === 1 ? arguments_[0] : undefined;

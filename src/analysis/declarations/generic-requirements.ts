@@ -3,6 +3,7 @@ import { rustGenericCallableValue } from "../../target-model/types/carriers/gene
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import { rustGenericNumericOperandsKey } from "../facts/generic-numeric.js";
 import { classifyCarrierRequirements } from "./generic-carrier-requirements.js";
+import { createRustOptionalStorageCollector, type RustOptionalStorageRequirement } from "./type-projections.js";
 import { isRustDeclarationPathUse, isRustReturnedValue, isRustIndependentCallable, isRustGenericTypeDeclaration, collectRustCallableDeclarations } from "./generic-reference-uses.js";
 import { createRustAssociatedRequirementCollector, type RustAssociatedTypeRequirement } from "./associated-requirements.js";
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
@@ -74,6 +75,7 @@ export interface RustDeclarationGenericRequirementContract {
   readonly capturedTypeParameters: readonly RustDeclarationTypeParameterRequirements[];
   readonly associatedTypes: readonly RustAssociatedTypeRequirement[];
   readonly projectProjections: readonly RustProjectProjectionRequirement[];
+  readonly optionalStorage: readonly RustOptionalStorageRequirement[];
 }
 
 export interface RustDeclarationGenericRequirementIndex {
@@ -248,7 +250,8 @@ export function analyzeRustDeclarationGenericRequirements(
     supportsClone(declaration: Node, carrier: TargetTypeRef) {
       const contract = contractByDeclaration.get(declaration);
       if (contract === undefined) return false;
-      const parameters = [...contract.typeParameters, ...contract.capturedTypeParameters];
+      const parameters = [...contract.typeParameters, ...contract.capturedTypeParameters,
+        ...contract.optionalStorage.map(entry => ({ name: entry.carrier.name, requirements: entry.requirements }))];
       return rustCarrierSupportsTrait(carrier, "core::clone::Clone", (name, trait) =>
         trait === "core::clone::Clone" && parameters.some(parameter =>
           parameter.name === name && parameter.requirements.includes("clone")),
@@ -335,6 +338,7 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
   const projections = createRustProjectProjectionRequirementCollector(declared, input.projectTypes);
   const byParameter = new Map([...declared].map((name) =>
     [name, new Set<RustGenericRequirement>()] as const));
+  const optionalStorage = createRustOptionalStorageCollector(new Set(exactNames), declared, byParameter);
   if (definition !== undefined) {
     const dispatchLifetime = input.objectRepresentations.representationFor(definition)?.dispatchObjectLifetime;
     for (const name of exactNames) {
@@ -354,6 +358,7 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
     if (carrier === undefined) {
       return "A Rust generic requirement has no exact target carrier.";
     }
+    if (!optionalStorage.collect(carrier)) return "A native optional storage projection has no exact generic owner.";
     const normalized = normalizeRequirements(requirements);
     const classified = classifyCarrierRequirements(
       carrier,
@@ -455,10 +460,16 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
           if (![requirement.sourceCarrier, requirement.targetCarrier].flatMap(rustTargetTypeParameterNames).every(name => declared.has(name))) continue;
           if (!projections.require(requirement)) return "A captured projection has no exact enclosing native conversion contract.";
         }
+        for (const requirement of input.contractFor(node)?.optionalStorage ?? []) {
+          if (!rustTargetTypeParameterNames(requirement.carrier).every(name => declared.has(name))) continue;
+          const error = addUse(node, requirement.carrier, requirement.requirements);
+          if (error !== undefined) return error;
+        }
       }
       return undefined;
     }
     const collectType = (carrier: TargetTypeRef): string | undefined => {
+      if (!optionalStorage.collect(carrier)) return "A native optional storage projection has no exact generic owner.";
       if (!associated.collect(carrier)) return "A dependent Rust type has no exact family implementation or generic obligation.";
       const sourceType = rustSourceTypeCarrierValue(carrier);
       const definition = sourceType === undefined ? undefined : input.projectTypes.definitionForCarrier(carrier);
@@ -497,6 +508,11 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
             const error = addUse(node, instantiated, requirement.requirements);
             if (error !== undefined) return error;
           }
+          for (const requirement of contract?.optionalStorage ?? []) {
+            const instantiated = substituteRustTargetTypeParameters(requirement.carrier, substitutions);
+            const error = addUse(node, instantiated, requirement.requirements);
+            if (error !== undefined) return error;
+          }
         }
       }
       for (const child of rustTargetTypeChildren(carrier)) {
@@ -530,7 +546,8 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
     if (carrier !== undefined && !isRustDeclarationPathUse(node, ast, facts)) {
       const error = collectType(carrier);
       if (error !== undefined) return error;
-      if (ast.kindName(node) === "KindPropertyDeclaration" && carrier.kind === "associated-type") {
+      if (ast.kindName(node) === "KindPropertyDeclaration" && (carrier.kind === "associated-type" ||
+        carrier.kind === "type-parameter" && carrier.optionalStorageValue !== undefined)) {
         const fieldError = addUse(node, carrier, ["clone"]);
         if (fieldError !== undefined) return fieldError;
       }
@@ -721,8 +738,11 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
           selected.sourceDeclaration,
         );
         const calleeId = input.idByDeclaration.get(selectedDeclaration);
+        const selectedClass = input.projectTypes.definitionForDeclaration(selectedDeclaration);
         const targetTypeArguments = rustTargetGenericTypeArguments(
-          operation.targetGenericArguments,
+          selectedClass !== undefined && operation.target.form === "constructor"
+            ? rustSourceTypeCarrierValue(operation.target.typeCarrier)?.genericArguments
+            : operation.targetGenericArguments,
         );
         if (calleeId !== undefined) {
           dependencies.add(calleeId);
@@ -739,6 +759,10 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
             }
             const substitutions = new Map(callee.typeParameters.map((parameter, index) =>
               [parameter.name, targetTypeArguments[index]!] as const));
+            for (const requirement of callee.optionalStorage) {
+              const error = addUse(node, substituteRustTargetTypeParameters(requirement.carrier, substitutions), requirement.requirements);
+              if (error !== undefined) return error;
+            }
             for (const requirement of callee.projectProjections) {
               if (!projections.require({ sourceCarrier: substituteRustTargetTypeParameters(requirement.sourceCarrier, substitutions),
                 targetCarrier: substituteRustTargetTypeParameters(requirement.targetCarrier, substitutions) })) {
@@ -777,6 +801,7 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       declaration,
       associatedTypes: associated.seal(),
       projectProjections: projections.seal(),
+      optionalStorage: optionalStorage.seal(),
       typeParameters: Object.freeze(exactNames.map((name) => Object.freeze({
         name,
         requirements: normalizeRequirements([...(byParameter.get(name) ?? [])]),
@@ -818,6 +843,12 @@ function requirementContractsEqual(
   right: RequirementContractState,
 ): boolean {
   return left.declaration === right.declaration &&
+    left.optionalStorage.length === right.optionalStorage.length &&
+    left.optionalStorage.every((entry, index) => {
+      const other = right.optionalStorage[index];
+      return other !== undefined && entry.captured === other.captured &&
+        rustTargetTypeRefEquals(entry.carrier, other.carrier) && stringListsEqual(entry.requirements, other.requirements);
+    }) &&
     left.projectProjections.length === right.projectProjections.length &&
     left.projectProjections.every((projection, index) => {
       const other = right.projectProjections[index];

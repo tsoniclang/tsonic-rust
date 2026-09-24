@@ -230,6 +230,10 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
     }
     const check = (receiver: RustExpr): RustExpr => {
       if (fact.nullishDepths.length === 1 && fact.nullishDepths[0] === 0) {
+        if (rustOptionalStorageValue(fact.optionCarrier) !== undefined) {
+          const check = planRustOptionalStorageOperation(fact.optionCarrier, "is_absent", [{ kind: "reference", expr: receiver }], context);
+          return fact.negated ? { kind: "unary", operator: "!", operand: check } : check;
+        }
         return { kind: "option-presence", receiver, present: fact.negated };
       }
       const matched: RustExpr = { kind: "matches", expression: receiver,
@@ -399,11 +403,11 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
     return {
       kind: "evaluate-then",
       effect: planRustNonConsumingValue(leftNode, left, context),
-      discard: isRustUnitCarrier(expressionCarrier(leftNode, context)) ? "unit" : "value",
+      discard: isRustUnitCarrier(effectivePlannedExpressionCarrier(leftNode, context)) ? "unit" : "value",
       value: {
         kind: "evaluate-then",
         effect: planRustNonConsumingValue(rightNode, right, context),
-        discard: isRustUnitCarrier(expressionCarrier(rightNode, context)) ? "unit" : "value",
+        discard: isRustUnitCarrier(effectivePlannedExpressionCarrier(rightNode, context)) ? "unit" : "value",
         value: { kind: "bool-literal", value: fact.value },
       },
     };
@@ -537,9 +541,7 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
 }
 
 function isExplicitRustNullishValue(expression: RustExpr): boolean {
-  return expression.kind === "none" ||
-    expression.kind === "path" &&
-      (expression.path === "rt::Undefined" || expression.path === "rt::Null");
+  return expression.kind === "none" || expression.kind === "tuple-literal" && expression.elements.length === 0;
 }
 
 export function planRustOperatorCallExpression(
@@ -802,3 +804,5 @@ function planBooleanLiteralComparison(
     ? negateRustBooleanExpression(literal.other)
     : literal.other;
 }
+import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
+import { planRustOptionalStorageOperation } from "./optional-storage.js";

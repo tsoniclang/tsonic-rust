@@ -5,7 +5,7 @@ import type { RustOptionalChainFact } from "../../target-model/operations/model.
 import {
   rustOptionElementCarrier,
   rustOptionNestingDepth,
-  rustOptionTargetType,
+  rustSourceOptionalTargetType,
 } from "../../target-model/types/index.js";
 
 export type RustOptionalChainSelection =
@@ -58,7 +58,7 @@ export function selectRustOptionalChain(
   const innerIsOption = rustOptionElementCarrier(innerResultCarrier) !== undefined;
   const resultCarrier = innerIsOption
     ? innerResultCarrier
-    : rustOptionTargetType(innerResultCarrier);
+    : rustSourceOptionalTargetType(innerResultCarrier);
   const lowering = innerIsOption ? "and-then" : "map";
   if (sourceResultCarrier !== undefined &&
     !rustTargetTypeRefEquals(sourceResultCarrier, resultCarrier)) {

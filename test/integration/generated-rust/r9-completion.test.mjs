@@ -99,7 +99,7 @@ export async function size_of(path: string): Promise<boolean> {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /info\.is_file\(\)/u);
-  assert.match(text, /info\.size > 0/u);
+  assert.match(text, /info\.size != 0/u);
   assert.doesNotMatch(text, /u64_to_f64|info\.size as f64/u);
 });
 

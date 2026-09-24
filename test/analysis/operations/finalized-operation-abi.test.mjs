@@ -26,7 +26,7 @@ const isize = { kind: "source-primitive", name: "native-int" };
 const jsValue = { kind: "target-named", id: "rust.js.JsValue" };
 const providerError = { kind: "target-named", id: "rust.test.ProviderError" };
 const string = { kind: "target-named", id: "rust.std.String" };
-const sourceNullish = { kind: "target-specific", target: "rust", name: "source-nullish" };
+const sourceNullish = { kind: "target-named", id: "rust.native.absence" };
 const unit = { kind: "tuple", elements: [] };
 const usize = { kind: "source-primitive", name: "native-uint" };
 const typeArgument = (type) => ({ kind: "type", type });
@@ -1072,7 +1072,7 @@ test("finalized ABI rejects sparse arrays at every nested contract boundary", ()
 test("target type references honor optional target-specific payloads and reject malformed children", () => {
   const sparseTypes = Array(1);
   const sparseGenericArguments = Array(1);
-  const payloadFree = { kind: "target-specific", target: "rust", name: "source-nullish" };
+  const payloadFree = { kind: "target-named", id: "rust.native.absence" };
   const slice = { kind: "slice", element: int32 };
   assert.equal(isRustTargetTypeRef(payloadFree), true);
   assert.equal(rustTargetTypeRefEquals(payloadFree, { ...payloadFree }), true);

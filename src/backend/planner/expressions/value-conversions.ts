@@ -186,7 +186,7 @@ export function lowerRustValueConversion(
               }],
             },
             method: "unwrap_or",
-            args: [{ kind: "path", path: "js_abi::JsValue::Undefined" }],
+            args: [{ kind: "path", path: "js_abi::JsValue::Null" }],
           };
     }
     case "js-value-from-array": {

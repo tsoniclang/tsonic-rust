@@ -3,7 +3,7 @@ import test from "node:test";
 import { compileRust } from "../../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
 
-test("dense array comparisons distinguish undefined, null and present values without repeated reads", { timeout: 300_000 }, () => {
+test("dense array comparisons use one absence and retain present values without repeated reads", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     surfaces: ["js"],
     target: { id: "rust", options: { outputType: "bin", crateName: "array_absence_equality" } },
@@ -18,12 +18,12 @@ export function main(): void {
   check(1 === optional[readIndex(0)]);
   check(optional[1] === undefined && optional[2] === undefined);
   check(nullable[0] === 1 && nullable[1] === null);
-  check(nullable[0] !== null && nullable[1] !== undefined);
+  check(nullable[0] !== null && nullable[1] === undefined);
   check(optional[0] !== undefined && optional[0] !== 2);
   optional[1] = 7;
   nullable[1] = 9;
   check(optional[1] !== undefined && nullable[1] !== null);
-  check(optional[1] !== null && nullable[1] !== undefined);
+  check(optional[1] !== null && nullable[1] === undefined);
   optional[1] = undefined;
   nullable[1] = null;
   check(optional[1] === undefined && nullable[1] === null);
@@ -36,22 +36,23 @@ export function main(): void {
   check(allNull[0] !== undefined && allNull[1] !== undefined);
   check(reads === 3);
   check(optional.at(1) === undefined && optional.at(0) !== undefined);
-  check(nullable.at(1) === null && nullable.at(1) !== undefined);
-  check(nullable.at(9) === undefined && nullable.at(9) !== null);
+  check(nullable.at(1) === null && nullable.at(1) === undefined);
+  check(nullable.at(9) === undefined && nullable.at(9) === null);
   check(optional.find(() => true) !== undefined);
   check(optional.findLast(() => true) === undefined);
   check(undefined === optional.findLast(() => true));
   check(nullable.findLast(() => true) === null);
-  check(nullable.findLast(() => true) !== undefined);
+  check(nullable.findLast(() => true) === undefined);
   check(nullable.find(() => false) === undefined);
-  check(nullable.find(() => false) !== null);
+  check(nullable.find(() => false) === null);
   check(optional.findLast(() => { if (reads < 0) throw new Error("predicate"); return true; }) === undefined);
   check(optional.pop() === undefined && optional.shift() === 1);
   check(nullable.pop() === null && nullable.shift() === 1);
   const lookup = new Map<string, number | null>();
   lookup.set("present", null);
-  check(lookup.get("present") === null && lookup.get("present") !== undefined);
-  check(lookup.get("missing") === undefined && lookup.get("missing") !== null);
+  check(lookup.has("present") && !lookup.has("missing"));
+  check(lookup.get("present") === null && lookup.get("present") === undefined);
+  check(lookup.get("missing") === undefined && lookup.get("missing") === null);
 }
 ` },
   });

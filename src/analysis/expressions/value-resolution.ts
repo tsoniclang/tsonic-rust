@@ -38,20 +38,17 @@ import {
   isRustBigIntCarrier,
   isRustBoolCarrier,
   isRustIntegerCarrier,
-  isRustNullCarrier,
+  isRustAbsenceCarrier,
   isRustNumericCarrier,
-  isRustNullishSourceCarrier,
   isRustOptionCarrier,
   isRustSourceStringConvertibleCarrier,
   isRustStringCarrier,
   isRustUnitCarrier,
-  isRustUndefinedCarrier,
   rustOptionElementCarrier,
   rustBigIntTargetType,
-  rustNullTargetType,
+  rustAbsenceTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
-  rustUndefinedTargetType,
   rustSourceTypeCarrierValue,
 } from "../../target-model/types/index.js";
 import {
@@ -218,7 +215,7 @@ export function resolveExpressionCarrierUncached(
       return setCarrierFact(walk, expression, boolCarrier);
     }
     case "KindNullKeyword": {
-      return setCarrierFact(walk, expression, rustNullTargetType());
+      return setCarrierFact(walk, expression, rustAbsenceTargetType());
     }
     case "KindThisExpression":
     case "KindThisKeyword": {
@@ -480,7 +477,7 @@ export function resolveExpressionCarrierUncached(
         );
         return undefined;
       }
-      const resultCarrier = rustUndefinedTargetType();
+      const resultCarrier = rustAbsenceTargetType();
       const operationId = "tsonic.rust.syntax.void";
       setRustOperationFact(walk, expression, {
         kind: "void-expression",
@@ -615,7 +612,7 @@ function rustTypeofResult(
   if (runtimeUnion !== undefined) {
     return { kind: "runtime-union", method: runtimeUnion.typeofMethod, sourceCarrier: carrier };
   }
-  if (isRustNullCarrier(carrier)) {
+  if (isRustAbsenceCarrier(carrier)) {
     return "object";
   }
   if (carrier.kind === "source-primitive") {
@@ -633,14 +630,14 @@ function rustTypeofResult(
   if (isRustBigIntCarrier(carrier)) {
     return "bigint";
   }
-  if (isRustUnitCarrier(carrier) || isRustUndefinedCarrier(carrier)) {
+  if (isRustUnitCarrier(carrier)) {
     return "undefined";
   }
   if (carrier.kind === "function-pointer") {
     return "function";
   }
   const sourceType = rustSourceTypeCarrierValue(carrier);
-  if (sourceType?.shape === "enum" || isRustNullishSourceCarrier(carrier) ||
+  if (sourceType?.shape === "enum" ||
     carrier.kind === "type-parameter" || carrier.kind === "associated-type") {
     return undefined;
   }

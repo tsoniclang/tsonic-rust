@@ -21,7 +21,8 @@ export function rustStructuralGenericCarrier(carrier: TargetTypeRef): RustStruct
     if (source !== carrier && rustStructuralObjectCarrierValue(source) !== undefined) {
       nestedCarriers.push(Object.freeze({ source, carrier: type }));
     }
-    if (type.kind !== "associated-type" || rustTargetTypeParameterNames(type).length === 0) return type;
+    if (!(type.kind === "associated-type" || type.kind === "type-parameter" && type.optionalStorageValue !== undefined) ||
+      rustTargetTypeParameterNames(type).length === 0) return type;
     const key = closedMetadataKey(type);
     const existing = parameters.get(key);
     if (existing !== undefined) return existing;

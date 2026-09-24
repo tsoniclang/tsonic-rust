@@ -1,5 +1,6 @@
 import {
   isRustNeverCarrier,
+  isRustUnitCarrier,
   rustCallableProtocol,
   rustFutureOutputCarrier,
   rustSourceTypeCarrierValue,
@@ -53,6 +54,8 @@ import { rustGenericCallableEffectsFactKey } from "../../../../analysis/facts/ge
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { rustExpressionReferencesPath } from "../../../target-ast/inspection/source-usage.js";
 import { propagateRustBottomOperand } from "../bottom-operands.js";
+import { rustOptionalStorageCallArguments } from "../../types/type-projections.js";
+import { rustLintAttributes } from "../../../target-ast/normalization/lint-policy.js";
 
 export function sourceCallEffectsMatch(
   fact: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>,
@@ -185,6 +188,14 @@ export function planSelectedSourceCall(
       "Selected project-source call has no exact finite Rust callable specialization.",
     ));
     return undefined;
+  }
+  if (selectedDeclaration !== undefined && callableSpecialization === undefined && fact.target.form !== "constructor") {
+    const contract = context.input.program.declarationGenericRequirements.contractFor(selectedDeclaration);
+    if (contract !== undefined) {
+      const substitutions = new Map(contract.typeParameters.map((parameter, index) =>
+        [parameter.name, targetTypeArguments[index]!] as const));
+      targetAstGenericArguments.push(...rustOptionalStorageCallArguments(selectedDeclaration, substitutions, context));
+    }
   }
   const callGenericArguments = targetAstGenericArguments.length === 0 ||
       callableSpecialization !== undefined
@@ -419,6 +430,13 @@ export function planSelectedSourceCall(
       "Selected project-source call target does not resolve to a finalized Rust path or receiver operation.",
     ));
     return undefined;
+  }
+  if (fact.parameters.some((parameter, index) => {
+    const argument = shaped[index];
+    return isRustUnitCarrier(parameter.parameterCarrier) && argument !== undefined &&
+      argument.kind !== "path" && !(argument.kind === "tuple-literal" && argument.elements.length === 0);
+  })) {
+    planned = { kind: "block", valueAttrs: [rustLintAttributes.unitArguments], bindings: [], value: planned };
   }
   if (classBindings.length > 0) planned = { kind: "block", bindings: classBindings.map(binding =>
     rustExpressionReferencesPath(planned!, binding.name) ? binding : { ...binding, name: `_${binding.name}` }), value: planned };

@@ -1,8 +1,7 @@
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../../target-model/types/source-union-definitions.js";
 import {
   inferRustTargetGenericBindings,
-  isRustNullCarrier,
-  isRustUndefinedCarrier,
+  isRustAbsenceCarrier,
   rustOptionElementCarrier,
   rustStrTargetId,
   rustStringTargetType,
@@ -238,7 +237,7 @@ export function instantiateProviderOperationTemplate<
     if (actual === undefined) return false;
     const optionalElement = sourceArgument ? rustOptionElementCarrier(pattern) : undefined;
     if (optionalElement !== undefined) {
-      if (isRustNullCarrier(actual) || isRustUndefinedCarrier(actual)) return true;
+      if (isRustAbsenceCarrier(actual)) return true;
       if (rustOptionElementCarrier(actual) === undefined) pattern = optionalElement;
     }
     const inferred = inferRustTargetGenericBindings(pattern, actual, parameterSet, {

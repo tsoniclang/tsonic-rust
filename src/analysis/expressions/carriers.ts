@@ -21,9 +21,10 @@ import {
   KindSpreadElement,
   KindVoidExpression,
   Node_Expression,
+  Node_Type,
 } from "@tsonic/target-api/source";
 import {
-  isRustDefinitelyNullishCarrier,
+  isRustAbsenceCarrier,
   isRustBigIntCarrier,
   isRustNumericCarrier,
   isRustOptionCarrier,
@@ -43,7 +44,9 @@ import {
   rustTargetOperationFactKey,
   rustTargetOperationResultCarrier,
 } from "../facts/keys.js";
-import { appendRustDiagnostic, rustOperationContext, selectExpressionOperation } from "../program/walk.js";
+import { appendRustDiagnostic, rustOperationContext, rustResolutionContext, selectExpressionOperation } from "../program/walk.js";
+import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
+import { selectedSourceLiteralIsRepresentable } from "../../policy/types/selected-numeric-literal.js";
 import { selectProviderRecordArgument } from "../operations/provider/calls/record-arguments.js";
 import { selectRustExactIntegerConversion } from "../../target-model/conversions/exact-integer.js";
 import { isRustAssignmentOperator, isRustNumericBinaryOperator } from "../../policy/operations/operator-rules.js";
@@ -347,7 +350,11 @@ function resolveExpressionOperationDependencies(
   if (kind === "KindAsExpression" || kind === "KindTypeAssertionExpression") {
     const operand = Node_Expression(ast, expression);
     if (operand !== undefined) {
-      resolveExpressionCarrier(walk, operand, sourceFile, ast.isConstAssertion(expression) ? expected : undefined);
+      const asserted = ast.isConstAssertion(expression) ? expected : resolveRustTargetTypeRef(
+        Node_Type(ast, expression), rustResolutionContext(walk, expression), walk.operationOptions);
+      const literalExpected = asserted?.kind === "source-primitive" &&
+        selectedSourceLiteralIsRepresentable(operand, asserted.name, ast) ? asserted : undefined;
+      resolveExpressionCarrier(walk, operand, sourceFile, ast.isConstAssertion(expression) ? expected : literalExpected);
     }
     return;
   }
@@ -550,7 +557,7 @@ function applyOptionLane(
   if (projected !== undefined && isRustOptionCarrier(projected)) {
     return projected;
   }
-  if (isRustDefinitelyNullishCarrier(projected)) {
+  if (isRustAbsenceCarrier(projected)) {
     const existing = walk.context.facts.get(expression, rustTargetOperationFactKey);
     if (existing === undefined) {
       setRustOperationFact(walk, expression, { kind: "option-none", operationId: "tsonic.rust.option.none" });

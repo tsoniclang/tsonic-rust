@@ -6,10 +6,10 @@ import {
   rustJsArrayTargetType,
   rustJsSymbolTargetType,
   rustSourceLocationTargetType,
-  rustNullTargetType,
+  rustAbsenceTargetType,
   rustNeverTargetType,
   rustOptionElementCarrier,
-  rustOptionTargetType,
+  rustSourceOptionalTargetType,
   rustSourcePrimitiveTargetType,
   rustStructuralObjectTargetType,
   rustStructuralObjectCarrierValue,
@@ -18,7 +18,6 @@ import {
   rustStringTargetType,
   rustTupleTargetType,
   rustUnitTargetType,
-  rustUndefinedTargetType,
   rustVecTargetType,
   isRustNumericCarrier,
 } from "../../../target-model/types/index.js";
@@ -273,10 +272,7 @@ export function resolveRustExactNullishValueCarrier(
   if (!queries.types.isNullish(type)) {
     return undefined;
   }
-  const nonNullishType = queries.types.withoutMissingOrUndefined(type);
-  return nonNullishType !== undefined && queries.types.isNever(nonNullishType)
-    ? rustUndefinedTargetType()
-    : rustNullTargetType();
+  return rustAbsenceTargetType();
 }
 
 export function resolveStructuralObjectType(
@@ -384,7 +380,8 @@ export function resolveStructuralObjectType(
           carrier !== undefined && rustTargetTypeRefEquals(carrier, authoredCarriers[0]))
       ? authoredCarriers[0]
       : undefined;
-    const initializerCarriers = authoredTypeNodes.length === 0 && semantics.types.isNumberLike(property.type)
+    const initializerCarriers = authoredTypeNodes.length === 0 &&
+      (semantics.types.isNumberLike(property.type) || semantics.types.isBigIntLike(property.type))
       ? ordinaryDeclarations.map(declaration => {
           const kind = context.ast.kindName(declaration);
           const value = kind === "KindPropertyAssignment" || kind === "KindShorthandPropertyAssignment"
@@ -401,7 +398,7 @@ export function resolveStructuralObjectType(
     const fieldCarrier = selectedFieldCarrier === undefined
       ? undefined
       : property.optional && rustOptionElementCarrier(selectedFieldCarrier) === undefined
-        ? rustOptionTargetType(selectedFieldCarrier)
+        ? rustSourceOptionalTargetType(selectedFieldCarrier)
         : selectedFieldCarrier;
     const accessor = getters.length === 1 && setters.length <= 1 &&
         ordinaryDeclarations.length === 0 && methods.length === 0

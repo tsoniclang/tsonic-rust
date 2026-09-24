@@ -11,7 +11,7 @@ import {
   isRustVecCarrier,
   isRustStringCarrier,
   rustOptionElementCarrier,
-  rustOptionTargetType,
+  rustSourceOptionalTargetType,
   rustSliceElementCarrier,
   isRustJsValueCarrier,
   rustProgramErrorTargetType,
@@ -176,15 +176,15 @@ export function createRustSourceCallableAbiResolver(input: {
       const abi = form === "optional"
         ? {
             form,
-            valueCarrier: rustOptionTargetType(base),
-            parameterCarrier: rustOptionTargetType(base),
+            valueCarrier: rustSourceOptionalTargetType(base),
+            parameterCarrier: rustSourceOptionalTargetType(base),
             mode: "value" as const,
           }
         : form === "default"
           ? {
               form,
               valueCarrier: base,
-              parameterCarrier: rustOptionTargetType(base),
+              parameterCarrier: rustSourceOptionalTargetType(base),
               mode: "value" as const,
             }
           : form === "rest"

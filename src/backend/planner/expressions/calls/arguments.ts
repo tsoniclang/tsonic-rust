@@ -41,6 +41,7 @@ import { rustSpreadElementCarrier } from "../../../../target-model/operations/re
 import { planRustRestAssembly } from "./rest-assembly.js";
 import { validateRustFinalizedOperationAbi } from "../../../../analysis/facts/finalized-operation-abi.js";
 import type { Node } from "@tsonic/tsts";
+import { planRustAbsentValue } from "../optional-storage.js";
 import type { RustExpr } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustSelectedTargetSignature as SelectedTargetSignatureFact, TargetTypeRef } from "../../../../target-model/types/model.js";
@@ -97,7 +98,7 @@ export function shapeRustSourceCallParameters(
       if (parameter.form !== "optional" && parameter.form !== "default") {
         return undefined;
       }
-      shaped.push({ kind: "none" });
+      shaped.push(planRustAbsentValue(parameter.parameterCarrier, context));
       continue;
     }
     if (parameter.inputs.length !== 1) {

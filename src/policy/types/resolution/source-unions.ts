@@ -6,6 +6,11 @@ import { rustSourceUnionCarrierValue } from "../../../target-model/types/carrier
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { resolveRustTargetType } from "./target.js";
 import { rustSourceUnionMemberDeclarationIsOwned } from "../../evidence/source-union-members.js";
+import {
+  isRustAbsenceCarrier,
+  rustAbsenceTargetType,
+} from "../../../target-model/types/index.js";
+import { rustSourceOptionalTargetType } from "../../../target-model/types/projections.js";
 
 export function retainRustSourceUnionInstantiation(
   sourceType: Type,
@@ -89,4 +94,17 @@ function sourceDeclarations(type: Type, context: RustTargetTypeResolutionContext
   const declarations = context.currentSemantics.declarations;
   const symbol = declarations.typeSymbol(type);
   return symbol === undefined ? [] : declarations.symbolDeclarations(symbol);
+}
+
+export function resolveRustSourceUnionCarrier(
+  members: readonly TargetTypeRef[],
+  resolveValues: (values: readonly TargetTypeRef[]) => TargetTypeRef | undefined,
+): TargetTypeRef | undefined {
+  const values = members.filter((member) => !isRustAbsenceCarrier(member));
+  const distinct = values.filter((value, index) =>
+    values.findIndex((candidate) => rustTargetTypeRefEquals(candidate, value)) === index);
+  const absent = values.length !== members.length;
+  if (distinct.length === 0) return absent ? rustAbsenceTargetType() : undefined;
+  const value = distinct.length === 1 ? distinct[0] : resolveValues(distinct);
+  return value === undefined || !absent ? value : rustSourceOptionalTargetType(value);
 }

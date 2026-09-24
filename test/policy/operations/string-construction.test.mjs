@@ -40,7 +40,7 @@ function quote(value: string): string { return JSON.stringify(value); }
 export function main(): void {
   check(quote("héllo 😀") === '"héllo 😀"');
   check(JSON.stringify("line\n").slice(1, -1) === "line\\n");
-  check(JSON.stringify(undefined) === undefined);
+  check(JSON.stringify(undefined) === "null" && JSON.stringify(null) === "null");
 }
 ` },
   });
@@ -59,7 +59,7 @@ function numeric(value: number | bigint): string { return globalThis.String(valu
 function text(value: string): string { return String(value); }
 function local(): string { const String = (value: number): string => "local"; return String(12); }
 export function main(): void {
-  check(String() === "" && String(undefined) === "undefined" && String(null) === "null");
+  check(String() === "" && String(undefined) === "null" && String(null) === "null");
   check(String(true) === "true" && String(false) === "false" && text("a😀z") === "a😀z");
   check(String(-0) === "0" && String(1.5) === "1.5" && String(1e21) === "1e+21");
   check(String(Number.NaN) === "NaN" && String(Number.POSITIVE_INFINITY) === "Infinity");
@@ -101,7 +101,7 @@ function unit(): void { visits += 1; }
 function optional(value: number | undefined): boolean { return value === undefined; }
 function compare(value: number | undefined): boolean { return value === void unit(); }
 export function main(): void {
-  if (String(void value()) !== "undefined" || String(void unit()) !== "undefined" ||
+  if (String(void value()) !== "null" || String(void unit()) !== "null" ||
     !optional(void value()) || !optional(void unit()) || !compare(undefined) || visits !== 5) {
     throw new Error("void evaluation");
   }

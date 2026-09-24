@@ -98,6 +98,7 @@ test("native zero comparisons preserve runtime effects and compile without warni
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": `
 import type { int32, nativeUint } from "@tsonic/core/types.js";
 let calls: int32 = 0;
+function callCount(): int32 { return calls; }
 function next(): nativeUint { calls++; return 3; }
 function signed(value: int32): boolean { return value < 0; }
 function floating(value: number): boolean { return value < 0; }
@@ -106,8 +107,8 @@ export function main(): void {
   if (values.length !== 0 || !(0 >= values.length)) throw new Error("empty");
   values.push(3);
   if (!(values.length > 0) || values.length <= 0 || !(0 < values.length)) throw new Error("nonempty");
-  if (next() < 0 || !(next() >= 0) || calls !== 2) throw new Error("effects");
-  if (next() <= 0 || !(0 < next()) || calls !== 4) throw new Error("native zero equality");
+  if (next() < 0 || !(next() >= 0) || callCount() !== 2) throw new Error("effects");
+  if (next() <= 0 || !(0 < next()) || callCount() !== 4) throw new Error("native zero equality");
   if (!signed(-1) || !floating(-0.5)) throw new Error("signed controls");
 }
 ` } });

@@ -1,3 +1,4 @@
+import { resolveRustSourceUnionCarrier } from "./source-unions.js";
 import {
   ArrayTypeNode_ElementType,
   Node_Type,
@@ -12,14 +13,14 @@ import {
   rustJsStringTargetType,
   rustSourceLocationTargetType,
   rustRawPointerTargetType,
-  rustNullTargetType,
+  rustAbsenceTargetType,
+  isRustAbsenceCarrier,
   rustNeverTargetType,
   rustOptionTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
   rustTupleTargetType,
   rustUnitTargetType,
-  rustUndefinedTargetType,
   rustVecTargetType,
 } from "../../../target-model/types/index.js";
 import { asNode } from "../../evidence/selected-source.js";
@@ -277,18 +278,18 @@ export function resolveRustTargetTypeSyntax(
       { ...context, currentSemantics: semantics }, options, resolving, node);
   }
   if (kind === "KindNullKeyword") {
-    return rustNullTargetType();
+    return rustAbsenceTargetType();
   }
   if (kind === "KindUndefinedKeyword") {
-    return rustUndefinedTargetType();
+    return rustAbsenceTargetType();
   }
   if (kind === "KindVoidExpression") {
-    return ast.as.AsVoidExpression(node)?.Expression === undefined ? undefined : rustUndefinedTargetType();
+    return ast.as.AsVoidExpression(node)?.Expression === undefined ? undefined : rustAbsenceTargetType();
   }
   if (kind === "KindLiteralType") {
     const literal = ast.as.AsLiteralTypeNode(node)?.Literal;
     if (literal !== undefined && ast.kindName(literal) === "KindNullKeyword") {
-      return rustNullTargetType();
+      return rustAbsenceTargetType();
     }
   }
   if (kind === "KindAnyKeyword" || kind === "KindUnknownKeyword") {
@@ -376,45 +377,24 @@ export function resolveRustTargetTypeSyntax(
     }
     const semanticMembers = members.filter((child) => ast.kindName(child) !== "KindBarToken");
     const sourceType = semantics?.types.expressionType(node);
-    if (semantics !== undefined && sourceType !== undefined) {
-      const selectedTypes = semanticMembers.map(member => semantics.types.expressionType(member));
-      const selectedCarriers = semanticMembers.map(member => resolveRustAuthoredTargetType(member, context, options, resolving));
-      if (selectedTypes.every(type => type !== undefined) && selectedCarriers.every(carrier => carrier !== undefined)) {
-        const common = options.resolveProjectUnionCarrier(selectedCarriers as TargetTypeRef[]);
-        if (common !== undefined && selectedCarriers.some(carrier => rustTargetTypeRefEquals(carrier, common))) return common;
-        const union = resolveRustInferredObjectUnion(sourceType, selectedTypes as Type[], selectedCarriers as TargetTypeRef[],
-          { ...context, currentSemantics: semantics, currentSourceFile: sourceFile! }, options);
-        if (union !== undefined) return union;
-        if (common !== undefined) return common;
-      }
-    }
-    if (semanticMembers.length === 2) {
-      const nullish = semanticMembers.find((member) => {
-        const memberKind = ast.kindName(member);
-        if (memberKind === "KindUndefinedKeyword") {
-          return true;
-        }
-        if (memberKind !== "KindLiteralType") {
-          return false;
-        }
-        return ast.children(member).some((child) =>
-          child !== undefined && ast.kindName(child) === "KindNullKeyword");
+    const selectedCarriers = semanticMembers.map(member => resolveRustAuthoredTargetType(member, context, options, resolving));
+    if (selectedCarriers.every(carrier => carrier !== undefined)) {
+      const selected = resolveRustSourceUnionCarrier(selectedCarriers as TargetTypeRef[], values => {
+        const common = options.resolveProjectUnionCarrier(values);
+        if (common !== undefined && values.some(carrier => rustTargetTypeRefEquals(carrier, common))) return common;
+        const valueNodes = semanticMembers.filter((_, index) => !isRustAbsenceCarrier(selectedCarriers[index]));
+        const valueCarriers = selectedCarriers.filter(carrier => !isRustAbsenceCarrier(carrier)) as TargetTypeRef[];
+        const valueTypes = valueNodes.map(member => semantics?.types.expressionType(member));
+        return semantics === undefined || sourceType === undefined || valueTypes.some(type => type === undefined)
+          ? common
+          : resolveRustInferredObjectUnion(sourceType, valueTypes as Type[], valueCarriers,
+              { ...context, currentSemantics: semantics, currentSourceFile: sourceFile! }, options) ?? common;
       });
-      const value = semanticMembers.find((member) => member !== nullish);
-      const valueCarrier = nullish === undefined || value === undefined
-        ? undefined
-        : resolveRustAuthoredTargetType(value, context, options, resolving);
-      if (valueCarrier !== undefined) {
-        return rustOptionTargetType(valueCarrier);
-      }
+      if (selected !== undefined) return selected;
     }
-    return resolveRustTargetType(
-      semantics?.types.expressionType(node),
-      context,
-      options,
-      resolving,
-    );
+    return resolveRustTargetType(sourceType, context, options, resolving);
   }
+
   if (kind !== "KindTypeReference" || semantics === undefined) {
     return undefined;
   }

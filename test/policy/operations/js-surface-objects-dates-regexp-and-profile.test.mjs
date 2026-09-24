@@ -12,7 +12,7 @@ import {
   rustJsArrayTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
-  rustUndefinedTargetType,
+  rustAbsenceTargetType,
   rustVecTargetType,
 } from "../../../dist/target-model/types/index.js";
 import { rustInt32ToFloat64ValueConversion } from "../../../dist/target-model/conversions/model.js";

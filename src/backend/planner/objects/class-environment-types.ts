@@ -4,6 +4,7 @@ import type { RustTypeRenderingContext } from "../types/render.js";
 import { rustTargetGenericArgumentToAstInContext } from "../types/render.js";
 import { rustSourceTypeCarrierValue } from "../../../target-model/types/index.js";
 import { sourceModuleItemPath } from "../program/plan-context.js";
+import { rustOptionalStorageTypeArguments } from "../types/type-projections.js";
 
 export function rustClassEnvironmentType(carrier: TargetTypeRef, context: RustTypeRenderingContext): RustType | undefined {
   const environment = context.input.program.classValues.forCarrier(carrier)?.environment;
@@ -15,7 +16,8 @@ export function rustClassEnvironmentType(carrier: TargetTypeRef, context: RustTy
     return argument === undefined ? undefined : rustTargetGenericArgumentToAstInContext(argument, context);
   });
   if (path === undefined || arguments_.some(argument => argument === undefined)) return undefined;
-  return { kind: "named", path, genericArguments: arguments_ as NonNullable<typeof arguments_[number]>[] };
+  return { kind: "named", path, genericArguments: [...arguments_ as NonNullable<typeof arguments_[number]>[],
+    ...rustOptionalStorageTypeArguments(carrier, context, environment.genericParameterIndexes)] };
 }
 
 export function rustClassEnvironmentHandleType(carrier: TargetTypeRef, context: RustTypeRenderingContext): RustType | undefined {

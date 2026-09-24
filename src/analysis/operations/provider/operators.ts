@@ -4,7 +4,7 @@ import {
   isRustBoolCarrier,
   isRustProgramErrorCarrier,
   isRustNumericCarrier,
-  isRustNullishSourceCarrier,
+  isRustAbsenceCarrier,
   rustOptionElementCarrier,
   isRustSignedNumericCarrier,
 } from "../../../target-model/types/index.js";
@@ -68,7 +68,7 @@ export function selectRustCheckedOperator(
     }
     let left = resolveRustTargetTypeRef(request.left, context, options);
     let right = resolveRustTargetTypeRef(request.right, context, options);
-    if (isRustNullishSourceCarrier(right)) {
+    if (isRustAbsenceCarrier(right)) {
       const rightNode = asNode(request.right, context);
       const rightType = rightNode === undefined
         ? undefined
@@ -542,7 +542,7 @@ function mapSelectedProviderAssignment(
   if (rightNode !== undefined && context.ast.kindName(rightNode) === "KindArrayLiteralExpression") {
     sourceResultCarrier = rustOptionElementCarrier(selectedRight) ?? selectedRight;
   }
-  if (isRustNullishSourceCarrier(sourceResultCarrier)) {
+  if (isRustAbsenceCarrier(sourceResultCarrier)) {
     const sourceNode = asNode(request.right, context);
     const sourceType = sourceNode === undefined ? undefined : context.currentSemantics.types.expressionType(sourceNode);
     sourceResultCarrier = sourceType === undefined ? undefined

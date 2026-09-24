@@ -26,7 +26,7 @@ import {
 import {
   rustFutureOutputCarrier,
   getRustGeneratorProtocol,
-  rustOptionTargetType,
+  rustSourceOptionalTargetType,
   rustCallableProtocol,
   rustClosureProtocol,
   rustCallableTargetType,
@@ -344,7 +344,7 @@ function recordCallableValueSignatureFacts(
     }
     const parameterCarrier = Node_Initializer(ast, parameter) === undefined
       ? sourceParameterCarrier
-      : rustOptionTargetType(sourceParameterCarrier);
+      : rustSourceOptionalTargetType(sourceParameterCarrier);
     const parameterAbi = resolveRustContextualParameterAbi(
       parameter,
       parameterCarrier,

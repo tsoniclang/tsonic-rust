@@ -3,6 +3,7 @@ import {
   inferRustTargetTypeParameterBindings,
   isRustNumericCarrier,
   rustOptionElementCarrier,
+  rustOptionTargetType,
   rustTargetGenericBindingsForArguments,
   rustTargetGenericReferences,
   substituteRustTargetGenerics,
@@ -33,6 +34,8 @@ import { rustSpreadElementCarrier } from "../../target-model/operations/rest-ass
 import { rustLifetimeKey, rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
 import { selectRustIndexedCallKeys } from "./indexed-call-keys.js";
 import { rustIndexedFieldKeyArgument } from "../facts/indexed-field-keys.js";
+import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
+import { rustOptionalStorageValue, rustSourceOptionalTargetType } from "../../target-model/types/projections.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type {
@@ -168,12 +171,19 @@ function reconcileProjectSourceArgumentTypeParameters(
           : parameter.type;
       const instantiatedParameterCarrier = parameterCarrier === undefined
         ? undefined
-        : substituteRustTargetGenerics(
+        : mapRustTargetTypes(substituteRustTargetGenerics(
             parameterCarrier,
             new Map(),
             initialSubstitutions.lifetimes,
             initialSubstitutions.consts,
-          );
+          ), carrier => {
+            const value = rustOptionalStorageValue(carrier);
+            if (value === undefined) return carrier;
+            const selected = substituteRustTargetGenerics(value, initialSubstitutions.types,
+              initialSubstitutions.lifetimes, initialSubstitutions.consts);
+            return rustTargetTypeRefEquals(selected, rustSourceOptionalTargetType(selected))
+              ? value : rustOptionTargetType(value);
+          });
       const actualCarrier = actual === undefined ? undefined : binding.sourceForm === "spread-element"
         ? binding.spreadElementIndex === undefined
           ? undefined

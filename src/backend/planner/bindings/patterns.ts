@@ -421,7 +421,7 @@ function normalizeBindingValue(
   }
   const activeErrorType = rustActiveErrorType(context);
   if (activeErrorType === undefined) {
-    return rustOptionDefaultValue(flattened, fallback);
+    return rustOptionDefaultValue(flattened, fallback, fact.projectedCarrier, context);
   }
   const result = (value: RustExpr): RustExpr => ({
     kind: "call",

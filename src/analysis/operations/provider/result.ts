@@ -1,5 +1,5 @@
 import {
-  isRustDefinitelyNullishCarrier,
+  isRustAbsenceCarrier,
   isRustProgramErrorCarrier,
   isRustNumericCarrier,
   rustOptionElementCarrier,
@@ -608,7 +608,7 @@ export function normalizeSelectedOperationInputCarrier(
     }
     return direct;
   }
-  if (isRustDefinitelyNullishCarrier(direct)) {
+  if (isRustAbsenceCarrier(direct)) {
     return expected;
   }
   const inner = normalizeSelectedLiteralCarrier(
@@ -682,7 +682,7 @@ export function selectedArgumentMatchScore(
     }
     const optionElement = rustOptionElementCarrier(expected);
     if (optionElement !== undefined &&
-      (isRustDefinitelyNullishCarrier(actual) ||
+      (isRustAbsenceCarrier(actual) ||
         rustTargetTypeRefEquals(actual, optionElement) ||
         (optionElement.kind === "source-primitive" && isRustNumericCarrier(optionElement) &&
           sourceLiteralIsRepresentableAsPrimitive(node, optionElement.name, context)))) {

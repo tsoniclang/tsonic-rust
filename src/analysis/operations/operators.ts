@@ -34,15 +34,14 @@ import {
 } from "../../policy/operations/operator-rules.js";
 import {
   isRustBigIntCarrier,
-  isRustDefinitelyNullishCarrier,
+  isRustAbsenceCarrier,
   isRustNeverCarrier,
   isRustNumericCarrier,
   isRustIntegerCarrier,
-  isRustNullishSourceCarrier,
   isRustOptionCarrier,
   isRustStringCarrier,
   rustOptionElementCarrier,
-  rustOptionTargetType,
+  rustSourceOptionalTargetType,
   rustOptionValueCarrier,
   rustBigIntTargetType,
   rustSourcePrimitiveTargetType,
@@ -274,7 +273,9 @@ function contextualLiteralOperandCarrier(
   expression: Node,
   counterpart: TargetTypeRef | undefined,
 ): TargetTypeRef | undefined {
-  if (isRustNullishSourceCarrier(counterpart) || counterpart?.kind === "type-parameter") return undefined;
+  if (isRustAbsenceCarrier(counterpart) || counterpart?.kind === "type-parameter") return undefined;
+  const integerJoin = selectedIntegerLiteralJoin(expression, counterpart, ast);
+  if (integerJoin !== undefined) return integerJoin;
   const kind = ast.kindName(expression);
   if (kind === KindPrefixUnaryExpression || kind === KindParenthesizedExpression) {
     const operand = kind === KindPrefixUnaryExpression ? Node_Operand(ast, expression) : Node_Expression(ast, expression);
@@ -389,7 +390,7 @@ export function resolvePostCheckBinaryCarrier(
       ? "value"
       : inner !== undefined && rustTargetTypeRefEquals(left, rightValue)
         ? "option"
-        : inner === undefined && !isRustNullishSourceCarrier(left) && rustTargetTypeRefEquals(left, rightValue)
+        : inner === undefined && !isRustAbsenceCarrier(left) && rustTargetTypeRefEquals(left, rightValue)
           ? "identity"
           : undefined;
     if (presentResult !== undefined && rightValue !== undefined && storage !== undefined &&
@@ -439,10 +440,10 @@ export function resolvePostCheckBinaryCarrier(
         rightOptionDepth: rawDepth ?? rustOptionNestingDepth(right, inner)!,
         rightValueForm: rawDepth === undefined ? "value" : "raw",
         leftValueCarrier: inner,
-        resultCarrier: rustOptionTargetType(inner),
+        resultCarrier: rustSourceOptionalTargetType(inner),
       };
-    } else if (inner !== undefined && isRustDefinitelyNullishCarrier(right) && leftOptionDepth !== undefined) {
-      const resultCarrier = rustOptionTargetType(inner);
+    } else if (inner !== undefined && isRustAbsenceCarrier(right) && leftOptionDepth !== undefined) {
+      const resultCarrier = rustSourceOptionalTargetType(inner);
       const fallback = resolveExpressionCarrier(walk, rightNode, sourceFile, resultCarrier);
       if (rustTargetTypeRefEquals(fallback, resultCarrier)) {
         fact = {
@@ -457,9 +458,9 @@ export function resolvePostCheckBinaryCarrier(
       }
     } else if (left !== undefined && right !== undefined &&
       (rustTargetTypeRefEquals(left, right) || isRustNeverCarrier(right)) &&
-      !isRustOptionCarrier(left) && !isRustNullishSourceCarrier(left) &&
+      !isRustOptionCarrier(left) && !isRustAbsenceCarrier(left) &&
       rustRuntimeUnionContract(left)?.alternatives.some(alternative =>
-        isRustDefinitelyNullishCarrier(alternative.carrier)) !== true) {
+        isRustAbsenceCarrier(alternative.carrier)) !== true) {
       fact = {
         kind: "nullish-identity",
         operationId: "tsonic.rust.nullish.identity",
@@ -496,7 +497,7 @@ export function resolvePostCheckBinaryCarrier(
   } else if ((operatorKind === KindEqualsEqualsEqualsToken ||
       operatorKind === KindExclamationEqualsEqualsToken ||
       operatorKind === "KindEqualsEqualsToken" || operatorKind === "KindExclamationEqualsToken") &&
-    isRustDefinitelyNullishCarrier(left) && isRustDefinitelyNullishCarrier(right)) {
+    isRustAbsenceCarrier(left) && isRustAbsenceCarrier(right)) {
     const equal = operatorKind === "KindEqualsEqualsToken" || operatorKind === "KindExclamationEqualsToken" ||
       rustTargetTypeRefEquals(left, right);
     const negated = operatorKind === KindExclamationEqualsEqualsToken || operatorKind === "KindExclamationEqualsToken";
@@ -510,11 +511,11 @@ export function resolvePostCheckBinaryCarrier(
     };
   } else if ((operatorKind === KindEqualsEqualsEqualsToken ||
       operatorKind === KindExclamationEqualsEqualsToken) &&
-    ((isRustDefinitelyNullishCarrier(left) && right !== undefined &&
-        !isRustDefinitelyNullishCarrier(right) && !isRustOptionCarrier(right) &&
+    ((isRustAbsenceCarrier(left) && right !== undefined &&
+        !isRustAbsenceCarrier(right) && !isRustOptionCarrier(right) &&
         left !== undefined && rustRuntimeUnionProjection(right, left) === undefined) ||
-      (isRustDefinitelyNullishCarrier(right) && left !== undefined &&
-        !isRustDefinitelyNullishCarrier(left) && !isRustOptionCarrier(left) &&
+      (isRustAbsenceCarrier(right) && left !== undefined &&
+        !isRustAbsenceCarrier(left) && !isRustOptionCarrier(left) &&
         right !== undefined && rustRuntimeUnionProjection(left, right) === undefined))) {
     fact = {
       kind: "constant-equality",

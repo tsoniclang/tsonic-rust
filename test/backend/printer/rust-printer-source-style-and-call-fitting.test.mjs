@@ -21,6 +21,31 @@ test("only native-unused generic parameters retain a focused contract expectatio
   assert.match(items[0].attrs.join("\n"), /expect\(clippy::extra_unused_type_parameters/u);
   assert.doesNotMatch((items[1].attrs ?? []).join("\n"), /extra_unused_type_parameters/u);
   assert.doesNotMatch((items[2].attrs ?? []).join("\n"), /extra_unused_type_parameters/u);
+  const bounded = make("bounded", [{ name: "value", type: { kind: "named", path: "Storage" } }], truth);
+  bounded.generics.parameters.push({ kind: "type", name: "Storage", bounds: [{ kind: "trait-type", reference: {
+    trait: { kind: "named", path: "rt::OptionalStorage", genericArguments: [{ kind: "type", type: { kind: "named", path: "Value" } }] },
+  } }] });
+  const boundItem = finalizeRustSourceStyle({ headerComment, items: [bounded] }).items[0];
+  assert.doesNotMatch((boundItem.attrs ?? []).join("\n"), /extra_unused_type_parameters/u);
+});
+
+test("identical native absence branches preserve conditions without merging different constants", () => {
+  const condition = { kind: "call", path: "observe", args: [] };
+  const owner = { kind: "named", path: "Option", genericArguments: [{ kind: "type", type: { kind: "primitive", name: "i64" } }] };
+  const none = { kind: "associated-value", owner, name: "None" };
+  for (const [whenTrue, whenFalse, merged] of [
+    [{ kind: "none" }, { kind: "none" }, true],
+    [{ kind: "tuple-literal", elements: [] }, { kind: "tuple-literal", elements: [] }, true],
+    [none, { ...none }, true],
+    [none, { ...none, owner: { kind: "named", path: "Other" } }, false],
+    [none, { ...none, trait: { kind: "named", path: "Other" } }, false],
+    [{ kind: "call", path: "value", args: [] }, { kind: "call", path: "value", args: [] }, false],
+  ]) {
+    const conditional = { kind: "conditional", condition, whenTrue, whenFalse };
+    const result = finalizeRustSourceStyle({ headerComment, items: [{ kind: "const", name: "VALUE", visibility: "crate",
+      type: owner, value: conditional }] }).items[0].value;
+    assert.deepEqual(result, merged ? { kind: "evaluate-then", effect: condition, discard: "value", value: whenTrue } : conditional);
+  }
 });
 
 function printRustSourceFile(model) {

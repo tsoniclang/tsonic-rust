@@ -6,7 +6,7 @@ import { rustOperationContext, rustResolutionContext, selectExpressionOperation 
 import type { RustFactWalk } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { selectRustNumericBinaryPromotion } from "../../policy/operations/numeric-promotion.js";
-import { isRustBigIntCarrier, isRustDefinitelyNullishCarrier, isRustNumericCarrier, rustOptionElementCarrier, rustOptionTargetType } from "../../target-model/types/index.js";
+import { isRustBigIntCarrier, isRustAbsenceCarrier, isRustNumericCarrier, rustOptionElementCarrier, rustOptionTargetType } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
@@ -45,7 +45,7 @@ export function selectRustInferredNumericReturn(
     const carriers = expressions.map(expression => expressionCarrier(expression));
     let selected: TargetTypeRef | undefined;
     for (const carrier of carriers) {
-      if (carrier !== undefined && isRustDefinitelyNullishCarrier(carrier) && rustOptionElementCarrier(baseline) !== undefined) continue;
+      if (carrier !== undefined && isRustAbsenceCarrier(carrier) && rustOptionElementCarrier(baseline) !== undefined) continue;
       if (carrier === undefined || (!isRustNumericCarrier(carrier) && !isRustBigIntCarrier(carrier))) {
         selected = undefined;
         break;

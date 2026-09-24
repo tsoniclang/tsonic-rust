@@ -148,10 +148,10 @@ test("source trait references require source-owned paths rather than native-path
   assert.equal(isRustTargetTypeRef(family.trait), true);
   assert.equal(isRustTargetTypeRef({ ...family.trait, path: "other" }), false);
   assert.equal(rustTypeFromCarrier(projection), undefined);
-  assert.deepEqual(rustTypeFromCarrier(projection, (source) => {
+  assert.deepEqual(rustTypeFromCarrier(projection, { pathFor: (source) => {
     assert.deepEqual(source, family.trait.sourceItem);
     return "crate::storage::Storage";
-  }), { kind: "qualified", owner: { kind: "named", path: "T" },
+  }, additionalArgumentsFor: () => [] }), { kind: "qualified", owner: { kind: "named", path: "T" },
     trait: { kind: "named", path: "crate::storage::Storage" }, member: "Output" });
   assert.equal(rustTargetTypeRefEquals(family.trait, {
     ...family.trait, sourceItem: { ...family.trait.sourceItem, fileName: "/other.ts" },

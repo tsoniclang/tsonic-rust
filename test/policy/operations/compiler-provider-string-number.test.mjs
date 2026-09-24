@@ -18,10 +18,10 @@ function reversedNull(value: string | number | null | undefined): boolean { retu
 function reversedUndefined(value: string | number | null | undefined): boolean { return undefined === value; }
 export function main(): void {
   check(describe("pipe") === 4 && describe(3) === 4);
-  check(isNull(null) && !isNull(undefined) && !isNull("null"));
-  check(isUndefined(undefined) && !isUndefined(null) && !isUndefined(0));
-  check(reversedNull(null) && !reversedNull(undefined));
-  check(reversedUndefined(undefined) && !reversedUndefined(null));
+  check(isNull(null) && isNull(undefined) && !isNull("null"));
+  check(isUndefined(undefined) && isUndefined(null) && !isUndefined(0));
+  check(reversedNull(null) && reversedNull(undefined));
+  check(reversedUndefined(undefined) && reversedUndefined(null));
 }
 ` } });
   assert.deepEqual(result.diagnostics, []);

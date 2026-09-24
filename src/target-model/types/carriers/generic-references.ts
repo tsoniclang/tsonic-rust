@@ -39,7 +39,7 @@ export function visitRustTargetTypeParameters(
 ): boolean {
   switch (type.kind) {
     case "type-parameter":
-      return visit(type.name);
+      return type.optionalStorageValue === undefined ? visit(type.name) : visitRustTargetTypeParameters(type.optionalStorageValue, visit);
     case "target-named":
       return visitGenericArgumentTypes(type.genericArguments, visit);
     case "array":
@@ -211,7 +211,8 @@ export function rustTargetGenericReferences(
   function visitType(value: TargetTypeRef, bound: ReadonlySet<string>): void {
     switch (value.kind) {
       case "type-parameter":
-        typeNames.add(value.name);
+        if (value.optionalStorageValue === undefined) typeNames.add(value.name);
+        else visitType(value.optionalStorageValue, bound);
         return;
       case "target-named":
         visitArguments(value.genericArguments, bound);

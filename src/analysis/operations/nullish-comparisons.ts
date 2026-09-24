@@ -3,15 +3,14 @@ import type { Node } from "@tsonic/tsts";
 import { rustArrayEntryBinding, rustArrayEntryPayloadExcludesNullish } from "../control-flow/array-entry-values.js";
 import { rustOptionalChainFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
 import {
-  isRustDefinitelyNullishCarrier,
+  isRustAbsenceCarrier,
   isRustOptionCarrier,
   rustOptionElementCarrier,
-  rustUndefinedTargetType,
 } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { resolveRustExactNullishValueCarrier } from "../../policy/types/resolution/target.js";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { rustOptionalStorageValue } from "../../target-model/types/projections.js";
 
 export function selectedOptionNullishRelationship(
   walk: RustFactWalk,
@@ -23,9 +22,9 @@ export function selectedOptionNullishRelationship(
   const selected = (depths: readonly number[], negated = false) => Object.freeze({ depths: Object.freeze(depths), negated });
   const leftIsOption = isRustOptionCarrier(leftCarrier);
   const rightIsOption = isRustOptionCarrier(rightCarrier);
-  const optionNode = leftIsOption && isRustDefinitelyNullishCarrier(rightCarrier)
+  const optionNode = leftIsOption && isRustAbsenceCarrier(rightCarrier)
     ? leftNode
-    : rightIsOption && isRustDefinitelyNullishCarrier(leftCarrier)
+    : rightIsOption && isRustAbsenceCarrier(leftCarrier)
       ? rightNode
       : undefined;
   const nullishNode = optionNode === leftNode
@@ -36,17 +35,18 @@ export function selectedOptionNullishRelationship(
   if (optionNode === undefined || nullishNode === undefined) {
     return undefined;
   }
+  const selectedCarrier = optionNode === leftNode ? leftCarrier : rightCarrier;
+  if (selectedCarrier?.kind === "target-named" && selectedCarrier.sourceAbsence === true ||
+    rustOptionalStorageValue(selectedCarrier) !== undefined) return selected([0]);
   const optionalChain = walk.context.facts.get(optionNode, rustOptionalChainFactKey) ??
     walk.context.facts.resolve(optionNode, rustOptionalChainFactKey);
   if (optionalChain?.lowering === "map" &&
     rustTargetTypeRefEquals(optionalChain.resultCarrier, optionNode === leftNode ? leftCarrier : rightCarrier)) {
-    return rustTargetTypeRefEquals(optionNode === leftNode ? rightCarrier : leftCarrier, rustUndefinedTargetType())
-      ? selected([0]) : selected([]);
+    return selected([0]);
   }
   if (rustArrayEntryBinding(walk, optionNode) !== undefined) {
     if (!rustArrayEntryPayloadExcludesNullish(walk, optionNode)) return undefined;
-    return rustTargetTypeRefEquals(optionNode === leftNode ? rightCarrier : leftCarrier, rustUndefinedTargetType())
-      ? selected([0]) : selected([]);
+    return selected([0]);
   }
   const optionFact = walk.context.facts.get(optionNode, rustTargetOperationFactKey) ??
     walk.context.facts.resolve(optionNode, rustTargetOperationFactKey) ??
@@ -63,7 +63,7 @@ export function selectedOptionNullishRelationship(
       matchingDepths.push(0);
     }
     const payload = rustOptionElementCarrier(optionNode === leftNode ? leftCarrier : rightCarrier);
-    if (isRustDefinitelyNullishCarrier(payload)) {
+    if (isRustAbsenceCarrier(payload)) {
       if (!rustTargetTypeRefEquals(payload, optionFact.sourceResultCarrier)) return undefined;
       const presentMatches = rustTargetTypeRefEquals(payload, comparedNullishCarrier);
       return (matchingDepths.length === 1) === presentMatches
@@ -106,22 +106,11 @@ export function selectedOptionNullishRelationship(
   const members = optionSemantics.types.isUnion(optionType)
     ? optionSemantics.types.unionOrIntersectionTypes(optionType)
     : [optionType];
-  let nullishMembers = members.filter((member) => optionSemantics.types.isNullish(member));
-  if (payloadDepth === 1 && nullishMembers.length === 2 &&
-    optionFact?.kind === "provider-operation" && optionFact.sourceAbsenceCarrier !== undefined &&
-    walk.context.ast.is.IsCallExpression(optionNode)) {
-    nullishMembers = nullishMembers.filter(member => !rustTargetTypeRefEquals(
-      resolveRustExactNullishValueCarrier(member, optionSemantics), optionFact.sourceAbsenceCarrier));
-  }
-  if (optionalDeclaration && nullishMembers.length === 0) {
-    const comparedCarrier = optionNode === leftNode ? rightCarrier : leftCarrier;
-    return rustTargetTypeRefEquals(comparedCarrier, rustUndefinedTargetType())
-      ? selected([payloadDepth]) : selected(matchingDepths);
-  }
-  if (nullishMembers.length !== 1) {
+  const hasAbsence = optionalDeclaration || members.some((member) => optionSemantics.types.isNullish(member));
+  if (!hasAbsence) {
     return undefined;
   }
-  if (optionSemantics.types.relationship(nullishMembers[0]!, nullishType) === "identical") {
+  if (!matchingDepths.includes(payloadDepth)) {
     matchingDepths.push(payloadDepth);
   }
   return selected(matchingDepths);

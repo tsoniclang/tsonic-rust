@@ -1,10 +1,11 @@
+import { resolveRustSourceUnionCarrier } from "./source-unions.js";
 import {
   isRustJsArrayCarrier,
   rustCallableTargetType,
   rustJsArrayLikeElementTargetType,
   rustJsArrayTargetType,
   rustOptionElementCarrier,
-  rustOptionTargetType,
+  rustSourceOptionalTargetType,
   rustSourceUnionCarrierValue,
   rustTupleTargetType,
   rustVecTargetType,
@@ -169,7 +170,7 @@ export function resolveRustSignatureParameterEvidence(
   return resolved === undefined || !optional ||
       rustOptionElementCarrier(resolved) !== undefined
     ? resolved
-    : rustOptionTargetType(resolved);
+    : rustSourceOptionalTargetType(resolved);
 }
 
 export function resolveRustTypeComponentEvidence(
@@ -257,7 +258,6 @@ export function resolveRustTypeComponentEvidence(
     }
     return combineRustSelectedTargets(
       targets as readonly TargetTypeRef[],
-      selection.selectedNullishTypes.length,
       options,
       selected,
     );
@@ -267,28 +267,16 @@ export function resolveRustTypeComponentEvidence(
 
 function combineRustSelectedTargets(
   targets: readonly TargetTypeRef[],
-  nullishCount: number,
   options: RustTargetTypeResolutionOptions,
   selected?: TargetTypeRef,
 ): TargetTypeRef | undefined {
-  if (targets.length === 0) {
-    return undefined;
-  }
-  if (targets.length === 1) {
-    return targets[0];
-  }
-  if (nullishCount === 1 && targets.length === 2) {
-    return rustOptionTargetType(targets[0]!);
-  }
-  const first = targets[0]!;
-  if (targets.every((target) => rustTargetTypeRefEquals(first, target))) {
-    return first;
-  }
-  const union = rustSourceUnionCarrierValue(selected);
-  const variants = selected === undefined ? undefined : options.sourceTypes.sourceUnionVariants(selected);
-  return union?.origin === "generated" && variants?.length === targets.length &&
-    targets.every(target => variants.filter(variant => rustTargetTypeRefEquals(variant.carrier, target)).length === 1)
-    ? selected : options.resolveProjectUnionCarrier(targets);
+  return resolveRustSourceUnionCarrier(targets, values => {
+    const union = rustSourceUnionCarrierValue(selected);
+    const variants = selected === undefined ? undefined : options.sourceTypes.sourceUnionVariants(selected);
+    return union?.origin === "generated" && variants?.length === values.length &&
+      values.every(target => variants.filter(variant => rustTargetTypeRefEquals(variant.carrier, target)).length === 1)
+      ? selected : options.resolveProjectUnionCarrier(values);
+  });
 }
 
 export function resolveRustEvidenceNodesToCommonCarrier(

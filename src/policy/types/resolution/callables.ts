@@ -1,9 +1,10 @@
+import { resolveRustSourceUnionCarrier } from "./source-unions.js";
 import { asNode } from "../../evidence/selected-source.js";
 import { denseDefined } from "./project.js";
 import { resolveRustCallableEvidence } from "./source-evidence.js";
 import { resolveRustTargetType } from "./target.js";
 import { resolveRustInferredObjectUnion } from "./inferred-unions.js";
-import { rustOptionTargetType, rustSourcePrimitiveTargetType, rustStringTargetType } from "../../../target-model/types/index.js";
+import { rustAbsenceTargetType, rustSourcePrimitiveTargetType, rustStringTargetType } from "../../../target-model/types/index.js";
 import { isRustBigIntCarrier, rustJsNumericTargetType, rustJsStringNumberTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { sourceNodesEqual } from "@tsonic/target-api/source";
@@ -130,46 +131,22 @@ export function resolveUnion(
   if (valueCarriers.some((carrier) => carrier === undefined)) {
     return undefined;
   }
-  const distinctValueCarriers = (valueCarriers as readonly TargetTypeRef[]).filter(
-    (carrier, index, all) => all.findIndex((candidate) =>
-      rustTargetTypeRefEquals(candidate, carrier)) === index,
-  );
-  if (distinctValueCarriers.length === 1) {
-    if (nullishMembers.length === 0) {
-      return distinctValueCarriers[0];
+  return resolveRustSourceUnionCarrier([
+    ...(valueCarriers as readonly TargetTypeRef[]),
+    ...nullishMembers.map(() => rustAbsenceTargetType()),
+  ], (distinct) => {
+    if (options.jsEnabled && distinct.length === 2 &&
+      distinct.some(carrier => rustTargetTypeRefEquals(carrier, rustStringTargetType())) &&
+      distinct.some(carrier => rustTargetTypeRefEquals(carrier, rustSourcePrimitiveTargetType("float64")))) {
+      return rustJsStringNumberTargetType();
     }
-    return nullishMembers.length === 1
-      ? rustOptionTargetType(distinctValueCarriers[0]!)
-      : undefined;
-  }
-  if (options.jsEnabled && distinctValueCarriers.length === 2 &&
-    distinctValueCarriers.some(carrier => rustTargetTypeRefEquals(carrier, rustStringTargetType())) &&
-    distinctValueCarriers.some(carrier => rustTargetTypeRefEquals(carrier, rustSourcePrimitiveTargetType("float64")))) {
-    return rustJsStringNumberTargetType();
-  }
-  if (options.jsEnabled && distinctValueCarriers.length === 2 &&
-    distinctValueCarriers.some(isRustBigIntCarrier) &&
-    distinctValueCarriers.some(carrier => rustTargetTypeRefEquals(carrier, rustSourcePrimitiveTargetType("float64")))) {
-    return nullishMembers.length === 0 ? rustJsNumericTargetType()
-      : nullishMembers.length === 1 ? rustOptionTargetType(rustJsNumericTargetType())
-      : undefined;
-  }
-  if (members.length > 0 && members.every((member) => context.currentSemantics.types.isStringLike(member))) {
-    return rustStringTargetType();
-  }
-  if (members.length > 0 && members.every((member) => context.currentSemantics.types.isNumberLike(member))) {
-    return rustSourcePrimitiveTargetType("float64");
-  }
-  if (members.length > 0 && members.every((member) => context.currentSemantics.types.isBooleanLike(member))) {
-    return rustSourcePrimitiveTargetType("bool");
-  }
-  if (nullishMembers.length <= 1 && valueCarriers.length > 1 &&
-    valueCarriers.every((carrier) => carrier !== undefined)) {
-    const common = options.resolveProjectUnionCarrier(valueCarriers as readonly TargetTypeRef[]);
-    const selected = common !== undefined && valueCarriers.some(carrier => rustTargetTypeRefEquals(carrier, common))
+    if (options.jsEnabled && distinct.length === 2 && distinct.some(isRustBigIntCarrier) &&
+      distinct.some(carrier => rustTargetTypeRefEquals(carrier, rustSourcePrimitiveTargetType("float64")))) {
+      return rustJsNumericTargetType();
+    }
+    const common = options.resolveProjectUnionCarrier(distinct);
+    return common !== undefined && distinct.some(carrier => rustTargetTypeRefEquals(carrier, common))
       ? common
       : resolveRustInferredObjectUnion(type, valueMembers, valueCarriers as readonly TargetTypeRef[], context, options) ?? common;
-    return selected === undefined || nullishMembers.length === 0 ? selected : rustOptionTargetType(selected);
-  }
-  return undefined;
+  });
 }

@@ -339,8 +339,8 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /let equal: bool = \{\s*let _ = left\(counter\.clone\(\)\);\s*\{\s*let _ = \{\s*right\(counter\.clone\(\)\);\s*rt::Undefined\s*\};\s*false\s*\}\s*\};/u);
-  assert.match(source, /let unequal: bool = \{\s*let _ = left\(counter\.clone\(\)\);\s*\{\s*let _ = \{\s*right\(counter\.clone\(\)\);\s*rt::Undefined\s*\};\s*true\s*\}\s*\};/u);
+  assert.match(source, /let equal: bool = \{\s*let _ = left\(counter\.clone\(\)\);\s*\{\s*let _ = \{\s*right\(counter\.clone\(\)\);\s*\(\)\s*\};\s*false\s*\}\s*\};/u);
+  assert.match(source, /let unequal: bool = \{\s*let _ = left\(counter\.clone\(\)\);\s*\{\s*let _ = \{\s*right\(counter\.clone\(\)\);\s*\(\)\s*\};\s*true\s*\}\s*\};/u);
   const run = validateGeneratedProject("disjoint-nullish-equality", result.artifacts, { run: true });
   assert.equal(run.status, 0);
 });

@@ -138,6 +138,11 @@ export function main(): void {
   check((negativeOne >>> one) === 2147483647);
   check((highByte << one) === 0);
   check(((highByte as int32) << one) === 256);
+  check((highByte & 0x3fff) === 128);
+  check((0x3fff & highByte) === 128);
+  check((highByte | 0x100) === 384);
+  check((highByte & -1) === 128);
+  check((highByte | -256) === -128);
 }
 `,
     },

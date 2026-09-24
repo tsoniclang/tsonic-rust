@@ -255,14 +255,18 @@ function planProjectedExpression(
       ));
       return undefined;
     }
-    const value: RustExpr = { kind: "associated-value", owner: optionType, name: "None" };
+    const value: RustExpr = rustOptionalStorageValue(projection.resultCarrier) === undefined
+      ? { kind: "associated-value", owner: optionType, name: "None" }
+      : planRustOptionalStorageOperation(projection.resultCarrier, "absent", [], context);
     if (contextuallyConverted.kind === "bottom") return contextuallyConverted;
     return contextuallyConverted.kind === "none" || contextuallyConverted.kind === "path" || contextuallyConverted.kind === "associated-value"
       ? value
       : { kind: "evaluate-then", effect: contextuallyConverted, discard: "value", value };
   }
   return projection?.kind === "some"
-    ? { kind: "call", path: "Some", args: [contextuallyConverted] }
+    ? rustOptionalStorageValue(projection.resultCarrier) === undefined
+      ? { kind: "call", path: "Some", args: [contextuallyConverted] }
+      : planRustOptionalStorageOperation(projection.resultCarrier, "present", [contextuallyConverted], context)
     : contextuallyConverted;
 }
 
@@ -544,3 +548,5 @@ export function planRustProjectUpcast(
     },
   };
 }
+import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
+import { planRustOptionalStorageOperation } from "./optional-storage.js";

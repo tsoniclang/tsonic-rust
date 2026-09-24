@@ -15,8 +15,7 @@ import {
 import {
   getRustGeneratorProtocol,
   isRustNeverCarrier,
-  isRustNullCarrier,
-  isRustUndefinedCarrier,
+  isRustAbsenceCarrier,
   isRustUnitCarrier,
   rustOptionElementCarrier,
   rustJsPromiseTargetId,
@@ -149,18 +148,19 @@ export function planExpressionInner(
     case "KindNullKeyword": {
       const fact = rustOperationFact(node, context);
       if (fact?.kind === "option-none") {
-        return { kind: "none" };
+        const carrier = expressionCarrier(node, context);
+        return rustOptionalStorageValue(carrier) === undefined ? { kind: "none" }
+          : planRustOptionalStorageOperation(carrier!, "absent", [], context);
       }
-      if (!isRustNullCarrier(expressionCarrier(node, context))) {
+      if (!isRustAbsenceCarrier(expressionCarrier(node, context))) {
         context.diagnostics.push(missingFactDiagnostic(
           diagnosticInput(context, node),
           "rust.backend.nullish",
-          "null literals require an exact Null carrier or finalized Option lane fact.",
+          "null literals require an exact native absence carrier or finalized Option lane fact.",
         ));
         return undefined;
       }
-      context.usedAliases?.add("rt");
-      return { kind: "path", path: "rt::Null" };
+      return { kind: "tuple-literal", elements: [] };
     }
     case "KindClassExpression":
       return planRustClassValueRead(node, context);
@@ -171,11 +171,12 @@ export function planExpressionInner(
       const identifierFact = rustOperationFact(node, context);
       const binding = context.input.program.facts.getFact(node, rustSourceBindingFactKey);
       if (identifierFact !== undefined && identifierFact.kind === "option-none") {
-        return { kind: "none" };
+        const carrier = expressionCarrier(node, context);
+        return rustOptionalStorageValue(carrier) === undefined ? { kind: "none" }
+          : planRustOptionalStorageOperation(carrier!, "absent", [], context);
       }
-      if (binding === undefined && isRustUndefinedCarrier(expressionCarrier(node, context))) {
-        context.usedAliases?.add("rt");
-        return { kind: "path", path: "rt::Undefined" };
+      if (binding === undefined && isRustAbsenceCarrier(expressionCarrier(node, context))) {
+        return { kind: "tuple-literal", elements: [] };
       }
       if (identifierFact !== undefined && identifierFact.kind === "provider-operation") {
         if (identifierFact.abi.operationKind !== "property" || identifierFact.abi.sourceArguments.length !== 0) {
@@ -299,7 +300,9 @@ export function planExpressionInner(
         ));
         return undefined;
       }
-      return { kind: "method-call", receiver: planned, method: "unwrap", args: [] };
+      return rustOptionalStorageValue(fact.sourceCarrier) === undefined
+        ? { kind: "method-call", receiver: planned, method: "unwrap", args: [] }
+        : planRustOptionalStorageOperation(fact.sourceCarrier, "into_present", [planned], context);
     }
     case KindConditionalExpression: {
       const fact = rustOperationFact(node, context);
@@ -412,7 +415,7 @@ export function planExpressionInner(
             kind: "evaluate-then",
             effect: operand,
             discard: isRustUnitCarrier(expressionCarrier(operandNode, context)) ? "unit" : "value",
-            value: { kind: "path", path: "rt::Undefined" },
+            value: { kind: "tuple-literal", elements: [] },
           };
     }
     case KindDeleteExpression:
@@ -643,3 +646,5 @@ export function planExpressionInner(
     }
   }
 }
+import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
+import { planRustOptionalStorageOperation } from "./optional-storage.js";

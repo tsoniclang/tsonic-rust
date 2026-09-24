@@ -8,7 +8,7 @@ import type {
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import {
-  isRustDefinitelyNullishCarrier,
+  isRustAbsenceCarrier,
   rustSourceLocationTargetType,
   rustOptionalLocationPointeeCarrier,
   rustOptionTargetType,
@@ -42,7 +42,7 @@ export function selectRustPointerViewCall(
     resolveRustTargetTypeRef(view.sourcePointeeType, context, options);
   if (pointee === undefined || sourcePointee === undefined ||
     (operandPointee === undefined
-      ? !view.optional || !isRustDefinitelyNullishCarrier(operand)
+      ? !view.optional || !isRustAbsenceCarrier(operand)
       : !rustTargetTypeRefEquals(operandPointee, sourcePointee))) {
     return reject("Pointer views require exact source and destination pointee carriers.");
   }

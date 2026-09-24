@@ -8,6 +8,7 @@ import {
   rustFixedArrayCarrierValue,
   rustBuiltInCarrierRenderPaths,
   rustCallableTargetId,
+  rustAbsenceTargetId,
   rustFutureTargetId,
   rustNamedTypeCarrierValue,
   rustNativeScalarTargetId,
@@ -121,7 +122,7 @@ export function rustFoundationForCarrier(carrier: RustTargetTypeRef): RustFounda
           structural.fields.forEach((field) => visit(field.type));
           return;
         }
-        if (current.name !== "never" && current.name !== "source-nullish") {
+        if (current.name !== "never") {
           require("std");
         }
         return;
@@ -140,7 +141,7 @@ function rustFoundationForTargetNamedCarrier(id: string): RustFoundation {
   if (id === rustStringTargetId || id === rustCallableTargetId) {
     return "alloc";
   }
-  if (id === rustStrTargetId) {
+  if (id === rustAbsenceTargetId || id === rustStrTargetId) {
     return "core";
   }
   if (id === rustFutureTargetId || id === rustNativeScalarTargetId) {

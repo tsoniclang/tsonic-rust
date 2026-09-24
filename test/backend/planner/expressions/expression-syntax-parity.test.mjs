@@ -387,7 +387,7 @@ export function categories(text: string, count: int32, wide: int64, enabled: boo
   validateGeneratedProject("expression-typeof", result.artifacts);
 });
 
-test("void evaluates its operand and produces the closed undefined carrier", { timeout: 300_000 }, () => {
+test("void evaluates its operand and produces native absence", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName: "void_proof" } },
@@ -397,7 +397,7 @@ import { check } from "@acme/testing";
 
 export function main(): void {
   const discarded = void check(true);
-  check(typeof discarded === "undefined");
+  check(typeof discarded === "object");
 }
 `,
     },
@@ -405,7 +405,7 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /let discarded: rt::Undefined = \{\s+acme_testing::check\(true\);\s+rt::Undefined\s+\};/u);
+  assert.match(source, /let discarded: \(\) = \{\s+acme_testing::check\(true\);\s+\(\)\s+\};/u);
   validateGeneratedProject("expression-void", result.artifacts, { run: true });
 });
 

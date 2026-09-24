@@ -1,6 +1,6 @@
 import {
   rustCallableProtocol,
-  isRustDefinitelyNullishCarrier,
+  isRustAbsenceCarrier,
   rustLifetimeGenericArgument,
   rustStrTargetType,
   rustStringTargetId,
@@ -80,17 +80,10 @@ export function instantiateExactSelectedConstructionCarrier(
           sourceName: parameter.sourceName,
           targetIdentity: rustLifetimeKey(parameter.lifetime),
         });
-  const substitutions = rustTargetGenericBindingsForArguments(
-    parameters,
-    targetGenericArguments,
-  );
+  const substitutions = rustTargetGenericBindingsForArguments(parameters, targetGenericArguments);
   if (substitutions === undefined) return undefined;
-  return substituteRustTargetGenerics(
-    options.projectTypes.openCarrier(definition),
-    substitutions.types,
-    substitutions.lifetimes,
-    substitutions.consts,
-  );
+  return substituteRustTargetGenerics(options.projectTypes.openCarrier(definition),
+    substitutions.types, substitutions.lifetimes, substitutions.consts);
 }
 
 export function mapSelectedProjectGenericArguments(
@@ -565,7 +558,7 @@ function selectedCallSourceCarriers(
     let effective = rustEffectiveValueCarrier(context.facts, argument) ?? normalized;
     const optionElement = rustOptionElementCarrier(expected);
     if (optionElement !== undefined && effective !== undefined &&
-      (isRustDefinitelyNullishCarrier(effective) || rustTargetTypeRefEquals(effective, optionElement))) {
+      (isRustAbsenceCarrier(effective) || rustTargetTypeRefEquals(effective, optionElement))) {
       effective = expected;
     }
     if (effective !== undefined && expected !== undefined &&

@@ -9,8 +9,8 @@ export function rustTargetTypeChildren(type: TargetTypeRef): readonly TargetType
     values?.flatMap(value => value.kind === "type" ? [value.type] : []) ?? [];
   switch (type.kind) {
     case "source-primitive":
-    case "type-parameter":
     case "opaque": return [];
+    case "type-parameter": return type.optionalStorageValue === undefined ? [] : [type.optionalStorageValue];
     case "target-named": return arguments_(type.genericArguments);
     case "array":
     case "slice": return [type.element];

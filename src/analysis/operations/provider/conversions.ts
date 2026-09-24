@@ -6,7 +6,7 @@ import {
   finalizeProviderOperationFact,
   instantiateProviderOperationTemplate,
 } from "./calls/template-instantiation.js";
-import { isRustNullishSourceCarrier, rustOptionElementCarrier } from "../../../target-model/types/index.js";
+import { isRustAbsenceCarrier, rustOptionElementCarrier } from "../../../target-model/types/index.js";
 import { selectRustValueCarrierReconciliation } from "../../../policy/types/value-carrier-reconciliation.js";
 import { recordRustValueCarrierReconciliation, rustEffectiveValueCarrier } from "../../facts/value-carrier-queries.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
@@ -90,7 +90,7 @@ export function selectRustCheckedConversion(
     }
     const optionElement = rustOptionElementCarrier(targetCarrier);
     if (optionElement !== undefined) {
-      if (isRustNullishSourceCarrier(sourceCarrier)) {
+      if (isRustAbsenceCarrier(sourceCarrier)) {
         return acceptRustPolicy({ convertedType: targetCarrier }, [
           { message: "rust selected nullish argument maps to the selected Option carrier" },
         ]);

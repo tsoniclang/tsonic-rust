@@ -17,6 +17,7 @@ import { effectivePlannedExpressionCarrier, requireExpressionCarrier, selectedOp
 import { applyRustValueConversion } from "./value-conversions.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
 
 export function planNullishCoalescing(
   node: Node,
@@ -128,10 +129,21 @@ export function planNullishCoalescing(
         };
   const coalescedValueType = fallbackIsFallible ? rustTypeFromCarrierInContext(fact.resultCarrier, context) : undefined;
   if (fallbackIsFallible && coalescedValueType === undefined) return undefined;
+  const leftCarrier = context.input.program.facts.getRuntimeCarrierFact(leftNode)?.carrier;
+  const projected = rustOptionalStorageValue(leftCarrier);
+  const projectedValueType = projected === undefined ? undefined : rustTypeFromCarrierInContext(projected, context);
+  const projectedStorageType = projected === undefined ? undefined : rustTypeFromCarrierInContext(leftCarrier, context);
+  if (projected !== undefined && (projectedValueType === undefined || projectedStorageType === undefined)) return undefined;
   const coalesced: RustExpr = {
     kind: "call",
-    path: "rt::option_coalesce",
-    ...(fallbackIsFallible ? { genericArguments: [
+    path: projected === undefined ? "rt::option_coalesce" : "rt::optional_storage_coalesce",
+    ...(projected !== undefined ? { genericArguments: [
+      { kind: "type" as const, type: projectedValueType! },
+      { kind: "type" as const, type: projectedStorageType! },
+      { kind: "type" as const, type: fallbackIsFallible ? { kind: "named" as const, path: "core::result::Result", genericArguments: [
+        { kind: "type" as const, type: coalescedValueType! }, { kind: "type" as const, type: activeErrorType! },
+      ] } : { kind: "infer" as const } },
+    ] } : fallbackIsFallible ? { genericArguments: [
       { kind: "type" as const, type: { kind: "infer" as const } },
       { kind: "type" as const, type: { kind: "named" as const, path: "core::result::Result", genericArguments: [
         { kind: "type" as const, type: coalescedValueType! },

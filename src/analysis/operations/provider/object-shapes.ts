@@ -544,17 +544,22 @@ export function acceptProjectSourceCall(
         options.projectTypes.openCarrier(containingDefinition),
         selectedOwnerDefinition,
       );
-  const selectedResultOwnerCarrier = construction && selectedOwnerDefinition !== undefined &&
-      request.source.sourceResultType !== undefined
-    ? resolveRustTargetTypeRef(
-        request.source.sourceResultType,
+  const valueConstruction = construction && !superConstruction &&
+    selectedCalleeDeclaration !== selectedOwnerDefinition?.declaration;
+  const constructorInstance = valueConstruction
+    ? rustClassConstructorInstance(selectedValueCarrier(
+        request.source.sourceCallee.expression,
+        request.source.sourceCallee.type,
         context,
         options,
-      )
+      ))
     : undefined;
-  const selectedAuthoredOwnerCarrier = construction &&
-      selectedOwnerDefinition !== undefined &&
-      selectedOwnerDefinition === callableOwner
+  const selectedResultOwnerCarrier = construction && !valueConstruction &&
+      selectedOwnerDefinition !== undefined && request.source.sourceResultType !== undefined
+    ? resolveRustTargetTypeRef(request.source.sourceResultType, context, options)
+    : undefined;
+  const selectedAuthoredOwnerCarrier = construction && !valueConstruction &&
+      selectedOwnerDefinition !== undefined && selectedOwnerDefinition === callableOwner
     ? instantiateExactSelectedConstructionCarrier(
         selectedOwnerDefinition,
         targetGenericArguments.map((argument, index) => {
@@ -570,7 +575,7 @@ export function acceptProjectSourceCall(
     ? selectedOwnerRelationship?.kind === "related"
       ? selectedOwnerRelationship.targetType
       : undefined
-    : selectedAuthoredOwnerCarrier ?? selectedResultOwnerCarrier;
+    : valueConstruction ? constructorInstance : selectedAuthoredOwnerCarrier ?? selectedResultOwnerCarrier;
   if (construction && selectedOwnerCarrier === undefined) {
     return rejectSelectedOperation(
       request.source.call,

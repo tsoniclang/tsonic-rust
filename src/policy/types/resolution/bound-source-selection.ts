@@ -14,7 +14,9 @@ export function rustSourceSelectionUsesExactBindings(
     const declaration = symbol === undefined ? undefined : declarations.primarySymbolDeclaration(symbol);
     const binding = declaration === undefined ? undefined : context.sourceTypeParameterSubstitutions?.get(declaration);
     if (binding !== undefined) {
-      return types.isIdentical(left, right) || types.isIdentical(binding.sourceType, right) ? "bound" : undefined;
+      if (left === right || binding.sourceType === right) return "bound";
+      if (types.couldContainTypeVariables(binding.sourceType) || types.couldContainTypeVariables(right)) return undefined;
+      return types.isIdentical(binding.sourceType, right) ? "bound" : undefined;
     }
     if (active.get(left)?.has(right)) return undefined;
     const pairs = active.get(left) ?? new Set<Type>();
