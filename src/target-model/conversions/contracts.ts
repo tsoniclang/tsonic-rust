@@ -46,7 +46,8 @@ import {
   rustTsValueTargetType,
 } from "../types/index.js";
 import type { RustPrimitiveTypeName } from "../syntax/tokens.js";
-import { rustNumericPromotionKind } from "./numeric-promotion.js";
+import { rustNumericValueConversionIsSupported } from "./numeric-promotion.js";
+import { rustExactIntegerConversionMatches } from "./exact-integer.js";
 import { rustNumberBoxingSourceKind } from "./number-boxing.js";
 import { rustRestSequenceElements } from "../operations/rest-assembly.js";
 import { isDenseDataArray } from "../metadata/closed-data.js";
@@ -77,6 +78,7 @@ interface RustValueConversionContractBase {
 }
 
 export type RustValueConversionContract = RustValueConversionContractBase & (
+  | { readonly lowering: "exact-integer" }
   | {
       readonly lowering: "rest-sequence";
       readonly collection: "vec" | "js-array" | "fixed-array" | "tuple";
@@ -165,6 +167,13 @@ export function rustValueConversionContract(
   value: RustValueConversion,
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): RustValueConversionContract | undefined {
+  if (value.kind === "exact-integer") {
+    return isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) &&
+      rustExactIntegerConversionMatches(value.source, value.target, value)
+      ? { category: "checked-range", lowering: "exact-integer", sourceMode: "value",
+          source: value.source, target: value.target, fallible: true }
+      : undefined;
+  }
   if (value.kind === "object-identity-erasure") {
     return isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) &&
       !rustTargetTypeRefEquals(value.source, value.target) && rustObjectIdentityErasureMatches(value.source, value.target)
@@ -521,7 +530,7 @@ export function rustValueConversionContract(
     const target = rustSourcePrimitiveTargetType(value.target);
     const targetType = rustPrimitiveTypeName(value.target);
     return isRustNumericCarrier(source) && isRustNumericCarrier(target) &&
-        rustNumericPromotionKind(value.source, value.target) === value.target &&
+        rustNumericValueConversionIsSupported(value.source, value.target) &&
         targetType !== undefined
       ? {
           category: "numeric-promotion",
@@ -629,6 +638,9 @@ export function rustValueConversionIsFallible(value: RustValueConversion | undef
 }
 
 export function rustValueConversionIdentity(value: RustValueConversion): string {
+  if (value.kind === "exact-integer") {
+    return `exact-integer.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}`;
+  }
   if (value.kind === "object-identity-erasure") {
     return `object-identity-erasure.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}`;
   }
@@ -707,6 +719,7 @@ export function substituteRustValueConversion(
         ),
       });
     case "source-union-variant":
+    case "exact-integer":
     case "object-identity-erasure":
     case "native-upcast":
     case "bottom-coercion":

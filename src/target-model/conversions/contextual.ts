@@ -8,7 +8,7 @@ import { rustEmptyRecordConversionMatches, type RustEmptyRecordConversion } from
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../types/source-union-definitions.js";
 import { rustGenericCallableConversionMatches, type RustGenericCallableConversion } from "./generic-callable.js";
 import { rustIntegerTruncationConversionMatches, type RustIntegerTruncationConversion } from "./integer-truncation.js";
-import { rustExactIntegerConversionMatches, type RustExactIntegerConversion } from "./exact-integer.js";
+import { rustExactIntegerConversionMatches } from "./exact-integer.js";
 
 export type RustContextualValueConversion =
   | RustValueConversion
@@ -16,7 +16,6 @@ export type RustContextualValueConversion =
   | RustEmptyRecordConversion
   | RustGenericCallableConversion
   | RustIntegerTruncationConversion
-  | RustExactIntegerConversion
   | {
       readonly kind: "native-trait-object-upcast";
       readonly source: TargetTypeRef;
@@ -70,10 +69,8 @@ export function rustContextualValueConversionIsFallible(
   conversion: RustContextualValueConversion | undefined,
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): boolean {
-  if (conversion?.kind === "exact-integer") return true;
   if (conversion?.kind === "provider-record-copy") {
-    return conversion.fields.some(field => field.conversion?.kind === "exact-integer" ||
-      field.conversion !== undefined && rustValueConversionIsFallible(field.conversion, definitions));
+    return conversion.fields.some(field => rustValueConversionIsFallible(field.conversion, definitions));
   }
   return conversion !== undefined &&
     conversion.kind !== "native-trait-object-upcast" &&

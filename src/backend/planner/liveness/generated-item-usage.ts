@@ -702,13 +702,13 @@ export function analyzeRustGeneratedItemUsage(input: {
       if (conversion?.kind === "empty-record") markStructuralShapeConstructed(conversion.target);
       if (conversion?.kind === "provider-record-copy") {
         for (const field of conversion.fields) {
-          if (field.conversion !== undefined && field.conversion.kind !== "exact-integer") visitConversion(field.conversion);
+          if (field.conversion !== undefined) visitConversion(field.conversion);
         }
       }
       if (conversion !== undefined && conversion.kind !== "native-trait-object-upcast" &&
         conversion.kind !== "reference-reborrow" && conversion.kind !== "provider-record-copy" &&
         conversion.kind !== "empty-record" && conversion.kind !== "generic-callable-flow" &&
-        conversion.kind !== "integer-truncation" && conversion.kind !== "exact-integer") {
+        conversion.kind !== "integer-truncation") {
         visitConversion(conversion);
       }
       if (fact !== undefined) visitFact(node, fact);

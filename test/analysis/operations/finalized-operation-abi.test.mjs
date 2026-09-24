@@ -407,6 +407,32 @@ test("provider methods finalize receiver, source order, passing modes, conversio
   });
 });
 
+test("exact integer argument conversions survive finalization and reject altered evidence", () => {
+  const conversion = { kind: "exact-integer", source: int32, target: usize };
+  const abi = finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form: { form: "call", path: "acme::read", argModes: ["value"], argConversions: [conversion] },
+    sourceArgumentCarriers: [int32], declaredSourceArgumentCarriers: [int32],
+    resultCarrier: bool, isAsync: false, isFallible: false,
+  });
+  assert.ok(abi);
+  assert.equal(validateRustFinalizedOperationAbi(abi), true);
+  const argument = abi.targetArguments[0];
+  assert.deepEqual(argument.conversion.conversion, conversion);
+  assert.deepEqual(argument.parameterCarrier, usize);
+  assert.equal(argument.conversion.fallible, true);
+  for (const mutation of [
+    { sourceCarrier: bool }, { targetCarrier: int32 }, { fallible: false },
+    { conversion: { ...conversion, source: bool } },
+    { conversion: { ...conversion, target: float64 } },
+    { conversion: { ...conversion, extra: true } },
+  ]) {
+    assert.equal(validateRustFinalizedOperationAbi({ ...abi, targetArguments: [
+      { ...argument, conversion: { ...argument.conversion, ...mutation } },
+    ] }), false);
+  }
+});
+
 test("provider receivers distinguish runtime values from compile-time owner identities", () => {
   const owner = {
     kind: "target-specific",

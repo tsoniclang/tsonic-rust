@@ -382,7 +382,8 @@ function valueConversionCarriers(
   if (conversion.kind === "raw-pointer-mut-to-const") return [conversion.pointee];
   if (conversion.kind === "copy-from-reference") return [conversion.target];
   if (conversion.kind === "source-union-variant" || conversion.kind === "object-identity-erasure" || conversion.kind === "bottom-coercion" ||
-    conversion.kind === "js-argument-vector-callback" || conversion.kind === "native-upcast") {
+    conversion.kind === "js-argument-vector-callback" || conversion.kind === "native-upcast" ||
+    conversion.kind === "exact-integer") {
     return [conversion.source, conversion.target];
   }
   if (conversion.kind === "js-value-from-closed-carrier" ||

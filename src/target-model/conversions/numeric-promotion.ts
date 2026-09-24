@@ -49,6 +49,20 @@ export function rustIntegerKindIsExactlyRepresentableAsFloat64(
   return float64ExactIntegerKinds.has(kind);
 }
 
+export function rustNumericValueConversionIsSupported(
+  source: SourcePrimitiveKind,
+  target: SourcePrimitiveKind,
+): boolean {
+  return source !== target && (
+    rustNumericPromotionKind(source, target) === target ||
+    target === "native-int" && nativeSignedWideningKinds.has(source) ||
+    target === "native-uint" && nativeUnsignedWideningKinds.has(source)
+  );
+}
+
+const nativeSignedWideningKinds: ReadonlySet<SourcePrimitiveKind> = new Set(["int8", "uint8", "int16"]);
+const nativeUnsignedWideningKinds: ReadonlySet<SourcePrimitiveKind> = new Set(["uint8", "uint16"]);
+
 const numericKinds: ReadonlySet<SourcePrimitiveKind> = new Set([
   "int8",
   "uint8",

@@ -351,6 +351,10 @@ export function validateValueConversion(
     requireExactKeys(asRecord(conversion), ["kind", "id"], where, fail);
   } else if (conversion.kind === "numeric-promotion") {
     requireExactKeys(asRecord(conversion), ["kind", "source", "target"], where, fail);
+  } else if (conversion.kind === "exact-integer") {
+    requireExactKeys(asRecord(conversion), ["kind", "source", "target"], where, fail);
+    validateCarrier(conversion.source, definition, `${where}.source`, fail);
+    validateCarrier(conversion.target, definition, `${where}.target`, fail);
   } else if (conversion.kind === "raw-pointer-mut-to-const") {
     requireExactKeys(asRecord(conversion), ["kind", "pointee"], where, fail);
     if (!isRustTargetTypeRef(conversion.pointee)) {

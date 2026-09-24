@@ -1,10 +1,12 @@
 import type { RustValueConversion } from "../../target-model/operations/model.js";
 import { rustObjectIdentityErasureMatches } from "../../target-model/conversions/object-identity.js";
-import { rustNumericPromotionKind } from "../../target-model/conversions/numeric-promotion.js";
+import { rustNumericValueConversionIsSupported } from "../../target-model/conversions/numeric-promotion.js";
+import { selectRustExactIntegerConversion } from "../../target-model/conversions/exact-integer.js";
 import { rustNumberBoxingConversionId } from "../../target-model/conversions/number-boxing.js";
 import {
   isRustJsArrayCarrier,
   isRustBigIntCarrier,
+  isRustIntegerCarrier,
   rustJsNumericTargetType,
   rustJsStringNumberTargetType,
   isRustNeverCarrier,
@@ -268,8 +270,7 @@ export function selectRustSourceValueConversion(
   if (source.name === "uint64" && target.name === "float64") {
     return rustUint64ToFloat64ValueConversion;
   }
-  return source.name !== target.name &&
-      rustNumericPromotionKind(source.name, target.name) === target.name
+  return rustNumericValueConversionIsSupported(source.name, target.name)
     ? { kind: "numeric-promotion", source: source.name, target: target.name }
     : undefined;
 }
@@ -283,7 +284,9 @@ export function selectRustSourceAssertionConversion(
     if (source.name === "native-int") return rustIsizeToInt32ValueConversion;
     if (source.name === "native-uint") return rustUsizeToInt32ValueConversion;
   }
-  return selectRustSourceValueConversion(source, target, definitions);
+  const conversion = selectRustSourceValueConversion(source, target, definitions);
+  return conversion ?? (isRustIntegerCarrier(source) && isRustIntegerCarrier(target)
+    ? selectRustExactIntegerConversion(source, target) : undefined);
 }
 
 export function selectRustJsonValueConversion(

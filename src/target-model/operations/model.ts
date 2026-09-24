@@ -7,6 +7,7 @@ import type {
   TargetTypeRef,
 } from "../types/model.js";
 import type { RustLifetimeBinder } from "../lifetimes/index.js";
+import type { RustExactIntegerConversion } from "../conversions/exact-integer.js";
 
 export const rustExtensionId = "tsonic.rust";
 
@@ -83,8 +84,6 @@ export type RustValueConversionId =
   | "js-string-number-from-string"
   | "js-string-number-from-number"
   | "js-string-number-from-int32"
-  | "js-string-number-from-null"
-  | "js-string-number-from-undefined"
   | "js-numeric-from-number"
   | "js-numeric-from-int32"
   | "js-numeric-from-bigint"
@@ -117,13 +116,13 @@ export type RustValueConversionId =
   | "js-value-from-string"
   | "js-value-from-symbol"
   | "js-value-from-error"
-  | "js-value-from-absence"
   | "js-value-clone"
   | "ts-value-clone"
   | "owned-string-from-borrowed-str"
   | "borrowed-str-from-owned-string";
 
 export type RustNonOptionValueConversion =
+  | RustExactIntegerConversion
   | {
       readonly kind: "object-identity-erasure";
       readonly source: TargetTypeRef;

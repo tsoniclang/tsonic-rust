@@ -144,6 +144,7 @@ export function visitConversionContract(
       }
       return;
     case "call":
+    case "exact-integer":
     case "numeric-cast":
     case "identity":
     case "option-some":

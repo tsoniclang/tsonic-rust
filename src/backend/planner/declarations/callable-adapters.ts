@@ -1,5 +1,4 @@
 import type { Node } from "@tsonic/tsts";
-import { lowerRustExactIntegerConversion } from "../expressions/exact-integer.js";
 import { planRustAbsentValue } from "../expressions/optional-storage.js";
 import { planRustGenericCallableFlow } from "../expressions/generic-callable-flow.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -305,12 +304,6 @@ function applyRustCallableValueAdapterRaw(
         ? { expression, fallible: false }
         : undefined;
     case "conversion": {
-      if (adapter.conversion.kind === "exact-integer") {
-        if (!rustCompilerOwnedContextualConversionMatches(
-          adapter.sourceCarrier, adapter.targetCarrier, adapter.conversion, context.input.program.typeDefinitions)) return undefined;
-        const converted = lowerRustExactIntegerConversion(adapter.conversion, expression, context);
-        return converted === undefined ? undefined : { expression: converted, fallible: true };
-      }
       if (adapter.conversion.kind === "generic-callable-flow") {
         const converted = planRustGenericCallableFlow(adapter.conversion, expression, context);
         return converted === undefined ? undefined : { expression: converted, fallible: false };
