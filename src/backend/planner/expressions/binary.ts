@@ -402,17 +402,13 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
       ));
       return undefined;
     }
-    return {
-      kind: "evaluate-then",
-      effect: planRustNonConsumingValue(leftNode, left, context),
-      discard: isRustUnitCarrier(effectivePlannedExpressionCarrier(leftNode, context)) ? "unit" : "value",
-      value: {
-        kind: "evaluate-then",
-        effect: planRustNonConsumingValue(rightNode, right, context),
-        discard: isRustUnitCarrier(effectivePlannedExpressionCarrier(rightNode, context)) ? "unit" : "value",
-        value: { kind: "bool-literal", value: fact.value },
-      },
+    const evaluate = (operandNode: Node, operand: RustExpr, value: RustExpr): RustExpr => {
+      const effect = planRustNonConsumingValue(operandNode, operand, context);
+      if (effect.kind === "tuple-literal" && effect.elements.length === 0 || effect.kind === "path") return value;
+      return { kind: "evaluate-then", effect,
+        discard: isRustUnitCarrier(effectivePlannedExpressionCarrier(operandNode, context)) ? "unit" : "value", value };
     };
+    return evaluate(leftNode, left, evaluate(rightNode, right, { kind: "bool-literal", value: fact.value }));
   }
   if (fact === undefined) {
     context.diagnostics.push(missingFactDiagnostic(

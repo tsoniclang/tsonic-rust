@@ -405,7 +405,7 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /let discarded: \(\) = \{\s+acme_testing::check\(true\);\s+\(\)\s+\};/u);
+  assert.match(source, /let discarded: \(\) = \{\s+acme_testing::check\(true\);\s+\};/u);
   validateGeneratedProject("expression-void", result.artifacts, { run: true });
 });
 

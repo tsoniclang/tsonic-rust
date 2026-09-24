@@ -1,3 +1,4 @@
+import { requirementContractsEqual, stringListsEqual, type RequirementUse, type RequirementContractState } from "./generic-requirement-contract.js";
 import { rustObjectReferenceViewKey } from "../facts/object-reference-views.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
@@ -58,6 +59,7 @@ import {
   rustProjectDowncastFactKey,
   rustLocationStorageFactKey,
   rustSourceParameterAbiFactKey,
+  rustSourceCallableReturnFactKey,
   rustTargetOperationFactKey,
   rustTypedLocationPlanKey,
   rustYieldFactKey,
@@ -101,16 +103,6 @@ export type AnalyzeRustDeclarationGenericRequirementsResult =
       readonly kind: "rejected";
       readonly diagnostics: readonly TargetDiagnostic[];
     };
-
-interface RequirementUse {
-  readonly node: Node;
-  readonly carrier: TargetTypeRef;
-  readonly requirements: readonly RustGenericRequirement[];
-}
-
-interface RequirementContractState extends RustDeclarationGenericRequirementContract {
-  readonly uses: readonly RequirementUse[];
-}
 
 const requirementOrder: readonly RustGenericRequirement[] = [
   "clone",
@@ -523,6 +515,14 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       return undefined;
     };
     const carrier = facts.getRuntimeCarrierFact(node)?.carrier;
+    for (const signatureCarrier of [
+      facts.getFact(node, rustSourceCallableReturnFactKey)?.returnCarrier,
+      facts.getFact(node, rustSourceParameterAbiFactKey)?.parameterCarrier,
+    ]) {
+      if (signatureCarrier === undefined) continue;
+      const error = collectType(signatureCarrier);
+      if (error !== undefined) return error;
+    }
     if (carrier !== undefined && ast.is.IsIdentifier(node) &&
       !input.valueLifetimes.canMove(node) && isRustReturnedValue(node, declaration, ast)) {
       const error = addUse(node, carrier, ["clone"]);
@@ -837,60 +837,6 @@ function rustRequirementDescription(
         : "an exact Rust 'static lifetime");
   if (descriptions.length <= 1) return descriptions[0] ?? "an exact Rust carrier contract";
   return `${descriptions.slice(0, -1).join(", ")} and ${descriptions[descriptions.length - 1]}`;
-}
-
-function requirementContractsEqual(
-  left: RequirementContractState,
-  right: RequirementContractState,
-): boolean {
-  return left.declaration === right.declaration &&
-    left.optionalStorage.length === right.optionalStorage.length &&
-    left.optionalStorage.every((entry, index) => {
-      const other = right.optionalStorage[index];
-      return other !== undefined && entry.captured === other.captured &&
-        rustTargetTypeRefEquals(entry.carrier, other.carrier) && stringListsEqual(entry.requirements, other.requirements);
-    }) &&
-    left.projectProjections.length === right.projectProjections.length &&
-    left.projectProjections.every((projection, index) => {
-      const other = right.projectProjections[index];
-      return other !== undefined && projection.requiresBound === other.requiresBound &&
-        rustTargetTypeRefEquals(projection.sourceCarrier, other.sourceCarrier) &&
-        rustTargetTypeRefEquals(projection.targetCarrier, other.targetCarrier);
-    }) &&
-    left.associatedTypes.length === right.associatedTypes.length &&
-    left.associatedTypes.every((requirement, index) => {
-      const other = right.associatedTypes[index];
-      return other !== undefined && rustTargetTypeRefEquals(requirement.carrier, other.carrier) &&
-        stringListsEqual(requirement.fieldAccess ?? [], other.fieldAccess ?? []) &&
-        stringListsEqual(requirement.requirements, other.requirements);
-    }) &&
-    left.capturedTypeParameters.length === right.capturedTypeParameters.length &&
-    left.capturedTypeParameters.every((parameter, index) => {
-      const other = right.capturedTypeParameters[index];
-      return other !== undefined && parameter.name === other.name &&
-        stringListsEqual(parameter.requirements, other.requirements);
-    }) &&
-    left.typeParameters.length === right.typeParameters.length &&
-    left.typeParameters.every((parameter, index) => {
-      const other = right.typeParameters[index];
-      return other !== undefined && parameter.name === other.name &&
-        stringListsEqual(parameter.requirements, other.requirements);
-    }) &&
-    left.uses.length === right.uses.length &&
-    left.uses.every((use, index) => {
-      const other = right.uses[index];
-      return other !== undefined && use.node === other.node &&
-        rustTargetTypeRefEquals(use.carrier, other.carrier) &&
-        stringListsEqual(use.requirements, other.requirements);
-    });
-}
-
-function stringListsEqual(
-  left: readonly string[],
-  right: readonly string[],
-): boolean {
-  return left.length === right.length && left.every((entry, index) =>
-    entry === right[index]);
 }
 
 function diagnostic(

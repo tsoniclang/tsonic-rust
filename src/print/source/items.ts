@@ -260,7 +260,7 @@ function rustFunctionReturnType(
 }
 
 function printRustReturnSuffix(returnType: RustType | undefined): string {
-  return returnType === undefined ? "" : ` -> ${printRustType(returnType)}`;
+  return returnType === undefined || returnType.kind === "unit" ? "" : ` -> ${printRustType(returnType)}`;
 }
 
 function printRustGenericParameter(parameter: RustGenericParameter): string {

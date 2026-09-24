@@ -2,6 +2,7 @@ import { rustOptionalStorageValue } from "../../../target-model/types/projection
 import { planRustOptionalStorageOperation } from "./optional-storage.js";
 import {
   isRustCopyCarrier,
+  isRustUnitCarrier,
   rustCarrierSupportsClone,
   rustOptionElementCarrier,
   rustSourceTypeCarrierValue,
@@ -263,7 +264,8 @@ function planProjectedExpression(
     if (contextuallyConverted.kind === "bottom") return contextuallyConverted;
     return contextuallyConverted.kind === "none" || contextuallyConverted.kind === "path" || contextuallyConverted.kind === "associated-value"
       ? value
-      : { kind: "evaluate-then", effect: contextuallyConverted, discard: "value", value };
+      : { kind: "evaluate-then", effect: contextuallyConverted,
+          discard: isRustUnitCarrier(currentCarrier) ? "unit" : "value", value };
   }
   return projection?.kind === "some"
     ? rustOptionalStorageValue(projection.resultCarrier) === undefined

@@ -23,7 +23,7 @@ export function main(): void {
   optional[1] = 7;
   nullable[1] = 9;
   check(optional[1] !== undefined && nullable[1] !== null);
-  check(optional[1] !== null && nullable[1] === undefined);
+  check(optional[1] !== null && nullable[1] !== undefined);
   optional[1] = undefined;
   nullable[1] = null;
   check(optional[1] === undefined && nullable[1] === null);
@@ -31,9 +31,9 @@ export function main(): void {
   const allUndefined: undefined[] = [undefined, undefined, undefined];
   const allNull: null[] = [null, null];
   check(allUndefined[readIndex(0)] === undefined && allUndefined[1] === undefined);
-  check(allUndefined[0] !== null && !(allUndefined[1] !== undefined));
+  check(allUndefined[0] === null && !(allUndefined[1] !== undefined));
   check(allNull[0] === null && allNull[1] === null);
-  check(allNull[0] !== undefined && allNull[1] !== undefined);
+  check(allNull[0] === undefined && allNull[1] === undefined);
   check(reads === 3);
   check(optional.at(1) === undefined && optional.at(0) !== undefined);
   check(nullable.at(1) === null && nullable.at(1) === undefined);

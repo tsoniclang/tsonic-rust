@@ -62,6 +62,7 @@ function finalizeRustItemStyle(
       ? item.attrs
       : appendRustAttribute(item.attrs, rustLintAttributes.tooManyArguments);
     if (hasErasedGenericParameter(item)) attrs = appendRustAttribute(attrs, rustLintAttributes.unusedTypeParameters);
+    if (hasUnusedParameter(item)) attrs = appendRustAttribute(attrs, rustLintAttributes.unusedVariables);
     return { ...item, attrs };
   }
   if (item.kind === "trait") {
@@ -86,13 +87,17 @@ function finalizeRustItemStyle(
 
 function finalizeRustTraitFunctionStyle(fn: RustTraitFunction): RustTraitFunction {
   const argumentCount = fn.params.length + (fn.selfParam === undefined ? 0 : 1);
-  const attrs = argumentCount <= 7
+  let attrs = argumentCount <= 7
     ? fn.attrs
     : appendRustAttribute(fn.attrs, rustLintAttributes.tooManyArguments);
+  const body = fn.body === undefined ? undefined : createRustBodyStyler().block(fn.body);
+  if (body !== undefined && hasUnusedParameter({ ...fn, body })) {
+    attrs = appendRustAttribute(attrs, rustLintAttributes.unusedVariables);
+  }
   return {
     ...fn,
     ...(attrs === undefined ? {} : { attrs }),
-    ...(fn.body === undefined ? {} : { body: createRustBodyStyler().block(fn.body) }),
+    ...(body === undefined ? {} : { body }),
   };
 }
 
@@ -102,6 +107,7 @@ function finalizeRustImplFunctionStyle(
   publicOwner: boolean,
 ): RustImplFunction {
   let attrs = fn.attrs;
+  if (hasUnusedParameter(fn)) attrs = appendRustAttribute(attrs, rustLintAttributes.unusedVariables);
   if (inherent && hasErasedGenericParameter(fn)) attrs = appendRustAttribute(attrs, rustLintAttributes.unusedTypeParameters);
   const argumentCount = fn.params.length + (fn.selfParam === undefined ? 0 : 1);
   if (inherent && argumentCount > 7) {
@@ -122,6 +128,11 @@ function hasErasedGenericParameter(fn: RustImplFunction): boolean {
   const usage: RustItem = { ...fn, kind: "function" };
   return fn.generics.parameters.some(parameter => parameter.kind === "type" &&
     !rustItemsReferenceModuleAlias([usage], parameter.name));
+}
+
+function hasUnusedParameter(fn: Pick<RustImplFunction, "params" | "body">): boolean {
+  return fn.params.some(parameter => !parameter.name.startsWith("_") &&
+    !rustBlockReferencesPath(fn.body, parameter.name));
 }
 
 function createRustBodyStyler(nameType?: (type: RustType, role: string) => RustType): {
@@ -394,13 +405,19 @@ function finalizeRustExpressionStyle(expression: RustExpr): RustExpr {
     case "numeric-cast":
       result = { ...expression, expression: finalizeRustExpressionStyle(expression.expression) };
       break;
-    case "binary":
+    case "binary": {
+      const left = finalizeRustExpressionStyle(expression.left);
+      const right = finalizeRustExpressionStyle(expression.right);
+      if (left.kind === "bool-literal" && (expression.operator === "&&" || expression.operator === "||")) {
+        return (expression.operator === "&&" ? left.value : !left.value) ? right : left;
+      }
       result = {
         ...expression,
-        left: finalizeRustExpressionStyle(expression.left),
-        right: finalizeRustExpressionStyle(expression.right),
+        left,
+        right,
       };
       break;
+    }
     case "range":
       result = {
         ...expression,

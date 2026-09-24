@@ -8,6 +8,7 @@ import {
 } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { selectRustOptionalChain } from "../../../dist/policy/operations/optional-chains.js";
+import { rustSourceOptionalTargetType } from "../../../dist/target-model/types/projections.js";
 import {
   rustOptionTargetType,
   rustOptionValueCarrier,
@@ -129,7 +130,8 @@ export function use(): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.equal(text.match(/f64_to_i32/gu)?.length, 1);
+  assert.match(text, /accept\(250\)/u);
+  assert.doesNotMatch(text, /f64_to_i32|250\.0/u);
   validateGeneratedProject("selected-assertion-call-argument", result.artifacts);
 });
 
@@ -662,7 +664,7 @@ test("optional-chain selection retains the exact nested presence depth", () => {
   const selection = selectRustOptionalChain(input);
   assert.equal(selection.kind, "optional");
   assert.equal(selection.fact.guardDepth, 2);
-  assert.deepEqual(selection.fact.resultCarrier, optionString);
+  assert.deepEqual(selection.fact.resultCarrier, rustSourceOptionalTargetType(stringCarrier));
   assert.deepEqual(rustOptionValueCarrier(input.sourceGuardCarrier), stringCarrier);
   assert.equal(rustOptionValueCarrier(undefined), undefined);
   const cyclic = {
