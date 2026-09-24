@@ -209,8 +209,6 @@ export function rustFoundationForPath(path: string): RustFoundation {
 }
 
 const runtimeCoreExports = new Set([
-  "Null",
-  "Undefined",
   "iter_cloned",
   "iter_copied",
   "native_shift_left",
