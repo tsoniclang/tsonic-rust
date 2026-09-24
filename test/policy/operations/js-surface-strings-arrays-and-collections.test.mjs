@@ -12,10 +12,9 @@ import {
   rustJsArrayTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
-  rustUndefinedTargetType,
+  rustAbsenceTargetType,
   rustVecTargetType,
 } from "../../../dist/target-model/types/index.js";
-import { rustInt32ToFloat64ValueConversion } from "../../../dist/target-model/conversions/model.js";
 
 const denseSource = `
 import type { int32 } from "@tsonic/core/types.js";
@@ -26,7 +25,7 @@ export function sum(): int32 {
   for (const value of xs) {
     total += value;
   }
-  return total + xs.length;
+  return total + (xs.length as int32);
 }
 `;
 
@@ -51,7 +50,7 @@ test("string padding selects one exact overload row from finalized carriers", ()
     receiverCarrier: stringCarrier,
     argumentCarriers: [float64Carrier],
   });
-  assert.equal(floatDefault?.fact.operationId, "tsonic.rust.js.String.padStart.call.float64-default");
+  assert.equal(floatDefault?.fact.operationId, "tsonic.rust.js.String.padStart.call.native-default");
   assert.deepEqual(floatDefault?.fact.target, {
     form: "free-call",
     path: "js_string::pad_start",
@@ -66,13 +65,12 @@ test("string padding selects one exact overload row from finalized carriers", ()
     receiverCarrier: stringCarrier,
     argumentCarriers: [int32Carrier, stringCarrier],
   });
-  assert.equal(intFill?.fact.operationId, "tsonic.rust.js.String.padEnd.call.int32-fill");
+  assert.equal(intFill?.fact.operationId, "tsonic.rust.js.String.padEnd.call.native-fill");
   assert.deepEqual(intFill?.fact.target, {
     form: "free-call",
     path: "js_string::pad_end_with",
     receiverMode: "ref",
     argModes: ["value", "ref"],
-    argConversions: [rustInt32ToFloat64ValueConversion, undefined],
   });
 
   assert.equal(selectJsSurfaceOperation({
@@ -103,7 +101,7 @@ test("array index rows distinguish checked source and runtime result carriers", 
 
   assert.equal(selected?.fact.kind, "provider-operation");
   assert.deepEqual(selected?.fact.sourceResultCarrier, elementCarrier);
-  assert.deepEqual(selected?.fact.sourceAbsenceCarrier, rustUndefinedTargetType());
+  assert.deepEqual(selected?.fact.sourceAbsenceCarrier, rustAbsenceTargetType());
   assert.deepEqual(selected?.fact.resultCarrier, {
     kind: "target-named",
     id: "rust.std.Option",
@@ -270,7 +268,7 @@ export function edit(values: int32[]): int32 {
   values.copyWithin(0, 2);
   values.reverse();
   values.sort();
-  return length + (values.pop() ?? 0) + (values.shift() ?? 0) + removed.length + values.lastIndexOf(9, -1);
+  return (length as int32) + (values.pop() ?? 0) + (values.shift() ?? 0) + (removed.length as int32) + (values.lastIndexOf(9, -1) as int32);
 }
 `,
     },
@@ -444,11 +442,12 @@ export function probe(name: string): boolean {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn probe\(name: &str\) -> Result<bool, rt::TsonicError> \{/u);
+  assert.match(text, /pub fn probe\(name: &str\) -> bool \{/u);
   assert.match(text, /js_string::to_upper_case\(name\)/u);
   assert.match(text, /js_string::starts_with_from_start\(&upper, "A"\)/u);
   assert.match(text, /js_string::includes_from_start\(&upper, "B"\)/u);
-  assert.match(text, /rt::conversions::usize_to_i32\(\s*js_string::js_len\(name\),?\s*\)\? > 0/su);
+  assert.match(text, /js_string::js_len\(name\) != 0/u);
+  assert.doesNotMatch(text, /usize_to_(?:i32|f64)/u);
 });
 
 test("string index signatures and zero-argument Date construction use exact JS rows", () => {
@@ -472,7 +471,7 @@ export function probe(text: string, index: int32): boolean {
   assert.match(text, /js_string::char_at\(text, 0\.0\)\?/u);
   assert.match(
     text,
-    /js_string::char_at\(\s*text,\s*rt::conversions::i32_to_f64\(index\),?\s*\)\?/u,
+    /js_string::char_at\(text, index\)\?/u,
   );
   assert.match(text, /js_abi::JsDate::new\(\)/u);
 });
@@ -505,7 +504,7 @@ export function probe(text: string, values: readonly int32[]): boolean {
   assert.match(text, /js_string::repeat\(text, 2\.0\)\?/u);
   assert.match(
     text,
-    /let point: f64 = rt::option_coalesce\(\n {8}js_string::code_point_at\(text, 0\.0\),\n {8}core::convert::identity,\n {8}\|\| 0\.0,\n {4}\);/u,
+    /let point: u32 = rt::option_coalesce\(\n {8}js_string::code_point_at\(text, 0\.0\),\n {8}core::convert::identity,\n {8}\|\| 0,\n {4}\);/u,
   );
 });
 
@@ -536,15 +535,15 @@ export function probe(text: string, index: int32): string {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /js_string::split\(text, ",", 2\.0\)\?/u);
-  assert.match(text, /js_string::char_code_at\(text, rt::conversions::i32_to_f64\(index\)\)/u);
-  assert.match(text, /js_string::last_index_of\([\s\S]*text,[\s\S]*"a",[\s\S]*i32_to_f64\(index\),[\s\S]*\)/u);
+  assert.match(text, /js_string::char_code_at\(text, index\)/u);
+  assert.match(text, /js_string::last_index_of\(text, "a", index\)/u);
   assert.match(text, /js_string::substring\(text, 1\.0, 3\.0\)\?/u);
   assert.match(text, /js_string::substr\(\s*text,\s*-2\.0,\s*1\.0,?\s*\)\?/u);
   assert.match(text, /js_string::replace\(text, "a", "\[\$&\]"\)/u);
   assert.match(text, /js_string::replace_all\(&js_string::replace\(text, "a", "\[\$&\]"\), "b", "B"\)\?/u);
   assert.match(text, /js_string::concat\(text, &\["-", section\.as_str\(\)\]\)/u);
-  assert.match(text, /js_string::from_char_code\(&\[65\.0, 66\.0\]\)\?/u);
-  assert.match(text, /js_string::from_code_point\(&\[128512\.0\]\)\?/u);
+  assert.match(text, /js_string::from_char_code::<f64>\(&\[65\.0, 66\.0\]\)\?/u);
+  assert.match(text, /js_string::from_code_point::<f64>\(&\[128512\.0\]\)\?/u);
   assert.match(text, /js_string::trim_start\(text\)/u);
   assert.match(text, /js_string::identity/u);
 });
@@ -596,7 +595,8 @@ export function probe(value: number, integer: int32): boolean {
   assert.match(text, /js_abi::number_is_integer\(value\)/u);
   assert.match(text, /js_abi::number_is_safe_integer\(value\)/u);
   assert.match(text, /js_abi::number_is_nan\(value\)/u);
-  assert.match(text, /js_abi::number_is_finite\(rt::conversions::i32_to_f64\(integer\)\)/u);
+  assert.match(text, /js_abi::number_is_finite\(integer\)/u);
+  assert.doesNotMatch(text, /i32_to_f64\(integer\)/u);
 
   assertRustTargetRejection({
     surfaces: ["js"],
@@ -634,7 +634,8 @@ export function collections(): boolean {
   assert.match(text, /m\.has\(&1\)/u);
   assert.match(text, /m\.get\(&2\)\.is_none\(\)/u);
   assert.match(text, /s\.add_discard\(4\);/u);
-  assert.match(text, /rt::conversions::usize_to_i32\(m\.len\(\)\)\? == 1/u);
+  assert.match(text, /m\.len\(\) == 1/u);
+  assert.doesNotMatch(text, /usize_to_(?:i32|f64)\(m\.len\(\)\)/u);
 });
 
 test("Date lowers to the UTC runtime carrier", () => {

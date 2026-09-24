@@ -11,8 +11,8 @@ export const enum RustPrecedence {
   Shift = 7,
   Additive = 8,
   Multiplicative = 9,
-  Unary = 10,
-  Cast = 11,
+  Cast = 10,
+  Unary = 11,
   Postfix = 12,
   Atom = 13,
 }
@@ -97,7 +97,7 @@ export function expressionNeedsParentheses(
     (own === parent && (isRightSide || parent === RustPrecedence.Comparison));
 }
 
-function expressionIsStatementBlock(expression: RustExpr): boolean {
+export function expressionIsStatementBlock(expression: RustExpr): boolean {
   if (expression.kind === "bottom") {
     return expressionIsStatementBlock(expression.expression);
   }

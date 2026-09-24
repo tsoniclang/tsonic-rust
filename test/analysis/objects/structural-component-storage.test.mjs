@@ -32,3 +32,32 @@ test("structural storage unifies exact component contracts without erasing other
   }
   assert.equal(plan.sharesStorage(shapes[0].carrier, primitive("int32")), false);
 });
+
+test("structural instantiation diamonds require one ultimate template in either insertion order", () => {
+  const carrier = type => rustStructuralObjectTargetType("/source.ts", [{
+    sourceName: "value", type, presence: "required", readonly: false,
+  }]);
+  const template = carrier({ kind: "type-parameter", name: "Value" });
+  const middle = carrier({ kind: "array", element: { kind: "type-parameter", name: "Element" } });
+  const instance = carrier({ kind: "array", element: { kind: "source-primitive", name: "int32" } });
+  const shapes = [template, middle, instance].map(carrier => ({ carrier }));
+  const edges = [{ template, instance: middle }, { template: middle, instance }, { template, instance }];
+  for (const instantiations of [edges, [...edges].reverse()]) {
+    const plan = createRustStructuralShapePlan(shapes, [], () => "source", [], instantiations);
+    assert.equal(plan.definitions.length, 1);
+    const definitions = [template, middle, instance].map(carrier => plan.definitionForCarrier(carrier));
+    assert.equal(definitions[0].targetName, definitions[1].targetName);
+    assert.equal(definitions[0].targetName, definitions[2].targetName);
+    assert.deepEqual(definitions[2].genericArguments, [{ kind: "type", type: {
+      kind: "array", element: { kind: "source-primitive", name: "int32" },
+    } }]);
+    assert.equal(plan.sharesStorage(template, instance), false);
+    assert.equal(plan.sharesStorage(middle, instance), false);
+    assert.equal(plan.sharesStorage(instance, carrier({ kind: "array", element: { kind: "source-primitive", name: "int32" } })), true);
+  }
+  assert.throws(() => createRustStructuralShapePlan(shapes, [], () => "source", [], edges.slice(1)),
+    /contradictory storage templates/u);
+  assert.throws(() => createRustStructuralShapePlan(shapes, [], () => "source", [], [
+    ...edges, { template: instance, instance: template },
+  ]), /cyclic storage templates/u);
+});

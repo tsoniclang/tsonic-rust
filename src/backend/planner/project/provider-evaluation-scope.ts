@@ -7,12 +7,6 @@ import {
 import type {
   RustFinalizedSourceInput,
 } from "../../../analysis/facts/finalized-operation-abi.js";
-import {
-  isRustFinalizedArrayInput,
-  isRustFinalizedConstantInput,
-  isRustFinalizedSliceInput,
-  isRustFinalizedTaggedArrayInput,
-} from "../../../analysis/facts/finalized-operation-abi.js";
 import type {
   RustTargetOperationFact,
 } from "../../../analysis/facts/keys.js";
@@ -25,6 +19,7 @@ import {
   rustTargetOperationIsDirectLocation,
 } from "../../../analysis/facts/target-operation.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { sourceRuntimeSlots, providerTargetRuntimeSlotKeys, providerSourceInputs, providerSourceInputNode, providerSourceInputKey } from "./provider-source-inputs.js";
 import type { RustExpr } from "../../target-ast/nodes.js";
 import {
   missingFactDiagnostic,
@@ -63,16 +58,16 @@ export interface RustFinalizedInputPlanOverrides {
   readonly inputs: ReadonlyMap<RustFinalizedSourceInput, RustExpr>;
 }
 
+type RustProviderEvaluationStep =
+  | { readonly kind: "binding"; readonly name: string; readonly value: RustExpr; readonly mutable?: boolean }
+  | { readonly kind: "effect"; readonly value: RustExpr; readonly discard: "unit" | "value" };
+
 export type RustProviderEvaluationScopeSelection =
   | { readonly kind: "none" }
   | { readonly kind: "failed" }
   | {
       readonly kind: "selected";
-      readonly bindings: readonly {
-        readonly name: string;
-        readonly value: RustExpr;
-        readonly mutable?: boolean;
-      }[];
+      readonly steps: readonly RustProviderEvaluationStep[];
       readonly mutableLocations: readonly {
         readonly name: string;
         readonly ownerName: string;
@@ -128,11 +123,7 @@ export function planRustProviderEvaluationScope(
   if (!hasManagedInput && stabilizationKeys.size === 0) {
     return { kind: "none" };
   }
-  const bindings: {
-    readonly name: string;
-    readonly value: RustExpr;
-    readonly mutable?: boolean;
-  }[] = [];
+  const steps: RustProviderEvaluationStep[] = [];
   const mutableLocations: { readonly name: string; readonly ownerName: string }[] = [];
   const mutableProjectStates: { readonly receiver: RustExpr; readonly stateName: string }[] = [];
   const mutableProjectStateByRoot = new Map<Node, {
@@ -160,7 +151,7 @@ export function planRustProviderEvaluationScope(
       const value = planSequenceInput(input);
       if (value === undefined) return { kind: "failed" };
       const name = allocateRustSyntheticName(syntheticNames, `operation_sequence_${index}`);
-      bindings.push({ name, value });
+      steps.push({ kind: "binding", name, value });
       inputOverrides.set(input, { kind: "path", path: name });
       continue;
     }
@@ -168,7 +159,7 @@ export function planRustProviderEvaluationScope(
     if (mutable?.kind === "promoted") {
       const name = allocateRustSyntheticName(syntheticNames, `location_${index}`);
       const ownerName = allocateRustSyntheticName(syntheticNames, `location_value_${index}`);
-      bindings.push({ name, value: mutable.location });
+      steps.push({ kind: "binding", name, value: mutable.location });
       mutableLocations.push({ name, ownerName });
       for (const input of mutable.inputs) {
         inputOverrides.set(input, { kind: "path", path: ownerName });
@@ -245,8 +236,13 @@ export function planRustProviderEvaluationScope(
     if (value === undefined) {
       return { kind: "failed" };
     }
+    if (slot.evaluationOnly !== undefined) {
+      steps.push({ kind: "effect", value, discard: slot.evaluationOnly });
+      continue;
+    }
     const name = allocateRustSyntheticName(syntheticNames, `operation_input_${index}`);
-    bindings.push({
+    steps.push({
+      kind: "binding",
       name,
       value,
       ...(mutable?.kind === "owned" ? { mutable: true } : {}),
@@ -255,7 +251,7 @@ export function planRustProviderEvaluationScope(
   }
   return {
     kind: "selected",
-    bindings,
+    steps,
     mutableLocations,
     mutableProjectStates,
     overrides: { sourceValues, inputs: inputOverrides },
@@ -286,14 +282,23 @@ export function applyRustProviderEvaluationScope(
       value,
     );
   }
-  if (scope.bindings.length === 0) {
-    return value;
-  }
-  return {
-    kind: "block",
-    bindings: scope.bindings,
-    value,
+  let pending: Extract<RustProviderEvaluationStep, { readonly kind: "binding" }>[] = [];
+  const flush = (): void => {
+    if (pending.length !== 0) value = { kind: "block", value, bindings: pending.reverse().map(
+      ({ name, value, mutable }) => ({ name, value, ...(mutable === undefined ? {} : { mutable }) }),
+    ) };
+    pending = [];
   };
+  for (const step of [...scope.steps].reverse()) {
+    if (step.kind === "binding") {
+      pending.push(step);
+    } else {
+      flush();
+      value = { kind: "evaluate-then", effect: step.value, discard: step.discard, value };
+    }
+  }
+  flush();
+  return value;
 }
 
 function providerInputStabilizationKeys(
@@ -405,37 +410,6 @@ function expressionHasEffects(
 
 function stringSequencesEqual(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
-}
-
-function providerTargetRuntimeSlotKeys(
-  fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>,
-): readonly string[] {
-  const keys: string[] = [];
-  const collect = (input: import("../../../analysis/facts/finalized-operation-abi.js").RustFinalizedTargetInput): void => {
-    if (isRustFinalizedConstantInput(input)) {
-      return;
-    }
-    if (isRustFinalizedSliceInput(input) || isRustFinalizedArrayInput(input)) {
-      for (const element of input.elements) {
-        keys.push(providerSourceInputKey(element));
-      }
-      return;
-    }
-    if (isRustFinalizedTaggedArrayInput(input)) {
-      for (const element of input.elements) {
-        keys.push(providerSourceInputKey(element.input));
-      }
-      return;
-    }
-    keys.push(providerSourceInputKey(input));
-  };
-  if (fact.abi.targetReceiver.kind === "input") {
-    collect(fact.abi.targetReceiver.input);
-  }
-  for (const input of fact.abi.targetArguments) {
-    collect(input);
-  }
-  return keys;
 }
 
 type MutableProviderInput =
@@ -806,32 +780,6 @@ function providerDirectMutableRoot(
     : providerDirectMutableRoot(receiver, context);
 }
 
-function sourceRuntimeSlots(
-  fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>,
-  receiverNode: Node | undefined,
-  argumentNodes: readonly (Node | undefined)[],
-): readonly { readonly key: string; readonly node: Node }[] | undefined {
-  const slots: { readonly key: string; readonly node: Node }[] = [];
-  if (fact.abi.sourceReceiver.kind === "receiver" &&
-    fact.abi.sourceReceiver.disposition === "runtime") {
-    if (receiverNode === undefined) {
-      return undefined;
-    }
-    slots.push({ key: "receiver", node: receiverNode });
-  }
-  for (const argument of fact.abi.sourceArguments) {
-    if (argument.disposition !== "runtime") {
-      continue;
-    }
-    const node = argumentNodes[argument.sourceIndex];
-    if (node === undefined) {
-      return undefined;
-    }
-    slots.push({ key: `argument:${argument.sourceIndex}`, node });
-  }
-  return slots;
-}
-
 function providerMutableLocationNode(
   sourceNode: Node,
   context: RustPlanContext,
@@ -854,34 +802,4 @@ function providerMutableLocationNode(
     "Promoted mutable provider input requires one exact finalized mutable-borrow operand.",
   ));
   return undefined;
-}
-
-function providerSourceInputs(
-  fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>,
-): readonly RustFinalizedSourceInput[] {
-  return [
-    ...(fact.abi.targetReceiver.kind === "input"
-      ? [fact.abi.targetReceiver.input]
-      : []),
-    ...fact.abi.targetArguments.flatMap((input) =>
-      isRustFinalizedSliceInput(input) || isRustFinalizedArrayInput(input) ? input.elements :
-        isRustFinalizedTaggedArrayInput(input) ? input.elements.map((element) => element.input) :
-        isRustFinalizedConstantInput(input) ? [] : [input]),
-  ];
-}
-
-function providerSourceInputNode(
-  input: RustFinalizedSourceInput,
-  receiverNode: Node | undefined,
-  argumentNodes: readonly (Node | undefined)[],
-): Node | undefined {
-  return input.source.kind === "receiver"
-    ? receiverNode
-    : argumentNodes[input.source.sourceIndex];
-}
-
-function providerSourceInputKey(input: RustFinalizedSourceInput): string {
-  return input.source.kind === "receiver"
-    ? "receiver"
-    : `argument:${input.source.sourceIndex}`;
 }

@@ -10,6 +10,7 @@ import type {
 import { rustLifetimeKey } from "../../lifetimes/index.js";
 import type { RustLifetimeRef } from "../../lifetimes/index.js";
 import { rustGenericCallableCarrier, rustGenericCallableValue } from "./generic-callables.js";
+import { rustSourceOptionalTargetType } from "../projections.js";
 
 export function substituteRustTargetTypeParameters(
   type: TargetTypeRef,
@@ -23,13 +24,13 @@ export function substituteRustTargetGenerics(
   substitutions: ReadonlyMap<string, TargetTypeRef>,
   lifetimeSubstitutions: ReadonlyMap<string, RustLifetimeRef>,
   constSubstitutions: ReadonlyMap<string, RustTargetConstArgument> = new Map(),
-  normalize?: (type: TargetTypeRef) => TargetTypeRef,
+  normalize?: (type: TargetTypeRef, source: TargetTypeRef) => TargetTypeRef,
 ): TargetTypeRef {
   const result = substituteCarrierParts(type, substitutions, lifetimeSubstitutions, constSubstitutions, normalize);
-  return normalize === undefined ? result : normalize(result);
+  return normalize === undefined ? result : normalize(result, type);
 }
 
-export function mapRustTargetTypes(type: TargetTypeRef, normalize: (type: TargetTypeRef) => TargetTypeRef): TargetTypeRef {
+export function mapRustTargetTypes(type: TargetTypeRef, normalize: (type: TargetTypeRef, source: TargetTypeRef) => TargetTypeRef): TargetTypeRef {
   return substituteRustTargetGenerics(type, new Map(), new Map(), new Map(), normalize);
 }
 
@@ -38,13 +39,17 @@ function substituteCarrierParts(
   substitutions: ReadonlyMap<string, TargetTypeRef>,
   lifetimeSubstitutions: ReadonlyMap<string, RustLifetimeRef>,
   constSubstitutions: ReadonlyMap<string, RustTargetConstArgument>,
-  normalize?: (type: TargetTypeRef) => TargetTypeRef,
+  normalize?: (type: TargetTypeRef, source: TargetTypeRef) => TargetTypeRef,
 ): TargetTypeRef {
   const substituteLifetime = (lifetime: RustLifetimeRef): RustLifetimeRef =>
     lifetimeSubstitutions.get(rustLifetimeKey(lifetime)) ?? lifetime;
   switch (type.kind) {
     case "type-parameter":
       return (() => {
+        if (type.optionalStorageValue !== undefined) {
+          return rustSourceOptionalTargetType(substituteRustTargetGenerics(type.optionalStorageValue,
+            substitutions, lifetimeSubstitutions, constSubstitutions, normalize));
+        }
         const replacement = substitutions.get(type.name);
         return replacement === undefined ? type : normalize === undefined
           ? replacement : mapRustTargetTypes(replacement, normalize);
@@ -447,7 +452,7 @@ function substituteRustTargetTraitRef(
   substitutions: ReadonlyMap<string, TargetTypeRef>,
   lifetimeSubstitutions: ReadonlyMap<string, RustLifetimeRef>,
   constSubstitutions: ReadonlyMap<string, RustTargetConstArgument>,
-  normalize?: (type: TargetTypeRef) => TargetTypeRef,
+  normalize?: (type: TargetTypeRef, source: TargetTypeRef) => TargetTypeRef,
 ): RustTargetTraitRef {
   const substituted = substituteRustTargetGenerics(
     trait,
@@ -467,7 +472,7 @@ function substituteGenericArguments(
   typeSubstitutions: ReadonlyMap<string, TargetTypeRef>,
   lifetimeSubstitutions: ReadonlyMap<string, RustLifetimeRef>,
   constSubstitutions: ReadonlyMap<string, RustTargetConstArgument>,
-  normalize?: (type: TargetTypeRef) => TargetTypeRef,
+  normalize?: (type: TargetTypeRef, source: TargetTypeRef) => TargetTypeRef,
 ): readonly RustTargetGenericArgument[] {
   return Object.freeze(arguments_.map((argument): RustTargetGenericArgument => {
     switch (argument.kind) {
@@ -504,7 +509,7 @@ export function substituteRustTargetGenericArgument(
   typeSubstitutions: ReadonlyMap<string, TargetTypeRef>,
   lifetimeSubstitutions: ReadonlyMap<string, RustLifetimeRef>,
   constSubstitutions: ReadonlyMap<string, RustTargetConstArgument> = new Map(),
-  normalize?: (type: TargetTypeRef) => TargetTypeRef,
+  normalize?: (type: TargetTypeRef, source: TargetTypeRef) => TargetTypeRef,
 ): RustTargetGenericArgument {
   return substituteGenericArguments(
     [argument],

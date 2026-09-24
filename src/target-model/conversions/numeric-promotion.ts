@@ -16,16 +16,16 @@ export function rustNumericPromotionKind(
   if (left === "float32" || right === "float32") {
     return "float32";
   }
-  if (left === "native-int" || right === "native-int" ||
-    left === "native-uint" || right === "native-uint") {
-    return undefined;
-  }
   if (left === "uint128" || right === "uint128") {
     const other = left === "uint128" ? right : left;
     return unsignedKinds.has(other) ? "uint128" : undefined;
   }
   if (left === "int128" || right === "int128") {
     return "int128";
+  }
+  if (left === "native-int" || right === "native-int" ||
+    left === "native-uint" || right === "native-uint") {
+    return undefined;
   }
   if (left === "uint64" || right === "uint64") {
     const other = left === "uint64" ? right : left;
@@ -48,6 +48,20 @@ export function rustIntegerKindIsExactlyRepresentableAsFloat64(
 ): boolean {
   return float64ExactIntegerKinds.has(kind);
 }
+
+export function rustNumericValueConversionIsSupported(
+  source: SourcePrimitiveKind,
+  target: SourcePrimitiveKind,
+): boolean {
+  return source !== target && (
+    rustNumericPromotionKind(source, target) === target ||
+    target === "native-int" && nativeSignedWideningKinds.has(source) ||
+    target === "native-uint" && nativeUnsignedWideningKinds.has(source)
+  );
+}
+
+const nativeSignedWideningKinds: ReadonlySet<SourcePrimitiveKind> = new Set(["int8", "uint8", "int16"]);
+const nativeUnsignedWideningKinds: ReadonlySet<SourcePrimitiveKind> = new Set(["uint8", "uint16"]);
 
 const numericKinds: ReadonlySet<SourcePrimitiveKind> = new Set([
   "int8",

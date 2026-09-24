@@ -45,7 +45,7 @@ import { rustInt32ToUsizeValueConversion } from "../../../target-model/conversio
 import { rustProjectObjectIndexSignature } from "../../project-types/object-layout.js";
 import { rustRuntimeCarrierKey } from "../../../target-model/facts/selections.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { selectedValueCarrier } from "./operators.js";
+import { selectedValueCarrier } from "../selected-values.js";
 import { selectJsSurfaceOperation } from "../../../policy/operations/js-surface.js";
 import { selectRustFixedArrayElementAccess } from "./structural-properties.js";
 import { isIntrinsicSourceQualifier } from "./source-qualifiers.js";

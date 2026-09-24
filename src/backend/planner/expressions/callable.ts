@@ -59,6 +59,7 @@ import { planRustGenericCallableValue } from "./generic-callables.js";
 import { planRustGeneratorBody } from "../declarations/generator-body.js";
 import { wrapRustJsPromiseBody } from "../declarations/async-promise.js";
 import { planRustSuspendedCallableConstruction } from "./suspended-callables.js";
+import { planRustParameterEntryConversion } from "../declarations/parameter-entry-conversion.js";
 
 export function planCallableExpression(
   node: Node,
@@ -203,12 +204,12 @@ export function planRustCallableExpressionBody(
     }
     const byRefCopy = closureFact.byRefCopyParams[index] === true;
     const ownedBinding = parameterCarrier.kind !== "pointer" && parameterCarrier.kind !== "reference";
-    const objectRepresentation = context.input.program.objectRepresentations.representationFor(
-      context.input.program.projectTypes.definitionForCarrier(parameterCarrier),
-    );
     const referentMutationRequiresMutableBinding =
-      rustCarrierReferentMutationRequiresMutableBinding(parameterCarrier) &&
-      (objectRepresentation === undefined || objectRepresentation.kind === "value");
+      rustCarrierReferentMutationRequiresMutableBinding(parameterCarrier, carrier => {
+        const representation = context.input.program.objectRepresentations.representationFor(
+          context.input.program.projectTypes.definitionForCarrier(carrier));
+        return representation !== undefined && representation.kind !== "value";
+      });
     sourceParameterPlans.push({
       parameter,
       name: parameterName,
@@ -429,7 +430,7 @@ export function planRustCallableExpressionBody(
       })),
       ...sourceParameterPlans.map((parameter) => ({
         name: parameter.name,
-        mutable: parameter.mutable,
+        mutable: parameter.mutable && context.input.program.facts.getFact(parameter.parameter, rustSourceParameterAbiFactKey)?.entryConversion === undefined,
         byRefCopy: parameter.byRefCopy,
       })),
     ];
@@ -473,15 +474,20 @@ export function planRustCallableExpressionBody(
         if (defaultValue === undefined) {
           return undefined;
         }
-        initializer = rustOptionDefaultValue(initializer, defaultValue);
+        initializer = rustOptionDefaultValue(initializer, defaultValue, parameter.carrier, callableClosureContext);
       }
       bindingStatements.push({
         kind: "let",
         name: parameter.name,
-        mutable: parameter.mutable,
+        mutable: parameter.mutable && context.input.program.facts.getFact(parameter.parameter, rustSourceParameterAbiFactKey)?.entryConversion === undefined,
         init: initializer,
       });
     }
+  }
+  for (const parameter of sourceParameterPlans) {
+    const entry = planRustParameterEntryConversion(parameter.parameter, parameter.name, parameter.mutable, callableClosureContext);
+    if (entry === undefined) return undefined;
+    bindingStatements.push(...entry);
   }
   for (const binding of bindingParameters) {
     const planned = planRustBindingPattern(

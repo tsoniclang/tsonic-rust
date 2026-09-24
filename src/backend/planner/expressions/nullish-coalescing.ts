@@ -2,7 +2,7 @@ import { BinaryExpression_Left, BinaryExpression_Right } from "@tsonic/target-ap
 import type { Node } from "@tsonic/tsts";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 import { rustTargetOperationText } from "../../../analysis/facts/target-operation.js";
-import { rustOptionElementCarrier } from "../../../target-model/types/index.js";
+import { isRustNeverCarrier, rustOptionElementCarrier } from "../../../target-model/types/index.js";
 import { rustOptionNestingDepth } from "../../../target-model/types/carriers/optional.js";
 import { rustUnparenthesizedExpression } from "../../../target-model/syntax/expressions.js";
 import type { RustExpr } from "../../target-ast/nodes.js";
@@ -14,6 +14,10 @@ import { applyRustFallibleResultExpression, rustExpressionUsesTryInCurrentRegion
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planExpression, planExpressionBeforeValueProjections } from "./entry.js";
 import { effectivePlannedExpressionCarrier, requireExpressionCarrier, selectedOperationMatches } from "./fundamentals.js";
+import { applyRustValueConversion } from "./value-conversions.js";
+import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
 
 export function planNullishCoalescing(
   node: Node,
@@ -45,18 +49,26 @@ export function planNullishCoalescing(
   }
   const presentCarrier = fact.rightOptionDepth > 0
     ? rustOptionElementCarrier(fact.resultCarrier) : fact.resultCarrier;
+  const rightCarrier = rightNode === undefined ? undefined : fact.rightValueForm === "raw"
+    ? context.input.program.facts.getRuntimeCarrierFact(rightNode)?.carrier
+    : effectivePlannedExpressionCarrier(rightNode, context);
+  const rightDepth = fact.rightValueForm === "value" && isRustNeverCarrier(rightCarrier)
+    ? 0 : rustOptionNestingDepth(rightCarrier, presentCarrier);
+  const conversion = fact.leftConversion === undefined ? undefined
+    : rustValueConversionContract(fact.leftConversion, context.input.program.typeDefinitions);
+  const exactPresentValue = fact.leftConversion === undefined
+    ? rustTargetTypeRefEquals(fact.leftValueCarrier, presentCarrier)
+    : conversion !== undefined && !conversion.fallible &&
+      rustTargetTypeRefEquals(conversion.source, fact.leftValueCarrier) && rustTargetTypeRefEquals(conversion.target, presentCarrier);
   if (!Number.isSafeInteger(fact.leftOptionDepth) || fact.leftOptionDepth < 1 ||
     !Number.isSafeInteger(fact.rightOptionDepth) || fact.rightOptionDepth < 0 ||
-    fact.rightValueForm !== "value" && fact.rightValueForm !== "raw" ||
+    !exactPresentValue || fact.rightValueForm !== "value" && fact.rightValueForm !== "raw" ||
     fact.rightValueForm === "raw" && fact.rightOptionDepth === 0 ||
     rustOptionNestingDepth(
       context.input.program.facts.getRuntimeCarrierFact(leftNode)?.carrier,
-      presentCarrier,
+      fact.leftValueCarrier,
     ) !== fact.leftOptionDepth ||
-    rustOptionNestingDepth(rightNode === undefined ? undefined :
-      fact.rightValueForm === "raw"
-        ? context.input.program.facts.getRuntimeCarrierFact(rightNode)?.carrier
-        : effectivePlannedExpressionCarrier(rightNode, context), presentCarrier) !== fact.rightOptionDepth) {
+    rightDepth !== fact.rightOptionDepth) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.option-coalesce-depth",
@@ -91,7 +103,13 @@ export function planNullishCoalescing(
     context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []),
     "present_value",
   );
-  const present: RustExpr = fallbackIsFallible && fact.rightOptionDepth === 0
+  const convertedPresent = fact.leftConversion === undefined ? undefined : applyRustValueConversion(context,
+    { kind: "path", path: presentValueName }, fact.leftConversion, node, false);
+  if (fact.leftConversion !== undefined && convertedPresent === undefined) return undefined;
+  const present: RustExpr = convertedPresent !== undefined
+    ? { kind: "closure", params: [{ name: presentValueName, byRefCopy: false }],
+        body: fallbackIsFallible ? { kind: "call", path: "Ok", args: [convertedPresent] } : convertedPresent }
+    : fallbackIsFallible && fact.rightOptionDepth === 0
     ? { kind: "path", path: "Ok" }
     : fallbackIsFallible
       ? {
@@ -111,10 +129,21 @@ export function planNullishCoalescing(
         };
   const coalescedValueType = fallbackIsFallible ? rustTypeFromCarrierInContext(fact.resultCarrier, context) : undefined;
   if (fallbackIsFallible && coalescedValueType === undefined) return undefined;
+  const leftCarrier = context.input.program.facts.getRuntimeCarrierFact(leftNode)?.carrier;
+  const projected = rustOptionalStorageValue(leftCarrier);
+  const projectedValueType = projected === undefined ? undefined : rustTypeFromCarrierInContext(projected, context);
+  const projectedStorageType = projected === undefined ? undefined : rustTypeFromCarrierInContext(leftCarrier, context);
+  if (projected !== undefined && (projectedValueType === undefined || projectedStorageType === undefined)) return undefined;
   const coalesced: RustExpr = {
     kind: "call",
-    path: "rt::option_coalesce",
-    ...(fallbackIsFallible ? { genericArguments: [
+    path: projected === undefined ? "rt::option_coalesce" : "rt::optional_storage_coalesce",
+    ...(projected !== undefined ? { genericArguments: [
+      { kind: "type" as const, type: projectedValueType! },
+      { kind: "type" as const, type: projectedStorageType! },
+      { kind: "type" as const, type: fallbackIsFallible ? { kind: "named" as const, path: "core::result::Result", genericArguments: [
+        { kind: "type" as const, type: coalescedValueType! }, { kind: "type" as const, type: activeErrorType! },
+      ] } : { kind: "infer" as const } },
+    ] } : fallbackIsFallible ? { genericArguments: [
       { kind: "type" as const, type: { kind: "infer" as const } },
       { kind: "type" as const, type: { kind: "named" as const, path: "core::result::Result", genericArguments: [
         { kind: "type" as const, type: coalescedValueType! },

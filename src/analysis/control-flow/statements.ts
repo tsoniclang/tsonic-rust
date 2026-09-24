@@ -41,6 +41,7 @@ import {
   VariableStatement_DeclarationList,
 } from "@tsonic/target-api/source";
 import {
+  isRustBigIntCarrier,
   isRustBoolCarrier,
   isRustNumericCarrier,
   isRustStringCarrier,
@@ -141,6 +142,12 @@ export function recordVariableStatementFacts(walk: RustFactWalk, statement: Node
     const initializerCarrier = initializer === undefined
       ? undefined
       : resolveExpressionCarrier(walk, initializer, sourceFile, annotated ?? predeclared);
+    if (initializer !== undefined && annotated !== undefined && initializerCarrier !== undefined &&
+      !reconcileRequiredCarrier(walk, initializer, initializerCarrier, annotated)) {
+      appendRustDiagnostic(walk, "RUST_INITIALIZER_CARRIER_MISMATCH",
+        "The initializer cannot be represented by the declaration's exact Rust carrier.", initializer,
+        ["target.capability=rust.initializer-carrier"]);
+    }
     const effective = annotated ?? initializerCarrier ?? predeclared;
     if (effective !== undefined) {
       setCarrierFact(walk, declaration, effective);
@@ -205,6 +212,7 @@ export function recordExportAssignmentFacts(
   walk.context.facts.set(declaration, rustModuleBindingFactKey, {
     declarationKind: "const",
     storage: "module-cell",
+    initialization: "value",
     valueCarrier: finalized,
   }, [{ message: "rust finalized default export snapshot storage" }]);
   return finalized;
@@ -347,6 +355,12 @@ export function recordStatementFacts(
         const initializerCarrier = declarationInitializer === undefined
           ? undefined
           : resolveExpressionCarrier(walk, declarationInitializer, sourceFile, annotated);
+        if (declarationInitializer !== undefined && annotated !== undefined && initializerCarrier !== undefined &&
+          !reconcileRequiredCarrier(walk, declarationInitializer, initializerCarrier, annotated)) {
+          appendRustDiagnostic(walk, "RUST_INITIALIZER_CARRIER_MISMATCH",
+            "The initializer cannot be represented by the declaration's exact Rust carrier.", declarationInitializer,
+            ["target.capability=rust.initializer-carrier"]);
+        }
         const effective = annotated ?? initializerCarrier;
         if (effective !== undefined) {
           setCarrierFact(walk, declaration, effective);
@@ -437,7 +451,7 @@ function recordSwitchFacts(
 
 function rustSwitchCarrierSupportsEquality(carrier: TargetTypeRef): boolean {
   const sourceType = rustSourceTypeCarrierValue(carrier);
-  return isRustNumericCarrier(carrier) || isRustBoolCarrier(carrier) ||
+  return isRustNumericCarrier(carrier) || isRustBigIntCarrier(carrier) || isRustBoolCarrier(carrier) ||
     isRustStringCarrier(carrier) || sourceType?.shape === "enum";
 }
 

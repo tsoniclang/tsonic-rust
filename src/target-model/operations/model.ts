@@ -7,6 +7,7 @@ import type {
   TargetTypeRef,
 } from "../types/model.js";
 import type { RustLifetimeBinder } from "../lifetimes/index.js";
+import type { RustExactIntegerConversion } from "../conversions/exact-integer.js";
 
 export const rustExtensionId = "tsonic.rust";
 
@@ -83,8 +84,6 @@ export type RustValueConversionId =
   | "js-string-number-from-string"
   | "js-string-number-from-number"
   | "js-string-number-from-int32"
-  | "js-string-number-from-null"
-  | "js-string-number-from-undefined"
   | "js-numeric-from-number"
   | "js-numeric-from-int32"
   | "js-numeric-from-bigint"
@@ -109,17 +108,21 @@ export type RustValueConversionId =
   | "js-value-from-f32"
   | "js-value-from-f64"
   | "js-value-from-i32"
-  | "js-value-from-null"
+  | "js-value-from-i64"
+  | "js-value-from-u64"
+  | "js-value-from-isize"
+  | "js-value-from-usize"
+  | "js-value-from-absence"
   | "js-value-from-string"
   | "js-value-from-symbol"
   | "js-value-from-error"
-  | "js-value-from-undefined"
   | "js-value-clone"
   | "ts-value-clone"
   | "owned-string-from-borrowed-str"
   | "borrowed-str-from-owned-string";
 
 export type RustNonOptionValueConversion =
+  | RustExactIntegerConversion
   | {
       readonly kind: "object-identity-erasure";
       readonly source: TargetTypeRef;
@@ -406,6 +409,7 @@ export type RustProviderOperationForm =
       // it is row metadata, never derived from method names.
       readonly form: "receiver-method";
       readonly name: string;
+      readonly emptyTestMethod?: string;
       readonly receiverConversion?: RustValueConversion;
       readonly argModes?: readonly RustArgumentMode[];
       readonly argConversions?: readonly (RustValueConversion | undefined)[];
@@ -439,7 +443,7 @@ export interface RustProviderOperationTemplate<
   readonly carrierRequirements?: readonly RustOperationCarrierRequirement[];
   readonly targetGenericArguments?: readonly RustTargetGenericArgument[];
   readonly resultConversion?: RustValueConversion;
-  readonly compileTimeSourceArgumentIndexes?: readonly number[];
+  readonly evaluationOnlySourceArgumentIndexes?: readonly number[];
   readonly isAsync: boolean;
   readonly isFallible: boolean;
   readonly returnedFuture?: {

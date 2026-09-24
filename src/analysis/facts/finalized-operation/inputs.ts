@@ -457,12 +457,12 @@ export function finalizeSourceArguments(
     readonly targetReceiver: RustFinalizedOperationAbi["targetReceiver"];
     readonly targetArguments: readonly RustFinalizedTargetInput[];
   },
-  compileTimeSourceArgumentIndexes: readonly number[] | undefined,
+  evaluationOnlySourceArgumentIndexes: readonly number[] | undefined,
   spreadSourceArgumentIndexes: ReadonlySet<number> = new Set(),
 ): readonly RustFinalizedSourceArgument[] | undefined {
-  const compileTime = new Set(compileTimeSourceArgumentIndexes ?? []);
-  if (compileTime.size !== (compileTimeSourceArgumentIndexes?.length ?? 0) ||
-    [...compileTime].some((index) => !Number.isInteger(index) || index < 0 || index >= carriers.length)) {
+  const evaluationOnly = new Set(evaluationOnlySourceArgumentIndexes ?? []);
+  if (evaluationOnly.size !== (evaluationOnlySourceArgumentIndexes?.length ?? 0) ||
+    [...evaluationOnly].some((index) => !Number.isInteger(index) || index < 0 || index >= carriers.length)) {
     return undefined;
   }
   const modes = new Map<number, RustArgumentMode>();
@@ -496,8 +496,8 @@ export function finalizeSourceArguments(
   if (!mapping.targetArguments.every(collect)) {
     return undefined;
   }
-  if ([...runtime].some((index) => compileTime.has(index)) ||
-    carriers.some((_carrier, index) => !runtime.has(index) && !compileTime.has(index))) {
+  if ([...runtime].some((index) => evaluationOnly.has(index)) ||
+    carriers.some((_carrier, index) => !runtime.has(index) && !evaluationOnly.has(index))) {
     return undefined;
   }
   return carriers.map((carrier, sourceIndex) => ({
@@ -505,11 +505,11 @@ export function finalizeSourceArguments(
     form: spreadSourceArgumentIndexes.has(sourceIndex) ? "spread-sequence" : "value",
     carrier,
     mode: modes.get(sourceIndex) ?? "value",
-    role: compileTime.has(sourceIndex)
-      ? "compile-time"
+    role: evaluationOnly.has(sourceIndex)
+      ? "evaluation-only"
       : (operationKind === "indexer" || operationKind === "index-set") && sourceIndex === 0
         ? "index"
         : "parameter",
-    disposition: compileTime.has(sourceIndex) ? "compile-time" : "runtime",
+    disposition: evaluationOnly.has(sourceIndex) ? "evaluation-only" : "runtime",
   }));
 }

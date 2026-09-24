@@ -1,5 +1,8 @@
+import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
+import { planRustOptionalStorageOperation } from "./optional-storage.js";
 import {
   isRustCopyCarrier,
+  isRustUnitCarrier,
   rustCarrierSupportsClone,
   rustOptionElementCarrier,
   rustSourceTypeCarrierValue,
@@ -46,6 +49,7 @@ import { rustValueConversionContract } from "../../../target-model/conversions/c
 import { tryPlanRustNativePointerOperation } from "./native-pointers.js";
 import type { Node } from "@tsonic/tsts";
 import { planRustGenericCallableFlow } from "./generic-callable-flow.js";
+import { planRustIntegerTruncation } from "./integer-truncation.js";
 import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
@@ -252,14 +256,19 @@ function planProjectedExpression(
       ));
       return undefined;
     }
-    const value: RustExpr = { kind: "associated-value", owner: optionType, name: "None" };
+    const value: RustExpr = rustOptionalStorageValue(projection.resultCarrier) === undefined
+      ? { kind: "associated-value", owner: optionType, name: "None" }
+      : planRustOptionalStorageOperation(projection.resultCarrier, "absent", [], context);
     if (contextuallyConverted.kind === "bottom") return contextuallyConverted;
     return contextuallyConverted.kind === "none" || contextuallyConverted.kind === "path" || contextuallyConverted.kind === "associated-value"
       ? value
-      : { kind: "evaluate-then", effect: contextuallyConverted, discard: "value", value };
+      : { kind: "evaluate-then", effect: contextuallyConverted,
+          discard: isRustUnitCarrier(currentCarrier) ? "unit" : "value", value };
   }
   return projection?.kind === "some"
-    ? { kind: "call", path: "Some", args: [contextuallyConverted] }
+    ? rustOptionalStorageValue(projection.resultCarrier) === undefined
+      ? { kind: "call", path: "Some", args: [contextuallyConverted] }
+      : planRustOptionalStorageOperation(projection.resultCarrier, "present", [contextuallyConverted], context)
     : contextuallyConverted;
 }
 
@@ -390,6 +399,14 @@ function applyRustContextualValueConversion(
   }
   if (fact.conversion.kind === "generic-callable-flow") {
     return planRustGenericCallableFlow(fact.conversion, expression, context);
+  }
+  if (fact.conversion.kind === "integer-truncation") {
+    const selected = planRustIntegerTruncation(expression, fact, context);
+    if (selected === undefined) {
+      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+        "rust.backend.integer-truncation", "Native integer truncation requires its exact classified call and range proof."));
+    }
+    return selected;
   }
   if (fact.conversion.kind === "provider-record-copy") {
     return planProviderRecordCopy(fact.conversion, expression, node, context);

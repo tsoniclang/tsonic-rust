@@ -7,6 +7,17 @@ import {
 } from "../../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
 import { genericBaseConstructorFiles } from "../../../../../tsonic/test/fixtures/generic-base-constructors.mjs";
+import { classFactoryEffectsFiles } from "../../../../../tsonic/test/fixtures/class-factory-effects.mjs";
+
+test("class factories retain distinct evaluation and constructor exception boundaries", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"],
+    target: { id: "rust", options: { outputType: "bin", crateName: "class_factory_effects" } },
+    files: { ...classFactoryEffectsFiles, "index.ts": `${classFactoryEffectsFiles["index.ts"]}
+export function main(): void { if (!run()) throw new Error("class factory effects"); }` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  assert.equal(validateGeneratedProject("class-factory-effects", result.artifacts, { run: true }).status, 0);
+});
 
 function compileExecutable(source, crateName) {
   return compileRust({

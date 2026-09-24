@@ -231,7 +231,8 @@ function rustTargetTypeRefEqualsValidated(
       return right.kind === left.kind && left.id === right.id &&
         genericArgumentListsEqual(left.genericArguments, right.genericArguments, lifetimeContext);
     case "type-parameter":
-      return right.kind === left.kind && left.name === right.name;
+      return right.kind === left.kind && left.name === right.name &&
+        optionalTargetTypesEqual(left.optionalStorageValue, right.optionalStorageValue, lifetimeContext);
     case "opaque":
       return right.kind === left.kind && left.id === right.id;
     case "array":
@@ -337,15 +338,19 @@ function validateRustTargetTypeRef(
       case "target-named":
         return hasExactKeys(
           value,
-          ["kind", "id", "genericArguments"],
+          ["kind", "id", "genericArguments", "sourceAbsence"],
           ["kind", "id"],
         ) &&
           typeof value.id === "string" && value.id.length > 0 &&
+          (value.sourceAbsence === undefined || value.sourceAbsence === true && value.id === "rust.std.Option" &&
+            isDenseDataArray(value.genericArguments) && value.genericArguments.length === 1 &&
+            isPlainRecord(value.genericArguments[0]) && value.genericArguments[0].kind === "type") &&
           (value.genericArguments === undefined ||
             validateGenericArguments(value.genericArguments, validateChild));
       case "type-parameter":
-        return hasExactKeys(value, ["kind", "name"], ["kind", "name"]) &&
-          typeof value.name === "string" && value.name.length > 0;
+        return hasExactKeys(value, ["kind", "name", "optionalStorageValue"], ["kind", "name"]) &&
+          typeof value.name === "string" && value.name.length > 0 &&
+          (value.optionalStorageValue === undefined || validateChild(value.optionalStorageValue));
       case "array":
         return hasExactKeys(value, ["kind", "element", "rank"], ["kind", "element"]) &&
           validateChild(value.element) &&

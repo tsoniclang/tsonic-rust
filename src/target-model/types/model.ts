@@ -63,8 +63,9 @@ export type RustTargetTypeRef =
       readonly kind: "target-named";
       readonly id: string;
       readonly genericArguments?: readonly RustTargetGenericArgument[];
+      readonly sourceAbsence?: true;
     }
-  | { readonly kind: "type-parameter"; readonly name: string }
+  | { readonly kind: "type-parameter"; readonly name: string; readonly optionalStorageValue?: RustTargetTypeRef }
   | { readonly kind: "array"; readonly element: RustTargetTypeRef; readonly rank?: number }
   | { readonly kind: "slice"; readonly element: RustTargetTypeRef }
   | { readonly kind: "tuple"; readonly elements: readonly RustTargetTypeRef[] }

@@ -2,6 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustOperationPolicyContext } from "../../../../policy/operations/contracts.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { rustCarrierSupportsTrait } from "../../../../target-model/types/index.js";
+import { createRustOptionalStorageCollector } from "../../../declarations/type-projections.js";
 
 export function canRequireSourceClone(
   carrier: TargetTypeRef,
@@ -15,6 +16,8 @@ export function canRequireSourceClone(
       if (parameter.kind === "type") parameters.add(parameter.sourceName);
     }
   }
+  const storage = createRustOptionalStorageCollector(parameters, parameters, new Map());
+  if (!storage.collect(carrier)) return false;
   return rustCarrierSupportsTrait(carrier, "core::clone::Clone", (name, trait) =>
     trait === "core::clone::Clone" && parameters.has(name), undefined, context.typeDefinitions);
 }

@@ -25,7 +25,8 @@ export function rustProviderOperationFormAcceptsTargetGenericArguments(
   return form.form === "call" || form.form === "free-call" || form.form === "method" ||
     form.form === "source-module-construction" ||
     form.form === "receiver-method" || form.form === "arg-method" ||
-    form.form === "arg-receiver-method" || form.form === "trait-call";
+    form.form === "arg-receiver-method" || form.form === "trait-call" ||
+    form.form === "call-value-slice" || form.form === "call-value-array";
 }
 
 export function rustProviderOperationFormDeclaresWritableInput(
@@ -479,8 +480,9 @@ export function rustProviderOperationFormContractViolation(
       }
       return validateArguments(form);
     case "receiver-method":
-      if (!hasExactKeys(form, ["form", "name", "receiverConversion", "argModes", "argConversions", "argOrder", "trailingArguments", "chain", "mutatesReceiver"], ["form", "name"]) ||
+      if (!hasExactKeys(form, ["form", "name", "emptyTestMethod", "receiverConversion", "argModes", "argConversions", "argOrder", "trailingArguments", "chain", "mutatesReceiver"], ["form", "name"]) ||
         typeof form.name !== "string" || !rustIdentifierPattern.test(form.name) ||
+        (form.emptyTestMethod !== undefined && (typeof form.emptyTestMethod !== "string" || !rustIdentifierPattern.test(form.emptyTestMethod))) ||
         (form.receiverConversion !== undefined && (!isRecord(form.receiverConversion) || rustValueConversionContract(form.receiverConversion, definitions) === undefined)) ||
         (form.mutatesReceiver !== undefined && typeof form.mutatesReceiver !== "boolean")) {
         return "receiver-method form is malformed";

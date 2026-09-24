@@ -10,6 +10,7 @@ import {
 } from "./callable.js";
 import { printRustClosureParams } from "./closure-params.js";
 import {
+  expressionIsStatementBlock,
   expressionNeedsParentheses,
   operatorPrecedence,
   RustPrecedence,
@@ -66,7 +67,7 @@ export function printRustExpr(expression: RustExpr): string {
     case "call":
       return `${printRustDirectCallTarget(expression)}(${expression.args.map(printRustExpr).join(", ")})`;
     case "invoke":
-      return `${printOperand(expression.callee, RustPrecedence.Postfix, false)}(${expression.args.map(printRustExpr).join(", ")})`;
+      return `${printDelimitedPostfixOperand(expression.callee)}(${expression.args.map(printRustExpr).join(", ")})`;
     case "associated-value": {
       const owner = expression.trait === undefined
         ? printRustAssociatedOwner(expression.owner)
@@ -88,14 +89,13 @@ export function printRustExpr(expression: RustExpr): string {
       return `${nestedTupleField ? `(${receiver})` : receiver}.${expression.name}`;
     }
     case "index":
-      return `${printOperand(expression.receiver, RustPrecedence.Postfix, false)}[${printRustExpr(expression.index)}]`;
+      return `${printDelimitedPostfixOperand(expression.receiver)}[${printRustExpr(expression.index)}]`;
     case "block":
       return `{ ${printRustBlockExpressionContents(expression)} }`;
     case "unsafe":
       return `unsafe { ${printRustExpr(expression.expression)} }`;
     case "evaluate-then": {
-      const effect = printRustExpr(expression.effect);
-      const statement = expression.discard === "unit" ? `${effect};` : `let _ = ${effect};`;
+      const statement = printRustDiscard(expression);
       if (expression.value.kind === "tuple-literal" && expression.value.elements.length === 0) {
         return `{ ${statement} }`;
       }
@@ -163,6 +163,12 @@ export function printRustExpr(expression: RustExpr): string {
   }
 }
 
+function printDelimitedPostfixOperand(expression: RustExpr): string {
+  return expressionIsStatementBlock(expression)
+    ? `(${printRustExpr(expression)})`
+    : printOperand(expression, RustPrecedence.Postfix, false);
+}
+
 function printOperand(
   operand: RustExpr,
   parent: RustPrecedence,
@@ -201,11 +207,16 @@ function printConditionalArm(expression: RustExpr, allowInnerAttributes = true):
     return printRustBlockExpressionContents(expression, (value) => printConditionalArm(value, false));
   }
   if (expression.kind === "evaluate-then") {
-    const effect = printRustExpr(expression.effect);
-    const statement = expression.discard === "unit" ? `${effect};` : `let _ = ${effect};`;
+    const statement = printRustDiscard(expression);
     return `${statement} ${printConditionalArm(expression.value, false)}`;
   }
   return printRustExpr(expression);
+}
+
+function printRustDiscard(expression: Extract<RustExpr, { readonly kind: "evaluate-then" }>): string {
+  const effect = printRustExpr(expression.effect);
+  return expression.discard === "value" ? `let _ = ${effect};`
+    : expression.effect.kind === "path" ? `let () = ${effect};` : `${effect};`;
 }
 
 function printRustBlockExpressionContents(

@@ -39,6 +39,7 @@ export interface RustNativeModuleCallable {
 
 export function createRustModuleBindingPolicy(
   context: RustAnalysisContext,
+  addressTakenDeclarations: ReadonlySet<Node>,
 ): RustModuleBindingPolicy {
   const callableByDeclaration = collectNativeCallableCandidates(context);
   const cyclic = cyclicSourceFiles(context.source.navigation, context.sourceFiles);
@@ -79,7 +80,7 @@ export function createRustModuleBindingPolicy(
         moduleStringCanUseStaticStorage(declaration, context) &&
         !cyclic.has(context.ast.getSourceFile(declaration)!) &&
         !context.runtimeValueUses.hasSameFileRuntimeUseBeforeDeclaration(declaration);
-      const nativeConst = declarationKind === "const" && (
+      const nativeConst = declarationKind === "const" && !addressTakenDeclarations.has(declaration) && (
         initializerKind === KindNumericLiteral ||
         initializerKind === KindTrueKeyword ||
         initializerKind === KindFalseKeyword || stringConstant
@@ -94,6 +95,7 @@ export function createRustModuleBindingPolicy(
       return {
         declarationKind,
         storage: "module-cell",
+        initialization: initializer === undefined ? "declaration" : "value",
         valueCarrier,
       };
     },

@@ -7,6 +7,7 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustExpr } from "../../target-ast/nodes.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { planExpression } from "../expressions/entry.js";
+import { effectivePlannedExpressionCarrier } from "../expressions/fundamentals.js";
 import { sourceFieldSelectedOperationMatches } from "../expressions/properties.js";
 import { planRustDirectStorage } from "../expressions/updates/target.js";
 import { findRustLocationStorageRoot, planRustSourceLocationStorage, rustExpressionHasBoundRecordField, planRustSharedReceiver, rustLocationStorageForReference, rustRawLocationRoot } from "../expressions/typed-locations.js";
@@ -78,6 +79,7 @@ export function planRustValueFieldLocation(
   const visited = new Set<Node>();
   while (!visited.has(current)) {
     visited.add(current);
+    if (context.expressionOverrides?.has(current)) break;
     if (ast.is.IsParenthesizedExpression(current) || ast.is.IsAsExpression(current) ||
       ast.is.IsSatisfiesExpression(current) || ast.is.IsNonNullExpression(current) || ast.is.IsTypeAssertion(current)) {
       const inner = Node_Expression(ast, current);
@@ -114,7 +116,8 @@ export function planRustValueFieldLocation(
     const selected = project(value);
     return isRustCopyCarrier(resultCarrier) ? selected : { kind: "method-call", receiver: selected, method: "clone", args: [] };
   };
-  const rootField = context.input.program.facts.getFact(current, rustTargetOperationFactKey);
+  const overridden = context.expressionOverrides?.has(current) === true;
+  const rootField = overridden ? undefined : context.input.program.facts.getFact(current, rustTargetOperationFactKey);
   if (rootField?.kind === "source-field") {
     if (rootField.valueSemantics.kind !== "stored" || rootField.dispatch !== undefined ||
       !sourceFieldSelectedOperationMatches(current, rootField, context) ||
@@ -134,7 +137,7 @@ export function planRustValueFieldLocation(
         rootField.storageIndex, "=", value, context, names),
     };
   }
-  const location = rustLocationStorageForReference(current, context);
+  const location = overridden ? undefined : rustLocationStorageForReference(current, context);
   if (location !== undefined) {
     if (!rustTargetTypeRefEquals(location.valueCarrier, expectedReceiver!)) return reject();
     const root = rustRawLocationRoot(current, context);
@@ -153,7 +156,7 @@ export function planRustValueFieldLocation(
     };
   }
   const direct = planRustDirectStorage(current, context);
-  const carrier = context.input.program.facts.getRuntimeCarrierFact(current)?.carrier;
+  const carrier = effectivePlannedExpressionCarrier(current, context);
   if (!rustTargetTypeRefEquals(carrier, expectedReceiver)) return reject();
   if (direct === undefined) {
     const value = access === "read" ? planExpression(current, context) : undefined;

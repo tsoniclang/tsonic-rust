@@ -48,6 +48,7 @@ export interface RustCallableParameterAbi {
   readonly valueCarrier: TargetTypeRef;
   readonly parameterCarrier: TargetTypeRef;
   readonly mode: RustArgumentMode;
+  readonly entryConversion?: RustSourceParameterAbiFact["entryConversion"];
 }
 
 export type RustCallableParameterAdapter =

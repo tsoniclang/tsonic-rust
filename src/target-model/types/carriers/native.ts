@@ -3,7 +3,7 @@ import {
   isDenseDataArray,
 } from "../../metadata/closed-data.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../equality.js";
-import { rustBigIntTargetId, rustNamedTypeCarrierName, rustNeverCarrierName, rustNullTargetId, rustStringTargetId, rustStrTargetId, rustTsValueTargetId, rustUndefinedTargetId } from "./source-types.js";
+import { rustBigIntTargetId, rustNamedTypeCarrierName, rustNeverCarrierName, rustAbsenceTargetId, rustStringTargetId, rustStrTargetId, rustTsValueTargetId} from "./source-types.js";
 import { rustEmptyObjectTargetId, rustObjectIdentityTargetId, rustJsNumericTargetId, rustJsStringNumberTargetId } from "./source-types.js";
 import type { SourcePrimitiveKind } from "@tsonic/tsts";
 import type {
@@ -69,13 +69,10 @@ export function rustNeverTargetType(): TargetTypeRef {
   return { kind: "target-specific", target: "rust", name: rustNeverCarrierName };
 }
 
-export function rustUndefinedTargetType(): TargetTypeRef {
-  return { kind: "target-named", id: rustUndefinedTargetId };
+export function rustAbsenceTargetType(): TargetTypeRef {
+  return { kind: "target-named", id: rustAbsenceTargetId };
 }
 
-export function rustNullTargetType(): TargetTypeRef {
-  return { kind: "target-named", id: rustNullTargetId };
-}
 
 export function rustVecTargetType(element: TargetTypeRef): TargetTypeRef {
   return { kind: "array", element };

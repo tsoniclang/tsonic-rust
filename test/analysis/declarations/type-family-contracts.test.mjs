@@ -10,7 +10,7 @@ import { mapRustTargetTypes, substituteRustTargetGenerics } from "../../../dist/
 import { rustTypeFamilyNormalizer } from "../../../dist/policy/types/type-family-normalization.js";
 import { rustTypeFromCarrier } from "../../../dist/backend/planner/types/render.js";
 import { selectRustFlowReadProjection } from "../../../dist/policy/types/value-carrier-reconciliation.js";
-import { rustOptionTargetType } from "../../../dist/target-model/types/index.js";
+import { rustOptionTargetType, rustSourceLocationTargetType } from "../../../dist/target-model/types/index.js";
 import { rustIndexedFieldKey, rustIndexedFieldProjection, rustIndexedFieldTrait } from "../../../dist/target-model/types/carriers/indexed-fields.js";
 
 const signed = { kind: "source-primitive", name: "int32" };
@@ -90,6 +90,36 @@ test("type family templates replace equivalent concrete demands without overlapp
   }
 });
 
+test("type families retain disjoint nested nominal templates and subsume only their own concrete demands", () => {
+  const owner = (name, type) => rustOptionTargetType(rustSourceLocationTargetType(
+    rustSourceTypeCarrier("/cache.ts", name, "object", [{ kind: "type", type }])));
+  const make = (name, type) => ({ family, arguments: [], owner: owner(name, type), output: owner(name, type), sourceFileName: "/storage.ts" });
+  for (const genericFirst of [false, true]) {
+    for (const names of [["Entry", "OtherEntry", "LastEntry"], ["LastEntry", "OtherEntry", "Entry"]]) {
+      const registry = createRustSourceTypeFamilyRegistry();
+      assert.equal(registry.register(family), true);
+      const requests = names.flatMap(name => [make(name, signed), make(name, parameter)]);
+      if (genericFirst) requests.reverse();
+      for (const request of requests) assert.equal(registry.registerImplementation(request), true);
+      assert.equal(registry.implementations().length, 3);
+      for (const name of names) {
+        assert.deepEqual(registry.implementation(family.trait, owner(name, unsigned)).output, owner(name, unsigned));
+        const renamed = { kind: "type-parameter", name: "Renamed" };
+        assert.equal(registry.registerImplementation(make(name, renamed)), true);
+        assert.equal(registry.registerImplementation({ ...make(name, unsigned), output: signed }), false);
+        assert.equal(registry.registerImplementation({ ...make(name, unsigned), sourceFileName: "/foreign.ts" }), false);
+      }
+      const before = registry.implementations();
+      const broad = rustOptionTargetType(rustSourceLocationTargetType(parameter));
+      assert.equal(registry.registerImplementation({ family, arguments: [], owner: broad, output: signed, sourceFileName: "/storage.ts" }), false);
+      assert.deepEqual(registry.implementations(), before);
+      const sealed = registry.seal();
+      for (const name of names) assert.deepEqual(sealed.normalize({ ...projection, owner: owner(name, unsigned) }), owner(name, unsigned));
+      assert.equal(sealed.implementations.length, 3);
+    }
+  }
+});
+
 test("substituting a compound argument normalizes nested selected families without recursively substituting binders", () => {
   const registry = createRustSourceTypeFamilyRegistry();
   registry.register(family);
@@ -118,10 +148,10 @@ test("source trait references require source-owned paths rather than native-path
   assert.equal(isRustTargetTypeRef(family.trait), true);
   assert.equal(isRustTargetTypeRef({ ...family.trait, path: "other" }), false);
   assert.equal(rustTypeFromCarrier(projection), undefined);
-  assert.deepEqual(rustTypeFromCarrier(projection, (source) => {
+  assert.deepEqual(rustTypeFromCarrier(projection, { pathFor: (source) => {
     assert.deepEqual(source, family.trait.sourceItem);
     return "crate::storage::Storage";
-  }), { kind: "qualified", owner: { kind: "named", path: "T" },
+  }, additionalArgumentsFor: () => [] }), { kind: "qualified", owner: { kind: "named", path: "T" },
     trait: { kind: "named", path: "crate::storage::Storage" }, member: "Output" });
   assert.equal(rustTargetTypeRefEquals(family.trait, {
     ...family.trait, sourceItem: { ...family.trait.sourceItem, fileName: "/other.ts" },

@@ -16,6 +16,7 @@ import { rustLifetimeToAst } from "../types/lifetime-syntax.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustDeclarationAssociatedPredicates } from "../types/associated-bounds.js";
 import { rustTypeParameterBounds } from "../types/generic-bounds.js";
+import { rustOptionalStorageParameters } from "../types/type-projections.js";
 
 export interface RustCallableGenericPlan {
   readonly context: RustPlanContext;
@@ -178,7 +179,10 @@ export function planRustCallableGenerics(
       bounds: rustTypeParameterBounds(parameter, requirements),
     }]);
   });
-  const generics: RustGenerics = rustGenericsWithAssociatedBounds(parameters,
+  const generics: RustGenerics = rustGenericsWithAssociatedBounds([
+    ...parameters,
+    ...(specialization === undefined ? rustOptionalStorageParameters(requirementContract.optionalStorage, context) : []),
+  ],
     rustDeclarationAssociatedPredicates(declaration, {
       ...context, typeParameterSubstitutions: substitutions,
     }),

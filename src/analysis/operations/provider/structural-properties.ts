@@ -8,10 +8,11 @@ import {
   rustSourcePrimitiveTargetType,
   rustTargetConstInteger,
 } from "../../../target-model/types/index.js";
-import { rustInt32ToUsizeValueConversion, rustUsizeToInt32ValueConversion } from "../../../target-model/conversions/model.js";
+import { rustInt32ToUsizeValueConversion } from "../../../target-model/conversions/model.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectTsonicFixedArrayFromSource } from "@tsonic/source-core/facts";
-import { selectedValueCarrier } from "./operators.js";
+import { sourceIntegerLiteralValue } from "@tsonic/target-api/source";
+import { selectedValueCarrier } from "../selected-values.js";
 import type {
   RustCheckedElementSelectionInput,
   RustCheckedOperationSelectionResult,
@@ -421,31 +422,14 @@ export function selectRustFixedArrayLengthProperty(
       "The selected FixedArray.length access requires a source fixed-array fact whose exact extent agrees with its receiver carrier.",
     );
   }
-  if (sourceFixedArray.lengthRuntimeBase === "bigint") {
-    return rejectSelectedOperation(
-      request.expression,
-      context,
-      "RUST_FIXED_ARRAY_LENGTH_RUNTIME_BASE_UNSUPPORTED",
-      "Rust FixedArray.length does not implement the selected bigint runtime result; numeric length conversion is not permitted.",
-    );
-  }
-  if (length > 2147483647n) {
-    return rejectSelectedOperation(
-      request.expression,
-      context,
-      "RUST_FIXED_ARRAY_LENGTH_RANGE_UNSUPPORTED",
-      `Rust FixedArray.length uses a checked int32 result; exact extent ${length} exceeds 2147483647.`,
-    );
-  }
-  const resultCarrier = rustSourcePrimitiveTargetType("int32");
+  const resultCarrier = rustSourcePrimitiveTargetType("native-uint");
   const template: RustProviderOperationTemplate = {
     kind: "provider-operation",
     operationId: "tsonic.rust.fixed-array.length",
     operationKind: "property",
-    target: { form: "receiver-method", name: "len" },
+    target: { form: "receiver-method", name: "len", emptyTestMethod: "is_empty" },
     resultCarrier,
     parameterCarriers: [],
-    resultConversion: rustUsizeToInt32ValueConversion,
     evaluation: "pure",
     isAsync: false,
     isFallible: false,
@@ -498,7 +482,13 @@ export function selectRustFixedArrayElementAccess(
       "The selected FixedArray index access has no exact fixed-array receiver carrier.",
     );
   }
-  const index = request.sourceSelectedElementIndex;
+  const selectedIndex = request.sourceSelectedElementIndex;
+  if (selectedIndex !== undefined && !Number.isSafeInteger(selectedIndex)) {
+    return rejectSelectedOperation(request.expression, context, "RUST_FIXED_ARRAY_INDEX_NOT_PROVEN",
+      "The selected fixed-array ordinal is not an exact checker integer.");
+  }
+  const literalIndex = sourceIntegerLiteralValue(context.ast, request.argument);
+  const index = selectedIndex === undefined ? literalIndex : BigInt(selectedIndex);
   if (index !== undefined) {
     const length = rustTargetConstInteger(fixedArray.length);
     if (length === undefined) {
@@ -509,12 +499,12 @@ export function selectRustFixedArrayElementAccess(
         "Fixed-array element access requires one closed integer extent.",
       );
     }
-    if (!Number.isSafeInteger(index) || index < 0 || BigInt(index) >= length) {
+    if (index < 0n || index >= length || literalIndex !== undefined && literalIndex !== index) {
       return rejectSelectedOperation(
         request.expression,
         context,
         "RUST_FIXED_ARRAY_INDEX_NOT_PROVEN",
-        "Fixed-array element access carries a TSTS-selected ordinal outside the finalized array bounds.",
+        "Fixed-array element access requires an exact ordinal within the finalized bounds and consistent source evidence.",
       );
     }
     return acceptRustMemberOperation(request, "indexer", {

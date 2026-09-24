@@ -56,7 +56,6 @@ import {
   rustLocationTargetId,
   rustInfallibleTargetId,
   rustRawPointerTargetId,
-  rustNullTargetId,
   rustOptionTargetId,
   rustProgramErrorTargetId,
   rustRegExpExecArrayTargetId,
@@ -68,7 +67,6 @@ import {
   rustStringTargetId,
   rustStrTargetId,
   rustTsValueTargetId,
-  rustUndefinedTargetId,
 } from "./source-types.js";
 
 export const rustBuiltInCarrierRenderPaths: Readonly<Record<string, string>> = Object.freeze({
@@ -86,8 +84,6 @@ export const rustBuiltInCarrierRenderPaths: Readonly<Record<string, string>> = O
   [rustBorrowedGeneratorTargetId]: "rt::BorrowedGenerator",
   [rustBorrowedAsyncGeneratorTargetId]: "rt::BorrowedAsyncGenerator",
   [rustIteratorResultTargetId]: "rt::IteratorResult",
-  [rustNullTargetId]: "rt::Null",
-  [rustUndefinedTargetId]: "rt::Undefined",
   [rustJsErrorTargetId]: "rt::JsError",
   [rustProgramErrorTargetId]: "rt::TsonicError",
   [rustTsValueTargetId]: "rt::TsValue",

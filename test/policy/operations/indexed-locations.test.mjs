@@ -30,10 +30,9 @@ test("indexed location metadata retains the exact receiver, pointee and index co
     assert.deepEqual(contract.pointeeCarrier, element);
     assert.deepEqual(contract.receiverCarrier, receiver);
     assert.equal(contract.index, fact.abi.targetArguments[0]);
-    assert.equal(contract.index.conversion.kind, name === "int32" ? "semantic" : "identity");
-    if (name === "int32") {
-      assert.equal(contract.index.conversion.conversion.id, "exact-i32-to-f64");
-    }
+    assert.equal(contract.index.conversion.kind, "identity");
+    assert.deepEqual(contract.index.conversion.sourceCarrier, index);
+    assert.deepEqual(contract.index.conversion.targetCarrier, index);
     const readonly = finalizeProviderOperationFact(selected("ReadonlyArray", index), [index], receiver);
     assert.ok(readonly);
     assert.equal(rustIndexedLocationContract(readonly), undefined);

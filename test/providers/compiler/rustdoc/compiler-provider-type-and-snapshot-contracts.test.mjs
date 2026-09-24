@@ -100,6 +100,45 @@ test("compiler provider preserves Rust scalar char without conflating neutral UT
   });
 });
 
+test("compiler provider retains all native scalar widths in selected signatures", () => {
+  const primitives = [
+    ["bool", "bool"], ["i8", "int8"], ["u8", "uint8"], ["i16", "int16"], ["u16", "uint16"],
+    ["i32", "int32"], ["u32", "uint32"], ["i64", "int64"], ["u64", "uint64"],
+    ["i128", "int128"], ["u128", "uint128"], ["isize", "native-int"], ["usize", "native-uint"],
+    ["f32", "float32"], ["f64", "float64"],
+  ];
+  const projection = projectRustCompilerModule({
+    protocolVersion: rustCompilerProviderProtocolVersion,
+    projectDigest: "scalar-contract",
+    dependency: {
+      alias: "scalars", packageId: "scalars 1.0.0", packageName: "scalars", packageVersion: "1.0.0",
+      crateName: "scalars", targetCrateName: "scalars", manifestPath: "/scalars/Cargo.toml",
+      sourceRoot: "/scalars", sourceDigest: "scalar-contract", closurePackageIds: ["scalars 1.0.0"], features: [],
+    },
+    modulePath: [], unsupportedExports: [], standardTypeLocations: [],
+    exports: primitives.map(([name]) => ({
+      kind: "function", id: `scalars::${name}`, name, canonicalPath: ["scalars", name], targetPath: ["scalars", name],
+      function: {
+        identity: { itemId: `scalars::${name}`, canonicalPath: ["scalars", name] }, name,
+        parameters: [{ name: "value", type: { kind: "primitive", name } }], result: { kind: "primitive", name },
+        genericParameters: [], typeRequirements: [], asynchronous: false, unsafe: false, abi: "Rust", variadic: false,
+      },
+    })),
+  }, { providerModuleId: "scalars", moduleSpecifier: "@tsonic/rust/crates/scalars/index.js" });
+  for (const [name, targetName] of primitives) {
+    const declaration = projection.declarationModel.exports.find(item => item.name === name);
+    assert.ok(declaration, name);
+    const primitive = { kind: "source-primitive", name: targetName };
+    assert.deepEqual(declaration.signatures[0].parameters[0].type, primitive);
+    assert.deepEqual(declaration.signatures[0].returnType, primitive);
+    const operation = projection.operations.find(item => item.exportId === declaration.id);
+    assert.ok(operation, name);
+    assert.deepEqual(operation.parameterCarriers, [primitive]);
+    assert.deepEqual(operation.resultCarrier, primitive);
+    assert.equal(operation.resultConversion, undefined);
+  }
+});
+
 test("compiler provider retains incomplete Rust enums as opaque native types", () => {
   const dependency = {
     alias: "opaque_enum",

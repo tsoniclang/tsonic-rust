@@ -198,13 +198,20 @@ export function resolveProviderRecordLiteral(
         "Provider object-literal member relations do not form one exact native field storage contract.",
       );
     }
-    if (resolveExpressionCarrier(
+    const valueCarrier = resolveExpressionCarrier(
       walk,
       value,
       sourceFile,
       storageCarrier,
-    ) === undefined) {
+      "value",
+      "exact",
+    );
+    if (valueCarrier === undefined) {
       return { kind: "rejected" };
+    }
+    if (!rustTargetTypeRefEquals(valueCarrier, storageCarrier)) {
+      return rejectProviderRecordLiteral(walk, value,
+        "Provider object-literal value has no exact conversion to its native field storage.");
     }
     fields.push({
       property,

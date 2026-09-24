@@ -18,13 +18,8 @@ export function nameRustSignatureTypes(
     ...(item.kind === "use" ? [item.alias ?? item.path.split("::").slice(-1)[0]!] : []),
   ]));
   const aliases: Extract<RustItem, { readonly kind: "type-alias" }>[] = [];
-  const nameCallable = <Callable extends {
-    readonly name: string; readonly visibility: RustVisibility;
-    readonly params: readonly RustFunctionParam[]; readonly returnType?: RustType;
-    readonly generics: RustGenerics;
-    readonly body: RustBlock;
-  }>(item: Callable, ownerParameters: readonly RustGenericParameter[]): Callable => {
-    const availableParameters = [...ownerParameters, ...item.generics.parameters];
+  const createTypeNamer = (item: { readonly name: string; readonly visibility: RustVisibility },
+    availableParameters: readonly RustGenericParameter[]) => {
     const nameType = (type: RustType, role: string, visibility = item.visibility): RustType => {
       if (type.kind === "reference") return { ...type, referent: nameType(type.referent, role, visibility) };
       if (type.kind === "slice") return { ...type, element: nameType(type.element, `${role}Element`, visibility) };
@@ -67,6 +62,15 @@ export function nameRustSignatureTypes(
       }
       return { kind: "named", path: alias.name, genericArguments: arguments_ };
     };
+    return nameType;
+  };
+  const nameCallable = <Callable extends {
+    readonly name: string; readonly visibility: RustVisibility;
+    readonly params: readonly RustFunctionParam[]; readonly returnType?: RustType;
+    readonly generics: RustGenerics;
+    readonly body: RustBlock;
+  }>(item: Callable, ownerParameters: readonly RustGenericParameter[]): Callable => {
+    const nameType = createTypeNamer(item, [...ownerParameters, ...item.generics.parameters]);
     return { ...item, params: item.params.map(parameter => ({ ...parameter,
       type: nameType(parameter.type, parameter.name),
     })), ...(item.returnType === undefined ? {} : { returnType: nameType(item.returnType, "Result") }),
@@ -75,6 +79,9 @@ export function nameRustSignatureTypes(
   };
   const result = items.map(item => item.kind === "function" ? nameCallable(item, [])
     : item.kind === "impl" ? { ...item, functions: item.functions.map(method => nameCallable(method, item.generics.parameters)) }
+      : item.kind === "struct" ? { ...item, fields: item.fields.map(field => ({ ...field,
+        type: createTypeNamer(item, item.generics.parameters)(field.type, field.name),
+      })) }
       : item);
   return [...aliases, ...result];
 }

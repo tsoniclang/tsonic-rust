@@ -86,7 +86,8 @@ export function readOffset(bytes: Buffer): int32 {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /read_uint8_number\(\s*&bytes,\s*index \+ 1\.0,?\s*\)/u);
-  assert.match(text, /f64_to_i32\([\s\S]*read_uint8_number/u);
+  assert.match(text, /u8_to_i32\([\s\S]*read_uint8_number/u);
+  assert.doesNotMatch(text, /f64_to_i32/u);
 });
 
 test("node path, filesystem, and crypto overloads lower through exact provider signatures", async () => {
@@ -153,11 +154,11 @@ export function defaultedOptions(path: string): void {
   assert.match(text, /\.is_symbolic_link\(\)/u);
   assert.match(
     text,
-    /MakeDirectoryOptions\s*\{\s*recursive:\s*Some\(true\),\s*mode:\s*Some\(mode\),\s*\}/u,
+    /MakeDirectoryOptions\s*\{\s*recursive:\s*Some\(true\),\s*mode:\s*Some\(rt::conversions::checked_integer::<u32>\(mode\)\?\),\s*\}/u,
   );
   assert.match(
     text,
-    /RmOptions\s*\{\s*recursive:\s*Some\(true\),\s*force:\s*Some\(true\),\s*max_retries:\s*Some\(max_retries\),\s*retry_delay_ms:\s*Some\(retry_delay\),\s*\}/u,
+    /RmOptions\s*\{\s*recursive:\s*Some\(true\),\s*force:\s*Some\(true\),\s*max_retries:\s*Some\(rt::conversions::checked_integer::<u32>\(max_retries\)\?\),\s*retry_delay_ms:\s*Some\(rt::conversions::checked_integer::<u64>\(retry_delay\)\?\),\s*\}/u,
   );
   assert.match(
     text,

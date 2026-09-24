@@ -1,15 +1,16 @@
 import type { RustValueConversion } from "../../target-model/operations/model.js";
 import { rustObjectIdentityErasureMatches } from "../../target-model/conversions/object-identity.js";
-import { rustNumericPromotionKind } from "../../target-model/conversions/numeric-promotion.js";
+import { rustNumericValueConversionIsSupported } from "../../target-model/conversions/numeric-promotion.js";
+import { selectRustExactIntegerConversion } from "../../target-model/conversions/exact-integer.js";
 import { rustNumberBoxingConversionId } from "../../target-model/conversions/number-boxing.js";
 import {
   isRustJsArrayCarrier,
   isRustBigIntCarrier,
+  isRustIntegerCarrier,
   rustJsNumericTargetType,
   rustJsStringNumberTargetType,
   isRustNeverCarrier,
-  isRustNullCarrier,
-  isRustUndefinedCarrier,
+  isRustAbsenceCarrier,
   rustCarrierSupportsClone,
   rustCarrierCanEnterTsValue,
   rustCarrierSupportsTrait,
@@ -36,15 +37,16 @@ import {
   rustFloat64ToUint8ValueConversion,
   rustInt32ToFloat64ValueConversion,
   rustInt32ToUint8ValueConversion,
+  rustIsizeToInt32ValueConversion,
   rustJsValueCloneConversion,
   rustTsValueCloneConversion,
-  rustNullToJsValueConversion,
+  rustAbsenceToJsValueConversion,
   rustStringToJsValueConversion,
   rustSymbolToJsValueConversion,
-  rustUndefinedToJsValueConversion,
   rustUint32ToInt32ValueConversion,
   rustUint64ToFloat64ValueConversion,
   rustUint8ToInt32ValueConversion,
+  rustUsizeToInt32ValueConversion,
 } from "../../target-model/conversions/model.js";
 
 const boolCarrier = rustSourcePrimitiveTargetType("bool");
@@ -81,8 +83,6 @@ export function selectRustSourceValueConversion(
     if (rustTargetTypeRefEquals(source, stringCarrier)) return { kind: "semantic-conversion", id: "js-string-number-from-string" };
     if (rustTargetTypeRefEquals(source, float64Carrier)) return { kind: "semantic-conversion", id: "js-string-number-from-number" };
     if (rustTargetTypeRefEquals(source, int32Carrier)) return { kind: "semantic-conversion", id: "js-string-number-from-int32" };
-    if (isRustNullCarrier(source)) return { kind: "semantic-conversion", id: "js-string-number-from-null" };
-    if (isRustUndefinedCarrier(source)) return { kind: "semantic-conversion", id: "js-string-number-from-undefined" };
   }
   const sourceOptionElement = rustOptionElementCarrier(source);
   const targetOptionElement = rustOptionElementCarrier(target);
@@ -147,17 +147,14 @@ export function selectRustSourceValueConversion(
     if (numberBoxing !== undefined) {
       return Object.freeze({ kind: "semantic-conversion", id: numberBoxing });
     }
-    if (isRustNullCarrier(source)) {
-      return rustNullToJsValueConversion;
+    if (isRustAbsenceCarrier(source)) {
+      return rustAbsenceToJsValueConversion;
     }
     if (rustTargetTypeRefEquals(source, stringCarrier)) {
       return rustStringToJsValueConversion;
     }
     if (rustTargetTypeRefEquals(source, symbolCarrier)) {
       return rustSymbolToJsValueConversion;
-    }
-    if (isRustUndefinedCarrier(source)) {
-      return rustUndefinedToJsValueConversion;
     }
     if (rustCarrierSupportsClone(source, definitions) &&
       rustCarrierSupportsTrait(source, rustJsClosedValueCarrierTraitPath, undefined, undefined, definitions)) {
@@ -273,10 +270,23 @@ export function selectRustSourceValueConversion(
   if (source.name === "uint64" && target.name === "float64") {
     return rustUint64ToFloat64ValueConversion;
   }
-  return source.name !== target.name &&
-      rustNumericPromotionKind(source.name, target.name) === target.name
+  return rustNumericValueConversionIsSupported(source.name, target.name)
     ? { kind: "numeric-promotion", source: source.name, target: target.name }
     : undefined;
+}
+
+export function selectRustSourceAssertionConversion(
+  source: TargetTypeRef,
+  target: TargetTypeRef,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
+): RustValueConversion | undefined {
+  if (source.kind === "source-primitive" && target.kind === "source-primitive" && target.name === "int32") {
+    if (source.name === "native-int") return rustIsizeToInt32ValueConversion;
+    if (source.name === "native-uint") return rustUsizeToInt32ValueConversion;
+  }
+  const conversion = selectRustSourceValueConversion(source, target, definitions);
+  return conversion ?? (isRustIntegerCarrier(source) && isRustIntegerCarrier(target)
+    ? selectRustExactIntegerConversion(source, target) : undefined);
 }
 
 export function selectRustJsonValueConversion(

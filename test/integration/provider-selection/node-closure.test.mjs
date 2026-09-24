@@ -22,12 +22,12 @@ import type { int32 } from "@tsonic/core/types.js";
 
 export function probe(): string {
   const buf = Buffer.from("hi", "utf8");
-  const size: int32 = buf.length;
+  const size: int32 = buf.length as int32;
   const u = new URL("https://example.com/a?b=1");
   const params = new URLSearchParams("x=1");
   const h = createHash("sha256");
   h.update("abc");
-  const id: int32 = pid;
+  const id: int32 = pid as int32;
   if (size > 0 && id > 0) {
     return u.pathname + (params.get("x") ?? "") + h.digest("hex") + (env["PATH"] ?? "");
   }
@@ -268,7 +268,7 @@ export async function roundtrip(dir: string, file: string): Promise<int32> {
   await rename(copied, renamed);
   await unlink(renamed);
   await rm(dir);
-  let total: int32 = names.length;
+  let total: int32 = names.length as int32;
   if (text.length > 0 && written > 0) {
     total += 1;
   }
@@ -287,7 +287,7 @@ export async function roundtrip(dir: string, file: string): Promise<int32> {
   validateGeneratedProject("r7-async-fs-lib", result.artifacts);
 });
 
-test("process env writes retain native environment identity and stringify undefined", { timeout: 300_000 }, async () => {
+test("process env writes retain native environment identity and remove absent values", { timeout: 300_000 }, async () => {
   const { result } = compileRust({
     surfaces: ["js"],
     capabilities: [await nodejsCapability()],
@@ -304,7 +304,7 @@ export function main(): void {
   env[name] = "1";
   check(env[name] === "1");
   env[name] = undefined;
-  check(env[name] === "undefined");
+  check(env[name] === undefined);
   if (previous !== undefined) env[name] = previous;
 }
 `,
@@ -357,8 +357,8 @@ export function closeStreams(inputPath: string, outputPath: string): void {
   });
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /tsonic_rust_node::fs::create_read_stream\(input_path\.as_str\(\)\)\?/u);
-  assert.match(text, /tsonic_rust_node::fs::create_write_stream\(output_path\.as_str\(\)\)\?/u);
+  assert.match(text, /tsonic_rust_node::fs::create_read_stream\(input_path\)\?/u);
+  assert.match(text, /tsonic_rust_node::fs::create_write_stream\(output_path\)\?/u);
   assert.match(text, /readable\.close\(\)/u);
   assert.match(text, /writable\.close\(\)\?/u);
   validateGeneratedProject("r9-node-stream-constructors", result.artifacts);

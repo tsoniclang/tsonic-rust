@@ -213,8 +213,8 @@ declare var BigInt: BigIntConstructor;
 
 declare function parseInt(value: string, radix?: number): number;
 declare function parseFloat(value: string): number;
-declare function isNaN(value: number): boolean;
-declare function isFinite(value: number): boolean;
+declare function isNaN(value: number | bigint): boolean;
+declare function isFinite(value: number | bigint): boolean;
 declare function encodeURIComponent(value: string): string;
 declare function decodeURIComponent(value: string): string;
 
@@ -438,14 +438,14 @@ interface Math {
   cbrt(x: number): number;
   floor(x: number): number;
   ceil(x: number): number;
-  clz32(x: number): number;
+  clz32(x: number): import("@tsonic/core/types.js").int32;
   cos(x: number): number;
   cosh(x: number): number;
   exp(x: number): number;
   expm1(x: number): number;
   fround(x: number): number;
   hypot(...values: number[]): number;
-  imul(x: number, y: number): number;
+  imul(x: number, y: number): import("@tsonic/core/types.js").int32;
   log(x: number): number;
   log1p(x: number): number;
   log10(x: number): number;

@@ -369,7 +369,7 @@ test("sealed lifetime, append, and counted-loop plans remove only proven Rust co
     },
     files: {
       "index.ts": `
-import type { int32 } from "@tsonic/core/types.js";
+import type { int32, nativeUint } from "@tsonic/core/types.js";
 
 function inspect(value: string): number { return value.length; }
 
@@ -436,15 +436,15 @@ function appendFailure(): string {
 
 function combine(values: string[]): string {
   let output = "";
-  for (let index = 0; index < values.length; index++) {
+  for (let index: nativeUint = 0; index < values.length; index++) {
     output += values[index]!;
   }
   return output;
 }
 
-function mapOrdinalTotal(values: Map<string, string>): number {
-  let total = 0;
-  for (let index = 0; index < values.size; index++) {
+function mapOrdinalTotal(values: Map<string, string>): nativeUint {
+  let total: nativeUint = 0;
+  for (let index: nativeUint = 0; index < values.size; index++) {
     total += index;
   }
   return total;
@@ -604,11 +604,11 @@ export function main(): void {
   assert.doesNotMatch(selfAppendOutput, /value\.clone\(\)\s*\}/u);
   assert.match(
     combineOutput,
-    /for index_range(?:_\d+)? in 0\.\.[^{]+\{\s*let index = index_range(?:_\d+)? as f64;/u,
+    /for index in 0\.\.values\.len\(\)/u,
   );
   assert.match(
     mapOutput,
-    /for index_range(?:_\d+)? in 0\.\.[^{]+\{\s*let index = index_range(?:_\d+)? as f64;/u,
+    /for index in 0\.\.values\.len\(\)/u,
   );
   assert.match(
     scalarOutput,

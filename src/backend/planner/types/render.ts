@@ -29,6 +29,7 @@ import { rustGenericCallableValue } from "../../../target-model/types/carriers/g
 import { rustClassConstructorInstance } from "../../../target-model/types/carriers/class-constructors.js";
 import { rustClassEnvironmentHandleType } from "../objects/class-environment-types.js";
 import { rustLifetimeToAst } from "./lifetime-syntax.js";
+import { rustOptionalStorageTypeArguments } from "./type-projections.js";
 import {
   rustBuiltInCarrierRenderPaths,
   rustCallableTargetId,
@@ -39,6 +40,7 @@ import {
   rustStringTargetId,
   rustStrTargetId,
   isRustNeverCarrier,
+  isRustAbsenceCarrier,
   rustOnlyTypeGenericArguments,
   rustFutureTargetId,
   rustJsPromiseTargetId,
@@ -51,9 +53,14 @@ export const rustStrRefType: RustType = {
   mutable: false,
 };
 
+interface RustSourceTypeRendering {
+  readonly pathFor: (value: { readonly fileName: string; readonly typeName: string }) => string | undefined;
+  readonly additionalArgumentsFor: (carrier: TargetTypeRef) => readonly RustGenericArgument[];
+}
+
 export function rustTypeFromCarrier(
   carrier: TargetTypeRef | undefined,
-  resolveSourceTypePath?: (value: { readonly fileName: string; readonly typeName: string }) => string | undefined,
+  resolveSourceTypePath?: RustSourceTypeRendering,
   resolveStructuralShape?: (carrier: TargetTypeRef) => RustType | undefined,
 ): RustType | undefined {
   if (carrier === undefined) {
@@ -65,6 +72,9 @@ export function rustTypeFromCarrier(
   }
   if (isRustNeverCarrier(carrier)) {
     return undefined;
+  }
+  if (isRustAbsenceCarrier(carrier)) {
+    return { kind: "unit" };
   }
   if (carrier.kind === "source-primitive") {
     const name = rustPrimitiveTypeName(carrier.name);
@@ -245,26 +255,28 @@ export function rustTypeFromCarrier(
   if (resolveSourceTypePath !== undefined) {
     const value = rustSourceTypeCarrierValue(carrier);
     if (value !== undefined) {
-      const path = resolveSourceTypePath(value);
+      const path = resolveSourceTypePath.pathFor(value);
       const genericArguments = rustGenericArgumentsFromCarrier(
         value.genericArguments,
         resolveSourceTypePath,
         resolveStructuralShape,
       );
-      return path === undefined || genericArguments === undefined
-        ? undefined
-        : {
+      if (path === undefined || genericArguments === undefined) return undefined;
+      const completeArguments = [
+        ...genericArguments, ...resolveSourceTypePath.additionalArgumentsFor(carrier),
+      ];
+      return {
             kind: "named",
             path,
-            ...(genericArguments.length === 0
+            ...(completeArguments.length === 0
               ? {}
-              : { genericArguments }),
+              : { genericArguments: completeArguments }),
           };
     }
     const union = rustSourceUnionCarrierValue(carrier);
     if (union !== undefined) {
       if (union.origin === "generated") return resolveStructuralShape?.(carrier);
-      const path = resolveSourceTypePath(union);
+      const path = resolveSourceTypePath.pathFor(union);
       const genericArguments = rustGenericArgumentsFromCarrier(
         union.genericArguments, resolveSourceTypePath, resolveStructuralShape,
       );
@@ -355,11 +367,11 @@ export function rustTypeFromCarrier(
 
 function rustTraitReferenceFromCarrier(
   carrier: TargetTypeRef,
-  resolveSourceTypePath?: (value: { readonly fileName: string; readonly typeName: string }) => string | undefined,
+  resolveSourceTypePath?: RustSourceTypeRendering,
   resolveStructuralShape?: (carrier: TargetTypeRef) => RustType | undefined,
 ): RustTraitReference | undefined {
   if (carrier.kind !== "trait-ref") return undefined;
-  const path = carrier.sourceItem === undefined ? carrier.path : resolveSourceTypePath?.(carrier.sourceItem);
+  const path = carrier.sourceItem === undefined ? carrier.path : resolveSourceTypePath?.pathFor(carrier.sourceItem);
   if (path === undefined) return undefined;
   const genericArguments = rustGenericArgumentsFromCarrier(
     carrier.genericArguments,
@@ -437,7 +449,7 @@ function rustTraitReferenceFromCarrier(
 
 export function rustReturnTypeFromCarrier(
   carrier: TargetTypeRef | undefined,
-  resolveSourceTypePath?: (value: { readonly fileName: string; readonly typeName: string }) => string | undefined,
+  resolveSourceTypePath?: RustSourceTypeRendering,
   resolveStructuralShape?: (carrier: TargetTypeRef) => RustType | undefined,
 ): RustType | undefined {
   return isRustNeverCarrier(carrier)
@@ -467,6 +479,8 @@ export interface RustTypeRenderingContext {
         readonly sourceCallableSpecializations: import("../../../analysis/callables/specializations.js").RustSourceCallableSpecializationPlan;
         readonly callableValues: import("../../../analysis/callables/value-plan.js").RustCallableValuePlan;
         readonly classValues: import("../../../analysis/objects/class-values.js").RustClassValuePlan;
+        readonly declarationGenericRequirements: import("../../../analysis/declarations/generic-requirements.js").RustDeclarationGenericRequirementIndex;
+        readonly projectTypes: import("../../../analysis/project-types/type-policy.js").RustProjectTypePolicy;
       };
     };
 }
@@ -555,7 +569,7 @@ export function rustTypeFromCarrierInContext(
   };
   const rendered = rustTypeFromCarrier(
     selectedCarrier,
-    resolveSourceTypePath,
+    { pathFor: resolveSourceTypePath, additionalArgumentsFor: type => rustOptionalStorageTypeArguments(type, context) },
     resolveStructuralShape,
   );
   if (!rustTypeIsLegalInPosition(rendered, position)) {
@@ -821,7 +835,7 @@ function rustLifetimeBinderToAst(
 
 function rustGenericArgumentsFromCarrier(
   arguments_: readonly RustTargetGenericArgument[] | undefined,
-  resolveSourceTypePath?: (value: { readonly fileName: string; readonly typeName: string }) => string | undefined,
+  resolveSourceTypePath?: RustSourceTypeRendering,
   resolveStructuralShape?: (carrier: TargetTypeRef) => RustType | undefined,
 ): readonly RustGenericArgument[] | undefined {
   const result: RustGenericArgument[] = [];

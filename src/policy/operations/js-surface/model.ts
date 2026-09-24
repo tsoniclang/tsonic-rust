@@ -6,6 +6,7 @@ import type {
   RustValueConversion,
 } from "../../../target-model/operations/model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustJsTypedArrayName } from "../../../target-model/types/index.js";
 import { rustProviderOperationFormDeclaresWritableInput } from "../forms.js";
 
 export interface JsOperationRequest {
@@ -15,6 +16,7 @@ export interface JsOperationRequest {
   readonly receiverCarrier?: TargetTypeRef;
   readonly sourceResultCarrier?: TargetTypeRef;
   readonly argumentCarriers?: readonly (TargetTypeRef | undefined)[];
+  readonly spreadArgumentIndexes?: readonly number[];
   readonly soleArgumentNumberKind?: "number" | "non-number";
   readonly selectedMethodTypeArgumentCarriers?: readonly (TargetTypeRef | undefined)[];
   readonly authoredMethodTypeArgumentCarriers?: readonly (TargetTypeRef | undefined)[];
@@ -84,7 +86,7 @@ export type JsCarrierRef =
   | { readonly ref: "cb-array-comparator"; readonly arity: 0 | 1 | 2 }
   | { readonly ref: "cb-map-for-each"; readonly arity: 0 | 1 | 2 | 3 }
   | { readonly ref: "cb-set-for-each"; readonly arity: 0 | 1 | 2 | 3 }
-  | { readonly ref: "int32" }
+  | { readonly ref: "int8" | "uint8" | "int16" | "uint16" | "int32" | "uint32" | "uint64" | "native-int" | "native-uint" | "float32" }
   | { readonly ref: "jsvalue" }
   | { readonly ref: "float64" }
   | { readonly ref: "infer" }
@@ -99,7 +101,7 @@ export type JsCarrierRef =
   | { readonly ref: "unit" }
   | { readonly ref: "string-array" }
   | { readonly ref: "optional-string-array" }
-  | { readonly ref: "float64-array" }
+  | { readonly ref: "numeric-array-argument"; readonly index: number }
   | { readonly ref: "js-string-array" }
   | { readonly ref: "optional-js-string-array" }
   | { readonly ref: "regexp" }
@@ -134,10 +136,10 @@ export type JsCarrierRef =
   | { readonly ref: "element-array" }
   | { readonly ref: "array-entries" }
   | { readonly ref: "array-entry-result" }
-  | { readonly ref: "option-of-float64" }
+  | { readonly ref: "option-of-float64" | "option-of-uint16" | "option-of-uint32" | "option-of-native-uint" }
   | { readonly ref: "string" }
   | { readonly ref: "js-string" }
-  | { readonly ref: "undefined" }
+  | { readonly ref: "absence" }
   | { readonly ref: "element" }
   | { readonly ref: "option-of-element" }
   | { readonly ref: "receiver" }
@@ -159,6 +161,7 @@ export type JsCarrierRef =
   | { readonly ref: "weak-key-array" }
   | { readonly ref: "array-buffer" }
   | { readonly ref: "uint8-array" }
+  | { readonly ref: "typed-array"; readonly name: RustJsTypedArrayName }
   | { readonly ref: "int32-array" }
   | { readonly ref: "date" }
   | { readonly ref: "future-output" }
@@ -168,9 +171,9 @@ export type JsCarrierRef =
   | { readonly ref: "promise-of-settled-input-output-array" }
   | { readonly ref: "promise-finally-callback" }
   | { readonly ref: "json-replacer-callback" }
-  | { readonly ref: "null" }
   | { readonly ref: "source-result" }
-  | { readonly ref: "argument"; readonly index: number };
+  | { readonly ref: "argument"; readonly index: number }
+  | { readonly ref: "numeric-argument"; readonly index: number };
 
 type JsCarrierCapability = "numeric" | "integer" | "numeric-parameter" | "clone" | "stringifiable" | "js-equality" | "project-identity-equality" | "object-identity" | "freezable-object";
 
@@ -192,9 +195,10 @@ export interface JsOperationRowData {
     readonly awaiting: "infallible" | "fallible";
     readonly errorBoundary: "none" | "source-program";
   };
-  readonly compileTimeSourceArgumentIndexes?: readonly number[];
+  readonly evaluationOnlySourceArgumentIndexes?: readonly number[];
   readonly jsonValueSourceArgumentIndexes?: readonly number[];
   readonly variadic?: true;
+  readonly numericRest?: true;
   readonly firstArgCarrierId?: string;
   readonly authoredPropertyKey?: true;
   readonly shape:
@@ -224,6 +228,10 @@ export function defineJsOperationRows(rows: readonly JsOperationRowData[]): read
   const identities = new Set<string>();
   const variantsByOperation = new Map<string, string[]>();
   for (const row of rows) {
+    if (row.numericRest === true && (row.variadic !== true || row.shape.target.form !== "call-value-slice" ||
+      row.shape.target.leadingArguments.length !== 0)) {
+      throw new Error(`Numeric rest row '${row.owner}.${row.member}' requires one closed numeric sequence.`);
+    }
     if (row.shape.op === "operation" && row.shape.evaluation === "pure" &&
       (row.shape.operationKind === "constructor" ||
         row.callback !== undefined ||
@@ -239,7 +247,7 @@ export function defineJsOperationRows(rows: readonly JsOperationRowData[]): read
       row.jsonValueSourceArgumentIndexes.some((index) =>
         !Number.isSafeInteger(index) || index < 0 ||
         index >= (row.shape.params?.length ?? 0) ||
-        row.compileTimeSourceArgumentIndexes?.includes(index) === true)
+        row.evaluationOnlySourceArgumentIndexes?.includes(index) === true)
     )) {
       throw new Error(
         `JavaScript operation row '${row.owner}.${row.member}' has an invalid JSON-value source projection.`,

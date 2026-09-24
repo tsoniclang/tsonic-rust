@@ -616,11 +616,13 @@ function planTopLevelVariableStatement(
     const name = context.input.program.names.nameForDeclaration(declaration) ?? "";
     const initializer = Node_Initializer(ast, declaration);
     const binding = context.input.program.facts.getFact(declaration, rustModuleBindingFactKey);
-    if (initializer === undefined || binding === undefined || !isValidRustIdentifier(name)) {
+    if (binding === undefined || !isValidRustIdentifier(name) ||
+      initializer === undefined && (binding.storage !== "module-cell" || binding.initialization !== "declaration") ||
+      initializer !== undefined && binding.storage === "module-cell" && binding.initialization !== "value") {
       context.diagnostics.push(unsupportedConstructDiagnostic(
         { ast, sourceFile: context.sourceFile, node: declaration },
         "rust.backend.module-binding",
-        "Top-level bindings require a plain Rust identifier, an initializer, and one finalized module-binding fact.",
+        "Top-level bindings require a plain Rust identifier and one finalized module-binding fact matching their initialization.",
       ));
       return undefined;
     }
@@ -687,11 +689,12 @@ function planTopLevelVariableStatement(
       ));
       return undefined;
     }
-    const value = planExpression(initializer, context);
-    if (value === undefined) {
+    const value = initializer === undefined ? undefined : planExpression(initializer, context);
+    if (initializer !== undefined && value === undefined) {
       return undefined;
     }
     if (binding.storage === "native-const") {
+      if (value === undefined) return undefined;
       const deadCode = rustAuthoredDeadCodeDisposition(context, declaration);
       const attrs = [
         ...(isUpperSnakeName(name) ? [] : [rustLintAttributes.nonUpperCaseGlobal]),

@@ -59,6 +59,7 @@ export function createRustSourceTypeRegistry(
   const structuralObjectsByType = new WeakMap<Type, RustSourceObjectShape[]>();
   const structuralObjects: RustSourceObjectShape[] = [];
   const structuralObjectsByCarrier = new Map<string, RustSourceObjectShape[]>();
+  const structuralCarriersByAlias = new WeakMap<Node, Map<string, TargetTypeRef>>();
   const structuralInstantiations: RustStructuralInstantiation[] = [];
   const structuralInstantiationsByKey = new Map<string, RustStructuralInstantiation[]>();
   const structuralFieldsBySymbol = new WeakMap<Symbol, RustStructuralFieldRegistration[]>();
@@ -113,6 +114,18 @@ export function createRustSourceTypeRegistry(
     return typeName.length === 0
       ? undefined
       : rustSourceTypeCarrier(fileName, typeName, shape);
+  };
+
+  const retainStructuralInstantiation = (template: TargetTypeRef, instance: TargetTypeRef): void => {
+    if (rustTargetTypeRefEquals(template, instance)) return;
+    const key = closedMetadataKey([structuralCarrierKey(template), structuralCarrierKey(instance)]);
+    const entries = structuralInstantiationsByKey.get(key) ?? [];
+    if (entries.some(entry => rustTargetTypeRefEquals(entry.template, template) &&
+      rustTargetTypeRefEquals(entry.instance, instance))) return;
+    const entry = Object.freeze({ template, instance });
+    entries.push(entry);
+    structuralInstantiationsByKey.set(key, entries);
+    structuralInstantiations.push(entry);
   };
 
   return {
@@ -172,7 +185,11 @@ export function createRustSourceTypeRegistry(
       if (existing !== undefined) {
         return rustTargetTypeRefEquals(existing, carrier);
       }
+      const instances = structuralCarriersByAlias.get(declaration);
+      const key = structuralCarrierKey(carrier);
+      if (instances !== undefined && (key === undefined || !structuralObjectsByCarrier.has(key))) return false;
       carriersByDeclaration.set(declaration, carrier);
+      for (const instance of instances?.values() ?? []) retainStructuralInstantiation(carrier, instance);
       return true;
     },
     carrierForDeclaration,
@@ -246,17 +263,16 @@ export function createRustSourceTypeRegistry(
       const templateShape = templateKey === undefined ? undefined : structuralObjectsByCarrier.get(templateKey)?.find(candidate =>
         rustTargetTypeRefEquals(candidate.carrier, template));
       if (template !== undefined && templateShape === undefined) return false;
+      const aliasTemplate = normalized.sourceAlias === undefined ? undefined : carriersByDeclaration.get(normalized.sourceAlias);
+      const aliasTemplateKey = aliasTemplate === undefined ? undefined : structuralCarrierKey(aliasTemplate);
+      if (aliasTemplate !== undefined && (aliasTemplateKey === undefined || !structuralObjectsByCarrier.has(aliasTemplateKey))) return false;
       const retainInstantiation = (): void => {
-        if (templateShape === undefined || templateKey === undefined ||
-          rustTargetTypeRefEquals(templateShape.carrier, normalized.carrier)) return;
-        const key = closedMetadataKey([templateKey, carrierKey]);
-        const entries = structuralInstantiationsByKey.get(key) ?? [];
-        if (entries.some(entry => rustTargetTypeRefEquals(entry.template, templateShape.carrier) &&
-          rustTargetTypeRefEquals(entry.instance, normalized.carrier))) return;
-        const entry = Object.freeze({ template: templateShape.carrier, instance: normalized.carrier });
-        entries.push(entry);
-        structuralInstantiationsByKey.set(key, entries);
-        structuralInstantiations.push(entry);
+        if (templateShape !== undefined) retainStructuralInstantiation(templateShape.carrier, normalized.carrier);
+        if (normalized.sourceAlias === undefined) return;
+        const instances = structuralCarriersByAlias.get(normalized.sourceAlias) ?? new Map<string, TargetTypeRef>();
+        instances.set(carrierKey, normalized.carrier);
+        structuralCarriersByAlias.set(normalized.sourceAlias, instances);
+        if (aliasTemplate !== undefined) retainStructuralInstantiation(aliasTemplate, normalized.carrier);
       };
       const existingForType = structuralObjectsByType.get(shape.sourceType) ?? [];
       if (existingForType.some((existing) =>
@@ -594,6 +610,7 @@ function freezeSourceObjectField(field: RustSourceObjectField): RustSourceObject
 function freezeSourceObjectShape(shape: RustSourceObjectShape): RustSourceObjectShape {
   return Object.freeze({
     sourceType: shape.sourceType,
+    ...(shape.sourceAlias === undefined ? {} : { sourceAlias: shape.sourceAlias }),
     carrier: snapshotClosedMetadata(shape.carrier),
     storage: shape.storage,
     fields: Object.freeze(shape.fields.map(freezeSourceObjectField)),
@@ -719,6 +736,7 @@ function sourceObjectShapeEquals(
   right: RustSourceObjectShape,
 ): boolean {
   return left.sourceType === right.sourceType &&
+    left.sourceAlias === right.sourceAlias &&
     left.construction?.declaration === right.construction?.declaration &&
     left.construction?.signature === right.construction?.signature &&
     rustTargetTypeRefEquals(left.construction?.carrier, right.construction?.carrier) &&

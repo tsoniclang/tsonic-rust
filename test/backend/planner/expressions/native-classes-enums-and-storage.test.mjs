@@ -682,7 +682,7 @@ export function bump(xs: int32[]): void {
 export function drive(): int32 {
   const values: int32[] = [1, 2, 3];
   bump(values);
-  return values.length;
+  return values.length as int32;
 }
 
 export function assign(values: int32[]): int32 {

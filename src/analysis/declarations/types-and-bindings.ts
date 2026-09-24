@@ -358,6 +358,7 @@ export function setParameterAbiFact(
     valueCarrier: abi.valueCarrier,
     parameterCarrier: abi.parameterCarrier,
     mode: abi.mode,
+    ...(abi.entryConversion === undefined ? {} : { entryConversion: abi.entryConversion }),
   }, [
     { message: "rust finalized source parameter ABI" },
   ]);

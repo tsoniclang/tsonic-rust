@@ -12,7 +12,7 @@ import { createRustPlanBuilder } from "../../../dist/analysis/facts/plan-store.j
 import { rustBindingProjectionFactKey } from "../../../dist/analysis/facts/keys.js";
 import { recordRustBindingPatternFacts } from "../../../dist/analysis/control-flow/binding-patterns.js";
 import { resolveArrayLiteralCarrier } from "../../../dist/analysis/operations/inputs.js";
-import { selectRustFixedArrayLengthProperty } from "../../../dist/analysis/operations/provider/structural-properties.js";
+import { selectRustFixedArrayElementAccess, selectRustFixedArrayLengthProperty } from "../../../dist/analysis/operations/provider/structural-properties.js";
 import {
   resolveRustTargetTypeRef,
   resolveRustTargetTypeSyntax,
@@ -217,7 +217,7 @@ test("fixed-array literal cardinality rejects exact mismatches without extent ex
   const expression = Object.freeze({});
   for (const length of [3n, 9007199254740992n, 9007199254740993n]) {
     const diagnostics = [];
-    const walk = { context: { ast: { elements: () => [] }, diagnostics } };
+    const walk = { context: { ast: { elements: () => [] }, diagnostics }, rejectedExpressions: new Set(), resolving: new Set() };
     assert.equal(resolveArrayLiteralCarrier(walk, expression, {}, rustFixedArrayTargetType(element, integer(length))), undefined);
     assert.deepEqual(diagnostics.map(({ code, message }) => ({ code, message })), [{
       code: "RUST_FIXED_ARRAY_LITERAL_LENGTH_MISMATCH",
@@ -304,7 +304,8 @@ test("numeric shared arrays preserve cross-file carriers, length, indexing and n
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /\[i32; 3\]/u);
-  assert.match(output, /usize_to_i32\(values\.len\(\)\)/u);
+  assert.match(output, /values\.len\(\) != 3/u);
+  assert.doesNotMatch(output, /usize_to_(?:i32|f64)\(values\.len\(\)\)/u);
   assert.match(output, /let for_in_length\w* = values\.len\(\);/u);
   assert.match(output, /0\.\.for_in_length/u);
   assert.doesNotMatch(output, /as f64|as i32/u);
@@ -324,33 +325,90 @@ test("large fixed-array value types and finite indexes emit exact native extents
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /pub fn left\(values: \[i32; 9007199254740992\]\)/u);
   assert.match(output, /pub fn right\(values: \[i32; 9007199254740993\]\)/u);
-  assert.match(output, /values\[rt::conversions::i32_to_usize\(0\)\?\]/u);
+  assert.match(output, /values\[0\]/u);
   assert.doesNotMatch(output, /usize_to_i32|as f64/u);
+});
+
+test("fixed-array ordinals preserve exact native integers beyond floating precision", () => {
+  const { result } = compileRust({ files: { "index.ts": `
+    import type { FixedArray, int32 } from "@tsonic/core/types.js";
+    export function last(values: FixedArray<int32, 9007199254740994n>): int32 {
+      return values[9007199254740993];
+    }
+  ` } });
+  assert.deepEqual(result.diagnostics, []);
+  const output = artifactText(result, "src/index.rs");
+  assert.match(output, /values\[9007199254740993\]/u);
+  assert.doesNotMatch(output, /values\[9007199254740992\]|i32_to_usize|as f64/u);
+});
+
+test("fixed-array ordinal validation rejects inconsistent and malformed checker evidence", () => {
+  const expression = Object.freeze({});
+  const argument = Object.freeze({});
+  const carrier = rustFixedArrayTargetType(element, integer(2));
+  const context = {
+    extensionId: "tsonic.rust.policy",
+    ast: {
+      kindName: () => "KindNumericLiteral",
+      is: { IsParenthesizedExpression: () => false, IsPrefixUnaryExpression: () => false },
+      authoredRange: () => ({ kind: "synthetic" }),
+      text: () => "1",
+    },
+  };
+  for (const selected of [NaN, Infinity, -Infinity, 0.5, -1, 0, 2, 9007199254740992]) {
+    const result = selectRustFixedArrayElementAccess({ expression, argument,
+      sourceSelectedElementIndex: selected }, carrier, context, {});
+    assert.equal(result.kind, "reject", String(selected));
+    assert.equal(result.diagnostic.extensionCode, "RUST_FIXED_ARRAY_INDEX_NOT_PROVEN");
+    assert.equal(result.diagnostic.nodeOrSpan, expression);
+  }
+});
+
+test("fixed-array literals reject out-of-range ordinals without enabling dynamic non-Copy reads", () => {
+  for (const [index, code] of [
+    ["-1", "RUST_FIXED_ARRAY_INDEX_NOT_PROVEN"],
+    ["2", "RUST_FIXED_ARRAY_INDEX_NOT_PROVEN"],
+    ["9007199254740993", "RUST_FIXED_ARRAY_INDEX_NOT_PROVEN"],
+    ["index", "RUST_FIXED_ARRAY_DYNAMIC_INDEX_REQUIRES_COPY"],
+    ["1.5", "RUST_FIXED_ARRAY_DYNAMIC_INDEX_REQUIRES_COPY"],
+  ]) {
+    const { result } = compileRust({ files: { "index.ts": `
+      import type { FixedArray, int32 } from "@tsonic/core/types.js";
+      export function select(values: FixedArray<string, 2>, index: int32): string {
+        return values[${index}];
+      }
+    ` } });
+    assert.ok(result.diagnostics.some(diagnostic => diagnostic.code === code),
+      `${index}: ${JSON.stringify(result.diagnostics)}`);
+    assert.equal(result.artifacts.length, 0);
+  }
 });
 
 for (const length of ["2n", "9007199254740993n"]) {
   for (const [name, expression] of [["direct", "values.length"], ["inferred", "inferred(values).length"]]) {
-    test(`${name} bigint fixed-array length ${length} rejects instead of selecting a number result`, () => {
+    test(`${name} bigint fixed-array length ${length} retains its exact native extent`, () => {
       const { result } = compileRust({ files: { "index.ts": `
         import type { FixedArray, int32 } from "@tsonic/core/types.js";
         function inferred(values: FixedArray<int32, ${length}>) { return values; }
-        export function length(values: FixedArray<int32, ${length}>): bigint { return ${expression}; }
+        export function length(values: FixedArray<int32, ${length}>) { return ${expression}; }
       ` } });
-      assert.ok(result.diagnostics.some(({ code, message }) => code === "RUST_FIXED_ARRAY_LENGTH_RUNTIME_BASE_UNSUPPORTED" &&
-        message === "Rust FixedArray.length does not implement the selected bigint runtime result; numeric length conversion is not permitted."),
-      JSON.stringify(result.diagnostics));
-      assert.deepEqual(result.artifacts, []);
+      assert.deepEqual(result.diagnostics, []);
+      const output = artifactText(result, "src/index.rs");
+      assert.match(output, /pub fn length\(values: \[i32; \d+\]\) -> usize/u);
+      assert.match(output, /\.len\(\)/u);
+      assert.doesNotMatch(output, /usize_to_i32|usize_to_f64|as f64/u);
     });
   }
 }
 
-test("numeric fixed-array length beyond int32 rejects with its exact extent", () => {
+test("numeric fixed-array length beyond int32 is not artificially narrowed", () => {
   const { result } = compileRust({ files: { "index.ts": `
-    import type { FixedArray, int32 } from "@tsonic/core/types.js";
-    export function length(values: FixedArray<int32, 2147483648>): number { return values.length; }
+    import type { FixedArray, int32, nativeUint } from "@tsonic/core/types.js";
+    export function length(values: FixedArray<int32, 2147483648>): nativeUint { return values.length; }
   ` } });
-  assert.ok(result.diagnostics.some(({ code, message }) => code === "RUST_FIXED_ARRAY_LENGTH_RANGE_UNSUPPORTED" &&
-    message === "Rust FixedArray.length uses a checked int32 result; exact extent 2147483648 exceeds 2147483647."),
-  JSON.stringify(result.diagnostics));
-  assert.deepEqual(result.artifacts, []);
+  assert.deepEqual(result.diagnostics, []);
+  const output = artifactText(result, "src/index.rs");
+  assert.match(output, /-> usize/u);
+  assert.match(output, /\.len\(\)/u);
+  assert.doesNotMatch(output, /usize_to_i32|usize_to_f64|as f64/u);
 });

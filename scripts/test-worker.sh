@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-test_concurrency="$1"
-shift
-
 npm run build
 loader_registration="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/scripts/register-tsonic-root-loader.mjs"
 node --import "$loader_registration" \
@@ -11,5 +8,5 @@ node --import "$loader_registration" \
 exec node \
   --import "$loader_registration" \
   --test \
-  --test-concurrency="${test_concurrency}" \
+  --test-concurrency="${TSONIC_TEST_WORKERS}" \
   "$@"

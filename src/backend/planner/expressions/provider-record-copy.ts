@@ -7,6 +7,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { readRustStoredObjectField } from "../objects/project-storage.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
+import { applyRustValueConversion } from "./value-conversions.js";
 
 export function planProviderRecordCopy(
   conversion: RustProviderRecordCopy,
@@ -22,9 +23,11 @@ export function planProviderRecordCopy(
   const fields = conversion.fields.map(field => {
     const plan = context.input.program.structuralShapes.field(conversion.source, field.storageIndex);
     if (plan?.storage !== "stored" || plan.method === true ||
-      !rustTargetTypeRefEquals(plan.carrier, field.carrier)) return undefined;
-    const value = readRustStoredObjectField("structural-object", conversion.source,
-      { kind: "path", path: name }, field.storageIndex, field.carrier, context);
+      !rustTargetTypeRefEquals(plan.carrier, field.sourceCarrier)) return undefined;
+    const source = readRustStoredObjectField("structural-object", conversion.source,
+      { kind: "path", path: name }, field.storageIndex, field.sourceCarrier, context);
+    if (source === undefined) return undefined;
+    const value = applyRustValueConversion(context, source, field.conversion, node, false);
     return value === undefined ? undefined : { name: field.targetName, value };
   });
   if (fields.some(field => field === undefined)) return undefined;

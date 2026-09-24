@@ -1,6 +1,16 @@
 import type { JsOperationRowData } from "./model.js";
+import { rustInt32ToFloat64ValueConversion } from "../../../target-model/conversions/model.js";
 
 export const bigintOperationRows: readonly JsOperationRowData[] = [
+  {
+    owner: "NumberConstructor", member: "call", operationKind: "call", lane: "number",
+    variant: "string",
+    shape: {
+      op: "operation", operationKind: "method",
+      target: { form: "call", path: "js_abi::number_from_string", argModes: ["ref"] },
+      params: [{ ref: "string" }], result: { ref: "float64" },
+    },
+  },
   {
     owner: "NumberConstructor", member: "call", operationKind: "call", lane: "number",
     variant: "numeric-scalar",
@@ -23,35 +33,47 @@ export const bigintOperationRows: readonly JsOperationRowData[] = [
       params: [{ ref: "argument", index: 0 }], result: { ref: result },
     },
   })),
+  ...(["number", "bigint"] as const).flatMap((lane): readonly JsOperationRowData[] => [
   {
-    owner: "BigInt", member: "toString", operationKind: "call", lane: "bigint",
-    variant: "default",
+    owner: "BigInt", member: "toString", operationKind: "call", lane,
+    variant: `${lane}-default`,
+    requirements: lane === "number" ? [{ carrier: { ref: "receiver" }, capability: "integer" }] : [],
     shape: {
       op: "operation", operationKind: "method",
       target: { form: "free-call", path: "ToString::to_string", receiverMode: "ref" },
       result: { ref: "string" },
     },
   },
-  {
-    owner: "BigInt", member: "toString", operationKind: "call", lane: "bigint",
-    variant: "radix", fallible: true,
+  ...(["float64", "int32"] as const).map((radix): JsOperationRowData => ({
+    owner: "BigInt", member: "toString", operationKind: "call", lane,
+    variant: `${lane}-${radix}-radix`, fallible: true,
+    requirements: lane === "number" ? [{ carrier: { ref: "receiver" }, capability: "integer" }] : [],
     shape: {
       op: "operation", operationKind: "method",
-      target: { form: "free-call", path: "js_abi::bigint_to_string_radix", receiverMode: "ref", argModes: ["value"] },
-      params: [{ ref: "float64" }], result: { ref: "string" },
+      target: {
+        form: "free-call", path: `js_abi::${lane}_to_string_radix`,
+        receiverMode: lane === "number" ? "value" : "ref", argModes: ["value"],
+        ...(radix === "int32" ? { argConversions: [rustInt32ToFloat64ValueConversion] } : {}),
+      },
+      params: [{ ref: radix }], result: { ref: "string" },
     },
-  },
+  })),
+  ]),
   ...([
     ["asIntN", "js_abi::bigint_as_int_n"],
     ["asUintN", "js_abi::bigint_as_uint_n"],
-  ] as const).map(([member, path]): JsOperationRowData => ({
-    owner: "BigIntConstructor", member, operationKind: "call", lane: "bigint", fallible: true,
+  ] as const).flatMap(([member, path]) => (["bigint", "integer"] as const).map((variant): JsOperationRowData => ({
+    owner: "BigIntConstructor", member, operationKind: "call", lane: "bigint", variant, fallible: true,
+    ...(variant === "integer" ? {
+      requirements: [{ carrier: { ref: "argument" as const, index: 1 }, capability: "integer" as const }],
+    } : {}),
     shape: {
       op: "operation", operationKind: "method",
       target: { form: "call", path, argModes: ["value", "ref"] },
-      params: [{ ref: "float64" }, { ref: "bigint" }], result: { ref: "bigint" },
+      params: [{ ref: "float64" }, variant === "bigint" ? { ref: "bigint" } : { ref: "argument", index: 1 }],
+      result: { ref: "bigint" },
     },
-  })),
+  }))),
   {
     owner: "BigIntConstructor", member: "call", operationKind: "call", lane: "bigint",
     variant: "numeric-union", fallible: true,

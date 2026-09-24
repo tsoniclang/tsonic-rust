@@ -60,6 +60,7 @@ export function fakeCompileInput({
   sourceFiles = [],
   target = { id: "rust", options: {} },
   runtimeReferences = [],
+  runtimeActivatedCapabilityIds = [],
 } = {}) {
   const ast = fakeAstReader(sourceFiles);
   const sourceFacts = { getFact: () => undefined };
@@ -167,6 +168,7 @@ export function fakeCompileInput({
     project: { entryPoint: "src/index.ts", targets: [target] },
     target,
     runtimeReferences,
+    runtimeActivatedCapabilityIds,
     paths: {
       projectFilePath: "src/tsonic.json",
       projectRoot: "src",

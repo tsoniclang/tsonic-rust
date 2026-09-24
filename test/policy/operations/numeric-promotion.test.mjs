@@ -12,6 +12,7 @@ import {
 } from "../../../dist/target-model/conversions/contracts.js";
 import {
   selectRustSourceValueConversion,
+  selectRustSourceAssertionConversion,
 } from "../../../dist/policy/conversions/selection.js";
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
@@ -70,7 +71,7 @@ test("wide and pointer-width primitives extend one symmetric closed promotion po
   const expectedRows = new Map([
     ["int128", [
       "int128", "int128", "int128", "int128", "int128", "int128", "int128",
-      "int128", "float32", "float64", "int128", undefined, undefined, undefined,
+      "int128", "float32", "float64", "int128", undefined, "int128", "int128",
     ]],
     ["uint128", [
       undefined, "uint128", undefined, "uint128", undefined, "uint128", undefined,
@@ -78,11 +79,11 @@ test("wide and pointer-width primitives extend one symmetric closed promotion po
     ]],
     ["native-int", [
       undefined, undefined, undefined, undefined, undefined, undefined, undefined,
-      undefined, "float32", "float64", undefined, undefined, "native-int", undefined,
+      undefined, "float32", "float64", "int128", undefined, "native-int", undefined,
     ]],
     ["native-uint", [
       undefined, undefined, undefined, undefined, undefined, undefined, undefined,
-      undefined, "float32", "float64", undefined, undefined, undefined, "native-uint",
+      undefined, "float32", "float64", "int128", undefined, undefined, "native-uint",
     ]],
   ]);
 
@@ -197,6 +198,21 @@ test("optional value conversions lift one exact element conversion", () => {
     ),
     undefined,
   );
+});
+
+test("native-sized integers select checked narrowing without a floating intermediate", () => {
+  for (const name of ["native-int", "native-uint"]) {
+    const source = { kind: "source-primitive", name };
+    const target = { kind: "source-primitive", name: "int32" };
+    assert.equal(selectRustSourceValueConversion(source, target), undefined);
+    const conversion = selectRustSourceAssertionConversion(source, target);
+    const contract = rustValueConversionContract(conversion);
+    assert.deepEqual(contract.source, source);
+    assert.deepEqual(contract.target, target);
+    assert.equal(contract.category, "checked-range");
+    assert.equal(contract.fallible, true);
+    assert.equal(contract.path, `rt::conversions::${name === "native-int" ? "isize" : "usize"}_to_i32`);
+  }
 });
 
 test("generated Rust compiles representative mixed numeric operations", { timeout: 300_000 }, () => {

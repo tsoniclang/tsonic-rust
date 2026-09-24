@@ -114,7 +114,7 @@ export function stats(xs: int32[]): int32 {
   if (any_big && all_positive) {
     bonus = 1;
   }
-  return xs.reduce((acc, x) => acc + x, 0) + evens.length + doubled.length + bonus;
+  return xs.reduce((acc, x) => acc + x, 0) + (evens.length as int32) + (doubled.length as int32) + bonus;
 }
 `,
     },
@@ -244,8 +244,8 @@ export function load(path: string): string {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn load\(path: String\) -> Result<String, rt::TsonicError> \{/u);
-  assert.match(text, /tsonic_rust_node::fs::read_file_sync_string\(path\.as_str\(\), "utf8"\)/u);
+  assert.match(text, /pub fn load\(path: &str\) -> Result<String, rt::TsonicError> \{/u);
+  assert.match(text, /tsonic_rust_node::fs::read_file_sync_string\(path, "utf8"\)/u);
   assert.doesNotMatch(text, /Ok\(tsonic_rust_node::fs::read_file_sync_string/u);
 });
 
@@ -598,7 +598,7 @@ export function safe(xs: int32[]): int32 {
   let doubled_len: int32 = 0;
   try {
     risky();
-    doubled_len = xs.map((x) => x * 2).length;
+    doubled_len = xs.map((x) => x * 2).length as int32;
   } catch (error) {
     doubled_len = -1;
   }

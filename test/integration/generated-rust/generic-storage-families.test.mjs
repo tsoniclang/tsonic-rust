@@ -184,7 +184,7 @@ export function main(): void {
   validateGeneratedProject("inferred-pointer-family", result.artifacts, { run: true });
 });
 
-test("pointer transport rejects inferred number storage as an annotated uint32 record", () => {
+test("pointer transport rejects explicitly floating storage as an annotated uint32 record", () => {
   const { result } = compileRust({ surfaces: ["js"], files: {
     "index.ts": `
 import type { Pointer, uint32 } from "@tsonic/core/types.js";
@@ -195,7 +195,7 @@ function read(pointer: Pointer<Box<{ count: uint32 }>>): uint32 {
 }
 export function example(): uint32 {
   const maximum: uint32 = 4294967295;
-  const data = { count: maximum };
+  const data: { count: number } = { count: maximum };
   return read(allocatePointer(new Box(data)));
 }
 ` },
@@ -203,6 +203,32 @@ export function example(): uint32 {
   assert.deepEqual(result.artifacts, []);
   assert.ok(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_UNSUPPORTED_AST" &&
     diagnostic.evidence?.includes("target.capability=rust.backend.source-call-argument-carrier")));
+});
+
+test("pointer transport retains inferred native fields without floating storage", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"], packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "inferred_native_pointer" } },
+    files: { "index.ts": `
+import type { Pointer, uint32 } from "@tsonic/core/types.js";
+import { allocatePointer, loadPointer } from "@tsonic/core/lang.js";
+import { check } from "@acme/testing";
+class Box<T> { value: T; constructor(value: T) { this.value = value; } }
+function read(pointer: Pointer<Box<{ count: uint32 }>>): uint32 {
+  return loadPointer(pointer).value.count;
+}
+export function main(): void {
+  const maximum: uint32 = 4294967295;
+  const data = { count: maximum };
+  const pointer = allocatePointer(new Box(data));
+  check(read(pointer) === maximum);
+  data.count = 7;
+  check(read(pointer) === 7);
+}
+` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  validateGeneratedProject("inferred-native-pointer", result.artifacts, { run: true });
 });
 
 for (const surfaces of [[], ["js"]]) {

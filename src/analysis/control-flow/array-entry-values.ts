@@ -1,7 +1,7 @@
 import type { Node, Type } from "@tsonic/tsts";
 import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_Initializer } from "@tsonic/target-api/source";
 import { rustJsArrayEntriesElementTargetType } from "../../target-model/types/carriers/array-entries.js";
-import { rustOptionElementCarrier, rustUndefinedTargetType } from "../../target-model/types/index.js";
+import { rustOptionElementCarrier, rustAbsenceTargetType } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustBindingProjectionFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
 import type { RustFactWalk } from "../program/walk.js";
@@ -115,7 +115,7 @@ export function rustGuardedArrayEntryCarrier(
     const condition = statement?.Expression;
     if (statement === undefined || condition === undefined) continue;
     const selected = facts.getFact(condition, rustTargetOperationFactKey);
-    if (selected?.kind !== "option-check" || !rustTargetTypeRefEquals(selected.nullishCarrier, rustUndefinedTargetType()) ||
+    if (selected?.kind !== "option-check" || !rustTargetTypeRefEquals(selected.nullishCarrier, rustAbsenceTargetType()) ||
       selected.nullishDepths.length !== 1 || selected.nullishDepths[0] !== 0 ||
       !rustTargetTypeRefEquals(selected.optionCarrier, sourceCarrier)) continue;
     const checked = selected.optionOperand === "left" ? BinaryExpression_Left(ast, condition) : BinaryExpression_Right(ast, condition);

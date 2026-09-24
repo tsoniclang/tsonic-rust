@@ -20,6 +20,6 @@ export function rustJsArrayEntriesElementTargetType(carrier: TargetTypeRef | und
 export function rustJsArrayEntryTargetType(element: TargetTypeRef): TargetTypeRef {
   return {
     kind: "tuple",
-    elements: [{ kind: "source-primitive", name: "float64" }, element],
+    elements: [{ kind: "source-primitive", name: "native-uint" }, element],
   };
 }

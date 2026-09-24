@@ -31,7 +31,8 @@ import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution.js
 import { rustOptionalChainFactKey } from "../../../facts/keys.js";
 import { rustOptionElementCarrier } from "../../../../target-model/types/index.js";
 import { rustRuntimeCarrierKey, rustSelectedCallKey } from "../../../../target-model/facts/selections.js";
-import { selectedCallArgumentCarriers, selectedCallArgumentNodes, selectedCallCalleeDeclaration, selectedCallCalleeSymbol, selectedValueCarrier } from "../operators.js";
+import { selectedCallArgumentCarriers, selectedCallArgumentNodes, selectedCallCalleeDeclaration, selectedCallCalleeSymbol } from "../operators.js";
+import { selectedValueCarrier } from "../../selected-values.js";
 import { selectJsSurfaceConstructorBySourceOwner, selectJsSurfaceOperation } from "../../../../policy/operations/js-surface.js";
 import { selectRustGeneratorSourceCall } from "../../../../policy/types/generator-source-profile.js";
 import { rustSourceErrorConstructors } from "../../../../target-model/identities/source-errors.js";
@@ -357,6 +358,8 @@ export function selectRustCheckedCall(
       ...(receiverCarrier === undefined ? {} : { receiverCarrier }),
       ...(sourceResultCarrier === undefined ? {} : { sourceResultCarrier }),
       ...(argumentCarriers.length === 0 ? {} : { argumentCarriers }),
+      spreadArgumentIndexes: request.source.sourceArguments.flatMap((argument, index) =>
+        context.ast.is.IsSpreadElement(argument.expression) ? [index] : []),
       selectedMethodTypeArgumentCarriers,
       authoredMethodTypeArgumentCarriers,
       argumentMatchScore: selectedArgumentMatchScore(selectedCallArgumentNodes(request), context, options),
@@ -415,11 +418,11 @@ export function selectRustCheckedCall(
   const calleeDeclaration = isProjectSourceDeclaration(context, selectedCallCalleeDeclaration(request))
     ? asNode(selectedCallCalleeDeclaration(request), context)
     : undefined;
-  const constructorCarrier = sourceDeclaration === undefined && checkedCallIsConstruction(request, context)
+  const constructorCarrier = checkedCallIsConstruction(request, context)
     ? selectedValueCarrier(request.source.sourceCallee.expression, request.source.sourceCallee.type, context, options)
     : undefined;
   const constructorInstance = constructorCarrier === undefined ? undefined : rustClassConstructorInstance(constructorCarrier);
-  const constructorDefinition = sourceDeclaration === undefined && checkedCallIsConstruction(request, context)
+  const constructorDefinition = checkedCallIsConstruction(request, context)
     ? options.projectTypes.definitionForDeclaration(calleeDeclaration) ??
       (constructorInstance === undefined ? undefined : options.projectTypes.definitionForCarrier(constructorInstance))
     : undefined;
@@ -446,7 +449,9 @@ export function selectRustCheckedCall(
     const declarationKind = context.ast.kindName(sourceDeclaration);
     if (declarationKind === "KindConstructSignature" || declarationKind === "KindConstructorType") {
       const receiverCarrier = selectedValueCarrier(request.source.sourceCallee.expression, request.source.sourceCallee.type, context, options);
-      const construction = receiverCarrier === undefined ? undefined : options.sourceTypes.structuralObjectForCarrier(receiverCarrier)?.construction;
+      const construction = receiverCarrier === undefined ? undefined : options.sourceTypes.structuralObjectForType(
+        request.source.sourceCallee.type, receiverCarrier,
+      )?.construction;
       if (construction === undefined || receiverCarrier === undefined || construction.declaration !== sourceDeclaration ||
         !checkedCallIsConstruction(request, context)) {
         return rejectSelectedOperation(request.source.call, context, "RUST_CONSTRUCTOR_VALUE_SIGNATURE_NOT_CLOSED",

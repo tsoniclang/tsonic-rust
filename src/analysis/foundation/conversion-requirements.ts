@@ -90,6 +90,9 @@ function rustFoundationForConversionContract(
     foundation = maximumRustFoundation(foundation, candidate);
   };
   switch (contract.lowering) {
+    case "exact-integer":
+      require(rustFoundationForPath("rt::conversions::checked_integer"));
+      break;
     case "rest-sequence":
       for (const conversion of contract.elementConversions) {
         if (conversion !== null) require(rustFoundationForConversionContract(conversion));

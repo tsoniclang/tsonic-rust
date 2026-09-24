@@ -5,7 +5,7 @@ import type { RustFactWalk } from "../program/walk.js";
 import type { RustCallableParameterAbi, RustCallableParameterAdapter, RustCallableValueAdapter } from "../facts/callable-adapters.js";
 import { rustResolutionContext } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
-import { rustCallableProtocol, rustOptionElementCarrier, rustOptionTargetType } from "../../target-model/types/index.js";
+import { rustCallableProtocol, rustOptionElementCarrier, rustSourceOptionalTargetType } from "../../target-model/types/index.js";
 import { rustProjectCallableTargetName } from "../facts/source-member-name.js";
 import { resolveParameterAbi } from "../declarations/types-and-bindings.js";
 import { projectOwnerTypeSubstitutions, selectRustCallableParameterAdapters, selectRustCallableValueAdapter, substituteRustCallableParameterAbi } from "../callables/adapters.js";
@@ -61,7 +61,7 @@ export function selectRustClassValueCallable(
     form: parameter.parameterKind,
     valueCarrier: parameter.parameterKind === "optional" ? rustOptionElementCarrier(target.parameters[index]) ?? target.parameters[index]! : target.parameters[index]!,
     parameterCarrier: parameter.parameterKind === "optional" && rustOptionElementCarrier(target.parameters[index]) === undefined
-      ? rustOptionTargetType(target.parameters[index]!) : target.parameters[index]!,
+      ? rustSourceOptionalTargetType(target.parameters[index]!) : target.parameters[index]!,
     mode: "value",
   }));
   const parameterAdapters = selectRustCallableParameterAdapters(parameters,

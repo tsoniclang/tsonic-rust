@@ -15,6 +15,16 @@ export function recordRustCompoundWrite(
   left: Node,
   resultCarrier: TargetTypeRef,
 ): void {
+  const fact = selectRustCompoundWrite(walk, left, resultCarrier);
+  if (fact !== undefined) walk.context.facts.set(expression, rustCompoundWriteFactKey,
+    fact, [{ message: "rust exact selected compound-write index ABI" }]);
+}
+
+export function selectRustCompoundWrite(
+  walk: RustFactWalk,
+  left: Node,
+  resultCarrier: TargetTypeRef,
+): Extract<import("../../facts/keys.js").RustTargetOperationFact, { kind: "runtime-set" }> | undefined {
   if (!walk.jsEnabled || walk.context.ast.kindName(left) !== "KindElementAccessExpression") return;
   const context = rustOperationContext(walk, left);
   const selected = context.facts.getSelectedTargetOperator(left);
@@ -39,7 +49,7 @@ export function recordRustCompoundWrite(
     declaredSourceArgumentCarriers: selection.parameterCarriers,
     resultCarrier: rustUnitTargetType(), isAsync: false, isFallible: false,
   }, context.typeDefinitions);
-  if (abi !== undefined) context.facts.set(expression, rustCompoundWriteFactKey, {
+  return abi === undefined ? undefined : {
     kind: "runtime-set", operationId: selection.fact.operationId, abi,
-  }, [{ message: "rust exact selected compound-write index ABI" }]);
+  };
 }

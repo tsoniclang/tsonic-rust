@@ -298,7 +298,12 @@ export function planProviderOperationExpression(
     case "free-call-str-slice":
     case "free-call": {
       registerAliasFromPath(context, form.path);
-      return scoped({ kind: "call", path: form.path, args });
+      return scoped({
+        kind: "call",
+        path: form.path,
+        args,
+        ...(concreteTargetGenericArguments === undefined ? {} : { genericArguments: concreteTargetGenericArguments }),
+      });
     }
     case "path": {
       registerAliasFromPath(context, form.path);

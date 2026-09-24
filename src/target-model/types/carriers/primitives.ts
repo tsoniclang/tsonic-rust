@@ -1,4 +1,3 @@
-import { isRustNullCarrier, isRustUndefinedCarrier } from "./js.js";
 import type { RustPrimitiveTypeName } from "../../syntax/tokens.js";
 import type { SourcePrimitiveKind } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../model.js";
@@ -114,21 +113,6 @@ export function isRustSliceMutRefCarrier(carrier: TargetTypeRef | undefined): bo
 }
 
 export const rustFutureTargetId = "rust.core.Future";
-
-export function rustNullishSourceTargetType(): TargetTypeRef {
-  return { kind: "target-specific", target: "rust", name: "source-nullish" };
-}
-
-export function isRustNullishSourceCarrier(carrier: TargetTypeRef | undefined): boolean {
-  return carrier?.kind === "target-specific" &&
-    carrier.target === "rust" &&
-    carrier.name === "source-nullish";
-}
-
-export function isRustDefinitelyNullishCarrier(carrier: TargetTypeRef | undefined): boolean {
-  return isRustNullishSourceCarrier(carrier) || isRustNullCarrier(carrier) ||
-    isRustUndefinedCarrier(carrier);
-}
 
 export function rustFutureTargetType(output: TargetTypeRef): TargetTypeRef {
   return {

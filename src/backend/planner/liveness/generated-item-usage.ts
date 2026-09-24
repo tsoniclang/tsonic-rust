@@ -1,4 +1,5 @@
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
+import { rustObjectReferenceViewKey } from "../../../analysis/facts/object-reference-views.js";
 import type { RustClassValuePlan } from "../../../analysis/objects/class-values.js";
 import type { RustSourceCallableSpecializationPlan } from "../../../analysis/callables/specializations.js";
 import type { RustDeclarationGenericRequirementIndex } from "../../../analysis/declarations/generic-requirements.js";
@@ -699,9 +700,15 @@ export function analyzeRustGeneratedItemUsage(input: {
       }
       const conversion = input.facts.getFact(node, rustContextualValueConversionFactKey)?.conversion;
       if (conversion?.kind === "empty-record") markStructuralShapeConstructed(conversion.target);
+      if (conversion?.kind === "provider-record-copy") {
+        for (const field of conversion.fields) {
+          if (field.conversion !== undefined) visitConversion(field.conversion);
+        }
+      }
       if (conversion !== undefined && conversion.kind !== "native-trait-object-upcast" &&
         conversion.kind !== "reference-reborrow" && conversion.kind !== "provider-record-copy" &&
-        conversion.kind !== "empty-record" && conversion.kind !== "generic-callable-flow") {
+        conversion.kind !== "empty-record" && conversion.kind !== "generic-callable-flow" &&
+        conversion.kind !== "integer-truncation") {
         visitConversion(conversion);
       }
       if (fact !== undefined) visitFact(node, fact);
@@ -758,5 +765,3 @@ export function analyzeRustGeneratedItemUsage(input: {
       variantsByDeclaration.get(declaration)?.has(variantName) === true,
   });
 }
-
-import { rustObjectReferenceViewKey } from "../../../analysis/facts/object-reference-views.js";

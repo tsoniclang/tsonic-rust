@@ -85,7 +85,7 @@ import { check } from "@acme/testing";
 function readonlyMapTotal(map: ReadonlyMap<string, int32>): int32 {
   let total: int32 = 0;
   for (const entry of map) {
-    total += entry[0].length + entry[1];
+    total += (entry[0].length as int32) + entry[1];
   }
   return total;
 }
@@ -104,13 +104,13 @@ export function main(): void {
   check(map.size === 2 && map.has("a") && map.get("bb") !== undefined);
   let keyLength: int32 = 0;
   for (const key of map.keys()) {
-    keyLength += key.length;
+    keyLength += key.length as int32;
   }
   check(keyLength === 3);
   const storedKeys = map.keys();
   let storedKeyLength: int32 = 0;
   for (const key of storedKeys) {
-    storedKeyLength += key.length;
+    storedKeyLength += key.length as int32;
   }
   check(storedKeyLength === 3);
   let valueTotal: int32 = 0;
@@ -120,7 +120,7 @@ export function main(): void {
   check(valueTotal === 3);
   let entryTotal: int32 = 0;
   for (const entry of map.entries()) {
-    entryTotal += entry[0].length + entry[1];
+    entryTotal += (entry[0].length as int32) + entry[1];
   }
   check(entryTotal === 6);
   map.forEach(() => check(true));
@@ -326,7 +326,7 @@ import { check } from "@acme/testing";
 
 export function main(): void {
   const values = ["bb", "a", "cc", "ddd"];
-  values.sort((left, right) => left.length - right.length);
+  values.sort((left, right) => left.length < right.length ? -1 : left.length > right.length ? 1 : 0);
   check(values.join("|") === "a|bb|cc|ddd");
 
   const unary = [3, 2, 1];
@@ -343,7 +343,7 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /values\s*\.try_sort_borrowed\(/u);
+  assert.match(source, /values\s*\.sort_borrowed\(/u);
   assert.doesNotMatch(source, /let operation_input_\d+ = \|left, right\|/u);
   assert.match(source, /unary\.sort_value\(/u);
   assert.match(source, /zero\.sort_zero\(/u);

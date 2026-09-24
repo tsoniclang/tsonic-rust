@@ -381,7 +381,8 @@ export function main(): void {}
 
   assert.deepEqual(result.diagnostics, []);
   assert.doesNotMatch(artifactText(result, "src/main.rs"), /drain_runtime/u);
-  assert.doesNotMatch(artifactText(result, "Cargo.toml"), /acme_platform/u);
+  assert.match(artifactText(result, "Cargo.toml"), /acme_platform/u);
+  validateGeneratedProject("type-only-provider-link-without-hook", result.artifacts);
 });
 
 test("a fallible provider epilogue makes binary completion explicitly fallible", () => {

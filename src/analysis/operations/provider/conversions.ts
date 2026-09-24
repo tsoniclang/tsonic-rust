@@ -6,7 +6,7 @@ import {
   finalizeProviderOperationFact,
   instantiateProviderOperationTemplate,
 } from "./calls/template-instantiation.js";
-import { isRustNullishSourceCarrier, rustOptionElementCarrier } from "../../../target-model/types/index.js";
+import { isRustAbsenceCarrier, rustOptionElementCarrier } from "../../../target-model/types/index.js";
 import { selectRustValueCarrierReconciliation } from "../../../policy/types/value-carrier-reconciliation.js";
 import { recordRustValueCarrierReconciliation, rustEffectiveValueCarrier } from "../../facts/value-carrier-queries.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
@@ -16,7 +16,7 @@ import { rustTargetOperationFactKey, rustProjectDowncastFactKey } from "../../fa
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectRustProviderOperation } from "../../../policy/operations/provider-selection.js";
 import { rustValueConversionIdentity } from "../../../target-model/conversions/contracts.js";
-import { selectRustSourceValueConversion } from "../../../policy/conversions/selection.js";
+import { selectRustSourceAssertionConversion } from "../../../policy/conversions/selection.js";
 import { selectRustProjectProjection } from "../../../policy/types/project-projections.js";
 import type {
   RustCheckedConversionSelectionInput,
@@ -90,7 +90,7 @@ export function selectRustCheckedConversion(
     }
     const optionElement = rustOptionElementCarrier(targetCarrier);
     if (optionElement !== undefined) {
-      if (isRustNullishSourceCarrier(sourceCarrier)) {
+      if (isRustAbsenceCarrier(sourceCarrier)) {
         return acceptRustPolicy({ convertedType: targetCarrier }, [
           { message: "rust selected nullish argument maps to the selected Option carrier" },
         ]);
@@ -143,7 +143,7 @@ export function selectRustCheckedConversion(
   );
   const conversion = identity || projectUpcast || projectDowncast
     ? undefined
-    : selectRustSourceValueConversion(sourceCarrier, targetCarrier, context.typeDefinitions);
+    : selectRustSourceAssertionConversion(sourceCarrier, targetCarrier, context.typeDefinitions);
   if (!identity && !projectUpcast && !projectDowncast && conversion === undefined) {
     return rejectSelectedOperation(
       request.expression,

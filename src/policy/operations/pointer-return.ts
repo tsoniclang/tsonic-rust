@@ -6,7 +6,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import {
   rustSourceLocationTargetType,
   rustOptionTargetType,
-  rustUndefinedTargetType,
+  rustAbsenceTargetType,
 } from "../../target-model/types/index.js";
 import { resolveRustExactNullishValueCarrier } from "../types/resolution/target.js";
 import { readRustRawLocation, resolveRustMemoryLayoutPointee } from "./native-memory.js";
@@ -52,7 +52,7 @@ export function selectRustPointerReturnContract(
   }
   const nullish = evidence.nullishTypes.map((type) =>
     resolveRustExactNullishValueCarrier(type, context.semanticsFor(declaration)));
-  if (nullish.some((type) => !rustTargetTypeRefEquals(type, rustUndefinedTargetType()))) {
+  if (nullish.some((type) => !rustTargetTypeRefEquals(type, rustAbsenceTargetType()))) {
     return undefined;
   }
   const carrier = rustSourceLocationTargetType(first);

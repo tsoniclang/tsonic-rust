@@ -22,6 +22,7 @@ import {
   planRustNonConsumingValue,
   planRustPromotedStorageLocation,
   planRustPromotedStorageWrite,
+  planRustModuleBindingStore,
 } from "../expressions/typed-locations.js";
 import {
   rustTargetOperationFactKey,
@@ -215,7 +216,7 @@ export function planRustAssignmentWrite(
   const compoundWrite = context.input.program.facts.getFact(expression, rustCompoundWriteFactKey);
   if (compoundWrite !== undefined) {
     return operator === "="
-      ? planRuntimeSetStatement(expression, compoundWrite, context, true)
+      ? planRuntimeSetStatement(expression, compoundWrite, context, { target: left, value: valueNode })
       : planRustCompoundRuntimeWrite(expression, left, valueNode, fact, context);
   }
   const storageOverride = context.expressionOverrides?.get(left);
@@ -766,6 +767,10 @@ export function planRustAssignmentWrite(
         value: { kind: "assignment", operator: "=", target, value: concatenated },
       },
     }];
+  }
+  if (operator === "=") {
+    const moduleStore = planRustModuleBindingStore(left, value, context);
+    if (moduleStore !== undefined) return [{ kind: "expr", expr: moduleStore }];
   }
   const promoted = planRustPromotedStorageWrite(
     left,

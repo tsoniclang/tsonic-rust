@@ -1,5 +1,6 @@
 import {
   KindBinaryExpression,
+  sourceIntegerLiteralValue,
   KindElementAccessExpression,
   KindNonNullExpression,
   KindParenthesizedExpression,
@@ -28,7 +29,7 @@ import { isFloatCarrier, rustTypeFromCarrierInContext } from "../types/render.js
 import { isRustBigIntCarrier, isRustIntegerCarrier, isRustStringCarrier } from "../../../target-model/types/index.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { negateRustBooleanExpression, rustStringConcat } from "../../target-ast/expressions.js";
-import { parseSourceBigIntLiteral, parseSourceIntegerLiteral } from "../../../target-model/syntax/literals.js";
+import { parseSourceBigIntLiteral } from "../../../target-model/syntax/literals.js";
 import { planExpression } from "./entry.js";
 import { planRustFallibleReturnExpression } from "../statements/completion-exits.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
@@ -473,7 +474,7 @@ export function planNumericLiteralWithCarrier(
     return { kind: "float-literal", text: floatText };
   }
   if (isRustIntegerCarrier(carrier)) {
-    const value = parseSourceIntegerLiteral(text);
+    const value = sourceIntegerLiteralValue(context.input.program.source.ast, node);
     if (value === undefined) {
       context.diagnostics.push(unsupportedConstructDiagnostic(
         diagnosticInput(context, node),

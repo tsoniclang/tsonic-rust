@@ -12,6 +12,7 @@ import {
   isRustLifetimeRef,
 } from "../../lifetimes/index.js";
 
+export const rustAbsenceTargetId = "rust.native.absence";
 export const rustStringTargetId = "rust.std.String";
 export const rustStrTargetId = "rust.primitive.str";
 export const rustNativeScalarTargetId = "rust.native.char";
@@ -27,8 +28,6 @@ export const rustAsyncGeneratorTargetId = "rust.runtime.AsyncGenerator";
 export const rustBorrowedGeneratorTargetId = "rust.runtime.BorrowedGenerator";
 export const rustBorrowedAsyncGeneratorTargetId = "rust.runtime.BorrowedAsyncGenerator";
 export const rustIteratorResultTargetId = "rust.runtime.IteratorResult";
-export const rustNullTargetId = "rust.runtime.Null";
-export const rustUndefinedTargetId = "rust.runtime.Undefined";
 export const rustJsErrorTargetId = "rust.runtime.JsError";
 export const rustProgramErrorTargetId = "rust.program.TsonicError";
 export const rustTsValueTargetId = "rust.runtime.TsValue";

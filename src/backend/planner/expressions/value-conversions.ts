@@ -27,6 +27,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustValueConversion } from "../../../analysis/facts/keys.js";
 import type { RustFinalizedValueConversion } from "../../../analysis/facts/finalized-operation-abi.js";
 import { rustUnionTypePathInContext, rustTypeFromCarrierInContext } from "../types/render.js";
+import { lowerRustExactIntegerConversion } from "./exact-integer.js";
 
 export function applyRustValueConversion(
   context: RustPlanContext,
@@ -105,6 +106,8 @@ export function lowerRustValueConversion(
   node: Node | undefined,
 ): RustExpr | undefined {
   switch (contract.lowering) {
+    case "exact-integer":
+      return lowerRustExactIntegerConversion({ kind: "exact-integer", source: contract.source, target: contract.target }, source, context);
     case "rest-sequence": {
       const collectionType = rustTypeFromCarrierInContext(contract.target, context);
       if (collectionType === undefined) return undefined;
@@ -186,7 +189,7 @@ export function lowerRustValueConversion(
               }],
             },
             method: "unwrap_or",
-            args: [{ kind: "path", path: "js_abi::JsValue::Undefined" }],
+            args: [{ kind: "path", path: "js_abi::JsValue::Null" }],
           };
     }
     case "js-value-from-array": {

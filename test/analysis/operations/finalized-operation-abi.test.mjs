@@ -26,10 +26,33 @@ const isize = { kind: "source-primitive", name: "native-int" };
 const jsValue = { kind: "target-named", id: "rust.js.JsValue" };
 const providerError = { kind: "target-named", id: "rust.test.ProviderError" };
 const string = { kind: "target-named", id: "rust.std.String" };
-const sourceNullish = { kind: "target-specific", target: "rust", name: "source-nullish" };
+const sourceNullish = { kind: "target-named", id: "rust.native.absence" };
 const unit = { kind: "tuple", elements: [] };
 const usize = { kind: "source-primitive", name: "native-uint" };
 const typeArgument = (type) => ({ kind: "type", type });
+
+test("native length emptiness correspondence is explicit and rejects inconsistent evidence", () => {
+  const options = {
+    operationKind: "property", form: { form: "receiver-method", name: "count", emptyTestMethod: "empty" },
+    sourceReceiverCarrier: string, sourceArgumentCarriers: [], resultCarrier: usize,
+    isAsync: false, isFallible: false, evaluation: "pure",
+  };
+  const abi = finalizeRustProviderOperationAbi(options);
+  assert.ok(abi);
+  assert.equal(abi.target.emptyTestMethod, "empty");
+  assert.equal(validateRustFinalizedOperationAbi(abi), true);
+  for (const mutation of [
+    { isFallible: true, errorBoundary: "target-runtime" }, { isAsync: true },
+    { evaluation: "observable" }, { operationKind: "method" }, { resultCarrier: int32 },
+    { resultCarrier: float64 }, { sourceReceiverCarrier: undefined },
+    { sourceArgumentCarriers: [int32] },
+    { form: { ...options.form, emptyTestMethod: "" } },
+    { form: { ...options.form, mutatesReceiver: true } },
+    { form: { ...options.form, chain: [{ kind: "method", name: "other" }] } },
+  ]) assert.equal(finalizeRustProviderOperationAbi({ ...options, ...mutation }), undefined, JSON.stringify(mutation));
+  assert.equal(validateRustFinalizedOperationAbi({ ...abi, effects: { ...abi.effects, evaluation: "observable" } }), false);
+  assert.equal(validateRustFinalizedOperationAbi({ ...abi, result: { ...abi.result, carrier: int32, rawCarrier: int32 } }), false);
+});
 
 test("provider calls retain closed target-only generic arguments", () => {
   const abi = finalizeRustProviderOperationAbi({
@@ -384,6 +407,32 @@ test("provider methods finalize receiver, source order, passing modes, conversio
   });
 });
 
+test("exact integer argument conversions survive finalization and reject altered evidence", () => {
+  const conversion = { kind: "exact-integer", source: int32, target: usize };
+  const abi = finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form: { form: "call", path: "acme::read", argModes: ["value"], argConversions: [conversion] },
+    sourceArgumentCarriers: [int32], declaredSourceArgumentCarriers: [int32],
+    resultCarrier: bool, isAsync: false, isFallible: false,
+  });
+  assert.ok(abi);
+  assert.equal(validateRustFinalizedOperationAbi(abi), true);
+  const argument = abi.targetArguments[0];
+  assert.deepEqual(argument.conversion.conversion, conversion);
+  assert.deepEqual(argument.parameterCarrier, usize);
+  assert.equal(argument.conversion.fallible, true);
+  for (const mutation of [
+    { sourceCarrier: bool }, { targetCarrier: int32 }, { fallible: false },
+    { conversion: { ...conversion, source: bool } },
+    { conversion: { ...conversion, target: float64 } },
+    { conversion: { ...conversion, extra: true } },
+  ]) {
+    assert.equal(validateRustFinalizedOperationAbi({ ...abi, targetArguments: [
+      { ...argument, conversion: { ...argument.conversion, ...mutation } },
+    ] }), false);
+  }
+});
+
 test("provider receivers distinguish runtime values from compile-time owner identities", () => {
   const owner = {
     kind: "target-specific",
@@ -423,7 +472,7 @@ test("provider receivers distinguish runtime values from compile-time owner iden
   }), false);
 });
 
-test("compile-time source arguments must be declared explicitly and remain in the source ABI", () => {
+test("evaluation-only source arguments remain explicit and cannot enter the target ABI", () => {
   const options = {
     operationKind: "method",
     form: {
@@ -445,15 +494,27 @@ test("compile-time source arguments must be declared explicitly and remain in th
   assert.equal(finalizeRustProviderOperationAbi(options), undefined);
   const abi = finalizeRustProviderOperationAbi({
     ...options,
-    compileTimeSourceArgumentIndexes: [1, 2],
+    evaluationOnlySourceArgumentIndexes: [1, 2],
   });
   assert.ok(abi);
   assert.deepEqual(abi.sourceArguments.map(({ sourceIndex, role, disposition }) => ({ sourceIndex, role, disposition })), [
     { sourceIndex: 0, role: "parameter", disposition: "runtime" },
-    { sourceIndex: 1, role: "compile-time", disposition: "compile-time" },
-    { sourceIndex: 2, role: "compile-time", disposition: "compile-time" },
+    { sourceIndex: 1, role: "evaluation-only", disposition: "evaluation-only" },
+    { sourceIndex: 2, role: "evaluation-only", disposition: "evaluation-only" },
   ]);
   assert.equal(abi.targetArguments.length, 2);
+  assert.equal(validateRustFinalizedOperationAbi({ ...abi,
+    sourceArguments: abi.sourceArguments.map((argument, index) => index === 1
+      ? { ...argument, disposition: "compile-time" } : argument),
+  }), false);
+  assert.equal(finalizeRustProviderOperationAbi({ ...options,
+    evaluationOnlySourceArgumentIndexes: [0, 1, 2],
+  }), undefined);
+  for (const indexes of [[1, 1], [-1], [3], [1.5], [NaN]]) {
+    assert.equal(finalizeRustProviderOperationAbi({ ...options,
+      evaluationOnlySourceArgumentIndexes: indexes,
+    }), undefined);
+  }
   assert.deepEqual(abi.targetArguments[1], {
     source: { kind: "constant", value: { kind: "string", value: "  " } },
   });
@@ -577,7 +638,7 @@ test("variadic value slices convert each source value exactly and always pass on
     operationKind: "method",
     form,
     sourceArgumentCarriers: [string, int32],
-    compileTimeSourceArgumentIndexes: [1],
+    evaluationOnlySourceArgumentIndexes: [1],
     resultCarrier: string,
     isAsync: false,
     isFallible: false,
@@ -1018,7 +1079,7 @@ test("operation forms fail closed for missing discriminant data, unknown variant
     ...base,
     form: { form: "call", path: "acme::run" },
     sourceArgumentCarriers: [int32, int32],
-    compileTimeSourceArgumentIndexes: sparseTwo,
+    evaluationOnlySourceArgumentIndexes: sparseTwo,
   }), undefined);
 });
 
@@ -1049,7 +1110,7 @@ test("finalized ABI rejects sparse arrays at every nested contract boundary", ()
 test("target type references honor optional target-specific payloads and reject malformed children", () => {
   const sparseTypes = Array(1);
   const sparseGenericArguments = Array(1);
-  const payloadFree = { kind: "target-specific", target: "rust", name: "source-nullish" };
+  const payloadFree = { kind: "target-named", id: "rust.native.absence" };
   const slice = { kind: "slice", element: int32 };
   assert.equal(isRustTargetTypeRef(payloadFree), true);
   assert.equal(rustTargetTypeRefEquals(payloadFree, { ...payloadFree }), true);

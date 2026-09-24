@@ -22,7 +22,7 @@ import {
 } from "@tsonic/target-api/source";
 import { selectRustGenericNumericOperation } from "./generic-numeric.js";
 import { selectRustProgramErrorEquality } from "./error-equality.js";
-import { recordRustCompoundWrite } from "./provider/compound-writes.js";
+import { recordRustCompoundWrite, selectRustCompoundWrite } from "./provider/compound-writes.js";
 import {
   isRustAssignmentOperator,
   rustBinaryResultCarrierIsIndependentOfOperands,
@@ -34,13 +34,14 @@ import {
 } from "../../policy/operations/operator-rules.js";
 import {
   isRustBigIntCarrier,
-  isRustDefinitelyNullishCarrier,
+  isRustAbsenceCarrier,
+  isRustNeverCarrier,
   isRustNumericCarrier,
-  isRustNullishSourceCarrier,
+  isRustIntegerCarrier,
   isRustOptionCarrier,
   isRustStringCarrier,
   rustOptionElementCarrier,
-  rustOptionTargetType,
+  rustSourceOptionalTargetType,
   rustOptionValueCarrier,
   rustBigIntTargetType,
   rustSourcePrimitiveTargetType,
@@ -69,7 +70,8 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustOptionNestingDepth } from "../../target-model/types/carriers/optional.js";
 import { rustValueCarrierBeforeContextualConversion, rustValueCarrierBeforeOptionProjection } from "../facts/value-carrier-queries.js";
 import { rustRuntimeUnionContract, rustRuntimeUnionProjection } from "../../target-model/types/carriers/runtime-unions.js";
-import { selectedSourceLiteralIsRepresentable } from "../../policy/types/selected-numeric-literal.js";
+import { selectedIntegerLiteralJoin, selectedSourceLiteralIsRepresentable } from "../../policy/types/selected-numeric-literal.js";
+import { rustNumericPromotionConversion } from "../../policy/operations/numeric-promotion.js";
 import { setCarrierFact, setRustOperationFact } from "./project-calls.js";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { RustAssignmentOperator } from "../../target-model/syntax/tokens.js";
@@ -189,7 +191,7 @@ export function resolveBinaryOperandCarriers(
     left = resolveLeft(leftSemanticCarrier);
   }
   const initialRightExpectation = operatorKind === KindQuestionQuestionToken
-    ? isRustOptionCarrier(left) ? rustOptionValueCarrier(left) : expected
+    ? isRustOptionCarrier(left) ? selectedIntegerLiteralJoin(rightNode, rustOptionValueCarrier(left), walk.context.ast) ?? rustOptionValueCarrier(left) : expected
     : operatorKind === KindEqualsToken
       ? selectedAssignmentValueCarrier ??
         (useAssignmentReadCarrier ? left : undefined)
@@ -271,7 +273,9 @@ function contextualLiteralOperandCarrier(
   expression: Node,
   counterpart: TargetTypeRef | undefined,
 ): TargetTypeRef | undefined {
-  if (isRustNullishSourceCarrier(counterpart) || counterpart?.kind === "type-parameter") return undefined;
+  if (isRustAbsenceCarrier(counterpart) || counterpart?.kind === "type-parameter") return undefined;
+  const integerJoin = selectedIntegerLiteralJoin(expression, counterpart, ast);
+  if (integerJoin !== undefined) return integerJoin;
   const kind = ast.kindName(expression);
   if (kind === KindPrefixUnaryExpression || kind === KindParenthesizedExpression) {
     const operand = kind === KindPrefixUnaryExpression ? Node_Operand(ast, expression) : Node_Expression(ast, expression);
@@ -280,6 +284,8 @@ function contextualLiteralOperandCarrier(
   if (kind === KindNumericLiteral && isRustBigIntCarrier(counterpart) ||
     kind === KindBigIntLiteral && isRustNumericCarrier(counterpart) &&
       (counterpart.name === "float64" || counterpart.name === "float32")) return undefined;
+  if (kind === KindNumericLiteral && isRustIntegerCarrier(counterpart) &&
+    !selectedSourceLiteralIsRepresentable(expression, counterpart.name, ast)) return undefined;
   return counterpart;
 }
 
@@ -384,7 +390,7 @@ export function resolvePostCheckBinaryCarrier(
       ? "value"
       : inner !== undefined && rustTargetTypeRefEquals(left, rightValue)
         ? "option"
-        : inner === undefined && !isRustNullishSourceCarrier(left) && rustTargetTypeRefEquals(left, rightValue)
+        : inner === undefined && !isRustAbsenceCarrier(left) && rustTargetTypeRefEquals(left, rightValue)
           ? "identity"
           : undefined;
     if (presentResult !== undefined && rightValue !== undefined && storage !== undefined &&
@@ -407,15 +413,21 @@ export function resolvePostCheckBinaryCarrier(
   } else if (operatorKind === KindQuestionQuestionToken) {
     const inner = isRustOptionCarrier(left) ? rustOptionValueCarrier(left) : undefined;
     const leftOptionDepth = rustOptionNestingDepth(left, inner);
+    const integerJoin = selectedIntegerLiteralJoin(rightNode, inner, walk.context.ast);
+    const leftConversion = inner?.kind === "source-primitive" && integerJoin?.kind === "source-primitive"
+      ? rustNumericPromotionConversion(inner.name, integerJoin.name) : undefined;
     if (inner !== undefined && right !== undefined &&
-      leftOptionDepth !== undefined && rustTargetTypeRefEquals(inner, right)) {
+      leftOptionDepth !== undefined && (rustTargetTypeRefEquals(inner, right) || isRustNeverCarrier(right) ||
+        leftConversion !== undefined && rustTargetTypeRefEquals(integerJoin, right))) {
       fact = {
         kind: "option-coalesce",
         operationId: "tsonic.rust.option.coalesce",
         leftOptionDepth,
         rightOptionDepth: 0,
         rightValueForm: "value",
-        resultCarrier: inner,
+        leftValueCarrier: inner,
+        ...(leftConversion === undefined ? {} : { leftConversion }),
+        resultCarrier: leftConversion === undefined ? inner : integerJoin!,
       };
     } else if (inner !== undefined && right !== undefined && leftOptionDepth !== undefined &&
       isRustOptionCarrier(right) && rustTargetTypeRefEquals(inner, rustOptionValueCarrier(right))) {
@@ -427,10 +439,11 @@ export function resolvePostCheckBinaryCarrier(
         leftOptionDepth,
         rightOptionDepth: rawDepth ?? rustOptionNestingDepth(right, inner)!,
         rightValueForm: rawDepth === undefined ? "value" : "raw",
-        resultCarrier: rustOptionTargetType(inner),
+        leftValueCarrier: inner,
+        resultCarrier: rustSourceOptionalTargetType(inner),
       };
-    } else if (inner !== undefined && isRustDefinitelyNullishCarrier(right) && leftOptionDepth !== undefined) {
-      const resultCarrier = rustOptionTargetType(inner);
+    } else if (inner !== undefined && isRustAbsenceCarrier(right) && leftOptionDepth !== undefined) {
+      const resultCarrier = rustSourceOptionalTargetType(inner);
       const fallback = resolveExpressionCarrier(walk, rightNode, sourceFile, resultCarrier);
       if (rustTargetTypeRefEquals(fallback, resultCarrier)) {
         fact = {
@@ -439,14 +452,15 @@ export function resolvePostCheckBinaryCarrier(
           leftOptionDepth,
           rightOptionDepth: 1,
           rightValueForm: "value",
+          leftValueCarrier: inner,
           resultCarrier,
         };
       }
     } else if (left !== undefined && right !== undefined &&
-      rustTargetTypeRefEquals(left, right) &&
-      !isRustOptionCarrier(left) && !isRustNullishSourceCarrier(left) &&
+      (rustTargetTypeRefEquals(left, right) || isRustNeverCarrier(right)) &&
+      !isRustOptionCarrier(left) && !isRustAbsenceCarrier(left) &&
       rustRuntimeUnionContract(left)?.alternatives.some(alternative =>
-        isRustDefinitelyNullishCarrier(alternative.carrier)) !== true) {
+        isRustAbsenceCarrier(alternative.carrier)) !== true) {
       fact = {
         kind: "nullish-identity",
         operationId: "tsonic.rust.nullish.identity",
@@ -483,7 +497,7 @@ export function resolvePostCheckBinaryCarrier(
   } else if ((operatorKind === KindEqualsEqualsEqualsToken ||
       operatorKind === KindExclamationEqualsEqualsToken ||
       operatorKind === "KindEqualsEqualsToken" || operatorKind === "KindExclamationEqualsToken") &&
-    isRustDefinitelyNullishCarrier(left) && isRustDefinitelyNullishCarrier(right)) {
+    isRustAbsenceCarrier(left) && isRustAbsenceCarrier(right)) {
     const equal = operatorKind === "KindEqualsEqualsToken" || operatorKind === "KindExclamationEqualsToken" ||
       rustTargetTypeRefEquals(left, right);
     const negated = operatorKind === KindExclamationEqualsEqualsToken || operatorKind === "KindExclamationEqualsToken";
@@ -497,11 +511,11 @@ export function resolvePostCheckBinaryCarrier(
     };
   } else if ((operatorKind === KindEqualsEqualsEqualsToken ||
       operatorKind === KindExclamationEqualsEqualsToken) &&
-    ((isRustDefinitelyNullishCarrier(left) && right !== undefined &&
-        !isRustDefinitelyNullishCarrier(right) && !isRustOptionCarrier(right) &&
+    ((isRustAbsenceCarrier(left) && right !== undefined &&
+        !isRustAbsenceCarrier(right) && !isRustOptionCarrier(right) &&
         left !== undefined && rustRuntimeUnionProjection(right, left) === undefined) ||
-      (isRustDefinitelyNullishCarrier(right) && left !== undefined &&
-        !isRustDefinitelyNullishCarrier(left) && !isRustOptionCarrier(left) &&
+      (isRustAbsenceCarrier(right) && left !== undefined &&
+        !isRustAbsenceCarrier(left) && !isRustOptionCarrier(left) &&
         right !== undefined && rustRuntimeUnionProjection(left, right) === undefined))) {
     fact = {
       kind: "constant-equality",
@@ -559,7 +573,8 @@ export function resolvePostCheckBinaryCarrier(
       resultCarrier: rustValueCarrierBeforeOptionProjection(walk.context.facts, operands.rightNode) ?? right,
     };
   } else {
-    const compound = selectRustCompoundAssignment(operatorKind, left, right);
+    const compound = selectRustCompoundAssignment(operatorKind, left, right,
+      carrier => selectRustCompoundWrite(walk, leftNode, carrier) !== undefined);
     if (compound !== undefined && left !== undefined) {
       fact = compound.kind === "operator-call"
         ? {
@@ -570,12 +585,16 @@ export function resolvePostCheckBinaryCarrier(
             resultCarrier: compound.resultCarrier,
             fallible: compound.fallible,
             operandModes: compound.operandModes,
+            leftConversion: compound.leftConversion,
+            rightConversion: compound.rightConversion,
           }
         : {
             kind: "operator-token",
             operationId: `tsonic.rust.operator.${compound.operator}.${rustOperatorCarrierKey(left)}`,
             operator: compound.operator,
             resultCarrier: compound.resultCarrier,
+            leftConversion: compound.leftConversion,
+            rightConversion: compound.rightConversion,
           };
     } else {
       const binary = selectRustBinaryOperator(operatorKind, left, right) ??

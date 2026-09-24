@@ -36,8 +36,7 @@ import {
   rustStructuralObjectCarrierValue,
   rustJsArrayLikeElementTargetType,
   isRustJsArrayCarrier,
-  rustNullTargetType,
-  rustUndefinedTargetType,
+  rustAbsenceTargetType,
   rustTargetGenericReferences,
   rustCarrierSupportsClone,
   rustCarrierCanEnterTsValue,
@@ -47,7 +46,8 @@ import {
   rustTsValueTargetType,
 } from "../types/index.js";
 import type { RustPrimitiveTypeName } from "../syntax/tokens.js";
-import { rustNumericPromotionKind } from "./numeric-promotion.js";
+import { rustNumericValueConversionIsSupported } from "./numeric-promotion.js";
+import { rustExactIntegerConversionMatches } from "./exact-integer.js";
 import { rustNumberBoxingSourceKind } from "./number-boxing.js";
 import { rustRestSequenceElements } from "../operations/rest-assembly.js";
 import { isDenseDataArray } from "../metadata/closed-data.js";
@@ -67,8 +67,7 @@ const exactStringCarrier = rustJsStringTargetType();
 const symbolCarrier = rustJsSymbolTargetType();
 const jsValueCarrier = rustJsValueTargetType();
 const tsValueCarrier = rustTsValueTargetType();
-const nullCarrier = rustNullTargetType();
-const undefinedCarrier = rustUndefinedTargetType();
+const absenceCarrier = rustAbsenceTargetType();
 
 interface RustValueConversionContractBase {
   readonly category: "exact" | "checked-range" | "js-number" | "numeric-promotion" | "ownership" | "projection";
@@ -79,6 +78,7 @@ interface RustValueConversionContractBase {
 }
 
 export type RustValueConversionContract = RustValueConversionContractBase & (
+  | { readonly lowering: "exact-integer" }
   | {
       readonly lowering: "rest-sequence";
       readonly collection: "vec" | "js-array" | "fixed-array" | "tuple";
@@ -167,6 +167,13 @@ export function rustValueConversionContract(
   value: RustValueConversion,
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): RustValueConversionContract | undefined {
+  if (value.kind === "exact-integer") {
+    return isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) &&
+      rustExactIntegerConversionMatches(value.source, value.target, value)
+      ? { category: "checked-range", lowering: "exact-integer", sourceMode: "value",
+          source: value.source, target: value.target, fallible: true }
+      : undefined;
+  }
   if (value.kind === "object-identity-erasure") {
     return isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) &&
       !rustTargetTypeRefEquals(value.source, value.target) && rustObjectIdentityErasureMatches(value.source, value.target)
@@ -523,7 +530,7 @@ export function rustValueConversionContract(
     const target = rustSourcePrimitiveTargetType(value.target);
     const targetType = rustPrimitiveTypeName(value.target);
     return isRustNumericCarrier(source) && isRustNumericCarrier(target) &&
-        rustNumericPromotionKind(value.source, value.target) === value.target &&
+        rustNumericValueConversionIsSupported(value.source, value.target) &&
         targetType !== undefined
       ? {
           category: "numeric-promotion",
@@ -550,10 +557,6 @@ export function rustValueConversionContract(
       return contract(value.id, "exact", "js_abi::JsStringNumber::from_number", "value", float64Carrier, rustJsStringNumberTargetType(), false);
     case "js-string-number-from-int32":
       return contract(value.id, "exact", "js_abi::JsStringNumber::from_int32", "value", int32Carrier, rustJsStringNumberTargetType(), false);
-    case "js-string-number-from-null":
-      return contract(value.id, "exact", "js_abi::JsStringNumber::from_null", "value", nullCarrier, rustJsStringNumberTargetType(), false);
-    case "js-string-number-from-undefined":
-      return contract(value.id, "exact", "js_abi::JsStringNumber::from_undefined", "value", undefinedCarrier, rustJsStringNumberTargetType(), false);
     case "js-numeric-from-int32":
       return contract(value.id, "exact", "js_abi::JsNumeric::from_int32", "value", int32Carrier, rustJsNumericTargetType(), false);
     case "js-numeric-from-bigint":
@@ -584,16 +587,14 @@ export function rustValueConversionContract(
       return contract(value.id, "js-number", "rt::conversions::u64_to_f64", "value", uint64Carrier, float64Carrier, false);
     case "js-value-from-bool":
       return contract(value.id, "exact", "js_abi::JsValue::from", "value", boolCarrier, jsValueCarrier, false);
-    case "js-value-from-null":
-      return contract(value.id, "exact", "js_abi::JsValue::from", "value", nullCarrier, jsValueCarrier, false);
+    case "js-value-from-absence":
+      return contract(value.id, "exact", "js_abi::JsValue::from", "value", absenceCarrier, jsValueCarrier, false);
     case "js-value-from-string":
       return contract(value.id, "exact", "js_abi::js_value_from_string", "ref", stringCarrier, jsValueCarrier, false);
     case "js-value-from-symbol":
       return contract(value.id, "exact", "js_abi::JsValue::from", "value", symbolCarrier, jsValueCarrier, false);
     case "js-value-from-error":
       return contract(value.id, "exact", "js_abi::JsValue::from_error", "ref", rustJsErrorTargetType(), jsValueCarrier, false);
-    case "js-value-from-undefined":
-      return contract(value.id, "exact", "js_abi::JsValue::from", "value", undefinedCarrier, jsValueCarrier, false);
     case "js-value-clone":
       return contract(value.id, "exact", "js_abi::clone_js_value", "ref", jsValueCarrier, jsValueCarrier, false);
     case "ts-value-clone":
@@ -637,6 +638,9 @@ export function rustValueConversionIsFallible(value: RustValueConversion | undef
 }
 
 export function rustValueConversionIdentity(value: RustValueConversion): string {
+  if (value.kind === "exact-integer") {
+    return `exact-integer.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}`;
+  }
   if (value.kind === "object-identity-erasure") {
     return `object-identity-erasure.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}`;
   }
@@ -715,6 +719,7 @@ export function substituteRustValueConversion(
         ),
       });
     case "source-union-variant":
+    case "exact-integer":
     case "object-identity-erasure":
     case "native-upcast":
     case "bottom-coercion":

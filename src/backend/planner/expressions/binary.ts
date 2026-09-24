@@ -1,3 +1,5 @@
+import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
+import { planRustOptionalStorageOperation } from "./optional-storage.js";
 import {
   isRustBoolCarrier,
   isRustStringCarrier,
@@ -20,6 +22,8 @@ import { isRustAssignmentOperator, isRustBinaryOperator } from "../../../target-
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { negateRustBooleanExpression, rustBorrowedStringView, rustStringConcat } from "../../target-ast/expressions.js";
 import { foldRustIntegerComparison } from "../../target-ast/integer-comparisons.js";
+import { planRustNativeZeroComparison } from "./native-zero-comparisons.js";
+import { planRustNativeIntegerIdentity } from "./native-integer-identities.js";
 import { planExpression, planExpressionBeforeValueProjections } from "./entry.js";
 import type { RustExpressionResultUse } from "./entry.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
@@ -229,6 +233,10 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
     }
     const check = (receiver: RustExpr): RustExpr => {
       if (fact.nullishDepths.length === 1 && fact.nullishDepths[0] === 0) {
+        if (rustOptionalStorageValue(fact.optionCarrier) !== undefined) {
+          const check = planRustOptionalStorageOperation(fact.optionCarrier, "is_absent", [{ kind: "reference", expr: receiver }], context);
+          return fact.negated ? { kind: "unary", operator: "!", operand: check } : check;
+        }
         return { kind: "option-presence", receiver, present: fact.negated };
       }
       const matched: RustExpr = { kind: "matches", expression: receiver,
@@ -395,17 +403,13 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
       ));
       return undefined;
     }
-    return {
-      kind: "evaluate-then",
-      effect: planRustNonConsumingValue(leftNode, left, context),
-      discard: isRustUnitCarrier(expressionCarrier(leftNode, context)) ? "unit" : "value",
-      value: {
-        kind: "evaluate-then",
-        effect: planRustNonConsumingValue(rightNode, right, context),
-        discard: isRustUnitCarrier(expressionCarrier(rightNode, context)) ? "unit" : "value",
-        value: { kind: "bool-literal", value: fact.value },
-      },
+    const evaluate = (operandNode: Node, operand: RustExpr, value: RustExpr): RustExpr => {
+      const effect = planRustNonConsumingValue(operandNode, operand, context);
+      if (effect.kind === "tuple-literal" && effect.elements.length === 0 || effect.kind === "path") return value;
+      return { kind: "evaluate-then", effect,
+        discard: isRustUnitCarrier(effectivePlannedExpressionCarrier(operandNode, context)) ? "unit" : "value", value };
     };
+    return evaluate(leftNode, left, evaluate(rightNode, right, { kind: "bool-literal", value: fact.value }));
   }
   if (fact === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -487,6 +491,11 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
     }
     const integerComparison = foldRustIntegerComparison(fact.operator, comparisonLeft, comparisonRight);
     if (integerComparison !== undefined) return integerComparison;
+    const integerIdentity = planRustNativeIntegerIdentity(fact.operator, comparisonLeft, comparisonRight, fact.resultCarrier);
+    if (integerIdentity !== undefined) return integerIdentity;
+    const zeroComparison = planRustNativeZeroComparison(
+      fact.operator, comparisonLeft, comparisonRight, leftNode, rightNode, context);
+    if (zeroComparison !== undefined) return zeroComparison;
     const booleanComparison = planBooleanLiteralComparison(
       fact.operator,
       comparisonLeft,
@@ -533,9 +542,7 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
 }
 
 function isExplicitRustNullishValue(expression: RustExpr): boolean {
-  return expression.kind === "none" ||
-    expression.kind === "path" &&
-      (expression.path === "rt::Undefined" || expression.path === "rt::Null");
+  return expression.kind === "none" || expression.kind === "tuple-literal" && expression.elements.length === 0;
 }
 
 export function planRustOperatorCallExpression(

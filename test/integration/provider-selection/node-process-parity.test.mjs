@@ -71,8 +71,9 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /tsonic_rust_node::process::hrtime_open_number/u);
-  assert.match(source, /tsonic_rust_node::process::hrtime_since_number/u);
+  assert.match(source, /tsonic_rust_node::process::hrtime_open\(\)/u);
+  assert.match(source, /tsonic_rust_node::process::hrtime_since\(&first\)/u);
+  assert.doesNotMatch(source, /hrtime_(?:open|since)_number/u);
   assert.match(source, /tsonic_rust_node::process::memory_usage/u);
   assert.match(source, /tsonic_rust_node::process::stdout/u);
   assert.match(source, /\.write_string\(""\)/u);

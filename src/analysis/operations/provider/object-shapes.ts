@@ -20,7 +20,8 @@ import { rustCallableInvocationResult } from "../../facts/callable-results.js";
 import { rustClassConstructorInstance } from "../../../target-model/types/carriers/class-constructors.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
-import { selectedCallCalleeDeclaration, selectedCallCalleeSymbol, selectedSourceValueCarrier, selectedValueCarrier } from "./operators.js";
+import { selectedCallCalleeDeclaration, selectedCallCalleeSymbol, selectedSourceValueCarrier } from "./operators.js";
+import { selectedValueCarrier } from "../selected-values.js";
 import {
   selectedAuthoredObjectFields,
   selectObjectAssignmentFields,
@@ -543,20 +544,30 @@ export function acceptProjectSourceCall(
         options.projectTypes.openCarrier(containingDefinition),
         selectedOwnerDefinition,
       );
-  const selectedResultOwnerCarrier = construction && selectedOwnerDefinition !== undefined &&
-      request.source.sourceResultType !== undefined
-    ? resolveRustTargetTypeRef(
-        request.source.sourceResultType,
+  const valueConstruction = construction && !superConstruction &&
+    selectedCalleeDeclaration !== selectedOwnerDefinition?.declaration;
+  const constructorInstance = valueConstruction
+    ? rustClassConstructorInstance(selectedValueCarrier(
+        request.source.sourceCallee.expression,
+        request.source.sourceCallee.type,
         context,
         options,
-      )
+      ))
     : undefined;
-  const selectedAuthoredOwnerCarrier = construction &&
-      selectedOwnerDefinition !== undefined &&
-      selectedOwnerDefinition === callableOwner
+  const selectedResultOwnerCarrier = construction && !valueConstruction &&
+      selectedOwnerDefinition !== undefined && request.source.sourceResultType !== undefined
+    ? resolveRustTargetTypeRef(request.source.sourceResultType, context, options)
+    : undefined;
+  const selectedAuthoredOwnerCarrier = construction && !valueConstruction &&
+      selectedOwnerDefinition !== undefined && selectedOwnerDefinition === callableOwner
     ? instantiateExactSelectedConstructionCarrier(
         selectedOwnerDefinition,
-        targetGenericArguments,
+        targetGenericArguments.map((argument, index) => {
+          const parameter = genericContract[index]!;
+          return parameter.kind === "type" && argument.kind === "type"
+            ? { kind: "type" as const, type: { kind: "type-parameter" as const, name: parameter.sourceName } }
+            : argument;
+        }),
         options,
       )
     : undefined;
@@ -564,7 +575,7 @@ export function acceptProjectSourceCall(
     ? selectedOwnerRelationship?.kind === "related"
       ? selectedOwnerRelationship.targetType
       : undefined
-    : selectedAuthoredOwnerCarrier ?? selectedResultOwnerCarrier;
+    : valueConstruction ? constructorInstance : selectedAuthoredOwnerCarrier ?? selectedResultOwnerCarrier;
   if (construction && selectedOwnerCarrier === undefined) {
     return rejectSelectedOperation(
       request.source.call,

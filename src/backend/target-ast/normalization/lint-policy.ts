@@ -5,6 +5,8 @@ export const rustLintAttributes = Object.freeze({
     '#[expect(clippy::blocks_in_conditions, reason = "Rust 2021 match temporary scope")]',
   collapsibleIf:
     '#[expect(clippy::collapsible_if, reason = "checked lexical regions")]',
+  fieldReassignWithDefault:
+    '#![expect(clippy::field_reassign_with_default, reason = "checked source assignment order")]',
   authoredDeadCode:
     '#[allow(dead_code, reason = "retains an unused authored declaration")]',
   authoredUnreadField:
@@ -51,6 +53,8 @@ export const rustLintAttributes = Object.freeze({
     '#[expect(unused_variables, reason = "authored binding drop scope")]',
   unusedTypeParameters:
     '#[expect(clippy::extra_unused_type_parameters, reason = "retains the checked generic callable contract")]',
+  unitArguments:
+    '#[expect(clippy::unit_arg, reason = "preserves evaluation and borrow scopes of zero-sized source arguments")]',
   reflexiveComparison:
     '#[expect(clippy::eq_op, reason = "authored reflexive comparison")]',
   unusedUnsafe:

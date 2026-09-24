@@ -2,6 +2,8 @@ import type { TargetTypeRef } from "../types/model.js";
 import { rustStructuralObjectCarrierValue, rustCarrierSupportsClone, rustNamedTypeCarrierValue } from "../types/index.js";
 import { rustTargetTypeRefEquals } from "../types/equality.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../types/source-union-definitions.js";
+import { rustValueConversionContract } from "./contracts.js";
+import type { RustValueConversion } from "../operations/model.js";
 
 export interface RustProviderRecordCopy {
   readonly kind: "provider-record-copy";
@@ -10,8 +12,10 @@ export interface RustProviderRecordCopy {
   readonly completion: "complete" | "default";
   readonly fields: readonly {
     readonly storageIndex: number;
+    readonly sourceCarrier: TargetTypeRef;
     readonly carrier: TargetTypeRef;
     readonly targetName: string;
+    readonly conversion?: RustValueConversion;
   }[];
 }
 
@@ -29,11 +33,16 @@ export function rustProviderRecordCopyMatches(
     new Set(conversion.fields.map(field => field.targetName)).size === conversion.fields.length &&
     conversion.fields.every(field => {
       const sourceField = shape.fields[field.storageIndex];
+      const contract = field.conversion === undefined
+        ? undefined : rustValueConversionContract(field.conversion, definitions);
+      const exactConversion = contract !== undefined && rustTargetTypeRefEquals(contract.source, field.sourceCarrier) &&
+          rustTargetTypeRefEquals(contract.target, field.carrier);
       return Number.isSafeInteger(field.storageIndex) && field.storageIndex >= 0 &&
         typeof field.targetName === "string" && field.targetName.length > 0 &&
         sourceField !== undefined && sourceField.presence === "required" &&
         sourceField.accessor === undefined && sourceField.method !== true &&
-        rustTargetTypeRefEquals(sourceField.type, field.carrier) &&
-        rustCarrierSupportsClone(field.carrier, definitions);
+        rustTargetTypeRefEquals(sourceField.type, field.sourceCarrier) &&
+        (field.conversion === undefined ? rustTargetTypeRefEquals(field.sourceCarrier, field.carrier) : exactConversion) &&
+        rustCarrierSupportsClone(field.sourceCarrier, definitions);
     });
 }

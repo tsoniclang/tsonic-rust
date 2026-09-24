@@ -6,21 +6,7 @@ import type { RustArgumentMode, RustOptionalChainFact, RustProviderFactOperation
 import type { RustPlanKey } from "../../../target-model/facts/keys.js";
 import type { RustTargetOperationFact, RustTypedLocationPlan } from "./facts.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-
-function rustTargetOperationFactEquals(left: RustTargetOperationFact, right: RustTargetOperationFact): boolean {
-  if (left.kind === "source-field") {
-    if (right.kind !== "source-field" || left.declaration !== right.declaration) return false;
-    const { declaration: _leftDeclaration, ...leftContract } = left;
-    const { declaration: _rightDeclaration, ...rightContract } = right;
-    return closedMetadataEquals(leftContract, rightContract);
-  }
-  if (left.kind === "throw-op" && left.error.kind === "runtime") {
-    return right.kind === "throw-op" && right.error.kind === "runtime" &&
-      left.operationId === right.operationId && left.error.expression === right.error.expression &&
-      rustTargetTypeRefEquals(left.error.carrier, right.error.carrier);
-  }
-  return closedMetadataEquals(left, right);
-}
+import { rustTargetOperationFactEquals } from "./equality.js";
 
 export const rustTargetOperationFactKey: RustPlanKey<RustTargetOperationFact> =
   defineRustPlanKey("targetOperation", rustTargetOperationFactEquals);
@@ -53,7 +39,12 @@ export const rustPreparedOperationResultFactKey: RustPlanKey<RustPreparedOperati
     rustTargetTypeRefEquals(left.resultCarrier, right.resultCarrier));
 
 export const rustOptionalChainFactKey: RustPlanKey<RustOptionalChainFact> =
-  defineRustPlanKey("optionalChain", closedMetadataEquals);
+  defineRustPlanKey("optionalChain", (left, right) => {
+    const { expression: leftExpression, guard: leftGuard, ...leftMetadata } = left;
+    const { expression: rightExpression, guard: rightGuard, ...rightMetadata } = right;
+    return leftExpression === rightExpression && leftGuard === rightGuard &&
+      closedMetadataEquals(leftMetadata, rightMetadata);
+  });
 
 export const rustTypedLocationPlanKey: RustPlanKey<RustTypedLocationPlan> =
   defineRustPlanKey("typedLocationPlan", rustTypedLocationPlanEquals);
@@ -139,6 +130,7 @@ export type RustModuleBindingFact =
   | {
       readonly declarationKind: "const" | "let" | "var";
       readonly storage: "module-cell";
+      readonly initialization: "value" | "declaration";
       readonly valueCarrier: TargetTypeRef;
     };
 
@@ -152,6 +144,8 @@ export const rustModuleBindingFactKey: RustPlanKey<RustModuleBindingFact> = defi
         left.name === right.name &&
         nativeCallableValuesEqual(left.value, right.value)
       : right.storage !== "native-callable" &&
+        (left.storage !== "module-cell" || right.storage === "module-cell" &&
+          left.initialization === right.initialization) &&
         rustTargetTypeRefEquals(left.valueCarrier, right.valueCarrier)),
 );
 

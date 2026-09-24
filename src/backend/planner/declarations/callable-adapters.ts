@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { planRustAbsentValue } from "../expressions/optional-storage.js";
 import { planRustGenericCallableFlow } from "../expressions/generic-callable-flow.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type {
@@ -30,6 +31,7 @@ import { rustCompilerOwnedContextualConversionMatches } from "../../../target-mo
 import { planRustEmptyRecordConversion } from "../expressions/empty-record-conversion.js";
 import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";
 import { planRustProjectStructuralConversion } from "../objects/project-structural-views.js";
+import { planRustParameterEntryValue } from "./parameter-entry-conversion.js";
 
 export function planRustCallableArguments(
   input: {
@@ -63,7 +65,7 @@ export function planRustCallableArguments(
     }
     if (adapter.kind === "omitted") {
       if (adapter.target.form === "optional" || adapter.target.form === "default") {
-        adaptedArguments.push({ kind: "none" });
+        adaptedArguments.push(planRustAbsentValue(adapter.target.parameterCarrier, context));
         continue;
       }
       return undefined;
@@ -248,7 +250,7 @@ function readRustCallableLogicalParameter(
   context: RustPlanContext,
 ): RustExpr | undefined {
   if (abi.mode === "value") {
-    return expression;
+    return planRustParameterEntryValue(abi, expression, undefined, context);
   }
   if (isRustStringCarrier(abi.valueCarrier)) {
     return { kind: "owned-string-from-borrowed-str", expression };
@@ -310,7 +312,8 @@ function applyRustCallableValueAdapterRaw(
         const converted = planRustEmptyRecordConversion(adapter.conversion, expression, node, context);
         return converted === undefined ? undefined : { expression: converted, fallible: false };
       }
-      if (adapter.conversion.kind === "provider-record-copy") return undefined;
+      if (adapter.conversion.kind === "provider-record-copy" ||
+        adapter.conversion.kind === "integer-truncation") return undefined;
       if (adapter.conversion.kind === "native-trait-object-upcast" ||
         adapter.conversion.kind === "reference-reborrow") {
         return rustCompilerOwnedContextualConversionMatches(

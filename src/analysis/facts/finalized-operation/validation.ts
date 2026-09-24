@@ -21,12 +21,20 @@ import { rustFutureOutputCarrier, rustFutureTargetType, rustSliceRefTargetType }
 import { rustProviderOperationFormAcceptsTargetGenericArguments, rustProviderOperationFormContractViolation } from "../../../policy/operations/forms.js";
 import type { RustFinalizedOperationAbi, RustFinalizedOperationResult, RustFinalizedSourceArgument, RustFinalizedSourceArgumentRole, RustFinalizedSourceInput, RustFinalizedTargetInput, RustFinalizedValueConversion } from "./model.js";
 import type { RustProviderConstantArgument } from "../keys.js";
+import { rustLengthEmptinessContractIsValid } from "../../../target-model/operations/length-emptiness.js";
 
 export function validateRustFinalizedOperationAbi(candidate: unknown, definitions: RustTypeDefinitions = emptyRustTypeDefinitions): candidate is RustFinalizedOperationAbi {
   if (!isClosedMetadata(candidate) || !isRustFinalizedOperationAbiShape(candidate)) {
     return false;
   }
   const abi = candidate;
+  if (abi.target.form === "receiver-method" && abi.target.emptyTestMethod !== undefined && (
+    abi.result.kind !== "sync" || abi.sourceReceiver.kind !== "receiver" ||
+    !rustLengthEmptinessContractIsValid({ target: abi.target, operationKind: abi.operationKind,
+      resultCarrier: abi.result.carrier, sourceArgumentCount: abi.sourceArguments.length,
+      isFallible: abi.effects.invocation !== "infallible", isAsync: abi.effects.awaiting !== "not-applicable",
+      hasResultConversion: abi.result.conversion.kind !== "identity", evaluation: abi.effects.evaluation })
+  )) return false;
   if (abi.target.form === "numeric-cast" && (
     abi.result.kind !== "sync" || abi.result.rawCarrier.kind !== "source-primitive" ||
     abi.result.rawCarrier.name !== abi.target.target ||
@@ -62,14 +70,14 @@ export function validateRustFinalizedOperationAbi(candidate: unknown, definition
   }
   const sequenceForm = rustRestSequenceForm(abi.target);
   if (abi.sourceArguments.some((argument, index) => {
-    const expectedRole: RustFinalizedSourceArgumentRole = argument.disposition === "compile-time"
-      ? "compile-time"
+    const expectedRole: RustFinalizedSourceArgumentRole = argument.disposition === "evaluation-only"
+      ? "evaluation-only"
       : (abi.operationKind === "indexer" || abi.operationKind === "index-set") && index === 0
         ? "index"
         : "parameter";
     return argument.sourceIndex !== index ||
       (argument.mode !== "value" && argument.mode !== "ref" && argument.mode !== "mut-ref") ||
-      (argument.disposition !== "runtime" && argument.disposition !== "compile-time") ||
+      (argument.disposition !== "runtime" && argument.disposition !== "evaluation-only") ||
       (argument.form === "spread-sequence" &&
         (argument.disposition !== "runtime" || sequenceForm === undefined ||
           index < sequenceForm.leadingArguments.length)) ||
@@ -88,7 +96,7 @@ export function validateRustFinalizedOperationAbi(candidate: unknown, definition
     if (input.source.kind === "argument") {
       const argument = abi.sourceArguments[input.source.sourceIndex];
       if (argument === undefined || argument.disposition !== "runtime" ||
-        argument.role === "compile-time" || argument.mode !== input.mode ||
+        argument.role === "evaluation-only" || argument.mode !== input.mode ||
         !rustTargetTypeRefEquals(argument.carrier, input.sourceCarrier)) {
         return false;
       }
@@ -217,8 +225,9 @@ function isRustFinalizedOperationAbiShape(value: unknown): value is RustFinalize
 
 export const operationKinds = new Set<unknown>(["method", "constructor", "property", "indexer", "property-set", "index-set"]);
 const argumentModes = new Set<unknown>(["value", "ref", "mut-ref"]);
-const argumentRoles = new Set<unknown>(["parameter", "index", "compile-time"]);
+const argumentRoles = new Set<unknown>(["parameter", "index", "evaluation-only"]);
 const dispositions = new Set<unknown>(["runtime", "compile-time"]);
+const argumentDispositions = new Set<unknown>(["runtime", "evaluation-only"]);
 
 function isSourceReceiver(value: unknown): value is RustFinalizedOperationAbi["sourceReceiver"] {
   return isRecord(value) && (value.kind === "none"
@@ -233,7 +242,7 @@ function isSourceArgument(value: unknown): value is RustFinalizedSourceArgument 
     (value.form === "value" || value.form === "spread-sequence") &&
     Number.isSafeInteger(value.sourceIndex) && (value.sourceIndex as number) >= 0 &&
     isRustTargetTypeRef(value.carrier) && argumentModes.has(value.mode) && argumentRoles.has(value.role) &&
-    dispositions.has(value.disposition);
+    argumentDispositions.has(value.disposition);
 }
 
 function isTargetReceiver(value: unknown): value is RustFinalizedOperationAbi["targetReceiver"] {
@@ -376,6 +385,10 @@ function isNonOptionValueConversion(value: unknown): boolean {
 }
 
 function isValueProjectionConversion(value: Record<string, unknown>): boolean {
+  if (value.kind === "exact-integer") {
+    return hasExactKeys(value, ["kind", "source", "target"]) &&
+      isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target);
+  }
   if (value.kind === "native-upcast") {
     return hasExactKeys(value, ["kind", "source", "target", "path"]) &&
       isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) &&

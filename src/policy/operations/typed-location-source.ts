@@ -70,6 +70,17 @@ export function selectRustAddressOfSourceOperation(
     : undefined;
 }
 
+export function selectRustBindPointerSourceOperation(
+  subject: ExtensionFactSubject,
+  resolveFact: RustTypedLocationFactLookup,
+  getFact: RustTypedLocationFactLookup,
+): Extract<RustTypedLocationSourceFact, { readonly operation: "bind-pointer" }> | undefined {
+  const sourceOperation = rustTypedLocationSourceFact(subject, resolveFact, getFact);
+  return sourceOperation?.operation === "bind-pointer" && sourceOperation.call === subject
+    ? sourceOperation
+    : undefined;
+}
+
 function rustTypedLocationSourceFact(
   subject: ExtensionFactSubject,
   resolveFact: RustTypedLocationFactLookup,

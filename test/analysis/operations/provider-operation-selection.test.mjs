@@ -8,8 +8,62 @@ import {
   resolveSelectedProviderDeclaration,
 } from "../../../dist/policy/evidence/selected-source.js";
 import { rustCallScopedElisionLifetime } from "../../../dist/target-model/lifetimes/index.js";
+import { selectRustCheckedOperator } from "../../../dist/analysis/operations/provider/operators.js";
+import { rustOptionTargetType, rustAbsenceTargetType } from "../../../dist/target-model/types/index.js";
 
 const unit = { kind: "tuple", elements: [] };
+
+test("provider optional argument inference preserves native carriers and absence", () => {
+  const int64 = { kind: "source-primitive", name: "int64" };
+  const uint64 = { kind: "source-primitive", name: "uint64" };
+  const float64 = { kind: "source-primitive", name: "float64" };
+  const parameter = { kind: "type-parameter", name: "Value" };
+  const template = {
+    kind: "provider-operation", operationId: "acme.optional", operationKind: "method",
+    target: { form: "call", path: "acme::optional" }, resultCarrier: unit,
+    parameterCarriers: [rustOptionTargetType(parameter)],
+    genericParameters: [{ kind: "type", sourceName: "Value", defaultArgument: { kind: "type", type: float64 } }],
+    isAsync: false, isFallible: false, errorBoundary: "target-runtime",
+  };
+  for (const carrier of [int64, uint64]) {
+    for (const actual of [carrier, rustOptionTargetType(carrier)]) {
+      const result = instantiateProviderOperationTemplate(template, { sourceParameterCarriers: [actual] });
+      assert.ok(result);
+      assert.deepEqual(result.substitutions.types.get("Value"), carrier);
+      assert.deepEqual(result.template.parameterCarriers, [rustOptionTargetType(carrier)]);
+    }
+  }
+  for (const absent of [rustAbsenceTargetType()]) {
+    const result = instantiateProviderOperationTemplate(template, { sourceParameterCarriers: [absent] });
+    assert.deepEqual(result?.substitutions.types.get("Value"), float64);
+    assert.equal(instantiateProviderOperationTemplate({ ...template,
+      genericParameters: [{ kind: "type", sourceName: "Value" }],
+    }, { sourceParameterCarriers: [absent] }), undefined);
+  }
+  assert.equal(instantiateProviderOperationTemplate(template, { sourceParameterCarriers: [undefined] }), undefined);
+  assert.equal(instantiateProviderOperationTemplate({ ...template,
+    parameterCarriers: [rustOptionTargetType(parameter), parameter],
+  }, { sourceParameterCarriers: [int64, uint64] }), undefined);
+  const arrayTemplate = { ...template, parameterCarriers: [rustOptionTargetType({ kind: "array", element: parameter })] };
+  assert.equal(instantiateProviderOperationTemplate(arrayTemplate, { sourceParameterCarriers: [int64] }), undefined);
+});
+
+test("checked operators do not repeat the initialized project declaration scan", () => {
+  const context = {
+    ast: { kind: () => undefined },
+    get sourceFiles() { assert.fail("Operator selection must not traverse the source-file bank"); },
+  };
+  const options = { sourceTypes: {
+    registerSourceFile() { assert.fail("Declaration registration belongs to program initialization"); },
+  } };
+  for (let index = 0; index < 256; index++) {
+    const expression = {};
+    const result = selectRustCheckedOperator({ expression, operator: "+", left: {}, right: {} }, context, options);
+    assert.equal(result.kind, "accept");
+    assert.equal(result.value.operation.targetOperation, "post-check-finalization");
+    assert.equal(result.value.provenance.sourceExpression, expression);
+  }
+});
 
 function row(overrides = {}) {
   return {

@@ -16,7 +16,7 @@ import {
   rustJsWeakSetTargetType,
   rustCarrierSupportsObjectIdentity,
 } from "../../../target-model/types/index.js";
-import { resolveCarrierRef } from "./selection.js";
+import { resolveCarrierRef } from "./carrier-references.js";
 import { selectJsArrayConstruction } from "./array-construction.js";
 import { materializeJsonValueConversions } from "./materialization.js";
 import { selectRustJsonValueConversion } from "../../conversions/selection.js";
@@ -103,11 +103,16 @@ function typedArrayConstructorRows(name: RustJsTypedArrayName): readonly JsConst
   const result = { kind: "typed-array", name } as const;
   const path = `js_abi::${name}`;
   return [
-    { className: name, sourceOwnerName: `${name}Constructor`, typeArgumentCount: 0, argumentCount: 1, path: `${path}::new`, result, fallible: true, params: [{ ref: "float64" }], variant: "length" },
-    { className: name, sourceOwnerName: `${name}Constructor`, typeArgumentCount: 0, argumentCount: 1, path: `${path}::from_array`, result, fallible: true, params: [{ ref: "float64-array" }], argModes: ["ref"], variant: "array" },
+    { className: name, sourceOwnerName: `${name}Constructor`, typeArgumentCount: 0, argumentCount: 1, path: `${path}::new`, result, fallible: true, params: [{ ref: "numeric-argument", index: 0 }], variant: "length" },
+    { className: name, sourceOwnerName: `${name}Constructor`, typeArgumentCount: 0, argumentCount: 1, path: `${path}::from_array`, result, fallible: true, params: [{ ref: "numeric-array-argument", index: 0 }], argModes: ["ref"], variant: "array" },
+    ...typedArrayNames.map((source): JsConstructorRowData => ({
+      className: name, sourceOwnerName: `${name}Constructor`, typeArgumentCount: 0,
+      argumentCount: 1, path: `${path}::from_typed_array`, result, fallible: true,
+      params: [{ ref: "typed-array", name: source }], argModes: ["ref"], variant: source,
+    })),
     { className: name, sourceOwnerName: `${name}Constructor`, typeArgumentCount: 0, argumentCount: 1, path: `${path}::from_buffer_only`, result, fallible: true, params: [{ ref: "array-buffer" }], variant: "buffer" },
-    { className: name, sourceOwnerName: `${name}Constructor`, typeArgumentCount: 0, argumentCount: 2, path: `${path}::from_buffer_offset`, result, fallible: true, params: [{ ref: "array-buffer" }, { ref: "float64" }], variant: "buffer-offset" },
-    { className: name, sourceOwnerName: `${name}Constructor`, typeArgumentCount: 0, argumentCount: 3, path: `${path}::from_buffer_length`, result, fallible: true, params: [{ ref: "array-buffer" }, { ref: "float64" }, { ref: "float64" }], variant: "buffer-offset-length" },
+    { className: name, sourceOwnerName: `${name}Constructor`, typeArgumentCount: 0, argumentCount: 2, path: `${path}::from_buffer_offset`, result, fallible: true, params: [{ ref: "array-buffer" }, { ref: "numeric-argument", index: 1 }], variant: "buffer-offset" },
+    { className: name, sourceOwnerName: `${name}Constructor`, typeArgumentCount: 0, argumentCount: 3, path: `${path}::from_buffer_length`, result, fallible: true, params: [{ ref: "array-buffer" }, { ref: "numeric-argument", index: 1 }, { ref: "numeric-argument", index: 2 }], variant: "buffer-offset-length" },
   ];
 }
 
@@ -127,7 +132,7 @@ function intlConstructorRows(
 }
 
 const jsConstructorRows = defineJsConstructorRows([
-  { className: "SharedArrayBuffer", sourceOwnerName: "SharedArrayBufferConstructor", typeArgumentCount: 0, argumentCount: 1, path: "js_abi::ArrayBuffer::new_shared", result: { kind: "array-buffer" }, fallible: true, params: [{ ref: "float64" }] },
+  { className: "SharedArrayBuffer", sourceOwnerName: "SharedArrayBufferConstructor", typeArgumentCount: 0, argumentCount: 1, path: "js_abi::ArrayBuffer::new_shared", result: { kind: "array-buffer" }, fallible: true, params: [{ ref: "numeric-argument", index: 0 }] },
   { className: "Uint8Array", sourceOwnerName: "Uint8ArrayConstructor", typeArgumentCount: 0, argumentCount: 0, path: "js_abi::Uint8Array::new", result: { kind: "typed-array", name: "Uint8Array" }, fallible: true, trailingArguments: [{ kind: "float64", value: 0 }], variant: "empty" },
   { className: "Map", sourceOwnerName: "MapConstructor", typeArgumentCount: 2, argumentCount: 0, path: "js_abi::JsMap::new", result: { kind: "map" } },
   { className: "Map", sourceOwnerName: "MapConstructor", typeArgumentCount: 2, argumentCount: 1, path: "js_abi::JsMap::from_array", result: { kind: "map" }, params: [{ ref: "js-map-entry-array" }], argModes: ["ref"], variant: "js-array" },
@@ -135,10 +140,10 @@ const jsConstructorRows = defineJsConstructorRows([
   { className: "Set", sourceOwnerName: "SetConstructor", typeArgumentCount: 1, argumentCount: 1, path: "js_abi::JsSet::from_array", result: { kind: "set" }, params: [{ ref: "element-array" }], argModes: ["ref"], inputShape: "js-array-of-element", variant: "js-array" },
   { className: "Set", sourceOwnerName: "SetConstructor", typeArgumentCount: 1, argumentCount: 1, path: "js_abi::JsSet::from_fixed_array", result: { kind: "set" }, argModes: ["ref"], inputShape: "fixed-array-of-element", variant: "fixed-array" },
   { className: "WeakMap", sourceOwnerName: "WeakMapConstructor", typeArgumentCount: 2, argumentCount: 0, path: "js_abi::JsWeakMap::new", result: { kind: "weak-map" }, requiresObjectIdentityTypeArgument: 0 },
-  { className: "WeakMap", sourceOwnerName: "WeakMapConstructor", typeArgumentCount: 2, argumentCount: 1, path: "js_abi::JsWeakMap::from_null", result: { kind: "weak-map" }, params: [{ ref: "null" }], requiresObjectIdentityTypeArgument: 0, variant: "null" },
+  { className: "WeakMap", sourceOwnerName: "WeakMapConstructor", typeArgumentCount: 2, argumentCount: 1, path: "js_abi::JsWeakMap::from_null", result: { kind: "weak-map" }, params: [{ ref: "absence" }], requiresObjectIdentityTypeArgument: 0, variant: "null" },
   { className: "WeakMap", sourceOwnerName: "WeakMapConstructor", typeArgumentCount: 2, argumentCount: 1, path: "js_abi::JsWeakMap::from_array", result: { kind: "weak-map" }, params: [{ ref: "weak-map-entry-array" }], argModes: ["ref"], requiresObjectIdentityTypeArgument: 0, variant: "array" },
   { className: "WeakSet", sourceOwnerName: "WeakSetConstructor", typeArgumentCount: 1, argumentCount: 0, path: "js_abi::JsWeakSet::new", result: { kind: "weak-set" }, requiresObjectIdentityTypeArgument: 0 },
-  { className: "WeakSet", sourceOwnerName: "WeakSetConstructor", typeArgumentCount: 1, argumentCount: 1, path: "js_abi::JsWeakSet::from_null", result: { kind: "weak-set" }, params: [{ ref: "null" }], requiresObjectIdentityTypeArgument: 0, variant: "null" },
+  { className: "WeakSet", sourceOwnerName: "WeakSetConstructor", typeArgumentCount: 1, argumentCount: 1, path: "js_abi::JsWeakSet::from_null", result: { kind: "weak-set" }, params: [{ ref: "absence" }], requiresObjectIdentityTypeArgument: 0, variant: "null" },
   { className: "WeakSet", sourceOwnerName: "WeakSetConstructor", typeArgumentCount: 1, argumentCount: 1, path: "js_abi::JsWeakSet::from_array", result: { kind: "weak-set" }, params: [{ ref: "weak-key-array" }], argModes: ["ref"], requiresObjectIdentityTypeArgument: 0, variant: "array" },
   { className: "Date", sourceOwnerName: "DateConstructor", typeArgumentCount: 0, argumentCount: 0, path: "js_abi::JsDate::new", result: { kind: "date" } },
   { className: "Date", sourceOwnerName: "DateConstructor", typeArgumentCount: 0, argumentCount: 1, path: "js_abi::JsDate::from_millis", result: { kind: "date" }, params: [{ ref: "float64" }], variant: "millis" },
@@ -146,20 +151,20 @@ const jsConstructorRows = defineJsConstructorRows([
   { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 0, path: "js_abi::regexp_empty_native", result: { kind: "regexp" }, fallible: true, variant: "empty" },
   { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 1, path: "js_abi::regexp_from_string_native", result: { kind: "regexp" }, fallible: true, params: [{ ref: "string" }], argModes: ["ref"], variant: "native" },
   { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 1, path: "js_abi::regexp_from_exact", result: { kind: "regexp" }, fallible: true, params: [{ ref: "js-string" }], argModes: ["ref"], variant: "exact" },
-  { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 1, path: "js_abi::regexp_from_undefined_native", result: { kind: "regexp" }, fallible: true, params: [{ ref: "undefined" }], variant: "undefined" },
+  { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 1, path: "js_abi::regexp_from_undefined_native", result: { kind: "regexp" }, fallible: true, params: [{ ref: "absence" }], variant: "undefined" },
   { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 1, path: "js_abi::regexp_construct_from_regexp_native", result: { kind: "regexp" }, fallible: true, params: [{ ref: "regexp" }], argModes: ["ref"], variant: "regexp" },
   { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 2, path: "js_abi::regexp_from_string_with_flags_native", result: { kind: "regexp" }, fallible: true, params: [{ ref: "string" }, { ref: "string" }], argModes: ["ref", "ref"], variant: "native-flags" },
-  { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 2, path: "js_abi::regexp_from_string_with_undefined_flags_native", result: { kind: "regexp" }, fallible: true, params: [{ ref: "string" }, { ref: "undefined" }], argModes: ["ref", "value"], variant: "native-undefined-flags" },
+  { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 2, path: "js_abi::regexp_from_string_with_undefined_flags_native", result: { kind: "regexp" }, fallible: true, params: [{ ref: "string" }, { ref: "absence" }], argModes: ["ref", "value"], variant: "native-undefined-flags" },
   { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 2, path: "js_abi::regexp_from_exact_with_flags", result: { kind: "regexp" }, fallible: true, params: [{ ref: "js-string" }, { ref: "string" }], argModes: ["ref", "ref"], variant: "exact-flags" },
-  { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 2, path: "js_abi::regexp_from_exact_with_undefined_flags", result: { kind: "regexp" }, fallible: true, params: [{ ref: "js-string" }, { ref: "undefined" }], argModes: ["ref", "value"], variant: "exact-undefined-flags" },
-  { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 2, path: "js_abi::regexp_from_undefined_with_flags_native", result: { kind: "regexp" }, fallible: true, params: [{ ref: "undefined" }, { ref: "string" }], argModes: ["value", "ref"], variant: "undefined-flags" },
-  { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 2, path: "js_abi::regexp_from_undefined_with_undefined_flags_native", result: { kind: "regexp" }, fallible: true, params: [{ ref: "undefined" }, { ref: "undefined" }], variant: "undefined-undefined-flags" },
+  { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 2, path: "js_abi::regexp_from_exact_with_undefined_flags", result: { kind: "regexp" }, fallible: true, params: [{ ref: "js-string" }, { ref: "absence" }], argModes: ["ref", "value"], variant: "exact-undefined-flags" },
+  { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 2, path: "js_abi::regexp_from_undefined_with_flags_native", result: { kind: "regexp" }, fallible: true, params: [{ ref: "absence" }, { ref: "string" }], argModes: ["value", "ref"], variant: "undefined-flags" },
+  { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 2, path: "js_abi::regexp_from_undefined_with_undefined_flags_native", result: { kind: "regexp" }, fallible: true, params: [{ ref: "absence" }, { ref: "absence" }], variant: "undefined-undefined-flags" },
   { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 2, path: "js_abi::regexp_construct_from_regexp_with_flags_native", result: { kind: "regexp" }, fallible: true, params: [{ ref: "regexp" }, { ref: "string" }], argModes: ["ref", "ref"], variant: "regexp-flags" },
-  { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 2, path: "js_abi::regexp_construct_from_regexp_with_undefined_flags_native", result: { kind: "regexp" }, fallible: true, params: [{ ref: "regexp" }, { ref: "undefined" }], argModes: ["ref", "value"], variant: "regexp-undefined-flags" },
-  { className: "ArrayBuffer", sourceOwnerName: "ArrayBufferConstructor", typeArgumentCount: 0, argumentCount: 1, path: "js_abi::ArrayBuffer::new", result: { kind: "array-buffer" }, fallible: true, params: [{ ref: "float64" }] },
+  { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 2, path: "js_abi::regexp_construct_from_regexp_with_undefined_flags_native", result: { kind: "regexp" }, fallible: true, params: [{ ref: "regexp" }, { ref: "absence" }], argModes: ["ref", "value"], variant: "regexp-undefined-flags" },
+  { className: "ArrayBuffer", sourceOwnerName: "ArrayBufferConstructor", typeArgumentCount: 0, argumentCount: 1, path: "js_abi::ArrayBuffer::new", result: { kind: "array-buffer" }, fallible: true, params: [{ ref: "numeric-argument", index: 0 }] },
   { className: "DataView", sourceOwnerName: "DataViewConstructor", typeArgumentCount: 0, argumentCount: 1, path: "js_abi::DataView::from_buffer", result: { kind: "data-view" }, fallible: true, params: [{ ref: "array-buffer" }] },
-  { className: "DataView", sourceOwnerName: "DataViewConstructor", typeArgumentCount: 0, argumentCount: 2, path: "js_abi::DataView::from_buffer_offset", result: { kind: "data-view" }, fallible: true, params: [{ ref: "array-buffer" }, { ref: "float64" }], variant: "offset" },
-  { className: "DataView", sourceOwnerName: "DataViewConstructor", typeArgumentCount: 0, argumentCount: 3, path: "js_abi::DataView::from_buffer_length", result: { kind: "data-view" }, fallible: true, params: [{ ref: "array-buffer" }, { ref: "float64" }, { ref: "float64" }], variant: "offset-length" },
+  { className: "DataView", sourceOwnerName: "DataViewConstructor", typeArgumentCount: 0, argumentCount: 2, path: "js_abi::DataView::from_buffer_offset", result: { kind: "data-view" }, fallible: true, params: [{ ref: "array-buffer" }, { ref: "numeric-argument", index: 1 }], variant: "offset" },
+  { className: "DataView", sourceOwnerName: "DataViewConstructor", typeArgumentCount: 0, argumentCount: 3, path: "js_abi::DataView::from_buffer_length", result: { kind: "data-view" }, fallible: true, params: [{ ref: "array-buffer" }, { ref: "numeric-argument", index: 1 }, { ref: "numeric-argument", index: 2 }], variant: "offset-length" },
   ...typedArrayNames.flatMap(typedArrayConstructorRows),
   ...intlConstructorRows("Intl.DateTimeFormat", "IntlDateTimeFormatConstructor", { kind: "intl-date-time" }, "js_abi::IntlDateTimeFormat"),
   ...intlConstructorRows("Intl.NumberFormat", "IntlNumberFormatConstructor", { kind: "intl-number" }, "js_abi::IntlNumberFormat"),
@@ -234,6 +239,7 @@ export function selectJsSurfaceConstructor(request: JsConstructorRequest, defini
     }
     let parameterCarriers = (row.params ?? []).map((reference) =>
       reference === undefined ? undefined : resolveCarrierRef(reference, {
+        arguments: request.argumentCarriers,
         element: typeArguments[0],
         mapKey: typeArguments[0],
         mapValue: typeArguments[1],

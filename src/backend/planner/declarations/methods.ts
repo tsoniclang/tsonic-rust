@@ -32,6 +32,7 @@ import { rustDeclarationRequiresUnsafe, rustSafetyAttributesForDeclaration } fro
 import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
 import { rustReturnTypeFromCarrierInContext } from "../types/render.js";
 import type { Node } from "@tsonic/tsts";
+import { planRustAbsentValue } from "../expressions/optional-storage.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustProjectTypeDefinition } from "../../../analysis/project-types/type-policy.js";
 import type { RustImplFunction, RustStmt } from "../../target-ast/nodes.js";
@@ -256,7 +257,7 @@ export function planProjectMethod(
     return undefined;
   }
   const body = retainRustCheckedCompletion({ statements: [...plannedBody.statements, ...(sourceReturn?.fallthroughUndefined
-    ? [planRustReturnExit({ kind: "path", path: "None" }, bodyContext)] : [])] },
+    ? [planRustReturnExit(planRustAbsentValue(returnCarrier, bodyContext), bodyContext)] : [])] },
     !isUnit && generatorFact === undefined ? sourceReturn?.canFallThrough : undefined);
   if (generatorFact === undefined && !isUnit && !rustBlockTerminates(body)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(

@@ -1,9 +1,10 @@
 import {
   isRustBigIntCarrier,
+  isRustIntegerCarrier,
   isRustBoolCarrier,
   isRustProgramErrorCarrier,
   isRustNumericCarrier,
-  isRustNullishSourceCarrier,
+  isRustAbsenceCarrier,
   rustOptionElementCarrier,
   isRustSignedNumericCarrier,
 } from "../../../target-model/types/index.js";
@@ -26,12 +27,13 @@ import { instantiateProviderOperationTemplate } from "./calls/template-instantia
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
 import { resolveRustExactNullishValueCarrier } from "../../../policy/types/resolution/target.js";
 import {
-  recordRustFlowReadProjection,
   rustEffectiveValueCarrier,
 } from "../../facts/value-carrier-queries.js";
 import { rustSourcePrimitiveTargetType, rustUnitTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { selectRustFlowReadProjection } from "../../../policy/types/value-carrier-reconciliation.js";
+import { selectedValueCarrier } from "../selected-values.js";
+import { selectRustExactIntegerConversion } from "../../../target-model/conversions/exact-integer.js";
+import { rustContextualValueConversionFactKey } from "../../facts/value-projections.js";
 import { selectJsSurfaceOperation } from "../../../policy/operations/js-surface.js";
 import { selectRustProviderOperation } from "../../../policy/operations/provider-selection.js";
 import { selectRustBuiltinErrorTypeTest } from "./builtin-errors.js";
@@ -53,11 +55,6 @@ export function selectRustCheckedOperator(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> {
-  for (const sourceFile of context.sourceFiles) {
-    if (sourceFile !== undefined) {
-      options.sourceTypes.registerSourceFile(sourceFile, context.ast);
-    }
-  }
   if (isDeclarationFileSubject(request.expression, context)) {
     return acceptDeclarationOperation("operator");
   }
@@ -71,7 +68,7 @@ export function selectRustCheckedOperator(
     }
     let left = resolveRustTargetTypeRef(request.left, context, options);
     let right = resolveRustTargetTypeRef(request.right, context, options);
-    if (isRustNullishSourceCarrier(right)) {
+    if (isRustAbsenceCarrier(right)) {
       const rightNode = asNode(request.right, context);
       const rightType = rightNode === undefined
         ? undefined
@@ -88,7 +85,8 @@ export function selectRustCheckedOperator(
     }
     return acceptPostCheckOperator(request);
   }
-  const operand = resolveRustTargetTypeRef(request.left, context, options);
+  const operand = rustEffectiveValueCarrier(context.facts, request.left) ??
+    resolveRustTargetTypeRef(request.left, context, options);
   return mapSelectedUnaryOperator(request, operand, context);
 }
 
@@ -232,6 +230,9 @@ function mapSelectedUnaryOperator(
   let targetOperator: RustOperatorToken | undefined;
   let resultCarrier: TargetTypeRef | undefined;
   if (request.operator === "!" && isRustBoolCarrier(operand)) {
+    targetOperator = "!";
+    resultCarrier = operand;
+  } else if (request.operator === "~" && operand !== undefined && isRustIntegerCarrier(operand)) {
     targetOperator = "!";
     resultCarrier = operand;
   } else if (request.operator === "~" && isRustBigIntCarrier(operand)) {
@@ -479,14 +480,27 @@ function mapSelectedProviderAssignment(
       `Selected provider declaration '${providerIdentityText(identity)}' cannot instantiate one total Rust ${operationKind} ABI.`,
     );
   }
-  const sourceArgumentCarriers = sourceArguments.map((argument, index) =>
-    normalizeSelectedOperationInputCarrier(
+  const sourceArgumentCarriers = sourceArguments.map((argument, index) => {
+    const actual = rawArgumentCarriers[index];
+    const expected = template.parameterCarriers?.[index];
+    const selected = normalizeSelectedOperationInputCarrier(
       argument,
-      rawArgumentCarriers[index],
-      template.parameterCarriers?.[index],
+      actual,
+      expected,
       context,
       options,
-    ));
+    );
+    if (rustTargetTypeRefEquals(selected, expected)) return selected;
+    const conversion = operationKind !== "property-set" || template.target.form !== "field" ||
+      actual === undefined || expected === undefined ? undefined
+      : selectRustExactIntegerConversion(actual, rustOptionElementCarrier(actual) === undefined
+        ? rustOptionElementCarrier(expected) ?? expected : expected);
+    if (conversion === undefined) return selected;
+    context.facts.set(argument, rustContextualValueConversionFactKey, {
+      sourceCarrier: conversion.source, targetCarrier: conversion.target, conversion,
+    }, [{ message: "rust exact provider field write" }]);
+    return expected;
+  });
   const finalizedSourceArgumentCarriers = sourceArgumentCarriers.filter(
     (carrier): carrier is TargetTypeRef => carrier !== undefined,
   );
@@ -498,6 +512,7 @@ function mapSelectedProviderAssignment(
       context,
       "RUST_PROVIDER_SET_VALUE_MISMATCH",
       `Selected provider declaration '${providerIdentityText(identity)}' has source inputs that do not match its finalized Rust ${operationKind} carriers.`,
+      [{ message: `actual=${JSON.stringify(rawArgumentCarriers)}; expected=${JSON.stringify(template.parameterCarriers)}` }],
     );
   }
   const abi = finalizeRustProviderOperationAbi({
@@ -528,7 +543,7 @@ function mapSelectedProviderAssignment(
   if (rightNode !== undefined && context.ast.kindName(rightNode) === "KindArrayLiteralExpression") {
     sourceResultCarrier = rustOptionElementCarrier(selectedRight) ?? selectedRight;
   }
-  if (isRustNullishSourceCarrier(sourceResultCarrier)) {
+  if (isRustAbsenceCarrier(sourceResultCarrier)) {
     const sourceNode = asNode(request.right, context);
     const sourceType = sourceNode === undefined ? undefined : context.currentSemantics.types.expressionType(sourceNode);
     sourceResultCarrier = sourceType === undefined ? undefined
@@ -594,43 +609,6 @@ export function selectedSourceValueCarrier(
         resolveRustTargetTypeRef(operand, context, options);
   }
   return selectedValueCarrier(value.expression, value.type, context, options);
-}
-
-export function selectedValueCarrier(
-  expression: ExtensionFactSubject,
-  selectedType: ExtensionFactSubject,
-  context: RustOperationPolicyContext,
-  options: RustOperationsProviderOptions,
-): TargetTypeRef | undefined {
-  const stored = resolveRustTargetTypeRef(expression, context, options);
-  const effective = rustEffectiveValueCarrier(context.facts, expression);
-  if (effective !== undefined &&
-    (stored === undefined || !rustTargetTypeRefEquals(effective, stored))) {
-    return effective;
-  }
-  const selected = resolveRustTargetTypeRef(selectedType, context, options);
-  if (stored === undefined || selected === undefined ||
-    rustTargetTypeRefEquals(stored, selected)) {
-    return selected ?? stored;
-  }
-  const flowRead = selectRustFlowReadProjection(
-    stored,
-    selected,
-    options.projectTypes, context.typeDefinitions,
-  );
-  if (flowRead.kind === "projection") {
-    recordRustFlowReadProjection(
-      context.facts,
-      expression,
-      flowRead.fact,
-    );
-    return selected;
-  }
-  if (stored.kind === "reference" &&
-    rustTargetTypeRefEquals(stored.referent, selected)) {
-    return selected;
-  }
-  return stored;
 }
 
 export function selectedCallCalleeSymbol(

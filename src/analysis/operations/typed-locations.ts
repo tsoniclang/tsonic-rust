@@ -5,6 +5,7 @@ import type {
   SourceCallMarkerKind,
 } from "@tsonic/tsts";
 import type { SourceProgramNavigation } from "@tsonic/target-api/source";
+import { selectedValueCarrier } from "./selected-values.js";
 import {
   acceptRustPolicy,
   rejectRustPolicy,
@@ -48,7 +49,7 @@ import {
   rustClosureProtocol,
   rustCarrierSupportsObjectIdentity,
   rustOptionElementCarrier,
-  isRustDefinitelyNullishCarrier,
+  isRustAbsenceCarrier,
 } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustLocationCallbackCarrier } from "./location-callbacks.js";
@@ -175,7 +176,10 @@ function acceptRustTypedLocationCall(
             ? [optionLocationCarrier]
             : [optionLocationCarrier, optionLocationCarrier];
   if (sourceOperation.operation === "bind-pointer") {
-    const identity = resolveRustTargetTypeRef(sourceOperation.identityExpression, context, options);
+    const identityArgument = request.source.sourceArguments[0];
+    const identity = identityArgument?.expression === sourceOperation.identityExpression
+      ? selectedValueCarrier(identityArgument.expression, identityArgument.type, context, options)
+      : undefined;
     if (identity === undefined || !(rustCarrierSupportsObjectIdentity(identity) ||
       options.projectCarrierSupportsObjectIdentity(identity))) {
       return rejectRustTypedLocation(request.source.call, context,
@@ -438,12 +442,12 @@ function rustTypedLocationPlan(
         : resolveRustTargetTypeRef(operation.explicitSourcePointeeTypeNode, context, options);
       return sourcePointeeCarrier === undefined ||
         (operandPointeeCarrier === undefined
-          ? !isRustDefinitelyNullishCarrier(sourceLocation)
+          ? !isRustAbsenceCarrier(sourceLocation)
           : !rustTargetTypeRefEquals(sourcePointeeCarrier, operandPointeeCarrier))
         ? { kind: "rejected", reason: "Pointer projection requires the exact source location carrier." }
         : { kind: "selected", value: { ...base, operation: operation.operation,
             pointerExpression: operation.pointerExpression, sourcePointeeCarrier,
-            optional: rustOptionElementCarrier(sourceLocation) !== undefined || isRustDefinitelyNullishCarrier(sourceLocation),
+            optional: rustOptionElementCarrier(sourceLocation) !== undefined || isRustAbsenceCarrier(sourceLocation),
             fromSourceExpression: operation.fromSourceExpression, toSourceExpression: operation.toSourceExpression } };
     }
     case "address-of": {

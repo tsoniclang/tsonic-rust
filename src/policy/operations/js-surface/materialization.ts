@@ -41,6 +41,7 @@ export function materializeTarget(
 export function materializeVariadicTarget(
   target: RustProviderOperationForm,
   elementCarrier: TargetTypeRef | undefined,
+  parameterCarriers: readonly (TargetTypeRef | undefined)[],
 ): RustProviderOperationForm | undefined {
   if (target.form === "receiver-tagged-array") {
     if (elementCarrier === undefined) {
@@ -62,9 +63,15 @@ export function materializeVariadicTarget(
     target.elementCarrier.id === "tsonic.rust.infer"
     ? elementCarrier
     : target.elementCarrier;
-  return resolvedElementCarrier === undefined
+  const leadingArguments = target.leadingArguments.map((argument, index) => {
+    const carrier = argument.carrier.kind === "opaque" && argument.carrier.id === "tsonic.rust.infer"
+      ? parameterCarriers[index] : argument.carrier;
+    return carrier === undefined ? undefined : { ...argument, carrier };
+  });
+  return resolvedElementCarrier === undefined || leadingArguments.some(argument => argument === undefined)
     ? undefined
-    : { ...target, elementCarrier: resolvedElementCarrier };
+    : { ...target, elementCarrier: resolvedElementCarrier,
+        leadingArguments: leadingArguments as typeof target.leadingArguments };
 }
 
 export function materializeJsonValueConversions(

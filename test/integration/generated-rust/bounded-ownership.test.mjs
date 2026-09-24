@@ -50,12 +50,12 @@ export function main(): void {
 });
 
 test("local array borrows end before mutation and preserve owned values across effects", { timeout: 300_000 }, () => {
-  const { result, output } = compile(String.raw`
-import type { int32 } from "@tsonic/core/types.js";
+const { result, output } = compile(String.raw`
+import type { int32, nativeUint } from "@tsonic/core/types.js";
 function sum(contents: string): number {
   const lines = contents.split("\n");
   let total = 0;
-  for (let index: int32 = 0; index < lines.length; index++) {
+  for (let index: nativeUint = 0; index < lines.length; index++) {
     const line = lines[index];
     if (line.length === 0) continue;
     const fields = line.split(",");

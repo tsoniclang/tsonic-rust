@@ -227,9 +227,14 @@ test("target builds delete stale dist artifacts before compilation", () => {
 
 test("bounded tests cap and report nested Cargo parallelism", () => {
   const runner = readFileSync(join(repositoryRoot, "scripts/test.sh"), "utf8");
-  assert.match(runner, /cargo_build_jobs="\$\{CARGO_BUILD_JOBS:-2\}"/u);
-  assert.match(runner, /export CARGO_BUILD_JOBS="\$\{cargo_build_jobs\}"/u);
-  assert.match(runner, /nested Cargo jobs: %s per Cargo invocation/u);
+  const hostRoot = resolve(repositoryRoot, process.env.TSONIC_ROOT ?? "../tsonic");
+  const guard = readFileSync(join(hostRoot, "test/scripts/bounded-run.sh"), "utf8");
+  const worker = readFileSync(join(repositoryRoot, "scripts/test-worker.sh"), "utf8");
+  assert.match(runner, /\$\{TSONIC_ROOT:-\.\.\/tsonic\}\/test\/scripts\/bounded-run\.sh" rust/u);
+  assert.match(guard, /test-resource-budget\.mjs" "\$profile"/u);
+  assert.match(guard, /export CARGO_BUILD_JOBS="\$\{cargo_build_jobs\}"/u);
+  assert.match(guard, /nested Cargo jobs: %s per Cargo invocation/u);
+  assert.match(worker, /--test-concurrency="\$\{TSONIC_TEST_WORKERS\}"/u);
 });
 
 test("no product dependency on analysis files", () => {

@@ -168,25 +168,33 @@ export function createRustStructuralShapePlan(
       throw new Error("Rust structural carrier canonicalization produced a non-injective identity.");
     }
   }
-  const roots = new Map<string, string>();
+  const parents = new Map<string, Set<string>>();
   for (const { template, instance } of instantiations) {
     const templateKey = structuralStorageKey(template, componentForFile);
     const instanceKey = structuralStorageKey(instance, componentForFile);
     if (templateKey === instanceKey) continue;
-    const prior = roots.get(instanceKey);
-    if (prior !== undefined && prior !== templateKey) {
-      throw new Error("Rust structural instantiation has contradictory storage templates.");
-    }
-    roots.set(instanceKey, templateKey);
+    const selected = parents.get(instanceKey) ?? new Set<string>();
+    selected.add(templateKey);
+    parents.set(instanceKey, selected);
   }
+  const roots = new Map<string, string>();
+  const resolving = new Set<string>();
   const rootFor = (key: string): string => {
-    const visited = new Set<string>();
-    while (roots.has(key)) {
-      if (visited.has(key)) throw new Error("Rust structural instantiation has cyclic storage templates.");
-      visited.add(key);
-      key = roots.get(key)!;
+    const existing = roots.get(key);
+    if (existing !== undefined) return existing;
+    if (resolving.has(key)) throw new Error("Rust structural instantiation has cyclic storage templates.");
+    resolving.add(key);
+    let root: string | undefined;
+    for (const parent of parents.get(key) ?? []) {
+      const selected = rootFor(parent);
+      if (root !== undefined && root !== selected) {
+        throw new Error("Rust structural instantiation has contradictory storage templates.");
+      }
+      root = selected;
     }
-    return key;
+    resolving.delete(key);
+    roots.set(key, root ?? key);
+    return root ?? key;
   };
   const grouped = new Map<string, Map<string, TargetTypeRef>>();
   for (const [key, instances] of uniqueByKey) {
@@ -197,14 +205,17 @@ export function createRustStructuralShapePlan(
     for (const [instanceKey, carrier] of instances) group.set(instanceKey, carrier);
   }
   const usedTypeNamesByComponent = new Map<string, Set<string>>();
+  const nestedCarriers: { readonly source: TargetTypeRef; readonly carrier: TargetTypeRef }[] = [];
   const definitions = [...grouped]
     .sort(([left], [right]) => left.localeCompare(right, "en"))
     .map(([key, instances]): RustStructuralShapeDefinition => {
       const sourceCarriers = Object.freeze([...instances]
         .sort(([left], [right]) => left.localeCompare(right, "en"))
         .map(([, carrier]) => carrier));
-      const carrier = rustStructuralGenericCarrier([...uniqueByKey.get(key)!]
+      const selection = rustStructuralGenericCarrier([...uniqueByKey.get(key)!]
         .sort(([left], [right]) => left.localeCompare(right, "en"))[0]![1]);
+      const carrier = selection.carrier;
+      nestedCarriers.push(...selection.nestedCarriers);
       const structural = rustStructuralObjectCarrierValue(carrier);
       if (structural === undefined) {
         throw new Error("Rust structural shape plan contains a non-structural carrier.");
@@ -301,17 +312,28 @@ export function createRustStructuralShapePlan(
         }) }),
       });
     });
-  const byKey = new Map(definitions.flatMap((definition) =>
-    definition.sourceCarriers.map((carrier) =>
-      [closedMetadataKey(carrier), instantiateStructuralDefinition(definition, carrier)] as const)));
-  for (const definition of definitions) {
-    const key = closedMetadataKey(definition.carrier);
+  const byKey = new Map<string, RustStructuralShapeDefinition>();
+  const originsByKey = new Map<string, RustStructuralShapeDefinition>();
+  const registerCarrier = (definition: RustStructuralShapeDefinition, carrier: TargetTypeRef): void => {
+    const key = closedMetadataKey(carrier);
     const existing = byKey.get(key);
     if (existing !== undefined && (existing.targetName !== definition.targetName ||
       existing.componentId !== definition.componentId)) {
       throw new Error("Rust structural storage has conflicting canonical template identities.");
     }
-    byKey.set(key, definition);
+    byKey.set(key, instantiateStructuralDefinition(definition, carrier));
+    originsByKey.set(key, definition);
+  };
+  for (const definition of definitions) {
+    for (const carrier of definition.sourceCarriers) registerCarrier(definition, carrier);
+    registerCarrier(definition, definition.carrier);
+  }
+  for (const nested of nestedCarriers) {
+    const definition = originsByKey.get(closedMetadataKey(nested.source));
+    if (definition === undefined) {
+      throw new Error("Nested Rust structural storage is missing its checked source definition.");
+    }
+    registerCarrier(definition, nested.carrier);
   }
   return Object.freeze({
     ...createRustGeneratedUnionPlan(unions, componentForFile, usedTypeNamesByComponent),

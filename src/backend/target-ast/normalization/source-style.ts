@@ -16,7 +16,8 @@ import { rustBlockReferencesPath } from "../inspection/source-usage.js";
 import { collapseRustForwardingClosure } from "./forwarding-closures.js";
 import { nameRustSignatureTypes } from "./signature-aliases.js";
 import { rustItemsReferenceModuleAlias } from "../inspection/source-module-usage.js";
-import { emptyRustGenerics } from "../nodes.js";
+import { rustTypeEquals } from "../inspection/type-equality.js";
+import { mergeRustAdjacentConditionalBranches } from "./conditional-branches.js";
 
 export function finalizeRustSourceStyle(
   model: RustSourceFileModel,
@@ -62,6 +63,7 @@ function finalizeRustItemStyle(
       ? item.attrs
       : appendRustAttribute(item.attrs, rustLintAttributes.tooManyArguments);
     if (hasErasedGenericParameter(item)) attrs = appendRustAttribute(attrs, rustLintAttributes.unusedTypeParameters);
+    if (hasUnusedParameter(item)) attrs = appendRustAttribute(attrs, rustLintAttributes.unusedVariables);
     return { ...item, attrs };
   }
   if (item.kind === "trait") {
@@ -86,13 +88,17 @@ function finalizeRustItemStyle(
 
 function finalizeRustTraitFunctionStyle(fn: RustTraitFunction): RustTraitFunction {
   const argumentCount = fn.params.length + (fn.selfParam === undefined ? 0 : 1);
-  const attrs = argumentCount <= 7
+  let attrs = argumentCount <= 7
     ? fn.attrs
     : appendRustAttribute(fn.attrs, rustLintAttributes.tooManyArguments);
+  const body = fn.body === undefined ? undefined : createRustBodyStyler().block(fn.body);
+  if (body !== undefined && hasUnusedParameter({ ...fn, body })) {
+    attrs = appendRustAttribute(attrs, rustLintAttributes.unusedVariables);
+  }
   return {
     ...fn,
     ...(attrs === undefined ? {} : { attrs }),
-    ...(fn.body === undefined ? {} : { body: createRustBodyStyler().block(fn.body) }),
+    ...(body === undefined ? {} : { body }),
   };
 }
 
@@ -102,6 +108,7 @@ function finalizeRustImplFunctionStyle(
   publicOwner: boolean,
 ): RustImplFunction {
   let attrs = fn.attrs;
+  if (hasUnusedParameter(fn)) attrs = appendRustAttribute(attrs, rustLintAttributes.unusedVariables);
   if (inherent && hasErasedGenericParameter(fn)) attrs = appendRustAttribute(attrs, rustLintAttributes.unusedTypeParameters);
   const argumentCount = fn.params.length + (fn.selfParam === undefined ? 0 : 1);
   if (inherent && argumentCount > 7) {
@@ -119,9 +126,14 @@ function finalizeRustImplFunctionStyle(
 }
 
 function hasErasedGenericParameter(fn: RustImplFunction): boolean {
-  const usage: RustItem = { ...fn, kind: "function", generics: emptyRustGenerics };
+  const usage: RustItem = { ...fn, kind: "function" };
   return fn.generics.parameters.some(parameter => parameter.kind === "type" &&
     !rustItemsReferenceModuleAlias([usage], parameter.name));
+}
+
+function hasUnusedParameter(fn: Pick<RustImplFunction, "params" | "body">): boolean {
+  return fn.params.some(parameter => !parameter.name.startsWith("_") &&
+    !rustBlockReferencesPath(fn.body, parameter.name));
 }
 
 function createRustBodyStyler(nameType?: (type: RustType, role: string) => RustType): {
@@ -135,8 +147,18 @@ function finalizeRustFunctionBodyStyle(block: RustBlock): RustBlock {
 }
 
 function finalizeRustBlockStyle(block: RustBlock): RustBlock {
+  const retainsFieldAssignment = block.statements.some((statement, index) => {
+      const previous = block.statements[index - 1];
+      return previous?.kind === "let" && previous.init?.kind === "associated-call" &&
+        previous.init.trait?.kind === "named" && previous.init.trait.path === "core::default::Default" &&
+        previous.init.method === "default" && previous.init.args.length === 0 &&
+        statement.kind === "assign" && statement.operator === "=" && statement.target.kind === "field" &&
+        statement.target.receiver.kind === "path" && statement.target.receiver.path === previous.name &&
+        !rustBlockReferencesPath({ statements: [{ kind: "expr", expr: statement.value }] }, previous.name);
+  });
   return {
     ...block,
+    ...(retainsFieldAssignment ? { innerAttrs: appendRustAttribute(block.innerAttrs, rustLintAttributes.fieldReassignWithDefault) } : {}),
     statements: block.statements.map(finalizeRustStatementStyle),
   };
 }
@@ -384,13 +406,19 @@ function finalizeRustExpressionStyle(expression: RustExpr): RustExpr {
     case "numeric-cast":
       result = { ...expression, expression: finalizeRustExpressionStyle(expression.expression) };
       break;
-    case "binary":
+    case "binary": {
+      const left = finalizeRustExpressionStyle(expression.left);
+      const right = finalizeRustExpressionStyle(expression.right);
+      if (left.kind === "bool-literal" && (expression.operator === "&&" || expression.operator === "||")) {
+        return (expression.operator === "&&" ? left.value : !left.value) ? right : left;
+      }
       result = {
         ...expression,
-        left: finalizeRustExpressionStyle(expression.left),
-        right: finalizeRustExpressionStyle(expression.right),
+        left,
+        right,
       };
       break;
+    }
     case "range":
       result = {
         ...expression,
@@ -398,14 +426,26 @@ function finalizeRustExpressionStyle(expression: RustExpr): RustExpr {
         end: finalizeRustExpressionStyle(expression.end),
       };
       break;
-    case "conditional":
-      result = {
+    case "conditional": {
+      const whenTrue = finalizeRustExpressionStyle(expression.whenTrue);
+      const whenFalse = finalizeRustExpressionStyle(expression.whenFalse);
+      const condition = finalizeRustExpressionStyle(expression.condition);
+      if (whenTrue.kind === "none" && whenFalse.kind === "none" ||
+        whenTrue.kind === "associated-value" && whenFalse.kind === "associated-value" &&
+        whenTrue.name === whenFalse.name && rustTypeEquals(whenTrue.owner, whenFalse.owner) &&
+        rustTypeEquals(whenTrue.trait, whenFalse.trait) ||
+        whenTrue.kind === "tuple-literal" && whenTrue.elements.length === 0 &&
+        whenFalse.kind === "tuple-literal" && whenFalse.elements.length === 0) {
+        return { kind: "evaluate-then", effect: condition, discard: "value", value: whenTrue };
+      }
+      result = mergeRustAdjacentConditionalBranches(condition, whenTrue, whenFalse) ?? {
         ...expression,
-        condition: finalizeRustExpressionStyle(expression.condition),
-        whenTrue: finalizeRustExpressionStyle(expression.whenTrue),
-        whenFalse: finalizeRustExpressionStyle(expression.whenFalse),
+        condition,
+        whenTrue,
+        whenFalse,
       };
       break;
+    }
     case "match":
       result = {
         ...expression,
@@ -472,6 +512,10 @@ function finalizeRustExpressionStyle(expression: RustExpr): RustExpr {
       result = { ...expression, expression: finalizeRustExpressionStyle(expression.expression) };
       break;
     case "evaluate-then":
+      if (expression.discard === "unit" &&
+        expression.effect.kind === "tuple-literal" && expression.effect.elements.length === 0) {
+        return finalizeRustExpressionStyle(expression.value);
+      }
       result = {
         ...expression,
         effect: finalizeRustExpressionStyle(expression.effect),

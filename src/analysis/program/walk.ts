@@ -47,13 +47,16 @@ export const rustTargetSemanticsExtensionId = "tsonic.rust.policy";
 export interface RustFactWalk {
   readonly context: RustAnalysisContext;
   readonly providerRows: readonly RustProviderOperationRow[];
-  readonly resolving: Set<object>;
+  readonly resolving: Set<Node>;
+  readonly rejectedExpressions: WeakSet<Node>;
   readonly jsEnabled: boolean;
   readonly sourceProfiles: RustSourceProfileRegistry;
   readonly sourceTypes: RustSourceTypeRegistry;
   readonly sourceCallableAbi: RustSourceCallableAbiResolver;
   readonly operationOptions: RustOperationsProviderOptions;
   readonly operationAttempts: WeakSet<object>;
+  readonly inferredNumericReturns: Map<Node, TargetTypeRef | undefined>;
+  readonly resolvingNumericReturns: Set<Node>;
   readonly postCheckOperations: WeakMap<object, "binary" | "unary-minus" | "unary-plus">;
   readonly deferredCallbackCalls: WeakMap<Node, {
     readonly request: import("../../policy/operations/contracts.js").RustCheckedCallSelectionInput;
@@ -98,6 +101,7 @@ export function appendRustDiagnostic(
   node: Node | undefined,
   evidence: readonly string[],
 ): void {
+  recordTerminalExpressionFailure(walk, node);
   walk.context.diagnostics.push({
     code,
     category: "error",
@@ -106,6 +110,11 @@ export function appendRustDiagnostic(
     ...(node === undefined ? {} : { sourceNode: node }),
     evidence,
   });
+}
+
+function recordTerminalExpressionFailure(walk: RustFactWalk, node: Node | undefined): void {
+  if (node !== undefined) walk.rejectedExpressions.add(node);
+  for (const dependent of walk.resolving) walk.rejectedExpressions.add(dependent);
 }
 
 export function rustOperationContext(
@@ -125,7 +134,9 @@ export function recordPolicySelection<T extends { readonly operation?: unknown }
   selection: import("../../policy/operations/contracts.js").RustPolicySelection<T>,
 ): void {
   if (selection.kind === "reject") {
-    walk.context.diagnostics.push(rustPolicyTargetDiagnostic(selection.diagnostic));
+    const diagnostic = rustPolicyTargetDiagnostic(selection.diagnostic);
+    if (diagnostic.category === "error") recordTerminalExpressionFailure(walk, diagnostic.sourceNode);
+    walk.context.diagnostics.push(diagnostic);
     return;
   }
   const operation = selection.value.operation;

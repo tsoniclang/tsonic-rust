@@ -8,6 +8,7 @@ import {
   rustFixedArrayCarrierValue,
   rustBuiltInCarrierRenderPaths,
   rustCallableTargetId,
+  rustAbsenceTargetId,
   rustFutureTargetId,
   rustNamedTypeCarrierValue,
   rustNativeScalarTargetId,
@@ -121,7 +122,7 @@ export function rustFoundationForCarrier(carrier: RustTargetTypeRef): RustFounda
           structural.fields.forEach((field) => visit(field.type));
           return;
         }
-        if (current.name !== "never" && current.name !== "source-nullish") {
+        if (current.name !== "never") {
           require("std");
         }
         return;
@@ -140,7 +141,7 @@ function rustFoundationForTargetNamedCarrier(id: string): RustFoundation {
   if (id === rustStringTargetId || id === rustCallableTargetId) {
     return "alloc";
   }
-  if (id === rustStrTargetId) {
+  if (id === rustAbsenceTargetId || id === rustStrTargetId) {
     return "core";
   }
   if (id === rustFutureTargetId || id === rustNativeScalarTargetId) {
@@ -208,27 +209,10 @@ export function rustFoundationForPath(path: string): RustFoundation {
 }
 
 const runtimeCoreExports = new Set([
-  "Null",
-  "Undefined",
-  "bitwise_and",
-  "bitwise_not",
-  "bitwise_or",
-  "bitwise_xor",
   "iter_cloned",
   "iter_copied",
-  "left_shift",
   "native_shift_left",
   "native_shift_right",
   "native_unsigned_shift_right",
   "option_coalesce",
-  "signed_right_shift",
-  "source_number_bitwise_and",
-  "source_number_bitwise_or",
-  "source_number_bitwise_xor",
-  "source_number_shift_left",
-  "source_number_shift_right",
-  "source_number_unsigned_shift_right",
-  "to_int32",
-  "to_uint32",
-  "unsigned_right_shift",
 ]);
