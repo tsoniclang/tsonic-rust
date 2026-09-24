@@ -1,4 +1,5 @@
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
+import { rustObjectReferenceViewKey } from "../../../analysis/facts/object-reference-views.js";
 import type { RustClassValuePlan } from "../../../analysis/objects/class-values.js";
 import type { RustSourceCallableSpecializationPlan } from "../../../analysis/callables/specializations.js";
 import type { RustDeclarationGenericRequirementIndex } from "../../../analysis/declarations/generic-requirements.js";
@@ -764,5 +765,3 @@ export function analyzeRustGeneratedItemUsage(input: {
       variantsByDeclaration.get(declaration)?.has(variantName) === true,
   });
 }
-
-import { rustObjectReferenceViewKey } from "../../../analysis/facts/object-reference-views.js";

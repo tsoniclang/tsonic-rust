@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { lowerRustExactIntegerConversion } from "../expressions/exact-integer.js";
 import { planRustAbsentValue } from "../expressions/optional-storage.js";
 import { planRustGenericCallableFlow } from "../expressions/generic-callable-flow.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -415,4 +416,3 @@ function applyRustCallableValueAdapterRaw(
     }
   }
 }
-import { lowerRustExactIntegerConversion } from "../expressions/exact-integer.js";

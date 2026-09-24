@@ -1,4 +1,6 @@
 import { planRustRuntimeCategory } from "./runtime-category.js";
+import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
+import { planRustOptionalStorageOperation } from "./optional-storage.js";
 import { rustClassValueFactKey } from "../../../analysis/facts/class-values.js";
 import { planRustClassValueRead } from "../objects/class-values.js";
 import {
@@ -646,5 +648,3 @@ export function planExpressionInner(
     }
   }
 }
-import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
-import { planRustOptionalStorageOperation } from "./optional-storage.js";

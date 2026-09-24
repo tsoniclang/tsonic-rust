@@ -1,3 +1,4 @@
+import { rustObjectReferenceViewKey } from "../facts/object-reference-views.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
@@ -906,4 +907,3 @@ function diagnostic(
     evidence: ["target.capability=rust.callable.generic-contract-closure"],
   };
 }
-import { rustObjectReferenceViewKey } from "../facts/object-reference-views.js";

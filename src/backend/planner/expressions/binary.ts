@@ -1,3 +1,5 @@
+import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
+import { planRustOptionalStorageOperation } from "./optional-storage.js";
 import {
   isRustBoolCarrier,
   isRustStringCarrier,
@@ -804,5 +806,3 @@ function planBooleanLiteralComparison(
     ? negateRustBooleanExpression(literal.other)
     : literal.other;
 }
-import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
-import { planRustOptionalStorageOperation } from "./optional-storage.js";

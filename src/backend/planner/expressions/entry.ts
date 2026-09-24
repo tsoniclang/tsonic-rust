@@ -1,3 +1,5 @@
+import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
+import { planRustOptionalStorageOperation } from "./optional-storage.js";
 import {
   isRustCopyCarrier,
   rustCarrierSupportsClone,
@@ -548,5 +550,3 @@ export function planRustProjectUpcast(
     },
   };
 }
-import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
-import { planRustOptionalStorageOperation } from "./optional-storage.js";
