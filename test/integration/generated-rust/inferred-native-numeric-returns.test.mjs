@@ -72,7 +72,7 @@ test("tuple projections borrow retained owners and copy only an owned selected f
     target: { id: "rust", options: { outputType: "bin", crateName: "native_tuple_projection" } },
     files: { "index.ts": `
 import { check } from "@acme/testing";
-import type { int32, int64 } from "@tsonic/core/types.js";
+import type { FixedArray, int32, int64 } from "@tsonic/core/types.js";
 let sequence: int32 = 0;
 function create(): [int64, string] {
   sequence = sequence * 10 + 1;
@@ -91,13 +91,13 @@ export function main(): void {
   const single: [int32, string] = [1, "moved"];
   const moved = single[1];
   check(moved === "moved");
-  const retainedArray: [string, string] = ["first", "second"];
+  const retainedArray: FixedArray<string, 2> = ["first", "second"];
   const first = retainedArray[0];
   check(first === "first" && retainedArray[0] === "first" && retainedArray[1] === "second");
-  const ownedArray: [string, string] = ["discarded", "selected"];
+  const ownedArray: FixedArray<string, 2> = ["discarded", "selected"];
   const selectedElement = ownedArray[1];
   check(selectedElement === "selected");
-  const ownedFirst: [string, string] = ["selected first", "discarded"];
+  const ownedFirst: FixedArray<string, 2> = ["selected first", "discarded"];
   check(ownedFirst[0] === "selected first");
   const selected = create()[select()];
   check(selected === "owned" && sequence === 12);
