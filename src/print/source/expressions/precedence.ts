@@ -97,7 +97,7 @@ export function expressionNeedsParentheses(
     (own === parent && (isRightSide || parent === RustPrecedence.Comparison));
 }
 
-function expressionIsStatementBlock(expression: RustExpr): boolean {
+export function expressionIsStatementBlock(expression: RustExpr): boolean {
   if (expression.kind === "bottom") {
     return expressionIsStatementBlock(expression.expression);
   }

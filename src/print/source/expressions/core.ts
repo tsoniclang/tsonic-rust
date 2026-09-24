@@ -10,6 +10,7 @@ import {
 } from "./callable.js";
 import { printRustClosureParams } from "./closure-params.js";
 import {
+  expressionIsStatementBlock,
   expressionNeedsParentheses,
   operatorPrecedence,
   RustPrecedence,
@@ -66,7 +67,7 @@ export function printRustExpr(expression: RustExpr): string {
     case "call":
       return `${printRustDirectCallTarget(expression)}(${expression.args.map(printRustExpr).join(", ")})`;
     case "invoke":
-      return `${printOperand(expression.callee, RustPrecedence.Postfix, false)}(${expression.args.map(printRustExpr).join(", ")})`;
+      return `${printDelimitedPostfixOperand(expression.callee)}(${expression.args.map(printRustExpr).join(", ")})`;
     case "associated-value": {
       const owner = expression.trait === undefined
         ? printRustAssociatedOwner(expression.owner)
@@ -88,7 +89,7 @@ export function printRustExpr(expression: RustExpr): string {
       return `${nestedTupleField ? `(${receiver})` : receiver}.${expression.name}`;
     }
     case "index":
-      return `${printOperand(expression.receiver, RustPrecedence.Postfix, false)}[${printRustExpr(expression.index)}]`;
+      return `${printDelimitedPostfixOperand(expression.receiver)}[${printRustExpr(expression.index)}]`;
     case "block":
       return `{ ${printRustBlockExpressionContents(expression)} }`;
     case "unsafe":
@@ -161,6 +162,12 @@ export function printRustExpr(expression: RustExpr): string {
         : `${expression.path} { ${members.join(", ")} }`;
     }
   }
+}
+
+function printDelimitedPostfixOperand(expression: RustExpr): string {
+  return expressionIsStatementBlock(expression)
+    ? `(${printRustExpr(expression)})`
+    : printOperand(expression, RustPrecedence.Postfix, false);
 }
 
 function printOperand(

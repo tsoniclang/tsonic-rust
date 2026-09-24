@@ -91,6 +91,14 @@ export function main(): void {
   const single: [int32, string] = [1, "moved"];
   const moved = single[1];
   check(moved === "moved");
+  const retainedArray: [string, string] = ["first", "second"];
+  const first = retainedArray[0];
+  check(first === "first" && retainedArray[0] === "first" && retainedArray[1] === "second");
+  const ownedArray: [string, string] = ["discarded", "selected"];
+  const selectedElement = ownedArray[1];
+  check(selectedElement === "selected");
+  const ownedFirst: [string, string] = ["selected first", "discarded"];
+  check(ownedFirst[0] === "selected first");
   const selected = create()[select()];
   check(selected === "owned" && sequence === 12);
 }
@@ -99,6 +107,9 @@ export function main(): void {
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /let kept: String = pair\.1\.clone\(\);/u);
   assert.match(output, /let moved: String = single\.1;/u);
-  assert.doesNotMatch(output, /(?:pair|nested|single)\.clone\(\)|nested\.1\.clone\(\)|create\([^)]*\)\.clone\(\)/u);
+  assert.match(output, /let first: String = retained_array\[0\]\.clone\(\);/u);
+  assert.match(output, /owned_array\.into_iter\(\)\.nth\(1\)\.unwrap\(\)/u);
+  assert.match(output, /owned_first\.into_iter\(\)\.next\(\)\.unwrap\(\)/u);
+  assert.doesNotMatch(output, /(?:pair|nested|single|retained_array|owned_array|owned_first)\.clone\(\)|nested\.1\.clone\(\)|create\([^)]*\)\.clone\(\)/u);
   validateGeneratedProject("native-tuple-projection", result.artifacts, { run: true });
 });

@@ -21,6 +21,7 @@ import { rustOptionElementCarrier } from "../../../target-model/types/index.js";
 import { rustComputedMemberFactKey } from "../../../analysis/facts/operations/keys.js";
 import { planPropertyAccess } from "./properties.js";
 import { planRustIndexedFieldRead } from "./indexed-fields.js";
+import { rustCarrierHasCopyContract } from "../types/generic-requirements.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
@@ -123,11 +124,14 @@ function planElementAccessInner(node: Node, context: RustPlanContext): RustExpr 
     if (receiverNode === undefined || indexNode === undefined) {
       return undefined;
     }
-    return planIndexedProjection(node, receiverNode, indexNode, context, receiver => ({
-      kind: "index",
-      receiver,
-      index: { kind: "int-literal", text: String(fact.index) },
-    }));
+    return planIndexedProjection(node, receiverNode, indexNode, context, (receiver, borrowed) =>
+      borrowed || rustCarrierHasCopyContract(selectedResult, context)
+        ? { kind: "index", receiver, index: { kind: "int-literal", text: String(fact.index) } }
+        : { kind: "method-call", receiver: {
+            kind: "method-call", receiver: { kind: "method-call", receiver, method: "into_iter", args: [] },
+            method: fact.index === 0 ? "next" : "nth",
+            args: fact.index === 0 ? [] : [{ kind: "int-literal", text: String(fact.index) }],
+          }, method: "unwrap", args: [] });
   }
   if (fact !== undefined && fact.kind === "tuple-index") {
     const indexNode = ElementAccessExpression_ArgumentExpression(context.input.program.source.ast, node);
@@ -228,7 +232,7 @@ function planIndexedProjection(
   receiverNode: Node,
   indexNode: Node,
   context: RustPlanContext,
-  project: (receiver: RustExpr) => RustExpr,
+  project: (receiver: RustExpr, borrowed: boolean) => RustExpr,
 ): RustExpr | undefined {
   const planned = planExpression(receiverNode, context);
   if (planned === undefined) return undefined;
@@ -236,7 +240,7 @@ function planIndexedProjection(
   const borrowed = receiver !== planned || expressionCarrier(receiverNode, context)?.kind === "reference" ||
     context.expressionOverrides?.get(receiverNode)?.valueForm === "shared-reference";
   const read = (owner: RustExpr): RustExpr => borrowed
-    ? planRustValueRead(node, project(owner), context) : project(owner);
+    ? planRustValueRead(node, project(owner, true), context) : project(owner, false);
   if (context.input.program.source.ast.kindName(indexNode) === KindNumericLiteral) return read(receiver);
   const effect = planExpression(indexNode, context);
   if (effect === undefined) return undefined;
