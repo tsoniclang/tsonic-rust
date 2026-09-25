@@ -302,7 +302,7 @@ test("Rust emission delegates canonical layout exclusively to bounded rustfmt", 
 test("JS operation rows are unique per owner/member/kind/lane/variant", async () => {
   const source = readFileSync(join(sourceRoot, "policy/operations/js-surface/rows.ts"), "utf8");
   assert.match(source, /const jsOperationRows = defineJsOperationRows\(\[/u);
-  await import("../../dist/policy/operations/js-surface.js");
+  await import("../../dist/policy/operations/source-profiles/js/index.js");
 });
 
 test("rust target product source has no NodeJS capability coupling", () => {

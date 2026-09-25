@@ -479,7 +479,7 @@
     "area": "providers",
     "source": "externalMacro(value);",
     "classification": "target-limit",
-    "rustProof": "src/providers/compiler/model/model.ts",
+    "rustProof": "src/providers/native/model/model.ts",
     "action": "require a library-owned function wrapper because rustdoc does not provide an ordinary callable macro ABI"
   },
   {

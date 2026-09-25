@@ -40,7 +40,7 @@ import { planExpression } from "../expressions/index.js";
 import {
   planFunctionDeclarations,
   planNativeModuleFunction,
-} from "../declarations/functions.js";
+} from "../declarations/callables/functions.js";
 import {
   diagnosticInput,
   isUpperSnakeName,
@@ -76,11 +76,11 @@ import {
   planRustHoistedModuleCell,
   type PlannedRustModuleCell,
 } from "../project/module-storage.js";
-import { planRustClassInitialization } from "../declarations/class-static-fields.js";
-import { planProjectStaticFunctionItems } from "../declarations/methods.js";
+import { planRustClassInitialization } from "../declarations/classes/static-fields.js";
+import { planProjectStaticFunctionItems } from "../declarations/classes/methods.js";
 import { planRustTypeFamilyImplementations } from "../declarations/type-families.js";
-import { planRustGenericCallableItems } from "../declarations/generic-callables.js";
-import { planRustSuspendedCallableItems } from "../declarations/suspended-callables.js";
+import { planRustGenericCallableItems } from "../declarations/callables/generic-implementations.js";
+import { planRustSuspendedCallableItems } from "../declarations/callables/suspended.js";
 import { createRustObjectLiteralImplementationRegistry } from "../objects/object-literal-implementations.js";
 import { planRustSourceCallableValue } from "../expressions/source-callable-value.js";
 import { rustModuleInitializerFunctionName } from "./source-package-initializers.js";

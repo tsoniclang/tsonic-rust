@@ -52,14 +52,14 @@ import type { RustFactWalk } from "../program/walk.js";
 import type { RustSelectedTargetSignature, TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustSourceBindingFact, RustTargetOperationFact } from "../facts/keys.js";
 import { rustHigherRankedNativeFunctionCarrier } from "../callables/higher-ranked-function.js";
-import { readRustSourceRawAddress } from "../../policy/operations/raw-address-source.js";
-import { readRustRawLocation } from "../../policy/operations/native-memory.js";
+import { readRustSourceRawAddress } from "../../policy/operations/pointers/raw-addresses.js";
+import { readRustRawLocation } from "../../policy/operations/pointers/native-memory.js";
 import { resolveRustRawLocationCarrier } from "../operations/native-memory.js";
 import { resolveRustMemoryBindingCarrier } from "../operations/memory-bindings.js";
 import { selectTsonicMemoryFieldBinding, selectTsonicMemoryRecordBinding } from "@tsonic/source-core/facts";
 import { resolveRustRawAddressCarrier, resolveRustRawPointerIdentityCarrier } from "../operations/raw-addresses.js";
-import { readRustSourceRawPointerIdentity } from "../../policy/operations/raw-pointer-source.js";
-import { selectRustMemoryLayoutObservation } from "../../policy/operations/memory-layout.js";
+import { readRustSourceRawPointerIdentity } from "../../policy/operations/pointers/source-raw-pointers.js";
+import { selectRustMemoryLayoutObservation } from "../../policy/operations/pointers/layout-observations.js";
 import { rustMemoryLayoutObservationKey } from "../../target-model/operations/memory-layout.js";
 import { resolveRustClassValue } from "../objects/class-values.js";
 

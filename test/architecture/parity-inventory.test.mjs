@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { jsOperationRows } from "../../dist/policy/operations/js-surface/rows.js";
+import { jsOperationRows } from "../../dist/policy/operations/source-profiles/js/rows.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const operationTableRoot = join(root, "src/policy/operations/js-surface");

@@ -13,20 +13,20 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
-import { createRustCompilerWorkerClient } from "../../../../dist/providers/compiler/protocol/worker-client.js";
+import { createRustCompilerWorkerClient } from "../../../../dist/providers/native/protocol/worker-client.js";
 import {
   compilerProviderModuleId,
   projectRustCompilerModule,
-} from "../../../../dist/providers/compiler/projection/projection.js";
+} from "../../../../dist/providers/native/projection/projection.js";
 import {
   rustCompilerProviderProtocolVersion,
-} from "../../../../dist/providers/compiler/model/model.js";
+} from "../../../../dist/providers/native/model/model.js";
 import {
   rustNamedTypeCarrierValue,
 } from "../../../../dist/target-model/types/index.js";
 import {
   verifyRustCompilerStandardLibraryMetadata,
-} from "../../../../dist/providers/compiler/snapshot/cargo-snapshot.js";
+} from "../../../../dist/providers/native/snapshot/cargo-snapshot.js";
 import {
   compileRustThroughTargetPack,
   createRustSession,

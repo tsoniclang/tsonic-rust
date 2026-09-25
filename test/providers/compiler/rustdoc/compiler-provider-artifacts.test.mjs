@@ -16,18 +16,18 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { rustCompilerProviderProtocolVersion } from "../../../../dist/providers/compiler/model/model.js";
-import { parseRustdocDocument } from "../../../../dist/providers/compiler/model/rustdoc-schema.js";
-import { createRustdocDocumentLoader } from "../../../../dist/providers/compiler/snapshot/rustdoc-artifact.js";
+import { rustCompilerProviderProtocolVersion } from "../../../../dist/providers/native/model/model.js";
+import { parseRustdocDocument } from "../../../../dist/providers/native/model/rustdoc-schema.js";
+import { createRustdocDocumentLoader } from "../../../../dist/providers/native/snapshot/rustdoc-artifact.js";
 import {
   createRustCompilerCacheDirectory,
   isDeclaredCacheDirectory,
-} from "../../../../dist/providers/compiler/snapshot/cache-directory.js";
+} from "../../../../dist/providers/native/snapshot/cache-directory.js";
 import {
   createRustCompilerProjectSnapshot,
   verifyRustCompilerDependencySource,
-} from "../../../../dist/providers/compiler/snapshot/cargo-snapshot.js";
-import { createRustCompilerWorkerClient } from "../../../../dist/providers/compiler/protocol/worker-client.js";
+} from "../../../../dist/providers/native/snapshot/cargo-snapshot.js";
+import { createRustCompilerWorkerClient } from "../../../../dist/providers/native/protocol/worker-client.js";
 
 const testRoot = fileURLToPath(new URL("../../../../.temp/compiler-provider-artifact-tests/", import.meta.url));
 const cacheSignature = "Signature: 8a477f597d28d172789f06886806bc55";

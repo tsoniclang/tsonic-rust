@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { selectJsSurfaceOperation } from "../../../dist/policy/operations/js-surface.js";
+import { selectJsSurfaceOperation } from "../../../dist/policy/operations/source-profiles/js/index.js";
 import {
   rustSourcePrimitiveTargetType,
   rustStringTargetType,

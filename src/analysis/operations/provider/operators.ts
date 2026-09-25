@@ -34,7 +34,7 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { selectedValueCarrier } from "../selected-values.js";
 import { selectRustExactIntegerConversion } from "../../../target-model/conversions/exact-integer.js";
 import { rustContextualValueConversionFactKey } from "../../facts/value-projections.js";
-import { selectJsSurfaceOperation } from "../../../policy/operations/js-surface.js";
+import { selectJsSurfaceOperation } from "../../../policy/operations/source-profiles/js/index.js";
 import { selectRustProviderOperation } from "../../../policy/operations/provider-selection.js";
 import { selectRustBuiltinErrorTypeTest } from "./builtin-errors.js";
 import type {

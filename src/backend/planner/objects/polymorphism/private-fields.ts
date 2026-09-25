@@ -8,7 +8,7 @@ import { rustProjectImplementationVisibility } from "../project-storage-abi.js";
 import type { ProjectClassStateLayer } from "./model.js";
 import { rustProjectRepresentationGenerics } from "./names.js";
 import { emptyRustGenerics } from "../../../target-ast/nodes.js";
-import { rustSelfParameter } from "../../declarations/self-parameter.js";
+import { rustSelfParameter } from "../../declarations/callables/self-parameter.js";
 
 export function planProjectPrivateStateAccessors(
   stateType: RustType,

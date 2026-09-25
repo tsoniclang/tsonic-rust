@@ -1,0 +1,561 @@
+import type { JsOperationRowData } from "./model.js";
+import { atomicOperationRows } from "./atomic-rows.js";
+import {
+  rustJsValueTargetType,
+  rustSourcePrimitiveTargetType,
+  rustStringTargetType,
+  rustJsTypedArrayTargetIds,
+  type RustJsTypedArrayName,
+} from "../../../../target-model/types/index.js";
+
+const falseArgument = { kind: "boolean", value: false } as const;
+
+const symbolRows: readonly JsOperationRowData[] = [
+  { owner: "SymbolConstructor", member: "call", operationKind: "call", lane: "symbol", variant: "empty", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::JsSymbol::create" }, result: { ref: "symbol" } } },
+  { owner: "SymbolConstructor", member: "call", operationKind: "call", lane: "symbol", variant: "string", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::JsSymbol::create_string", argModes: ["ref"] }, result: { ref: "symbol" }, params: [{ ref: "string" }] } },
+  { owner: "SymbolConstructor", member: "call", operationKind: "call", lane: "symbol", variant: "number", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::JsSymbol::create_number" }, result: { ref: "symbol" }, params: [{ ref: "float64" }] } },
+  { owner: "SymbolConstructor", member: "for", operationKind: "call", lane: "symbol", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::JsSymbol::for_key", argModes: ["ref"] }, result: { ref: "symbol" }, params: [{ ref: "string" }] } },
+  { owner: "SymbolConstructor", member: "keyFor", operationKind: "call", lane: "symbol", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::JsSymbol::key_for", argModes: ["ref"] }, result: { ref: "option-of-string" }, sourceResult: { ref: "string" }, sourceAbsence: "undefined", params: [{ ref: "symbol" }] } },
+];
+
+const weakCollectionRows: readonly JsOperationRowData[] = [
+  { owner: "WeakMap", member: "get", operationKind: "call", lane: "weak-map", requirements: [{ carrier: { ref: "weak-value" }, capability: "clone" }, { carrier: { ref: "weak-key" }, capability: "object-identity" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "get", argModes: ["ref"] }, result: { ref: "option-of-weak-value" }, sourceResult: { ref: "weak-value" }, sourceAbsence: "undefined", params: [{ ref: "weak-key" }] } },
+  { owner: "WeakMap", member: "has", operationKind: "call", lane: "weak-map", requirements: [{ carrier: { ref: "weak-key" }, capability: "object-identity" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "has", argModes: ["ref"] }, result: { ref: "bool" }, params: [{ ref: "weak-key" }] } },
+  { owner: "WeakMap", member: "delete", operationKind: "call", lane: "weak-map", requirements: [{ carrier: { ref: "weak-key" }, capability: "object-identity" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "delete", argModes: ["ref"] }, result: { ref: "bool" }, params: [{ ref: "weak-key" }] } },
+  { owner: "WeakMap", member: "set", operationKind: "call", lane: "weak-map", requirements: [{ carrier: { ref: "weak-key" }, capability: "object-identity" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "set" }, result: { ref: "receiver" }, params: [{ ref: "weak-key" }, { ref: "weak-value" }] } },
+  { owner: "WeakSet", member: "has", operationKind: "call", lane: "weak-set", requirements: [{ carrier: { ref: "weak-key" }, capability: "object-identity" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "has", argModes: ["ref"] }, result: { ref: "bool" }, params: [{ ref: "weak-key" }] } },
+  { owner: "WeakSet", member: "delete", operationKind: "call", lane: "weak-set", requirements: [{ carrier: { ref: "weak-key" }, capability: "object-identity" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "delete", argModes: ["ref"] }, result: { ref: "bool" }, params: [{ ref: "weak-key" }] } },
+  { owner: "WeakSet", member: "add", operationKind: "call", lane: "weak-set", requirements: [{ carrier: { ref: "weak-key" }, capability: "object-identity" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "add" }, result: { ref: "receiver" }, params: [{ ref: "weak-key" }] } },
+];
+
+const arrayBufferRows: readonly JsOperationRowData[] = [
+  { owner: "ArrayBuffer", member: "byteLength", operationKind: "property", lane: "array-buffer", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "byte_length" }, result: { ref: "native-uint" }, evaluation: "pure" } },
+  { owner: "ArrayBuffer", member: "slice", operationKind: "call", lane: "array-buffer", variant: "all", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "slice_all" }, result: { ref: "array-buffer" } } },
+  { owner: "ArrayBuffer", member: "slice", operationKind: "call", lane: "array-buffer", variant: "start", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "slice_from" }, result: { ref: "array-buffer" }, params: [{ ref: "numeric-argument", index: 0 }] } },
+  { owner: "ArrayBuffer", member: "slice", operationKind: "call", lane: "array-buffer", variant: "start-end", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "slice_to" }, result: { ref: "array-buffer" }, params: [{ ref: "numeric-argument", index: 0 }, { ref: "numeric-argument", index: 1 }] } },
+];
+
+const dataViewRows: readonly JsOperationRowData[] = [
+  ...([false, true] as const).flatMap((explicitEndian): readonly JsOperationRowData[] => [
+    {
+      owner: "DataView", member: "getBigUint64", operationKind: "call", lane: "data-view",
+      variant: explicitEndian ? "endian" : "default-endian", fallible: true,
+      shape: {
+        op: "operation", operationKind: "method",
+        target: { form: "receiver-method", name: "get_big_uint64", ...(explicitEndian ? {} : { trailingArguments: [falseArgument] }) },
+        result: { ref: "bigint" }, params: [{ ref: "numeric-argument", index: 0 }, ...(explicitEndian ? [{ ref: "bool" } as const] : [])],
+      },
+    },
+    {
+      owner: "DataView", member: "setBigUint64", operationKind: "call", lane: "data-view",
+      variant: explicitEndian ? "endian" : "default-endian", fallible: true,
+      shape: {
+        op: "operation", operationKind: "method",
+        target: { form: "receiver-method", name: "set_big_uint64", argModes: explicitEndian ? ["value", "ref", "value"] : ["value", "ref"], ...(explicitEndian ? {} : { trailingArguments: [falseArgument] }) },
+        result: { ref: "unit" }, params: [{ ref: "numeric-argument", index: 0 }, { ref: "bigint" }, ...(explicitEndian ? [{ ref: "bool" } as const] : [])],
+      },
+    },
+  ]),
+  ...(["data-view", "typed-array"] as const).flatMap((lane) => [
+    ["buffer", "buffer", { ref: "array-buffer" }],
+    ["byteLength", "byte_length", { ref: "native-uint" }],
+    ["byteOffset", "byte_offset", { ref: "native-uint" }],
+  ].map(([member, name, result]): JsOperationRowData => ({ owner: "ArrayBufferView", member: member as string, operationKind: "property", lane, shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: name as string }, result: result as { readonly ref: "array-buffer" | "native-uint" }, evaluation: "pure" } }))),
+  ...["Int8", "Uint8"].map((suffix): JsOperationRowData => ({ owner: "DataView", member: `get${suffix}`, operationKind: "call", lane: "data-view", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: `get_${suffix.toLowerCase()}` }, result: { ref: suffix === "Int8" ? "int8" : "uint8" }, params: [{ ref: "numeric-argument", index: 0 }] } })),
+  ...["Int16", "Uint16", "Int32", "Uint32", "Float32", "Float64"].flatMap((suffix): readonly JsOperationRowData[] => {
+    const name = suffix.replace(/([a-z])([A-Z])/gu, "$1_$2").toLowerCase();
+    return [
+      { owner: "DataView", member: `get${suffix}`, operationKind: "call", lane: "data-view", variant: "default-endian", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: `get_${name}`, trailingArguments: [falseArgument] }, result: { ref: name as "int16" | "uint16" | "int32" | "uint32" | "float32" | "float64" }, params: [{ ref: "numeric-argument", index: 0 }] } },
+      { owner: "DataView", member: `get${suffix}`, operationKind: "call", lane: "data-view", variant: "endian", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: `get_${name}` }, result: { ref: name as "int16" | "uint16" | "int32" | "uint32" | "float32" | "float64" }, params: [{ ref: "numeric-argument", index: 0 }, { ref: "bool" }] } },
+    ];
+  }),
+  ...["Int8", "Uint8"].map((suffix): JsOperationRowData => ({ owner: "DataView", member: `set${suffix}`, operationKind: "call", lane: "data-view", fallible: true, requirements: [{ carrier: { ref: "argument", index: 1 }, capability: "numeric" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: `set_${suffix.toLowerCase()}` }, result: { ref: "unit" }, params: [{ ref: "numeric-argument", index: 0 }, { ref: "argument", index: 1 }] } })),
+  ...["Int16", "Uint16", "Int32", "Uint32", "Float32", "Float64"].flatMap((suffix): readonly JsOperationRowData[] => {
+    const name = suffix.replace(/([a-z])([A-Z])/gu, "$1_$2").toLowerCase();
+    const valueType = suffix.startsWith("Float")
+      ? { ref: "float64" } as const
+      : { ref: "argument", index: 1 } as const;
+    const requirements = [{ carrier: { ref: "argument", index: 1 } as const, capability: "numeric" as const }];
+    return [
+      { owner: "DataView", member: `set${suffix}`, operationKind: "call", lane: "data-view", variant: "default-endian", fallible: true, requirements, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: `set_${name}`, trailingArguments: [falseArgument] }, result: { ref: "unit" }, params: [{ ref: "numeric-argument", index: 0 }, valueType] } },
+      { owner: "DataView", member: `set${suffix}`, operationKind: "call", lane: "data-view", variant: "endian", fallible: true, requirements, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: `set_${name}` }, result: { ref: "unit" }, params: [{ ref: "numeric-argument", index: 0 }, valueType, { ref: "bool" }] } },
+    ];
+  }),
+];
+
+const typedArrayRows: readonly JsOperationRowData[] = [
+  ...Object.keys(rustJsTypedArrayTargetIds).map((name): JsOperationRowData => ({
+    owner: `${name}Constructor`, member: "BYTES_PER_ELEMENT", operationKind: "property", lane: "typed-array",
+    shape: { op: "operation", operationKind: "property", target: { form: "path", path: `js_abi::${name}::BYTES_PER_ELEMENT` }, result: { ref: "native-uint" }, evaluation: "pure" },
+  })),
+  {
+    owner: "Uint8ArrayConstructor", member: "from", operationKind: "call", lane: "typed-array", variant: "typed-array", fallible: true,
+    shape: {
+      op: "operation", operationKind: "method",
+      target: { form: "call", path: "js_abi::Uint8Array::from_typed_array", argModes: ["ref"] },
+      result: { ref: "uint8-array" }, params: [{ ref: "uint8-array" }],
+    },
+  },
+  {
+    owner: "Uint8ArrayConstructor", member: "from", operationKind: "call", lane: "typed-array", variant: "array", fallible: true,
+    shape: {
+      op: "operation", operationKind: "method",
+      target: { form: "call", path: "js_abi::Uint8Array::from_array", argModes: ["ref"] },
+      result: { ref: "source-result" }, params: [{ ref: "numeric-array-argument", index: 0 }],
+    },
+  },
+  ...[
+    ["length", "length", { ref: "native-uint" }],
+    ["BYTES_PER_ELEMENT", "bytes_per_element", { ref: "native-uint" }],
+  ].map(([member, name, result]): JsOperationRowData => ({ owner: "TypedArray", member: member as string, operationKind: "property", lane: "typed-array", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: name as string }, result: result as { readonly ref: "array-buffer" | "native-uint" }, evaluation: "pure" } })),
+  { owner: "TypedArray", member: "index", operationKind: "indexer", lane: "typed-array", shape: { op: "operation", operationKind: "indexer", target: { form: "receiver-method", name: "get_number" }, result: { ref: "option-of-element" }, sourceResult: { ref: "element" }, sourceAbsence: "undefined", params: [{ ref: "numeric-argument", index: 0 }] } },
+  { owner: "TypedArray", member: "index", operationKind: "index-set", lane: "typed-array", requirements: [{ carrier: { ref: "argument", index: 1 }, capability: "numeric" }], shape: { op: "set", target: { form: "receiver-method", name: "set_number" }, params: [{ ref: "numeric-argument", index: 0 }, { ref: "argument", index: 1 }] } },
+  { owner: "TypedArray", member: "at", operationKind: "call", lane: "typed-array", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "at" }, result: { ref: "option-of-element" }, sourceResult: { ref: "element" }, sourceAbsence: "undefined", params: [{ ref: "numeric-argument", index: 0 }] } },
+  ...[1, 2, 3].map((arity): JsOperationRowData => ({ owner: "TypedArray", member: "fill", operationKind: "call", lane: "typed-array", variant: String(arity), requirements: [{ carrier: { ref: "argument", index: 0 }, capability: "numeric" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: ["fill_all", "fill_from", "fill_to"][arity - 1]! }, result: { ref: "receiver" }, params: [{ ref: "argument", index: 0 }, ...Array.from({ length: arity - 1 }, (_, index) => ({ ref: "numeric-argument" as const, index: index + 1 }))] } })),
+  { owner: "TypedArray", member: "includes", operationKind: "call", lane: "typed-array", variant: "default", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "includes_from_start" }, result: { ref: "bool" }, params: [{ ref: "numeric-argument", index: 0 }] } },
+  { owner: "TypedArray", member: "includes", operationKind: "call", lane: "typed-array", variant: "from", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "includes" }, result: { ref: "bool" }, params: [{ ref: "numeric-argument", index: 0 }, { ref: "numeric-argument", index: 1 }] } },
+  { owner: "TypedArray", member: "indexOf", operationKind: "call", lane: "typed-array", variant: "default", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "index_of_from_start" }, result: { ref: "native-int" }, params: [{ ref: "numeric-argument", index: 0 }] } },
+  { owner: "TypedArray", member: "indexOf", operationKind: "call", lane: "typed-array", variant: "from", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "index_of" }, result: { ref: "native-int" }, params: [{ ref: "numeric-argument", index: 0 }, { ref: "numeric-argument", index: 1 }] } },
+  { owner: "TypedArray", member: "join", operationKind: "call", lane: "typed-array", variant: "default", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "join_default" }, result: { ref: "string" } } },
+  { owner: "TypedArray", member: "join", operationKind: "call", lane: "typed-array", variant: "separator", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "join", argModes: ["ref"] }, result: { ref: "string" }, params: [{ ref: "string" }] } },
+  { owner: "TypedArray", member: "reverse", operationKind: "call", lane: "typed-array", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "reverse" }, result: { ref: "receiver" } } },
+  { owner: "TypedArray", member: "set", operationKind: "call", lane: "typed-array", variant: "default", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "set_from_array_default", argModes: ["ref"] }, result: { ref: "unit" }, params: [{ ref: "numeric-array-argument", index: 0 }] } },
+  { owner: "TypedArray", member: "set", operationKind: "call", lane: "typed-array", variant: "offset", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "set_from_array", argModes: ["ref", "value"] }, result: { ref: "unit" }, params: [{ ref: "numeric-array-argument", index: 0 }, { ref: "numeric-argument", index: 1 }] } },
+  ...(Object.keys(rustJsTypedArrayTargetIds) as RustJsTypedArrayName[]).flatMap((name) =>
+    [false, true].map((offset): JsOperationRowData => ({
+      owner: "TypedArray", member: "set", operationKind: "call", lane: "typed-array",
+      variant: `${name}-${offset ? "offset" : "default"}`, fallible: true,
+      shape: {
+        op: "operation", operationKind: "method",
+        target: {
+          form: "receiver-method", name: "set_from_typed_array", argModes: offset ? ["ref", "value"] : ["ref"],
+          ...(offset ? {} : { trailingArguments: [{ kind: "float64", value: 0 }] }),
+        },
+        result: { ref: "unit" },
+        params: [{ ref: "typed-array", name }, ...(offset ? [{ ref: "numeric-argument" as const, index: 1 }] : [])],
+      },
+    }))),
+  ...["slice", "subarray"].flatMap((member): readonly JsOperationRowData[] => [
+    { owner: "TypedArray", member, operationKind: "call", lane: "typed-array", variant: "all", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: `${member}_all` }, result: { ref: "receiver" } } },
+    { owner: "TypedArray", member, operationKind: "call", lane: "typed-array", variant: "start", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: `${member}_from` }, result: { ref: "receiver" }, params: [{ ref: "numeric-argument", index: 0 }] } },
+    { owner: "TypedArray", member, operationKind: "call", lane: "typed-array", variant: "start-end", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: `${member}_to` }, result: { ref: "receiver" }, params: [{ ref: "numeric-argument", index: 0 }, { ref: "numeric-argument", index: 1 }] } },
+  ]),
+  { owner: "TypedArray", member: "sort", operationKind: "call", lane: "typed-array", variant: "default", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "sort_default" }, result: { ref: "receiver" } } },
+  { owner: "TypedArray", member: "sort", operationKind: "call", lane: "typed-array", variant: "compare", callback: { shape: "direct", sourceArgumentIndex: 0, failure: { kind: "invocation", fallibleTarget: { form: "receiver-method", name: "try_sort_by" } } }, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "sort_by" }, result: { ref: "receiver" }, params: [{ ref: "cb-array-comparator", arity: 2 }] } },
+];
+
+const intlRows: readonly JsOperationRowData[] = [
+  { owner: "IntlResolvedNumberFormatOptions", member: "useGrouping", operationKind: "property", lane: "intl-record", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "use_grouping" }, result: { ref: "intl-grouping" }, sourceResult: { ref: "intl-grouping" }, evaluation: "pure" } },
+  { owner: "IntlDateTimeFormat", member: "format", operationKind: "call", lane: "intl-date-time", variant: "default", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "format_default" }, result: { ref: "string" } } },
+  { owner: "IntlDateTimeFormat", member: "format", operationKind: "call", lane: "intl-date-time", variant: "date", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "format_date", argModes: ["ref"] }, result: { ref: "string" }, params: [{ ref: "date" }] } },
+  { owner: "IntlDateTimeFormat", member: "format", operationKind: "call", lane: "intl-date-time", variant: "number", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "format_number" }, result: { ref: "string" }, params: [{ ref: "float64" }] } },
+  { owner: "IntlDateTimeFormat", member: "formatToParts", operationKind: "call", lane: "intl-date-time", variant: "default", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "format_to_parts_default" }, result: { ref: "source-result" } } },
+  { owner: "IntlDateTimeFormat", member: "formatToParts", operationKind: "call", lane: "intl-date-time", variant: "date", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "format_to_parts_date", argModes: ["ref"] }, result: { ref: "source-result" }, params: [{ ref: "date" }] } },
+  { owner: "IntlDateTimeFormat", member: "formatToParts", operationKind: "call", lane: "intl-date-time", variant: "number", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "format_to_parts_number" }, result: { ref: "source-result" }, params: [{ ref: "float64" }] } },
+  { owner: "IntlDateTimeFormat", member: "resolvedOptions", operationKind: "call", lane: "intl-date-time", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "resolved_options" }, result: { ref: "source-result" } } },
+  { owner: "IntlNumberFormat", member: "format", operationKind: "call", lane: "intl-number", variant: "number", requirements: [{ carrier: { ref: "argument", index: 0 }, capability: "numeric" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "format" }, result: { ref: "string" }, params: [{ ref: "argument", index: 0 }] } },
+  { owner: "IntlNumberFormat", member: "formatToParts", operationKind: "call", lane: "intl-number", variant: "number", requirements: [{ carrier: { ref: "argument", index: 0 }, capability: "numeric" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "format_to_parts" }, result: { ref: "source-result" }, params: [{ ref: "argument", index: 0 }] } },
+  ...["format", "formatToParts"].map((member): JsOperationRowData => ({ owner: "IntlNumberFormat", member, operationKind: "call", lane: "intl-number", variant: "bigint", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: member === "format" ? "format" : "format_to_parts", argModes: ["ref"] }, result: { ref: member === "format" ? "string" : "source-result" }, params: [{ ref: "bigint" }] } })),
+  { owner: "IntlNumberFormat", member: "resolvedOptions", operationKind: "call", lane: "intl-number", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "resolved_options" }, result: { ref: "source-result" } } },
+  { owner: "IntlCollator", member: "compare", operationKind: "call", lane: "intl-collator", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "compare", argModes: ["ref", "ref"] }, result: { ref: "int32" }, params: [{ ref: "string" }, { ref: "string" }] } },
+  { owner: "IntlCollator", member: "resolvedOptions", operationKind: "call", lane: "intl-collator", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "resolved_options" }, result: { ref: "source-result" } } },
+  ...[
+    ["IntlDateTimeFormatPart", "type", "type_value", "string"],
+    ["IntlDateTimeFormatPart", "value", "value", "string"],
+    ["IntlNumberFormatPart", "type", "type_value", "string"],
+    ["IntlNumberFormatPart", "value", "value", "string"],
+    ["IntlResolvedDateTimeFormatOptions", "locale", "locale", "string"],
+    ["IntlResolvedDateTimeFormatOptions", "calendar", "calendar", "string"],
+    ["IntlResolvedDateTimeFormatOptions", "numberingSystem", "numbering_system", "string"],
+    ["IntlResolvedDateTimeFormatOptions", "timeZone", "time_zone", "string"],
+    ["IntlResolvedNumberFormatOptions", "locale", "locale", "string"],
+    ["IntlResolvedNumberFormatOptions", "numberingSystem", "numbering_system", "string"],
+    ["IntlResolvedNumberFormatOptions", "style", "style", "string"],
+    ["IntlResolvedNumberFormatOptions", "minimumIntegerDigits", "minimum_integer_digits", "uint16"],
+    ["IntlResolvedNumberFormatOptions", "roundingIncrement", "rounding_increment", "uint16"],
+    ...[["notation", "notation"], ["signDisplay", "sign_display"], ["roundingPriority", "rounding_priority"], ["roundingMode", "rounding_mode"], ["trailingZeroDisplay", "trailing_zero_display"]].map(([member, name]) => ["IntlResolvedNumberFormatOptions", member, name, "string"]),
+    ["IntlResolvedCollatorOptions", "locale", "locale", "string"],
+    ["IntlResolvedCollatorOptions", "usage", "usage", "string"],
+    ["IntlResolvedCollatorOptions", "sensitivity", "sensitivity", "string"],
+    ["IntlResolvedCollatorOptions", "ignorePunctuation", "ignore_punctuation", "bool"],
+    ["IntlResolvedCollatorOptions", "collation", "collation", "string"],
+    ["IntlResolvedCollatorOptions", "numeric", "numeric", "bool"],
+    ["IntlResolvedCollatorOptions", "caseFirst", "case_first", "string"],
+  ].map(([owner, member, name, result]): JsOperationRowData => ({ owner: owner!, member: member!, operationKind: "property", lane: "intl-record", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: name! }, result: { ref: result as "string" | "uint16" | "bool" }, evaluation: "pure" } })),
+  ...[
+    ["minimumFractionDigits", "minimum_fraction_digits"], ["maximumFractionDigits", "maximum_fraction_digits"],
+    ["minimumSignificantDigits", "minimum_significant_digits"], ["maximumSignificantDigits", "maximum_significant_digits"],
+  ].map(([member, name]): JsOperationRowData => ({ owner: "IntlResolvedNumberFormatOptions", member: member!, operationKind: "property", lane: "intl-record", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: name! }, result: { ref: "option-of-uint16" }, sourceAbsence: "undefined", evaluation: "pure" } })),
+  ...[
+    ["currency", "currency"], ["currencyDisplay", "currency_display"], ["currencySign", "currency_sign"],
+    ["unit", "unit"], ["unitDisplay", "unit_display"], ["compactDisplay", "compact_display"],
+  ].map(([member, name]): JsOperationRowData => ({ owner: "IntlResolvedNumberFormatOptions", member: member!, operationKind: "property", lane: "intl-record", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: name! }, result: { ref: "option-of-string" }, sourceAbsence: "undefined", evaluation: "pure" } })),
+  ...[
+    { variant: "default", path: "integer_to_locale_string", params: [], modes: [] },
+    { variant: "undefined", path: "integer_to_locale_string_with_undefined", params: [{ ref: "absence" }], modes: ["value"] },
+    { variant: "undefined-options", path: "integer_to_locale_string_with_undefined_options", params: [{ ref: "absence" }, { ref: "jsvalue" }], modes: ["value", "ref"] },
+    { variant: "locale", path: "integer_to_locale_string_with_locale", params: [{ ref: "string" }], modes: ["ref"] },
+    { variant: "options", path: "integer_to_locale_string_with_options", params: [{ ref: "string" }, { ref: "jsvalue" }], modes: ["ref", "ref"] },
+    { variant: "locales", path: "integer_to_locale_string_with_locales", params: [{ ref: "string-array" }], modes: ["ref"] },
+    { variant: "locales-options", path: "integer_to_locale_string_with_locales_options", params: [{ ref: "string-array" }, { ref: "jsvalue" }], modes: ["ref", "ref"] },
+  ].flatMap((entry) => (["number", "bigint"] as const).map((lane): JsOperationRowData => ({ owner: "BigInt", member: "toLocaleString", operationKind: "call", lane, variant: `${lane}-${entry.variant}`, fallible: entry.variant !== "default" && entry.variant !== "undefined", requirements: lane === "number" ? [{ carrier: { ref: "receiver" }, capability: "integer" }] : [], shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: `js_abi::${entry.path}`, receiverMode: lane === "number" ? "value" : "ref", argModes: entry.modes as ("value" | "ref")[] }, result: { ref: "string" }, params: entry.params as import("./model.js").JsCarrierRef[] } }))),
+];
+
+const consoleVariadicRows = [
+  ["dirxml", "js_abi::console_dirxml"],
+  ["group", "js_abi::console_group"],
+  ["groupCollapsed", "js_abi::console_group_collapsed"],
+  ["trace", "js_abi::console_trace"],
+] as const;
+
+const consoleRows: readonly JsOperationRowData[] = [
+  { owner: "Console", member: "assert", operationKind: "call", lane: "console", variant: "default", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::console_assert_default" }, result: { ref: "unit" } } },
+  { owner: "Console", member: "assert", operationKind: "call", lane: "console", variant: "condition", variadic: true, shape: { op: "operation", operationKind: "method", target: { form: "call-value-slice", path: "js_abi::console_assert", leadingArguments: [{ carrier: rustSourcePrimitiveTargetType("bool"), mode: "value" }], elementCarrier: rustJsValueTargetType() }, result: { ref: "unit" }, params: [{ ref: "bool" }] } },
+  { owner: "Console", member: "clear", operationKind: "call", lane: "console", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::console_clear" }, result: { ref: "unit" } } },
+  ...(["count", "countReset", "time", "timeEnd", "timeStamp"] as const).flatMap((member): readonly JsOperationRowData[] => {
+    const target = member.replace(/[A-Z]/gu, (letter) => `_${letter.toLowerCase()}`);
+    return [
+      { owner: "Console", member, operationKind: "call", lane: "console", variant: "default", shape: { op: "operation", operationKind: "method", target: { form: "call", path: `js_abi::console_${target}` }, result: { ref: "unit" } } },
+      { owner: "Console", member, operationKind: "call", lane: "console", variant: "label", shape: { op: "operation", operationKind: "method", target: { form: "call", path: `js_abi::console_${target}_label`, argModes: ["ref"] }, result: { ref: "unit" }, params: [{ ref: "string" }] } },
+    ];
+  }),
+  { owner: "Console", member: "dir", operationKind: "call", lane: "console", variant: "default", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::console_dir", argModes: ["ref"] }, result: { ref: "unit" }, params: [{ ref: "jsvalue" }] } },
+  { owner: "Console", member: "dir", operationKind: "call", lane: "console", variant: "options", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::console_dir_with_options", argModes: ["ref", "ref"] }, result: { ref: "unit" }, params: [{ ref: "jsvalue" }, { ref: "jsvalue" }] } },
+  { owner: "Console", member: "groupEnd", operationKind: "call", lane: "console", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::console_group_end" }, result: { ref: "unit" } } },
+  { owner: "Console", member: "timeLog", operationKind: "call", lane: "console", variant: "default", shape: { op: "operation", operationKind: "method", target: { form: "call-value-slice", path: "js_abi::console_time_log", leadingArguments: [], elementCarrier: rustJsValueTargetType() }, result: { ref: "unit" } } },
+  { owner: "Console", member: "timeLog", operationKind: "call", lane: "console", variant: "label", variadic: true, shape: { op: "operation", operationKind: "method", target: { form: "call-value-slice", path: "js_abi::console_time_log_label", leadingArguments: [{ carrier: rustStringTargetType(), mode: "ref" }], elementCarrier: rustJsValueTargetType() }, result: { ref: "unit" }, params: [{ ref: "string" }] } },
+  ...consoleVariadicRows.map(([member, path]): JsOperationRowData => ({ owner: "Console", member, operationKind: "call", lane: "console", variadic: true, shape: { op: "operation", operationKind: "method", target: { form: "call-value-slice", path, leadingArguments: [], elementCarrier: rustJsValueTargetType() }, result: { ref: "unit" } } })),
+];
+
+const timerRows: readonly JsOperationRowData[] = [
+  ...(["setTimeout", "setInterval"] as const).flatMap((member): readonly JsOperationRowData[] => {
+    const path = member === "setTimeout"
+      ? "js_abi::set_timeout_callable"
+      : "js_abi::set_interval_callable";
+    return [
+      { owner: "Global", member, operationKind: "call", lane: "global", variant: "default", shape: { op: "operation", operationKind: "method", target: { form: "call", path, trailingArguments: [{ kind: "float64", value: 0 }] }, result: { ref: "uint64" }, params: [{ ref: "argument", index: 0 }] } },
+      { owner: "Global", member, operationKind: "call", lane: "global", variant: "delay", shape: { op: "operation", operationKind: "method", target: { form: "call", path }, result: { ref: "uint64" }, params: [{ ref: "argument", index: 0 }, { ref: "float64" }] } },
+    ];
+  }),
+  { owner: "Global", member: "clearTimeout", operationKind: "call", lane: "global", requirements: [{ carrier: { ref: "argument", index: 0 }, capability: "numeric" }], shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::clear_timeout" }, result: { ref: "unit" }, params: [{ ref: "argument", index: 0 }] } },
+  { owner: "Global", member: "clearInterval", operationKind: "call", lane: "global", requirements: [{ carrier: { ref: "argument", index: 0 }, capability: "numeric" }], shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::clear_interval" }, result: { ref: "unit" }, params: [{ ref: "argument", index: 0 }] } },
+];
+
+const promiseRows: readonly JsOperationRowData[] = [
+  ...(["race", "any"] as const).map((member): JsOperationRowData => ({
+    owner: "PromiseConstructor",
+    member,
+    operationKind: "call",
+    lane: "promise",
+    requirements: [{ carrier: { ref: "promise-input-output" }, capability: "clone" }],
+    returnedFuture: { awaiting: "fallible", errorBoundary: "source-program" },
+    shape: {
+      op: "operation",
+      operationKind: "method",
+      target: {
+        form: "call",
+        path: member === "race" ? "js_abi::promise_race" : "js_abi::promise_any",
+        argModes: ["ref"],
+      },
+      result: { ref: "promise-of-input-output" },
+      params: [{ ref: "argument", index: 0 }],
+    },
+  })),
+  {
+    owner: "PromiseConstructor",
+    member: "allSettled",
+    operationKind: "call",
+    lane: "promise",
+    requirements: [{ carrier: { ref: "promise-input-output" }, capability: "clone" }],
+    returnedFuture: { awaiting: "infallible", errorBoundary: "none" },
+    shape: {
+      op: "operation",
+      operationKind: "method",
+      target: { form: "call", path: "js_abi::promise_all_settled", argModes: ["ref"] },
+      result: { ref: "promise-of-settled-input-output-array" },
+      params: [{ ref: "argument", index: 0 }],
+    },
+  },
+  {
+    owner: "Promise",
+    member: "finally",
+    operationKind: "call",
+    lane: "promise",
+    variant: "default",
+    requirements: [{ carrier: { ref: "promise-output" }, capability: "clone" }],
+    returnedFuture: { awaiting: "fallible", errorBoundary: "source-program" },
+    shape: {
+      op: "operation",
+      operationKind: "method",
+      target: { form: "receiver-method", name: "finally_default" },
+      result: { ref: "receiver" },
+    },
+  },
+  {
+    owner: "Promise",
+    member: "finally",
+    operationKind: "call",
+    lane: "promise",
+    variant: "callback",
+    requirements: [{ carrier: { ref: "promise-output" }, capability: "clone" }],
+    callback: {
+      shape: "direct",
+      sourceArgumentIndex: 0,
+      failure: { kind: "returned-future" },
+    },
+    returnedFuture: { awaiting: "fallible", errorBoundary: "source-program" },
+    shape: {
+      op: "operation",
+      operationKind: "method",
+      target: { form: "receiver-method", name: "finally" },
+      result: { ref: "receiver" },
+      params: [{ ref: "promise-finally-callback" }],
+    },
+  },
+  ...(["PromiseFulfilledResult", "PromiseRejectedResult"] as const).map(
+    (owner): JsOperationRowData => ({
+      owner,
+      member: "status",
+      operationKind: "property",
+      lane: "promise-record",
+      shape: {
+        op: "operation",
+        operationKind: "property",
+        target: { form: "field", name: "status" },
+        result: { ref: "string" },
+        evaluation: "pure",
+      },
+    }),
+  ),
+  {
+    owner: "PromiseFulfilledResult",
+    member: "value",
+    operationKind: "property",
+    lane: "promise-record",
+    shape: {
+      op: "operation",
+      operationKind: "property",
+      target: { form: "field", name: "value" },
+      result: { ref: "source-result" },
+      evaluation: "pure",
+    },
+  },
+  {
+    owner: "PromiseRejectedResult",
+    member: "reason",
+    operationKind: "property",
+    lane: "promise-record",
+    shape: {
+      op: "operation",
+      operationKind: "property",
+      target: { form: "field", name: "reason" },
+      result: { ref: "source-result" },
+      evaluation: "pure",
+    },
+  },
+];
+
+const jsonRows: readonly JsOperationRowData[] = ([
+  {
+    owner: "JSON",
+    member: "stringify",
+    operationKind: "call",
+    lane: "json",
+    variant: "absent-replacer",
+    fallible: true,
+    evaluationOnlySourceArgumentIndexes: [1],
+    shape: {
+      op: "operation",
+      operationKind: "method",
+      target: { form: "call", path: "js_abi::json_stringify", argModes: ["ref"], argOrder: [0] },
+      result: { ref: "option-of-string" },
+      params: [{ ref: "jsvalue" }, { ref: "absence" }],
+    },
+  },
+  {
+    owner: "JSON",
+    member: "stringify",
+    operationKind: "call",
+    lane: "json",
+    variant: "absent-replacer-number-space",
+    fallible: true,
+    evaluationOnlySourceArgumentIndexes: [1],
+    shape: {
+      op: "operation",
+      operationKind: "method",
+      target: { form: "call", path: "js_abi::json_stringify_with_space_number", argModes: ["ref", "value"], argOrder: [0, 2] },
+      result: { ref: "option-of-string" },
+      params: [{ ref: "jsvalue" }, { ref: "absence" }, { ref: "float64" }],
+    },
+  },
+  {
+    owner: "JSON",
+    member: "stringify",
+    operationKind: "call",
+    lane: "json",
+    variant: "absent-replacer-string-space",
+    fallible: true,
+    evaluationOnlySourceArgumentIndexes: [1],
+    shape: {
+      op: "operation",
+      operationKind: "method",
+      target: { form: "call", path: "js_abi::json_stringify_with_space_string", argModes: ["ref", "ref"], argOrder: [0, 2] },
+      result: { ref: "option-of-string" },
+      params: [{ ref: "jsvalue" }, { ref: "absence" }, { ref: "string" }],
+    },
+  },
+  {
+    owner: "JSON",
+    member: "stringify",
+    operationKind: "call",
+    lane: "json",
+    variant: "absent-replacer-absent-space",
+    fallible: true,
+    evaluationOnlySourceArgumentIndexes: [1, 2],
+    shape: {
+      op: "operation",
+      operationKind: "method",
+      target: { form: "call", path: "js_abi::json_stringify", argModes: ["ref"], argOrder: [0] },
+      result: { ref: "option-of-string" },
+      params: [{ ref: "jsvalue" }, { ref: "absence" }, { ref: "absence" }],
+    },
+  },
+  {
+    owner: "JSON",
+    member: "stringify",
+    operationKind: "call",
+    lane: "json",
+    variant: "callback-replacer",
+    fallible: true,
+    callback: {
+      shape: "direct",
+      sourceArgumentIndex: 1,
+      failure: { kind: "invocation", fallibleTarget: { form: "call", path: "js_abi::json_try_stringify_with_replacer", argModes: ["ref", "value"] } },
+    },
+    shape: {
+      op: "operation",
+      operationKind: "method",
+      target: { form: "call", path: "js_abi::json_stringify_with_replacer", argModes: ["ref", "value"] },
+      result: { ref: "option-of-string" },
+      params: [{ ref: "jsvalue" }, { ref: "json-replacer-callback" }],
+    },
+  },
+  ...(["number", "string"] as const).map((space): JsOperationRowData => ({
+    owner: "JSON",
+    member: "stringify",
+    operationKind: "call",
+    lane: "json",
+    variant: `callback-replacer-${space}-space`,
+    fallible: true,
+    callback: {
+      shape: "direct",
+      sourceArgumentIndex: 1,
+      failure: {
+        kind: "invocation",
+        fallibleTarget: {
+          form: "call",
+          path: space === "number"
+            ? "js_abi::json_try_stringify_with_replacer_and_space_number"
+            : "js_abi::json_try_stringify_with_replacer_and_space_string",
+          argModes: ["ref", "value", space === "number" ? "value" : "ref"],
+        },
+      },
+    },
+    shape: {
+      op: "operation",
+      operationKind: "method",
+      target: {
+        form: "call",
+        path: space === "number"
+          ? "js_abi::json_stringify_with_replacer_and_space_number"
+          : "js_abi::json_stringify_with_replacer_and_space_string",
+        argModes: ["ref", "value", space === "number" ? "value" : "ref"],
+      },
+      result: { ref: "option-of-string" },
+      params: [
+        { ref: "jsvalue" },
+        { ref: "json-replacer-callback" },
+        { ref: space === "number" ? "float64" : "string" },
+      ],
+    },
+  })),
+  {
+    owner: "JSON",
+    member: "stringify",
+    operationKind: "call",
+    lane: "json",
+    variant: "callback-replacer-undefined-space",
+    fallible: true,
+    evaluationOnlySourceArgumentIndexes: [2],
+    callback: {
+      shape: "direct",
+      sourceArgumentIndex: 1,
+      failure: { kind: "invocation", fallibleTarget: { form: "call", path: "js_abi::json_try_stringify_with_replacer", argModes: ["ref", "value"], argOrder: [0, 1] } },
+    },
+    shape: {
+      op: "operation",
+      operationKind: "method",
+      target: { form: "call", path: "js_abi::json_stringify_with_replacer", argModes: ["ref", "value"], argOrder: [0, 1] },
+      result: { ref: "option-of-string" },
+      params: [{ ref: "jsvalue" }, { ref: "json-replacer-callback" }, { ref: "absence" }],
+    },
+  },
+  {
+    owner: "JSON",
+    member: "stringify",
+    operationKind: "call",
+    lane: "json",
+    variant: "property-list-replacer",
+    fallible: true,
+    shape: {
+      op: "operation",
+      operationKind: "method",
+      target: { form: "call", path: "js_abi::json_stringify_with_property_list", argModes: ["ref", "ref"] },
+      result: { ref: "option-of-string" },
+      params: [{ ref: "jsvalue" }, { ref: "jsvalue" }],
+    },
+  },
+  ...(["number", "string"] as const).map((space): JsOperationRowData => ({
+    owner: "JSON",
+    member: "stringify",
+    operationKind: "call",
+    lane: "json",
+    variant: `property-list-replacer-${space}-space`,
+    fallible: true,
+    shape: {
+      op: "operation",
+      operationKind: "method",
+      target: {
+        form: "call",
+        path: space === "number"
+          ? "js_abi::json_stringify_with_property_list_and_space_number"
+          : "js_abi::json_stringify_with_property_list_and_space_string",
+        argModes: ["ref", "ref", space === "number" ? "value" : "ref"],
+      },
+      result: { ref: "option-of-string" },
+      params: [
+        { ref: "jsvalue" },
+        { ref: "jsvalue" },
+        { ref: space === "number" ? "float64" : "string" },
+      ],
+    },
+  })),
+] satisfies readonly JsOperationRowData[]).map((row) => ({
+  ...row,
+  jsonValueSourceArgumentIndexes: [0],
+}));
+
+export const jsCapabilityOperationRows: readonly JsOperationRowData[] = [
+  ...atomicOperationRows,
+  ...symbolRows,
+  ...weakCollectionRows,
+  ...arrayBufferRows,
+  ...arrayBufferRows.map(row => ({ ...row, owner: "SharedArrayBuffer" })),
+  ...dataViewRows,
+  ...typedArrayRows,
+  ...intlRows,
+  ...consoleRows,
+  ...timerRows,
+  ...promiseRows,
+  ...jsonRows,
+];

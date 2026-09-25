@@ -18,7 +18,7 @@ import {
 } from "../project-objects.js";
 import { rustProjectDispatchTraitType, rustProjectRepresentationGenerics } from "./names.js";
 import { emptyRustGenerics } from "../../../target-ast/nodes.js";
-import { rustSelfParameter } from "../../declarations/self-parameter.js";
+import { rustSelfParameter } from "../../declarations/callables/self-parameter.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr, RustImplFunction, RustItem, RustType } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";

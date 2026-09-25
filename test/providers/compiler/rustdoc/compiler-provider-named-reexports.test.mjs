@@ -1,17 +1,17 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normalizeModule } from "../../../../dist/providers/compiler/model/rustdoc-model.js";
+import { normalizeModule } from "../../../../dist/providers/native/model/rustdoc-model.js";
 import {
   compilerAssociatedSourceExportName,
   resolveLocalRustdocItem,
-} from "../../../../dist/providers/compiler/model/rustdoc-items.js";
-import { projectRustCompilerModule } from "../../../../dist/providers/compiler/projection/projection.js";
+} from "../../../../dist/providers/native/model/rustdoc-items.js";
+import { projectRustCompilerModule } from "../../../../dist/providers/native/projection/projection.js";
 import {
   compilerModuleSpecifier,
   compilerProviderModuleId,
   compilerTargetTypeId,
-} from "../../../../dist/providers/compiler/projection/operations.js";
-import { resolveStandardLibraryItem } from "../../../../dist/providers/compiler/projection/standard-library.js";
+} from "../../../../dist/providers/native/projection/operations.js";
+import { resolveStandardLibraryItem } from "../../../../dist/providers/native/projection/standard-library.js";
 
 const dependency = {
   alias: "widget_alias",

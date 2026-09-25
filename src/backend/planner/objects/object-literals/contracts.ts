@@ -6,7 +6,7 @@ import {
   writeRustProjectObjectField,
   writeRustProjectMethodOverride,
 } from "../project-objects.js";
-import { applyRustCallableValueAdapter, planRustCallableArguments } from "../../declarations/callable-adapters.js";
+import { applyRustCallableValueAdapter, planRustCallableArguments } from "../../declarations/callables/adapters.js";
 import { projectOwnFields, projectOwnMethods } from "../polymorphism/model.js";
 import { rustProjectDispatchTraitType } from "../polymorphism/names.js";
 import type {
@@ -24,7 +24,7 @@ import {
 import { applyRustFallibleResultExpression } from "../../types/fallible-shape.js";
 import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
 import { emptyRustGenerics } from "../../../target-ast/nodes.js";
-import { rustSelfParameter } from "../../declarations/self-parameter.js";
+import { rustSelfParameter } from "../../declarations/callables/self-parameter.js";
 import { checkRustDataWrite } from "../data-writes.js";
 import { planCheckedProjectProjectionImplementation } from "../checked-project-projections.js";
 

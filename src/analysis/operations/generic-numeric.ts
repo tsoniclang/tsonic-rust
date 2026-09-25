@@ -5,7 +5,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustFactWalk } from "../program/walk.js";
 import { rustResolutionContext } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
-import { selectRustNumericConstraintComparison } from "../../policy/operations/numeric-union.js";
+import { selectRustNumericConstraintComparison } from "../../policy/operations/numeric/union.js";
 import { rustGenericNumericOperandsKey } from "../facts/generic-numeric.js";
 import type { RustTargetTypeResolutionContext } from "../../policy/types/resolution/model.js";
 import type { RustOperationsProviderOptions } from "./provider/model.js";

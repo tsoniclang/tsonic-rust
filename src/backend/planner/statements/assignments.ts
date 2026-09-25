@@ -28,7 +28,7 @@ import { isRustCopyCarrier, isRustStringCarrier } from "../../../target-model/ty
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { planRustMutableProjectReceiver, planRustPromotedStorageLocation } from "../expressions/typed-locations.js";
 import { rustSelectedAccessorRequiresUnsafe } from "../safety/explicit-safety.js";
-import { planRustSourceStaticFieldStorage } from "../declarations/static-field-storage.js";
+import { planRustSourceStaticFieldStorage } from "../declarations/classes/static-field-storage.js";
 import { rustProjectObjectRepresentation } from "../objects/project-storage.js";
 import { rustStringConcat } from "../../target-ast/expressions.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";

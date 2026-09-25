@@ -12,7 +12,7 @@ import { resolveExpressionCarrier } from "./carriers.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { recordBindingWrite } from "../declarations/types-and-bindings.js";
 import { rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
-import { selectRustEquivalentAssignment } from "../../policy/operations/operator-rules.js";
+import { selectRustEquivalentAssignment } from "../../policy/operations/operators/rules.js";
 import {
   rustLangModule,
   rustSourceOperationExportIds,

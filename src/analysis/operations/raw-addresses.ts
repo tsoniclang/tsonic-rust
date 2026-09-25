@@ -3,13 +3,13 @@ import type { RustFactWalk } from "../program/walk.js";
 import { appendRustDiagnostic } from "../program/walk.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { setCarrierFact } from "./project-calls.js";
-import type { RustSourceRawAddress } from "../../policy/operations/raw-address-source.js";
-import { rustSourceRawAddressWidth } from "../../policy/operations/raw-address-source.js";
+import type { RustSourceRawAddress } from "../../policy/operations/pointers/raw-addresses.js";
+import { rustSourceRawAddressWidth } from "../../policy/operations/pointers/raw-addresses.js";
 import { rustOptionTargetType, rustRawPointerTargetType, rustSourcePrimitiveTargetType } from "../../target-model/types/index.js";
 import { rustRawAddressPlanKey } from "../../target-model/operations/raw-addresses.js";
 import type { RustRawAddressPlan } from "../../target-model/operations/raw-addresses.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { readRustSourceRawPointerIdentity } from "../../policy/operations/raw-pointer-source.js";
+import { readRustSourceRawPointerIdentity } from "../../policy/operations/pointers/source-raw-pointers.js";
 
 export function resolveRustRawPointerIdentityCarrier(
   walk: RustFactWalk, expression: Node, sourceFile: SourceFile,

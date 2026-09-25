@@ -62,10 +62,10 @@ import type {
 } from "../../policy/types/resolution.js";
 import {
   selectRustTypedLocationSourceOperation,
-} from "../../policy/operations/typed-location-source.js";
+} from "../../policy/operations/typed-locations/source-typed-locations.js";
 import type {
   RustTypedLocationSourceFact,
-} from "../../policy/operations/typed-location-source.js";
+} from "../../policy/operations/typed-locations/source-typed-locations.js";
 
 function typedLocationCallArguments(
   request: RustCheckedCallSelectionInput,

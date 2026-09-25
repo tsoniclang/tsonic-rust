@@ -3,6 +3,7 @@ import {
   canonicalTargetLayerPolicies,
   canonicalTargetRootPolicies,
   canonicalTargetSourceRules,
+  selectedTargetEvidenceRule,
   targetForbiddenPackage,
   targetLayerExact,
   targetLayerPrefix,
@@ -58,28 +59,10 @@ export const rustForbiddenDirectories = canonicalTargetForbiddenDirectories;
 export const rustSourceRules = Object.freeze([
   ...canonicalTargetSourceRules,
   Object.freeze({
-    ruleId: "ARCH-RUST-CONFIG-001",
-    matches: (file, source) => file.startsWith("src/backend/") &&
-      /\bconfiguration\.projectFile\b|from\s+["'][^"']*\/options\//u.test(source),
-    reason: "Rust analysis and backend planning consume the one normalized target configuration.",
-  }),
-  Object.freeze({
     ruleId: "ARCH-RUST-PRINTER-001",
     matches: (file, source) => file.startsWith("src/print/") &&
       /\bfinalizeRustSourceStyle\b/u.test(source),
     reason: "Rust source normalization completes before output-plan closure; printers are observationally pure.",
-  }),
-  Object.freeze({
-    ruleId: "ARCH-RUST-PLAN-001",
-    matches: (file, source) => file === "src/backend/artifact-model/output.ts" &&
-      /\bdiagnostic/u.test(source),
-    reason: "Rust output plans contain complete target artifacts, never stage diagnostics.",
-  }),
-  Object.freeze({
-    ruleId: "ARCH-RUST-PROGRAM-001",
-    matches: (file, source) => file === "src/analysis/program/model.ts" &&
-      /\b(?:Map|Set|Builder|Registry)\s*</u.test(source),
-    reason: "The sealed Rust target program cannot expose mutable collections or builders.",
   }),
   Object.freeze({
     ruleId: "ARCH-RUST-PROVIDER-001",
@@ -93,12 +76,8 @@ export const rustSourceRules = Object.freeze([
       /Readonly<Record<[^>]+>>\s*\|\s*ReadonlyMap\s*</u.test(source),
     reason: "Rust provider carrier materialization accepts one canonical immutable metadata representation.",
   }),
-  Object.freeze({
-    ruleId: "ARCH-RUST-SELECTION-001",
-    matches: (file, source) => (
-      file.startsWith("src/analysis/operations/") ||
-      file.startsWith("src/policy/operations/")
-    ) && /\.types\.(?:propertyInfos|callSignatures|constructSignatures)\s*\(/u.test(source),
-    reason: "Checked Rust operation mapping consumes selected evidence and cannot fall back to structural member or signature enumeration.",
-  }),
+  selectedTargetEvidenceRule([
+    "src/analysis/operations/",
+    "src/policy/operations/",
+  ]),
 ]);

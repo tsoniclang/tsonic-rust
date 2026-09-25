@@ -2,7 +2,7 @@ import { Node_Initializer } from "@tsonic/target-api/source";
 import { isRustStringCarrier } from "../../../../target-model/types/index.js";
 import { selectedCallArgumentNodes } from "../operators.js";
 import type { RustCheckedCallSelectionInput, RustOperationPolicyContext } from "../../../../policy/operations/contracts.js";
-import type { JsOperationSelection } from "../../../../policy/operations/js-surface.js";
+import type { JsOperationSelection } from "../../../../policy/operations/source-profiles/js/index.js";
 import type { RustOperationsProviderOptions } from "../model.js";
 
 export function selectBorrowedCallbackParameters(

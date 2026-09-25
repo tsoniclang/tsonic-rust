@@ -31,7 +31,7 @@ import {
   selectRustBinaryOperator,
   selectRustCompoundAssignment,
   selectRustEquivalentAssignment,
-} from "../../policy/operations/operator-rules.js";
+} from "../../policy/operations/operators/rules.js";
 import {
   isRustBigIntCarrier,
   isRustAbsenceCarrier,
@@ -71,7 +71,7 @@ import { rustOptionNestingDepth } from "../../target-model/types/carriers/option
 import { rustValueCarrierBeforeContextualConversion, rustValueCarrierBeforeOptionProjection } from "../facts/value-carrier-queries.js";
 import { rustRuntimeUnionContract, rustRuntimeUnionProjection } from "../../target-model/types/carriers/runtime-unions.js";
 import { selectedIntegerLiteralJoin, selectedSourceLiteralIsRepresentable } from "../../policy/types/selected-numeric-literal.js";
-import { rustNumericPromotionConversion } from "../../policy/operations/numeric-promotion.js";
+import { rustNumericPromotionConversion } from "../../policy/operations/numeric/promotion.js";
 import { setCarrierFact, setRustOperationFact } from "./project-calls.js";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { RustAssignmentOperator } from "../../target-model/syntax/tokens.js";

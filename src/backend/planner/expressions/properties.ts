@@ -18,7 +18,7 @@ import { planRustSourceUnionFieldProjection, readRustUnionField } from "./unions
 import { planRustBuiltinErrorProperty } from "./builtin-errors.js";
 import { readRustProjectDispatchedField, rustProjectObjectDispatchField } from "../objects/project-objects.js";
 import { planRustProjectFieldDispatchRole } from "../objects/project-field-dispatch.js";
-import { readRustSourceStaticField } from "../declarations/static-field-storage.js";
+import { readRustSourceStaticField } from "../declarations/classes/static-field-storage.js";
 import { readRustStoredObjectField } from "../objects/project-storage.js";
 import { planRustValueFieldLocation, rustSourceFieldHasValueReceiver } from "../objects/value-fields.js";
 import { rustCallableProtocol, rustSourceTypeCarrierValue } from "../../../target-model/types/index.js";

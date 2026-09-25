@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createRustCompilerProviderSession } from "../../../../dist/providers/compiler/session.js";
+import { createRustCompilerProviderSession } from "../../../../dist/providers/native/session.js";
 
 test("closing a compiler-provider session revokes its per-build snapshot lease", () => {
   const snapshot = Object.freeze({

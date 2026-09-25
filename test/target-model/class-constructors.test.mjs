@@ -7,7 +7,7 @@ import { rustTargetTypeParameterNames } from "../../dist/target-model/types/carr
 import { substituteRustTargetTypeParameters } from "../../dist/target-model/types/carriers/substitution.js";
 import { inferRustTargetTypeParameterBindings } from "../../dist/target-model/types/carriers/generic-inference.js";
 import { isRustCopyCarrier, rustCarrierSupportsClone, rustCarrierSupportsObjectIdentity } from "../../dist/target-model/types/carriers/traits.js";
-import { selectRustBinaryOperator } from "../../dist/policy/operations/operator-rules.js";
+import { selectRustBinaryOperator } from "../../dist/policy/operations/operators/rules.js";
 
 const instance = (name, parameter) => rustSourceTypeCarrier("/src/model.ts", name, "object",
   [{ kind: "type", type: parameter }]);

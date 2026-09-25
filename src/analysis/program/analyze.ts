@@ -30,7 +30,7 @@ import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import { rustLocationStorageFactKey } from "../facts/keys.js";
 import { rustTypedLocationStorageRootReference } from "../operations/typed-locations.js";
-import { selectRustAddressOfSourceOperation } from "../../policy/operations/typed-location-source.js";
+import { selectRustAddressOfSourceOperation } from "../../policy/operations/typed-locations/source-typed-locations.js";
 import { rustProjectCallableTargetName } from "../facts/source-member-name.js";
 import { collectRustMutableProjectStorageRequirements } from "../project-types/mutable-storage-requirements.js";
 import { rustCompileTimeSourceKey } from "../../target-model/facts/source-declarations.js";

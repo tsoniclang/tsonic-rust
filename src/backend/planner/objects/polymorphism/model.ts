@@ -36,7 +36,7 @@ import {
 } from "../../program/plan-context.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustReturnTypeFromCarrierInContext, rustTypeFromCarrierInContext } from "../../types/render.js";
-import { planRustCallableParameters } from "../../declarations/callable-parameters.js";
+import { planRustCallableParameters } from "../../declarations/callables/parameters.js";
 import { createRustSyntheticNameState } from "../../names/synthetic.js";
 import { rustDeclarationRequiresUnsafe } from "../../safety/explicit-safety.js";
 import { rustProjectStateType as rustProjectNamedStateType } from "./names.js";

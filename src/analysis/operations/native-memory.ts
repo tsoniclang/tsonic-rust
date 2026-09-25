@@ -3,7 +3,7 @@ import { createTsonicClosedArrayStorageQueries } from "@tsonic/source-core/facts
 import type { RustFactWalk } from "../program/walk.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
-import { readRustRawLocation, selectRustNativeMemoryLayout } from "../../policy/operations/native-memory.js";
+import { readRustRawLocation, selectRustNativeMemoryLayout } from "../../policy/operations/pointers/native-memory.js";
 import { rustNativeBackingKey, rustNativeMemoryLayoutsEqual, rustRawLocationPlanKey, rustNativeArrayStorageKey } from "../../target-model/operations/native-memory.js";
 import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
 import type { RustNativeObjectField } from "../../target-model/operations/native-memory.js";

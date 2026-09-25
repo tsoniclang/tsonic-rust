@@ -59,7 +59,7 @@ import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import {
   planRustCallableParameterPrelude,
   planRustCallableParameters,
-} from "../../declarations/callable-parameters.js";
+} from "../../declarations/callables/parameters.js";
 import {
   isValidRustIdentifier,
 } from "../../program/plan-context.js";
@@ -75,7 +75,7 @@ import {
   prepareRustPreconstructionNode,
   rustNamedFieldPath,
   type RustPreconstructionFieldValue,
-} from "../../declarations/preconstruction-fields.js";
+} from "../../declarations/classes/preconstruction-fields.js";
 import { planStatementSequence } from "../../statements/index.js";
 import { applyFallibleShape } from "../../types/fallible-shape.js";
 import { rustProjectStateMarker } from "./names.js";

@@ -1,7 +1,7 @@
 import type { RustStructuralShapeDefinition } from "../../../analysis/objects/structural-shape-plan.js";
 import type { RustDeadCodeDisposition, RustExpr, RustGenerics, RustItem, RustTraitFunction, RustType, RustVisibility } from "../../target-ast/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/nodes.js";
-import { rustSelfParameter } from "../declarations/self-parameter.js";
+import { rustSelfParameter } from "../declarations/callables/self-parameter.js";
 import { rustProjectObjectIdentityImplementation } from "./project-identity.js";
 import { rustCallableProtocol } from "../../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";

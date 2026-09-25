@@ -33,7 +33,7 @@ import { resolveReferencedDeclarationType, resolveRustAuthoredTargetType, resolv
 import { resolveRustFixedArrayTargetType, resolveRustTargetType, resolveStructuralObjectType } from "./target.js";
 import { sourceTransformedTypeFactEvidenceNodes } from "@tsonic/target-api/source";
 import { tsonicFixedArrayFactKey } from "@tsonic/source-core/facts";
-import { isRustSourceRawPointer } from "../../operations/raw-pointer-source.js";
+import { isRustSourceRawPointer } from "../../operations/pointers/source-raw-pointers.js";
 import type { ExtensionFactSubject, Node, Type } from "@tsonic/tsts";
 import type { SourceStandardTypeTransformation } from "@tsonic/target-api/source";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
@@ -47,7 +47,7 @@ import {
   rustSourceLifetimeTypeContract,
 } from "./lifetimes.js";
 import { parseSourceIntegerLiteral } from "../../../target-model/syntax/literals.js";
-import { readRustRawLocation, resolveRustMemoryLayoutPointee } from "../../operations/native-memory.js";
+import { readRustRawLocation, resolveRustMemoryLayoutPointee } from "../../operations/pointers/native-memory.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import {
   resolveRustCallableEvidence,

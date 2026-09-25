@@ -56,10 +56,10 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustReceiverIndependentMethodFactKey } from "../../../analysis/facts/operations/keys.js";
 import { rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
 import { planRustGenericCallableValue } from "./generic-callables.js";
-import { planRustGeneratorBody } from "../declarations/generator-body.js";
-import { wrapRustJsPromiseBody } from "../declarations/async-promise.js";
+import { planRustGeneratorBody } from "../declarations/callables/generator-body.js";
+import { wrapRustJsPromiseBody } from "../declarations/callables/async-promise.js";
 import { planRustSuspendedCallableConstruction } from "./suspended-callables.js";
-import { planRustParameterEntryConversion } from "../declarations/parameter-entry-conversion.js";
+import { planRustParameterEntryConversion } from "../declarations/callables/parameter-entry-conversion.js";
 
 export function planCallableExpression(
   node: Node,

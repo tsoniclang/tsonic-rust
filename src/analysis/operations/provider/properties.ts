@@ -15,7 +15,7 @@ import { resolveRustProjectField } from "./project-fields.js";
 import { rustCallableProtocol, rustSourceTypeCarrier } from "../../../target-model/types/index.js";
 import { rustProjectStaticFieldStorage } from "../../project-types/object-layout.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { selectJsSurfaceOperation } from "../../../policy/operations/js-surface.js";
+import { selectJsSurfaceOperation } from "../../../policy/operations/source-profiles/js/index.js";
 import { selectRustGeneratorSourceProperty } from "../../../policy/types/generator-source-profile.js";
 import { selectRustBuiltinErrorProperty } from "./builtin-errors.js";
 import { isIntrinsicSourceQualifier } from "./source-qualifiers.js";

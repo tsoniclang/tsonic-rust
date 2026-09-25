@@ -7,7 +7,7 @@ import { emptyRustGenerics, type RustExpr, type RustImplFunction, type RustItem,
   type RustType } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { allocateRustSyntheticTypeName, type RustSyntheticNameState } from "../../names/synthetic.js";
-import { rustSelfParameter } from "../../declarations/self-parameter.js";
+import { rustSelfParameter } from "../../declarations/callables/self-parameter.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { rustStructuralDispatchType } from "../project-structural-types.js";
 import { rustStructuralShapeGenerics } from "../structural-generics.js";

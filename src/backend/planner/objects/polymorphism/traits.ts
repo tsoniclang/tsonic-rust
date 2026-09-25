@@ -6,12 +6,12 @@ import {
   projectOwnMethods,
 } from "./model.js";
 import { projectAccessorCallableShape, projectDowncastReturnType } from "./forwarders.js";
-import { rustCallableSpecialization } from "../../declarations/callable-generics.js";
+import { rustCallableSpecialization } from "../../declarations/callables/generics.js";
 import { rustProjectDispatchTraitName, rustProjectDispatchTraitType, rustProjectRepresentationGenerics } from "./names.js";
 import { rustProjectObjectIdentityField } from "../project-objects.js";
 import type { RustItem, RustTraitFunction, RustType } from "../../../target-ast/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/nodes.js";
-import { rustSelfParameter } from "../../declarations/self-parameter.js";
+import { rustSelfParameter } from "../../declarations/callables/self-parameter.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import {
   rustErrorBoundaryForProjectMember,

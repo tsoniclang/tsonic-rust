@@ -10,7 +10,7 @@ import { rustTargetGenericReferences } from "../../../target-model/types/carrier
 import { rustAuthoredDeadCodeDisposition } from "../liveness/directives.js";
 import { rustGenericRequirementBounds } from "../types/generic-bounds.js";
 import { rustAssociatedPredicates } from "../types/associated-bounds.js";
-import { planRustIndexedFieldImplementation } from "./indexed-fields.js";
+import { planRustIndexedFieldImplementation } from "./classes/indexed-fields.js";
 
 export function planRustTypeFamilyDeclaration(
   declaration: Node,
