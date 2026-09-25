@@ -682,10 +682,7 @@ export function targetGenericParameterArguments(
     if (parameter.kind === "type") {
       return {
         kind: "type",
-        type: {
-          kind: "type-parameter",
-          name: requireSourceGenericName(parameter.identity.itemId, selected),
-        },
+        type: targetTypeFor({ kind: "generic", identity: parameter.identity, name: parameter.name }, selected, "parameter"),
       };
     }
     return {

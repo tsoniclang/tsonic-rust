@@ -221,6 +221,7 @@ export function resolveRustContextualParameterAbi(
     readonly authored: RustLifetimeBinder;
     readonly selected: RustLifetimeBinder;
   },
+  contextualValueCarrier?: TargetTypeRef,
 ): RustSourceParameterAbi | undefined {
   const declaration = context.ast.as.AsParameterDeclaration(parameter);
   if (declaration === undefined) {
@@ -247,6 +248,8 @@ export function resolveRustContextualParameterAbi(
     ? selectedParameterCarrier
     : form === "default"
       ? rustOptionElementCarrier(selectedParameterCarrier)
+      : contextualValueCarrier !== undefined
+        ? contextualValueCarrier
       : selectedParameterCarrier.kind === "reference"
         ? authoredCarrier
         : selectedParameterCarrier;

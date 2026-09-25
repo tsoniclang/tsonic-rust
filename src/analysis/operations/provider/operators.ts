@@ -284,7 +284,8 @@ function mapSelectedAssignment(
   if (selectedLeftFact?.kind === "source-field" ||
     selectedLeftFact?.kind === "source-static-field" ||
     selectedLeftFact?.kind === "source-union-field" ||
-    selectedLeftFact?.kind === "source-accessor") {
+    selectedLeftFact?.kind === "source-accessor" ||
+    selectedLeftFact?.kind === "provider-operation" && selectedLeftFact.abi.target.form === "index") {
     return undefined;
   }
   const selectedLeft = context.facts.getSelectedTargetOperator(request.left);

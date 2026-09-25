@@ -488,7 +488,7 @@ export interface RustTypeRenderingContext {
 export function rustTypeFromCarrierInContext(
   carrier: TargetTypeRef | undefined,
   context: RustTypeRenderingContext,
-  position: "general" | "parameter" | "return" = "general",
+  position: "general" | "parameter" | "return" | "inferred-call" = "general",
 ): RustType | undefined {
   const selectedCarrier = carrier === undefined ||
       context.typeParameterSubstitutions === undefined &&
@@ -572,7 +572,10 @@ export function rustTypeFromCarrierInContext(
     { pathFor: resolveSourceTypePath, additionalArgumentsFor: type => rustOptionalStorageTypeArguments(type, context) },
     resolveStructuralShape,
   );
-  if (!rustTypeIsLegalInPosition(rendered, position)) {
+  if (position === "inferred-call" && rendered !== undefined && rustTypeContainsImplTrait(rendered)) {
+    return { kind: "infer" };
+  }
+  if (!rustTypeIsLegalInPosition(rendered, position === "inferred-call" ? "general" : position)) {
     return undefined;
   }
   collectAliasesFromRustType(rendered, (path) => {
@@ -810,17 +813,23 @@ export function rustTargetCallGenericArgumentToAstInContext(
   argument: Extract<RustTargetGenericArgument, { readonly kind: "type" | "const" }>,
   context: RustTypeRenderingContext,
 ): RustCallGenericArgument | undefined {
-  if (
-    argument.kind === "type" &&
-    argument.type.kind === "target-named" &&
-    argument.type.id === rustFutureTargetId
-  ) {
-    return { kind: "type", type: { kind: "infer" } };
+  if (argument.kind === "type") {
+    const type = rustCallTypeFromCarrierInContext(argument.type, context);
+    return type === undefined ? undefined : { kind: "type", type };
   }
   const rendered = rustTargetGenericArgumentToAstInContext(argument, context);
   return rendered?.kind === "type" || rendered?.kind === "const"
     ? rendered
     : undefined;
+}
+
+export function rustCallTypeFromCarrierInContext(
+  carrier: TargetTypeRef,
+  context: RustTypeRenderingContext,
+): RustType | undefined {
+  return carrier.kind === "target-named" && carrier.id === rustFutureTargetId
+    ? { kind: "infer" }
+    : rustTypeFromCarrierInContext(carrier, context, "inferred-call");
 }
 
 function rustLifetimeBinderToAst(

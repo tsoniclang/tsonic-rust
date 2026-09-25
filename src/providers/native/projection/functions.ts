@@ -1,7 +1,6 @@
 import {
   functionSignatureDigest,
   operationRow,
-  targetTraitPath,
   typeRequirements,
 } from "./operations.js";
 import {
@@ -134,10 +133,7 @@ export function projectFunction(
   );
   const operationTypeNames = operationGenericBindings.flatMap((parameter) =>
     parameter.kind === "type" ? [parameter.sourceName] : []);
-  const targetGenericArguments = fn.genericParameters.flatMap(parameter => parameter.kind === "type" &&
-    functionContext.callableGenerics?.has(parameter.identity.itemId)
-    ? [{ kind: "type" as const, type: { kind: "opaque" as const, id: "tsonic.rust.infer" } }]
-    : targetGenericParameterArguments([parameter], functionContext));
+  const targetGenericArguments = targetGenericParameterArguments(fn.genericParameters, functionContext);
 
   const target = fn.traitDispatch === undefined
     ? ordinaryFunctionTarget(
@@ -150,7 +146,7 @@ export function projectFunction(
     : {
         form: "trait-call" as const,
         owner: requireCurrentType(context).carrier,
-        traitPath: targetTraitPath(fn.traitDispatch.path, functionContext),
+        traitPath: targetTraitFor(fn.traitDispatch, functionContext, "parameter", "target-default").path,
         traitGenericArguments: fn.traitDispatch.genericArguments.map((argument) =>
           targetGenericArgumentFor(argument, functionContext, "result")),
         method: fn.name,

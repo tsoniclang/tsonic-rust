@@ -40,7 +40,9 @@ export function optionalCall(value: Outcome<int32>, callback: ((value: int32) =>
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /value\?/u);
-  assert.doesNotMatch(output, /unwrap\(|TsonicResult|TsonicError|panic!/u);
+  assert.doesNotMatch(output, /unwrap\(|panic!/u);
+  const ordinaryNativeFunctions = output.slice(output.indexOf("pub fn forward"), output.indexOf("pub fn optional_call"));
+  assert.doesNotMatch(ordinaryNativeFunctions, /TsonicResult|TsonicError/u);
   const root = writeGeneratedProject("native-control", result.artifacts);
   mkdirSync(join(root, "tests"), { recursive: true });
   writeFileSync(join(root, "tests/result.rs"), `
@@ -59,7 +61,11 @@ fn early_error_does_not_run_following_statements() {
     assert_eq!(writes, 3);
     assert_eq!(fallback(Err(14), Some(15)), Ok(15));
     assert_eq!(fallback(Err(14), None), Err(14));
-    assert_eq!(optional_call(Err(16), None), Ok(0));
+    assert_eq!(optional_call(Err(16), None).unwrap(), Ok(0));
+    let unreachable_callback = tsonic_rust_runtime::Callable::new(|(_value,)| panic!("native error must return before callback"));
+    assert_eq!(optional_call(Err(17), Some(unreachable_callback)).unwrap(), Err(17));
+    let increment = tsonic_rust_runtime::Callable::new(|(value,)| Ok(value + 1));
+    assert_eq!(optional_call(Ok(18), Some(increment)).unwrap(), Ok(19));
 }
 #[test]
 fn generic_ownership_and_drop_are_native() {

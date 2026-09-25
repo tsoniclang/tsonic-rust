@@ -1,4 +1,5 @@
 import { rustDeriveAttributes, rustHiddenAttribute } from "../../../target-ast/attributes.js";
+import { planRustAttributes } from "../../attributes/planning.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustItem, RustStructField, RustType } from "../../../target-ast/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/nodes.js";
@@ -243,7 +244,7 @@ export function planPolymorphicClassDeclaration(
       kind: "struct",
       name: definition.targetName,
       visibility: wrapperVisibility,
-      attrs: [...(programErrorVariant === undefined ? [] : [rustHiddenAttribute]), ...rustDeriveAttributes(["Clone"])],
+      attrs: [...planRustAttributes(declaration, context), ...(programErrorVariant === undefined ? [] : [rustHiddenAttribute]), ...rustDeriveAttributes(["Clone"])],
       generics,
       fields: [
         {

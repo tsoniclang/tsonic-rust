@@ -25,6 +25,7 @@ import { rustFinalizedCarrierTransitionMatches } from "../../../analysis/facts/t
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import {
   rustTargetCallGenericArgumentToAstInContext,
+  rustCallTypeFromCarrierInContext,
   rustTargetGenericArgumentToAstInContext,
   rustTypeFromCarrierInContext,
 } from "../types/render.js";
@@ -409,7 +410,7 @@ export function planProviderOperationExpression(
       return scoped({ kind: "binary", operator: form.operator, left, right });
     }
     case "trait-call": {
-      const owner = rustTypeFromCarrierInContext(form.owner, context);
+      const owner = rustCallTypeFromCarrierInContext(form.owner, context);
       const traitGenericArguments = form.traitGenericArguments.map((argument) =>
         rustTargetGenericArgumentToAstInContext(argument, context));
       if (owner === undefined || traitGenericArguments.some((argument) => argument === undefined)) {

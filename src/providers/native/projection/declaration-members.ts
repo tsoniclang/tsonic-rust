@@ -5,7 +5,7 @@ import {
   withDefaultGenericBindings,
   withProjectionGenericParameters,
 } from "./utilities.js";
-import { operationRow, targetTraitPath, typeRequirements } from "./operations.js";
+import { operationRow, typeRequirements } from "./operations.js";
 import {
   projectFunction,
   sourceMethodIsInstance,
@@ -323,7 +323,7 @@ export function projectAssociatedConstants(
     const target = {
       form: "trait-associated-value" as const,
       owner: requireCurrentType(context).carrier,
-      traitPath: targetTraitPath(constant.traitDispatch.path, context),
+      traitPath: targetTraitFor(constant.traitDispatch, context, "result", "target-default").path,
       traitGenericArguments: constant.traitDispatch.genericArguments.map((argument) =>
         targetGenericArgumentFor(argument, context, "result")),
       name: constant.name,

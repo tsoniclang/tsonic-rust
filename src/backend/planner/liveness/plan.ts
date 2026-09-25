@@ -123,7 +123,7 @@ export function createRustPlannerLiveness(program: RustTargetProgram): RustPlann
       externallyReachable.add(selected);
     }
     for (const use of summary.uses) {
-      if (use.kind === "source-linkage") continue;
+      if (use.kind === "source-linkage" || program.attributeApplications.isCompileTimeReference(use.reference)) continue;
       const owner: DeclarationOwner = runtimeInitializationNodes.has(use.reference)
         ? { kind: "root" }
         : enclosingDeclarationOwner(

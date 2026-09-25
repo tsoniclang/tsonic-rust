@@ -28,7 +28,8 @@ export function rustCapturedBindingStorage(
   }
   const mutated = walk.context.facts.get(declaration, rustMutatedBindingFactKey) !== undefined ||
     walk.context.source.navigation.bindingWritesWithin(selected.symbol, sourceFile).length > 0;
-  const storage = !mutated ? "value" : permitSingleOwner &&
+  const storage = walk.context.facts.get(declaration, rustBindingStorageFactKey)?.storage === "location"
+    ? "location" : !mutated ? "value" : permitSingleOwner &&
       walk.context.facts.get(declaration, rustBindingStorageFactKey) === undefined &&
       rustCarrierSupportsClone(carrier, walk.context.typeDefinitions) && singleOwnerDirectBinding(walk, declaration, owner)
     ? isRustCopyCarrier(carrier) ? "cell" : "borrow-cell" : "location";

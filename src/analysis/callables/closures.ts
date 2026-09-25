@@ -171,6 +171,8 @@ export function resolveFunctionExpressionCarrier(
       rustResolutionContext(walk, parameter),
       walk.operationOptions,
       lifetimeBinders,
+      selectedExpected.kind === "closure" && selectedExpected.callTrait !== undefined
+        ? targetParameterCarrier : undefined,
     );
     if (parameterAbi === undefined ||
       (sourceParameterCarrier !== undefined &&
