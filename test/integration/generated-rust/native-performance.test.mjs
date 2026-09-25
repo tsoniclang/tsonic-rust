@@ -139,12 +139,8 @@ export function main(): void {
     });
     assert.deepEqual(result.diagnostics, []);
     const output = artifactText(result, "src/index.rs");
-    if (edition === "2024") {
-      assert.doesNotMatch(output, /match\s*\{/u);
-      assert.doesNotMatch(output, /blocks_in_conditions/u);
-    } else {
-      assert.match(output, /expect\(\s*clippy::blocks_in_conditions,\s*reason = "Rust 2021 match temporary scope"\s*\)/u);
-    }
+    assert.doesNotMatch(output, /match\s*\{/u);
+    assert.doesNotMatch(output, /blocks_in_conditions/u);
     validateGeneratedProject(`native-owned-index-regions-${edition}`, result.artifacts, { run: true });
   });
 }

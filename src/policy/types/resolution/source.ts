@@ -62,6 +62,7 @@ import { resolveRustInferredObjectUnion } from "./inferred-unions.js";
 import { resolveRustConditionalAlias } from "./type-families.js";
 import { tsonicMemoryFieldBindingFactKey, selectTsonicMemoryFieldBinding } from "@tsonic/source-core/facts";
 import { selectRustConditionalNumericCarrier } from "../conditional-numeric-carrier.js";
+import { resolveRustProviderIndexedAccess } from "./indexed-access.js";
 
 export function resolveRustTargetTypeRef(
   subject: ExtensionFactSubject | undefined,
@@ -214,6 +215,8 @@ export function resolveRustTargetTypeSyntax(
   options: RustTargetTypeResolutionOptions,
   resolving: Set<object>,
 ): TargetTypeRef | undefined {
+  const indexed = resolveRustProviderIndexedAccess(node, context, options);
+  if (indexed !== undefined) return indexed;
   if (context.ast.is.IsTypeQueryNode(node)) {
     const expression = context.ast.as.AsTypeQueryNode(node)?.ExprName;
     const declaration = context.source.navigation.referenceFor(expression)?.declaration;
