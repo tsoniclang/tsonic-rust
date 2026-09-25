@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { rustBindingStorageOperations, type RustBindingStorageOperations } from "./binding-storage.js";
 import { locationIndexExpression } from "./location-expressions.js";
 import type {
   RustAssignmentOperator,
@@ -802,4 +803,3 @@ function rejectLocationStorage(
   ));
   return undefined;
 }
-import { rustBindingStorageOperations, type RustBindingStorageOperations } from "./binding-storage.js";

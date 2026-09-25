@@ -48,6 +48,8 @@ export function applyFlowReadLane(
     parent = walk.context.ast.parent(receiver);
   }
   const parentKind = parent === undefined ? undefined : walk.context.ast.kindName(parent);
+  if (parent !== undefined && walk.context.ast.as.AsCallExpression(parent)?.QuestionDotToken !== undefined &&
+    Node_Expression(walk.context.ast, parent) === receiver) return sourceCarrier;
   const access = parent === undefined ? undefined
     : parentKind === KindPropertyAccessExpression
       ? walk.context.semanticsFor(parent).operations.propertyAccess(parent)

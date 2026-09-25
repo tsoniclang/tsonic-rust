@@ -43,6 +43,7 @@ import { rustFoundationForCarrier } from "../foundation/requirements.js";
 import { maximumRustFoundation } from "../../target-model/foundation/model.js";
 import { analyzeRustProjectFlowReadSelections } from "../control-flow/project-flow-read-selections.js";
 import { isRustJsArrayCarrier, isRustStringCarrier } from "../../target-model/types/index.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustClosureCaptureFactKey, rustTargetOperationFactKey, rustBindingStorageFactKey } from "../facts/keys.js";
 
 const rustJsTimerEpilogue: RustProviderBinaryHookRow = Object.freeze({
@@ -129,6 +130,14 @@ export function analyzeRustTargetProgram(
     mayBorrowArgument: (argument) => facts.getArgumentPassingFact(argument)?.mode !== "by-value",
     isSharedBorrowArgument: (argument) => facts.getArgumentPassingFact(argument)?.mode === "borrow-shared",
     capturesFor: (closure) => facts.getFact(closure, rustClosureCaptureFactKey),
+    isOwnedOperationResult: (expression) => {
+      const operation = facts.getFact(expression, rustTargetOperationFactKey);
+      return operation?.kind === "provider-operation" &&
+        (operation.abi.target.form === "method" || operation.abi.target.form === "call" ||
+          operation.abi.target.form === "receiver-method") &&
+        operation.abi.result.kind === "sync" && operation.abi.result.carrier.kind !== "reference" &&
+        rustTargetTypeRefEquals(operation.abi.result.carrier, facts.getRuntimeCarrierFact(expression)?.carrier);
+    },
     canMoveStoredField: (field) => {
       const selected = facts.getFact(field, rustTargetOperationFactKey);
       if (selected?.kind !== "source-field" || selected.storage !== "project-object" ||

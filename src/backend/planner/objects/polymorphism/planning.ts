@@ -1,5 +1,5 @@
 import { rustDeriveAttributes, rustHiddenAttribute } from "../../../target-ast/attributes.js";
-import { planRustAttributes } from "../../attributes/planning.js";
+import { planRustAttributes } from "../../declarations/attributes/planning.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustItem, RustStructField, RustType } from "../../../target-ast/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/nodes.js";

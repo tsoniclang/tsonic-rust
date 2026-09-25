@@ -46,6 +46,10 @@ export function main(): void {
   assert.match(direct, /let capture_value = value;/u);
   assert.match(direct, /capture_value\.clone\(\)/u);
   assert.match(output, /let capture_value(?:_\d+)? = value\.clone\(\)/u);
+  const mutable = functionSection(output, "mutable", "finalized");
+  assert.match(mutable, /RefCell::new\(value\)/u);
+  assert.match(mutable, /\.borrow_mut\(\)/u);
+  assert.doesNotMatch(mutable, /\.load\(\)|\.store\(|rt::Location/u);
   validateGeneratedProject("terminal-capture-ownership", result.artifacts, { run: true });
 });
 

@@ -37,6 +37,9 @@ import { prepareRustDeferredCheckedCall } from "../operations/provider/index.js"
 import { readRustSourceNativePointerOperation, readRustSourceSafetyBuilder, readRustSourceUnsafeContext } from "../../policy/safety/source-explicit-safety.js";
 import { recordExportAssignmentFacts, resolveTypeNodeCarrier } from "../control-flow/statements.js";
 import { resolveExpressionCarrier } from "./carriers.js";
+import { selectRustFlowReadProjection } from "../../policy/types/value-carrier-reconciliation.js";
+import { recordRustFlowReadProjection } from "../facts/value-carrier-queries.js";
+import { selectRustOptionalCallResult } from "../operations/provider/calls/instantiation.js";
 import {
   readRustReferenceOperation,
   resolvedRustReferenceOperationCarrier,
@@ -685,6 +688,28 @@ function applySelectedRuntimeCallableCall(
   )) {
     return undefined;
   }
+  const runtimeValue = selectedSignature.sourceStructuralMethod === undefined && selectedSignature.sourceConstructorCarrier === undefined;
+  const calleeCarrier = runtimeValue ? resolveExpressionCarrier(walk, callee, sourceFile, carrier) : undefined;
+  if (runtimeValue) {
+    const source = walk.context.semantics(sourceFile).operations.call(expression);
+    if (source === undefined || calleeCarrier === undefined) return undefined;
+    const declaration = walk.context.semantics(sourceFile).declarations.signatureDeclaration(source.selectedSignature);
+    const optionalInvocation = walk.context.ast.as.AsCallExpression(expression)?.QuestionDotToken !== undefined;
+    const optionalResult = selectRustOptionalCallResult(
+      { source, ...(declaration === undefined ? {} : { sourceSelectedDeclaration: declaration }) },
+      callable.result, rustOperationContext(walk, expression), walk.operationOptions,
+      optionalInvocation ? { guard: callee, sourceGuardCarrier: calleeCarrier, selectedGuardCarrier: carrier } : undefined,
+    );
+    if (optionalResult.kind === "rejected") {
+      appendRustDiagnostic(walk, "RUST_OPTIONAL_CALL_CONTRACT_INVALID", optionalResult.message,
+        expression, ["target.capability=rust.optional-call.exact-callee"]);
+      return undefined;
+    }
+    if (optionalResult.fact !== undefined) {
+      walk.context.facts.set(expression, rustOptionalChainFactKey, optionalResult.fact,
+        [{ message: "rust exact runtime-callable optional guard" }]);
+    }
+  }
   const optionalCall = walk.context.facts.get(expression, rustOptionalChainFactKey) ??
     walk.context.facts.resolve(expression, rustOptionalChainFactKey);
   if (optionalCall !== undefined &&
@@ -750,7 +775,21 @@ function applySelectedRuntimeCallableCall(
     }),
   });
   if (target.form === "callable") {
-    resolveExpressionCarrier(walk, callee, sourceFile, carrier);
+    const resolved = calleeCarrier;
+    if (optionalCall === undefined) {
+      const projection = resolved === undefined ? undefined : selectRustFlowReadProjection(
+        resolved, carrier, walk.context.projectTypes, walk.context.typeDefinitions,
+      );
+      if (projection === undefined || projection.kind === "incompatible") {
+        appendRustDiagnostic(walk, "RUST_RUNTIME_CALLABLE_VALUE_CONFLICT",
+          "The runtime callee cannot project to its exact checked callable carrier.", callee,
+          ["target.capability=rust.source-call.runtime-callable-value"]);
+        return undefined;
+      }
+      if (projection.kind === "projection") {
+        recordRustFlowReadProjection(walk.context.facts, callee, projection.fact);
+      }
+    }
   } else if (target.form === "constructor-value") {
     resolveExpressionCarrier(walk, callee, sourceFile, target.receiverCarrier);
   }

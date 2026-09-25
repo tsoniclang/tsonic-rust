@@ -1,5 +1,5 @@
 import { rustDeriveAttributes, rustListAttribute, rustWordAttribute } from "../../../target-ast/attributes.js";
-import { planRustAttributes } from "../../attributes/planning.js";
+import { planRustAttributes } from "../attributes/planning.js";
 import { diagnosticInput, isUpperSnakeName, isValidRustIdentifier, rustProjectTypeHasPublicImplementationAbi } from "../../program/plan-context.js";
 import { rustAuthoredDeadCodeDisposition, rustAuthoredVariantDeadCodeDisposition, rustGeneratedEnumDiscriminantDeadCodeDisposition } from "../../liveness/directives.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";

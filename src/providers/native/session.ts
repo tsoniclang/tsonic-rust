@@ -2,6 +2,7 @@ import {
   TstsSourceProviderContractVersion,
 } from "@tsonic/tsts";
 import { resolve } from "node:path";
+import { refineNativeExportDeclaration } from "./projection/declaration-state.js";
 import type {
   ExtensionDiagnostic,
   ProviderDeclarationModel,
@@ -545,4 +546,3 @@ function compareText(left: string, right: string): number {
 export function rustCompilerProviderRootModule(dependencyAlias: string): string {
   return compilerModuleSpecifier(dependencyAlias, []);
 }
-import { refineNativeExportDeclaration } from "./projection/declaration-state.js";

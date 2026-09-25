@@ -1,5 +1,5 @@
-import type { RustItem, RustSourceFileModel } from "../../target-ast/nodes.js";
-import type { RustAttribute } from "../../target-ast/attributes.js";
+import type { RustItem, RustSourceFileModel } from "../../../target-ast/nodes.js";
+import type { RustAttribute } from "../../../target-ast/attributes.js";
 
 export interface RustAttributedModule {
   readonly model: RustSourceFileModel;

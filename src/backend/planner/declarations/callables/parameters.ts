@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { rustInlineBindingStoragePath } from "../../expressions/binding-storage.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import {
@@ -245,4 +246,3 @@ export function planRustCallableParameterPrelude(
   }
   return statements;
 }
-import { rustInlineBindingStoragePath } from "../../expressions/binding-storage.js";

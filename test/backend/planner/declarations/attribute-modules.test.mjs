@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createRustSourceFile, emptyRustGenerics } from "../../../dist/backend/target-ast/nodes.js";
-import { rustWordAttribute } from "../../../dist/backend/target-ast/attributes.js";
-import { inlineRustAttributedModules } from "../../../dist/backend/planner/attributes/modules.js";
-import { finalizeRustSourceStyle } from "../../../dist/backend/target-ast/normalization/source-style.js";
-import { finalizeRustDeadCode } from "../../../dist/backend/target-ast/normalization/dead-code.js";
-import { printRustSourceFile } from "../../../dist/print/source/items.js";
+import { createRustSourceFile, emptyRustGenerics } from "../../../../dist/backend/target-ast/nodes.js";
+import { rustWordAttribute } from "../../../../dist/backend/target-ast/attributes.js";
+import { inlineRustAttributedModules } from "../../../../dist/backend/planner/declarations/attributes/modules.js";
+import { finalizeRustSourceStyle } from "../../../../dist/backend/target-ast/normalization/source-style.js";
+import { finalizeRustDeadCode } from "../../../../dist/backend/target-ast/normalization/dead-code.js";
+import { printRustSourceFile } from "../../../../dist/print/source/items.js";
 
 test("attributed module assembly retains lexical scope and recursively prints native items", () => {
   const nested = createRustSourceFile([{ kind: "function", name: "run", visibility: "public", generics: emptyRustGenerics,

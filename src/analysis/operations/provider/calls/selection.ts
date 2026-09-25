@@ -516,7 +516,11 @@ function acceptRuntimeCallableCall(
     );
     if (selection.kind === "reject") return selection;
   }
-  const calleeCarrier = selectedValueCarrier(
+  const optionalInvocation = context.ast.as.AsCallExpression(request.source.call)?.QuestionDotToken !== undefined;
+  const selectedCarrier = optionalInvocation
+    ? resolveRustTargetTypeRef(request.source.sourceCallee.type, context, options) : undefined;
+  const calleeCarrier = optionalInvocation
+    ? rustOptionElementCarrier(selectedCarrier) ?? selectedCarrier : selectedValueCarrier(
     request.source.sourceCallee.expression,
     request.source.sourceCallee.type,
     context,
@@ -678,7 +682,9 @@ function acceptRuntimeCallableCarrierCall(
   if (parameterPlan === undefined) {
     return undefined;
   }
-  const optionalResult = selectRustOptionalCallResult(
+  const optionalResult = sourceStructuralMethod === undefined && sourceConstructorCarrier === undefined
+    ? { kind: "resolved" as const, resultCarrier }
+    : selectRustOptionalCallResult(
     request,
     resultCarrier,
     context,

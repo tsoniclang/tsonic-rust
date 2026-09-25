@@ -1,9 +1,9 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustPlanContext } from "../program/plan-context.js";
-import type { RustAttribute, RustAttributeArgument } from "../../target-ast/attributes.js";
-import { rustListAttribute, rustValueAttribute, rustWordAttribute } from "../../target-ast/attributes.js";
-import type { RustAttributeConstant } from "../../../target-model/attributes/model.js";
-import type { RustAttributeApplication } from "../../../analysis/attributes/application-index.js";
+import type { RustPlanContext } from "../../program/plan-context.js";
+import type { RustAttribute, RustAttributeArgument } from "../../../target-ast/attributes.js";
+import { rustListAttribute, rustValueAttribute, rustWordAttribute } from "../../../target-ast/attributes.js";
+import type { RustAttributeConstant } from "../../../../target-model/attributes/model.js";
+import type { RustAttributeApplication } from "../../../../analysis/attributes/application-index.js";
 
 export function planRustAttributes(declaration: Node, context: RustPlanContext): readonly RustAttribute[] {
   return planRustAttributeApplications(context.input.program.attributeApplications.forDeclaration(declaration));

@@ -21,7 +21,6 @@ import { planRustNonConsumingValue } from "./typed-locations.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
 import { planRustOptionalStorageOperation } from "./optional-storage.js";
-import { rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
 import {
   allocateRustSyntheticName,
   createRustSyntheticNameState,
@@ -76,13 +75,7 @@ export function planRustFlowReadProjection(
     }
     return { kind: "method-call", receiver: planRustNonConsumingValue(node, expression, context), method: fact.method, args: [] };
   }
-  const operation = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
-  const ownsValue = context.input.program.valueLifetimes.canMove(node) ||
-    operation?.kind === "provider-operation" &&
-      (operation.abi.target.form === "method" || operation.abi.target.form === "call" ||
-        operation.abi.target.form === "receiver-method") &&
-      operation.abi.result.kind === "sync" && operation.abi.result.carrier.kind !== "reference" &&
-      rustTargetTypeRefEquals(operation.abi.result.carrier, fact.sourceCarrier);
+  const ownsValue = context.input.program.valueLifetimes.canMove(node);
   if (fact.kind === "source-union") {
     const variants = context.input.program.typeDefinitions.sourceUnionVariants(fact.sourceCarrier);
     const path = rustUnionTypePathInContext(fact.sourceCarrier, context);

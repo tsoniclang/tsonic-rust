@@ -22,8 +22,8 @@ import type {
 import type { RustSourcePackageInitializerPlan } from "./source-package-initializers.js";
 import type { RustSourcePackageErrorPlan } from "./source-package-errors.js";
 import { createRustCrateRootSourceFile } from "../project/foundation.js";
-import { planRustAttributeApplications } from "../attributes/planning.js";
-import { inlineRustAttributedModules, type RustAttributedModule } from "../attributes/modules.js";
+import { planRustAttributeApplications } from "../declarations/attributes/planning.js";
+import { inlineRustAttributedModules, type RustAttributedModule } from "../declarations/attributes/modules.js";
 
 export interface RustSourcePackageCrateContentPlan {
   readonly component: RustSourcePackageComponentPlan;

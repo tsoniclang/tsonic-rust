@@ -22,6 +22,7 @@ export function analyzeRustValueLifetimes(input: {
   readonly isSharedBorrowArgument: (argument: Node) => boolean;
   readonly capturesFor: (closure: Node) => RustClosureCaptureFact | undefined;
   readonly canMoveStoredField: (field: Node) => boolean;
+  readonly isOwnedOperationResult: (expression: Node) => boolean;
 }): RustValueLifetimePlan {
   const movableReferences = new WeakSet<Node>();
   const movableCaptures = new WeakMap<Node, ReadonlySet<Node>>();
@@ -32,7 +33,7 @@ export function analyzeRustValueLifetimes(input: {
     if (input.canMoveStoredField(node)) storedFields.push(node);
     if (["KindStringLiteral", "KindNoSubstitutionTemplateLiteral", "KindNumericLiteral", "KindBigIntLiteral",
       "KindTrueKeyword", "KindFalseKeyword"].includes(kind)) stableBindings.add(node);
-    if (input.ast.is.IsCallExpression(node) || input.ast.is.IsNewExpression(node)) {
+    if (input.ast.is.IsCallExpression(node) || input.ast.is.IsNewExpression(node) || input.isOwnedOperationResult(node)) {
       movableReferences.add(node);
     }
     if (kind === "KindVariableDeclaration" || kind === "KindParameter") {
@@ -79,7 +80,13 @@ export function analyzeRustValueLifetimes(input: {
   }
   return Object.freeze({
     canMove(reference: Node): boolean {
-      return movableReferences.has(reference);
+      let current = reference;
+      for (;;) {
+        if (movableReferences.has(current)) return true;
+        const inner = Node_Expression(input.ast, current);
+        if (inner === undefined || !isTransparentValueWrapper(current, inner, input.ast)) return false;
+        current = inner;
+      }
     },
     canMoveCapture(closure: Node, declaration: Node): boolean {
       return movableCaptures.get(closure)?.has(declaration) === true;

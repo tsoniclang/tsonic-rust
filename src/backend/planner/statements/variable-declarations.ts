@@ -6,6 +6,7 @@ import {
   Node_Type,
 } from "@tsonic/target-api/source";
 import { rustBindingStorageForDeclaration } from "../expressions/typed-locations.js";
+import { rustInlineBindingStoragePath, rustInlineBindingStorageType } from "../expressions/binding-storage.js";
 import { planRustNativeAllocation } from "../expressions/native-memory.js";
 import { rustNativeBackingKey, rustNativeArrayStorageKey } from "../../../target-model/operations/native-memory.js";
 import { nativeRustArrayType } from "../expressions/native-arrays.js";
@@ -243,4 +244,3 @@ function planBindingVariableDeclaration(
     ? undefined
     : [{ kind: "let", name: temporary, mutable: false, init: value }, ...bindings];
 }
-import { rustInlineBindingStoragePath, rustInlineBindingStorageType } from "../expressions/binding-storage.js";

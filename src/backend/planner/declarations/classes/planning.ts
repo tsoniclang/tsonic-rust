@@ -1,5 +1,5 @@
 import { rustDeriveAttributes, rustHiddenAttribute } from "../../../target-ast/attributes.js";
-import { planRustAttributes } from "../../attributes/planning.js";
+import { planRustAttributes } from "../attributes/planning.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
 import { applyFallibleShape } from "../../types/fallible-shape.js";
 import { createRustProjectObject, rustProjectObjectStateField, rustProjectObjectType } from "../../objects/project-objects.js";
