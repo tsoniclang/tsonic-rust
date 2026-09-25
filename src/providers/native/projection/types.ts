@@ -10,7 +10,6 @@ import {
 } from "../../../target-model/types/index.js";
 import {
   canonicalCompilerTypePathKey,
-  digestText,
   importedSourceType,
   isRustOptionPath,
   isRustStringPath,
@@ -61,6 +60,7 @@ import type {
   RustProviderGenericParameter,
 } from "../../../target-model/operations/model.js";
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
+import { isCompilerCallableTrait } from "./callable-generics.js";
 import {
   compilerModuleSpecifierForIdentity,
   requireSourceLifetimeFor,
@@ -74,7 +74,6 @@ import {
   targetPathForIdentity,
   withCompilerLifetimeBinder,
 } from "./type-arguments.js";
-import { rustCompilerTypeSemanticKey } from "../model/types/substitution.js";
 
 export function sourceTypeFor(
   type: RustCompilerType,
@@ -101,11 +100,19 @@ export function sourceTypeFor(
       }
       return { kind: "source-primitive", name: primitive };
     }
-    case "generic":
+    case "generic": {
+      const callable = context.callableGenerics?.get(type.identity.itemId);
+      if (callable !== undefined) return {
+        kind: "function", id: context.allocateFunctionTypeIdentity(),
+        parameters: callable.parameters.map((parameter, index) => ({ name: `argument${index}`,
+          type: sourceTypeFor(parameter, context, position) })),
+        returnType: sourceTypeFor(callable.result, context, position),
+      };
       return {
         kind: "type-parameter",
         name: requireSourceGenericName(type.identity.itemId, context),
       };
+    }
     case "self":
       return requireCurrentType(context).sourceType;
     case "tuple":
@@ -167,7 +174,7 @@ export function sourceTypeFor(
       );
       return {
         kind: "function",
-        id: `rust-function-pointer:${digestText(rustCompilerTypeSemanticKey(type))}`,
+        id: context.allocateFunctionTypeIdentity(),
         parameters: type.parameters.map((parameter, index) => ({
           name: `argument${index}`,
           type: sourceTypeFor(parameter, binderContext, position),
@@ -218,6 +225,15 @@ export function sourceTypeFor(
       );
     }
     case "associated-type":
+      if (type.name === "Output" && type.genericArguments.length === 0 && isCompilerCallableTrait(type.trait)) {
+        return { kind: "source-global", name: "ReturnType", typeArguments: [{
+          kind: "source-global", name: "Extract", typeArguments: [sourceTypeFor(type.owner, context, position), {
+            kind: "function", id: context.allocateFunctionTypeIdentity(),
+            parameters: [{ name: "arguments_", rest: true, type: { kind: "array", elementType: { kind: "never" } } }],
+            returnType: { kind: "unknown" },
+          }],
+        }] };
+      }
       return sourceAssociatedTypeFor(type, context, position);
     case "path": {
       if (isRustStringPath(type)) return { kind: "string" };
@@ -296,11 +312,16 @@ export function targetTypeFor(
       }
       return rustSourcePrimitiveTargetType(primitive);
     }
-    case "generic":
+    case "generic": {
+      const callable = context.callableGenerics?.get(type.identity.itemId);
+      if (callable !== undefined) return { kind: "closure", callTrait: callable.callTrait,
+        args: callable.parameters.map(parameter => targetTypeFor(parameter, context, position)),
+        result: targetTypeFor(callable.result, context, position) };
       return {
         kind: "type-parameter",
         name: requireSourceGenericName(type.identity.itemId, context),
       };
+    }
     case "self":
       return requireCurrentType(context).carrier;
     case "tuple":

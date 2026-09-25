@@ -10,6 +10,7 @@ import type { RustProviderModuleDefinition, RustProviderOperationDefinition, Rus
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export interface RustCompilerProviderProjection {
+  readonly completeExports: ReadonlySet<string>;
   readonly declarationModel: ProviderDeclarationModel;
   readonly module: RustProviderModuleDefinition;
   readonly operations: readonly RustProviderOperationDefinition[];
@@ -24,6 +25,8 @@ export interface ProjectionOwner {
 }
 
 export interface ProjectionContext {
+  readonly allocateFunctionTypeIdentity: () => string;
+  readonly materialization: import("@tsonic/tsts").ProviderDeclarationMaterialization;
   readonly dependency: RustCompilerDependency;
   readonly modulePath: readonly string[];
   readonly owner: ProjectionOwner;
@@ -37,6 +40,7 @@ export interface ProjectionContext {
     readonly genericParameters: readonly RustCompilerGenericParameter[];
   }>;
   readonly defaultGenericBindings?: import("../model/rustdoc-types.js").RustCompilerSubstitutions;
+  readonly callableGenerics?: ReadonlyMap<string, import("./callable-generics.js").RustCompilerCallableSignature>;
   readonly genericNames?: ReadonlyMap<string, { readonly nativeName: string; readonly sourceName: string }>;
   readonly currentType?: {
     readonly exportId: string;

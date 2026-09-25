@@ -6,9 +6,9 @@ import { artifactText, compileRust, acmeTestingPackage } from "../../helpers/rus
 import { attributePackage } from "../../helpers/rust-session/provider-attributes.mjs";
 import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
-function compile(files) {
+function compile(files, outputType = "bin") {
   return compileRust({ packages: [attributePackage(), acmeTestingPackage()],
-    target: { id: "rust", options: { outputType: "bin", crateName: "native_attributes" } }, files }).result;
+    target: { id: "rust", options: { outputType, crateName: "native_attributes" } }, files }).result;
 }
 
 test("checked attribute lambdas preserve alias identity, order and native expansion", { timeout: 300_000 }, () => {
@@ -86,7 +86,7 @@ test("derive selection retains exact class identity without constructing an attr
     export class RecordValue { value: int32 = 1; }
     attribute<RecordValue>().add(() => deriveProbe());
     export function main(): void {}
-  ` });
+  ` }, "lib");
   assert.deepEqual(result.diagnostics, []);
   assert.match(artifactText(result, "src/index.rs"), /#\[derive\(acme_attributes::Probe(?:, [A-Za-z]+)*\)\]/u);
   const root = writeGeneratedProject("native-derived-attribute", result.artifacts);

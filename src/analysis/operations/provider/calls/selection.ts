@@ -1,7 +1,6 @@
 import {
   asNode,
   isProjectSourceDeclaration,
-  resolveSelectedProviderDeclaration,
   resolveSelectedSourceProfileMember,
 } from "../../../../policy/evidence/selected-source.js";
 import {
@@ -31,7 +30,7 @@ import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution.js
 import { rustOptionalChainFactKey } from "../../../facts/keys.js";
 import { rustOptionElementCarrier } from "../../../../target-model/types/index.js";
 import { rustRuntimeCarrierKey, rustSelectedCallKey } from "../../../../target-model/facts/selections.js";
-import { selectedCallArgumentCarriers, selectedCallArgumentNodes, selectedCallCalleeDeclaration, selectedCallCalleeSymbol } from "../operators.js";
+import { selectedCallArgumentCarriers, selectedCallArgumentNodes, selectedCallCalleeDeclaration, selectedCallCalleeSymbol, selectedCallProviderDeclaration } from "../operators.js";
 import { selectedValueCarrier } from "../../selected-values.js";
 import { selectJsSurfaceConstructorBySourceOwner, selectJsSurfaceOperation } from "../../../../policy/operations/source-profiles/js/index.js";
 import { selectRustGeneratorSourceCall } from "../../../../policy/types/generator-source-profile.js";
@@ -82,15 +81,7 @@ export function selectRustCheckedCall(
       isAsync: false, isFallible: false, errorBoundary: "none",
     }, [value], context, options, { sourceName: "keepAlive" });
   }
-  const providerEvidence = resolveSelectedProviderDeclaration(
-    context,
-    request.sourceSelectedDeclaration,
-    [
-      { subject: request.source.selectedSignature, precision: "exact" },
-      { subject: selectedCallCalleeDeclaration(request), precision: "declaration" },
-      { subject: selectedCallCalleeSymbol(request), precision: "declaration" },
-    ],
-  );
+  const providerEvidence = selectedCallProviderDeclaration(request, context);
   if (providerEvidence.kind === "conflict") {
     return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_PROVIDER_EVIDENCE_CONFLICT", "Checked call carries conflicting selected provider declaration identities.");
   }

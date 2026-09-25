@@ -1,7 +1,7 @@
 import { hasInnerKind, itemById, requireArray, requireInnerRecord, requireRecord, requireString } from "../rustdoc-schema.js";
 import { resolveLocalRustdocItem, type ResolvedRustdocItem, type RustdocItemResolver } from "../rustdoc-items.js";
 import { createRustCompilerSubstitutions, normalizeGenericParameters, rootNormalizationContext } from "../rustdoc-types.js";
-import type { RustCompilerDependency, RustCompilerGenericParameter, RustCompilerTraitDispatch } from "../model.js";
+import type { RustCompilerDependency, RustCompilerGenericParameter, RustCompilerTraitDispatch, RustCompilerUnsupportedMember } from "../model.js";
 import type { RustCompilerSubstitutions } from "../rustdoc-types.js";
 import type { RustdocDocument } from "../rustdoc-schema.js";
 
@@ -17,11 +17,13 @@ export function selectedRustDefaultMethods(
   dispatch: RustCompilerTraitDispatch,
   implementationBindings: RustCompilerSubstitutions,
   resolveItem?: RustdocItemResolver,
-): readonly RustDefaultMethod[] {
+): { readonly methods: readonly RustDefaultMethod[]; readonly unsupported: readonly RustCompilerUnsupportedMember[] } {
+  const methods: RustDefaultMethod[] = [];
+  const unsupported: RustCompilerUnsupportedMember[] = [];
   const names = requireArray(implementation.provided_trait_methods, "Rust impl provided trait methods")
     .map(value => requireString(value, "Rust provided trait method name"));
   if (new Set(names).size !== names.length) throw new Error("Rust provided trait methods contain duplicate identities.");
-  if (names.length === 0) return [];
+  if (names.length === 0) return { methods, unsupported };
   const trait = requireRecord(implementation.trait, "Rust impl trait");
   const selected = resolveLocalRustdocItem(document, dependency, trait.id, resolveItem);
   const body = requireInnerRecord(selected.item, "trait", "Rust implemented trait");
@@ -36,12 +38,16 @@ export function selectedRustDefaultMethods(
   const overrides = new Set(requireArray(implementation.items, "Rust impl items")
     .map(id => itemById(document, id).name));
   const members = requireArray(body.items, "Rust trait items").map(id => itemById(selected.document, id));
-  return names.flatMap(name => {
+  for (const name of names) {
+    if (overrides.has(name)) continue;
     const matches = members.filter(item => item.name === name && hasInnerKind(item, "function"));
     if (matches.length !== 1 || requireInnerRecord(matches[0]!, "function", "Rust trait default method").has_body !== true) {
-      throw new Error(`Rust provided trait method '${name}' has no exact default implementation.`);
+      unsupported.push(Object.freeze({ kind: "method", name,
+        reason: `Rust provided trait method '${name}' has no exact default implementation.` }));
+      continue;
     }
-    return overrides.has(name) ? [] : [Object.freeze({ ...selected, item: matches[0]!,
-      inheritedGenericParameters: generics.parameters, implementationBindings: bindings })];
-  });
+    methods.push(Object.freeze({ ...selected, item: matches[0]!,
+      inheritedGenericParameters: generics.parameters, implementationBindings: bindings }));
+  }
+  return Object.freeze({ methods: Object.freeze(methods), unsupported: Object.freeze(unsupported) });
 }

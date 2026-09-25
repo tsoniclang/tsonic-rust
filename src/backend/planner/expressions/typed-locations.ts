@@ -31,7 +31,6 @@ import {
 } from "../diagnostics.js";
 import {
   diagnosticInput,
-  isValidRustIdentifier,
   rustSourceBindingPath,
   rustCurrentErrorBoundary,
   rustErrorType,
@@ -286,17 +285,12 @@ export function rustRawLocationRoot(
   if (binding === undefined) {
     return undefined;
   }
-  const name = context.input.program.names.nameForDeclaration(binding.sourceDeclaration) ?? "";
-  if (!isValidRustIdentifier(name) ||
-    rustLocationStorageForReference(expression, context) === undefined) {
-    return undefined;
-  }
-  const sourcePath = rustSourceBindingPath(context, binding);
-  if (sourcePath === undefined) {
-    return undefined;
-  }
   const storage = rustLocationStorageForReference(expression, context);
-  const value: RustExpr = rustCapturedBinding(expression, context)?.expression ?? { kind: "path", path: sourcePath };
+  if (storage === undefined) return undefined;
+  const captured = rustCapturedBinding(expression, context);
+  const sourcePath = captured === undefined ? rustSourceBindingPath(context, binding) : undefined;
+  if (captured === undefined && sourcePath === undefined) return undefined;
+  const value: RustExpr = captured?.expression ?? { kind: "path", path: sourcePath! };
   return storage?.storage === "module-cell"
     ? rustModuleCellAccess(value, "location", [])
     : value;

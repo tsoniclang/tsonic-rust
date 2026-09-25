@@ -50,6 +50,14 @@ import type { RustOperationsProviderOptions } from "./model.js";
 import type { RustOperatorToken, RustRuntimeSetOperationKind, RustTargetOperationFact } from "../../facts/keys.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
+export function selectedCallProviderDeclaration(request: RustCheckedCallSelectionInput, context: RustOperationPolicyContext) {
+  return resolveSelectedProviderDeclaration(context, request.sourceSelectedDeclaration, [
+    { subject: request.source.selectedSignature, precision: "exact" },
+    { subject: selectedCallCalleeDeclaration(request), precision: "declaration" },
+    { subject: selectedCallCalleeSymbol(request), precision: "declaration" },
+  ]);
+}
+
 export function selectRustCheckedOperator(
   request: RustCheckedOperatorSelectionInput,
   context: RustOperationPolicyContext,

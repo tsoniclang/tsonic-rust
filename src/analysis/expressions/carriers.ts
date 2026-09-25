@@ -17,6 +17,7 @@ import {
   KindPostfixUnaryExpression,
   KindPrefixUnaryExpression,
   KindPropertyAccessExpression,
+  KindQuestionQuestionToken,
   KindSatisfiesExpression,
   KindSpreadElement,
   KindVoidExpression,
@@ -71,6 +72,7 @@ import { selectRustMemoryLayoutObservation } from "../../policy/operations/point
 import { resolveRustClassValue } from "../objects/class-values.js";
 import { selectTsonicMemoryFieldBinding, selectTsonicMemoryRecordBinding } from "@tsonic/source-core/facts";
 import { applyFlowReadLane } from "./flow-read.js";
+import { resolveNativeProviderCallableArguments } from "../operations/provider/calls/native-callables.js";
 
 export function resolveExpressionCarrier(
   walk: RustFactWalk,
@@ -427,6 +429,8 @@ function resolveCallSelectionPrerequisites(
       sourceFile,
     );
   }
+  resolveNativeProviderCallableArguments(walk, expression, sourceFile,
+    (argument, expected) => resolveExpressionCarrier(walk, argument, sourceFile, expected));
 }
 
 function resolveIndependentValueOperation(
@@ -438,6 +442,10 @@ function resolveIndependentValueOperation(
   const kind = ast.kindName(argument);
   if (kind === KindBinaryExpression) {
     const operator = BinaryExpression_OperatorToken(ast, argument);
+    if (operator !== undefined && ast.kindName(operator) === KindQuestionQuestionToken) {
+      resolveExpressionCarrier(walk, argument, sourceFile, undefined, "operation");
+      return;
+    }
     if (operator === undefined || !isRustNumericBinaryOperator(ast.kindName(operator))) return;
     const left = BinaryExpression_Left(ast, argument);
     const right = BinaryExpression_Right(ast, argument);

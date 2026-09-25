@@ -100,8 +100,11 @@ fn explicit_owners_keep_identity_and_count() {
     drop(callable);
     assert_eq!(Rc::strong_count(&result), 1);
     let holder = index::Holder::new(result);
-    assert_eq!(Rc::as_ptr(&holder.value), address);
-    assert_eq!(Rc::strong_count(&holder.value), 1);
+    let stored = holder.dispatch.read_holder_value();
+    assert_eq!(Rc::as_ptr(&stored), address);
+    assert_eq!(Rc::strong_count(&stored), 2);
+    drop(stored);
+    assert_eq!(weak.strong_count(), 1);
     drop(holder);
     assert!(weak.upgrade().is_none());
 

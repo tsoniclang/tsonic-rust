@@ -30,7 +30,7 @@ const carrierFieldsByKind: Readonly<Record<RustTargetTypeRef["kind"], readonly s
     reference: ["kind", "referent", "mutable", "lifetime"],
     pointer: ["kind", "pointee", "mutability"],
     "function-pointer": ["kind", "args", "result", "lifetimeBinder", "abi", "isUnsafe"],
-    closure: ["kind", "args", "result", "lifetimeBinder"],
+    closure: ["kind", "args", "result", "lifetimeBinder", "callTrait"],
     "trait-ref": [
       "kind",
       "id",
@@ -152,8 +152,8 @@ export function validateCarrier(
       });
       return;
     case "closure":
-      if (options.allowImmediateClosure !== true) {
-        fail(`${where} uses a native Rust closure outside an exact immediate-callback parameter`);
+      if (options.allowImmediateClosure !== true && carrier.callTrait === undefined) {
+        fail(`${where} uses a native Rust closure without an exact callable trait or immediate-callback contract`);
       }
       for (const [index, argument] of carrier.args.entries()) {
         validateCarrier(argument, definition, `${where}.args[${index}]`, fail);

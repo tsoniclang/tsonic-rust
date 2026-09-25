@@ -38,11 +38,10 @@ fn native_storage_is_borrowed_not_copied() {
     assert_eq!(read(&values, 1), 4);
     write(&mut values, 1, 7);
     assert_eq!(values, [3, 7, 5]);
-    assert_eq!(narrow(&values, 2), 5);
+    assert_eq!(narrow(&values, 2).unwrap(), 5);
 }
 #[test]
-#[should_panic]
-fn negative_index_is_rejected() { narrow(&[1], -1); }
+fn negative_index_is_rejected() { assert!(narrow(&[1], -1).is_err()); }
 #[test]
 #[should_panic]
 fn out_of_bounds_is_rejected() { read(&[1], 1); }

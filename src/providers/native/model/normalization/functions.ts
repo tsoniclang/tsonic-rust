@@ -17,7 +17,7 @@ import {
   requireRecord,
   requireString,
 } from "../rustdoc-schema.js";
-import { normalizeMemberType } from "./associated-types.js";
+import { normalizeMemberType, substituteMemberParameter } from "./associated-types.js";
 import type {
   RustCompilerDependency,
   RustCompilerFunction,
@@ -112,20 +112,23 @@ export function normalizeFunction(
   if (borrowed === undefined && !rustResultTypeHasClosedCarrier(result)) {
     throw new Error(`Rust function '${name}' returns an unsized value with no closed target carrier.`);
   }
-  const ownTypeParameters = generics.parameters.filter((parameter): parameter is RustCompilerTypeParameter =>
+  const selectedGenerics = generics.parameters.map(parameter => parameter.kind !== "type" ? parameter
+    : substituteMemberParameter(parameter, implementationBindings, associatedTypeBindings, options.traitDispatch));
+  const ownTypeParameters = selectedGenerics.filter((parameter): parameter is RustCompilerTypeParameter =>
     parameter.kind === "type");
-  const typeRequirements = mergeTypeParameterRequirements(
-    options.inheritedRequirements ?? Object.freeze([]),
-    generics.contextualTypeRequirements,
-    ownTypeParameters,
-    ...(borrowed?.typeRequirements === undefined ? [] : [borrowed.typeRequirements]),
-  );
+  const typeRequirements = mergeTypeParameterRequirements([
+    ...(options.inheritedRequirements ?? []),
+    ...generics.contextualTypeRequirements,
+    ...ownTypeParameters,
+    ...(borrowed?.typeRequirements ?? []),
+  ].map(parameter => substituteMemberParameter(parameter, implementationBindings, associatedTypeBindings,
+    options.traitDispatch)));
   return Object.freeze({
     identity,
     name,
     parameters: Object.freeze(parameters),
     result,
-    genericParameters: generics.parameters,
+    genericParameters: Object.freeze(selectedGenerics),
     typeRequirements,
     ...(receiver === undefined ? {} : { receiver }),
     ...(options.traitDispatch === undefined ? {} : { traitDispatch: options.traitDispatch }),

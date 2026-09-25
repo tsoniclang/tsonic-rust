@@ -29,17 +29,16 @@ import {
 import { canonicalItemId } from "../rustdoc-items.js";
 import { normalizeFunction } from "./functions.js";
 import { selectedRustDefaultMethods } from "./default-methods.js";
+import { implementationSubstitutions } from "./implementation-bindings.js";
 import type {
   RustCompilerAssociatedConstant,
   RustCompilerAssociatedType,
-  RustCompilerConstArgument,
   RustCompilerDependency,
   RustCompilerEnumVariant,
   RustCompilerField,
   RustCompilerFunction,
   RustCompilerGenericParameter,
   RustCompilerItemIdentity,
-  RustCompilerLifetime,
   RustCompilerTraitDispatch,
   RustCompilerType,
   RustCompilerTypeParameter,
@@ -239,8 +238,10 @@ export function normalizeTypeMembers(
       );
       if (selected.kind === "not-public") continue;
       if (selected.traitDispatch !== undefined) {
-        for (const member of selectedRustDefaultMethods(document, dependency, impl,
-          selected.traitDispatch, selected.bindings, resolveItem)) {
+        const defaults = selectedRustDefaultMethods(document, dependency, impl,
+          selected.traitDispatch, selected.bindings, resolveItem);
+        unsupported.push(...defaults.unsupported);
+        for (const member of defaults.methods) {
           const name = requireString(member.item.name, "Rust default method name");
           try {
             methods.push(normalizeFunction(member.document, member.item, member.dependency, true, {
@@ -266,7 +267,7 @@ export function normalizeTypeMembers(
         try {
           if (hasInnerKind(item, "function")) {
             methods.push(normalizeFunction(document, item, dependency, true, {
-              inheritedGenericParameters: declaredGenericParameters,
+              inheritedGenericParameters: selected.genericParameters,
               inheritedRequirements: selected.sourceRequirements,
               implementationBindings: selected.bindings,
               associatedTypeBindings: selected.associatedTypeBindings,
@@ -470,6 +471,7 @@ function normalizeImplementation(
 ): {
   readonly kind: "selected";
   readonly context: RustCompilerNormalizationContext;
+  readonly genericParameters: readonly RustCompilerGenericParameter[];
   readonly bindings: RustCompilerSubstitutions;
   readonly sourceRequirements: readonly RustCompilerTypeParameter[];
   readonly associatedTypeBindings: ReadonlyMap<string, RustCompilerType>;
@@ -534,37 +536,12 @@ function normalizeImplementation(
   return Object.freeze({
     kind: "selected",
     context: generics.context,
+    genericParameters: generics.parameters,
     bindings,
     sourceRequirements,
     associatedTypeBindings,
     ...(traitDispatch === undefined ? {} : { traitDispatch }),
   });
-}
-
-function implementationSubstitutions(
-  implementationParameters: readonly RustCompilerGenericParameter[],
-  positions: ReadonlyMap<string, number>,
-  declaredParameters: readonly RustCompilerGenericParameter[],
-): RustCompilerSubstitutions {
-  const types = new Map<string, RustCompilerType>();
-  const lifetimes = new Map<string, RustCompilerLifetime>();
-  const consts = new Map<string, RustCompilerConstArgument>();
-  for (const parameter of implementationParameters) {
-    const identity = genericParameterIdentity(parameter);
-    const position = positions.get(identity);
-    const declared = position === undefined ? undefined : declaredParameters[position];
-    if (declared === undefined || declared.kind !== parameter.kind) {
-      throw new Error("Rust impl generic parameter is not an exact projection of its owning declaration.");
-    }
-    if (parameter.kind === "lifetime" && declared.kind === "lifetime") {
-      lifetimes.set(identity, declared.lifetime);
-    } else if (parameter.kind === "type" && declared.kind === "type") {
-      types.set(identity, Object.freeze({ kind: "generic", identity: declared.identity, name: declared.name }));
-    } else if (parameter.kind === "const" && declared.kind === "const") {
-      consts.set(identity, Object.freeze({ kind: "parameter", identity: declared.identity, name: declared.name }));
-    }
-  }
-  return Object.freeze({ types, lifetimes, consts });
 }
 
 function normalizeAssociatedTypeBindings(
@@ -609,14 +586,6 @@ function traitIsPublic(
   const selected = resolveItem?.(document, dependency, trait.id)?.item ??
     (isRecord(local) ? local : undefined);
   return selected === undefined || selected.visibility === "public";
-}
-
-function genericParameterIdentity(parameter: RustCompilerGenericParameter): string {
-  return parameter.kind === "lifetime"
-    ? parameter.lifetime.kind === "parameter"
-      ? parameter.lifetime.identity.itemId
-      : parameter.lifetime.identity
-    : parameter.identity.itemId;
 }
 
 function unsupportedMember(

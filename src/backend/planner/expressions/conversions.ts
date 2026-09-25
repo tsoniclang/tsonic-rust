@@ -142,8 +142,8 @@ export function planProviderOperationExpression(
   }
   const args: RustExpr[] = [];
   const nativeFormat = fact.abi.target.form === "expression-macro" && fact.abi.target.arguments === "format";
-  for (const input of fact.abi.targetArguments) {
-    const planned = nativeFormat && isRustFinalizedSourceInput(input)
+  for (const [index, input] of fact.abi.targetArguments.entries()) {
+    const planned = nativeFormat && index > 0 && isRustFinalizedSourceInput(input)
       ? planFinalizedSourceInput(context, input, receiverNode, argumentNodes, operationNode, "native-auto-borrow", overrides)
       : planFinalizedTargetInput(
       context,

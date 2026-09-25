@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, ItemFn, ItemMod, LitInt};
+use syn::{ItemFn, ItemMod, LitInt, parse_macro_input};
 
 #[proc_macro_attribute]
 pub fn offset(arguments: TokenStream, input: TokenStream) -> TokenStream {
@@ -14,11 +14,18 @@ pub fn offset(arguments: TokenStream, input: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn module_contract(arguments: TokenStream, input: TokenStream) -> TokenStream {
     if !arguments.is_empty() {
-        return syn::Error::new(proc_macro::Span::call_site().into(), "module contract takes no arguments").to_compile_error().into();
+        return syn::Error::new(
+            proc_macro::Span::call_site().into(),
+            "module contract takes no arguments",
+        )
+        .to_compile_error()
+        .into();
     }
     let mut module = parse_macro_input!(input as ItemMod);
     let Some((_, items)) = module.content.as_mut() else {
-        return syn::Error::new_spanned(module, "module contract requires an inline module").to_compile_error().into();
+        return syn::Error::new_spanned(module, "module contract requires an inline module")
+            .to_compile_error()
+            .into();
     };
     let mut entries = 0;
     for item in items {
@@ -43,19 +50,29 @@ pub fn module_contract(arguments: TokenStream, input: TokenStream) -> TokenStrea
             if selected && shape {
                 entries += 1;
             } else if selected || shape {
-                return syn::Error::new_spanned(function, "entry requires its exact named tuple contract").to_compile_error().into();
+                return syn::Error::new_spanned(
+                    function,
+                    "entry requires its exact named tuple contract",
+                )
+                .to_compile_error()
+                .into();
             }
         }
     }
     if entries != 1 {
-        return syn::Error::new_spanned(module, "module requires exactly one entry").to_compile_error().into();
+        return syn::Error::new_spanned(module, "module requires exactly one entry")
+            .to_compile_error()
+            .into();
     }
     quote!(#module).into()
 }
 
 fn integer(expression: &syn::Expr) -> Option<u64> {
     match expression {
-        syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Int(value), .. }) => value.base10_parse().ok(),
+        syn::Expr::Lit(syn::ExprLit {
+            lit: syn::Lit::Int(value),
+            ..
+        }) => value.base10_parse().ok(),
         _ => None,
     }
 }

@@ -25,18 +25,26 @@ function fixture() {
 test("default methods select exact trait declarations and retain explicit overrides", () => {
   const { document, implementation, dispatch } = fixture();
   const select = value => selectedRustDefaultMethods(document, dependency, value, dispatch, emptyRustCompilerSubstitutions);
-  const methods = select(implementation);
+  const { methods, unsupported } = select(implementation);
+  assert.deepEqual(unsupported, []);
   assert.equal(methods.length, 1);
   assert.equal(methods[0].item, document.index[3]);
   assert.equal(methods[0].document, document);
-  assert.deepEqual(select({ ...implementation, items: [4] }), []);
-  assert.deepEqual(select({ ...implementation, provided_trait_methods: [] }), []);
-  for (const names of [["missing"], ["next"], ["count", "count"], [3]]) {
+  assert.deepEqual(select({ ...implementation, items: [4] }).methods, []);
+  assert.deepEqual(select({ ...implementation, provided_trait_methods: [] }).methods, []);
+  for (const names of [["count", "count"], [3]]) {
     assert.throws(() => select({ ...implementation, provided_trait_methods: names }));
+  }
+  for (const name of ["missing", "next"]) {
+    const selected = select({ ...implementation, provided_trait_methods: ["count", name] });
+    assert.equal(selected.methods.length, 1);
+    assert.deepEqual(selected.unsupported.map(member => member.name), [name]);
+    assert.match(selected.unsupported[0].reason, /no exact default implementation/u);
   }
   document.index[5] = { ...document.index[3], id: 5 };
   document.index[1].inner.trait.items.push(5);
-  assert.throws(() => select(implementation), /no exact default implementation/u);
+  assert.equal(select(implementation).methods.length, 0);
+  assert.match(select(implementation).unsupported[0].reason, /no exact default implementation/u);
 });
 
 test("external generic trait defaults bind checked trait arguments without owner-name inference", () => {
@@ -46,7 +54,7 @@ test("external generic trait defaults bind checked trait arguments without owner
   } }];
   const caller = { index: {}, paths: {} };
   const scalar = { kind: "primitive", name: "u64" };
-  const methods = selectedRustDefaultMethods(caller, dependency, implementation,
+  const { methods, unsupported } = selectedRustDefaultMethods(caller, dependency, implementation,
     { ...dispatch, genericArguments: [{ kind: "type", type: scalar }] }, emptyRustCompilerSubstitutions,
     (selectedDocument, selectedDependency, identity) => {
       assert.equal(selectedDocument, caller);
@@ -54,6 +62,7 @@ test("external generic trait defaults bind checked trait arguments without owner
       assert.equal(identity, 1);
       return { document, dependency, item: document.index[1] };
     });
+  assert.deepEqual(unsupported, []);
   assert.equal(methods[0].document, document);
   const parameter = methods[0].inheritedGenericParameters[0];
   assert.equal(parameter.name, "Element");

@@ -94,5 +94,7 @@ export function projectRustStandardMacros(
     }
   }
   const module = Object.freeze({ ...projection.module, exports: Object.freeze(declarations) });
-  return Object.freeze({ ...projection, module, declarationModel: module, operations: Object.freeze(operations) });
+  const completeExports = new Set([...projection.completeExports,
+    ...declarations.filter(declaration => declaration.kind === "function").map(declaration => declaration.id)]);
+  return Object.freeze({ ...projection, completeExports, module, declarationModel: module, operations: Object.freeze(operations) });
 }

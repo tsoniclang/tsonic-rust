@@ -23,6 +23,7 @@ import {
   sourceCallableGenericParameters,
 } from "./source-generics.js";
 import { compilerFunctionResult } from "./representability.js";
+import { withCallableGenericProjections } from "./callable-generics.js";
 import {
   rustBorrowedStrToStringValueConversion,
 } from "../../../target-model/conversions/model.js";
@@ -59,10 +60,12 @@ export function projectFunction(
     : `${exportId}::${constructor ? "constructor" : instanceMethod ? "method" : "static"}:${fn.name}`;
   const signatureId = `${memberId ?? exportId}::signature:${functionSignatureDigest(fn)}`;
   const ownerGenerics = context.currentType?.genericParameters ?? [];
-  const functionContext = withProjectionGenericParameters(
+  const functionContext = withCallableGenericProjections(fn, withProjectionGenericParameters(
     context,
     fn.genericParameters,
-  );
+  ));
+  const sourceGenerics = fn.genericParameters.filter(parameter => parameter.kind !== "type" ||
+    !functionContext.callableGenerics?.has(parameter.identity.itemId));
   const parameters: ProviderParameterDeclaration[] = [];
   const parameterCarriers: TargetTypeRef[] = [];
   const argumentModes: ("value" | "ref" | "mut-ref")[] = [];
@@ -119,11 +122,11 @@ export function projectFunction(
     context.currentType !== undefined && !instanceMethod && !constructor
       ? selectedOwnerGenerics
       : [],
-    fn.genericParameters,
+    sourceGenerics,
   );
   const operationGenerics = combineGenericParameters(
     selectedOwnerGenerics,
-    fn.genericParameters,
+    sourceGenerics,
   );
   const operationGenericBindings = providerGenericBindingsFor(
     operationGenerics,
@@ -131,10 +134,10 @@ export function projectFunction(
   );
   const operationTypeNames = operationGenericBindings.flatMap((parameter) =>
     parameter.kind === "type" ? [parameter.sourceName] : []);
-  const targetGenericArguments = targetGenericParameterArguments(
-    fn.genericParameters,
-    functionContext,
-  );
+  const targetGenericArguments = fn.genericParameters.flatMap(parameter => parameter.kind === "type" &&
+    functionContext.callableGenerics?.has(parameter.identity.itemId)
+    ? [{ kind: "type" as const, type: { kind: "opaque" as const, id: "tsonic.rust.infer" } }]
+    : targetGenericParameterArguments([parameter], functionContext));
 
   const target = fn.traitDispatch === undefined
     ? ordinaryFunctionTarget(

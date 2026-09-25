@@ -1,5 +1,6 @@
 import { compareText, digestText } from "./utilities.js";
 import { compilerTypeRequirementCanonicalPath } from "../model/rustdoc-types.js";
+import { sourceGenericParameterName } from "./type-arguments.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import type {
   RustCompilerDependency,
@@ -96,9 +97,9 @@ export function typeRequirements(
 ): { readonly typeRequirements?: readonly RustProviderTypeParameterRequirement[] } {
   const allowed = new Set(allowedTypeParameters);
   const requirements = parameters
-    .filter((parameter) => allowed.has(parameter.name) && parameter.requirements.length > 0)
+    .filter((parameter) => parameter.requirements.length > 0 && allowed.has(sourceGenericParameterName(parameter, context)))
     .map((parameter) => Object.freeze({
-      name: parameter.name,
+      name: sourceGenericParameterName(parameter, context),
       requirements: projectTypeRequirements(parameter, context, projectTrait),
     }))
     .sort((left, right) => compareText(left.name, right.name));

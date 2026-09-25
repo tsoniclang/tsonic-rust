@@ -206,10 +206,29 @@ export function instantiateSelectedCallTemplate(
     context,
     resolutionOptions,
   );
-  const borrowedStringTypeParameters = rustBorrowedStringTypeParameterNames(template);
   const selectedResultCarrier = request.source.sourceResultType === undefined
     ? undefined
     : resolveRustTargetTypeRef(request.source.sourceResultType, context, resolutionOptions);
+  const generic = selectedProviderCallGenericArguments(request, template, context, resolutionOptions);
+  if (generic === undefined) return undefined;
+  return instantiateProviderOperationTemplate(template, {
+    sourceReceiverCarrier: rawReceiverCarrier,
+    sourceParameterCarriers: selectedParameterCarriers,
+    sourceResultCarrier: selectedResultCarrier,
+    ...generic,
+  }, context.typeDefinitions);
+}
+
+export function selectedProviderCallGenericArguments(
+  request: RustCheckedCallSelectionInput,
+  template: RustProviderOperationTemplate,
+  context: RustOperationPolicyContext,
+  resolutionOptions: RustOperationsProviderOptions,
+): {
+  readonly directGenericArguments: ReadonlyMap<string, RustTargetGenericArgument>;
+  readonly callScopedElisionBindings?: ReadonlyMap<string, RustLifetimeRef>;
+} | undefined {
+  const borrowedStringTypeParameters = rustBorrowedStringTypeParameterNames(template);
   const directGenericArguments = new Map<string, RustTargetGenericArgument>();
   const call = asNode(request.source.call, context);
   const callIdentity = call === undefined ? undefined : sourceNodeIdentity(context.ast, call);
@@ -266,15 +285,12 @@ export function instantiateSelectedCallTemplate(
       directGenericArguments.set(parameter.sourceName, resolved);
     }
   }
-  return instantiateProviderOperationTemplate(template, {
-    sourceReceiverCarrier: rawReceiverCarrier,
-    sourceParameterCarriers: selectedParameterCarriers,
-    sourceResultCarrier: selectedResultCarrier,
+  return {
     directGenericArguments,
     ...(callScopedElisionBindings === undefined
       ? {}
       : { callScopedElisionBindings }),
-  }, context.typeDefinitions);
+  };
 }
 
 function selectedCallParameterInferenceCarriers(

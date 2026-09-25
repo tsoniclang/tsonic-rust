@@ -87,6 +87,7 @@ export type RustTargetTypeRef =
   | RustTargetTraitRef
   | {
       readonly kind: "closure";
+      readonly callTrait?: "Fn" | "FnMut" | "FnOnce";
       readonly args: readonly RustTargetTypeRef[];
       readonly result: RustTargetTypeRef;
       readonly fallible?: boolean;

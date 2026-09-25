@@ -32,11 +32,39 @@ export function normalizeMemberType(
   associatedTypeBindings: ReadonlyMap<string, RustCompilerType>,
   currentTrait: RustCompilerTraitDispatch | undefined,
 ): RustCompilerType {
-  return substituteAssociatedTypes(
-    substituteRustCompilerType(normalizeType(document, raw, context), implementationBindings),
-    associatedTypeBindings,
-    currentTrait,
-  );
+  return substituteMemberType(normalizeType(document, raw, context), implementationBindings,
+    associatedTypeBindings, currentTrait);
+}
+
+export function substituteMemberType(
+  type: RustCompilerType,
+  implementationBindings: RustCompilerSubstitutions,
+  associatedTypeBindings: ReadonlyMap<string, RustCompilerType>,
+  currentTrait: RustCompilerTraitDispatch | undefined,
+): RustCompilerType {
+  return substituteAssociatedTypes(substituteRustCompilerType(type, implementationBindings),
+    associatedTypeBindings, currentTrait);
+}
+
+export function substituteMemberParameter(
+  parameter: RustCompilerTypeParameter,
+  implementationBindings: RustCompilerSubstitutions,
+  associatedTypeBindings: ReadonlyMap<string, RustCompilerType>,
+  currentTrait: RustCompilerTraitDispatch | undefined,
+): RustCompilerTypeParameter {
+  const selected = implementationBindings.types.get(parameter.identity.itemId);
+  if (selected !== undefined && selected.kind !== "generic" && parameter.requirements.length !== 0) {
+    throw new Error("Rust associated implementation parameter requirements need an exact source-visible owner.");
+  }
+  return Object.freeze({ ...parameter,
+    ...(selected?.kind === "generic" ? { identity: selected.identity, name: selected.name } : {}),
+    requirements: Object.freeze(parameter.requirements.map(requirement => typeof requirement === "string"
+      ? requirement : Object.freeze({ kind: "trait" as const,
+        trait: mapTraitAssociatedTypes(substituteRustCompilerTrait(requirement.trait, implementationBindings),
+          associatedTypeBindings, currentTrait) }))),
+    ...(parameter.defaultType === undefined ? {} : { defaultType: substituteMemberType(parameter.defaultType,
+      implementationBindings, associatedTypeBindings, currentTrait) }),
+  });
 }
 
 export function substituteTraitDispatch(

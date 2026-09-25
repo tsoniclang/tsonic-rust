@@ -194,7 +194,7 @@ export function rustTypeFromCarrier(
           kind: "impl-trait",
           bounds: [{
             kind: "callable",
-            trait: "Fn",
+            trait: carrier.callTrait ?? "Fn",
             binder: carrier.lifetimeBinder === undefined ? [] : rustLifetimeBinderToAst(carrier.lifetimeBinder),
             parameters: parameters as RustType[],
             result: carrier.fallible === true ? {
