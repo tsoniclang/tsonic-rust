@@ -5,39 +5,10 @@ import {
   canonicalTargetSourceRules,
   selectedTargetEvidenceRule,
   targetForbiddenPackage,
-  targetLayerExact,
-  targetLayerPrefix,
-  targetLayerPredicate,
+  createTargetLayerRules,
 } from "../../../tsonic/test/architecture/tooling/target-layer-contract.mjs";
 
-function isProviderModel(path) {
-  return path.startsWith("src/providers/model/") ||
-    path === "src/providers/packages/model.ts";
-}
-
-export const rustLayerRules = Object.freeze([
-  targetLayerExact(["src/index.ts", "src/public/index.ts"], "public-root"),
-  targetLayerExact(["src/public/provider.ts"], "public-provider-sdk"),
-  targetLayerPrefix("src/descriptor/", "descriptor"),
-  targetLayerPrefix("src/compilation/", "compilation"),
-  targetLayerPrefix("src/options/", "options"),
-  targetLayerPrefix("src/source/", "source"),
-  targetLayerPredicate("provider-model", isProviderModel),
-  targetLayerPredicate(
-    "provider-implementation",
-    (path) => path.startsWith("src/providers/") && !isProviderModel(path),
-  ),
-  targetLayerPrefix("src/target-model/", "target-model"),
-  targetLayerPrefix("src/policy/", "policy"),
-  targetLayerPrefix("src/analysis/", "analysis"),
-  targetLayerPrefix("src/backend/target-ast/", "target-ast"),
-  targetLayerPrefix("src/backend/artifact-model/", "artifact-model"),
-  targetLayerPrefix("src/backend/planner/", "planner"),
-  targetLayerPrefix("src/backend/emission/", "emission"),
-  targetLayerExact(["src/backend/compile.ts"], "backend-entrypoint"),
-  targetLayerPrefix("src/print/", "printer"),
-  targetLayerPrefix("src/toolchain/", "toolchain"),
-]);
+export const rustLayerRules = createTargetLayerRules();
 
 export const rustLayerPolicies = canonicalTargetLayerPolicies;
 

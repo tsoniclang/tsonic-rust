@@ -40,8 +40,8 @@ test("canonical Rust source-module reference lists every public source alias", (
 });
 
 test("support ledgers are test fixtures rather than a second documentation tree", () => {
-  assert.equal(existsSync(resolve(repositoryRoot, "test/fixtures/support/csharp-parity-lanes.json")), true);
-  assert.equal(existsSync(resolve(repositoryRoot, "test/fixtures/support/javascript-node-lanes.json")), true);
+  assert.equal(existsSync(resolve(tsonicRoot, "test/fixtures/target-parity/language-lanes.json")), true);
+  assert.equal(existsSync(resolve(tsonicRoot, "test/fixtures/target-parity/javascript-node-lanes.json")), true);
 });
 
 function extractFrozenStringList(source, name) {

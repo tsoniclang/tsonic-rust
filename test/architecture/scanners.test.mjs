@@ -90,12 +90,12 @@ test("generated lint exceptions have one explicit policy owner", () => {
 
 test("Rust compiler reflection remains isolated from semantic and backend layers", () => {
   assert.throws(
-    () => statSync(join(sourceRoot, "providers/compiler/std-catalog.ts")),
+    () => statSync(join(sourceRoot, "providers/native/std-catalog.ts")),
     /ENOENT/u,
     "the retired hand-maintained standard-library catalog must remain deleted",
   );
   for (const { path, text } of sourceFiles) {
-    if (path.includes("/providers/compiler/")) {
+    if (path.includes("/providers/native/")) {
       continue;
     }
     const semanticText = path.endsWith("/descriptor/rust-starter-project.ts")
@@ -113,7 +113,7 @@ test("Rust compiler reflection remains isolated from semantic and backend layers
     }
     assert.doesNotMatch(
       text,
-      /providers\/compiler\//u,
+      /providers\/native\//u,
       `${path} reaches into compiler-provider tooling`,
     );
   }
@@ -207,7 +207,7 @@ test("Cargo registry patches require explicit runtime-reference provenance", () 
   const analysis = readFileSync(join(sourceRoot, "analysis/runtime/references.ts"), "utf8");
   const printer = readFileSync(join(sourceRoot, "print/project/manifest.ts"), "utf8");
   const runtimeReferences = readFileSync(
-    join(sourceRoot, "compilation/runtime-references.ts"),
+    join(sourceRoot, "providers/runtime/source-crates.ts"),
     "utf8",
   );
   assert.match(analysis, /registryPatch !== undefined && registryPatch !== cargoCratesIoRegistry/u);
@@ -300,7 +300,7 @@ test("Rust emission delegates canonical layout exclusively to bounded rustfmt", 
 });
 
 test("JS operation rows are unique per owner/member/kind/lane/variant", async () => {
-  const source = readFileSync(join(sourceRoot, "policy/operations/js-surface/rows.ts"), "utf8");
+  const source = readFileSync(join(sourceRoot, "policy/operations/source-profiles/js/rows.ts"), "utf8");
   assert.match(source, /const jsOperationRows = defineJsOperationRows\(\[/u);
   await import("../../dist/policy/operations/source-profiles/js/index.js");
 });
@@ -344,7 +344,7 @@ test("provider and library identity never flows through local-name recasing", ()
   assert.ok(providerLowering.includes("function planProviderOperationExpression"), "slice covers provider lowering");
   assert.ok(!providerLowering.includes("rustLocalBindingName"), "provider operation lowering must emit row metadata verbatim");
   const identitySources = [
-    join(sourceRoot, "policy/operations/js-surface/rows.ts"),
+    join(sourceRoot, "policy/operations/source-profiles/js/rows.ts"),
     ...collectFiles(join(sourceRoot, "providers/packages"), ".ts"),
   ];
   for (const path of identitySources) {
@@ -716,7 +716,7 @@ test("backend assignment and nullish checks consume finalized fact details", () 
   );
   const expressions = readFileSync(join(sourceRoot, "backend/planner/expressions/binary.ts"), "utf8");
   const semantics = readFileSync(join(sourceRoot, "analysis/operations/operators.ts"), "utf8");
-  const operators = readFileSync(join(sourceRoot, "policy/operations/operator-rules.ts"), "utf8");
+  const operators = readFileSync(join(sourceRoot, "policy/operations/operators/rules.ts"), "utf8");
   assert.match(statements, /assignment === undefined \|\| assignment\.kind !== "operator-token"/u);
   assert.match(statements, /selectedOperatorMatches\(expression, assignment, context\)/u);
   assert.doesNotMatch(statements, /sourceReferenceFor|selectRustEquivalentAssignment/u);
@@ -764,7 +764,7 @@ test("provider purity uses one generic operation-form writability policy", () =>
     "utf8",
   );
   const jsRows = readFileSync(
-    join(sourceRoot, "policy/operations/js-surface/model.ts"),
+    join(sourceRoot, "policy/operations/source-profiles/js/model.ts"),
     "utf8",
   );
   const finalization = readFileSync(

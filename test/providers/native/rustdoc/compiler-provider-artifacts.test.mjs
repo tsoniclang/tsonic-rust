@@ -29,7 +29,7 @@ import {
 } from "../../../../dist/providers/native/snapshot/cargo-snapshot.js";
 import { createRustCompilerWorkerClient } from "../../../../dist/providers/native/protocol/worker-client.js";
 
-const testRoot = fileURLToPath(new URL("../../../../.temp/compiler-provider-artifact-tests/", import.meta.url));
+const testRoot = fileURLToPath(new URL("../../../../.temp/compiler-provider-artifact-tests", import.meta.url));
 const cacheSignature = "Signature: 8a477f597d28d172789f06886806bc55";
 
 test("one rustdoc decoder accepts the audited signature formats without changing their facts", () => {

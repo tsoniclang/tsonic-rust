@@ -175,7 +175,7 @@ export function compilerTargetTypeId(
   dependency: RustCompilerDependency,
   canonicalPath: readonly string[],
 ): string {
-  return `rust.cargo.${digestText(dependency.packageId).slice(0, 24)}.${canonicalPath.join("../../compiler/projection")}`;
+  return `rust.cargo.${digestText(dependency.packageId).slice(0, 24)}.${canonicalPath.join(".")}`;
 }
 
 export function rustPath(crateName: string, modulePath: readonly string[], ...tail: readonly string[]): string {
