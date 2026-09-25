@@ -12,7 +12,7 @@ import { rustIndexedLocationContract } from "../../../analysis/facts/indexed-loc
 import { planFinalizedTargetInput } from "./conversions.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import {
-  rustLocationStorageFactKey,
+  rustBindingStorageFactKey,
   rustModuleBindingFactKey,
   rustSourceBindingFactKey,
   rustTargetOperationFactKey,
@@ -87,13 +87,14 @@ export function planRustIdentifierValue(
   if (context.input.program.facts.getFact(node, rustNativeArrayStorageKey)?.kind === "reference") {
     return { kind: "method-call", receiver: value, method: "clone", args: [] };
   }
-  if (captured?.storage === "location") {
-    return { kind: "method-call", receiver: value.kind === "reference" ? value.expr : value, method: "load", args: [] };
+  if (captured !== undefined && captured.storage !== "value") {
+    return { kind: "method-call", receiver: value.kind === "reference" ? value.expr : value,
+      method: captured.storage === "cell" ? "get" : "load", args: [] };
   }
   if (storage !== undefined) {
     return storage.storage === "module-cell"
       ? rustModuleCellAccess(value, "load", [])
-      : { kind: "method-call", receiver: value, method: "load", args: [] };
+      : { kind: "method-call", receiver: value, method: storage.storage === "cell" ? "get" : "load", args: [] };
   }
   if (captured?.borrowed === true) {
     const referent = value.kind === "reference" ? value.expr : undefined;
@@ -119,12 +120,13 @@ export function planRustValueRead(
 export function planRustCaptureValue(
   node: Node,
   path: string,
-  storage: "value" | "location",
+  storage: "value" | "location" | "cell",
   move: boolean,
   context: RustPlanContext,
 ): RustExpr {
   const captured = rustCapturedBinding(node, context);
   const capturedValue: RustExpr = captured?.expression ?? { kind: "path", path };
+  if (storage === "cell") return capturedValue;
   if (storage === "location") {
     return {
       kind: "method-call",
@@ -227,7 +229,7 @@ export function rustLocationStorageForReference(
   context: RustPlanContext,
 ): {
   readonly declaration: Node;
-  readonly storage: "local-location" | "module-cell";
+  readonly storage: "local-location" | "module-cell" | "cell";
   readonly valueCarrier: TargetTypeRef;
 } | undefined {
   const declaration = context.input.program.facts.getFact(node, rustSourceBindingFactKey)
@@ -236,21 +238,21 @@ export function rustLocationStorageForReference(
     ? undefined
     : rustCapturedBindingForDeclaration(declaration, context);
   if (declaration !== undefined && captured !== undefined) {
-    return captured.storage === "location"
+    return captured.storage !== "value"
       ? {
           declaration,
-          storage: "local-location",
+          storage: captured.storage === "cell" ? "cell" : "local-location",
           valueCarrier: captured.valueCarrier,
         }
       : undefined;
   }
   const localStorage = declaration === undefined
     ? undefined
-    : context.input.program.facts.getFact(declaration, rustLocationStorageFactKey);
+    : context.input.program.facts.getFact(declaration, rustBindingStorageFactKey);
   if (declaration !== undefined && localStorage !== undefined) {
     return {
       declaration,
-      storage: "local-location",
+      storage: localStorage.storage === "cell" ? "cell" : "local-location",
       valueCarrier: localStorage.valueCarrier,
     };
   }
@@ -267,11 +269,11 @@ export function rustLocationStorageForReference(
     : undefined;
 }
 
-export function rustLocationStorageForDeclaration(
+export function rustBindingStorageForDeclaration(
   declaration: Node,
   context: RustPlanContext,
-): { readonly valueCarrier: TargetTypeRef } | undefined {
-  return context.input.program.facts.getFact(declaration, rustLocationStorageFactKey);
+): { readonly storage: "location" | "cell"; readonly valueCarrier: TargetTypeRef } | undefined {
+  return context.input.program.facts.getFact(declaration, rustBindingStorageFactKey);
 }
 
 export function rustRawLocationRoot(
@@ -367,6 +369,8 @@ export type RustPromotedStorageLocationPlan =
       readonly kind: "promoted";
       readonly expression?: RustExpr;
       readonly rootDeclaration: Node;
+      readonly readMethod: "get" | "load";
+      readonly writeMethod: "set" | "store";
     };
 
 export function planRustPromotedStorageLocation(
@@ -388,6 +392,7 @@ export function planRustPromotedStorageLocation(
           planExpression,
         ),
         rootDeclaration: root.declaration,
+        ...rustPromotedStorageMethods(root.expression, context),
       };
 }
 
@@ -432,12 +437,13 @@ export function planRustPromotedStorageWrite(
   if (location === undefined) {
     return { handled: true };
   }
+  const methods = rustPromotedStorageMethods(root.expression, context);
   if (operator === "=") {
     return {
       handled: true,
       statement: {
         kind: "expr",
-        expr: { kind: "method-call", receiver: location, method: "store", args: [value] },
+        expr: { kind: "method-call", receiver: location, method: methods.writeMethod, args: [value] },
       },
     };
   }
@@ -470,14 +476,14 @@ export function planRustPromotedStorageWrite(
           },
           {
             name: currentName,
-            value: { kind: "method-call", receiver: locationPath, method: "load", args: [] },
+            value: { kind: "method-call", receiver: locationPath, method: methods.readMethod, args: [] },
           },
           { name: valueName, value },
         ],
         value: {
           kind: "method-call",
           receiver: locationPath,
-          method: "store",
+          method: methods.writeMethod,
           args: [{
             kind: "binary",
             operator: binaryOperator,
@@ -586,7 +592,9 @@ export function planRustLocationStorage(
           context,
           "The finalized local storage root did not emit a canonical Rust location.",
         )
-      : cloneRoot
+      : rustLocationStorageForReference(expression, context)?.storage === "cell"
+        ? { kind: "reference", expr: root }
+        : cloneRoot
         ? { kind: "method-call", receiver: root, method: "clone", args: [] }
         : root;
   }
@@ -753,6 +761,15 @@ export function planRustLocationStorage(
     context,
     "The finalized Rust storage path contains an unsupported projection.",
   );
+}
+
+function rustPromotedStorageMethods(node: Node, context: RustPlanContext): {
+  readonly readMethod: "get" | "load";
+  readonly writeMethod: "set" | "store";
+} {
+  return rustLocationStorageForReference(node, context)?.storage === "cell"
+    ? { readMethod: "get", writeMethod: "set" }
+    : { readMethod: "load", writeMethod: "store" };
 }
 
 

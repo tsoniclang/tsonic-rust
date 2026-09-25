@@ -30,6 +30,7 @@ import type { ExportRecord, Fail, MemberRecord, SignatureRecord } from "./model.
 import type { RustProviderPackageDefinition } from "../index.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { isRustFoundation } from "../../../target-model/foundation/model.js";
+import { validateAttributeRows } from "./attributes.js";
 
 export function validateProviderPackageDefinition(definition: RustProviderPackageDefinition): void {
   const fail: Fail = (message) => {
@@ -43,7 +44,7 @@ export function validateProviderPackageDefinition(definition: RustProviderPackag
   requireNonEmpty(definition.version, "version", fail);
   requireExactKeys(asRecord(definition), [
     "id", "displayName", "version", "requiredSurfaces", "sourceDependencies", "moduleAliases", "modules", "types", "operations", "crates",
-    "aliasImports", "carrierPaths", "carrierTraits", "binaryHooks", "sourceGlobals",
+    "aliasImports", "carrierPaths", "carrierTraits", "binaryHooks", "sourceGlobals", "attributes",
   ], "package", fail);
 
   const modulesBySpecifier = new Map<string, RustProviderPackageDefinition["modules"][number]>();
@@ -147,6 +148,7 @@ export function validateProviderPackageDefinition(definition: RustProviderPackag
   validateBinaryHooks(definition, fail);
   validateTypeRelations(definition, exportsById, fail);
   validateOperationRows(definition, exportsById, membersById, signaturesById, fail);
+  validateAttributeRows(definition, exportsById, membersById, signaturesById, fail);
 }
 
 function validateModuleAliases(

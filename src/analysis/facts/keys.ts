@@ -41,7 +41,7 @@ export { rustTargetOperationResultCarrier } from "./operations/facts.js";
 export type { RustTargetOperationFact, RustTypedLocationOperationKind, RustTypedLocationPlan } from "./operations/facts.js";
 export {
   rustClosureCaptureFactKey,
-  rustLocationStorageFactKey,
+  rustBindingStorageFactKey,
   rustModuleBindingFactKey,
   rustOptionalChainFactKey,
   rustPreparedOperationResultFactKey,

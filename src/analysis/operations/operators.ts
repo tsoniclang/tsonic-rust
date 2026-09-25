@@ -50,7 +50,7 @@ import {
   rustModuleBindingFactKey,
   rustMutatedBindingFactKey,
   rustOptionProjectionFactKey,
-  rustLocationStorageFactKey,
+  rustBindingStorageFactKey,
   rustPostCheckUnaryMinusOperationId,
   rustPostCheckUnaryPlusOperationId,
   rustTargetOperationFactKey,
@@ -721,8 +721,8 @@ function inPlaceStringAppendDeclarationFor(
   if (reference === undefined || reference.symbol === undefined ||
     walk.context.facts.get(reference.declaration, rustModuleBindingFactKey) !== undefined ||
     walk.context.facts.resolve(reference.declaration, rustModuleBindingFactKey) !== undefined ||
-    walk.context.facts.get(reference.declaration, rustLocationStorageFactKey) !== undefined ||
-    walk.context.facts.resolve(reference.declaration, rustLocationStorageFactKey) !== undefined ||
+    walk.context.facts.get(reference.declaration, rustBindingStorageFactKey) !== undefined ||
+    walk.context.facts.resolve(reference.declaration, rustBindingStorageFactKey) !== undefined ||
     walk.context.source.navigation.declarationUseSummary(reference.declaration).captured ||
     walk.context.source.navigation.referencesWithin(reference.symbol, value).length !== 0) {
     return undefined;

@@ -1,4 +1,5 @@
 import { rustDeriveAttributes, rustListAttribute, rustWordAttribute } from "../../../target-ast/attributes.js";
+import { planRustAttributes } from "../../attributes/planning.js";
 import { diagnosticInput, isUpperSnakeName, isValidRustIdentifier, rustProjectTypeHasPublicImplementationAbi } from "../../program/plan-context.js";
 import { rustAuthoredDeadCodeDisposition, rustAuthoredVariantDeadCodeDisposition, rustGeneratedEnumDiscriminantDeadCodeDisposition } from "../../liveness/directives.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
@@ -73,7 +74,7 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
       kind: "struct",
       name: enumName,
       visibility,
-      attrs: [rustListAttribute("repr", [rustWordAttribute("transparent")]), ...rustDeriveAttributes(["Clone", "Copy", "Debug", "PartialEq", "Eq", "Hash"])],
+      attrs: [...planRustAttributes(node, context), rustListAttribute("repr", [rustWordAttribute("transparent")]), ...rustDeriveAttributes(["Clone", "Copy", "Debug", "PartialEq", "Eq", "Hash"])],
       ...(deadCode === undefined ? {} : { deadCode }),
       generics: emptyRustGenerics,
       fields: [{
@@ -122,7 +123,7 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
     name: enumName,
     visibility,
     ...(deadCode === undefined ? {} : { deadCode }),
-    attrs: rustDeriveAttributes(["Clone", "Copy", "Debug", "PartialEq"]),
+    attrs: [...planRustAttributes(node, context), ...rustDeriveAttributes(["Clone", "Copy", "Debug", "PartialEq"])],
     variants: variants.map((variant) => {
       const variantDeadCode = rustAuthoredVariantDeadCodeDisposition(
         context,

@@ -60,6 +60,7 @@ function finalizeRustItemDeadCode(item: RustItem): RustItem {
       };
     }
     case "mod-decl":
+      return item.body === undefined ? item : { ...item, body: finalizeRustDeadCode(item.body) };
     case "extern-crate":
     case "use":
       return item;

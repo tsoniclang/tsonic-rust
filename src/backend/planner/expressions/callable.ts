@@ -350,7 +350,7 @@ export function planRustCallableExpressionBody(
   const captureBindings: { readonly name: string; readonly value: RustExpr }[] = [];
   const capturedBindings = [...(context.capturedBindings ?? [])];
   for (const [index, capture] of captureFact.captures.entries()) {
-    const moveCapture = context.input.program.valueLifetimes.canMoveCapture(node, capture.declaration);
+    const moveCapture = capture.storage === "cell" || context.input.program.valueLifetimes.canMoveCapture(node, capture.declaration);
     if (context.syntheticNames === undefined || !requireRustCarrierRequirements(
       capture.carrier,
       [...(moveCapture ? [] : ["clone" as const]), ...(nativeClosureProtocol === undefined ? ["static" as const] : [])],

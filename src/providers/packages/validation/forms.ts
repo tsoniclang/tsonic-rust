@@ -107,8 +107,8 @@ export function validateOperationForm(
       if (form.delimiter !== "parentheses" && form.delimiter !== "brackets" && form.delimiter !== "braces") {
         fail(`${label}.target.delimiter is not an exact Rust macro delimiter`);
       }
-      if (form.arguments !== "list" && form.arguments !== "repeat") {
-        fail(`${label}.target.arguments must select the list or repeat macro grammar`);
+      if (form.arguments !== "list" && form.arguments !== "repeat" && form.arguments !== "format") {
+        fail(`${label}.target.arguments must select the list, repeat or format macro grammar`);
       }
       if (form.arguments === "repeat" && parameterCarriers?.length !== 2) {
         fail(`${label}.target repetition requires exactly two declared parameter carriers`);

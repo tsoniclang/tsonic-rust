@@ -269,7 +269,7 @@ export type RustProviderOperationForm =
       readonly form: "expression-macro";
       readonly path: string;
       readonly delimiter: "parentheses" | "brackets" | "braces";
-      readonly arguments: "list" | "repeat";
+      readonly arguments: "list" | "repeat" | "format";
     }
   | {
       readonly form: "call-c-variadic";

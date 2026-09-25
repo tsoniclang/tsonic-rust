@@ -1,4 +1,5 @@
 import { rustDeriveAttributes, rustHiddenAttribute } from "../../../target-ast/attributes.js";
+import { planRustAttributes } from "../../attributes/planning.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
 import { applyFallibleShape } from "../../types/fallible-shape.js";
 import { createRustProjectObject, rustProjectObjectStateField, rustProjectObjectType } from "../../objects/project-objects.js";
@@ -415,7 +416,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     kind: "struct",
     name: className,
     visibility: structVisibility,
-    attrs: [...generatedStructAttributes, ...rustDeriveAttributes(representation.kind === "value" ? ["Clone"] : explicitWrapperTraits ? [] : ["Clone", "Debug", "PartialEq"])],
+    attrs: [...planRustAttributes(node, context), ...generatedStructAttributes, ...rustDeriveAttributes(representation.kind === "value" ? ["Clone"] : explicitWrapperTraits ? [] : ["Clone", "Debug", "PartialEq"])],
     generics,
     fields: structFields,
   };

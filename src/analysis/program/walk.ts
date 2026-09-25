@@ -69,7 +69,7 @@ export interface RustFactWalk {
     readonly request: import("../../policy/operations/contracts.js").RustCheckedCallSelectionInput;
     readonly prepared: RustPreparedDeferredCheckedCall;
   }>;
-  readonly capturedBindingStorage: Map<Node, "value" | "location">;
+  readonly capturedBindingStorage: Map<Node, "value" | "location" | "cell">;
   readonly objectLiteralMethodExpressions: Node[];
   readonly objectLiteralMethodSpreadExpressions: Node[];
   readonly moduleBindings: RustModuleBindingPolicy;

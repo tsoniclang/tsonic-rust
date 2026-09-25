@@ -60,6 +60,7 @@ export interface RustPlanningHost {
 }
 
 export interface RustTargetProgram {
+  readonly attributeApplications: import("../attributes/application-index.js").RustAttributeApplicationFactIndex;
   readonly numericRepresentations: RustNumericRepresentations;
   readonly typeDefinitions: import("../../target-model/types/source-union-definitions.js").RustTypeDefinitions;
   readonly typeFamilies: RustSourceTypeFamilyPlan;

@@ -107,7 +107,7 @@ test("last-use facts move loop-local strings on terminal branches but retain rep
       while (owner !== undefined && !source.ast.is.IsFunctionDeclaration(owner)) owner = source.ast.parent(owner);
       const name = owner === undefined ? "" : source.ast.text(source.ast.name(owner));
       const decisions = borrowed.get(name) ?? [];
-      decisions.push(program.valueLifetimes.canBorrowStableBinding(node));
+      decisions.push(program.valueLifetimes.canBorrowStableValue(node));
       borrowed.set(name, decisions);
     }
     source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });

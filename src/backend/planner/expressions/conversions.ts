@@ -282,7 +282,7 @@ export function planProviderOperationExpression(
         kind: "macro-invocation",
         path: form.path,
         delimiter: form.delimiter,
-        arguments: form.arguments,
+        arguments: form.arguments === "repeat" ? "repeat" : "list",
         args,
       });
     case "call-c-variadic":

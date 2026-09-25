@@ -126,6 +126,7 @@ export function analyzeRustTargetProgram(
     isOwnedString: (declaration) => isRustStringCarrier(facts.getRuntimeCarrierFact(declaration)?.carrier),
     hasSharedIdentityStorage: (declaration) => isRustJsArrayCarrier(facts.getRuntimeCarrierFact(declaration)?.carrier),
     mayBorrowArgument: (argument) => facts.getArgumentPassingFact(argument)?.mode !== "by-value",
+    isSharedBorrowArgument: (argument) => facts.getArgumentPassingFact(argument)?.mode === "borrow-shared",
     capturesFor: (closure) => facts.getFact(closure, rustClosureCaptureFactKey),
   });
   const declarationGenericRequirements = analyzeRustDeclarationGenericRequirements(
@@ -199,6 +200,7 @@ export function analyzeRustTargetProgram(
       binaryHooks,
     ),
     safetyApplications: context.safetyApplications,
+    attributeApplications: context.attributeApplications,
     moduleInitialization,
     names: context.names,
     enumMemberConstants: analyzeRustEnumMemberConstants(

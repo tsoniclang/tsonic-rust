@@ -9,7 +9,7 @@ import {
 export interface RustValueLifetimePlan {
   canMove(reference: Node): boolean;
   canMoveCapture(closure: Node, declaration: Node): boolean;
-  canBorrowStableBinding(reference: Node): boolean;
+  canBorrowStableValue(reference: Node): boolean;
 }
 
 export function analyzeRustValueLifetimes(input: {
@@ -19,6 +19,7 @@ export function analyzeRustValueLifetimes(input: {
   readonly isOwnedString: (declaration: Node) => boolean;
   readonly hasSharedIdentityStorage: (declaration: Node) => boolean;
   readonly mayBorrowArgument: (argument: Node) => boolean;
+  readonly isSharedBorrowArgument: (argument: Node) => boolean;
   readonly capturesFor: (closure: Node) => RustClosureCaptureFact | undefined;
 }): RustValueLifetimePlan {
   const movableReferences = new WeakSet<Node>();
@@ -26,13 +27,19 @@ export function analyzeRustValueLifetimes(input: {
   const stableBindings = new WeakSet<Node>();
   const visit = (node: Node): void => {
     const kind = input.ast.kindName(node);
+    if (["KindStringLiteral", "KindNoSubstitutionTemplateLiteral", "KindNumericLiteral", "KindBigIntLiteral",
+      "KindTrueKeyword", "KindFalseKeyword"].includes(kind)) stableBindings.add(node);
     if (input.ast.is.IsCallExpression(node) || input.ast.is.IsNewExpression(node)) {
       movableReferences.add(node);
     }
     if (kind === "KindVariableDeclaration" || kind === "KindParameter") {
       classifyDeclaration(node, input, movableReferences);
       const summary = input.navigation.declarationUseSummary(node);
-      if (input.hasSharedIdentityStorage(node) && enclosingCallable(node, input.ast) !== undefined && !summary.captured &&
+      const immutableString = input.isOwnedString(node) && !summary.hasUnclassifiedValueUse &&
+        summary.uses.every(use => use.kind === "type-only" ||
+          use.role === "argument" && input.isSharedBorrowArgument(use.reference) ||
+          ["comparison", "condition", "return", "storage"].includes(use.role));
+      if ((input.hasSharedIdentityStorage(node) || immutableString) && enclosingCallable(node, input.ast) !== undefined && !summary.captured &&
         !summary.exported && !summary.bindingWritten && !summary.memberWritten) {
         for (const use of summary.uses) {
           if (input.ast.is.IsIdentifier(use.reference)) stableBindings.add(use.reference);
@@ -60,7 +67,7 @@ export function analyzeRustValueLifetimes(input: {
     canMoveCapture(closure: Node, declaration: Node): boolean {
       return movableCaptures.get(closure)?.has(declaration) === true;
     },
-    canBorrowStableBinding(reference: Node): boolean {
+    canBorrowStableValue(reference: Node): boolean {
       return stableBindings.has(reference);
     },
   });

@@ -31,7 +31,7 @@ import {
   Node_Type,
 } from "@tsonic/target-api/source";
 import {
-  rustLocationStorageFactKey,
+  rustBindingStorageFactKey,
   rustModuleBindingFactKey,
   rustTargetOperationFactKey,
   rustTypedLocationPlanKey,
@@ -482,7 +482,8 @@ function rustTypedLocationPlan(
         };
       }
       if (root.storage === "local-location") {
-        context.facts.set(root.declaration, rustLocationStorageFactKey, {
+        context.facts.set(root.declaration, rustBindingStorageFactKey, {
+          storage: "location",
           valueCarrier: rootCarrier,
         }, [{ message: "rust selected canonical typed-location storage root" }]);
       }

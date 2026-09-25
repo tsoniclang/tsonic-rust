@@ -40,8 +40,15 @@ export function printRustItem(item: RustItem): string {
   switch (item.kind) {
     case "extern-crate":
       return `extern crate ${item.name};`;
-    case "mod-decl":
-      return `${printAttributes(item.attrs, 0)}${printRustVisibility(item.visibility)}mod ${item.name};`;
+    case "mod-decl": {
+      const declaration = `${printAttributes(item.attrs, 0)}${printRustVisibility(item.visibility)}mod ${item.name}`;
+      if (item.body === undefined) return `${declaration};`;
+      const contents = [
+        ...(item.body.innerAttrs ?? []).map(attribute => printRustAttribute(attribute, true)),
+        ...item.body.items.map(printRustItem),
+      ].join("\n\n");
+      return `${declaration} {\n${indentText(contents, 1)}\n}`;
+    }
     case "use": {
       const visibility = printRustVisibility(item.visibility ?? "private");
       return item.alias === undefined

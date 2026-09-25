@@ -264,7 +264,7 @@ export function planRustDirectOperatorCallAssignment(
           { name: locationName, value: promoted.expression },
           {
             name: currentName,
-            value: { kind: "method-call", receiver: locationPath, method: "load", args: [] },
+            value: { kind: "method-call", receiver: locationPath, method: promoted.readMethod, args: [] },
           },
           { name: valueName, value },
           { name: nextName, value: next },
@@ -272,7 +272,7 @@ export function planRustDirectOperatorCallAssignment(
         value: {
           kind: "method-call",
           receiver: locationPath,
-          method: "store",
+          method: promoted.writeMethod,
           args: [{ kind: "path", path: nextName }],
         },
       },

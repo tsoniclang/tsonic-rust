@@ -35,6 +35,7 @@ import {
   projectRustCompilerModule,
 } from "./projection/projection.js";
 import { standardModuleRequestFromSpecifier } from "./projection/module-specifier.js";
+import { projectRustStandardMacros, rustStandardMacroRequest } from "./projection/standard-macros.js";
 import type { RustCompilerProviderProjection } from "./projection/projection.js";
 import type { RustNamedTypeTraitContract } from "../../target-model/types/model.js";
 import { createRustCompilerWorkerClient } from "./protocol/worker-client.js";
@@ -275,17 +276,22 @@ function createCompilerProvider(
       }
       try {
         const requestedExports = requestedExportNames(request);
+        const macros = snapshot.kind === "standard-library"
+          ? rustStandardMacroRequest(dependency, modulePath, requestedExports) : undefined;
+        const compilerExports = macros === undefined ? requestedExports : macros.compilerExports;
         const module = options.worker.module({
           snapshot,
           dependency,
           modulePath,
-          ...(requestedExports === undefined ? {} : { requestedExports }),
+          ...(compilerExports === undefined ? {} : { requestedExports: compilerExports }),
           foundation: options.foundation,
         });
-        const projection = projectRustCompilerModule(module, {
+        const projected = projectRustCompilerModule(module, {
           providerModuleId: expectedModuleId,
           moduleSpecifier: resolution.moduleSpecifier,
         });
+        const projection = macros === undefined ? projected
+          : projectRustStandardMacros(projected, dependency, modulePath, macros.macros);
         options.registry.add(projection);
         return materializeClosedMetadata(projection.declarationModel);
       } catch (error) {

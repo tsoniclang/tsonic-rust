@@ -516,6 +516,14 @@ function validateOperationParameters(
     return;
   }
   const counts = new Set(ownerSignatures.map((candidate) => candidate.parameters.length));
+  if (row.target.form === "expression-macro" && row.target.arguments === "format") {
+    const parameters = ownerSignatures.length === 1 ? ownerSignatures[0]?.parameters : undefined;
+    if (parameters?.length !== 2 || parameters[0]?.rest === true || parameters[0]?.optional === true ||
+      parameters[1]?.rest !== true || row.parameterCarriers?.length !== 1) {
+      fail(`row '${row.memberId ?? row.exportId}' formatting requires one exact literal parameter and one trailing native argument list`);
+    }
+    return;
+  }
   if (counts.size !== 1) {
     fail(`row '${row.memberId ?? row.exportId}' spans signatures with different parameter counts; declare exact signatureId rows`);
   }

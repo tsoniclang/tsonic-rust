@@ -42,6 +42,7 @@ import { applyFallibleShape } from "../../types/fallible-shape.js";
 import { rustLintAttributes } from "../../../target-ast/normalization/lint-policy.js";
 import { wrapRustJsPromiseBody } from "./async-promise.js";
 import { planRustReturnExit } from "../../statements/completion-exits.js";
+import { planRustAttributes } from "../../attributes/planning.js";
 import { planRustGeneratorBody } from "./generator-body.js";
 
 export { applyRustTailShape, rustBlockTerminates } from "../../statements/block-flow.js";
@@ -140,7 +141,7 @@ function planRustFunctionItem(
     outerContext,
     source.nameDeclaration,
   );
-  const declarationAttributes = [...safetyAttributes];
+  const declarationAttributes = [...planRustAttributes(node, context), ...safetyAttributes];
   let context: RustPlanContext = outerContext;
   if (!isValidRustIdentifier(name)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(

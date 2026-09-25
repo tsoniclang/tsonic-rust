@@ -46,7 +46,7 @@ function publicItemSurface(item: RustItem): readonly string[] {
   switch (item.kind) {
     case "function":
       return item.visibility === "public"
-        ? [rustFunctionSurface({
+        ? [encodeRustContractParts([closedMetadataKey(item.attrs ?? []), rustFunctionSurface({
             name: item.name,
             isAsync: item.isAsync === true,
             ...(item.errorType === undefined ? {} : { errorType: item.errorType }),
@@ -55,7 +55,7 @@ function publicItemSurface(item: RustItem): readonly string[] {
             ...(item.returnType === undefined
               ? {}
               : { returnType: item.returnType }),
-          })]
+          })])]
         : [];
     case "const":
     case "thread-local":
@@ -95,7 +95,8 @@ function publicItemSurface(item: RustItem): readonly string[] {
         .map((fn) => publicMethodSurface(closedMetadataKey(item.target), fn));
     case "mod-decl":
       return item.visibility === "public"
-        ? [encodeRustContractParts(["module", item.name])]
+        ? [encodeRustContractParts(["module", item.name, closedMetadataKey(item.attrs ?? []),
+            ...(item.body === undefined ? [] : [closedMetadataKey(item.body)])])]
         : [];
     case "extern-crate":
     case "use":

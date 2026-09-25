@@ -130,7 +130,8 @@ export function finalizeTargetInputs(
         : { targetReceiver: none, targetArguments: args };
     }
     case "expression-macro": {
-      const args = mappedArguments(undefined, undefined, undefined);
+      const args = mappedArguments(undefined,
+        form.arguments === "format" ? indexes.map(() => "ref" as const) : undefined, undefined);
       return args === undefined || (form.arguments === "repeat" && args.length !== 2)
         ? undefined : { targetReceiver: none, targetArguments: args };
     }

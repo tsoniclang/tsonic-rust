@@ -5,7 +5,7 @@ import {
   Node_Name,
   Node_Type,
 } from "@tsonic/target-api/source";
-import { rustLocationStorageForDeclaration } from "../expressions/typed-locations.js";
+import { rustBindingStorageForDeclaration } from "../expressions/typed-locations.js";
 import { planRustNativeAllocation } from "../expressions/native-memory.js";
 import { rustNativeBackingKey, rustNativeArrayStorageKey } from "../../../target-model/operations/native-memory.js";
 import { nativeRustArrayType } from "../expressions/native-arrays.js";
@@ -75,7 +75,7 @@ function planVariableDeclaration(
   }
   const initializer = Node_Initializer(context.input.program.source.ast, declaration);
   const nativeArray = context.input.program.facts.getFact(declaration, rustNativeArrayStorageKey);
-  const locationStorage = nativeArray === undefined ? rustLocationStorageForDeclaration(declaration, context) : undefined;
+  const locationStorage = nativeArray === undefined ? rustBindingStorageForDeclaration(declaration, context) : undefined;
   if (initializer === undefined && locationStorage !== undefined) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, declaration),
@@ -94,7 +94,7 @@ function planVariableDeclaration(
     : context.input.program.facts.getRuntimeCarrierFact(typeNode)?.carrier;
   let rustType;
   if (typeNode !== undefined) {
-    const renderedCarrier = locationStorage === undefined
+    const renderedCarrier = locationStorage === undefined || locationStorage.storage === "cell"
       ? annotatedCarrier
       : rustLocationTargetType(locationStorage.valueCarrier);
     rustType = rustTypeFromCarrierInContext(renderedCarrier, context);
@@ -117,7 +117,7 @@ function planVariableDeclaration(
     return undefined;
   }
   if (rustType === undefined) {
-    const renderedCarrier = locationStorage === undefined
+    const renderedCarrier = locationStorage === undefined || locationStorage.storage === "cell"
       ? declarationCarrier
       : rustLocationTargetType(locationStorage.valueCarrier);
     rustType = rustTypeFromCarrierInContext(renderedCarrier, context);
@@ -142,6 +142,9 @@ function planVariableDeclaration(
     return undefined;
   }
   const ownedBinding = declarationCarrier.kind !== "pointer" && declarationCarrier.kind !== "reference";
+  if (locationStorage?.storage === "cell" && rustType !== undefined) {
+    rustType = { kind: "named", path: "core::cell::Cell", genericArguments: [{ kind: "type", type: rustType }] };
+  }
   if (nativeArray !== undefined) {
     rustType = nativeRustArrayType(declaration, context);
     if (rustType === undefined) return undefined;
@@ -171,6 +174,8 @@ function planVariableDeclaration(
     }
     if (locationStorage === undefined) {
       init = planned;
+    } else if (locationStorage.storage === "cell") {
+      init = { kind: "call", path: "core::cell::Cell::new", args: [planned] };
     } else {
       if (!requireRustLocationValueCarrier(
         locationStorage.valueCarrier,

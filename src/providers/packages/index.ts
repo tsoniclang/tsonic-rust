@@ -1,4 +1,5 @@
 export { materializeProviderCarrier } from "./materialization.js";
+export type { RustAttributePlacement, RustAttributeArgumentSchema, RustProviderAttributeDefinition, RustProviderAttributeRow } from "./attributes.js";
 export { rustProviderPolicyContributionKind } from "./model.js";
 export type {
   RustProviderBinaryHookDefinition,

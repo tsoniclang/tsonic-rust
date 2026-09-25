@@ -59,6 +59,7 @@ function finalizeRustItemStyle(
   item: RustItem,
   publicTypes: ReadonlySet<string>,
 ): RustItem {
+  if (item.kind === "mod-decl" && item.body !== undefined) return { ...item, body: finalizeRustSourceStyle(item.body) };
   if (item.kind === "function") {
     let attrs = item.params.length <= 7
       ? item.attrs

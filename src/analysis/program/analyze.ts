@@ -28,7 +28,7 @@ import type { RustFactWalk } from "./walk.js";
 import type { RustOperationsProviderOptions } from "../operations/provider/index.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
-import { rustLocationStorageFactKey } from "../facts/keys.js";
+import { rustBindingStorageFactKey } from "../facts/keys.js";
 import { rustTypedLocationStorageRootReference } from "../operations/typed-locations.js";
 import { selectRustAddressOfSourceOperation } from "../../policy/operations/typed-locations/source-typed-locations.js";
 import { rustProjectCallableTargetName } from "../facts/source-member-name.js";
@@ -179,6 +179,10 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     return;
   }
   const collectPromotedStorage = (node: Node): void => {
+    if (context.attributeApplications.isCompileTimeExpression(node)) {
+      context.facts.set(node, rustCompileTimeSourceKey, true);
+      return;
+    }
     if (recordRustValueStructDeclaration(walk, node)) return;
     context.pointerBacking.record(node);
     const metadata = context.memoryMetadata.declaration(node);
@@ -229,8 +233,8 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     sourceFiles: projectSourceFiles,
     hasPromotedStorage(declaration) {
       return promotedStorageDeclarations.has(declaration) ||
-        context.facts.get(declaration, rustLocationStorageFactKey) !== undefined ||
-        context.facts.resolve(declaration, rustLocationStorageFactKey) !== undefined;
+        context.facts.get(declaration, rustBindingStorageFactKey) !== undefined ||
+        context.facts.resolve(declaration, rustBindingStorageFactKey) !== undefined;
     },
     hasMutableStorageUse(declaration) {
       return mutableStorageDeclarations.declarations.has(declaration);

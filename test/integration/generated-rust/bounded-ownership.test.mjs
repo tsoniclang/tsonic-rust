@@ -199,7 +199,7 @@ export function projectionCount(count: number): number {
 use std::cell::Cell;
 use bounded_allocations::index;
 use tsonic_rust_js::JsArray;
-use tsonic_rust_runtime::Callable;
+use std::rc::Rc;
 struct Counting;
 std::thread_local! {
     static ACTIVE: Cell<bool> = const { Cell::new(false) };
@@ -229,7 +229,7 @@ fn allocation_parity() {
     let actual_text = "x".repeat(65536);
     let native_text = "x".repeat(65536);
     let actual = measure(|| index::retain_length(actual_text));
-    let native = measure(|| Callable::<(), usize>::new(move |()| native_text.len()));
+    let native = measure(|| { let callback: Rc<dyn Fn() -> usize> = Rc::new(move || native_text.len()); callback });
     assert_eq!(actual, native);
     assert_eq!(actual.0, 1);
     let values = JsArray::from_dense(vec![String::from("123456")]);

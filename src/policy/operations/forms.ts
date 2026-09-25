@@ -272,9 +272,10 @@ export function rustProviderOperationFormContractViolation(
       return hasExactKeys(form, ["form", "path", "delimiter", "arguments"], ["form", "path", "delimiter", "arguments"]) &&
           typeof form.path === "string" && rustPathPattern.test(form.path) &&
           (form.delimiter === "parentheses" || form.delimiter === "brackets" || form.delimiter === "braces") &&
-          (form.arguments === "list" || (form.arguments === "repeat" && runtimeSourceIndexes.length === 2))
+          (form.arguments === "list" || (form.arguments === "repeat" && runtimeSourceIndexes.length === 2) ||
+            (form.arguments === "format" && runtimeSourceIndexes.length >= 1))
         ? undefined
-        : "expression-macro form requires one closed Rust path, delimiter and exact list or two-operand repeat grammar";
+        : "expression-macro form requires one closed Rust path, delimiter and exact list, two-operand repeat or nonempty format grammar";
     case "call-c-variadic":
       return hasExactKeys(
         form,

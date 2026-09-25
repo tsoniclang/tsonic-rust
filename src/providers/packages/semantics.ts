@@ -1,5 +1,6 @@
 import {
   canonicalizeProviderOperationRow,
+  expandProviderPath,
   materializeProviderBinaryHookRow,
   materializeProviderCarrier,
   materializeProviderGenericParameter,
@@ -13,6 +14,7 @@ import type { RustNamedTypeTraitContract } from "../../target-model/types/model.
 import { rustProviderPolicyContributionKind } from "./model.js";
 import type { RustProviderBinaryHookRow, RustProviderExportRow, RustProviderOperationRow, RustProviderPackageDefinition, RustProviderPolicyContribution, RustProviderSemantics, RustProviderTypeRow } from "./model.js";
 import type { SelectedTargetCapabilityContributions } from "@tsonic/target-api/provider";
+import type { RustProviderAttributeRow } from "./attributes.js";
 
 export function rustProviderPolicyContributionsOf(
   capabilities: readonly SelectedTargetCapabilityContributions[],
@@ -104,6 +106,7 @@ export function collectRustProviderSemanticsFromDefinitions(
 ): RustProviderSemantics {
   const exports: RustProviderExportRow[] = [];
   const operations: RustProviderOperationRow[] = [];
+  const attributes: RustProviderAttributeRow[] = [];
   const carrierPaths = new Map<string, string>();
   const carrierTraits = new Map<string, RustNamedTypeTraitContract>();
   const types: RustProviderTypeRow[] = [];
@@ -172,6 +175,13 @@ export function collectRustProviderSemanticsFromDefinitions(
       }));
     }
     const aliases = new Map((definition.aliasImports ?? []).map((entry) => [entry.alias, entry.path]));
+    for (const row of definition.attributes ?? []) {
+      const owner = moduleByExportId.get(row.exportId);
+      if (owner === undefined) throw new Error(`Rust attribute '${row.exportId}' has no declaration owner.`);
+      attributes.push(snapshotClosedMetadata({ ...row, path: expandProviderPath(row.path, aliases), providerPackageId: definition.id, providerId,
+        providerVersion: definition.version, providerModuleId: owner.module.providerModuleId,
+        moduleSpecifier: owner.module.moduleSpecifier }));
+    }
     binaryHooks.push(...(definition.binaryHooks ?? []).map((epilogue) =>
       snapshotClosedMetadata(materializeProviderBinaryHookRow(
         epilogue,
@@ -201,6 +211,7 @@ export function collectRustProviderSemanticsFromDefinitions(
   const canonicalCarrierTraits = freezeSortedRecord(carrierTraits);
   return Object.freeze({
     exports: Object.freeze(exports),
+    attributes: Object.freeze(attributes),
     operations: Object.freeze(operations.map((row) =>
       snapshotClosedMetadata(canonicalizeProviderOperationRow(row, canonicalCarrierPaths, canonicalCarrierTraits)))),
     carrierPaths: canonicalCarrierPaths,
@@ -287,6 +298,8 @@ export function mergeRustProviderSemantics(
   );
   return Object.freeze({
     exports,
+    attributes: mergeExactRows(inputs.flatMap(input => input.attributes),
+      row => `${providerExportRowIdentity(row)}\0${row.signatureId}`, "attribute"),
     operations,
     types,
     binaryHooks,

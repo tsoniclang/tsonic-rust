@@ -22,8 +22,9 @@ export function rustProviderSourceArgumentMode(
   switch (form.form) {
     case "numeric-cast":
     case "struct-variant":
-    case "expression-macro":
       return "value";
+    case "expression-macro":
+      return form.arguments === "format" ? "ref" : "value";
     case "call":
     case "source-module-construction":
     case "free-call":

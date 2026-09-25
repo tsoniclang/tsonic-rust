@@ -19,8 +19,7 @@ import {
   rustAsyncFunctionFactKey,
   rustClosureCaptureFactKey,
   rustGeneratorFactKey,
-  rustLocationStorageFactKey,
-  rustMutatedBindingFactKey,
+  rustBindingStorageFactKey,
   rustSourceCallableReturnFactKey,
   rustSourceParameterAbiFactKey,
 } from "../facts/keys.js";
@@ -45,6 +44,7 @@ import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustGenericCallableProtocol, rustGenericCallableTargetType, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { recordCallableReturnFact, recordCallableSuspensionFacts } from "./signatures.js";
+import { rustCapturedBindingStorage } from "./capture-storage.js";
 
 export function resolveFunctionExpressionCarrier(
   walk: RustFactWalk,
@@ -282,7 +282,9 @@ export function resolveFunctionExpressionCarrier(
     : rustCallableTargetType(finalizedParameterCarriers, valueResult);
   if (closureCarrier === undefined ||
     !recordCallableReturnFact(walk, expression, generator?.resultCarrier ?? bodyCarrier)) return undefined;
-  const captures = collectRustLexicalCaptures(walk, expression, [body]);
+  const captures = collectRustLexicalCaptures(walk, expression, [body],
+    generator === undefined && asynchronous === undefined && ast.typeParameters(expression).length === 0 &&
+    ["KindArrowFunction", "KindFunctionExpression"].includes(ast.kindName(expression)));
   if (captures === undefined) {
     return undefined;
   }
@@ -312,13 +314,14 @@ export function collectRustLexicalCaptures(
   walk: RustFactWalk,
   expression: Node,
   roots: readonly Node[],
+  permitSingleOwner = false,
 ): import("../facts/keys.js").RustClosureCaptureFact | undefined {
   const { ast } = walk.context;
   const captures = new Map<Node, {
     readonly declaration: Node;
     readonly reference: Node;
     readonly carrier: TargetTypeRef;
-    readonly storage: "value" | "location";
+    readonly storage: "value" | "location" | "cell";
   }>();
   let recursiveDeclaration: Node | undefined;
   const valueDeclaration = callableExpressionValueDeclaration(expression, ast);
@@ -336,39 +339,15 @@ export function collectRustLexicalCaptures(
       walk.context.facts.resolve(reference, rustRuntimeCarrierKey)?.carrier ??
       walk.context.facts.get(declaration, rustRuntimeCarrierKey)?.carrier ??
       walk.context.facts.resolve(declaration, rustRuntimeCarrierKey)?.carrier;
-    const storage = rustCapturedBindingStorage(walk, declaration, reference);
+    const storage = rustCapturedBindingStorage(walk, declaration, reference, expression, carrier, permitSingleOwner);
     if (carrier === undefined || storage === undefined) return undefined;
-    if (storage === "location") walk.context.facts.set(declaration, rustLocationStorageFactKey, {
+    if (storage !== "value") walk.context.facts.set(declaration, rustBindingStorageFactKey, {
+      storage,
       valueCarrier: carrier,
     }, [{ message: "rust captured mutable binding storage" }]);
     captures.set(declaration, { declaration, reference, carrier, storage });
   }
   return { captures: [...captures.values()], ...(recursiveDeclaration === undefined ? {} : { recursiveDeclaration }) };
-}
-
-function rustCapturedBindingStorage(
-  walk: RustFactWalk,
-  declaration: Node,
-  reference: Node,
-): "value" | "location" | undefined {
-  const cached = walk.capturedBindingStorage.get(declaration);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const selected = walk.context.source.navigation.sourceReferenceFor(reference);
-  const sourceFile = walk.context.ast.getSourceFile(declaration);
-  if (
-    selected?.declaration !== declaration ||
-    selected.symbol === undefined ||
-    sourceFile === undefined
-  ) {
-    return undefined;
-  }
-  const mutated = walk.context.facts.get(declaration, rustMutatedBindingFactKey) !== undefined ||
-    walk.context.source.navigation.bindingWritesWithin(selected.symbol, sourceFile).length > 0;
-  const storage = mutated ? "location" : "value";
-  walk.capturedBindingStorage.set(declaration, storage);
-  return storage;
 }
 
 function callableExpressionValueDeclaration(

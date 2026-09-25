@@ -22,6 +22,8 @@ import type {
 import type { RustSourcePackageInitializerPlan } from "./source-package-initializers.js";
 import type { RustSourcePackageErrorPlan } from "./source-package-errors.js";
 import { createRustCrateRootSourceFile } from "../project/foundation.js";
+import { planRustAttributeApplications } from "../attributes/planning.js";
+import { inlineRustAttributedModules, type RustAttributedModule } from "../attributes/modules.js";
 
 export interface RustSourcePackageCrateContentPlan {
   readonly component: RustSourcePackageComponentPlan;
@@ -211,6 +213,12 @@ export function materializeRustSourcePackageCrateArtifacts(
     readonly additionalLibraryItems?: readonly RustItem[];
   },
 ): readonly RustPlannedArtifact[] | undefined {
+  const attributedModules = new Map<string, RustAttributedModule>(plan.sources.flatMap(source => {
+    const applications = input.program.attributeApplications.forDeclaration(source.sourceFile);
+    return applications.length === 0 ? [] : [[source.moduleName, {
+      model: source.model, attributes: planRustAttributeApplications(applications),
+    }] as const];
+  }));
   const artifacts: RustPlannedArtifact[] = options.manifest === undefined
     ? []
     : [{
@@ -220,10 +228,10 @@ export function materializeRustSourcePackageCrateArtifacts(
       }];
   artifacts.push(rustSourceArtifact(
     prefixedPath(options.prefix, "src/lib.rs"),
-    createRustCrateRootSourceFile(input.program.configuration.foundation, [
+    inlineRustAttributedModules(createRustCrateRootSourceFile(input.program.configuration.foundation, [
       ...plan.libraryItems,
       ...(options.additionalLibraryItems ?? []),
-    ]),
+    ]), "", attributedModules),
   ));
   if (plan.programErrorModel !== undefined) {
     artifacts.push(rustSourceArtifact(
@@ -250,7 +258,7 @@ export function materializeRustSourcePackageCrateArtifacts(
     identity.componentId === plan.component.componentId));
   const sourceArtifacts = planSyntheticModuleArtifacts(
     componentIdentities,
-    plan.syntheticModules,
+    new Map([...plan.syntheticModules].map(([name, model]) => [name, inlineRustAttributedModules(model, name, attributedModules)])),
     facadePlan.publicModuleNamesByComponent.get(plan.component.componentId) ?? new Set(),
     plan.component.publicImplementationModuleNames,
   );
@@ -264,7 +272,8 @@ export function materializeRustSourcePackageCrateArtifacts(
       ));
       continue;
     }
-    sourceArtifacts.push(rustSourceArtifact(identity.artifactPath, source.model));
+    if (!attributedModules.has(source.moduleName)) sourceArtifacts.push(rustSourceArtifact(identity.artifactPath,
+      inlineRustAttributedModules(source.model, source.moduleName, attributedModules)));
   }
   sourceArtifacts.sort((left, right) => compareNames(left.path, right.path));
   artifacts.push(...sourceArtifacts.map((artifact) => ({

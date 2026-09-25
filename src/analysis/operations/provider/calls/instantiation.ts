@@ -12,6 +12,7 @@ import {
 import { acceptRustPolicy } from "../../../../policy/operations/contracts.js";
 import { asNode } from "../../../../policy/evidence/selected-source.js";
 import { selectProviderRecordArgument } from "./record-arguments.js";
+import { rustSelectedFormatLiteral } from "./macro-inputs.js";
 import { isRustCVariadicArgumentCarrier } from "../../../facts/c-variadic.js";
 import {
   KindCallExpression,
@@ -328,6 +329,12 @@ export function acceptSelectedCall(
     readonly providerDeclaration?: ProviderDeclarationIdentity;
   },
 ): RustPolicySelection<RustCheckedCallSelectionResult> {
+  if (template.target.form === "expression-macro" && template.target.arguments === "format") {
+    if (rustSelectedFormatLiteral(request, context) === undefined) {
+      return rejectSelectedOperation(request.source.call, context, "RUST_MACRO_FORMAT_LITERAL_REQUIRED",
+        "Native formatting requires one authored string literal with explicit positional arguments; implicit named captures are not source references.");
+    }
+  }
   const instantiation = instantiateSelectedCallTemplate(
     request,
     template,
