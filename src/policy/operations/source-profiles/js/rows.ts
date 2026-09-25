@@ -641,7 +641,7 @@ export const jsOperationRows = defineJsOperationRows([
 
   // Math lane. Exact f64 operations lower directly; operations with distinct
   // ECMAScript edge semantics use closed runtime helpers.
-  ...(["int8", "uint8", "int16", "uint16", "int32", "uint32", "native-int", "native-uint"] as const).map((carrier): JsOperationRowData => ({
+  ...(["int8", "uint8", "int16", "uint16", "int32", "uint32", "int64", "uint64", "int128", "uint128", "native-int", "native-uint"] as const).map((carrier): JsOperationRowData => ({
     owner: "Math", member: "floor", operationKind: "call", lane: "math", variant: carrier,
     requirements: [{ carrier: { ref: "argument", index: 0 }, capability: "integer" }],
     shape: { op: "operation", operationKind: "method", target: { form: "numeric-cast", target: carrier },

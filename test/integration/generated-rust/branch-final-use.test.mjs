@@ -18,6 +18,21 @@ function retained(value: string): string[] {
   for (let index = 0; index < 2; index++) result.push(value);
   return result;
 }
+function branchReturn(returnedValue: string, early: boolean): string[] {
+  const result: string[] = [];
+  if (early) { result.push(returnedValue); return result; }
+  result.push(returnedValue);
+  return result;
+}
+function branchBreak(values: string[]): string[] {
+  const result: string[] = [];
+  for (let index = 0; index < values.length; index++) {
+    const breakValue = values[index]!;
+    if (breakValue.length > 0) { result.push(breakValue); break; }
+    result.push(breakValue);
+  }
+  return result;
+}
 let observed = "";
 function cleanup(value: string): string[] {
   const result: string[] = [];
@@ -50,7 +65,8 @@ export function main(): void {
   if (values.join("|") !== "a||c" || retained("x").join("|") !== "x|x" ||
     cleanup("kept").join("") !== "kept" || observed !== "kept" ||
     stable().join("|") !== "value|value" || mutatedAlias().join("|") !== "first|second|third" ||
-    replaced().join("|") !== "old|added") {
+    replaced().join("|") !== "old|added" || branchReturn("early", true).join("") !== "early" ||
+    branchReturn("late", false).join("") !== "late" || branchBreak(["", "b", "c"]).join("|") !== "|b") {
     throw new Error("branch ownership");
   }
 }
@@ -60,12 +76,15 @@ test("last-use facts move loop-local strings on terminal branches but retain rep
   const { source, program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": sourceText } });
   const snapshots = [];
   const retained = [];
+  const terminal = [];
   const borrowed = new Map();
   const visit = node => {
     if (source.ast.is.IsIdentifier(node) && source.ast.text(node) === "snapshot" &&
       source.ast.is.IsCallExpression(source.ast.parent(node))) snapshots.push(program.valueLifetimes.canMove(node));
     if (source.ast.is.IsIdentifier(node) && source.ast.text(node) === "value" &&
       source.ast.is.IsCallExpression(source.ast.parent(node))) retained.push(program.valueLifetimes.canMove(node));
+    if (source.ast.is.IsIdentifier(node) && ["returnedValue", "breakValue"].includes(source.ast.text(node)) &&
+      source.ast.is.IsCallExpression(source.ast.parent(node))) terminal.push(program.valueLifetimes.canMove(node));
     const parent = source.ast.parent(node);
     if (source.ast.is.IsIdentifier(node) && source.ast.is.IsPropertyAccessExpression(parent) &&
       source.ast.as.AsPropertyAccessExpression(parent)?.Expression === node && source.ast.text(source.ast.name(parent)) === "push") {
@@ -81,6 +100,7 @@ test("last-use facts move loop-local strings on terminal branches but retain rep
   for (const file of source.sourceFiles) if (source.ast.getFileName(file).endsWith("/index.ts")) visit(file);
   assert.deepEqual(snapshots, [true, true]);
   assert.deepEqual(retained, [false, false]);
+  assert.deepEqual(terminal, [true, true, true, true]);
   assert.deepEqual(borrowed.get("stable"), [true, true]);
   assert.deepEqual(borrowed.get("replaced"), [false]);
 });

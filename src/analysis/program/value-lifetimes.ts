@@ -189,7 +189,7 @@ function isLastUseOnPath(
   for (;;) {
     const parent = input.ast.parent(current);
     if (parent === undefined) return false;
-    if (input.ast.is.IsBlock(parent) && blockEndsLifetime(parent, declaration, callable, input.ast)) {
+    if (terminalRegion === undefined && input.ast.is.IsBlock(parent) && blockEndsLifetime(parent, declaration, callable, input.ast)) {
       terminalRegion = parent;
     }
     if (parent === body) break;

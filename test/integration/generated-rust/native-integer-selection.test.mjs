@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { nativeIntegerSelectionSource } from "../../../../tsonic/test/fixtures/native-integer-selection.mjs";
-import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
+import { analyzeRust, artifactText, compileRust, nodejsCapability } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { rustSourceCallableReturnFactKey } from "../../../dist/analysis/facts/keys.js";
 
@@ -44,4 +44,23 @@ test("native counters, conditional joins and integer floor preserve exact carrie
   const floor = output.slice(output.indexOf("fn integral_floor("), output.indexOf("fn fractional_floor("));
   assert.doesNotMatch(floor, /f64|\.floor\(/u);
   validateGeneratedProject("native-integer-selection", result.artifacts, { run: true });
+});
+
+test("floor retains a wide integer behind a provider's number declaration", { timeout: 300_000 }, async () => {
+  const { result } = compileRust({ surfaces: ["js"], capabilities: [await nodejsCapability()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "wide_integer_floor" } },
+    files: { "index.ts": `
+      import { statSync } from "node:fs";
+      export function main(): void {
+        const size = statSync("Cargo.toml").size;
+        const rounded = Math.floor(size);
+        if (rounded !== size || rounded <= 0) throw new Error("wide integer floor");
+      }
+    ` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  const output = artifactText(result, "src/index.rs");
+  assert.match(output, /let rounded: u64/u);
+  assert.doesNotMatch(output, /f64|\.floor\(/u);
+  validateGeneratedProject("wide-integer-floor", result.artifacts, { run: true });
 });
