@@ -2,7 +2,7 @@ import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_In
 import type { Node } from "@tsonic/tsts";
 import { createRustPlanBuilder } from "../facts/plan-store.js";
 import { rustSourceCallableReturnFactKey } from "../facts/keys.js";
-import { rustOperationContext, rustResolutionContext, selectExpressionOperation } from "../program/walk.js";
+import { rustOperationContext, rustResolutionContext } from "../program/walk.js";
 import type { RustFactWalk } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { selectRustNumericBinaryPromotion } from "../../policy/operations/numeric/promotion.js";
@@ -136,8 +136,9 @@ export function selectRustInferredNumericReturn(
           facts.set(operand, rustRuntimeCarrierKey, { carrier });
         }
         const sourceFile = ast.getSourceFile(expression);
-        if (sourceFile !== undefined && kind !== "KindIdentifier") selectExpressionOperation(probe, expression, sourceFile);
-        return resolveRustTargetTypeRef(expression, context, walk.operationOptions);
+        return sourceFile !== undefined && kind !== "KindIdentifier"
+          ? resolveExpressionCarrier(probe, expression, sourceFile, undefined)
+          : resolveRustTargetTypeRef(expression, context, walk.operationOptions);
       } finally {
         active.delete(expression);
       }

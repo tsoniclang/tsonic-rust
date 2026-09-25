@@ -29,6 +29,7 @@ import {
   KindTypeOfExpression,
   KindVoidExpression,
   Node_Expression,
+  sourceIntegerLiteralValue,
 } from "@tsonic/target-api/source";
 import { rustRuntimeUnionContract, rustRuntimeUnionProjection } from "../../target-model/types/carriers/runtime-unions.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
@@ -71,6 +72,7 @@ import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectedSourceLiteralIsRepresentable, selectedSourceLiteralOperandIsRepresentable } from "../../policy/types/selected-numeric-literal.js";
 import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
+import { selectRustConditionalNumericCarrier } from "../../policy/types/conditional-numeric-carrier.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustTargetOperationFact } from "../facts/keys.js";
@@ -414,11 +416,18 @@ export function resolveExpressionCarrierUncached(
         return undefined;
       }
       const conditionCarrier = resolveExpressionCarrier(walk, condition, sourceFile, boolCarrier);
-      const semanticCarrier = expected ?? resolveRustTargetTypeRef(
+      let semanticCarrier = expected ?? resolveRustTargetTypeRef(
         expression,
         rustResolutionContext(walk, expression),
         walk.operationOptions,
       );
+      if (expected === undefined && isRustNumericCarrier(rustOptionElementCarrier(semanticCarrier) ?? semanticCarrier)) {
+        const left = sourceIntegerLiteralValue(walk.context.ast, whenTrue) === undefined
+          ? resolveExpressionCarrier(walk, whenTrue, sourceFile, undefined) : undefined;
+        const right = sourceIntegerLiteralValue(walk.context.ast, whenFalse) === undefined
+          ? resolveExpressionCarrier(walk, whenFalse, sourceFile, undefined) : undefined;
+        semanticCarrier = selectRustConditionalNumericCarrier(whenTrue, whenFalse, left, right, walk.context.ast) ?? semanticCarrier;
+      }
       const trueCarrier = resolveExpressionCarrier(walk, whenTrue, sourceFile, semanticCarrier);
       const falseCarrier = resolveExpressionCarrier(walk, whenFalse, sourceFile, semanticCarrier ?? trueCarrier);
       const resultCarrier = semanticCarrier ?? trueCarrier;

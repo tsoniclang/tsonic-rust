@@ -118,6 +118,7 @@ test("last-use facts move loop-local strings on terminal branches but retain rep
   assert.deepEqual(terminal, [true, true, true, true]);
   assert.deepEqual(borrowed.get("stable"), [true, true]);
   assert.deepEqual(borrowed.get("replaced"), [false]);
+  assert.deepEqual(borrowed.get("pointerReplaced"), [true]);
 });
 
 test("branch ownership and stable receiver borrowing compile and preserve alias replacement", { timeout: 300_000 }, () => {
@@ -131,5 +132,7 @@ test("branch ownership and stable receiver borrowing compile and preserve alias 
   assert.doesNotMatch(branch, /snapshot\.clone\(\)/u);
   const stable = output.slice(output.indexOf("fn stable("), output.indexOf("fn replaced("));
   assert.doesNotMatch(stable, /result\.clone\(\)/u);
+  const pointer = output.slice(output.indexOf("fn pointer_replaced("), output.indexOf("pub fn main("));
+  assert.match(pointer, /values\s*\.load\(\)\s*\.push_many_discard\(\[replace_location\(/u);
   validateGeneratedProject("branch-final-use", result.artifacts, { run: true });
 });

@@ -20,7 +20,7 @@ test("numeric analysis seals integer joins and native counters while retaining e
   };
   for (const file of program.sourceFiles) visit(file);
   assert.deepEqual(counters, ["int32", "native-uint", "native-uint", "float64", "float64", "float64"]);
-  for (const name of ["conditional", "conditionalLiteral", "nested"]) {
+  for (const name of ["conditional", "conditionalLiteral", "nested", "compoundFloor", "negatedFloor", "calledConditional", "calledConditionalLiteral"]) {
     assert.deepEqual(returns.get(name), { kind: "source-primitive", name: "int32" }, name);
   }
   for (const name of ["conditionalFraction", "explicitFloat", "fractionalFloor"]) {
@@ -35,6 +35,9 @@ test("native counters, conditional joins and integer floor preserve exact carrie
   });
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
+  for (const name of ["integral_floor", "compound_floor", "negated_floor", "called_conditional", "called_conditional_literal"]) {
+    assert.match(output, new RegExp(`fn ${name}\\([^)]*\\) -> (?:Result<)?i32`, "u"), name);
+  }
   assert.match(output, /fn conditional\([^)]*\) -> i32/u);
   assert.match(output, /fn conditional_literal\([^)]*\) -> i32/u);
   assert.match(output, /fn explicit_float\([^)]*\) -> f64/u);
