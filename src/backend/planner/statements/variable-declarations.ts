@@ -29,7 +29,7 @@ import { requireRustLocationValueCarrier } from "../types/generic-requirements.j
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
+import type { RustExpr, RustStmt, RustType } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustCompileTimeSourceKey } from "../../../target-model/facts/source-declarations.js";
 
@@ -92,7 +92,7 @@ function planVariableDeclaration(
   const annotatedCarrier = typeNode === undefined
     ? undefined
     : context.input.program.facts.getRuntimeCarrierFact(typeNode)?.carrier;
-  let rustType;
+  let rustType: RustType | undefined;
   if (typeNode !== undefined) {
     const renderedCarrier = locationStorage === undefined || locationStorage.storage === "cell"
       ? annotatedCarrier

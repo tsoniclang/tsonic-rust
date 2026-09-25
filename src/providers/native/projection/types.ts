@@ -115,11 +115,14 @@ export function sourceTypeFor(
           sourceTypeFor(element, context, position)),
       };
     case "array":
-    case "slice":
       return {
         kind: "array",
         elementType: sourceTypeFor(type.element, context, position),
       };
+    case "slice":
+      return importedSourceType(context, rustTypesModule, rustSourceTypeExportIds.slice, [
+        sourceTypeFor(type.element, context, position),
+      ]);
     case "reference": {
       const lifetime = sourceLifetimeFor(type.lifetime, context);
       return importedSourceType(

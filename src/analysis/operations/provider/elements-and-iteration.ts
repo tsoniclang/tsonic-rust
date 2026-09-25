@@ -37,11 +37,11 @@ import {
   rustSourcePrimitiveTargetType,
   rustCarrierSupportsClone,
 } from "../../../target-model/types/index.js";
-import { acceptDeclarationOperation, acceptRustMemberOperation, acceptRustOperation, elementProvenance, isDeclarationFileSubject, normalizeSelectedLiteralCarrier, rejectSelectedOperation, selectedArgumentMatchScore, selectedMemberReceiverCarrier, sourceOperationId } from "./result.js";
+import { acceptDeclarationOperation, acceptRustMemberOperation, acceptRustOperation, elementProvenance, isDeclarationFileSubject, normalizeSelectedLiteralCarrier, normalizeSelectedOperationInputCarrier, rejectSelectedOperation, selectedArgumentMatchScore, selectedMemberReceiverCarrier, sourceOperationId } from "./result.js";
 import { finalizeProviderOperationFromSubjects, mapProviderCheckedOperation } from "./conversions.js";
 import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
-import { rustInt32ToUsizeValueConversion } from "../../../target-model/conversions/model.js";
+import { selectRustNativeIndex } from "../../../policy/operations/native-indices.js";
 import { rustProjectObjectIndexSignature } from "../../project-types/object-layout.js";
 import { rustRuntimeCarrierKey } from "../../../target-model/facts/selections.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -263,23 +263,33 @@ export function selectRustCheckedElementAccess(
     : receiverCarrier?.kind === "reference" && receiverCarrier.referent.kind === "slice"
       ? receiverCarrier.referent
       : undefined;
-  if (sourceProfileIdentity?.profile === "native" &&
-    (sourceProfileIdentity.ownerName === "Array" || sourceProfileIdentity.ownerName === "ReadonlyArray") &&
-    sourceProfileIdentity.memberName === "index" &&
+  const nativeIndexIdentity = sourceProfileIdentity?.profile === "native" ? sourceProfileIdentity
+    : receiverCarrier?.kind === "reference" && receiverCarrier.referent.kind === "slice" ? jsIdentity : undefined;
+  if (nativeIndexIdentity !== undefined &&
+    (nativeIndexIdentity.ownerName === "Array" || nativeIndexIdentity.ownerName === "ReadonlyArray") &&
+    nativeIndexIdentity.memberName === "index" &&
     nativeArrayReceiver !== undefined && (isRustCopyCarrier(nativeArrayReceiver.element) || rustCarrierSupportsClone(nativeArrayReceiver.element, context.typeDefinitions))) {
+    const sourceIndex = selectedValueCarrier(request.argument, request.sourceArgumentType, context, options);
+    const index = selectRustNativeIndex(sourceIndex) ?? selectRustNativeIndex(normalizeSelectedOperationInputCarrier(
+      request.argument, sourceIndex, rustSourcePrimitiveTargetType("int32"), context, options,
+    ));
+    if (index === undefined) {
+      return rejectSelectedOperation(request.expression, context, "RUST_NATIVE_INDEX_CARRIER_UNSUPPORTED",
+        "Native indexing requires an exact integer carrier.");
+    }
     const template: RustProviderOperationTemplate = {
       kind: "provider-operation",
-      operationId: `tsonic.rust.native.${sourceProfileIdentity.ownerName}.index`,
+      operationId: `tsonic.rust.native.${nativeIndexIdentity.ownerName}.index`,
       operationKind: "indexer",
-      target: { form: "index", indexConversion: rustInt32ToUsizeValueConversion },
+      target: { form: "index", ...(index.conversion === undefined ? {} : { indexConversion: index.conversion }) },
       resultCarrier: nativeArrayReceiver.element,
-      parameterCarriers: [rustSourcePrimitiveTargetType("int32")],
+      parameterCarriers: [index.carrier],
       evaluation: "pure",
       isAsync: false,
       isFallible: false,
       errorBoundary: "none",
     };
-    const fact = finalizeProviderOperationFromSubjects(template, request.receiver, [request.argument], context, options, selectedReceiverCarrier);
+    const fact = finalizeProviderOperationFromSubjects(template, request.receiver, [request.argument], context, options, selectedReceiverCarrier, [index.carrier]);
     if (fact === undefined) {
       return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_OPERATION_ABI_INCOMPLETE", "Native array indexing cannot finalize one total Rust operation ABI.");
     }

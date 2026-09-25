@@ -2,6 +2,7 @@ import type { RustProviderPackageDefinition } from "../model.js";
 import type { RustAttributeArgumentSchema } from "../attributes.js";
 import type { ExportRecord, Fail, MemberRecord, SignatureRecord } from "./model.js";
 import { asRecord, requireExactKeys, requireNonEmpty, requireRustIdentifier, requireRustPath } from "./carriers.js";
+import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
 
 export function validateAttributeRows(
   definition: RustProviderPackageDefinition,
@@ -10,7 +11,7 @@ export function validateAttributeRows(
   signatures: ReadonlyMap<string, SignatureRecord>,
   fail: Fail,
 ): void {
-  if (definition.attributes !== undefined && !Array.isArray(definition.attributes)) fail("attributes must be a finite array of exact contracts");
+  if (definition.attributes !== undefined && !isDenseDataArray(definition.attributes)) fail("attributes must be a finite array of exact contracts");
   const identities = new Set<string>();
   for (const row of definition.attributes ?? []) {
     requireExactKeys(asRecord(row), ["exportId", "signatureId", "kind", "path", "placements", "arguments", "requiredParent"], "attribute", fail);
@@ -18,7 +19,7 @@ export function validateAttributeRows(
     requireNonEmpty(row.signatureId, "attribute signature", fail);
     requireRustPath(row.path, "attribute path", fail);
     const signature = signatures.get(row.signatureId);
-    if (exports.get(row.exportId)?.declaration.kind !== "function" || signature?.exportId !== row.exportId || signature.memberId !== undefined) {
+    if (signature === undefined || exports.get(row.exportId)?.declaration.kind !== "function" || signature.exportId !== row.exportId || signature.memberId !== undefined) {
       fail("attribute must select an exact exported function signature");
     }
     const identity = `${row.exportId}\0${row.signatureId}`;
@@ -27,9 +28,9 @@ export function validateAttributeRows(
     if (definition.operations.some(operation => operation.exportId === row.exportId && operation.memberId === undefined &&
       (operation.signatureId === undefined || operation.signatureId === row.signatureId))) fail("an attribute signature cannot also be a runtime operation");
     if (row.kind !== "attribute" && row.kind !== "derive") fail("attribute kind must be attribute or derive");
-    if (!Array.isArray(row.placements) || row.placements.length === 0 || new Set(row.placements).size !== row.placements.length ||
+    if (!isDenseDataArray(row.placements) || row.placements.length === 0 || new Set(row.placements).size !== row.placements.length ||
       row.placements.some(placement => !["function", "module", "struct", "enum"].includes(placement))) fail("attribute placements must be unique native item kinds");
-    if (!Array.isArray(row.arguments) || row.arguments.length !== signature.declaration.parameters.length ||
+    if (!isDenseDataArray(row.arguments) || row.arguments.length !== signature.declaration.parameters.length ||
       signature.declaration.parameters.some(parameter => parameter.optional || parameter.rest) ||
       (signature.declaration.typeParameters?.length ?? 0) !== 0) fail("attribute grammar must exactly cover a closed required parameter list");
     if (row.kind === "derive" && (row.arguments.length !== 0 || row.placements.some(placement => placement !== "struct" && placement !== "enum"))) {
@@ -53,12 +54,12 @@ export function validateAttributeRows(
       requireExactKeys(record, ["kind"], "attribute literal", fail);
     } else if (schema.kind === "tuple") {
       requireExactKeys(record, ["kind", "elements"], "attribute tuple", fail);
-      if (!Array.isArray(schema.elements)) fail("attribute tuple requires its exact elements");
+      if (!isDenseDataArray(schema.elements)) fail("attribute tuple requires its exact elements");
       for (const element of schema.elements) validateSchema(element, depth + 1);
     } else if (schema.kind === "record") {
       if (depth !== 0) fail("named attribute fields must be top-level arguments, not nested records");
       requireExactKeys(record, ["kind", "exportId", "fields"], "attribute record", fail);
-      if (exports.get(schema.exportId)?.declaration.kind !== "interface" || !Array.isArray(schema.fields)) fail("attribute record requires an exact provider interface");
+      if (exports.get(schema.exportId)?.declaration.kind !== "interface" || !isDenseDataArray(schema.fields)) fail("attribute record requires an exact provider interface");
       const fieldIds = new Set<string>();
       const names = new Set<string>();
       for (const field of schema.fields) {

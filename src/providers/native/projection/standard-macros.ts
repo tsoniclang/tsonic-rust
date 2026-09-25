@@ -63,7 +63,7 @@ export function projectRustStandardMacros(
         }
         defaults.set(parameter.sourceName, parameter.defaultArgument.type);
       }
-      const resultCarrier = substituteRustTargetGenerics(type.targetCarrier, defaults);
+      const resultCarrier = substituteRustTargetGenerics(type.targetCarrier, defaults, new Map());
       const count = { kind: "source-primitive", name: "native-uint" } as const;
       declarations.push({ id: exportId, name, kind: "function", signatures: [{ id: signatureId,
         typeParameters: [{ name: element.sourceName }],

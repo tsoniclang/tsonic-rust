@@ -20,6 +20,7 @@ export const rustSourceTypeExportIds = Object.freeze({
   opaqueType: "Impl",
   maybeSized: "MaybeSized",
   scalar: "scalar",
+  slice: "Slice",
 } as const);
 
 export const rustSourceOperationExportIds = Object.freeze({
@@ -27,6 +28,8 @@ export const rustSourceOperationExportIds = Object.freeze({
   mutableReference: "mut",
   load: "load",
   store: "store",
+  range: "range",
+  propagate: "propagate",
 } as const);
 
 export const rustSourceOperationSignatureIds = Object.freeze({
@@ -35,4 +38,6 @@ export const rustSourceOperationSignatureIds = Object.freeze({
   loadShared: "load<T,L>(reference)",
   loadMutable: "load<T,L>(mutableReference)",
   store: "store<T,L>(reference,value)",
+  range: "range<T>(start,end)",
+  propagate: "propagate<T,E>(result)",
 } as const);

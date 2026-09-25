@@ -1,5 +1,5 @@
 import { providerVirtualDeclarationFactKey } from "@tsonic/tsts";
-import type { Node, SourceFile } from "@tsonic/tsts";
+import type { Node, SourceFile, ProviderDeclarationIdentity } from "@tsonic/tsts";
 import { tsonicAttributeBuilderFactKey } from "@tsonic/source-core/facts";
 import type { TsonicAttributeApplicationFact } from "@tsonic/source-core/facts";
 import { isAstNode } from "@tsonic/target-api/source";
@@ -86,7 +86,7 @@ export function createRustAttributeApplicationFactIndex(
       const identity = subject === undefined ? undefined : source.sourceFacts.getFact(subject, providerVirtualDeclarationFactKey);
       return identity === undefined ? [] : [identity];
     });
-    let identity = identities[0];
+    let identity: ProviderDeclarationIdentity | undefined = identities[0];
     for (const candidate of identities.slice(1)) identity = identity === undefined ? undefined : mergeProviderDeclarationIdentities(identity, candidate);
     const rows = identity === undefined ? [] : providers.attributes.filter(row => rustProviderOperationOwnerMatches(row, identity!) &&
       row.exportId === identity!.exportId && identity!.memberId === undefined && row.signatureId === identity!.signatureId);

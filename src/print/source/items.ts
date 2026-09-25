@@ -47,7 +47,7 @@ export function printRustItem(item: RustItem): string {
         ...(item.body.innerAttrs ?? []).map(attribute => printRustAttribute(attribute, true)),
         ...item.body.items.map(printRustItem),
       ].join("\n\n");
-      return `${declaration} {\n${indentText(contents, 1)}\n}`;
+      return `${declaration} {\n${contents.split("\n").map(line => `${indentText(1)}${line}`).join("\n")}\n}`;
     }
     case "use": {
       const visibility = printRustVisibility(item.visibility ?? "private");

@@ -16,6 +16,23 @@ export type RustTypeofResult =
 
 export type RustTargetOperationFact =
   | {
+      readonly kind: "native-range";
+      readonly operationId: string;
+      readonly operands: readonly Node[];
+      readonly elementCarrier: TargetTypeRef;
+      readonly path: string;
+      readonly resultCarrier: TargetTypeRef;
+    }
+  | {
+      readonly kind: "native-propagation";
+      readonly operationId: string;
+      readonly operandExpression: Node;
+      readonly operandCarrier: TargetTypeRef;
+      readonly operandErrorCarrier: TargetTypeRef;
+      readonly resultErrorCarrier: TargetTypeRef;
+      readonly resultCarrier: TargetTypeRef;
+    }
+  | {
       readonly kind: "operator-token";
       readonly operationId: string;
       readonly operator: RustOperatorToken;
@@ -773,6 +790,8 @@ export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact):
     case "closure":
     case "source-conversion":
     case "reference-operation":
+    case "native-range":
+    case "native-propagation":
     case "option-coalesce":
     case "nullish-identity":
     case "nullish-assignment":

@@ -62,6 +62,7 @@ import { readRustSourceRawPointerIdentity } from "../../policy/operations/pointe
 import { selectRustMemoryLayoutObservation } from "../../policy/operations/pointers/layout-observations.js";
 import { rustMemoryLayoutObservationKey } from "../../target-model/operations/memory-layout.js";
 import { resolveRustClassValue } from "../objects/class-values.js";
+import { readRustNativeControl, resolveRustNativeControl } from "./native-controls.js";
 
 export function resolveIdentifierCarrier(
   walk: RustFactWalk,
@@ -301,6 +302,7 @@ export function isSharedSourceMarkerOperation(
 ): boolean {
   const sourceFacts = walk.context.source.sourceFacts;
   return readRustReferenceOperation(walk, expression) !== undefined ||
+    readRustNativeControl(walk, expression) !== undefined ||
     selectTsonicMemoryFieldBinding(walk.context.ast, sourceFacts, expression) !== undefined ||
     selectTsonicMemoryRecordBinding(walk.context.ast, sourceFacts, expression) !== undefined ||
     readRustRawLocation(walk.context.ast, sourceFacts, expression) !== undefined ||
@@ -323,6 +325,10 @@ function resolveSharedSourceMarkerCarrier(
   expected: TargetTypeRef | undefined,
 ): RustSharedSourceMarkerCarrierResolution {
   const sourceFacts = walk.context.source.sourceFacts;
+  const nativeControl = readRustNativeControl(walk, expression);
+  if (nativeControl !== undefined) {
+    return { handled: true, ...resolveRustNativeControl(walk, expression, sourceFile, nativeControl) };
+  }
   const memoryBinding = resolveRustMemoryBindingCarrier(walk, expression, sourceFile);
   if (memoryBinding !== undefined) return memoryBinding;
   const rawLocation = resolveRustRawLocationCarrier(walk, expression, sourceFile);

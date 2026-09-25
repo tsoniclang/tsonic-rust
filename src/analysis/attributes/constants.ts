@@ -1,5 +1,5 @@
 import { providerVirtualDeclarationFactKey } from "@tsonic/tsts";
-import type { Node } from "@tsonic/tsts";
+import type { Node, ProviderDeclarationIdentity } from "@tsonic/tsts";
 import { Node_Expression, Node_Initializer, ObjectLiteralProperty_Value, sourceIntegerLiteralValue } from "@tsonic/target-api/source";
 import type { TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustAttributeArgumentSchema, RustProviderAttributeRow } from "../../providers/packages/attributes.js";
@@ -49,7 +49,7 @@ export function selectRustAttributeConstant(
     return values.every((value): value is RustAttributeConstant => value !== undefined)
       ? Object.freeze({ kind: "tuple", elements: Object.freeze(values) }) : undefined;
   }
-  if (!ast.is.IsObjectLiteralExpression(node)) return undefined;
+  if (schema.kind !== "record" || !ast.is.IsObjectLiteralExpression(node)) return undefined;
   const fields: { readonly name: string; readonly value: RustAttributeConstant }[] = [];
   const selectedMembers = new Set<string>();
   for (const property of ast.properties(node)) {
@@ -61,7 +61,7 @@ export function selectRustAttributeConstant(
         const fact = subject === undefined ? undefined : source.sourceFacts.getFact(subject, providerVirtualDeclarationFactKey);
         return fact === undefined ? [] : [fact];
       });
-    let identity = identities[0];
+    let identity: ProviderDeclarationIdentity | undefined = identities[0];
     for (const candidate of identities.slice(1)) identity = identity === undefined ? undefined : mergeProviderDeclarationIdentities(identity, candidate);
     if (identity === undefined || !rustProviderOperationOwnerMatches(row, identity) || identity.exportId !== schema.exportId || identity.memberId === undefined || selectedMembers.has(identity.memberId)) return undefined;
     const field = schema.fields.find(candidate => candidate.memberId === identity.memberId);

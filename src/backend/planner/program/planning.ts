@@ -10,7 +10,8 @@ import type { RustItem } from "../../target-ast/nodes.js";
 import { finalizeRustSourceStyle } from "../../target-ast/normalization/source-style.js";
 import { finalizeRustDeadCode } from "../../target-ast/normalization/dead-code.js";
 import { planRustCargoProject } from "../project/cargo.js";
-import { rustAsyncFunctionFactKey, rustFallibleFactKey } from "../../../analysis/facts/keys.js";
+import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustSourceCallableReturnFactKey } from "../../../analysis/facts/keys.js";
+import { isRustUnitCarrier } from "../../../target-model/types/index.js";
 import type { RustPlanningContext } from "../context.js";
 import { reconstructRustSourceFiles } from "../artifacts/reconstruction.js";
 import {
@@ -444,6 +445,12 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
             : entryCall],
         }
       : entryCall;
+    const completionType: import("../../target-ast/nodes.js").RustType = entryFunction.nativeTermination
+      ? { kind: "named", path: "std::process::ExitCode" }
+      : { kind: "unit" };
+    const successfulCompletion: import("../../target-ast/nodes.js").RustExpr = {
+      kind: "path", path: entryFunction.nativeTermination ? "std::process::ExitCode::SUCCESS" : "()",
+    };
     const initializationStatements = crateInitializer === undefined
       ? []
       : [{
@@ -508,6 +515,8 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
       input,
       workerEntries.entries,
       mainErrorType,
+      completionType,
+      successfulCompletion,
       epilogueStatements,
       diagnostics,
     );
@@ -518,17 +527,21 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
       crateInitializer?.errorType !== undefined ||
       workerEntries.entries.length > 0 ||
       activeHooks.some((epilogue) => epilogue.isFallible === true);
-    const entryStatement = {
-      kind: "expr" as const,
-      expr: entryFunction.fallible
+    const executedEntry = entryFunction.fallible
         ? {
             kind: "try" as const,
             expr: entryExecution,
             resultErrorType: mainErrorType,
             operandErrorType: mainErrorType,
           }
-        : entryExecution,
-    };
+        : entryExecution;
+    const entryStatement: import("../../target-ast/nodes.js").RustStmt = entryFunction.nativeTermination
+      ? { kind: "let", name: "entry_result", mutable: false, init: executedEntry }
+      : { kind: "expr", expr: executedEntry };
+    const completedEntry: import("../../target-ast/nodes.js").RustExpr = entryFunction.nativeTermination
+      ? { kind: "call", path: "std::process::Termination::report",
+          args: [{ kind: "path", path: "entry_result" }] }
+      : successfulCompletion;
     const completionStatements = mainFallible
       ? [{
           kind: "tail" as const,
@@ -536,25 +549,26 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
             kind: "call" as const,
             path: "Ok",
             genericArguments: [
-              { kind: "type" as const, type: { kind: "unit" as const } },
+              { kind: "type" as const, type: completionType },
               { kind: "type" as const, type: mainErrorType },
             ],
-            args: [{ kind: "path" as const, path: "()" }],
+            args: [completedEntry],
           },
         }]
-      : [];
+      : entryFunction.nativeTermination ? [{ kind: "tail" as const, expr: completedEntry }] : [];
     const mainItem: RustItem = {
       kind: "function",
       name: "main",
       visibility: "private",
       generics: emptyRustGenerics,
       params: [],
+      ...(entryFunction.nativeTermination ? { returnType: completionType } : {}),
       ...(mainFallible
         ? {
             errorType: mainErrorType,
             body: { statements: [...startupStatements, ...workerDispatchStatements, ...initializationStatements, entryStatement, ...epilogueStatements, ...completionStatements] },
           }
-        : { body: { statements: [...startupStatements, ...workerDispatchStatements, ...initializationStatements, entryStatement, ...epilogueStatements] } }),
+        : { body: { statements: [...startupStatements, ...workerDispatchStatements, ...initializationStatements, entryStatement, ...epilogueStatements, ...completionStatements] } }),
     };
     artifacts.push(rustSourceArtifact(
       "src/main.rs",
@@ -598,6 +612,8 @@ function planRustWorkerDispatch(
   input: RustPlanningContext,
   entries: readonly RustWorkerEntryPlan[],
   mainErrorType: import("../../target-ast/nodes.js").RustType,
+  completionType: import("../../target-ast/nodes.js").RustType,
+  successfulCompletion: import("../../target-ast/nodes.js").RustExpr,
   epilogueStatements: readonly import("../../target-ast/nodes.js").RustStmt[],
   diagnostics: TargetDiagnostic[],
 ): readonly import("../../target-ast/nodes.js").RustStmt[] | undefined {
@@ -715,7 +731,7 @@ function planRustWorkerDispatch(
                 statements: [
                   { kind: "expr", expr: invoke },
                   ...epilogueStatements,
-                  okReturn(mainErrorType),
+                  okReturn(mainErrorType, completionType, successfulCompletion),
                 ],
               },
             };
@@ -737,6 +753,8 @@ function planRustWorkerDispatch(
 
 function okReturn(
   errorType: import("../../target-ast/nodes.js").RustType,
+  completionType: import("../../target-ast/nodes.js").RustType,
+  successfulCompletion: import("../../target-ast/nodes.js").RustExpr,
 ): import("../../target-ast/nodes.js").RustStmt {
   return {
     kind: "return",
@@ -744,10 +762,10 @@ function okReturn(
       kind: "call",
       path: "Ok",
       genericArguments: [
-        { kind: "type", type: { kind: "unit" } },
+        { kind: "type", type: completionType },
         { kind: "type", type: errorType },
       ],
-      args: [{ kind: "path", path: "()" }],
+      args: [successfulCompletion],
     },
   };
 }
@@ -783,6 +801,7 @@ interface RustBinaryEntry {
   readonly functionName: string;
   readonly async?: "native-future" | "js-promise";
   readonly fallible: boolean;
+  readonly nativeTermination: boolean;
 }
 
 function resolveLibraryInitializationRoots(
@@ -879,13 +898,15 @@ function resolveBinaryEntry(
       functionName: "main",
       async: asyncFact?.kind,
       fallible: input.program.facts.getFact(declaration, rustFallibleFactKey) !== undefined,
+      nativeTermination: !isRustUnitCarrier(asyncFact?.outputCarrier ??
+        input.program.facts.getFact(declaration, rustSourceCallableReturnFactKey)?.returnCarrier),
     };
   }
   diagnostics.push({
     code: "RUST_MISSING_ENTRYPOINT",
     category: "error",
     source: "tsonic-rust",
-    message: "Binary output requires the entry module to export a 'main' function returning void.",
+    message: "Binary output requires an exported, nongeneric, zero-parameter 'main' with a closed return carrier; Rust validates its native Termination contract.",
     evidence: ["target.capability=rust.backend.entrypoint"],
   });
   return undefined;

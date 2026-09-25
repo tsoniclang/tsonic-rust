@@ -33,6 +33,7 @@ function rustItemReferencesModuleAlias(item: RustItem, alias: string): boolean {
       return rustTypeReferencesModuleAlias(item.type, alias) ||
         rustExpressionReferencesModuleAlias(item.value, alias);
     case "mod-decl":
+      return item.body !== undefined && rustItemsReferenceModuleAlias(item.body.items, alias);
     case "extern-crate":
       return false;
     case "struct":

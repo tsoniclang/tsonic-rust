@@ -8,7 +8,7 @@ import {
   rustSourcePrimitiveTargetType,
   rustTargetConstInteger,
 } from "../../../target-model/types/index.js";
-import { rustInt32ToUsizeValueConversion } from "../../../target-model/conversions/model.js";
+import { selectRustNativeIndex } from "../../../policy/operations/native-indices.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectTsonicFixedArrayFromSource } from "@tsonic/source-core/facts";
 import { sourceIntegerLiteralValue } from "@tsonic/target-api/source";
@@ -527,25 +527,21 @@ export function selectRustFixedArrayElementAccess(
     context,
     options,
   );
-  const normalizedIndexCarrier = normalizeSelectedOperationInputCarrier(
+  const nativeIndex = selectRustNativeIndex(dynamicIndexCarrier);
+  const normalizedIndexCarrier = nativeIndex?.carrier ?? normalizeSelectedOperationInputCarrier(
     request.argument,
     dynamicIndexCarrier,
     rustSourcePrimitiveTargetType("int32"),
     context,
     options,
   );
-  if (
-    normalizedIndexCarrier === undefined ||
-    !rustTargetTypeRefEquals(
-      normalizedIndexCarrier,
-      rustSourcePrimitiveTargetType("int32"),
-    )
-  ) {
+  const selection = nativeIndex ?? selectRustNativeIndex(normalizedIndexCarrier);
+  if (selection === undefined) {
     return rejectSelectedOperation(
       request.expression,
       context,
       "RUST_FIXED_ARRAY_DYNAMIC_INDEX_CARRIER_UNSUPPORTED",
-      "Dynamic fixed-array element access requires an exact int32 index carrier; literal unions and other source carriers are not reconstructed from their spelling.",
+      "Dynamic fixed-array element access requires an exact native integer index carrier; source carriers are not reconstructed from their spelling.",
     );
   }
   const template: RustProviderOperationTemplate = {
@@ -554,10 +550,10 @@ export function selectRustFixedArrayElementAccess(
     operationKind: "indexer",
     target: {
       form: "index",
-      indexConversion: rustInt32ToUsizeValueConversion,
+      ...(selection.conversion === undefined ? {} : { indexConversion: selection.conversion }),
     },
     resultCarrier: fixedArray.element,
-    parameterCarriers: [rustSourcePrimitiveTargetType("int32")],
+    parameterCarriers: [selection.carrier],
     evaluation: "pure",
     isAsync: false,
     isFallible: false,
@@ -570,7 +566,7 @@ export function selectRustFixedArrayElementAccess(
     context,
     options,
     receiverCarrier,
-    [normalizedIndexCarrier],
+    [selection.carrier],
   );
   if (fact === undefined) {
     return rejectSelectedOperation(

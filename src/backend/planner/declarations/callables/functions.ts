@@ -141,7 +141,7 @@ function planRustFunctionItem(
     outerContext,
     source.nameDeclaration,
   );
-  const declarationAttributes = [...planRustAttributes(node, context), ...safetyAttributes];
+  const declarationAttributes = [...planRustAttributes(node, outerContext), ...safetyAttributes];
   let context: RustPlanContext = outerContext;
   if (!isValidRustIdentifier(name)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(

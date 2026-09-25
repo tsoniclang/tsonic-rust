@@ -23,6 +23,10 @@ function projectOperationMetadata(fact: RustTargetOperationFact, references: Nod
     return references.length - 1;
   };
   switch (fact.kind) {
+    case "native-propagation":
+      return { ...fact, operandExpression: reference(fact.operandExpression) };
+    case "native-range":
+      return { ...fact, operands: fact.operands.map(reference) };
     case "template-string":
       return { ...fact, substitutions: fact.substitutions.map(part =>
         ({ ...part, expression: reference(part.expression) })) };

@@ -9,7 +9,6 @@ import {
   rustSourceCallableReturnFactKey,
 } from "../../../analysis/facts/keys.js";
 import type { RustTargetProgram } from "../../../analysis/program/model.js";
-import { isRustUnitCarrier } from "../../../target-model/types/index.js";
 
 export function rustProjectEntrySourceFile(
   program: RustTargetProgram,
@@ -38,7 +37,9 @@ export function rustBinaryEntryDeclaration(
     const returnCarrier = asyncFact?.outputCarrier ??
       program.facts.getFact(statement, rustSourceCallableReturnFactKey)?.returnCarrier;
     return program.source.ast.hasModifierKind(statement, "export") &&
-        isRustUnitCarrier(returnCarrier)
+        returnCarrier !== undefined &&
+        program.source.ast.parameters(statement).length === 0 &&
+        program.source.ast.typeParameters(statement).length === 0
       ? statement
       : undefined;
   }

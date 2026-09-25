@@ -30,6 +30,7 @@ import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
 import { planRustReferenceOperationCall } from "../reference-operations.js";
 import { planRustBorrowedElementRead } from "../borrowed-element-reads.js";
+import { planRustNativeControl } from "../native-controls.js";
 
 export function planCallExpression(node: Node, context: RustPlanContext, resultUse: RustExpressionResultUse = "value"): RustExpr | undefined {
   const borrowed = context.input.program.borrowedElementReads.forExpression(node);
@@ -52,6 +53,8 @@ function planCallExpressionInner(node: Node, context: RustPlanContext, resultUse
       fact?.kind === "object-shape-projection" ||
       fact?.kind === "default-value" ||
       fact?.kind === "typed-location" ||
+      fact?.kind === "native-range" ||
+      fact?.kind === "native-propagation" ||
       fact?.kind === "reference-operation"
     ? fact.resultCarrier
     : undefined;
@@ -82,6 +85,9 @@ function planCallExpressionInner(node: Node, context: RustPlanContext, resultUse
     return undefined;
   }
   const callee = Node_Expression(context.input.program.source.ast, node);
+  if (fact?.kind === "native-range" || fact?.kind === "native-propagation") {
+    return planRustNativeControl(node, fact, context, planExpression);
+  }
   if (fact?.kind === "reference-operation") {
     return planRustReferenceOperationCall(node, fact, context, planExpression);
   }

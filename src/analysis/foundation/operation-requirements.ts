@@ -245,6 +245,16 @@ export function rustFoundationForTargetOperationFact(
       if (fact.operation === "store") requireCarrier(fact.valueCarrier);
       requireCarrier(fact.resultCarrier);
       break;
+    case "native-range":
+      requireCarrier(fact.elementCarrier);
+      requireCarrier(fact.resultCarrier);
+      break;
+    case "native-propagation":
+      requireCarrier(fact.operandCarrier);
+      requireCarrier(fact.resultCarrier);
+      requireCarrier(fact.operandErrorCarrier);
+      requireCarrier(fact.resultErrorCarrier);
+      break;
     case "typed-location":
       requireCarrier(fact.pointeeCarrier);
       requireCarrier(fact.locationCarrier);
