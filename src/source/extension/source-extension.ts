@@ -63,6 +63,14 @@ export function createRustSourceSemanticsExtension(
                     (exportedName) => ({ exportedName, kind: "type" as const }),
                   ),
                   typeOnly: true,
+                }, {
+                  moduleSpecifier: "@tsonic/rust/core/ops.js",
+                  namedImports: [{ exportedName: "Range", kind: "type" as const }],
+                  typeOnly: true,
+                }, {
+                  moduleSpecifier: "@tsonic/rust/core/result.js",
+                  namedImports: [{ exportedName: "Result", kind: "type" as const }],
+                  typeOnly: true,
                 }]
               : [];
           },

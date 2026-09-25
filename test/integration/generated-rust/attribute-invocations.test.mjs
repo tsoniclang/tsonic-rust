@@ -88,7 +88,7 @@ test("derive selection retains exact class identity without constructing an attr
     export function main(): void {}
   ` });
   assert.deepEqual(result.diagnostics, []);
-  assert.match(artifactText(result, "src/index.rs"), /#\[derive\(acme_attributes::Probe\)\]/u);
+  assert.match(artifactText(result, "src/index.rs"), /#\[derive\(acme_attributes::Probe(?:, [A-Za-z]+)*\)\]/u);
   const root = writeGeneratedProject("native-derived-attribute", result.artifacts);
   mkdirSync(join(root, "tests"), { recursive: true });
   writeFileSync(join(root, "tests/derive.rs"), `

@@ -386,6 +386,7 @@ export function projectAssociatedConstants(
 export function projectAssociatedTypes(
   exported: Extract<RustCompilerExport, { readonly kind: "trait" }>,
   context: ProjectionContext,
+  ownerExportId: string,
 ): {
   readonly declarations: readonly ProviderExportDeclaration[];
   readonly types: readonly RustProviderTypeDefinition[];
@@ -398,7 +399,7 @@ export function projectAssociatedTypes(
       associated.identity.itemId,
       associated.name,
     );
-    const exportId = `${exported.id}::associated-type:${associated.identity.itemId}`;
+    const exportId = `${ownerExportId}::associated-type:${associated.identity.itemId}`;
     const parameters = Object.freeze([
       ...exported.genericParameters,
       self,

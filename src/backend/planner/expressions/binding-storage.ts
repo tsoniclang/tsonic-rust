@@ -18,7 +18,7 @@ export function rustInlineBindingStorageType(storage: RustInlineBindingStorage, 
 
 export function rustBindingStorageOperations(storage: "location" | RustInlineBindingStorage): RustBindingStorageOperations {
   const call = (receiver: RustExpr, method: string, args: readonly RustExpr[] = []): RustExpr =>
-    ({ kind: "method-call", receiver, method, args });
+    ({ kind: "method-call", receiver: receiver.kind === "reference" ? receiver.expr : receiver, method, args });
   if (storage === "borrow-cell") {
     return {
       read: receiver => ({ kind: "block", bindings: [{ name: "value", value: call(call(receiver, "borrow"), "clone") }],

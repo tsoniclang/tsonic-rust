@@ -99,9 +99,11 @@ export function selectRustCheckedCall(
     request.sourceSelectedDeclaration,
     options.sourceProfiles,
   );
-  const calleeSourceMember = resolveSelectedSourceProfileMember(
+  const selectedCalleeDeclaration = selectedCallCalleeDeclaration(request);
+  const calleeSourceMember = selectedCalleeDeclaration !== undefined &&
+    context.ast.is.IsIndexSignatureDeclaration(selectedCalleeDeclaration) ? undefined : resolveSelectedSourceProfileMember(
     context,
-    selectedCallCalleeDeclaration(request),
+    selectedCalleeDeclaration,
     options.sourceProfiles,
   );
   if (selectedSourceMember === undefined && calleeSourceMember !== undefined) {

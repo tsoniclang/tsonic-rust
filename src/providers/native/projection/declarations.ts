@@ -456,7 +456,7 @@ function projectNominalExport(
     genericContext,
   );
   const associated = exported.kind === "trait"
-    ? projectAssociatedTypes(exported, genericContext)
+    ? projectAssociatedTypes(exported, genericContext, exportId)
     : { declarations: Object.freeze([]), types: Object.freeze([]) };
   const typeNames = providerTypeParameterNames(sourceGenerics, genericContext);
   return {

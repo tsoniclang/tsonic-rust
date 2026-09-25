@@ -37,7 +37,7 @@ export interface ProjectionContext {
     readonly genericParameters: readonly RustCompilerGenericParameter[];
   }>;
   readonly defaultGenericBindings?: import("../model/rustdoc-types.js").RustCompilerSubstitutions;
-  readonly genericNames?: ReadonlyMap<string, string>;
+  readonly genericNames?: ReadonlyMap<string, { readonly nativeName: string; readonly sourceName: string }>;
   readonly currentType?: {
     readonly exportId: string;
     readonly name: string;

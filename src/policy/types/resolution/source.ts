@@ -472,8 +472,19 @@ export function resolveRustTargetTypeSyntax(
   if (typeArguments === undefined || typeArguments.some((argument) => argument === undefined)) {
     return undefined;
   }
+  if (referencedDeclaration !== undefined && ast.is.IsTypeAliasDeclaration(referencedDeclaration) &&
+    context.source.navigation.isProjectDeclaration(referencedDeclaration) &&
+    options.sourceTypes.carrierForDeclaration(referencedDeclaration, ast) !== undefined) {
+    const alias = resolveProjectSourceCarrier(selectedTypeSymbol, sourceGenericArguments ?? {
+      values: Object.freeze((typeArguments as readonly TargetTypeRef[]).map((type) =>
+        Object.freeze({ kind: "type" as const, type }))),
+    }, context, options, referencedDeclaration, selectedType, resolving);
+    if (alias !== undefined) return alias;
+  }
+  const reference = context.source.navigation.sourceReferenceFor(typeName);
   const provider = resolveProviderTypeIdentity(
-    semantics.facts.authoredTypeSubjects(node),
+    reference === undefined ? semantics.facts.authoredTypeSubjects(node)
+      : semantics.facts.selectedSubjects(reference.symbol, reference.declaration),
     context,
   );
   if (provider !== undefined) {

@@ -186,7 +186,7 @@ test("provider operation metadata preserves native reference, variant, and macro
       path: "acme_validation::sum_pair",
       delimiter: "brackets",
       ...(arguments_ === undefined ? {} : { arguments: arguments_ }),
-    })), /list or repeat macro grammar/u);
+    })), /list, repeat or format macro grammar/u);
   }
   const missingRepeatOperand = binaryDefinition({
     form: "expression-macro", path: "acme_validation::repeat", delimiter: "brackets", arguments: "repeat",
@@ -194,7 +194,7 @@ test("provider operation metadata preserves native reference, variant, and macro
   assert.throws(() => createRustProviderPackage({
     ...missingRepeatOperand,
     operations: [{ ...missingRepeatOperand.operations[0], parameterCarriers: [int32Carrier] }],
-  }), /repetition requires exactly two/u);
+  }), /declares 1 target parameter carriers for 2 selected source parameters/u);
 
   assert.throws(
     () => createRustProviderPackage(binaryDefinition({

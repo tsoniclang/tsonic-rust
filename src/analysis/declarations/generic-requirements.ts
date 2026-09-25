@@ -696,7 +696,8 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
           : ["clone"];
       for (const capture of captures.captures) {
         const error = addUse(capture.reference, capture.carrier,
-          input.valueLifetimes.canMoveCapture(node, capture.declaration)
+          capture.storage === "cell" || capture.storage === "borrow-cell" ||
+            input.valueLifetimes.canMoveCapture(node, capture.declaration)
             ? required.filter(requirement => requirement !== "clone") : required);
         if (error !== undefined) return error;
       }

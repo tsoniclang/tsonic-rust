@@ -49,7 +49,7 @@ export class Holder {
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
   assert.doesNotMatch(output, /Location::allocate|JsValue|ObjectReference|RefCell<(?:std::)?(?:rc::Rc|sync::Arc)|Rc<(?:std::)?(?:rc::Rc|sync::Arc)/u);
-  assert.match(output, /pub fn exclusive\(value: Box<i32>\) -> Box<i32>/u);
+  assert.match(output, /pub fn exclusive\(value: std::boxed::Box<i32>\) -> std::boxed::Box<i32>/u);
   const root = writeGeneratedProject("explicit-native-owner-boundaries", result.artifacts);
   mkdirSync(join(root, "tests"), { recursive: true });
   writeFileSync(join(root, "tests/owners.rs"), `
@@ -94,7 +94,7 @@ fn explicit_owners_keep_identity_and_count() {
     let value = tsonic_rust_runtime::block_on(index::suspended(values.pop().unwrap()));
     assert_eq!(Rc::strong_count(&value), 1);
     let callable = index::capture(value);
-    let result = callable.call(());
+    let result = callable.call(()).unwrap();
     assert_eq!(Rc::as_ptr(&result), address);
     assert_eq!(Rc::strong_count(&result), 2);
     drop(callable);

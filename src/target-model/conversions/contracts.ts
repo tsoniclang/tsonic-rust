@@ -37,6 +37,7 @@ import {
   rustJsArrayLikeElementTargetType,
   isRustJsArrayCarrier,
   rustAbsenceTargetType,
+  rustUnitTargetType,
   rustTargetGenericReferences,
   rustCarrierSupportsClone,
   rustCarrierCanEnterTsValue,
@@ -606,6 +607,15 @@ export function rustValueConversionContract(
         sourceMode: "value",
         source: rustBorrowedStrTargetType(),
         target: stringCarrier,
+        fallible: false,
+      };
+    case "unit-from-absence":
+      return {
+        category: "exact",
+        lowering: "identity",
+        sourceMode: "value",
+        source: absenceCarrier,
+        target: rustUnitTargetType(),
         fallible: false,
       };
     case "borrowed-str-from-owned-string":

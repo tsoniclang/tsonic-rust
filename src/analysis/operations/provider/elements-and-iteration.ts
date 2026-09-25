@@ -330,7 +330,8 @@ export function selectRustCheckedElementAccess(
   if (isDeclarationFileSubject(request.expression, context)) {
     return acceptDeclarationOperation("indexer");
   }
-  return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_EVIDENCE_MISSING", "Checked element access has no selected provider, source-profile, tuple, or fixed-array evidence.");
+  return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_EVIDENCE_MISSING", "Checked element access has no selected provider, source-profile, tuple, or fixed-array evidence.",
+    [{ message: `receiverCarrier=${JSON.stringify(selectedReceiverCarrier)}; sourceProfile=${sourceProfileIdentity?.profile}; owner=${sourceProfileIdentity?.ownerName}; member=${sourceProfileIdentity?.memberName}` }]);
 }
 
 export function selectRustCheckedIteration(

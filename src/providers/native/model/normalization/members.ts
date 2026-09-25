@@ -28,6 +28,7 @@ import {
 } from "./associated-types.js";
 import { canonicalItemId } from "../rustdoc-items.js";
 import { normalizeFunction } from "./functions.js";
+import { selectedRustDefaultMethods } from "./default-methods.js";
 import type {
   RustCompilerAssociatedConstant,
   RustCompilerAssociatedType,
@@ -237,6 +238,26 @@ export function normalizeTypeMembers(
         resolveItem,
       );
       if (selected.kind === "not-public") continue;
+      if (selected.traitDispatch !== undefined) {
+        for (const member of selectedRustDefaultMethods(document, dependency, impl,
+          selected.traitDispatch, selected.bindings, resolveItem)) {
+          const name = requireString(member.item.name, "Rust default method name");
+          try {
+            methods.push(normalizeFunction(member.document, member.item, member.dependency, true, {
+              inheritedGenericParameters: member.inheritedGenericParameters,
+              inheritedRequirements: selected.sourceRequirements,
+              implementationBindings: member.implementationBindings,
+              associatedTypeBindings: selected.associatedTypeBindings,
+              traitDispatch: selected.traitDispatch,
+              selfOwner: ownerIdentity,
+              declarationIdentity: rustCompilerNestedItemIdentity(member.dependency, member.item, selected.context.owner),
+              ...(resolveItem === undefined ? {} : { resolveItem }),
+            }));
+          } catch (error) {
+            unsupported.push(unsupportedMember(member.item, name, error));
+          }
+        }
+      }
       for (const memberId of memberIds) {
         const item = itemById(document, memberId);
         if (selected.traitDispatch === undefined && item.visibility !== "public") continue;

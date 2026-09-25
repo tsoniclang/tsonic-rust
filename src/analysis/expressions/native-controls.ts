@@ -6,7 +6,7 @@ import { readRustLanguageCall, type RustLanguageCall } from "./native-language-c
 import { rustSourceOperationExportIds, rustSourceOperationSignatureIds } from "../../source/semantics/identity.js";
 import { resolveExpressionCarrier } from "./carriers.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
-import { rustNamedTypeCarrierValue, rustTargetGenericTypeArguments } from "../../target-model/types/index.js";
+import { rustNamedTargetType, rustNamedTypeCarrierValue, rustTargetGenericTypeArguments } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustAsyncFunctionFactKey, rustSourceCallableReturnFactKey } from "../facts/keys.js";
 import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
@@ -37,20 +37,26 @@ export function resolveRustNativeControl(
   const selectedResult = resolveRustTargetTypeRef(
     control.selection.sourceResultType, resolution, walk.operationOptions);
   const operands = control.selection.sourceArguments;
+  const explicitElement = control.operation === "range"
+    ? resolveRustTargetTypeRef(walk.context.ast.typeArguments(expression)[0], resolution, walk.operationOptions)
+    : undefined;
   const carriers = operands.map(operand => resolveExpressionCarrier(
     walk, operand.expression, sourceFile,
-    resolveRustTargetTypeRef(operand.type, resolution, walk.operationOptions)));
+    explicitElement ?? resolveRustTargetTypeRef(operand.type, resolution, walk.operationOptions)));
   if (control.operation === "range") {
     const native = rustNamedTypeCarrierValue(selectedResult);
-    const element = native === undefined ? undefined : rustTargetGenericTypeArguments(native.genericArguments)[0];
+    const element = explicitElement ?? carriers[0];
     if (selectedResult !== undefined && native !== undefined && element !== undefined &&
+      native.genericArguments.length === 1 && native.genericArguments[0]?.kind === "type" &&
       operands.length === 2 && carriers.every(carrier => rustTargetTypeRefEquals(carrier, element))) {
+      const resultCarrier = rustNamedTargetType(native.id, native.path,
+        [{ kind: "type", type: element }], native.genericDefaults, native.traits, native.upcasts);
       setRustOperationFact(walk, expression, {
         kind: "native-range", operationId: "tsonic.rust.range",
         operands: operands.map(operand => operand.expression), elementCarrier: element,
-        resultCarrier: selectedResult,
+        resultCarrier,
       });
-      return { carrier: setCarrierFact(walk, expression, selectedResult) };
+      return { carrier: setCarrierFact(walk, expression, resultCarrier) };
     }
   } else {
     const declaration = walk.currentCallableDeclaration;
@@ -63,18 +69,22 @@ export function resolveRustNativeControl(
     const target = rustNamedTypeCarrierValue(returnCarrier);
     const argumentsList = operand === undefined ? [] : rustTargetGenericTypeArguments(operand.genericArguments);
     const targetArguments = target === undefined ? [] : rustTargetGenericTypeArguments(target.genericArguments);
+    const explicitArguments = walk.context.ast.typeArguments(expression).map(argument =>
+      resolveRustTargetTypeRef(argument, resolution, walk.operationOptions));
     if (selectedResult !== undefined && operandCarrier !== undefined && returnCarrier !== undefined && declaration !== undefined &&
       operands.length === 1 && operand !== undefined && target !== undefined && operand.id === target.id &&
       argumentsList.length === 2 && targetArguments.length === 2 &&
-      rustTargetTypeRefEquals(selectedResult, argumentsList[0])) {
+      (explicitArguments.length === 0 || explicitArguments.length === 2 &&
+        explicitArguments.every((argument, index) => argument !== undefined &&
+          rustTargetTypeRefEquals(argument, argumentsList[index])))) {
       setRustOperationFact(walk, expression, {
         kind: "native-propagation", operationId: "tsonic.rust.propagate",
         callableDeclaration: declaration, callableReturnCarrier: returnCarrier,
         operandExpression: operands[0]!.expression, operandCarrier,
         operandErrorCarrier: argumentsList[1]!, resultErrorCarrier: targetArguments[1]!,
-        resultCarrier: selectedResult,
+        resultCarrier: argumentsList[0]!,
       });
-      return { carrier: setCarrierFact(walk, expression, selectedResult) };
+      return { carrier: setCarrierFact(walk, expression, argumentsList[0]!) };
     }
   }
   appendRustDiagnostic(walk, "RUST_NATIVE_CONTROL_CONTRACT_REQUIRED",

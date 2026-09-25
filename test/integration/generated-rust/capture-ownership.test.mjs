@@ -129,7 +129,7 @@ fn same_frame_and_no_call_allocation() {
     assert_eq!((actual_calls, actual_bytes), (expected_calls, expected_bytes));
     assert_eq!(actual_calls, 1);
     let (_, calls, bytes) = measure(|| {
-        for _iteration in 0..10000 { assert_eq!(std::hint::black_box(actual.call(())), std::hint::black_box(expected())); }
+        for _iteration in 0..10000 { assert_eq!(std::hint::black_box(actual.call(()).unwrap()), std::hint::black_box(expected())); }
     });
     assert_eq!((calls, bytes), (0, 0));
 }
@@ -141,8 +141,8 @@ fn non_copy_capture_has_only_its_native_callable_frame() {
     let (expected, expected_calls, expected_bytes) = measure(|| handwritten_string(expected_seed));
     assert_eq!((actual_calls, actual_bytes), (expected_calls, expected_bytes));
     assert_eq!(actual_calls, 1);
-    assert_eq!(actual.call((String::from("x"),)), expected(String::from("x")));
-    assert_eq!(actual.call((String::from("y"),)), expected(String::from("y")));
+    assert_eq!(actual.call((String::from("x"),)).unwrap(), expected(String::from("x")));
+    assert_eq!(actual.call((String::from("y"),)).unwrap(), expected(String::from("y")));
 }
 `);
   runCargo(root, ["generate-lockfile", "--offline"]);

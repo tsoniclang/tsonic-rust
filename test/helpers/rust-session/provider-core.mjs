@@ -79,7 +79,7 @@ export function acmeTestingPackage() {
             id: "@acme/testing::repeatSum(value,count)",
             parameters: [
               { name: "value", type: { kind: "source-primitive", name: "int32" } },
-              { name: "count", type: { kind: "source-primitive", name: "nativeUint" } },
+              { name: "count", type: { kind: "source-primitive", name: "native-uint" } },
             ],
             returnType: { kind: "source-primitive", name: "int32" },
           }],
@@ -120,7 +120,7 @@ export function acmeTestingPackage() {
         operationKind: "method",
         target: { form: "expression-macro", path: "acme_testing::repeat_sum", delimiter: "brackets", arguments: "repeat" },
         resultCarrier: int32Carrier,
-        parameterCarriers: [int32Carrier, { kind: "source-primitive", name: "nativeUint" }],
+        parameterCarriers: [int32Carrier, { kind: "source-primitive", name: "native-uint" }],
       },
       ...[
         ["sumParen", "parentheses"],

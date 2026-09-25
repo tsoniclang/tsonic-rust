@@ -8,6 +8,7 @@ test("the final stored field of an unaliased local generated value moves without
     target: { id: "rust", options: { outputType: "bin" } },
     files: { "index.ts": `
 class Record { text: string; count = 1; constructor(text: string) { this.text = text; } }
+class SharedRecord { text: string; constructor(text: string) { this.text = text; } }
 function extract(text: string): string { const value = new Record(text); return value.text; }
 function afterRead(text: string): string {
   const value = new Record(text);
@@ -36,7 +37,7 @@ function branch(text: string, selected: boolean): string {
   return value.text;
 }
 function observed(text: string): string {
-  const value = new Record(text);
+  const value = new SharedRecord(text);
   const read = () => value.text;
   const first = value.text;
   value.text = "next";

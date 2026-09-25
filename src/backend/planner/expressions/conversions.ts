@@ -141,8 +141,11 @@ export function planProviderOperationExpression(
     return undefined;
   }
   const args: RustExpr[] = [];
+  const nativeFormat = fact.abi.target.form === "expression-macro" && fact.abi.target.arguments === "format";
   for (const input of fact.abi.targetArguments) {
-    const planned = planFinalizedTargetInput(
+    const planned = nativeFormat && isRustFinalizedSourceInput(input)
+      ? planFinalizedSourceInput(context, input, receiverNode, argumentNodes, operationNode, "native-auto-borrow", overrides)
+      : planFinalizedTargetInput(
       context,
       input,
       receiverNode,
@@ -664,7 +667,7 @@ export function planFinalizedSourceInput(
   receiverNode: Node | undefined,
   argumentNodes: readonly (Node | undefined)[],
   operationNode: Node,
-  position: "target-argument" | "target-receiver" = "target-argument",
+  position: "target-argument" | "target-receiver" | "native-auto-borrow" = "target-argument",
   overrides?: RustFinalizedInputPlanOverrides,
 ): RustExpr | undefined {
   const occurrence = input.source.kind === "receiver"
@@ -742,7 +745,7 @@ export function planFinalizedSourceInput(
   const converted = applyFinalizedValueConversion(context, rawExpression, input.conversion, sourceNode, "source-input");
   return converted === undefined
     ? undefined
-    : position === "target-receiver"
+    : position !== "target-argument"
       ? converted
       : applyFinalizedRustArgumentMode(
           context,

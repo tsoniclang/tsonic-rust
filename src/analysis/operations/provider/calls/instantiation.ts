@@ -377,7 +377,10 @@ export function acceptSelectedCall(
   }
   const spreadIndexes = request.source.sourceArguments.flatMap((argument, index) =>
     context.ast.is.IsSpreadElement(argument.expression) ? [index] : []);
-  const fact = finalizeProviderOperationFact(instantiatedTemplate, sourceArguments.carriers, selectedReceiverCarrier,
+  const finalizedTemplate = instantiatedTemplate.target.form === "expression-macro"
+    ? { ...instantiatedTemplate, parameterCarriers: sourceArguments.declaredCarriers }
+    : instantiatedTemplate;
+  const fact = finalizeProviderOperationFact(finalizedTemplate, sourceArguments.carriers, selectedReceiverCarrier,
     context.typeDefinitions, spreadIndexes.length === 0 ? undefined : spreadIndexes);
   if (fact === undefined) {
     return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_OPERATION_ABI_INCOMPLETE", `Selected call '${callIdentity.sourceName}' cannot finalize one total Rust operation ABI.`);
@@ -523,6 +526,7 @@ type SelectedCallSourceCarriers =
   | {
       readonly kind: "resolved";
       readonly carriers: readonly TargetTypeRef[];
+      readonly declaredCarriers: readonly (TargetTypeRef | undefined)[];
       readonly reconciliations: readonly {
         readonly sourceIndex: number;
         readonly reconciliation: RustAppliedValueCarrierReconciliation;
@@ -629,10 +633,17 @@ function selectedCallSourceCarriers(
   if (actual.some((carrier) => carrier === undefined)) {
     return { kind: "missing" };
   }
+  const resolved = {
+    kind: "resolved" as const,
+    carriers: actual as TargetTypeRef[],
+    declaredCarriers: request.source.sourceArguments.flatMap((_argument, index) =>
+      declaredBySourceIndex.has(index) ? [declaredBySourceIndex.get(index)] : []),
+    reconciliations,
+  };
   if (fact.target.form === "call-str-slice" || fact.target.form === "free-call-str-slice") {
     const stringCarrier = rustStringTargetType();
     return actual.every((carrier) => carrier !== undefined && rustTargetTypeRefEquals(carrier, stringCarrier))
-      ? { kind: "resolved", carriers: actual as TargetTypeRef[], reconciliations }
+      ? resolved
       : { kind: "incompatible", sourceIndex: 0 };
   }
   if (fact.target.form === "call-value-slice" || fact.target.form === "call-value-array" ||
@@ -641,7 +652,7 @@ function selectedCallSourceCarriers(
     if (actual.length < form.leadingArguments.length) {
       return { kind: "incompatible", sourceIndex: actual.length };
     }
-    return { kind: "resolved", carriers: actual as TargetTypeRef[], reconciliations };
+    return resolved;
   }
   if (fact.target.form === "receiver-tagged-array") {
     const form = fact.target;
@@ -666,7 +677,7 @@ function selectedCallSourceCarriers(
       return (exact.length > 0 ? exact : convertible).length !== 1;
     });
     return incompatible < 0
-      ? { kind: "resolved", carriers: actual as TargetTypeRef[], reconciliations }
+      ? resolved
       : { kind: "incompatible", sourceIndex: incompatible };
   }
   if (fact.target.form === "call-c-variadic") {
@@ -678,10 +689,10 @@ function selectedCallSourceCarriers(
       sourceIndex >= form.fixedArgumentModes.length &&
       !isRustCVariadicArgumentCarrier(carrier));
     return incompatible < 0
-      ? { kind: "resolved", carriers: actual as TargetTypeRef[], reconciliations }
+      ? resolved
       : { kind: "incompatible", sourceIndex: incompatible };
   }
-  return { kind: "resolved", carriers: actual as TargetTypeRef[], reconciliations };
+  return resolved;
 }
 
 
