@@ -107,11 +107,13 @@ test("Rust standard-library operation requirements remain checked by the native 
       "index.ts": `
 import type { float64, int32 } from "@tsonic/core/types.js";
 import { HashMap } from "@tsonic/rust/std/collections.js";
+import { metadata } from "@tsonic/rust/std/fs.js";
 
 export function invalid(): void {
   const map = new HashMap<float64, int32>();
   map.insert(1, 2);
 }
+export function invalidPath(): void { metadata<int32>(3); }
 `,
     },
   });
@@ -122,6 +124,7 @@ export function invalid(): void {
   assert.throws(() => runCargo(root, ["check", "--all-targets", "--locked", "--offline"]), error => {
     assert.match(error.message, /f64: Eq/u);
     assert.match(error.message, /f64: Hash/u);
+    assert.match(error.message, /i32: AsRef<Path>/u);
     return true;
   });
 });

@@ -101,6 +101,30 @@ fn derive_expands_on_selected_source_type() {
   runCargo(root, ["test", "--locked", "--offline"]);
 });
 
+test("mutable const aggregates cannot be snapshotted into attribute arguments", () => {
+  for (const [declarations, argument] of [
+    ["const shape: Shape = { domain: 1, block: [256, 1, 1] }; shape.domain = 2;", "shape"],
+    ["const shape: Shape = { domain: 1, block: [256, 1, 1] }; const alias = shape; alias.block[0] = 128;", "shape"],
+    ["const block: [int32, int32, int32] = [256, 1, 1]; block[0] = 128;", "{ domain: 1, block }"],
+    ["const block: [int32, int32, int32] = [256, 1, 1]; const alias = block; alias[1] = 2;", "{ domain: 1, block }"],
+  ]) {
+    const result = compile({ "index.ts": `
+      import { attribute } from "@tsonic/core/lang.js";
+      import type { int32 } from "@tsonic/core/types.js";
+      import { moduleContract, launchShape } from "@acme/attributes";
+      import type { Shape } from "@acme/attributes";
+      ${declarations}
+      function target(): int32 { return 4; }
+      attribute.module().add(() => moduleContract());
+      attribute<typeof target>().add(() => launchShape(${argument}));
+      export function main(): void {}
+    ` });
+    assert.equal(result.artifacts.length, 0, declarations);
+    assert.ok(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_ATTRIBUTE_CONTRACT_NOT_PROVEN" &&
+      diagnostic.message.includes("constant literals")), JSON.stringify(result.diagnostics));
+  }
+});
+
 test("removed flat and bare attribute factories never retain a parallel path", () => {
   for (const invocation of ["offset, 2", "offset", "factory", "async () => offset(2)", "() => { offset(2); }"]) {
     const source = `

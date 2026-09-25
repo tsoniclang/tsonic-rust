@@ -2,7 +2,7 @@ import { providerVirtualDeclarationFactKey } from "@tsonic/tsts";
 import type { Node, ProviderDeclarationIdentity } from "@tsonic/tsts";
 import { Node_Expression, Node_Initializer, ObjectLiteralProperty_Value, sourceIntegerLiteralValue } from "@tsonic/target-api/source";
 import type { TargetSourceProgram } from "@tsonic/target-api/source";
-import type { RustAttributeArgumentSchema, RustProviderAttributeRow } from "../../providers/packages/attributes.js";
+import type { RustAttributeArgumentSchema, RustProviderAttributeRow } from "../../target-model/attributes/schema.js";
 import type { RustAttributeConstant } from "../../target-model/attributes/model.js";
 import { mergeProviderDeclarationIdentities } from "../../policy/evidence/selected-source.js";
 import { rustProviderOperationOwnerMatches } from "../../policy/operations/provider-selection.js";
@@ -22,6 +22,7 @@ export function selectRustAttributeConstant(
     return expression === undefined ? undefined : selectRustAttributeConstant(expression, schema, row, source, next);
   }
   if (ast.is.IsIdentifier(node)) {
+    if (schema.kind === "tuple" || schema.kind === "record") return undefined;
     const declaration = source.navigation.sourceReferenceFor(node)?.declaration;
     const initializer = Node_Initializer(ast, declaration);
     return declaration !== undefined && ast.is.IsVariableDeclaration(declaration) && ast.variableDeclarationKind(declaration) === "const" && initializer !== undefined

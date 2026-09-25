@@ -4,6 +4,7 @@ import test from "node:test";
 import { emptyRustGenerics } from "../../../dist/backend/target-ast/nodes.js";
 import { closeRustModuleTypeVisibility } from "../../../dist/backend/target-ast/normalization/module-visibility.js";
 import { finalizeRustDeadCode } from "../../../dist/backend/target-ast/normalization/dead-code.js";
+import { rustLintAttributes } from "../../../dist/backend/target-ast/normalization/lint-policy.js";
 
 const trait = (name, visibility, superTraits = []) => ({
   kind: "trait", name, visibility, generics: emptyRustGenerics, functions: [], superTraits,
@@ -44,8 +45,9 @@ test("public trait promotion removes only obsolete dead-code expectations", () =
       { ...trait("Private", "crate"), functions: [method] }] }],
   ]);
   const finalized = finalizeRustDeadCode(closeRustModuleTypeVisibility(models).get("base"));
-  assert.deepEqual(finalized.items[0].functions[0].attrs, ["#[must_use]"]);
-  assert.match(finalized.items[1].functions[0].attrs[1], /expect\(dead_code/u);
+  assert.deepEqual(finalized.items[0].functions[0].attrs, [rustWordAttribute("must_use")]);
+  assert.deepEqual(finalized.items[1].functions[0].attrs,
+    [rustWordAttribute("must_use"), rustLintAttributes.generatedUnusedDispatch]);
   assert.equal(method.deadCode, "generated-unused-dispatch");
 });
 
@@ -57,10 +59,9 @@ test("already-public unused traits retain their exact dead-code dispositions", (
   const closed = closeRustModuleTypeVisibility(models);
   const finalized = finalizeRustDeadCode(closed.get("internal")).items[0];
   assert.equal(finalized.visibility, "public");
-  assert.deepEqual(finalized.attrs, ["#[doc(hidden)]",
-    '#[allow(dead_code, reason = "retains an unused authored declaration")]']);
+  assert.deepEqual(finalized.attrs, [rustHiddenAttribute, rustLintAttributes.authoredDeadCode]);
   assert.deepEqual(finalized.functions[0].attrs,
-    ['#[allow(dead_code, reason = "retains an unused authored declaration")]']);
+    [rustLintAttributes.authoredDeadCode]);
   assert.equal(unused.deadCode, "authored-declaration");
   assert.deepEqual(closeRustModuleTypeVisibility(closed), closed);
 });

@@ -21,6 +21,7 @@ export function analyzeRustValueLifetimes(input: {
   readonly mayBorrowArgument: (argument: Node) => boolean;
   readonly isSharedBorrowArgument: (argument: Node) => boolean;
   readonly capturesFor: (closure: Node) => RustClosureCaptureFact | undefined;
+  readonly isOnceCallable: (closure: Node) => boolean;
   readonly canMoveStoredField: (field: Node) => boolean;
   readonly isOwnedOperationResult: (expression: Node) => boolean;
 }): RustValueLifetimePlan {
@@ -54,9 +55,19 @@ export function analyzeRustValueLifetimes(input: {
       kind === "KindClassDeclaration" || kind === "KindClassExpression") {
       const captures = input.capturesFor(node)?.captures.filter(capture =>
         capture.storage === "value" &&
-        isSingleOwnedCapture(node, capture.declaration, input));
+        (capture.mutable === true || isSingleOwnedCapture(node, capture.declaration, input)));
       if (captures !== undefined && captures.length > 0) {
         movableCaptures.set(node, new Set(captures.map(capture => capture.declaration)));
+        if (input.isOnceCallable(node)) {
+          for (const capture of captures) {
+            for (const use of input.navigation.declarationUses(capture.declaration)) {
+              if (use.kind !== "type-only" && use.kind !== "source-linkage" &&
+                isExactCallableExitValue(use.reference, capture.declaration, input, node)) {
+                movableReferences.add(use.reference);
+              }
+            }
+          }
+        }
       }
     }
     input.ast.forEachChild(node, (child) => {
@@ -158,8 +169,8 @@ function isExactCallableExitValue(
     readonly ast: AstReader;
     readonly navigation: SourceProgramNavigation;
   },
+  declarationCallable = enclosingCallable(declaration, input.ast),
 ): boolean {
-  const declarationCallable = enclosingCallable(declaration, input.ast);
   if (declarationCallable === undefined) {
     return false;
   }

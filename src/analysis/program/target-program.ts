@@ -130,6 +130,10 @@ export function analyzeRustTargetProgram(
     mayBorrowArgument: (argument) => facts.getArgumentPassingFact(argument)?.mode !== "by-value",
     isSharedBorrowArgument: (argument) => facts.getArgumentPassingFact(argument)?.mode === "borrow-shared",
     capturesFor: (closure) => facts.getFact(closure, rustClosureCaptureFactKey),
+    isOnceCallable: (closure) => {
+      const carrier = facts.getRuntimeCarrierFact(closure)?.carrier;
+      return carrier?.kind === "closure" && carrier.callTrait === "FnOnce";
+    },
     isOwnedOperationResult: (expression) => {
       const operation = facts.getFact(expression, rustTargetOperationFactKey);
       return operation?.kind === "provider-operation" &&

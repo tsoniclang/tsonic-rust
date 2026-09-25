@@ -1,5 +1,5 @@
 export { createRustProviderPackage } from "../providers/packages/package.js";
-export type { RustAttributePlacement, RustAttributeArgumentSchema, RustProviderAttributeDefinition, RustProviderAttributeRow } from "../providers/packages/attributes.js";
+export type { RustAttributePlacement, RustAttributeArgumentSchema, RustProviderAttributeDefinition, RustProviderAttributeRow } from "../target-model/attributes/schema.js";
 export type {
   RustProviderBinaryHookDefinition,
   RustProviderBinaryHookRow,

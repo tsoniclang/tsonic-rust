@@ -1,5 +1,5 @@
 import type { RustProviderPackageDefinition } from "../model.js";
-import type { RustAttributeArgumentSchema } from "../attributes.js";
+import type { RustAttributeArgumentSchema } from "../../../target-model/attributes/schema.js";
 import type { ExportRecord, Fail, MemberRecord, SignatureRecord } from "./model.js";
 import { asRecord, requireExactKeys, requireNonEmpty, requireRustIdentifier, requireRustPath } from "./carriers.js";
 import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";

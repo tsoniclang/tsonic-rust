@@ -18,7 +18,9 @@ macro_rules! sum_pair {
 
 #[macro_export]
 macro_rules! repeat_sum {
-    ($value:expr; $count:expr) => {
-        vec![$value; $count].into_iter().sum::<i32>()
-    };
+    ($value:expr; $count:expr) => {{
+        let value = $value;
+        let count = $count;
+        vec![value; count].into_iter().sum::<i32>()
+    }};
 }

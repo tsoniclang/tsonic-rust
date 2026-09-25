@@ -41,6 +41,7 @@ import type { RustSourceProfileRegistry } from "../../policy/types/source-profil
 import type { RustSourceTypeRegistry } from "../project-types/source-type-registry.js";
 import type { RustTargetTypeResolutionContext } from "../../policy/types/resolution.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustCaptureStorage } from "../callables/capture-storage.js";
 
 export const rustTargetSemanticsExtensionId = "tsonic.rust.policy";
 
@@ -69,7 +70,7 @@ export interface RustFactWalk {
     readonly request: import("../../policy/operations/contracts.js").RustCheckedCallSelectionInput;
     readonly prepared: RustPreparedDeferredCheckedCall;
   }>;
-  readonly capturedBindingStorage: Map<Node, "value" | "location" | "cell" | "borrow-cell">;
+  readonly capturedBindingStorage: Map<Node, RustCaptureStorage>;
   readonly objectLiteralMethodExpressions: Node[];
   readonly objectLiteralMethodSpreadExpressions: Node[];
   readonly moduleBindings: RustModuleBindingPolicy;

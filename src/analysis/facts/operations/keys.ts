@@ -64,6 +64,7 @@ export interface RustClosureCaptureFact {
     readonly reference: Node;
     readonly carrier: TargetTypeRef;
     readonly storage: "value" | "location" | "cell" | "borrow-cell";
+    readonly mutable?: true;
   }[];
   readonly recursiveDeclaration?: Node;
 }
@@ -79,6 +80,7 @@ export const rustClosureCaptureFactKey: RustPlanKey<RustClosureCaptureFact> = de
         capture.declaration === other.declaration &&
         capture.reference === other.reference &&
         capture.storage === other.storage &&
+        capture.mutable === other.mutable &&
         rustTargetTypeRefEquals(capture.carrier, other.carrier);
     }),
 );

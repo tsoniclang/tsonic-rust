@@ -563,9 +563,11 @@ export function recordCallableSuspensionFacts(walk: RustFactWalk, declaration: N
   }
 }
 
-function selectedSourceCallableReturn(walk: RustFactWalk, declaration: Node) {
+export function selectedSourceCallableReturn(walk: RustFactWalk, declaration: Node) {
   const semantics = walk.context.semanticsFor(declaration);
-  const callableType = semantics.declarations.declaredValueType(declaration);
+  const callableType = walk.context.ast.is.IsArrowFunction(declaration) || walk.context.ast.is.IsFunctionExpression(declaration)
+    ? semantics.types.expressionType(declaration)
+    : semantics.declarations.declaredValueType(declaration);
   if (callableType === undefined) {
     return undefined;
   }

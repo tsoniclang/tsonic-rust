@@ -4,6 +4,9 @@ import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isRustCopyCarrier, rustCarrierSupportsClone } from "../../target-model/types/index.js";
 import { rustBindingStorageFactKey, rustMutatedBindingFactKey } from "../facts/keys.js";
+import type { RustClosureCaptureFact } from "../facts/keys.js";
+
+export type RustCaptureStorage = Pick<RustClosureCaptureFact["captures"][number], "storage" | "mutable">;
 
 export function rustCapturedBindingStorage(
   walk: RustFactWalk,
@@ -12,7 +15,8 @@ export function rustCapturedBindingStorage(
   owner: Node,
   carrier: TargetTypeRef | undefined,
   permitSingleOwner: boolean,
-): "value" | "location" | "cell" | "borrow-cell" | undefined {
+  nativeCallTrait?: "Fn" | "FnMut" | "FnOnce",
+): RustCaptureStorage | undefined {
   const cached = walk.capturedBindingStorage.get(declaration);
   if (cached !== undefined) {
     return cached;
@@ -28,11 +32,17 @@ export function rustCapturedBindingStorage(
   }
   const mutated = walk.context.facts.get(declaration, rustMutatedBindingFactKey) !== undefined ||
     walk.context.source.navigation.bindingWritesWithin(selected.symbol, sourceFile).length > 0;
-  const storage = walk.context.facts.get(declaration, rustBindingStorageFactKey)?.storage === "location"
-    ? "location" : !mutated ? "value" : permitSingleOwner &&
-      walk.context.facts.get(declaration, rustBindingStorageFactKey) === undefined &&
-      rustCarrierSupportsClone(carrier, walk.context.typeDefinitions) && singleOwnerDirectBinding(walk, declaration, owner)
-    ? isRustCopyCarrier(carrier) ? "cell" : "borrow-cell" : "location";
+  const existing = walk.context.facts.get(declaration, rustBindingStorageFactKey);
+  const unique = mutated && permitSingleOwner && existing === undefined &&
+    singleOwnerDirectBinding(walk, declaration, owner);
+  const storage: RustCaptureStorage = existing?.storage === "location"
+    ? { storage: "location" }
+    : !mutated ? { storage: "value" }
+    : unique && (nativeCallTrait === "FnMut" || nativeCallTrait === "FnOnce")
+      ? { storage: "value", mutable: true }
+      : unique && rustCarrierSupportsClone(carrier, walk.context.typeDefinitions)
+        ? { storage: isRustCopyCarrier(carrier) ? "cell" : "borrow-cell" }
+        : { storage: "location" };
   walk.capturedBindingStorage.set(declaration, storage);
   return storage;
 }

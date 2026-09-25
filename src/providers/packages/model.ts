@@ -123,7 +123,7 @@ export interface RustProviderExportRow {
 }
 
 export interface RustProviderSemantics {
-  readonly attributes: readonly import("./attributes.js").RustProviderAttributeRow[];
+  readonly attributes: readonly import("../../target-model/attributes/schema.js").RustProviderAttributeRow[];
   readonly exports: readonly RustProviderExportRow[];
   readonly operations: readonly RustProviderOperationRow[];
   readonly carrierPaths: Readonly<Record<string, string>>;
@@ -184,7 +184,7 @@ export type RustProviderBinaryHookRow = RustProviderBinaryHookDefinition & {
 };
 
 export interface RustProviderPackageDefinition {
-  readonly attributes?: readonly import("./attributes.js").RustProviderAttributeDefinition[];
+  readonly attributes?: readonly import("../../target-model/attributes/schema.js").RustProviderAttributeDefinition[];
   readonly id: string;
   readonly displayName: string;
   readonly version: string;

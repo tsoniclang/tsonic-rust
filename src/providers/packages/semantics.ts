@@ -14,7 +14,7 @@ import type { RustNamedTypeTraitContract } from "../../target-model/types/model.
 import { rustProviderPolicyContributionKind } from "./model.js";
 import type { RustProviderBinaryHookRow, RustProviderExportRow, RustProviderOperationRow, RustProviderPackageDefinition, RustProviderPolicyContribution, RustProviderSemantics, RustProviderTypeRow } from "./model.js";
 import type { SelectedTargetCapabilityContributions } from "@tsonic/target-api/provider";
-import type { RustProviderAttributeRow } from "./attributes.js";
+import type { RustProviderAttributeRow } from "../../target-model/attributes/schema.js";
 
 export function rustProviderPolicyContributionsOf(
   capabilities: readonly SelectedTargetCapabilityContributions[],

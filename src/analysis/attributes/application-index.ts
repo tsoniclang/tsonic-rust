@@ -6,7 +6,7 @@ import { isAstNode } from "@tsonic/target-api/source";
 import type { TargetSourceProgram } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustProviderSemantics } from "../../providers/packages/model.js";
-import type { RustAttributePlacement, RustProviderAttributeRow } from "../../providers/packages/attributes.js";
+import type { RustAttributePlacement, RustProviderAttributeRow } from "../../target-model/attributes/schema.js";
 import type { RustAttributeConstant } from "../../target-model/attributes/model.js";
 import { mergeProviderDeclarationIdentities } from "../../policy/evidence/selected-source.js";
 import { rustProviderOperationOwnerMatches } from "../../policy/operations/provider-selection.js";

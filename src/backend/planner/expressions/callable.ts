@@ -372,6 +372,17 @@ export function planRustCallableExpressionBody(
     if (sourcePath === undefined) {
       return undefined;
     }
+    if (capture.mutable === true) {
+      if (capture.storage !== "value" || closureFact.resultCarrier.kind !== "closure" ||
+        (closureFact.resultCarrier.callTrait !== "FnMut" && closureFact.resultCarrier.callTrait !== "FnOnce")) {
+        context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+          "rust.backend.native-mutable-capture", "A mutable value capture requires its exact owning native callable contract."));
+        return undefined;
+      }
+      capturedBindings.push({ declaration: capture.declaration, expression: { kind: "path", path: sourcePath },
+        storage: "value", valueCarrier: capture.carrier });
+      continue;
+    }
     const name = allocateRustSyntheticName(context.syntheticNames, `capture_${sourceName}`);
     const captureValue = planRustCaptureValue(
       capture.reference,
@@ -422,7 +433,7 @@ export function planRustCallableExpressionBody(
   };
   const bindingStatements: RustStmt[] = [];
   let closureParams: { name: string; mutable: boolean; byRefCopy?: boolean }[];
-  let closureMove = nativeClosureProtocol !== undefined && captureBindings.length > 0;
+  let closureMove = nativeClosureProtocol !== undefined && captureFact.captures.length > 0;
   if (callableProtocol === undefined) {
     closureParams = [
       ...leadingParameterPlans.map((parameter) => ({

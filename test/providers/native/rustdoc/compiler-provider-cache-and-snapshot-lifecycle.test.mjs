@@ -572,7 +572,7 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
         },
         {
           moduleSpecifier: "@tsonic/rust/types.js",
-          namedImports: [{ exportedName: "constPtr" }],
+          namedImports: [{ exportedName: "Slice" }, { exportedName: "constPtr" }],
         },
       ],
     );
@@ -892,15 +892,15 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
     assert.deepEqual(
       projectedIntoIterator?.members?.find(({ name }) => name === "try_fold")
         ?.signatures?.[0]?.typeParameters?.map(({ name }) => name),
-      ["B", "R", "F"],
-      "callable generic constraints are declared after every source-visible dependency",
+      ["B", "R"],
+      "native callable parameters are represented by their checked signature, not an extra source generic",
     );
     const projectedVec = vecProjection.declarationModel.exports.find(({ name }) => name === "Vec");
     assert.deepEqual(
       projectedVec?.members?.find(({ name }) => name === "dedup_by_key")
         ?.signatures?.[0]?.typeParameters?.map(({ name }) => name),
-      ["K", "F"],
-      "later Rust callable dependencies move before the constrained source parameter",
+      ["K"],
+      "the callable signature retains its selected key type without a second source generic",
     );
 
     const fmtModule = worker.module({

@@ -1,5 +1,4 @@
 import type { SourceFile } from "@tsonic/tsts";
-import { resolve } from "node:path";
 import {
   rejectedTargetStage,
   resolvedTargetStage,
@@ -10,8 +9,6 @@ import type { RustItem } from "../../target-ast/nodes.js";
 import { finalizeRustSourceStyle } from "../../target-ast/normalization/source-style.js";
 import { finalizeRustDeadCode } from "../../target-ast/normalization/dead-code.js";
 import { planRustCargoProject } from "../project/cargo.js";
-import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustSourceCallableReturnFactKey } from "../../../analysis/facts/keys.js";
-import { isRustUnitCarrier } from "../../../target-model/types/index.js";
 import type { RustPlanningContext } from "../context.js";
 import { reconstructRustSourceFiles } from "../artifacts/reconstruction.js";
 import {
@@ -25,8 +22,8 @@ import {
 import { applyRustErrorBoundary } from "../types/error-boundary.js";
 import { rustTypeFromCarrier } from "../types/render.js";
 import {
-  rustBinaryEntryDeclaration,
-  rustProjectEntrySourceFile,
+  resolveBinaryEntry,
+  resolveProjectEntrySourceFile,
 } from "./entry-point.js";
 import type {
   RustPlannedArtifact,
@@ -795,15 +792,6 @@ function rustSourceArtifact(
   return Object.freeze({ kind: "source", path, model });
 }
 
-interface RustBinaryEntry {
-  readonly sourceFile: SourceFile;
-  readonly moduleName: string;
-  readonly functionName: string;
-  readonly async?: "native-future" | "js-promise";
-  readonly fallible: boolean;
-  readonly nativeTermination: boolean;
-}
-
 function resolveLibraryInitializationRoots(
   input: RustPlanningContext,
   exports: readonly RustSourcePackageFacadeExport[],
@@ -842,72 +830,6 @@ function resolveLibraryInitializationRoots(
   return entrySourceFile === undefined ? [] : Object.freeze([entrySourceFile]);
 }
 
-function resolveProjectEntrySourceFile(
-  input: RustPlanningContext,
-  diagnostics: TargetDiagnostic[],
-): SourceFile | undefined {
-  const entryPoint = normalizeSourcePath(
-    resolve(input.host.paths.projectRoot, input.host.entryPoint),
-  );
-  const sourceFile = rustProjectEntrySourceFile(input.program);
-  if (sourceFile === undefined) {
-    diagnostics.push({
-      code: "RUST_MISSING_ENTRYPOINT",
-      category: "error",
-      source: "tsonic-rust",
-      message: `Rust output requires entry point '${entryPoint}' to be part of the compiled sources.`,
-      evidence: ["target.capability=rust.backend.entrypoint"],
-    });
-    return undefined;
-  }
-  return sourceFile;
-}
-
 function normalizeSourcePath(path: string): string {
   return path.split("\\").join("/");
-}
-
-function resolveBinaryEntry(
-  input: RustPlanningContext,
-  moduleNameByFileName: ReadonlyMap<string, string>,
-  diagnostics: TargetDiagnostic[],
-): RustBinaryEntry | undefined {
-  const entryPoint = input.host.entryPoint;
-  const entrySourceFile = resolveProjectEntrySourceFile(input, diagnostics);
-  if (entrySourceFile === undefined) {
-    return undefined;
-  }
-  const entryFileName = input.program.source.ast.getFileName(entrySourceFile);
-  const moduleName = moduleNameByFileName.get(entryFileName);
-  if (moduleName === undefined) {
-    diagnostics.push({
-      code: "RUST_MISSING_ENTRYPOINT",
-      category: "error",
-      source: "tsonic-rust",
-      message: `Binary output requires entry point '${entryPoint}' to be part of the compiled sources.`,
-      evidence: ["target.capability=rust.backend.entrypoint"],
-    });
-    return undefined;
-  }
-  const declaration = rustBinaryEntryDeclaration(input.program);
-  if (declaration !== undefined) {
-    const asyncFact = input.program.facts.getFact(declaration, rustAsyncFunctionFactKey);
-    return {
-      sourceFile: entrySourceFile,
-      moduleName,
-      functionName: "main",
-      async: asyncFact?.kind,
-      fallible: input.program.facts.getFact(declaration, rustFallibleFactKey) !== undefined,
-      nativeTermination: !isRustUnitCarrier(asyncFact?.outputCarrier ??
-        input.program.facts.getFact(declaration, rustSourceCallableReturnFactKey)?.returnCarrier),
-    };
-  }
-  diagnostics.push({
-    code: "RUST_MISSING_ENTRYPOINT",
-    category: "error",
-    source: "tsonic-rust",
-    message: "Binary output requires an exported, nongeneric, zero-parameter 'main' with a closed return carrier; Rust validates its native Termination contract.",
-    evidence: ["target.capability=rust.backend.entrypoint"],
-  });
-  return undefined;
 }
