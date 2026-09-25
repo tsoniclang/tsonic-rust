@@ -139,7 +139,9 @@ export function resolveRustTargetTypeRef(
   const declaration = node === undefined ? undefined :
     context.ast.is.IsVariableDeclaration(node) ? node : context.source.navigation.referenceFor(node)?.declaration;
   const induction = declaration === undefined ? undefined
-    : sourceIntegerInduction(declaration, context.ast, context.source.navigation);
+    : sourceIntegerInduction(declaration, context.ast, context.source.navigation, {
+        sourceFacts: context.source.sourceFacts, semanticsFor: context.semanticsFor,
+      });
   if (induction !== undefined) {
     const bound = resolveRustTargetTypeRef(induction.bound, context, options);
     if (bound?.kind === "source-primitive" &&

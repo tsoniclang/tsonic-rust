@@ -19,7 +19,7 @@ test("numeric analysis seals integer joins and native counters while retaining e
     source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   for (const file of program.sourceFiles) visit(file);
-  assert.deepEqual(counters, ["native-uint", "native-uint", "float64", "float64", "float64"]);
+  assert.deepEqual(counters, ["int32", "native-uint", "native-uint", "float64", "float64", "float64"]);
   for (const name of ["conditional", "conditionalLiteral", "nested"]) {
     assert.deepEqual(returns.get(name), { kind: "source-primitive", name: "int32" }, name);
   }

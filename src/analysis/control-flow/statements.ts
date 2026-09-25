@@ -355,7 +355,9 @@ export function recordStatementFacts(
     if (initializer !== undefined) {
       for (const declaration of collectDescendantsOfKind(walk, initializer, KindVariableDeclaration)) {
         const annotated = resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, declaration));
-        const induction = sourceIntegerInduction(declaration, walk.context.ast, walk.context.source.navigation);
+        const induction = sourceIntegerInduction(declaration, walk.context.ast, walk.context.source.navigation, {
+          sourceFacts: walk.context.source.sourceFacts, semanticsFor: walk.context.semanticsFor,
+        });
         if (induction !== undefined) resolveExpressionCarrier(walk, induction.bound, sourceFile, undefined);
         const selected = annotated ?? (induction === undefined ? undefined :
           resolveRustTargetTypeRef(declaration, rustResolutionContext(walk, declaration), walk.operationOptions));

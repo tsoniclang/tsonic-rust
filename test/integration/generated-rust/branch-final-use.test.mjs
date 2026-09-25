@@ -4,6 +4,8 @@ import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-sessi
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 const sourceText = `
+import { addressOf, storePointer } from "@tsonic/core/lang.js";
+import type { Pointer } from "@tsonic/core/types.js";
 function branch(values: string[]): string[] {
   const result: string[] = [];
   for (let index = 0; index < values.length; index++) {
@@ -60,12 +62,25 @@ function replaced(): string[] {
   if (values[0] !== "new") throw new Error("replaced binding");
   return original;
 }
+function replaceLocation(location: Pointer<string[]>): string {
+  storePointer(location, ["new"]);
+  return "added";
+}
+function pointerReplaced(): string[] {
+  let values = ["old"];
+  const original = values;
+  const location = addressOf(values);
+  values.push(replaceLocation(location));
+  if (values[0] !== "new") throw new Error("pointer-replaced binding");
+  return original;
+}
 export function main(): void {
   const values = branch(["a", "", "c"]);
   if (values.join("|") !== "a||c" || retained("x").join("|") !== "x|x" ||
     cleanup("kept").join("") !== "kept" || observed !== "kept" ||
     stable().join("|") !== "value|value" || mutatedAlias().join("|") !== "first|second|third" ||
-    replaced().join("|") !== "old|added" || branchReturn("early", true).join("") !== "early" ||
+    replaced().join("|") !== "old|added" || pointerReplaced().join("|") !== "old|added" ||
+    branchReturn("early", true).join("") !== "early" ||
     branchReturn("late", false).join("") !== "late" || branchBreak(["", "b", "c"]).join("|") !== "|b") {
     throw new Error("branch ownership");
   }
