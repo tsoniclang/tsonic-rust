@@ -393,6 +393,12 @@ function walkType(
       walkType(type.returnType, moduleSpecifier, importedExports, exportNamesByModule, `${where}.returnType`, fail);
       walkTypeParameters(type.typeParameters, moduleSpecifier, importedExports, exportNamesByModule, `${where}.typeParameters`, fail);
       return;
+    case "bigint-literal":
+      requireExactKeys(record, ["kind", "value"], where, fail);
+      if (typeof type.value !== "string" || !/^(?:0|-?[1-9][0-9]*)$/.test(type.value)) {
+        fail(`${where}.value is not a canonical bigint literal`);
+      }
+      return;
     case "literal":
       requireExactKeys(record, ["kind", "value"], where, fail);
       if (type.value !== null && typeof type.value !== "string" && typeof type.value !== "number" && typeof type.value !== "boolean") {

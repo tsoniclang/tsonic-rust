@@ -8,6 +8,27 @@ pub mod predicates;
 
 pub const ANSWER: i32 = 42;
 
+#[derive(Clone, Copy, Debug)]
+pub struct ExactToken<const ID: u64 = 9007199254740993> {
+    pub value: u64,
+}
+
+pub fn exact_token<const ID: u64>() -> ExactToken<ID> {
+    ExactToken { value: ID }
+}
+
+pub fn default_exact_token() -> ExactToken {
+    exact_token()
+}
+
+pub fn exact_token_value<const ID: u64>(token: ExactToken<ID>) -> u64 {
+    token.value
+}
+
+pub fn signed_const_value<const VALUE: i64>() -> i64 {
+    VALUE
+}
+
 pub type Pair<T> = (T, T);
 
 pub enum Mode {

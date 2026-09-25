@@ -93,6 +93,7 @@ export function projectRustCompilerModule(
     .filter(isNominalExport)
     .map((exported) => [canonicalPathKey(exported.canonicalPath), {
       sourceExportName: exported.name,
+      genericParameters: exported.genericParameters,
       targetPath: standardTypes.get(canonicalPathKey(exported.canonicalPath))?.targetPath ??
         exported.targetPath,
     }]));

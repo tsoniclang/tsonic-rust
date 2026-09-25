@@ -641,7 +641,13 @@ export const jsOperationRows = defineJsOperationRows([
 
   // Math lane. Exact f64 operations lower directly; operations with distinct
   // ECMAScript edge semantics use closed runtime helpers.
-  { owner: "Math", member: "floor", operationKind: "call", lane: "math", shape: { op: "operation", operationKind: "method", target: { form: "arg-method", name: "floor" }, result: { ref: "float64" }, params: [{ ref: "float64" }] } },
+  ...(["int8", "uint8", "int16", "uint16", "int32", "uint32", "native-int", "native-uint"] as const).map((carrier): JsOperationRowData => ({
+    owner: "Math", member: "floor", operationKind: "call", lane: "math", variant: carrier,
+    requirements: [{ carrier: { ref: "argument", index: 0 }, capability: "integer" }],
+    shape: { op: "operation", operationKind: "method", target: { form: "numeric-cast", target: carrier },
+      result: { ref: carrier }, params: [{ ref: carrier }], evaluation: "pure" },
+  })),
+  { owner: "Math", member: "floor", operationKind: "call", lane: "math", variant: "floating", shape: { op: "operation", operationKind: "method", target: { form: "arg-method", name: "floor" }, result: { ref: "float64" }, params: [{ ref: "float64" }] } },
   { owner: "Math", member: "ceil", operationKind: "call", lane: "math", shape: { op: "operation", operationKind: "method", target: { form: "arg-method", name: "ceil" }, result: { ref: "float64" }, params: [{ ref: "float64" }] } },
   { owner: "Math", member: "clz32", operationKind: "call", lane: "math", requirements: [{ carrier: { ref: "argument", index: 0 }, capability: "numeric" }], shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::math_clz32" }, result: { ref: "int32" }, params: [{ ref: "argument", index: 0 }] } },
   { owner: "Math", member: "trunc", operationKind: "call", lane: "math", shape: { op: "operation", operationKind: "method", target: { form: "arg-method", name: "trunc" }, result: { ref: "float64" }, params: [{ ref: "float64" }] } },

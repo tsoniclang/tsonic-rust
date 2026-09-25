@@ -47,6 +47,7 @@ import type { Pair } from "@tsonic/rust/crates/widget_alias/index.js";
 import { ANSWER, CheckedWidget, GenericFactory, GLOBAL_COUNT, MUTABLE_COUNT, Mode, NON_CLONE_STATIC, NumberBits, SimpleMode, StructuredMode, Widget, apply, borrowed_answer, borrowed_label, byte_ptr, checked_double, cloned, copied, dangerous, double, duplicate, featured, fill, first_byte, first_mixed_item, identity, integer_bits, integer_format, maybe_positive, mixed_item, mode_code, non_clone_static_value, pair_sum, pin_widget, preserve_borrowed, scalar_code, scalar_smile, simple_mode_code, singleton_map, structured_mode_value, sum, variadic_printf } from "@tsonic/rust/crates/widget_alias/index.js";
 import { int_widget } from "@tsonic/rust/crates/widget_alias/factory.js";
 import { triple } from "@tsonic/rust/crates/widget_alias/math.js";
+import { ExactToken, exact_token, default_exact_token, exact_token_value, signed_const_value } from "@tsonic/rust/crates/widget_alias/index.js";
 
 function readMutablePointer(pointer: mutPtr<u8>): u8 {
   return unsafeContext(first_byte(pointer));
@@ -73,6 +74,15 @@ export function invokePointer(
 }
 
 export function main(): void {
+  const exact: ExactToken<9007199254740993n> = exact_token<9007199254740993n>();
+  const adjacent: ExactToken<9007199254740992n> = exact_token<9007199254740992n>();
+  const maximum: ExactToken<18446744073709551615n> = exact_token<18446744073709551615n>();
+  const defaulted: ExactToken = default_exact_token();
+  if (exact_token_value(exact) !== 9007199254740993n || exact_token_value(adjacent) !== 9007199254740992n ||
+    exact_token_value(maximum) !== 18446744073709551615n || exact_token_value(defaulted) !== 9007199254740993n ||
+    signed_const_value<-9223372036854775808n>() !== -9223372036854775808n) {
+    throw new Error("lossless const argument identity");
+  }
   if (GenericFactory.new<int32>(1).value !== 27) {
     throw new Error("generic static factory mapping failed");
   }

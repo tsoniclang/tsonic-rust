@@ -396,6 +396,9 @@ function providerInputUsesExistingBorrow(
   if (context.expressionOverrides?.get(node)?.valueForm === "shared-reference") {
     return true;
   }
+  if (input.mode === "ref" && context.input.program.valueLifetimes.canBorrowStableBinding(node)) {
+    return true;
+  }
   const sourceParameter = context.input.program.facts.getFact(node, rustSourceParameterAbiFactKey);
   return sourceParameter?.mode === input.mode &&
     rustTargetTypeRefEquals(sourceParameter.parameterCarrier, input.parameterCarrier);

@@ -82,9 +82,9 @@ export function standardSourceGenericArguments(
     sourceGenericArgumentFor(argument, context, position)));
 }
 
-export function standardTargetGenericArguments(
+export function targetGenericArgumentsForApplication(
   type: Extract<RustCompilerType, { readonly kind: "path" }>,
-  location: RustCompilerStandardTypeLocation,
+  location: Pick<RustCompilerStandardTypeLocation, "genericParameters">,
   context: ProjectionContext,
   position: "parameter" | "result",
 ): readonly RustTargetGenericArgument[] {
@@ -102,9 +102,9 @@ export function standardTargetGenericArguments(
     )));
 }
 
-export function standardTargetGenericDefaults(
+export function targetGenericDefaultsForApplication(
   type: Extract<RustCompilerType, { readonly kind: "path" }>,
-  location: RustCompilerStandardTypeLocation,
+  location: Pick<RustCompilerStandardTypeLocation, "genericParameters">,
   context: ProjectionContext,
   position: "parameter" | "result",
 ): readonly RustTargetGenericArgument[] {
@@ -241,7 +241,7 @@ export function compareText(left: string, right: string): number {
 
 function requireGenericApplication(
   type: Extract<RustCompilerType, { readonly kind: "path" }>,
-  location: RustCompilerStandardTypeLocation,
+  location: Pick<RustCompilerStandardTypeLocation, "genericParameters">,
 ): void {
   if (type.genericArguments.length > location.genericParameters.length ||
     type.genericArguments.some((argument, index) =>
@@ -249,7 +249,7 @@ function requireGenericApplication(
     location.genericParameters.slice(type.genericArguments.length)
       .some((parameter) => !genericParameterHasDefault(parameter))) {
     throw new Error(
-      `Rust standard-library type '${rustCompilerTypeText(type)}' has a generic application that does not match its exact declaration.`,
+      `Rust type '${rustCompilerTypeText(type)}' has a generic application that does not match its exact declaration.`,
     );
   }
 }

@@ -212,6 +212,7 @@ function rebaseProviderType(
     case "bigint":
     case "object":
     case "literal":
+    case "bigint-literal":
     case "source-primitive":
     case "type-parameter":
       return type;

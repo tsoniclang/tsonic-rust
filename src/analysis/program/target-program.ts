@@ -41,7 +41,7 @@ import { analyzeRustFoundation } from "../foundation/plan.js";
 import { rustFoundationForCarrier } from "../foundation/requirements.js";
 import { maximumRustFoundation } from "../../target-model/foundation/model.js";
 import { analyzeRustProjectFlowReadSelections } from "../control-flow/project-flow-read-selections.js";
-import { isRustStringCarrier } from "../../target-model/types/index.js";
+import { isRustJsArrayCarrier, isRustStringCarrier } from "../../target-model/types/index.js";
 import { rustClosureCaptureFactKey } from "../facts/keys.js";
 
 const rustJsTimerEpilogue: RustProviderBinaryHookRow = Object.freeze({
@@ -124,6 +124,7 @@ export function analyzeRustTargetProgram(
     sourceFiles: context.sourceFiles,
     navigation: context.source.navigation,
     isOwnedString: (declaration) => isRustStringCarrier(facts.getRuntimeCarrierFact(declaration)?.carrier),
+    hasSharedIdentityStorage: (declaration) => isRustJsArrayCarrier(facts.getRuntimeCarrierFact(declaration)?.carrier),
     mayBorrowArgument: (argument) => facts.getArgumentPassingFact(argument)?.mode !== "by-value",
     capturesFor: (closure) => facts.getFact(closure, rustClosureCaptureFactKey),
   });
