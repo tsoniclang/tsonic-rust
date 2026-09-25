@@ -83,6 +83,7 @@ export function resolveExpressionCarrierUncached(
   expression: Node,
   sourceFile: SourceFile,
   expected: TargetTypeRef | undefined,
+  purpose: "value" | "operation",
 ): TargetTypeRef | undefined {
   const kind = walk.context.ast.kindName(expression);
   switch (kind) {
@@ -333,7 +334,7 @@ export function resolveExpressionCarrierUncached(
       const inner = Node_Expression(walk.context.ast, expression);
       const carrier = inner === undefined
         ? undefined
-        : resolveExpressionCarrier(walk, inner, sourceFile, expected);
+        : resolveExpressionCarrier(walk, inner, sourceFile, expected, purpose);
       return carrier === undefined ? undefined : setCarrierFact(walk, expression, carrier);
     }
     case "KindAsExpression":
@@ -365,7 +366,7 @@ export function resolveExpressionCarrierUncached(
       const inner = Node_Expression(walk.context.ast, expression);
       const carrier = inner === undefined
         ? undefined
-        : resolveExpressionCarrier(walk, inner, sourceFile, expected);
+        : resolveExpressionCarrier(walk, inner, sourceFile, expected, purpose);
       if (carrier === undefined) {
         return undefined;
       }

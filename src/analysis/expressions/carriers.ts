@@ -136,6 +136,7 @@ export function resolveExpressionCarrier(
           expression,
           sourceFile,
           contextualExpected ?? existing.carrier,
+          purpose,
         );
         if (callableCarrier === undefined ||
           !rustTargetTypeRefEquals(callableCarrier, existing.carrier)) {
@@ -220,6 +221,7 @@ export function resolveExpressionCarrier(
       expression,
       sourceFile,
       contextualExpected,
+      purpose,
     );
     return finalize(resolved);
   } finally {
