@@ -3,12 +3,6 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 if (( $# == 0 )); then
-  mapfile -d '' -t test_arguments < <(node "${TSONIC_ROOT:-../tsonic}/test/scripts/node-test-files.mjs" test)
-else
-  test_arguments=("$@")
+  exec node "${TSONIC_ROOT:-../tsonic}/scripts/certification/run.mjs" tsonic-rust
 fi
-if (( ${#test_arguments[@]} == 0 )); then
-  printf 'No Rust test files were discovered.\n' >&2
-  exit 2
-fi
-exec bash "${TSONIC_ROOT:-../tsonic}/test/scripts/bounded-run.sh" rust bash scripts/test-worker.sh "${test_arguments[@]}"
+exec bash "${TSONIC_ROOT:-../tsonic}/test/scripts/bounded-run.sh" rust bash scripts/test-worker.sh "$@"
