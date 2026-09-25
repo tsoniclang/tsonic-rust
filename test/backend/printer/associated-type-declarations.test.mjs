@@ -51,7 +51,7 @@ test("public associated output types cannot remain private", () => {
   const model = finalizeRustSourceStyle(createRustSourceFile([
     family,
     { kind: "struct", name: "Payload", visibility: "private", generics: emptyRustGenerics,
-      derives: [], fields: [] },
+      fields: [] },
     { ...implementation, associatedTypes: [{ name: "Output", type: { kind: "named", path: "Payload" } }] },
   ]));
   assert.equal(model.items.find((item) => item.kind === "struct").visibility, "public");

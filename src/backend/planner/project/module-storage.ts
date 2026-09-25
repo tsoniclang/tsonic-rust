@@ -1,3 +1,4 @@
+import { type RustAttribute } from "../../target-ast/attributes.js";
 import type {
   RustExpr,
   RustItem,
@@ -23,7 +24,7 @@ export function planRustHoistedModuleCell(
   value: RustExpr,
   visibility: RustVisibility,
   syntheticNames: RustSyntheticNameState,
-  attrs: readonly string[] = [],
+  attrs: readonly RustAttribute[] = [],
 ): readonly RustItem[] {
   const callableAlias = type.kind === "named" && type.path === "rt::Callable"
     ? allocateRustSyntheticTypeName(syntheticNames, `${name}_callable`)
@@ -67,7 +68,7 @@ export function planRustModuleCell(
   value: RustExpr | undefined,
   visibility: RustVisibility,
   syntheticNames: RustSyntheticNameState,
-  attrs: readonly string[] = [],
+  attrs: readonly RustAttribute[] = [],
 ): PlannedRustModuleCell {
   const cellName = allocateRustSyntheticName(syntheticNames, "module_binding");
   const valueName = allocateRustSyntheticName(syntheticNames, "module_value");

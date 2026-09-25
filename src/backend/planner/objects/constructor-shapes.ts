@@ -56,7 +56,7 @@ export function planRustConstructorShape(
   return [
     { kind: "trait", name: definition.dispatchName, visibility, generics, functions,
       superTraits: [{ kind: "named", path: "rt::ObjectIdentityCarrier" }, ...superTraits] },
-    { kind: "struct", name: definition.targetName, visibility, generics, derives: [], fields: [
+    { kind: "struct", name: definition.targetName, visibility, generics, fields: [
       { name: "dispatch", visibility, type: dispatch },
     ] },
     { kind: "impl", generics, target: type, trait: { kind: "named", path: "Clone" }, functions: [{

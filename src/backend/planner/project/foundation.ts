@@ -1,3 +1,4 @@
+import { rustWordAttribute } from "../../target-ast/attributes.js";
 import type { RustFoundation } from "../../../target-model/foundation/model.js";
 import {
   createRustSourceFile,
@@ -13,6 +14,6 @@ export function createRustCrateRootSourceFile(
     foundation === "core"
       ? items
       : [{ kind: "extern-crate", name: "alloc" }, ...items],
-    foundation === "std" ? [] : ["#![no_std]"],
+    foundation === "std" ? [] : [rustWordAttribute("no_std")],
   );
 }

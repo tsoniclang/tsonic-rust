@@ -61,7 +61,7 @@ function planImplementation(implementation: RustSuspendedCallableImplementation,
   const selfType: RustType = { kind: "named", path: "Self" };
   const state: RustType = { kind: "tuple", elements: storage as RustType[] };
   context.usedAliases?.add("rt");
-  return [{ kind: "struct", name: implementation.stateName, visibility: "crate", derives: [],
+  return [{ kind: "struct", name: implementation.stateName, visibility: "crate",
     generics: { parameters: environment, wherePredicates: [] }, fields: [{ name: "state", type: state, visibility: "crate" }, {
       name: "owner", type: { kind: "named", path: "alloc::rc::Weak", genericArguments: [{ kind: "type", type: selfType }] }, visibility: "crate",
     }],

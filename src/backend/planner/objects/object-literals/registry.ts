@@ -495,7 +495,6 @@ export function createImplementationPlan(
     kind: "struct",
     name: stateName,
     visibility: "private",
-    derives: [],
     generics: emptyRustGenerics,
     fields: [
       ...finalizedStateFields.map((field): RustStructField => ({
@@ -532,7 +531,6 @@ export function createImplementationPlan(
     kind: "struct",
     name: rootName,
     visibility: "private",
-    derives: [],
     generics: emptyRustGenerics,
     fields: [{
       name: rustProjectObjectIdentityField,

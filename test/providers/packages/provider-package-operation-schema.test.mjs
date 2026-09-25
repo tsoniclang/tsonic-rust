@@ -170,8 +170,31 @@ test("provider operation metadata preserves native reference, variant, and macro
       form: "expression-macro",
       path: "acme_validation::sum_pair",
       delimiter,
+      arguments: "list",
+    })));
+    assert.doesNotThrow(() => createRustProviderPackage(binaryDefinition({
+      form: "expression-macro",
+      path: "acme_validation::repeat",
+      delimiter,
+      arguments: "repeat",
     })));
   }
+
+  for (const arguments_ of [undefined, "guess", {}, ["list"]]) {
+    assert.throws(() => createRustProviderPackage(binaryDefinition({
+      form: "expression-macro",
+      path: "acme_validation::sum_pair",
+      delimiter: "brackets",
+      ...(arguments_ === undefined ? {} : { arguments: arguments_ }),
+    })), /list or repeat macro grammar/u);
+  }
+  const missingRepeatOperand = binaryDefinition({
+    form: "expression-macro", path: "acme_validation::repeat", delimiter: "brackets", arguments: "repeat",
+  });
+  assert.throws(() => createRustProviderPackage({
+    ...missingRepeatOperand,
+    operations: [{ ...missingRepeatOperand.operations[0], parameterCarriers: [int32Carrier] }],
+  }), /repetition requires exactly two/u);
 
   assert.throws(
     () => createRustProviderPackage(binaryDefinition({
@@ -194,6 +217,7 @@ test("provider operation metadata preserves native reference, variant, and macro
       form: "expression-macro",
       path: "acme_validation::sum_pair",
       delimiter: "guess",
+      arguments: "list",
     })),
     /not an exact Rust macro delimiter/u,
   );

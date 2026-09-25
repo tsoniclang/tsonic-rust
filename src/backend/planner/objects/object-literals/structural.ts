@@ -130,7 +130,7 @@ export function createStructuralLiteralImplementation(
   }
   return Object.freeze({ kind: "structural", expression, wrapperPath: instantiatedWrapper.path, stateName,
     slots: Object.freeze(slots), items: Object.freeze<RustItem[]>([
-      { kind: "struct", name: stateName, visibility: "crate", generics, derives: [], fields },
+      { kind: "struct", name: stateName, visibility: "crate", generics, fields },
       { kind: "impl", target: root, trait, generics, functions },
     ]) });
 }

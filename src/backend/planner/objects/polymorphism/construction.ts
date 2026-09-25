@@ -1,3 +1,4 @@
+import { rustHiddenAttribute } from "../../../target-ast/attributes.js";
 import type { Node } from "@tsonic/tsts";
 import { rustClassEnvironmentContext, rustClassEnvironmentParameter } from "../class-environments.js";
 import {
@@ -533,7 +534,7 @@ export function planProjectClassConstructor(
       ? {}
       : {
           attrs: [
-            ...(publishesImplementationAbi ? ["#[doc(hidden)]"] : []),
+            ...(publishesImplementationAbi ? [rustHiddenAttribute] : []),
             ...initializationSafetyAttributes,
           ],
         }),

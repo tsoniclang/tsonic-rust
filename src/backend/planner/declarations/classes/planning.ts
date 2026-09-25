@@ -1,3 +1,4 @@
+import { rustDeriveAttributes, rustHiddenAttribute } from "../../../target-ast/attributes.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
 import { applyFallibleShape } from "../../types/fallible-shape.js";
 import { createRustProjectObject, rustProjectObjectStateField, rustProjectObjectType } from "../../objects/project-objects.js";
@@ -370,7 +371,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
           genericArguments: [{ kind: "type" as const, type: property.callableType }],
         },
         visibility: storageVisibility,
-        ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
+        ...(publiclyReachable ? { attrs: [rustHiddenAttribute] } : {}),
       })),
     ...(stateMarker === undefined
       ? []
@@ -378,7 +379,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
           name: stateMarker.name,
           type: stateMarker.type,
           visibility: storageVisibility,
-          ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
+          ...(publiclyReachable ? { attrs: [rustHiddenAttribute] } : {}),
         }]),
   ];
   if (representation.kind !== "value" && stateCarrier === undefined) {
@@ -390,14 +391,13 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
         name: rustProjectObjectStateField,
         type: stateCarrier,
         visibility: storageVisibility,
-        ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
+        ...(publiclyReachable ? { attrs: [rustHiddenAttribute] } : {}),
       };
   const stateItem: RustItem = {
     kind: "struct",
     name: definition.stateName,
     visibility: storageVisibility,
-    ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
-    derives: [],
+    ...(publiclyReachable ? { attrs: [rustHiddenAttribute] } : {}),
     generics,
     fields: valueFields,
   };
@@ -414,9 +414,8 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   const structItem: RustItem = {
     kind: "struct",
     name: className,
-    ...(generatedStructAttributes.length === 0 ? {} : { attrs: generatedStructAttributes }),
     visibility: structVisibility,
-    derives: representation.kind === "value" ? ["Clone"] : explicitWrapperTraits ? [] : ["Clone", "Debug", "PartialEq"],
+    attrs: [...generatedStructAttributes, ...rustDeriveAttributes(representation.kind === "value" ? ["Clone"] : explicitWrapperTraits ? [] : ["Clone", "Debug", "PartialEq"])],
     generics,
     fields: structFields,
   };

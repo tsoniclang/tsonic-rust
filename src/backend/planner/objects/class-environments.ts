@@ -1,3 +1,4 @@
+import { rustDeriveAttributes } from "../../target-ast/attributes.js";
 import type { Node } from "@tsonic/tsts";
 import { Node_Initializer } from "@tsonic/target-api/source";
 import type { RustClassValueDefinition } from "../../../analysis/objects/class-values.js";
@@ -77,7 +78,7 @@ export function planRustClassEnvironmentItems(declaration: Node, context: RustPl
       } }] },
     }] }, { kind: "impl", generics, target: identityOwner, trait: { kind: "named", path: "Eq" }, functions: [] }];
   return [{ kind: "struct", name: environment.typeName, visibility: rustProjectImplementationVisibility(publiclyReachable),
-    derives: environment.storage === "value" && !manualClone ? ["Clone", "Copy"] : [], generics, fields },
+    attrs: rustDeriveAttributes(environment.storage === "value" && !manualClone ? ["Clone", "Copy"] : []), generics, fields },
     ...identityItems,
     ...(target === undefined ? [] : [
       ...(environment.copy ? [{ kind: "impl" as const, generics, target, trait: { kind: "named" as const, path: "Copy" }, functions: [] }] : []),

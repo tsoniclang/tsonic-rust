@@ -18,7 +18,7 @@ export function genericCallableStorageItems(
           args: [{ kind: "method-call", receiver: { kind: "path", path: "environment" }, method: "clone", args: [] }] },
       })) };
   const items: RustItem[] = [{ kind: "enum", name: definition.targetName, visibility: "public",
-    derives: [], generics, variants },
+    generics, variants },
   { kind: "impl", trait: { kind: "named", path: "Clone" }, target, generics, functions: [{
     name: "clone", visibility: "private", selfParam: rustSelfParameter("ref"), generics: emptyRustGenerics,
     params: [], returnType: { kind: "named", path: "Self" }, body: { statements: [{ kind: "tail", expr: clone }] },

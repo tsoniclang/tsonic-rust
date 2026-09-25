@@ -115,21 +115,18 @@ test("source style attributes are item-local and derived from exact Rust signatu
       generics: emptyRustGenerics,
       name: "Hidden",
       visibility: "crate",
-      derives: [],
       fields: [],
     }, {
       kind: "struct",
       generics: emptyRustGenerics,
       name: "Owner",
       visibility: "public",
-      derives: [],
       fields: [],
     }, {
       kind: "struct",
       generics: emptyRustGenerics,
       name: "InternalCursor",
       visibility: "crate",
-      derives: [],
       fields: [],
     }, {
       kind: "impl",
@@ -198,7 +195,7 @@ test("Iterator naming expectations require the exact mutable-reference receiver"
     const model = finalizeRustSourceStyle({
       headerComment,
       items: [{
-        kind: "struct", generics: emptyRustGenerics, name: "Cursor", visibility: "public", derives: [], fields: [],
+        kind: "struct", generics: emptyRustGenerics, name: "Cursor", visibility: "public", fields: [],
       }, {
         kind: "impl", generics: emptyRustGenerics, target: { kind: "named", path: "Cursor" },
         functions: [{

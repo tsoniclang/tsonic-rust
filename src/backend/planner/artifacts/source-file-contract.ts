@@ -67,8 +67,7 @@ function publicItemSurface(item: RustItem): readonly string[] {
         ? [encodeRustContractParts([
             "struct",
             item.name,
-            ...item.attrs ?? [],
-            ...item.derives,
+            ...(item.attrs ?? []).map(closedMetadataKey),
             encodeRustContractParts(["generics", closedMetadataKey(item.generics)]),
             ...item.fields.map((field) =>
               encodeRustContractParts([

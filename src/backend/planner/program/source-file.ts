@@ -1,3 +1,4 @@
+import { rustHiddenAttribute } from "../../target-ast/attributes.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { planRustClassEnvironmentItems } from "../objects/class-environments.js";
 import { planRustClassValueImplementations } from "../objects/constructor-values.js";
@@ -189,7 +190,7 @@ export function planRustSourceFile(
         name,
         visibility: sourcePublic || implementationPublic ? "public" : "crate",
         ...(implementationPublic && !sourcePublic
-          ? { attrs: ["#[doc(hidden)]"] }
+          ? { attrs: [rustHiddenAttribute] }
           : {}),
       };
     }),
@@ -501,7 +502,7 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
     visibility: "public",
     generics: emptyRustGenerics,
     attrs: [
-      "#[doc(hidden)]",
+      rustHiddenAttribute,
     ],
     ...(asynchronous ? { isAsync: true } : {}),
     ...(errorBoundary === undefined ? {} : { errorType: rustErrorType(errorBoundary) }),

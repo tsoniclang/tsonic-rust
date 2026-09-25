@@ -1,3 +1,4 @@
+import { type RustAttribute } from "../attributes.js";
 import type {
   RustDeadCodeDisposition,
   RustImplConstant,
@@ -9,7 +10,7 @@ import type {
 import { rustLintAttributes } from "./lint-policy.js";
 
 interface RustDeadCodeOwner {
-  readonly attrs?: readonly string[];
+  readonly attrs?: readonly RustAttribute[];
   readonly deadCode?: RustDeadCodeDisposition;
 }
 
@@ -91,7 +92,7 @@ function finalizeRustDeadCodeOwner<T extends RustDeadCodeOwner>(owner: T): T {
   return { ...withoutDeadCode, attrs } as T;
 }
 
-function rustDeadCodeAttribute(disposition: RustDeadCodeDisposition): string {
+function rustDeadCodeAttribute(disposition: RustDeadCodeDisposition): RustAttribute {
   switch (disposition) {
     case "authored-declaration":
       return rustLintAttributes.authoredDeadCode;

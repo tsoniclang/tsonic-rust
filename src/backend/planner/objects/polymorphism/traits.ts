@@ -1,3 +1,4 @@
+import { rustHiddenAttribute } from "../../../target-ast/attributes.js";
 import {
   projectCallableShape,
   projectOwnAccessors,
@@ -370,7 +371,7 @@ export function planProjectDispatchTrait(
     kind: "trait",
     name: rustProjectDispatchTraitName(definition),
     visibility,
-    ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
+    ...(publiclyReachable ? { attrs: [rustHiddenAttribute] } : {}),
     ...(deadCode === undefined ? {} : { deadCode }),
     generics,
     ...(superTraits.length === 0 ? {} : { superTraits: superTraits as readonly RustType[] }),

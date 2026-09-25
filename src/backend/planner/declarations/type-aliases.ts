@@ -1,3 +1,4 @@
+import { rustDeriveAttributes } from "../../target-ast/attributes.js";
 import { planRustTypeFamilyDeclaration } from "./type-families.js";
 import { diagnosticInput, isValidRustIdentifier, rustProjectTypeHasPublicImplementationAbi } from "../program/plan-context.js";
 import { rustAuthoredDeadCodeDisposition, rustAuthoredVariantDeadCodeDisposition } from "../liveness/directives.js";
@@ -87,9 +88,9 @@ export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): 
     name: aliasName,
     visibility,
     ...(deadCode === undefined ? {} : { deadCode }),
-    derives: fact.kind === "string-literal"
+    attrs: rustDeriveAttributes(fact.kind === "string-literal"
       ? ["Clone", "Copy", "Debug", "PartialEq"]
-      : ["Clone", "Debug", "PartialEq"],
+      : ["Clone", "Debug", "PartialEq"]),
     variants: fact.variants.map((variant, index) => {
       const variantDeadCode = rustAuthoredVariantDeadCodeDisposition(
         context,

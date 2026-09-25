@@ -1,3 +1,4 @@
+import { rustHiddenAttribute } from "../../../target-ast/attributes.js";
 import { isRustCopyCarrier } from "../../../../target-model/types/index.js";
 import { rustProjectMemberIsPrivate } from "../../../../analysis/project-types/member-privacy.js";
 import type { RustExpr, RustImplFunction, RustItem, RustType } from "../../../target-ast/nodes.js";
@@ -50,7 +51,7 @@ export function planProjectPrivateStateAccessors(
     functions.push({
       name: readName,
       visibility,
-      ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
+      ...(publiclyReachable ? { attrs: [rustHiddenAttribute] } : {}),
       generics: emptyRustGenerics,
       selfParam: rustSelfParameter("ref"),
       params: [],
@@ -68,7 +69,7 @@ export function planProjectPrivateStateAccessors(
       functions.push({
         name: writeName,
         visibility,
-        ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
+        ...(publiclyReachable ? { attrs: [rustHiddenAttribute] } : {}),
         generics: emptyRustGenerics,
         selfParam: rustSelfParameter("mut-ref"),
         params: [{ name: "value", type: field.type }],

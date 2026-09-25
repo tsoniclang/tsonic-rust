@@ -71,6 +71,19 @@ export function acmeTestingPackage() {
             returnType: { kind: "never" },
           }],
         },
+        {
+          id: "@acme/testing::repeatSum",
+          name: "repeatSum",
+          kind: "function",
+          signatures: [{
+            id: "@acme/testing::repeatSum(value,count)",
+            parameters: [
+              { name: "value", type: { kind: "source-primitive", name: "int32" } },
+              { name: "count", type: { kind: "source-primitive", name: "nativeUint" } },
+            ],
+            returnType: { kind: "source-primitive", name: "int32" },
+          }],
+        },
         ...["sumParen", "sumBrackets", "sumBraces"].map((name) => ({
           id: `@acme/testing::${name}`,
           name,
@@ -102,6 +115,13 @@ export function acmeTestingPackage() {
         resultCarrier: neverCarrier,
         parameterCarriers: [stringCarrier],
       },
+      {
+        exportId: "@acme/testing::repeatSum",
+        operationKind: "method",
+        target: { form: "expression-macro", path: "acme_testing::repeat_sum", delimiter: "brackets", arguments: "repeat" },
+        resultCarrier: int32Carrier,
+        parameterCarriers: [int32Carrier, { kind: "source-primitive", name: "nativeUint" }],
+      },
       ...[
         ["sumParen", "parentheses"],
         ["sumBrackets", "brackets"],
@@ -113,6 +133,7 @@ export function acmeTestingPackage() {
           form: "expression-macro",
           path: "acme_testing::sum_pair",
           delimiter,
+          arguments: "list",
         },
         resultCarrier: int32Carrier,
         parameterCarriers: [int32Carrier, int32Carrier],

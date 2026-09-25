@@ -34,7 +34,7 @@ test("signature aliases retain exact generic types, share definitions and promot
 
 test("signature aliases avoid declarations, imports and generic parameter names", () => {
   for (const collision of [
-    { kind: "struct", name: "ReadValues", visibility: "private", generics: emptyRustGenerics, fields: [], derives: [] },
+    { kind: "struct", name: "ReadValues", visibility: "private", generics: emptyRustGenerics, fields: [] },
     { kind: "use", path: "models::ReadValues" },
     { kind: "use", path: "models::Other", alias: "ReadValues" },
     { ...makeFunction("other"), generics: { parameters: [{ kind: "type", name: "ReadValues", bounds: [] }], wherePredicates: [] } },
@@ -46,7 +46,7 @@ test("signature aliases avoid declarations, imports and generic parameter names"
 });
 
 test("complex struct fields reuse exact native aliases without changing storage or generic bounds", () => {
-  const source = { kind: "struct", name: "Entries", visibility: "public", derives: [],
+  const source = { kind: "struct", name: "Entries", visibility: "public",
     generics: makeFunction("read").generics,
     fields: [{ name: "entries", type: nested, visibility: "public" },
       { name: "count", type: { kind: "primitive", name: "usize" }, visibility: "private" }],

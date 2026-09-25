@@ -1,3 +1,4 @@
+import { rustListAttribute, rustWordAttribute } from "../../../dist/backend/target-ast/attributes.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { finalizeRustBlockLiveness } from "../../../dist/backend/target-ast/inspection/source-liveness.js";
@@ -48,8 +49,8 @@ test("conditional initialization leaves unsafe-to-move bindings unchanged", () =
     branch(complete, block()),
     { ...branch(complete, complete), else: undefined },
     { ...branch(complete, complete), condition: path("result") },
-    { ...branch(complete, complete), attrs: ["#[allow(unused)]"] },
-    branch({ ...complete, innerAttrs: ["#![allow(unused)]"] }, complete),
+    { ...branch(complete, complete), attrs: [rustListAttribute("allow", [rustWordAttribute("unused")])] },
+    branch({ ...complete, innerAttrs: [rustListAttribute("allow", [rustWordAttribute("unused")])] }, complete),
     branch(complete, block(branch(complete, block()))),
   ];
   for (const conditional of cases) {
@@ -63,7 +64,7 @@ test("conditional initialization leaves unsafe-to-move bindings unchanged", () =
 test("conditional printing preserves scoped attributes and discarded-value effects", () => {
   const scoped = {
     kind: "block",
-    innerAttrs: ["#![allow(unused_variables)]"],
+    innerAttrs: [rustListAttribute("allow", [rustWordAttribute("unused_variables")])],
     bindings: [{ name: "local", value: literal(2) }],
     value: literal(3),
   };

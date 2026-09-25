@@ -269,11 +269,12 @@ export function rustProviderOperationFormContractViolation(
         ? undefined
         : "struct-variant form must contain one path and one distinct Rust field for each source argument";
     case "expression-macro":
-      return hasExactKeys(form, ["form", "path", "delimiter"], ["form", "path", "delimiter"]) &&
+      return hasExactKeys(form, ["form", "path", "delimiter", "arguments"], ["form", "path", "delimiter", "arguments"]) &&
           typeof form.path === "string" && rustPathPattern.test(form.path) &&
-          (form.delimiter === "parentheses" || form.delimiter === "brackets" || form.delimiter === "braces")
+          (form.delimiter === "parentheses" || form.delimiter === "brackets" || form.delimiter === "braces") &&
+          (form.arguments === "list" || (form.arguments === "repeat" && runtimeSourceIndexes.length === 2))
         ? undefined
-        : "expression-macro form must contain one closed Rust path and delimiter";
+        : "expression-macro form requires one closed Rust path, delimiter and exact list or two-operand repeat grammar";
     case "call-c-variadic":
       return hasExactKeys(
         form,

@@ -661,7 +661,6 @@ test("long struct field types use rustfmt-compatible continuation indentation", 
       generics: emptyRustGenerics,
       name: "DispatchRoot",
       visibility: "private",
-      derives: [],
       fields: [{
         name: "dispatch_identity_identity_specialization_1_implementation",
         visibility: "private",

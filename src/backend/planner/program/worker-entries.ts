@@ -1,3 +1,4 @@
+import { rustHiddenAttribute } from "../../target-ast/attributes.js";
 import type { SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustPlanningContext } from "../context.js";
@@ -124,7 +125,7 @@ export function planRustWorkerEntries(input: {
       kind: "function",
       name: functionName,
       visibility: "public",
-      attrs: ["#[doc(hidden)]"],
+      attrs: [rustHiddenAttribute],
       generics: emptyRustGenerics,
       params: [],
       body: { statements: [] },

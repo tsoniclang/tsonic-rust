@@ -352,7 +352,7 @@ test("every path-bearing provider operation materializes its declared crate alia
       ...["parentheses", "brackets", "braces"].map((delimiter) => ({
         exportId: `acme.materialized::${delimiter}`,
         operationKind: "method",
-        target: { form: "expression-macro", path: "api::value", delimiter },
+        target: { form: "expression-macro", path: "api::value", delimiter, arguments: "list" },
         resultCarrier: { kind: "source-primitive", name: "int32" },
       })),
     ],

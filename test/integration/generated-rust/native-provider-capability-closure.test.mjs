@@ -37,3 +37,30 @@ export function main(): void {
   assert.match(source, /acme_testing::sum_pair! \{5, 6\}/u);
   validateGeneratedProject("provider-macro-contract", result.artifacts, { run: true });
 });
+
+test("provider repetition uses native count and evaluates its element once, including zero", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "provider_macro_repeat" } },
+    files: { "index.ts": `
+      import type { int32, nativeUint } from "@tsonic/core/types.js";
+      import { check, repeatSum as repeat } from "@acme/testing";
+      let calls: int32 = 0;
+      function next(): int32 { calls += 1; return calls; }
+      export function main(): void {
+        const count: nativeUint = 3;
+        check(repeat(next(), count) === 3);
+        check(calls === 1);
+        check(repeat(next(), 0) === 0);
+        check(calls === 2);
+        check(repeat(next(), 1) === 3);
+        check(calls === 3);
+      }
+    ` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /acme_testing::repeat_sum!\[[^;]+; count\]/u);
+  assert.doesNotMatch(source, /repeat_sum!\[[^;\]]+,/u);
+  validateGeneratedProject("provider-macro-repeat", result.artifacts, { run: true });
+});

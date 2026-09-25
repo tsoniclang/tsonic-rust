@@ -15,3 +15,10 @@ macro_rules! sum_pair {
         $left + $right
     };
 }
+
+#[macro_export]
+macro_rules! repeat_sum {
+    ($value:expr; $count:expr) => {
+        vec![$value; $count].into_iter().sum::<i32>()
+    };
+}

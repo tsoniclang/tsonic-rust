@@ -102,10 +102,16 @@ export function validateOperationForm(
       }
       return;
     case "expression-macro":
-      requireExactKeys(record, ["form", "path", "delimiter"], `${label}.target`, fail);
+      requireExactKeys(record, ["form", "path", "delimiter", "arguments"], `${label}.target`, fail);
       requireRustPath(form.path, `${label}.target.path`, fail);
       if (form.delimiter !== "parentheses" && form.delimiter !== "brackets" && form.delimiter !== "braces") {
         fail(`${label}.target.delimiter is not an exact Rust macro delimiter`);
+      }
+      if (form.arguments !== "list" && form.arguments !== "repeat") {
+        fail(`${label}.target.arguments must select the list or repeat macro grammar`);
+      }
+      if (form.arguments === "repeat" && parameterCarriers?.length !== 2) {
+        fail(`${label}.target repetition requires exactly two declared parameter carriers`);
       }
       return;
     case "call-c-variadic":

@@ -1,3 +1,4 @@
+import { rustWordAttribute, rustHiddenAttribute } from "../../../dist/backend/target-ast/attributes.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { emptyRustGenerics } from "../../../dist/backend/target-ast/nodes.js";
@@ -36,7 +37,7 @@ test("private and external native signatures do not promote local lookalikes", (
 test("public trait promotion removes only obsolete dead-code expectations", () => {
   const method = { name: "read", generics: emptyRustGenerics, params: [],
     returnType: { kind: "unit" }, deadCode: "generated-unused-dispatch",
-    attrs: ["#[must_use]"] };
+    attrs: [rustWordAttribute("must_use")] };
   const models = new Map([
     ["api", { items: [trait("Public", "public", [{ kind: "named", path: "crate::base::Base" }])] }],
     ["base", { items: [{ ...trait("Base", "crate"), functions: [method] },
@@ -50,7 +51,7 @@ test("public trait promotion removes only obsolete dead-code expectations", () =
 
 test("already-public unused traits retain their exact dead-code dispositions", () => {
   const unused = { ...trait("Unused", "public"), deadCode: "authored-declaration",
-    attrs: ["#[doc(hidden)]"], functions: [{ name: "read", generics: emptyRustGenerics,
+    attrs: [rustHiddenAttribute], functions: [{ name: "read", generics: emptyRustGenerics,
       params: [], returnType: { kind: "unit" }, deadCode: "authored-declaration" }] };
   const models = new Map([["internal", { items: [unused] }]]);
   const closed = closeRustModuleTypeVisibility(models);

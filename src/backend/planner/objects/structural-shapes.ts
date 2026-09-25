@@ -1,3 +1,4 @@
+import { rustDeriveAttributes } from "../../target-ast/attributes.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustPlanningContext } from "../context.js";
 import {
@@ -80,7 +81,7 @@ export function planRustStructuralShapeModule(
       kind: "enum",
       name: union.targetName,
       visibility,
-      derives: ["Clone"],
+      attrs: rustDeriveAttributes(["Clone"]),
       ...(deadCode === undefined ? {} : { deadCode }),
       generics: {
         parameters: union.variantNames.map((_, index) => ({ kind: "type", name: `Payload${index}`, bounds: [] })),
@@ -343,7 +344,7 @@ export function planRustStructuralShapeModule(
       name: definition.targetName,
       visibility,
       ...(shapeDeadCode === undefined ? {} : { deadCode: shapeDeadCode }),
-      derives: [...(cloneable ? ["Clone"] : []), ...(copyable ? ["Copy"] : []), ...(defaultable ? ["Default"] : [])],
+      attrs: rustDeriveAttributes([...(cloneable ? ["Clone"] : []), ...(copyable ? ["Copy"] : []), ...(defaultable ? ["Default"] : [])]),
       generics,
       fields,
     });

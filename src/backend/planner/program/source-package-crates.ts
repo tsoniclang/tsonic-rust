@@ -1,3 +1,4 @@
+import { rustHiddenAttribute } from "../../target-ast/attributes.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustSourceFileOutputIdentity } from "../names/source-output-identities.js";
 import type { CargoDependency, CargoManifestPlan } from "../../artifact-model/project/cargo.js";
@@ -142,7 +143,7 @@ export function planRustSourcePackageCrateContent(
           kind: "mod-decl" as const,
           name: component.programModuleName,
           visibility: "public" as const,
-          attrs: ["#[doc(hidden)]"],
+          attrs: [rustHiddenAttribute],
         }]),
     ...(structuralShapeModel === undefined
       ? []
@@ -153,7 +154,7 @@ export function planRustSourcePackageCrateContent(
             ? "public" as const
             : "crate" as const,
           ...(structuralShapeNames.size > 0
-            ? { attrs: ["#[doc(hidden)]"] }
+            ? { attrs: [rustHiddenAttribute] }
             : {}),
         }]),
     ...(initializerFacadeModel === undefined
@@ -162,7 +163,7 @@ export function planRustSourcePackageCrateContent(
           kind: "mod-decl" as const,
           name: initializerFacadeModuleName,
           visibility: "public" as const,
-          attrs: ["#[doc(hidden)]"],
+          attrs: [rustHiddenAttribute],
         }]),
     ...[...topLevelModuleNames].sort(compareNames).map((name): RustItem => {
       const sourcePublic = publicTopLevelModuleNames.has(name);
@@ -172,7 +173,7 @@ export function planRustSourcePackageCrateContent(
         name,
         visibility: sourcePublic || implementationPublic ? "public" : "crate",
         ...(implementationPublic && !sourcePublic
-          ? { attrs: ["#[doc(hidden)]"] }
+          ? { attrs: [rustHiddenAttribute] }
           : {}),
       };
     }),
@@ -539,7 +540,7 @@ function planSyntheticModuleArtifacts(
               name,
               visibility: sourcePublic || implementationPublic ? "public" : "crate",
               ...(implementationPublic && !sourcePublic
-                ? { attrs: ["#[doc(hidden)]"] }
+                ? { attrs: [rustHiddenAttribute] }
                 : {}),
             };
           }),

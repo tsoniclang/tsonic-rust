@@ -1,3 +1,4 @@
+import { type RustAttribute } from "../attributes.js";
 import type {
   RustBlock,
   RustExpr,
@@ -803,9 +804,9 @@ function rustGenericArgumentTypeNames(
 }
 
 function appendRustAttribute(
-  attrs: readonly string[] | undefined,
-  attribute: string,
-): readonly string[] {
+  attrs: readonly RustAttribute[] | undefined,
+  attribute: RustAttribute,
+): readonly RustAttribute[] {
   return attrs?.includes(attribute) === true
     ? attrs
     : [...attrs ?? [], attribute];

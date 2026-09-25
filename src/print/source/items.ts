@@ -1,5 +1,6 @@
 import { printRustBlockStatements } from "./blocks.js";
 import { printRustExpr } from "./expressions/core.js";
+import { printRustAttribute, printRustAttributes as printAttributes } from "./attributes.js";
 import {
   indentText,
   printRustConstArgument,
@@ -24,7 +25,7 @@ import type {
 export function printRustSourceFile(model: RustSourceFileModel): string {
   const sections: string[] = [`// ${model.headerComment}`];
   if (model.innerAttrs !== undefined) {
-    sections.push(...model.innerAttrs);
+    sections.push(...model.innerAttrs.map(attribute => printRustAttribute(attribute, true)));
   }
   let previousWasUse = false;
   for (const item of model.items) {
@@ -69,15 +70,13 @@ export function printRustItem(item: RustItem): string {
       const generics = printRustGenerics(item.generics);
       const declaration = `${printRustVisibility(item.visibility)}struct ${item.name}${generics.parameters}`;
       const header = appendRustWhereEnding(declaration, generics, 0, "{");
-      const derives = item.derives.length === 0 ? "" : `#[derive(${item.derives.join(", ")})]\n`;
       const fields = item.fields.map(printRustStructField).join("\n");
-      return `${printAttributes(item.attrs, 0)}${derives}${header}${fields.length === 0 ? "}" : `\n${fields}\n}`}`;
+      return `${printAttributes(item.attrs, 0)}${header}${fields.length === 0 ? "}" : `\n${fields}\n}`}`;
     }
     case "enum": {
       const generics = printRustGenerics(item.generics);
       const declaration = `${printRustVisibility(item.visibility)}enum ${item.name}${generics.parameters}`;
       const header = appendRustWhereEnding(declaration, generics, 0, "{");
-      const derives = item.derives.length === 0 ? "" : `#[derive(${item.derives.join(", ")})]\n`;
       const variants = item.variants.map((variant) => {
         const fields = variant.fields === undefined
           ? ""
@@ -87,7 +86,7 @@ export function printRustItem(item: RustItem): string {
           : ` = ${variant.discriminant}`;
         return `${printAttributes(variant.attrs, 1)}    ${variant.name}${fields}${discriminant},`;
       }).join("\n");
-      return `${printAttributes(item.attrs, 0)}${derives}${header}\n${variants}\n}`;
+      return `${printAttributes(item.attrs, 0)}${header}\n${variants}\n}`;
     }
     case "trait": {
       const generics = printRustGenerics(item.generics);
@@ -284,9 +283,4 @@ function printRustGenericParameter(parameter: RustGenericParameter): string {
 
 function printRustVisibility(visibility: RustVisibility): string {
   return visibility === "public" ? "pub " : visibility === "crate" ? "pub(crate) " : "";
-}
-
-function printAttributes(attrs: readonly string[] | undefined, depth: number): string {
-  const indent = indentText(depth);
-  return attrs?.map((attr) => `${indent}${attr}\n`).join("") ?? "";
 }

@@ -1,3 +1,4 @@
+import { rustDeriveAttributes, rustListAttribute, rustWordAttribute } from "../../../target-ast/attributes.js";
 import { diagnosticInput, isUpperSnakeName, isValidRustIdentifier, rustProjectTypeHasPublicImplementationAbi } from "../../program/plan-context.js";
 import { rustAuthoredDeadCodeDisposition, rustAuthoredVariantDeadCodeDisposition, rustGeneratedEnumDiscriminantDeadCodeDisposition } from "../../liveness/directives.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
@@ -72,9 +73,8 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
       kind: "struct",
       name: enumName,
       visibility,
-      attrs: ["#[repr(transparent)]"],
+      attrs: [rustListAttribute("repr", [rustWordAttribute("transparent")]), ...rustDeriveAttributes(["Clone", "Copy", "Debug", "PartialEq", "Eq", "Hash"])],
       ...(deadCode === undefined ? {} : { deadCode }),
-      derives: ["Clone", "Copy", "Debug", "PartialEq", "Eq", "Hash"],
       generics: emptyRustGenerics,
       fields: [{
         name: "value",
@@ -122,7 +122,7 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
     name: enumName,
     visibility,
     ...(deadCode === undefined ? {} : { deadCode }),
-    derives: ["Clone", "Copy", "Debug", "PartialEq"],
+    attrs: rustDeriveAttributes(["Clone", "Copy", "Debug", "PartialEq"]),
     variants: variants.map((variant) => {
       const variantDeadCode = rustAuthoredVariantDeadCodeDisposition(
         context,

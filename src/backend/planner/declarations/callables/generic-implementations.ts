@@ -99,7 +99,7 @@ function planImplementation(
   const ownerParams: readonly RustFunctionParam[] = captures.length === 0 ? [] : [{ name: owner,
     type: suspended ? shared(state) : { kind: "reference", referent: state, mutable: false },
   }];
-  return [{ kind: "struct", name: implementation.stateName, visibility: "public", derives: [],
+  return [{ kind: "struct", name: implementation.stateName, visibility: "public",
     generics, fields,
   }, ...(definition.storage === "value" ? genericCallableCopyStateItems(state, generics) : []),
   { ...helper, generics: rustGenericsWithAssociatedBounds([...parameters, ...helper.generics.parameters],

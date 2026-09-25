@@ -1,62 +1,63 @@
+import { rustListAttribute, rustWordAttribute, rustValueAttribute } from "../attributes.js";
 export const rustLintAttributes = Object.freeze({
   blocksInConditions:
-    '#[expect(clippy::blocks_in_conditions, reason = "checked evaluation region")]',
+    rustListAttribute("expect", [rustWordAttribute("clippy::blocks_in_conditions"), rustValueAttribute("reason", { kind: "string", value: "checked evaluation region" })]),
   matchTemporaryScope:
-    '#[expect(clippy::blocks_in_conditions, reason = "Rust 2021 match temporary scope")]',
+    rustListAttribute("expect", [rustWordAttribute("clippy::blocks_in_conditions"), rustValueAttribute("reason", { kind: "string", value: "Rust 2021 match temporary scope" })]),
   collapsibleIf:
-    '#[expect(clippy::collapsible_if, reason = "checked lexical regions")]',
+    rustListAttribute("expect", [rustWordAttribute("clippy::collapsible_if"), rustValueAttribute("reason", { kind: "string", value: "checked lexical regions" })]),
   fieldReassignWithDefault:
-    '#![expect(clippy::field_reassign_with_default, reason = "checked source assignment order")]',
+    rustListAttribute("expect", [rustWordAttribute("clippy::field_reassign_with_default"), rustValueAttribute("reason", { kind: "string", value: "checked source assignment order" })]),
   authoredDeadCode:
-    '#[allow(dead_code, reason = "retains an unused authored declaration")]',
+    rustListAttribute("allow", [rustWordAttribute("dead_code"), rustValueAttribute("reason", { kind: "string", value: "retains an unused authored declaration" })]),
   authoredUnreadField:
-    '#[allow(dead_code, reason = "retains an unread authored field")]',
+    rustListAttribute("allow", [rustWordAttribute("dead_code"), rustValueAttribute("reason", { kind: "string", value: "retains an unread authored field" })]),
   authoredUnusedVariant:
-    '#[allow(dead_code, reason = "retains an unused authored variant")]',
+    rustListAttribute("allow", [rustWordAttribute("dead_code"), rustValueAttribute("reason", { kind: "string", value: "retains an unused authored variant" })]),
   generatedEnumDiscriminant:
-    '#[allow(dead_code, reason = "stores an authored enum discriminant")]',
+    rustListAttribute("allow", [rustWordAttribute("dead_code"), rustValueAttribute("reason", { kind: "string", value: "stores an authored enum discriminant" })]),
   generatedRetainedConstructor:
-    '#[allow(dead_code, reason = "retains an unused generated constructor")]',
+    rustListAttribute("allow", [rustWordAttribute("dead_code"), rustValueAttribute("reason", { kind: "string", value: "retains an unused generated constructor" })]),
   generatedUnconstructedInstance:
-    '#[expect(dead_code, reason = "retains an unconstructed generated instance")]',
+    rustListAttribute("expect", [rustWordAttribute("dead_code"), rustValueAttribute("reason", { kind: "string", value: "retains an unconstructed generated instance" })]),
   generatedUnconstructedShape:
-    '#[expect(dead_code, reason = "retains an unconstructed checked source shape")]',
+    rustListAttribute("expect", [rustWordAttribute("dead_code"), rustValueAttribute("reason", { kind: "string", value: "retains an unconstructed checked source shape" })]),
   generatedUnusedDispatch:
-    '#[expect(dead_code, reason = "retains an unused generated dispatch slot")]',
+    rustListAttribute("expect", [rustWordAttribute("dead_code"), rustValueAttribute("reason", { kind: "string", value: "retains an unused generated dispatch slot" })]),
   generatedUnusedStorage:
-    '#[expect(dead_code, reason = "retains unused generated storage")]',
+    rustListAttribute("expect", [rustWordAttribute("dead_code"), rustValueAttribute("reason", { kind: "string", value: "retains unused generated storage" })]),
   inherentToString:
-    '#[expect(clippy::inherent_to_string, reason = "authored toString contract")]',
+    rustListAttribute("expect", [rustWordAttribute("clippy::inherent_to_string"), rustValueAttribute("reason", { kind: "string", value: "authored toString contract" })]),
   missingSafetyDoc:
-    '#[allow(clippy::missing_safety_doc, reason = "explicit source safety contract")]',
+    rustListAttribute("allow", [rustWordAttribute("clippy::missing_safety_doc"), rustValueAttribute("reason", { kind: "string", value: "explicit source safety contract" })]),
   needlessLifetimes:
-    '#[allow(clippy::needless_lifetimes, reason = "explicit lifetime contract")]',
+    rustListAttribute("allow", [rustWordAttribute("clippy::needless_lifetimes"), rustValueAttribute("reason", { kind: "string", value: "explicit lifetime contract" })]),
   neverLoop:
-    '#[expect(clippy::never_loop, reason = "authored iterator protocol")]',
+    rustListAttribute("expect", [rustWordAttribute("clippy::never_loop"), rustValueAttribute("reason", { kind: "string", value: "authored iterator protocol" })]),
   newReturningOtherType:
-    '#[allow(clippy::new_ret_no_self, reason = "authored static member name")]',
+    rustListAttribute("allow", [rustWordAttribute("clippy::new_ret_no_self"), rustValueAttribute("reason", { kind: "string", value: "authored static member name" })]),
   nonCamelCaseType:
-    '#[allow(non_camel_case_types, reason = "preserves an exact target type identity")]',
+    rustListAttribute("allow", [rustWordAttribute("non_camel_case_types"), rustValueAttribute("reason", { kind: "string", value: "preserves an exact target type identity" })]),
   nonUpperCaseGlobal:
-    '#[allow(non_upper_case_globals, reason = "preserves the authored source name")]',
+    rustListAttribute("allow", [rustWordAttribute("non_upper_case_globals"), rustValueAttribute("reason", { kind: "string", value: "preserves the authored source name" })]),
   pointerDerefOutsideUnsafeFunction:
-    '#[allow(clippy::not_unsafe_ptr_arg_deref, reason = "explicit unsafe region")]',
+    rustListAttribute("allow", [rustWordAttribute("clippy::not_unsafe_ptr_arg_deref"), rustValueAttribute("reason", { kind: "string", value: "explicit unsafe region" })]),
   shouldImplementTrait:
-    '#[expect(clippy::should_implement_trait, reason = "authored method contract")]',
+    rustListAttribute("expect", [rustWordAttribute("clippy::should_implement_trait"), rustValueAttribute("reason", { kind: "string", value: "authored method contract" })]),
   tooManyArguments:
-    '#[expect(clippy::too_many_arguments, reason = "checked source signature")]',
+    rustListAttribute("expect", [rustWordAttribute("clippy::too_many_arguments"), rustValueAttribute("reason", { kind: "string", value: "checked source signature" })]),
   unusedAssignments:
-    '#[expect(unused_assignments, reason = "checked source evaluation order")]',
+    rustListAttribute("expect", [rustWordAttribute("unused_assignments"), rustValueAttribute("reason", { kind: "string", value: "checked source evaluation order" })]),
   unusedAssignmentsInner:
-    '#![expect(unused_assignments, reason = "checked source evaluation order")]',
+    rustListAttribute("expect", [rustWordAttribute("unused_assignments"), rustValueAttribute("reason", { kind: "string", value: "checked source evaluation order" })]),
   unusedVariables:
-    '#[expect(unused_variables, reason = "authored binding drop scope")]',
+    rustListAttribute("expect", [rustWordAttribute("unused_variables"), rustValueAttribute("reason", { kind: "string", value: "authored binding drop scope" })]),
   unusedTypeParameters:
-    '#[expect(clippy::extra_unused_type_parameters, reason = "retains the checked generic callable contract")]',
+    rustListAttribute("expect", [rustWordAttribute("clippy::extra_unused_type_parameters"), rustValueAttribute("reason", { kind: "string", value: "retains the checked generic callable contract" })]),
   unitArguments:
-    '#[expect(clippy::unit_arg, reason = "preserves evaluation and borrow scopes of zero-sized source arguments")]',
+    rustListAttribute("expect", [rustWordAttribute("clippy::unit_arg"), rustValueAttribute("reason", { kind: "string", value: "preserves evaluation and borrow scopes of zero-sized source arguments" })]),
   reflexiveComparison:
-    '#[expect(clippy::eq_op, reason = "authored reflexive comparison")]',
+    rustListAttribute("expect", [rustWordAttribute("clippy::eq_op"), rustValueAttribute("reason", { kind: "string", value: "authored reflexive comparison" })]),
   unusedUnsafe:
-    '#[allow(unused_unsafe, reason = "explicit source unsafe region")]',
+    rustListAttribute("allow", [rustWordAttribute("unused_unsafe"), rustValueAttribute("reason", { kind: "string", value: "explicit source unsafe region" })]),
 });

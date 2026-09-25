@@ -1,5 +1,6 @@
 import { printRustBlockStatements } from "../blocks.js";
 import { escapeRustChar, escapeRustString, printRustPattern } from "../patterns.js";
+import { printRustAttribute } from "../attributes.js";
 import { printRustConstArgument, printRustType } from "../types.js";
 import {
   printRustAssociatedCallOwner,
@@ -146,7 +147,11 @@ export function printRustExpr(expression: RustExpr): string {
           ? ["[", "]"]
           : ["{", "}"];
       const separator = expression.delimiter === "braces" ? " " : "";
-      return `${expression.path}!${separator}${open}${expression.args.map(printRustExpr).join(", ")}${close}`;
+      if (expression.arguments === "repeat" && expression.args.length !== 2) {
+        throw new Error("A Rust repetition macro requires exactly two operands.");
+      }
+      const arguments_ = expression.args.map(printRustExpr).join(expression.arguments === "repeat" ? "; " : ", ");
+      return `${expression.path}!${separator}${open}${arguments_}${close}`;
     }
     case "struct-literal": {
       const members = expression.fields.map((field) => {
@@ -224,15 +229,15 @@ function printRustBlockExpressionContents(
   printValue: (value: RustExpr) => string = printRustExpr,
 ): string {
   const bindings = expression.bindings.map((binding) => {
-    const attributes = binding.attrs?.join(" ") ?? "";
+    const attributes = binding.attrs?.map(attribute => printRustAttribute(attribute)).join(" ") ?? "";
     const initializer = binding.value === undefined ? "" : ` = ${printRustExpr(binding.value)}`;
     const declaration = `let ${binding.mutable === true ? "mut " : ""}${binding.name}${binding.type === undefined ? "" : `: ${printRustType(binding.type)}`}${initializer};`;
     return attributes.length === 0 ? declaration : `${attributes} ${declaration}`;
   });
   return [
-    ...(expression.innerAttrs ?? []),
+    ...(expression.innerAttrs ?? []).map(attribute => printRustAttribute(attribute, true)),
     ...bindings,
-    ...(expression.valueAttrs ?? []),
+    ...(expression.valueAttrs ?? []).map(attribute => printRustAttribute(attribute)),
     printValue(expression.value),
   ].join(" ");
 }
