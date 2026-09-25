@@ -59,7 +59,9 @@ function fixedArraySourceFixture() {
     },
   };
   const context = {
-    ast: { kind: () => undefined, getSourceFile: () => undefined, is: { IsTypeQueryNode: () => false } },
+    ast: { kind: () => undefined, getSourceFile: () => undefined, is: {
+      IsTypeQueryNode: () => false, IsIndexedAccessTypeNode: () => false,
+    } },
     source: { sourceFacts },
     facts: createRustPlanBuilder(sourceFacts),
     extensionId: "tsonic.rust.policy",

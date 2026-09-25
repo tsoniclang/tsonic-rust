@@ -60,6 +60,7 @@ import { rustIntegerKindIsExactlyRepresentableAsFloat64 } from "../../../target-
 import {
   rustNumericPromotionConversion,
   selectRustNumericBinaryPromotion,
+  selectRustNumericComparisonPromotion,
 } from "../numeric/promotion.js";
 
 export type RustBinaryOperatorSelection =
@@ -383,7 +384,7 @@ export function selectRustBinaryOperator(
         operandModes: ["ref", "ref"],
       };
     }
-    const promotion = selectRustNumericBinaryPromotion(left, right);
+    const promotion = selectRustNumericComparisonPromotion(left, right);
     if (promotion !== undefined) {
       return {
         kind: "operator-token",
@@ -440,7 +441,7 @@ export function selectRustBinaryOperator(
     const sameStructuralObject = rustStructuralObjectCarrierValue(left) !== undefined &&
       rustStructuralObjectCarrierValue(right) !== undefined &&
       rustTargetTypeRefEquals(left, right);
-    const numericPromotion = selectRustNumericBinaryPromotion(left, right);
+    const numericPromotion = selectRustNumericComparisonPromotion(left, right);
     const comparable =
       (rustRuntimeUnionContract(left) !== undefined && rustTargetTypeRefEquals(left, right)) ||
       rustRuntimeUnionProjection(left, right) !== undefined ||

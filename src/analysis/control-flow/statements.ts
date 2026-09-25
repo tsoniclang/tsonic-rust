@@ -39,6 +39,7 @@ import {
   Node_Type,
   VariableDeclarationList_Declarations,
   VariableStatement_DeclarationList,
+  sourceIntegerInduction,
 } from "@tsonic/target-api/source";
 import {
   isRustBigIntCarrier,
@@ -139,9 +140,12 @@ export function recordVariableStatementFacts(walk: RustFactWalk, statement: Node
     const predeclared = walk.context.facts.get(declaration, rustRuntimeCarrierKey)?.carrier ??
       walk.context.facts.resolve(declaration, rustRuntimeCarrierKey)?.carrier;
     const initializer = Node_Initializer(walk.context.ast, declaration);
+    const inferredContext = initializer !== undefined && walk.context.ast.is.IsConditionalExpression(initializer) &&
+      predeclared?.kind === "source-primitive" && predeclared.name === "float64"
+      ? undefined : predeclared;
     const initializerCarrier = initializer === undefined
       ? undefined
-      : resolveExpressionCarrier(walk, initializer, sourceFile, annotated ?? predeclared);
+      : resolveExpressionCarrier(walk, initializer, sourceFile, annotated ?? inferredContext);
     if (initializer !== undefined && annotated !== undefined && initializerCarrier !== undefined &&
       !reconcileRequiredCarrier(walk, initializer, initializerCarrier, annotated)) {
       appendRustDiagnostic(walk, "RUST_INITIALIZER_CARRIER_MISMATCH",
@@ -351,17 +355,23 @@ export function recordStatementFacts(
     if (initializer !== undefined) {
       for (const declaration of collectDescendantsOfKind(walk, initializer, KindVariableDeclaration)) {
         const annotated = resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, declaration));
+        const induction = sourceIntegerInduction(declaration, walk.context.ast, walk.context.source.navigation, {
+          sourceFacts: walk.context.source.sourceFacts, semanticsFor: walk.context.semanticsFor,
+        });
+        if (induction !== undefined) resolveExpressionCarrier(walk, induction.bound, sourceFile, undefined);
+        const selected = annotated ?? (induction === undefined ? undefined :
+          resolveRustTargetTypeRef(declaration, rustResolutionContext(walk, declaration), walk.operationOptions));
         const declarationInitializer = Node_Initializer(walk.context.ast, declaration);
         const initializerCarrier = declarationInitializer === undefined
           ? undefined
-          : resolveExpressionCarrier(walk, declarationInitializer, sourceFile, annotated);
+          : resolveExpressionCarrier(walk, declarationInitializer, sourceFile, selected);
         if (declarationInitializer !== undefined && annotated !== undefined && initializerCarrier !== undefined &&
           !reconcileRequiredCarrier(walk, declarationInitializer, initializerCarrier, annotated)) {
           appendRustDiagnostic(walk, "RUST_INITIALIZER_CARRIER_MISMATCH",
             "The initializer cannot be represented by the declaration's exact Rust carrier.", declarationInitializer,
             ["target.capability=rust.initializer-carrier"]);
         }
-        const effective = annotated ?? initializerCarrier;
+        const effective = selected ?? initializerCarrier;
         if (effective !== undefined) {
           setCarrierFact(walk, declaration, effective);
         }

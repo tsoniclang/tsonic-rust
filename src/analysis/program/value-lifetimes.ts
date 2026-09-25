@@ -9,6 +9,7 @@ import {
 export interface RustValueLifetimePlan {
   canMove(reference: Node): boolean;
   canMoveCapture(closure: Node, declaration: Node): boolean;
+  canBorrowStableBinding(reference: Node): boolean;
 }
 
 export function analyzeRustValueLifetimes(input: {
@@ -16,11 +17,13 @@ export function analyzeRustValueLifetimes(input: {
   readonly sourceFiles: readonly SourceFile[];
   readonly navigation: SourceProgramNavigation;
   readonly isOwnedString: (declaration: Node) => boolean;
+  readonly hasSharedIdentityStorage: (declaration: Node) => boolean;
   readonly mayBorrowArgument: (argument: Node) => boolean;
   readonly capturesFor: (closure: Node) => RustClosureCaptureFact | undefined;
 }): RustValueLifetimePlan {
   const movableReferences = new WeakSet<Node>();
   const movableCaptures = new WeakMap<Node, ReadonlySet<Node>>();
+  const stableBindings = new WeakSet<Node>();
   const visit = (node: Node): void => {
     const kind = input.ast.kindName(node);
     if (input.ast.is.IsCallExpression(node) || input.ast.is.IsNewExpression(node)) {
@@ -28,6 +31,13 @@ export function analyzeRustValueLifetimes(input: {
     }
     if (kind === "KindVariableDeclaration" || kind === "KindParameter") {
       classifyDeclaration(node, input, movableReferences);
+      const summary = input.navigation.declarationUseSummary(node);
+      if (input.hasSharedIdentityStorage(node) && enclosingCallable(node, input.ast) !== undefined && !summary.captured &&
+        !summary.exported && !summary.bindingWritten && !summary.memberWritten) {
+        for (const use of summary.uses) {
+          if (input.ast.is.IsIdentifier(use.reference)) stableBindings.add(use.reference);
+        }
+      }
     }
     if (kind === "KindArrowFunction" || kind === "KindFunctionExpression" ||
       kind === "KindClassDeclaration" || kind === "KindClassExpression") {
@@ -49,6 +59,9 @@ export function analyzeRustValueLifetimes(input: {
     },
     canMoveCapture(closure: Node, declaration: Node): boolean {
       return movableCaptures.get(closure)?.has(declaration) === true;
+    },
+    canBorrowStableBinding(reference: Node): boolean {
+      return stableBindings.has(reference);
     },
   });
 }
@@ -94,7 +107,7 @@ function classifyDeclaration(
     use.kind !== "source-linkage" && use.kind !== "type-only");
   for (const { reference } of runtimeUses) {
     if (isExactCallableExitValue(reference, declaration, input) ||
-      input.isOwnedString(declaration) && isLastStraightLineUse(reference, declaration, input)) {
+      input.isOwnedString(declaration) && isLastUseOnPath(reference, declaration, input)) {
       movableReferences.add(reference);
     }
   }
@@ -155,7 +168,7 @@ function isExactCallableExitValue(
   }
 }
 
-function isLastStraightLineUse(
+function isLastUseOnPath(
   reference: Node,
   declaration: Node,
   input: {
@@ -165,15 +178,20 @@ function isLastStraightLineUse(
   },
 ): boolean {
   const callable = enclosingCallable(declaration, input.ast);
-  const body = input.ast.body(callable);
+  const body = declarationLifetimeBlock(declaration, input.ast);
   if (body === undefined || !input.ast.is.IsBlock(body)) return false;
+  if (isInsideRepeatedRegion(reference, declaration, input.ast)) return false;
   const range = input.ast.authoredRange(reference);
   if (range.kind !== "authored") return false;
   const invocations = new Set<Node>();
+  let terminalRegion: Node | undefined;
   let current = reference;
   for (;;) {
     const parent = input.ast.parent(current);
     if (parent === undefined) return false;
+    if (terminalRegion === undefined && input.ast.is.IsBlock(parent) && blockEndsLifetime(parent, declaration, callable, input.ast)) {
+      terminalRegion = parent;
+    }
     if (parent === body) break;
     const kind = input.ast.kindName(parent);
     if (input.ast.is.IsCallExpression(parent) || input.ast.is.IsNewExpression(parent)) invocations.add(parent);
@@ -181,16 +199,60 @@ function isLastStraightLineUse(
       kind !== "KindCallExpression" && kind !== "KindNewExpression" &&
       kind !== "KindReturnStatement" && kind !== "KindExpressionStatement" &&
       kind !== "KindVariableDeclaration" && kind !== "KindVariableDeclarationList" &&
-      kind !== "KindVariableStatement") return false;
+      kind !== "KindVariableStatement" && kind !== "KindBlock" &&
+      !(kind === "KindIfStatement" && input.ast.as.AsIfStatement(parent)?.Expression !== current)) return false;
     current = parent;
   }
   return input.navigation.declarationUses(declaration).every(use => {
     if (use.kind === "source-linkage" || use.kind === "type-only" || use.reference === reference) return true;
     if (use.captured) return false;
+    if (terminalRegion !== undefined && !isWithin(use.reference, terminalRegion, input.ast)) return true;
     const other = input.ast.authoredRange(use.reference);
     return other.kind === "authored" && other.end <= range.start &&
       !hasOverlappingArgumentBorrow(use.reference, invocations, input);
   });
+}
+
+function declarationLifetimeBlock(declaration: Node, ast: AstReader): Node | undefined {
+  if (ast.kindName(declaration) === "KindParameter" || ast.variableDeclarationKind(declaration) === "var") {
+    return ast.body(enclosingCallable(declaration, ast));
+  }
+  let current = ast.parent(declaration);
+  while (current !== undefined) {
+    if (ast.is.IsBlock(current)) return current;
+    if (isCallableKind(ast.kindName(current))) return ast.body(current);
+    current = ast.parent(current);
+  }
+  return undefined;
+}
+
+function isWithin(node: Node, ancestor: Node, ast: AstReader): boolean {
+  let current: Node | undefined = node;
+  while (current !== undefined && current !== ancestor) current = ast.parent(current);
+  return current === ancestor;
+}
+
+function blockEndsLifetime(block: Node, declaration: Node, callable: Node | undefined, ast: AstReader): boolean {
+  const statements = ast.statements(block);
+  const last = statements[statements.length - 1];
+  const kind = last === undefined ? undefined : ast.kindName(last);
+  if (kind !== "KindContinueStatement" && kind !== "KindBreakStatement" &&
+    kind !== "KindReturnStatement" && kind !== "KindThrowStatement") return false;
+  if (last === undefined || (ast.is.IsContinueStatement(last) ? ast.as.AsContinueStatement(last)?.Label :
+    ast.is.IsBreakStatement(last) ? ast.as.AsBreakStatement(last)?.Label : undefined) !== undefined) return false;
+  let current = ast.parent(block);
+  let exitedRegion: Node | undefined;
+  while (current !== undefined && current !== callable) {
+    const ownerKind = ast.kindName(current);
+    if (ast.is.IsTryStatement(current) || isCallableKind(ownerKind)) return false;
+    if (exitedRegion === undefined && (ownerKind === "KindForStatement" ||
+      ownerKind === "KindForOfStatement" || ownerKind === "KindForInStatement" ||
+      ownerKind === "KindWhileStatement" || ownerKind === "KindDoStatement" ||
+      kind === "KindBreakStatement" && ownerKind === "KindSwitchStatement")) exitedRegion = current;
+    current = ast.parent(current);
+  }
+  return current === callable && (kind === "KindReturnStatement" || kind === "KindThrowStatement" ||
+    exitedRegion !== undefined && isWithin(declaration, exitedRegion, ast));
 }
 
 function hasOverlappingArgumentBorrow(
@@ -260,7 +322,7 @@ function isInsideRepeatedRegion(
   declaration: Node,
   ast: AstReader,
 ): boolean {
-  const declarationCallable = enclosingCallable(declaration, ast);
+  const declarationCallable = declarationLifetimeBlock(declaration, ast);
   let current = ast.parent(reference);
   while (current !== undefined && current !== declarationCallable) {
     const kind = ast.kindName(current);

@@ -136,6 +136,7 @@ export function resolveExpressionCarrier(
           expression,
           sourceFile,
           contextualExpected ?? existing.carrier,
+          purpose,
         );
         if (callableCarrier === undefined ||
           !rustTargetTypeRefEquals(callableCarrier, existing.carrier)) {
@@ -220,6 +221,7 @@ export function resolveExpressionCarrier(
       expression,
       sourceFile,
       contextualExpected,
+      purpose,
     );
     return finalize(resolved);
   } finally {
@@ -456,9 +458,10 @@ function resolveIndependentValueOperation(
     resolveExpressionCarrier(walk, argument, sourceFile, undefined, "operation");
     return;
   }
+  const unary = kind === KindPrefixUnaryExpression || kind === KindPostfixUnaryExpression;
   if (kind === KindParenthesizedExpression || kind === KindSatisfiesExpression ||
-    kind === KindSpreadElement) {
-    const inner = Node_Expression(ast, argument);
+    kind === KindSpreadElement || unary) {
+    const inner = unary ? Node_Operand(ast, argument) : Node_Expression(ast, argument);
     if (inner !== undefined) {
       if (kind === KindSpreadElement && ast.is.IsArrayLiteralExpression(inner) &&
         ast.as.AsArrayLiteralExpression(inner)?.Elements?.Nodes.length === 0) {
@@ -466,6 +469,9 @@ function resolveIndependentValueOperation(
         return;
       }
       resolveIndependentValueOperation(walk, inner, sourceFile);
+      if (kind !== KindSpreadElement && walk.context.facts.getRuntimeCarrierFact(inner) !== undefined) {
+        resolveExpressionCarrier(walk, argument, sourceFile, undefined, "operation");
+      }
     }
   }
 }

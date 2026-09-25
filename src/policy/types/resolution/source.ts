@@ -5,6 +5,7 @@ import {
   Node_Operand,
   TypeReferenceNode_TypeName,
   TypeOperatorNode_Type,
+  sourceIntegerInduction,
 } from "@tsonic/target-api/source";
 import {
   rustBigIntTargetType,
@@ -60,6 +61,8 @@ import { resolveRustAuthoredBroadSourceValueTargetType } from "./broad-values.js
 import { resolveRustInferredObjectUnion } from "./inferred-unions.js";
 import { resolveRustConditionalAlias } from "./type-families.js";
 import { tsonicMemoryFieldBindingFactKey, selectTsonicMemoryFieldBinding } from "@tsonic/source-core/facts";
+import { selectRustConditionalNumericCarrier } from "../conditional-numeric-carrier.js";
+import { resolveRustProviderIndexedAccess } from "./indexed-access.js";
 
 export function resolveRustTargetTypeRef(
   subject: ExtensionFactSubject | undefined,
@@ -133,6 +136,19 @@ export function resolveRustTargetTypeRef(
     return pointee === undefined ? undefined : rustSourceLocationTargetType(pointee);
   }
   const node = asNode(subject, context);
+  const declaration = node === undefined ? undefined :
+    context.ast.is.IsVariableDeclaration(node) ? node : context.source.navigation.referenceFor(node)?.declaration;
+  const induction = declaration === undefined ? undefined
+    : sourceIntegerInduction(declaration, context.ast, context.source.navigation, {
+        sourceFacts: context.source.sourceFacts, semanticsFor: context.semanticsFor,
+      });
+  if (induction !== undefined) {
+    const bound = resolveRustTargetTypeRef(induction.bound, context, options);
+    if (bound?.kind === "source-primitive" &&
+      ["int8", "uint8", "int16", "uint16", "int32", "uint32", "int64", "uint64", "int128", "uint128", "native-int", "native-uint"].includes(bound.name)) {
+      return bound;
+    }
+  }
   const existing = context.facts.getRuntimeCarrierFact(node)?.carrier;
   if (existing !== undefined) {
     return existing;
@@ -168,6 +184,15 @@ export function resolveRustTargetTypeRef(
   const conditional = node === undefined ? undefined
     : resolveRustConditionalAlias(node, context, options, new Set<object>());
   if (conditional !== undefined) return conditional.carrier;
+  if (node !== undefined && context.ast.is.IsConditionalExpression(node)) {
+    const expression = context.ast.as.AsConditionalExpression(node);
+    if (expression?.WhenTrue !== undefined && expression.WhenFalse !== undefined) {
+      const carrier = selectRustConditionalNumericCarrier(expression.WhenTrue, expression.WhenFalse,
+        resolveRustTargetTypeRef(expression.WhenTrue, context, options),
+        resolveRustTargetTypeRef(expression.WhenFalse, context, options), context.ast);
+      if (carrier !== undefined) return carrier;
+    }
+  }
   const syntax = node === undefined
     ? undefined
     : resolveRustTargetTypeSyntax(node, context, options, new Set<object>());
@@ -192,6 +217,8 @@ export function resolveRustTargetTypeSyntax(
   options: RustTargetTypeResolutionOptions,
   resolving: Set<object>,
 ): TargetTypeRef | undefined {
+  const indexed = resolveRustProviderIndexedAccess(node, context, options);
+  if (indexed !== undefined) return indexed;
   if (context.ast.is.IsTypeQueryNode(node)) {
     const expression = context.ast.as.AsTypeQueryNode(node)?.ExprName;
     const declaration = context.source.navigation.referenceFor(expression)?.declaration;
@@ -585,17 +612,19 @@ function constIntegerText(
   node: Node,
   context: RustTargetTypeResolutionContext,
 ): string | undefined {
-  if (context.ast.kindName(node) === "KindNumericLiteral") {
-    return parseSourceIntegerLiteral(context.ast.text(node))?.toString(10);
+  if (context.ast.kindName(node) === "KindNumericLiteral" ||
+    context.ast.kindName(node) === "KindBigIntLiteral") {
+    return parseSourceIntegerLiteral(context.ast.text(node).replace(/n$/, ""))?.toString(10);
   }
   if (context.ast.kindName(node) !== "KindPrefixUnaryExpression") {
     return undefined;
   }
   const operand = Node_Operand(context.ast, node);
-  if (operand === undefined || context.ast.kindName(operand) !== "KindNumericLiteral") {
+  if (operand === undefined || (context.ast.kindName(operand) !== "KindNumericLiteral" &&
+    context.ast.kindName(operand) !== "KindBigIntLiteral")) {
     return undefined;
   }
-  const value = parseSourceIntegerLiteral(context.ast.text(operand));
+  const value = parseSourceIntegerLiteral(context.ast.text(operand).replace(/n$/, ""));
   if (value === undefined) return undefined;
   const operator = context.ast.operatorKindName(node);
   return operator === "KindMinusToken"

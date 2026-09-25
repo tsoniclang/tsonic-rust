@@ -116,7 +116,10 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
     case "uint16":
     case "int32":
     case "uint32":
+    case "int64":
     case "uint64":
+    case "int128":
+    case "uint128":
     case "native-int":
     case "native-uint":
     case "float32":

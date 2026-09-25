@@ -2,7 +2,7 @@ import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_In
 import type { Node } from "@tsonic/tsts";
 import { createRustPlanBuilder } from "../facts/plan-store.js";
 import { rustSourceCallableReturnFactKey } from "../facts/keys.js";
-import { rustOperationContext, rustResolutionContext, selectExpressionOperation } from "../program/walk.js";
+import { rustOperationContext, rustResolutionContext } from "../program/walk.js";
 import type { RustFactWalk } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { selectRustNumericBinaryPromotion } from "../../policy/operations/numeric/promotion.js";
@@ -12,6 +12,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
 import { checkedPropertySelectionInput, selectRustCheckedPropertyAccess } from "../operations/provider/properties.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
+import { selectRustConditionalNumericCarrier } from "../../policy/types/conditional-numeric-carrier.js";
 
 export function selectRustInferredNumericReturn(
   walk: RustFactWalk,
@@ -46,12 +47,13 @@ export function selectRustInferredNumericReturn(
     let selected: TargetTypeRef | undefined;
     for (const carrier of carriers) {
       if (carrier !== undefined && isRustAbsenceCarrier(carrier) && rustOptionElementCarrier(baseline) !== undefined) continue;
-      if (carrier === undefined || (!isRustNumericCarrier(carrier) && !isRustBigIntCarrier(carrier))) {
+      const numeric = rustOptionElementCarrier(baseline) === undefined ? carrier : rustOptionElementCarrier(carrier) ?? carrier;
+      if (numeric === undefined || (!isRustNumericCarrier(numeric) && !isRustBigIntCarrier(numeric))) {
         selected = undefined;
         break;
       }
-      selected = selected === undefined ? carrier : rustTargetTypeRefEquals(selected, carrier)
-        ? selected : selectRustNumericBinaryPromotion(selected, carrier)?.carrier;
+      selected = selected === undefined ? numeric : rustTargetTypeRefEquals(selected, numeric)
+        ? selected : selectRustNumericBinaryPromotion(selected, numeric)?.carrier;
       if (selected === undefined) break;
     }
     const result = expressions.length === 0 ? baseline : selected === undefined ? undefined
@@ -80,6 +82,14 @@ export function selectRustInferredNumericReturn(
             (ast.variableDeclarationKind(reference) === "const" || unwritten) && initializer !== undefined) {
             return expressionCarrier(initializer);
           }
+        }
+        if (ast.is.IsConditionalExpression(expression)) {
+          const conditional = ast.as.AsConditionalExpression(expression);
+          if (conditional?.WhenTrue === undefined || conditional.WhenFalse === undefined) return undefined;
+          const left = expressionCarrier(conditional.WhenTrue);
+          const right = expressionCarrier(conditional.WhenFalse);
+          return selectRustConditionalNumericCarrier(conditional.WhenTrue, conditional.WhenFalse, left, right, ast) ??
+            resolveRustTargetTypeRef(expression, context, walk.operationOptions);
         }
         if (kind === "KindCallExpression") {
           const semantics = walk.context.semanticsFor(expression);
@@ -126,8 +136,9 @@ export function selectRustInferredNumericReturn(
           facts.set(operand, rustRuntimeCarrierKey, { carrier });
         }
         const sourceFile = ast.getSourceFile(expression);
-        if (sourceFile !== undefined && kind !== "KindIdentifier") selectExpressionOperation(probe, expression, sourceFile);
-        return resolveRustTargetTypeRef(expression, context, walk.operationOptions);
+        return sourceFile !== undefined && kind !== "KindIdentifier"
+          ? resolveExpressionCarrier(probe, expression, sourceFile, undefined)
+          : resolveRustTargetTypeRef(expression, context, walk.operationOptions);
       } finally {
         active.delete(expression);
       }

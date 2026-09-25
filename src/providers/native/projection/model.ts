@@ -34,6 +34,7 @@ export interface ProjectionContext {
   readonly localTypeLocations: ReadonlyMap<string, {
     readonly sourceExportName: string;
     readonly targetPath: readonly string[];
+    readonly genericParameters: readonly RustCompilerGenericParameter[];
   }>;
   readonly defaultGenericBindings?: import("../model/rustdoc-types.js").RustCompilerSubstitutions;
   readonly genericNames?: ReadonlyMap<string, string>;

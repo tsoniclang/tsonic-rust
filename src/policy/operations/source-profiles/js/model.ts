@@ -86,7 +86,7 @@ export type JsCarrierRef =
   | { readonly ref: "cb-array-comparator"; readonly arity: 0 | 1 | 2 }
   | { readonly ref: "cb-map-for-each"; readonly arity: 0 | 1 | 2 | 3 }
   | { readonly ref: "cb-set-for-each"; readonly arity: 0 | 1 | 2 | 3 }
-  | { readonly ref: "int8" | "uint8" | "int16" | "uint16" | "int32" | "uint32" | "uint64" | "native-int" | "native-uint" | "float32" }
+  | { readonly ref: "int8" | "uint8" | "int16" | "uint16" | "int32" | "uint32" | "int64" | "uint64" | "int128" | "uint128" | "native-int" | "native-uint" | "float32" }
   | { readonly ref: "jsvalue" }
   | { readonly ref: "float64" }
   | { readonly ref: "infer" }

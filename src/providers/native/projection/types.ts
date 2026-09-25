@@ -18,8 +18,8 @@ import {
   requireSourceGenericName,
   rustCompilerTypeText,
   standardSourceGenericArguments,
-  standardTargetGenericArguments,
-  standardTargetGenericDefaults,
+  targetGenericArgumentsForApplication,
+  targetGenericDefaultsForApplication,
   withProjectionGenericParameters,
 } from "./utilities.js";
 import {
@@ -406,13 +406,13 @@ export function targetTypeFor(
         canonicalCompilerTypePathKey(type),
       );
       if (standard !== undefined) {
-        const arguments_ = standardTargetGenericArguments(
+        const arguments_ = targetGenericArgumentsForApplication(
           type,
           standard,
           context,
           position,
         );
-        const genericDefaults = standardTargetGenericDefaults(
+        const genericDefaults = targetGenericDefaultsForApplication(
           type,
           standard,
           context,
@@ -442,9 +442,11 @@ export function targetTypeFor(
           ? rustPath(context.dependency.targetCrateName, type.modulePath, type.name)
           : type.identity.canonicalPath.join("::"));
       recordCarrierPath(context.carrierPaths, id, path);
-      const genericArguments = type.genericArguments.map((argument) =>
-        targetGenericArgumentFor(argument, context, position, pathResolution));
-      return rustNamedTargetType(id, path, genericArguments);
+      const genericArguments = local === undefined
+        ? type.genericArguments.map((argument) => targetGenericArgumentFor(argument, context, position, pathResolution))
+        : targetGenericArgumentsForApplication(type, local, context, position);
+      const genericDefaults = local === undefined ? [] : targetGenericDefaultsForApplication(type, local, context, position);
+      return rustNamedTargetType(id, path, genericArguments, genericDefaults);
     }
   }
 }
@@ -525,11 +527,14 @@ export function providerGenericParametersFor(
       });
     }
     if (parameter.kind === "const") {
+      const scalar = parameter.type.kind === "primitive" ? parameter.type.name : undefined;
+      const constraint: ProviderTypeExpression = scalar !== undefined &&
+          /^(?:[iu](?:8|16|32|64|128|size))$/.test(scalar)
+        ? { kind: "union", types: [{ kind: "number" }, { kind: "bigint" }] }
+        : sourceTypeFor(parameter.type, selectedContext, "parameter");
       return Object.freeze({
         name,
-        constraints: Object.freeze([
-          sourceTypeFor(parameter.type, selectedContext, "parameter"),
-        ]),
+        constraints: Object.freeze([constraint]),
         ...(parameter.defaultValue === undefined
           ? {}
           : { defaultType: sourceConstFor(parameter.defaultValue, selectedContext) }),

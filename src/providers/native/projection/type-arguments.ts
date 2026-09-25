@@ -148,12 +148,9 @@ export function sourceConstFor(
   switch (value.kind) {
     case "integer": {
       const selected = Number(value.value);
-      if (!Number.isSafeInteger(selected) || String(selected) !== value.value) {
-        throw new Error(
-          `Rust const integer '${value.value}' is outside exact TypeScript literal range.`,
-        );
-      }
-      return { kind: "literal", value: selected };
+      return Number.isSafeInteger(selected) && String(selected) === value.value
+        ? { kind: "literal", value: selected }
+        : { kind: "bigint-literal", value: value.value };
     }
     case "boolean":
     case "char":

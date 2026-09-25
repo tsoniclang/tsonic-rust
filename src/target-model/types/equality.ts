@@ -13,6 +13,7 @@ import type {
 import {
   rustLifetimesEqual,
 } from "../lifetimes/index.js";
+import { rustNamedTypeCarrierValue } from "./carriers/native.js";
 import type {
   RustLifetimeBinder,
   RustLifetimeRef,
@@ -311,9 +312,21 @@ function rustTargetTypeRefEqualsValidated(
         genericArgumentListsEqual(left.genericArguments, right.genericArguments, lifetimeContext) &&
         optionalTargetTypesEqual(left.trait, right.trait, lifetimeContext) &&
         rustTargetTypeRefEqualsValidated(left.owner, right.owner, lifetimeContext);
-    case "target-specific":
+    case "target-specific": {
+      const leftNamed = rustNamedTypeCarrierValue(left);
+      const rightNamed = rustNamedTypeCarrierValue(right);
+      if (leftNamed !== undefined || rightNamed !== undefined) {
+        return leftNamed !== undefined && rightNamed !== undefined &&
+          leftNamed.id === rightNamed.id && leftNamed.path === rightNamed.path &&
+          genericArgumentListsEqual(leftNamed.genericArguments, rightNamed.genericArguments, lifetimeContext) &&
+          closedMetadataEquals(leftNamed.traits, rightNamed.traits) &&
+          leftNamed.upcasts.length === rightNamed.upcasts.length &&
+          leftNamed.upcasts.every((upcast, index) => upcast.path === rightNamed.upcasts[index]?.path &&
+            rustTargetTypeRefEqualsValidated(upcast.target, rightNamed.upcasts[index]!.target, lifetimeContext));
+      }
       return right.kind === left.kind && left.target === right.target && left.name === right.name &&
         closedMetadataEquals(left.value, right.value);
+    }
   }
 }
 
