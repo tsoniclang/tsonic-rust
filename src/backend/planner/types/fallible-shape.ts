@@ -25,7 +25,7 @@ export type RustFallibleShapeOptions =
 export function rustExpressionUsesTryInCurrentRegion(expression: RustExpr): boolean {
   switch (expression.kind) {
     case "try":
-      return true;
+      return expression.nativeReturn !== true || rustExpressionUsesTryInCurrentRegion(expression.expr);
     case "option-try":
       return rustExpressionUsesTryInCurrentRegion(expression.expr);
     case "bottom":
@@ -135,7 +135,7 @@ function applyRustResultExpression(
   if (expression.kind === "bottom") {
     return expression;
   }
-  if (expression.kind === "try" &&
+  if (expression.kind === "try" && expression.nativeReturn !== true &&
     rustTypeEquals(expression.resultErrorType, boundary.errorType)) {
     if (rustTypeEquals(expression.operandErrorType, boundary.errorType)) {
       return expression.expr;

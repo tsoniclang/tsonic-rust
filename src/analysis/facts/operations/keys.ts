@@ -50,7 +50,7 @@ export const rustTypedLocationPlanKey: RustPlanKey<RustTypedLocationPlan> =
   defineRustPlanKey("typedLocationPlan", rustTypedLocationPlanEquals);
 
 export const rustBindingStorageFactKey: RustPlanKey<{
-  readonly storage: "location" | "cell";
+  readonly storage: "location" | "cell" | "borrow-cell";
   readonly valueCarrier: TargetTypeRef;
 }> = defineRustPlanKey(
   "bindingStorage",
@@ -63,7 +63,7 @@ export interface RustClosureCaptureFact {
     readonly declaration: Node;
     readonly reference: Node;
     readonly carrier: TargetTypeRef;
-    readonly storage: "value" | "location" | "cell";
+    readonly storage: "value" | "location" | "cell" | "borrow-cell";
   }[];
   readonly recursiveDeclaration?: Node;
 }

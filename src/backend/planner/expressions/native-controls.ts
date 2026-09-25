@@ -6,6 +6,10 @@ import { diagnosticInput } from "../program/plan-context.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
+import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustSourceCallableReturnFactKey } from "../../../analysis/facts/keys.js";
+import { rustNamedTypeCarrierValue, rustTargetGenericTypeArguments } from "../../../target-model/types/index.js";
+import { planRustReturnExpression } from "../statements/completion-exits.js";
+import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 
 export function planRustNativeControl(
   call: Node,
@@ -26,8 +30,24 @@ export function planRustNativeControl(
   const values = operands.map(operand => planExpression(operand, context));
   if (values.some(value => value === undefined)) return undefined;
   if (fact.kind === "native-range") {
-    return { kind: "struct-literal", path: fact.path,
-      fields: [{ name: "start", value: values[0]! }, { name: "end", value: values[1]! }] };
+    return { kind: "range", start: values[0]!, end: values[1]! };
+  }
+  const callableReturn = context.callableDeclaration === undefined ? undefined :
+    context.input.program.facts.getFact(context.callableDeclaration, rustAsyncFunctionFactKey)?.outputCarrier ??
+    context.input.program.facts.getFact(context.callableDeclaration, rustSourceCallableReturnFactKey)?.returnCarrier;
+  const operand = rustNamedTypeCarrierValue(fact.operandCarrier);
+  const target = rustNamedTypeCarrierValue(callableReturn);
+  const operandArguments = operand === undefined ? [] : rustTargetGenericTypeArguments(operand.genericArguments);
+  const targetArguments = target === undefined ? [] : rustTargetGenericTypeArguments(target.genericArguments);
+  if (context.callableDeclaration !== fact.callableDeclaration || !rustTargetTypeRefEquals(callableReturn, fact.callableReturnCarrier) ||
+    operand === undefined || target === undefined || operand.id !== target.id ||
+    operandArguments.length !== 2 || targetArguments.length !== 2 ||
+    !rustTargetTypeRefEquals(operandArguments[0], fact.resultCarrier) ||
+    !rustTargetTypeRefEquals(operandArguments[1], fact.operandErrorCarrier) ||
+    !rustTargetTypeRefEquals(targetArguments[1], fact.resultErrorCarrier)) {
+    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, call),
+      "rust.backend.native-control-return", "Native propagation conflicts with its sealed callable return contract."));
+    return undefined;
   }
   const operandErrorType = rustTypeFromCarrierInContext(fact.operandErrorCarrier, context);
   const resultErrorType = rustTypeFromCarrierInContext(fact.resultErrorCarrier, context);
@@ -36,5 +56,22 @@ export function planRustNativeControl(
       "rust.backend.native-control-error", "Native propagation requires exact renderable error carriers."));
     return undefined;
   }
-  return { kind: "try", expr: values[0]!, operandErrorType, resultErrorType };
+  const sourceFallible = context.callableDeclaration !== undefined &&
+    context.input.program.facts.getFact(context.callableDeclaration, rustFallibleFactKey) !== undefined;
+  if (context.completionBoundary === undefined && !sourceFallible) {
+    return { kind: "try", expr: values[0]!, nativeReturn: true, operandErrorType, resultErrorType };
+  }
+  const names = context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, call, []);
+  const success = allocateRustSyntheticName(names, "result_value");
+  const failure = allocateRustSyntheticName(names, "result_error");
+  return { kind: "match", expression: values[0]!, arms: [
+    { pattern: { kind: "tuple-variant", path: "Ok", elements: [{ kind: "binding", name: success }] },
+      expression: { kind: "path", path: success } },
+    { pattern: { kind: "tuple-variant", path: "Err", elements: [{ kind: "binding", name: failure }] },
+      expression: planRustReturnExpression({ kind: "call", path: "Err", args: [
+        { kind: "associated-call", owner: resultErrorType,
+          trait: { kind: "named", path: "core::convert::From", genericArguments: [{ kind: "type", type: operandErrorType }] },
+          method: "from", args: [{ kind: "path", path: failure }] },
+      ] }, context, sourceFallible) },
+  ] };
 }

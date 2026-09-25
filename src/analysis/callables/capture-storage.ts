@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import { sourceBindingHasSingleCaptureOwner } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { isRustCopyCarrier } from "../../target-model/types/index.js";
+import { isRustCopyCarrier, rustCarrierSupportsClone } from "../../target-model/types/index.js";
 import { rustBindingStorageFactKey, rustMutatedBindingFactKey } from "../facts/keys.js";
 
 export function rustCapturedBindingStorage(
@@ -12,7 +12,7 @@ export function rustCapturedBindingStorage(
   owner: Node,
   carrier: TargetTypeRef | undefined,
   permitSingleOwner: boolean,
-): "value" | "location" | "cell" | undefined {
+): "value" | "location" | "cell" | "borrow-cell" | undefined {
   const cached = walk.capturedBindingStorage.get(declaration);
   if (cached !== undefined) {
     return cached;
@@ -30,8 +30,8 @@ export function rustCapturedBindingStorage(
     walk.context.source.navigation.bindingWritesWithin(selected.symbol, sourceFile).length > 0;
   const storage = !mutated ? "value" : permitSingleOwner &&
       walk.context.facts.get(declaration, rustBindingStorageFactKey) === undefined &&
-      isRustCopyCarrier(carrier) && singleOwnerDirectBinding(walk, declaration, owner)
-    ? "cell" : "location";
+      rustCarrierSupportsClone(carrier, walk.context.typeDefinitions) && singleOwnerDirectBinding(walk, declaration, owner)
+    ? isRustCopyCarrier(carrier) ? "cell" : "borrow-cell" : "location";
   walk.capturedBindingStorage.set(declaration, storage);
   return storage;
 }
@@ -59,4 +59,3 @@ function singleOwnerDirectBinding(walk: RustFactWalk, declaration: Node, owner: 
       "KindDoStatement", "KindForStatement", "KindSwitchStatement", "KindCaseClause", "KindExpressionStatement"].includes(ast.kindName(parent));
   });
 }
-

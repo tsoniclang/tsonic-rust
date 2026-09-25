@@ -265,6 +265,7 @@ export type RustExpr =
   | {
       readonly kind: "try";
       readonly expr: RustExpr;
+      readonly nativeReturn?: true;
       readonly resultErrorType: RustType;
       readonly operandErrorType: RustType;
     }

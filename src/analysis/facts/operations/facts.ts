@@ -20,12 +20,13 @@ export type RustTargetOperationFact =
       readonly operationId: string;
       readonly operands: readonly Node[];
       readonly elementCarrier: TargetTypeRef;
-      readonly path: string;
       readonly resultCarrier: TargetTypeRef;
     }
   | {
       readonly kind: "native-propagation";
       readonly operationId: string;
+      readonly callableDeclaration: Node;
+      readonly callableReturnCarrier: TargetTypeRef;
       readonly operandExpression: Node;
       readonly operandCarrier: TargetTypeRef;
       readonly operandErrorCarrier: TargetTypeRef;

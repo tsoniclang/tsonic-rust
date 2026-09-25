@@ -33,9 +33,10 @@ export function planRustReturnExit(
   };
 }
 
-export function planRustFallibleReturnExpression(
+export function planRustReturnExpression(
   expression: RustExpr,
   context: RustPlanContext,
+  rootResultWrapped: boolean,
 ): RustExpr {
   if (expression.kind === "bottom") {
     return expression;
@@ -44,7 +45,7 @@ export function planRustFallibleReturnExpression(
   if (boundary === undefined) {
     return {
       kind: "return-expression",
-      expr: { kind: "call", path: "Ok", args: [expression] },
+      expr: rootResultWrapped ? { kind: "call", path: "Ok", args: [expression] } : expression,
     };
   }
   markOutermostReturnDispatch(boundary);

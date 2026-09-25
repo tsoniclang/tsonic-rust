@@ -46,7 +46,7 @@ export function resolveRustNativeControl(
     if (selectedResult !== undefined && native !== undefined && element !== undefined &&
       operands.length === 2 && carriers.every(carrier => rustTargetTypeRefEquals(carrier, element))) {
       setRustOperationFact(walk, expression, {
-        kind: "native-range", operationId: "tsonic.rust.range", path: native.path,
+        kind: "native-range", operationId: "tsonic.rust.range",
         operands: operands.map(operand => operand.expression), elementCarrier: element,
         resultCarrier: selectedResult,
       });
@@ -63,12 +63,13 @@ export function resolveRustNativeControl(
     const target = rustNamedTypeCarrierValue(returnCarrier);
     const argumentsList = operand === undefined ? [] : rustTargetGenericTypeArguments(operand.genericArguments);
     const targetArguments = target === undefined ? [] : rustTargetGenericTypeArguments(target.genericArguments);
-    if (selectedResult !== undefined && operandCarrier !== undefined && declaration !== undefined &&
+    if (selectedResult !== undefined && operandCarrier !== undefined && returnCarrier !== undefined && declaration !== undefined &&
       operands.length === 1 && operand !== undefined && target !== undefined && operand.id === target.id &&
       argumentsList.length === 2 && targetArguments.length === 2 &&
       rustTargetTypeRefEquals(selectedResult, argumentsList[0])) {
       setRustOperationFact(walk, expression, {
         kind: "native-propagation", operationId: "tsonic.rust.propagate",
+        callableDeclaration: declaration, callableReturnCarrier: returnCarrier,
         operandExpression: operands[0]!.expression, operandCarrier,
         operandErrorCarrier: argumentsList[1]!, resultErrorCarrier: targetArguments[1]!,
         resultCarrier: selectedResult,

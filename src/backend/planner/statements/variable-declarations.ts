@@ -94,7 +94,7 @@ function planVariableDeclaration(
     : context.input.program.facts.getRuntimeCarrierFact(typeNode)?.carrier;
   let rustType: RustType | undefined;
   if (typeNode !== undefined) {
-    const renderedCarrier = locationStorage === undefined || locationStorage.storage === "cell"
+    const renderedCarrier = locationStorage?.storage !== "location"
       ? annotatedCarrier
       : rustLocationTargetType(locationStorage.valueCarrier);
     rustType = rustTypeFromCarrierInContext(renderedCarrier, context);
@@ -117,7 +117,7 @@ function planVariableDeclaration(
     return undefined;
   }
   if (rustType === undefined) {
-    const renderedCarrier = locationStorage === undefined || locationStorage.storage === "cell"
+    const renderedCarrier = locationStorage?.storage !== "location"
       ? declarationCarrier
       : rustLocationTargetType(locationStorage.valueCarrier);
     rustType = rustTypeFromCarrierInContext(renderedCarrier, context);
@@ -142,8 +142,8 @@ function planVariableDeclaration(
     return undefined;
   }
   const ownedBinding = declarationCarrier.kind !== "pointer" && declarationCarrier.kind !== "reference";
-  if (locationStorage?.storage === "cell" && rustType !== undefined) {
-    rustType = { kind: "named", path: "core::cell::Cell", genericArguments: [{ kind: "type", type: rustType }] };
+  if (locationStorage !== undefined && locationStorage.storage !== "location" && rustType !== undefined) {
+    rustType = rustInlineBindingStorageType(locationStorage.storage, rustType);
   }
   if (nativeArray !== undefined) {
     rustType = nativeRustArrayType(declaration, context);
@@ -174,8 +174,8 @@ function planVariableDeclaration(
     }
     if (locationStorage === undefined) {
       init = planned;
-    } else if (locationStorage.storage === "cell") {
-      init = { kind: "call", path: "core::cell::Cell::new", args: [planned] };
+    } else if (locationStorage.storage !== "location") {
+      init = { kind: "call", path: `${rustInlineBindingStoragePath(locationStorage.storage)}::new`, args: [planned] };
     } else {
       if (!requireRustLocationValueCarrier(
         locationStorage.valueCarrier,
@@ -243,3 +243,4 @@ function planBindingVariableDeclaration(
     ? undefined
     : [{ kind: "let", name: temporary, mutable: false, init: value }, ...bindings];
 }
+import { rustInlineBindingStoragePath, rustInlineBindingStorageType } from "../expressions/binding-storage.js";

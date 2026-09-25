@@ -24,6 +24,17 @@ export function increment(value: Outcome<int32>, writes: Mut<int32>): Outcome<in
 }
 function propagate(value: int32): int32 { return value + 4; }
 export function ordinary(): int32 { return propagate(3); }
+export function cleanup(value: Outcome<int32>, writes: Mut<int32>): Outcome<int32> {
+  try { return Result.Ok<int32, int32>(checked(value)); }
+  finally { store(writes, load(writes) + 1); }
+}
+export function fallback(value: Outcome<int32>, present: int32 | undefined): Outcome<int32> {
+  return Result.Ok<int32, int32>(present ?? checked(value));
+}
+export function optionalCall(value: Outcome<int32>, callback: ((value: int32) => int32) | undefined): Outcome<int32> {
+  const selected = callback?.(checked(value));
+  return Result.Ok<int32, int32>(selected ?? 0);
+}
 ` },
   });
   assert.deepEqual(result.diagnostics, []);
@@ -33,7 +44,7 @@ export function ordinary(): int32 { return propagate(3); }
   const root = writeGeneratedProject("native-control", result.artifacts);
   mkdirSync(join(root, "tests"), { recursive: true });
   writeFileSync(join(root, "tests/result.rs"), `
-use native_control::index::{forward, increment, ordinary};
+use native_control::index::{cleanup, fallback, forward, increment, ordinary, optional_call};
 #[test]
 fn early_error_does_not_run_following_statements() {
     let mut writes = 0;
@@ -42,6 +53,13 @@ fn early_error_does_not_run_following_statements() {
     assert_eq!(increment(Ok(8), &mut writes), Ok(9));
     assert_eq!(writes, 1);
     assert_eq!(ordinary(), 7);
+    assert_eq!(cleanup(Err(12), &mut writes), Err(12));
+    assert_eq!(writes, 2);
+    assert_eq!(cleanup(Ok(13), &mut writes), Ok(13));
+    assert_eq!(writes, 3);
+    assert_eq!(fallback(Err(14), Some(15)), Ok(15));
+    assert_eq!(fallback(Err(14), None), Err(14));
+    assert_eq!(optional_call(Err(16), None), Ok(0));
 }
 #[test]
 fn generic_ownership_and_drop_are_native() {

@@ -178,10 +178,10 @@ export function planRustCallableParameters(
     if (locationStorage === undefined) {
       continue;
     }
-    if (locationStorage.storage === "cell") {
+    if (locationStorage.storage !== "location") {
       prelude.push({ kind: "statement", statement: {
         kind: "let", name: parameterName, mutable: false,
-        init: { kind: "call", path: "core::cell::Cell::new", args: [{ kind: "path", path: parameterName }] },
+        init: { kind: "call", path: `${rustInlineBindingStoragePath(locationStorage.storage)}::new`, args: [{ kind: "path", path: parameterName }] },
       } });
       continue;
     }
@@ -245,3 +245,4 @@ export function planRustCallableParameterPrelude(
   }
   return statements;
 }
+import { rustInlineBindingStoragePath } from "../../expressions/binding-storage.js";

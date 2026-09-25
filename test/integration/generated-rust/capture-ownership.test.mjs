@@ -58,16 +58,36 @@ test("independent, repeated, nested and addressed capture owners retain their sh
   validateGeneratedProject("shared-native-capture", result.artifacts, { run: true });
 });
 
+test("a single non-Copy capture uses inline native interior storage without a separate owner", { timeout: 300_000 }, () => {
+  const { result, output } = compile(`
+    function append(seed: string): (suffix: string) => string {
+      return suffix => { seed = seed + suffix; return seed; };
+    }
+    export function main(): void {
+      const first = append("a");
+      const alias = first;
+      const second = append("b");
+      if (first("x") !== "ax" || alias("y") !== "axy" || second("z") !== "bz") throw new Error("owned string capture");
+    }
+  `);
+  assert.match(output, /core::cell::RefCell::new/u);
+  assert.doesNotMatch(output, /Location::allocate|Rc::new\([^\n]*RefCell/u);
+  validateGeneratedProject("single-owned-string-capture", result.artifacts, { run: true });
+});
+
 test("unique mutable capture allocation matches an independent native owning Fn", { timeout: 300_000 }, () => {
   const { result } = compile(`
     import type { int32 } from "@tsonic/core/types.js";
     export function counter(seed: int32): () => int32 { return () => ++seed; }
+    export function append(seed: string): (suffix: string) => string {
+      return suffix => { seed = seed + suffix; return seed; };
+    }
   `, { outputType: "lib", crateName: "capture_cost" });
   const root = writeGeneratedProject("native-capture-cost", result.artifacts);
   mkdirSync(join(root, "tests"), { recursive: true });
   writeFileSync(join(root, "tests/cost.rs"), `
 use std::alloc::{GlobalAlloc, Layout, System};
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 struct Counting;
 thread_local! {
@@ -94,6 +114,14 @@ fn handwritten(seed: i32) -> Rc<dyn Fn() -> i32> {
     let seed = Cell::new(seed);
     Rc::new(move || { let next = seed.get() + 1; seed.set(next); next })
 }
+fn handwritten_string(seed: String) -> Rc<dyn Fn(String) -> String> {
+    let seed = RefCell::new(seed);
+    Rc::new(move |suffix| {
+        let next = seed.borrow().clone() + &suffix;
+        *seed.borrow_mut() = next;
+        seed.borrow().clone()
+    })
+}
 #[test]
 fn same_frame_and_no_call_allocation() {
     let (actual, actual_calls, actual_bytes) = measure(|| capture_cost::index::counter(0));
@@ -104,6 +132,17 @@ fn same_frame_and_no_call_allocation() {
         for _iteration in 0..10000 { assert_eq!(std::hint::black_box(actual.call(())), std::hint::black_box(expected())); }
     });
     assert_eq!((calls, bytes), (0, 0));
+}
+#[test]
+fn non_copy_capture_has_only_its_native_callable_frame() {
+    let actual_seed = String::from("a");
+    let expected_seed = String::from("a");
+    let (actual, actual_calls, actual_bytes) = measure(|| capture_cost::index::append(actual_seed));
+    let (expected, expected_calls, expected_bytes) = measure(|| handwritten_string(expected_seed));
+    assert_eq!((actual_calls, actual_bytes), (expected_calls, expected_bytes));
+    assert_eq!(actual_calls, 1);
+    assert_eq!(actual.call((String::from("x"),)), expected(String::from("x")));
+    assert_eq!(actual.call((String::from("y"),)), expected(String::from("y")));
 }
 `);
   runCargo(root, ["generate-lockfile", "--offline"]);

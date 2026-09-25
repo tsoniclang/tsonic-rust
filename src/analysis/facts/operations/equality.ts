@@ -24,7 +24,7 @@ function projectOperationMetadata(fact: RustTargetOperationFact, references: Nod
   };
   switch (fact.kind) {
     case "native-propagation":
-      return { ...fact, operandExpression: reference(fact.operandExpression) };
+      return { ...fact, callableDeclaration: reference(fact.callableDeclaration), operandExpression: reference(fact.operandExpression) };
     case "native-range":
       return { ...fact, operands: fact.operands.map(reference) };
     case "template-string":

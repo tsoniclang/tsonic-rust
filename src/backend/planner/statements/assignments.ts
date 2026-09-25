@@ -264,17 +264,12 @@ export function planRustDirectOperatorCallAssignment(
           { name: locationName, value: promoted.expression },
           {
             name: currentName,
-            value: { kind: "method-call", receiver: locationPath, method: promoted.readMethod, args: [] },
+            value: promoted.read(locationPath),
           },
           { name: valueName, value },
           { name: nextName, value: next },
         ],
-        value: {
-          kind: "method-call",
-          receiver: locationPath,
-          method: promoted.writeMethod,
-          args: [{ kind: "path", path: nextName }],
-        },
+        value: promoted.write(locationPath, { kind: "path", path: nextName }),
       },
     }];
   }

@@ -6,6 +6,7 @@ import {
   snapshotTargetPlanningSourceNavigation,
   targetSourceSyntaxProgram,
 } from "@tsonic/target-api/analysis";
+import { Node_Expression } from "@tsonic/target-api/source";
 import { analyzeRustProgram } from "./analyze.js";
 import { analyzeRustNumericRepresentations } from "../numeric/representations.js";
 import { createRustAnalysisContext } from "./context.js";
@@ -42,7 +43,7 @@ import { rustFoundationForCarrier } from "../foundation/requirements.js";
 import { maximumRustFoundation } from "../../target-model/foundation/model.js";
 import { analyzeRustProjectFlowReadSelections } from "../control-flow/project-flow-read-selections.js";
 import { isRustJsArrayCarrier, isRustStringCarrier } from "../../target-model/types/index.js";
-import { rustClosureCaptureFactKey } from "../facts/keys.js";
+import { rustClosureCaptureFactKey, rustTargetOperationFactKey, rustBindingStorageFactKey } from "../facts/keys.js";
 
 const rustJsTimerEpilogue: RustProviderBinaryHookRow = Object.freeze({
   id: "tsonic.rust.js.timers",
@@ -128,6 +129,17 @@ export function analyzeRustTargetProgram(
     mayBorrowArgument: (argument) => facts.getArgumentPassingFact(argument)?.mode !== "by-value",
     isSharedBorrowArgument: (argument) => facts.getArgumentPassingFact(argument)?.mode === "borrow-shared",
     capturesFor: (closure) => facts.getFact(closure, rustClosureCaptureFactKey),
+    canMoveStoredField: (field) => {
+      const selected = facts.getFact(field, rustTargetOperationFactKey);
+      if (selected?.kind !== "source-field" || selected.storage !== "project-object" ||
+        selected.valueSemantics.kind !== "stored" || selected.dispatch !== undefined) return false;
+      const definition = context.projectTypes.definitionForCarrier(selected.receiverCarrier);
+      if (definition === undefined || context.attributeApplications.forDeclaration(definition.declaration).length !== 0 ||
+        objectRepresentations.representationFor(definition)?.kind !== "value") return false;
+      const receiver = Node_Expression(context.ast, field);
+      const declaration = receiver === undefined ? undefined : context.source.navigation.sourceReferenceFor(receiver)?.declaration;
+      return declaration !== undefined && facts.getFact(declaration, rustBindingStorageFactKey) === undefined;
+    },
   });
   const declarationGenericRequirements = analyzeRustDeclarationGenericRequirements(
     context.source,

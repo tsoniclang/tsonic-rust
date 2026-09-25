@@ -321,7 +321,7 @@ export function collectRustLexicalCaptures(
     readonly declaration: Node;
     readonly reference: Node;
     readonly carrier: TargetTypeRef;
-    readonly storage: "value" | "location" | "cell";
+    readonly storage: "value" | "location" | "cell" | "borrow-cell";
   }>();
   let recursiveDeclaration: Node | undefined;
   const valueDeclaration = callableExpressionValueDeclaration(expression, ast);

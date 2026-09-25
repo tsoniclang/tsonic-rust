@@ -21,12 +21,15 @@ export function analyzeRustValueLifetimes(input: {
   readonly mayBorrowArgument: (argument: Node) => boolean;
   readonly isSharedBorrowArgument: (argument: Node) => boolean;
   readonly capturesFor: (closure: Node) => RustClosureCaptureFact | undefined;
+  readonly canMoveStoredField: (field: Node) => boolean;
 }): RustValueLifetimePlan {
   const movableReferences = new WeakSet<Node>();
   const movableCaptures = new WeakMap<Node, ReadonlySet<Node>>();
   const stableBindings = new WeakSet<Node>();
+  const storedFields: Node[] = [];
   const visit = (node: Node): void => {
     const kind = input.ast.kindName(node);
+    if (input.canMoveStoredField(node)) storedFields.push(node);
     if (["KindStringLiteral", "KindNoSubstitutionTemplateLiteral", "KindNumericLiteral", "KindBigIntLiteral",
       "KindTrueKeyword", "KindFalseKeyword"].includes(kind)) stableBindings.add(node);
     if (input.ast.is.IsCallExpression(node) || input.ast.is.IsNewExpression(node)) {
@@ -60,6 +63,20 @@ export function analyzeRustValueLifetimes(input: {
     });
   };
   for (const sourceFile of input.sourceFiles) visit(sourceFile);
+  for (const field of storedFields) {
+    const receiver = Node_Expression(input.ast, field);
+    if (receiver === undefined || !input.ast.is.IsIdentifier(receiver)) continue;
+    const declaration = input.navigation.sourceReferenceFor(receiver)?.declaration;
+    if (declaration === undefined || input.ast.kindName(declaration) !== "KindVariableDeclaration" ||
+      enclosingCallable(declaration, input.ast) === undefined) continue;
+    const kind = input.ast.variableDeclarationKind(declaration);
+    const summary = input.navigation.declarationUseSummary(declaration);
+    if (kind === "using" || kind === "await using" || summary.captured || summary.exported ||
+      summary.bindingWritten || isInsideRepeatedRegion(receiver, declaration, input.ast)) continue;
+    if (movableReferences.has(receiver) || isLastUseOnPath(receiver, declaration, {
+      ...input, isOwnedFieldProjection: candidate => candidate === field,
+    })) movableReferences.add(field);
+  }
   return Object.freeze({
     canMove(reference: Node): boolean {
       return movableReferences.has(reference);
@@ -182,6 +199,7 @@ function isLastUseOnPath(
     readonly ast: AstReader;
     readonly navigation: SourceProgramNavigation;
     readonly mayBorrowArgument: (argument: Node) => boolean;
+    readonly isOwnedFieldProjection?: (field: Node) => boolean;
   },
 ): boolean {
   const callable = enclosingCallable(declaration, input.ast);
@@ -203,6 +221,7 @@ function isLastUseOnPath(
     const kind = input.ast.kindName(parent);
     if (input.ast.is.IsCallExpression(parent) || input.ast.is.IsNewExpression(parent)) invocations.add(parent);
     if (!isTransparentValueWrapper(parent, current, input.ast) &&
+      !(input.isOwnedFieldProjection?.(parent) === true && Node_Expression(input.ast, parent) === current) &&
       kind !== "KindCallExpression" && kind !== "KindNewExpression" &&
       kind !== "KindReturnStatement" && kind !== "KindExpressionStatement" &&
       kind !== "KindVariableDeclaration" && kind !== "KindVariableDeclarationList" &&
