@@ -2,6 +2,7 @@ import type { SourcePrimitiveKind } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustValueConversion } from "../../../target-model/operations/model.js";
 import {
+  isRustIntegerCarrier,
   isRustNumericCarrier,
   rustSourcePrimitiveTargetType,
 } from "../../../target-model/types/index.js";
@@ -44,4 +45,17 @@ export function rustNumericPromotionConversion(
   return source !== target && rustNumericPromotionKind(source, target) === target
     ? { kind: "numeric-promotion", source, target }
     : undefined;
+}
+
+export function selectRustNumericComparisonPromotion(
+  left: TargetTypeRef,
+  right: TargetTypeRef,
+): RustNumericBinaryPromotion | undefined {
+  const ordinary = selectRustNumericBinaryPromotion(left, right);
+  if (ordinary !== undefined) return ordinary;
+  if (!isRustIntegerCarrier(left) || !isRustIntegerCarrier(right)) return undefined;
+  const leftConversion = rustNumericPromotionConversion(left.name, "int128");
+  const rightConversion = rustNumericPromotionConversion(right.name, "int128");
+  if (leftConversion === undefined || rightConversion === undefined) return undefined;
+  return { carrier: rustSourcePrimitiveTargetType("int128"), leftConversion, rightConversion };
 }
