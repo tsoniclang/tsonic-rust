@@ -1,6 +1,6 @@
 import type { RustGeneratedUnionDefinition } from "../../../analysis/objects/generated-union-plan.js";
 import { emptyRustGenerics, type RustExpr, type RustItem, type RustType } from "../../target-ast/nodes.js";
-import { rustSelfParameter } from "../declarations/self-parameter.js";
+import { rustSelfParameter } from "../declarations/callables/self-parameter.js";
 
 export function planRustNumberArrayUnionImplementation(definition: RustGeneratedUnionDefinition): RustItem {
   const trait = "js_abi::NumberArrayLike";

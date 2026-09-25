@@ -3,7 +3,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 if (( $# == 0 )); then
-  mapfile -d '' -t test_arguments < <(find test -type f -name '*.test.mjs' -print0 | sort -z)
+  mapfile -d '' -t test_arguments < <(node "${TSONIC_ROOT:-../tsonic}/test/scripts/node-test-files.mjs" test)
 else
   test_arguments=("$@")
 fi

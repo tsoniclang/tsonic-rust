@@ -5,7 +5,7 @@ import { rustSourceCallableReturnFactKey } from "../facts/keys.js";
 import { rustOperationContext, rustResolutionContext, selectExpressionOperation } from "../program/walk.js";
 import type { RustFactWalk } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
-import { selectRustNumericBinaryPromotion } from "../../policy/operations/numeric-promotion.js";
+import { selectRustNumericBinaryPromotion } from "../../policy/operations/numeric/promotion.js";
 import { isRustBigIntCarrier, isRustAbsenceCarrier, isRustNumericCarrier, rustOptionElementCarrier, rustOptionTargetType } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";

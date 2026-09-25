@@ -8,7 +8,7 @@ import {
   applyFallibleShape,
   applyRustFallibleResultExpression,
 } from "../../../dist/backend/planner/types/fallible-shape.js";
-import { rustBlockTerminates } from "../../../dist/backend/planner/declarations/functions.js";
+import { rustBlockTerminates } from "../../../dist/backend/planner/declarations/callables/functions.js";
 import { rustTypeFromCarrier } from "../../../dist/backend/planner/types/render.js";
 import {
   requireProviderArgumentPassingFacts,

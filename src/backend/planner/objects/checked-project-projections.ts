@@ -1,7 +1,7 @@
 import type { RustProjectTypeDefinition } from "../../../analysis/project-types/type-policy.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustBlock, RustExpr, RustGenerics, RustImplFunction, RustTraitFunction, RustType } from "../../target-ast/nodes.js";
-import { rustSelfParameter } from "../declarations/self-parameter.js";
+import { rustSelfParameter } from "../declarations/callables/self-parameter.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustProjectDispatchObjectType } from "./polymorphism/names.js";
 import { rustStructuralDispatchType } from "./project-structural-types.js";

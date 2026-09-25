@@ -1,14 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { readTargetParityInventory, targetReferenceFindings } from "../../../tsonic/test/architecture/tooling/target-parity-inventory.mjs";
 
-const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
-const lanes = JSON.parse(readFileSync(
-  join(root, "test/fixtures/support/csharp-parity-lanes.json"),
-  "utf8",
-));
+const lanes = readTargetParityInventory("language-lanes");
 const classifications = new Set([
   "implemented",
   "implementation-gap",
@@ -29,7 +23,7 @@ test("C# parity inventory is complete and mechanically classified", () => {
     assert.ok(classifications.has(lane.classification), lane.id);
     assert.equal(typeof lane.source, "string", `${lane.id} needs source`);
     assert.ok(lane.source.length > 0, `${lane.id} has empty source`);
-    assert.equal(typeof lane.rustProof, "string", `${lane.id} needs Rust evidence`);
+    assert.equal(typeof lane.rustReference, "string", `${lane.id} needs a Rust source reference`);
     assert.equal(typeof lane.action, "string", `${lane.id} needs an action`);
     assert.ok(lane.action.length > 0, `${lane.id} has no action`);
   }
@@ -71,9 +65,10 @@ test("priority coverage remains mechanically visible", () => {
 });
 
 test("the detailed JS and Node inventory remains a required parity input", () => {
-  const detailed = JSON.parse(readFileSync(
-    join(root, "test/fixtures/support/javascript-node-lanes.json"),
-    "utf8",
-  ));
+  const detailed = readTargetParityInventory("javascript-node-lanes");
   assert.ok(detailed.length >= 140, `detailed surface inventory is too small: ${detailed.length}`);
+});
+
+test("shared C#/Rust structural references resolve without claiming behavioral parity", () => {
+  assert.deepEqual(targetReferenceFindings(lanes), []);
 });

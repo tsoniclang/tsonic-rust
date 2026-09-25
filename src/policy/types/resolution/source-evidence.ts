@@ -26,7 +26,7 @@ import type {
   RustTargetTypeResolutionOptions,
 } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { selectRustPointerReturnCarrier } from "../../operations/pointer-return.js";
+import { selectRustPointerReturnCarrier } from "../../operations/pointers/return.js";
 import { rustTargetGenericReferences } from "../../../target-model/types/carriers/generic-references.js";
 import { inferRustTargetTypeParameterBindings } from "../../../target-model/types/carriers/generic-inference.js";
 import { mapRustTargetTypes } from "../../../target-model/types/carriers/substitution.js";

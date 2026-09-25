@@ -21,7 +21,7 @@ import { planExpression } from "../entry.js";
 import { planRustMutableProjectReceiver, planRustPromotedStorageLocation } from "../typed-locations.js";
 import { planRustSourceUnionFieldProjection, mutateRustUnionField } from "../unions.js";
 import { readRustProjectObjectIndex, writeRustProjectObjectIndex } from "../../objects/project-objects.js";
-import { planRustSourceStaticFieldStorage } from "../../declarations/static-field-storage.js";
+import { planRustSourceStaticFieldStorage } from "../../declarations/classes/static-field-storage.js";
 import { rustTargetOperationFactKey } from "../../../../analysis/facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import type { Node } from "@tsonic/tsts";

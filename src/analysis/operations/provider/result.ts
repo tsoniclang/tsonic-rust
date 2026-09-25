@@ -33,7 +33,7 @@ import { rustRuntimeCarrierKey, rustSelectedOperationKey } from "../../../target
 import { rustTargetOperationText } from "../../facts/target-operation.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectedSourceLiteralIsRepresentable, selectedSourceNumericLiteralOperationId } from "../../../policy/types/selected-numeric-literal.js";
-import { selectJsSurfaceOperation } from "../../../policy/operations/js-surface.js";
+import { selectJsSurfaceOperation } from "../../../policy/operations/source-profiles/js/index.js";
 import { selectRustOptionalChain } from "../../../policy/operations/optional-chains.js";
 import { selectRustValueCarrierReconciliation } from "../../../policy/types/value-carrier-reconciliation.js";
 import { contextualConditionalArgumentMatches } from "./calls/contextual-conditionals.js";

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { selectRustBinaryOperator } from "../../../dist/policy/operations/operator-rules.js";
+import { selectRustBinaryOperator } from "../../../dist/policy/operations/operators/rules.js";
 import { rustJsArrayTargetType, rustSourcePrimitiveTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
 
 test("array membership admits only exact numeric key carriers and retains operand order", () => {

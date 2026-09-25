@@ -5,8 +5,8 @@ import { rustProjectCallableAdaptersKey } from "../../../../analysis/facts/proje
 import { isRustNeverCarrier, isRustUnitCarrier } from "../../../../target-model/types/index.js";
 import type { RustExpr, RustFunctionParam, RustImplFunction, RustStmt, RustType } from "../../../target-ast/nodes.js";
 import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
-import { applyRustCallableValueAdapter, planRustCallableArguments } from "../../declarations/callable-adapters.js";
-import { rustSelfParameter } from "../../declarations/self-parameter.js";
+import { applyRustCallableValueAdapter, planRustCallableArguments } from "../../declarations/callables/adapters.js";
+import { rustSelfParameter } from "../../declarations/callables/self-parameter.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { diagnosticInput, rustErrorBoundaryForProjectMember, rustErrorType } from "../../program/plan-context.js";

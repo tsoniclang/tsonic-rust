@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import { rustSourceBindingFactKey } from "../../../analysis/facts/keys.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustExpr } from "../../target-ast/nodes.js";
-import { rustGenericCallableImplementationPath } from "../declarations/generic-callables.js";
+import { rustGenericCallableImplementationPath } from "../declarations/callables/generic-implementations.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { diagnosticInput, rustSourceBindingPath } from "../program/plan-context.js";

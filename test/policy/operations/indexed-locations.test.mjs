@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { selectJsSurfaceOperation } from "../../../dist/policy/operations/js-surface.js";
+import { selectJsSurfaceOperation } from "../../../dist/policy/operations/source-profiles/js/index.js";
 import { finalizeProviderOperationFact } from "../../../dist/analysis/operations/provider/calls/template-instantiation.js";
 import { rustIndexedLocationContract } from "../../../dist/analysis/facts/indexed-location.js";
 import { rustJsArrayTargetType, rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";

@@ -7,7 +7,7 @@ import {
   createRustSession,
   rustSourceDiagnostics,
 } from "../../helpers/rust-session.mjs";
-import { selectJsSurfaceOperation } from "../../../dist/policy/operations/js-surface.js";
+import { selectJsSurfaceOperation } from "../../../dist/policy/operations/source-profiles/js/index.js";
 import {
   rustJsArrayTargetType,
   rustSourcePrimitiveTargetType,

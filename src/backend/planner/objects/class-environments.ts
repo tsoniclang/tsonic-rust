@@ -11,7 +11,7 @@ import { rustProjectGenerics, rustProjectStateMarker } from "./polymorphism/name
 import { planExpression } from "../expressions/index.js";
 import { planRustCaptureValue } from "../expressions/typed-locations.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { rustSelfParameter } from "../declarations/self-parameter.js";
+import { rustSelfParameter } from "../declarations/callables/self-parameter.js";
 import { rustModuleCellAccess } from "../project/module-storage.js";
 import { rustProjectObjectIdentityImplementation } from "./project-identity.js";
 import { rustClassEnvironmentType, rustClassEnvironmentHandleType } from "./class-environment-types.js";

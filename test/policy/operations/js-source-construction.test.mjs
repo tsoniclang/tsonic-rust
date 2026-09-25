@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { acmeTestingPackage, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
-import { selectJsSurfaceOperation, selectJsSurfaceConstructor } from "../../../dist/policy/operations/js-surface.js";
+import { selectJsSurfaceOperation, selectJsSurfaceConstructor } from "../../../dist/policy/operations/source-profiles/js/index.js";
 import { rustSourcePrimitiveTargetType, rustBigIntTargetType, rustEmptyObjectTargetType } from "../../../dist/target-model/types/index.js";
 
 test("builtin construction selection retains exact numeric and identity carriers", () => {

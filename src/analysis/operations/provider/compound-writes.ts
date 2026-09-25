@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { ElementAccessExpression_ArgumentExpression, Node_Expression } from "@tsonic/target-api/source";
 import { resolveSelectedJsSourceMember } from "../../../policy/evidence/selected-source.js";
-import { selectJsSurfaceOperation } from "../../../policy/operations/js-surface.js";
+import { selectJsSurfaceOperation } from "../../../policy/operations/source-profiles/js/index.js";
 import { rustUnitTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { finalizeRustProviderOperationAbi } from "../../facts/finalized-operation-abi.js";

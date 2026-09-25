@@ -1,5 +1,5 @@
 import { flowStateFactKey } from "@tsonic/tsts";
-import { selectRustBindPointerSourceOperation } from "../../policy/operations/typed-location-source.js";
+import { selectRustBindPointerSourceOperation } from "../../policy/operations/typed-locations/source-typed-locations.js";
 import {
   KindCallExpression,
   KindElementAccessExpression,

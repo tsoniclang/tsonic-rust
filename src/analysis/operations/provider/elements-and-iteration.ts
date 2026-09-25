@@ -46,7 +46,7 @@ import { rustProjectObjectIndexSignature } from "../../project-types/object-layo
 import { rustRuntimeCarrierKey } from "../../../target-model/facts/selections.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectedValueCarrier } from "../selected-values.js";
-import { selectJsSurfaceOperation } from "../../../policy/operations/js-surface.js";
+import { selectJsSurfaceOperation } from "../../../policy/operations/source-profiles/js/index.js";
 import { selectRustFixedArrayElementAccess } from "./structural-properties.js";
 import { isIntrinsicSourceQualifier } from "./source-qualifiers.js";
 import { tsonicFixedArrayProviderMember } from "@tsonic/source-core/facts";

@@ -22,7 +22,7 @@ import {
 } from "../source/profiles/source-modules.js";
 import {
   createRustCompilerProviderSession,
-} from "../providers/compiler/session.js";
+} from "../providers/native/session.js";
 import {
   composeRustProviderSemantics,
   mergeRustProviderSemantics,
@@ -30,7 +30,7 @@ import {
 import {
   createRustTargetConfiguration,
 } from "../options/rust-target-options.js";
-import { rustRuntimeCrateReference } from "./runtime-references.js";
+import { rustRuntimeCrateReference } from "../providers/runtime/source-crates.js";
 
 type RustCompilationSessionState =
   | "created"

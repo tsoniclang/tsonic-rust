@@ -9,7 +9,7 @@ import type { RustOperationsProviderOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { isRustNumberArrayUnion } from "../../../target-model/types/carriers/array-unions.js";
 import { resolveSelectedJsSourceMember, resolveSelectedSourceProfilePropertyMembers } from "../../../policy/evidence/selected-source.js";
-import { selectRustNumberArrayUnionOperation } from "../../../policy/operations/js-surface/number-array-unions.js";
+import { selectRustNumberArrayUnionOperation } from "../../../policy/operations/source-profiles/js/number-array-unions.js";
 import { selectedValueCarrier } from "../selected-values.js";
 import { finalizeProviderOperationFromSubjects } from "./conversions.js";
 import { acceptRustMemberOperation, elementProvenance, rejectSelectedOperation } from "./result.js";

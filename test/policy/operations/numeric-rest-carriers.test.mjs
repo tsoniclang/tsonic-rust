@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { selectRustNumericRestCarrier } from "../../../dist/policy/operations/js-surface/numeric-rest.js";
+import { selectRustNumericRestCarrier } from "../../../dist/policy/operations/source-profiles/js/numeric-rest.js";
 import { rustJsArrayTargetType, rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
 
 const numeric = rustSourcePrimitiveTargetType;

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   rustNumericPromotionConversion,
-} from "../../../dist/policy/operations/numeric-promotion.js";
+} from "../../../dist/policy/operations/numeric/promotion.js";
 import {
   rustIntegerKindIsExactlyRepresentableAsFloat64,
   rustNumericPromotionKind,

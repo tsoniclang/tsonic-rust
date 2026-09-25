@@ -8,9 +8,9 @@ import type {
 import type {
   TargetRuntimeContributions,
 } from "@tsonic/target-api/artifacts";
-import { rustCompilerProviderSpecifierPrefix } from "../providers/compiler/session.js";
+import { rustCompilerProviderSpecifierPrefix } from "../providers/native/session.js";
 import { rustJsSurfaceSourceProfileContributions } from "../source/profiles/declarations.js";
-import { rustRuntimeCrateReference } from "./runtime-references.js";
+import { rustRuntimeCrateReference } from "../providers/runtime/source-crates.js";
 import {
   createJsSourceSemanticsExtension,
   jsSourceSemanticsModules,

@@ -12,6 +12,7 @@ import { classifyFiles } from "../../../tsonic/test/architecture/tooling/layer-c
 import { buildTypeScriptModuleAnalysis } from "../../../tsonic/test/architecture/tooling/module-graph.mjs";
 import { evaluateTestDomainOwnership } from "../../../tsonic/test/architecture/tooling/test-inventory.mjs";
 import { evaluatePublicExportInventory } from "../../../tsonic/test/architecture/tooling/public-export-inventory.mjs";
+import { canonicalTargetTestDomains } from "../../../tsonic/test/architecture/tooling/target-layer-contract.mjs";
 import {
   rustAllowedImplementationIndexes,
   rustForbiddenDirectories,
@@ -26,13 +27,13 @@ const repositoryRoot = resolve(new URL("../..", import.meta.url).pathname);
 
 test("Rust architecture rules reject target-specific boundary mutations", () => {
   const mutations = [
-    ["ARCH-RUST-CONFIG-001", "src/backend/planner/project.ts", "configuration.projectFile"],
+    ["ARCH-TARGET-CONFIG-001", "src/backend/planner/project.ts", "configuration.projectFile"],
     ["ARCH-RUST-PRINTER-001", "src/print/source/index.ts", "finalizeRustSourceStyle(model);"],
-    ["ARCH-RUST-PLAN-001", "src/backend/artifact-model/output.ts", "readonly diagnostics: readonly string[];"],
-    ["ARCH-RUST-PROGRAM-001", "src/analysis/program/model.ts", "readonly values: Set<string>;"],
+    ["ARCH-TARGET-PLAN-001", "src/backend/artifact-model/output.ts", "readonly diagnostics: readonly string[];"],
+    ["ARCH-TARGET-PROGRAM-001", "src/analysis/program/model.ts", "readonly values: Set<string>;"],
     ["ARCH-RUST-PROVIDER-001", "src/providers/packages/model.ts", "interface RustProviderSemantics { readonly carrierPaths: ReadonlyMap<string, string>; }"],
     ["ARCH-RUST-PROVIDER-002", "src/providers/packages/materialization.ts", "type Carriers = Readonly<Record<string, string>> | ReadonlyMap<string, string>;"],
-    ["ARCH-RUST-SELECTION-001", "src/analysis/operations/call.ts", "semantics.types.callSignatures(type);"],
+    ["ARCH-TARGET-SELECTION-001", "src/analysis/operations/call.ts", "semantics.types.callSignatures(type);"],
     ["ARCH-TARGET-PLANNER-002", "src/backend/planner/call.ts", "selectRustTargetCall(node);"],
     ["ARCH-TARGET-ANALYSIS-002", "src/analysis/calls.ts", 'import { planCall } from "../backend/planner/call.js";'],
     ["ARCH-TARGET-MODEL-001", "src/target-model/types.ts", 'import { analyzeType } from "../analysis/types.js";'],
@@ -126,17 +127,7 @@ test("Rust package exposes only approved audience entrypoints", async () => {
 });
 
 test("Rust tests mirror explicit architecture domains", () => {
-  const domains = [
-    "analysis",
-    "architecture",
-    "backend",
-    "integration",
-    "policy",
-    "providers",
-    "source",
-    "target-model",
-    "toolchain",
-  ];
+  const domains = canonicalTargetTestDomains;
   const files = collectFiles(resolve(repositoryRoot, "test"), {
     extensions: [".test.mjs"],
   }).map((file) => `test/${file}`);
@@ -153,7 +144,7 @@ test("Rust tests mirror explicit architecture domains", () => {
 
 test("Rust runtime-reference construction has one owner and explicit core/surface ownership", () => {
   const helper = readFileSync(
-    resolve(repositoryRoot, "src/compilation/runtime-references.ts"),
+    resolve(repositoryRoot, "src/providers/runtime/source-crates.ts"),
     "utf8",
   );
   const session = readFileSync(

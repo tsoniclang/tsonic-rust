@@ -3,10 +3,11 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { jsOperationRows } from "../../dist/policy/operations/js-surface/rows.js";
+import { jsOperationRows } from "../../dist/policy/operations/source-profiles/js/rows.js";
+import { readTargetParityInventory } from "../../../tsonic/test/architecture/tooling/target-parity-inventory.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
-const operationTableRoot = join(root, "src/policy/operations/js-surface");
+const operationTableRoot = join(root, "src/policy/operations/source-profiles/js");
 const operationTables = readdirSync(operationTableRoot)
   .filter((name) => name === "rows.ts" || name.endsWith("-rows.ts"))
   .sort()
@@ -21,10 +22,7 @@ test("implemented row members exist in the operation tables", () => {
   }
 });
 
-const lanes = JSON.parse(readFileSync(
-  join(root, "test/fixtures/support/javascript-node-lanes.json"),
-  "utf8",
-));
+const lanes = readTargetParityInventory("javascript-node-lanes");
 
 test("every C#-relative lane has exactly one valid classification", () => {
   assert.ok(lanes.length >= 90, `lane list too small: ${lanes.length}`);

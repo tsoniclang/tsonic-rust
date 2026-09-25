@@ -1,4 +1,4 @@
-import { rustSelfParameter } from "../declarations/self-parameter.js";
+import { rustSelfParameter } from "../declarations/callables/self-parameter.js";
 import type { RustExpr, RustGenerics, RustItem, RustType } from "../../target-ast/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/nodes.js";
 

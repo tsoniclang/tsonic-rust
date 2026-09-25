@@ -54,7 +54,7 @@ test("Rust converts typed-location facts into one target-owned selection", () =>
     "src/analysis/operations/provider/calls/deferred.ts",
   );
   const operations = source(
-    "src/policy/operations/typed-location-source.ts",
+    "src/policy/operations/typed-locations/source-typed-locations.ts",
   );
   const selection = source(
     "src/analysis/operations/typed-locations.ts",
@@ -71,7 +71,7 @@ test("Rust converts typed-location facts into one target-owned selection", () =>
     .filter((path) => readFileSync(path, "utf8").includes("pointerOperationFactKey"))
     .map((path) => path.slice(repositoryRoot.length + 1));
   assert.deepEqual(neutralFactConsumers, [
-    "src/policy/operations/typed-location-source.ts",
+    "src/policy/operations/typed-locations/source-typed-locations.ts",
   ]);
   assert.doesNotMatch(
     selection,
@@ -94,7 +94,7 @@ test("raw pointer source facts have one policy adapter", () => {
     const consumers = sourceFiles(join(repositoryRoot, "src"))
       .filter(path => readFileSync(path, "utf8").includes(key))
       .map(path => path.slice(repositoryRoot.length + 1));
-    assert.deepEqual(consumers, ["src/policy/operations/raw-pointer-source.ts"]);
+    assert.deepEqual(consumers, ["src/policy/operations/pointers/source-raw-pointers.ts"]);
   }
 });
 

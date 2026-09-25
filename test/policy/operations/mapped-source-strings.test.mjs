@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { acmeTestingPackage, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
-import { selectJsSurfaceOperation } from "../../../dist/policy/operations/js-surface.js";
+import { selectJsSurfaceOperation } from "../../../dist/policy/operations/source-profiles/js/index.js";
 import { rustClosureTargetType, rustStringTargetType, rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
 import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
 import { rustValueConversionContract } from "../../../dist/target-model/conversions/contracts.js";

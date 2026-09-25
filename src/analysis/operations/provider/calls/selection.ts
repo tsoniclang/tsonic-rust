@@ -17,7 +17,7 @@ import {
   rustTargetGenericBindingsForArguments,
   substituteRustTargetGenerics,
 } from "../../../../target-model/types/index.js";
-import { readRustSourceKeepAlive } from "../../../../policy/operations/reachability-source.js";
+import { readRustSourceKeepAlive } from "../../../../policy/operations/pointers/reachability.js";
 import { acceptProjectSourceCall, mapSelectedJsSpecialCall } from "../object-shapes.js";
 import { checkedPropertySelectionInput, selectRustCheckedPropertyAccess } from "../properties.js";
 import { acceptRustPolicy } from "../../../../policy/operations/contracts.js";
@@ -33,11 +33,11 @@ import { rustOptionElementCarrier } from "../../../../target-model/types/index.j
 import { rustRuntimeCarrierKey, rustSelectedCallKey } from "../../../../target-model/facts/selections.js";
 import { selectedCallArgumentCarriers, selectedCallArgumentNodes, selectedCallCalleeDeclaration, selectedCallCalleeSymbol } from "../operators.js";
 import { selectedValueCarrier } from "../../selected-values.js";
-import { selectJsSurfaceConstructorBySourceOwner, selectJsSurfaceOperation } from "../../../../policy/operations/js-surface.js";
+import { selectJsSurfaceConstructorBySourceOwner, selectJsSurfaceOperation } from "../../../../policy/operations/source-profiles/js/index.js";
 import { selectRustGeneratorSourceCall } from "../../../../policy/types/generator-source-profile.js";
 import { rustSourceErrorConstructors } from "../../../../target-model/identities/source-errors.js";
 import { selectRustProviderOperation } from "../../../../policy/operations/provider-selection.js";
-import { selectRustProviderPointerResult } from "../../../../policy/operations/provider-pointer-result.js";
+import { selectRustProviderPointerResult } from "../../../../policy/operations/pointers/provider-result.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { sourceCallMarkerByIdentity } from "../model.js";
 import { mapSelectedStringRegExpProtocolCall } from "../regexp-protocols.js";

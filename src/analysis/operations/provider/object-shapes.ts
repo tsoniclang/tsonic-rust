@@ -39,7 +39,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { RustTargetMember, TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustTargetOperationFact } from "../../facts/keys.js";
-import { selectRustPointerReturnCarrier } from "../../../policy/operations/pointer-return.js";
+import { selectRustPointerReturnCarrier } from "../../../policy/operations/pointers/return.js";
 import { resolveRustUnionMethodContracts, rustUnionMethodOwner, selectRustUnionMethods } from "./calls/union-methods.js";
 import { rustSourceUnionCarrierValue } from "../../../target-model/types/carriers/source-types.js";
 import { rustGenericCallableValueOwner } from "../../../policy/types/generic-callable-origin.js";
