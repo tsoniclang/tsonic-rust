@@ -8,20 +8,11 @@ import { decodeNativeEvidence } from "./decode-evidence.js";
 import type { RustNativeDeclarationEvidence, RustNativeEvidence, RustNativeSemanticEvidence } from "./evidence.js";
 import { validateRustNativeEvidenceInputs } from "./freshness.js";
 import { runRustNativeCommand } from "../protocol/bounded-command.js";
+import { defaultRustNativeSourceLimits, validateRustNativeSourceLimits } from "./limits.js";
+import type { RustNativeSourceLimits } from "./limits.js";
 
-export interface RustNativeSourceLimits {
-  readonly maximumRows: number;
-  readonly maximumDepth: number;
-  readonly maximumOutputBytes: number;
-  readonly timeoutMilliseconds: number;
-}
-
-export const defaultRustNativeSourceLimits: RustNativeSourceLimits = Object.freeze({
-  maximumRows: 1_048_576,
-  maximumDepth: 256,
-  maximumOutputBytes: 64 * 1024 * 1024,
-  timeoutMilliseconds: 120_000,
-});
+export { defaultRustNativeSourceLimits } from "./limits.js";
+export type { RustNativeSourceLimits } from "./limits.js";
 
 export interface RustNativeSourceTool {
   readonly compilerIdentity: string;
@@ -35,17 +26,20 @@ export function createRustNativeSourceTool(options: {
   readonly cacheRoot: string;
   readonly compiler?: string;
   readonly limits?: RustNativeSourceLimits;
+  readonly environment?: Readonly<NodeJS.ProcessEnv>;
 }): RustNativeSourceTool {
-  const limits = Object.freeze({ ...(options.limits ?? defaultRustNativeSourceLimits) });
-  validateLimits(limits);
-  const compiler = options.compiler ?? process.env.RUSTC ?? "rustc";
+  const selection = options.limits === undefined ? defaultRustNativeSourceLimits : options.limits;
+  validateRustNativeSourceLimits(selection);
+  const limits = Object.freeze({ ...selection });
+  const selectedEnvironment = Object.freeze({ ...(options.environment ?? process.env) });
+  const compiler = options.compiler ?? selectedEnvironment.RUSTC ?? "rustc";
   const cacheRoot = resolve(options.cacheRoot);
   mkdirSync(cacheRoot, { recursive: true });
   const command = (executable: string, arguments_: readonly string[], env: NodeJS.ProcessEnv): string =>
     runRustNativeCommand({ executable, arguments: arguments_, environment: env, directory: cacheRoot,
       timeoutMilliseconds: limits.timeoutMilliseconds, maximumDiagnosticBytes: 8 * 1024 * 1024 });
-  const compilerIdentity = command(compiler, ["-vV"], process.env);
-  const sysroot = command(compiler, ["--print", "sysroot"], process.env);
+  const compilerIdentity = command(compiler, ["-vV"], selectedEnvironment);
+  const sysroot = command(compiler, ["--print", "sysroot"], selectedEnvironment);
   const host = compilerIdentity.split("\n").find(line => line.startsWith("host: "))?.slice(6);
   if (host === undefined || !/^[A-Za-z0-9_-]+$/u.test(host) || !existsSync(sysroot)) {
     throw new Error("Selected Rust compiler did not provide its host and sysroot identity.");
@@ -67,16 +61,17 @@ export function createRustNativeSourceTool(options: {
         "--edition=2024", "--crate-name", "tsonic_rust_source_provider", "-D", "warnings",
         "-L", `native=${join(sysroot, "lib")}`, "-C", "prefer-dynamic", "-C", "codegen-units=1",
         join(sourceRoot, "main.rs"), "-o", temporary,
-      ], { ...process.env, RUSTC_BOOTSTRAP: "1" });
+      ], { ...selectedEnvironment, RUSTC_BOOTSTRAP: "1" });
       renameSync(temporary, binary);
     }
     built = true;
   };
-  const environment = (): NodeJS.ProcessEnv => {
+  const executionEnvironment = (() => {
     const libraries = [join(sysroot, "lib"), join(sysroot, "lib", "rustlib", host, "lib")];
     const variable = process.platform === "win32" ? "PATH" : process.platform === "darwin" ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH";
-    return { ...process.env, [variable]: [...libraries, process.env[variable]].filter(Boolean).join(delimiter) };
-  };
+    return Object.freeze({ ...selectedEnvironment,
+      [variable]: [...libraries, selectedEnvironment[variable]].filter(Boolean).join(delimiter) });
+  })();
   const request = (payload: Readonly<Record<string, unknown>>): unknown => {
     ensureBuilt();
     const identity = `${process.pid}-${randomUUID()}`;
@@ -93,7 +88,7 @@ export function createRustNativeSourceTool(options: {
       throw new Error("Native Rust source request exceeds the byte limit.");
     }
     writeFileSync(requestPath, text, { flag: "wx" });
-    command(binary, [requestPath, responsePath], environment());
+    command(binary, [requestPath, responsePath], executionEnvironment);
     const status = statSync(responsePath);
     if (!status.isFile() || status.size > limits.maximumOutputBytes) {
       throw new Error("Native Rust source response exceeds the byte limit or is not a file.");
@@ -130,19 +125,6 @@ export function createRustNativeSourceTool(options: {
       return evidence;
     },
   });
-}
-
-function validateLimits(limits: RustNativeSourceLimits): void {
-  for (const [name, value, ceiling] of [
-    ["maximumRows", limits.maximumRows, 4_194_304],
-    ["maximumDepth", limits.maximumDepth, 512],
-    ["maximumOutputBytes", limits.maximumOutputBytes, 256 * 1024 * 1024],
-    ["timeoutMilliseconds", limits.timeoutMilliseconds, 3_600_000],
-  ] as const) {
-    if (!Number.isSafeInteger(value) || value <= 0 || value > ceiling) {
-      throw new Error(`Native Rust source ${name} must be a positive integer no larger than ${ceiling}.`);
-    }
-  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

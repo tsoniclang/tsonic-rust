@@ -3,17 +3,20 @@ import type {
   RustNativeExpansion, RustNativeNodeId, RustNativeOccurrence, RustNativeSourceSpan, RustNativeTypeRow,
   RustNativeAccess, RustNativeConstantRow,
 } from "./evidence.js";
+import { isAbsolute } from "node:path";
 import { nativeDefinitionKey, nativeNodeKey } from "./evidence.js";
-import type { RustNativeSourceLimits } from "./tool.js";
+import { validateRustNativeSourceLimits } from "./limits.js";
+import type { RustNativeSourceLimits } from "./limits.js";
 import { createNativeTypeDecodeContext } from "./decode-type-context.js";
 import { createNativeRegionDecoder } from "./decode-regions.js";
 import { createNativeGenericDecoder } from "./decode-generics.js";
 import { createNativeTypeDecoder } from "./decode-types.js";
 import { createNativeConstantDecoder } from "./decode-constants.js";
 import { createNativeScopeDecoder, validateNativeScopeRelations } from "./decode-scopes.js";
-import { array, choice, index, record, requireAcyclicParents, shape, text, unique } from "./decode-values.js";
+import { array, boolean, choice, index, record, requireAcyclicParents, shape, text, unique } from "./decode-values.js";
 
 export function decodeNativeEvidence(value: unknown, limits: RustNativeSourceLimits): RustNativeSemanticEvidence {
+  validateRustNativeSourceLimits(limits);
   let rows = 0;
   const reserve = (): void => {
     if (++rows > limits.maximumRows) throw new Error("Native Rust evidence exceeds the row limit.");
@@ -54,16 +57,26 @@ export function decodeNativeEvidence(value: unknown, limits: RustNativeSourceLim
   if (phase === "declarations" && ("occurrences" in input || "effects" in input)) {
     throw new Error("Native Rust declaration evidence cannot claim checked body evidence.");
   }
-  shape(input, phase === "checked" ? ["phase", "inputs", "types", "constants", "definitions", "scopes", "expansions", "occurrences", "effects"] :
-    ["phase", "inputs", "types", "constants", "definitions", "scopes", "expansions"]);
+  shape(input, phase === "checked" ? ["phase", "inputs", "probes", "types", "constants", "definitions", "scopes", "expansions", "occurrences", "effects"] :
+    ["phase", "inputs", "probes", "types", "constants", "definitions", "scopes", "expansions"]);
   const inputs = array(input.inputs, value => {
     reserve();
-    const row = record(value);
+    const row = shape(value, ["path", "byteLength", "digest"]);
     const digest = text(row.digest);
     if (!/^[0-9a-f]{64}$/u.test(digest)) throw new Error("Native Rust evidence has an invalid input digest.");
-    return Object.freeze({ path: text(row.path), byteLength: index(row.byteLength), digest });
+    return Object.freeze({ path: sourcePath(row.path), byteLength: index(row.byteLength), digest });
   });
   unique(inputs.map(input => input.path), "source input");
+  const probes = array(input.probes, value => {
+    reserve();
+    const row = shape(value, ["path", "exists"]);
+    return Object.freeze({ path: sourcePath(row.path), exists: boolean(row.exists) });
+  });
+  unique(probes.map(probe => probe.path), "source lookup");
+  const missingPaths = new Set(probes.filter(probe => !probe.exists).map(probe => probe.path));
+  if (inputs.some(input => missingPaths.has(input.path))) {
+    throw new Error("Native Rust evidence contradicts a source lookup.");
+  }
   const types = array(input.types, (value): RustNativeTypeRow => {
     reserve();
     const row = shape(value, ["id", "value"]);
@@ -203,8 +216,8 @@ export function decodeNativeEvidence(value: unknown, limits: RustNativeSourceLim
     }
   }
   return phase === "declarations"
-    ? Object.freeze({ phase, inputs, types, constants, definitions, scopes, expansions })
-    : Object.freeze({ phase, inputs, types, constants, definitions, scopes, expansions, occurrences, effects });
+    ? Object.freeze({ phase, inputs, probes, types, constants, definitions, scopes, expansions })
+    : Object.freeze({ phase, inputs, probes, types, constants, definitions, scopes, expansions, occurrences, effects });
 }
 
 const definitionKinds = [
@@ -215,3 +228,9 @@ const definitionKinds = [
   "anonymous-constant", "inline-constant", "opaque-type", "field", "lifetime-parameter", "global-assembly",
   "trait-implementation", "inherent-implementation", "closure", "coroutine-body",
 ] as const;
+
+function sourcePath(value: unknown): string {
+  const path = text(value);
+  if (!isAbsolute(path) || path.includes("\0")) throw new Error("Native Rust evidence has an invalid source input path.");
+  return path;
+}

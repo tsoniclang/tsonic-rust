@@ -1,8 +1,13 @@
 import { createHash } from "node:crypto";
-import { closeSync, fstatSync, openSync, readSync } from "node:fs";
+import { closeSync, existsSync, fstatSync, openSync, readSync } from "node:fs";
 import type { RustNativeSemanticEvidence } from "./evidence.js";
 
 export function validateRustNativeEvidenceInputs(evidence: RustNativeSemanticEvidence): void {
+  for (const probe of evidence.probes) {
+    if (existsSync(probe.path) !== probe.exists) {
+      throw new Error(`Native Rust checked source lookup changed: ${probe.path}`);
+    }
+  }
   const buffer = Buffer.allocUnsafe(64 * 1024);
   for (const input of evidence.inputs) {
     const descriptor = openSync(input.path, "r");

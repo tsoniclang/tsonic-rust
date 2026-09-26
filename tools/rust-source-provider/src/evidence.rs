@@ -13,7 +13,7 @@ use serde::Serialize;
 
 use crate::request::{EvidencePhase, Limits, PROTOCOL_VERSION, Response, encode_response};
 use crate::definitions::definition_kind;
-use crate::inputs::{SourceInput, TrackedInputs};
+use crate::inputs::{SourceInput, SourceProbe, TrackedInputs};
 use crate::effects::{BodyEffects, TrackedEffects};
 use crate::type_graph::TypeGraph;
 use crate::type_model::{ConstantRow, Generics, TypeId, TypeRow};
@@ -38,6 +38,7 @@ pub enum Evidence {
 #[serde(rename_all = "camelCase")]
 pub struct DeclarationEvidence {
     pub inputs: Vec<SourceInput>,
+    pub probes: Vec<SourceProbe>,
     pub types: Vec<TypeRow>,
     pub constants: Vec<ConstantRow>,
     pub expansions: Vec<Expansion>,
@@ -274,14 +275,17 @@ fn collect(context: TyCtxt<'_>, phase: EvidencePhase, limits: &Limits, tracked_i
         if definitions.is_empty() { break; }
         for definition in definitions { collector.definition(definition)?; }
     }
-    let inputs = tracked_inputs.snapshot()?;
+    let snapshot = tracked_inputs.snapshot()?;
+    let inputs = snapshot.files;
+    let probes = snapshot.probes;
     for _ in &inputs { collector.graph.reserve(0)?; }
+    for _ in &probes { collector.graph.reserve(0)?; }
     let (types, constants) = collector.graph.finish();
     let mut definitions = collector.definitions.into_values().collect::<Vec<_>>();
     definitions.sort_by_key(|entry| (entry.id.krate, entry.id.index));
     let mut expansions = collector.expansions.into_values().collect::<Vec<_>>();
     expansions.sort_by_key(|entry| (entry.id.krate, entry.id.index));
-    let declarations = DeclarationEvidence { inputs, types, constants, expansions, definitions, scopes: collector.scopes };
+    let declarations = DeclarationEvidence { inputs, probes, types, constants, expansions, definitions, scopes: collector.scopes };
     Ok(match phase {
         EvidencePhase::Declarations => Evidence::Declarations { declarations },
         EvidencePhase::Checked => Evidence::Checked { declarations, occurrences: collector.occurrences, effects },

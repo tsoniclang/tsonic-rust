@@ -1,10 +1,12 @@
 import type { RustTokenDelimiter, RustLexicalTokenTree } from "../../../target-model/syntax/token-tree.js";
-import type { RustNativeSourceLimits } from "./tool.js";
+import { validateRustNativeSourceLimits } from "./limits.js";
+import type { RustNativeSourceLimits } from "./limits.js";
 
 export function decodeNativeTokenResponse(
   response: unknown,
   limits: RustNativeSourceLimits,
 ): readonly RustLexicalTokenTree[] {
+  validateRustNativeSourceLimits(limits);
   if (!isRecord(response) || response.kind !== "tokens" || response.protocolVersion !== 1 || !Array.isArray(response.tokens)) {
     throw new Error("Native Rust token service returned an invalid response.");
   }

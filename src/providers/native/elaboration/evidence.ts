@@ -69,6 +69,7 @@ export interface RustNativeExpansion {
 
 interface RustNativeDeclarationGraph {
   readonly inputs: readonly RustNativeSourceInput[];
+  readonly probes: readonly RustNativeSourceProbe[];
   readonly types: readonly RustNativeTypeRow[];
   readonly constants: readonly RustNativeConstantRow[];
   readonly expansions: readonly RustNativeExpansion[];
@@ -117,6 +118,11 @@ export interface RustNativeSourceInput {
   readonly path: string;
   readonly byteLength: number;
   readonly digest: string;
+}
+
+export interface RustNativeSourceProbe {
+  readonly path: string;
+  readonly exists: boolean;
 }
 
 export function nativeDefinitionKey(identity: RustNativeDefinitionId): string {

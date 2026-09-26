@@ -16,7 +16,7 @@ const signature = { inputs: [0], output: 0, variadic: false, unsafeCall: true, a
 
 function graph() {
   return {
-    phase: "declarations", inputs: [], expansions: [], scopes: [],
+    phase: "declarations", inputs: [], probes: [], expansions: [], scopes: [],
     definitions: kinds.map((kind, index) => ({ id: identity(index), parent: index === 0 ? null : identity(0), path: `crate::item${index}`,
       name: `item${index}`, kind, macroKinds: [], type: null, generics: null, visibility: null, source: null })),
     types: [{ id: 0, value: { kind: "primitive", name: "u64" } }],
