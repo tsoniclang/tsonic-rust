@@ -5,6 +5,7 @@ import type {
   RustType,
 } from "../../target-ast/nodes.js";
 import { rustTypeEquals } from "../../target-ast/inspection/type-equality.js";
+import { rustMacroInputExpressions } from "../../target-ast/macro-input.js";
 import { rustBlockTerminates } from "../statements/block-flow.js";
 
 export interface RustFallibleBoundary {
@@ -56,8 +57,9 @@ export function rustExpressionUsesTryInCurrentRegion(expression: RustExpr): bool
     case "assignment":
       return rustExpressionUsesTryInCurrentRegion(expression.target) ||
         rustExpressionUsesTryInCurrentRegion(expression.value);
-    case "call":
     case "macro-invocation":
+      return rustMacroInputExpressions(expression.input).some(rustExpressionUsesTryInCurrentRegion);
+    case "call":
     case "associated-call":
       return expression.args.some(rustExpressionUsesTryInCurrentRegion);
     case "invoke":

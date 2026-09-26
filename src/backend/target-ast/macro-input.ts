@@ -6,8 +6,8 @@ import type {
   RustPattern,
   RustType,
 } from "./nodes.js";
-
-export type RustTokenDelimiter = "parentheses" | "brackets" | "braces";
+import type { RustNativeMacroInput, RustNativeTokenTree } from "../../target-model/syntax/token-tree.js";
+export type { RustTokenDelimiter } from "../../target-model/syntax/token-tree.js";
 
 export type RustTokenFragment =
   | { readonly kind: "expression"; readonly expression: RustExpr }
@@ -17,17 +17,8 @@ export type RustTokenFragment =
   | { readonly kind: "lifetime"; readonly lifetime: RustLifetime }
   | { readonly kind: "const"; readonly value: RustConstArgument };
 
-export type RustTokenTree =
-  | { readonly kind: "identifier"; readonly text: string; readonly raw: boolean }
-  | { readonly kind: "literal"; readonly text: string }
-  | { readonly kind: "punctuation"; readonly text: string; readonly joint: boolean }
-  | { readonly kind: "group"; readonly delimiter: RustTokenDelimiter; readonly tokens: readonly RustTokenTree[] }
-  | { readonly kind: "fragment"; readonly fragment: RustTokenFragment };
-
-export interface RustMacroInput {
-  readonly delimiter: RustTokenDelimiter;
-  readonly tokens: readonly RustTokenTree[];
-}
+export type RustTokenTree = RustNativeTokenTree<RustTokenFragment>;
+export type RustMacroInput = RustNativeMacroInput<RustTokenFragment>;
 
 export function rustSeparatedExpressionTokens(
   expressions: readonly RustExpr[],
