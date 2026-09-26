@@ -70,19 +70,19 @@ export function planRustClassEnvironmentItems(declaration: Node, context: RustPl
         method: "get_or_init", args: [{ kind: "path", path: "rt::ObjectIdentity::new" }] },
       { kind: "method-call", receiver: { kind: "call", path: "core::ptr::from_ref", args: [{ kind: "path", path: "self" }] },
         method: "addr", args: [] },
-    ), { kind: "impl", generics, target: identityOwner, trait: { kind: "named", path: "PartialEq" }, functions: [{
+    ), { kind: "impl", generics, target: identityOwner, trait: { kind: "named", path: "PartialEq" }, members: [{ kind: "function",
       name: "eq", visibility: "private", generics: emptyRustGenerics, selfParam: rustSelfParameter("ref"),
       params: [{ name: "other", type: { kind: "reference", mutable: false, referent: { kind: "named", path: "Self" } } }],
       returnType: { kind: "primitive", name: "bool" }, body: { statements: [{ kind: "tail", expr: {
         kind: "call", path: "core::ptr::eq", args: [{ kind: "path", path: "self" }, { kind: "path", path: "other" }],
       } }] },
-    }] }, { kind: "impl", generics, target: identityOwner, trait: { kind: "named", path: "Eq" }, functions: [] }];
+    }] }, { kind: "impl", generics, target: identityOwner, trait: { kind: "named", path: "Eq" }, members: [] }];
   return [{ kind: "struct", name: environment.typeName, visibility: rustProjectImplementationVisibility(publiclyReachable),
     attrs: rustDeriveAttributes(environment.storage === "value" && !manualClone ? ["Clone", "Copy"] : []), generics, fields },
     ...identityItems,
     ...(target === undefined ? [] : [
-      ...(environment.copy ? [{ kind: "impl" as const, generics, target, trait: { kind: "named" as const, path: "Copy" }, functions: [] }] : []),
-      { kind: "impl" as const, generics, target, trait: { kind: "named" as const, path: "Clone" }, functions: [{
+      ...(environment.copy ? [{ kind: "impl" as const, generics, target, trait: { kind: "named" as const, path: "Copy" }, members: [] }] : []),
+      { kind: "impl" as const, generics, target, trait: { kind: "named" as const, path: "Clone" }, members: [{ kind: "function" as const,
         name: "clone", visibility: "private" as const, generics: emptyRustGenerics,
         selfParam: rustSelfParameter("ref"), params: [], returnType: { kind: "named" as const, path: "Self" },
         body: { statements: [{ kind: "tail" as const, expr: environment.copy

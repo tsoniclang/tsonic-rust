@@ -36,6 +36,8 @@ export function rustItemsReferenceModuleAlias(
 
 function rustItemReferencesModuleAlias(item: RustItem, alias: string): boolean {
   switch (item.kind) {
+    case "macro-invocation":
+      return rustPathReferencesModuleAlias(item.path, alias) || rustMacroInputReferencesModuleAlias(item.input, alias);
     case "function":
       return rustGenericsReferenceModuleAlias(item.generics, alias) ||
         rustFunctionParametersReferenceModuleAlias(item.params, alias) ||
@@ -57,16 +59,24 @@ function rustItemReferencesModuleAlias(item: RustItem, alias: string): boolean {
       return rustGenericsReferenceModuleAlias(item.generics, alias) ||
         item.superTraits?.some((type) =>
           rustTypeReferencesModuleAlias(type, alias)) === true ||
-        item.associatedTypes?.some((type) => type.bounds.some((bound) =>
-          rustTypeBoundReferencesModuleAlias(bound, alias))) === true ||
-        item.functions.some((fn) => rustTraitFunctionReferencesModuleAlias(fn, alias));
+        item.members.some(member => member.kind === "type"
+          ? member.bounds.some(bound => rustTypeBoundReferencesModuleAlias(bound, alias))
+          : member.kind === "function" ? rustTraitFunctionReferencesModuleAlias(member, alias)
+          : rustPathReferencesModuleAlias(member.path, alias) || rustMacroInputReferencesModuleAlias(member.input, alias));
     case "impl":
       return rustGenericsReferenceModuleAlias(item.generics, alias) ||
         rustOptionalTypeReferencesModuleAlias(item.trait, alias) ||
         rustTypeReferencesModuleAlias(item.target, alias) ||
-        item.associatedTypes?.some((type) =>
-          rustTypeReferencesModuleAlias(type.type, alias)) === true ||
-        item.functions.some((fn) => rustImplFunctionReferencesModuleAlias(fn, alias));
+        item.members.some(member => {
+          switch (member.kind) {
+            case "type": return rustTypeReferencesModuleAlias(member.type, alias);
+            case "function": return rustImplFunctionReferencesModuleAlias(member, alias);
+            case "const": return rustTypeReferencesModuleAlias(member.type, alias) ||
+              rustExpressionReferencesModuleAlias(member.value, alias);
+            case "macro-invocation": return rustPathReferencesModuleAlias(member.path, alias) ||
+              rustMacroInputReferencesModuleAlias(member.input, alias);
+          }
+        });
     case "enum":
       return rustGenericsReferenceModuleAlias(item.generics, alias) ||
         item.variants.some((variant) =>
@@ -156,6 +166,8 @@ function rustOptionalTypeReferencesModuleAlias(
 
 function rustTypeReferencesModuleAlias(type: RustType, alias: string): boolean {
   switch (type.kind) {
+    case "macro-invocation":
+      return rustPathReferencesModuleAlias(type.path, alias) || rustMacroInputReferencesModuleAlias(type.input, alias);
     case "infer":
     case "primitive":
     case "string":
@@ -228,6 +240,11 @@ function rustBlockReferencesModuleAlias(block: RustBlock, alias: string): boolea
 
 function rustStatementReferencesModuleAlias(statement: RustStmt, alias: string): boolean {
   switch (statement.kind) {
+    case "macro-statement":
+      return rustPathReferencesModuleAlias(statement.invocation.path, alias) ||
+        rustMacroInputReferencesModuleAlias(statement.invocation.input, alias);
+    case "item":
+      return rustItemReferencesModuleAlias(statement.item, alias);
     case "let":
       return rustOptionalTypeReferencesModuleAlias(statement.type, alias) ||
         (statement.init !== undefined &&
@@ -425,6 +442,8 @@ function rustExpressionReferencesModuleAlias(expression: RustExpr, alias: string
 
 function rustPatternReferencesModuleAlias(pattern: RustPattern, alias: string): boolean {
   switch (pattern.kind) {
+    case "macro-invocation":
+      return rustPathReferencesModuleAlias(pattern.path, alias) || rustMacroInputReferencesModuleAlias(pattern.input, alias);
     case "wildcard":
     case "binding":
       return false;

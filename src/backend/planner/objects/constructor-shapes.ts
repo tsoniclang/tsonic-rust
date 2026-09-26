@@ -26,7 +26,7 @@ export function planRustConstructorShape(
       return type === undefined ? undefined : { name: `argument${index}`, type };
     });
     if (result === undefined || parameters === undefined || parameters.some(parameter => parameter === undefined)) return false;
-    functions.push({ name, generics: emptyRustGenerics, selfParam: rustSelfParameter(construction || definition.construction === undefined ? "rc" : "ref"),
+    functions.push({ kind: "function", name, generics: emptyRustGenerics, selfParam: rustSelfParameter(construction || definition.construction === undefined ? "rc" : "ref"),
       params: parameters as NonNullable<typeof parameters[number]>[], returnType: result, errorType });
     return true;
   };
@@ -37,10 +37,10 @@ export function planRustConstructorShape(
     } else {
       const selected = render(field.carrier);
       if (selected === undefined || field.property === undefined) return undefined;
-      functions.push({ name: field.property.getterTargetName, generics: emptyRustGenerics,
+      functions.push({ kind: "function", name: field.property.getterTargetName, generics: emptyRustGenerics,
         deadCode: fieldDeadCode(index, "getter"),
         selfParam: rustSelfParameter(field.property.selfMode), params: [], returnType: selected, errorType });
-      if (field.property.setterTargetName !== undefined) functions.push({ name: field.property.setterTargetName,
+      if (field.property.setterTargetName !== undefined) functions.push({ kind: "function", name: field.property.setterTargetName,
         deadCode: fieldDeadCode(index, "setter"),
         generics: emptyRustGenerics, selfParam: rustSelfParameter(field.property.selfMode), params: [{ name: "value", type: selected }],
         returnType: { kind: "unit" }, errorType });
@@ -54,12 +54,12 @@ export function planRustConstructorShape(
   } }] };
   const field = (owner: string, name: string): RustExpr => ({ kind: "field", receiver: { kind: "path", path: owner }, name });
   return [
-    { kind: "trait", name: definition.dispatchName, visibility, generics, functions,
+    { kind: "trait", name: definition.dispatchName, visibility, generics, members: functions,
       superTraits: [{ kind: "named", path: "rt::ObjectIdentityCarrier" }, ...superTraits] },
     { kind: "struct", name: definition.targetName, visibility, generics, fields: [
       { name: "dispatch", visibility, type: dispatch },
     ] },
-    { kind: "impl", generics, target: type, trait: { kind: "named", path: "Clone" }, functions: [{
+    { kind: "impl", generics, target: type, trait: { kind: "named", path: "Clone" }, members: [{ kind: "function",
       name: "clone", visibility: "private", generics: emptyRustGenerics, selfParam: rustSelfParameter("ref"), params: [],
       returnType: { kind: "named", path: "Self" }, body: { statements: [{ kind: "tail", expr: {
         kind: "struct-literal", path: "Self", fields: [
@@ -67,7 +67,7 @@ export function planRustConstructorShape(
         ],
       } }] },
     }] },
-    { kind: "impl", generics, target: type, trait: { kind: "named", path: "PartialEq" }, functions: [{
+    { kind: "impl", generics, target: type, trait: { kind: "named", path: "PartialEq" }, members: [{ kind: "function",
       name: "eq", visibility: "private", generics: emptyRustGenerics, selfParam: rustSelfParameter("ref"),
       params: [{ name: "other", type: { kind: "reference", mutable: false, referent: { kind: "named", path: "Self" } } }],
       returnType: { kind: "primitive", name: "bool" }, body: { statements: [{ kind: "tail", expr: {
@@ -76,7 +76,7 @@ export function planRustConstructorShape(
         ],
       } }] },
     }] },
-    { kind: "impl", generics, target: type, trait: { kind: "named", path: "Eq" }, functions: [] },
+    { kind: "impl", generics, target: type, trait: { kind: "named", path: "Eq" }, members: [] },
     rustProjectObjectIdentityImplementation(type, generics, {
       kind: "method-call", receiver: field("self", "dispatch"), method: "object_identity", args: [],
     }, {

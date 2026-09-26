@@ -199,7 +199,7 @@ export function planRustProgramErrorModule(
       generics: emptyRustGenerics,
       trait: namedType("core::error::Error"),
       target: programErrorType,
-      functions: [],
+      members: [],
     },
     sourceStringImplementation(),
     planRustSuppressedErrorConstructor(),
@@ -226,7 +226,7 @@ function fromImplementation(
     generics: emptyRustGenerics,
     trait: namedType("core::convert::From", [source]),
     target: programErrorType,
-    functions: [{
+    members: [{ kind: "function",
       name: "from",
       visibility: "private",
       generics: emptyRustGenerics,
@@ -260,7 +260,7 @@ function displayImplementation(projectVariants: readonly {
     generics: emptyRustGenerics,
     trait: namedType("core::fmt::Display"),
     target: programErrorType,
-    functions: [{
+    members: [{ kind: "function",
       name: "fmt",
       visibility: "private",
       generics: emptyRustGenerics,
@@ -324,7 +324,7 @@ function debugImplementation(): RustItem {
     generics: emptyRustGenerics,
     trait: namedType("core::fmt::Debug"),
     target: programErrorType,
-    functions: [{
+    members: [{ kind: "function",
       name: "fmt",
       visibility: "private",
       generics: emptyRustGenerics,
@@ -358,7 +358,7 @@ function sourceStringImplementation(): RustItem {
     generics: emptyRustGenerics,
     trait: namedType("tsonic_rust_runtime::ToSourceString"),
     target: programErrorType,
-    functions: [{
+    members: [{ kind: "function",
       name: "to_source_string",
       visibility: "private",
       generics: emptyRustGenerics,

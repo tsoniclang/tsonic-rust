@@ -20,6 +20,12 @@ export type RustTokenFragment =
 export type RustTokenTree = RustNativeTokenTree<RustTokenFragment>;
 export type RustMacroInput = RustNativeMacroInput<RustTokenFragment>;
 
+export interface RustMacroInvocation {
+  readonly kind: "macro-invocation";
+  readonly path: string;
+  readonly input: RustMacroInput;
+}
+
 export function rustSeparatedExpressionTokens(
   expressions: readonly RustExpr[],
   separator: "," | ";",

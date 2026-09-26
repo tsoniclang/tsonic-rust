@@ -192,7 +192,7 @@ function planDefinition(definition: RustGenericCallableDefinition, context: Rust
   } }], outlives: [], captures: [{ kind: "type", type: { kind: "named", path: "Self" } },
     ...arguments_, ...definition.signature.typeParameters.map(path => ({ kind: "type" as const, type: { kind: "named" as const, path } }))] } : methodOutput;
   return [...genericCallableStorageItems(definition, generics, target, variants as NonNullable<typeof variants[number]>[]),
-  { kind: "impl", target, generics, functions: [{
+  { kind: "impl", target, generics, members: [{ kind: "function",
     name: "call", visibility: "public", selfParam: { kind: "reference", mutable: false },
     generics: { parameters: definition.signature.typeParameters.map(name => ({ kind: "type", name, bounds: [] })),
       wherePredicates: [...predicates.values()],

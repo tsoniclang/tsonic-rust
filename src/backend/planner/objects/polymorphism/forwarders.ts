@@ -93,6 +93,7 @@ export function planProjectDowncastRouteImplementation(
   return returnType === undefined
     ? undefined
     : {
+        kind: "function",
         name: route.slot,
         visibility: "private",
         generics: emptyRustGenerics,

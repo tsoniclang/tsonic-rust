@@ -617,6 +617,8 @@ function rustTypeIsLegalInPosition(
 
 function rustTypeContainsImplTrait(type: RustType): boolean {
   switch (type.kind) {
+    case "macro-invocation":
+      throw new Error("Native macro result classification requires the selected expansion's type evidence.");
     case "impl-trait":
       return true;
     case "named":

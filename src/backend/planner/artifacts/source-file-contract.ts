@@ -44,6 +44,8 @@ function rustPublicSurface(items: readonly RustItem[]): string {
 
 function publicItemSurface(item: RustItem): readonly string[] {
   switch (item.kind) {
+    case "macro-invocation":
+      return [closedMetadataKey(item)];
     case "function":
       return item.visibility === "public"
         ? [encodeRustContractParts([closedMetadataKey(item.attrs ?? []), rustFunctionSurface({
@@ -82,17 +84,19 @@ function publicItemSurface(item: RustItem): readonly string[] {
       return item.visibility === "public" ? [closedMetadataKey(item)] : [];
     case "impl":
       if (item.trait !== undefined) {
-        return (item.associatedTypes?.length ?? 0) === 0 ? [] : [closedMetadataKey({
-          kind: "associated-type-implementation",
+        const members = item.members.filter(member => member.kind !== "function");
+        return members.length === 0 ? [] : [closedMetadataKey({
+          kind: "associated-implementation",
           trait: item.trait,
           target: item.target,
           generics: item.generics,
-          associatedTypes: item.associatedTypes,
+          members,
         })];
       }
-      return item.functions
-        .filter((fn) => fn.visibility === "public")
-        .map((fn) => publicMethodSurface(closedMetadataKey(item.target), fn));
+      return item.members.flatMap(member => member.kind === "function"
+        ? member.visibility === "public" ? [publicMethodSurface(closedMetadataKey(item.target), member)] : []
+        : member.kind === "macro-invocation" || member.kind === "const" && member.visibility === "public"
+          ? [closedMetadataKey({ target: item.target, generics: item.generics, member })] : []);
     case "mod-decl":
       return item.visibility === "public"
         ? [encodeRustContractParts(["module", item.name, closedMetadataKey(item.attrs ?? []),

@@ -23,7 +23,7 @@ export function rustDefaultImplementation(
     generics,
     trait: { kind: "named", path: "Default" },
     target,
-    functions: [{
+    members: [{ kind: "function",
       name: "default",
       visibility: "public",
       generics: emptyRustGenerics,

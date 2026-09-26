@@ -48,7 +48,7 @@ export function planRustClassValueForwarder(
   }
   const result = applyRustCallableValueAdapter(invocation, callable.resultAdapter, callable.declaration, localContext);
   if (result === undefined) return undefined;
-  return { name, visibility: "private", generics: { parameters: [], wherePredicates: [] },
+  return { kind: "function", name, visibility: "private", generics: { parameters: [], wherePredicates: [] },
     selfParam: rustSelfParameter(construction ? "rc" : "ref"),
     params, returnType, errorType: rustErrorType(boundary),
     body: { statements: [...arguments_.statements, { kind: "tail", expr:

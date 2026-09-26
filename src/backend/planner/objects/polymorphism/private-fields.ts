@@ -48,7 +48,7 @@ export function planProjectPrivateStateAccessors(
       receiver: { kind: "path", path: "self" },
       name: field.targetName,
     };
-    functions.push({
+    functions.push({ kind: "function",
       name: readName,
       visibility,
       ...(publiclyReachable ? { attrs: [rustHiddenAttribute] } : {}),
@@ -66,7 +66,7 @@ export function planProjectPrivateStateAccessors(
       },
     });
     if (writeName !== undefined) {
-      functions.push({
+      functions.push({ kind: "function",
         name: writeName,
         visibility,
         ...(publiclyReachable ? { attrs: [rustHiddenAttribute] } : {}),
@@ -91,6 +91,6 @@ export function planProjectPrivateStateAccessors(
     kind: "impl",
     generics: rustProjectRepresentationGenerics(representation, context),
     target: stateType,
-    functions,
+    members: functions,
   }];
 }

@@ -425,7 +425,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     kind: "impl",
     generics,
     target: openType,
-    functions: implFunctions,
+    members: implFunctions,
   };
   return [
     ...(representation.kind === "value" ? [] : [stateItem]),
@@ -646,7 +646,7 @@ function planConstructor(
     publiclyReachable,
   );
   const constructorAttributes = safetyAttributes;
-  return {
+  return { kind: "function",
     name: "new",
     ...(constructorDeadCode === undefined ? {} : { deadCode: constructorDeadCode }),
     generics: emptyRustGenerics,

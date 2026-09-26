@@ -22,6 +22,10 @@ export function rustStatementsReferencePath(
 
 export function rustStatementReferencesPath(statement: RustStmt, path: string): boolean {
   switch (statement.kind) {
+    case "macro-statement":
+      return true;
+    case "item":
+      return false;
     case "let":
       return statement.init !== undefined && rustExpressionReferencesPath(statement.init, path);
     case "expr":

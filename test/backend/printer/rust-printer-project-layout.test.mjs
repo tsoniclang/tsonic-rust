@@ -451,7 +451,7 @@ test("format macro arguments keep borrowed nested calls attached to their call",
       kind: "impl",
       generics: emptyRustGenerics,
       target: { kind: "named", path: "Proof" },
-      functions: [{
+      members: [{ kind: "function",
         name: "proof",
         generics: emptyRustGenerics,
         visibility: "private",

@@ -76,7 +76,7 @@ export function createStructuralLiteralImplementation(
       });
       if (protocol === undefined || storage === undefined || result === undefined || params === undefined ||
         params.some(parameter => parameter === undefined) || !store(field.targetName, storageIndex, "value", storage)) return undefined;
-      functions.push({ name: field.targetName, visibility: "private", generics: emptyRustGenerics,
+      functions.push({ kind: "function", name: field.targetName, visibility: "private", generics: emptyRustGenerics,
         selfParam: rustSelfParameter("rc"), params: params as NonNullable<typeof params[number]>[], returnType: result, errorType,
         body: { statements: [{ kind: "let", name: "callable", mutable: false, init: read(field.targetName) }, { kind: "tail", expr: {
           kind: "method-call", receiver: { kind: "path", path: "callable" }, method: "call", args: [{ kind: "tuple-literal",
@@ -118,12 +118,12 @@ export function createStructuralLiteralImplementation(
         setter = { kind: "evaluate-then", effect: write, discard: "unit", value: { kind: "call", path: "Ok", args: [{ kind: "tuple-literal", elements: [] }] } };
       }
     }
-    functions.push({ name: property.getterTargetName, visibility: "private", generics: emptyRustGenerics,
+    functions.push({ kind: "function", name: property.getterTargetName, visibility: "private", generics: emptyRustGenerics,
       selfParam: rustSelfParameter(property.selfMode), params: [], returnType: type, errorType,
       body: { statements: [{ kind: "tail", expr: getter }] } });
     if (property.setterTargetName !== undefined) {
       if (setter === undefined) return undefined;
-      functions.push({ name: property.setterTargetName, visibility: "private", generics: emptyRustGenerics,
+      functions.push({ kind: "function", name: property.setterTargetName, visibility: "private", generics: emptyRustGenerics,
         selfParam: rustSelfParameter(property.selfMode), params: [{ name: "value", type }], returnType: { kind: "unit" }, errorType,
         body: { statements: [{ kind: "tail", expr: setter }] } });
     }
@@ -131,7 +131,7 @@ export function createStructuralLiteralImplementation(
   return Object.freeze({ kind: "structural", expression, wrapperPath: instantiatedWrapper.path, stateName,
     slots: Object.freeze(slots), items: Object.freeze<RustItem[]>([
       { kind: "struct", name: stateName, visibility: "crate", generics, fields },
-      { kind: "impl", target: root, trait, generics, functions },
+      { kind: "impl", target: root, trait, generics, members: functions },
     ]) });
 }
 

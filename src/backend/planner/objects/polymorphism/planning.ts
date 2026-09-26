@@ -313,7 +313,7 @@ export function planPolymorphicClassDeclaration(
       kind: "impl",
       generics,
       target: wrapperType,
-      functions: [constructor.initialize, ...(constructor.construct === undefined ? [] : [constructor.construct]), ...staticMethods],
+      members: [constructor.initialize, ...(constructor.construct === undefined ? [] : [constructor.construct]), ...staticMethods],
     },
     ...(defaultImplementation === undefined ? [] : [defaultImplementation]),
     ...rootImplementations,
@@ -349,7 +349,7 @@ function planProjectExternalErrorImplementations(
     generics: rustProjectRepresentationGenerics(representation, context),
     trait: { kind: "named", path: "rt::ErrorStack" },
     target: wrapperType,
-    functions: [{
+    members: [{ kind: "function",
       name: "set_stack", visibility: "private", generics: emptyRustGenerics,
       selfParam: { kind: "reference", mutable: false },
       params: [{ name: "stack", type: { kind: "named", path: "Option", genericArguments: [
@@ -365,7 +365,7 @@ function planProjectExternalErrorImplementations(
     generics: rustProjectRepresentationGenerics(representation, context),
     trait: { kind: "named", path: "core::fmt::Display" },
     target: wrapperType,
-    functions: [{
+    members: [{ kind: "function",
       name: "fmt",
       visibility: "private",
       generics: emptyRustGenerics,
@@ -403,7 +403,7 @@ function planProjectExternalErrorImplementations(
     generics: rustProjectRepresentationGenerics(representation, context),
     trait: { kind: "named", path: "rt::ToSourceString" },
     target: wrapperType,
-    functions: [{
+    members: [{ kind: "function",
       name: "to_source_string",
       visibility: "private",
       generics: emptyRustGenerics,

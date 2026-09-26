@@ -68,7 +68,7 @@ function planImplementation(implementation: RustSuspendedCallableImplementation,
   }, { kind: "impl", target,
     generics: rustGenericsWithAssociatedBounds(parameters, rustDeclarationAssociatedPredicates(declaration, scoped)),
     trait: { kind: "named", path: "rt::CallableImplementation", genericArguments: [{ kind: "type", type: argumentsType }, resultType] },
-    functions: [{ name: "invoke", visibility: "private", selfParam: { kind: "reference", mutable: false },
+    members: [{ kind: "function", name: "invoke", visibility: "private", selfParam: { kind: "reference", mutable: false },
       generics: { parameters: [], wherePredicates: [] }, params: [{ name: argumentsName, type: argumentsType }], returnType: resultType.type,
       body: { statements: [{ kind: "let", name: ownerName, mutable: false, init: {
         kind: "method-call", receiver: { kind: "method-call", receiver: {

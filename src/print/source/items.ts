@@ -1,5 +1,6 @@
 import { printRustBlockStatements } from "./blocks.js";
 import { printRustExpr } from "./expressions/core.js";
+import { printRustMacroItem } from "./macro-input.js";
 import { printRustAttribute, printRustAttributes as printAttributes } from "./attributes.js";
 import {
   indentText,
@@ -38,6 +39,8 @@ export function printRustSourceFile(model: RustSourceFileModel): string {
 
 export function printRustItem(item: RustItem): string {
   switch (item.kind) {
+    case "macro-invocation":
+      return printRustMacroItem(item);
     case "extern-crate":
       return `extern crate ${item.name};`;
     case "mod-decl": {
@@ -102,17 +105,21 @@ export function printRustItem(item: RustItem): string {
         : `: ${item.superTraits.map(printRustType).join(" + ")}`;
       const declaration = `${printRustVisibility(item.visibility)}trait ${item.name}${generics.parameters}${superTraits}`;
       const header = appendRustWhereEnding(declaration, generics, 0, "{");
-      const types = (item.associatedTypes ?? []).map((type) => {
-        const bounds = type.bounds.length === 0
-          ? ""
-          : `: ${type.bounds.map(printRustTypeBound).join(" + ")}`;
-        return `    type ${type.name}${bounds};`;
-      });
-      const members = [...types, ...item.functions.map(printRustTraitFunction)].join("\n");
+      const members = item.members.map(member => {
+        switch (member.kind) {
+          case "macro-invocation": return `    ${printRustMacroItem(member)}`;
+          case "function": return printRustTraitFunction(member);
+          case "type": {
+            const bounds = member.bounds.length === 0
+              ? "" : `: ${member.bounds.map(printRustTypeBound).join(" + ")}`;
+            return `    type ${member.name}${bounds};`;
+          }
+        }
+      }).join("\n");
       return `${printAttributes(item.attrs, 0)}${header}${members.length === 0 ? "}" : `\n${members}\n}`}`;
     }
     case "impl": {
-      if (item.trait === undefined && (item.associatedTypes?.length ?? 0) !== 0) {
+      if (item.trait === undefined && item.members.some(member => member.kind === "type")) {
         throw new Error("Associated type definitions require an exact trait implementation.");
       }
       const generics = printRustGenerics(item.generics);
@@ -121,16 +128,17 @@ export function printRustItem(item: RustItem): string {
         ? `impl${generics.parameters} ${target}`
         : `impl${generics.parameters} ${printRustType(item.trait)} for ${target}`;
       const header = appendRustWhereEnding(declaration, generics, 0, "{");
-      const constants = (item.constants ?? []).map((constant) => {
-        const visibility = item.trait === undefined
-          ? printRustVisibility(constant.visibility)
-          : "";
-        return `${printAttributes(constant.attrs, 1)}    ${visibility}const ${constant.name}: ${printRustType(constant.type)} = ${printRustExpr(constant.value)};`;
-      });
-      const functions = item.functions.map((fn) => printRustImplFunction(fn, item.trait === undefined));
-      const types = (item.associatedTypes ?? []).map((type) =>
-        `    type ${type.name} = ${printRustType(type.type)};`);
-      const members = [...types, ...constants, ...functions].join("\n\n");
+      const members = item.members.map(member => {
+        switch (member.kind) {
+          case "macro-invocation": return `    ${printRustMacroItem(member)}`;
+          case "function": return printRustImplFunction(member, item.trait === undefined);
+          case "type": return `    type ${member.name} = ${printRustType(member.type)};`;
+          case "const": {
+            const visibility = item.trait === undefined ? printRustVisibility(member.visibility) : "";
+            return `${printAttributes(member.attrs, 1)}    ${visibility}const ${member.name}: ${printRustType(member.type)} = ${printRustExpr(member.value)};`;
+          }
+        }
+      }).join("\n\n");
       return members.length === 0 ? `${header}}` : `${header}\n${members}\n}`;
     }
     case "function":

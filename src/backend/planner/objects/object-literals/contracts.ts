@@ -108,7 +108,7 @@ export function planContractImplementation(
     if (readResult === undefined) {
       return undefined;
     }
-    functions.push({
+    functions.push({ kind: "function",
       name: read,
       visibility: "private",
       generics: emptyRustGenerics,
@@ -159,7 +159,7 @@ export function planContractImplementation(
       if (writeValue === undefined || !dispatch.write.fallible && accessor !== undefined) {
         return undefined;
       }
-      functions.push({
+      functions.push({ kind: "function",
         name: write!,
         visibility: "private",
         generics: emptyRustGenerics,
@@ -309,7 +309,7 @@ export function planContractImplementation(
                   },
               { errorType: method.errorType },
             );
-        functions.push({
+        functions.push({ kind: "function",
           name: variant.virtualSlot,
           visibility: "private",
           generics: emptyRustGenerics,
@@ -378,7 +378,7 @@ export function planContractImplementation(
       const result = method.errorType === undefined
         ? adaptedResult
         : applyRustFallibleResultExpression(adaptedResult, { errorType: method.errorType });
-      functions.push({
+      functions.push({ kind: "function",
         name: variant.virtualSlot,
         visibility: "private",
         generics: emptyRustGenerics,
@@ -431,7 +431,7 @@ export function planContractImplementation(
       if (replacement === undefined) {
         return undefined;
       }
-      functions.push({
+      functions.push({ kind: "function",
         name: write,
         visibility: "private",
         generics: emptyRustGenerics,
@@ -451,7 +451,7 @@ export function planContractImplementation(
     generics: emptyRustGenerics,
     trait,
     target: rootType,
-    functions,
+    members: functions,
   };
 }
 

@@ -71,15 +71,15 @@ function finalizeRustItemStyle(
   if (item.kind === "trait") {
     return {
       ...item,
-      functions: item.functions.map(finalizeRustTraitFunctionStyle),
+      members: item.members.map(member => member.kind === "function" ? finalizeRustTraitFunctionStyle(member) : member),
     };
   }
   if (item.kind === "impl") {
     const publicOwner = item.target.kind === "named" && publicTypes.has(item.target.path);
     return {
       ...item,
-      functions: item.functions.map((fn) =>
-        finalizeRustImplFunctionStyle(fn, item.trait === undefined, publicOwner)),
+      members: item.members.map(member => member.kind === "function"
+        ? finalizeRustImplFunctionStyle(member, item.trait === undefined, publicOwner) : member),
     };
   }
   if (item.kind === "const" || item.kind === "thread-local") {
@@ -167,6 +167,9 @@ function finalizeRustBlockStyle(block: RustBlock): RustBlock {
 
 function finalizeRustStatementStyle(statement: RustStmt): RustStmt {
   switch (statement.kind) {
+    case "macro-statement":
+    case "item":
+      return statement;
     case "let":
       return { ...statement,
         ...(statement.type === undefined || nameType === undefined ? {} : { type: nameType(statement.type, statement.name) }),
@@ -341,6 +344,10 @@ function rustBlockMayContinueLoop(block: RustBlock, label: string | undefined): 
 
 function rustStatementMayContinueLoop(statement: RustStmt, label: string | undefined): boolean {
   switch (statement.kind) {
+    case "macro-statement":
+      return true;
+    case "item":
+      return false;
     case "continue":
       return statement.label === label;
     case "if":
@@ -619,7 +626,11 @@ function closePublicRustTypeVisibility(
         item.visibility !== "public"
       ? { ...item, visibility: "public",
           ...(item.kind === "trait" ? {
-            functions: item.functions.map(({ deadCode, ...method }) => method),
+            members: item.members.map(member => {
+              if (member.kind !== "function") return member;
+              const { deadCode, ...method } = member;
+              return method;
+            }),
           } : {}),
         }
       : item);
@@ -649,25 +660,23 @@ function publicSignatureTypes(
       return publicTypes.has(item.name)
         ? [
             ...(item.superTraits ?? []),
-            ...(item.associatedTypes ?? []).flatMap((type) =>
-              type.bounds.flatMap(rustTypeBoundTypes)),
-            ...item.functions.flatMap((fn) => [
-              ...fn.params.map((parameter) => parameter.type),
-              ...optionalType(fn.returnType),
-            ]),
+            ...item.members.flatMap(member => member.kind === "type"
+              ? member.bounds.flatMap(rustTypeBoundTypes)
+              : member.kind === "function" ? [
+                ...member.params.map(parameter => parameter.type),
+                ...optionalType(member.returnType),
+              ] : []),
           ]
         : [];
     case "impl":
       return [...rustTypeNames(item.target), ...optionalType(item.trait).flatMap(rustTypeNames)]
         .some((name) => publicTypes.has(name))
         ? [
-          ...(item.associatedTypes ?? []).map((type) => type.type),
-          ...item.functions.flatMap((fn) => fn.visibility === "public"
-          ? [
-              ...fn.params.map((parameter) => parameter.type),
-              ...optionalType(fn.returnType),
-            ]
-          : []),
+          ...item.members.flatMap(member => member.kind === "type" ? [member.type]
+            : member.kind === "const" ? (member.visibility === "public" ? [member.type] : [])
+            : member.kind === "function" && member.visibility === "public" ? [
+              ...member.params.map(parameter => parameter.type), ...optionalType(member.returnType),
+            ] : []),
         ]
         : [];
     case "type-alias":
@@ -675,6 +684,7 @@ function publicSignatureTypes(
     case "mod-decl":
     case "extern-crate":
     case "use":
+    case "macro-invocation":
       return [];
   }
 }
@@ -711,6 +721,8 @@ function collectLocalRustTypeNames(
 
 function rustTypeNames(type: RustType): readonly string[] {
   switch (type.kind) {
+    case "macro-invocation":
+      return [];
     case "infer":
       return [];
     case "named":

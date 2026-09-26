@@ -13,10 +13,10 @@ export function rustProjectWrapperTraits(
   });
   const reference = (expression: RustExpr): RustExpr => ({ kind: "reference", expr: expression });
   const implementation = (trait: string, method: RustImplFunction): RustItem => ({
-    kind: "impl", target, generics, trait: { kind: "named", path: trait }, functions: [method],
+    kind: "impl", target, generics, trait: { kind: "named", path: trait }, members: [method],
   });
   return [
-    implementation("Clone", {
+    implementation("Clone", { kind: "function",
       name: "clone", visibility: "private", generics: emptyRustGenerics,
       selfParam: rustSelfParameter("ref"), params: [], returnType: { kind: "named", path: "Self" },
       body: { statements: [{ kind: "tail", expr: {
@@ -26,7 +26,7 @@ export function rustProjectWrapperTraits(
         }],
       } }] },
     }),
-    implementation("core::fmt::Debug", {
+    implementation("core::fmt::Debug", { kind: "function",
       name: "fmt", visibility: "private", generics: emptyRustGenerics,
       selfParam: rustSelfParameter("ref"), params: [{ name: "formatter", type: {
         kind: "reference", mutable: true, referent: {
@@ -45,7 +45,7 @@ export function rustProjectWrapperTraits(
         }, method: "finish", args: [],
       } }] },
     }),
-    implementation("PartialEq", {
+    implementation("PartialEq", { kind: "function",
       name: "eq", visibility: "private", generics: emptyRustGenerics,
       selfParam: rustSelfParameter("ref"), params: [{ name: "other", type: {
         kind: "reference", mutable: false, referent: { kind: "named", path: "Self" },

@@ -526,7 +526,7 @@ export function planProjectClassConstructor(
     context,
     definition.targetName,
   );
-  const initialize: RustImplFunction = {
+  const initialize: RustImplFunction = { kind: "function",
     name: constructorSignature.initializeName,
     visibility: publishesImplementationAbi ? "public" : "crate",
     generics: emptyRustGenerics,
@@ -563,7 +563,7 @@ export function planProjectClassConstructor(
       expr: { kind: "path" as const, path: environmentBorrow.name } }]),
     ...parameterPlan.params.map((parameter) => ({ kind: "path" as const, path: parameter.name })),
   ];
-  const construct: RustImplFunction = {
+  const construct: RustImplFunction = { kind: "function",
     name: constructorSignature.targetName,
     generics: emptyRustGenerics,
     ...(isUnsafe ? { isUnsafe: true } : {}),

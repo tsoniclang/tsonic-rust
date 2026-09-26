@@ -48,7 +48,7 @@ export function projectIdentityImplementations(
       generics,
       trait: { kind: "named", path: "core::fmt::Debug" },
       target: wrapperType,
-      functions: [{
+      members: [{ kind: "function",
         name: "fmt",
         visibility: "private",
         generics: emptyRustGenerics,
@@ -84,7 +84,7 @@ export function projectIdentityImplementations(
       generics,
       trait: { kind: "named", path: "PartialEq" },
       target: wrapperType,
-      functions: [{
+      members: [{ kind: "function",
         name: "eq",
         visibility: "private",
         generics: emptyRustGenerics,
@@ -124,7 +124,7 @@ export function projectIdentityImplementations(
       generics,
       trait: { kind: "named", path: "Eq" },
       target: wrapperType,
-      functions: [],
+      members: [],
     },
     rustProjectObjectIdentityImplementation(wrapperType, generics, {
       kind: "reference",
@@ -170,7 +170,7 @@ export function planProjectDispatchTrait(
       route.target.declaration,
       publiclyReachable,
     );
-    functions.push({
+    functions.push({ kind: "function",
       name: route.slot,
       ...(deadCode === undefined ? {} : { deadCode }),
       generics: emptyRustGenerics,
@@ -210,14 +210,14 @@ export function planProjectDispatchTrait(
       const contentDeadCode = rustGeneratedDispatchDeadCodeDisposition(
         context, definition.declaration, field.declaration, "content", publiclyReachable,
       );
-      functions.push({
+      functions.push({ kind: "function",
         name: rustArrayFieldMutationName(read), generics: emptyRustGenerics,
         ...(contentDeadCode === undefined ? {} : { deadCode: contentDeadCode }),
         selfParam: rustSelfParameter("ref"),
         params: [{ name: "action", type: rustArrayFieldMutationType(field.type) }],
       });
     }
-    functions.push({
+    functions.push({ kind: "function",
       name: read,
       ...(readDeadCode === undefined ? {} : { deadCode: readDeadCode }),
       generics: emptyRustGenerics,
@@ -236,7 +236,7 @@ export function planProjectDispatchTrait(
         "write",
         publiclyReachable,
       );
-      functions.push({
+      functions.push({ kind: "function",
         name: write!,
         ...(writeDeadCode === undefined ? {} : { deadCode: writeDeadCode }),
         generics: emptyRustGenerics,
@@ -270,7 +270,7 @@ export function planProjectDispatchTrait(
       accessor.role,
       publiclyReachable,
     );
-    functions.push({
+    functions.push({ kind: "function",
       name: slot,
       ...(deadCode === undefined ? {} : { deadCode }),
       generics: emptyRustGenerics,
@@ -309,7 +309,7 @@ export function planProjectDispatchTrait(
           role,
           publiclyReachable,
         );
-        return {
+        return { kind: "function",
         name,
         ...(deadCode === undefined ? {} : { deadCode }),
         generics: emptyRustGenerics,
@@ -348,7 +348,7 @@ export function planProjectDispatchTrait(
       "write",
       publiclyReachable,
     );
-    functions.push({
+    functions.push({ kind: "function",
       name: write,
       ...(deadCode === undefined ? {} : { deadCode }),
       generics: emptyRustGenerics,
@@ -375,6 +375,6 @@ export function planProjectDispatchTrait(
     ...(deadCode === undefined ? {} : { deadCode }),
     generics,
     ...(superTraits.length === 0 ? {} : { superTraits: superTraits as readonly RustType[] }),
-    functions,
+    members: functions,
   };
 }

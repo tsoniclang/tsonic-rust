@@ -89,7 +89,7 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
       kind: "impl",
       generics: emptyRustGenerics,
       target: enumType,
-      constants: variants.map((variant) => {
+      members: variants.map((variant) => {
         const variantDeadCode = rustAuthoredVariantDeadCodeDisposition(
           context,
           node,
@@ -99,6 +99,7 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
             ? []
             : [rustLintAttributes.nonUpperCaseGlobal];
         return {
+          kind: "const",
           name: variant.name,
           visibility: "public",
           ...(constantAttrs.length === 0 ? {} : { attrs: constantAttrs }),
@@ -114,7 +115,6 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
           },
         };
       }),
-      functions: [],
     }];
   }
   return [{

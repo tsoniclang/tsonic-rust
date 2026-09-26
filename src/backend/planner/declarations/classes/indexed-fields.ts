@@ -40,7 +40,7 @@ export function planRustIndexedFieldImplementation(
   if (storage === undefined) return undefined;
   const trait: RustType = { kind: "named", path: "rt::Field", genericArguments: [{ kind: "type", type: keyType }] };
   const items: RustItem[] = [{ kind: "impl", trait, target: storage, generics,
-    associatedTypes: [{ name: "Output", type: output }, { name: "Storage", type: storage }], functions: [],
+    members: [{ kind: "type", name: "Output", type: output }, { kind: "type", name: "Storage", type: storage }],
   }];
   for (const access of field.sharedWrite ? ["read", "write"] as const : ["read"] as const) {
     const bodyContext: RustPlanContext = { ...context, fallibleBoundary: boundary,
@@ -61,7 +61,7 @@ export function planRustIndexedFieldImplementation(
       trait: { kind: "named", path: access === "read" ? "rt::ReadFieldOf" : "rt::WriteFieldOf", genericArguments: [
         { kind: "type", type: owner }, { kind: "type", type: keyType }, { kind: "type", type: error },
       ] },
-      functions: [{ name: access === "read" ? "read_field" : "write_field", visibility: "private",
+      members: [{ kind: "function", name: access === "read" ? "read_field" : "write_field", visibility: "private",
         generics: emptyRustGenerics,
         params: [
           { name: "owner", type: { kind: "reference", referent: owner, mutable: false } },

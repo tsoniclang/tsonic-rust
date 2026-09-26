@@ -132,7 +132,7 @@ export function planProjectRootImplementations(
       generics,
       trait: traitType,
       target: rootType,
-      functions,
+      members: functions,
     });
   }
   const helpers = [
@@ -146,7 +146,7 @@ export function planProjectRootImplementations(
         kind: "impl",
         generics,
         target: rootType,
-        functions: helpers,
+        members: helpers,
       }, ...items];
 }
 
@@ -260,7 +260,7 @@ function planRootContractFunctions(
           { kind: "reference", mutable: true, expr: storage },
         ] }), representation);
       if (mutation === undefined) return undefined;
-      functions.push({
+      functions.push({ kind: "function",
         name: rustArrayFieldMutationName(read), visibility: "private", generics: emptyRustGenerics,
         selfParam: rustSelfParameter("ref"),
         params: [{ name: "action", type: rustArrayFieldMutationType(field.type) }],
@@ -290,7 +290,7 @@ function planRootContractFunctions(
     if (readResult === undefined) {
       return undefined;
     }
-    functions.push({
+    functions.push({ kind: "function",
       name: read,
       visibility: "private",
       generics: emptyRustGenerics,
@@ -350,7 +350,7 @@ function planRootContractFunctions(
           !rustTypeEquals(writeValue.errorType, fieldErrorType))) {
         return undefined;
       }
-      functions.push({
+      functions.push({ kind: "function",
         name: write!,
         visibility: "private",
         generics: emptyRustGenerics,
@@ -522,7 +522,7 @@ function planRootContractFunctions(
           if (replacement === undefined) {
             return undefined;
           }
-          functions.push({
+          functions.push({ kind: "function",
             name: write,
             visibility: "private",
             generics: emptyRustGenerics,

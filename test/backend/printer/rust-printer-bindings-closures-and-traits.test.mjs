@@ -491,7 +491,7 @@ test("long multi-supertrait headers use rustfmt-compatible vertical layout", () 
         { kind: "named", path: "__TsonicDispatch_TaggedProjectObject" },
         { kind: "named", path: "__TsonicDispatch_CountedProjectObject" },
       ],
-      functions: [],
+      members: [],
     }],
   });
 
@@ -513,7 +513,7 @@ test("one long supertrait header uses rustfmt-compatible vertical layout", () =>
         kind: "named",
         path: "__TsonicDispatch_ProjectObjectWithAnIntentionallyLongBaseContractName",
       }],
-      functions: [],
+      members: [],
     }],
   });
 
@@ -535,7 +535,7 @@ test("one supertrait header below rustfmt width remains on one line", () => {
         kind: "named",
         path: "__TsonicDispatch_GenericBase<String>",
       }],
-      functions: [],
+      members: [],
     }],
   });
 
@@ -557,7 +557,7 @@ test("nonempty traits use rustfmt-compatible long supertrait headers", () => {
         kind: "named",
         path: "__TsonicDispatch_UnsafeContract",
       }],
-      functions: [{
+      members: [{ kind: "function",
         name: "read",
         generics: emptyRustGenerics,
         selfParam: { kind: "rc" },
@@ -585,7 +585,7 @@ test("nonempty traits retain rustfmt-compatible fitted supertrait headers", () =
         kind: "named",
         path: "__TsonicDispatch_GenericBase<String>",
       }],
-      functions: [{
+      members: [{ kind: "function",
         name: "read",
         generics: emptyRustGenerics,
         selfParam: { kind: "rc" },

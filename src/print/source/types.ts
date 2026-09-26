@@ -8,9 +8,12 @@ import type {
   RustTypeBound,
 } from "../../backend/target-ast/nodes.js";
 import { escapeRustChar } from "./patterns.js";
+import { printRustMacroInvocation } from "./macro-input.js";
 
 export function printRustType(type: RustType): string {
   switch (type.kind) {
+    case "macro-invocation":
+      return printRustMacroInvocation(type.path, type.input);
     case "infer":
       return "_";
     case "primitive": {

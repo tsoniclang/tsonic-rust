@@ -13,7 +13,7 @@ export function rustProjectObjectIdentityImplementation(
     generics,
     trait: { kind: "named", path: "rt::ObjectIdentityCarrier" },
     target,
-    functions: [{
+    members: [{ kind: "function",
       name: "object_identity",
       visibility: "private",
       generics: emptyRustGenerics,
@@ -25,7 +25,7 @@ export function rustProjectObjectIdentityImplementation(
         referent: { kind: "named", path: "rt::ObjectIdentity" },
       },
       body: { statements: [{ kind: "tail", expr: identity }] },
-    }, ...(identityKey === undefined ? [] : [{
+    }, ...(identityKey === undefined ? [] : [{ kind: "function" as const,
       name: "object_identity_key",
       visibility: "private" as const,
       generics: emptyRustGenerics,

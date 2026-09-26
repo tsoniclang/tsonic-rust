@@ -8,14 +8,12 @@ import { rustSourceFileContractCandidate } from "../../../dist/backend/planner/a
 
 const family = {
   kind: "trait", name: "Storage", visibility: "public", generics: emptyRustGenerics,
-  associatedTypes: [{ name: "Output", bounds: [{ kind: "trait", path: "Clone" }] }],
-  functions: [],
+  members: [{ kind: "type", name: "Output", bounds: [{ kind: "trait", path: "Clone" }] }],
 };
 const implementation = {
   kind: "impl", generics: emptyRustGenerics, trait: { kind: "named", path: "Storage" },
   target: { kind: "primitive", name: "i32" },
-  associatedTypes: [{ name: "Output", type: { kind: "primitive", name: "i32" } }],
-  functions: [],
+  members: [{ kind: "type", name: "Output", type: { kind: "primitive", name: "i32" } }],
 };
 
 test("associated storage outputs stay typed until the final Rust printer", () => {
@@ -26,10 +24,10 @@ test("associated storage outputs stay typed until the final Rust printer", () =>
 });
 
 test("associated bounds and definitions retain their module dependencies", () => {
-  const bound = { ...family, associatedTypes: [{ name: "Output", bounds: [
+  const bound = { ...family, members: [{ kind: "type", name: "Output", bounds: [
     { kind: "trait-type", reference: { trait: { kind: "named", path: "storage::Value" } } },
   ] }] };
-  const output = { ...implementation, associatedTypes: [{ name: "Output",
+  const output = { ...implementation, members: [{ kind: "type", name: "Output",
     type: { kind: "named", path: "data::Payload" } }] };
   assert.equal(rustItemsReferenceModuleAlias([bound], "storage"), true);
   assert.equal(rustItemsReferenceModuleAlias([output], "data"), true);
@@ -39,11 +37,11 @@ test("associated bounds and definitions retain their module dependencies", () =>
 test("public storage output changes invalidate the artifact public contract", () => {
   const surface = (item) => rustSourceFileContractCandidate("family", createRustSourceFile([item]), [])
     .contract.facets.find((facet) => facet.facet === "source-file-public-surface").value;
-  assert.notEqual(surface(implementation), surface({ ...implementation, associatedTypes: [
-    { name: "Output", type: { kind: "primitive", name: "u32" } },
+  assert.notEqual(surface(implementation), surface({ ...implementation, members: [
+    { kind: "type", name: "Output", type: { kind: "primitive", name: "u32" } },
   ] }));
-  assert.notEqual(surface(family), surface({ ...family, associatedTypes: [
-    { name: "Output", bounds: [] },
+  assert.notEqual(surface(family), surface({ ...family, members: [
+    { kind: "type", name: "Output", bounds: [] },
   ] }));
 });
 
@@ -52,7 +50,7 @@ test("public associated output types cannot remain private", () => {
     family,
     { kind: "struct", name: "Payload", visibility: "private", generics: emptyRustGenerics,
       fields: [] },
-    { ...implementation, associatedTypes: [{ name: "Output", type: { kind: "named", path: "Payload" } }] },
+    { ...implementation, members: [{ kind: "type", name: "Output", type: { kind: "named", path: "Payload" } }] },
   ]));
   assert.equal(model.items.find((item) => item.kind === "struct").visibility, "public");
 });

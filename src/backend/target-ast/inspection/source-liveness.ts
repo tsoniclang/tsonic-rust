@@ -119,6 +119,8 @@ function finalizeRustNestedStatementLiveness(
     case "completion-exit":
     case "index-assign":
     case "throw":
+    case "macro-statement":
+    case "item":
       return statement;
   }
 }

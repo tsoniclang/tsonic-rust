@@ -7,7 +7,7 @@ import { finalizeRustDeadCode } from "../../../dist/backend/target-ast/normaliza
 import { rustLintAttributes } from "../../../dist/backend/target-ast/normalization/lint-policy.js";
 
 const trait = (name, visibility, superTraits = []) => ({
-  kind: "trait", name, visibility, generics: emptyRustGenerics, functions: [], superTraits,
+  kind: "trait", name, visibility, generics: emptyRustGenerics, members: [], superTraits,
 });
 
 test("public native signatures close visibility across modules without exposing unrelated types", () => {
@@ -36,31 +36,31 @@ test("private and external native signatures do not promote local lookalikes", (
 });
 
 test("public trait promotion removes only obsolete dead-code expectations", () => {
-  const method = { name: "read", generics: emptyRustGenerics, params: [],
+  const method = { kind: "function", name: "read", generics: emptyRustGenerics, params: [],
     returnType: { kind: "unit" }, deadCode: "generated-unused-dispatch",
     attrs: [rustWordAttribute("must_use")] };
   const models = new Map([
     ["api", { items: [trait("Public", "public", [{ kind: "named", path: "crate::base::Base" }])] }],
-    ["base", { items: [{ ...trait("Base", "crate"), functions: [method] },
-      { ...trait("Private", "crate"), functions: [method] }] }],
+    ["base", { items: [{ ...trait("Base", "crate"), members: [method] },
+      { ...trait("Private", "crate"), members: [method] }] }],
   ]);
   const finalized = finalizeRustDeadCode(closeRustModuleTypeVisibility(models).get("base"));
-  assert.deepEqual(finalized.items[0].functions[0].attrs, [rustWordAttribute("must_use")]);
-  assert.deepEqual(finalized.items[1].functions[0].attrs,
+  assert.deepEqual(finalized.items[0].members[0].attrs, [rustWordAttribute("must_use")]);
+  assert.deepEqual(finalized.items[1].members[0].attrs,
     [rustWordAttribute("must_use"), rustLintAttributes.generatedUnusedDispatch]);
   assert.equal(method.deadCode, "generated-unused-dispatch");
 });
 
 test("already-public unused traits retain their exact dead-code dispositions", () => {
   const unused = { ...trait("Unused", "public"), deadCode: "authored-declaration",
-    attrs: [rustHiddenAttribute], functions: [{ name: "read", generics: emptyRustGenerics,
+    attrs: [rustHiddenAttribute], members: [{ kind: "function", name: "read", generics: emptyRustGenerics,
       params: [], returnType: { kind: "unit" }, deadCode: "authored-declaration" }] };
   const models = new Map([["internal", { items: [unused] }]]);
   const closed = closeRustModuleTypeVisibility(models);
   const finalized = finalizeRustDeadCode(closed.get("internal")).items[0];
   assert.equal(finalized.visibility, "public");
   assert.deepEqual(finalized.attrs, [rustHiddenAttribute, rustLintAttributes.authoredDeadCode]);
-  assert.deepEqual(finalized.functions[0].attrs,
+  assert.deepEqual(finalized.members[0].attrs,
     [rustLintAttributes.authoredDeadCode]);
   assert.equal(unused.deadCode, "authored-declaration");
   assert.deepEqual(closeRustModuleTypeVisibility(closed), closed);

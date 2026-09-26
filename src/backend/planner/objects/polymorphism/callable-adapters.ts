@@ -89,7 +89,7 @@ export function planRootCallableForwarder(
     });
   }
   statements.push({ kind: "tail", expr: result });
-  return {
+  return { kind: "function",
     name: slot, visibility: "private", generics: helper.generics, selfParam: rustSelfParameter("rc"),
     params: parameters,
     ...(shape.returnType === undefined ? {} : { returnType: shape.returnType }),

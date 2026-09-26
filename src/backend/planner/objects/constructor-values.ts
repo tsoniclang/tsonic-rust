@@ -64,13 +64,13 @@ export function planRustClassValueImplementations(declaration: Node, context: Ru
         storageFileName: field.fileName, storageName: field.targetName, resultCarrier: storage.carrier };
       const read = readRustSourceStaticField(fact, local);
       if (read === undefined) return undefined;
-      functions.push({ name: storage.property.getterTargetName, visibility: "private", generics: emptyRustGenerics,
+      functions.push({ kind: "function", name: storage.property.getterTargetName, visibility: "private", generics: emptyRustGenerics,
         selfParam: rustSelfParameter("ref"), params: [], returnType: type, errorType: rustErrorType(boundary),
         body: { statements: [{ kind: "tail", expr: { kind: "call", path: "Ok", args: [read] } }] } });
       if (storage.property.setterTargetName !== undefined) {
         const target = planRustSourceStaticFieldStorage(fact, local);
         if (target === undefined) return undefined;
-        functions.push({ name: storage.property.setterTargetName, visibility: "private", generics: emptyRustGenerics,
+        functions.push({ kind: "function", name: storage.property.setterTargetName, visibility: "private", generics: emptyRustGenerics,
           selfParam: rustSelfParameter("ref"), params: [{ name: "value", type }], returnType: { kind: "unit" },
           errorType: rustErrorType(boundary), body: { statements: [{ kind: "tail", expr: { kind: "block", bindings: target.bindings,
             value: { kind: "evaluate-then", effect: target.write({ kind: "path", path: "value" }), discard: "unit",
@@ -78,7 +78,7 @@ export function planRustClassValueImplementations(declaration: Node, context: Ru
       }
     }
     items.push({ kind: "impl", generics, target,
-      trait: { kind: "named", path: `${ownerPath}${shape.dispatchName}`, genericArguments: wrapper.genericArguments }, functions });
+      trait: { kind: "named", path: `${ownerPath}${shape.dispatchName}`, genericArguments: wrapper.genericArguments }, members: functions });
   }
   return items;
 }

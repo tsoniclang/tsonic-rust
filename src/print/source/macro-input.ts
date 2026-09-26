@@ -1,5 +1,6 @@
 import type {
   RustMacroInput,
+  RustMacroInvocation,
   RustTokenDelimiter,
   RustTokenFragment,
   RustTokenTree,
@@ -11,6 +12,11 @@ import { printRustConstArgument, printRustLifetime, printRustType } from "./type
 
 export function printRustMacroInvocation(path: string, input: RustMacroInput): string {
   return `${path}!${printRustTokenGroup(input.delimiter, input.tokens)}`;
+}
+
+export function printRustMacroItem(invocation: RustMacroInvocation): string {
+  const invocationText = printRustMacroInvocation(invocation.path, invocation.input);
+  return invocation.input.delimiter === "braces" ? invocationText : `${invocationText};`;
 }
 
 export function printRustTokenStream(tokens: readonly RustTokenTree[]): string {

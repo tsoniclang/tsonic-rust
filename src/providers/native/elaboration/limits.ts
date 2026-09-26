@@ -25,7 +25,7 @@ export function validateRustNativeSourceLimits(limits: RustNativeSourceLimits): 
   }
   const fields = Object.keys(ceilings) as readonly (keyof RustNativeSourceLimits)[];
   const keys = Object.keys(limits);
-  if (keys.length !== fields.length || keys.some(key => !Object.hasOwn(ceilings, key))) {
+  if (keys.length !== fields.length || keys.some(key => !Object.prototype.hasOwnProperty.call(ceilings, key))) {
     throw new Error("Native Rust source limits require exactly the supported budget fields.");
   }
   for (const name of fields) {
