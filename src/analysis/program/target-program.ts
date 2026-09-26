@@ -19,6 +19,7 @@ import { createRustModuleInitializationPlan } from "../module-initialization/ana
 import { analyzeRustProviderErrorCarriers } from "./provider-errors.js";
 import { analyzeRustDeclarationGenericRequirements } from "../declarations/generic-requirements.js";
 import { analyzeRustValueLifetimes } from "./value-lifetimes.js";
+import { rustCallArgumentIsOwned } from "../facts/parameter-passing.js";
 import { analyzeRustBorrowedElementReads } from "./borrowed-element-reads.js";
 import {
   analyzeRustBinaryHooks,
@@ -128,6 +129,7 @@ export function analyzeRustTargetProgram(
     isOwnedString: (declaration) => isRustStringCarrier(facts.getRuntimeCarrierFact(declaration)?.carrier),
     hasSharedIdentityStorage: (declaration) => isRustJsArrayCarrier(facts.getRuntimeCarrierFact(declaration)?.carrier),
     mayBorrowArgument: (argument) => facts.getArgumentPassingFact(argument)?.mode !== "by-value",
+    isOwnedCallArgument: (argument) => rustCallArgumentIsOwned(argument, context.ast, facts),
     isSharedBorrowArgument: (argument) => facts.getArgumentPassingFact(argument)?.mode === "borrow-shared",
     capturesFor: (closure) => facts.getFact(closure, rustClosureCaptureFactKey),
     isOnceCallable: (closure) => {

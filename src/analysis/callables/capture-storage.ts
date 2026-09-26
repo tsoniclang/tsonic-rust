@@ -5,6 +5,8 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isRustCopyCarrier, rustCarrierSupportsClone } from "../../target-model/types/index.js";
 import { rustBindingStorageFactKey, rustMutatedBindingFactKey } from "../facts/keys.js";
 import type { RustClosureCaptureFact } from "../facts/keys.js";
+import { rustCallArgumentIsOwned } from "../facts/parameter-passing.js";
+import { rustSourceValueWrapperContains } from "../../policy/ownership/source-value-wrappers.js";
 
 export type RustCaptureStorage = Pick<RustClosureCaptureFact["captures"][number], "storage" | "mutable">;
 
@@ -59,10 +61,12 @@ function singleOwnerDirectBinding(walk: RustFactWalk, declaration: Node, owner: 
     }
     let expression = use.reference;
     let parent = ast.parent(expression);
-    while (parent !== undefined && ["KindParenthesizedExpression", "KindAsExpression", "KindSatisfiesExpression",
-      "KindNonNullExpression", "KindTypeAssertionExpression"].includes(ast.kindName(parent))) {
+    while (parent !== undefined && rustSourceValueWrapperContains(parent, expression, ast)) {
       expression = parent;
       parent = ast.parent(expression);
+    }
+    if (parent !== undefined && (ast.is.IsCallExpression(parent) || ast.is.IsNewExpression(parent))) {
+      return rustCallArgumentIsOwned(expression, ast, walk.context.facts);
     }
     return parent !== undefined && ["KindReturnStatement", "KindBinaryExpression", "KindPrefixUnaryExpression",
       "KindPostfixUnaryExpression", "KindConditionalExpression", "KindVariableDeclaration", "KindArrayLiteralExpression",
