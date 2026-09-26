@@ -176,12 +176,16 @@ export function authoredPublicKind(
     const path = document.paths[String(selectedId)];
     return isRecord(path) && typeof path.kind === "string" ? path.kind : undefined;
   }
+  if (isRecord(item.inner) && Object.prototype.hasOwnProperty.call(item.inner, "macro")) {
+    return "macro";
+  }
   for (const kind of [
     "constant",
     "enum",
     "function",
     "module",
     "primitive",
+    "proc_macro",
     "static",
     "struct",
     "trait",

@@ -40,6 +40,7 @@ import {
   normalizeTypeMembers,
 } from "./members.js";
 import { normalizeFunction } from "./functions.js";
+import { normalizeMacro } from "./macros.js";
 import { rustCompilerProviderProtocolVersion } from "../model.js";
 import type {
   RustCompilerAssociatedConstraint,
@@ -72,6 +73,7 @@ export function normalizeModule(
   const module = findModule(document, options.dependency, options.modulePath, resolveItem);
   const items = expandedPublicModuleItems(module, "requested Rust module", resolveItem);
   const publicItemsByName = new Map<string, ResolvedRustdocItem>();
+  const publicMacrosByName = new Map<string, ResolvedRustdocItem>();
   const publicItemIdentitiesByName = new Map<string, string>();
   const publicNameByCanonicalPath = new Map<string, string>();
   const publicResolutionErrors = new Map<string, string>();
@@ -82,38 +84,39 @@ export function normalizeModule(
     if (name === undefined) continue;
     let selected = authored;
     let resolutionError: string | undefined;
-    if (resolveItem === undefined) {
-      try {
-        selected = resolveLocalRustdocItem(authored.document, authored.dependency, authored.item.id);
-      } catch (error) {
-        resolutionError = error instanceof Error ? error.message : String(error);
-      }
+    try {
+      selected = (resolveItem ?? resolveLocalRustdocItem)(authored.document, authored.dependency, authored.item.id);
+    } catch (error) {
+      resolutionError = error instanceof Error ? error.message : String(error);
     }
-    if (resolutionError === undefined &&
-      !providerExportKind(authoredPublicKind(selected.document, selected.item))) continue;
+    const kind = authoredPublicKind(selected.document, selected.item);
+    if (resolutionError === undefined && !providerExportKind(kind)) continue;
+    const macro = kind === "macro" || kind === "proc_macro";
+    const namespaceKey = `${macro ? "macro" : "ordinary"}\0${name}`;
+    const publicItems = macro ? publicMacrosByName : publicItemsByName;
     const identity = resolutionError === undefined
       ? authoredPublicIdentity(selected.document, selected.dependency, selected.item)
       : canonicalItemId(authored.dependency, authored.item);
-    const previous = publicItemIdentitiesByName.get(name);
+    const previous = publicItemIdentitiesByName.get(namespaceKey);
     if (previous === identity) continue;
     if (previous !== undefined) {
-      publicItemsByName.delete(name);
-      publicItemIdentitiesByName.delete(name);
+      publicItems.delete(name);
+      publicItemIdentitiesByName.delete(namespaceKey);
       publicResolutionErrors.delete(name);
       ambiguousNames.add(name);
     } else if (!ambiguousNames.has(name)) {
-      publicItemsByName.set(name, selected);
-      publicItemIdentitiesByName.set(name, identity);
+      publicItems.set(name, selected);
+      publicItemIdentitiesByName.set(namespaceKey, identity);
       if (resolutionError !== undefined) publicResolutionErrors.set(name, resolutionError);
       const canonicalPath = resolutionError === undefined
         ? authoredPublicCanonicalPath(selected.document, selected.item)
         : undefined;
-      if (canonicalPath !== undefined) {
+      if (!macro && canonicalPath !== undefined) {
         publicNameByCanonicalPath.set(canonicalPathKey(canonicalPath), name);
       }
     }
   }
-  const requested = new Set(options.requestedExports ?? publicItemsByName.keys());
+  const requested = new Set(options.requestedExports ?? [...publicItemsByName.keys(), ...publicMacrosByName.keys()]);
   const exports: RustCompilerExport[] = [];
   const unsupported: RustCompilerUnsupportedExport[] = [];
   const pending = [...requested].sort(compareText);
@@ -132,7 +135,8 @@ export function normalizeModule(
       continue;
     }
     const authored = publicItemsByName.get(name);
-    if (authored === undefined) {
+    const macro = publicMacrosByName.get(name);
+    if (authored === undefined && macro === undefined) {
       const associatedOwner = isCompilerAssociatedSourceExportName(name)
         ? associatedTypeOwnerName(
             name,
@@ -150,32 +154,28 @@ export function normalizeModule(
       continue;
     }
     try {
-      const resolved = resolveItem?.(
-        authored.document,
-        authored.dependency,
-        authored.item.id,
-      ) ?? authored;
-      const normalized = normalizeExport(
-        resolved.document,
-        resolved.item,
-        resolved.dependency,
-        name,
-        [options.dependency.targetCrateName, ...options.modulePath, name],
-        resolveItem,
-      );
-      exports.push(normalized);
-      for (const dependencyName of sameModuleExportDependencies(
-        normalized,
-        publicNameByCanonicalPath,
-      )) {
-        if (!visited.has(dependencyName)) pending.push(dependencyName);
+      const targetPath = [options.dependency.targetCrateName, ...options.modulePath, name];
+      const normalizedExports: RustCompilerExport[] = [];
+      if (macro !== undefined) {
+        const resolved = resolveItem?.(macro.document, macro.dependency, macro.item.id) ?? macro;
+        normalizedExports.push(normalizeMacro(resolved.document, resolved.item, resolved.dependency, name, targetPath));
       }
+      if (authored !== undefined) {
+        const normalized = normalizeExport(
+          authored.document, authored.item, authored.dependency, name, targetPath, resolveItem,
+        );
+        normalizedExports.push(normalized);
+        for (const dependencyName of sameModuleExportDependencies(normalized, publicNameByCanonicalPath)) {
+          if (!visited.has(dependencyName)) pending.push(dependencyName);
+        }
+      }
+      exports.push(...normalizedExports);
       pending.sort(compareText);
     } catch (error) {
       unsupported.push({ name, reason: error instanceof Error ? error.message : String(error) });
     }
   }
-  exports.sort((left, right) => compareText(left.name, right.name));
+  exports.sort((left, right) => compareText(left.name, right.name) || compareText(left.kind, right.kind));
   unsupported.sort((left, right) => compareText(left.name, right.name));
   return Object.freeze({
     protocolVersion: rustCompilerProviderProtocolVersion,
@@ -622,7 +622,7 @@ function findModule(
 function providerExportKind(kind: string | undefined): boolean {
   return kind === "primitive" || kind === "constant" || kind === "enum" || kind === "function" ||
     kind === "static" || kind === "struct" || kind === "trait" ||
-    kind === "type_alias" || kind === "union";
+    kind === "type_alias" || kind === "union" || kind === "macro" || kind === "proc_macro";
 }
 
 function compilerGenericParameterArgument(

@@ -412,11 +412,22 @@ function walkType(
 
 function validateExportDeclaration(exported: ProviderExportDeclaration, fail: Fail): void {
   requireExactKeys(asRecord(exported), [
-    "id", "name", "exportName", "exportKind", "sourceTypeFamily", "kind", "type",
+    "id", "intrinsicId", "name", "exportName", "exportKind", "sourceTypeFamily", "kind", "type",
     "typeParameters", "heritage", "members", "signatures", "documentation",
   ], `export '${String((exported as { readonly id?: unknown }).id)}'`, fail);
-  if (!["type", "value", "namespace", "function", "class", "interface", "enum"].includes(exported.kind)) {
+  if (!["type", "value", "namespace", "function", "class", "interface", "enum", "intrinsic"].includes(exported.kind)) {
     fail(`export '${exported.id}' has unsupported declaration kind '${String(exported.kind)}'`);
+  }
+  if (exported.intrinsicId !== undefined) {
+    requireNonEmpty(exported.intrinsicId, `${exported.id}.intrinsicId`, fail);
+    if (exported.kind === "intrinsic" || exported.intrinsicId === exported.id) {
+      fail(`export '${exported.id}' has conflicting ordinary and intrinsic identities`);
+    }
+  }
+  if (exported.kind === "intrinsic" && (exported.type !== undefined || exported.sourceTypeFamily !== undefined ||
+    (exported.members?.length ?? 0) !== 0 || (exported.signatures?.length ?? 0) !== 0 ||
+    (exported.heritage?.length ?? 0) !== 0 || (exported.typeParameters?.length ?? 0) !== 0)) {
+    fail(`intrinsic '${exported.id}' cannot carry an ordinary callable or type declaration`);
   }
   if (exported.exportKind !== undefined && exported.exportKind !== "named" && exported.exportKind !== "default") {
     fail(`export '${exported.id}' has unsupported export kind '${String(exported.exportKind)}'`);

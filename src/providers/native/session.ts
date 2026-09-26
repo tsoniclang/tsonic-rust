@@ -9,6 +9,7 @@ import type {
   ProviderDeclarationRequest,
   ProviderModuleResolution,
   SourceDeclarationProvider,
+  ProviderVirtualDeclarationFact,
 } from "@tsonic/tsts";
 import { materializeClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import type { RustTargetConfiguration } from "../../target-model/configuration/model.js";
@@ -36,7 +37,7 @@ import {
   projectRustCompilerModule,
 } from "./projection/projection.js";
 import { standardModuleRequestFromSpecifier } from "./projection/module-specifier.js";
-import { projectRustStandardMacros, rustStandardMacroRequest } from "./projection/standard-macros.js";
+import type { RustCompilerIntrinsicProjection } from "./projection/model.js";
 import type { RustCompilerProviderProjection } from "./projection/projection.js";
 import type { RustNamedTypeTraitContract } from "../../target-model/types/model.js";
 import { createRustCompilerWorkerClient } from "./protocol/worker-client.js";
@@ -54,6 +55,7 @@ type RustCompilerProviderDiagnosticCode = keyof typeof rustCompilerProviderDiagn
 
 export interface RustCompilerProviderSession {
   readonly sourceProviders: readonly SourceDeclarationProvider[];
+  intrinsic(declaration: ProviderVirtualDeclarationFact): RustCompilerIntrinsicProjection | undefined;
   semantics(): RustProviderSemantics;
   close(): void;
 }
@@ -151,6 +153,14 @@ function createCompilerProviderSessionResult(options: {
   let semantics: RustProviderSemantics | undefined;
   return Object.freeze({
     sourceProviders: options.sourceProviders,
+    intrinsic(declaration: ProviderVirtualDeclarationFact): RustCompilerIntrinsicProjection | undefined {
+      if (state === "closed") throw new Error("Rust compiler-provider session is closed.");
+      for (const registry of options.registries) {
+        const intrinsic = registry.intrinsic(declaration);
+        if (intrinsic !== undefined) return intrinsic;
+      }
+      return undefined;
+    },
     semantics(): RustProviderSemantics {
       if (state === "closed") {
         throw new Error("Rust compiler-provider session is closed.");
@@ -277,22 +287,17 @@ function createCompilerProvider(
       }
       try {
         const requestedExports = requestedExportNames(request);
-        const macros = snapshot.kind === "standard-library"
-          ? rustStandardMacroRequest(dependency, modulePath, requestedExports) : undefined;
-        const compilerExports = macros === undefined ? requestedExports : macros.compilerExports;
         const module = options.worker.module({
           snapshot,
           dependency,
           modulePath,
-          ...(compilerExports === undefined ? {} : { requestedExports: compilerExports }),
+          ...(requestedExports === undefined ? {} : { requestedExports }),
           foundation: options.foundation,
         });
-        const projected = projectRustCompilerModule(module, {
+        const projection = projectRustCompilerModule(module, {
           providerModuleId: expectedModuleId,
           moduleSpecifier: resolution.moduleSpecifier,
         }, request.materialization);
-        const projection = macros === undefined ? projected
-          : projectRustStandardMacros(projected, dependency, modulePath, macros.macros);
         options.registry.add(projection);
         return materializeClosedMetadata(projection.declarationModel);
       } catch (error) {
@@ -307,6 +312,7 @@ function createCompilerProvider(
 
 interface ProjectionRegistry {
   add(projection: RustCompilerProviderProjection): void;
+  intrinsic(declaration: ProviderVirtualDeclarationFact): RustCompilerIntrinsicProjection | undefined;
   semantics(): RustProviderSemantics;
   close(): void;
 }
@@ -324,6 +330,7 @@ function createProjectionRegistry(options: {
   }>();
   const operationsByIdentity = new Map<string, RustProviderOperationDefinition>();
   const typesByIdentity = new Map<string, RustProviderTypeDefinition>();
+  const intrinsicsByModule = new Map<string, Map<string, RustCompilerIntrinsicProjection>>();
   const carrierPaths = new Map<string, string>();
   const carrierTraits = new Map<string, RustNamedTypeTraitContract>();
   let state: "open" | "sealed" | "closed" = "open";
@@ -364,6 +371,11 @@ function createProjectionRegistry(options: {
       for (const row of projection.types) {
         addExact(typesByIdentity, providerTypeIdentity(row), row, "type");
       }
+      const intrinsics = intrinsicsByModule.get(projection.module.moduleSpecifier) ?? new Map<string, RustCompilerIntrinsicProjection>();
+      for (const intrinsic of projection.intrinsics) {
+        addExact(intrinsics, intrinsic.exportId, intrinsic, "intrinsic");
+      }
+      intrinsicsByModule.set(projection.module.moduleSpecifier, intrinsics);
       for (const [id, path] of projection.carrierPaths) {
         const existing = carrierPaths.get(id);
         if (existing !== undefined && existing !== path) {
@@ -378,6 +390,16 @@ function createProjectionRegistry(options: {
         }
         carrierTraits.set(id, traits);
       }
+    },
+    intrinsic(declaration: ProviderVirtualDeclarationFact): RustCompilerIntrinsicProjection | undefined {
+      if (state === "closed") throw new Error("Rust compiler-provider registry is closed.");
+      if (declaration.providerId !== rustProviderBindingProviderId(options.packageId) ||
+        declaration.providerVersion !== options.providerVersion || declaration.exportId === undefined ||
+        declaration.memberId !== undefined || declaration.signatureId !== undefined) return undefined;
+      const module = modules.get(declaration.moduleSpecifier);
+      if (module?.providerModuleId !== declaration.providerModuleId) return undefined;
+      const intrinsic = intrinsicsByModule.get(declaration.moduleSpecifier)?.get(declaration.exportId);
+      return intrinsic?.native.name === declaration.exportName ? intrinsic : undefined;
     },
     semantics(): RustProviderSemantics {
       if (state === "closed") {
@@ -470,6 +492,7 @@ function createProjectionRegistry(options: {
       modules.clear();
       operationsByIdentity.clear();
       typesByIdentity.clear();
+      intrinsicsByModule.clear();
       carrierPaths.clear();
       carrierTraits.clear();
       sealedSemantics = undefined;

@@ -3,6 +3,7 @@ import type { ProviderDeclarationModel, ProviderTypeExpression } from "@tsonic/t
 import type {
   RustCompilerDependency,
   RustCompilerGenericParameter,
+  RustCompilerMacroExport,
   RustCompilerStandardTypeLocation,
 } from "../model/model.js";
 import type { RustNamedTypeTraitContract } from "../../../target-model/types/model.js";
@@ -15,8 +16,14 @@ export interface RustCompilerProviderProjection {
   readonly module: RustProviderModuleDefinition;
   readonly operations: readonly RustProviderOperationDefinition[];
   readonly types: readonly RustProviderTypeDefinition[];
+  readonly intrinsics: readonly RustCompilerIntrinsicProjection[];
   readonly carrierPaths: ReadonlyMap<string, string>;
   readonly carrierTraits: ReadonlyMap<string, RustNamedTypeTraitContract>;
+}
+
+export interface RustCompilerIntrinsicProjection {
+  readonly exportId: string;
+  readonly native: RustCompilerMacroExport;
 }
 
 export interface ProjectionOwner {
