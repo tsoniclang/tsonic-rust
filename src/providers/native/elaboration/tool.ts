@@ -1,4 +1,3 @@
-import { spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { delimiter, dirname, join, resolve } from "node:path";
@@ -8,6 +7,7 @@ import { decodeNativeTokenResponse } from "./tokens.js";
 import { decodeNativeEvidence } from "./decode-evidence.js";
 import type { RustNativeEvidence } from "./evidence.js";
 import { validateRustNativeEvidenceInputs } from "./freshness.js";
+import { runRustNativeCommand } from "../protocol/bounded-command.js";
 
 export interface RustNativeSourceLimits {
   readonly maximumRows: number;
@@ -40,21 +40,9 @@ export function createRustNativeSourceTool(options: {
   const compiler = options.compiler ?? process.env.RUSTC ?? "rustc";
   const cacheRoot = resolve(options.cacheRoot);
   mkdirSync(cacheRoot, { recursive: true });
-  const command = (executable: string, arguments_: readonly string[], env: NodeJS.ProcessEnv): string => {
-    const result = spawnSync(executable, arguments_, {
-      cwd: cacheRoot,
-      env,
-      encoding: "utf8",
-      timeout: limits.timeoutMilliseconds,
-      maxBuffer: 8 * 1024 * 1024,
-      killSignal: "SIGKILL",
-      windowsHide: true,
-    });
-    if (result.error !== undefined || result.status !== 0) {
-      throw new Error(`Native Rust source service failed: ${result.error?.message ?? result.stderr.trim() ?? String(result.status)}`);
-    }
-    return result.stdout.trim();
-  };
+  const command = (executable: string, arguments_: readonly string[], env: NodeJS.ProcessEnv): string =>
+    runRustNativeCommand({ executable, arguments: arguments_, environment: env, directory: cacheRoot,
+      timeoutMilliseconds: limits.timeoutMilliseconds, maximumDiagnosticBytes: 8 * 1024 * 1024 });
   const compilerIdentity = command(compiler, ["-vV"], process.env);
   const sysroot = command(compiler, ["--print", "sysroot"], process.env);
   const host = compilerIdentity.split("\n").find(line => line.startsWith("host: "))?.slice(6);
