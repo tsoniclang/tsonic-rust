@@ -456,7 +456,7 @@ interface FlowMarkerResolution {
 }
 
 // The generic source-semantics extension records flowStateFactKey on neutral
-// sharedBorrow/mutableBorrow/move operations.
+// sharedborrow/mutableborrow/move operations.
 // This target converts those source facts into Rust-owned operation facts.
 // Flow operations erase at emission because the consuming position's finalized
 // Rust argument mode owns the passing shape. Non-flow source markers are

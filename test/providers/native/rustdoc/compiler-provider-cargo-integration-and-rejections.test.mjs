@@ -40,7 +40,7 @@ test("Cargo provider virtual imports compile, execute, and preserve the user-own
   const source = `
 import type { FixedArray, int32 } from "@tsonic/core/types.js";
 import type { FunctionPointer } from "@tsonic/core/types.js";
-import { unsafeContext } from "@tsonic/core/lang.js";
+import { unsafecontext } from "@tsonic/core/lang.js";
 import type { constPtr, i8, mutPtr, u8 } from "@tsonic/rust/types.js";
 import { Box } from "@tsonic/rust/std/boxed.js";
 import type { Pair } from "@tsonic/rust/crates/widget_alias/index.js";
@@ -50,11 +50,11 @@ import { triple } from "@tsonic/rust/crates/widget_alias/math.js";
 import { ExactToken, exact_token, default_exact_token, exact_token_value, signed_const_value } from "@tsonic/rust/crates/widget_alias/index.js";
 
 function readMutablePointer(pointer: mutPtr<u8>): u8 {
-  return unsafeContext(first_byte(pointer));
+  return unsafecontext(first_byte(pointer));
 }
 
 function readConstPointer(pointer: constPtr<u8>): u8 {
-  return unsafeContext(first_byte(pointer));
+  return unsafecontext(first_byte(pointer));
 }
 
 class DomainError extends Error {
@@ -128,10 +128,10 @@ export function main(): void {
   if (preserve_borrowed(borrowed) !== 6) {
     throw new Error("inferred provider lifetime mapping failed");
   }
-  if (unsafeContext(dangerous(12)) !== 12) {
+  if (unsafecontext(dangerous(12)) !== 12) {
     throw new Error("unsafe function mapping failed");
   }
-  if (unsafeContext(first_byte(byte_ptr())) !== 23) {
+  if (unsafecontext(first_byte(byte_ptr())) !== 23) {
     throw new Error("raw pointer mapping failed");
   }
   if (readConstPointer(byte_ptr()) !== 23) {
@@ -153,7 +153,7 @@ export function main(): void {
     throw new Error("static or unit enum mapping failed");
   }
   {
-    unsafeContext();
+    unsafecontext();
     MUTABLE_COUNT.value = 4;
     if (MUTABLE_COUNT.value !== 4) {
       throw new Error("mutable static mapping failed");
@@ -555,11 +555,11 @@ export function rejected(value: Widget<string>): Widget<string> {
     target: { id: "rust", options: { projectFile: project.manifestPath } },
     files: {
       "index.ts": `
-import { unsafeContext } from "@tsonic/core/lang.js";
+import { unsafecontext } from "@tsonic/core/lang.js";
 import type { float32, int32 } from "@tsonic/core/types.js";
 import { integer_format, variadic_printf } from "@tsonic/rust/crates/widget_alias/index.js";
 export function rejected(value: float32): int32 {
-  return unsafeContext(variadic_printf(integer_format(), value));
+  return unsafecontext(variadic_printf(integer_format(), value));
 }
 `,
     },

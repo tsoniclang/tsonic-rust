@@ -66,7 +66,7 @@ test("three-arm generic class unions preserve nullable pointer results, errors a
     files: {
       "backing.ts": `
 import type { Pointer, uint8 } from "@tsonic/core/types.js";
-import { loadPointer } from "@tsonic/core/lang.js";
+import { loadptr } from "@tsonic/core/lang.js";
 export class OptionalBacking {
   value: Pointer<uint8>;
   constructor(value: Pointer<uint8>) { this.value = value; }
@@ -96,7 +96,7 @@ export type Backing = RequiredBacking | GenericBacking<Pointer<uint8>> | Optiona
 export function read(backing: Backing, fail: boolean): uint8 {
   const pointer = backing.read(fail);
   if (pointer === undefined) return 0;
-  return loadPointer(pointer);
+  return loadptr(pointer);
 }
 export class Calls {
   order: string = "";
@@ -106,24 +106,24 @@ export class Calls {
 export function evaluate(calls: Calls, value: Backing): uint8 {
   const pointer = calls.source(value).read(calls.argument());
   if (pointer === undefined) return 0;
-  return loadPointer(pointer);
+  return loadptr(pointer);
 }
 `,
       "index.ts": `
 import { check } from "@acme/testing";
 
 import type { Pointer, uint8 } from "@tsonic/core/types.js";
-import { allocatePointer, storePointer } from "@tsonic/core/lang.js";
+import { allocateptr, storeptr } from "@tsonic/core/lang.js";
 import { OptionalBacking, RequiredBacking, GenericBacking, Calls, evaluate, read } from "./backing.js";
 
 function run(): boolean {
   const byte: uint8 = 29;
-  const pointer = allocatePointer<uint8>(byte);
+  const pointer = allocateptr<uint8>(byte);
   const first = new OptionalBacking(pointer);
   const second = new RequiredBacking(pointer);
   const third = new GenericBacking<Pointer<uint8>>(pointer);
   const initial = read(first, false) === 29 && read(second, false) === 29 && read(third, false) === 29 && read(first, true) === 0;
-  storePointer(pointer, 31);
+  storeptr(pointer, 31);
   const retained = read(first, false) === 31 && read(second, false) === 31 && read(third, false) === 31;
   let caught = false;
   try { read(second, true); } catch { caught = true; }

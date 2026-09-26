@@ -4,7 +4,7 @@ import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-sessi
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 const sourceText = `
-import { addressOf, storePointer } from "@tsonic/core/lang.js";
+import { addressof, storeptr } from "@tsonic/core/lang.js";
 import type { Pointer } from "@tsonic/core/types.js";
 function branch(values: string[]): string[] {
   const result: string[] = [];
@@ -63,13 +63,13 @@ function replaced(): string[] {
   return original;
 }
 function replaceLocation(location: Pointer<string[]>): string {
-  storePointer(location, ["new"]);
+  storeptr(location, ["new"]);
   return "added";
 }
 function pointerReplaced(): string[] {
   let values = ["old"];
   const original = values;
-  const location = addressOf(values);
+  const location = addressof(values);
   values.push(replaceLocation(location));
   if (values[0] !== "new") throw new Error("pointer-replaced binding");
   return original;

@@ -80,7 +80,7 @@ for (const [name, replacement] of [
       .replace("export const Word = struct({ count: field<uint32>() });\nexport type Word = typeof Word;", replacement) };
     if (name === "mismatched scalar layout") {
       assert.throws(() => compileRust({ capabilities: [memoryAbiCapability("rust")], files }),
-        /TSEXT9901180: memoryField requires the exact selected child layout for its field type/u);
+        /TSEXT9901180: memoryfield requires the exact selected child layout for its field type/u);
       return;
     }
     const { result } = compileRust({ capabilities: [memoryAbiCapability("rust")], files });

@@ -37,12 +37,12 @@ test("one synchronous capture owns inline native storage across calls and callab
 
 test("independent, repeated, nested and addressed capture owners retain their shared binding", { timeout: 300_000 }, () => {
   const { result, output } = compile(`
-    import { addressOf, loadPointer, storePointer } from "@tsonic/core/lang.js";
+    import { addressof, loadptr, storeptr } from "@tsonic/core/lang.js";
     import type { int32 } from "@tsonic/core/types.js";
     function independent(seed: int32): (() => int32)[] { return [() => ++seed, () => ++seed]; }
     function repeated(seed: int32): (() => int32)[] { const values: (() => int32)[] = []; for (let index = 0; index < 2; index++) values.push(() => ++seed); return values; }
     function nested(seed: int32): () => () => int32 { return () => () => ++seed; }
-    function addressed(seed: int32): () => int32 { return () => { const pointer = addressOf(seed); storePointer(pointer, loadPointer(pointer) + 1); return seed; }; }
+    function addressed(seed: int32): () => int32 { return () => { const pointer = addressof(seed); storeptr(pointer, loadptr(pointer) + 1); return seed; }; }
     export function main(): void {
       const pair = independent(1);
       const loop = repeated(10);

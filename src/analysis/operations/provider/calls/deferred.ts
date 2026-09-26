@@ -483,7 +483,7 @@ function mapRustDefaultValueCall(
     sourceSelectedSignatureParameters: request.source.sourceSelectedSignatureParameters,
     sourceSelectedMethodTypeArguments: sourceTypeArguments,
   };
-  const evidence = [{ message: "rust selected source-core defaultValue<T>()" }];
+  const evidence = [{ message: "rust selected source-core defaultvalue<T>()" }];
   context.facts.set(request.source.call, rustTargetOperationFactKey, fact, evidence);
   context.facts.set(request.source.call, rustSelectedOperationKey, operation, evidence);
   context.facts.set(request.source.call, rustSelectedCallKey, selectedSignature, evidence);

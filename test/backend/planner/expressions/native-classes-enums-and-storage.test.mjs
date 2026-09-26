@@ -605,12 +605,12 @@ test("flow markers erase into finalized argument modes", () => {
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
-import { move, sharedBorrow } from "@tsonic/core/lang.js";
+import { move, sharedborrow } from "@tsonic/core/lang.js";
 import { Vector, magnitude, consume } from "@acme/vectors";
 
 export function drive(): int32 {
   const v = new Vector(3, 4);
-  const m = magnitude(sharedBorrow(v));
+  const m = magnitude(sharedborrow(v));
   return m + consume(move(v));
 }
 `,
@@ -629,12 +629,12 @@ test("flow markers mismatching argument modes fail closed", () => {
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
-import { sharedBorrow } from "@tsonic/core/lang.js";
+import { sharedborrow } from "@tsonic/core/lang.js";
 import { Vector, consume } from "@acme/vectors";
 
 export function bad(): int32 {
   const v = new Vector(1, 2);
-  return consume(sharedBorrow(v));
+  return consume(sharedborrow(v));
 }
 `,
     },
@@ -650,12 +650,12 @@ test("byref passing markers are rejected deterministically", () => {
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
-import { readWriteRef } from "@tsonic/core/lang.js";
+import { readwriteref } from "@tsonic/core/lang.js";
 import { Vector, consume } from "@acme/vectors";
 
 export function bad(): int32 {
   const v = new Vector(1, 2);
-  return consume(readWriteRef(v));
+  return consume(readwriteref(v));
 }
 `,
     },
