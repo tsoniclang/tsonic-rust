@@ -2,10 +2,10 @@ use std::collections::HashMap;
 use std::ops::ControlFlow;
 
 use rustc_driver::{Callbacks, Compilation};
-use rustc_hir::def::{DefKind, MacroKinds, Res};
+use rustc_hir::def::{DefKind, MacroKinds};
 use rustc_hir::intravisit::{self, Visitor};
 use rustc_interface::interface;
-use rustc_middle::ty::{TyCtxt, TypeckResults};
+use rustc_middle::ty::TyCtxt;
 use rustc_span::def_id::DefId;
 use rustc_span::hygiene::{ExpnId, ExpnKind};
 use rustc_span::Span;
@@ -18,6 +18,10 @@ use crate::effects::{BodyEffects, TrackedEffects};
 use crate::type_graph::TypeGraph;
 use crate::type_model::{ConstantRow, Generics, TypeId, TypeRow};
 use crate::scopes::{Scope, Visibility, collect_scope, visibility};
+
+mod adjustments;
+mod occurrences;
+use occurrences::{BodyVisitor, Occurrence};
 
 #[derive(Serialize)]
 #[serde(tag = "phase", rename_all = "kebab-case")]
@@ -89,17 +93,6 @@ pub struct Expansion {
     definition: Option<DefinitionId>,
     call_site: Option<SourceSpan>,
     definition_site: Option<SourceSpan>,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Occurrence {
-    id: NodeId,
-    kind: &'static str,
-    source: Option<SourceSpan>,
-    r#type: TypeId,
-    adjusted_type: TypeId,
-    resolution: Option<Resolution>,
 }
 
 #[derive(Serialize)]
@@ -427,76 +420,5 @@ impl<'tcx> Visitor<'tcx> for DefinitionVisitor<'_, 'tcx, '_> {
             return ControlFlow::Break(error);
         }
         intravisit::walk_struct_def(self, data)
-    }
-}
-
-struct BodyVisitor<'collector, 'tcx, 'limits> {
-    collector: &'collector mut Collector<'tcx, 'limits>,
-    types: &'tcx TypeckResults<'tcx>,
-    depth: usize,
-}
-
-impl<'tcx> Visitor<'tcx> for BodyVisitor<'_, 'tcx, '_> {
-    type Result = ControlFlow<String>;
-
-    fn visit_expr(&mut self, expression: &'tcx rustc_hir::Expr<'tcx>) -> Self::Result {
-        let selected_definition = match expression.kind {
-            rustc_hir::ExprKind::Path(ref path) => self.types.qpath_res(path, expression.hir_id).opt_def_id(),
-            _ => self.types.type_dependent_def_id(expression.hir_id),
-        };
-        if let Some(definition) = selected_definition
-            && let Err(error) = self.collector.graph.definition(definition)
-        { return ControlFlow::Break(error); }
-        let resolution = match expression.kind {
-            rustc_hir::ExprKind::Path(ref path) => match self.types.qpath_res(path, expression.hir_id) {
-                Res::Def(_, definition) => Some(Resolution::Declaration { id: definition_id(definition) }),
-                Res::Local(binding) => Some(Resolution::Binding { id: node_id(binding) }),
-                _ => None,
-            },
-            _ => self.types.type_dependent_def_id(expression.hir_id)
-                .map(|id| Resolution::Declaration { id: definition_id(id) }),
-        };
-        self.record(expression.hir_id, expression.span, "expression", self.types.expr_ty(expression),
-            self.types.expr_ty_adjusted(expression), resolution)?;
-        self.depth += 1;
-        let result = intravisit::walk_expr(self, expression);
-        self.depth -= 1;
-        result
-    }
-
-    fn visit_pat(&mut self, pattern: &'tcx rustc_hir::Pat<'tcx>) -> Self::Result {
-        let resolution = match pattern.kind {
-            rustc_hir::PatKind::Binding(_, binding, _, _) => Some(Resolution::Binding { id: node_id(binding) }),
-            _ => None,
-        };
-        self.record(pattern.hir_id, pattern.span, "pattern", self.types.pat_ty(pattern),
-            self.types.pat_ty(pattern), resolution)?;
-        self.depth += 1;
-        let result = intravisit::walk_pat(self, pattern);
-        self.depth -= 1;
-        result
-    }
-}
-
-impl<'tcx> BodyVisitor<'_, 'tcx, '_> {
-    fn record(&mut self, id: rustc_hir::HirId, span: Span, kind: &'static str,
-        ty: rustc_middle::ty::Ty<'tcx>, adjusted: rustc_middle::ty::Ty<'tcx>,
-        resolution: Option<Resolution>) -> ControlFlow<String>
-    {
-        let result = (|| {
-            self.collector.graph.reserve(self.depth)?;
-            self.collector.span_expansions(span)?;
-            let ty = self.collector.graph.ty(ty)?;
-            let adjusted = self.collector.graph.ty(adjusted)?;
-            self.collector.occurrences.push(Occurrence {
-                id: node_id(id), kind, source: source_span(self.collector.context, span),
-                r#type: ty, adjusted_type: adjusted, resolution,
-            });
-            Ok(())
-        })();
-        match result {
-            Ok(()) => ControlFlow::Continue(()),
-            Err(error) => ControlFlow::Break(error),
-        }
     }
 }

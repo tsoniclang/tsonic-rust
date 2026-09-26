@@ -1,5 +1,7 @@
 import type { RustNativeConstant, RustNativeGenerics, RustNativeType } from "./type-model.js";
 import type { RustNativeScope, RustNativeVisibility } from "./scope-model.js";
+import type { RustNativeOccurrence } from "./occurrence-model.js";
+export type { RustNativeOccurrence } from "./occurrence-model.js";
 
 export interface RustNativeDefinitionId {
   readonly krate: number;
@@ -20,18 +22,6 @@ export interface RustNativeSourceSpan {
     readonly transparency: "opaque" | "semi-opaque" | "transparent";
   }[];
   readonly expansion: RustNativeDefinitionId;
-}
-
-export interface RustNativeOccurrence {
-  readonly id: RustNativeNodeId;
-  readonly kind: "expression" | "pattern";
-  readonly source: RustNativeSourceSpan | null;
-  readonly type: number;
-  readonly adjustedType: number;
-  readonly resolution:
-    | { readonly kind: "declaration"; readonly id: RustNativeDefinitionId }
-    | { readonly kind: "binding"; readonly id: RustNativeNodeId }
-    | null;
 }
 
 export interface RustNativeTypeRow {

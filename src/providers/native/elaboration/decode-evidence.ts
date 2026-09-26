@@ -1,6 +1,6 @@
 import type {
   RustNativeDefinition, RustNativeDefinitionId, RustNativeSemanticEvidence,
-  RustNativeExpansion, RustNativeNodeId, RustNativeOccurrence, RustNativeSourceSpan, RustNativeTypeRow,
+  RustNativeExpansion, RustNativeNodeId, RustNativeSourceSpan, RustNativeTypeRow,
   RustNativeAccess, RustNativeConstantRow,
 } from "./evidence.js";
 import { isAbsolute } from "node:path";
@@ -13,6 +13,7 @@ import { createNativeGenericDecoder } from "./decode-generics.js";
 import { createNativeTypeDecoder } from "./decode-types.js";
 import { createNativeConstantDecoder } from "./decode-constants.js";
 import { createNativeScopeDecoder, validateNativeScopeRelations } from "./decode-scopes.js";
+import { createNativeOccurrenceDecoder } from "./decode-occurrences.js";
 import { array, boolean, choice, index, record, requireAcyclicParents, shape, text, unique } from "./decode-values.js";
 
 export function decodeNativeEvidence(value: unknown, limits: RustNativeSourceLimits): RustNativeSemanticEvidence {
@@ -31,7 +32,7 @@ export function decodeNativeEvidence(value: unknown, limits: RustNativeSourceLim
     return Object.freeze({ krate: index(input.krate), index: index(input.index) });
   };
   const node = (value: unknown): RustNativeNodeId => {
-    const input = record(value);
+    const input = shape(value, ["owner", "local"]);
     return Object.freeze({ owner: identity(input.owner), local: index(input.local) });
   };
   const span = (value: unknown): RustNativeSourceSpan | null => {
@@ -106,20 +107,8 @@ export function decodeNativeEvidence(value: unknown, limits: RustNativeSourceLim
       name: text(row.name), definition: row.definition === null ? null : identity(row.definition),
       callSite: span(row.callSite), definitionSite: span(row.definitionSite) });
   });
-  const occurrences = phase === "declarations" ? [] : array(input.occurrences, (value): RustNativeOccurrence => {
-    reserve();
-    const row = record(value);
-    let resolution: RustNativeOccurrence["resolution"] = null;
-    if (row.resolution !== null) {
-      const selected = record(row.resolution);
-      switch (choice(selected.kind, ["declaration", "binding"] as const)) {
-        case "declaration": resolution = Object.freeze({ kind: "declaration", id: identity(selected.id) }); break;
-        case "binding": resolution = Object.freeze({ kind: "binding", id: node(selected.id) }); break;
-      }
-    }
-    return Object.freeze({ id: node(row.id), kind: choice(row.kind, ["expression", "pattern"] as const),
-      source: span(row.source), type: index(row.type), adjustedType: index(row.adjustedType), resolution });
-  });
+  const occurrences = phase === "declarations" ? []
+    : array(input.occurrences, createNativeOccurrenceDecoder(graph, generics, { node, span }));
   const effects = phase === "declarations" ? [] : array(input.effects, value => {
     reserve();
     const row = record(value);
@@ -195,7 +184,7 @@ export function decodeNativeEvidence(value: unknown, limits: RustNativeSourceLim
   for (const row of occurrences) {
     requireDefinition(row.id.owner);
     requireType(row.type);
-    requireType(row.adjustedType);
+    if (row.kind === "expression") requireType(row.adjustedType);
     requireSpan(row.source);
     if (row.resolution?.kind === "declaration") requireDefinition(row.resolution.id);
     else if (row.resolution?.kind === "binding" && !nodeIds.has(nativeNodeKey(row.resolution.id))) {
