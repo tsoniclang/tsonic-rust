@@ -41,6 +41,8 @@ pub enum Evidence {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeclarationEvidence {
+    pub root: DefinitionId,
+    pub items: Vec<DefinitionId>,
     pub inputs: Vec<SourceInput>,
     pub probes: Vec<SourceProbe>,
     pub types: Vec<TypeRow>,
@@ -106,6 +108,7 @@ pub enum Resolution {
 #[serde(rename_all = "camelCase")]
 pub struct Definition {
     id: DefinitionId,
+    stable: StableDefinitionId,
     parent: Option<DefinitionId>,
     path: String,
     name: Option<String>,
@@ -115,6 +118,12 @@ pub struct Definition {
     generics: Option<Generics>,
     visibility: Option<Visibility>,
     source: Option<SourceSpan>,
+}
+
+#[derive(Serialize)]
+pub struct StableDefinitionId {
+    krate: String,
+    path: String,
 }
 
 pub fn analyze(arguments: &[String], phase: EvidencePhase, limits: &Limits) -> Result<Vec<u8>, String> {
@@ -234,6 +243,12 @@ fn collect(context: TyCtxt<'_>, phase: EvidencePhase, limits: &Limits, tracked_i
         definitions: HashMap::new(),
         scopes: Vec::new(),
     };
+    let root = rustc_span::def_id::CRATE_DEF_ID.to_def_id();
+    let mut items = Vec::new();
+    for owner in context.hir_crate_items(()).definitions() {
+        collector.graph.reserve(0)?;
+        items.push(collector.graph.definition(owner.to_def_id())?);
+    }
     if phase == EvidencePhase::Checked {
         for owner in context.hir_body_owners() {
             collector.graph.definition(owner.to_def_id())?;
@@ -243,7 +258,7 @@ fn collect(context: TyCtxt<'_>, phase: EvidencePhase, limits: &Limits, tracked_i
             }
         }
     }
-    collector.graph.definition(rustc_span::def_id::CRATE_DEF_ID.to_def_id())?;
+    collector.graph.definition(root)?;
     let mut visitor = DefinitionVisitor { collector: &mut collector };
     if let ControlFlow::Break(error) = context.hir_visit_all_item_likes_in_crate(&mut visitor) {
         return Err(error);
@@ -278,7 +293,8 @@ fn collect(context: TyCtxt<'_>, phase: EvidencePhase, limits: &Limits, tracked_i
     definitions.sort_by_key(|entry| (entry.id.krate, entry.id.index));
     let mut expansions = collector.expansions.into_values().collect::<Vec<_>>();
     expansions.sort_by_key(|entry| (entry.id.krate, entry.id.index));
-    let declarations = DeclarationEvidence { inputs, probes, types, constants, expansions, definitions, scopes: collector.scopes };
+    let declarations = DeclarationEvidence { root: definition_id(root), items, inputs, probes, types,
+        constants, expansions, definitions, scopes: collector.scopes };
     Ok(match phase {
         EvidencePhase::Declarations => Evidence::Declarations { declarations },
         EvidencePhase::Checked => Evidence::Checked { declarations, occurrences: collector.occurrences, effects },
@@ -319,8 +335,13 @@ impl Collector<'_, '_> {
             _ => None,
         };
         self.context.sess.dcx().abort_if_errors();
+        let stable = self.context.def_path_hash(id);
         self.definitions.insert(id, Definition {
             id: definition_id(id),
+            stable: StableDefinitionId {
+                krate: format!("{:016x}", stable.stable_crate_id().as_u64()),
+                path: format!("{:016x}", stable.local_hash().as_u64()),
+            },
             parent: self.context.opt_parent(id).map(definition_id),
             path: self.context.def_path_str(id),
             name: self.context.opt_item_name(id).map(|name| name.to_string()),

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { decodeNativeEvidence } from "../../../../dist/providers/native/elaboration/decode-evidence.js";
+import { nativeDefinition, nativeEvidenceFixture } from "./native-evidence-fixture.mjs";
 
 const limits = { maximumRows: 10_000, maximumDepth: 16, maximumOutputBytes: 1_048_576, timeoutMilliseconds: 1_000 };
 const identity = index => ({ krate: 0, index });
@@ -16,9 +17,10 @@ const signature = { inputs: [0], output: 0, variadic: false, unsafeCall: true, a
 
 function graph() {
   return {
-    phase: "declarations", inputs: [], probes: [], expansions: [], scopes: [],
-    definitions: kinds.map((kind, index) => ({ id: identity(index), parent: index === 0 ? null : identity(0), path: `crate::item${index}`,
-      name: `item${index}`, kind, macroKinds: [], type: null, generics: null, visibility: null, source: null })),
+    ...nativeEvidenceFixture(),
+    items: [0, 1, 2, 3, 4, 9, 10, 12, 14].map(identity),
+    scopes: [0, 3].map(index => ({ kind: "named", owner: identity(index), bindings: [], ambiguities: [] })),
+    definitions: kinds.map((kind, index) => nativeDefinition(index, kind)),
     types: [{ id: 0, value: { kind: "primitive", name: "u64" } }],
     constants: [{ id: 0, value: { kind: "scalar", type: 0, bytes: 8, bits: "9007199254740993" } }],
   };
@@ -147,8 +149,7 @@ test("graph recursion remains bounded without rejecting legitimate type referenc
   input.types.push({ id: 1, value: { kind: "adt", definition: identity(1), arguments: [] } });
   input.types.push({ id: 2, value: { kind: "raw-pointer", pointee: 1, mutable: true } });
   input.definitions[1].type = 1;
-  input.definitions.push({ id: identity(15), parent: identity(1), path: "crate::item1::next", name: "next", kind: "field",
-    macroKinds: [], type: 2, generics: null, visibility: null, source: null });
+  input.definitions.push({ ...nativeDefinition(15, "field"), parent: identity(1), path: "crate::item1::next", name: "next", type: 2 });
   assert.equal(decodeNativeEvidence(input, limits).types.length, 3);
   for (const mutate of [
     value => { value.definitions[1].parent = identity(1); },

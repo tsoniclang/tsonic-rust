@@ -109,7 +109,6 @@ export function validateNativeScopeRelations(scopes: readonly RustNativeScope[],
   unique(scopes.map(scope => nativeDefinitionKey(scope.owner)), "scope owner");
   const declarations = new Map(definitions.map(definition => [nativeDefinitionKey(definition.id), definition]));
   for (const scope of scopes) {
-    if (scope.owner.krate !== 0) throw new Error("Native Rust effective scope has a nonlocal owner.");
     if (scope.kind === "named") {
       for (const binding of scope.bindings) requireSpan(binding.source);
       for (const ambiguity of scope.ambiguities) { requireSpan(ambiguity.main.source); requireSpan(ambiguity.second.source); }

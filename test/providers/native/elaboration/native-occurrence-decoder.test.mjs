@@ -1,16 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { decodeNativeEvidence } from "../../../../dist/providers/native/elaboration/decode-evidence.js";
+import { nativeDefinition, nativeEvidenceFixture } from "./native-evidence-fixture.mjs";
 
 const limits = { maximumRows: 10_000, maximumDepth: 16, maximumOutputBytes: 1_048_576, timeoutMilliseconds: 1_000 };
 const identity = index => ({ krate: 0, index });
 
 function evidence(occurrence) {
-  return { phase: "checked", inputs: [], probes: [], expansions: [], scopes: [], effects: [],
-    definitions: ["module", "function", "associated-function"].map((kind, index) => ({
-      id: identity(index), parent: index === 0 ? null : identity(0), path: `crate::item${index}`,
-      name: `item${index}`, kind, macroKinds: [], type: null, generics: null, visibility: null, source: null,
-    })),
+  return { ...nativeEvidenceFixture(), phase: "checked", effects: [], items: [0, 1, 2].map(identity),
+    definitions: ["module", "function", "associated-function"].map((kind, index) => nativeDefinition(index, kind)),
     types: [{ id: 0, value: { kind: "primitive", name: "u64" } }],
     constants: [{ id: 0, value: { kind: "scalar", type: 0, bytes: 8, bits: "9007199254740993" } }],
     occurrences: [occurrence],

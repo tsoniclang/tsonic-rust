@@ -8,6 +8,11 @@ export interface RustNativeDefinitionId {
   readonly index: number;
 }
 
+export interface RustNativeStableDefinitionId {
+  readonly krate: string;
+  readonly path: string;
+}
+
 export interface RustNativeNodeId {
   readonly owner: RustNativeDefinitionId;
   readonly local: number;
@@ -36,6 +41,7 @@ export interface RustNativeConstantRow {
 
 export interface RustNativeDefinition {
   readonly id: RustNativeDefinitionId;
+  readonly stable: RustNativeStableDefinitionId;
   readonly parent: RustNativeDefinitionId | null;
   readonly path: string;
   readonly name: string | null;
@@ -58,6 +64,8 @@ export interface RustNativeExpansion {
 }
 
 interface RustNativeDeclarationGraph {
+  readonly root: RustNativeDefinitionId;
+  readonly items: readonly RustNativeDefinitionId[];
   readonly inputs: readonly RustNativeSourceInput[];
   readonly probes: readonly RustNativeSourceProbe[];
   readonly types: readonly RustNativeTypeRow[];
@@ -117,6 +125,10 @@ export interface RustNativeSourceProbe {
 
 export function nativeDefinitionKey(identity: RustNativeDefinitionId): string {
   return `${identity.krate}:${identity.index}`;
+}
+
+export function nativeStableDefinitionKey(identity: RustNativeStableDefinitionId): string {
+  return `${identity.krate}:${identity.path}`;
 }
 
 export function nativeNodeKey(identity: RustNativeNodeId): string {

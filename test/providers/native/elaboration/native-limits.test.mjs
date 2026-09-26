@@ -4,8 +4,9 @@ import { defaultRustNativeSourceLimits, validateRustNativeSourceLimits } from ".
 import { createRustNativeSourceTool } from "../../../../dist/providers/native/elaboration/tool.js";
 import { decodeNativeEvidence } from "../../../../dist/providers/native/elaboration/decode-evidence.js";
 import { decodeNativeTokenResponse } from "../../../../dist/providers/native/elaboration/tokens.js";
+import { nativeEvidenceFixture } from "./native-evidence-fixture.mjs";
 
-const evidence = { phase: "declarations", inputs: [], probes: [], types: [], constants: [], definitions: [], scopes: [], expansions: [] };
+const evidence = nativeEvidenceFixture();
 const tokens = { kind: "tokens", protocolVersion: 1, tokens: [] };
 const defaults = defaultRustNativeSourceLimits;
 const ceilings = { maximumRows: 4_194_304, maximumDepth: 512,
@@ -21,7 +22,8 @@ test("native source finite defaults and exact supported ceilings share one contr
   assert.ok(Object.isFrozen(defaults));
   for (const limits of [defaults, ceilings, Object.fromEntries(Object.keys(ceilings).map(key => [key, 1]))]) {
     validateRustNativeSourceLimits(limits);
-    assert.equal(decodeNativeEvidence(evidence, limits).phase, "declarations");
+    if (limits.maximumRows === 1) assert.throws(() => decodeNativeEvidence(evidence, limits), /row limit/u);
+    else assert.equal(decodeNativeEvidence(evidence, limits).phase, "declarations");
     assert.deepEqual(decodeNativeTokenResponse(tokens, limits), []);
   }
 });

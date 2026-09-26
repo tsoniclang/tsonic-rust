@@ -9,6 +9,7 @@ import { createRustNativeSourceTool, defaultRustNativeSourceLimits } from "../..
 import { decodeNativeEvidence } from "../../../../dist/providers/native/elaboration/decode-evidence.js";
 import { validateRustNativeEvidenceInputs } from "../../../../dist/providers/native/elaboration/freshness.js";
 import { runRustNativeCommand } from "../../../../dist/providers/native/protocol/bounded-command.js";
+import { nativeEvidenceFixture } from "./native-evidence-fixture.mjs";
 
 const root = createTestWorkspace("native-source-inputs");
 const cacheRoot = join(root, "cache");
@@ -23,8 +24,7 @@ function writeSource(directory, name, source) {
 }
 
 function emptyEvidence() {
-  return { phase: "declarations", inputs: [], probes: [], types: [], constants: [],
-    definitions: [], scopes: [], expansions: [] };
+  return nativeEvidenceFixture();
 }
 
 function input(path, contents) {
@@ -91,8 +91,8 @@ test("native input decoding rejects missing, duplicate, contradictory and malfor
     mutate(corrupted);
     assert.throws(() => decodeNativeEvidence(corrupted, limits), /Native Rust/u);
   }
-  assert.throws(() => decodeNativeEvidence(valid, { ...limits, maximumRows: 2 }), /row limit/u);
-  assert.equal(decodeNativeEvidence(valid, { ...limits, maximumRows: 3 }).probes.length, 2);
+  assert.throws(() => decodeNativeEvidence(valid, { ...limits, maximumRows: 6 }), /row limit/u);
+  assert.equal(decodeNativeEvidence(valid, { ...limits, maximumRows: 7 }).probes.length, 2);
 });
 
 test("one native source tool retains its selected environment without mutating caller options", () => {
