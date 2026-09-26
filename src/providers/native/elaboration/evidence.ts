@@ -63,14 +63,24 @@ export interface RustNativeExpansion {
   readonly definitionSite: RustNativeSourceSpan | null;
 }
 
-export interface RustNativeEvidence {
+interface RustNativeDeclarationGraph {
   readonly inputs: readonly RustNativeSourceInput[];
-  readonly occurrences: readonly RustNativeOccurrence[];
   readonly types: readonly RustNativeTypeRow[];
   readonly expansions: readonly RustNativeExpansion[];
   readonly definitions: readonly RustNativeDefinition[];
+}
+
+export interface RustNativeDeclarationEvidence extends RustNativeDeclarationGraph {
+  readonly phase: "declarations";
+}
+
+export interface RustNativeEvidence extends RustNativeDeclarationGraph {
+  readonly phase: "checked";
+  readonly occurrences: readonly RustNativeOccurrence[];
   readonly effects: readonly RustNativeBodyEffects[];
 }
+
+export type RustNativeSemanticEvidence = RustNativeDeclarationEvidence | RustNativeEvidence;
 
 export interface RustNativeBodyEffects {
   readonly owner: RustNativeDefinitionId;

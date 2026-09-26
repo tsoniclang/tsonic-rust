@@ -1,12 +1,12 @@
 import type {
-  RustCompilerData, RustNativeDefinition, RustNativeDefinitionId, RustNativeEvidence,
+  RustCompilerData, RustNativeDefinition, RustNativeDefinitionId, RustNativeSemanticEvidence,
   RustNativeExpansion, RustNativeNodeId, RustNativeOccurrence, RustNativeSourceSpan, RustNativeTypeRow,
   RustNativeAccess,
 } from "./evidence.js";
 import { nativeDefinitionKey, nativeNodeKey } from "./evidence.js";
 import type { RustNativeSourceLimits } from "./tool.js";
 
-export function decodeNativeEvidence(value: unknown, limits: RustNativeSourceLimits): RustNativeEvidence {
+export function decodeNativeEvidence(value: unknown, limits: RustNativeSourceLimits): RustNativeSemanticEvidence {
   let rows = 0;
   const reserve = (): void => {
     if (++rows > limits.maximumRows) throw new Error("Native Rust evidence exceeds the row limit.");
@@ -47,6 +47,10 @@ export function decodeNativeEvidence(value: unknown, limits: RustNativeSourceLim
     });
   };
   const input = record(value);
+  const phase = choice(input.phase, ["declarations", "checked"] as const);
+  if (phase === "declarations" && ("occurrences" in input || "effects" in input)) {
+    throw new Error("Native Rust declaration evidence cannot claim checked body evidence.");
+  }
   const inputs = array(input.inputs, value => {
     reserve();
     const row = record(value);
@@ -77,7 +81,7 @@ export function decodeNativeEvidence(value: unknown, limits: RustNativeSourceLim
       name: text(row.name), definition: row.definition === null ? null : identity(row.definition),
       callSite: span(row.callSite), definitionSite: span(row.definitionSite) });
   });
-  const occurrences = array(input.occurrences, (value): RustNativeOccurrence => {
+  const occurrences = phase === "declarations" ? [] : array(input.occurrences, (value): RustNativeOccurrence => {
     reserve();
     const row = record(value);
     let resolution: RustNativeOccurrence["resolution"] = null;
@@ -91,7 +95,7 @@ export function decodeNativeEvidence(value: unknown, limits: RustNativeSourceLim
     return Object.freeze({ id: node(row.id), kind: choice(row.kind, ["expression", "pattern"] as const),
       source: span(row.source), type: index(row.type), adjustedType: index(row.adjustedType), resolution });
   });
-  const effects = array(input.effects, value => {
+  const effects = phase === "declarations" ? [] : array(input.effects, value => {
     reserve();
     const row = record(value);
     return Object.freeze({ owner: identity(row.owner), accesses: array(row.accesses, (value): RustNativeAccess => {
@@ -128,6 +132,7 @@ export function decodeNativeEvidence(value: unknown, limits: RustNativeSourceLim
   unique(effects.map(row => nativeDefinitionKey(row.owner)), "effect body");
   const typeIds = unique(types.map(row => String(row.id)), "type");
   const definitionIds = unique(definitions.map(row => nativeDefinitionKey(row.id)), "definition");
+  unique(definitions.map(row => String(row.publicId)), "public definition");
   const expansionIds = unique(expansions.map(row => nativeDefinitionKey(row.id)), "expansion");
   const nodeIds = unique(occurrences.map(row => nativeNodeKey(row.id)), "node");
   const requireType = (id: number | null): void => {
@@ -178,7 +183,9 @@ export function decodeNativeEvidence(value: unknown, limits: RustNativeSourceLim
       if (access.fakeRead !== null) requireDefinition(access.fakeRead.closure);
     }
   }
-  return Object.freeze({ inputs, types, definitions, expansions, occurrences, effects });
+  return phase === "declarations"
+    ? Object.freeze({ phase, inputs, types, definitions, expansions })
+    : Object.freeze({ phase, inputs, types, definitions, expansions, occurrences, effects });
 }
 
 const definitionKinds = [

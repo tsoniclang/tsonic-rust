@@ -61,7 +61,7 @@ export function tryPlanRustNativePointerOperation(
       code: "RUST_NATIVE_POINTER_UNSAFE_CONTEXT_REQUIRED",
       category: "error",
       source: "tsonic-rust",
-      message: `Rust native-pointer '${fact.operation}' requires an explicit unsafeContext() source region.`,
+      message: `Rust native-pointer '${fact.operation}' requires an explicit unsafecontext() source region.`,
       sourceNode: node,
     });
     return { handled: true };

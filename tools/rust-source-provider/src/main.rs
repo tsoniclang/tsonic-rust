@@ -51,7 +51,7 @@ fn execute() -> Result<(), String> {
             protocol_version: request::PROTOCOL_VERSION,
             tokens: tokens::read_tokens(edition, source.clone(), limits)?,
         }, limits)?,
-        Request::Check { arguments, limits, .. } => evidence::check(arguments, limits)?,
+        Request::Analyze { arguments, phase, limits, .. } => evidence::analyze(arguments, *phase, limits)?,
     };
     let mut file = std::fs::OpenOptions::new()
         .write(true)

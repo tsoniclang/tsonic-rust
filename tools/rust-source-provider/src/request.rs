@@ -15,12 +15,20 @@ pub enum Request {
         source: String,
         limits: Limits,
     },
-    Check {
+    Analyze {
         #[serde(rename = "protocolVersion")]
         protocol_version: u32,
+        phase: EvidencePhase,
         arguments: Vec<String>,
         limits: Limits,
     },
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum EvidencePhase {
+    Declarations,
+    Checked,
 }
 
 #[derive(Clone, Deserialize)]
@@ -34,13 +42,13 @@ pub struct Limits {
 impl Request {
     pub fn limits(&self) -> &Limits {
         match self {
-            Self::Tokens { limits, .. } | Self::Check { limits, .. } => limits,
+            Self::Tokens { limits, .. } | Self::Analyze { limits, .. } => limits,
         }
     }
 
     pub fn validate(&self) -> Result<(), String> {
         let version = match self {
-            Self::Tokens { protocol_version, .. } | Self::Check { protocol_version, .. } => *protocol_version,
+            Self::Tokens { protocol_version, .. } | Self::Analyze { protocol_version, .. } => *protocol_version,
         };
         if version != PROTOCOL_VERSION {
             return Err("Native source protocol version mismatch.".to_owned());
@@ -52,7 +60,7 @@ impl Request {
         {
             return Err("Native source limits must be positive and within the service ceilings.".to_owned());
         }
-        if let Self::Check { arguments, .. } = self
+        if let Self::Analyze { arguments, .. } = self
             && (arguments.is_empty() || arguments.iter().any(|argument| argument.contains('\0')))
         {
             return Err("Native compiler arguments must be nonempty and cannot contain NUL.".to_owned());

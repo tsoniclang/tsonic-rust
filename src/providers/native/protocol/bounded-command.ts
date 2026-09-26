@@ -53,7 +53,7 @@ export function runRustNativeCommand(command: RustNativeCommand): string {
   });
   worker.unref();
   const handleWorkerError = (error: unknown): void => {
-    const cleanupError = cleanupCommandProcess(memory);
+    const cleanupError = cleanupCommandProcess(memory, "caller");
     publishCommandResult(memory, false, `Native Rust command worker failed: ${commandErrorMessage(error)}${
       cleanupError === undefined ? "" : `; ${cleanupError}`}`);
   };
@@ -66,9 +66,9 @@ export function runRustNativeCommand(command: RustNativeCommand): string {
     const preventedSpawn = Atomics.compareExchange(state, commandState.phase,
       commandPhase.initial, commandPhase.finished) === commandPhase.initial;
     const spawning = Atomics.load(state, commandState.phase) === commandPhase.spawning;
-    const cleanupError = cleanupCommandProcess(memory);
+    const cleanupError = cleanupCommandProcess(memory, "caller");
     const cleanupStatus = Atomics.load(state, commandState.cleanup);
-    const cleaning = cleanupStatus === commandCleanup.claimed;
+    const cleaning = cleanupStatus === commandCleanup.claimed || cleanupStatus === commandCleanup.reclaimed;
     const cleanupFailure = cleanupError ?? (cleanupStatus === commandCleanup.failed ? "Process-tree cleanup failed." : undefined);
     if (preventedSpawn || (!spawning && !cleaning)) {
       retireWorker();

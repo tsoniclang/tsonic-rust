@@ -79,7 +79,7 @@ export function selectRustCheckedCall(
       target: { form: "call", path: "rt::keep_alive", argModes: ["ref"] },
       parameterCarriers: [value], resultCarrier: rustUnitTargetType(),
       isAsync: false, isFallible: false, errorBoundary: "none",
-    }, [value], context, options, { sourceName: "keepAlive" });
+    }, [value], context, options, { sourceName: "keepalive" });
   }
   const providerEvidence = selectedCallProviderDeclaration(request, context);
   if (providerEvidence.kind === "conflict") {

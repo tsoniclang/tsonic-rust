@@ -15,20 +15,33 @@ use rustc_span::hygiene::{ExpnId, ExpnKind};
 use rustc_span::Span;
 use serde::Serialize;
 
-use crate::request::{Budget, Limits, PROTOCOL_VERSION, Response, encode_response};
+use crate::request::{Budget, EvidencePhase, Limits, PROTOCOL_VERSION, Response, encode_response};
 use crate::definitions::definition_kind;
 use crate::inputs::{SourceInput, TrackedInputs};
 use crate::effects::{BodyEffects, TrackedEffects};
 
 #[derive(Serialize)]
+#[serde(tag = "phase", rename_all = "kebab-case")]
+pub enum Evidence {
+    Declarations {
+        #[serde(flatten)]
+        declarations: DeclarationEvidence,
+    },
+    Checked {
+        #[serde(flatten)]
+        declarations: DeclarationEvidence,
+        occurrences: Vec<Occurrence>,
+        effects: Vec<BodyEffects>,
+    },
+}
+
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Evidence {
+pub struct DeclarationEvidence {
     pub inputs: Vec<SourceInput>,
-    pub occurrences: Vec<Occurrence>,
     pub types: Vec<TypeRow>,
     pub expansions: Vec<Expansion>,
     pub definitions: Vec<Definition>,
-    pub effects: Vec<BodyEffects>,
 }
 
 #[derive(Clone, Copy, Serialize)]
@@ -116,18 +129,19 @@ pub struct Definition {
     source: Option<SourceSpan>,
 }
 
-pub fn check(arguments: &[String], limits: &Limits) -> Result<Vec<u8>, String> {
+pub fn analyze(arguments: &[String], phase: EvidencePhase, limits: &Limits) -> Result<Vec<u8>, String> {
     let mut callbacks = EvidenceCallbacks {
-        limits, inputs: TrackedInputs::new(limits.maximum_rows),
+        limits, phase, inputs: TrackedInputs::new(limits.maximum_rows),
         effects: TrackedEffects::new(limits.maximum_rows), result: None,
     };
     rustc_driver::catch_fatal_errors(|| rustc_driver::run_compiler(arguments, &mut callbacks))
         .map_err(|_| "Native compiler rejected the source; no semantic evidence was published.".to_owned())?;
-    callbacks.result.ok_or_else(|| "Native compiler did not complete semantic analysis.".to_owned())?
+    callbacks.result.ok_or_else(|| "Native compiler did not complete the requested semantic phase.".to_owned())?
 }
 
 struct EvidenceCallbacks<'limits> {
     limits: &'limits Limits,
+    phase: EvidencePhase,
     inputs: TrackedInputs,
     effects: TrackedEffects,
     result: Option<Result<Vec<u8>, String>>,
@@ -136,11 +150,26 @@ struct EvidenceCallbacks<'limits> {
 impl Callbacks for EvidenceCallbacks<'_> {
     fn config(&mut self, configuration: &mut interface::Config) {
         configuration.file_loader = Some(Box::new(self.inputs.clone()));
-        let effects = self.effects.clone();
-        configuration.register_lints = Some(Box::new(move |_, store| {
-            let effects = effects.clone();
-            store.register_late_lint_pass(Box::new(move |_| Box::new(effects.pass())));
-        }));
+        if self.phase == EvidencePhase::Checked {
+            let effects = self.effects.clone();
+            configuration.register_lints = Some(Box::new(move |_, store| {
+                let effects = effects.clone();
+                store.register_late_lint_pass(Box::new(move |_| Box::new(effects.pass())));
+            }));
+        }
+    }
+
+    fn after_expansion<'tcx>(
+        &mut self,
+        _compiler: &interface::Compiler,
+        context: TyCtxt<'tcx>,
+    ) -> Compilation {
+        if self.phase == EvidencePhase::Declarations {
+            self.capture(context);
+            Compilation::Stop
+        } else {
+            Compilation::Continue
+        }
     }
 
     fn after_analysis<'tcx>(
@@ -148,13 +177,21 @@ impl Callbacks for EvidenceCallbacks<'_> {
         _compiler: &interface::Compiler,
         context: TyCtxt<'tcx>,
     ) -> Compilation {
+        self.capture(context);
+        Compilation::Stop
+    }
+}
+
+impl EvidenceCallbacks<'_> {
+    fn capture(&mut self, context: TyCtxt<'_>) {
+        context.sess.dcx().abort_if_errors();
         self.result = Some(run(context, || {
-            let evidence = collect(context, self.limits, self.inputs.snapshot()?, self.effects.take()?)?;
+            let evidence = collect(context, self.phase, self.limits, &self.inputs, self.effects.take()?)?;
+            context.sess.dcx().abort_if_errors();
             encode_response(&Response::Evidence { protocol_version: PROTOCOL_VERSION, evidence }, self.limits)
         })
             .map_err(|error| format!("Native compiler evidence context failed: {error}"))
             .and_then(|result| result));
-        Compilation::Stop
     }
 }
 
@@ -191,6 +228,7 @@ fn source_span(context: TyCtxt<'_>, span: Span) -> Option<SourceSpan> {
 
 struct Collector<'tcx, 'limits> {
     context: TyCtxt<'tcx>,
+    phase: EvidencePhase,
     budget: Budget<'limits>,
     occurrences: Vec<Occurrence>,
     type_queue: Vec<Ty>,
@@ -199,11 +237,12 @@ struct Collector<'tcx, 'limits> {
     definitions: HashMap<DefId, Definition>,
 }
 
-fn collect(context: TyCtxt<'_>, limits: &Limits, inputs: Vec<SourceInput>,
+fn collect(context: TyCtxt<'_>, phase: EvidencePhase, limits: &Limits, tracked_inputs: &TrackedInputs,
     pending_effects: Vec<crate::effects::PendingBody>) -> Result<Evidence, String>
 {
     let mut collector = Collector {
         context,
+        phase,
         budget: Budget::new(limits),
         occurrences: Vec::new(),
         type_queue: Vec::new(),
@@ -211,12 +250,13 @@ fn collect(context: TyCtxt<'_>, limits: &Limits, inputs: Vec<SourceInput>,
         expansions: HashMap::new(),
         definitions: HashMap::new(),
     };
-    for _ in &inputs { collector.budget.reserve(0)?; }
-    for owner in context.hir_body_owners() {
-        collector.definition(owner.to_def_id())?;
-        let mut visitor = BodyVisitor { collector: &mut collector, types: context.typeck(owner), depth: 0 };
-        if let ControlFlow::Break(error) = visitor.visit_body(context.hir_body_owned_by(owner)) {
-            return Err(error);
+    if phase == EvidencePhase::Checked {
+        for owner in context.hir_body_owners() {
+            collector.definition(owner.to_def_id())?;
+            let mut visitor = BodyVisitor { collector: &mut collector, types: context.typeck(owner), depth: 0 };
+            if let ControlFlow::Break(error) = visitor.visit_body(context.hir_body_owned_by(owner)) {
+                return Err(error);
+            }
         }
     }
     collector.definition(rustc_span::def_id::CRATE_DEF_ID.to_def_id())?;
@@ -224,12 +264,30 @@ fn collect(context: TyCtxt<'_>, limits: &Limits, inputs: Vec<SourceInput>,
     if let ControlFlow::Break(error) = context.hir_visit_all_item_likes_in_crate(&mut visitor) {
         return Err(error);
     }
+    let mut effects = Vec::new();
+    for body in pending_effects {
+        collector.budget.reserve(0)?;
+        collector.definition(body.owner.to_def_id())?;
+        let mut accesses = Vec::new();
+        for mut pending in body.accesses {
+            collector.budget.reserve(0)?;
+            for _ in &pending.access.projections { collector.budget.reserve(0)?; }
+            collector.span_expansions(pending.span)?;
+            pending.access.source = source_span(context, pending.span);
+            accesses.push(pending.access);
+        }
+        effects.push(BodyEffects { owner: definition_id(body.owner.to_def_id()), accesses });
+    }
     let mut types = Vec::new();
     let mut index = 0;
     while index < collector.type_queue.len() {
         let id = collector.type_queue[index];
-        let kind = id.kind();
         let native_type: rustc_middle::ty::Ty<'_> = internal(context, id);
+        if let rustc_middle::ty::FnDef(definition, _) = native_type.kind() {
+            context.fn_sig(*definition);
+            context.sess.dcx().abort_if_errors();
+        }
+        let kind = id.kind();
         let definition = match native_type.kind() {
             rustc_middle::ty::Adt(definition, _) => Some(definition.did()),
             rustc_middle::ty::Foreign(id) | rustc_middle::ty::FnDef(id, _)
@@ -247,25 +305,17 @@ fn collect(context: TyCtxt<'_>, limits: &Limits, inputs: Vec<SourceInput>,
         types.push(TypeRow { id, kind, signature });
         index += 1;
     }
-    let mut effects = Vec::new();
-    for body in pending_effects {
-        collector.budget.reserve(0)?;
-        collector.definition(body.owner.to_def_id())?;
-        let mut accesses = Vec::new();
-        for mut pending in body.accesses {
-            collector.budget.reserve(0)?;
-            for _ in &pending.access.projections { collector.budget.reserve(0)?; }
-            collector.span_expansions(pending.span)?;
-            pending.access.source = source_span(context, pending.span);
-            accesses.push(pending.access);
-        }
-        effects.push(BodyEffects { owner: definition_id(body.owner.to_def_id()), accesses });
-    }
+    let inputs = tracked_inputs.snapshot()?;
+    for _ in &inputs { collector.budget.reserve(0)?; }
     let mut definitions = collector.definitions.into_values().collect::<Vec<_>>();
     definitions.sort_by_key(|entry| (entry.id.krate, entry.id.index));
     let mut expansions = collector.expansions.into_values().collect::<Vec<_>>();
     expansions.sort_by_key(|entry| (entry.id.krate, entry.id.index));
-    Ok(Evidence { inputs, occurrences: collector.occurrences, types, expansions, definitions, effects })
+    let declarations = DeclarationEvidence { inputs, types, expansions, definitions };
+    Ok(match phase {
+        EvidencePhase::Declarations => Evidence::Declarations { declarations },
+        EvidencePhase::Checked => Evidence::Checked { declarations, occurrences: collector.occurrences, effects },
+    })
 }
 
 impl Collector<'_, '_> {
@@ -290,14 +340,20 @@ impl Collector<'_, '_> {
             ].into_iter().filter_map(|(flag, name)| kinds.contains(flag).then_some(name)).collect(),
             _ => Vec::new(),
         };
-        let ty = match kind {
+        let native_type = match kind {
             DefKind::Fn | DefKind::AssocFn | DefKind::Struct | DefKind::Enum | DefKind::Union
             | DefKind::TyAlias | DefKind::ForeignTy | DefKind::Field | DefKind::Const { .. }
-            | DefKind::Static { .. } | DefKind::AssocConst { .. } | DefKind::Ctor(..)
-            | DefKind::Closure => Some(stable(self.context.type_of(id).instantiate_identity().skip_norm_wip())),
+            | DefKind::Static { .. } | DefKind::AssocConst { .. } | DefKind::Ctor(..) =>
+                Some(self.context.type_of(id).instantiate_identity().skip_norm_wip()),
+            DefKind::Closure if self.phase == EvidencePhase::Checked =>
+                Some(self.context.type_of(id).instantiate_identity().skip_norm_wip()),
             _ => None,
         };
+        self.context.sess.dcx().abort_if_errors();
+        let ty = native_type.map(stable);
         if let Some(ty) = ty { self.register_type(ty)?; }
+        let generics = kind.has_generics().then(|| self.context.generics_of(id));
+        self.context.sess.dcx().abort_if_errors();
         self.definitions.insert(id, Definition {
             id: definition_id(id),
             public_id: stable(id),
@@ -307,7 +363,7 @@ impl Collector<'_, '_> {
             kind: definition_kind(kind),
             macro_kinds,
             r#type: ty,
-            generics: kind.has_generics().then(|| stable(self.context.generics_of(id))),
+            generics: generics.map(stable),
             source: source_span(self.context, span),
         });
         if let Some(parent) = self.context.opt_parent(id) { self.definition(parent)?; }
@@ -379,6 +435,22 @@ impl<'tcx> Visitor<'tcx> for DefinitionVisitor<'_, 'tcx, '_> {
             Ok(()) => ControlFlow::Continue(()),
             Err(error) => ControlFlow::Break(error),
         }
+    }
+
+    fn visit_variant(&mut self, variant: &'tcx rustc_hir::Variant<'tcx>) -> Self::Result {
+        if let Err(error) = self.collector.definition(variant.def_id.to_def_id()) {
+            return ControlFlow::Break(error);
+        }
+        intravisit::walk_variant(self, variant)
+    }
+
+    fn visit_variant_data(&mut self, data: &'tcx rustc_hir::VariantData<'tcx>) -> Self::Result {
+        if let Some(constructor) = data.ctor_def_id()
+            && let Err(error) = self.collector.definition(constructor.to_def_id())
+        {
+            return ControlFlow::Break(error);
+        }
+        intravisit::walk_struct_def(self, data)
     }
 }
 

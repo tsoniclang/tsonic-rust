@@ -23,7 +23,7 @@ export function tryPlanRustRawLocation(
   if (plan.operation === "reinterpret" && (context.explicitUnsafeContextDepth ?? 0) === 0) {
     context.diagnostics.push({ code: "RUST_NATIVE_POINTER_UNSAFE_CONTEXT_REQUIRED", category: "error",
       source: "tsonic-rust", sourceNode: node,
-      message: "Raw memory reinterpretation requires an explicit unsafeContext() source region." });
+      message: "Raw memory reinterpretation requires an explicit unsafecontext() source region." });
     return { handled: true };
   }
   const value = planExpression(plan.expression, context);

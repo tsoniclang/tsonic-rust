@@ -120,6 +120,128 @@ pub fn invalid<'scope>() -> &'scope String {
   assert.throws(() => tool.check(["--edition=2024", "--crate-type=lib", invalid]), /cannot return reference|does not live long enough/u);
 });
 
+test("native declaration evidence is available before body checking without claiming body acceptance", () => {
+  const path = sourceFile("declarations_before_bodies.rs", `
+macro_rules! record { () => { pub struct Generated { pub count: u32 } }; }
+record!();
+pub fn choose<Element>(input: Element) -> Element { input }
+pub fn first(input: Generated) -> Generated { second(input) }
+pub fn second(input: Generated) -> Generated { first(input) }
+pub fn invalid() -> Generated { Generated { count: "not a u32" } }
+`);
+  const arguments_ = ["--edition=2024", "--crate-type=lib", path];
+  const evidence = tool.declarations(arguments_);
+  assert.equal(evidence.phase, "declarations");
+  assert.ok(!Object.hasOwn(evidence, "occurrences"));
+  assert.ok(!Object.hasOwn(evidence, "effects"));
+  assert.ok(Object.isFrozen(evidence));
+  assert.ok(evidence.expansions.some(expansion => expansion.name.includes("record")));
+  const generated = evidence.definitions.find(definition => definition.name === "Generated");
+  const count = evidence.definitions.find(definition => definition.name === "count");
+  assert.ok(generated);
+  assert.deepEqual(count.parent, generated.id);
+  assert.deepEqual(evidence.types.find(type => type.id === count.type).kind, { RigidTy: { Uint: "U32" } });
+  for (const name of ["choose", "first", "second", "invalid"]) {
+    const declaration = evidence.definitions.find(definition => definition.name === name);
+    assert.ok(declaration, name);
+    const type = evidence.types.find(type => type.id === declaration.type);
+    assert.ok(type.signature, name);
+  }
+  validateRustNativeEvidenceInputs(evidence);
+  assert.throws(() => tool.check(arguments_), /mismatched types/u);
+});
+
+test("native declaration queries still reject unresolved signatures and failed expansion", () => {
+  for (const [name, source, message] of [
+    ["unresolved_signature", "pub fn read() -> Missing { loop {} }", /cannot find type/u],
+    ["failed_expansion", 'compile_error!("expansion rejected");', /expansion rejected/u],
+  ]) {
+    const path = sourceFile(`${name}.rs`, source);
+    assert.throws(() => tool.declarations(["--edition=2024", "--crate-type=lib", path]), message);
+  }
+});
+
+test("nested declaration parents do not force closure body inference during declaration queries", () => {
+  const path = sourceFile("declarations_in_closure.rs", `
+pub fn outer() {
+    let _callback = || {
+        struct Local { field: u32 }
+        let _: u32 = "invalid body";
+    };
+}
+`);
+  const arguments_ = ["--edition=2024", "--crate-type=lib", path];
+  const evidence = tool.declarations(arguments_);
+  const local = evidence.definitions.find(definition => definition.name === "Local");
+  assert.ok(local);
+  const parent = evidence.definitions.find(definition => definition.id.krate === local.parent.krate &&
+    definition.id.index === local.parent.index);
+  assert.equal(parent.kind, "closure");
+  assert.equal(parent.type, null);
+  assert.throws(() => tool.check(arguments_), /mismatched types/u);
+});
+
+test("invalid native headers reject as diagnostics rather than crashing the public type converter", () => {
+  for (const [name, source] of [
+    ["missing_return_argument", "pub struct Boxed<Value>(Value); pub fn read() -> Boxed { loop {} }"],
+    ["missing_field_argument", "pub struct Boxed<Value>(Value); pub struct Holder { value: Boxed }"],
+  ]) {
+    const path = sourceFile(`${name}.rs`, source);
+    assert.throws(() => tool.declarations(["--edition=2024", "--crate-type=lib", path]), error => {
+      assert.match(error.message, /missing generics|generic argument/u);
+      assert.doesNotMatch(error.message, /internal compiler error|panicked at|unreachable/u);
+      return true;
+    });
+  }
+});
+
+test("unused native variants and constructors remain in declaration evidence", () => {
+  const path = sourceFile("unused_constructors.rs", `
+pub enum Flag { Off, On(u8), Count { value: u32 } }
+pub struct Unit;
+pub struct Tuple(pub u32);
+`);
+  const evidence = tool.declarations(["--edition=2024", "--crate-type=lib", path]);
+  const flag = evidence.definitions.find(definition => definition.name === "Flag");
+  assert.ok(flag);
+  const variants = evidence.definitions.filter(definition => definition.kind === "variant");
+  assert.deepEqual(variants.map(definition => definition.name).sort(), ["Count", "Off", "On"]);
+  for (const variant of variants) assert.deepEqual(variant.parent, flag.id);
+  for (const kind of ["unit-struct-constructor", "tuple-struct-constructor", "unit-variant-constructor", "tuple-variant-constructor"]) {
+    const constructor = evidence.definitions.find(definition => definition.kind === kind);
+    assert.ok(constructor, kind);
+    assert.notEqual(constructor.type, null);
+    assert.ok(evidence.types.some(type => type.id === constructor.type));
+    assert.ok(evidence.definitions.some(definition => definition.id.krate === constructor.parent.krate &&
+      definition.id.index === constructor.parent.index));
+  }
+});
+
+test("declaration evidence preserves phase identity, graph integrity and resource limits", () => {
+  const path = sourceFile("declaration_mutations.rs", "pub fn identity(input: u64) -> u64 { input }");
+  const arguments_ = ["--edition=2024", "--crate-type=lib", path];
+  const evidence = tool.declarations(arguments_);
+  for (const mutate of [
+    value => { delete value.phase; },
+    value => { value.phase = "checked"; },
+    value => { value.effects = []; },
+    value => { value.occurrences = []; },
+    value => { value.definitions[0].parent = { krate: 0, index: 0xffff_ffff }; },
+    value => value.types.push(value.types[0]),
+    value => { value.definitions[1].publicId = value.definitions[0].publicId; },
+  ]) {
+    const corrupted = structuredClone(evidence);
+    mutate(corrupted);
+    assert.throws(() => decodeNativeEvidence(corrupted, defaultRustNativeSourceLimits), /Native Rust/u);
+  }
+  for (const selection of [{ maximumRows: 1 }, { maximumOutputBytes: 128 }]) {
+    const bounded = createRustNativeSourceTool({ cacheRoot, limits: { ...defaultRustNativeSourceLimits, ...selection } });
+    assert.throws(() => bounded.declarations(arguments_), /limit/u);
+  }
+  writeFileSync(path, "pub fn identity(input: i64) -> i64 { input }");
+  assert.throws(() => validateRustNativeEvidenceInputs(evidence), /checked input changed/u);
+});
+
 test("procedural expansion observes real bodies, produces definitions and runs derives", () => {
   const library = sourceFile("native_fixture.rs", `
 extern crate proc_macro;
@@ -166,12 +288,20 @@ native_fixture::echo!(pub fn read() -> i64 { generated() });
 pub fn tag() -> u32 { Generated::TAG }
 `);
   const arguments_ = ["--edition=2024", "--crate-type=lib", "--extern", `native_fixture=${join(output, libraryName)}`];
+  const declarations = tool.declarations([...arguments_, path]);
+  assert.equal(declarations.phase, "declarations");
+  assert.ok(declarations.definitions.some(definition => definition.name === "generated"));
+  assert.ok(declarations.definitions.some(definition => definition.name === "TAG"));
+  assert.ok(!declarations.definitions.some(definition => definition.name === "removed"));
+  assert.ok(declarations.expansions.some(expansion => expansion.kind === "derive"));
   const evidence = tool.check([...arguments_, path]);
+  assert.equal(evidence.phase, "checked");
   assert.ok(evidence.expansions.some(expansion => expansion.kind === "attribute"));
   assert.ok(evidence.expansions.some(expansion => expansion.kind === "derive"));
   assert.ok(evidence.definitions.some(definition => definition.name === "generated"));
   assert.ok(!evidence.definitions.some(definition => definition.name === "removed"));
   const invalid = sourceFile("missing_body.rs", `#[native_fixture::require_body] pub fn invalid() {}`);
+  assert.throws(() => tool.declarations([...arguments_, invalid]), /custom attribute panicked/u);
   assert.throws(() => tool.check([...arguments_, invalid]), /custom attribute panicked/u);
 });
 

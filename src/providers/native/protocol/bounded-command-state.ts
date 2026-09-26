@@ -13,7 +13,7 @@ export const commandState = Object.freeze({
 });
 export const commandOutcome = Object.freeze({ pending: 0, success: 1, failure: 2, cancelled: 3 });
 export const commandPhase = Object.freeze({ initial: 0, spawning: 1, watching: 2, finished: 3 });
-export const commandCleanup = Object.freeze({ pending: 0, claimed: 1, complete: 2, failed: 3 });
+export const commandCleanup = Object.freeze({ pending: 0, claimed: 1, complete: 2, failed: 3, reclaimed: 4 });
 
 export interface CommandWorkerInput {
   readonly command: RustNativeCommand;
@@ -58,15 +58,21 @@ export function publishCommandResult(memory: CommandMemory, success: boolean, me
   Atomics.notify(state, commandState.outcome);
 }
 
-export function cleanupCommandProcess(memory: CommandMemory): string | undefined {
+export function cleanupCommandProcess(memory: CommandMemory, owner: "worker" | "caller" = "worker"): string | undefined {
   const { state } = memory;
   const processId = Atomics.load(state, commandState.processId);
   if (processId < 0) return "Invalid native Rust process identity.";
-  if (processId === 0 || Atomics.compareExchange(state, commandState.cleanup,
-    commandCleanup.pending, commandCleanup.claimed) !== commandCleanup.pending) return undefined;
+  if (processId === 0) return undefined;
+  const claim = owner === "worker" ? commandCleanup.claimed : commandCleanup.reclaimed;
+  const acquired = Atomics.compareExchange(state, commandState.cleanup,
+    commandCleanup.pending, claim) === commandCleanup.pending;
+  if (!acquired && !(owner === "caller" && Atomics.load(state, commandState.outcome) !== commandOutcome.pending &&
+      Atomics.compareExchange(state, commandState.cleanup, commandCleanup.claimed, claim) === commandCleanup.claimed)) {
+    return undefined;
+  }
   try {
     terminateProcessTree(processId);
-    Atomics.store(state, commandState.cleanup, commandCleanup.complete);
+    Atomics.compareExchange(state, commandState.cleanup, claim, commandCleanup.complete);
     return undefined;
   } catch (error) {
     let message = `Native Rust process-tree cleanup failed: ${commandErrorMessage(error)}`;
@@ -75,7 +81,7 @@ export function cleanupCommandProcess(memory: CommandMemory): string | undefined
     } catch (rootError) {
       if (!isMissingProcess(rootError)) message += `; root cleanup failed: ${commandErrorMessage(rootError)}`;
     }
-    Atomics.store(state, commandState.cleanup, commandCleanup.failed);
+    Atomics.compareExchange(state, commandState.cleanup, claim, commandCleanup.failed);
     return message;
   }
 }

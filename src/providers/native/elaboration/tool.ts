@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import type { RustLexicalTokenTree } from "../../../target-model/syntax/token-tree.js";
 import { decodeNativeTokenResponse } from "./tokens.js";
 import { decodeNativeEvidence } from "./decode-evidence.js";
-import type { RustNativeEvidence } from "./evidence.js";
+import type { RustNativeDeclarationEvidence, RustNativeEvidence, RustNativeSemanticEvidence } from "./evidence.js";
 import { validateRustNativeEvidenceInputs } from "./freshness.js";
 import { runRustNativeCommand } from "../protocol/bounded-command.js";
 
@@ -27,6 +27,7 @@ export interface RustNativeSourceTool {
   readonly compilerIdentity: string;
   readonly sysroot: string;
   tokens(source: string, edition: string): readonly RustLexicalTokenTree[];
+  declarations(arguments_: readonly string[]): RustNativeDeclarationEvidence;
   check(arguments_: readonly string[]): RustNativeEvidence;
 }
 
@@ -102,19 +103,29 @@ export function createRustNativeSourceTool(options: {
     }
     return response;
   };
+  const analyze = (phase: RustNativeSemanticEvidence["phase"], arguments_: readonly string[]): RustNativeSemanticEvidence => {
+    const response = request({ kind: "analyze", phase, arguments: [compiler, "--sysroot", sysroot, ...arguments_] });
+    if (!isRecord(response) || response.kind !== "evidence" || !isRecord(response.evidence)) {
+      throw new Error("Native Rust source service did not return semantic evidence.");
+    }
+    const evidence = decodeNativeEvidence(response.evidence, limits);
+    validateRustNativeEvidenceInputs(evidence);
+    return evidence;
+  };
   return Object.freeze({
     compilerIdentity,
     sysroot,
     tokens(source: string, edition: string): readonly RustLexicalTokenTree[] {
       return decodeNativeTokenResponse(request({ kind: "tokens", source, edition }), limits);
     },
+    declarations(arguments_: readonly string[]): RustNativeDeclarationEvidence {
+      const evidence = analyze("declarations", arguments_);
+      if (evidence.phase !== "declarations") throw new Error("Native Rust source service did not return declaration evidence.");
+      return evidence;
+    },
     check(arguments_: readonly string[]): RustNativeEvidence {
-      const response = request({ kind: "check", arguments: [compiler, "--sysroot", sysroot, ...arguments_] });
-      if (!isRecord(response) || response.kind !== "evidence" || !isRecord(response.evidence)) {
-        throw new Error("Native Rust source service did not return checked evidence.");
-      }
-      const evidence = decodeNativeEvidence(response.evidence, limits);
-      validateRustNativeEvidenceInputs(evidence);
+      const evidence = analyze("checked", arguments_);
+      if (evidence.phase !== "checked") throw new Error("Native Rust source service did not return checked evidence.");
       return evidence;
     },
   });

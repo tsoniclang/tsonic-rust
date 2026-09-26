@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { closeSync, fstatSync, openSync, readSync } from "node:fs";
-import type { RustNativeEvidence } from "./evidence.js";
+import type { RustNativeSemanticEvidence } from "./evidence.js";
 
-export function validateRustNativeEvidenceInputs(evidence: RustNativeEvidence): void {
+export function validateRustNativeEvidenceInputs(evidence: RustNativeSemanticEvidence): void {
   const buffer = Buffer.allocUnsafe(64 * 1024);
   for (const input of evidence.inputs) {
     const descriptor = openSync(input.path, "r");
