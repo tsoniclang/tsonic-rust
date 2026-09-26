@@ -241,21 +241,33 @@ while (process.hrtime.bigint() <= workerData.deadlineNanoseconds) Atomics.wait(p
 test("cleanup failure preserves native rejection diagnostics and never certifies a live root", posix, async () => {
   for (const denyRoot of [false, true]) {
     const identitiesPath = join(root, `${randomUUID()}.json`);
-    const runner = await fixtureRunner(`
-const originalKill = process.kill.bind(process);
-process.kill = (identity, signal) => {
-  if (identity < 0 || ${denyRoot}) throw Object.assign(new Error("injected cleanup denial"), { code: "EPERM" });
-  return originalKill(identity, signal);
-};`);
-    try {
-      assert.throws(() => runner(command(`
+    const input = command(`
 import { writeFileSync } from "node:fs";
 writeFileSync(${JSON.stringify(identitiesPath)}, JSON.stringify([process.pid]));
 process.stderr.write("native rejection");
 ${denyRoot ? 'setInterval(() => {}, 1000);' : 'process.exitCode = 7;'}
-`, { timeoutMilliseconds: 1_000 })), denyRoot
-        ? /native rejection[\s\S]*deadline[\s\S]*cleanup failed[\s\S]*termination could not be confirmed/u
-        : /native rejection[\s\S]*Exit: 7[\s\S]*cleanup failed/u);
+`, { timeoutMilliseconds: 1_000 });
+    const control = isolated(`
+import { parentPort, workerData } from "node:worker_threads";
+import { runRustNativeCommand } from ${JSON.stringify(new URL("bounded-command.js", protocolRoot).href)};
+const originalKill = process.kill.bind(process);
+process.kill = (identity, signal) => {
+  if (identity < 0 || ${denyRoot}) throw Object.assign(new Error("injected cleanup denial"), { code: "EPERM" });
+  return originalKill(identity, signal);
+};
+try { parentPort.postMessage({ output: runRustNativeCommand(workerData) }); }
+catch (error) { parentPort.postMessage({ failure: error.message }); }
+`, input);
+    try {
+      const result = await control.result;
+      assert.equal(result.output, undefined);
+      assert.match(result.failure, /native rejection/u);
+      assert.match(result.failure, /cleanup failed/u);
+      assert.match(result.failure, /injected cleanup denial/u);
+      if (denyRoot) {
+        assert.match(result.failure, /deadline/u);
+        assert.match(result.failure, /termination could not be confirmed/u);
+      } else assert.match(result.failure, /Exit: 7/u);
       const identities = JSON.parse(readFileSync(identitiesPath, "utf8"));
       if (denyRoot) assert.equal(processRunning(identities[0]), true);
       else expectDead(identities);
@@ -342,12 +354,12 @@ test("malformed shared results and success without cleanup fail closed", async (
   ]) {
     const runner = await fixtureRunner(`
 import { workerData } from "node:worker_threads";
-import { commandPhase, commandState, commandOutcome } from "./bounded-command-state.js";
+import { commandPhase, commandState, commandOutcome, notifyCommandChange } from "./bounded-command-state.js";
 const state = new Int32Array(workerData.state);
 Atomics.store(state, commandState.phase, commandPhase.finished);
 Atomics.store(state, ${field}, ${value});
 Atomics.store(state, commandState.outcome, ${field === commandState.outcome ? value : commandOutcome.failure});
-Atomics.notify(state, commandState.outcome);`, true);
+notifyCommandChange(state);`, true);
     assert.throws(() => runner(command("")), pattern);
   }
   const runner = await fixtureRunner(`
@@ -443,12 +455,14 @@ childProcess.spawnSync = (executable, args, options) => {
   return { status: workerData.fault === "none" ? 0 : 1 };
 };
 syncBuiltinESMExports();
-const { cleanupCommandProcess, commandMemory, commandState } = await import(${JSON.stringify(new URL("bounded-command-state.js", protocolRoot).href)});
+const { createCommandCleanupOwner } = await import(${JSON.stringify(new URL("bounded-command-cleanup.js", protocolRoot).href)});
+const { commandMemory, commandState } = await import(${JSON.stringify(new URL("bounded-command-state.js", protocolRoot).href)});
 const memory = commandMemory(workerData.input);
 Atomics.store(memory.state, commandState.processId, 12345);
-const message = cleanupCommandProcess(memory);
-cleanupCommandProcess(memory);
-parentPort.postMessage({ message, calls, cleanup: Atomics.load(memory.state, commandState.cleanup) });
+const owner = createCommandCleanupOwner(memory.state, () => {});
+owner.reconcile(true);
+owner.reconcile(true);
+parentPort.postMessage({ message: owner.failure(), calls, cleanup: Atomics.load(memory.state, commandState.cleanup) });
 `, { platform, fault, input: sharedInput() });
       const result = await control.result;
       if (["none", "missing"].includes(fault)) {
@@ -474,39 +488,37 @@ parentPort.postMessage({ message, calls, cleanup: Atomics.load(memory.state, com
   }
 });
 
-test("caller cleanup takes over a worker claim abandoned by an abrupt exit", posix, async () => {
+test("native worker failures never require worker-owned OS cleanup", posix, async () => {
   const identitiesPath = join(root, `${randomUUID()}.json`);
   const runner = await fixtureRunner(`
-const originalKill = process.kill.bind(process);
-process.kill = (identity, signal) => {
-  if (identity < 0) process.exit(91);
-  return originalKill(identity, signal);
-};`);
+process.kill = () => { throw new Error("worker must not perform OS cleanup"); };`);
   try {
     assert.throws(() => runner(command(`
 import { writeFileSync } from "node:fs";
 writeFileSync(${JSON.stringify(identitiesPath)}, JSON.stringify([process.pid]));
 setInterval(() => {}, 1000);
-`, { timeoutMilliseconds: 1_000 })), /incomplete result/u);
+`, { timeoutMilliseconds: 1_000 })), /deadline/u);
     expectDead(JSON.parse(readFileSync(identitiesPath, "utf8")));
   } finally { cleanRecordedProcesses(identitiesPath); }
 });
 
-test("watchdog recovers claimed cleanup rather than leaving a live root behind", async () => {
+test("caller handles an abandoned cleanup request from a blocked worker", async () => {
   const identitiesPath = join(root, `${randomUUID()}.json`);
   const runner = await fixtureRunner(`
 import { spawn } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { workerData } from "node:worker_threads";
-import { commandCleanup, commandPhase, commandState } from "./bounded-command-state.js";
+import { commandCleanup, commandLaunch, commandPhase, commandState, notifyCommandChange } from "./bounded-command-state.js";
 const state = new Int32Array(workerData.state);
 const child = spawn(workerData.command.executable, workerData.command.arguments, {
   detached: process.platform !== "win32", stdio: "ignore",
 });
 writeFileSync(${JSON.stringify(identitiesPath)}, JSON.stringify([child.pid]));
 Atomics.store(state, commandState.processId, child.pid);
+Atomics.store(state, commandState.launch, commandLaunch.published);
 Atomics.store(state, commandState.phase, commandPhase.watching);
-Atomics.store(state, commandState.cleanup, commandCleanup.claimed);
+Atomics.store(state, commandState.cleanup, commandCleanup.requested);
+notifyCommandChange(state);
 Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0);`, true);
   try {
     assert.throws(() => runner(command('setInterval(() => {}, 1000);', { timeoutMilliseconds: 500 })), /watchdog/u);
@@ -514,35 +526,37 @@ Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0);`, true);
   } finally { cleanRecordedProcesses(identitiesPath); }
 });
 
-test("cleanup takeover is fenced by termination and cannot be overwritten by a late worker", async () => {
+test("one cleanup owner deduplicates repeated requests and retains cleanup failure", async () => {
   const control = isolated(`
 import { parentPort, workerData } from "node:worker_threads";
-import { cleanupCommandProcess, commandCleanup, commandMemory, commandOutcome, commandState } from ${JSON.stringify(new URL("bounded-command-state.js", protocolRoot).href)};
+import { createCommandCleanupOwner } from ${JSON.stringify(new URL("bounded-command-cleanup.js", protocolRoot).href)};
+import { commandCleanup, commandMemory, commandState, requestCommandCleanup } from ${JSON.stringify(new URL("bounded-command-state.js", protocolRoot).href)};
 Object.defineProperty(process, "platform", { value: "linux" });
 const memory = commandMemory(workerData);
 const { state } = memory;
 Atomics.store(state, commandState.processId, 12345);
 const attempts = [];
-let takeover;
+let acknowledgements = 0;
+const owner = createCommandCleanupOwner(state, () => { acknowledgements += 1; });
 process.kill = (identity, signal) => {
   attempts.push([identity, signal]);
-  if (attempts.length === 1) {
-    cleanupCommandProcess(memory, "caller");
-    Atomics.store(state, commandState.outcome, commandOutcome.cancelled);
-    process.kill = (identity, signal) => {
-      attempts.push([identity, signal]);
-      if (identity < 0) throw Object.assign(new Error("caller tree denial"), { code: "EPERM" });
-      return true;
-    };
-    takeover = cleanupCommandProcess(memory, "caller");
-  }
+  owner.reconcile(true);
+  if (identity < 0) throw Object.assign(new Error("caller tree denial"), { code: "EPERM" });
   return true;
 };
-cleanupCommandProcess(memory);
-parentPort.postMessage({ attempts, takeover, cleanup: Atomics.load(state, commandState.cleanup) });
+owner.reconcile();
+const beforeRequest = attempts.length;
+requestCommandCleanup(state);
+owner.reconcile();
+requestCommandCleanup(state);
+owner.observe(12345);
+owner.reconcile(true);
+parentPort.postMessage({ attempts, beforeRequest, acknowledgements, failure: owner.failure(), cleanup: Atomics.load(state, commandState.cleanup) });
 `, sharedInput());
   const result = await control.result;
-  assert.deepEqual(result.attempts, [[-12345, "SIGKILL"], [-12345, "SIGKILL"], [12345, "SIGKILL"]]);
-  assert.match(result.takeover, /caller tree denial/u);
+  assert.equal(result.beforeRequest, 0);
+  assert.equal(result.acknowledgements, 1);
+  assert.deepEqual(result.attempts, [[-12345, "SIGKILL"], [12345, "SIGKILL"]]);
+  assert.match(result.failure, /caller tree denial/u);
   assert.equal(result.cleanup, commandCleanup.failed);
 });

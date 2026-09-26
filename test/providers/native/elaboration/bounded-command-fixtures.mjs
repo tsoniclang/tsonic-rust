@@ -45,7 +45,7 @@ export async function fixtureRunner(setup, replacement = false) {
   const directory = join(root, randomUUID());
   mkdirSync(directory);
   writeFileSync(join(directory, "package.json"), '{"type":"module"}');
-  for (const file of ["bounded-command.js", "bounded-command-state.js"]) {
+  for (const file of ["bounded-command.js", "bounded-command-state.js", "bounded-command-cleanup.js"]) {
     copyFileSync(new URL(file, protocolRoot), join(directory, file));
   }
   copyFileSync(new URL("bounded-command-worker.js", protocolRoot), join(directory, "implementation.js"));

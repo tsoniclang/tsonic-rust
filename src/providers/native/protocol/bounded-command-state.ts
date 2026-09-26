@@ -1,5 +1,3 @@
-import { spawnSync } from "node:child_process";
-import { join } from "node:path";
 import type { RustNativeCommand } from "./bounded-command.js";
 
 export const nativeCommandStartupMilliseconds = 5_000;
@@ -9,11 +7,12 @@ export const nativeCommandErrorBytes = 4_096;
 
 export const commandState = Object.freeze({
   outcome: 0, phase: 1, processId: 2, cleanup: 3,
-  stdoutBytes: 4, stderrBytes: 5, errorBytes: 6, length: 7,
+  stdoutBytes: 4, stderrBytes: 5, errorBytes: 6, sequence: 7, launch: 8, length: 9,
 });
 export const commandOutcome = Object.freeze({ pending: 0, success: 1, failure: 2, cancelled: 3 });
 export const commandPhase = Object.freeze({ initial: 0, spawning: 1, watching: 2, finished: 3 });
-export const commandCleanup = Object.freeze({ pending: 0, claimed: 1, complete: 2, failed: 3, reclaimed: 4 });
+export const commandLaunch = Object.freeze({ initial: 0, admitted: 1, absent: 2, published: 3, prevented: 4 });
+export const commandCleanup = Object.freeze({ pending: 0, requested: 1, complete: 2, failed: 3 });
 
 export interface CommandWorkerInput {
   readonly command: RustNativeCommand;
@@ -56,67 +55,15 @@ export function publishCommandResult(memory: CommandMemory, success: boolean, me
   Atomics.compareExchange(state, commandState.outcome, commandOutcome.pending,
     success ? commandOutcome.success : commandOutcome.failure);
   Atomics.notify(state, commandState.outcome);
+  notifyCommandChange(state);
 }
 
-export function cleanupCommandProcess(memory: CommandMemory, owner: "worker" | "caller" = "worker"): string | undefined {
-  const { state } = memory;
-  const processId = Atomics.load(state, commandState.processId);
-  if (processId < 0) return "Invalid native Rust process identity.";
-  if (processId === 0) return undefined;
-  const claim = owner === "worker" ? commandCleanup.claimed : commandCleanup.reclaimed;
-  const acquired = Atomics.compareExchange(state, commandState.cleanup,
-    commandCleanup.pending, claim) === commandCleanup.pending;
-  if (!acquired && !(owner === "caller" && Atomics.load(state, commandState.outcome) !== commandOutcome.pending &&
-      Atomics.compareExchange(state, commandState.cleanup, commandCleanup.claimed, claim) === commandCleanup.claimed)) {
-    return undefined;
-  }
-  try {
-    terminateProcessTree(processId);
-    Atomics.compareExchange(state, commandState.cleanup, claim, commandCleanup.complete);
-    return undefined;
-  } catch (error) {
-    let message = `Native Rust process-tree cleanup failed: ${commandErrorMessage(error)}`;
-    try {
-      process.kill(processId, "SIGKILL");
-    } catch (rootError) {
-      if (!isMissingProcess(rootError)) message += `; root cleanup failed: ${commandErrorMessage(rootError)}`;
-    }
-    Atomics.compareExchange(state, commandState.cleanup, claim, commandCleanup.failed);
-    return message;
-  }
+export function notifyCommandChange(state: Int32Array): void {
+  Atomics.add(state, commandState.sequence, 1);
+  Atomics.notify(state, commandState.sequence);
 }
 
-function terminateProcessTree(processId: number): void {
-  if (!Number.isSafeInteger(processId) || processId <= 0) throw new Error("Invalid native Rust process identity.");
-  if (process.platform === "win32") {
-    const systemRoot = Object.entries(process.env).find(([key]) => key.toLowerCase() === "systemroot")?.[1];
-    if (systemRoot === undefined) throw new Error("Windows process-tree cleanup requires SystemRoot.");
-    const result = spawnSync(join(systemRoot, "System32", "taskkill.exe"), ["/pid", String(processId), "/T", "/F"], {
-      timeout: nativeCommandCleanupMilliseconds, killSignal: "SIGKILL", stdio: "ignore", windowsHide: true,
-    });
-    if (result.error !== undefined) throw result.error;
-    if (result.status !== 0 && processExists(processId)) {
-      throw new Error(`taskkill failed (exit ${result.status ?? result.signal ?? "unknown"}).`);
-    }
-    return;
-  }
-  try {
-    process.kill(-processId, "SIGKILL");
-  } catch (error) {
-    if (!isMissingProcess(error)) throw error;
-  }
-}
-
-function processExists(processId: number): boolean {
-  try {
-    process.kill(processId, 0);
-    return true;
-  } catch (error) {
-    if (isMissingProcess(error)) return false;
-    throw error;
-  }
-}
-
-function isMissingProcess(error: unknown): boolean {
-  return error instanceof Error && "code" in error && error.code === "ESRCH";
+export function requestCommandCleanup(state: Int32Array): void {
+  if (Atomics.compareExchange(state, commandState.cleanup, commandCleanup.pending,
+    commandCleanup.requested) === commandCleanup.pending) notifyCommandChange(state);
 }

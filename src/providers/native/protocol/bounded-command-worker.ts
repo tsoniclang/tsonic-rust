@@ -1,11 +1,11 @@
 import { spawn } from "node:child_process";
 import type { ChildProcessByStdio } from "node:child_process";
 import type { Readable } from "node:stream";
-import { workerData } from "node:worker_threads";
+import { parentPort, workerData } from "node:worker_threads";
 import {
-  cleanupCommandProcess, commandErrorMessage, commandMemory, commandOutcome,
+  commandCleanup, commandErrorMessage, commandLaunch, commandMemory, commandOutcome,
   commandPhase, commandState, nativeCommandCleanupMilliseconds, nativeCommandErrorBytes,
-  publishCommandResult, remainingCommandMilliseconds,
+  notifyCommandChange, publishCommandResult, remainingCommandMilliseconds, requestCommandCleanup,
 } from "./bounded-command-state.js";
 import type { CommandWorkerInput } from "./bounded-command-state.js";
 
@@ -29,11 +29,6 @@ function recordFailure(message: string): void {
     : `${failure}; ${boundedMessage}`.slice(0, nativeCommandErrorBytes);
 }
 
-function cleanup(): void {
-  const message = cleanupCommandProcess(memory);
-  if (message !== undefined) recordFailure(message);
-}
-
 function finish(): void {
   if (finished) return;
   if (failure === undefined && remainingCommandMilliseconds(deadlineNanoseconds) <= 0) {
@@ -45,6 +40,7 @@ function finish(): void {
   child?.stdout.destroy();
   child?.stderr.destroy();
   child?.unref();
+  parentPort?.close();
   Atomics.store(state, commandState.phase, commandPhase.finished);
   publishCommandResult(memory, failure === undefined, failure ?? "");
 }
@@ -54,21 +50,26 @@ function reject(message: string): void {
   rejecting = true;
   recordFailure(message);
   clearTimeout(deadline);
-  cleanup();
+  requestCommandCleanup(state);
   child?.stdout.destroy();
   child?.stderr.destroy();
-  if (exited || child?.pid === undefined) {
+  if (child?.pid === undefined) {
     finish();
   } else {
     cleanupDeadline = setTimeout(() => {
       recordFailure("Native Rust root process termination could not be confirmed.");
       finish();
     }, nativeCommandCleanupMilliseconds);
+    maybeFinish();
   }
 }
 
 function maybeFinish(): void {
-  if (exited && stdoutEnded && stderrEnded) finish();
+  if (finished) return;
+  const cleanup = Atomics.load(state, commandState.cleanup);
+  if (cleanup !== commandCleanup.complete && cleanup !== commandCleanup.failed) return;
+  if (cleanup === commandCleanup.failed && failure === undefined) recordFailure("Native Rust process-tree cleanup failed.");
+  if (exited && (rejecting || (stdoutEnded && stderrEnded))) finish();
 }
 
 function receive(stream: "stdout" | "stderr", chunk: Buffer): void {
@@ -90,27 +91,35 @@ function receive(stream: "stdout" | "stderr", chunk: Buffer): void {
 
 process.on("uncaughtException", error => reject(`Native Rust command worker failed: ${commandErrorMessage(error)}`));
 process.on("unhandledRejection", error => reject(`Native Rust command worker failed: ${commandErrorMessage(error)}`));
+parentPort?.on("message", () => maybeFinish());
 process.on("exit", code => {
   if (finished) return;
   recordFailure(`Native Rust command worker exited before completion (exit ${code}).`);
-  cleanup();
+  requestCommandCleanup(state);
   finish();
 });
 
 try {
-  if (Atomics.compareExchange(state, commandState.phase, commandPhase.initial,
-    commandPhase.spawning) === commandPhase.initial) {
-    Atomics.notify(state, commandState.outcome);
+  if (Atomics.compareExchange(state, commandState.launch, commandLaunch.initial,
+    commandLaunch.admitted) === commandLaunch.initial) {
+    Atomics.store(state, commandState.phase, commandPhase.spawning);
+    notifyCommandChange(state);
     if (Atomics.load(state, commandState.outcome) !== commandOutcome.pending ||
         remainingCommandMilliseconds(deadlineNanoseconds) <= 0) {
+      Atomics.store(state, commandState.launch, commandLaunch.absent);
       reject("Native Rust command exceeded its deadline before invocation.");
     } else {
       child = spawn(command.executable, command.arguments, {
         cwd: command.directory, env: command.environment,
         detached: process.platform !== "win32", stdio: ["ignore", "pipe", "pipe"], windowsHide: true,
       });
-      if (child.pid !== undefined) Atomics.store(state, commandState.processId, child.pid);
+      if (child.pid !== undefined) {
+        parentPort?.postMessage({ kind: "pid", processId: child.pid });
+        Atomics.store(state, commandState.processId, child.pid);
+      }
+      Atomics.store(state, commandState.launch, child.pid === undefined ? commandLaunch.absent : commandLaunch.published);
       Atomics.store(state, commandState.phase, commandPhase.watching);
+      notifyCommandChange(state);
       child.stdout.on("data", (chunk: Buffer) => receive("stdout", chunk));
       child.stderr.on("data", (chunk: Buffer) => receive("stderr", chunk));
       child.stdout.on("error", error => reject(`Native Rust stdout failed: ${commandErrorMessage(error)}`));
@@ -127,9 +136,8 @@ try {
       child.on("exit", (code, signal) => {
         exited = true;
         if (!rejecting && code !== 0) recordFailure(`Exit: ${code ?? signal ?? "unknown"}`);
-        cleanup();
-        if (rejecting) finish();
-        else maybeFinish();
+        requestCommandCleanup(state);
+        maybeFinish();
       });
       if (Atomics.load(state, commandState.outcome) !== commandOutcome.pending ||
           remainingCommandMilliseconds(deadlineNanoseconds) <= 0) {

@@ -1,9 +1,10 @@
 import { Worker } from "node:worker_threads";
+import { createCommandCleanupOwner, retainCommandCleanup } from "./bounded-command-cleanup.js";
 import {
-  cleanupCommandProcess, commandCleanup, commandErrorMessage, commandMemory,
+  commandCleanup, commandLaunch, commandMemory,
   commandOutcome, commandPhase, commandState, nativeCommandErrorBytes,
   nativeCommandStartupMilliseconds, nativeCommandWatchdogGraceMilliseconds,
-  publishCommandResult, remainingCommandMilliseconds,
+  notifyCommandChange, remainingCommandMilliseconds,
 } from "./bounded-command-state.js";
 import type { CommandWorkerInput } from "./bounded-command-state.js";
 
@@ -28,6 +29,9 @@ export interface RustNativeCommand {
  * Neither contains escaped groups/sessions, discovers every Windows orphan, reaps
  * nonchildren, limits native memory, or prevents filesystem writes. Failed queries
  * throw and must not publish evidence, even if the command wrote a response file.
+ * A late PID handoff retains one caller cleanup listener for at most 5 seconds
+ * after return, subject to caller event-loop scheduling. Death before recoverable
+ * PID publication cannot establish cleanup; bounded return is not containment.
  */
 export function runRustNativeCommand(command: RustNativeCommand): string {
   if (!Number.isSafeInteger(command.maximumDiagnosticBytes) || command.maximumDiagnosticBytes <= 0 ||
@@ -52,42 +56,33 @@ export function runRustNativeCommand(command: RustNativeCommand): string {
     workerData: input, execArgv: [], resourceLimits: { maxOldGenerationSizeMb: 128 },
   });
   worker.unref();
-  const handleWorkerError = (error: unknown): void => {
-    const cleanupError = cleanupCommandProcess(memory, "caller");
-    publishCommandResult(memory, false, `Native Rust command worker failed: ${commandErrorMessage(error)}${
-      cleanupError === undefined ? "" : `; ${cleanupError}`}`);
-  };
-  worker.once("error", handleWorkerError);
-  const retireWorker = (): void => {
-    worker.off("error", handleWorkerError);
-    worker.once("error", ignoreRetiredWorkerError);
-  };
+  const cleanup = createCommandCleanupOwner(state, () => worker.postMessage("cleanup"));
+  const retireWorker = retainCommandCleanup(worker, state, cleanup);
   const stopWorker = (): string => {
-    const preventedSpawn = Atomics.compareExchange(state, commandState.phase,
-      commandPhase.initial, commandPhase.finished) === commandPhase.initial;
-    const spawning = Atomics.load(state, commandState.phase) === commandPhase.spawning;
-    const cleanupError = cleanupCommandProcess(memory, "caller");
-    const cleanupStatus = Atomics.load(state, commandState.cleanup);
-    const cleaning = cleanupStatus === commandCleanup.claimed || cleanupStatus === commandCleanup.reclaimed;
-    const cleanupFailure = cleanupError ?? (cleanupStatus === commandCleanup.failed ? "Process-tree cleanup failed." : undefined);
-    if (preventedSpawn || (!spawning && !cleaning)) {
-      retireWorker();
-      void worker.terminate();
-    }
+    const preventedSpawn = Atomics.compareExchange(state, commandState.launch,
+      commandLaunch.initial, commandLaunch.prevented) === commandLaunch.initial;
+    cleanup.reconcile(true);
+    const spawning = Atomics.load(state, commandState.launch) === commandLaunch.admitted && cleanup.processId() === undefined;
+    retireWorker();
+    const cleanupFailure = cleanup.failure();
     return `${preventedSpawn ? " Worker startup did not complete." : ""}${
-      spawning || cleaning ? " Process cleanup handoff could not be confirmed." : ""}${
+      spawning ? " Process cleanup handoff could not be confirmed." : ""}${
       cleanupFailure === undefined ? "" : ` ${cleanupFailure}`}`;
   };
-  while (Atomics.load(state, commandState.outcome) === commandOutcome.pending) {
-    const waitingForStartup = Atomics.load(state, commandState.phase) === commandPhase.initial;
+  while (true) {
+    const sequence = Atomics.load(state, commandState.sequence);
+    cleanup.reconcile();
+    if (Atomics.load(state, commandState.outcome) !== commandOutcome.pending) break;
+    const waitingForStartup = Atomics.load(state, commandState.launch) === commandLaunch.initial;
     const waitDeadline = waitingForStartup && startupDeadline < watchdogDeadline ? startupDeadline : watchdogDeadline;
     const remaining = remainingCommandMilliseconds(waitDeadline);
     if (remaining <= 0) break;
-    Atomics.wait(state, commandState.outcome, commandOutcome.pending, remaining);
+    Atomics.wait(state, commandState.sequence, sequence, remaining);
   }
   if (Atomics.compareExchange(state, commandState.outcome, commandOutcome.pending,
     commandOutcome.cancelled) === commandOutcome.pending) {
     Atomics.notify(state, commandState.outcome);
+    notifyCommandChange(state);
     throw new Error(`Native Rust command watchdog did not complete.${stopWorker()}`);
   }
   const stdoutBytes = Atomics.load(state, commandState.stdoutBytes);
@@ -99,21 +94,25 @@ export function runRustNativeCommand(command: RustNativeCommand): string {
   }
   const outcome = Atomics.load(state, commandState.outcome);
   const processId = Atomics.load(state, commandState.processId);
+  const launch = Atomics.load(state, commandState.launch);
   const cleanupStatus = Atomics.load(state, commandState.cleanup);
   if ((outcome !== commandOutcome.success && outcome !== commandOutcome.failure) ||
       Atomics.load(state, commandState.phase) !== commandPhase.finished ||
-      processId < 0 ||
-      (processId > 0 && cleanupStatus !== commandCleanup.complete && cleanupStatus !== commandCleanup.failed) ||
-      (outcome === commandOutcome.success && (processId === 0 || cleanupStatus !== commandCleanup.complete))) {
-    throw new Error(`Native Rust command returned an incomplete result.${stopWorker()}`);
+      (launch !== commandLaunch.absent && launch !== commandLaunch.published) ||
+      processId < 0 || (processId === 0) !== (launch === commandLaunch.absent) ||
+      (processId > 0 && (!cleanup.attempted() || cleanup.processId() !== processId ||
+        (cleanupStatus !== commandCleanup.complete && cleanupStatus !== commandCleanup.failed))) ||
+      (outcome === commandOutcome.success && (processId === 0 || cleanupStatus !== commandCleanup.complete || cleanup.failure() !== undefined))) {
+    const message = memory.error.toString("utf8", 0, errorBytes);
+    throw new Error(`Native Rust command returned an incomplete result: ${message}.${stopWorker()}`);
   }
   retireWorker();
   if (outcome !== commandOutcome.success) {
     const diagnostics = memory.stderr.toString("utf8", 0, stderrBytes);
     const message = memory.error.toString("utf8", 0, errorBytes);
-    throw new Error(`Native Rust source service failed: ${diagnostics}${diagnostics.length > 0 ? "\n" : ""}${message}`);
+    const cleanupFailure = cleanup.failure();
+    throw new Error(`Native Rust source service failed: ${diagnostics}${diagnostics.length > 0 ? "\n" : ""}${message}${
+      cleanupFailure === undefined ? "" : `; ${cleanupFailure}`}`);
   }
   return memory.stdout.toString("utf8", 0, stdoutBytes).trim();
 }
-
-function ignoreRetiredWorkerError(): void {}
