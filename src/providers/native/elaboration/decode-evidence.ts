@@ -10,6 +10,7 @@ import { createNativeRegionDecoder } from "./decode-regions.js";
 import { createNativeGenericDecoder } from "./decode-generics.js";
 import { createNativeTypeDecoder } from "./decode-types.js";
 import { createNativeConstantDecoder } from "./decode-constants.js";
+import { createNativeScopeDecoder, validateNativeScopeRelations } from "./decode-scopes.js";
 import { array, choice, index, record, requireAcyclicParents, shape, text, unique } from "./decode-values.js";
 
 export function decodeNativeEvidence(value: unknown, limits: RustNativeSourceLimits): RustNativeSemanticEvidence {
@@ -32,26 +33,29 @@ export function decodeNativeEvidence(value: unknown, limits: RustNativeSourceLim
   };
   const span = (value: unknown): RustNativeSourceSpan | null => {
     if (value === null) return null;
-    const input = record(value);
+    reserve();
+    const input = shape(value, ["file", "start", "end", "expansion", "context"]);
     const start = index(input.start);
     const end = index(input.end);
     if (end < start) throw new Error("Native Rust evidence has a reversed source span.");
     return Object.freeze({
       file: text(input.file), start, end, expansion: identity(input.expansion),
       context: array(input.context, value => {
-        const mark = record(value);
+        reserve();
+        const mark = shape(value, ["expansion", "transparency"]);
         return Object.freeze({ expansion: identity(mark.expansion),
           transparency: choice(mark.transparency, ["opaque", "semi-opaque", "transparent"] as const) });
       }),
     });
   };
+  const scopeDecoder = createNativeScopeDecoder(graph, generics, span);
   const input = record(value);
   const phase = choice(input.phase, ["declarations", "checked"] as const);
   if (phase === "declarations" && ("occurrences" in input || "effects" in input)) {
     throw new Error("Native Rust declaration evidence cannot claim checked body evidence.");
   }
-  shape(input, phase === "checked" ? ["phase", "inputs", "types", "constants", "definitions", "expansions", "occurrences", "effects"] :
-    ["phase", "inputs", "types", "constants", "definitions", "expansions"]);
+  shape(input, phase === "checked" ? ["phase", "inputs", "types", "constants", "definitions", "scopes", "expansions", "occurrences", "effects"] :
+    ["phase", "inputs", "types", "constants", "definitions", "scopes", "expansions"]);
   const inputs = array(input.inputs, value => {
     reserve();
     const row = record(value);
@@ -72,13 +76,15 @@ export function decodeNativeEvidence(value: unknown, limits: RustNativeSourceLim
   });
   const definitions = array(input.definitions, (value): RustNativeDefinition => {
     reserve();
-    const row = shape(value, ["id", "parent", "path", "name", "kind", "macroKinds", "type", "generics", "source"]);
+    const row = shape(value, ["id", "parent", "path", "name", "kind", "macroKinds", "type", "generics", "visibility", "source"]);
     return Object.freeze({ id: identity(row.id),
       parent: row.parent === null ? null : identity(row.parent), path: text(row.path),
       name: row.name === null ? null : text(row.name), kind: choice(row.kind, definitionKinds),
       macroKinds: array(row.macroKinds, value => choice(value, ["function-like", "attribute", "derive"] as const)),
-      type: row.type === null ? null : index(row.type), generics: generics.generics(row.generics), source: span(row.source) });
+      type: row.type === null ? null : index(row.type), generics: generics.generics(row.generics),
+      visibility: row.visibility === null ? null : scopeDecoder.visibility(row.visibility), source: span(row.source) });
   });
+  const scopes = array(input.scopes, scopeDecoder.scope);
   const expansions = array(input.expansions, (value): RustNativeExpansion => {
     reserve();
     const row = record(value);
@@ -161,6 +167,7 @@ export function decodeNativeEvidence(value: unknown, limits: RustNativeSourceLim
     requireType(row.type);
     requireSpan(row.source);
   }
+  validateNativeScopeRelations(scopes, definitions, requireSpan);
   for (const row of expansions) {
     requireExpansion(row.parent);
     requireDefinition(row.definition);
@@ -196,8 +203,8 @@ export function decodeNativeEvidence(value: unknown, limits: RustNativeSourceLim
     }
   }
   return phase === "declarations"
-    ? Object.freeze({ phase, inputs, types, constants, definitions, expansions })
-    : Object.freeze({ phase, inputs, types, constants, definitions, expansions, occurrences, effects });
+    ? Object.freeze({ phase, inputs, types, constants, definitions, scopes, expansions })
+    : Object.freeze({ phase, inputs, types, constants, definitions, scopes, expansions, occurrences, effects });
 }
 
 const definitionKinds = [

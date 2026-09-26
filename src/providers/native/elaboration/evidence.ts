@@ -1,4 +1,5 @@
 import type { RustNativeConstant, RustNativeGenerics, RustNativeType } from "./type-model.js";
+import type { RustNativeScope, RustNativeVisibility } from "./scope-model.js";
 
 export interface RustNativeDefinitionId {
   readonly krate: number;
@@ -52,6 +53,7 @@ export interface RustNativeDefinition {
   readonly macroKinds: readonly ("function-like" | "attribute" | "derive")[];
   readonly type: number | null;
   readonly generics: RustNativeGenerics | null;
+  readonly visibility: RustNativeVisibility | null;
   readonly source: RustNativeSourceSpan | null;
 }
 
@@ -71,6 +73,7 @@ interface RustNativeDeclarationGraph {
   readonly constants: readonly RustNativeConstantRow[];
   readonly expansions: readonly RustNativeExpansion[];
   readonly definitions: readonly RustNativeDefinition[];
+  readonly scopes: readonly RustNativeScope[];
 }
 
 export interface RustNativeDeclarationEvidence extends RustNativeDeclarationGraph {

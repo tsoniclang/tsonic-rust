@@ -17,6 +17,7 @@ use crate::inputs::{SourceInput, TrackedInputs};
 use crate::effects::{BodyEffects, TrackedEffects};
 use crate::type_graph::TypeGraph;
 use crate::type_model::{ConstantRow, Generics, TypeId, TypeRow};
+use crate::scopes::{Scope, Visibility, collect_scope, visibility};
 
 #[derive(Serialize)]
 #[serde(tag = "phase", rename_all = "kebab-case")]
@@ -41,6 +42,7 @@ pub struct DeclarationEvidence {
     pub constants: Vec<ConstantRow>,
     pub expansions: Vec<Expansion>,
     pub definitions: Vec<Definition>,
+    pub scopes: Vec<Scope>,
 }
 
 #[derive(Clone, Copy, Serialize)]
@@ -117,6 +119,7 @@ pub struct Definition {
     macro_kinds: Vec<&'static str>,
     r#type: Option<TypeId>,
     generics: Option<Generics>,
+    visibility: Option<Visibility>,
     source: Option<SourceSpan>,
 }
 
@@ -196,7 +199,7 @@ fn expansion_id(id: ExpnId) -> ExpansionId {
     ExpansionId { krate: id.krate.as_u32(), index: id.local_id.as_u32() }
 }
 
-fn source_span(context: TyCtxt<'_>, span: Span) -> Option<SourceSpan> {
+pub fn source_span(context: TyCtxt<'_>, span: Span) -> Option<SourceSpan> {
     if span.is_dummy() { return None; }
     let start = context.sess.source_map().lookup_byte_offset(span.lo());
     Some(SourceSpan {
@@ -222,6 +225,7 @@ struct Collector<'tcx, 'limits> {
     occurrences: Vec<Occurrence>,
     expansions: HashMap<ExpnId, Expansion>,
     definitions: HashMap<DefId, Definition>,
+    scopes: Vec<Scope>,
 }
 
 fn collect(context: TyCtxt<'_>, phase: EvidencePhase, limits: &Limits, tracked_inputs: &TrackedInputs,
@@ -234,6 +238,7 @@ fn collect(context: TyCtxt<'_>, phase: EvidencePhase, limits: &Limits, tracked_i
         occurrences: Vec::new(),
         expansions: HashMap::new(),
         definitions: HashMap::new(),
+        scopes: Vec::new(),
     };
     if phase == EvidencePhase::Checked {
         for owner in context.hir_body_owners() {
@@ -276,7 +281,7 @@ fn collect(context: TyCtxt<'_>, phase: EvidencePhase, limits: &Limits, tracked_i
     definitions.sort_by_key(|entry| (entry.id.krate, entry.id.index));
     let mut expansions = collector.expansions.into_values().collect::<Vec<_>>();
     expansions.sort_by_key(|entry| (entry.id.krate, entry.id.index));
-    let declarations = DeclarationEvidence { inputs, types, constants, expansions, definitions };
+    let declarations = DeclarationEvidence { inputs, types, constants, expansions, definitions, scopes: collector.scopes };
     Ok(match phase {
         EvidencePhase::Declarations => Evidence::Declarations { declarations },
         EvidencePhase::Checked => Evidence::Checked { declarations, occurrences: collector.occurrences, effects },
@@ -308,6 +313,14 @@ impl Collector<'_, '_> {
         self.context.sess.dcx().abort_if_errors();
         let ty = native_type.map(|value| self.graph.ty(value)).transpose()?;
         let generics = if kind.has_generics() { Some(self.graph.generics(id)?) } else { None };
+        let visibility = match kind {
+            DefKind::Mod | DefKind::Struct | DefKind::Union | DefKind::Enum | DefKind::Variant
+            | DefKind::Trait | DefKind::TraitAlias | DefKind::TyAlias | DefKind::ForeignTy
+            | DefKind::Fn | DefKind::Const { .. } | DefKind::Static { .. } | DefKind::Ctor(..)
+            | DefKind::AssocFn | DefKind::AssocConst { .. } | DefKind::AssocTy | DefKind::Macro(_)
+            | DefKind::Field => Some(visibility(&mut self.graph, self.context.visibility(id))?),
+            _ => None,
+        };
         self.context.sess.dcx().abort_if_errors();
         self.definitions.insert(id, Definition {
             id: definition_id(id),
@@ -318,9 +331,14 @@ impl Collector<'_, '_> {
             macro_kinds,
             r#type: ty,
             generics,
+            visibility,
             source: source_span(self.context, span),
         });
         if let Some(parent) = self.context.opt_parent(id) { self.graph.definition(parent)?; }
+        if let Some(scope) = collect_scope(&mut self.graph, id)? {
+            for span in scope.spans { self.span_expansions(span)?; }
+            self.scopes.push(scope.value);
+        }
         self.span_expansions(span)
     }
 

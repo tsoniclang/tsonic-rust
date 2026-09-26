@@ -26,6 +26,7 @@ mod type_graph;
 mod type_regions;
 mod type_constants;
 mod type_generics;
+mod scopes;
 
 use std::io::{Read, Write};
 use std::path::PathBuf;
