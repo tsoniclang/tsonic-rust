@@ -7,6 +7,7 @@ import { createTestWorkspace } from "../../../../../tsonic/test/scripts/test-wor
 import { createRustNativeSourceTool, defaultRustNativeSourceLimits } from "../../../../dist/providers/native/elaboration/tool.js";
 import { decodeNativeTokenResponse } from "../../../../dist/providers/native/elaboration/tokens.js";
 import { printRustTokenStream } from "../../../../dist/print/source/macro-input.js";
+import { printRustAttribute } from "../../../../dist/print/source/attributes.js";
 import { createRustTokenQuotation, bindRustTokenQuotation } from "../../../../dist/target-model/syntax/quotation.js";
 import { validateRustNativeEvidenceInputs } from "../../../../dist/providers/native/elaboration/freshness.js";
 import { decodeNativeEvidence } from "../../../../dist/providers/native/elaboration/decode-evidence.js";
@@ -45,6 +46,22 @@ test("native token groups and documentation attributes retain native meaning", (
   assert.throws(() => tool.tokens("([)]", "2024"), /invalid Rust tokens|source service failed/u);
   assert.throws(() => tool.tokens('r#"unterminated', "2024"), /invalid Rust tokens|source service failed/u);
   assert.throws(() => tool.tokens("x", "2099"), /Unsupported Rust edition/u);
+});
+
+test("attribute input round trips through the canonical native token grammar", () => {
+  for (const input of [
+    '(r#type => { 9007199254740993_u64; "text" })',
+    "(input: &'scope mut [u8], output => (value,))",
+    '(all(feature = "enabled", not(test)))',
+    '= r##"native \\ bytes"##',
+  ]) {
+    const attribute = { path: "fixture::attribute", tokens: tool.tokens(input, "2024") };
+    for (const inner of [false, true]) {
+      const expected = `#${inner ? "!" : ""}[fixture::attribute${input}]`;
+      assert.deepEqual(syntax(tool.tokens(printRustAttribute(attribute, inner), "2024")),
+        syntax(tool.tokens(expected, "2024")));
+    }
+  }
 });
 
 test("native quotation splices join exact byte ranges rather than placeholder spellings", () => {
