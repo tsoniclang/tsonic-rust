@@ -1,11 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { implementationSubstitutions } from "../../../../../dist/providers/native/model/normalization/implementation-bindings.js";
+import { directImplementationGenericParameterPositions } from "../../../../../dist/providers/native/model/types/requirements.js";
 
 const identity = itemId => ({ itemId, canonicalPath: ["example", itemId] });
 const parameter = (itemId, name) => ({ kind: "type", identity: identity(itemId), name,
   requirements: [], outlives: [], maybeSized: false });
 const reference = parameter => ({ kind: "generic", identity: parameter.identity, name: parameter.name });
+
+test("primitive implementation ownership uses the compiler type, not the export spelling", () => {
+  const owner = identity("renamed-primitive");
+  const implementation = { for: { primitive: "u32" } };
+  assert.deepEqual(directImplementationGenericParameterPositions({}, implementation, {}, [], owner, "u32"), new Map());
+  assert.equal(directImplementationGenericParameterPositions({}, implementation, {}, [], owner, "f32"), undefined);
+  assert.equal(directImplementationGenericParameterPositions({}, implementation, {}, [], owner), undefined);
+  assert.equal(directImplementationGenericParameterPositions({}, implementation, {}, [parameter("wrong", "T")], owner, "u32"), undefined);
+});
 
 test("implementation generics use declaration identities and exact associated equalities", () => {
   const declared = parameter("owner:type", "OwnerName");

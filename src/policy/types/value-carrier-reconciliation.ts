@@ -90,6 +90,9 @@ export function selectRustFlowReadProjection(
   const optionalElement = rustOptionElementCarrier(sourceCarrier);
   if (optionalElement !== undefined &&
     rustTargetTypeRefEquals(optionalElement, selectedCarrier)) {
+    if (selectedCarrier.kind === "reference" && selectedCarrier.mutable) {
+      return { kind: "projection", fact: { kind: "option-reference", sourceCarrier, selectedCarrier } };
+    }
     return rustCarrierSupportsTrait(
       selectedCarrier,
       "core::clone::Clone",

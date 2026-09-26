@@ -181,6 +181,7 @@ export function authoredPublicKind(
     "enum",
     "function",
     "module",
+    "primitive",
     "static",
     "struct",
     "trait",

@@ -1,4 +1,4 @@
-export const rustCompilerProviderProtocolVersion = 5;
+export const rustCompilerProviderProtocolVersion = 6;
 
 export interface RustCompilerIdentity {
   readonly rustcVerboseVersion: string;
@@ -303,7 +303,7 @@ export interface RustCompilerAssociatedConstant {
   readonly id: string;
   readonly name: string;
   readonly type: RustCompilerType;
-  readonly traitDispatch: RustCompilerTraitDispatch;
+  readonly traitDispatch?: RustCompilerTraitDispatch;
   readonly typeRequirements: readonly RustCompilerTypeParameter[];
 }
 
@@ -334,6 +334,13 @@ interface RustCompilerExportIdentity {
 }
 
 export type RustCompilerExport = RustCompilerExportIdentity & (
+  | {
+      readonly kind: "primitive";
+      readonly type: Extract<RustCompilerType, { readonly kind: "primitive" }>;
+      readonly methods: readonly RustCompilerFunction[];
+      readonly associatedConstants: readonly RustCompilerAssociatedConstant[];
+      readonly unsupportedMembers: readonly RustCompilerUnsupportedMember[];
+    }
   | {
       readonly kind: "constant";
       readonly type: RustCompilerType;

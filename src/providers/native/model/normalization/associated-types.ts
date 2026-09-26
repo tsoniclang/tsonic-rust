@@ -90,6 +90,7 @@ export function sourceImplementationRequirements(
   declaredGenericParameters: readonly RustCompilerGenericParameter[],
   ownerIdentity: RustCompilerItemIdentity,
   resolveItem?: RustdocItemResolver,
+  ownerPrimitive?: string,
 ): readonly RustCompilerTypeParameter[] | undefined {
   const positions = directImplementationTypeParameterPositions(
     document,
@@ -97,6 +98,7 @@ export function sourceImplementationRequirements(
     implementationContext,
     declaredGenericParameters,
     ownerIdentity,
+    ownerPrimitive,
   );
   if (positions === undefined) return undefined;
   const declaredTypeParameters = declaredGenericParameters.filter(

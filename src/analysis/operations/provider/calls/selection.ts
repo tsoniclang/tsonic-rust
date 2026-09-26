@@ -454,11 +454,9 @@ export function selectRustCheckedCall(
         undefined, undefined, sourceDeclaration, undefined, receiverCarrier);
       if (result !== undefined) return result;
     }
-    if (declarationKind === "KindFunctionType" || declarationKind === "KindCallSignature") {
-      const runtimeCallable = acceptRuntimeCallableCall(request, context, options);
-      if (runtimeCallable !== undefined) return runtimeCallable;
-    }
-    const structuralMethod = acceptStructuralRuntimeMethodCall(
+    const callableTypeOrArrow = declarationKind === "KindFunctionType" ||
+      declarationKind === "KindCallSignature" || declarationKind === "KindArrowFunction";
+    const structuralMethod = callableTypeOrArrow ? undefined : acceptStructuralRuntimeMethodCall(
       request,
       sourceDeclaration,
       context,
@@ -466,6 +464,12 @@ export function selectRustCheckedCall(
     );
     if (structuralMethod !== undefined) {
       return structuralMethod;
+    }
+    if (callableTypeOrArrow || declarationKind === "KindFunctionExpression") {
+      return acceptRuntimeCallableCall(request, context, options) ?? rejectSelectedOperation(
+        request.source.call, context, "RUST_SOURCE_CALLABLE_CARRIER_MISSING",
+        "The exact selected callable value requires a closed native invocation carrier.",
+      );
     }
     return acceptProjectSourceCall(request, sourceDeclaration, context, options);
   }

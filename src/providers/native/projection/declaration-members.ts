@@ -227,7 +227,7 @@ export function projectVariants(
 
 export function projectTypeMethods(
   methods: readonly RustCompilerFunction[],
-  ownerKind: "struct" | "enum" | "union" | "trait",
+  ownerKind: "struct" | "enum" | "union" | "trait" | "primitive",
   context: ProjectionContext,
   exportId: string,
   ownerTargetPath: readonly string[],
@@ -304,9 +304,11 @@ export function projectAssociatedConstants(
   readonly members: readonly ProviderMemberDeclaration[];
   readonly operations: readonly RustProviderOperationDefinition[];
 } {
-  const counts = new Map<string, number>();
+  const byName = new Map<string, RustCompilerAssociatedConstant[]>();
   for (const constant of constants) {
-    counts.set(constant.name, (counts.get(constant.name) ?? 0) + 1);
+    const candidates = byName.get(constant.name) ?? [];
+    candidates.push(constant);
+    byName.set(constant.name, candidates);
   }
   const ownerGenerics = requireCurrentType(context).genericParameters;
   const genericBindings = providerGenericBindingsFor(ownerGenerics, context);
@@ -315,12 +317,19 @@ export function projectAssociatedConstants(
     parameter.kind === "type" ? [parameter.sourceName] : []);
   const members: ProviderMemberDeclaration[] = [];
   const operations: RustProviderOperationDefinition[] = [];
-  for (const constant of constants) {
-    if (counts.get(constant.name) !== 1) continue;
-    const memberId = `${exportId}::trait-constant:${constant.name}`;
+  for (const candidates of byName.values()) {
+    const inherent = candidates.filter(constant => constant.traitDispatch === undefined);
+    const selected = inherent.length === 0 ? candidates : inherent;
+    if (selected.length !== 1) continue;
+    const constant = selected[0]!;
+    const memberId = `${exportId}::associated-constant:${constant.name}`;
     const resultCarrier = targetTypeFor(constant.type, context, "result");
     const sourceType = sourceTypeFor(constant.type, context, "result");
-    const target = {
+    const target = constant.traitDispatch === undefined ? {
+      form: "associated-value" as const,
+      owner: requireCurrentType(context).carrier,
+      name: constant.name,
+    } : {
       form: "trait-associated-value" as const,
       owner: requireCurrentType(context).carrier,
       traitPath: targetTraitFor(constant.traitDispatch, context, "result", "target-default").path,
@@ -404,7 +413,17 @@ export function projectAssociatedTypes(
       ...exported.genericParameters,
       self,
       ...associated.genericParameters,
-    ]);
+    ].map(parameter => {
+      if (parameter.kind === "type" && parameter.defaultType !== undefined) {
+        const { defaultType: _defaultType, ...required } = parameter;
+        return Object.freeze(required);
+      }
+      if (parameter.kind === "const" && parameter.defaultValue !== undefined) {
+        const { defaultValue: _defaultValue, ...required } = parameter;
+        return Object.freeze(required);
+      }
+      return parameter;
+    }));
     const genericContext = withDefaultGenericBindings(
       withProjectionGenericParameters(context, parameters),
       parameters,

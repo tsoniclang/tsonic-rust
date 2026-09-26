@@ -37,6 +37,7 @@ import {
   typeParametersOf,
 } from "./declaration-members.js";
 import { sourceTypeGenericParameters } from "./source-generics.js";
+import { projectPrimitiveExport } from "./primitives.js";
 import { rustNamedTargetType, rustUnitTargetType } from "../../../target-model/types/index.js";
 import type {
   ProviderExportDeclaration,
@@ -157,6 +158,9 @@ function projectExport(
     context.modulePath,
     exported.name,
   );
+  if (exported.kind === "primitive") {
+    return projectPrimitiveExport(exported, context, exportId);
+  }
   if (exported.kind === "constant" || exported.kind === "static") {
     return projectValueExport(exported, context, exportId);
   }
@@ -344,7 +348,7 @@ function projectTypeAlias(
 function projectNominalExport(
   exported: Exclude<
     RustCompilerExport,
-    { readonly kind: "constant" | "static" | "function" | "type-alias" }
+    { readonly kind: "constant" | "static" | "function" | "type-alias" | "primitive" }
   >,
   context: ProjectionContext,
   exportId: string,

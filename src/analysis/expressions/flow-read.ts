@@ -29,6 +29,7 @@ import type { Node, Type } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustGuardedArrayEntryCarrier } from "../control-flow/array-entry-values.js";
+import { recordBindingWrite } from "../declarations/types-and-bindings.js";
 
 export function applyFlowReadLane(
   walk: RustFactWalk,
@@ -129,6 +130,7 @@ export function applyFlowReadLane(
     expression,
     selection.fact,
   );
+  if (selection.fact.kind === "option-reference") recordBindingWrite(walk, expression, "referent");
   return selection.fact.selectedCarrier;
 }
 

@@ -101,7 +101,7 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
     assert.ok(widget.methods.some(({ name, traitDispatch }) =>
       name === "from_metric" && traitDispatch?.path === "acme_widget::Metric"));
     assert.deepEqual(
-      widget.associatedConstants.map(({ name, traitDispatch }) => ({ name, trait: traitDispatch.path })),
+      widget.associatedConstants.map(({ name, traitDispatch }) => ({ name, trait: traitDispatch?.path })),
       [
         { name: "SLOT", trait: "acme_widget::ConstantSlot" },
         { name: "UNIT", trait: "acme_widget::Metric" },

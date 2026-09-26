@@ -213,6 +213,7 @@ export function normalizeTypeMembers(
   declaredGenericParameters: readonly RustCompilerGenericParameter[],
   ownerIdentity: RustCompilerItemIdentity,
   resolveItem?: RustdocItemResolver,
+  ownerPrimitive?: string,
 ): {
   readonly methods: readonly RustCompilerFunction[];
   readonly associatedConstants: readonly RustCompilerAssociatedConstant[];
@@ -235,6 +236,7 @@ export function normalizeTypeMembers(
         declaredGenericParameters,
         ownerIdentity,
         resolveItem,
+        ownerPrimitive,
       );
       if (selected.kind === "not-public") continue;
       if (selected.traitDispatch !== undefined) {
@@ -280,7 +282,7 @@ export function normalizeTypeMembers(
               ),
               ...(resolveItem === undefined ? {} : { resolveItem }),
             }));
-          } else if (selected.traitDispatch !== undefined && hasInnerKind(item, "assoc_const")) {
+          } else if (hasInnerKind(item, "assoc_const")) {
             const constant = requireInnerRecord(item, "assoc_const", `Rust associated constant '${name}'`);
             associatedConstants.push(Object.freeze({
               id: canonicalItemId(dependency, item),
@@ -293,7 +295,7 @@ export function normalizeTypeMembers(
                 selected.associatedTypeBindings,
                 selected.traitDispatch,
               ),
-              traitDispatch: selected.traitDispatch,
+              ...(selected.traitDispatch === undefined ? {} : { traitDispatch: selected.traitDispatch }),
               typeRequirements: selected.sourceRequirements,
             }));
           }
@@ -468,6 +470,7 @@ function normalizeImplementation(
   declaredGenericParameters: readonly RustCompilerGenericParameter[],
   ownerIdentity: RustCompilerItemIdentity,
   resolveItem?: RustdocItemResolver,
+  ownerPrimitive?: string,
 ): {
   readonly kind: "selected";
   readonly context: RustCompilerNormalizationContext;
@@ -497,6 +500,7 @@ function normalizeImplementation(
     generics.context,
     declaredGenericParameters,
     ownerIdentity,
+    ownerPrimitive,
   );
   if (positions === undefined) {
     throw new Error("Rust impl does not project exactly onto the source-visible generic declaration.");
@@ -514,6 +518,7 @@ function normalizeImplementation(
     declaredGenericParameters,
     ownerIdentity,
     resolveItem,
+    ownerPrimitive,
   );
   if (sourceRequirements === undefined) {
     throw new Error("Rust impl requirements cannot be projected onto the source-visible type arguments.");
