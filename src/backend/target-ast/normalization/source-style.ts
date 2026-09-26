@@ -538,7 +538,7 @@ function finalizeRustExpressionStyle(expression: RustExpr): RustExpr {
       result = { ...expression, expr: finalizeRustExpressionStyle(expression.expr) };
       break;
     case "macro-invocation":
-      result = { ...expression, args: expression.args.map(finalizeRustExpressionStyle) };
+      result = expression;
       break;
     case "vec-literal":
     case "slice-literal":

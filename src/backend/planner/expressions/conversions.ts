@@ -50,6 +50,7 @@ import {
 import { invokeRustStructuralObjectMethod } from "../objects/project-storage.js";
 import { applyFinalizedValueConversion } from "./value-conversions.js";
 import { planRustRestAssembly } from "./calls/rest-assembly.js";
+import { rustSeparatedExpressionTokens } from "../../target-ast/macro-input.js";
 
 function providerConstantExpression(argument: RustProviderConstantArgument): RustExpr {
   switch (argument.kind) {
@@ -285,9 +286,10 @@ export function planProviderOperationExpression(
       return scoped({
         kind: "macro-invocation",
         path: form.path,
-        delimiter: form.delimiter,
-        arguments: form.arguments === "repeat" ? "repeat" : "list",
-        args,
+        input: {
+          delimiter: form.delimiter,
+          tokens: rustSeparatedExpressionTokens(args, form.arguments === "repeat" ? ";" : ","),
+        },
       });
     case "call-c-variadic":
       registerAliasFromPath(context, form.path);

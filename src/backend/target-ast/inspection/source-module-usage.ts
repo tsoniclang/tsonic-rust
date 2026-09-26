@@ -12,6 +12,20 @@ import type {
   RustGenerics,
   RustTypeBound,
 } from "../nodes.js";
+import { rustMacroInputFragments, type RustMacroInput } from "../macro-input.js";
+
+function rustMacroInputReferencesModuleAlias(input: RustMacroInput, alias: string): boolean {
+  return rustMacroInputFragments(input).some(fragment => {
+    switch (fragment.kind) {
+      case "expression": return rustExpressionReferencesModuleAlias(fragment.expression, alias);
+      case "type": return rustTypeReferencesModuleAlias(fragment.type, alias);
+      case "pattern": return rustPatternReferencesModuleAlias(fragment.pattern, alias);
+      case "items": return rustItemsReferenceModuleAlias(fragment.items, alias);
+      case "const": return fragment.value.kind === "path" && rustPathReferencesModuleAlias(fragment.value.path, alias);
+      case "lifetime": return false;
+    }
+  });
+}
 
 export function rustItemsReferenceModuleAlias(
   items: readonly RustItem[],
@@ -355,8 +369,7 @@ function rustExpressionReferencesModuleAlias(expression: RustExpr, alias: string
           rustExpressionReferencesModuleAlias(argument, alias));
     case "macro-invocation":
       return rustPathReferencesModuleAlias(expression.path, alias) ||
-        expression.args.some((argument) =>
-          rustExpressionReferencesModuleAlias(argument, alias));
+        rustMacroInputReferencesModuleAlias(expression.input, alias);
     case "option-presence":
     case "field":
       return rustExpressionReferencesModuleAlias(expression.receiver, alias);

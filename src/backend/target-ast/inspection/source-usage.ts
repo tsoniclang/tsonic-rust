@@ -1,4 +1,5 @@
 import type { RustBlock, RustExpr, RustStmt } from "../nodes.js";
+import { rustMacroInputExpressions } from "../macro-input.js";
 
 export function rustBlockReferencesPath(block: RustBlock, path: string): boolean {
   return rustStatementsReferencePath(block.statements, path);
@@ -153,7 +154,7 @@ export function rustExpressionChildren(expression: RustExpr): readonly RustExpr[
     case "method-call":
       return [expression.receiver, ...expression.args];
     case "macro-invocation":
-      return expression.args;
+      return rustMacroInputExpressions(expression.input);
     case "option-presence":
     case "field":
       return [expression.receiver];

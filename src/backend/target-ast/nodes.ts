@@ -1,4 +1,5 @@
 import { type RustAttribute } from "./attributes.js";
+import type { RustMacroInput } from "./macro-input.js";
 // Structured Rust output model for the static-native construct set. The
 // printer is the only place this model becomes text.
 
@@ -209,9 +210,7 @@ export type RustExpr =
   | {
       readonly kind: "macro-invocation";
       readonly path: string;
-      readonly delimiter: "parentheses" | "brackets" | "braces";
-      readonly arguments: "list" | "repeat";
-      readonly args: readonly RustExpr[];
+      readonly input: RustMacroInput;
     }
   | { readonly kind: "associated-value"; readonly owner: RustType; readonly trait?: RustType; readonly name: string }
   | { readonly kind: "associated-call"; readonly owner: RustType; readonly trait?: RustType; readonly method: string; readonly genericArguments?: readonly RustCallGenericArgument[]; readonly args: readonly RustExpr[] }
