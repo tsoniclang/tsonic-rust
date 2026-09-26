@@ -1,5 +1,4 @@
-export type RustCompilerData = null | boolean | number | string |
-  readonly RustCompilerData[] | { readonly [key: string]: RustCompilerData };
+import type { RustNativeConstant, RustNativeGenerics, RustNativeType } from "./type-model.js";
 
 export interface RustNativeDefinitionId {
   readonly krate: number;
@@ -36,20 +35,23 @@ export interface RustNativeOccurrence {
 
 export interface RustNativeTypeRow {
   readonly id: number;
-  readonly kind: RustCompilerData;
-  readonly signature: RustCompilerData;
+  readonly value: RustNativeType;
+}
+
+export interface RustNativeConstantRow {
+  readonly id: number;
+  readonly value: RustNativeConstant;
 }
 
 export interface RustNativeDefinition {
   readonly id: RustNativeDefinitionId;
-  readonly publicId: number;
   readonly parent: RustNativeDefinitionId | null;
   readonly path: string;
   readonly name: string | null;
   readonly kind: string;
   readonly macroKinds: readonly ("function-like" | "attribute" | "derive")[];
   readonly type: number | null;
-  readonly generics: RustCompilerData;
+  readonly generics: RustNativeGenerics | null;
   readonly source: RustNativeSourceSpan | null;
 }
 
@@ -66,6 +68,7 @@ export interface RustNativeExpansion {
 interface RustNativeDeclarationGraph {
   readonly inputs: readonly RustNativeSourceInput[];
   readonly types: readonly RustNativeTypeRow[];
+  readonly constants: readonly RustNativeConstantRow[];
   readonly expansions: readonly RustNativeExpansion[];
   readonly definitions: readonly RustNativeDefinition[];
 }

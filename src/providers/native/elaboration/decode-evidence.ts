@@ -1,30 +1,29 @@
 import type {
-  RustCompilerData, RustNativeDefinition, RustNativeDefinitionId, RustNativeSemanticEvidence,
+  RustNativeDefinition, RustNativeDefinitionId, RustNativeSemanticEvidence,
   RustNativeExpansion, RustNativeNodeId, RustNativeOccurrence, RustNativeSourceSpan, RustNativeTypeRow,
-  RustNativeAccess,
+  RustNativeAccess, RustNativeConstantRow,
 } from "./evidence.js";
 import { nativeDefinitionKey, nativeNodeKey } from "./evidence.js";
 import type { RustNativeSourceLimits } from "./tool.js";
+import { createNativeTypeDecodeContext } from "./decode-type-context.js";
+import { createNativeRegionDecoder } from "./decode-regions.js";
+import { createNativeGenericDecoder } from "./decode-generics.js";
+import { createNativeTypeDecoder } from "./decode-types.js";
+import { createNativeConstantDecoder } from "./decode-constants.js";
+import { array, choice, index, record, requireAcyclicParents, shape, text, unique } from "./decode-values.js";
 
 export function decodeNativeEvidence(value: unknown, limits: RustNativeSourceLimits): RustNativeSemanticEvidence {
   let rows = 0;
   const reserve = (): void => {
     if (++rows > limits.maximumRows) throw new Error("Native Rust evidence exceeds the row limit.");
   };
-  const data = (value: unknown, depth = 0): RustCompilerData => {
-    if (depth > limits.maximumDepth) throw new Error("Native Rust evidence exceeds the depth limit.");
-    if (value === null || typeof value === "string" || typeof value === "boolean") return value;
-    if (typeof value === "number" && Number.isSafeInteger(value)) return value;
-    if (Array.isArray(value)) return Object.freeze(value.map(entry => data(entry, depth + 1)));
-    const input = record(value);
-    const output: { [key: string]: RustCompilerData } = {};
-    for (const key of Object.keys(input)) {
-      Object.defineProperty(output, key, { value: data(input[key], depth + 1), enumerable: true });
-    }
-    return Object.freeze(output);
-  };
+  const graph = createNativeTypeDecodeContext(reserve, limits.maximumDepth);
+  const regions = createNativeRegionDecoder(graph);
+  const generics = createNativeGenericDecoder(graph, regions);
+  const decodeType = createNativeTypeDecoder(graph, regions, generics);
+  const decodeConstant = createNativeConstantDecoder(graph, regions, generics);
   const identity = (value: unknown): RustNativeDefinitionId => {
-    const input = record(value);
+    const input = shape(value, ["krate", "index"]);
     return Object.freeze({ krate: index(input.krate), index: index(input.index) });
   };
   const node = (value: unknown): RustNativeNodeId => {
@@ -51,6 +50,8 @@ export function decodeNativeEvidence(value: unknown, limits: RustNativeSourceLim
   if (phase === "declarations" && ("occurrences" in input || "effects" in input)) {
     throw new Error("Native Rust declaration evidence cannot claim checked body evidence.");
   }
+  shape(input, phase === "checked" ? ["phase", "inputs", "types", "constants", "definitions", "expansions", "occurrences", "effects"] :
+    ["phase", "inputs", "types", "constants", "definitions", "expansions"]);
   const inputs = array(input.inputs, value => {
     reserve();
     const row = record(value);
@@ -61,17 +62,22 @@ export function decodeNativeEvidence(value: unknown, limits: RustNativeSourceLim
   unique(inputs.map(input => input.path), "source input");
   const types = array(input.types, (value): RustNativeTypeRow => {
     reserve();
-    const row = record(value);
-    return Object.freeze({ id: index(row.id), kind: data(row.kind), signature: data(row.signature) });
+    const row = shape(value, ["id", "value"]);
+    return Object.freeze({ id: index(row.id), value: decodeType(row.value) });
+  });
+  const constants = array(input.constants, (value): RustNativeConstantRow => {
+    reserve();
+    const row = shape(value, ["id", "value"]);
+    return Object.freeze({ id: index(row.id), value: decodeConstant(row.value) });
   });
   const definitions = array(input.definitions, (value): RustNativeDefinition => {
     reserve();
-    const row = record(value);
-    return Object.freeze({ id: identity(row.id), publicId: index(row.publicId),
+    const row = shape(value, ["id", "parent", "path", "name", "kind", "macroKinds", "type", "generics", "source"]);
+    return Object.freeze({ id: identity(row.id),
       parent: row.parent === null ? null : identity(row.parent), path: text(row.path),
       name: row.name === null ? null : text(row.name), kind: choice(row.kind, definitionKinds),
       macroKinds: array(row.macroKinds, value => choice(value, ["function-like", "attribute", "derive"] as const)),
-      type: row.type === null ? null : index(row.type), generics: data(row.generics), source: span(row.source) });
+      type: row.type === null ? null : index(row.type), generics: generics.generics(row.generics), source: span(row.source) });
   });
   const expansions = array(input.expansions, (value): RustNativeExpansion => {
     reserve();
@@ -131,8 +137,9 @@ export function decodeNativeEvidence(value: unknown, limits: RustNativeSourceLim
   });
   unique(effects.map(row => nativeDefinitionKey(row.owner)), "effect body");
   const typeIds = unique(types.map(row => String(row.id)), "type");
+  unique(constants.map(row => String(row.id)), "constant");
   const definitionIds = unique(definitions.map(row => nativeDefinitionKey(row.id)), "definition");
-  unique(definitions.map(row => String(row.publicId)), "public definition");
+  graph.validate(types, constants, definitions);
   const expansionIds = unique(expansions.map(row => nativeDefinitionKey(row.id)), "expansion");
   const nodeIds = unique(occurrences.map(row => nativeNodeKey(row.id)), "node");
   const requireType = (id: number | null): void => {
@@ -159,7 +166,12 @@ export function decodeNativeEvidence(value: unknown, limits: RustNativeSourceLim
     requireDefinition(row.definition);
     requireSpan(row.callSite);
     requireSpan(row.definitionSite);
+    if (row.kind === "root" && nativeDefinitionKey(row.id) !== nativeDefinitionKey(row.parent)) {
+      throw new Error("Native Rust root expansion has an invalid parent.");
+    }
   }
+  requireAcyclicParents(new Map(definitions.map(row => [nativeDefinitionKey(row.id), row.parent === null ? null : nativeDefinitionKey(row.parent)])), "definition");
+  requireAcyclicParents(new Map(expansions.map(row => [nativeDefinitionKey(row.id), row.kind === "root" ? null : nativeDefinitionKey(row.parent)])), "expansion");
   for (const row of occurrences) {
     requireDefinition(row.id.owner);
     requireType(row.type);
@@ -184,8 +196,8 @@ export function decodeNativeEvidence(value: unknown, limits: RustNativeSourceLim
     }
   }
   return phase === "declarations"
-    ? Object.freeze({ phase, inputs, types, definitions, expansions })
-    : Object.freeze({ phase, inputs, types, definitions, expansions, occurrences, effects });
+    ? Object.freeze({ phase, inputs, types, constants, definitions, expansions })
+    : Object.freeze({ phase, inputs, types, constants, definitions, expansions, occurrences, effects });
 }
 
 const definitionKinds = [
@@ -196,38 +208,3 @@ const definitionKinds = [
   "anonymous-constant", "inline-constant", "opaque-type", "field", "lifetime-parameter", "global-assembly",
   "trait-implementation", "inherent-implementation", "closure", "coroutine-body",
 ] as const;
-
-function record(value: unknown): Readonly<Record<string, unknown>> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new Error("Native Rust evidence requires a structured object.");
-  }
-  return value as Readonly<Record<string, unknown>>;
-}
-
-function index(value: unknown): number {
-  if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > 0xffff_ffff) {
-    throw new Error("Native Rust evidence has an invalid index or offset.");
-  }
-  return value;
-}
-
-function text(value: unknown): string {
-  if (typeof value !== "string") throw new Error("Native Rust evidence has an invalid string.");
-  return value;
-}
-
-function choice<const Values extends readonly string[]>(value: unknown, values: Values): Values[number] {
-  if (typeof value !== "string" || !values.includes(value)) throw new Error("Native Rust evidence has an invalid category.");
-  return value;
-}
-
-function array<Value>(value: unknown, decode: (element: unknown) => Value): readonly Value[] {
-  if (!Array.isArray(value)) throw new Error("Native Rust evidence requires an array.");
-  return Object.freeze(value.map(decode));
-}
-
-function unique(values: readonly string[], kind: string): ReadonlySet<string> {
-  const result = new Set(values);
-  if (result.size !== values.length) throw new Error(`Native Rust evidence has a duplicate ${kind} identity.`);
-  return result;
-}

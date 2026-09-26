@@ -104,10 +104,10 @@ pub fn early() -> i32 { leave!(); }
   assert.ok(evidence.definitions.some(definition => definition.name === "Generated" && definition.kind === "struct"));
   const field = evidence.definitions.find(definition => definition.name === "count" && definition.kind === "field");
   assert.ok(field);
-  assert.deepEqual(evidence.types.find(type => type.id === field.type).kind, { RigidTy: { Int: "I32" } });
+  assert.deepEqual(evidence.types.find(type => type.id === field.type).value, { kind: "primitive", name: "i32" });
   assert.ok(evidence.expansions.some(expansion => expansion.name.includes("item") && expansion.kind === "function-like"));
   assert.ok(evidence.occurrences.some(occurrence => occurrence.kind === "pattern" && occurrence.resolution?.kind === "binding"));
-  assert.ok(evidence.types.some(type => type.kind.RigidTy?.Ref !== undefined));
+  assert.ok(evidence.types.some(type => type.value.kind === "reference"));
   const sourceNames = new Set(evidence.occurrences.flatMap(occurrence => occurrence.source === null ? [] : [occurrence.source.file]));
   assert.ok(sourceNames.has(path));
   const invalid = sourceFile("invalid.rs", `
@@ -140,12 +140,13 @@ pub fn invalid() -> Generated { Generated { count: "not a u32" } }
   const count = evidence.definitions.find(definition => definition.name === "count");
   assert.ok(generated);
   assert.deepEqual(count.parent, generated.id);
-  assert.deepEqual(evidence.types.find(type => type.id === count.type).kind, { RigidTy: { Uint: "U32" } });
+  assert.deepEqual(evidence.types.find(type => type.id === count.type).value, { kind: "primitive", name: "u32" });
   for (const name of ["choose", "first", "second", "invalid"]) {
     const declaration = evidence.definitions.find(definition => definition.name === name);
     assert.ok(declaration, name);
     const type = evidence.types.find(type => type.id === declaration.type);
-    assert.ok(type.signature, name);
+    assert.equal(type.value.kind, "function", name);
+    assert.ok(type.value.signature, name);
   }
   validateRustNativeEvidenceInputs(evidence);
   assert.throws(() => tool.check(arguments_), /mismatched types/u);
@@ -181,7 +182,7 @@ pub fn outer() {
   assert.throws(() => tool.check(arguments_), /mismatched types/u);
 });
 
-test("invalid native headers reject as diagnostics rather than crashing the public type converter", () => {
+test("invalid native headers reject as diagnostics rather than crashing the native type collector", () => {
   for (const [name, source] of [
     ["missing_return_argument", "pub struct Boxed<Value>(Value); pub fn read() -> Boxed { loop {} }"],
     ["missing_field_argument", "pub struct Boxed<Value>(Value); pub struct Holder { value: Boxed }"],
@@ -228,7 +229,8 @@ test("declaration evidence preserves phase identity, graph integrity and resourc
     value => { value.occurrences = []; },
     value => { value.definitions[0].parent = { krate: 0, index: 0xffff_ffff }; },
     value => value.types.push(value.types[0]),
-    value => { value.definitions[1].publicId = value.definitions[0].publicId; },
+    value => { value.definitions[1].id = value.definitions[0].id; },
+    value => { value.definitions[0].publicId = 0; },
   ]) {
     const corrupted = structuredClone(evidence);
     mutate(corrupted);
