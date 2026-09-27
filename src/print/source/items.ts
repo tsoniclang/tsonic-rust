@@ -297,5 +297,5 @@ function printRustGenericParameter(parameter: RustGenericParameter): string {
 }
 
 function printRustVisibility(visibility: RustVisibility): string {
-  return visibility === "public" ? "pub " : visibility === "crate" ? "pub(crate) " : "";
+  return visibility === "public" ? "pub " : visibility === "crate" ? "pub(crate) " : visibility === "parent" ? "pub(super) " : "";
 }

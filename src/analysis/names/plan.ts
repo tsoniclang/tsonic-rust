@@ -2,8 +2,8 @@ import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import {
-  rustPascalCaseIdentifier,
   rustScreamingSnakeIdentifier,
+  rustSnakeCaseIdentifier,
   rustTargetIdentifier,
   isValidRustIdentifier,
   isValidRustAuthoredIdentifier,
@@ -46,6 +46,7 @@ export function createRustNamePlan(input: {
   const names = new WeakMap<Node, string>();
   const functionNames = new WeakMap<Node, string>();
   const callableValueNames = new WeakMap<Node, string>();
+  const declarationScopes = new WeakMap<Node, string>();
   const sourceTypeNames = new Map<string, string>();
   const diagnostics: TargetDiagnostic[] = [];
   const reservedNames = new Map<Node, Set<string>>();
@@ -110,10 +111,11 @@ export function createRustNamePlan(input: {
         }
         owner = input.ast.parent(owner);
       }
-      const name = allocateRustGeneratedName(usedNames, rustPascalCaseIdentifier(parts.join("_")));
-      names.set(candidate.declaration, name);
+      const scope = allocateRustGeneratedName(usedNames, rustSnakeCaseIdentifier(`${parts.join("_")}_scope`));
+      const name = names.get(candidate.declaration)!;
+      declarationScopes.set(candidate.declaration, scope);
       sourceTypeNames.set(sourceTypeIdentity(input.ast.getFileName(sourceFile),
-        rustSourceDeclarationTypeName(candidate.declaration, input.ast)), name);
+        rustSourceDeclarationTypeName(candidate.declaration, input.ast)), `${scope}::${name}`);
     }
   }
   for (const candidate of candidates) {
@@ -164,6 +166,9 @@ export function createRustNamePlan(input: {
     },
     callableValueNameForDeclaration(declaration: Node | undefined) {
       return declaration === undefined ? undefined : callableValueNames.get(declaration);
+    },
+    scopeForDeclaration(declaration: Node | undefined) {
+      return declaration === undefined ? undefined : declarationScopes.get(declaration);
     },
     nameForSourceType(fileName: string, sourceName: string) {
       return sourceTypeNames.get(sourceTypeIdentity(fileName, sourceName));

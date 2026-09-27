@@ -35,8 +35,7 @@ export function finalizeRustSourceStyle(
 export function rustPublicSignatureTypeNames(model: RustSourceFileModel): readonly string[] {
   const items = closePublicRustTypeVisibility(model.items);
   const publicTypes = publicDeclaredRustTypeNames(items);
-  return Object.freeze([...new Set(items.flatMap((item) =>
-    publicSignatureTypes(item, publicTypes).flatMap(rustTypeNames)))].sort((left, right) =>
+  return Object.freeze([...new Set(scopedSignatureTypeNames(items, publicTypes))].sort((left, right) =>
       left.localeCompare(right, "en")));
 }
 
@@ -48,11 +47,31 @@ export function exposeRustSignatureTypes(
 }
 
 function publicDeclaredRustTypeNames(items: readonly RustItem[]): ReadonlySet<string> {
-  return new Set(items.flatMap((item) =>
-    (item.kind === "struct" || item.kind === "trait" || item.kind === "enum" ||
-        item.kind === "type-alias") && item.visibility === "public"
-      ? [item.name]
-      : []));
+  return declaredRustTypeNames(items, true);
+}
+
+function declaredRustTypeNames(items: readonly RustItem[], publicOnly = false): ReadonlySet<string> {
+  return new Set(items.flatMap(item => item.kind === "mod-decl" && item.body !== undefined
+    ? [...declaredRustTypeNames(item.body.items, publicOnly)].map(name => `${item.name}::${name}`)
+    : (item.kind === "struct" || item.kind === "trait" || item.kind === "enum" ||
+        item.kind === "type-alias") && (!publicOnly || item.visibility === "public") ? [item.name] : []));
+}
+
+function scopedSignatureTypeNames(
+  items: readonly RustItem[],
+  publicTypes: ReadonlySet<string>,
+  scope = "",
+  enclosingTypes: ReadonlySet<string> = declaredRustTypeNames(items),
+): readonly string[] {
+  const prefix = scope === "" ? "" : `${scope}::`;
+  const localPublicTypes = new Set([...publicTypes].filter(name => name.startsWith(prefix))
+    .map(name => name.slice(prefix.length)));
+  return items.flatMap(item => item.kind === "mod-decl" && item.body !== undefined
+    ? scopedSignatureTypeNames(item.body.items, publicTypes, `${prefix}${item.name}`, enclosingTypes)
+    : publicSignatureTypes(item, localPublicTypes).flatMap(rustTypeNames).map(name => {
+      if (enclosingTypes.has(`${prefix}${name}`)) return `${prefix}${name}`;
+      return name;
+    }));
 }
 
 function finalizeRustItemStyle(
@@ -595,23 +614,12 @@ function closePublicRustTypeVisibility(
   items: readonly RustItem[],
   requiredNames: ReadonlySet<string> = new Set(),
 ): readonly RustItem[] {
-  const localTypes = new Set(items.flatMap((item) =>
-    item.kind === "struct" || item.kind === "enum" || item.kind === "trait" ||
-        item.kind === "type-alias"
-      ? [item.name]
-      : []));
-  const publicTypes = new Set(items.flatMap((item) =>
-    (item.kind === "struct" || item.kind === "enum" || item.kind === "trait" ||
-        item.kind === "type-alias") && (item.visibility === "public" || requiredNames.has(item.name))
-      ? [item.name]
-      : []));
+  const localTypes = declaredRustTypeNames(items);
+  const publicTypes = new Set([...publicDeclaredRustTypeNames(items),
+    ...[...requiredNames].filter(name => localTypes.has(name))]);
   for (;;) {
-    const required = new Set<string>();
-    for (const item of items) {
-      for (const type of publicSignatureTypes(item, publicTypes)) {
-        collectLocalRustTypeNames(type, localTypes, required);
-      }
-    }
+    const required = new Set(scopedSignatureTypeNames(items, publicTypes)
+      .filter(name => localTypes.has(name)));
     const additions = [...required].filter((name) => !publicTypes.has(name));
     if (additions.length === 0) {
       break;
@@ -620,8 +628,18 @@ function closePublicRustTypeVisibility(
       publicTypes.add(name);
     }
   }
-  return items.map((item) =>
-    (item.kind === "struct" || item.kind === "enum" || item.kind === "trait" ||
+  return exposeScopedRustTypes(items, publicTypes);
+}
+
+function exposeScopedRustTypes(items: readonly RustItem[], publicTypes: ReadonlySet<string>): readonly RustItem[] {
+  return items.map(item => {
+    if (item.kind === "mod-decl" && item.body !== undefined) {
+      const prefix = `${item.name}::`;
+      const names = new Set([...publicTypes].filter(name => name.startsWith(prefix)).map(name => name.slice(prefix.length)));
+      return { ...item, visibility: names.size === 0 ? item.visibility : "public" as const,
+        body: { ...item.body, items: exposeScopedRustTypes(item.body.items, names) } };
+    }
+    return (item.kind === "struct" || item.kind === "enum" || item.kind === "trait" ||
         item.kind === "type-alias") && publicTypes.has(item.name) &&
         item.visibility !== "public"
       ? { ...item, visibility: "public",
@@ -633,7 +651,8 @@ function closePublicRustTypeVisibility(
             }),
           } : {}),
         }
-      : item);
+      : item;
+  });
 }
 
 function publicSignatureTypes(
@@ -704,18 +723,6 @@ function rustTypeBoundTypes(bound: RustTypeBound): readonly RustType[] {
     case "lifetime":
     case "maybe-sized":
       return [];
-  }
-}
-
-function collectLocalRustTypeNames(
-  type: RustType,
-  localTypes: ReadonlySet<string>,
-  result: Set<string>,
-): void {
-  for (const name of rustTypeNames(type)) {
-    if (localTypes.has(name)) {
-      result.add(name);
-    }
   }
 }
 

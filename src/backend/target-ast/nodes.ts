@@ -378,7 +378,7 @@ export type RustSelfParam =
   | { readonly kind: "reference"; readonly mutable: boolean; readonly lifetime?: RustLifetime }
   | { readonly kind: "rc" };
 
-export type RustVisibility = "private" | "crate" | "public";
+export type RustVisibility = "private" | "parent" | "crate" | "public";
 
 export type RustDeadCodeDisposition =
   | "authored-declaration"

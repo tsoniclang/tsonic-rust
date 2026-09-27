@@ -1,5 +1,6 @@
 import { rustDeriveAttributes, rustHiddenAttribute } from "../../../target-ast/attributes.js";
 import { planRustAttributes } from "../attributes/planning.js";
+import { planRustAuthoredStructScope } from "../scoped-types.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
 import { applyFallibleShape } from "../../types/fallible-shape.js";
 import { createRustProjectObject, rustProjectObjectStateField, rustProjectObjectType } from "../../objects/project-objects.js";
@@ -92,7 +93,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   const exported = ast.hasModifierKind(node, "export");
   const publiclyReachable = definition !== undefined &&
     context.input.program.projectTypes.programErrorVariant(definition) !== undefined ||
-    rustProjectTypeHasPublicImplementationAbi(context, className);
+    rustProjectTypeHasPublicImplementationAbi(context, definition?.targetPath ?? className);
   const storageVisibility = rustProjectImplementationVisibility(publiclyReachable);
   const structVisibility = exported || publiclyReachable ? "public" as const : "crate" as const;
   if (ast.extendsHeritageElements(node).length > 0 || ast.implementsHeritageElements(node).length > 0) {
@@ -288,7 +289,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   const constructorFn = planConstructor(
     node,
     constructorMember,
-    className,
+    definition.targetPath,
     openType,
     definition.stateName,
     stateMarker,
@@ -429,7 +430,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   };
   return [
     ...(representation.kind === "value" ? [] : [stateItem]),
-    structItem,
+    planRustAuthoredStructScope(node, structItem, context),
     ...(explicitWrapperTraits ? rustProjectWrapperTraits(openType, className, generics) : []),
     ...(representation.kind === "value"
       ? []

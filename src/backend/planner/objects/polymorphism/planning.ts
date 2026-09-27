@@ -1,5 +1,6 @@
 import { rustDeriveAttributes, rustHiddenAttribute } from "../../../target-ast/attributes.js";
 import { planRustAttributes } from "../../declarations/attributes/planning.js";
+import { planRustAuthoredStructScope } from "../../declarations/scoped-types.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustItem, RustStructField, RustType } from "../../../target-ast/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/nodes.js";
@@ -126,7 +127,7 @@ export function planPolymorphicClassDeclaration(
   const stateMarker = rustProjectStateMarker(definition, context);
   const programErrorVariant = context.input.program.projectTypes.programErrorVariant(definition);
   const publiclyReachable = programErrorVariant !== undefined ||
-    rustProjectTypeHasPublicImplementationAbi(context, definition.targetName);
+    rustProjectTypeHasPublicImplementationAbi(context, definition.targetPath);
   const exported = context.input.program.source.ast.hasModifierKind(declaration, "export");
   const ownLayer = layers[layers.length - 1]!;
   const privateStateAccessors = planProjectPrivateStateAccessors(
@@ -240,7 +241,7 @@ export function planPolymorphicClassDeclaration(
       ],
     },
     ...privateStateAccessors,
-    {
+    planRustAuthoredStructScope(declaration, {
       kind: "struct",
       name: definition.targetName,
       visibility: wrapperVisibility,
@@ -272,7 +273,7 @@ export function planPolymorphicClassDeclaration(
           })(),
         },
       ],
-    },
+    }, context),
     ...projectIdentityImplementations(definition, wrapperType, representation, context),
     ...(constructor.construct === undefined ? [] : [{
       kind: "struct" as const,
@@ -447,7 +448,7 @@ export function planPolymorphicInterfaceDeclaration(
   const exported = context.input.program.source.ast.hasModifierKind(declaration, "export");
   const publiclyReachable = rustProjectTypeHasPublicImplementationAbi(
     context,
-    definition.targetName,
+    definition.targetPath,
   );
   const implementationVisibility = rustProjectImplementationVisibility(publiclyReachable);
   const wrapperVisibility = exported || publiclyReachable ? "public" as const : "crate" as const;

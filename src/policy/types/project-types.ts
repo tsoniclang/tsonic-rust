@@ -46,6 +46,7 @@ export interface RustProjectTypeDefinition {
   readonly fileName: string;
   readonly sourceName: string;
   readonly targetName: string;
+  readonly targetPath: string;
   readonly kind: "class" | "interface";
   readonly genericParameters: readonly RustSourceGenericParameterContract[];
   readonly typeParameterNames: readonly string[];

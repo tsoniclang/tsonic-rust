@@ -524,7 +524,7 @@ export function planProjectClassConstructor(
   statements.push({ kind: "tail", expr: state });
   const publishesImplementationAbi = rustProjectTypeHasPublicImplementationAbi(
     context,
-    definition.targetName,
+    definition.targetPath,
   );
   const initialize: RustImplFunction = { kind: "function",
     name: constructorSignature.initializeName,

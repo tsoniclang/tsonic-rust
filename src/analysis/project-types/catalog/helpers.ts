@@ -26,6 +26,7 @@ export function projectDefinition(
   const sourceName = rustSourceDeclarationTypeName(declaration, ast);
   const targetName = namePlan.nameForDeclaration(declaration);
   const fileName = ast.getFileName(sourceFile);
+  const targetPath = namePlan.nameForSourceType(fileName, sourceName);
   const rawParameters = ast.typeParameters(declaration);
   const parameters = denseNodes(rawParameters);
   const ownContract = genericContract?.filter(parameter => ast.parent(parameter.declaration) === declaration);
@@ -39,7 +40,7 @@ export function projectDefinition(
     parameter.sourceName);
   const targetParameterNames = ordinaryParameters?.map((parameter) =>
     parameter.targetName);
-  return sourceName.length === 0 || targetName === undefined || fileName.length === 0 ||
+  return sourceName.length === 0 || targetName === undefined || targetPath === undefined || fileName.length === 0 ||
       parameters === undefined || !contractMatches || genericContract === undefined ||
       sourceTypeParameterNames === undefined ||
       sourceTypeParameterNames.some((name) => name.length === 0) ||
@@ -63,6 +64,7 @@ export function projectDefinition(
         fileName,
         sourceName,
         targetName,
+        targetPath,
         kind,
         genericParameters: Object.freeze([...genericContract]),
         typeParameterNames: Object.freeze(sourceTypeParameterNames),
@@ -88,6 +90,8 @@ export function sourceFileIdentifierNames(
     if (targetName !== undefined) {
       result.add(targetName);
     }
+    const targetScope = namePlan.scopeForDeclaration(node);
+    if (targetScope !== undefined) result.add(targetScope);
     ast.forEachChild(node, visit);
   };
   visit(sourceFile);

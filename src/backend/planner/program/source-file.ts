@@ -82,6 +82,7 @@ import { planProjectStaticFunctionItems } from "../declarations/classes/methods.
 import { planRustTypeFamilyImplementations } from "../declarations/type-families.js";
 import { planRustGenericCallableItems } from "../declarations/callables/generic-implementations.js";
 import { planRustSuspendedCallableItems } from "../declarations/callables/suspended.js";
+import { completeRustAuthoredStructScopes } from "../declarations/scoped-types.js";
 import { createRustObjectLiteralImplementationRegistry } from "../objects/object-literal-implementations.js";
 import { planRustSourceCallableValue } from "../expressions/source-callable-value.js";
 import { rustModuleInitializerFunctionName } from "./source-package-initializers.js";
@@ -179,7 +180,13 @@ export function planRustSourceFile(
       left.path.localeCompare(right.path, "en") ||
       left.alias.localeCompare(right.alias, "en"))
     .map((entry) => ({ kind: "use", path: entry.path, alias: entry.alias }));
-  const model = createRustSourceFile([
+  const scopes = new Set(input.program.projectTypes.definitions
+    .filter(definition => definition.sourceFile === sourceFile)
+    .flatMap(definition => {
+      const scope = input.program.names.scopeForDeclaration(definition.declaration);
+      return scope === undefined ? [] : [scope];
+    }));
+  const model = createRustSourceFile(completeRustAuthoredStructScopes([
     ...useItems,
     ...childModuleNames.map((name): RustItem => {
       const childModuleName = `${moduleName}::${name}`;
@@ -195,7 +202,7 @@ export function planRustSourceFile(
       };
     }),
     ...plannedModule.items,
-  ]);
+  ], scopes));
   return Object.freeze({
     sourceFile,
     moduleName,

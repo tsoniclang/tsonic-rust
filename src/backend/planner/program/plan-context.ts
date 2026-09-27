@@ -284,7 +284,8 @@ export function sourceTypePath(
 ): string | undefined {
   const moduleName = context.moduleNameByFileName.get(value.fileName);
   const typeName = context.input.program.names.nameForSourceType(value.fileName, value.typeName);
-  if (moduleName === undefined || typeName === undefined || !isValidRustIdentifier(typeName)) {
+  if (moduleName === undefined || typeName === undefined ||
+    !typeName.split("::").every(isValidRustIdentifier)) {
     return undefined;
   }
   return sourceModuleItemPath(context, value.fileName, typeName);

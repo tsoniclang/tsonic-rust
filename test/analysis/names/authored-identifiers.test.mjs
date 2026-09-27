@@ -6,6 +6,7 @@ import { createRustNamePlan } from "../../../dist/analysis/names/plan.js";
 import { isValidRustAuthoredIdentifier, isValidRustIdentifier, rustTargetIdentifier } from "../../../dist/target-model/names/identifiers.js";
 import { allocateRustGeneratedName } from "../../../dist/target-model/names/generated.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../../dist/backend/planner/names/synthetic.js";
+import { rustSourceDeclarationTypeName } from "../../../dist/policy/types/source-declarations.js";
 
 function planNames(sourceText) {
   const checked = createCompilerSessionFromFiles({
@@ -118,6 +119,34 @@ test("Rust generated temporaries avoid authored names and keyword escapes", () =
   assert.equal(allocateRustSyntheticName(state, "resultValue"), "result_value_4");
   assert.ok(state.reserved.has("resultValue"));
   assert.ok(state.reserved.has("r#type"));
+});
+
+test("Rust preserves shadowed local class names in distinct collision-safe scopes", () => {
+  const { source, plan, declarations } = planNames(`
+    export const first_entry_scope = 1;
+    export class Entry { value = 0; }
+    export function first() {
+      class Entry { value = 1; }
+      return new Entry();
+    }
+    export function second() {
+      class Entry { value = 2; }
+      return new Entry();
+    }
+    export function generic<Value>(value: Value) {
+      return class Entry { read(): Value { return value; } };
+    }
+  `);
+  assert.deepEqual(plan.diagnostics, []);
+  const classes = declarations.filter(node => source.ast.is.IsClassDeclaration(node) || source.ast.is.IsClassExpression(node));
+  assert.equal(classes.length, 4);
+  const paths = classes.map(node => {
+    assert.equal(plan.nameForDeclaration(node), "Entry");
+    return plan.nameForSourceType("/project/index.ts", rustSourceDeclarationTypeName(node, source.ast));
+  });
+  assert.deepEqual(paths, ["Entry", "first_entry_scope_2::Entry", "second_entry_scope::Entry", "generic_entry_scope::Entry"]);
+  assert.deepEqual(classes.map(node => plan.scopeForDeclaration(node)), [undefined,
+    "first_entry_scope_2", "second_entry_scope", "generic_entry_scope"]);
 });
 
 test("Rust private storage does not rename colliding authored public fields", () => {

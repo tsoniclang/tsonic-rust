@@ -65,3 +65,31 @@ test("already-public unused traits retain their exact dead-code dispositions", (
   assert.equal(unused.deadCode, "authored-declaration");
   assert.deepEqual(closeRustModuleTypeVisibility(closed), closed);
 });
+
+test("public signatures expose a local type's scope and dependencies without exposing its namesakes", () => {
+  const nested = (name, fields) => ({ kind: "mod-decl", name, visibility: "crate", body: { items: [
+    { kind: "use", path: "super::*" },
+    { kind: "struct", name: "Entry", visibility: "crate", generics: emptyRustGenerics, fields },
+  ] } });
+  const models = new Map([
+    ["api", { items: [{ kind: "function", name: "makeValue", visibility: "public", generics: emptyRustGenerics,
+      params: [], returnType: { kind: "named", path: "crate::values::first_scope::Entry" }, body: { statements: [] } }] }],
+    ["values", { items: [nested("first_scope", [{ name: "value", visibility: "public",
+      type: { kind: "named", path: "Payload" } }]), nested("second_scope", []),
+      { kind: "struct", name: "Payload", visibility: "crate", generics: emptyRustGenerics,
+        fields: [{ name: "inner", visibility: "public", type: { kind: "named", path: "crate::inner::Inner" } }] },
+      { kind: "struct", name: "Entry", visibility: "crate", generics: emptyRustGenerics, fields: [] }] }],
+    ["inner", { items: [trait("Inner", "crate")] }],
+  ]);
+  const closed = closeRustModuleTypeVisibility(models);
+  const items = closed.get("values").items;
+  assert.equal(items[0].visibility, "public");
+  assert.equal(items[0].body.items[1].visibility, "public");
+  assert.equal(items[1].visibility, "crate");
+  assert.equal(items[1].body.items[1].visibility, "crate");
+  assert.equal(items[2].visibility, "public");
+  assert.equal(items[3].visibility, "crate");
+  assert.equal(closed.get("inner").items[0].visibility, "public");
+  assert.deepEqual(closeRustModuleTypeVisibility(closed), closed);
+  assert.equal(models.get("values").items[0].visibility, "crate");
+});

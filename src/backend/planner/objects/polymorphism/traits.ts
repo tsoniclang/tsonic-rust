@@ -147,7 +147,7 @@ export function planProjectDispatchTrait(
     return undefined;
   }
   const publiclyReachable = context.input.program.projectTypes.programErrorVariant(definition) !== undefined ||
-    rustProjectTypeHasPublicImplementationAbi(context, definition.targetName);
+    rustProjectTypeHasPublicImplementationAbi(context, definition.targetPath);
   const fields = projectOwnFields(definition, carrier, context);
   if (fields === undefined) {
     return undefined;

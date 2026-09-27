@@ -11,6 +11,7 @@ import type {
   RustType,
   RustGenerics,
   RustTypeBound,
+  RustConstArgument,
 } from "../nodes.js";
 import { rustMacroInputFragments, type RustMacroInput } from "../macro-input.js";
 
@@ -35,6 +36,8 @@ export function rustItemsReferenceModuleAlias(
 }
 
 function rustItemReferencesModuleAlias(item: RustItem, alias: string): boolean {
+  if ("attrs" in item && item.attrs?.some(attribute => rustPathReferencesModuleAlias(attribute.path, alias) ||
+    rustMacroInputReferencesModuleAlias({ delimiter: "parentheses", tokens: attribute.tokens }, alias))) return true;
   switch (item.kind) {
     case "macro-invocation":
       return rustPathReferencesModuleAlias(item.path, alias) || rustMacroInputReferencesModuleAlias(item.input, alias);
@@ -129,7 +132,8 @@ function rustGenericsReferenceModuleAlias(
       ? parameter.bounds.some((bound) => rustTypeBoundReferencesModuleAlias(bound, alias)) ||
         rustOptionalTypeReferencesModuleAlias(parameter.defaultType, alias)
       : parameter.kind === "const"
-        ? rustTypeReferencesModuleAlias(parameter.type, alias)
+        ? rustTypeReferencesModuleAlias(parameter.type, alias) ||
+          rustConstReferencesModuleAlias(parameter.defaultValue, alias)
         : false) ||
     generics.wherePredicates.some((predicate) =>
       predicate.kind === "type" &&
@@ -194,6 +198,8 @@ function rustTypeReferencesModuleAlias(type: RustType, alias: string): boolean {
     case "raw-pointer":
       return rustTypeReferencesModuleAlias(type.pointee, alias);
     case "fixed-array":
+      return rustTypeReferencesModuleAlias(type.element, alias) ||
+        rustConstReferencesModuleAlias(type.length, alias);
     case "slice":
       return rustTypeReferencesModuleAlias(type.element, alias);
     case "function-pointer":
@@ -227,10 +233,15 @@ function rustGenericArgumentsReferenceModuleAlias(
         ) || argument.bounds.some((bound) =>
           rustTypeBoundReferencesModuleAlias(bound, alias));
       case "lifetime":
-      case "const":
         return false;
+      case "const":
+        return rustConstReferencesModuleAlias(argument.value, alias);
     }
   }) === true;
+}
+
+function rustConstReferencesModuleAlias(value: RustConstArgument | undefined, alias: string): boolean {
+  return value?.kind === "path" && rustPathReferencesModuleAlias(value.path, alias);
 }
 
 function rustBlockReferencesModuleAlias(block: RustBlock, alias: string): boolean {
