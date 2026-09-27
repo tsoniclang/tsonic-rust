@@ -39,8 +39,10 @@ pub fn decision(value: String, condition: bool) -> String { consume!(condition, 
   assert.ok(moves.length >= 2);
   assert.ok(moves.some(access => moves.filter(other =>
     nativeNodeKey(other.base.binding) === nativeNodeKey(access.base.binding)).length >= 2));
-  assert.ok(moves.some(access => access.source !== null && evidence.expansions.some(expansion => expansion.kind === "function-like" &&
-    nativeDefinitionKey(expansion.id) === nativeDefinitionKey(access.source.expansion))));
+  const expansion = evidence.expansions.find(row => row.kind === "function-like" && row.name === "consume");
+  assert.ok(expansion);
+  assert.ok(evidence.occurrences.some(occurrence => occurrence.source !== null &&
+    nativeDefinitionKey(expansion.id) === nativeDefinitionKey(occurrence.source.expansion)));
   assert.ok(Object.isFrozen(evidence));
   assert.throws(() => tool.check(program.arguments), /use of moved value/u);
   assert.equal(existsSync(program.output), false);
