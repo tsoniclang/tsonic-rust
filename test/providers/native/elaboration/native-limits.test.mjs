@@ -42,6 +42,19 @@ for (const [name, consume] of consumers) {
       assert.throws(() => consume(selection), /Native Rust source/u);
     }
   });
+  test(`${name} rejects non-data budget selections without evaluating accessors`, () => {
+    let reads = 0;
+    const accessor = { ...defaults };
+    Object.defineProperty(accessor, "maximumRows", { get() { reads += 1; return defaults.maximumRows; } });
+    const hidden = { ...defaults };
+    Object.defineProperty(hidden, "unchecked", { value: true });
+    const inherited = Object.assign(Object.create({ inherited: true }), defaults);
+    const symbol = { ...defaults, [Symbol("unchecked")]: true };
+    for (const selection of [accessor, hidden, inherited, symbol]) {
+      assert.throws(() => consume(selection), /Native Rust source/u);
+    }
+    assert.equal(reads, 0);
+  });
 }
 
 test("native decoders preserve independent row and depth limits", () => {

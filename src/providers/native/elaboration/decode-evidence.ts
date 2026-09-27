@@ -1,7 +1,7 @@
 import type {
   RustNativeDefinition, RustNativeDefinitionId, RustNativeSemanticEvidence,
   RustNativeExpansion, RustNativeNodeId, RustNativeSourceSpan, RustNativeTypeRow,
-  RustNativeAccess, RustNativeConstantRow,
+  RustNativeConstantRow,
 } from "./evidence.js";
 import { isAbsolute } from "node:path";
 import { nativeDefinitionKey, nativeNodeKey } from "./evidence.js";
@@ -14,6 +14,7 @@ import { createNativeTypeDecoder } from "./decode-types.js";
 import { createNativeConstantDecoder } from "./decode-constants.js";
 import { createNativeScopeDecoder, validateNativeScopeRelations } from "./decode-scopes.js";
 import { createNativeOccurrenceDecoder } from "./decode-occurrences.js";
+import { createNativeEffectDecoder } from "./decode-effects.js";
 import { decodeNativeStableDefinitionId, validateNativeItemInventory } from "./decode-item-inventory.js";
 import { array, boolean, choice, index, record, requireAcyclicParents, shape, text, unique } from "./decode-values.js";
 
@@ -104,7 +105,7 @@ export function decodeNativeEvidence(value: unknown, limits: RustNativeSourceLim
   const scopes = array(input.scopes, scopeDecoder.scope);
   const expansions = array(input.expansions, (value): RustNativeExpansion => {
     reserve();
-    const row = record(value);
+    const row = shape(value, ["id", "parent", "kind", "name", "definition", "callSite", "definitionSite"]);
     return Object.freeze({ id: identity(row.id), parent: identity(row.parent),
       kind: choice(row.kind, ["root", "function-like", "attribute", "derive", "compiler-pass", "desugaring"] as const),
       name: text(row.name), definition: row.definition === null ? null : identity(row.definition),
@@ -112,47 +113,20 @@ export function decodeNativeEvidence(value: unknown, limits: RustNativeSourceLim
   });
   const occurrences = phase === "declarations" ? []
     : array(input.occurrences, createNativeOccurrenceDecoder(graph, generics, { node, span }));
-  const effects = phase === "declarations" ? [] : array(input.effects, value => {
-    reserve();
-    const row = record(value);
-    return Object.freeze({ owner: identity(row.owner), accesses: array(row.accesses, (value): RustNativeAccess => {
-      reserve();
-      const access = record(value);
-      const inputBase = record(access.base);
-      let base: RustNativeAccess["base"];
-      switch (choice(inputBase.kind, ["temporary", "static", "local", "capture"] as const)) {
-        case "temporary": base = { kind: "temporary" }; break;
-        case "static": base = { kind: "static" }; break;
-        case "local": base = { kind: "local", binding: node(inputBase.binding) }; break;
-        case "capture": base = { kind: "capture", binding: node(inputBase.binding), closure: identity(inputBase.closure) }; break;
-      }
-      const fake = access.fakeRead === null ? null : record(access.fakeRead);
-      const kind = choice(access.kind, ["move", "use-cloned", "copy", "borrow-shared", "borrow-unique-shared",
-        "borrow-mutable", "mutate", "bind", "fake-read"] as const);
-      if ((kind === "fake-read") !== (fake !== null)) throw new Error("Native Rust evidence has inconsistent fake-read evidence.");
-      return Object.freeze({ kind, place: node(access.place), diagnostic: node(access.diagnostic),
-        source: span(access.source), base: Object.freeze(base),
-        projections: array(access.projections, value => {
-          reserve();
-          const projection = record(value);
-          const kind = choice(projection.kind, ["dereference", "field", "index", "subslice", "opaque-cast", "unwrap-unsafe-binder"] as const);
-          return Object.freeze(kind === "field"
-            ? { kind, field: index(projection.field), variant: index(projection.variant) } : { kind });
-        }),
-        fakeRead: fake === null ? null : Object.freeze({
-          reason: choice(fake.reason, ["match-guard", "matched-place", "guard-binding", "let", "index"] as const),
-          closure: fake.closure === null ? null : identity(fake.closure),
-        }),
-      });
-    }) });
-  });
+  const effects = phase === "declarations" ? [] : array(input.effects, createNativeEffectDecoder(graph, { node, span }));
   unique(effects.map(row => nativeDefinitionKey(row.owner)), "effect body");
   const typeIds = unique(types.map(row => String(row.id)), "type");
   unique(constants.map(row => String(row.id)), "constant");
   const definitionIds = unique(definitions.map(row => nativeDefinitionKey(row.id)), "definition");
   graph.validate(types, constants, definitions);
   const expansionIds = unique(expansions.map(row => nativeDefinitionKey(row.id)), "expansion");
-  const nodeIds = unique(occurrences.map(row => nativeNodeKey(row.id)), "node");
+  unique(occurrences.map(row => nativeNodeKey(row.id)), "node");
+  const bindings = new Set(occurrences.filter(row => row.kind === "pattern" && row.binding !== null &&
+    row.resolution?.kind === "binding" && nativeNodeKey(row.id) === nativeNodeKey(row.resolution.id))
+    .map(row => nativeNodeKey(row.id)));
+  const requireBinding = (id: RustNativeNodeId): void => {
+    if (!bindings.has(nativeNodeKey(id))) throw new Error("Native Rust evidence references an absent canonical binding.");
+  };
   const requireType = (id: number | null): void => {
     if (id !== null && !typeIds.has(String(id))) throw new Error("Native Rust evidence references an absent type.");
   };
@@ -191,9 +165,7 @@ export function decodeNativeEvidence(value: unknown, limits: RustNativeSourceLim
     if (row.kind === "expression") requireType(row.adjustedType);
     requireSpan(row.source);
     if (row.resolution?.kind === "declaration") requireDefinition(row.resolution.id);
-    else if (row.resolution?.kind === "binding" && !nodeIds.has(nativeNodeKey(row.resolution.id))) {
-      throw new Error("Native Rust evidence references an absent binding.");
-    }
+    else if (row.resolution?.kind === "binding") requireBinding(row.resolution.id);
   }
   for (const body of effects) {
     requireDefinition(body.owner);
@@ -202,7 +174,7 @@ export function decodeNativeEvidence(value: unknown, limits: RustNativeSourceLim
       requireDefinition(access.diagnostic.owner);
       requireSpan(access.source);
       if (access.base.kind === "capture" || access.base.kind === "local") {
-        if (!nodeIds.has(nativeNodeKey(access.base.binding))) throw new Error("Native Rust effects reference an absent binding.");
+        requireBinding(access.base.binding);
       }
       if (access.base.kind === "capture") requireDefinition(access.base.closure);
       if (access.fakeRead !== null) requireDefinition(access.fakeRead.closure);

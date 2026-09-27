@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { createTestWorkspace } from "../../../../../tsonic/test/scripts/test-workspaces.mjs";
 import { createRustNativeSourceTool, defaultRustNativeSourceLimits } from "../../../../dist/providers/native/elaboration/tool.js";
 import { decodeNativeEvidence } from "../../../../dist/providers/native/elaboration/decode-evidence.js";
-import { nativeDefinitionKey } from "../../../../dist/providers/native/elaboration/evidence.js";
+import { nativeDefinitionKey, nativeNodeKey } from "../../../../dist/providers/native/elaboration/evidence.js";
 
 const root = createTestWorkspace("rust-native-occurrences");
 const tool = createRustNativeSourceTool({ cacheRoot: join(root, "cache") });
@@ -107,4 +107,21 @@ pub fn ordinary() -> u32 { let mut owned_value = 1; owned_value += 1; owned_valu
   const changed = structuredClone(evidence);
   changed.occurrences.find(row => row.kind === "pattern" && row.binding !== null).binding = null;
   assert.throws(() => decodeNativeEvidence(changed, defaultRustNativeSourceLimits), /binding evidence/u);
+});
+
+test("native alternative patterns and closure captures point to canonical checked bindings", () => {
+  const evidence = tool.check(source("canonical_bindings", `
+pub fn select(input: Result<String, String>) -> impl FnOnce() -> String {
+    let value = match input { Ok(value) | Err(value) => value };
+    move || value
+}
+`));
+  const bindings = evidence.occurrences.filter(row => row.kind === "pattern" && row.binding !== null);
+  const canonical = new Set(bindings.filter(row => nativeNodeKey(row.id) === nativeNodeKey(row.resolution.id))
+    .map(row => nativeNodeKey(row.id)));
+  assert.ok(bindings.some(row => nativeNodeKey(row.id) !== nativeNodeKey(row.resolution.id)));
+  for (const binding of bindings) assert.ok(canonical.has(nativeNodeKey(binding.resolution.id)));
+  const captures = evidence.effects.flatMap(body => body.accesses).filter(access => access.base.kind === "capture");
+  assert.ok(captures.length > 0);
+  for (const capture of captures) assert.ok(canonical.has(nativeNodeKey(capture.base.binding)));
 });

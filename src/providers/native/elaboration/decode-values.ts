@@ -1,17 +1,17 @@
+import { hasExactObjectKeys, isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
+
 export function record(value: unknown): Readonly<Record<string, unknown>> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (typeof value !== "object" || value === null || !hasExactObjectKeys(value, Object.keys(value))) {
     throw new Error("Native Rust evidence requires a structured object.");
   }
   return value as Readonly<Record<string, unknown>>;
 }
 
 export function shape(value: unknown, fields: readonly string[]): Readonly<Record<string, unknown>> {
-  const input = record(value);
-  const keys = Object.keys(input);
-  if (keys.length !== fields.length || keys.some(key => !fields.includes(key))) {
+  if (typeof value !== "object" || value === null || !hasExactObjectKeys(value, fields)) {
     throw new Error("Native Rust evidence has an invalid record shape.");
   }
-  return input;
+  return value as Readonly<Record<string, unknown>>;
 }
 
 export function index(value: unknown): number {
@@ -37,8 +37,10 @@ export function choice<const Values extends readonly string[]>(value: unknown, v
 }
 
 export function array<Value>(value: unknown, decode: (element: unknown) => Value): readonly Value[] {
-  if (!Array.isArray(value)) throw new Error("Native Rust evidence requires an array.");
-  return Object.freeze(value.map(decode));
+  if (!isDenseDataArray(value)) throw new Error("Native Rust evidence requires a dense data array.");
+  const result: Value[] = [];
+  for (let offset = 0; offset < value.length; offset += 1) result.push(decode(value[offset]));
+  return Object.freeze(result);
 }
 
 export function unique(values: readonly string[], kind: string): ReadonlySet<string> {

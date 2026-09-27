@@ -1,3 +1,5 @@
+import { hasExactObjectKeys } from "../../../target-model/metadata/closed-data.js";
+
 export interface RustNativeSourceLimits {
   readonly maximumRows: number;
   readonly maximumDepth: number;
@@ -24,8 +26,7 @@ export function validateRustNativeSourceLimits(limits: RustNativeSourceLimits): 
     throw new Error("Native Rust source limits require an exact finite budget selection.");
   }
   const fields = Object.keys(ceilings) as readonly (keyof RustNativeSourceLimits)[];
-  const keys = Object.keys(limits);
-  if (keys.length !== fields.length || keys.some(key => !Object.prototype.hasOwnProperty.call(ceilings, key))) {
+  if (!hasExactObjectKeys(limits, fields)) {
     throw new Error("Native Rust source limits require exactly the supported budget fields.");
   }
   for (const name of fields) {
