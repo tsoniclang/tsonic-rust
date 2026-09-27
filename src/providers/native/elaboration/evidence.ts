@@ -1,6 +1,7 @@
 import type { RustNativeConstant, RustNativeGenerics, RustNativeType } from "./type-model.js";
 import type { RustNativeScope, RustNativeVisibility } from "./scope-model.js";
 import type { RustNativeOccurrence } from "./occurrence-model.js";
+import type { RustNativeBodyEvaluation } from "./evaluation-model.js";
 export type { RustNativeOccurrence } from "./occurrence-model.js";
 
 export interface RustNativeDefinitionId {
@@ -83,6 +84,7 @@ export interface RustNativeEvidence extends RustNativeDeclarationGraph {
   readonly phase: "checked";
   readonly occurrences: readonly RustNativeOccurrence[];
   readonly effects: readonly RustNativeBodyEffects[];
+  readonly evaluation: readonly RustNativeBodyEvaluation[];
 }
 
 export type RustNativeSemanticEvidence = RustNativeDeclarationEvidence | RustNativeEvidence;

@@ -8,6 +8,7 @@ use serde::Serialize;
 
 use super::{Collector, NodeId, Resolution, SourceSpan, definition_id, node_id, source_span};
 use super::adjustments::{Adjustment, BindingMode, PatternAdjustment};
+use super::evaluation::EvaluationNode;
 use crate::type_model::{Argument, TypeId};
 
 #[derive(Serialize)]
@@ -39,6 +40,7 @@ pub(super) struct BodyVisitor<'collector, 'tcx, 'limits> {
     pub collector: &'collector mut Collector<'tcx, 'limits>,
     pub types: &'tcx TypeckResults<'tcx>,
     pub depth: usize,
+    pub evaluation: Vec<EvaluationNode>,
 }
 
 impl<'tcx> Visitor<'tcx> for BodyVisitor<'_, 'tcx, '_> {
@@ -72,8 +74,23 @@ impl<'tcx> Visitor<'tcx> for BodyVisitor<'_, 'tcx, '_> {
         })();
         let detail = match detail { Ok(value) => value, Err(error) => return ControlFlow::Break(error) };
         self.record(expression.hir_id, expression.span, self.types.expr_ty(expression), resolution, detail)?;
+        match self.collector.evaluation(expression, self.depth) {
+            Ok(value) => self.evaluation.push(value),
+            Err(error) => return ControlFlow::Break(error),
+        }
         self.depth += 1;
         let result = intravisit::walk_expr(self, expression);
+        self.depth -= 1;
+        result
+    }
+
+    fn visit_block(&mut self, block: &'tcx rustc_hir::Block<'tcx>) -> Self::Result {
+        match self.collector.block_evaluation(block, self.depth) {
+            Ok(value) => self.evaluation.push(value),
+            Err(error) => return ControlFlow::Break(error),
+        }
+        self.depth += 1;
+        let result = intravisit::walk_block(self, block);
         self.depth -= 1;
         result
     }

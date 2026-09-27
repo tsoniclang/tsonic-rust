@@ -21,7 +21,9 @@ use crate::scopes::{Scope, Visibility, collect_scope, visibility};
 
 mod adjustments;
 mod occurrences;
+mod evaluation;
 use occurrences::{BodyVisitor, Occurrence};
+use evaluation::BodyEvaluation;
 
 #[derive(Serialize)]
 #[serde(tag = "phase", rename_all = "kebab-case")]
@@ -35,6 +37,7 @@ pub enum Evidence {
         declarations: DeclarationEvidence,
         occurrences: Vec<Occurrence>,
         effects: Vec<BodyEffects>,
+        evaluation: Vec<BodyEvaluation>,
     },
 }
 
@@ -229,6 +232,7 @@ struct Collector<'tcx, 'limits> {
     expansions: HashMap<ExpnId, Expansion>,
     definitions: HashMap<DefId, Definition>,
     scopes: Vec<Scope>,
+    evaluation: Vec<BodyEvaluation>,
 }
 
 fn collect(context: TyCtxt<'_>, phase: EvidencePhase, limits: &Limits, tracked_inputs: &TrackedInputs,
@@ -242,6 +246,7 @@ fn collect(context: TyCtxt<'_>, phase: EvidencePhase, limits: &Limits, tracked_i
         expansions: HashMap::new(),
         definitions: HashMap::new(),
         scopes: Vec::new(),
+        evaluation: Vec::new(),
     };
     let root = rustc_span::def_id::CRATE_DEF_ID.to_def_id();
     let mut items = Vec::new();
@@ -252,10 +257,19 @@ fn collect(context: TyCtxt<'_>, phase: EvidencePhase, limits: &Limits, tracked_i
     if phase == EvidencePhase::Checked {
         for owner in context.hir_body_owners() {
             collector.graph.definition(owner.to_def_id())?;
-            let mut visitor = BodyVisitor { collector: &mut collector, types: context.typeck(owner), depth: 0 };
-            if let ControlFlow::Break(error) = visitor.visit_body(context.hir_body_owned_by(owner)) {
+            let body = context.hir_body_owned_by(owner);
+            collector.graph.reserve(0)?;
+            let parameters = body.params.iter().map(|parameter| {
+                collector.graph.reserve(0)?;
+                Ok(node_id(parameter.pat.hir_id))
+            }).collect::<Result<_, String>>()?;
+            let mut visitor = BodyVisitor { collector: &mut collector, types: context.typeck(owner), depth: 0, evaluation: Vec::new() };
+            if let ControlFlow::Break(error) = visitor.visit_body(body) {
                 return Err(error);
             }
+            let nodes = visitor.evaluation;
+            collector.evaluation.push(BodyEvaluation { owner: definition_id(owner.to_def_id()), parameters,
+                root: node_id(body.value.hir_id), nodes });
         }
     }
     collector.graph.definition(root)?;
@@ -297,7 +311,7 @@ fn collect(context: TyCtxt<'_>, phase: EvidencePhase, limits: &Limits, tracked_i
         constants, expansions, definitions, scopes: collector.scopes };
     Ok(match phase {
         EvidencePhase::Declarations => Evidence::Declarations { declarations },
-        EvidencePhase::Checked => Evidence::Checked { declarations, occurrences: collector.occurrences, effects },
+        EvidencePhase::Checked => Evidence::Checked { declarations, occurrences: collector.occurrences, effects, evaluation: collector.evaluation },
     })
 }
 
