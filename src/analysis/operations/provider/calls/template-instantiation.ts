@@ -582,7 +582,6 @@ export function substituteProviderOperationForm(
     case "marker":
     case "numeric-cast":
     case "struct-variant":
-    case "expression-macro":
     case "call-c-variadic":
     case "call-str-slice":
     case "free-call-str-slice":

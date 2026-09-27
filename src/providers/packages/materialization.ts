@@ -235,7 +235,7 @@ function materializeProviderOperationForm(
   }
   if (form.form === "call-str-slice" || form.form === "free-call-str-slice" || form.form === "path" ||
     form.form === "reference-path" || form.form === "struct-variant" ||
-    form.form === "expression-macro" || form.form === "static") {
+    form.form === "static") {
     return { ...form, path: expandProviderPath(form.path, aliases) };
   }
   if (form.form === "binary-operator") {

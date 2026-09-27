@@ -22,7 +22,6 @@ export function rustProviderSourceArgumentMode(
   switch (form.form) {
     case "numeric-cast":
     case "struct-variant":
-    case "expression-macro":
       return "value";
     case "call":
     case "source-module-construction":

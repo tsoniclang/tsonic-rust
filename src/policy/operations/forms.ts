@@ -64,7 +64,6 @@ export function rustProviderOperationFormDeclaresWritableInput(
     case "marker":
     case "numeric-cast":
     case "struct-variant":
-    case "expression-macro":
     case "call-str-slice":
     case "path":
     case "reference-path":
@@ -108,7 +107,6 @@ export function rustProviderOperationSourceReceiverMayMutate(
     case "call":
     case "source-module-construction":
     case "struct-variant":
-    case "expression-macro":
     case "call-c-variadic":
     case "call-str-slice":
     case "call-value-slice":
@@ -163,7 +161,6 @@ export function rustProviderOperationSourceArgumentMayMutate(
     case "reference-path":
     case "static":
     case "struct-variant":
-    case "expression-macro":
     case "free-call-str-slice":
     case "call-str-slice":
     case "method":
@@ -268,12 +265,6 @@ export function rustProviderOperationFormContractViolation(
             rustIdentifierPattern.test(field) && form.fields.indexOf(field) === index)
         ? undefined
         : "struct-variant form must contain one path and one distinct Rust field for each source argument";
-    case "expression-macro":
-      return hasExactKeys(form, ["form", "path", "delimiter"], ["form", "path", "delimiter"]) &&
-          typeof form.path === "string" && rustPathPattern.test(form.path) &&
-          (form.delimiter === "parentheses" || form.delimiter === "brackets" || form.delimiter === "braces")
-        ? undefined
-        : "expression-macro form must contain one closed Rust path and delimiter";
     case "call-c-variadic":
       return hasExactKeys(
         form,
