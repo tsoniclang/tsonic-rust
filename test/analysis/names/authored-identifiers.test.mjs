@@ -3,7 +3,7 @@ import test from "node:test";
 import { createCompilerSessionFromFiles, formatDiagnostics } from "@tsonic/tsts";
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { createRustNamePlan } from "../../../dist/analysis/names/plan.js";
-import { isValidRustAuthoredIdentifier, isValidRustIdentifier, rustTargetIdentifier } from "../../../dist/target-model/names/identifiers.js";
+import { isValidRustAuthoredIdentifier, isValidRustIdentifier, rustTargetIdentifier, rustModuleSegmentName } from "../../../dist/target-model/names/identifiers.js";
 import { allocateRustGeneratedName } from "../../../dist/target-model/names/generated.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../../dist/backend/planner/names/synthetic.js";
 import { rustSourceDeclarationTypeName } from "../../../dist/policy/types/source-declarations.js";
@@ -84,6 +84,16 @@ test("Rust preserves valid non-ASCII source identifiers without deleting their c
     const name = source.ast.text(source.ast.name(declaration));
     assert.equal(plan.nameForDeclaration(declaration), name);
     assert.equal(isValidRustIdentifier(name), true);
+  }
+});
+
+test("source-derived Rust module names preserve valid authored spelling and case", () => {
+  for (const name of ["makeValue", "HTTP_API", "foo__bar", "_details", "数据", "résumé"]) {
+    assert.equal(rustModuleSegmentName(name), name);
+    assert.equal(isValidRustIdentifier(rustModuleSegmentName(name)), true);
+  }
+  for (const name of ["file-name", "1value", "main", "lib", "mod", "type", "Self"]) {
+    assert.equal(isValidRustIdentifier(rustModuleSegmentName(name)), true, name);
   }
 });
 

@@ -55,14 +55,10 @@ export function rustScreamingSnakeIdentifier(sourceName: string): string {
 
 export function rustModuleSegmentName(sourceName: string): string {
   let value = sourceName
-    .replace(/([a-z0-9])([A-Z])/gu, "$1_$2")
-    .replace(/([A-Z]+)([A-Z][a-z])/gu, "$1_$2")
-    .toLowerCase()
-    .replace(/[^a-z0-9_]/gu, "_")
-    .replace(/_+/gu, "_")
-    .replace(/^_+|_+$/gu, "") || "module";
+    .replace(/[^\p{XID_Continue}]/gu, "_") || "module";
+  if (value === "_") value = "module";
+  if (!/^(?:_|\p{XID_Start})/u.test(value)) value = `module_${value}`;
   if (
-    /^[0-9]/u.test(value) ||
     value === "main" ||
     value === "lib" ||
     value === "mod" ||
@@ -71,9 +67,7 @@ export function rustModuleSegmentName(sourceName: string): string {
   ) {
     value = `${value}_module`;
   }
-  return value.length <= 120
-    ? value
-    : value.slice(0, 120).replace(/_+$/u, "");
+  return value;
 }
 
 function rustIdentifierWords(sourceName: string): string[] {
