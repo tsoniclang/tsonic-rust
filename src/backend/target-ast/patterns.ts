@@ -1,5 +1,9 @@
 import type { RustPattern } from "./nodes.js";
 
+export function rustPatternBindsName(pattern: RustPattern, name: string): boolean | undefined {
+  return rustPatternBindings(pattern)?.some(binding => binding.name === name);
+}
+
 export function rustParametersBindName(parameters: readonly { readonly pattern: RustPattern }[], name: string): boolean | undefined {
   let found = false;
   for (const parameter of parameters) {

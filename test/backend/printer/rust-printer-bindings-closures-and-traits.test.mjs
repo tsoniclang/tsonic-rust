@@ -18,8 +18,7 @@ test("borrowed method-chain let initializers reflow as one continuation", () => 
       body: {
         statements: [{
           kind: "let",
-          name: "__tsonic_location",
-          mutable: false,
+          pattern: { kind: "binding", name: "__tsonic_location", mutable: false },
           init: {
             kind: "reference",
             expr: {
@@ -62,8 +61,7 @@ test("typed let bindings keep fitting call openings before expanded arrays", () 
       body: {
         statements: [{
           kind: "let",
-          name: "concatenated",
-          mutable: false,
+          pattern: { kind: "binding", name: "concatenated", mutable: false },
           type: {
             kind: "named",
             path: "js_abi::JsArray",
@@ -115,8 +113,7 @@ test("typed let bindings keep expanded ordinary calls attached", () => {
       body: {
         statements: [{
           kind: "let",
-          name: "point",
-          mutable: false,
+          pattern: { kind: "binding", name: "point", mutable: false },
           type: { kind: "primitive", name: "f64" },
           init: {
             kind: "call",
@@ -160,8 +157,7 @@ test("typed let bindings keep a fitting call base before a fallible selector", (
       body: {
         statements: [{
           kind: "let",
-          name: "temporary",
-          mutable: false,
+          pattern: { kind: "binding", name: "temporary", mutable: false },
           type: { kind: "string" },
           init: {
             kind: "try",
@@ -199,8 +195,7 @@ test("typed let bindings move an expanded call base to one continuation", () => 
       body: {
         statements: [{
           kind: "let",
-          name: "merged",
-          mutable: false,
+          pattern: { kind: "binding", name: "merged", mutable: false },
           type: { kind: "named", path: "tsonic_rust_node::buffer::Buffer" },
           init: {
             kind: "try",
@@ -252,8 +247,7 @@ test("fitting string concatenations remain on typed binding lines", () => {
       body: {
         statements: [{
           kind: "let",
-          name: "file",
-          mutable: false,
+          pattern: { kind: "binding", name: "file", mutable: false },
           type: { kind: "string" },
           init: {
             kind: "string-concat",

@@ -124,8 +124,7 @@ test("let-bound index closures retain rustfmt's vertical method-chain layout", (
       body: {
         statements: [{
           kind: "let",
-          name: "index_current",
-          mutable: false,
+          pattern: { kind: "binding", name: "index_current", mutable: false },
           init: {
             kind: "method-call",
             receiver: {
@@ -538,8 +537,7 @@ test("long multiline let initializers reflow from their continuation column", ()
       body: {
         statements: [{
           kind: "let",
-          name: "textFunction",
-          mutable: false,
+          pattern: { kind: "binding", name: "textFunction", mutable: false },
           init: {
             kind: "associated-call",
             owner: {
@@ -598,8 +596,7 @@ test("fitting callable closures move below long let bindings without expanding",
       body: {
         statements: [{
           kind: "let",
-          name: "record_method_2",
-          mutable: false,
+          pattern: { kind: "binding", name: "record_method_2", mutable: false },
           init: {
             kind: "associated-call",
             owner: {

@@ -1,5 +1,5 @@
 import type { RustExpr, RustStmt } from "../nodes.js";
-import { rustParametersBindName } from "../patterns.js";
+import { rustParametersBindName, rustPatternBindsName } from "../patterns.js";
 import {
   rustExpressionChildren,
   rustExpressionReferencesPath,
@@ -13,8 +13,8 @@ export function firstDirectPathAccessInStatements(
   path: string,
 ): "read" | "write" | "none" {
   for (const statement of statements) {
-    if (statement.kind === "let" && statement.name === path) {
-      return statement.init !== undefined && rustExpressionReferencesPath(statement.init, path)
+    if (statement.kind === "let" && rustPatternBindsName(statement.pattern, path) === true) {
+      return rustStatementReferencesPath(statement, path)
         ? "read"
         : "none";
     }
@@ -48,7 +48,7 @@ export function maxWritesInStatements(
   let writes = 0;
   for (const statement of statements) {
     writes = cappedWriteCount(writes + maxWritesInStatement(statement, path));
-    if (writes === 2 || statement.kind === "let" && statement.name === path) {
+    if (writes === 2 || statement.kind === "let" && rustPatternBindsName(statement.pattern, path) === true) {
       break;
     }
   }
@@ -76,7 +76,10 @@ function maxWritesInStatement(statement: RustStmt, path: string): number {
     case "item":
       return 0;
     case "let":
-      return statement.init === undefined ? 0 : maxWritesInExpression(statement.init, path);
+      return rustPatternBindsName(statement.pattern, path) === undefined ? 2 : cappedWriteCount(
+        (statement.init === undefined ? 0 : maxWritesInExpression(statement.init, path)) +
+        (statement.else === undefined ? 0 : maxWritesInStatements(statement.else.statements, path)),
+      );
     case "expr":
     case "tail":
       return maxWritesInExpression(statement.expr, path);
@@ -101,29 +104,21 @@ function maxWritesInStatement(statement: RustStmt, path: string): number {
         maxWritesInExpression(statement.condition, path) +
           (maxWritesInStatements(statement.body.statements, path) === 0 ? 0 : 2),
       );
-    case "while-let-some":
+    case "while-let":
       return cappedWriteCount(
         maxWritesInExpression(statement.expression, path) +
-          (statement.binding === path ||
-              maxWritesInStatements(statement.body.statements, path) === 0
-            ? 0
-            : 2),
+          (patternBodyWrites(statement, path) === 0 ? 0 : 2),
       );
     case "for":
       return cappedWriteCount(
         maxWritesInExpression(statement.iterable, path) +
-          (statement.binding === path ||
-              maxWritesInStatements(statement.body.statements, path) === 0
-            ? 0
-            : 2),
+          (patternBodyWrites(statement, path) === 0 ? 0 : 2),
       );
-    case "if-let-some":
+    case "if-let":
       return cappedWriteCount(
         maxWritesInExpression(statement.expression, path) +
           Math.max(
-            statement.binding === path
-              ? 0
-              : maxWritesInStatements(statement.body.statements, path),
+            patternBodyWrites(statement, path),
             statement.else === undefined
               ? 0
               : maxWritesInStatements(statement.else.statements, path),
@@ -164,6 +159,11 @@ function maxWritesInStatement(statement: RustStmt, path: string): number {
           maxDispatchPreludeWrites(statement.dispatchTargets, path),
       );
   }
+}
+
+function patternBodyWrites(statement: Extract<RustStmt, { kind: "for" | "if-let" | "while-let" }>, path: string): number {
+  const bound = rustPatternBindsName(statement.pattern, path);
+  return bound === undefined ? 2 : bound ? 0 : maxWritesInStatements(statement.body.statements, path);
 }
 
 function maxDispatchPreludeWrites(
@@ -284,12 +284,15 @@ function firstAccessesInStatement(
     case "item":
       return new Set<FirstAccess>(["none"]);
     case "let": {
+      const bound = rustPatternBindsName(statement.pattern, path);
+      if (bound === undefined) return new Set<FirstAccess>(["none", "read", "write", "exit"]);
       const initializer = statement.init === undefined
         ? new Set<FirstAccess>(["none"])
         : firstAccessesInExpression(statement.init, path);
-      return statement.name === path
-        ? replaceNone(initializer, new Set<FirstAccess>(["exit"]))
-        : initializer;
+      const success = new Set<FirstAccess>([bound ? "exit" : "none"]);
+      const outcomes = statement.else === undefined ? success : unionFirstAccesses(success,
+        replaceNone(firstAccessesInStatements(statement.else.statements, path), new Set<FirstAccess>(["exit"])));
+      return replaceNone(initializer, outcomes);
     }
     case "expr":
       return firstAccessesInExpression(statement.expr, path);
@@ -335,26 +338,22 @@ function firstAccessesInStatement(
           new Set<FirstAccess>(["none"]),
         ),
       );
-    case "while-let-some":
+    case "while-let":
     case "for": {
       const input = statement.kind === "for" ? statement.iterable : statement.expression;
       return replaceNone(
         firstAccessesInExpression(input, path),
         unionFirstAccesses(
-          statement.binding === path
-            ? new Set<FirstAccess>(["none"])
-            : firstAccessesInStatements(statement.body.statements, path),
+          patternBodyAccesses(statement, path),
           new Set<FirstAccess>(["none"]),
         ),
       );
     }
-    case "if-let-some":
+    case "if-let":
       return replaceNone(
         firstAccessesInExpression(statement.expression, path),
         unionFirstAccesses(
-          statement.binding === path
-            ? new Set<FirstAccess>(["none"])
-            : firstAccessesInStatements(statement.body.statements, path),
+          patternBodyAccesses(statement, path),
           statement.else === undefined
             ? new Set<FirstAccess>(["none"])
             : firstAccessesInStatements(statement.else.statements, path),
@@ -388,6 +387,12 @@ function firstAccessesInStatement(
         new Set<FirstAccess>(["exit"]),
       );
   }
+}
+
+function patternBodyAccesses(statement: Extract<RustStmt, { kind: "for" | "if-let" | "while-let" }>, path: string): ReadonlySet<FirstAccess> {
+  const bound = rustPatternBindsName(statement.pattern, path);
+  return bound === undefined ? new Set<FirstAccess>(["none", "read", "write", "exit"])
+    : bound ? new Set<FirstAccess>(["none"]) : firstAccessesInStatements(statement.body.statements, path);
 }
 
 function firstAccessesInAssignment(

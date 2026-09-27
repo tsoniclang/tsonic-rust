@@ -198,8 +198,7 @@ function planVariableDeclaration(
   }
   return [{
     kind: "let",
-    name,
-    mutable,
+    pattern: { kind: "binding", name, mutable },
     ...(rustType === undefined ? {} : { type: rustType }),
     ...(init === undefined ? {} : { init }),
   }];
@@ -242,5 +241,5 @@ function planBindingVariableDeclaration(
   );
   return bindings === undefined
     ? undefined
-    : [{ kind: "let", name: temporary, mutable: false, init: value }, ...bindings];
+    : [{ kind: "let", pattern: { kind: "binding", name: temporary, mutable: false }, init: value }, ...bindings];
 }

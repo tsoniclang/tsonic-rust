@@ -181,7 +181,7 @@ export function planRustCallableParameters(
     }
     if (locationStorage.storage !== "location") {
       prelude.push({ kind: "statement", statement: {
-        kind: "let", name: parameterName, mutable: false,
+        kind: "let", pattern: { kind: "binding", name: parameterName, mutable: false },
         init: { kind: "call", path: `${rustInlineBindingStoragePath(locationStorage.storage)}::new`, args: [{ kind: "path", path: parameterName }] },
       } });
       continue;
@@ -199,8 +199,7 @@ export function planRustCallableParameters(
       kind: "statement",
       statement: {
         kind: "let",
-        name: parameterName,
-        mutable: false,
+        pattern: { kind: "binding", name: parameterName, mutable: false },
         init: allocation,
       },
     });
@@ -226,8 +225,7 @@ export function planRustCallableParameterPrelude(
       }
       statements.push({
         kind: "let",
-        name: entry.name,
-        mutable: entry.mutable,
+        pattern: { kind: "binding", name: entry.name, mutable: entry.mutable },
         init: rustOptionDefaultValue({ kind: "path", path: entry.name }, initializer, entry.carrier, context),
       });
       continue;

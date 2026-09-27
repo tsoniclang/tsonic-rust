@@ -187,8 +187,7 @@ test("single projection calls keep a short receiver attached when closure argume
       body: {
         statements: [{
           kind: "let",
-          name: "projected",
-          mutable: false,
+          pattern: { kind: "binding", name: "projected", mutable: false },
           init: {
             kind: "method-call",
             receiver: { kind: "path", path: "pair" },
@@ -681,8 +680,7 @@ test("long atomic vectors use rustfmt-compatible element lines", () => {
       body: {
         statements: [{
           kind: "let",
-          name: "values",
-          mutable: false,
+          pattern: { kind: "binding", name: "values", mutable: false },
           init: {
             kind: "vec-literal",
             elements: ["first", "second", "third", "fourth"].map((value) => ({
@@ -1004,8 +1002,7 @@ test("expanded call arguments keep fitting optional closure chains attached", ()
       body: {
         statements: [{
           kind: "let",
-          name: "letter",
-          mutable: false,
+          pattern: { kind: "binding", name: "letter", mutable: false },
           init: {
             kind: "call",
             path: "rt::option_coalesce",
@@ -1080,8 +1077,7 @@ test("every fitted call layout preserves exact call-site type arguments", () => 
       body: {
         statements: [{
           kind: "let",
-          name: "direct",
-          mutable: false,
+          pattern: { kind: "binding", name: "direct", mutable: false },
           init: {
             kind: "call",
             path: "Ok",
@@ -1093,8 +1089,7 @@ test("every fitted call layout preserves exact call-site type arguments", () => 
           },
         }, {
           kind: "let",
-          name: "associated",
-          mutable: false,
+          pattern: { kind: "binding", name: "associated", mutable: false },
           init: {
             kind: "associated-call",
             owner: { kind: "named", path: "Factory" },
@@ -1104,8 +1099,7 @@ test("every fitted call layout preserves exact call-site type arguments", () => 
           },
         }, {
           kind: "let",
-          name: "method",
-          mutable: false,
+          pattern: { kind: "binding", name: "method", mutable: false },
           init: {
             kind: "method-call",
             receiver: { kind: "path", path: "values" },
@@ -1115,8 +1109,7 @@ test("every fitted call layout preserves exact call-site type arguments", () => 
           },
         }, {
           kind: "let",
-          name: "nested",
-          mutable: false,
+          pattern: { kind: "binding", name: "nested", mutable: false },
           init: {
             kind: "call",
             path: "wrap",

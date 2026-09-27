@@ -78,7 +78,7 @@ function printRustSourceFile(model) {
 
 test("authored default-then-write order has an exact local style expectation", () => {
   const type = { kind: "named", path: "Options" };
-  const initial = { kind: "let", name: "options", mutable: true, type,
+  const initial = { kind: "let", pattern: { kind: "binding", name: "options", mutable: true }, type,
     init: { kind: "associated-call", owner: type,
       trait: { kind: "named", path: "core::default::Default" }, method: "default", args: [] } };
   const assignment = { kind: "assign", operator: "=", target: { kind: "field",
@@ -239,7 +239,7 @@ test("source style keeps intentional control-flow policy statement-local", () =>
           {
             kind: "for",
             label: "first_value",
-            binding: "unused",
+            pattern: { kind: "binding", name: "unused" },
             iterable: { kind: "path", path: "values" },
             body: { statements: [{ kind: "break", label: "first_value" }] },
           },
@@ -279,8 +279,7 @@ test("source liveness policy is attached only to proven dead local values", () =
         statements: [
           {
             kind: "let",
-            name: "selected",
-            mutable: true,
+            pattern: { kind: "binding", name: "selected", mutable: true },
             type: { kind: "primitive", name: "i32" },
             init: { kind: "int-literal", text: "0" },
           },
@@ -305,8 +304,8 @@ test("source liveness policy is attached only to proven dead local values", () =
             },
           },
           { kind: "expr", expr: { kind: "call", path: "consume", args: [{ kind: "path", path: "selected" }] } },
-          { kind: "let", name: "unused", mutable: false, init: { kind: "call", path: "produce", args: [] } },
-          { kind: "let", name: "overwritten", mutable: true, init: { kind: "int-literal", text: "0" } },
+          { kind: "let", pattern: { kind: "binding", name: "unused", mutable: false }, init: { kind: "call", path: "produce", args: [] } },
+          { kind: "let", pattern: { kind: "binding", name: "overwritten", mutable: true }, init: { kind: "int-literal", text: "0" } },
           {
             kind: "assign",
             target: { kind: "path", path: "overwritten" },
@@ -320,7 +319,7 @@ test("source liveness policy is attached only to proven dead local values", () =
             value: { kind: "int-literal", text: "2" },
           },
           { kind: "expr", expr: { kind: "call", path: "consume", args: [{ kind: "path", path: "overwritten" }] } },
-          { kind: "let", name: "holder", mutable: true, init: { kind: "call", path: "create_holder", args: [] } },
+          { kind: "let", pattern: { kind: "binding", name: "holder", mutable: true }, init: { kind: "call", path: "create_holder", args: [] } },
           {
             kind: "assign",
             target: { kind: "field", receiver: { kind: "path", path: "holder" }, name: "value" },
@@ -328,9 +327,9 @@ test("source liveness policy is attached only to proven dead local values", () =
             value: { kind: "int-literal", text: "3" },
           },
           { kind: "expr", expr: { kind: "call", path: "consume", args: [{ kind: "path", path: "holder" }] } },
-          { kind: "let", name: "read_only", mutable: true, init: { kind: "call", path: "create_holder", args: [] } },
+          { kind: "let", pattern: { kind: "binding", name: "read_only", mutable: true }, init: { kind: "call", path: "create_holder", args: [] } },
           { kind: "expr", expr: { kind: "call", path: "consume", args: [{ kind: "path", path: "read_only" }] } },
-          { kind: "let", name: "method_mutated", mutable: true, init: { kind: "call", path: "create_holder", args: [] } },
+          { kind: "let", pattern: { kind: "binding", name: "method_mutated", mutable: true }, init: { kind: "call", path: "create_holder", args: [] } },
           {
             kind: "expr",
             expr: {
@@ -341,7 +340,7 @@ test("source liveness policy is attached only to proven dead local values", () =
               receiverMode: "mut-ref",
             },
           },
-          { kind: "let", name: "looped", mutable: true, init: { kind: "int-literal", text: "0" } },
+          { kind: "let", pattern: { kind: "binding", name: "looped", mutable: true }, init: { kind: "int-literal", text: "0" } },
           {
             kind: "while",
             condition: { kind: "path", path: "condition" },
@@ -435,8 +434,7 @@ test("rustfmt canonicalizes nested collection initializers", () => {
           body: {
             statements: [{
               kind: "let",
-              name: "module_value_3",
-              mutable: false,
+              pattern: { kind: "binding", name: "module_value_3", mutable: false },
               init: {
                 kind: "call",
                 path: "js_abi::JsArray::from_dense",

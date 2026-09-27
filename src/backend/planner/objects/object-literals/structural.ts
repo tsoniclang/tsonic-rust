@@ -79,7 +79,7 @@ export function createStructuralLiteralImplementation(
         params.some(parameter => parameter === undefined) || !store(field.targetName, storageIndex, "value", storage)) return undefined;
       functions.push({ kind: "function", name: field.targetName, visibility: "private", generics: emptyRustGenerics,
         selfParam: rustSelfParameter("rc"), params: params as NonNullable<typeof params[number]>[], returnType: result, errorType,
-        body: { statements: [{ kind: "let", name: "callable", mutable: false, init: read(field.targetName) }, { kind: "tail", expr: {
+        body: { statements: [{ kind: "let", pattern: { kind: "binding", name: "callable", mutable: false }, init: read(field.targetName) }, { kind: "tail", expr: {
           kind: "method-call", receiver: { kind: "path", path: "callable" }, method: "call", args: [{ kind: "tuple-literal",
             elements: [...(field.receiverIndependent ? [] : [receiver]), ...params.map(parameter => ({ kind: "path" as const, path: parameter!.pattern.name }))] }],
         } }] } });

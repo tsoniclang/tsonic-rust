@@ -1,4 +1,5 @@
 import { rustExpressionChildren } from "../../target-ast/inspection/source-usage.js";
+import { rustPatternBindings } from "../../target-ast/patterns.js";
 import type {
   RustBlock,
   RustExpr,
@@ -30,8 +31,9 @@ function rustStatementReferencesSelfField(
     case "item":
       return false;
     case "let":
-      return statement.init !== undefined &&
-        rustExpressionReferencesSelfField(statement.init, fieldName);
+      return rustPatternBindings(statement.pattern) === undefined ||
+        (statement.init !== undefined && rustExpressionReferencesSelfField(statement.init, fieldName)) ||
+        (statement.else !== undefined && rustBlockReferencesSelfField(statement.else, fieldName));
     case "expr":
     case "tail":
       return rustExpressionReferencesSelfField(statement.expr, fieldName);
@@ -53,16 +55,16 @@ function rustStatementReferencesSelfField(
     case "while":
       return rustExpressionReferencesSelfField(statement.condition, fieldName) ||
         rustBlockReferencesSelfField(statement.body, fieldName);
-    case "while-let-some":
-      return rustExpressionReferencesSelfField(statement.expression, fieldName) ||
+    case "while-let":
+      return rustPatternBindings(statement.pattern) === undefined || rustExpressionReferencesSelfField(statement.expression, fieldName) ||
         rustBlockReferencesSelfField(statement.body, fieldName);
-    case "if-let-some":
-      return rustExpressionReferencesSelfField(statement.expression, fieldName) ||
+    case "if-let":
+      return rustPatternBindings(statement.pattern) === undefined || rustExpressionReferencesSelfField(statement.expression, fieldName) ||
         rustBlockReferencesSelfField(statement.body, fieldName) ||
         (statement.else !== undefined &&
           rustBlockReferencesSelfField(statement.else, fieldName));
     case "for":
-      return rustExpressionReferencesSelfField(statement.iterable, fieldName) ||
+      return rustPatternBindings(statement.pattern) === undefined || rustExpressionReferencesSelfField(statement.iterable, fieldName) ||
         rustBlockReferencesSelfField(statement.body, fieldName);
     case "completion-exit":
       return statement.expr !== undefined &&

@@ -202,7 +202,7 @@ function planDefinition(definition: RustGenericCallableDefinition, context: Rust
       wherePredicates: [...predicates.values()],
     }, params: parameterTypes.map((type, index) => ({ pattern: { kind: "binding", name: `argument_${index}` }, type: type! })),
     returnType: resultType,
-    body: { statements: nativeFuture ? [{ kind: "let", name: "owner", mutable: false,
+    body: { statements: nativeFuture ? [{ kind: "let", pattern: { kind: "binding", name: "owner", mutable: false },
       init: { kind: "method-call", receiver: { kind: "path", path: "self" }, method: "clone", args: [] },
     }, { kind: "tail", expr: { kind: "invoke", callee: { kind: "closure-block", params: [], move: true, async: true,
       body: { statements: [{ kind: "tail", expr: dispatch }] },

@@ -88,6 +88,54 @@ test("native macro patterns occupy real function and closure parameters", () => 
     "fn main() { assert_eq!(combine((3, 4)), 7); assert_eq!(via_closure((5, 6)), 11); }"), "");
 });
 
+test("native macro patterns preserve all statement positions and let-else completion", () => {
+  const binding = (name, mutable = false) => ({ kind: "binding", name, mutable });
+  const path = name => ({ kind: "path", path: name });
+  const integer = text => ({ kind: "int-literal", text });
+  const selected = pattern => invocation("selected", "parentheses", [{ kind: "pattern", pattern }]);
+  const tuple = elements => ({ kind: "tuple", elements });
+  const present = name => ({ kind: "tuple-variant", path: "Some", elements: [binding(name)] });
+  const add = name => ({ kind: "assign", target: path("total"), operator: "+=", value: path(name) });
+  const item = { ...method("all_positions", [
+    { kind: "let", pattern: selected(tuple([binding("left"), binding("right")])),
+      init: { kind: "tuple-literal", elements: [integer("1u32"), integer("2u32")] } },
+    { kind: "let", pattern: binding("total", true), init: { kind: "binary", left: path("left"), operator: "+", right: path("right") } },
+    { kind: "for", pattern: selected(tuple([binding("offset"), binding("value", true)])),
+      iterable: { kind: "slice-literal", elements: [
+        { kind: "tuple-literal", elements: [integer("1u32"), integer("4u32")] },
+        { kind: "tuple-literal", elements: [integer("2u32"), integer("5u32")] },
+      ] }, body: { statements: [{ kind: "assign", target: path("value"), operator: "+=", value: path("offset") }, add("value")] } },
+    { kind: "let", pattern: binding("remaining", true), init: { kind: "call", path: "Some", args: [integer("3u32")] } },
+    { kind: "while-let", pattern: selected(present("value")),
+      expression: { kind: "method-call", receiver: path("remaining"), method: "take", args: [] }, body: { statements: [add("value")] } },
+    { kind: "if-let", pattern: selected(present("value")),
+      expression: { kind: "call", path: "Some", args: [integer("5u32")] }, body: { statements: [add("value")] } },
+    { kind: "let", pattern: selected(present("value")), init: { kind: "block", bindings: [], value: path("input") },
+      else: { statements: [{ kind: "return", expr: path("total") }] } },
+    { kind: "tail", expr: { kind: "binary", left: path("total"), operator: "+", right: path("value") } },
+  ]), params: [{ pattern: binding("input"), type: { kind: "named", path: "Option",
+    genericArguments: [{ kind: "type", type: { kind: "primitive", name: "u32" } }] } }] };
+  const styled = finalizeRustSourceStyle({ headerComment: "fixture", items: [item] });
+  assert.equal(nativeProgram("statement-patterns", styled.items,
+    "macro_rules! selected { ($value:pat) => { $value }; }",
+    "fn main() { assert_eq!(all_positions(None), 23); assert_eq!(all_positions(Some(7)), 30); }"), "");
+});
+
+test("native checking retains refutable-binding and nondiverging let-else failures", () => {
+  const pattern = invocation("selected", "parentheses", [{ kind: "pattern", pattern: { kind: "binding", name: "value" } }]);
+  const input = { kind: "call", path: "Some", args: [{ kind: "int-literal", text: "1u32" }] };
+  const definitions = "macro_rules! selected { ($value:ident) => { Some($value) }; }";
+  const invalidLet = method("invalid", [{ kind: "let", pattern, init: input }, { kind: "tail", expr: { kind: "path", path: "value" } }]);
+  assert.throws(() => nativeProgram("refutable-let", [invalidLet], definitions, "fn main() {}"), /refutable pattern/u);
+  const invalidElse = { ...invalidLet, body: { statements: [{ kind: "let", pattern, init: input, else: { statements: [] } },
+    { kind: "tail", expr: { kind: "path", path: "value" } }] } };
+  assert.throws(() => nativeProgram("nondiverging-let-else", [invalidElse], definitions, "fn main() {}"), /does not diverge/u);
+  const invalidFor = method("invalid", [{ kind: "for", pattern, iterable: { kind: "slice-literal", elements: [input] },
+    body: { statements: [{ kind: "return", expr: { kind: "path", path: "value" } }] } },
+  { kind: "tail", expr: { kind: "int-literal", text: "0" } }]);
+  assert.throws(() => nativeProgram("refutable-for", [invalidFor], definitions, "fn main() {}"), /refutable pattern/u);
+});
+
 test("native parameter patterns retain shared destructuring, mutable bindings and inferred closure types", () => {
   const integer = { kind: "primitive", name: "u32" };
   const reference = { kind: "reference", referent: integer, mutable: false };

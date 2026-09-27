@@ -5,7 +5,7 @@ import { acmeTestingPackage, artifactText, compileRust } from "../../../helpers/
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
 
 test("only an exact no-fallthrough proof adds a safe terminal assertion", () => {
-  const body = { statements: [{ kind: "let", name: "value", mutable: false, init: { kind: "bool-literal", value: true } }] };
+  const body = { statements: [{ kind: "let", pattern: { kind: "binding", name: "value", mutable: false }, init: { kind: "bool-literal", value: true } }] };
   for (const evidence of [undefined, true]) {
     assert.equal(retainRustCheckedCompletion(body, evidence), body);
     assert.equal(rustBlockTerminates(body), false);

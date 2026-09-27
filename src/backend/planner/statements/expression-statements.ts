@@ -173,14 +173,14 @@ export function planExpressionAsStatement(
     const fact = context.input.program.facts.getFact(expression, rustTargetOperationFactKey);
     if (planned !== undefined && fact?.kind === "provider-operation" &&
       fact.abi.target.form === "numeric-cast") {
-      return [{ kind: "let", name: "_", mutable: false, init: planned }];
+      return [{ kind: "let", pattern: { kind: "wildcard" }, init: planned }];
     }
     return planned === undefined ? undefined : [{ kind: "expr", expr: planned }];
   }
   const planned = planExpression(expression, context);
   return planned === undefined
     ? undefined
-    : [{ kind: "let", name: "_", mutable: false, init: planned }];
+    : [{ kind: "let", pattern: { kind: "wildcard" }, init: planned }];
 }
 
 export function planRustAssignmentWrite(
@@ -197,7 +197,7 @@ export function planRustAssignmentWrite(
     return statements === undefined ? undefined : [{ kind: "scope", body: {
       statements: [
         ...evaluation.bindings.map(binding => ({ kind: "let" as const,
-          name: binding.name, mutable: binding.mutable ?? false, init: binding.value })),
+          pattern: { kind: "binding" as const, name: binding.name, mutable: binding.mutable ?? false }, init: binding.value })),
         ...statements,
       ],
     } }];

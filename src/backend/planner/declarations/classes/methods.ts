@@ -403,8 +403,8 @@ function planDirectProjectMethodOverridePrelude(
     "method_override",
   );
   return [{
-    kind: "if-let-some",
-    binding: overrideName,
+    kind: "if-let",
+    pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: overrideName }] },
     expression: readRustProjectMethodOverride(
       { kind: "path", path: "self" },
       targetName,

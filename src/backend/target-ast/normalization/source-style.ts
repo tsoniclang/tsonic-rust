@@ -193,12 +193,12 @@ function finalizeRustBlockStyle(block: RustBlock): RustBlock {
   let nextItem = 0;
   const retainsFieldAssignment = block.statements.some((statement, index) => {
       const previous = block.statements[index - 1];
-      return previous?.kind === "let" && previous.init?.kind === "associated-call" &&
+      return previous?.kind === "let" && previous.pattern.kind === "binding" && previous.else === undefined && previous.init?.kind === "associated-call" &&
         previous.init.trait?.kind === "named" && previous.init.trait.path === "core::default::Default" &&
         previous.init.method === "default" && previous.init.args.length === 0 &&
         statement.kind === "assign" && statement.operator === "=" && statement.target.kind === "field" &&
-        statement.target.receiver.kind === "path" && statement.target.receiver.path === previous.name &&
-        !rustBlockReferencesPath({ statements: [{ kind: "expr", expr: statement.value }] }, previous.name);
+        statement.target.receiver.kind === "path" && statement.target.receiver.path === previous.pattern.name &&
+        !rustBlockReferencesPath({ statements: [{ kind: "expr", expr: statement.value }] }, previous.pattern.name);
   });
   return {
     ...block,
@@ -218,11 +218,13 @@ function finalizeRustStatementStyle(statement: RustStmt): RustStmt {
     case "macro-statement":
     case "item":
       return statement;
-    case "let":
-      return { ...statement,
-        ...(statement.type === undefined || nameType === undefined ? {} : { type: nameType(statement.type, statement.name) }),
-        ...(statement.init === undefined ? {} : { init: finalizeRustExpressionStyle(statement.init) }),
-      };
+    case "let": {
+      const typed = statement.type === undefined || nameType === undefined ? statement
+        : { ...statement, type: nameType(statement.type, statement.pattern.kind === "binding" ? statement.pattern.name : "Pattern") };
+      if (typed.init === undefined) return typed;
+      return { ...typed, init: finalizeRustExpressionStyle(typed.init),
+        ...(typed.else === undefined ? {} : { else: finalizeRustBlockStyle(typed.else) }) };
+    }
     case "expr":
       return { ...statement, expr: finalizeRustExpressionStyle(statement.expr) };
     case "assign":
@@ -272,7 +274,7 @@ function finalizeRustStatementStyle(statement: RustStmt): RustStmt {
         : statement.attrs;
       return { ...statement, attrs, condition, body: finalizeRustBlockStyle(statement.body) };
     }
-    case "while-let-some":
+    case "while-let":
       return {
         ...statement,
         expression: finalizeRustExpressionStyle(statement.expression),
@@ -281,8 +283,8 @@ function finalizeRustStatementStyle(statement: RustStmt): RustStmt {
     case "for": {
       const body = finalizeRustBlockStyle(statement.body);
       let attrs = statement.attrs;
-      if (!rustBlockReferencesPath(body, statement.binding) &&
-        statement.binding !== "_" && !statement.binding.startsWith("_")) {
+      if (rustPatternBindings(statement.pattern)?.some(binding =>
+        !binding.name.startsWith("_") && !rustBlockReferencesPath(body, binding.name)) === true) {
         attrs = appendRustAttribute(attrs, rustLintAttributes.unusedVariables);
       }
       const finalStatement = body.statements[body.statements.length - 1];
@@ -297,7 +299,7 @@ function finalizeRustStatementStyle(statement: RustStmt): RustStmt {
         body,
       };
     }
-    case "if-let-some":
+    case "if-let":
       return {
         ...statement,
         expression: finalizeRustExpressionStyle(statement.expression),
@@ -401,7 +403,7 @@ function rustStatementMayContinueLoop(statement: RustStmt, label: string | undef
     case "if":
       return rustBlockMayContinueLoop(statement.then, label) ||
         (statement.else !== undefined && rustBlockMayContinueLoop(statement.else, label));
-    case "if-let-some":
+    case "if-let":
       return rustBlockMayContinueLoop(statement.body, label) ||
         (statement.else !== undefined && rustBlockMayContinueLoop(statement.else, label));
     case "scope":
@@ -418,10 +420,11 @@ function rustStatementMayContinueLoop(statement: RustStmt, label: string | undef
           rustBlockMayContinueLoop(statement.finallyClause.body, label));
     case "loop":
     case "while":
-    case "while-let-some":
+    case "while-let":
     case "for":
       return label !== undefined && rustBlockMayContinueLoop(statement.body, label);
     case "let":
+      return statement.else !== undefined && rustBlockMayContinueLoop(statement.else, label);
     case "expr":
     case "assign":
     case "return":

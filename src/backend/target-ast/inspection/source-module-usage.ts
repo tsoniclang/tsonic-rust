@@ -271,7 +271,9 @@ function rustStatementReferencesModuleAlias(statement: RustStmt, alias: string):
     case "item":
       return rustItemReferencesModuleAlias(statement.item, alias);
     case "let":
-      return rustOptionalTypeReferencesModuleAlias(statement.type, alias) ||
+      return rustPatternReferencesModuleAlias(statement.pattern, alias) ||
+        rustOptionalTypeReferencesModuleAlias(statement.type, alias) ||
+        (statement.else !== undefined && rustBlockReferencesModuleAlias(statement.else, alias)) ||
         (statement.init !== undefined &&
           rustExpressionReferencesModuleAlias(statement.init, alias));
     case "expr":
@@ -293,16 +295,19 @@ function rustStatementReferencesModuleAlias(statement: RustStmt, alias: string):
     case "while":
       return rustExpressionReferencesModuleAlias(statement.condition, alias) ||
         rustBlockReferencesModuleAlias(statement.body, alias);
-    case "while-let-some":
-      return rustExpressionReferencesModuleAlias(statement.expression, alias) ||
+    case "while-let":
+      return rustPatternReferencesModuleAlias(statement.pattern, alias) ||
+        rustExpressionReferencesModuleAlias(statement.expression, alias) ||
         rustBlockReferencesModuleAlias(statement.body, alias);
-    case "if-let-some":
-      return rustExpressionReferencesModuleAlias(statement.expression, alias) ||
+    case "if-let":
+      return rustPatternReferencesModuleAlias(statement.pattern, alias) ||
+        rustExpressionReferencesModuleAlias(statement.expression, alias) ||
         rustBlockReferencesModuleAlias(statement.body, alias) ||
         (statement.else !== undefined &&
           rustBlockReferencesModuleAlias(statement.else, alias));
     case "for":
-      return rustExpressionReferencesModuleAlias(statement.iterable, alias) ||
+      return rustPatternReferencesModuleAlias(statement.pattern, alias) ||
+        rustExpressionReferencesModuleAlias(statement.iterable, alias) ||
         rustBlockReferencesModuleAlias(statement.body, alias);
     case "break":
     case "continue":

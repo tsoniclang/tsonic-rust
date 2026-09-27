@@ -228,8 +228,7 @@ export function planRustCallableArguments(
     const bindingName = allocateRustSyntheticName(names, "adapted_argument");
     statements.push({
       kind: "let",
-      name: bindingName,
-      mutable: true,
+      pattern: { kind: "binding", name: bindingName, mutable: true },
       init: adapted,
     });
     adaptedArguments.push({

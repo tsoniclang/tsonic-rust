@@ -140,8 +140,7 @@ test("long typed bindings expand the type before attaching the initializer", () 
       body: {
         statements: [{
           kind: "let",
-          name: "aliasedHandle",
-          mutable: false,
+          pattern: { kind: "binding", name: "aliasedHandle", mutable: false },
           type: callableType,
           init: { kind: "path", path: "handler_factory" },
         }],
@@ -194,8 +193,7 @@ test("fallible nested calls remain compact when their selected line fits", () =>
       body: {
         statements: [{
           kind: "let",
-          name: "bytes",
-          mutable: false,
+          pattern: { kind: "binding", name: "bytes", mutable: false },
           type: { kind: "named", path: "tsonic_rust_node::buffer::Buffer" },
           init: {
             kind: "try",

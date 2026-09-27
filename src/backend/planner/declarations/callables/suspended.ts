@@ -80,7 +80,7 @@ function planImplementation(implementation: RustSuspendedCallableImplementation,
     trait: { kind: "named", path: "rt::CallableImplementation", genericArguments: [{ kind: "type", type: argumentsType }, resultType] },
     members: [{ kind: "function", name: "invoke", visibility: "private", selfParam: { kind: "reference", mutable: false },
       generics: { parameters: [], wherePredicates: [] }, params: [{ pattern: { kind: "binding" as const, name: argumentsName }, type: argumentsType }], returnType: resultType.type,
-      body: { statements: [{ kind: "let", name: ownerName, mutable: false, init: {
+      body: { statements: [{ kind: "let", pattern: { kind: "binding", name: ownerName, mutable: false }, init: {
         kind: "method-call", receiver: { kind: "method-call", receiver: {
           kind: "field", receiver: { kind: "path", path: "self" }, name: "owner",
         }, method: "upgrade", args: [] }, method: "expect", args: [{ kind: "str-literal", value: "an invoked callable has a live owner" }],

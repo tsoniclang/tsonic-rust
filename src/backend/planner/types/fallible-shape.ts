@@ -215,6 +215,9 @@ export function applyFallibleShape(
         expr: result(statement.expr),
       };
     }
+    if (statement.kind === "let" && statement.else !== undefined) {
+      return { ...statement, else: { ...statement.else, statements: statement.else.statements.map(wrap) } };
+    }
     if (statement.kind === "if") {
       return {
         ...statement,
@@ -222,7 +225,7 @@ export function applyFallibleShape(
         ...(statement.else === undefined ? {} : { else: { statements: statement.else.statements.map(wrap) } }),
       };
     }
-    if (statement.kind === "if-let-some") {
+    if (statement.kind === "if-let") {
       return {
         ...statement,
         body: { statements: statement.body.statements.map(wrap) },
@@ -232,7 +235,7 @@ export function applyFallibleShape(
       };
     }
     if (statement.kind === "loop" || statement.kind === "while" || statement.kind === "for" ||
-      statement.kind === "while-let-some") {
+      statement.kind === "while-let") {
       return { ...statement, body: { statements: statement.body.statements.map(wrap) } };
     }
     if (statement.kind === "scope" || statement.kind === "unsafe-scope") {

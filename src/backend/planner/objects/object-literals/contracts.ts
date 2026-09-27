@@ -239,8 +239,8 @@ export function planContractImplementation(
       const overrideStatements = method.override === undefined
         ? []
         : [{
-            kind: "if-let-some" as const,
-            binding: overrideName,
+            kind: "if-let" as const,
+            pattern: { kind: "tuple-variant" as const, path: "Some", elements: [{ kind: "binding" as const, name: overrideName }] },
             expression: readRustProjectMethodOverride(
               { kind: "path", path: "self" },
               method.override.fieldName,
@@ -320,8 +320,7 @@ export function planContractImplementation(
           body: {
             statements: [...overrideStatements, {
               kind: "let",
-              name: implementationName,
-              mutable: false,
+              pattern: { kind: "binding", name: implementationName, mutable: false },
               init: {
                 kind: "method-call",
                 receiver: {
@@ -390,8 +389,7 @@ export function planContractImplementation(
         body: {
           statements: [...overrideStatements, {
             kind: "let",
-            name: implementationName,
-            mutable: false,
+            pattern: { kind: "binding", name: implementationName, mutable: false },
             init: {
               kind: "method-call",
               receiver: {

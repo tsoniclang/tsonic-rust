@@ -260,8 +260,7 @@ function planRootCallableImplementation(
           ...planned.body,
           statements: [{
             kind: "let",
-            name: thisBindingName,
-            mutable: false,
+            pattern: { kind: "binding", name: thisBindingName, mutable: false },
             init: thisPlan.binding,
           }, ...planned.body.statements],
         },
@@ -385,8 +384,8 @@ function applyRootMethodOverride(
     body: {
       ...callable.body,
       statements: [{
-        kind: "if-let-some",
-        binding: overrideName,
+        kind: "if-let",
+        pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: overrideName }] },
         expression: readRustProjectMethodOverride(
           { kind: "path", path: "self" },
           overrideStoragePath,

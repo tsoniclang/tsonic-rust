@@ -232,8 +232,7 @@ export function planProjectClassConstructor(
     };
     statements.push({
       kind: "let",
-      name,
-      mutable: true,
+      pattern: { kind: "binding", name, mutable: true },
       type: field.type,
     });
     values.set(field.declaration, expression);
@@ -352,8 +351,7 @@ export function planProjectClassConstructor(
     }
     statements.push({
       kind: "let",
-      name: baseStateName,
-      mutable: true,
+      pattern: { kind: "binding", name: baseStateName, mutable: true },
       init: baseInitialization,
     });
     bodyIndex = constructor === undefined ? 0 : 1;
@@ -378,7 +376,7 @@ export function planProjectClassConstructor(
       return undefined;
     }
     const baseName = allocateRustSyntheticName(syntheticNames, "external_base");
-    statements.push({ kind: "let", name: baseName, mutable: false, init: baseError });
+    statements.push({ kind: "let", pattern: { kind: "binding", name: baseName, mutable: false }, init: baseError });
     const basePath: RustExpr = { kind: "path", path: baseName };
     for (const externalField of externalBase.fields) {
       const field = ownLayer.fields.find((candidate) =>
@@ -589,8 +587,7 @@ export function planProjectClassConstructor(
       statements: [
         {
           kind: "let",
-          name: stateName,
-          mutable: false,
+          pattern: { kind: "binding", name: stateName, mutable: false },
           init: fallible ? {
             kind: "try",
             resultErrorType: constructorErrorType!,
@@ -610,14 +607,12 @@ export function planProjectClassConstructor(
         },
         {
           kind: "let",
-          name: identityName,
-          mutable: false,
+          pattern: { kind: "binding", name: identityName, mutable: false },
           init: { kind: "call", path: "rt::ObjectIdentity::new", args: [] },
         },
         {
           kind: "let",
-          name: rootName,
-          mutable: false,
+          pattern: { kind: "binding", name: rootName, mutable: false },
           init: {
             kind: "call",
             path: "alloc::rc::Rc::new",

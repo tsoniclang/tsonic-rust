@@ -428,12 +428,11 @@ export function planForOfStatement(
       kind: "scope",
       body: {
         statements: [
-          { kind: "let", name: iteratorName, mutable: false, init: iterable },
+          { kind: "let", pattern: { kind: "binding", name: iteratorName, mutable: false }, init: iterable },
           {
-            kind: "while-let-some",
+            kind: "while-let",
             ...(target.used.value ? { label: target.label } : {}),
-            binding,
-            ...(bindingMutable ? { bindingMutable: true } : {}),
+            pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: binding, ...(bindingMutable ? { mutable: true } : {}) }] },
             expression: next,
             body,
           },
@@ -485,8 +484,7 @@ export function planForOfStatement(
       statements: [
         {
           kind: "let",
-          name: binding,
-          mutable: bindingMutable,
+          pattern: { kind: "binding", name: binding, mutable: bindingMutable },
           init: {
             kind: "try",
             resultErrorType: activeErrorType,
@@ -501,8 +499,7 @@ export function planForOfStatement(
   return [{
     kind: "for",
     ...(target.used.value ? { label: target.label } : {}),
-    binding: loopBinding,
-    ...(loopBindingMutable ? { bindingMutable: true } : {}),
+    pattern: { kind: "binding", name: loopBinding, ...(loopBindingMutable ? { mutable: true } : {}) },
     iterable: targetIterable,
     body,
   }];
@@ -587,8 +584,7 @@ export function planForInStatement(
         statements: [
           {
             kind: "let",
-            name: lengthName,
-            mutable: false,
+            pattern: { kind: "binding", name: lengthName, mutable: false },
             init: {
               kind: "method-call",
               receiver: expression,
@@ -599,7 +595,7 @@ export function planForInStatement(
           {
             kind: "for",
             ...(target.used.value ? { label: target.label } : {}),
-            binding: indexName,
+            pattern: { kind: "binding", name: indexName },
             iterable: {
               kind: "range",
               start: { kind: "int-literal", text: "0" },
@@ -633,13 +629,12 @@ export function planForInStatement(
     body: {
       statements: [
         ...(fact.lowering.kind === "static-keys"
-          ? [{ kind: "let" as const, name: "_", mutable: false, init: { kind: "reference" as const, expr: expression } }]
+          ? [{ kind: "let" as const, pattern: { kind: "wildcard" as const }, init: { kind: "reference" as const, expr: expression } }]
           : []),
         {
           kind: "for",
           ...(target.used.value ? { label: target.label } : {}),
-          binding: keyName,
-          ...(binding.kind === "declaration" && binding.mutable ? { bindingMutable: true } : {}),
+          pattern: { kind: "binding", name: keyName, ...(binding.kind === "declaration" && binding.mutable ? { mutable: true } : {}) },
           iterable,
           body: { statements: [...activation, ...body.statements] },
         },
@@ -699,7 +694,7 @@ function activateForInBinding(
   value: RustExpr,
 ): readonly RustStmt[] {
   if (binding.kind === "declaration") {
-    return [{ kind: "let", name: binding.name, mutable: binding.mutable, init: value }];
+    return [{ kind: "let", pattern: { kind: "binding", name: binding.name, mutable: binding.mutable }, init: value }];
   }
   return [{
     kind: "assign",

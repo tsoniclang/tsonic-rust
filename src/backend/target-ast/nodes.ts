@@ -284,7 +284,8 @@ export type {
 export type RustStmt =
   | { readonly kind: "macro-statement"; readonly invocation: RustMacroInvocation; readonly semicolon: boolean }
   | { readonly kind: "item"; readonly item: RustItem }
-  | { readonly kind: "let"; readonly name: string; readonly mutable: boolean; readonly type?: RustType; readonly init?: RustExpr; readonly attrs?: readonly RustAttribute[] }
+  | ({ readonly kind: "let"; readonly pattern: RustPattern; readonly type?: RustType; readonly attrs?: readonly RustAttribute[] } &
+      ({ readonly init?: RustExpr; readonly else?: never } | { readonly init: RustExpr; readonly else: RustBlock }))
   | { readonly kind: "expr"; readonly expr: RustExpr }
   | { readonly kind: "assign"; readonly target: RustExpr; readonly operator: RustAssignmentOperator; readonly value: RustExpr }
   | { readonly kind: "return"; readonly expr?: RustExpr }
@@ -292,9 +293,9 @@ export type RustStmt =
   | { readonly kind: "if"; readonly condition: RustExpr; readonly then: RustBlock; readonly else?: RustBlock; readonly elseIf?: true; readonly attrs?: readonly RustAttribute[] }
   | { readonly kind: "loop"; readonly label?: string; readonly body: RustBlock; readonly neverFallsThrough?: boolean }
   | { readonly kind: "while"; readonly label?: string; readonly condition: RustExpr; readonly body: RustBlock; readonly attrs?: readonly RustAttribute[] }
-  | { readonly kind: "while-let-some"; readonly label?: string; readonly binding: string; readonly bindingMutable?: boolean; readonly expression: RustExpr; readonly body: RustBlock }
-  | { readonly kind: "for"; readonly label?: string; readonly binding: string; readonly bindingMutable?: boolean; readonly iterable: RustExpr; readonly body: RustBlock; readonly attrs?: readonly RustAttribute[] }
-  | { readonly kind: "if-let-some"; readonly binding: string; readonly expression: RustExpr; readonly body: RustBlock; readonly else?: RustBlock; readonly elseIf?: true }
+  | { readonly kind: "while-let"; readonly label?: string; readonly pattern: RustPattern; readonly expression: RustExpr; readonly body: RustBlock }
+  | { readonly kind: "for"; readonly label?: string; readonly pattern: RustPattern; readonly iterable: RustExpr; readonly body: RustBlock; readonly attrs?: readonly RustAttribute[] }
+  | { readonly kind: "if-let"; readonly pattern: RustPattern; readonly expression: RustExpr; readonly body: RustBlock; readonly else?: RustBlock; readonly elseIf?: true }
   | { readonly kind: "break"; readonly label?: string }
   | { readonly kind: "continue"; readonly label?: string }
   | {

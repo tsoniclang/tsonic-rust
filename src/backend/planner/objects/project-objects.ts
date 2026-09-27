@@ -428,8 +428,7 @@ export function writeRustProjectObjectIndex(
       body: {
         statements: [{
           kind: "let",
-          name: "_",
-          mutable: false,
+          pattern: { kind: "wildcard" },
           init: {
             kind: "method-call",
             receiver: rustProjectObjectStatePath(storageName),

@@ -1,6 +1,6 @@
 import type { RustBlock, RustExpr, RustStmt } from "../nodes.js";
 import { rustMacroInputExpressions } from "../macro-input.js";
-import { rustParametersBindName } from "../patterns.js";
+import { rustParametersBindName, rustPatternBindsName } from "../patterns.js";
 
 export function rustBlockReferencesPath(block: RustBlock, path: string): boolean {
   return rustStatementsReferencePath(block.statements, path);
@@ -14,7 +14,7 @@ export function rustStatementsReferencePath(
     if (rustStatementReferencesPath(statement, path)) {
       return true;
     }
-    if (statement.kind === "let" && statement.name === path) {
+    if (statement.kind === "let" && rustPatternBindsName(statement.pattern, path) === true) {
       return false;
     }
   }
@@ -28,7 +28,9 @@ export function rustStatementReferencesPath(statement: RustStmt, path: string): 
     case "item":
       return false;
     case "let":
-      return statement.init !== undefined && rustExpressionReferencesPath(statement.init, path);
+      return rustPatternBindsName(statement.pattern, path) === undefined ||
+        (statement.init !== undefined && rustExpressionReferencesPath(statement.init, path)) ||
+        (statement.else !== undefined && rustBlockReferencesPath(statement.else, path));
     case "expr":
     case "tail":
       return rustExpressionReferencesPath(statement.expr, path);
@@ -46,16 +48,16 @@ export function rustStatementReferencesPath(statement: RustStmt, path: string): 
     case "while":
       return rustExpressionReferencesPath(statement.condition, path) ||
         rustBlockReferencesPath(statement.body, path);
-    case "while-let-some":
+    case "while-let":
       return rustExpressionReferencesPath(statement.expression, path) ||
-        (statement.binding !== path && rustBlockReferencesPath(statement.body, path));
-    case "if-let-some":
+        patternBodyReferencesPath(statement, path);
+    case "if-let":
       return rustExpressionReferencesPath(statement.expression, path) ||
-        (statement.binding !== path && rustBlockReferencesPath(statement.body, path)) ||
+        patternBodyReferencesPath(statement, path) ||
         (statement.else !== undefined && rustBlockReferencesPath(statement.else, path));
     case "for":
       return rustExpressionReferencesPath(statement.iterable, path) ||
-        (statement.binding !== path && rustBlockReferencesPath(statement.body, path));
+        patternBodyReferencesPath(statement, path);
     case "break":
     case "continue":
       return false;
@@ -87,6 +89,11 @@ export function rustStatementReferencesPath(statement: RustStmt, path: string): 
           target.continuePrelude?.some((value) =>
             rustStatementReferencesPath(value, path)) === true);
   }
+}
+
+function patternBodyReferencesPath(statement: Extract<RustStmt, { kind: "for" | "if-let" | "while-let" }>, path: string): boolean {
+  const bound = rustPatternBindsName(statement.pattern, path);
+  return bound === undefined || !bound && rustBlockReferencesPath(statement.body, path);
 }
 
 export function rustExpressionReferencesPath(expression: RustExpr, path: string): boolean {

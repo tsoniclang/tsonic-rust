@@ -558,8 +558,7 @@ function planConstructor(
     };
     statements.push({
       kind: "let",
-      name: valueName,
-      mutable: true,
+      pattern: { kind: "binding", name: valueName, mutable: true },
       type: field.type,
     });
     values.set(field.declaration, expression);

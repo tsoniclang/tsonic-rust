@@ -90,7 +90,7 @@ export function planRustNativeLayout(layout: RustNativeMemoryLayout, context: Ru
         read: { kind: "call", path: "core::array::from_fn", args: [
           { kind: "closure", params: [{ pattern: { kind: "binding" as const, name: index } }], body: element.read },
         ] },
-        writes: [{ kind: "for", binding: index,
+        writes: [{ kind: "for", pattern: { kind: "binding", name: index },
           iterable: { kind: "range", start: integer(0), end: integer(current.length) },
           body: { statements: element.writes } }],
       };

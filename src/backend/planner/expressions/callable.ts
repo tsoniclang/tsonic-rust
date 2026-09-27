@@ -462,8 +462,7 @@ export function planRustCallableExpressionBody(
     for (const [index, parameter] of leadingParameterPlans.entries()) {
       bindingStatements.push({
         kind: "let",
-        name: parameter.name!,
-        mutable: false,
+        pattern: { kind: "binding", name: parameter.name!, mutable: false },
         init: {
           kind: "field",
           receiver: { kind: "path", path: tupleName },
@@ -489,8 +488,7 @@ export function planRustCallableExpressionBody(
       }
       bindingStatements.push({
         kind: "let",
-        name: parameter.name,
-        mutable: parameter.mutable && context.input.program.facts.getFact(parameter.parameter, rustSourceParameterAbiFactKey)?.entryConversion === undefined,
+        pattern: { kind: "binding", name: parameter.name, mutable: parameter.mutable && context.input.program.facts.getFact(parameter.parameter, rustSourceParameterAbiFactKey)?.entryConversion === undefined },
         init: initializer,
       });
     }

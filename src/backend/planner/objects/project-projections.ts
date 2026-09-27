@@ -39,7 +39,7 @@ export function planRustProjectProjectionImplementations(
         returnType: { kind: "named", path: "Result", genericArguments: [
           { kind: "type", type: { kind: "named", path: "Self" } }, { kind: "type", type: { kind: "unit" } },
         ] },
-        body: { statements: [{ kind: "let", name: "selected_dispatch", mutable: false, init: projection },
+        body: { statements: [{ kind: "let", pattern: { kind: "binding", name: "selected_dispatch", mutable: false }, init: projection },
           { kind: "tail", expr: { kind: "match",
           expression: { kind: "path", path: "selected_dispatch" },
           arms: [{ pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: "dispatch" }] },

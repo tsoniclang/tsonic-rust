@@ -152,8 +152,7 @@ test("rustfmt canonicalizes trailing conditional closures", () => {
       body: {
         statements: [{
           kind: "let",
-          name: "total",
-          mutable: false,
+          pattern: { kind: "binding", name: "total", mutable: false },
           init: {
             kind: "method-call",
             receiver: { kind: "path", path: "values" },
@@ -375,8 +374,7 @@ test("short conditional initializers use rustfmt's single-line form", () => {
         statements: [
           {
             kind: "let",
-            name: "result",
-            mutable: false,
+            pattern: { kind: "binding", name: "result", mutable: false },
             type: { kind: "primitive", name: "i32" },
             init: {
               kind: "conditional",
@@ -441,8 +439,7 @@ test("long let-bound method chains stay attached to their receiver", () => {
       body: {
         statements: [{
           kind: "let",
-          name: "module_value_with_a_deliberately_long_generated_identity",
-          mutable: false,
+          pattern: { kind: "binding", name: "module_value_with_a_deliberately_long_generated_identity", mutable: false },
           init: {
             kind: "method-call",
             receiver: {
@@ -702,8 +699,7 @@ test("one-field struct literals honor rustfmt's compact body limit", () => {
         statements: [
           {
             kind: "let",
-            name: "simple",
-            mutable: false,
+            pattern: { kind: "binding", name: "simple", mutable: false },
             init: {
               kind: "struct-literal",
               path: "Counter",
@@ -747,8 +743,7 @@ test("typed bindings retain overflowing struct openings and expand their fields"
       body: {
         statements: [{
           kind: "let",
-          name: "pair",
-          mutable: false,
+          pattern: { kind: "binding", name: "pair", mutable: false },
           type: {
             kind: "named",
             path: "Pair",

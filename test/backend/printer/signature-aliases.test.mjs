@@ -136,7 +136,7 @@ test("impl alias allocation reserves method-local type parameter names", () => {
 test("body type names reuse signature aliases through nested blocks without changing storage or effects", () => {
   const source = { ...makeFunction("read", "public"), params: [], returnType: undefined,
     body: { statements: [{ kind: "scope", body: { statements: [{
-      kind: "let", name: "values", mutable: false, type: nested,
+      kind: "let", pattern: { kind: "binding", name: "values", mutable: false }, type: nested,
       init: { kind: "block", bindings: [{ name: "input", type: nested,
         value: { kind: "path", path: "argument" } }], value: { kind: "path", path: "input" } },
     }] } }] } };

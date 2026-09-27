@@ -19,7 +19,7 @@ export function planRustSuspendedReceiver(
   for (const node of receiver.occurrences) overrides.set(node, override);
   return {
     context: { ...context, expressionOverrides: overrides },
-    prelude: [{ kind: "let", name, mutable: false,
+    prelude: [{ kind: "let", pattern: { kind: "binding", name, mutable: false },
       init: { kind: "method-call", receiver: { kind: "path", path: "self" }, method: "clone", args: [] } }],
   };
 }

@@ -18,8 +18,7 @@ test("rustfmt-stable calls, closures, conditionals, and borrowed fallible chains
       body: {
         statements: [{
           kind: "let",
-          name: "field_label",
-          mutable: false,
+          pattern: { kind: "binding", name: "field_label", mutable: false },
           type: { kind: "string" },
           init: {
             kind: "call",
@@ -43,8 +42,7 @@ test("rustfmt-stable calls, closures, conditionals, and borrowed fallible chains
           },
         }, {
           kind: "let",
-          name: "loud",
-          mutable: false,
+          pattern: { kind: "binding", name: "loud", mutable: false },
           type: { kind: "string" },
           init: {
             kind: "conditional",

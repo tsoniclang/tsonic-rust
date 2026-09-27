@@ -50,7 +50,7 @@ export function planCheckedProjectProjectionImplementation(
   for (const [index, carrier] of eligible.entries()) {
     const type = checkedProjectProjectionResultType(carrier, context);
     if (type === undefined) return undefined;
-    statements.push({ kind: "if-let-some", binding: "selected",
+    statements.push({ kind: "if-let", pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: "selected" }] },
       expression: { kind: "method-call", receiver: { kind: "path", path: "output" },
         method: "downcast_mut", genericArguments: [{ kind: "type", type }], args: [] },
       body: { statements: [{ kind: "assign", operator: "=",
