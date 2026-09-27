@@ -147,7 +147,7 @@ export function validateOperationRows(
     );
     validateTypeParameterRequirements(
       row.typeRequirements,
-      declaredGenerics.typeNames,
+      declaredGenerics.typeIdentities,
       definition,
       `${label}.typeRequirements`,
       fail,
@@ -195,8 +195,8 @@ export function validateOperationRows(
       fail,
     );
     const referenced = combineGenericReferences(genericCarriers);
-    for (const name of declaredGenerics.typeNames) {
-      if (!referenced.typeNames.has(name)) {
+    for (const name of declaredGenerics.typeIdentities) {
+      if (!referenced.typeIdentities.has(name)) {
         fail(`${label}.genericParameters declares unused type parameter '${name}'`);
       }
     }
@@ -238,15 +238,15 @@ export function validateTypeParameterRequirements(
   const seen = new Set<string>();
   let previous = "";
   for (const requirement of requirements ?? []) {
-    requireExactKeys(asRecord(requirement), ["name", "requirements"], where, fail);
+    requireExactKeys(asRecord(requirement), ["identity", "name", "requirements"], where, fail);
     requireRustIdentifier(requirement.name, `${where}.name`, fail);
-    if (!typeParameterNames.has(requirement.name)) {
+    if (typeof requirement.identity !== "string" || requirement.identity.length === 0 || !typeParameterNames.has(requirement.identity)) {
       fail(`${where} references undeclared type parameter '${requirement.name}'`);
     }
-    if (seen.has(requirement.name) || (previous.length > 0 && requirement.name < previous)) {
+    if (seen.has(requirement.identity) || (previous.length > 0 && requirement.name < previous)) {
       fail(`${where} must contain unique rows in type-parameter order`);
     }
-    seen.add(requirement.name);
+    seen.add(requirement.identity);
     previous = requirement.name;
     const keys = requirement.requirements.map((entry, index) => {
       if (entry === "clone" || entry === "copy") {
@@ -432,20 +432,20 @@ function valueConversionCarriers(
 }
 
 function combineGenericReferences(carriers: readonly TargetTypeRef[]): {
-  readonly typeNames: ReadonlySet<string>;
+  readonly typeIdentities: ReadonlySet<string>;
   readonly lifetimeIdentities: ReadonlySet<string>;
   readonly constIdentities: ReadonlySet<string>;
 } {
-  const typeNames = new Set<string>();
+  const typeIdentities = new Set<string>();
   const lifetimeIdentities = new Set<string>();
   const constIdentities = new Set<string>();
   for (const carrier of carriers) {
     const references = rustTargetGenericReferences(carrier);
-    references.typeNames.forEach((name) => typeNames.add(name));
+    references.typeIdentities.forEach((name) => typeIdentities.add(name));
     references.lifetimeIdentities.forEach((identity) => lifetimeIdentities.add(identity));
     references.constIdentities.forEach((identity) => constIdentities.add(identity));
   }
-  return { typeNames, lifetimeIdentities, constIdentities };
+  return { typeIdentities, lifetimeIdentities, constIdentities };
 }
 
 function validateOperationParameters(

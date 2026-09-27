@@ -170,7 +170,7 @@ export function instantiateProviderOperationTemplate<
             if (carrier === undefined) return undefined;
             const substituted = substituteProviderCarrier(carrier, substitutions);
             return carrier.kind === "type-parameter" &&
-                borrowedStringTypeParameters.has(carrier.name) &&
+                borrowedStringTypeParameters.has(carrier.identity) &&
                 rustProviderSourceArgumentMode(template.target, index) === "ref" &&
                 substituted.kind === "target-named" && substituted.id === rustStrTargetId
               ? rustStringTargetType()
@@ -261,8 +261,8 @@ export function providerGenericParameterSet(
   parameters: readonly RustProviderGenericParameter[],
 ): RustTargetGenericParameterSet {
   return Object.freeze({
-    typeNames: new Set(parameters.flatMap((parameter) =>
-      parameter.kind === "type" ? [parameter.sourceName] : [])),
+    typeIdentities: new Set(parameters.flatMap((parameter) =>
+      parameter.kind === "type" ? [parameter.targetIdentity] : [])),
     lifetimeIdentities: new Set(parameters.flatMap((parameter) =>
       parameter.kind === "lifetime" ? [parameter.targetIdentity] : [])),
     constIdentities: new Set(parameters.flatMap((parameter) =>
@@ -275,7 +275,7 @@ function carrierReferencesProviderParameters(
   parameters: RustTargetGenericParameterSet,
 ): boolean {
   const references = rustTargetGenericReferences(carrier);
-  return references.typeNames.some((name) => parameters.typeNames.has(name)) ||
+  return references.typeIdentities.some((name) => parameters.typeIdentities.has(name)) ||
     references.lifetimeIdentities.some((identity) =>
       parameters.lifetimeIdentities.has(identity)) ||
     references.constIdentities.some((identity) =>
@@ -288,8 +288,8 @@ function carrierReferencesUnboundProviderParameters(
   bound: RustTargetGenericBindings,
 ): boolean {
   const references = rustTargetGenericReferences(carrier);
-  return references.typeNames.some((name) =>
-    parameters.typeNames.has(name) && !bound.types.has(name)) ||
+  return references.typeIdentities.some((name) =>
+    parameters.typeIdentities.has(name) && !bound.types.has(name)) ||
     references.lifetimeIdentities.some((identity) =>
       parameters.lifetimeIdentities.has(identity) && !bound.lifetimes.has(identity)) ||
     references.constIdentities.some((identity) =>
@@ -302,7 +302,7 @@ function providerGenericParameterIsBound(
 ): boolean {
   switch (parameter.kind) {
     case "type":
-      return bindings.types.has(parameter.sourceName);
+      return bindings.types.has(parameter.targetIdentity);
     case "lifetime":
       return bindings.lifetimes.has(parameter.targetIdentity);
     case "const":
@@ -319,7 +319,7 @@ export function mergeDirectGenericArgument(
   switch (parameter.kind) {
     case "type":
       return argument.kind === "type" &&
-        mergeTypeBinding(bindings.types, parameter.sourceName, argument.type);
+        mergeTypeBinding(bindings.types, parameter.targetIdentity, argument.type);
     case "lifetime":
       return argument.kind === "lifetime" && mergeLifetimeBinding(
         bindings.lifetimes,

@@ -13,7 +13,7 @@ export function canRequireSourceClone(
   for (let owner: Node | undefined = expression; owner !== undefined; owner = context.ast.parent(owner)) {
     const contract = context.sourceLifetimes.contractFor(owner);
     for (const parameter of contract?.parameters ?? []) {
-      if (parameter.kind === "type") parameters.add(parameter.sourceName);
+      if (parameter.kind === "type") parameters.add(parameter.identity);
     }
   }
   const storage = createRustOptionalStorageCollector(parameters, parameters, new Map());

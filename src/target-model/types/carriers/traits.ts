@@ -108,7 +108,7 @@ function supportsCloneWithContracts(
   definitions: RustTypeDefinitions,
   active: Map<string, string> = new Map(),
 ): boolean {
-  if (carrier?.kind === "type-parameter") return typeParameterSupports(carrier.name, "core::clone::Clone");
+  if (carrier?.kind === "type-parameter") return typeParameterSupports(carrier.identity, "core::clone::Clone");
   if (carrier?.kind === "associated-type") return associatedTypeSupports(carrier, "core::clone::Clone");
   const supports = (type: TargetTypeRef): boolean =>
     supportsCloneWithContracts(type, typeParameterSupports, associatedTypeSupports, definitions, active);
@@ -177,7 +177,7 @@ export function rustCarrierCanEnterTsValue(carrier: TargetTypeRef | undefined, d
     return false;
   }
   const references = rustTargetGenericReferences(carrier);
-  return references.typeNames.length === 0 && references.lifetimeIdentities.length === 0 &&
+  return references.typeIdentities.length === 0 && references.lifetimeIdentities.length === 0 &&
     references.callScopedElisions.length === 0 && !references.hasUnnameableLifetime;
 }
 
@@ -223,7 +223,7 @@ export function rustCarrierSupportsTrait(
     return false;
   }
   if (carrier.kind === "type-parameter") {
-    return typeParameterSupports(carrier.name, traitPath);
+    return typeParameterSupports(carrier.identity, traitPath);
   }
   if (carrier.kind === "associated-type") return associatedTypeSupports(carrier, traitPath);
   if (traitPath === "core::default::Default") {
@@ -320,7 +320,7 @@ function rustCarrierSupportsDefault(
   definitions: RustTypeDefinitions,
 ): boolean {
   if (carrier.kind === "type-parameter") {
-    return typeParameterSupports(carrier.name, "core::default::Default");
+    return typeParameterSupports(carrier.identity, "core::default::Default");
   }
   const structural = rustStructuralObjectCarrierValue(carrier);
   if (structural !== undefined) {

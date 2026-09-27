@@ -3,7 +3,7 @@ import test from "node:test";
 import { rustClassConstructorTargetType, rustClassConstructorInstance, rustClassConstructorContract } from "../../dist/target-model/types/carriers/class-constructors.js";
 import { rustSourceTypeCarrier } from "../../dist/target-model/types/carriers/source-types.js";
 import { rustTargetTypeChildren } from "../../dist/target-model/types/carriers/children.js";
-import { rustTargetTypeParameterNames } from "../../dist/target-model/types/carriers/generic-references.js";
+import { rustTargetTypeParameterIdentities } from "../../dist/target-model/types/carriers/generic-references.js";
 import { substituteRustTargetTypeParameters } from "../../dist/target-model/types/carriers/substitution.js";
 import { inferRustTargetTypeParameterBindings } from "../../dist/target-model/types/carriers/generic-inference.js";
 import { isRustCopyCarrier, rustCarrierSupportsClone, rustCarrierSupportsObjectIdentity } from "../../dist/target-model/types/carriers/traits.js";
@@ -11,7 +11,7 @@ import { selectRustBinaryOperator } from "../../dist/policy/operations/operators
 
 const instance = (name, parameter) => rustSourceTypeCarrier("/src/model.ts", name, "object",
   [{ kind: "type", type: parameter }]);
-const parameter = { kind: "type-parameter", name: "Value" };
+const parameter = { kind: "type-parameter", identity: "Value", name: "Value" };
 const number = { kind: "source-primitive", name: "float64" };
 
 test("constructor values retain distinct instance identity and exact generic arguments", () => {
@@ -20,7 +20,7 @@ test("constructor values retain distinct instance identity and exact generic arg
   assert.deepEqual(rustClassConstructorInstance(constructor), source);
   assert.equal(rustClassConstructorInstance(source), undefined);
   assert.deepEqual(rustTargetTypeChildren(constructor), [parameter]);
-  assert.deepEqual(rustTargetTypeParameterNames(constructor), ["Value"]);
+  assert.deepEqual(rustTargetTypeParameterIdentities(constructor), ["Value"]);
   const concrete = substituteRustTargetTypeParameters(constructor, new Map([["Value", number]]));
   assert.deepEqual(rustClassConstructorInstance(concrete), instance("Adapter@10", number));
   assert.deepEqual(inferRustTargetTypeParameterBindings(constructor, concrete, new Set(["Value"])), new Map([["Value", number]]));
@@ -40,7 +40,7 @@ test("constructor values retain distinct instance identity and exact generic arg
 });
 
 test("constructor binders remain quantified while outer environment arguments are substituted", () => {
-  const own = { kind: "type-parameter", name: "Item" };
+  const own = { kind: "type-parameter", identity: "Item", name: "Item" };
   const source = rustSourceTypeCarrier("/src/model.ts", "Factory", "object", [
     { kind: "type", type: parameter }, { kind: "type", type: own },
   ]);
@@ -51,7 +51,7 @@ test("constructor binders remain quantified while outer environment arguments ar
     { kind: "type", type: number }, { kind: "type", type: own },
   ]);
   assert.deepEqual(rustTargetTypeChildren(constructor), [parameter]);
-  assert.deepEqual(rustTargetTypeParameterNames(constructor), ["Value"]);
+  assert.deepEqual(rustTargetTypeParameterIdentities(constructor), ["Value"]);
   assert.deepEqual(inferRustTargetTypeParameterBindings(constructor, concrete, new Set(["Value", "Item"])), new Map([["Value", number]]));
   assert.equal(inferRustTargetTypeParameterBindings(constructor, rustClassConstructorTargetType(source), new Set(["Value", "Item"])), undefined);
   for (const indexes of [[-1], [2], [1, 1], [0.5], [NaN], [Infinity]]) {

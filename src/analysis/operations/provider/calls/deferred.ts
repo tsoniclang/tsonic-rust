@@ -2,6 +2,7 @@ import { acceptRustPolicy } from "../../../../policy/operations/contracts.js";
 import { acceptSelectedCall, mapSelectedTargetTypeArguments, selectRustOptionalCallResult } from "./instantiation.js";
 import { defaultValueFactKey, flowStateFactKey } from "@tsonic/tsts";
 import { finalizeRustCallbackOperation } from "../callbacks.js";
+import { rustSelectedCallTypeParameters } from "../../../../policy/types/resolution/generic-arguments.js";
 import {
   applyRustRegExpReplacementCallbackConversion,
   finalizeRustRegExpReplacementCallbackContract,
@@ -412,9 +413,10 @@ function mapRustDefaultValueCall(
     context.facts.get(request.source.call, defaultValueFactKey);
   const resultCarrier = resolveRustTargetTypeRef(sourceFact?.type, context, options);
   const sourceTypeArguments = request.source.sourceSelectedMethodTypeArguments;
+  const sourceParameters = rustSelectedCallTypeParameters(sourceTypeArguments ?? [], context);
   const targetTypeArguments = mapSelectedTargetTypeArguments(request, context, options);
   if (sourceArguments.length !== 0 || sourceFact === undefined || resultCarrier === undefined ||
-    sourceTypeArguments?.length !== 1 ||
+    sourceTypeArguments?.length !== 1 || sourceParameters === undefined || sourceParameters.length !== 1 ||
     targetTypeArguments === undefined || targetTypeArguments.length !== 1 ||
     !rustTargetTypeRefEquals(targetTypeArguments[0], resultCarrier)) {
     return rejectSelectedOperation(
@@ -457,6 +459,7 @@ function mapRustDefaultValueCall(
     genericParameters: [{
       kind: "type",
       sourceName: sourceTypeArguments[0]!.typeParameterName,
+      targetIdentity: sourceParameters[0]!.identity,
     }],
     providerDeclaration: provider,
   };

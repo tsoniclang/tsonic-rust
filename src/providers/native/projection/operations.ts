@@ -99,6 +99,7 @@ export function typeRequirements(
   const requirements = parameters
     .filter((parameter) => parameter.requirements.length > 0 && allowed.has(sourceGenericParameterName(parameter, context)))
     .map((parameter) => Object.freeze({
+      identity: parameter.identity.itemId,
       name: sourceGenericParameterName(parameter, context),
       requirements: projectTypeRequirements(parameter, context, projectTrait),
     }))

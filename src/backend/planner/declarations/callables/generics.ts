@@ -21,7 +21,7 @@ import { rustOptionalStorageParameters } from "../../types/type-projections.js";
 export interface RustCallableGenericPlan {
   readonly context: RustPlanContext;
   readonly preservesExplicitLifetimes: boolean;
-  readonly sourceTypeParameterNames: readonly string[];
+  readonly sourceTypeParameterIdentities: readonly string[];
   finalizeGenerics(): RustGenerics;
 }
 
@@ -85,7 +85,7 @@ export function planRustCallableGenerics(
     return {
       context: { ...context, callableDeclaration: declaration },
       preservesExplicitLifetimes: false,
-      sourceTypeParameterNames: Object.freeze([]),
+      sourceTypeParameterIdentities: Object.freeze([]),
       finalizeGenerics: () => emptyRustGenerics,
     };
   }
@@ -107,6 +107,9 @@ export function planRustCallableGenerics(
     (parameter): parameter is Extract<RustSourceGenericParameterContract, { readonly kind: "type" }> =>
       parameter.kind === "type",
   );
+  const typeParameterNames = new Map(context.typeParameterNames);
+  for (const parameter of ordinaryParameters) typeParameterNames.set(parameter.identity, parameter.targetName);
+  context = { ...context, typeParameterNames };
   if (ordinaryParameters.some((parameter) =>
     !isValidRustIdentifier(parameter.targetName))) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -116,8 +119,8 @@ export function planRustCallableGenerics(
     ));
     return undefined;
   }
-  const sourceTypeParameterNames = Object.freeze(
-    ordinaryParameters.map((parameter) => parameter.sourceName),
+  const sourceTypeParameterIdentities = Object.freeze(
+    ordinaryParameters.map((parameter) => parameter.identity),
   );
   const requirementContract = context.input.program.declarationGenericRequirements.contractFor(
     declaration,
@@ -125,7 +128,7 @@ export function planRustCallableGenerics(
   if (requirementContract === undefined ||
     requirementContract.typeParameters.length !== ordinaryParameters.length ||
     requirementContract.typeParameters.some((parameter, index) =>
-      parameter.name !== ordinaryParameters[index]?.targetName)) {
+      parameter.identity !== ordinaryParameters[index]?.identity)) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, declaration),
       "rust.backend.callable-generic-requirements",
@@ -136,8 +139,8 @@ export function planRustCallableGenerics(
 
   const substitutions = new Map(context.typeParameterSubstitutions ?? []);
   if (specialization !== undefined) {
-    if (specialization.size !== sourceTypeParameterNames.length ||
-      sourceTypeParameterNames.some((name) => !specialization.has(name))) {
+    if (specialization.size !== sourceTypeParameterIdentities.length ||
+      sourceTypeParameterIdentities.some((name) => !specialization.has(name))) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, declaration),
         "rust.backend.callable-specialization",
@@ -157,8 +160,8 @@ export function planRustCallableGenerics(
     ));
     return undefined;
   }
-  const requirementsByName = new Map(requirementContract.typeParameters.map((parameter) =>
-    [parameter.name, parameter.requirements] as const));
+  const requirementsByIdentity = new Map(requirementContract.typeParameters.map((parameter) =>
+    [parameter.identity, parameter.requirements] as const));
   const parameters = sourceContract.parameters.flatMap((parameter): readonly RustGenericParameter[] => {
     if (parameter.kind === "lifetime") {
       if (parameter.lifetime.kind !== "parameter") return Object.freeze([]);
@@ -169,7 +172,7 @@ export function planRustCallableGenerics(
       }]);
     }
     if (specialization !== undefined) return Object.freeze([]);
-    const requirements = requirementsByName.get(parameter.targetName);
+    const requirements = requirementsByIdentity.get(parameter.identity);
     if (requirements === undefined) {
       throw new Error("Sealed callable generic requirements lost one exact source type parameter.");
     }
@@ -196,18 +199,18 @@ export function planRustCallableGenerics(
     preservesExplicitLifetimes: sourceContract.parameters.some(
       (parameter) => parameter.kind === "lifetime",
     ),
-    sourceTypeParameterNames,
+    sourceTypeParameterIdentities,
     finalizeGenerics: () => generics,
   };
 }
 
 export function rustCallableSpecialization(
-  sourceTypeParameterNames: readonly string[],
+  sourceTypeParameterIdentities: readonly string[],
   targetTypeArguments: readonly TargetTypeRef[],
 ): ReadonlyMap<string, TargetTypeRef> | undefined {
-  if (sourceTypeParameterNames.length !== targetTypeArguments.length) {
+  if (sourceTypeParameterIdentities.length !== targetTypeArguments.length) {
     return undefined;
   }
-  return new Map(sourceTypeParameterNames.map((name, index) =>
+  return new Map(sourceTypeParameterIdentities.map((name, index) =>
     [name, targetTypeArguments[index]!] as const));
 }

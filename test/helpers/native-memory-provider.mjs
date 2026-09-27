@@ -31,7 +31,8 @@ export function nativeMemoryProvider(cratePath, { missingRelation = false, wrong
   const word = { kind: "source-primitive", name: "uint32" };
   const genericSource = { kind: "provider-ref", moduleSpecifier: "@tsonic/core/types.js", exportName: "Pointer",
     typeArguments: [{ kind: "type-parameter", name: "Value" }] };
-  const genericCarrier = rustSourceLocationTargetType({ kind: "type-parameter", name: "Value" });
+  const parameterCarrier = { kind: "type-parameter", identity: "memory:Value", name: "Value" };
+  const genericCarrier = rustSourceLocationTargetType(parameterCarrier);
   const definitions = [
     ["acquire", "acquire", [{ name: "value", type: word }],
       { kind: "provider-ref", moduleSpecifier: "@tsonic/core/types.js", exportName: "RawPointer" }, rustRawPointerTargetType()],
@@ -45,8 +46,8 @@ export function nativeMemoryProvider(cratePath, { missingRelation = false, wrong
     ["relay", "relay", [{ name: "pointer", type: genericSource }], genericSource, genericCarrier,
       [{ name: "Value" }], [genericCarrier]],
     ["identity", "identity", [{ name: "value", type: { kind: "type-parameter", name: "Value" } }],
-      { kind: "type-parameter", name: "Value" }, { kind: "type-parameter", name: "Value" },
-      [{ name: "Value" }], [{ kind: "type-parameter", name: "Value" }]],
+      { kind: "type-parameter", name: "Value" }, parameterCarrier,
+      [{ name: "Value" }], [parameterCarrier]],
   ];
   return createRustProviderPackage({
     id: "native-memory-proof", displayName: "Native memory proof", version: "1",
@@ -70,10 +71,10 @@ export function nativeMemoryProvider(cratePath, { missingRelation = false, wrong
           : resultCarrier,
         parameterCarriers: parameterCarriers ?? parameters.map(() => word),
         ...(typeParameters === undefined ? {} : {
-          genericParameters: typeParameters.map(parameter => ({ kind: "type", sourceName: parameter.name })),
+          genericParameters: typeParameters.map(parameter => ({ kind: "type", targetIdentity: `memory:${parameter.name}`, sourceName: parameter.name })),
         }),
         ...(typeParameters !== undefined || name === "location" ? { targetGenericArguments: [
-          ...(typeParameters ?? []).map(parameter => ({ kind: "type", type: { kind: "type-parameter", name: parameter.name } })),
+          ...(typeParameters ?? []).map(parameter => ({ kind: "type", type: { kind: "type-parameter", identity: `memory:${parameter.name}`, name: parameter.name } })),
           ...(name === "location" || name === "relay" ? [{ kind: "type", type: rustProgramErrorTargetType() }] : []),
         ] } : {}),
       })),

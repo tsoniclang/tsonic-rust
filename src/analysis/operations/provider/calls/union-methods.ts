@@ -104,7 +104,7 @@ function unionMethodGenericNormalization(
   for (const [index, parameter] of declared.entries()) {
     const canonical = selected[index]!;
     if (parameter.kind === "type" && canonical.kind === "type") {
-      types.set(parameter.targetName, { kind: "type-parameter", name: canonical.targetName });
+      types.set(parameter.identity, { kind: "type-parameter", identity: canonical.identity, name: canonical.targetName });
     } else if (parameter.kind === "lifetime" && canonical.kind === "lifetime") {
       lifetimes.set(rustLifetimeKey(parameter.lifetime), canonical.lifetime);
     } else return undefined;

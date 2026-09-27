@@ -339,7 +339,7 @@ function projectTypeAlias(
     exported.genericParameters,
     typeContext,
   );
-  const typeNames = providerTypeParameterNames(exported.genericParameters, typeContext);
+  const typeIdentities = providerTypeParameterNames(exported.genericParameters, typeContext);
   return {
     declaration: Object.freeze({
       id: exportId,
@@ -363,7 +363,7 @@ function projectTypeAlias(
       targetCarrier: targetTypeFor(exported.type, typeContext, "result"),
       ...typeRequirements(
         typeParametersOf(exported.genericParameters),
-        typeNames,
+        typeIdentities,
         typeContext,
         (trait) => targetTraitFor(trait, typeContext, "parameter", "target-default"),
       ),
@@ -503,7 +503,7 @@ function projectNominalExport(
   members.push(...projectedConstants.members);
   operations.push(...projectedConstants.operations);
   const unambiguous = selectUnambiguousMembers(members, operations);
-  const typeNames = providerTypeParameterNames(sourceGenerics, genericContext);
+  const typeIdentities = providerTypeParameterNames(sourceGenerics, genericContext);
   return {
     declaration: Object.freeze({
       id: exportId,
@@ -530,7 +530,7 @@ function projectNominalExport(
       targetCarrier: declaredCarrier,
       ...typeRequirements(
         typeParametersOf(sourceGenerics),
-        typeNames,
+        typeIdentities,
         genericContext,
         (trait) => targetTraitFor(trait, genericContext, "parameter", "target-default"),
       ),

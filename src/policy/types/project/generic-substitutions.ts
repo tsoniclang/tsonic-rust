@@ -20,7 +20,7 @@ export function projectGenericSubstitutions(
       continue;
     }
     if (argument?.kind !== "type") return undefined;
-    types.set(parameter.sourceName, argument.type);
+    types.set(parameter.identity, argument.type);
   }
   return Object.freeze({ types, lifetimes });
 }

@@ -2,6 +2,7 @@ import { requirementContractsEqual, stringListsEqual, type RequirementUse, type 
 import { rustObjectReferenceViewKey } from "../facts/object-reference-views.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
+import { rustTypeParameterFromSourceContract } from "../../target-model/names/type-parameters.js";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import { rustGenericNumericOperandsKey } from "../facts/generic-numeric.js";
 import { classifyCarrierRequirements } from "./generic-carrier-requirements.js";
@@ -13,7 +14,7 @@ import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
 import { substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustJsArrayEntriesElementTargetType } from "../../target-model/types/carriers/array-entries.js";
-import { rustTargetTypeParameterNames } from "../../target-model/types/carriers/generic-references.js";
+import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
 import { analyzeRustShapeGenericRequirements, type RustShapeGenericRequirementContract } from "./generic-shape-requirements.js";
 import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
@@ -68,6 +69,7 @@ import {
 export type RustGenericRequirement = "clone" | "default" | "static" | "source-numeric";
 
 export interface RustDeclarationTypeParameterRequirements {
+  readonly identity: string;
   readonly name: string;
   readonly requirements: readonly RustGenericRequirement[];
 }
@@ -244,10 +246,10 @@ export function analyzeRustDeclarationGenericRequirements(
       const contract = contractByDeclaration.get(declaration);
       if (contract === undefined) return false;
       const parameters = [...contract.typeParameters, ...contract.capturedTypeParameters,
-        ...contract.optionalStorage.map(entry => ({ name: entry.carrier.name, requirements: entry.requirements }))];
+        ...contract.optionalStorage.map(entry => ({ identity: entry.carrier.identity, requirements: entry.requirements }))];
       return rustCarrierSupportsTrait(carrier, "core::clone::Clone", (name, trait) =>
         trait === "core::clone::Clone" && parameters.some(parameter =>
-          parameter.name === name && parameter.requirements.includes("clone")),
+          parameter.identity === name && parameter.requirements.includes("clone")),
         (projection, trait) => trait === "core::clone::Clone" && contract.associatedTypes.some(requirement =>
           rustTargetTypeRefEquals(requirement.carrier, projection) && requirement.requirements.includes("clone")), definitions);
     },
@@ -301,33 +303,33 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       readonly dependencies: readonly string[];
     }
   | { readonly kind: "rejected"; readonly reason: string } {
-  const { ast, declaration, facts, names } = input;
+  const { ast, declaration, facts } = input;
   const definition = input.projectTypes.definitionForDeclaration(declaration);
   const typeParameterNodes = (definition === undefined ? ast.typeParameters(declaration)
     : definition.genericParameters.map(parameter => parameter.declaration)).filter(
     (candidate): candidate is Node => candidate !== undefined &&
       input.sourceLifetimes.parameterFor(candidate)?.kind !== "lifetime",
   );
-  const typeParameterNames = typeParameterNodes.map((parameter) =>
-    names.nameForDeclaration(parameter));
-  if (typeParameterNames.some((name) => name === undefined)) {
+  const typeParameters = typeParameterNodes.map(parameter => input.sourceLifetimes.parameterFor(parameter));
+  if (typeParameters.some(parameter => parameter?.kind !== "type")) {
     return {
       kind: "rejected",
       reason: "A Rust callable type parameter has no exact target identity.",
     };
   }
-  const exactNames = typeParameterNames as string[];
-  const capturedNames: string[] = [];
+  const ownParameters = typeParameters.flatMap(parameter => parameter?.kind === "type" ? [rustTypeParameterFromSourceContract(parameter)] : []);
+  const exactNames = ownParameters.map(parameter => parameter.identity);
+  const capturedParameters = new Map<string, Extract<TargetTypeRef, { readonly kind: "type-parameter" }>>();
   for (let ancestor = ast.parent(declaration); ancestor !== undefined; ancestor = ast.parent(ancestor)) {
     if (!isRustIndependentCallable(ast, ancestor) && !isRustGenericTypeDeclaration(ast, ancestor)) continue;
     for (const parameter of ast.typeParameters(ancestor)) {
       if (parameter === undefined || input.sourceLifetimes.parameterFor(parameter)?.kind === "lifetime") continue;
-      const name = names.nameForDeclaration(parameter);
-      if (name === undefined) return { kind: "rejected", reason: "A captured Rust type parameter has no exact target identity." };
-      if (!exactNames.includes(name) && !capturedNames.includes(name)) capturedNames.push(name);
+      const selected = input.sourceLifetimes.parameterFor(parameter);
+      if (selected?.kind !== "type") return { kind: "rejected", reason: "A captured Rust type parameter has no exact target identity." };
+      if (!exactNames.includes(selected.identity)) capturedParameters.set(selected.identity, rustTypeParameterFromSourceContract(selected));
     }
   }
-  const declared = new Set([...exactNames, ...capturedNames]);
+  const declared = new Set([...exactNames, ...capturedParameters.keys()]);
   const projections = createRustProjectProjectionRequirementCollector(declared, input.projectTypes);
   const byParameter = new Map([...declared].map((name) =>
     [name, new Set<RustGenericRequirement>()] as const));
@@ -430,18 +432,18 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
         dependencies.add(nestedId);
         for (const parameter of input.contractFor(node)?.capturedTypeParameters ?? []) {
           if (parameter.requirements.length === 0) continue;
-          const error = addUse(node, { kind: "type-parameter", name: parameter.name }, parameter.requirements);
+          const error = addUse(node, { kind: "type-parameter", identity: parameter.identity, name: parameter.name }, parameter.requirements);
           if (error !== undefined) return error;
         }
         const nestedClass = input.projectTypes.definitionForDeclaration(node);
         for (const parameter of nestedClass?.genericParameters ?? []) {
           if (parameter.kind !== "type" || ast.parent(parameter.declaration) === node) continue;
-          const requirements = input.contractFor(node)?.typeParameters.find(candidate => candidate.name === parameter.targetName)?.requirements ?? [];
-          const error = addUse(node, { kind: "type-parameter", name: parameter.targetName }, requirements);
+          const requirements = input.contractFor(node)?.typeParameters.find(candidate => candidate.identity === parameter.identity)?.requirements ?? [];
+          const error = addUse(node, { kind: "type-parameter", identity: parameter.identity, name: parameter.targetName }, requirements);
           if (error !== undefined) return error;
         }
         for (const requirement of input.contractFor(node)?.associatedTypes ?? []) {
-          if (!rustTargetTypeParameterNames(requirement.carrier).every(name => declared.has(name))) continue;
+          if (!rustTargetTypeParameterIdentities(requirement.carrier).every(name => declared.has(name))) continue;
           if (!associated.collect(requirement.carrier)) return "A captured associated output has no enclosing generic contract.";
           if (requirement.fieldAccess !== undefined && !associated.requireField(requirement.carrier, requirement.fieldAccess)) {
             return "A captured field operation has no enclosing native field contract.";
@@ -450,11 +452,11 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
           if (error !== undefined) return error;
         }
         for (const requirement of input.contractFor(node)?.projectProjections ?? []) {
-          if (![requirement.sourceCarrier, requirement.targetCarrier].flatMap(rustTargetTypeParameterNames).every(name => declared.has(name))) continue;
+          if (![requirement.sourceCarrier, requirement.targetCarrier].flatMap(rustTargetTypeParameterIdentities).every(name => declared.has(name))) continue;
           if (!projections.require(requirement)) return "A captured projection has no exact enclosing native conversion contract.";
         }
         for (const requirement of input.contractFor(node)?.optionalStorage ?? []) {
-          if (!rustTargetTypeParameterNames(requirement.carrier).every(name => declared.has(name))) continue;
+          if (!rustTargetTypeParameterIdentities(requirement.carrier).every(name => declared.has(name))) continue;
           const error = addUse(node, requirement.carrier, requirement.requirements);
           if (error !== undefined) return error;
         }
@@ -477,7 +479,7 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
           for (const [index, parameter] of parameters.entries()) {
             const argument = arguments_[index];
             if (argument?.kind !== parameter.kind) return "A source type family use lost a class generic parameter kind.";
-            if (parameter.kind === "type" && argument.kind === "type") substitutions.set(parameter.targetName, argument.type);
+            if (parameter.kind === "type" && argument.kind === "type") substitutions.set(parameter.identity, argument.type);
           }
           const contract = input.contractFor(definition.declaration);
           for (const requirement of contract?.projectProjections ?? []) {
@@ -488,7 +490,7 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
           }
           for (const parameter of contract?.typeParameters ?? []) {
             if (parameter.requirements.length === 0) continue;
-            const argument = substitutions.get(parameter.name);
+            const argument = substitutions.get(parameter.identity);
             if (argument === undefined) return "A generic class use lost its required type argument.";
             const error = addUse(node, argument, parameter.requirements);
             if (error !== undefined) return error;
@@ -760,7 +762,7 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
               if (error !== undefined) return error;
             }
             const substitutions = new Map(callee.typeParameters.map((parameter, index) =>
-              [parameter.name, targetTypeArguments[index]!] as const));
+              [parameter.identity, targetTypeArguments[index]!] as const));
             for (const requirement of callee.optionalStorage) {
               const error = addUse(node, substituteRustTargetTypeParameters(requirement.carrier, substitutions), requirement.requirements);
               if (error !== undefined) return error;
@@ -804,13 +806,13 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       associatedTypes: associated.seal(),
       projectProjections: projections.seal(),
       optionalStorage: optionalStorage.seal(),
-      typeParameters: Object.freeze(exactNames.map((name) => Object.freeze({
-        name,
-        requirements: normalizeRequirements([...(byParameter.get(name) ?? [])]),
+      typeParameters: Object.freeze(ownParameters.map((parameter) => Object.freeze({
+        identity: parameter.identity, name: parameter.name,
+        requirements: normalizeRequirements([...(byParameter.get(parameter.identity) ?? [])]),
       }))),
-      capturedTypeParameters: Object.freeze(capturedNames.map((name) => Object.freeze({
-        name,
-        requirements: normalizeRequirements([...(byParameter.get(name) ?? [])]),
+      capturedTypeParameters: Object.freeze([...capturedParameters.values()].map((parameter) => Object.freeze({
+        identity: parameter.identity, name: parameter.name,
+        requirements: normalizeRequirements([...(byParameter.get(parameter.identity) ?? [])]),
       }))),
       uses: Object.freeze(uses),
     }),

@@ -10,7 +10,7 @@ import { allocateRustSyntheticTypeName, type RustSyntheticNameState } from "../.
 import { rustSelfParameter } from "../../declarations/callables/self-parameter.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { rustStructuralDispatchType } from "../project-structural-types.js";
-import { rustStructuralShapeGenerics } from "../structural-generics.js";
+import { rustStructuralShapeGenerics, rustStructuralShapeContext } from "../structural-generics.js";
 import { checkRustDataWrite } from "../data-writes.js";
 import type { RustStructuralObjectFieldInitializer } from "../project-storage.js";
 
@@ -36,8 +36,9 @@ export function createStructuralLiteralImplementation(
   const shape = context.input.program.structuralShapes.definitions.find(candidate =>
     candidate.targetName === instance?.targetName && candidate.componentId === instance.componentId);
   if (shape?.dispatchName === undefined || shape.construction !== undefined) return undefined;
-  const wrapper = rustTypeFromCarrierInContext(shape.carrier, context);
   const instantiatedWrapper = rustTypeFromCarrierInContext(carrier, context);
+  context = rustStructuralShapeContext(shape, context);
+  const wrapper = rustTypeFromCarrierInContext(shape.carrier, context);
   const trait = rustStructuralDispatchType(shape.carrier, context);
   const errorType = rustTypeFromCarrierInContext(rustProgramErrorTargetType(), context);
   if (wrapper?.kind !== "named" || instantiatedWrapper?.kind !== "named" || trait === undefined || errorType === undefined) return undefined;

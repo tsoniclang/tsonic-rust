@@ -933,13 +933,23 @@ test("external source dependencies declare exact provider-reference imports", ()
 });
 
 test("operation type parameters are declared exactly when their carriers use them", () => {
+  for (const [genericParameters, resultCarrier, message] of [
+    [[{ kind: "type", sourceName: "T" }], { kind: "type-parameter", identity: "first", name: "T" }, /targetIdentity/u],
+    [[{ kind: "type", sourceName: "T", targetIdentity: "first" }], { kind: "type-parameter", name: "T" }, /not a closed Rust target type/u],
+    [[{ kind: "type", sourceName: "T", targetIdentity: "first" }], { kind: "type-parameter", identity: "second", name: "T" }, /undeclared type parameter/u],
+  ]) {
+    assert.throws(() => createRustProviderPackage(definition({ operations: [{
+      exportId: "@acme/validation::run", operationKind: "method",
+      target: { form: "call", path: "acme_validation::run" }, genericParameters, resultCarrier,
+    }] })), message);
+  }
   assert.throws(
     () => createRustProviderPackage(definition({
       operations: [{
         exportId: "@acme/validation::run",
         operationKind: "method",
         target: { form: "call", path: "acme_validation::run" },
-        resultCarrier: { kind: "type-parameter", name: "T" },
+        resultCarrier: { kind: "type-parameter", identity: "T", name: "T" },
       }],
     })),
     /references undeclared type parameter 'T'/u,
@@ -951,7 +961,7 @@ test("operation type parameters are declared exactly when their carriers use the
         operationKind: "method",
         target: { form: "call", path: "acme_validation::run" },
         resultCarrier: int32Carrier,
-        genericParameters: [{ kind: "type", sourceName: "T" }],
+        genericParameters: [{ kind: "type", targetIdentity: "T", sourceName: "T" }],
       }],
     })),
     /declares unused type parameter 'T'/u,
@@ -961,8 +971,8 @@ test("operation type parameters are declared exactly when their carriers use the
       exportId: "@acme/validation::run",
       operationKind: "method",
       target: { form: "call", path: "acme_validation::run" },
-      resultCarrier: { kind: "type-parameter", name: "T" },
-      genericParameters: [{ kind: "type", sourceName: "T", maybeSized: true }],
+      resultCarrier: { kind: "type-parameter", identity: "T", name: "T" },
+      genericParameters: [{ kind: "type", targetIdentity: "T", sourceName: "T", maybeSized: true }],
     }],
   })));
   assert.throws(
@@ -971,8 +981,8 @@ test("operation type parameters are declared exactly when their carriers use the
         exportId: "@acme/validation::run",
         operationKind: "method",
         target: { form: "call", path: "acme_validation::run" },
-        resultCarrier: { kind: "type-parameter", name: "T" },
-        genericParameters: [{ kind: "type", sourceName: "T", maybeSized: false }],
+        resultCarrier: { kind: "type-parameter", identity: "T", name: "T" },
+        genericParameters: [{ kind: "type", targetIdentity: "T", sourceName: "T", maybeSized: false }],
       }],
     })),
     /maybeSized must be true when present/u,
@@ -983,10 +993,10 @@ test("operation type parameters are declared exactly when their carriers use the
       operationKind: "method",
       target: { form: "call", path: "acme_validation::run" },
       resultCarrier: int32Carrier,
-      genericParameters: [{ kind: "type", sourceName: "T" }],
+      genericParameters: [{ kind: "type", targetIdentity: "T", sourceName: "T" }],
       targetGenericArguments: [{
         kind: "type",
-        type: { kind: "type-parameter", name: "T" },
+        type: { kind: "type-parameter", identity: "T", name: "T" },
       }],
     }],
   })));
@@ -997,10 +1007,10 @@ test("operation type parameters are declared exactly when their carriers use the
         operationKind: "method",
         target: { form: "path", path: "acme_validation::VALUE" },
         resultCarrier: int32Carrier,
-        genericParameters: [{ kind: "type", sourceName: "T" }],
+        genericParameters: [{ kind: "type", targetIdentity: "T", sourceName: "T" }],
         targetGenericArguments: [{
           kind: "type",
-          type: { kind: "type-parameter", name: "T" },
+          type: { kind: "type-parameter", identity: "T", name: "T" },
         }],
       }],
     })),

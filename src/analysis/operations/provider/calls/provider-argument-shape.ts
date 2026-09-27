@@ -42,11 +42,11 @@ export function rustBorrowedStringTypeParameterNames(
   template: RustProviderOperationTemplate<RustProviderFactOperationKind | RustRuntimeSetOperationKind>,
 ): ReadonlySet<string> {
   const candidates = new Set((template.genericParameters ?? []).flatMap((parameter) =>
-    parameter.kind === "type" && parameter.maybeSized === true ? [parameter.sourceName] : []));
+    parameter.kind === "type" && parameter.maybeSized === true ? [parameter.targetIdentity] : []));
   if (candidates.size === 0) return candidates;
   const disallowReferenced = (carrier: TargetTypeRef | undefined): void => {
     if (carrier === undefined) return;
-    for (const name of rustTargetGenericReferences(carrier).typeNames) {
+    for (const name of rustTargetGenericReferences(carrier).typeIdentities) {
       candidates.delete(name);
     }
   };
@@ -57,8 +57,8 @@ export function rustBorrowedStringTypeParameterNames(
   const borrowedOccurrences = new Set<string>();
   for (const [index, carrier] of (template.parameterCarriers ?? []).entries()) {
     if (carrier === undefined) continue;
-    for (const name of rustTargetGenericReferences(carrier).typeNames) {
-      if (carrier.kind !== "type-parameter" || carrier.name !== name ||
+    for (const name of rustTargetGenericReferences(carrier).typeIdentities) {
+      if (carrier.kind !== "type-parameter" || carrier.identity !== name ||
           rustProviderSourceArgumentMode(template.target, index) !== "ref") {
         candidates.delete(name);
       } else {

@@ -1,3 +1,4 @@
+import { rustTypeParameterFromSourceContract } from "../../target-model/names/type-parameters.js";
 import {
   KindBlock,
   KindFunctionExpression,
@@ -63,8 +64,8 @@ export function resolveFunctionExpressionCarrier(
   },
 ): TargetTypeRef | undefined {
   const { ast } = walk.context;
-  const genericNames = walk.context.sourceLifetimes.contractFor(expression)?.parameters
-    .flatMap(parameter => parameter.kind === "type" ? [parameter.targetName] : []);
+  const genericParameters = walk.context.sourceLifetimes.contractFor(expression)?.parameters
+    .flatMap(parameter => parameter.kind === "type" ? [rustTypeParameterFromSourceContract(parameter)] : []);
   const parameters = ast.parameters(expression);
   const sourceSelected = options?.sourceCarrier ?? (expected === undefined
     ? resolveRustTargetTypeRef(
@@ -75,7 +76,7 @@ export function resolveFunctionExpressionCarrier(
     : undefined);
   const resolvedSourceCallable = sourceSelected?.kind === "function-pointer"
     ? { parameters: sourceSelected.args, result: sourceSelected.result }
-    : rustGenericCallableProtocol(sourceSelected, genericNames) ?? rustClosureProtocol(sourceSelected) ?? rustCallableProtocol(sourceSelected);
+    : rustGenericCallableProtocol(sourceSelected, genericParameters) ?? rustClosureProtocol(sourceSelected) ?? rustCallableProtocol(sourceSelected);
   const fallbackParameterCarriers = resolvedSourceCallable?.parameters.map((carrier, index) =>
     Node_Initializer(ast, parameters[index]) === undefined
       ? carrier
@@ -89,16 +90,16 @@ export function resolveFunctionExpressionCarrier(
         args: fallbackParameterCarriers,
         result: resolvedSourceCallable.result,
       }
-    : rustGenericCallableValue(sourceSelected) !== undefined && genericNames !== undefined
-      ? rustGenericCallableTargetType(genericNames, fallbackParameterCarriers, resolvedSourceCallable.result, rustGenericCallableValue(sourceSelected)!.origin)
+    : rustGenericCallableValue(sourceSelected) !== undefined && genericParameters !== undefined
+      ? rustGenericCallableTargetType(genericParameters, fallbackParameterCarriers, resolvedSourceCallable.result, rustGenericCallableValue(sourceSelected)!.origin)
       : rustCallableTargetType(fallbackParameterCarriers, resolvedSourceCallable.result));
   if (selectedExpected === undefined || (selectedExpected.kind !== "function-pointer" &&
     rustClosureProtocol(selectedExpected) === undefined &&
-    rustGenericCallableProtocol(selectedExpected, genericNames) === undefined &&
+    rustGenericCallableProtocol(selectedExpected, genericParameters) === undefined &&
     rustCallableProtocol(selectedExpected) === undefined)) {
     return undefined;
   }
-  const callable = rustGenericCallableProtocol(selectedExpected, genericNames) ?? rustCallableProtocol(selectedExpected);
+  const callable = rustGenericCallableProtocol(selectedExpected, genericParameters) ?? rustCallableProtocol(selectedExpected);
   const closure = rustClosureProtocol(selectedExpected);
   const selectedParameters = selectedExpected.kind === "function-pointer"
     ? selectedExpected.args
@@ -282,8 +283,8 @@ export function resolveFunctionExpressionCarrier(
   const valueResult = generator?.resultCarrier ?? asynchronous?.futureCarrier ?? bodyCarrier;
   const closureCarrier = selectedExpected.kind === "function-pointer" || selectedExpected.kind === "closure"
     ? { ...selectedExpected, args: finalizedParameterCarriers, result: valueResult }
-    : rustGenericCallableValue(selectedExpected) !== undefined && genericNames !== undefined
-      ? rustGenericCallableTargetType(genericNames, finalizedParameterCarriers, valueResult, rustGenericCallableValue(selectedExpected)!.origin)
+    : rustGenericCallableValue(selectedExpected) !== undefined && genericParameters !== undefined
+      ? rustGenericCallableTargetType(genericParameters, finalizedParameterCarriers, valueResult, rustGenericCallableValue(selectedExpected)!.origin)
     : rustCallableTargetType(finalizedParameterCarriers, valueResult);
   if (closureCarrier === undefined ||
     !recordCallableReturnFact(walk, expression, generator?.resultCarrier ?? bodyCarrier)) return undefined;

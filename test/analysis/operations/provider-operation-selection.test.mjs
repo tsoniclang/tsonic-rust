@@ -17,12 +17,12 @@ test("provider optional argument inference preserves native carriers and absence
   const int64 = { kind: "source-primitive", name: "int64" };
   const uint64 = { kind: "source-primitive", name: "uint64" };
   const float64 = { kind: "source-primitive", name: "float64" };
-  const parameter = { kind: "type-parameter", name: "Value" };
+  const parameter = { kind: "type-parameter", identity: "Value", name: "Value" };
   const template = {
     kind: "provider-operation", operationId: "acme.optional", operationKind: "method",
     target: { form: "call", path: "acme::optional" }, resultCarrier: unit,
     parameterCarriers: [rustOptionTargetType(parameter)],
-    genericParameters: [{ kind: "type", sourceName: "Value", defaultArgument: { kind: "type", type: float64 } }],
+    genericParameters: [{ kind: "type", targetIdentity: "Value", sourceName: "Value", defaultArgument: { kind: "type", type: float64 } }],
     isAsync: false, isFallible: false, errorBoundary: "target-runtime",
   };
   for (const carrier of [int64, uint64]) {
@@ -37,7 +37,7 @@ test("provider optional argument inference preserves native carriers and absence
     const result = instantiateProviderOperationTemplate(template, { sourceParameterCarriers: [absent] });
     assert.deepEqual(result?.substitutions.types.get("Value"), float64);
     assert.equal(instantiateProviderOperationTemplate({ ...template,
-      genericParameters: [{ kind: "type", sourceName: "Value" }],
+      genericParameters: [{ kind: "type", targetIdentity: "Value", sourceName: "Value" }],
     }, { sourceParameterCarriers: [absent] }), undefined);
   }
   assert.equal(instantiateProviderOperationTemplate(template, { sourceParameterCarriers: [undefined] }), undefined);
@@ -102,7 +102,7 @@ test("borrowed native string inference requires an exact ?Sized generic paramete
     operationKind: "method",
     target: { form: "call", path: "acme::borrowed", argModes: ["ref"] },
     resultCarrier: unit,
-    parameterCarriers: [{ kind: "type-parameter", name: "Q" }],
+    parameterCarriers: [{ kind: "type-parameter", identity: "Q", name: "Q" }],
     genericParameters: [{
       kind: "type",
       sourceName: "Q",

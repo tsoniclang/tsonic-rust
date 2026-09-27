@@ -89,8 +89,8 @@ export function rustTargetGenericBindingsForArguments(
     if (parameter.kind !== argument.kind) return undefined;
     switch (parameter.kind) {
       case "type":
-        if (argument.kind !== "type" || types.has(parameter.sourceName)) return undefined;
-        types.set(parameter.sourceName, argument.type);
+        if (argument.kind !== "type" || types.has(parameter.targetIdentity)) return undefined;
+        types.set(parameter.targetIdentity, argument.type);
         break;
       case "lifetime":
         if (argument.kind !== "lifetime" || lifetimes.has(parameter.targetIdentity)) return undefined;

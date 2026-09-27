@@ -319,8 +319,8 @@ export function projectCallableShape(
   const methodTypeArgumentSubstitutions = options?.methodTypeArgumentSubstitutions;
   const methodTypeParameters = context.input.program.source.ast.typeParameters(member);
   const methodTypeParameterNames = methodTypeParameters.map((parameter) => {
-    const name = parameter === undefined ? undefined : context.input.program.source.ast.name(parameter);
-    return name === undefined ? undefined : context.input.program.source.ast.text(name);
+    const selected = context.input.program.sourceLifetimes.parameterFor(parameter);
+    return selected?.kind === "type" ? selected.identity : undefined;
   });
   const methodSpecializationValid = methodTypeParameters.length === 0
     ? methodTypeArgumentSubstitutions === undefined || methodTypeArgumentSubstitutions.size === 0
@@ -471,7 +471,7 @@ export function projectTypeSubstitutions(
       if (argument?.kind !== "type") {
         throw new Error("Project carrier generic argument kind conflicts with its sealed declaration.");
       }
-      result.set(parameter.targetName, argument.type);
+      result.set(parameter.identity, argument.type);
     } else if (argument?.kind !== "lifetime") {
       throw new Error("Project carrier generic argument kind conflicts with its sealed declaration.");
     }

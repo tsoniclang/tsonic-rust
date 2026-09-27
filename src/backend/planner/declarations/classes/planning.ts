@@ -58,6 +58,7 @@ import {
   rustProjectMemberStorageVisibility,
 } from "../../objects/project-storage-abi.js";
 import { rustProjectObjectIdentityImplementation } from "../../objects/project-identity.js";
+import { rustProjectTypeParameterContext } from "../../names/type-parameters.js";
 import { rustProjectWrapperTraits } from "../../objects/project-wrapper-traits.js";
 import { rustClassEnvironmentContext, rustClassEnvironmentParameter } from "../../objects/class-environments.js";
 import { rustClassEnvironmentHandleType } from "../../objects/class-environment-types.js";
@@ -111,6 +112,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     ));
     return undefined;
   }
+  context = rustProjectTypeParameterContext(definition, context, "declaration");
   const representation = context.input.program.objectRepresentations.representationFor(definition);
   if (representation === undefined || representation.kind === "open-hierarchy" ||
     representation.kind === "closed-hierarchy") {
@@ -285,18 +287,23 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     ));
     return undefined;
   }
+  const implementationContext = rustProjectTypeParameterContext(definition, context, "implementation");
+  const implementationType = rustTypeFromCarrierInContext(context.input.program.projectTypes.openCarrier(definition), implementationContext);
+  const implementationGenerics = rustProjectGenerics(definition, implementationContext);
+  const implementationFields = fields.map(field => ({ ...field, type: rustTypeFromCarrierInContext(field.carrier, implementationContext) }));
+  if (implementationType === undefined || implementationFields.some(field => field.type === undefined)) return undefined;
   const constructorFn = planConstructor(
     node,
     constructorMember,
     definition.targetPath,
-    openType,
+    implementationType,
     definition.stateName,
-    stateMarker,
-    fields,
+    rustProjectStateMarker(definition, implementationContext),
+    implementationFields as readonly PlannedProjectObjectField[],
     methodProperties,
     representation,
     publiclyReachable,
-    context,
+    implementationContext,
   );
   if (failed || constructorFn === undefined) {
     return undefined;
@@ -304,7 +311,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   const implFunctions: RustImplFunction[] = [constructorFn];
   for (const method of methods) {
     if (context.input.program.projectTypes.memberSlotName(method, "static") !== undefined) continue;
-    const planned = planProjectMethodVariants(method, context);
+    const planned = planProjectMethodVariants(method, implementationContext);
     if (planned === undefined) {
       return undefined;
     }
@@ -323,7 +330,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
       ));
       return undefined;
     }
-    const planned = planProjectMethod(accessor.declaration, context, {
+    const planned = planProjectMethod(accessor.declaration, implementationContext, {
       targetName,
       safetyPlacement: accessor.role === "read" ? "getter" : "setter",
     });
@@ -420,11 +427,11 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     generics,
     fields: structFields,
   };
-  const defaultImplementation = rustDefaultImplementation(openType, generics, constructorFn);
+  const defaultImplementation = rustDefaultImplementation(implementationType, implementationGenerics, constructorFn);
   const implementation: RustItem = {
     kind: "impl",
-    generics,
-    target: openType,
+    generics: implementationGenerics,
+    target: implementationType,
     members: implFunctions,
   };
   return [

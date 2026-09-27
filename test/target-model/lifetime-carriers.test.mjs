@@ -331,7 +331,7 @@ test("opaque carriers preserve and substitute lifetime, type, and const captures
     outlives: [lifetime],
     captures: [
       { kind: "lifetime", lifetime },
-      { kind: "type", type: { kind: "type-parameter", name: "T" } },
+      { kind: "type", type: { kind: "type-parameter", identity: "T", name: "T" } },
       { kind: "const", value: constParameter },
     ],
   };

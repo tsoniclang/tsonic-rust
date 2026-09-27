@@ -18,6 +18,7 @@ import { rustProjectObjectIdentityImplementation } from "./project-identity.js";
 import { rustClassEnvironmentType, rustClassEnvironmentHandleType } from "./class-environment-types.js";
 import { rustProjectImplementationVisibility, rustProjectMemberStorageVisibility } from "./project-storage-abi.js";
 import { rustAuthoredFieldDeadCodeDisposition } from "../liveness/directives.js";
+import { rustProjectTypeParameterContext } from "../names/type-parameters.js";
 
 type Environment = NonNullable<RustClassValueDefinition["environment"]>;
 
@@ -26,6 +27,7 @@ export function planRustClassEnvironmentItems(declaration: Node, context: RustPl
   if (environment === undefined) return [];
   const definition = context.input.program.projectTypes.definitionForDeclaration(declaration);
   if (definition === undefined) return undefined;
+  context = rustProjectTypeParameterContext(definition, context, "declaration");
   const fields: RustStructField[] = [];
   const publiclyReachable = rustSourceItemIsPubliclyReachable(context, environment.typeName);
   if (environment.constructorIdentity) {

@@ -258,7 +258,7 @@ test("project-source call consumption requires exact selected member kind, targe
 test("project-source call consumption accepts only proven target-finalized inferred type arguments", () => {
   const int32 = { kind: "source-primitive", name: "int32" };
   const float64 = { kind: "source-primitive", name: "float64" };
-  const typeParameter = { kind: "type-parameter", name: "T" };
+  const typeParameter = { kind: "type-parameter", identity: "T", name: "T" };
   const targetArgument = { kind: "type", type: int32 };
   const selectedArgument = { kind: "type", type: float64 };
   const fact = {
@@ -290,7 +290,7 @@ test("project-source call consumption accepts only proven target-finalized infer
     sourceName: "identity",
     targetName: "identity",
     kind: "method",
-    genericParameters: [{ kind: "type", sourceName: "T" }],
+    genericParameters: [{ kind: "type", targetIdentity: "T", sourceName: "T" }],
     parameters: [{ name: "value", type: typeParameter, passingMode: "by-value" }],
     returnType: typeParameter,
   };

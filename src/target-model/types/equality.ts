@@ -232,7 +232,7 @@ function rustTargetTypeRefEqualsValidated(
       return right.kind === left.kind && left.id === right.id &&
         genericArgumentListsEqual(left.genericArguments, right.genericArguments, lifetimeContext);
     case "type-parameter":
-      return right.kind === left.kind && left.name === right.name &&
+      return right.kind === left.kind && left.identity === right.identity &&
         optionalTargetTypesEqual(left.optionalStorageValue, right.optionalStorageValue, lifetimeContext);
     case "opaque":
       return right.kind === left.kind && left.id === right.id;
@@ -362,7 +362,8 @@ function validateRustTargetTypeRef(
           (value.genericArguments === undefined ||
             validateGenericArguments(value.genericArguments, validateChild));
       case "type-parameter":
-        return hasExactKeys(value, ["kind", "name", "optionalStorageValue"], ["kind", "name"]) &&
+        return hasExactKeys(value, ["kind", "identity", "name", "optionalStorageValue"], ["kind", "identity", "name"]) &&
+          nonEmptyString(value.identity) &&
           typeof value.name === "string" && value.name.length > 0 &&
           (value.optionalStorageValue === undefined || validateChild(value.optionalStorageValue));
       case "array":

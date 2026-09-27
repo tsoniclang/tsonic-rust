@@ -204,7 +204,7 @@ export function createRustProjectTypePolicy(
       Object.freeze(definition.genericParameters.map((parameter) =>
         parameter.kind === "lifetime"
           ? rustLifetimeGenericArgument(parameter.lifetime)
-          : rustTypeGenericArgument({ kind: "type-parameter", name: parameter.sourceName }))),
+          : rustTypeGenericArgument({ kind: "type-parameter", identity: parameter.identity, name: parameter.targetName }))),
     );
 
   const relationship = (
@@ -636,7 +636,7 @@ export function createRustProjectTypePolicy(
         const selected = relationship(openCarrier(implementation), target);
         if (selected.kind !== "related") continue;
         const references = rustTargetGenericReferences(selected.targetType);
-        if (references.typeNames.length !== 0 || references.lifetimes.length !== 0 || references.constIdentities.length !== 0) continue;
+        if (references.typeIdentities.length !== 0 || references.lifetimes.length !== 0 || references.constIdentities.length !== 0) continue;
         targets.set(closedMetadataKey(selected.targetType), { target, carrier: selected.targetType });
       }
     }

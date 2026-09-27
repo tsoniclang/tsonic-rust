@@ -6,7 +6,7 @@ import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustClassEnvironmentContext } from "./class-environments.js";
 import { rustClassEnvironmentType } from "./class-environment-types.js";
 import { planRustClassValueForwarder } from "./class-value-callables.js";
-import { rustProjectGenerics } from "./polymorphism/names.js";
+import { planRustProjectGenerics } from "./polymorphism/names.js";
 import { rustSelfParameter } from "../declarations/callables/self-parameter.js";
 import { readRustSourceStaticField, planRustSourceStaticFieldStorage } from "../declarations/classes/static-field-storage.js";
 import { createRustSyntheticNameState } from "../names/synthetic.js";
@@ -32,8 +32,8 @@ export function planRustClassValueImplementations(declaration: Node, context: Ru
     if (target === undefined || sourceArguments === undefined) return undefined;
     const bound = sourceArguments.flatMap((argument, index) => !environment.genericParameterIndexes.includes(index) &&
       (argument.kind === "type" && argument.type.kind === "type-parameter" || argument.kind === "lifetime" && argument.lifetime.kind === "parameter") ? [index] : []);
-    const generics = rustProjectImplementationGenerics(rustClassConstructorTargetType(view.sourceCarrier, bound), definition,
-      rustProjectGenerics(definition, context, environment.genericParameterIndexes), context);
+    const generics = rustProjectImplementationGenerics(rustClassConstructorTargetType(view.sourceCarrier, bound),
+      planRustProjectGenerics(definition, [], context, environment.genericParameterIndexes), context);
     if (generics === undefined) return undefined;
     const shape = context.input.program.structuralShapes.definitionForCarrier(view.targetCarrier);
     const wrapper = rustTypeFromCarrierInContext(view.targetCarrier, context);

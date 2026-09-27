@@ -57,7 +57,7 @@ test("passive broad values reject carriers whose lifetime cannot be closed", () 
   );
   assert.equal(
     selectRustSourceValueConversion(
-      { kind: "type-parameter", name: "T" },
+      { kind: "type-parameter", identity: "T", name: "T" },
       rustTsValueTargetType(),
     ),
     undefined,

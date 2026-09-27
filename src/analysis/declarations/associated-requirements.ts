@@ -1,7 +1,7 @@
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustGenericRequirement } from "./generic-requirements.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustTargetTypeParameterNames } from "../../target-model/types/carriers/generic-references.js";
+import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 
@@ -24,7 +24,7 @@ export function createRustAssociatedRequirementCollector(
   const entries: { carrier: Extract<TargetTypeRef, { readonly kind: "associated-type" }>; requirements: Set<RustGenericRequirement>; fieldAccess: Set<"read" | "write"> }[] = [];
   const require = (carrier: Extract<TargetTypeRef, { readonly kind: "associated-type" }>, requirement?: RustGenericRequirement): boolean => {
     if (carrier.trait === undefined || families.get(carrier.trait.id) === undefined) return false;
-    const references = rustTargetTypeParameterNames(carrier);
+    const references = rustTargetTypeParameterIdentities(carrier);
     if (references.length === 0) {
       const implementation = families.implementation(carrier.trait, carrier.owner);
       return implementation !== undefined && (requirement === undefined || classify(implementation.output, [requirement]));

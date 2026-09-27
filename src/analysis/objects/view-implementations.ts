@@ -16,7 +16,7 @@ export function selectRustProjectViewImplementations<View extends RustProjectVie
   views: readonly View[], context: RustAnalysisContext,
 ): readonly (View & { readonly ownerFileName: string })[] {
   const candidates = views.map(view => ({ view, parameters: rustTargetGenericReferences(view.sourceCarrier) }));
-  const parameterCount = (candidate: typeof candidates[number]): number => candidate.parameters.typeNames.length +
+  const parameterCount = (candidate: typeof candidates[number]): number => candidate.parameters.typeIdentities.length +
     candidate.parameters.lifetimeIdentities.length + candidate.parameters.constIdentities.length;
   candidates.sort((left, right) => parameterCount(right) - parameterCount(left));
   const selected: typeof candidates = [];
@@ -27,10 +27,10 @@ export function selectRustProjectViewImplementations<View extends RustProjectVie
         pattern.fields.some((field, index) => field.declaration !== view.fields[index]?.declaration ||
           field.storageIndex !== view.fields[index]?.storageIndex)) return false;
       const bindings = inferRustTargetGenericBindings(pattern.sourceCarrier, view.sourceCarrier, {
-        typeNames: new Set(parameters.typeNames), lifetimeIdentities: new Set(parameters.lifetimeIdentities),
+        typeIdentities: new Set(parameters.typeIdentities), lifetimeIdentities: new Set(parameters.lifetimeIdentities),
         constIdentities: new Set(parameters.constIdentities),
       });
-      if (bindings === undefined || bindings.types.size !== parameters.typeNames.length ||
+      if (bindings === undefined || bindings.types.size !== parameters.typeIdentities.length ||
         bindings.lifetimes.size !== parameters.lifetimeIdentities.length || bindings.consts.size !== parameters.constIdentities.length) return false;
       return rustTargetTypeRefEquals(substituteRustTargetGenerics(pattern.sourceCarrier, bindings.types, bindings.lifetimes, bindings.consts), view.sourceCarrier) &&
         rustTargetTypeRefEquals(substituteRustTargetGenerics(pattern.targetCarrier, bindings.types, bindings.lifetimes, bindings.consts), view.targetCarrier);

@@ -77,7 +77,7 @@ export function finalizeProjectSourceGenericArguments(
   );
   if (initialSubstitutions === undefined) return undefined;
   const typeParameterNames = new Set(parameters.flatMap((parameter) =>
-    parameter.kind === "type" ? [parameter.sourceName] : []));
+    parameter.kind === "type" ? [parameter.targetIdentity] : []));
   const inferred = reconcileProjectSourceArgumentTypeParameters(
     walk,
     selected,
@@ -89,7 +89,7 @@ export function finalizeProjectSourceGenericArguments(
   for (let index = 0; index < sourceArguments.length; index += 1) {
     const source = sourceArguments[index]!;
     const parameter = parameters[index]!;
-    const target = inferred.get(parameter.sourceName);
+    const target = inferred.get(parameter.targetIdentity);
     if (parameter.kind === "type" && target !== undefined &&
       source.explicitTypeNode === undefined) {
       finalized[index] = Object.freeze({ kind: "type", type: target });
@@ -107,12 +107,12 @@ export function finalizeProjectSourceGenericArguments(
         const parameter = parameters[index]!;
         const selectedTarget = finalized[index];
         if (parameter.kind !== "type" || selectedTarget?.kind !== "type") continue;
-        const contextualTarget = contextual.get(parameter.sourceName);
+        const contextualTarget = contextual.get(parameter.targetIdentity);
         if (contextualTarget === undefined ||
           rustTargetTypeRefEquals(selectedTarget.type, contextualTarget)) {
           continue;
         }
-        const argumentTarget = inferred.get(parameter.sourceName);
+        const argumentTarget = inferred.get(parameter.targetIdentity);
         if (argumentTarget !== undefined &&
           !rustTargetTypeRefEquals(argumentTarget, contextualTarget)) {
           continue;
@@ -124,7 +124,7 @@ export function finalizeProjectSourceGenericArguments(
           !projectSourceTypeArgumentHasLiteralProof(
             walk,
             selected.member,
-            parameter.sourceName,
+            parameter.targetIdentity,
             callArguments,
             contextualTarget,
           )) {
@@ -206,7 +206,7 @@ function reconcileProjectSourceArgumentTypeParameters(
           pair.pattern,
           pair.actual,
           {
-            typeNames: parameterNames,
+            typeIdentities: parameterNames,
             lifetimeIdentities: new Set(callScopedElisions.keys()),
             constIdentities: new Set(),
           },
@@ -300,7 +300,7 @@ function resolveProjectSourceInferenceCarrier(
 function projectSourceTypeArgumentHasLiteralProof(
   walk: RustFactWalk,
   member: RustTargetMember,
-  typeParameterName: string,
+  typeParameterIdentity: string,
   callArguments: readonly Node[],
   target: Extract<TargetTypeRef, { readonly kind: "source-primitive" }>,
 ): boolean {
@@ -308,7 +308,7 @@ function projectSourceTypeArgumentHasLiteralProof(
   for (let index = 0; index < member.parameters.length; index += 1) {
     const parameter = member.parameters[index];
     if (parameter?.type.kind !== "type-parameter" ||
-      parameter.type.name !== typeParameterName) {
+      parameter.type.identity !== typeParameterIdentity) {
       continue;
     }
     const argument = callArguments[index];

@@ -4,7 +4,7 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustConditionalSourceTypeFamily } from "../../../target-model/types/type-families.js";
 import { rustSourceTypeCarrierValue, rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { rustTargetTypeParameterNames } from "../../../target-model/types/carriers/generic-references.js";
+import { rustTargetTypeParameterIdentities } from "../../../target-model/types/carriers/generic-references.js";
 import { inferRustTargetTypeParameterBindings } from "../../../target-model/types/carriers/generic-inference.js";
 import { substituteRustTargetTypeParameters } from "../../../target-model/types/carriers/substitution.js";
 import { resolveRustAuthoredTargetType } from "./tuples.js";
@@ -98,7 +98,7 @@ export function resolveRustTypeFamilyApplication(
     if (templateOwner === undefined) return undefined;
     if (!rustTargetTypeRefEquals(templateOwner, owner)) {
       const bindings = inferRustTargetTypeParameterBindings(templateOwner, owner,
-        new Set(rustTargetTypeParameterNames(templateOwner)));
+        new Set(rustTargetTypeParameterIdentities(templateOwner)));
       const templateApplication = context.currentSemantics.types.instantiateAlias(family.declaration, [template!]);
       if (bindings === undefined || templateApplication === undefined) return undefined;
       const output = resolveRustTypeFamilyApplication(templateApplication, [templateOwner], context, options, resolving);

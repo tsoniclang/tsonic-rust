@@ -54,6 +54,7 @@ export const rustStrRefType: RustType = {
 };
 
 interface RustSourceTypeRendering {
+  readonly typeParameterNames?: ReadonlyMap<string, string>;
   readonly pathFor: (value: { readonly fileName: string; readonly typeName: string }) => string | undefined;
   readonly additionalArgumentsFor: (carrier: TargetTypeRef) => readonly RustGenericArgument[];
 }
@@ -132,7 +133,7 @@ export function rustTypeFromCarrier(
     };
   }
   if (carrier.kind === "type-parameter") {
-    return { kind: "named", path: carrier.name };
+    return { kind: "named", path: resolveSourceTypePath?.typeParameterNames?.get(carrier.identity) ?? carrier.name };
   }
   if (carrier.kind === "reference") {
     const referent = !carrier.mutable && carrier.referent.kind === "target-named" &&
@@ -462,6 +463,7 @@ export function isFloatCarrier(carrier: TargetTypeRef | undefined): boolean {
 }
 
 export interface RustTypeRenderingContext {
+    readonly typeParameterNames?: ReadonlyMap<string, string>;
     readonly moduleName: string;
     readonly moduleNameByFileName: ReadonlyMap<string, string>;
     readonly externalCrateNameByFileName: ReadonlyMap<string, string>;
@@ -569,7 +571,8 @@ export function rustTypeFromCarrierInContext(
   };
   const rendered = rustTypeFromCarrier(
     selectedCarrier,
-    { pathFor: resolveSourceTypePath, additionalArgumentsFor: type => rustOptionalStorageTypeArguments(type, context) },
+    { typeParameterNames: context.typeParameterNames,
+      pathFor: resolveSourceTypePath, additionalArgumentsFor: type => rustOptionalStorageTypeArguments(type, context) },
     resolveStructuralShape,
   );
   if (position === "inferred-call" && rendered !== undefined && rustTypeContainsImplTrait(rendered)) {

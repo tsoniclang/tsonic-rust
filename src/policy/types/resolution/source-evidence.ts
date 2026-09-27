@@ -33,6 +33,7 @@ import { mapRustTargetTypes } from "../../../target-model/types/carriers/substit
 import { resolveBoundSourceTypeParameter } from "./callables.js";
 import { rustTypeFamilyNormalizer } from "../type-family-normalization.js";
 import { rustGenericCallableTargetType } from "../../../target-model/types/carriers/generic-callables.js";
+import { rustTypeParameterFromSourceContract } from "../../../target-model/names/type-parameters.js";
 import { rustGenericCallableOrigin } from "../generic-callable-origin.js";
 import { closeRustCallableResultStorage } from "../callable-result-storage.js";
 import { rustSourceSelectionUsesExactBindings } from "./bound-source-selection.js";
@@ -107,7 +108,7 @@ export function resolveRustCallableEvidence(
   if (genericContract !== undefined && genericContract.parameters.length > 0 &&
     genericContract.parameters.every(parameter => parameter.kind === "type")) {
     const origin = rustGenericCallableOrigin(context.ast, declaration);
-    return origin === undefined ? undefined : rustGenericCallableTargetType(genericContract.parameters.map(parameter => parameter.targetName),
+    return origin === undefined ? undefined : rustGenericCallableTargetType(genericContract.parameters.map(rustTypeParameterFromSourceContract),
       parameters as readonly TargetTypeRef[], result, origin);
   }
   if (genericContract?.lifetimeBinder !== undefined) {
@@ -235,11 +236,11 @@ export function resolveRustTypeComponentEvidence(
     const normalizedSelected = mapRustTargetTypes(selected, normalize);
     if (rustTargetTypeRefEquals(normalizedAuthored, normalizedSelected)) return authored;
     const references = rustTargetGenericReferences(normalizedAuthored);
-    if (references.typeNames.length > 0) {
+    if (references.typeIdentities.length > 0) {
       const substitutions = inferRustTargetTypeParameterBindings(
         normalizedAuthored,
         normalizedSelected,
-        new Set(references.typeNames),
+        new Set(references.typeIdentities),
       );
       return substitutions === undefined
         ? undefined

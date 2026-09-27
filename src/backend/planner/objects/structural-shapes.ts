@@ -38,7 +38,7 @@ import {
 } from "../../../target-model/types/index.js";
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
 import { rustLifetimeToAst } from "../types/lifetime-syntax.js";
-import { rustStructuralShapeGenerics } from "./structural-generics.js";
+import { rustStructuralShapeGenerics, rustStructuralShapeContext } from "./structural-generics.js";
 import { planRustNumberArrayUnionImplementation } from "./number-array-unions.js";
 import { planRustConstructorShape } from "./constructor-shapes.js";
 
@@ -103,13 +103,14 @@ export function planRustStructuralShapeModule(
       definition.sourceCarriers,
       visibility === "public",
     );
-    const generics = rustStructuralShapeGenerics(definition, context);
+    const scope = rustStructuralShapeContext(definition, context);
+    const generics = rustStructuralShapeGenerics(definition, scope);
     const aliasGenericArguments: readonly RustGenericArgument[] = definition.genericParameters.map((parameter) =>
       parameter.kind === "lifetime"
         ? { kind: "lifetime", lifetime: rustLifetimeToAst(parameter.lifetime) }
-        : { kind: "type", type: { kind: "named", path: parameter.name } });
+        : { kind: "type", type: { kind: "named", path: scope.typeParameterNames?.get(parameter.identity) ?? parameter.name } });
     const definitionContext = {
-      ...context,
+      ...scope,
       lifetimeSubstitutions: new Map(definition.genericParameters.flatMap((parameter) =>
         parameter.kind === "lifetime"
           ? [[rustLifetimeKey(parameter.lifetime), parameter.lifetime] as const]

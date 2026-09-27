@@ -10,7 +10,7 @@ import { createRustStructuralShapePlan } from "../../../dist/analysis/objects/st
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
 
 test("source union generic arguments survive substitution and reject malformed metadata", () => {
-  const parameter = { kind: "type-parameter", name: "Element" };
+  const parameter = { kind: "type-parameter", identity: "Element", name: "Element" };
   const integer = rustSourcePrimitiveTargetType("int32");
   const original = rustSourceUnionTargetType("/src/region.ts", "Region", [{ kind: "type", type: parameter }]);
   const definitions = createRustTypeDefinitionRegistry();
@@ -120,7 +120,7 @@ export function main(): void {
 });
 
 test("generic structural storage preserves exact arguments while sharing alpha-equivalent definitions", () => {
-  const parameter = name => ({ kind: "type-parameter", name });
+  const parameter = name => ({ kind: "type-parameter", identity: name, name });
   const shape = (first, second, readonly = false) => rustStructuralObjectTargetType("/src/region.ts", [
     { sourceName: "first", type: first, readonly, presence: "required" },
     { sourceName: "second", type: second, readonly, presence: "required" },
@@ -140,7 +140,7 @@ test("generic structural storage preserves exact arguments while sharing alpha-e
   assert.deepEqual(new Set(first.genericArguments.map(argument => argument.type.name)), new Set(["Left", "Right"]));
   const renamedParameters = new Map([["Left", "Zed"], ["Right", "Alpha"]]);
   assert.deepEqual(second.genericArguments, first.genericArguments.map(argument => ({
-    kind: "type", type: { kind: "type-parameter", name: renamedParameters.get(argument.type.name) },
+    kind: "type", type: parameter(renamedParameters.get(argument.type.name)),
   })));
   assert.deepEqual(plan.field(renamed, 0).carrier, parameter("Zed"));
   assert.deepEqual(plan.field(renamed, 1).carrier, parameter("Alpha"));
@@ -156,7 +156,7 @@ test("generic structural storage preserves exact arguments while sharing alpha-e
 test("equal target carriers retain distinct source instantiations without ambiguous refinements", () => {
   const registry = createRustSourceTypeRegistry();
   const declaration = {};
-  const parameter = { kind: "type-parameter", name: "Element" };
+  const parameter = { kind: "type-parameter", identity: "Element", name: "Element" };
   const carrier = rustSourceUnionTargetType("/src/region.ts", "Region", [{ kind: "type", type: parameter }]);
   const firstType = {};
   const secondType = {};
@@ -185,7 +185,7 @@ test("equal target carriers retain distinct source instantiations without ambigu
 
 test("structural instantiations reuse only their proven generic storage template", () => {
   const template = rustStructuralObjectTargetType("/src/region.ts", [
-    { sourceName: "value", type: { kind: "type-parameter", name: "Element" }, readonly: true, presence: "required" },
+    { sourceName: "value", type: { kind: "type-parameter", identity: "Element", name: "Element" }, readonly: true, presence: "required" },
   ]);
   const byte = rustSourcePrimitiveTargetType("uint8");
   const instance = substituteRustTargetTypeParameters(template, new Map([["Element", byte]]));
@@ -198,7 +198,7 @@ test("structural instantiations reuse only their proven generic storage template
   assert.deepEqual(plan.definitionForCarrier(instance).genericArguments, [{ kind: "type", type: byte }]);
   assert.deepEqual(plan.field(instance, 0).carrier, byte);
   const wrongTemplate = rustStructuralObjectTargetType("/src/region.ts", [
-    { sourceName: "different", type: { kind: "type-parameter", name: "Element" }, readonly: true, presence: "required" },
+    { sourceName: "different", type: { kind: "type-parameter", identity: "Element", name: "Element" }, readonly: true, presence: "required" },
   ]);
   assert.throws(() => createRustStructuralShapePlan(shapes, [], () => "root", [], [{ template: wrongTemplate, instance }]), /missing.*template/u);
   assert.throws(() => createRustStructuralShapePlan([...shapes, { carrier: wrongTemplate }], [], () => "root", [], [{ template: wrongTemplate, instance }]), /exact generic-parameter correspondence/u);

@@ -13,7 +13,7 @@ test("signed native all-bits identities retain the exact converted operand", () 
     }
   }
   for (const carrier of [{ kind: "source-primitive", name: "uint32" },
-    { kind: "source-primitive", name: "float64" }, { kind: "type-parameter", name: "Custom" }]) {
+    { kind: "source-primitive", name: "float64" }, { kind: "type-parameter", identity: "Custom", name: "Custom" }]) {
     assert.equal(planRustNativeIntegerIdentity("&", value, { kind: "int-literal", text: "-1" }, carrier), undefined);
   }
   const signed = { kind: "source-primitive", name: "int32" };

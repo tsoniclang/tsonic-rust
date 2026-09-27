@@ -257,7 +257,7 @@ function matchesByElidingCallScopedLifetimes(
     pattern,
     actual,
     {
-      typeNames: new Set(),
+      typeIdentities: new Set(),
       lifetimeIdentities: new Set(lifetimes.keys()),
       constIdentities: new Set(),
     },

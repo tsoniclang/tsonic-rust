@@ -14,7 +14,7 @@ test("native indexing keeps usize and checked native integer widths without floa
     });
   }
   for (const carrier of [undefined, rustSourcePrimitiveTargetType("float64"), rustSourcePrimitiveTargetType("bool"),
-    { kind: "type-parameter", name: "T" }]) {
+    { kind: "type-parameter", identity: "T", name: "T" }]) {
     assert.equal(selectRustNativeIndex(carrier), undefined);
   }
 });

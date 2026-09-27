@@ -64,6 +64,7 @@ export function analyzeRustLifetimes(
   const contracts: RustSourceGenericContract[] = [];
   const unresolved = new Map<Node, {
     readonly owner: Node;
+    readonly identity: string;
     readonly sourceName: string;
     readonly targetName: string;
     readonly kind: "lifetime" | "type";
@@ -75,8 +76,9 @@ export function analyzeRustLifetimes(
       const nameNode = input.ast.name(parameter);
       const sourceName = nameNode === undefined ? "" : input.ast.text(nameNode);
       const targetName = input.names.nameForDeclaration(parameter) ?? "";
+      const identity = sourceNodeIdentity(input.ast, parameter);
       if (evidence === undefined || evidence.owner !== owner || evidence.parameter !== parameter ||
-        sourceName.length === 0 || targetName.length === 0) {
+        identity === undefined || sourceName.length === 0 || targetName.length === 0) {
         diagnostics.push(diagnostic(
           "RUST_LIFETIME_GENERIC_IDENTITY_MISSING",
           "A generic parameter has no exact finalized owner, kind, and target name.",
@@ -86,6 +88,7 @@ export function analyzeRustLifetimes(
       }
       unresolved.set(parameter, {
         owner,
+        identity,
         sourceName,
         targetName,
         kind: evidence.kind,
@@ -198,6 +201,7 @@ export function analyzeRustLifetimes(
         : Object.freeze({
             kind: "type" as const,
             declaration: parameter,
+            identity: registered.identity,
             sourceName: registered.sourceName,
             targetName: registered.targetName,
             outlives: Object.freeze(outlives as RustLifetimeRef[]),

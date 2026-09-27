@@ -8,6 +8,7 @@ import { rustAbsenceTargetType, rustSourcePrimitiveTargetType, rustStringTargetT
 import { isRustBigIntCarrier, rustJsNumericTargetType, rustJsStringNumberTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { sourceNodesEqual } from "@tsonic/target-api/source";
+import { rustSourceTypeParameter } from "../../../target-model/names/type-parameters.js";
 import { sourcePrimitiveFactKey } from "@tsonic/tsts";
 import type {
   ExtensionFactSubject,
@@ -57,13 +58,12 @@ export function resolveSourceTypeParameter(
     return undefined;
   }
   const declaration = referencedDeclaration ?? symbolDeclaration;
-  if (declaration === undefined || context.ast.kindName(declaration) !== "KindTypeParameter") {
+  if (declaration === undefined || !context.ast.is.IsTypeParameterDeclaration(declaration)) {
     return undefined;
   }
   const substitution = context.sourceTypeParameterSubstitutions?.get(declaration);
   if (substitution !== undefined) return substitution.carrier;
-  const name = context.ast.text(context.ast.name(declaration));
-  return name.length === 0 ? undefined : { kind: "type-parameter", name };
+  return rustSourceTypeParameter(declaration, context.ast);
 }
 
 export function resolveBoundSourceTypeParameter(

@@ -452,7 +452,7 @@ export function planProjectMethodVariants(
   const methods: RustImplFunction[] = [];
   for (const variant of variants) {
     const specialization = rustCallableSpecialization(
-      variant.sourceTypeParameterNames,
+      variant.sourceTypeParameterIdentities,
       variant.targetTypeArguments,
     );
     if (specialization === undefined) {

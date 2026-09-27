@@ -1,5 +1,5 @@
 import type { RustProjectProjectionRequirement } from "../../../target-model/types/project-projections.js";
-import { rustTargetTypeParameterNames } from "../../../target-model/types/carriers/generic-references.js";
+import { rustTargetTypeParameterIdentities } from "../../../target-model/types/carriers/generic-references.js";
 import type { RustWherePredicate } from "../../target-ast/nodes.js";
 import { rustTypeFromCarrierInContext, type RustTypeRenderingContext } from "./render.js";
 
@@ -8,7 +8,7 @@ export function rustProjectProjectionPredicates(
 ): readonly RustWherePredicate[] {
   return Object.freeze(requirements.flatMap(requirement => {
     if (!requirement.requiresBound) return [];
-    if ([requirement.sourceCarrier, requirement.targetCarrier].flatMap(rustTargetTypeParameterNames).length === 0) return [];
+    if ([requirement.sourceCarrier, requirement.targetCarrier].flatMap(rustTargetTypeParameterIdentities).length === 0) return [];
     const source = rustTypeFromCarrierInContext(requirement.sourceCarrier, context);
     const target = rustTypeFromCarrierInContext(requirement.targetCarrier, context);
     if (source === undefined || target === undefined) throw new Error("A finalized project projection bound lost its native type.");

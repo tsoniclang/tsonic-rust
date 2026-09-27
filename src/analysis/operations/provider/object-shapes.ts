@@ -565,7 +565,7 @@ export function acceptProjectSourceCall(
         targetGenericArguments.map((argument, index) => {
           const parameter = genericContract[index]!;
           return parameter.kind === "type" && argument.kind === "type"
-            ? { kind: "type" as const, type: { kind: "type-parameter" as const, name: parameter.sourceName } }
+            ? { kind: "type" as const, type: { kind: "type-parameter" as const, identity: parameter.identity, name: parameter.targetName } }
             : argument;
         }),
         options,
@@ -711,6 +711,7 @@ export function acceptProjectSourceCall(
             ? {
                 kind: "type" as const,
                 sourceName: parameter.sourceName,
+                targetIdentity: parameter.identity,
               }
             : {
                 kind: "lifetime" as const,

@@ -6,6 +6,7 @@ import type {
 } from "@tsonic/tsts";
 import type { SourceProgramNavigation } from "@tsonic/target-api/source";
 import { selectedValueCarrier } from "./selected-values.js";
+import { rustSelectedCallTypeParameters } from "../../policy/types/resolution/generic-arguments.js";
 import {
   acceptRustPolicy,
   rejectRustPolicy,
@@ -222,6 +223,9 @@ export function recordRustTypedLocationCall(
   const { pointeeCarrier, locationCarrier } = plan;
   const sourceOperation = plan;
   const selectedGenericParameters = request.source.sourceSelectedMethodTypeArguments ?? [];
+  const sourceParameters = rustSelectedCallTypeParameters(selectedGenericParameters, context);
+  if (sourceParameters === undefined) return rejectRustTypedLocation(request.source.call, context,
+    "RUST_POINTER_GENERIC_EVIDENCE_CONFLICT", "A pointer operation requires exact selected generic declarations.");
   const operationId = `tsonic.rust.location.${sourceOperation.operation}`;
   const evidence = [{
     message: `rust selected exact typed-location operation ${sourceOperation.operation}`,
@@ -266,9 +270,10 @@ export function recordRustTypedLocationCall(
       passingMode: "by-value",
     })),
     returnType: resultCarrier,
-    genericParameters: selectedGenericParameters.map(parameter => ({
+    genericParameters: sourceParameters.map(parameter => ({
       kind: "type",
-      sourceName: parameter.typeParameterName,
+      sourceName: parameter.name,
+      targetIdentity: parameter.identity,
     })),
     providerDeclaration: provider,
   };

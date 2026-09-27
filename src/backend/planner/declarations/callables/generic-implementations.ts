@@ -17,6 +17,8 @@ import { rustProjectProjectionPredicates } from "../../types/project-projection-
 import { planNativeModuleFunction } from "./functions.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
 import { genericCallableCopyStateItems, genericCallableStorageItems } from "./generic-storage.js";
+import { rustAuthoredTypeParameterNames } from "../../../../target-model/names/type-parameters.js";
+import { rustGeneratedTypeParameterContext } from "../../names/type-parameters.js";
 
 export function rustGenericCallableImplementationPath(
   implementation: RustGenericCallableImplementation, name: string, context: RustTypeRenderingContext,
@@ -33,8 +35,10 @@ export function rustGenericCallableCaptureType(
     ? rustLocationTargetType(capture.storageCarrier) : capture.storageCarrier, context);
 }
 
-export function rustGenericCallableMarker(definition: RustGenericCallableDefinition): RustType {
-  const environment: RustType = { kind: "tuple", elements: definition.signature.environmentParameters.map(path => ({ kind: "named", path })) };
+export function rustGenericCallableMarker(definition: RustGenericCallableDefinition, context: RustTypeRenderingContext): RustType {
+  const environment: RustType = { kind: "tuple", elements: definition.signature.environmentParameters.map(parameter => ({
+    kind: "named", path: context.typeParameterNames?.get(parameter.identity) ?? parameter.name,
+  })) };
   return { kind: "named", path: "core::marker::PhantomData", genericArguments: [{ kind: "type", type: {
     kind: "function-pointer", parameters: [environment], result: environment,
   } }] };
@@ -62,7 +66,9 @@ function planImplementation(
   definition: RustGenericCallableDefinition, implementation: RustGenericCallableImplementation, context: RustPlanContext,
 ): readonly RustItem[] | undefined {
   const substitutions = new Map(implementation.substitutions);
-  const helperContext = { ...context, typeParameterSubstitutions: substitutions };
+  const helperContext = rustGeneratedTypeParameterContext(definition.signature.environmentParameters,
+    rustAuthoredTypeParameterNames(implementation.declaration, context.input.program.source.ast),
+    { ...context, typeParameterSubstitutions: substitutions });
   const captures = implementation.captures.map(capture => rustGenericCallableCaptureType(capture, helperContext));
   if (captures.some(type => type === undefined)) return undefined;
   const names = createRustSyntheticNameState(context.input.program.source.ast, implementation.declaration, []);
@@ -81,17 +87,17 @@ function planImplementation(
   if (helper?.kind !== "function") return undefined;
   const contract = context.input.program.declarationGenericRequirements.contractFor(implementation.declaration);
   if (contract === undefined) return undefined;
-  const environment = environmentParameters(definition);
-  const parameters = environment.map(parameter => {
-    const original = implementation.substitutions.find(([_name, type]) => type.kind === "type-parameter" && type.name === parameter.name)?.[0];
-    const requirements = contract.capturedTypeParameters.find(parameter => parameter.name === original)?.requirements ?? [];
+  const environment = environmentParameters(definition, helperContext);
+  const parameters = environment.map((parameter, index) => {
+    const identity = definition.signature.environmentParameters[index]!.identity;
+    const original = implementation.substitutions.find(([_identity, type]) => type.kind === "type-parameter" && type.identity === identity)?.[0];
+    const requirements = contract.capturedTypeParameters.find(parameter => parameter.identity === original)?.requirements ?? [];
     return { ...parameter, bounds: rustGenericRequirementBounds(requirements) };
   });
-  if (parameters.some(parameter => helper.generics.parameters.some(candidate => candidate.name === parameter.name))) return undefined;
   const fields = implementation.captures.map((_capture, index) => ({
     name: `capture_${index}`, type: captures[index]!, visibility: "public" as const,
   }));
-  if (environment.length > 0) fields.push({ name: "marker", type: rustGenericCallableMarker(definition), visibility: "public" });
+  if (environment.length > 0) fields.push({ name: "marker", type: rustGenericCallableMarker(definition, helperContext), visibility: "public" });
   const generics = { parameters: environment, wherePredicates: [] };
   const state: RustType = { kind: "named", path: implementation.stateName,
     genericArguments: environment.map(parameter => ({ kind: "type", type: { kind: "named", path: parameter.name } })),
@@ -109,10 +115,10 @@ function planImplementation(
 }
 
 function planDefinition(definition: RustGenericCallableDefinition, context: RustPlanContext): readonly RustItem[] | undefined {
-  const environment = environmentParameters(definition);
+  const environment = environmentParameters(definition, context);
   const arguments_ = environment.map(parameter => ({ kind: "type" as const, type: { kind: "named" as const, path: parameter.name } }));
   const signatureCarrier = rustGenericCallableCarrier({ origin: definition.origin, signature: definition.signature,
-    environment: environment.map(parameter => ({ kind: "type-parameter", name: parameter.name })),
+    environment: definition.signature.environmentParameters,
   });
   const protocol = rustGenericCallableProtocol(signatureCarrier);
   const boundary = rustCurrentErrorBoundary(context);
@@ -143,10 +149,10 @@ function planDefinition(definition: RustGenericCallableDefinition, context: Rust
     const substitutions = new Map(implementation.substitutions);
     for (const [index, parameter] of source.parameters.entries()) {
       if (parameter.kind !== "type") return undefined;
-      substitutions.set(parameter.targetName, { kind: "type-parameter", name: definition.signature.typeParameters[index]! });
+      substitutions.set(parameter.identity, definition.signature.typeParameters[index]!);
     }
     for (const parameter of [...contract.typeParameters, ...contract.capturedTypeParameters]) {
-      const type = substitutions.get(parameter.name);
+      const type = substitutions.get(parameter.identity);
       if (type === undefined) continue;
       const rendered = rustTypeFromCarrierInContext(type, context);
       if (rendered === undefined) return undefined;
@@ -166,7 +172,7 @@ function planDefinition(definition: RustGenericCallableDefinition, context: Rust
       ? nativeFuture ? owner : { kind: "method-call", receiver: owner, method: "clone", args: [] }
       : definition.storage === "shared" ? { kind: "method-call", receiver: owner, method: "as_ref", args: [] } : owner;
     const call: RustExpr = { kind: "call", path,
-      genericArguments: [...arguments_, ...definition.signature.typeParameters.map(path => ({ kind: "type" as const, type: { kind: "named" as const, path } }))],
+      genericArguments: [...arguments_, ...definition.signature.typeParameters.map(parameter => ({ kind: "type" as const, type: { kind: "named" as const, path: parameter.name } }))],
       args: [...(implementation.captures.length === 0 ? [] : [ownerArgument]),
         ...parameterTypes.map((_type, index): RustExpr => ({ kind: "path", path: `argument_${index}` }))],
     };
@@ -190,11 +196,11 @@ function planDefinition(definition: RustGenericCallableDefinition, context: Rust
   const resultType: RustType = nativeFuture ? { kind: "impl-trait", bounds: [{ kind: "trait-type", reference: {
     trait: { kind: "named", path: "core::future::Future", genericArguments: [{ kind: "associated-equality", name: "Output", genericArguments: [], type: methodOutput }] },
   } }], outlives: [], captures: [{ kind: "type", type: { kind: "named", path: "Self" } },
-    ...arguments_, ...definition.signature.typeParameters.map(path => ({ kind: "type" as const, type: { kind: "named" as const, path } }))] } : methodOutput;
+    ...arguments_, ...definition.signature.typeParameters.map(parameter => ({ kind: "type" as const, type: { kind: "named" as const, path: parameter.name } }))] } : methodOutput;
   return [...genericCallableStorageItems(definition, generics, target, variants as NonNullable<typeof variants[number]>[]),
   { kind: "impl", target, generics, members: [{ kind: "function",
     name: "call", visibility: "public", selfParam: { kind: "reference", mutable: false },
-    generics: { parameters: definition.signature.typeParameters.map(name => ({ kind: "type", name, bounds: [] })),
+    generics: { parameters: definition.signature.typeParameters.map(parameter => ({ kind: "type", name: parameter.name, bounds: [] })),
       wherePredicates: [...predicates.values()],
     }, params: parameterTypes.map((type, index) => ({ name: `argument_${index}`, type: type! })),
     returnType: resultType,
@@ -210,8 +216,9 @@ function shared(type: RustType): RustType {
   return { kind: "named", path: "alloc::rc::Rc", genericArguments: [{ kind: "type", type }] };
 }
 
-function environmentParameters(definition: RustGenericCallableDefinition): Extract<RustGenericParameter, { kind: "type" }>[] {
-  return definition.signature.environmentParameters.map(name => ({ kind: "type", name, bounds: [] }));
+function environmentParameters(definition: RustGenericCallableDefinition, context: RustTypeRenderingContext): Extract<RustGenericParameter, { kind: "type" }>[] {
+  return definition.signature.environmentParameters.map(parameter => ({ kind: "type",
+    name: context.typeParameterNames?.get(parameter.identity) ?? parameter.name, bounds: [] }));
 }
 
 function reject(node: Node, context: RustPlanContext): void {

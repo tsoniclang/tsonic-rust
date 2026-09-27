@@ -20,6 +20,6 @@ export function rustProjectGenericParameters(
   const parameters = bindings.map(binding => context.sourceLifetimes.parameterFor(binding.declaration));
   if (parameters.some(parameter => parameter === undefined)) return undefined;
   const exact = parameters as readonly RustSourceGenericParameterContract[];
-  const names = exact.map(parameter => parameter.kind === "type" ? parameter.targetName : parameter.lifetime.name);
-  return new Set(names).size === names.length ? Object.freeze([...exact]) : undefined;
+  const identities = exact.map(parameter => parameter.kind === "type" ? parameter.identity : parameter.lifetime.identity);
+  return new Set(identities).size === identities.length ? Object.freeze([...exact]) : undefined;
 }

@@ -1,3 +1,4 @@
+import { rustTypeParameterFromSourceContract } from "../../target-model/names/type-parameters.js";
 import { rustCallableInvocationResult } from "../facts/callable-results.js";
 import {
   KindFunctionExpression,
@@ -321,9 +322,9 @@ function recordCallableValueSignatureFacts(
       rustResolutionContext(walk, declaration),
       walk.operationOptions,
     ));
-  const ownNames = walk.context.sourceLifetimes.contractFor(expression)?.parameters
-    .flatMap(parameter => parameter.kind === "type" ? [parameter.targetName] : []);
-  const callable = rustGenericCallableProtocol(selectedCarrier, ownNames) ?? rustCallableProtocol(selectedCarrier);
+  const ownParameters = walk.context.sourceLifetimes.contractFor(expression)?.parameters
+    .flatMap(parameter => parameter.kind === "type" ? [rustTypeParameterFromSourceContract(parameter)] : []);
+  const callable = rustGenericCallableProtocol(selectedCarrier, ownParameters) ?? rustCallableProtocol(selectedCarrier);
   const closure = rustClosureProtocol(selectedCarrier);
   const parameterCarriers = selectedCarrier?.kind === "function-pointer"
     ? selectedCarrier.args
@@ -377,8 +378,8 @@ function recordCallableValueSignatureFacts(
   const valueReturnCarrier = selectedCallableValueReturn(walk, expression, returnCarrier);
   const runtimeCarrier = selectedCarrier.kind === "function-pointer" || selectedCarrier.kind === "closure"
     ? { ...selectedCarrier, args: runtimeParameterCarriers, result: valueReturnCarrier }
-    : rustGenericCallableValue(selectedCarrier) !== undefined && ownNames !== undefined
-      ? rustGenericCallableTargetType(ownNames, runtimeParameterCarriers, valueReturnCarrier, rustGenericCallableValue(selectedCarrier)!.origin)
+    : rustGenericCallableValue(selectedCarrier) !== undefined && ownParameters !== undefined
+      ? rustGenericCallableTargetType(ownParameters, runtimeParameterCarriers, valueReturnCarrier, rustGenericCallableValue(selectedCarrier)!.origin)
     : rustCallableTargetType(runtimeParameterCarriers, valueReturnCarrier);
   if (runtimeCarrier !== undefined) setCarrierFact(walk, declaration, runtimeCarrier);
 }

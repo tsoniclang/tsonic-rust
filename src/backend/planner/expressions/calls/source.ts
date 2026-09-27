@@ -193,7 +193,7 @@ export function planSelectedSourceCall(
     const contract = context.input.program.declarationGenericRequirements.contractFor(selectedDeclaration);
     if (contract !== undefined) {
       const substitutions = new Map(contract.typeParameters.map((parameter, index) =>
-        [parameter.name, targetTypeArguments[index]!] as const));
+        [parameter.identity, targetTypeArguments[index]!] as const));
       targetAstGenericArguments.push(...rustOptionalStorageCallArguments(selectedDeclaration, substitutions, context));
     }
   }

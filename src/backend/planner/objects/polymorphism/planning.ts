@@ -51,6 +51,7 @@ import {
 } from "../project-storage-abi.js";
 import { planProjectPrivateStateAccessors } from "./private-fields.js";
 import { rustClassEnvironmentHandleType } from "../class-environment-types.js";
+import { rustProjectTypeParameterContext } from "../../names/type-parameters.js";
 
 export function planPolymorphicClassDeclaration(
   declaration: Node,
@@ -61,6 +62,7 @@ export function planPolymorphicClassDeclaration(
     return undefined;
   }
   const diagnosticCountBeforeShape = context.diagnostics.length;
+  context = rustProjectTypeParameterContext(definition, context, "declaration");
   const openCarrier = context.input.program.projectTypes.openCarrier(definition);
   const representation = context.input.program.objectRepresentations.representationFor(definition);
   const wrapperType = rustTypeFromCarrierInContext(openCarrier, context);
@@ -92,7 +94,13 @@ export function planPolymorphicClassDeclaration(
     return undefined;
   }
   const diagnosticCountBeforeConstructor = context.diagnostics.length;
-  const constructor = planProjectClassConstructor(definition, wrapperType, rootType, layers, context);
+  const implementationContext = rustProjectTypeParameterContext(definition, context, "implementation");
+  const implementationType = rustTypeFromCarrierInContext(openCarrier, implementationContext);
+  const implementationRoot = rustProjectRootType(openCarrier, implementationContext);
+  const implementationLayers = projectClassStateLayers(definition, openCarrier, implementationContext);
+  if (implementationType === undefined || implementationRoot === undefined || implementationLayers === undefined) return undefined;
+  const implementationGenerics = rustProjectRepresentationGenerics(representation, implementationContext);
+  const constructor = planProjectClassConstructor(definition, implementationType, implementationRoot, implementationLayers, implementationContext);
   if (constructor === undefined) {
     if (context.diagnostics.length === diagnosticCountBeforeConstructor) {
       context.diagnostics.push(missingFactDiagnostic(
@@ -107,9 +115,9 @@ export function planPolymorphicClassDeclaration(
   const rootImplementations = constructor.construct === undefined ? [] : planProjectRootImplementations(
     definition,
     openCarrier,
-    rootType,
-    layers,
-    context,
+    implementationRoot,
+    implementationLayers,
+    implementationContext,
   );
   if (rootImplementations === undefined) {
     if (context.diagnostics.length === diagnosticCountBeforeRootImplementations) {
@@ -145,7 +153,7 @@ export function planPolymorphicClassDeclaration(
   if (baseLayer !== undefined && baseStateType === undefined) {
     return undefined;
   }
-  const staticMethods = planProjectStaticMethods(definition, context);
+  const staticMethods = planProjectStaticMethods(definition, implementationContext);
   const externalErrorImplementations = planProjectExternalErrorImplementations(
     definition,
     wrapperType,
@@ -158,8 +166,8 @@ export function planPolymorphicClassDeclaration(
   const implementationVisibility = rustProjectImplementationVisibility(publiclyReachable);
   const wrapperVisibility = exported || publiclyReachable ? "public" as const : "crate" as const;
   const defaultImplementation = constructor.construct === undefined ? undefined : rustDefaultImplementation(
-    wrapperType,
-    generics,
+    implementationType,
+    implementationGenerics,
     constructor.construct,
   );
   const selectedEnvironment = context.input.program.classValues.forDeclaration(declaration)?.environment;
@@ -311,8 +319,8 @@ export function planPolymorphicClassDeclaration(
     } satisfies RustItem]),
     {
       kind: "impl",
-      generics,
-      target: wrapperType,
+      generics: implementationGenerics,
+      target: implementationType,
       members: [constructor.initialize, ...(constructor.construct === undefined ? [] : [constructor.construct]), ...staticMethods],
     },
     ...(defaultImplementation === undefined ? [] : [defaultImplementation]),
@@ -428,6 +436,7 @@ export function planPolymorphicInterfaceDeclaration(
   if (definition?.kind !== "interface" || !context.input.program.projectTypes.isPolymorphic(definition)) {
     return undefined;
   }
+  context = rustProjectTypeParameterContext(definition, context, "declaration");
   const carrier = context.input.program.projectTypes.openCarrier(definition);
   const representation = context.input.program.objectRepresentations.representationFor(definition);
   const wrapperType = rustTypeFromCarrierInContext(carrier, context);

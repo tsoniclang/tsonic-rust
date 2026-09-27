@@ -39,7 +39,7 @@ test("collection rows require exact carrier capabilities", () => {
     argumentCarriers: [],
   })?.fact.operationId, "tsonic.rust.js.ReadonlySet.values.call");
 
-  const unresolved = { kind: "type-parameter", name: "T" };
+  const unresolved = { kind: "type-parameter", identity: "T", name: "T" };
   assert.equal(selectJsSurfaceOperation({
     ownerName: "ReadonlyMap",
     memberName: "keys",
@@ -57,7 +57,7 @@ test("collection rows require exact carrier capabilities", () => {
 });
 
 test("generic collection clone obligations require an explicit source declaration context", () => {
-  const parameter = { kind: "type-parameter", name: "Element" };
+  const parameter = { kind: "type-parameter", identity: "Element", name: "Element" };
   const request = {
     ownerName: "ReadonlyMap",
     memberName: "keys",

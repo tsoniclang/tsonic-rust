@@ -564,7 +564,8 @@ function applySelectedRuntimeCallableCall(
   if (!isDenseDataArray(callArguments) || callArguments.some(argument => argument === undefined)) return undefined;
   const carrier = selectedSignature.sourceCallableCarrier;
   const genericNames = (selectedSignature.member.genericParameters ?? [])
-    .flatMap(parameter => parameter.kind === "type" ? [parameter.sourceName] : []);
+    .flatMap(parameter => parameter.kind === "type" ? [{ kind: "type-parameter" as const,
+      identity: parameter.targetIdentity, name: parameter.sourceName }] : []);
   const protocol = rustGenericCallableProtocol(carrier, genericNames) ??
     rustNativeCallableProtocol(carrier) ?? rustCallableProtocol(carrier);
   const finalized = finalizeProjectSourceGenericArguments(walk, selectedSignature, callArguments as readonly Node[], undefined);

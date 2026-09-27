@@ -36,9 +36,9 @@ test("generic invocation defers unproved AsRef obligations without creating owne
     kind: "provider-operation", operationId: "acme.accept",
     operationKind: "method", target: { form: "call", path: "acme::accept" },
     resultCarrier: { kind: "tuple", elements: [] },
-    parameterCarriers: [{ kind: "type-parameter", name: "P" }],
-    genericParameters: [{ kind: "type", sourceName: "P" }],
-    typeRequirements: [{ name: "P", requirements: [asRef(path)] }],
+    parameterCarriers: [{ kind: "type-parameter", identity: "P", name: "P" }],
+    genericParameters: [{ kind: "type", targetIdentity: "P", sourceName: "P" }],
+    typeRequirements: [{ identity: "P", name: "P", requirements: [asRef(path)] }],
     isAsync: false, isFallible: false, errorBoundary: "none",
   };
   assert.ok(instantiateProviderOperationTemplate(template, { sourceParameterCarriers: [rustStringTargetType()] }));

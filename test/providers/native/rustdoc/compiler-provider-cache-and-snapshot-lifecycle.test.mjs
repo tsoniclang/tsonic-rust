@@ -532,7 +532,7 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
     assert.deepEqual(
       functionProjection.operations.find(({ exportId }) => exportId.endsWith("::copied"))
         ?.typeRequirements,
-      [{ name: "T", requirements: ["copy"] }],
+      [{ identity: copiedParameter.identity.itemId, name: "T", requirements: ["copy"] }],
       "native Rust requirements remain target policy rather than TypeScript structural constraints",
     );
     const checkedDoubleOperation = functionProjection.operations.find(
@@ -788,7 +788,8 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
     assert.equal(projectedBorrowRequirement?.path, "core::borrow::Borrow");
     assert.deepEqual(projectedBorrowRequirement?.genericArguments, [{
       kind: "type",
-      type: { kind: "type-parameter", name: "Q" },
+      type: { kind: "type-parameter", name: "Q",
+        identity: projectedGetOperation.genericParameters.find(parameter => parameter.sourceName === "Q").targetIdentity },
     }]);
     const hashMapKeyParameter = hashMapTypeParameters.find(({ name }) => name === "K");
     const insertKeyRequirement = hashMap.methods

@@ -2,12 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { rustSourceTypeCarrier, rustStructuralObjectTargetType, rustStructuralObjectCarrierValue } from "../../dist/target-model/types/carriers/source-types.js";
 import { rustTargetTypeChildren } from "../../dist/target-model/types/carriers/children.js";
-import { rustTargetTypeParameterNames } from "../../dist/target-model/types/carriers/generic-references.js";
+import { rustTargetTypeParameterIdentities } from "../../dist/target-model/types/carriers/generic-references.js";
 import { substituteRustTargetTypeParameters } from "../../dist/target-model/types/carriers/substitution.js";
 import { inferRustTargetTypeParameterBindings } from "../../dist/target-model/types/carriers/generic-inference.js";
 import { structuralStorageKey } from "../../dist/analysis/objects/structural-shape-plan.js";
 
-const parameter = { kind: "type-parameter", name: "Value" };
+const parameter = { kind: "type-parameter", identity: "Value", name: "Value" };
 const number = { kind: "source-primitive", name: "float64" };
 const base = (name, argument) => rustSourceTypeCarrier("/src/base.ts", name, "object", [{ kind: "type", type: argument }]);
 const view = (name, argument) => rustStructuralObjectTargetType("/src/view.ts", [
@@ -19,7 +19,7 @@ test("structural instance views retain exact nominal bases through generic subst
   const concrete = view("Base", number);
   assert.deepEqual(rustStructuralObjectCarrierValue(template).bases, [base("Base", parameter)]);
   assert.deepEqual(rustTargetTypeChildren(template), [base("Base", parameter), parameter]);
-  assert.deepEqual(rustTargetTypeParameterNames(template), ["Value"]);
+  assert.deepEqual(rustTargetTypeParameterIdentities(template), ["Value"]);
   assert.deepEqual(substituteRustTargetTypeParameters(template, new Map([["Value", number]])), concrete);
   assert.deepEqual(inferRustTargetTypeParameterBindings(template, concrete, new Set(["Value"])), new Map([["Value", number]]));
   assert.equal(inferRustTargetTypeParameterBindings(template, view("Other", number), new Set(["Value"])), undefined);

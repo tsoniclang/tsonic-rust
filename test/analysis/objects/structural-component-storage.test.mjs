@@ -37,8 +37,8 @@ test("structural instantiation diamonds require one ultimate template in either 
   const carrier = type => rustStructuralObjectTargetType("/source.ts", [{
     sourceName: "value", type, presence: "required", readonly: false,
   }]);
-  const template = carrier({ kind: "type-parameter", name: "Value" });
-  const middle = carrier({ kind: "array", element: { kind: "type-parameter", name: "Element" } });
+  const template = carrier({ kind: "type-parameter", identity: "Value", name: "Value" });
+  const middle = carrier({ kind: "array", element: { kind: "type-parameter", identity: "Element", name: "Element" } });
   const instance = carrier({ kind: "array", element: { kind: "source-primitive", name: "int32" } });
   const shapes = [template, middle, instance].map(carrier => ({ carrier }));
   const edges = [{ template, instance: middle }, { template: middle, instance }, { template, instance }];

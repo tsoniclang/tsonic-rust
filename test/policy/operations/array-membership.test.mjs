@@ -4,7 +4,7 @@ import { selectRustBinaryOperator } from "../../../dist/policy/operations/operat
 import { rustJsArrayTargetType, rustSourcePrimitiveTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
 
 test("array membership admits only exact numeric key carriers and retains operand order", () => {
-  const array = rustJsArrayTargetType({ kind: "type-parameter", name: "T" });
+  const array = rustJsArrayTargetType({ kind: "type-parameter", identity: "T", name: "T" });
   for (const kind of ["float64", "float32", "int8", "uint8", "int16", "uint16", "int32", "uint32"]) {
     const selection = selectRustBinaryOperator("in", rustSourcePrimitiveTargetType(kind), array);
     assert.equal(selection?.kind, "operator-call");

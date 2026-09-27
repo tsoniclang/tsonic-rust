@@ -230,7 +230,7 @@ export function instantiateProviderTargetType(
       return undefined;
     }
     if (parameter.kind === "type" && selected.kind === "type") {
-      typeSubstitutions.set(parameter.sourceName, selected.type);
+      typeSubstitutions.set(parameter.targetIdentity, selected.type);
     } else if (parameter.kind === "lifetime" && selected.kind === "lifetime") {
       lifetimeSubstitutions.set(parameter.targetIdentity, selected.lifetime);
     } else if (parameter.kind === "const" && selected.kind === "const") {

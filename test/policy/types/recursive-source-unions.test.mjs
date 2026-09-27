@@ -11,7 +11,7 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { recursiveSourceUnionFiles } from "../../../../tsonic/test/fixtures/recursive-source-unions.mjs";
 
 const integer = rustSourcePrimitiveTargetType("int32");
-const parameter = { kind: "type-parameter", name: "Value" };
+const parameter = { kind: "type-parameter", identity: "Value", name: "Value" };
 const reference = (name, argument = parameter) => rustSourceUnionTargetType(`/src/${name}.ts`, name, [{ kind: "type", type: argument }]);
 
 test("recursive union references keep immutable exact generic variant contracts", () => {

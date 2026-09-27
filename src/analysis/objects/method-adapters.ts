@@ -73,10 +73,10 @@ function createObjectLiteralMethodAdapterFact(
       continue;
     }
     const sourceCallable = contribution.expression;
-    const sourceTypeParameterNames = sourceCallableTypeParameterNames(input, sourceCallable);
+    const sourceTypeParameterIdentities = sourceCallableTypeParameterNames(input, sourceCallable);
     const sourceParameters = sourceCallableParameterAbis(input, sourceCallable, new Map());
     const sourceReturnCarrier = sourceCallableReturnCarrier(input, sourceCallable, new Map());
-    if (sourceTypeParameterNames === undefined) {
+    if (sourceTypeParameterIdentities === undefined) {
       return reject(
         "The authored object-literal method has no dense, named type-parameter contract.",
         sourceCallable,
@@ -107,7 +107,7 @@ function createObjectLiteralMethodAdapterFact(
       }
       for (const variant of input.projectMethodDispatch.variantsForMember(contractMethod)) {
         const contractSubstitutions = projectOwnerTypeSubstitutions(owner, relationship.targetType);
-        variant.sourceTypeParameterNames.forEach((name, index) => {
+        variant.sourceTypeParameterIdentities.forEach((name, index) => {
           const target = variant.targetTypeArguments[index];
           if (target !== undefined) {
             contractSubstitutions.set(name, target);
@@ -130,12 +130,12 @@ function createObjectLiteralMethodAdapterFact(
           );
         }
         const sourceSubstitutions = inferObjectLiteralImplementationSubstitutions(
-          sourceTypeParameterNames,
+          sourceTypeParameterIdentities,
           sourceParameters,
           sourceReturnCarrier,
           contractParameters,
           contractReturnCarrier,
-          variant.sourceTypeParameterNames,
+          variant.sourceTypeParameterIdentities,
           variant.targetTypeArguments,
         );
         if (sourceSubstitutions === undefined) {
@@ -166,7 +166,7 @@ function createObjectLiteralMethodAdapterFact(
             contractMethod,
           );
         }
-        const substitutions = Object.freeze(sourceTypeParameterNames.map((name) =>
+        const substitutions = Object.freeze(sourceTypeParameterIdentities.map((name) =>
           Object.freeze([name, sourceSubstitutions.get(name)!] as const)));
         const implementationKey = closedMetadataKey({
           substitutions,
@@ -225,7 +225,7 @@ function sourceCallableTypeParameterNames(
 
 
 function inferObjectLiteralImplementationSubstitutions(
-  sourceTypeParameterNames: readonly string[],
+  sourceTypeParameterIdentities: readonly string[],
   sourceParameters: readonly RustCallableParameterAbi[],
   sourceReturnCarrier: TargetTypeRef,
   contractParameters: readonly RustCallableParameterAbi[],
@@ -233,14 +233,14 @@ function inferObjectLiteralImplementationSubstitutions(
   contractTypeParameterNames: readonly string[],
   contractTypeArguments: readonly TargetTypeRef[],
 ): ReadonlyMap<string, TargetTypeRef> | undefined {
-  if (sourceTypeParameterNames.length === 0) {
+  if (sourceTypeParameterIdentities.length === 0) {
     return new Map();
   }
-  const selectedNames = new Set(sourceTypeParameterNames);
+  const selectedNames = new Set(sourceTypeParameterIdentities);
   const inferred = new Map<string, TargetTypeRef>();
-  if (sourceTypeParameterNames.length === contractTypeParameterNames.length &&
+  if (sourceTypeParameterIdentities.length === contractTypeParameterNames.length &&
     contractTypeParameterNames.length === contractTypeArguments.length) {
-    sourceTypeParameterNames.forEach((name, index) => {
+    sourceTypeParameterIdentities.forEach((name, index) => {
       const target = contractTypeArguments[index];
       if (target !== undefined) {
         inferred.set(name, target);
@@ -275,7 +275,7 @@ function inferObjectLiteralImplementationSubstitutions(
     }
   }
   if (!merge(sourceReturnCarrier, contractReturnCarrier) ||
-    sourceTypeParameterNames.some((name) => !inferred.has(name))) {
+    sourceTypeParameterIdentities.some((name) => !inferred.has(name))) {
     return undefined;
   }
   return inferred;

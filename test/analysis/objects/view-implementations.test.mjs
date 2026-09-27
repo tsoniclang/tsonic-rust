@@ -26,7 +26,7 @@ test("recursive constructor contracts terminate at the exact already visited typ
   assert.equal(reads, 2);
 });
 const member = Object.freeze({ file: "/model.ts" });
-const parameter = { kind: "type-parameter", name: "Value" };
+const parameter = { kind: "type-parameter", identity: "Value", name: "Value" };
 const number = { kind: "source-primitive", name: "float64" };
 const source = argument => rustSourceTypeCarrier("/model.ts", "Box", "object", [{ kind: "type", type: argument }]);
 const view = (argument, file = "/view.ts") => ({ declaration, sourceCarrier: source(argument),

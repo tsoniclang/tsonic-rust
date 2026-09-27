@@ -77,10 +77,10 @@ export function rustBuiltInSourceTypeSemantics(): RustProviderSemantics {
         providerVersion: rustSourceProviderVersion,
         providerModuleId: rustTypesModule,
         moduleSpecifier: rustTypesModule,
-        genericParameters: Object.freeze([{ kind: "type" as const, sourceName: "T" }]),
+        genericParameters: Object.freeze([{ kind: "type" as const, sourceName: "T", targetIdentity: `${rustSourceTypeExportIds.slice}:0` }]),
         targetCarrier: Object.freeze({
           kind: "slice" as const,
-          element: Object.freeze({ kind: "type-parameter" as const, name: "T" }),
+          element: Object.freeze({ kind: "type-parameter" as const, identity: `${rustSourceTypeExportIds.slice}:0`, name: "T" }),
         }),
       }),
     ]),
@@ -95,11 +95,12 @@ function pointerType(
   exportId: string,
   mutability: "const" | "mut",
 ): RustProviderTypeRow {
+  const targetIdentity = JSON.stringify([providerId, moduleSpecifier, exportId, 0]);
   return Object.freeze({
     exportId,
     targetCarrier: Object.freeze({
       kind: "pointer",
-      pointee: Object.freeze({ kind: "type-parameter", name: "T" }),
+      pointee: Object.freeze({ kind: "type-parameter", identity: targetIdentity, name: "T" }),
       mutability,
     }),
     providerPackageId,
@@ -110,6 +111,7 @@ function pointerType(
     genericParameters: Object.freeze([Object.freeze({
       kind: "type" as const,
       sourceName: "T",
+      targetIdentity,
     })]),
   });
 }

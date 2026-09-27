@@ -21,7 +21,7 @@ import type { RustProviderPackageDefinition } from "../model.js";
 import type { Fail } from "./model.js";
 
 export interface RustDeclaredProviderGenerics {
-  readonly typeNames: ReadonlySet<string>;
+  readonly typeIdentities: ReadonlySet<string>;
   readonly lifetimeIdentities: ReadonlySet<string>;
   readonly constIdentities: ReadonlySet<string>;
 }
@@ -43,7 +43,7 @@ export function validateProviderGenericParameters(
   if (target.length === 0 && parameters !== undefined) {
     fail(`${where} must omit an empty genericParameters list`);
   }
-  const typeNames = new Set<string>();
+  const typeIdentities = new Set<string>();
   const lifetimeIdentities = new Set<string>();
   const constIdentities = new Set<string>();
   const sourceNames = new Set<string>();
@@ -67,14 +67,18 @@ export function validateProviderGenericParameters(
     if (parameter.kind === "type") {
       requireExactKeys(
         asRecord(parameter),
-        ["kind", "sourceName", "maybeSized", "defaultArgument"],
+        ["kind", "sourceName", "targetIdentity", "maybeSized", "defaultArgument"],
         label,
         fail,
       );
       if (parameter.maybeSized !== undefined && parameter.maybeSized !== true) {
         fail(`${label}.maybeSized must be true when present`);
       }
-      typeNames.add(parameter.sourceName);
+      requireIdentity(parameter.targetIdentity, `${label}.targetIdentity`, fail);
+      if (typeIdentities.has(parameter.targetIdentity)) {
+        fail(`${where} repeats target type identity '${parameter.targetIdentity}'`);
+      }
+      typeIdentities.add(parameter.targetIdentity);
       if (parameter.defaultArgument !== undefined) {
         if (parameter.defaultArgument.kind !== "type") {
           fail(`${label}.defaultArgument must be a type generic argument`);
@@ -125,7 +129,7 @@ export function validateProviderGenericParameters(
       );
     }
   }
-  return Object.freeze({ typeNames, lifetimeIdentities, constIdentities });
+  return Object.freeze({ typeIdentities, lifetimeIdentities, constIdentities });
 }
 
 export function validateTargetGenericArguments(
@@ -171,18 +175,18 @@ export function validateGenericReferences(
   where: string,
   fail: Fail,
 ): void {
-  const typeNames = new Set<string>();
+  const typeIdentities = new Set<string>();
   const lifetimeIdentities = new Set<string>();
   const constIdentities = new Set<string>();
   for (const carrier of carriers) {
     const references = rustTargetGenericReferences(carrier);
-    references.typeNames.forEach((name) => typeNames.add(name));
+    references.typeIdentities.forEach((name) => typeIdentities.add(name));
     references.lifetimeIdentities.forEach((identity) =>
       lifetimeIdentities.add(identity));
     references.constIdentities.forEach((identity) => constIdentities.add(identity));
   }
-  for (const name of typeNames) {
-    if (!declared.typeNames.has(name)) {
+  for (const name of typeIdentities) {
+    if (!declared.typeIdentities.has(name)) {
       fail(`${where} references undeclared type parameter '${name}'`);
     }
   }

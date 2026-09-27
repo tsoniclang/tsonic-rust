@@ -80,7 +80,7 @@ export function realizeRustSourceTypeFamilyDemands(walk: RustFactWalk, files: re
       const parameterType = walk.context.semanticsFor(declaration).declarations.declaredType(parameter.declaration);
       if (parameterType === undefined) { reject(node, "A dependent source call lost its exact generic parameter type."); return; }
       types.set(parameterType, parent.types.get(source.selectedType) ?? source.selectedType);
-      carriers.set(parameter.targetName, substituteRustTargetTypeParameters(target.type, parent.carriers));
+      carriers.set(parameter.identity, substituteRustTargetTypeParameters(target.type, parent.carriers));
     }
     enqueue(declaration, { types, carriers });
   };
@@ -90,7 +90,7 @@ export function realizeRustSourceTypeFamilyDemands(walk: RustFactWalk, files: re
       const owner = substituteRustTargetTypeParameters(carrier.owner, demand.carriers);
       const argument = carrier.trait.genericArguments[0];
       const sourceType = (part: TargetTypeRef): Type | undefined => {
-        const declaration = part.kind === "type-parameter" ? enclosingParameter(node, part.name, walk)
+        const declaration = part.kind === "type-parameter" ? enclosingParameter(node, part.identity, walk)
           : walk.sourceTypes.declarationForCarrier(part);
         const type = declaration === undefined ? undefined : walk.context.semanticsFor(declaration).declarations.declaredType(declaration);
         return type === undefined ? undefined : demand.types.get(type) ?? type;
@@ -117,7 +117,7 @@ export function realizeRustSourceTypeFamilyDemands(walk: RustFactWalk, files: re
       }
       let type: Type | undefined;
       if (carrier.owner.kind === "type-parameter") {
-        const declaration = enclosingParameter(node, carrier.owner.name, walk);
+        const declaration = enclosingParameter(node, carrier.owner.identity, walk);
         const parameterType = declaration === undefined ? undefined
           : walk.context.semanticsFor(declaration).declarations.declaredType(declaration);
         type = parameterType === undefined ? undefined : demand.types.get(parameterType);
@@ -156,12 +156,12 @@ export function realizeRustSourceTypeFamilyDemands(walk: RustFactWalk, files: re
         const selectedBindings = bindings.filter(binding => binding.declaration === parameter.declaration);
         if (selectedBindings.length === 1) argumentType = demand.types.get(selectedBindings[0]!.argumentType) ?? selectedBindings[0]!.argumentType;
         if (argument.type.kind === "type-parameter") {
-          const origin = enclosingParameter(node, argument.type.name, walk);
+          const origin = enclosingParameter(node, argument.type.identity, walk);
           const originType = origin === undefined ? undefined : walk.context.semanticsFor(origin).declarations.declaredType(origin);
           argumentType = originType === undefined ? argumentType : demand.types.get(originType) ?? originType;
         }
         if (sourceParameter !== undefined && argumentType !== undefined) types.set(sourceParameter, argumentType);
-        carriers.set(parameter.targetName, substituteRustTargetTypeParameters(argument.type, demand.carriers));
+        carriers.set(parameter.identity, substituteRustTargetTypeParameters(argument.type, demand.carriers));
       }
       enqueue(definition.declaration, { types, carriers });
     }
@@ -193,11 +193,11 @@ function createsGenericScope(kind: string | undefined): boolean {
     kind === "KindTypeAliasDeclaration" || kind === "KindConstructor";
 }
 
-function enclosingParameter(node: Node, name: string, walk: RustFactWalk): Node | undefined {
+function enclosingParameter(node: Node, identity: string, walk: RustFactWalk): Node | undefined {
   const { ast, sourceLifetimes } = walk.context;
   for (let ancestor: Node | undefined = node; ancestor !== undefined; ancestor = ast.parent(ancestor)) {
     const contract = sourceLifetimes.contractFor(ancestor);
-    const parameter = contract?.parameters.find(candidate => candidate.kind === "type" && candidate.targetName === name);
+    const parameter = contract?.parameters.find(candidate => candidate.kind === "type" && candidate.identity === identity);
     if (parameter !== undefined) return parameter.declaration;
   }
   return undefined;

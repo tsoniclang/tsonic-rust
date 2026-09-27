@@ -56,7 +56,7 @@ export function projectFields(
   operations: RustProviderOperationDefinition[],
 ): void {
   const generics = providerGenericBindingsFor(exported.genericParameters, context);
-  const typeNames = generics.flatMap((parameter) =>
+  const typeIdentities = generics.flatMap((parameter) =>
     parameter.kind === "type" ? [parameter.sourceName] : []);
   for (const field of exported.fields) {
     const sourceFieldType = sourceTypeFor(field.type, context, "result");
@@ -76,7 +76,7 @@ export function projectFields(
       ...(generics.length === 0 ? {} : { genericParameters: generics }),
       ...typeRequirements(
         typeParametersOf(exported.genericParameters),
-        typeNames,
+        typeIdentities,
         context,
         (trait) => targetTraitFor(trait, context, "parameter", "target-default"),
       ),
@@ -109,7 +109,7 @@ export function projectVariants(
 ): void {
   const generics = providerGenericBindingsFor(exported.genericParameters, context);
   const sourceParameters = providerGenericParametersFor(exported.genericParameters, context);
-  const typeNames = generics.flatMap((parameter) =>
+  const typeIdentities = generics.flatMap((parameter) =>
     parameter.kind === "type" ? [parameter.sourceName] : []);
   for (const variant of exported.variants) {
     const memberId = `${exportId}::variant:${variant.name}`;
@@ -143,7 +143,7 @@ export function projectVariants(
           genericParameters: generics,
           ...typeRequirements(
             typeParametersOf(exported.genericParameters),
-            typeNames,
+            typeIdentities,
             context,
             (trait) => targetTraitFor(trait, context, "parameter", "target-default"),
           ),
@@ -168,7 +168,7 @@ export function projectVariants(
         ...(generics.length === 0 ? {} : { genericParameters: generics }),
         ...typeRequirements(
           typeParametersOf(exported.genericParameters),
-          typeNames,
+          typeIdentities,
           context,
           (trait) => targetTraitFor(trait, context, "parameter", "target-default"),
         ),
@@ -217,7 +217,7 @@ export function projectVariants(
       ...(generics.length === 0 ? {} : { genericParameters: generics }),
       ...typeRequirements(
         typeParametersOf(exported.genericParameters),
-        typeNames,
+        typeIdentities,
         context,
         (trait) => targetTraitFor(trait, context, "parameter", "target-default"),
       ),
@@ -313,7 +313,7 @@ export function projectAssociatedConstants(
   const ownerGenerics = requireCurrentType(context).genericParameters;
   const genericBindings = providerGenericBindingsFor(ownerGenerics, context);
   const sourceParameters = providerGenericParametersFor(ownerGenerics, context);
-  const typeNames = genericBindings.flatMap((parameter) =>
+  const typeIdentities = genericBindings.flatMap((parameter) =>
     parameter.kind === "type" ? [parameter.sourceName] : []);
   const members: ProviderMemberDeclaration[] = [];
   const operations: RustProviderOperationDefinition[] = [];
@@ -339,7 +339,7 @@ export function projectAssociatedConstants(
     };
     const requirements = typeRequirements(
       [...typeParametersOf(ownerGenerics), ...constant.typeRequirements],
-      typeNames,
+      typeIdentities,
       context,
       (trait) => targetTraitFor(trait, context, "parameter", "target-default"),
     );
@@ -433,7 +433,7 @@ export function projectAssociatedTypes(
       currentType: Object.freeze({
         exportId,
         name: associated.name,
-        carrier: Object.freeze({ kind: "type-parameter", name: self.name }),
+        carrier: Object.freeze({ kind: "type-parameter", identity: self.identity.itemId, name: self.name }),
         sourceType: Object.freeze({ kind: "type-parameter", name: self.name }),
         genericParameters: parameters,
         canonicalPath: Object.freeze([...exported.canonicalPath, associated.name, "Self"]),
@@ -451,7 +451,7 @@ export function projectAssociatedTypes(
     );
     const carrier: TargetTypeRef = Object.freeze({
       kind: "associated-type",
-      owner: Object.freeze({ kind: "type-parameter", name: self.name }),
+      owner: Object.freeze({ kind: "type-parameter", identity: self.identity.itemId, name: self.name }),
       trait,
       name: associated.name,
       ...(associated.genericParameters.length === 0
@@ -473,14 +473,14 @@ export function projectAssociatedTypes(
         : sourceTypeFor(associated.defaultType, associatedContext, "result"),
       typeParameters: sourceParameters,
     }));
-    const typeNames = providerTypeParameterNames(parameters, associatedContext);
+    const typeIdentities = providerTypeParameterNames(parameters, associatedContext);
     types.push(Object.freeze({
       exportId,
       genericParameters: providerGenericBindingsFor(parameters, associatedContext),
       targetCarrier: carrier,
       ...typeRequirements(
         typeParametersOf(parameters),
-        typeNames,
+        typeIdentities,
         associatedContext,
         (selectedTrait) => targetTraitFor(
           selectedTrait,
@@ -561,7 +561,7 @@ export function syntheticTraitSelf(
   });
   return Object.freeze({
     parameter,
-    carrier: Object.freeze({ kind: "type-parameter", name }),
+    carrier: Object.freeze({ kind: "type-parameter", identity: parameter.identity.itemId, name }),
   });
 }
 

@@ -7,7 +7,7 @@ import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import {
-  rustTargetTypeParameterNames,
+  rustTargetTypeParameterIdentities,
   substituteRustTargetTypeParameters,
 } from "../../target-model/types/index.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
@@ -15,7 +15,7 @@ import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 
 export interface RustSourceCallableSpecializationVariant {
   readonly declaration: Node;
-  readonly sourceTypeParameterNames: readonly string[];
+  readonly sourceTypeParameterIdentities: readonly string[];
   readonly targetTypeArguments: readonly TargetTypeRef[];
   readonly targetName: string;
 }
@@ -86,7 +86,7 @@ interface SourceCallEdge {
 
 interface MutableSpecializationVariant {
   readonly declaration: Node;
-  readonly sourceTypeParameterNames: readonly string[];
+  readonly sourceTypeParameterIdentities: readonly string[];
   readonly targetTypeArguments: readonly TargetTypeRef[];
   targetName?: string;
 }
@@ -113,7 +113,7 @@ export function createRustSourceCallableSpecializationPlanRegistry(): RustSource
       if (current !== undefined) {
         throw new Error("Rust source-callable specialization requests cannot be recorded after initialization.");
       }
-      const names = callableTypeParameterNames(
+      const names = callableTypeParameterIdentities(
         input.callee,
         input.ast,
         input.sourceLifetimes,
@@ -134,7 +134,7 @@ export function createRustSourceCallableSpecializationPlanRegistry(): RustSource
         throw new Error("Rust project-method specialization requests cannot be recorded after initialization.");
       }
       const owner = input.projectTypes.definitionContainingDeclaration(input.declaration);
-      const names = callableTypeParameterNames(
+      const names = callableTypeParameterIdentities(
         input.declaration,
         input.ast,
         input.sourceLifetimes,
@@ -220,7 +220,7 @@ function createRustSourceCallableSpecializationPlan(
     targetTypeArguments: readonly TargetTypeRef[],
     subject: Node,
   ): boolean => {
-    const parameterNames = callableTypeParameterNames(
+    const parameterNames = callableTypeParameterIdentities(
       declaration,
       input.ast,
       input.sourceLifetimes,
@@ -230,8 +230,8 @@ function createRustSourceCallableSpecializationPlan(
       return false;
     }
     const owner = input.projectTypes.definitionContainingDeclaration(declaration);
-    const allowedOpenNames = new Set(owner?.typeParameterNames ?? []);
-    const unresolved = new Set(targetTypeArguments.flatMap(rustTargetTypeParameterNames));
+    const allowedOpenNames = new Set(owner?.typeParameterIdentities ?? []);
+    const unresolved = new Set(targetTypeArguments.flatMap(rustTargetTypeParameterIdentities));
     if ([...unresolved].some((name) => !allowedOpenNames.has(name))) {
       return false;
     }
@@ -244,7 +244,7 @@ function createRustSourceCallableSpecializationPlan(
     }
     existing.push({
       declaration,
-      sourceTypeParameterNames: Object.freeze(parameterNames),
+      sourceTypeParameterIdentities: Object.freeze(parameterNames),
       targetTypeArguments: Object.freeze([...targetTypeArguments]),
     });
     variants.set(declaration, existing);
@@ -256,8 +256,8 @@ function createRustSourceCallableSpecializationPlan(
     subject: Node,
   ): boolean => {
     const owner = input.projectTypes.definitionContainingDeclaration(declaration);
-    const allowedOpenNames = new Set(owner?.typeParameterNames ?? []);
-    const unresolved = new Set(targetTypeArguments.flatMap(rustTargetTypeParameterNames));
+    const allowedOpenNames = new Set(owner?.typeParameterIdentities ?? []);
+    const unresolved = new Set(targetTypeArguments.flatMap(rustTargetTypeParameterIdentities));
     if (owner === undefined || [...unresolved].some((name) => !allowedOpenNames.has(name))) {
       return false;
     }
@@ -515,7 +515,7 @@ function callableIsExternallyReachable(declaration: Node, ast: AstReader): boole
   return owner !== undefined && ast.hasModifierKind(owner, "export");
 }
 
-function callableTypeParameterNames(
+function callableTypeParameterIdentities(
   declaration: Node,
   ast: AstReader,
   sourceLifetimes: RustLifetimeIndex,
@@ -527,8 +527,8 @@ function callableTypeParameterNames(
   const names = (parameters as readonly Node[])
     .filter((parameter) => sourceLifetimes.parameterFor(parameter)?.kind !== "lifetime")
     .map((parameter) => {
-      const name = ast.name(parameter);
-      return name === undefined ? "" : ast.text(name);
+      const selected = sourceLifetimes.parameterFor(parameter);
+      return selected?.kind === "type" ? selected.identity : "";
     });
   return names.some((name) => name.length === 0) ? undefined : Object.freeze(names);
 }
@@ -540,7 +540,7 @@ function callableTypeParameterNameSet(
 ): ReadonlySet<string> {
   return new Set(declaration === undefined
     ? []
-    : callableTypeParameterNames(declaration, ast, sourceLifetimes) ?? []);
+    : callableTypeParameterIdentities(declaration, ast, sourceLifetimes) ?? []);
 }
 
 function targetArgumentsUseNames(
@@ -548,16 +548,16 @@ function targetArgumentsUseNames(
   names: ReadonlySet<string>,
 ): boolean {
   return targetTypeArguments.some((argument) =>
-    rustTargetTypeParameterNames(argument).some((name) => names.has(name)));
+    rustTargetTypeParameterIdentities(argument).some((name) => names.has(name)));
 }
 
 function variantSubstitutions(
   variant: Pick<
     MutableSpecializationVariant,
-    "sourceTypeParameterNames" | "targetTypeArguments"
+    "sourceTypeParameterIdentities" | "targetTypeArguments"
   >,
 ): ReadonlyMap<string, TargetTypeRef> {
-  return new Map(variant.sourceTypeParameterNames.map((name, index) =>
+  return new Map(variant.sourceTypeParameterIdentities.map((name, index) =>
     [name, variant.targetTypeArguments[index]!] as const));
 }
 

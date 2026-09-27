@@ -1,3 +1,4 @@
+import { rustSelectedCallTypeParameters } from "../../../../policy/types/resolution/generic-arguments.js";
 import {
   asNode,
   isProjectSourceDeclaration,
@@ -649,8 +650,10 @@ function acceptRuntimeCallableCarrierCall(
 ): RustPolicySelection<RustCheckedCallSelectionResult> | undefined {
   const generic = rustGenericCallableValue(calleeCarrier);
   const selectedGenerics = request.source.sourceSelectedMethodTypeArguments ?? [];
+  const sourceParameters = rustSelectedCallTypeParameters(selectedGenerics, context);
+  if (sourceParameters === undefined) return undefined;
   const protocol = generic === undefined ? runtimeCallableProtocol(calleeCarrier)
-    : rustGenericCallableProtocol(calleeCarrier, selectedGenerics.map(argument => argument.typeParameterName));
+    : rustGenericCallableProtocol(calleeCarrier, sourceParameters);
   if (calleeCarrier === undefined || protocol === undefined) {
     return undefined;
   }
@@ -665,7 +668,7 @@ function acceptRuntimeCallableCarrierCall(
       "Runtime callable generic arguments require the exact selected lifetime binder; runtime type generics are not erased.");
   }
   const genericParameters = generic !== undefined
-    ? selectedGenerics.map(argument => ({ kind: "type" as const, sourceName: argument.typeParameterName }))
+    ? sourceParameters.map(parameter => ({ kind: "type" as const, targetIdentity: parameter.identity, sourceName: parameter.name }))
     : calleeCarrier.kind !== "closure" || calleeCarrier.lifetimeBinder === undefined ? []
     : calleeCarrier.lifetimeBinder.parameters.map((parameter, index) => ({
         kind: "lifetime" as const,

@@ -74,7 +74,7 @@ export function instantiateExactSelectedConstructionCarrier(
 ): TargetTypeRef | undefined {
   const parameters = definition.genericParameters.map((parameter): RustTargetGenericParameter =>
     parameter.kind === "type"
-      ? { kind: "type", sourceName: parameter.sourceName }
+      ? { kind: "type", targetIdentity: parameter.identity, sourceName: parameter.sourceName }
       : {
           kind: "lifetime",
           sourceName: parameter.sourceName,
@@ -257,7 +257,7 @@ export function selectedProviderCallGenericArguments(
             ? undefined
             : Object.freeze({
                 kind: "type" as const,
-                type: borrowedStringTypeParameters.has(parameter.sourceName) &&
+                type: borrowedStringTypeParameters.has(parameter.targetIdentity) &&
                     isOwnedRustString(type)
                   ? rustStrTargetType()
                   : type,
@@ -281,7 +281,7 @@ export function selectedProviderCallGenericArguments(
             resolutionOptions,
           );
     if (resolved !== undefined) {
-      directGenericArguments.set(parameter.sourceName, resolved);
+      directGenericArguments.set(parameter.targetIdentity, resolved);
     }
   }
   return {
@@ -317,7 +317,7 @@ function selectedCallParameterInferenceCarriers(
       const pattern = template.parameterCarriers?.[parameterIndex];
       return selected !== undefined && isOwnedRustString(selected) &&
           pattern?.kind === "type-parameter" &&
-          borrowedStringTypeParameters.has(pattern.name)
+          borrowedStringTypeParameters.has(pattern.identity)
         ? rustStrTargetType()
         : selected;
     });

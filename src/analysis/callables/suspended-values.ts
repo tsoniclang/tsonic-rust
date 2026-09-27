@@ -69,11 +69,11 @@ export function createRustSuspendedCallablePlan(
     const available = new Map<string, RustSourceGenericParameterContract>();
     for (let owner: Node | undefined = declaration; owner !== undefined; owner = ast.parent(owner)) {
       for (const parameter of lifetimes.contractFor(owner)?.parameters ?? []) {
-        const key = parameter.kind === "type" ? parameter.targetName : parameter.lifetime.identity;
+        const key = parameter.kind === "type" ? parameter.identity : parameter.lifetime.identity;
         if (!available.has(key)) available.set(key, parameter);
       }
     }
-    const requested = [...signature.lifetimes.map(lifetime => lifetime.identity), ...signature.typeNames];
+    const requested = [...signature.lifetimes.map(lifetime => lifetime.identity), ...signature.typeIdentities];
     const parameters = requested.map(key => available.get(key));
     if (parameters.some(parameter => parameter === undefined) || signature.constIdentities.length > 0) {
       issues.push({ subject: declaration, message: "A suspended callable state lost its exact enclosing generic parameter declarations." });

@@ -279,7 +279,8 @@ export function applySelectedProjectSourceCall(
   const selectedCallableCarrier = optionalCall?.selectedGuardCarrier ?? callableCalleeCarrier;
   const selectedNativeCallable = rustNativeCallableProtocol(selectedCallableCarrier);
   const selectedGenericCallable = rustGenericCallableProtocol(selectedCallableCarrier,
-    (selectedSignature.sourceSelectedMethodTypeArguments ?? []).map(argument => argument.typeParameterName));
+    (selectedSignature.member.genericParameters ?? []).flatMap(parameter => parameter.kind === "type"
+      ? [{ kind: "type-parameter" as const, identity: parameter.targetIdentity, name: parameter.sourceName }] : []));
   const indirectCallable = selectedCallableCarrier !== undefined &&
     (selectedNativeCallable !== undefined || selectedGenericCallable !== undefined ||
       rustCallableProtocol(selectedCallableCarrier) !== undefined) &&

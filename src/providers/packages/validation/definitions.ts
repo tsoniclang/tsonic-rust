@@ -681,7 +681,7 @@ function validateTypeRelations(
     );
     validateTypeParameterRequirements(
       relation.typeRequirements,
-      declared.typeNames,
+      declared.typeIdentities,
       definition,
       `export '${relation.exportId}' type requirements`,
       fail,
@@ -704,8 +704,8 @@ function validateTypeRelations(
       fail,
     );
     const referenced = rustTargetGenericReferences(relation.targetCarrier);
-    for (const name of declared.typeNames) {
-      if (!referenced.typeNames.includes(name)) {
+    for (const name of declared.typeIdentities) {
+      if (!referenced.typeIdentities.includes(name)) {
         fail(`export '${relation.exportId}' does not use declared type parameter '${name}'`);
       }
     }

@@ -33,6 +33,7 @@ import { rustArrayFieldMutationName, rustArrayFieldMutationType } from "./array-
 import { planRustProjectProjectionImplementations } from "../project-projections.js";
 import { rustStructuralDispatchType } from "../project-structural-types.js";
 import { checkedProjectProjectionSignature } from "../checked-project-projections.js";
+import { rustProjectTypeParameterContext } from "../../names/type-parameters.js";
 
 export function projectIdentityImplementations(
   definition: RustProjectTypeDefinition,
@@ -142,6 +143,7 @@ export function planProjectDispatchTrait(
   carrier: TargetTypeRef,
   context: RustPlanContext,
 ): RustItem | undefined {
+  context = rustProjectTypeParameterContext(definition, context, "implementation");
   const representation = context.input.program.objectRepresentations.representationFor(definition);
   if (representation === undefined) {
     return undefined;
@@ -287,7 +289,7 @@ export function planProjectDispatchTrait(
     }
     for (const variant of context.input.program.projectMethodDispatch.variantsForMember(member)) {
       const specialization = rustCallableSpecialization(
-        variant.sourceTypeParameterNames,
+        variant.sourceTypeParameterIdentities,
         variant.targetTypeArguments,
       );
       const shape = specialization === undefined

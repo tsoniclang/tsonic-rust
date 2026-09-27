@@ -1,4 +1,4 @@
-import type { TargetTypeRef } from "../../../../target-model/types/model.js";
+import type { TargetTypeRef, RustTargetGenericArgument } from "../../../../target-model/types/model.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
 import type { RustObjectRepresentation } from "../../../../analysis/project-types/object-representation.js";
 import { rustGenericsWithAssociatedBounds } from "../../types/generic-bounds.js";
@@ -22,6 +22,12 @@ import type { RustLifetimeRef } from "../../../../target-model/lifetimes/index.j
 import { rustDeclarationAssociatedPredicates } from "../../types/associated-bounds.js";
 import { rustTypeParameterBounds } from "../../types/generic-bounds.js";
 import { rustOptionalStorageParameters, rustOptionalStorageTypeArguments } from "../../types/type-projections.js";
+import { rustTypeParameterFromSourceContract } from "../../../../target-model/names/type-parameters.js";
+
+export interface RustProjectGenericPlan {
+  readonly bindings: readonly { readonly parameter: RustGenericParameter; readonly argument: RustTargetGenericArgument }[];
+  readonly wherePredicates: RustGenerics["wherePredicates"];
+}
 
 export function rustProjectDispatchTraitName(
   definition: RustProjectTypeDefinition,
@@ -43,14 +49,21 @@ export function rustProjectGenerics(
   context: RustPlanContext,
   parameterIndexes: readonly number[] = definition.genericParameters.map((_, index) => index),
 ): RustGenerics {
-  return rustProjectGenericsWithTypeOutlives(definition, [], context, parameterIndexes);
+  return rustProjectGenericSyntax(planRustProjectGenerics(definition, [], context, parameterIndexes));
 }
 
 export function rustProjectRepresentationGenerics(
   representation: RustObjectRepresentation,
   context: RustPlanContext,
 ): RustGenerics {
-  return rustProjectGenericsWithTypeOutlives(
+  return rustProjectGenericSyntax(planRustProjectRepresentationGenerics(representation, context));
+}
+
+export function planRustProjectRepresentationGenerics(
+  representation: RustObjectRepresentation,
+  context: RustPlanContext,
+): RustProjectGenericPlan {
+  return planRustProjectGenerics(
     representation.definition,
     representation.dispatchObjectLifetime === undefined
       ? []
@@ -59,16 +72,16 @@ export function rustProjectRepresentationGenerics(
   );
 }
 
-function rustProjectGenericsWithTypeOutlives(
+export function planRustProjectGenerics(
   definition: RustProjectTypeDefinition,
   requiredTypeOutlives: readonly RustLifetimeRef[],
   context: RustPlanContext,
   parameterIndexes: readonly number[] = definition.genericParameters.map((_, index) => index),
-): RustGenerics {
+): RustProjectGenericPlan {
   const contract = context.input.program.declarationGenericRequirements.contractFor(definition.declaration);
   if (contract === undefined) throw new Error("A source class has no sealed generic requirement contract.");
   const boundsFor = (parameter: Extract<RustProjectTypeDefinition["genericParameters"][number], { readonly kind: "type" }>): readonly RustTypeBound[] => {
-    const selected = contract.typeParameters.find(candidate => candidate.name === parameter.targetName);
+    const selected = contract.typeParameters.find(candidate => candidate.identity === parameter.identity);
     if (selected === undefined) throw new Error("A source class generic parameter lost its selected requirements.");
     return rustTypeParameterBounds(parameter, selected.requirements, requiredTypeOutlives);
   };
@@ -77,30 +90,36 @@ function rustProjectGenericsWithTypeOutlives(
     if (parameter === undefined) throw new Error("A selected native generic parameter is outside its declaration.");
     return parameter;
   });
-  const typeNames = new Set(selectedParameters.flatMap(parameter => parameter.kind === "type" ? [parameter.targetName] : []));
+  const typeIdentities = new Set(selectedParameters.flatMap(parameter => parameter.kind === "type" ? [parameter.identity] : []));
   const lifetimeNames = new Set(selectedParameters.flatMap(parameter => parameter.kind === "lifetime" ? [parameter.lifetime.name] : []));
   const inScope = (carrier: TargetTypeRef): boolean => {
     const references = rustTargetGenericReferences(carrier);
-    return references.typeNames.every(name => typeNames.has(name)) &&
+    return references.typeIdentities.every(name => typeIdentities.has(name)) &&
       references.lifetimes.every(lifetime => lifetime.kind === "bound" || lifetimeNames.has(lifetime.name));
   };
-  const parameters = selectedParameters.map((parameter): RustGenericParameter =>
+  const bindings = selectedParameters.map((parameter): RustProjectGenericPlan["bindings"][number] =>
     parameter.kind === "lifetime"
-      ? {
+      ? { argument: { kind: "lifetime", lifetime: parameter.lifetime }, parameter: {
           kind: "lifetime",
           name: parameter.lifetime.name,
           outlives: Object.freeze(parameter.outlives.map(rustLifetimeToAst)),
-        }
-      : {
+        } }
+      : { argument: { kind: "type", type: rustTypeParameterFromSourceContract(parameter) }, parameter: {
           kind: "type",
-          name: parameter.targetName,
+          name: context.typeParameterNames?.get(parameter.identity) ?? parameter.targetName,
           bounds: boundsFor(parameter),
-        });
-  parameters.push(...rustOptionalStorageParameters(contract.optionalStorage.filter(entry => inScope(entry.carrier)), context));
-  return rustGenericsWithAssociatedBounds(parameters,
-    rustDeclarationAssociatedPredicates(definition.declaration, context, inScope));
+        } });
+  const optionalStorage = contract.optionalStorage.filter(entry => !entry.captured && inScope(entry.carrier));
+  const storageParameters = rustOptionalStorageParameters(optionalStorage, context);
+  bindings.push(...optionalStorage.map((entry, index) => ({
+    argument: { kind: "type" as const, type: entry.carrier }, parameter: storageParameters[index]!,
+  })));
+  return { bindings, wherePredicates: rustDeclarationAssociatedPredicates(definition.declaration, context, inScope) };
 }
 
+function rustProjectGenericSyntax(plan: RustProjectGenericPlan): RustGenerics {
+  return rustGenericsWithAssociatedBounds(plan.bindings.map(binding => binding.parameter), plan.wherePredicates);
+}
 
 export function rustProjectDispatchObjectType(
   carrier: TargetTypeRef,
@@ -172,7 +191,7 @@ export function rustProjectStateMarker(
                   mutable: false,
                   lifetime: rustLifetimeToAst(parameter.lifetime),
                 }
-              : { kind: "named", path: parameter.targetName };
+              : { kind: "named", path: context.typeParameterNames?.get(parameter.identity) ?? parameter.targetName };
           }),
         },
       }],

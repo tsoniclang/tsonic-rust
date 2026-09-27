@@ -10,12 +10,12 @@ import { rustObjectLiteralMethodAdapterFactKey } from "../../../dist/analysis/fa
 import { rustProjectCallableAdaptersKey } from "../../../dist/analysis/facts/project-callable-adapters.js";
 import { rustRuntimeCarrierKey } from "../../../dist/target-model/facts/selections.js";
 
-const parameter = { kind: "type-parameter", name: "Value" };
+const parameter = { kind: "type-parameter", identity: "Value", name: "Value" };
 function input() {
   const files = ["first", "second"].map(name => ({ name: `/${name}.ts`, nodes: [] }));
   const closures = files.map((file, index) => {
     const node = { file, position: index + 1 };
-    node.carrier = rustGenericCallableTargetType(["Value"], [parameter], parameter, {
+    node.carrier = rustGenericCallableTargetType([parameter], [parameter], parameter, {
       fileName: file.name, declarationIdentity: `${file.name}:1`,
     });
     file.nodes.push(node);
@@ -139,7 +139,7 @@ test("generic callable flow closure is deterministic, transitive and fail-closed
   const { closures } = input();
   const first = closures[0].carrier;
   const second = closures[1].carrier;
-  const third = rustGenericCallableTargetType(["Value"], [parameter], parameter, { fileName: "/third.ts", declarationIdentity: "/third.ts:1" });
+  const third = rustGenericCallableTargetType([parameter], [parameter], parameter, { fileName: "/third.ts", declarationIdentity: "/third.ts:1" });
   const flow = (source, target) => ({ subject: closures[0], conversion: { kind: "generic-callable-flow", source, target } });
   const edges = [flow(first, second), flow(second, third), flow(third, first)];
   const forward = createRustGenericCallableFlowIndex(edges);
@@ -149,7 +149,7 @@ test("generic callable flow closure is deterministic, transitive and fail-closed
     assert.equal(forward.familyFor(carrier), forward.familyFor(first));
     assert.equal(reverse.familyFor(carrier), forward.familyFor(first));
   }
-  const invalid = rustGenericCallableTargetType(["Value"], [parameter], { kind: "source-primitive", name: "float64" }, first.value.origin);
+  const invalid = rustGenericCallableTargetType([parameter], [parameter], { kind: "source-primitive", name: "float64" }, first.value.origin);
   const rejected = createRustGenericCallableFlowIndex([flow(invalid, second)]);
   assert.equal(rejected.issues.length, 1);
   assert.notEqual(rejected.familyFor(first), rejected.familyFor(second));
@@ -168,7 +168,7 @@ test("implementations selected for one exact contextual contract share its nativ
 
 test("contradictory signatures under one origin fail closed instead of selecting another family", () => {
   const { closures, create } = input();
-  closures[1].carrier = rustGenericCallableTargetType(["Value"], [parameter], { kind: "source-primitive", name: "float64" }, closures[0].carrier.value.origin);
+  closures[1].carrier = rustGenericCallableTargetType([parameter], [parameter], { kind: "source-primitive", name: "float64" }, closures[0].carrier.value.origin);
   const plan = create();
   assert.equal(plan.issues.length, 1);
   assert.match(plan.issues[0].message, /conflicting native signatures/u);

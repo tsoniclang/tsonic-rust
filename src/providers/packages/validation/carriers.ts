@@ -23,7 +23,7 @@ const carrierFieldsByKind: Readonly<Record<RustTargetTypeRef["kind"], readonly s
   Object.freeze({
     "source-primitive": ["kind", "name"],
     "target-named": ["kind", "id", "genericArguments"],
-    "type-parameter": ["kind", "name"],
+    "type-parameter": ["kind", "identity", "name"],
     array: ["kind", "element", "rank"],
     slice: ["kind", "element"],
     tuple: ["kind", "elements"],

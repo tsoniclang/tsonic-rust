@@ -319,6 +319,7 @@ export function targetTypeFor(
         result: targetTypeFor(callable.result, context, position) };
       return {
         kind: "type-parameter",
+        identity: type.identity.itemId,
         name: requireSourceGenericName(type.identity.itemId, context),
       };
     }
@@ -633,6 +634,7 @@ export function providerGenericBindingsFor(
     return Object.freeze({
       kind: "type",
       sourceName,
+      targetIdentity: parameter.identity.itemId,
       ...(parameter.maybeSized ? { maybeSized: true as const } : {}),
       ...(parameter.defaultType === undefined
         ? {}

@@ -53,7 +53,7 @@ export function reserveTypeAliasUnion(walk: RustFactWalk, declaration: Node): vo
   if (typeName.length === 0 || fileName.length === 0) return;
   walk.sourceTypes.reserveSourceUnion(declaration, rustSourceUnionTargetType(fileName, typeName,
     contract?.parameters.map(parameter => parameter.kind === "type"
-      ? {kind: "type" as const, type: {kind: "type-parameter" as const, name: parameter.targetName}}
+      ? {kind: "type" as const, type: {kind: "type-parameter" as const, identity: parameter.identity, name: parameter.targetName}}
       : {kind: "lifetime" as const, lifetime: parameter.lifetime}) ?? []));
 }
 
@@ -96,7 +96,7 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
   if (sourceParameters.length > 0 && !lifetimeBearingAlias) {
     const arguments_ = sourceParameters.map(parameter => semantics.declarations.declaredType(parameter!));
     const carriers = genericContract!.parameters.map(parameter => parameter.kind === "type"
-      ? { kind: "type-parameter" as const, name: parameter.targetName } : undefined);
+      ? { kind: "type-parameter" as const, identity: parameter.identity, name: parameter.targetName } : undefined);
     const application = arguments_.some(argument => argument === undefined) ? undefined
       : semantics.types.instantiateAlias(declaration, arguments_ as readonly Type[]);
     const root = application?.conditionalSteps[0];
@@ -212,7 +212,7 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
     fileName,
     typeName,
     genericContract?.parameters.map(parameter => parameter.kind === "type"
-      ? { kind: "type" as const, type: { kind: "type-parameter" as const, name: parameter.targetName } }
+      ? { kind: "type" as const, type: { kind: "type-parameter" as const, identity: parameter.identity, name: parameter.targetName } }
       : { kind: "lifetime" as const, lifetime: parameter.lifetime }) ?? [],
   );
   const variantMemberDeclarations = new Set(finalizedVariants.flatMap((variant) =>

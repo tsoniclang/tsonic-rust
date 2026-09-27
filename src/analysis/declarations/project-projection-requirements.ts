@@ -3,7 +3,7 @@ import { selectRustProjectProjection, selectRustProjectProjectionImplementation,
   type RustProjectProjectionImplementation } from "../../policy/types/project-projections.js";
 import type { RustProjectProjectionRequirement } from "../../target-model/types/project-projections.js";
 import type { RustProjectTypeDefinition } from "../../policy/types/project-types.js";
-import { rustTargetTypeParameterNames } from "../../target-model/types/carriers/generic-references.js";
+import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 export function createRustProjectProjectionRequirementCollector(
@@ -15,8 +15,8 @@ export function createRustProjectProjectionRequirementCollector(
   const entries: RustProjectProjectionRequirement[] = [];
   return {
     require(requirement) {
-      const parameters = [...rustTargetTypeParameterNames(requirement.sourceCarrier),
-        ...rustTargetTypeParameterNames(requirement.targetCarrier)];
+      const parameters = [...rustTargetTypeParameterIdentities(requirement.sourceCarrier),
+        ...rustTargetTypeParameterIdentities(requirement.targetCarrier)];
       const selection = selectRustProjectProjection(requirement.sourceCarrier, requirement.targetCarrier, projectTypes);
       if (!parameters.every(name => declared.has(name)) || selection === undefined) return false;
       if (!entries.some(entry =>

@@ -60,7 +60,7 @@ export function resolveNativeProviderCallableArguments(
       !(context.ast.is.IsArrowFunction(argument) || context.ast.is.IsFunctionExpression(argument))) continue;
     const expected = substituteRustTargetGenerics(pattern, bindings.types, bindings.lifetimes, bindings.consts);
     const carrier = resolve(argument, mapRustTargetTypes(expected, type => type.kind === "type-parameter" &&
-      names.typeNames.has(type.name) ? { kind: "opaque", id: "tsonic.rust.infer" } : type));
+      names.typeIdentities.has(type.identity) ? { kind: "opaque", id: "tsonic.rust.infer" } : type));
     if (carrier === undefined) continue;
     const inferred = inferRustTargetGenericBindings(pattern, carrier, names);
     if (inferred === undefined || !mergeGenericBindings(bindings, inferred)) return;

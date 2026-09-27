@@ -20,7 +20,7 @@ export function rustProviderGenericRequirementsAreSatisfied(
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): boolean {
   for (const parameter of requirements ?? []) {
-    const carrier = bindings.types.get(parameter.name);
+    const carrier = bindings.types.get(parameter.identity);
     if (carrier === undefined || parameter.requirements.some((requirement) =>
       !rustProviderTypeRequirementIsSatisfied(requirement, carrier, bindings, definitions))) {
       return false;
@@ -35,7 +35,7 @@ export function rustProviderOperationGenericRequirementsAreSelectable(
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): boolean {
   for (const parameter of requirements ?? []) {
-    const carrier = bindings.types.get(parameter.name);
+    const carrier = bindings.types.get(parameter.identity);
     if (carrier === undefined || parameter.requirements.some((requirement) =>
       !rustProviderTypeRequirementIsSatisfied(requirement, carrier, bindings, definitions) &&
       !rustProviderOperationRequirementIsRustcDecidable(requirement, bindings))) {

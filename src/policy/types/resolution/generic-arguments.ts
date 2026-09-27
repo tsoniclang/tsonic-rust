@@ -1,8 +1,24 @@
 import type { Node, Type } from "@tsonic/tsts";
-import type { RustSelectedTargetSignature, RustTargetGenericArgument } from "../../../target-model/types/model.js";
+import type { RustSelectedTargetSignature, RustTargetGenericArgument, TargetTypeRef } from "../../../target-model/types/model.js";
+import { rustSourceTypeParameters } from "../../../target-model/names/type-parameters.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import { resolveRustTargetType } from "./target.js";
 import { resolveRustAuthoredTargetType } from "./tuples.js";
+
+export function rustSelectedCallTypeParameters(
+  sourceArguments: NonNullable<RustSelectedTargetSignature["sourceSelectedMethodTypeArguments"]>,
+  context: RustTargetTypeResolutionContext,
+): readonly Extract<TargetTypeRef, { readonly kind: "type-parameter" }>[] | undefined {
+  const declarations = sourceArguments.map(argument => sourceTypeParameterDeclaration(argument.typeParameter, context));
+  if (declarations.some(declaration => declaration === undefined)) return undefined;
+  return rustSourceTypeParameters(declarations.filter(declaration => declaration !== undefined), context.ast);
+}
+
+function sourceTypeParameterDeclaration(type: Type, context: RustTargetTypeResolutionContext): Node | undefined {
+  const symbol = context.currentSemantics.declarations.typeSymbol(type);
+  const declaration = symbol === undefined ? undefined : context.currentSemantics.declarations.primarySymbolDeclaration(symbol);
+  return declaration !== undefined && context.ast.is.IsTypeParameterDeclaration(declaration) ? declaration : undefined;
+}
 
 export function bindRustSelectedCallTypeArguments(
   sourceArguments: NonNullable<RustSelectedTargetSignature["sourceSelectedMethodTypeArguments"]>,
@@ -16,9 +32,8 @@ export function bindRustSelectedCallTypeArguments(
   for (const [index, argument] of sourceArguments.entries()) {
     const target = targetArguments[index]!;
     if (target.kind !== "type") continue;
-    const symbol = context.currentSemantics.declarations.typeSymbol(argument.typeParameter);
-    const declaration = symbol === undefined ? undefined : context.currentSemantics.declarations.primarySymbolDeclaration(symbol);
-    if (declaration === undefined || context.ast.kindName(declaration) !== "KindTypeParameter" ||
+    const declaration = sourceTypeParameterDeclaration(argument.typeParameter, context);
+    if (declaration === undefined ||
       declarations.has(declaration)) return undefined;
     declarations.add(declaration);
     substitutions.set(declaration, { sourceType: argument.selectedType, carrier: target.type });
@@ -61,8 +76,7 @@ export function bindRustSourceAliasArguments(
 }
 
 export function selectedRustSourceTypeArgument(type: Type, context: RustTargetTypeResolutionContext): Type {
-  const symbol = context.currentSemantics.declarations.typeSymbol(type);
-  const declaration = symbol === undefined ? undefined : context.currentSemantics.declarations.primarySymbolDeclaration(symbol);
-  return declaration === undefined || context.ast.kindName(declaration) !== "KindTypeParameter"
+  const declaration = sourceTypeParameterDeclaration(type, context);
+  return declaration === undefined
     ? type : context.sourceTypeParameterSubstitutions?.get(declaration)?.sourceType ?? type;
 }

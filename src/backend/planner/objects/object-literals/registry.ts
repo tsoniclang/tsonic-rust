@@ -302,7 +302,7 @@ export function createImplementationPlan(
       return undefined;
     }
     const substitutions = new Map(projectTypeSubstitutions(owner, ownerRelation.targetType));
-    variant.sourceTypeParameterNames.forEach((name, index) => {
+    variant.sourceTypeParameterIdentities.forEach((name, index) => {
       const target = variant.targetTypeArguments[index];
       if (target !== undefined) {
         substitutions.set(name, target);
@@ -320,7 +320,7 @@ export function createImplementationPlan(
       },
       {
         methodTypeArgumentSubstitutions: new Map(
-          variant.sourceTypeParameterNames.map((name, index) =>
+          variant.sourceTypeParameterIdentities.map((name, index) =>
             [name, variant.targetTypeArguments[index]!] as const),
         ),
       },

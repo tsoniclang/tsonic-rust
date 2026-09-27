@@ -18,7 +18,7 @@ test("source absence normalization retains one native layer and genuine native o
 
 test("generic storage substitution is exact for values, nullable values and pure absence", () => {
   const value = rustSourcePrimitiveTargetType("int64");
-  const parameter = { kind: "type-parameter", name: "Value" };
+  const parameter = { kind: "type-parameter", identity: "Value", name: "Value" };
   const projection = rustSourceOptionalTargetType(parameter);
   assert.deepEqual(projection, rustOptionalStorageProjection(parameter));
   for (const argument of [value, rustSourceOptionalTargetType(value), rustAbsenceTargetType(), rustJsValueTargetType()]) {
@@ -37,5 +37,5 @@ test("native absence metadata rejects malformed carrier claims", () => {
   assert.equal(isRustTargetTypeRef({ kind: "target-named", id: "rust.std.Option", sourceAbsence: true }), false);
   assert.equal(isRustTargetTypeRef({ kind: "target-named", id: "rust.std.Option", sourceAbsence: true,
     genericArguments: [{ kind: "type", type: value }, { kind: "type", type: value }] }), false);
-  assert.equal(isRustTargetTypeRef({ kind: "type-parameter", name: "Value", optionalStorageValue: {} }), false);
+  assert.equal(isRustTargetTypeRef({ kind: "type-parameter", identity: "Value", name: "Value", optionalStorageValue: {} }), false);
 });

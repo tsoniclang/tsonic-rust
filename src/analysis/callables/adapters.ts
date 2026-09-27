@@ -71,10 +71,10 @@ export function projectOwnerTypeSubstitutions(
 ): Map<string, TargetTypeRef> {
   const value = rustSourceTypeCarrierValue(carrier);
   const typeArguments = rustTargetGenericTypeArguments(value?.genericArguments);
-  if (typeArguments.length !== owner.typeParameterNames.length) {
+  if (typeArguments.length !== owner.typeParameterIdentities.length) {
     throw new Error("Callable owner arguments do not match the sealed project type-parameter arity.");
   }
-  return new Map(owner.typeParameterNames.map((name, index) =>
+  return new Map(owner.typeParameterIdentities.map((name, index) =>
     [name, typeArguments[index]!] as const));
 }
 

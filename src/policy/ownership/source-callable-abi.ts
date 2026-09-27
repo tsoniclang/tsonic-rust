@@ -93,7 +93,7 @@ export function instantiateRustSourceParameterValueCarrier(
     substituteSelected(abi.parameterCarrier),
     selectedParameterCarrier,
     {
-      typeNames: new Set(references.typeNames.filter((name) => !selectedBindings.types.has(name))),
+      typeIdentities: new Set(references.typeIdentities.filter((name) => !selectedBindings.types.has(name))),
       lifetimeIdentities: new Set(references.lifetimeIdentities.filter((identity) => !selectedBindings.lifetimes.has(identity))),
       constIdentities: new Set(references.constIdentities.filter((identity) => !selectedBindings.consts.has(identity))),
     },

@@ -11,7 +11,7 @@ const instantiate = (abi, selected, bindings = emptyBindings, normalize = unchan
   instantiateRustSourceParameterValueCarrier(abi, selected, bindings, normalize);
 
 test("selected generic parameter ABI instantiation retains default, rest and reference shapes", () => {
-  const generic = { kind: "type-parameter", name: "T" };
+  const generic = { kind: "type-parameter", identity: "T", name: "T" };
   const integer = rustSourcePrimitiveTargetType("uint32");
   const string = rustStringTargetType();
   for (const actual of [integer, string]) {
@@ -36,7 +36,7 @@ test("selected generic parameter ABI instantiation retains default, rest and ref
 
 test("selected parameter ABI normalizes noninjective families forwards without guessing their owner", () => {
   const registry = createRustSourceTypeFamilyRegistry();
-  const parameter = { kind: "type-parameter", name: "T" };
+  const parameter = { kind: "type-parameter", identity: "T", name: "T" };
   const signed = rustSourcePrimitiveTargetType("int32");
   const unsigned = rustSourcePrimitiveTargetType("uint32");
   const family = {
@@ -59,7 +59,7 @@ test("selected parameter ABI normalizes noninjective families forwards without g
     assert.equal(instantiate(abi, signed, selected, normalize), undefined);
   }
   assert.equal(instantiate(abi, unsigned, emptyBindings, normalize), undefined);
-  const callerParameter = { kind: "type-parameter", name: "Caller" };
+  const callerParameter = { kind: "type-parameter", identity: "Caller", name: "Caller" };
   const selected = { ...emptyBindings, types: new Map([["T", callerParameter]]) };
   assert.equal(instantiate({ ...abi, valueCarrier: parameter, parameterCarrier: parameter }, unsigned, selected, normalize), undefined);
 });
