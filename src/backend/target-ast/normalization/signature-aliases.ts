@@ -22,6 +22,7 @@ export function nameRustSignatureTypes(
     ...(item.kind === "impl" ? item.members.flatMap(member => member.kind === "function"
       ? member.generics.parameters.map(parameter => parameter.name) : []) : []),
     ...(item.kind === "use" ? [item.alias ?? item.path.split("::").slice(-1)[0]!] : []),
+    ...(item.kind === "extern-block" ? item.members.flatMap(member => "name" in member ? [member.name] : []) : []),
   ]));
   const aliases: Extract<RustItem, { readonly kind: "type-alias" }>[] = [];
   const createTypeNamer = (item: { readonly name: string; readonly visibility: RustVisibility },

@@ -13,6 +13,7 @@ import {
 import type {
   RustGenerics,
   RustGenericParameter,
+  RustForeignMember,
   RustImplFunction,
   RustItem,
   RustSelfParam,
@@ -43,6 +44,14 @@ export function printRustItem(item: RustItem): string {
       return printRustMacroItem(item);
     case "extern-crate":
       return `extern crate ${item.name};`;
+    case "extern-block": {
+      const abi = item.abi === undefined ? "" : ` ${JSON.stringify(item.abi)}`;
+      const members = [
+        ...(item.innerAttrs ?? []).map(attribute => `    ${printRustAttribute(attribute, true)}`),
+        ...item.members.map(printRustForeignMember),
+      ].join("\n");
+      return `${printAttributes(item.attrs, 0)}${item.isUnsafe ? "unsafe " : ""}extern${abi} {${members.length === 0 ? "}" : `\n${members}\n}`}`;
+    }
     case "mod-decl": {
       const declaration = `${printAttributes(item.attrs, 0)}${printRustVisibility(item.visibility)}mod ${item.name}`;
       if (item.body === undefined) return `${declaration};`;
@@ -148,6 +157,21 @@ export function printRustItem(item: RustItem): string {
 
 function printRustStructField(field: RustStructField): string {
   return `${printAttributes(field.attrs, 1)}    ${printRustVisibility(field.visibility)}${field.name}: ${printRustType(field.type)},`;
+}
+
+function printRustForeignMember(member: RustForeignMember): string {
+  if (member.kind === "macro-invocation") return `    ${printRustMacroItem(member)}`;
+  const prefix = `${printAttributes(member.attrs, 1)}    ${printRustVisibility(member.visibility)}`;
+  if (member.kind === "type") return `${prefix}type ${member.name};`;
+  const safety = member.safety === undefined ? "" : `${member.safety} `;
+  if (member.kind === "static") {
+    return `${prefix}${safety}static ${member.mutable ? "mut " : ""}${member.name}: ${printRustType(member.type)};`;
+  }
+  const generics = printRustGenerics(member.generics);
+  const parameters = [printRustParameters(undefined, member.params), ...(member.variadic ? ["..."] : [])]
+    .filter(value => value.length > 0).join(", ");
+  return appendRustWhereEnding(`${prefix}${safety}fn ${member.name}${generics.parameters}(${parameters})${printRustReturnSuffix(member.returnType)}`,
+    generics, 1, ";");
 }
 
 function printRustTraitFunction(fn: RustTraitFunction): string {

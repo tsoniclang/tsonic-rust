@@ -59,6 +59,8 @@ function publicDeclaredRustTypeNames(items: readonly RustItem[]): ReadonlySet<st
 function declaredRustTypeNames(items: readonly RustItem[], publicOnly = false): ReadonlySet<string> {
   return new Set(items.flatMap(item => item.kind === "mod-decl" && item.body !== undefined
     ? [...declaredRustTypeNames(item.body.items, publicOnly)].map(name => `${item.name}::${name}`)
+    : item.kind === "extern-block" ? item.members.flatMap(member => member.kind === "type" &&
+      (!publicOnly || member.visibility === "public") ? [member.name] : [])
     : (item.kind === "struct" || item.kind === "trait" || item.kind === "enum" ||
         item.kind === "type-alias") && (!publicOnly || item.visibility === "public") ? [item.name] : []));
 }
@@ -660,6 +662,10 @@ function closePublicRustTypeVisibility(
 
 function exposeScopedRustTypes(items: readonly RustItem[], publicTypes: ReadonlySet<string>): readonly RustItem[] {
   return items.map(item => {
+    if (item.kind === "extern-block") {
+      return { ...item, members: item.members.map(member => member.kind === "type" && publicTypes.has(member.name)
+        ? { ...member, visibility: "public" as const } : member) };
+    }
     if (item.kind === "mod-decl" && item.body !== undefined) {
       const prefix = `${item.name}::`;
       const names = new Set([...publicTypes].filter(name => name.startsWith(prefix)).map(name => name.slice(prefix.length)));
@@ -727,6 +733,10 @@ function publicSignatureTypes(
         : [];
     case "type-alias":
       return publicTypes.has(item.name) ? [item.target] : [];
+    case "extern-block":
+      return item.members.flatMap(member => member.kind === "macro-invocation" || member.visibility !== "public"
+        ? [] : member.kind === "static" ? [member.type] : member.kind === "function"
+          ? [...member.params.map(parameter => parameter.type), ...optionalType(member.returnType)] : []);
     case "mod-decl":
     case "extern-crate":
     case "use":

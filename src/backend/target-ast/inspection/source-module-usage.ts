@@ -14,6 +14,7 @@ import type {
   RustConstArgument,
 } from "../nodes.js";
 import { rustMacroInputFragments, type RustMacroInput } from "../macro-input.js";
+import type { RustAttribute } from "../attributes.js";
 
 function rustMacroInputReferencesModuleAlias(input: RustMacroInput, alias: string): boolean {
   return rustMacroInputFragments(input).some(fragment => {
@@ -36,8 +37,7 @@ export function rustItemsReferenceModuleAlias(
 }
 
 function rustItemReferencesModuleAlias(item: RustItem, alias: string): boolean {
-  if ("attrs" in item && item.attrs?.some(attribute => rustPathReferencesModuleAlias(attribute.path, alias) ||
-    rustMacroInputReferencesModuleAlias({ delimiter: "parentheses", tokens: attribute.tokens }, alias))) return true;
+  if ("attrs" in item && rustAttributesReferenceModuleAlias(item.attrs, alias)) return true;
   switch (item.kind) {
     case "macro-invocation":
       return rustPathReferencesModuleAlias(item.path, alias) || rustMacroInputReferencesModuleAlias(item.input, alias);
@@ -55,6 +55,15 @@ function rustItemReferencesModuleAlias(item: RustItem, alias: string): boolean {
       return item.body !== undefined && rustItemsReferenceModuleAlias(item.body.items, alias);
     case "extern-crate":
       return false;
+    case "extern-block":
+      return rustAttributesReferenceModuleAlias(item.innerAttrs, alias) || item.members.some(member => {
+        if (member.kind === "macro-invocation") {
+          return rustPathReferencesModuleAlias(member.path, alias) || rustMacroInputReferencesModuleAlias(member.input, alias);
+        }
+        return rustAttributesReferenceModuleAlias(member.attrs, alias) || (member.kind === "static"
+          ? rustTypeReferencesModuleAlias(member.type, alias)
+          : member.kind === "function" && rustTraitFunctionReferencesModuleAlias(member, alias));
+      });
     case "struct":
       return rustGenericsReferenceModuleAlias(item.generics, alias) ||
         item.fields.some((field) => rustTypeReferencesModuleAlias(field.type, alias));
@@ -91,6 +100,11 @@ function rustItemReferencesModuleAlias(item: RustItem, alias: string): boolean {
     case "use":
       return rustPathReferencesModuleAlias(item.path, alias);
   }
+}
+
+function rustAttributesReferenceModuleAlias(attributes: readonly RustAttribute[] | undefined, alias: string): boolean {
+  return attributes?.some(attribute => rustPathReferencesModuleAlias(attribute.path, alias) ||
+    rustMacroInputReferencesModuleAlias({ delimiter: "parentheses", tokens: attribute.tokens }, alias)) === true;
 }
 
 function rustTraitFunctionReferencesModuleAlias(

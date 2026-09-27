@@ -43,6 +43,7 @@ export function completeRustAuthoredStructScopes(
       case "type-alias":
       case "mod-decl": return [item.name];
       case "use": return [item.alias ?? item.path.split("::").pop()!];
+      case "extern-block": return item.members.flatMap(member => "name" in member ? [member.name] : []);
       case "impl":
       case "extern-crate":
       case "macro-invocation": return [];

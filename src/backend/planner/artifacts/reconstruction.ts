@@ -325,6 +325,13 @@ function rustSourceFileItemNames(model: RustSourceFileModel): readonly string[] 
         return [];
       case "macro-invocation":
         throw new Error("Native macro item names require the selected expansion's declaration evidence.");
+      case "extern-block":
+        return item.members.map(member => {
+          if (member.kind === "macro-invocation") {
+            throw new Error("Native macro item names require the selected expansion's declaration evidence.");
+          }
+          return member.name;
+        });
     }
   }));
 }

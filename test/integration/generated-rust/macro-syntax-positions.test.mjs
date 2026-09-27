@@ -6,6 +6,8 @@ import { createTestWorkspace } from "../../../../tsonic/test/scripts/test-worksp
 import { repositoryRoot } from "../../helpers/rust-session/paths.mjs";
 import { emptyRustGenerics } from "../../../dist/backend/target-ast/nodes.js";
 import { printRustItem } from "../../../dist/print/source/items.js";
+import { rustValueAttribute } from "../../../dist/backend/target-ast/attributes.js";
+import { finalizeRustSourceStyle } from "../../../dist/backend/target-ast/normalization/source-style.js";
 import { runRustNativeCommand } from "../../../dist/providers/native/protocol/bounded-command.js";
 
 function invocation(path, delimiter = "parentheses", fragments = []) {
@@ -111,4 +113,62 @@ test("invalid native macro positions and expansion types remain native errors", 
   assert.throws(() => nativeProgram("invalid_result", [method("wrong", [
     { kind: "tail", expr: invocation("text") },
   ])], 'macro_rules! text { () => { "not a number" }; }', "fn main() {}"), /mismatched types/u);
+});
+
+test("foreign macro members link and execute in their exact native scope", () => {
+  const integer = { kind: "primitive", name: "u32" };
+  const link = name => [rustValueAttribute("link_name", { kind: "string", value: name })];
+  const foreign = { kind: "extern-block", isUnsafe: true, abi: "C", members: [
+    { kind: "function", name: "doubleValue", visibility: "public", safety: "safe",
+      generics: emptyRustGenerics, params: [{ name: "inputValue", type: integer }], returnType: integer,
+      attrs: link("proof_double") },
+    invocation("foreign_first", "parentheses"),
+    { kind: "static", name: "nativeValue", visibility: "public", safety: "safe", mutable: false,
+      type: integer, attrs: link("PROOF_VALUE") },
+    invocation("foreign_second", "brackets"),
+    { kind: "static", name: "SLOT", visibility: "public", mutable: true,
+      type: integer, attrs: link("PROOF_SLOT") },
+    invocation("foreign_third", "braces"),
+  ] };
+  const items = finalizeRustSourceStyle({ headerComment: "fixture", items: [foreign] }).items;
+  assert.equal(nativeProgram("foreign", items, `
+mod implementation {
+    #[unsafe(export_name = "proof_double")]
+    pub extern "C" fn double(value: u32) -> u32 { value * 2 }
+    #[unsafe(export_name = "proof_identity")]
+    pub extern "C" fn identity(value: u32) -> u32 { value }
+    #[unsafe(export_name = "PROOF_VALUE")]
+    pub static VALUE: u32 = 9;
+    #[unsafe(export_name = "PROOF_SLOT")]
+    pub static mut SLOT: u32 = 0;
+}
+macro_rules! foreign_first { () => {
+    #[link_name = "proof_identity"] pub safe fn first(value: u32) -> u32;
+}; }
+macro_rules! foreign_second { () => {
+    #[link_name = "proof_identity"] pub unsafe fn second(value: u32) -> u32;
+}; }
+macro_rules! foreign_third { () => {
+    #[link_name = "proof_identity"] pub fn third(value: u32) -> u32;
+}; }
+`, `fn main() {
+    assert_eq!(doubleValue(first(4)) + nativeValue, 17);
+    unsafe {
+        SLOT = second(third(11));
+        assert_eq!(std::ptr::read(std::ptr::addr_of!(SLOT)), 11);
+    }
+}`), "");
+});
+
+test("foreign macro position and native safety restrictions remain errors", () => {
+  const block = { kind: "extern-block", isUnsafe: true, abi: "C", members: [invocation("declaration")] };
+  assert.throws(() => nativeProgram("foreign_body", [block],
+    "macro_rules! declaration { () => { pub fn invalid() {} }; }", "fn main() {}"),
+  /functions in `extern` blocks cannot have a body/u);
+  assert.throws(() => nativeProgram("foreign_safety", [block],
+    "macro_rules! declaration { () => { pub unsafe fn foreign_operation(); }; }",
+    "fn main() { foreign_operation(); }"), /call to unsafe function/u);
+  assert.throws(() => nativeProgram("foreign_unsafe_block", [{ ...block, isUnsafe: false }],
+    "macro_rules! declaration { () => { pub fn foreign_operation(); }; }", "fn main() {}"),
+  /extern blocks must be unsafe/u);
 });

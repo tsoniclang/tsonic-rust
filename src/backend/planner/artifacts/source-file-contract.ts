@@ -46,6 +46,10 @@ function publicItemSurface(item: RustItem): readonly string[] {
   switch (item.kind) {
     case "macro-invocation":
       return [closedMetadataKey(item)];
+    case "extern-block": {
+      const members = item.members.filter(member => member.kind === "macro-invocation" || member.visibility === "public");
+      return members.length === 0 ? [] : [closedMetadataKey({ ...item, members })];
+    }
     case "function":
       return item.visibility === "public"
         ? [encodeRustContractParts([closedMetadataKey(item.attrs ?? []), rustFunctionSurface({

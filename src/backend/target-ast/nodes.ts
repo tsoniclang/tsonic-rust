@@ -456,6 +456,29 @@ export interface RustImplAssociatedType {
 export type RustTraitMember = RustTraitFunction | RustTraitAssociatedType | RustMacroInvocation;
 export type RustImplMember = RustImplFunction | RustImplConstant | RustImplAssociatedType | RustMacroInvocation;
 
+export type RustForeignMember = RustMacroInvocation | {
+  readonly name: string;
+  readonly visibility: RustVisibility;
+  readonly attrs?: readonly RustAttribute[];
+  readonly deadCode?: RustDeadCodeDisposition;
+} & (
+  | {
+      readonly kind: "function";
+      readonly safety?: "safe" | "unsafe";
+      readonly generics: RustGenerics;
+      readonly params: readonly RustFunctionParam[];
+      readonly variadic?: boolean;
+      readonly returnType?: RustType;
+    }
+  | {
+      readonly kind: "static";
+      readonly safety?: "safe" | "unsafe";
+      readonly mutable: boolean;
+      readonly type: RustType;
+    }
+  | { readonly kind: "type" }
+);
+
 export type RustItem =
   | RustMacroInvocation
   | {
@@ -493,6 +516,7 @@ export type RustItem =
     }
   | { readonly kind: "mod-decl"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly RustAttribute[]; readonly body?: RustSourceFileModel }
   | { readonly kind: "extern-crate"; readonly name: string }
+  | { readonly kind: "extern-block"; readonly isUnsafe: boolean; readonly abi?: string; readonly attrs?: readonly RustAttribute[]; readonly innerAttrs?: readonly RustAttribute[]; readonly members: readonly RustForeignMember[] }
   | { readonly kind: "struct"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly RustAttribute[]; readonly deadCode?: RustDeadCodeDisposition; readonly generics: RustGenerics; readonly fields: readonly RustStructField[] }
   | { readonly kind: "trait"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly RustAttribute[]; readonly deadCode?: RustDeadCodeDisposition; readonly generics: RustGenerics; readonly superTraits?: readonly RustType[]; readonly members: readonly RustTraitMember[] }
   | { readonly kind: "impl"; readonly attrs?: readonly RustAttribute[]; readonly generics: RustGenerics; readonly trait?: RustType; readonly target: RustType; readonly members: readonly RustImplMember[] }

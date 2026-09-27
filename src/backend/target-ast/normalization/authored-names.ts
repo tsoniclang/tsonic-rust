@@ -70,6 +70,10 @@ export function finalizeRustItemNames(item: RustItem): RustItem {
       member.kind === "type" ? named(member, "camel") : member) };
     case "impl": return { ...generic(item), members: item.members.map(member =>
       member.kind === "const" && item.trait === undefined ? named(member, "upper") : member) };
+    case "extern-block": return { ...item, members: item.members.map(member =>
+      member.kind === "function" ? finalizeRustFunctionNames(member)
+        : member.kind === "static" ? named(member, "upper")
+          : member.kind === "type" ? named(member, "camel") : member) };
     case "extern-crate":
     case "use":
     case "macro-invocation": return item;
