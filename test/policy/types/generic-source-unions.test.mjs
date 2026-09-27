@@ -40,7 +40,7 @@ test("generic source unions retain cross-file narrowing and concrete instantiati
     files: {
       "region.ts": `
 import type { Pointer, uint8 } from "@tsonic/core/types.js";
-import { loadPointer } from "@tsonic/core/lang.js";
+import { loadptr } from "@tsonic/core/lang.js";
 export type Region<Element> = {
   readonly kind: "array";
   readonly values: Element[];
@@ -77,13 +77,13 @@ export function retainBytePointer(region: PointerRegion<uint8> | undefined): Poi
 export function readByteRegion(region: PointerRegion<uint8> | undefined): uint8 {
   if (region === undefined) return 0;
   if (region.kind === "value") return region.value;
-  return loadPointer(region.at());
+  return loadptr(region.at());
 }
 `,
       "index.ts": `
 import { check } from "@acme/testing";
 import type { int32, uint8 } from "@tsonic/core/types.js";
-import { allocatePointer, storePointer } from "@tsonic/core/lang.js";
+import { allocateptr, storeptr } from "@tsonic/core/lang.js";
 import { arrayRegion, callbackRegion, nested, read, retainPointer, retainBytePointer, readByteRegion } from "./region.js";
 export function main(): void {
   check(read(arrayRegion(7), 0) === 7);
@@ -102,11 +102,11 @@ export function main(): void {
   const byte: uint8 = 29;
   const retained = retainBytePointer({kind: "value", value: byte});
   check(retained !== undefined && retained.kind === "value" && retained.value === byte);
-  const pointer = allocatePointer<uint8>(byte);
+  const pointer = allocateptr<uint8>(byte);
   check(readByteRegion(retained) === byte);
   check(readByteRegion(retainPointer({kind: "pointer", at: () => pointer})) === byte);
   const inline = retainPointer({kind: "pointer", at: () => pointer});
-  storePointer(pointer, 31);
+  storeptr(pointer, 31);
   check(readByteRegion(inline) === 31);
   check(readByteRegion(undefined) === 0);
 }

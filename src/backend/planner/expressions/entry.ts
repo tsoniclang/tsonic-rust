@@ -325,7 +325,7 @@ export function planRawExpression(
       code: "RUST_UNSAFE_OPERATION_CONTEXT_REQUIRED",
       category: "error",
       source: "tsonic-rust",
-      message: "The selected Rust operation requires an explicit unsafeContext() source region at this use site.",
+      message: "The selected Rust operation requires an explicit unsafecontext() source region at this use site.",
       sourceNode: node,
     });
     planned = undefined;

@@ -421,7 +421,7 @@ function mapRustDefaultValueCall(
       request.source.call,
       context,
       "RUST_DEFAULT_VALUE_EVIDENCE_NOT_PROVEN",
-      "defaultValue<T>() requires one exact source-core type fact, one matching selected type argument, no arguments, and one matching Rust result carrier.",
+      "defaultvalue<T>() requires one exact source-core type fact, one matching selected type argument, no arguments, and one matching Rust result carrier.",
     );
   }
   const operationId = "tsonic.rust.default-value";
@@ -448,7 +448,7 @@ function mapRustDefaultValueCall(
   };
   const member: RustTargetMember = {
     id: operationId,
-    sourceName: "defaultValue",
+    sourceName: "defaultvalue",
     targetName: "Default::default",
     kind: "method",
     static: true,
@@ -483,7 +483,7 @@ function mapRustDefaultValueCall(
     sourceSelectedSignatureParameters: request.source.sourceSelectedSignatureParameters,
     sourceSelectedMethodTypeArguments: sourceTypeArguments,
   };
-  const evidence = [{ message: "rust selected source-core defaultValue<T>()" }];
+  const evidence = [{ message: "rust selected source-core defaultvalue<T>()" }];
   context.facts.set(request.source.call, rustTargetOperationFactKey, fact, evidence);
   context.facts.set(request.source.call, rustSelectedOperationKey, operation, evidence);
   context.facts.set(request.source.call, rustSelectedCallKey, selectedSignature, evidence);

@@ -1,7 +1,7 @@
 export const compoundTypeFamilyOwnerFiles = {
   "storage.ts": `
 import type { Pointer } from "@tsonic/core/types.js";
-import { loadPointer, storePointer } from "@tsonic/core/lang.js";
+import { loadptr, storeptr } from "@tsonic/core/lang.js";
 declare const storage: unique symbol;
 interface Stored<Value> { readonly [storage]: Value; }
 type Storage<Value> = Value extends Stored<infer Inner> ? Inner : Value;
@@ -12,11 +12,11 @@ export class Job<Value> {
 }
 export function read<Value>(value: Storage<Pointer<Job<Value>> | undefined>): Value | undefined {
   if (value === undefined) return undefined;
-  return loadPointer(value).payload;
+  return loadptr(value).payload;
 }
 export function write<Value>(value: Storage<Pointer<Job<Value>> | undefined>, payload: Value): void {
   if (value === undefined) return;
-  storePointer(value, new Job(payload));
+  storeptr(value, new Job(payload));
 }
 export function countEntries<Key, Value>(values: Entry<Key, Pointer<Job<Value>> | undefined>[],
   count: (entries: Entry<Key, Pointer<Job<Value>> | undefined>[]) => number): number {
@@ -25,13 +25,13 @@ export function countEntries<Key, Value>(values: Entry<Key, Pointer<Job<Value>> 
 `,
   "index.ts": `
 import { check } from "@acme/testing";
-import { addressOf } from "@tsonic/core/lang.js";
+import { addressof } from "@tsonic/core/lang.js";
 import { Job, read, write, countEntries } from "./storage.js";
 export function main(): void {
   let numericJob = new Job(7);
   let textJob = new Job("retained");
-  const numeric = addressOf(numericJob);
-  const text = addressOf(textJob);
+  const numeric = addressof(numericJob);
+  const text = addressof(textJob);
   check(read(numeric) === 7);
   check(read(text) === "retained");
   check(read<number>(undefined) === undefined);

@@ -28,12 +28,12 @@ test("raw pointer identity preserves optional address carriers through parameter
   const { result } = compileRust({
     target: { id: "rust", options: { outputType: "bin" } },
     files: { "index.ts": `
-import { equalRawPointer as same, hashRawPointer } from "@tsonic/core/lang.js";
+import { equalrawptr as same, hashrawptr } from "@tsonic/core/lang.js";
 import type { RawPointer } from "@tsonic/core/types.js";
 type Address = RawPointer;
 function pass(value: Address | undefined): Address | undefined { return value; }
 export function check(left: Address | undefined, right: Address | undefined): boolean {
-  return same(pass(left), pass(right)) && hashRawPointer(left) === hashRawPointer(right);
+  return same(pass(left), pass(right)) && hashrawptr(left) === hashrawptr(right);
 }
 export function main(): void { if (!check(undefined, undefined)) throw new Error("raw identity"); }
 ` },
@@ -50,14 +50,14 @@ export function main(): void { if (!check(undefined, undefined)) throw new Error
 test("pointer hash and projection preserve exact optional and generic contracts", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     files: { "index.ts": `
-import { hashPointer, projectPointer } from "@tsonic/core/lang.js";
+import { hashptr, projectptr } from "@tsonic/core/lang.js";
 import type { int32, Pointer } from "@tsonic/core/types.js";
-export function hash<T>(pointer: Pointer<T> | undefined): number { return hashPointer(pointer); }
+export function hash<T>(pointer: Pointer<T> | undefined): number { return hashptr(pointer); }
 export function shifted(pointer: Pointer<int32>): Pointer<int32> {
-  return projectPointer<int32, int32>(pointer, value => value + 1, value => value - 1);
+  return projectptr<int32, int32>(pointer, value => value + 1, value => value - 1);
 }
 export function optional(pointer: Pointer<int32> | undefined): Pointer<int32> | undefined {
-  return projectPointer<int32, int32>(pointer, value => value + 1, value => value - 1);
+  return projectptr<int32, int32>(pointer, value => value + 1, value => value - 1);
 }
 ` },
   });
@@ -72,18 +72,18 @@ export function optional(pointer: Pointer<int32> | undefined): Pointer<int32> | 
 test("pointer binding retains the source reference identity and captured storage", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     files: { "index.ts": `
-import { bindPointer, loadPointer, storePointer } from "@tsonic/core/lang.js";
+import { bindptr, loadptr, storeptr } from "@tsonic/core/lang.js";
 import type { int32, Pointer } from "@tsonic/core/types.js";
 class Identity { value: int32 = 0; }
 export function bind(value: int32): Pointer<int32> {
   const identity = new Identity();
   let storage = value;
-  return bindPointer<int32>(identity, () => storage, next => { storage = next; });
+  return bindptr<int32>(identity, () => storage, next => { storage = next; });
 }
 export function run(): int32 {
   const pointer = bind(3);
-  storePointer(pointer, 8);
-  return loadPointer(pointer);
+  storeptr(pointer, 8);
+  return loadptr(pointer);
 }
 ` },
   });
@@ -98,23 +98,23 @@ test("typed locations retain generic pointees and optional identity", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
-import { equalPointer, loadPointer, storePointer } from "@tsonic/core/lang.js";
+import { equalptr, loadptr, storeptr } from "@tsonic/core/lang.js";
 import type { int32, Pointer } from "@tsonic/core/types.js";
 
 export function replace<T>(pointer: Pointer<T>, value: T): T {
-  storePointer(pointer, value);
-  return loadPointer(pointer);
+  storeptr(pointer, value);
+  return loadptr(pointer);
 }
 
 export function same<T>(
   left: Pointer<T> | undefined,
   right: Pointer<T> | undefined,
 ): boolean {
-  return equalPointer(left, right);
+  return equalptr(left, right);
 }
 
 export function bothMissing(): boolean {
-  return equalPointer<int32>(undefined, undefined);
+  return equalptr<int32>(undefined, undefined);
 }
 `,
     },
@@ -128,25 +128,25 @@ export function bothMissing(): boolean {
   assert.match(output, /rt::Location::<T, rt::TsonicError>::same\(left\.as_ref\(\), right\.as_ref\(\)\)/u);
   assert.match(output, /rt::Location::<i32, rt::TsonicError>::same\(\s*Option::<rt::Location<i32, rt::TsonicError>>::None\.as_ref\(\),\s*Option::<rt::Location<i32, rt::TsonicError>>::None\.as_ref\(\),?\s*\)/u);
   assert.doesNotMatch(output, /(?:left|right)\.clone\(\)/u);
-  assert.doesNotMatch(output, /equalPointer|loadPointer|storePointer/u);
+  assert.doesNotMatch(output, /equalptr|loadptr|storeptr/u);
 });
 
 test("typed locations retain only the exact lifetime bound for raw and function pointers", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
-import { allocatePointer } from "@tsonic/core/lang.js";
+import { allocateptr } from "@tsonic/core/lang.js";
 import type { FunctionPointer, Pointer } from "@tsonic/core/types.js";
 import type { constPtr } from "@tsonic/rust/types.js";
 
 export function retainRaw<T>(value: constPtr<T>): Pointer<constPtr<T>> {
-  return allocatePointer(value);
+  return allocateptr(value);
 }
 
 export function retainFunction<T>(
   value: FunctionPointer<[T], T>,
 ): Pointer<FunctionPointer<[T], T>> {
-  return allocatePointer(value);
+  return allocateptr(value);
 }
 `,
     },
@@ -228,11 +228,11 @@ test("generated Rust locations preserve aliases and projected storage", { timeou
     files: {
       "index.ts": `
 import {
-  addressOf,
-  allocatePointer,
-  equalPointer,
-  loadPointer,
-  storePointer,
+  addressof,
+  allocateptr,
+  equalptr,
+  loadptr,
+  storeptr,
 } from "@tsonic/core/lang.js";
 import type { int32, Pointer } from "@tsonic/core/types.js";
 import { check } from "@acme/testing";
@@ -257,53 +257,53 @@ class Pair {
 }
 
 function increment(pointer: Pointer<int32>): void {
-  storePointer(pointer, loadPointer(pointer) + 1);
+  storeptr(pointer, loadptr(pointer) + 1);
 }
 
 function replace<T>(pointer: Pointer<T>, value: T): T {
-  storePointer(pointer, value);
-  return loadPointer(pointer);
+  storeptr(pointer, value);
+  return loadptr(pointer);
 }
 
 function allocateGeneric<T>(value: T): Pointer<T> {
-  return allocatePointer(value);
+  return allocateptr(value);
 }
 
 function updateParameter(value: int32): int32 {
-  const pointer = addressOf(value);
+  const pointer = addressof(value);
   increment(pointer);
   return value;
 }
 
 export function main(): void {
   let local: int32 = 1;
-  const alias = addressOf(local);
+  const alias = addressof(local);
   local += 1;
   increment(alias);
   check(local === 3);
-  check(loadPointer(alias) === 3);
+  check(loadptr(alias) === 3);
 
   const allocated = allocateGeneric<int32>(40);
   check(replace(allocated, 41) === 41);
 
   let pair = new Pair(3, 4);
-  const first = addressOf(pair.left);
-  const firstAgain = addressOf(pair.left);
-  storePointer(first, 5);
+  const first = addressof(pair.left);
+  const firstAgain = addressof(pair.left);
+  storeptr(first, 5);
   check(pair.left === 5);
-  check(loadPointer(firstAgain) === 5);
-  check(equalPointer(first, firstAgain));
+  check(loadptr(firstAgain) === 5);
+  check(equalptr(first, firstAgain));
   pair.incrementLeft();
-  check(loadPointer(first) === 6);
+  check(loadptr(first) === 6);
   check(pair.addLeft(pair.right) === 10);
-  check(loadPointer(first) === 10);
+  check(loadptr(first) === 10);
 
   let values: int32[] = [6, 7];
-  const second = addressOf(values[1]);
+  const second = addressof(values[1]);
   values[1] += 1;
-  check(loadPointer(second) === 8);
-  check(!equalPointer(addressOf(values[0]), second));
-  check(equalPointer<int32>(undefined, undefined));
+  check(loadptr(second) === 8);
+  check(!equalptr(addressof(values[0]), second));
+  check(equalptr<int32>(undefined, undefined));
   check(updateParameter(8) === 9);
 }
 `,
@@ -419,18 +419,18 @@ test("module binding locations preserve one initialized identity", { timeout: 30
     },
     files: {
       "index.ts": `
-import { addressOf, equalPointer, loadPointer } from "@tsonic/core/lang.js";
+import { addressof, equalptr, loadptr } from "@tsonic/core/lang.js";
 import type { int32 } from "@tsonic/core/types.js";
 import { check } from "@acme/testing";
 
 export let value: int32 = 1;
 
 export function main(): void {
-  const first = addressOf(value);
+  const first = addressof(value);
   value += 1;
-  const second = addressOf(value);
-  check(loadPointer(first) === 2);
-  check(equalPointer(first, second));
+  const second = addressof(value);
+  check(loadptr(first) === 2);
+  check(equalptr(first, second));
 }
 `,
     },
@@ -447,11 +447,11 @@ test("typed-location requirements propagate through transitive source calls", { 
   const { result } = compileRust({
     files: {
       "storage.ts": `
-import { allocatePointer } from "@tsonic/core/lang.js";
+import { allocateptr } from "@tsonic/core/lang.js";
 import type { Pointer } from "@tsonic/core/types.js";
 
 export function allocateValue<T>(value: T): Pointer<T> {
-  return allocatePointer(value);
+  return allocateptr(value);
 }
 `,
       "middle.ts": `
@@ -499,24 +499,24 @@ test("promoted storage preserves selected mutating provider receivers", { timeou
     },
     files: {
       "index.ts": `
-import { addressOf, loadPointer, storePointer } from "@tsonic/core/lang.js";
+import { addressof, loadptr, storeptr } from "@tsonic/core/lang.js";
 import type { int32, Pointer } from "@tsonic/core/types.js";
 import { check } from "@acme/testing";
 
 function nextValue(values: Pointer<int32[]>, calls: Pointer<int32>): int32 {
-  storePointer(calls, loadPointer(calls) + 1);
-  check(loadPointer(values).length === 1);
+  storeptr(calls, loadptr(calls) + 1);
+  check(loadptr(values).length === 1);
   return 2;
 }
 
 export function main(): void {
   let values: int32[] = [1];
-  const alias = addressOf(values);
+  const alias = addressof(values);
   let argumentCalls: int32 = 0;
-  const calls = addressOf(argumentCalls);
+  const calls = addressof(argumentCalls);
   values.push(nextValue(alias, calls));
   check(argumentCalls === 1);
-  check(loadPointer(alias).length === 2);
+  check(loadptr(alias).length === 2);
   check(values.includes(2));
 }
 `,
@@ -541,16 +541,16 @@ test("promoted storage preserves selected mutable provider arguments", { timeout
     },
     files: {
       "index.ts": `
-import { addressOf, loadPointer, mutableBorrow } from "@tsonic/core/lang.js";
+import { addressof, loadptr, mutableborrow } from "@tsonic/core/lang.js";
 import { Vector, scale } from "@acme/vectors";
 import { check } from "@acme/testing";
 
 export function main(): void {
   let value = new Vector(3, 4);
-  const alias = addressOf(value);
-  scale(mutableBorrow(value), 2);
-  check(loadPointer(alias).x === 6);
-  check(loadPointer(alias).y === 8);
+  const alias = addressof(value);
+  scale(mutableborrow(value), 2);
+  check(loadptr(alias).x === 6);
+  check(loadptr(alias).y === 8);
 }
 `,
     },
@@ -574,7 +574,7 @@ test("mutable provider field and element inputs evaluate each selected place onc
     },
     files: {
       "index.ts": `
-import { mutableBorrow } from "@tsonic/core/lang.js";
+import { mutableborrow } from "@tsonic/core/lang.js";
 import type { int32 } from "@tsonic/core/types.js";
 import { Vector, scale } from "@acme/vectors";
 import { check } from "@acme/testing";
@@ -596,14 +596,14 @@ function select(holder: Holder): Holder {
 
 export function main(): void {
   let holder = new Holder(new Vector(11, 13));
-  scale(mutableBorrow(select(holder).value), 2);
+  scale(mutableborrow(select(holder).value), 2);
   check(receiverCalls === 1);
   check(holder.value.x === 22);
   check(holder.value.y === 26);
 
   let values: Vector[] = [new Vector(2, 3), new Vector(5, 7)];
   let selected: int32 = 0;
-  scale(mutableBorrow(values[selected++]), 3);
+  scale(mutableborrow(values[selected++]), 3);
   check(selected === 1);
   check(values[0].x === 6);
   check(values[0].y === 9);
@@ -631,7 +631,7 @@ test("multiple promoted mutable inputs require disjoint storage roots", { timeou
     },
     files: {
       "index.ts": `
-import { addressOf, loadPointer, mutableBorrow } from "@tsonic/core/lang.js";
+import { addressof, loadptr, mutableborrow } from "@tsonic/core/lang.js";
 import { Vector, mutateBoth } from "@acme/vectors";
 import { check } from "@acme/testing";
 
@@ -648,14 +648,14 @@ class Pair {
 export function main(): void {
   let left = new Vector(1, 2);
   let right = new Vector(3, 4);
-  const leftAlias = addressOf(left);
-  const rightAlias = addressOf(right);
-  mutateBoth(mutableBorrow(left), mutableBorrow(right));
-  check(loadPointer(leftAlias).x === 2);
-  check(loadPointer(rightAlias).y === 5);
+  const leftAlias = addressof(left);
+  const rightAlias = addressof(right);
+  mutateBoth(mutableborrow(left), mutableborrow(right));
+  check(loadptr(leftAlias).x === 2);
+  check(loadptr(rightAlias).y === 5);
 
   let pair = new Pair(new Vector(10, 20), new Vector(30, 40));
-  mutateBoth(mutableBorrow(pair.left), mutableBorrow(pair.right));
+  mutateBoth(mutableborrow(pair.left), mutableborrow(pair.right));
   check(pair.left.x === 11);
   check(pair.right.y === 41);
 }
@@ -692,19 +692,19 @@ test("pointer binding retains the exact empty-object reference identity", { time
   const { result } = compileRust({
     target: { id: "rust", options: { outputType: "bin" } },
     files: { "index.ts": `
-import { bindPointer, equalPointer, loadPointer, storePointer } from "@tsonic/core/lang.js";
+import { bindptr, equalptr, loadptr, storeptr } from "@tsonic/core/lang.js";
 import type { int32, Pointer } from "@tsonic/core/types.js";
 function create(): Pointer<int32> {
   let current: int32 = 1;
-  return bindPointer<int32>({}, () => current, value => { current = value; });
+  return bindptr<int32>({}, () => current, value => { current = value; });
 }
 export function main(): void {
   const first = create();
   const alias = first;
   const second = create();
-  storePointer(alias, 7);
-  if (loadPointer(first) !== 7 || loadPointer(second) !== 1 ||
-      !equalPointer(first, alias) || equalPointer(first, second)) {
+  storeptr(alias, 7);
+  if (loadptr(first) !== 7 || loadptr(second) !== 1 ||
+      !equalptr(first, alias) || equalptr(first, second)) {
     throw new Error("empty-object pointer identity");
   }
 }
@@ -715,16 +715,16 @@ export function main(): void {
 
 test("reachability uses exact marker identity and retains later source uses", { timeout: 300_000 }, () => {
   const { result } = compileRust({ files: { "index.ts": `
-import { keepAlive as retain } from "@tsonic/core/lang.js";
+import { keepalive as retain } from "@tsonic/core/lang.js";
 import * as core from "@tsonic/core/lang.js";
 import type { int32 } from "@tsonic/core/types.js";
-function keepAlive(value: int32): int32 { return value + 1; }
+function keepalive(value: int32): int32 { return value + 1; }
 export function run(value: string): string {
   retain(value);
-  core.keepAlive(value);
+  core.keepalive(value);
   return value;
 }
-export function ordinary(value: int32): int32 { return keepAlive(value); }
+export function ordinary(value: int32): int32 { return keepalive(value); }
 export function retainGeneric<T>(value: T): T { retain(value); return value; }
 ` } });
   assert.deepEqual(result.diagnostics, []);
@@ -740,14 +740,14 @@ test("typed-location storage outside the safe owned-root model fails closed", ()
   assertRustTargetRejection({
     files: {
       "index.ts": `
-import { addressOf } from "@tsonic/core/lang.js";
+import { addressof } from "@tsonic/core/lang.js";
 import type { int32 } from "@tsonic/core/types.js";
 
 export class Box {
   value: int32 = 0;
 
   takeAddress(): void {
-    addressOf(this.value);
+    addressof(this.value);
   }
 }
 `,
@@ -764,12 +764,12 @@ test("same-spelled project functions remain ordinary source calls", () => {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
 
-function loadPointer(value: int32): int32 {
+function loadptr(value: int32): int32 {
   return value;
 }
 
 export function run(value: int32): int32 {
-  return loadPointer(value);
+  return loadptr(value);
 }
 `,
     },

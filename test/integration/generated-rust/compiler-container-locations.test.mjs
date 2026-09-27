@@ -9,23 +9,23 @@ test("generic compiler container locations retain nested storage and propagate l
     target: { id: "rust", options: { outputType: "bin", crateName: "container_locations" } },
     files: { "index.ts": `
 import { check } from "@acme/testing";
-import { addressOf, equalPointer, hashPointer, loadPointer, storePointer } from "@tsonic/core/lang.js";
+import { addressof, equalptr, hashptr, loadptr, storeptr } from "@tsonic/core/lang.js";
 import type { Pointer } from "@tsonic/core/types.js";
-function first<T>(values: T[]): Pointer<T> { return addressOf<T>(values[0]); }
+function first<T>(values: T[]): Pointer<T> { return addressof<T>(values[0]); }
 function forward<U>(values: U[]): Pointer<U> { return first<U>(values); }
 function nested<V>(values: V[][]): Pointer<V> { return forward<V>(values[0]); }
 export function main(): void {
   const values = [3, 4];
   const pointer = forward<number>(values);
-  storePointer(pointer, 8);
-  check(values[0] === 8 && loadPointer(pointer) === 8);
+  storeptr(pointer, 8);
+  check(values[0] === 8 && loadptr(pointer) === 8);
   const again = forward<number>(values);
-  check(equalPointer(pointer, again) && hashPointer(pointer) === hashPointer(again));
+  check(equalptr(pointer, again) && hashptr(pointer) === hashptr(again));
   const outer = [values];
   const nestedPointer = nested<number>(outer);
-  storePointer(nestedPointer, 9);
-  check(loadPointer(pointer) === 9 && values[0] === 9);
-  check(equalPointer(pointer, nestedPointer));
+  storeptr(nestedPointer, 9);
+  check(loadptr(pointer) === 9 && values[0] === 9);
+  check(equalptr(pointer, nestedPointer));
 }
 ` },
   });
