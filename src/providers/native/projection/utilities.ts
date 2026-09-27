@@ -136,18 +136,19 @@ export function withProjectionGenericParameters(
   parameters: readonly RustCompilerGenericParameter[],
 ): ProjectionContext {
   const names = new Map(context.genericNames ?? []);
-  const occupied = new Set(names.values());
+  const occupied = new Set([...names.values()].map(value => value.sourceName));
   for (const parameter of parameters) {
     const identity = genericParameterIdentity(parameter);
-    const name = genericParameterName(parameter);
     const existing = names.get(identity);
-    if (existing !== undefined && existing !== name) {
-      throw new Error(`Rust generic identity '${identity}' has conflicting source names.`);
+    const preferred = genericParameterName(parameter);
+    if (existing !== undefined) {
+      if (existing.nativeName !== preferred) throw new Error(`Rust generic identity '${identity}' has conflicting native names.`);
+      continue;
     }
-    if (existing === undefined && occupied.has(name)) {
-      throw new Error(`Rust generic source name '${name}' is declared by more than one identity.`);
-    }
-    names.set(identity, name);
+    let name = preferred;
+    let suffix = 2;
+    while (occupied.has(name)) name = `${preferred}_${suffix++}`;
+    names.set(identity, Object.freeze({ nativeName: preferred, sourceName: name }));
     occupied.add(name);
   }
   return Object.freeze({ ...context, genericNames: names });
@@ -189,7 +190,7 @@ export function requireSourceGenericName(
   if (selected === undefined) {
     throw new Error(`Rust generic identity '${identity}' has no source-visible declaration.`);
   }
-  return selected;
+  return selected.sourceName;
 }
 
 export function rustCompilerTypeConstructsCurrentType(

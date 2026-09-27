@@ -3,6 +3,7 @@ import type { ProviderDeclarationModel, ProviderTypeExpression } from "@tsonic/t
 import type {
   RustCompilerDependency,
   RustCompilerGenericParameter,
+  RustCompilerMacroExport,
   RustCompilerStandardTypeLocation,
 } from "../model/model.js";
 import type { RustNamedTypeTraitContract } from "../../../target-model/types/model.js";
@@ -10,12 +11,19 @@ import type { RustProviderModuleDefinition, RustProviderOperationDefinition, Rus
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export interface RustCompilerProviderProjection {
+  readonly completeExports: ReadonlySet<string>;
   readonly declarationModel: ProviderDeclarationModel;
   readonly module: RustProviderModuleDefinition;
   readonly operations: readonly RustProviderOperationDefinition[];
   readonly types: readonly RustProviderTypeDefinition[];
+  readonly intrinsics: readonly RustCompilerIntrinsicProjection[];
   readonly carrierPaths: ReadonlyMap<string, string>;
   readonly carrierTraits: ReadonlyMap<string, RustNamedTypeTraitContract>;
+}
+
+export interface RustCompilerIntrinsicProjection {
+  readonly exportId: string;
+  readonly native: RustCompilerMacroExport;
 }
 
 export interface ProjectionOwner {
@@ -24,6 +32,8 @@ export interface ProjectionOwner {
 }
 
 export interface ProjectionContext {
+  readonly allocateFunctionTypeIdentity: () => string;
+  readonly materialization: import("@tsonic/tsts").ProviderDeclarationMaterialization;
   readonly dependency: RustCompilerDependency;
   readonly modulePath: readonly string[];
   readonly owner: ProjectionOwner;
@@ -37,7 +47,8 @@ export interface ProjectionContext {
     readonly genericParameters: readonly RustCompilerGenericParameter[];
   }>;
   readonly defaultGenericBindings?: import("../model/rustdoc-types.js").RustCompilerSubstitutions;
-  readonly genericNames?: ReadonlyMap<string, string>;
+  readonly callableGenerics?: ReadonlyMap<string, import("./callable-generics.js").RustCompilerCallableSignature>;
+  readonly genericNames?: ReadonlyMap<string, { readonly nativeName: string; readonly sourceName: string }>;
   readonly currentType?: {
     readonly exportId: string;
     readonly name: string;

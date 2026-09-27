@@ -37,6 +37,8 @@ import {
   typeParametersOf,
 } from "./declaration-members.js";
 import { sourceTypeGenericParameters } from "./source-generics.js";
+import { projectPrimitiveExport } from "./primitives.js";
+import { materializeClosedMetadata } from "../../../target-model/metadata/closed-data.js";
 import { rustNamedTargetType, rustUnitTargetType } from "../../../target-model/types/index.js";
 import type {
   ProviderExportDeclaration,
@@ -46,11 +48,13 @@ import type {
 import type {
   RustCompilerExport,
   RustCompilerModuleModel,
+  RustCompilerOrdinaryExport,
 } from "../model/model.js";
 import type {
   ProjectionContext,
   ProjectionOwner,
   RustCompilerProviderProjection,
+  RustCompilerIntrinsicProjection,
 } from "./model.js";
 import type {
   RustNamedTypeTraitContract,
@@ -74,6 +78,7 @@ interface ProjectedExport {
 export function projectRustCompilerModule(
   module: RustCompilerModuleModel,
   owner: ProjectionOwner,
+  materialization: import("@tsonic/tsts").ProviderDeclarationMaterialization = { kind: "complete" },
 ): RustCompilerProviderProjection {
   if (module.unsupportedExports.length > 0) {
     throw new Error(module.unsupportedExports
@@ -83,6 +88,26 @@ export function projectRustCompilerModule(
   const declarations: ProviderExportDeclaration[] = [];
   const operations: RustProviderOperationDefinition[] = [];
   const types: RustProviderTypeDefinition[] = [];
+  const completeExports = new Set<string>();
+  const intrinsics: RustCompilerIntrinsicProjection[] = [];
+  const intrinsicByName = new Map<string, RustCompilerIntrinsicProjection>();
+  const ordinaryNames = new Set(module.exports.filter(exported => exported.kind !== "macro").map(exported => exported.name));
+  for (const exported of module.exports) {
+    if (exported.kind !== "macro") continue;
+    if (intrinsicByName.has(exported.name)) {
+      throw new Error(`Rust source export '${exported.name}' has more than one macro identity.`);
+    }
+    const intrinsic = Object.freeze({
+      exportId: `${compilerExportId(module.dependency, module.modulePath, exported.name)}::macro`,
+      native: materializeClosedMetadata(exported),
+    });
+    intrinsicByName.set(exported.name, intrinsic);
+    intrinsics.push(intrinsic);
+    if (!ordinaryNames.has(exported.name)) {
+      declarations.push(Object.freeze({ id: intrinsic.exportId, name: exported.name, kind: "intrinsic" }));
+      completeExports.add(intrinsic.exportId);
+    }
+  }
   const carrierPaths = new Map<string, string>();
   const carrierTraits = new Map<string, RustNamedTypeTraitContract>();
   const standardTypes = new Map(module.standardTypeLocations.map((location) => [
@@ -97,7 +122,8 @@ export function projectRustCompilerModule(
       targetPath: standardTypes.get(canonicalPathKey(exported.canonicalPath))?.targetPath ??
         exported.targetPath,
     }]));
-  const context: ProjectionContext = {
+  const context: Omit<ProjectionContext, "allocateFunctionTypeIdentity"> = {
+    materialization,
     dependency: module.dependency,
     modulePath: module.modulePath,
     owner,
@@ -108,8 +134,18 @@ export function projectRustCompilerModule(
     localTypeLocations,
   };
   for (const exported of module.exports) {
-    const projected = projectExport(exported, context);
-    declarations.push(projected.declaration, ...(projected.additionalDeclarations ?? []));
+    if (exported.kind === "macro") continue;
+    let functionTypeSequence = 0;
+    const projected = projectExport(exported, { ...context,
+      allocateFunctionTypeIdentity: () => `${owner.providerModuleId}::${exported.name}::function-type:${functionTypeSequence++}`,
+    });
+    const intrinsic = intrinsicByName.get(exported.name);
+    declarations.push(intrinsic === undefined ? projected.declaration
+      : Object.freeze({ ...projected.declaration, intrinsicId: intrinsic.exportId }), ...(projected.additionalDeclarations ?? []));
+    if (!isNominalExport(exported) || nativeExportIsComplete(projected.declaration.id, exported.name, materialization)) {
+      completeExports.add(projected.declaration.id);
+    }
+    for (const additional of projected.additionalDeclarations ?? []) completeExports.add(additional.id);
     operations.push(...projected.operations);
     if (projected.type !== undefined) types.push(projected.type);
     types.push(...(projected.additionalTypes ?? []));
@@ -122,17 +158,25 @@ export function projectRustCompilerModule(
     exports: Object.freeze(declarations),
   });
   return Object.freeze({
+    completeExports,
     declarationModel: providerModule,
     module: providerModule,
     operations: Object.freeze(operations),
     types: Object.freeze(types),
+    intrinsics: Object.freeze(intrinsics),
     carrierPaths,
     carrierTraits,
   });
 }
 
+function nativeExportIsComplete(id: string, name: string,
+  materialization: import("@tsonic/tsts").ProviderDeclarationMaterialization): boolean {
+  return materialization.kind === "complete" || materialization.completeExports.some(request =>
+    request.exportName === name && (request.exportId === undefined || request.exportId === id));
+}
+
 function projectExport(
-  exported: RustCompilerExport,
+  exported: RustCompilerOrdinaryExport,
   context: ProjectionContext,
 ): ProjectedExport {
   const exportId = compilerExportId(
@@ -140,6 +184,9 @@ function projectExport(
     context.modulePath,
     exported.name,
   );
+  if (exported.kind === "primitive") {
+    return projectPrimitiveExport(exported, context, exportId);
+  }
   if (exported.kind === "constant" || exported.kind === "static") {
     return projectValueExport(exported, context, exportId);
   }
@@ -326,8 +373,8 @@ function projectTypeAlias(
 
 function projectNominalExport(
   exported: Exclude<
-    RustCompilerExport,
-    { readonly kind: "constant" | "static" | "function" | "type-alias" }
+    RustCompilerOrdinaryExport,
+    { readonly kind: "constant" | "static" | "function" | "type-alias" | "primitive" }
   >,
   context: ProjectionContext,
   exportId: string,
@@ -413,13 +460,18 @@ function projectNominalExport(
   });
   const members: ProviderMemberDeclaration[] = [];
   const operations: RustProviderOperationDefinition[] = [];
+  const complete = nativeExportIsComplete(exportId, exported.name, context.materialization);
+  const sourceParameters = providerGenericParametersFor(sourceGenerics, genericContext);
+  const associated = exported.kind === "trait"
+    ? projectAssociatedTypes(exported, genericContext, exportId)
+    : { declarations: Object.freeze([]), types: Object.freeze([]) };
   const nativeEnum = exported.kind === "enum" && exported.variantsComplete &&
     exported.genericParameters.length === 0 &&
     exported.variants.every((variant) => variant.kind === "plain") &&
     exported.methods.length === 0 && exported.associatedConstants.length === 0;
-  if (exported.kind === "struct" || exported.kind === "union") {
+  if (complete && (exported.kind === "struct" || exported.kind === "union")) {
     projectFields(exported, typeContext, exportId, declaredCarrier, members, operations);
-  } else if (exported.kind === "enum" && exported.variantsComplete) {
+  } else if (complete && exported.kind === "enum" && exported.variantsComplete) {
     projectVariants(
       exported,
       typeContext,
@@ -433,7 +485,7 @@ function projectNominalExport(
     );
   }
   const projectedMethods = projectTypeMethods(
-    exported.methods,
+    complete ? exported.methods : [],
     exported.kind,
     typeContext,
     exportId,
@@ -441,7 +493,7 @@ function projectNominalExport(
   );
   members.push(...projectedMethods.members);
   operations.push(...projectedMethods.operations);
-  const projectedConstants = exported.kind === "trait"
+  const projectedConstants = !complete || exported.kind === "trait"
     ? { members: Object.freeze([]), operations: Object.freeze([]) }
     : projectAssociatedConstants(
         exported.associatedConstants,
@@ -451,13 +503,6 @@ function projectNominalExport(
   members.push(...projectedConstants.members);
   operations.push(...projectedConstants.operations);
   const unambiguous = selectUnambiguousMembers(members, operations);
-  const sourceParameters = providerGenericParametersFor(
-    sourceGenerics,
-    genericContext,
-  );
-  const associated = exported.kind === "trait"
-    ? projectAssociatedTypes(exported, genericContext)
-    : { declarations: Object.freeze([]), types: Object.freeze([]) };
   const typeNames = providerTypeParameterNames(sourceGenerics, genericContext);
   return {
     declaration: Object.freeze({

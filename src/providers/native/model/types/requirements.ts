@@ -119,6 +119,7 @@ export function directImplementationTypeParameterPositions(
   implementationContext: RustCompilerNormalizationContext,
   declaredGenericParameters: readonly RustCompilerGenericParameter[],
   ownerIdentity: RustCompilerItemIdentity,
+  ownerPrimitive?: string,
 ): ReadonlyMap<string, number> | undefined {
   const genericPositions = directImplementationGenericParameterPositions(
     document,
@@ -126,6 +127,7 @@ export function directImplementationTypeParameterPositions(
     implementationContext,
     declaredGenericParameters,
     ownerIdentity,
+    ownerPrimitive,
   );
   if (genericPositions === undefined) return undefined;
   const declaredTypeParameters = declaredGenericParameters.filter(
@@ -151,8 +153,14 @@ export function directImplementationGenericParameterPositions(
   implementationContext: RustCompilerNormalizationContext,
   declaredGenericParameters: readonly RustCompilerGenericParameter[],
   ownerIdentity: RustCompilerItemIdentity,
+  ownerPrimitive?: string,
 ): ReadonlyMap<string, number> | undefined {
   const target = normalizeType(document, impl.for, implementationContext);
+  if (ownerPrimitive !== undefined) {
+    return target.kind === "primitive" && target.name === ownerPrimitive && declaredGenericParameters.length === 0
+      ? new Map<string, number>()
+      : undefined;
+  }
   if (target.kind !== "path" || target.identity.itemId !== ownerIdentity.itemId ||
     target.genericArguments.length > declaredGenericParameters.length ||
     !omittedParametersHaveDefaults(declaredGenericParameters.slice(target.genericArguments.length))) {
