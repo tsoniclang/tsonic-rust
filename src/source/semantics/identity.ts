@@ -9,11 +9,14 @@ export const rustMutPointerExport = "mutPtr";
 
 export const rustSourceSyntaxExportIds = Object.freeze({
   tokens: "tokens",
+  native: "native",
 } as const);
 
 export const rustSourceSyntaxMemberIds = Object.freeze({
   tokenType: "tokens.type",
   tokenItems: "tokens.items",
+  nativeMacro: "native.macro",
+  nativeValue: "native.value",
 } as const);
 
 export const rustSourceTypeExportIds = Object.freeze({

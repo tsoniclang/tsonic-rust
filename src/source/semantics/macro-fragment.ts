@@ -1,4 +1,4 @@
-import type { AstReader, Node, SourceIntrinsicDeclarationInfo } from "@tsonic/tsts";
+import type { AstReader, Node, SourceProviderReferenceInfo } from "@tsonic/tsts";
 import { rustTokenFragmentOperation } from "./syntax-intrinsics.js";
 
 export type RustSourceMacroFragment =
@@ -14,7 +14,7 @@ export function readRustSourceMacroFragment(
   source: Node,
   context: {
     readonly ast: AstReader;
-    readonly intrinsic: (expression: Node) => SourceIntrinsicDeclarationInfo | undefined;
+    readonly reference: (expression: Node) => SourceProviderReferenceInfo | undefined;
   },
 ): RustSourceMacroFragmentResult {
   const { ast } = context;
@@ -22,7 +22,7 @@ export function readRustSourceMacroFragment(
   const call = ast.is.IsCallExpression(node) ? ast.as.AsCallExpression(node) : undefined;
   const tagged = ast.is.IsTaggedTemplateExpression(node) ? ast.as.AsTaggedTemplateExpression(node) : undefined;
   const expression = call?.Expression ?? tagged?.Tag ?? node;
-  const operation = rustTokenFragmentOperation(context.intrinsic(expression)?.declaration);
+  const operation = rustTokenFragmentOperation(context.reference(expression)?.intrinsic);
   if (operation === undefined) return available({ kind: "expression", source });
   if (call === undefined || call.QuestionDotToken !== undefined) {
     return rejected(source, "A native token fragment requires a direct non-optional invocation of its exact intrinsic.");

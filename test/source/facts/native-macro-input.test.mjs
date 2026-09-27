@@ -1,77 +1,42 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { join } from "node:path";
-import { createCompilerSessionFromFiles, createSourceProgramQueries } from "@tsonic/tsts";
-import { createSourceSemanticsVirtualModuleProvider } from "@tsonic/source-core/extension";
+import { createRustSourceSyntax } from "../../helpers/rust-source-syntax.mjs";
 import { createTestWorkspace } from "../../../../tsonic/test/scripts/test-workspaces.mjs";
 import { repositoryRoot } from "../../helpers/rust-session/paths.mjs";
 import { readRustSourceMacroInput } from "../../../dist/source/semantics/macro-input.js";
 import { createRustNativeSourceTool } from "../../../dist/providers/native/elaboration/tool.js";
 import { rustSyntaxIntrinsicDeclarations } from "../../../dist/source/semantics/declarations/syntax.js";
 import { isRustTokenQuotationDeclaration, rustTokenFragmentOperation } from "../../../dist/source/semantics/syntax-intrinsics.js";
-import { rustLangModule, rustSourceProviderVersion, rustSourceSemanticsExtensionId,
-  rustSourceVirtualModulesProviderId } from "../../../dist/source/semantics/identity.js";
+import { rustLangModule } from "../../../dist/source/semantics/identity.js";
 
 const root = createTestWorkspace(join(repositoryRoot, ".temp/generated"), "rust-source-macro-input-");
 let nativeTool;
-const core = ["Object", "Function", "CallableFunction", "NewableFunction", "IArguments", "String", "Number", "Boolean", "RegExp"]
-  .map(name => `interface ${name} {}`).join("\n") + "\ninterface Array<T> { [index:number]:T; length:number; }";
 
 function syntax(expression, { quotation = false, tokenize } = {}) {
   const imports = quotation ? `import { tokens as quote, tokens as renamed } from "${rustLangModule}";
 import * as namespace from "${rustLangModule}";
 ` : "";
-  const session = createCompilerSessionFromFiles({
-    currentDirectory: "/src",
-    files: { "/src/core.d.ts": core, "/src/index.ts": imports + expression },
-    compilerOptions: { noLib: true, module: "esnext", target: "esnext" },
-    extensionHostOptions: { extensions: [{
-      identity: { id: rustSourceSemanticsExtensionId, version: rustSourceProviderVersion },
-      initialize(context) {
-        context.registerSourceDeclarationProvider(createSourceSemanticsVirtualModuleProvider({
-          id: rustSourceVirtualModulesProviderId,
-          version: rustSourceProviderVersion,
-          displayName: "Rust syntax declarations",
-          virtualDirectory: "rust-source",
-          modules: [{ moduleSpecifier: rustLangModule, packageName: "@tsonic/rust", subpath: "lang.js", exports: [] }],
-          exportsForModule: rustSyntaxIntrinsicDeclarations,
-          evidenceMessage: "Rust syntax declaration identity under test.",
-        }));
-      },
-    }] },
-  });
-  assert.deepEqual(session.getDiagnostics("syntactic"), []);
-  session.ensureBound();
-  const source = createSourceProgramQueries(session.program);
-  const ast = source.ast;
-  const file = source.getSourceFile("/src/index.ts");
-  const queries = source.getSourceFileQueries(file);
-  const nodes = [];
-  const visit = node => {
-    if (node === undefined) return;
-    nodes.push(node);
-    ast.forEachChild(node, visit);
-  };
-  visit(file);
+  const { ast, queries, nodes } = createRustSourceSyntax(imports + expression);
   const call = nodes.find(node => ast.is.IsCallExpression(node) || ast.is.IsTaggedTemplateExpression(node));
   assert.ok(call);
   const fragments = [];
   const sourceFragments = [];
-  const selectedIntrinsics = [];
+  const selectedReferences = [];
   const result = readRustSourceMacroInput(call, {
     ast,
     fragment(fragment) { sourceFragments.push(fragment); fragments.push(fragment.source); return fragment.source; },
-    intrinsic(tag) {
-      const intrinsic = queries.checker.getIntrinsicDeclarationInfo(tag);
-      if (intrinsic !== undefined) selectedIntrinsics.push(intrinsic);
-      return intrinsic;
+    reference(tag) {
+      const reference = queries.checker.getProviderReferenceInfo(tag);
+      if (reference !== undefined) selectedReferences.push(reference);
+      return reference;
     },
     tokenize: tokenize ?? (source => {
       nativeTool ??= createRustNativeSourceTool({ cacheRoot: join(root, "native-cache") });
       return nativeTool.tokens(source, "2024");
     }),
   });
-  return { result, ast, call, nodes, fragments, sourceFragments, selectedIntrinsics };
+  return { result, ast, call, nodes, fragments, sourceFragments, selectedReferences };
 }
 
 function available(value) {
@@ -87,17 +52,20 @@ test("token quotation is one noncallable compiler intrinsic, not a guessed tag n
   assert.deepEqual(declarations, [{ id: "tokens", name: "tokens", kind: "intrinsic", members: [
     { id: "tokens.type", name: "type", kind: "intrinsic" },
     { id: "tokens.items", name: "items", kind: "intrinsic" },
+  ] }, { id: "native", name: "native", kind: "namespace", members: [
+    { id: "native.macro", name: "macro", kind: "intrinsic" },
+    { id: "native.value", name: "value", kind: "intrinsic" },
   ] }]);
   assert.ok(Object.isFrozen(declarations));
   assert.ok(Object.isFrozen(declarations[0]));
   for (const tag of ["quote", "renamed", "namespace.tokens", 'namespace["tokens"]']) {
     const value = syntax(`unrelated(${tag}\`[]\`)`, { quotation: true });
     assert.equal(available(value).delimiter, "brackets");
-    assert.ok(value.selectedIntrinsics.length > 0);
-    for (const selected of value.selectedIntrinsics) {
-      assert.equal(selected.declaration.exportId, "tokens");
+    assert.ok(value.selectedReferences.length > 0);
+    for (const selected of value.selectedReferences) {
+      assert.equal(selected.intrinsic.exportId, "tokens");
       assert.equal(selected.ordinary, undefined);
-      assert.equal(isRustTokenQuotationDeclaration(selected.declaration), true);
+      assert.equal(isRustTokenQuotationDeclaration(selected.intrinsic), true);
     }
   }
   for (const source of [
@@ -108,13 +76,13 @@ test("token quotation is one noncallable compiler intrinsic, not a guessed tag n
     const value = syntax(source, { quotation: true, tokenize: () => assert.fail("Unrelated tags are ordinary source fragments.") });
     assert.equal(available(value).delimiter, "parentheses");
     assert.equal(available(value).tokens[0].kind, "fragment");
-    assert.deepEqual(value.selectedIntrinsics, []);
+    assert.deepEqual(value.selectedReferences, []);
   }
 });
 
 test("quotation identity rejects foreign providers, versions and member/signature facts", () => {
   const value = syntax("unrelated(quote`[]`)", { quotation: true });
-  const declaration = value.selectedIntrinsics[0].declaration;
+  const declaration = value.selectedReferences[0].intrinsic;
   assert.equal(isRustTokenQuotationDeclaration(undefined), false);
   for (const field of ["providerId", "providerVersion", "providerModuleId", "moduleSpecifier", "exportId", "exportName"]) {
     assert.equal(isRustTokenQuotationDeclaration({ ...declaration, [field]: "unrelated" }), false, field);
@@ -141,7 +109,7 @@ test("native type splices retain their exact source type and generic scope", () 
     assert.ok(value.ast.is.IsTypeReferenceNode(fragment.type));
     const parameter = value.ast.typeArguments(fragment.type)[0];
     assert.equal(value.ast.text(value.ast.as.AsTypeReferenceNode(parameter).TypeName), "Value");
-    assert.equal(rustTokenFragmentOperation(value.selectedIntrinsics[0].declaration), "type");
+    assert.equal(rustTokenFragmentOperation(value.selectedReferences[0].intrinsic), "type");
   }
   const alias = syntax("const selected = quote.type; arbitrary(selected<string>());", { quotation: true });
   available(alias);
@@ -163,7 +131,7 @@ test("native item splices keep one actual declaration scope and are not expressi
   assert.equal(fragment.body, value.ast.body(fragment.scope));
   assert.equal(value.ast.statements(fragment.body).length, 3);
   assert.equal(value.ast.parent(fragment.body), fragment.scope);
-  assert.equal(rustTokenFragmentOperation(value.selectedIntrinsics[0].declaration), "items");
+  assert.equal(rustTokenFragmentOperation(value.selectedReferences[0].intrinsic), "items");
   for (const expression of ["quote.items((() => {}))", "(quote.type<string>())"]) {
     const grouped = syntax(`arbitrary(${expression});`, { quotation: true });
     available(grouped);
@@ -193,7 +161,7 @@ test("ordinary callbacks and same-spelled members stay ordinary expressions", ()
     assert.equal(value.sourceFragments.length, 1);
     assert.equal(value.sourceFragments[0].kind, "expression");
     assert.equal(value.sourceFragments[0].source, value.ast.arguments(value.call)[0]);
-    assert.deepEqual(value.selectedIntrinsics, []);
+    assert.deepEqual(value.selectedReferences, []);
   }
 });
 
@@ -219,7 +187,7 @@ test("native fragment shape rejects extra values, fake declaration factories and
 test("token member recognition retains every provider, member and signature identity component", () => {
   const value = syntax("arbitrary(quote.type<string>())", { quotation: true });
   available(value);
-  const declaration = value.selectedIntrinsics[0].declaration;
+  const declaration = value.selectedReferences[0].intrinsic;
   assert.equal(rustTokenFragmentOperation(declaration), "type");
   assert.equal(isRustTokenQuotationDeclaration(declaration), false);
   assert.equal(rustTokenFragmentOperation(undefined), undefined);
