@@ -1,5 +1,7 @@
 import { printRustBlockStatements } from "../blocks.js";
 import { escapeRustChar, escapeRustString, printRustPattern } from "../patterns.js";
+import { printRustAttribute } from "../attributes.js";
+import { printRustMacroInvocation } from "../macro-input.js";
 import { printRustConstArgument, printRustType } from "../types.js";
 import {
   printRustAssociatedCallOwner,
@@ -139,15 +141,8 @@ export function printRustExpr(expression: RustExpr): string {
       const elements = expression.elements.map(printRustExpr).join(", ");
       return `(${elements}${expression.elements.length === 1 ? "," : ""})`;
     }
-    case "macro-invocation": {
-      const [open, close] = expression.delimiter === "parentheses"
-        ? ["(", ")"]
-        : expression.delimiter === "brackets"
-          ? ["[", "]"]
-          : ["{", "}"];
-      const separator = expression.delimiter === "braces" ? " " : "";
-      return `${expression.path}!${separator}${open}${expression.args.map(printRustExpr).join(", ")}${close}`;
-    }
+    case "macro-invocation":
+      return printRustMacroInvocation(expression.path, expression.input);
     case "struct-literal": {
       const members = expression.fields.map((field) => {
         const value = printRustExpr(field.value);
@@ -224,15 +219,15 @@ function printRustBlockExpressionContents(
   printValue: (value: RustExpr) => string = printRustExpr,
 ): string {
   const bindings = expression.bindings.map((binding) => {
-    const attributes = binding.attrs?.join(" ") ?? "";
+    const attributes = binding.attrs?.map(attribute => printRustAttribute(attribute)).join(" ") ?? "";
     const initializer = binding.value === undefined ? "" : ` = ${printRustExpr(binding.value)}`;
     const declaration = `let ${binding.mutable === true ? "mut " : ""}${binding.name}${binding.type === undefined ? "" : `: ${printRustType(binding.type)}`}${initializer};`;
     return attributes.length === 0 ? declaration : `${attributes} ${declaration}`;
   });
   return [
-    ...(expression.innerAttrs ?? []),
+    ...(expression.innerAttrs ?? []).map(attribute => printRustAttribute(attribute, true)),
     ...bindings,
-    ...(expression.valueAttrs ?? []),
+    ...(expression.valueAttrs ?? []).map(attribute => printRustAttribute(attribute)),
     printValue(expression.value),
   ].join(" ");
 }

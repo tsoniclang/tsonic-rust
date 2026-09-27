@@ -1,7 +1,10 @@
 import type { RustPattern } from "../../backend/target-ast/nodes.js";
+import { printRustMacroInvocation } from "./macro-input.js";
 
 export function printRustPattern(pattern: RustPattern): string {
   switch (pattern.kind) {
+    case "macro-invocation":
+      return printRustMacroInvocation(pattern.path, pattern.input);
     case "wildcard":
       return "_";
     case "binding":

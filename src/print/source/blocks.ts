@@ -1,10 +1,13 @@
 import { printRustExpr } from "./expressions/core.js";
+import { printRustItem } from "./items.js";
+import { printRustMacroInvocation } from "./macro-input.js";
+import { printRustAttribute, printRustAttributes as printRustStatementAttributes } from "./attributes.js";
 import { indentText, printRustType } from "./types.js";
 import type { RustBlock, RustExpr, RustStmt } from "../../backend/target-ast/nodes.js";
 
 export function printRustBlockStatements(block: RustBlock, depth: number): string {
   return [
-    ...(block.innerAttrs ?? []).map((attribute) => `${indentText(depth)}${attribute}`),
+    ...(block.innerAttrs ?? []).map((attribute) => `${indentText(depth)}${printRustAttribute(attribute, true)}`),
     ...block.statements.map((statement) => printRustStmt(statement, depth)),
   ].join("\n");
 }
@@ -20,6 +23,10 @@ function printRustBlock(block: RustBlock, depth: number, header: string): string
 function printRustStmt(statement: RustStmt, depth: number): string {
   const indent = indentText(depth);
   switch (statement.kind) {
+    case "macro-statement":
+      return `${indent}${printRustMacroInvocation(statement.invocation.path, statement.invocation.input)}${statement.semicolon ? ";" : ""}`;
+    case "item":
+      return printRustItem(statement.item).split("\n").map(line => `${indent}${line}`).join("\n");
     case "let": {
       const attributes = printRustStatementAttributes(statement.attrs, depth);
       const type = statement.type === undefined ? "" : `: ${printRustType(statement.type)}`;
@@ -147,14 +154,6 @@ function printRustStmt(statement: RustStmt, depth: number): string {
     case "try-scope":
       return printRustTryScope(statement, depth);
   }
-}
-
-function printRustStatementAttributes(
-  attrs: readonly string[] | undefined,
-  depth: number,
-): string {
-  const indent = indentText(depth);
-  return attrs?.map((attribute) => `${indent}${attribute}\n`).join("") ?? "";
 }
 
 function nestedMarkedElseIf(

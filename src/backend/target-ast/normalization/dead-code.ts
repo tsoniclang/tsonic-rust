@@ -1,7 +1,6 @@
+import { type RustAttribute } from "../attributes.js";
 import type {
   RustDeadCodeDisposition,
-  RustImplConstant,
-  RustImplFunction,
   RustItem,
   RustSourceFileModel,
   RustStructField,
@@ -9,7 +8,7 @@ import type {
 import { rustLintAttributes } from "./lint-policy.js";
 
 interface RustDeadCodeOwner {
-  readonly attrs?: readonly string[];
+  readonly attrs?: readonly RustAttribute[];
   readonly deadCode?: RustDeadCodeDisposition;
 }
 
@@ -40,16 +39,14 @@ function finalizeRustItemDeadCode(item: RustItem): RustItem {
       const owner = finalizeRustDeadCodeOwner(item);
       return {
         ...owner,
-        functions: owner.functions.map(finalizeRustDeadCodeOwner),
+        members: owner.members.map(member => member.kind === "function" ? finalizeRustDeadCodeOwner(member) : member),
       };
     }
     case "impl":
       return {
         ...item,
-        ...(item.constants === undefined
-          ? {}
-          : { constants: item.constants.map(finalizeRustImplConstantDeadCode) }),
-        functions: item.functions.map(finalizeRustImplFunctionDeadCode),
+        members: item.members.map(member => member.kind === "function" || member.kind === "const"
+          ? finalizeRustDeadCodeOwner(member) : member),
       };
     case "enum": {
       const owner = finalizeRustDeadCodeOwner(item);
@@ -59,26 +56,16 @@ function finalizeRustItemDeadCode(item: RustItem): RustItem {
       };
     }
     case "mod-decl":
+      return item.body === undefined ? item : { ...item, body: finalizeRustDeadCode(item.body) };
     case "extern-crate":
     case "use":
+    case "macro-invocation":
       return item;
   }
 }
 
 function finalizeRustStructFieldDeadCode(field: RustStructField): RustStructField {
   return finalizeRustDeadCodeOwner(field);
-}
-
-function finalizeRustImplFunctionDeadCode(
-  fn: RustImplFunction,
-): RustImplFunction {
-  return finalizeRustDeadCodeOwner(fn);
-}
-
-function finalizeRustImplConstantDeadCode(
-  constant: RustImplConstant,
-): RustImplConstant {
-  return finalizeRustDeadCodeOwner(constant);
 }
 
 function finalizeRustDeadCodeOwner<T extends RustDeadCodeOwner>(owner: T): T {
@@ -91,7 +78,7 @@ function finalizeRustDeadCodeOwner<T extends RustDeadCodeOwner>(owner: T): T {
   return { ...withoutDeadCode, attrs } as T;
 }
 
-function rustDeadCodeAttribute(disposition: RustDeadCodeDisposition): string {
+function rustDeadCodeAttribute(disposition: RustDeadCodeDisposition): RustAttribute {
   switch (disposition) {
     case "authored-declaration":
       return rustLintAttributes.authoredDeadCode;

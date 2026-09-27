@@ -34,7 +34,7 @@ test("signature aliases retain exact generic types, share definitions and promot
 
 test("signature aliases avoid declarations, imports and generic parameter names", () => {
   for (const collision of [
-    { kind: "struct", name: "ReadValues", visibility: "private", generics: emptyRustGenerics, fields: [], derives: [] },
+    { kind: "struct", name: "ReadValues", visibility: "private", generics: emptyRustGenerics, fields: [] },
     { kind: "use", path: "models::ReadValues" },
     { kind: "use", path: "models::Other", alias: "ReadValues" },
     { ...makeFunction("other"), generics: { parameters: [{ kind: "type", name: "ReadValues", bounds: [] }], wherePredicates: [] } },
@@ -46,7 +46,7 @@ test("signature aliases avoid declarations, imports and generic parameter names"
 });
 
 test("complex struct fields reuse exact native aliases without changing storage or generic bounds", () => {
-  const source = { kind: "struct", name: "Entries", visibility: "public", derives: [],
+  const source = { kind: "struct", name: "Entries", visibility: "public",
     generics: makeFunction("read").generics,
     fields: [{ name: "entries", type: nested, visibility: "public" },
       { name: "count", type: { kind: "primitive", name: "usize" }, visibility: "private" }],
@@ -102,16 +102,16 @@ test("impl signature aliases retain owner and call binders without moving their 
   const method = { ...source, selfParam: { kind: "reference", mutable: false },
     params: [{ name: "value", type }], returnType: undefined };
   const implementation = { kind: "impl", target: named("Wrapper", [named("Owner")]),
-    generics: { parameters: [owner], wherePredicates: [] }, functions: [method] };
+    generics: { parameters: [owner], wherePredicates: [] }, members: [method] };
   const result = nameRustSignatureTypes([implementation]);
   const alias = result.find(item => item.kind === "type-alias");
   const native = result.find(item => item.kind === "impl");
   assert.deepEqual(alias.target, type);
   assert.deepEqual(alias.generics.parameters, ["Owner", "Item"].map(name => ({ kind: "type", name, bounds: [] })));
   assert.deepEqual(native.generics, implementation.generics);
-  assert.deepEqual(native.functions[0].generics, method.generics);
-  assert.deepEqual(native.functions[0].body, method.body);
-  assert.deepEqual(native.functions[0].params[0].type.genericArguments,
+  assert.deepEqual(native.members[0].generics, method.generics);
+  assert.deepEqual(native.members[0].body, method.body);
+  assert.deepEqual(native.members[0].params[0].type.genericArguments,
     ["Owner", "Item"].map(path => ({ kind: "type", type: { kind: "named", path } })));
   assert.deepEqual(nameRustSignatureTypes(result), result);
 });
@@ -121,10 +121,10 @@ test("impl alias allocation reserves method-local type parameter names", () => {
   const method = { ...source, generics: { parameters: [...source.generics.parameters,
     { kind: "type", name: "ReadValues", bounds: [] }], wherePredicates: [] } };
   const result = nameRustSignatureTypes([{ kind: "impl", target: named("Container"), generics: emptyRustGenerics,
-    functions: [method] }]);
+    members: [method] }]);
   const alias = result.find(item => item.kind === "type-alias");
   assert.notEqual(alias.name, "ReadValues");
-  assert.deepEqual(result.find(item => item.kind === "impl").functions[0].generics, method.generics);
+  assert.deepEqual(result.find(item => item.kind === "impl").members[0].generics, method.generics);
 });
 
 test("body type names reuse signature aliases through nested blocks without changing storage or effects", () => {

@@ -71,6 +71,10 @@ export function firstAccessesInStatements(
 
 function maxWritesInStatement(statement: RustStmt, path: string): number {
   switch (statement.kind) {
+    case "macro-statement":
+      return 2;
+    case "item":
+      return 0;
     case "let":
       return statement.init === undefined ? 0 : maxWritesInExpression(statement.init, path);
     case "expr":
@@ -271,6 +275,10 @@ function firstAccessesInStatement(
   path: string,
 ): ReadonlySet<FirstAccess> {
   switch (statement.kind) {
+    case "macro-statement":
+      return new Set<FirstAccess>(["none", "read", "write", "exit"]);
+    case "item":
+      return new Set<FirstAccess>(["none"]);
     case "let": {
       const initializer = statement.init === undefined
         ? new Set<FirstAccess>(["none"])

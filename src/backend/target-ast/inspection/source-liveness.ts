@@ -1,3 +1,4 @@
+import { type RustAttribute } from "../attributes.js";
 import type { RustBlock, RustExpr, RustStmt } from "../nodes.js";
 import { rustLintAttributes } from "../normalization/lint-policy.js";
 import {
@@ -118,6 +119,8 @@ function finalizeRustNestedStatementLiveness(
     case "completion-exit":
     case "index-assign":
     case "throw":
+    case "macro-statement":
+    case "item":
       return statement;
   }
 }
@@ -329,9 +332,9 @@ function isBranchBindingDeclaration(
 }
 
 function appendRustAttribute(
-  attrs: readonly string[] | undefined,
-  attribute: string,
-): readonly string[] {
+  attrs: readonly RustAttribute[] | undefined,
+  attribute: RustAttribute,
+): readonly RustAttribute[] {
   return attrs?.includes(attribute) === true
     ? attrs
     : [...attrs ?? [], attribute];

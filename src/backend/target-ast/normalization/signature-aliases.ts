@@ -14,7 +14,8 @@ export function nameRustSignatureTypes(
   const reserved = new Set(items.flatMap(item => [
     ...("name" in item ? [item.name] : []),
     ...("generics" in item ? item.generics.parameters.map(parameter => parameter.name) : []),
-    ...(item.kind === "impl" ? item.functions.flatMap(method => method.generics.parameters.map(parameter => parameter.name)) : []),
+    ...(item.kind === "impl" ? item.members.flatMap(member => member.kind === "function"
+      ? member.generics.parameters.map(parameter => parameter.name) : []) : []),
     ...(item.kind === "use" ? [item.alias ?? item.path.split("::").slice(-1)[0]!] : []),
   ]));
   const aliases: Extract<RustItem, { readonly kind: "type-alias" }>[] = [];
@@ -78,7 +79,8 @@ export function nameRustSignatureTypes(
     };
   };
   const result = items.map(item => item.kind === "function" ? nameCallable(item, [])
-    : item.kind === "impl" ? { ...item, functions: item.functions.map(method => nameCallable(method, item.generics.parameters)) }
+    : item.kind === "impl" ? { ...item, members: item.members.map(member => member.kind === "function"
+      ? nameCallable(member, item.generics.parameters) : member) }
       : item.kind === "struct" ? { ...item, fields: item.fields.map(field => ({ ...field,
         type: createTypeNamer(item, item.generics.parameters)(field.type, field.name),
       })) }
@@ -101,6 +103,8 @@ function summarizeClosedType(type: RustType): ClosedTypeSummary | undefined {
   const visit = (value: RustType, depth: number): boolean => {
     weight += depth * 10;
     switch (value.kind) {
+      case "macro-invocation":
+        return false;
       case "named":
         names.add(value.path);
         return arguments_(value.genericArguments, depth + 1);

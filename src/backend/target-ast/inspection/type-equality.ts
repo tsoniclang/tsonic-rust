@@ -14,6 +14,8 @@ export function rustTypeEquals(
   if (left === undefined || right === undefined) return left === right;
   if (left.kind !== right.kind) return false;
   switch (left.kind) {
+    case "macro-invocation":
+      return false;
     case "infer":
     case "string":
     case "str":

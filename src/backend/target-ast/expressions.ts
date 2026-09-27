@@ -1,4 +1,5 @@
 import type { RustExpr } from "./nodes.js";
+import { rustMacroInputExpressions } from "./macro-input.js";
 
 export function negateRustBooleanExpression(expression: RustExpr): RustExpr {
   if (expression.kind === "bool-literal") {
@@ -177,7 +178,7 @@ export function rustExpressionContainsStatementBlock(expression: RustExpr): bool
       return rustExpressionContainsStatementBlock(expression.receiver) ||
         expression.args.some(rustExpressionContainsStatementBlock);
     case "macro-invocation":
-      return expression.args.some(rustExpressionContainsStatementBlock);
+      return rustMacroInputExpressions(expression.input).some(rustExpressionContainsStatementBlock);
     case "option-presence":
     case "field":
       return rustExpressionContainsStatementBlock(expression.receiver);

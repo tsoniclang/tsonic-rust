@@ -1,3 +1,4 @@
+import { type RustAttribute } from "../attributes.js";
 import type {
   RustBlock,
   RustExpr,
@@ -34,8 +35,7 @@ export function finalizeRustSourceStyle(
 export function rustPublicSignatureTypeNames(model: RustSourceFileModel): readonly string[] {
   const items = closePublicRustTypeVisibility(model.items);
   const publicTypes = publicDeclaredRustTypeNames(items);
-  return Object.freeze([...new Set(items.flatMap((item) =>
-    publicSignatureTypes(item, publicTypes).flatMap(rustTypeNames)))].sort((left, right) =>
+  return Object.freeze([...new Set(scopedSignatureTypeNames(items, publicTypes))].sort((left, right) =>
       left.localeCompare(right, "en")));
 }
 
@@ -47,17 +47,38 @@ export function exposeRustSignatureTypes(
 }
 
 function publicDeclaredRustTypeNames(items: readonly RustItem[]): ReadonlySet<string> {
-  return new Set(items.flatMap((item) =>
-    (item.kind === "struct" || item.kind === "trait" || item.kind === "enum" ||
-        item.kind === "type-alias") && item.visibility === "public"
-      ? [item.name]
-      : []));
+  return declaredRustTypeNames(items, true);
+}
+
+function declaredRustTypeNames(items: readonly RustItem[], publicOnly = false): ReadonlySet<string> {
+  return new Set(items.flatMap(item => item.kind === "mod-decl" && item.body !== undefined
+    ? [...declaredRustTypeNames(item.body.items, publicOnly)].map(name => `${item.name}::${name}`)
+    : (item.kind === "struct" || item.kind === "trait" || item.kind === "enum" ||
+        item.kind === "type-alias") && (!publicOnly || item.visibility === "public") ? [item.name] : []));
+}
+
+function scopedSignatureTypeNames(
+  items: readonly RustItem[],
+  publicTypes: ReadonlySet<string>,
+  scope = "",
+  enclosingTypes: ReadonlySet<string> = declaredRustTypeNames(items),
+): readonly string[] {
+  const prefix = scope === "" ? "" : `${scope}::`;
+  const localPublicTypes = new Set([...publicTypes].filter(name => name.startsWith(prefix))
+    .map(name => name.slice(prefix.length)));
+  return items.flatMap(item => item.kind === "mod-decl" && item.body !== undefined
+    ? scopedSignatureTypeNames(item.body.items, publicTypes, `${prefix}${item.name}`, enclosingTypes)
+    : publicSignatureTypes(item, localPublicTypes).flatMap(rustTypeNames).map(name => {
+      if (enclosingTypes.has(`${prefix}${name}`)) return `${prefix}${name}`;
+      return name;
+    }));
 }
 
 function finalizeRustItemStyle(
   item: RustItem,
   publicTypes: ReadonlySet<string>,
 ): RustItem {
+  if (item.kind === "mod-decl" && item.body !== undefined) return { ...item, body: finalizeRustSourceStyle(item.body) };
   if (item.kind === "function") {
     let attrs = item.params.length <= 7
       ? item.attrs
@@ -69,15 +90,15 @@ function finalizeRustItemStyle(
   if (item.kind === "trait") {
     return {
       ...item,
-      functions: item.functions.map(finalizeRustTraitFunctionStyle),
+      members: item.members.map(member => member.kind === "function" ? finalizeRustTraitFunctionStyle(member) : member),
     };
   }
   if (item.kind === "impl") {
     const publicOwner = item.target.kind === "named" && publicTypes.has(item.target.path);
     return {
       ...item,
-      functions: item.functions.map((fn) =>
-        finalizeRustImplFunctionStyle(fn, item.trait === undefined, publicOwner)),
+      members: item.members.map(member => member.kind === "function"
+        ? finalizeRustImplFunctionStyle(member, item.trait === undefined, publicOwner) : member),
     };
   }
   if (item.kind === "const" || item.kind === "thread-local") {
@@ -165,6 +186,9 @@ function finalizeRustBlockStyle(block: RustBlock): RustBlock {
 
 function finalizeRustStatementStyle(statement: RustStmt): RustStmt {
   switch (statement.kind) {
+    case "macro-statement":
+    case "item":
+      return statement;
     case "let":
       return { ...statement,
         ...(statement.type === undefined || nameType === undefined ? {} : { type: nameType(statement.type, statement.name) }),
@@ -339,6 +363,10 @@ function rustBlockMayContinueLoop(block: RustBlock, label: string | undefined): 
 
 function rustStatementMayContinueLoop(statement: RustStmt, label: string | undefined): boolean {
   switch (statement.kind) {
+    case "macro-statement":
+      return true;
+    case "item":
+      return false;
     case "continue":
       return statement.label === label;
     case "if":
@@ -536,7 +564,7 @@ function finalizeRustExpressionStyle(expression: RustExpr): RustExpr {
       result = { ...expression, expr: finalizeRustExpressionStyle(expression.expr) };
       break;
     case "macro-invocation":
-      result = { ...expression, args: expression.args.map(finalizeRustExpressionStyle) };
+      result = expression;
       break;
     case "vec-literal":
     case "slice-literal":
@@ -586,23 +614,12 @@ function closePublicRustTypeVisibility(
   items: readonly RustItem[],
   requiredNames: ReadonlySet<string> = new Set(),
 ): readonly RustItem[] {
-  const localTypes = new Set(items.flatMap((item) =>
-    item.kind === "struct" || item.kind === "enum" || item.kind === "trait" ||
-        item.kind === "type-alias"
-      ? [item.name]
-      : []));
-  const publicTypes = new Set(items.flatMap((item) =>
-    (item.kind === "struct" || item.kind === "enum" || item.kind === "trait" ||
-        item.kind === "type-alias") && (item.visibility === "public" || requiredNames.has(item.name))
-      ? [item.name]
-      : []));
+  const localTypes = declaredRustTypeNames(items);
+  const publicTypes = new Set([...publicDeclaredRustTypeNames(items),
+    ...[...requiredNames].filter(name => localTypes.has(name))]);
   for (;;) {
-    const required = new Set<string>();
-    for (const item of items) {
-      for (const type of publicSignatureTypes(item, publicTypes)) {
-        collectLocalRustTypeNames(type, localTypes, required);
-      }
-    }
+    const required = new Set(scopedSignatureTypeNames(items, publicTypes)
+      .filter(name => localTypes.has(name)));
     const additions = [...required].filter((name) => !publicTypes.has(name));
     if (additions.length === 0) {
       break;
@@ -611,16 +628,31 @@ function closePublicRustTypeVisibility(
       publicTypes.add(name);
     }
   }
-  return items.map((item) =>
-    (item.kind === "struct" || item.kind === "enum" || item.kind === "trait" ||
+  return exposeScopedRustTypes(items, publicTypes);
+}
+
+function exposeScopedRustTypes(items: readonly RustItem[], publicTypes: ReadonlySet<string>): readonly RustItem[] {
+  return items.map(item => {
+    if (item.kind === "mod-decl" && item.body !== undefined) {
+      const prefix = `${item.name}::`;
+      const names = new Set([...publicTypes].filter(name => name.startsWith(prefix)).map(name => name.slice(prefix.length)));
+      return { ...item, visibility: names.size === 0 ? item.visibility : "public" as const,
+        body: { ...item.body, items: exposeScopedRustTypes(item.body.items, names) } };
+    }
+    return (item.kind === "struct" || item.kind === "enum" || item.kind === "trait" ||
         item.kind === "type-alias") && publicTypes.has(item.name) &&
         item.visibility !== "public"
       ? { ...item, visibility: "public",
           ...(item.kind === "trait" ? {
-            functions: item.functions.map(({ deadCode, ...method }) => method),
+            members: item.members.map(member => {
+              if (member.kind !== "function") return member;
+              const { deadCode, ...method } = member;
+              return method;
+            }),
           } : {}),
         }
-      : item);
+      : item;
+  });
 }
 
 function publicSignatureTypes(
@@ -647,25 +679,23 @@ function publicSignatureTypes(
       return publicTypes.has(item.name)
         ? [
             ...(item.superTraits ?? []),
-            ...(item.associatedTypes ?? []).flatMap((type) =>
-              type.bounds.flatMap(rustTypeBoundTypes)),
-            ...item.functions.flatMap((fn) => [
-              ...fn.params.map((parameter) => parameter.type),
-              ...optionalType(fn.returnType),
-            ]),
+            ...item.members.flatMap(member => member.kind === "type"
+              ? member.bounds.flatMap(rustTypeBoundTypes)
+              : member.kind === "function" ? [
+                ...member.params.map(parameter => parameter.type),
+                ...optionalType(member.returnType),
+              ] : []),
           ]
         : [];
     case "impl":
       return [...rustTypeNames(item.target), ...optionalType(item.trait).flatMap(rustTypeNames)]
         .some((name) => publicTypes.has(name))
         ? [
-          ...(item.associatedTypes ?? []).map((type) => type.type),
-          ...item.functions.flatMap((fn) => fn.visibility === "public"
-          ? [
-              ...fn.params.map((parameter) => parameter.type),
-              ...optionalType(fn.returnType),
-            ]
-          : []),
+          ...item.members.flatMap(member => member.kind === "type" ? [member.type]
+            : member.kind === "const" ? (member.visibility === "public" ? [member.type] : [])
+            : member.kind === "function" && member.visibility === "public" ? [
+              ...member.params.map(parameter => parameter.type), ...optionalType(member.returnType),
+            ] : []),
         ]
         : [];
     case "type-alias":
@@ -673,6 +703,7 @@ function publicSignatureTypes(
     case "mod-decl":
     case "extern-crate":
     case "use":
+    case "macro-invocation":
       return [];
   }
 }
@@ -695,20 +726,10 @@ function rustTypeBoundTypes(bound: RustTypeBound): readonly RustType[] {
   }
 }
 
-function collectLocalRustTypeNames(
-  type: RustType,
-  localTypes: ReadonlySet<string>,
-  result: Set<string>,
-): void {
-  for (const name of rustTypeNames(type)) {
-    if (localTypes.has(name)) {
-      result.add(name);
-    }
-  }
-}
-
 function rustTypeNames(type: RustType): readonly string[] {
   switch (type.kind) {
+    case "macro-invocation":
+      return [];
     case "infer":
       return [];
     case "named":
@@ -803,9 +824,9 @@ function rustGenericArgumentTypeNames(
 }
 
 function appendRustAttribute(
-  attrs: readonly string[] | undefined,
-  attribute: string,
-): readonly string[] {
+  attrs: readonly RustAttribute[] | undefined,
+  attribute: RustAttribute,
+): readonly RustAttribute[] {
   return attrs?.includes(attribute) === true
     ? attrs
     : [...attrs ?? [], attribute];
