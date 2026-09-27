@@ -151,5 +151,5 @@ pub fn observe(input: u32) {
   }
   const changed = structuredClone(evidence);
   changed.occurrences.find(row => nativeNodeKey(row.id) === nativeNodeKey(bindings[1].id)).id = bindings[0].id;
-  assert.throws(() => decodeNativeEvidence(changed, defaultRustNativeSourceLimits), /duplicate occurrence/u);
+  assert.throws(() => decodeNativeEvidence(changed, defaultRustNativeSourceLimits), /duplicate node identity/u);
 });
