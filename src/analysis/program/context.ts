@@ -144,7 +144,6 @@ export function createRustAnalysisContext(
   const facts = createRustPlanBuilder(input.source.sourceFacts, typeDefinitions);
   const names = createRustNamePlan({
     ast,
-    navigation: input.source.navigation,
     runtimeValueUses,
     sourceFiles,
   });
@@ -192,7 +191,7 @@ export function createRustAnalysisContext(
     runtimeValueUses,
     generatedDeclarationUses: createRustGeneratedDeclarationUseRegistry(),
     names,
-    diagnostics: [...attributeApplications.diagnostics, ...lifetimes.diagnostics, ...memoryBindings.issues.map(issue => ({
+    diagnostics: [...names.diagnostics, ...attributeApplications.diagnostics, ...lifetimes.diagnostics, ...memoryBindings.issues.map(issue => ({
       code: "RUST_MEMORY_BINDING_NOT_PROVEN", category: "error" as const, source: "tsonic-rust",
       sourceNode: issue.node, message: issue.reason,
     }))],

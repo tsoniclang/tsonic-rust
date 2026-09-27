@@ -49,16 +49,8 @@ export function planRootCallableForwarder(
   }
   const syntheticNames = createRustSyntheticNameState(context.input.program.source.ast, contract, shape.params.map(parameter => parameter.name));
   const selectedContext = { ...context, syntheticNames, fallibleBoundary: boundary };
-  const used = new Set(adapter.parameterAdapters.flatMap(parameter => {
-    switch (parameter.kind) {
-      case "omitted": return [];
-      case "fixed-rest": return parameter.contractParameterIndexes;
-      default: return [parameter.contractParameterIndex];
-    }
-  }));
-  const parameters = shape.params.map((parameter, index) => ({
+  const parameters = shape.params.map(parameter => ({
     ...parameter,
-    name: used.has(index) || parameter.name.startsWith("_") ? parameter.name : `_${parameter.name}`,
     mutable: false,
   }));
   const arguments_ = planRustCallableArguments({

@@ -4,7 +4,6 @@ import type { SourceFileSemantics, TargetSourceProgram } from "@tsonic/target-ap
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
-import { rustSnakeCaseIdentifier } from "../../target-model/names/identifiers.js";
 import {
   rustPlaceholderLifetime,
   rustStaticLifetime,
@@ -270,21 +269,11 @@ function allocateLifetimeNames(
 ): WeakMap<Node, string> {
   const names = new WeakMap<Node, string>();
   for (const owner of owners) {
-    const used = new Set<string>();
     for (const parameter of ast.typeParameters(owner)) {
       if (parameter === undefined) continue;
       const registered = unresolved.get(parameter);
       if (registered?.kind !== "lifetime" || registered.owner !== owner) continue;
-      const selected = rustSnakeCaseIdentifier(registered.targetName);
-      const base = selected.startsWith("r#")
-        ? `lifetime_${selected.slice(2)}`
-        : selected;
-      let name = base;
-      for (let suffix = 2; used.has(name); suffix += 1) {
-        name = `${base}_${suffix}`;
-      }
-      used.add(name);
-      names.set(parameter, name);
+      names.set(parameter, registered.targetName);
     }
   }
   return names;

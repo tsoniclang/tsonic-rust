@@ -7,7 +7,7 @@ import { rustTargetGenericArgumentEquals, rustTargetTypeRefEquals } from "../../
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import {
   rustPascalCaseIdentifier,
-  rustSnakeCaseIdentifier,
+  rustTargetIdentifier,
 } from "../../target-model/names/identifiers.js";
 import {
   rustStructuralObjectCarrierValue,
@@ -223,7 +223,7 @@ export function createRustStructuralShapePlan(
       const componentId = componentForFile(structural.ownerFileName);
       const usedTypeNames = usedTypeNamesByComponent.get(componentId) ?? new Set<string>();
       usedTypeNamesByComponent.set(componentId, usedTypeNames);
-      const usedFieldNames = new Set<string>();
+      const usedFieldNames = new Set(structural.fields.map(field => rustTargetIdentifier(field.sourceName)));
       const nativeDispatch = structural.construction !== undefined || implementations.some(implementation =>
         implementation.kind === "dispatch" && instances.has(closedMetadataKey(implementation.carrier)));
       const fields = structural.fields.map((field, storageIndex): RustStructuralShapeField => {
@@ -234,10 +234,7 @@ export function createRustStructuralShapePlan(
           !rustNativeMemoryLayoutsEqual(candidate.layout, nativeLayout))) {
           throw new Error("Equivalent Rust structural carriers have contradictory native field layouts.");
         }
-        const targetName = allocateSnakeName(
-          usedFieldNames,
-          rustSnakeCaseIdentifier(field.sourceName),
-        );
+        const targetName = rustTargetIdentifier(field.sourceName);
         const fieldImplementations = implementations.filter((implementation) =>
           implementation.storageIndex === storageIndex &&
           instances.has(closedMetadataKey(implementation.carrier)));
@@ -259,13 +256,13 @@ export function createRustStructuralShapePlan(
                     ? "rc" as const : "ref" as const,
                   getterTargetName: allocateSnakeName(
                     usedFieldNames,
-                    `get_${targetName}`,
+                    `get_${field.sourceName}`,
                   ),
                   ...(!field.readonly
                     ? {
                         setterTargetName: allocateSnakeName(
                           usedFieldNames,
-                          `set_${targetName}`,
+                          `set_${field.sourceName}`,
                         ),
                       }
                     : {}),

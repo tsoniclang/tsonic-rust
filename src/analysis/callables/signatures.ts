@@ -165,7 +165,7 @@ export function recordPredeclaredNativeFunctionBindingFacts(
         continue;
       }
       const valueName = candidate.valueObserved
-        ? walk.context.names.nameForDeclaration(declaration)
+        ? walk.context.names.callableValueNameForDeclaration(declaration)
         : undefined;
       const value = finalizedNativeCallableValue(
         walk,
