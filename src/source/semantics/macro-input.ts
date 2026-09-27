@@ -1,6 +1,7 @@
-import type { AstReader, Node } from "@tsonic/tsts";
+import type { AstReader, Node, SourceIntrinsicDeclarationInfo } from "@tsonic/tsts";
 import type { RustLexicalTokenTree, RustNativeMacroInput, RustNativeTokenTree } from "../../target-model/syntax/token-tree.js";
 import { bindRustTokenQuotation, createRustTokenQuotation } from "../../target-model/syntax/quotation.js";
+import { isRustTokenQuotationDeclaration } from "./syntax-intrinsics.js";
 
 export type RustSourceMacroInputResult<Fragment> =
   | { readonly kind: "available"; readonly input: RustNativeMacroInput<Fragment> }
@@ -9,7 +10,7 @@ export type RustSourceMacroInputResult<Fragment> =
 export interface RustSourceMacroInputContext<Fragment> {
   readonly ast: AstReader;
   readonly fragment: (node: Node) => Fragment;
-  readonly isTokenQuotation: (tag: Node) => boolean;
+  readonly intrinsic: (tag: Node) => SourceIntrinsicDeclarationInfo | undefined;
   readonly tokenize: (source: string) => readonly RustLexicalTokenTree[];
 }
 
@@ -43,7 +44,7 @@ export function readRustSourceMacroInput<Fragment>(
 function isQuotation<Fragment>(node: Node, context: RustSourceMacroInputContext<Fragment>): boolean {
   if (!context.ast.is.IsTaggedTemplateExpression(node)) return false;
   const tag = context.ast.as.AsTaggedTemplateExpression(node)!.Tag;
-  return tag !== undefined && context.isTokenQuotation(tag);
+  return tag !== undefined && isRustTokenQuotationDeclaration(context.intrinsic(tag)?.declaration);
 }
 
 function sequence<Fragment>(

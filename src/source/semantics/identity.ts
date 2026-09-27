@@ -7,6 +7,10 @@ export const rustLangModule = "@tsonic/rust/lang.js";
 export const rustConstPointerExport = "constPtr";
 export const rustMutPointerExport = "mutPtr";
 
+export const rustSourceSyntaxExportIds = Object.freeze({
+  tokens: "tokens",
+} as const);
+
 export const rustSourceTypeExportIds = Object.freeze({
   life: "Life",
   staticLifetime: "Static",

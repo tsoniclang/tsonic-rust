@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { join } from "node:path";
-import { createCompilerSessionFromFiles } from "@tsonic/tsts";
+import { createCompilerSessionFromFiles, createSourceProgramQueries } from "@tsonic/tsts";
+import { createSourceSemanticsVirtualModuleProvider } from "@tsonic/source-core/extension";
 import { createTestWorkspace } from "../../../../tsonic/test/scripts/test-workspaces.mjs";
 import { repositoryRoot } from "../../helpers/rust-session/paths.mjs";
 import { readRustSourceMacroInput } from "../../../dist/source/semantics/macro-input.js";
 import { createRustNativeSourceTool } from "../../../dist/providers/native/elaboration/tool.js";
+import { rustSyntaxIntrinsicDeclarations } from "../../../dist/source/semantics/declarations/syntax.js";
+import { isRustTokenQuotationDeclaration } from "../../../dist/source/semantics/syntax-intrinsics.js";
+import { rustLangModule, rustSourceProviderVersion, rustSourceSemanticsExtensionId,
+  rustSourceVirtualModulesProviderId } from "../../../dist/source/semantics/identity.js";
 
 const root = createTestWorkspace(join(repositoryRoot, ".temp/generated"), "rust-source-macro-input-");
 let nativeTool;
@@ -13,36 +18,59 @@ const core = ["Object", "Function", "CallableFunction", "NewableFunction", "IArg
   .map(name => `interface ${name} {}`).join("\n") + "\ninterface Array<T> { [index:number]:T; length:number; }";
 
 function syntax(expression, { quotation = false, tokenize } = {}) {
+  const imports = quotation ? `import { tokens as quote, tokens as renamed } from "${rustLangModule}";
+import * as namespace from "${rustLangModule}";
+` : "";
   const session = createCompilerSessionFromFiles({
     currentDirectory: "/src",
-    files: { "/src/core.d.ts": core, "/src/index.ts": expression },
+    files: { "/src/core.d.ts": core, "/src/index.ts": imports + expression },
     compilerOptions: { noLib: true, module: "esnext", target: "esnext" },
+    extensionHostOptions: { extensions: [{
+      identity: { id: rustSourceSemanticsExtensionId, version: rustSourceProviderVersion },
+      initialize(context) {
+        context.registerSourceDeclarationProvider(createSourceSemanticsVirtualModuleProvider({
+          id: rustSourceVirtualModulesProviderId,
+          version: rustSourceProviderVersion,
+          displayName: "Rust syntax declarations",
+          virtualDirectory: "rust-source",
+          modules: [{ moduleSpecifier: rustLangModule, packageName: "@tsonic/rust", subpath: "lang.js", exports: [] }],
+          exportsForModule: rustSyntaxIntrinsicDeclarations,
+          evidenceMessage: "Rust syntax declaration identity under test.",
+        }));
+      },
+    }] },
   });
   assert.deepEqual(session.getDiagnostics("syntactic"), []);
-  const checked = session.checkSource();
-  const ast = checked.ast;
+  session.ensureBound();
+  const source = createSourceProgramQueries(session.program);
+  const ast = source.ast;
+  const file = source.getSourceFile("/src/index.ts");
+  const queries = source.getSourceFileQueries(file);
   const nodes = [];
   const visit = node => {
     if (node === undefined) return;
     nodes.push(node);
     ast.forEachChild(node, visit);
   };
-  visit(checked.getSourceFile("/src/index.ts"));
+  visit(file);
   const call = nodes.find(node => ast.is.IsCallExpression(node) || ast.is.IsTaggedTemplateExpression(node));
   assert.ok(call);
-  const tags = new Set(quotation ? nodes.filter(ast.is.IsTaggedTemplateExpression)
-    .map(node => ast.as.AsTaggedTemplateExpression(node).Tag) : []);
   const fragments = [];
+  const selectedIntrinsics = [];
   const result = readRustSourceMacroInput(call, {
     ast,
     fragment(node) { fragments.push(node); return node; },
-    isTokenQuotation: tag => tags.has(tag),
+    intrinsic(tag) {
+      const intrinsic = queries.checker.getIntrinsicDeclarationInfo(tag);
+      if (intrinsic !== undefined) selectedIntrinsics.push(intrinsic);
+      return intrinsic;
+    },
     tokenize: tokenize ?? (source => {
       nativeTool ??= createRustNativeSourceTool({ cacheRoot: join(root, "native-cache") });
       return nativeTool.tokens(source, "2024");
     }),
   });
-  return { result, ast, call, nodes, fragments };
+  return { result, ast, call, nodes, fragments, selectedIntrinsics };
 }
 
 function available(value) {
@@ -52,6 +80,48 @@ function available(value) {
   assert.ok(Object.isFrozen(value.result.input.tokens));
   return value.result.input;
 }
+
+test("token quotation is one noncallable compiler intrinsic, not a guessed tag name", () => {
+  const declarations = rustSyntaxIntrinsicDeclarations();
+  assert.deepEqual(declarations, [{ id: "tokens", name: "tokens", kind: "intrinsic" }]);
+  assert.ok(Object.isFrozen(declarations));
+  assert.ok(Object.isFrozen(declarations[0]));
+  for (const tag of ["quote", "renamed", "namespace.tokens", 'namespace["tokens"]']) {
+    const value = syntax(`unrelated(${tag}\`[]\`)`, { quotation: true });
+    assert.equal(available(value).delimiter, "brackets");
+    assert.ok(value.selectedIntrinsics.length > 0);
+    for (const selected of value.selectedIntrinsics) {
+      assert.equal(selected.declaration.exportId, "tokens");
+      assert.equal(selected.ordinary, undefined);
+      assert.equal(isRustTokenQuotationDeclaration(selected.declaration), true);
+    }
+  }
+  for (const source of [
+    "unrelated(tokens`[]`)",
+    "function run(quote: (value: unknown) => unknown) { unrelated(quote`[]`); }",
+    "function run() { const quote = (value: unknown) => value; unrelated(quote`[]`); }",
+  ]) {
+    const value = syntax(source, { quotation: true, tokenize: () => assert.fail("Unrelated tags are ordinary source fragments.") });
+    assert.equal(available(value).delimiter, "parentheses");
+    assert.equal(available(value).tokens[0].kind, "fragment");
+    assert.deepEqual(value.selectedIntrinsics, []);
+  }
+});
+
+test("quotation identity rejects foreign providers, versions and member/signature facts", () => {
+  const value = syntax("unrelated(quote`[]`)", { quotation: true });
+  const declaration = value.selectedIntrinsics[0].declaration;
+  assert.equal(isRustTokenQuotationDeclaration(undefined), false);
+  for (const field of ["providerId", "providerVersion", "providerModuleId", "moduleSpecifier", "exportId", "exportName"]) {
+    assert.equal(isRustTokenQuotationDeclaration({ ...declaration, [field]: "unrelated" }), false, field);
+  }
+  for (const replacement of [
+    { memberId: "tokens" }, { memberName: "tokens" },
+    { memberKey: { kind: "property-key", name: "tokens" } }, { memberStatic: false }, { signatureId: "tokens" },
+  ]) {
+    assert.equal(isRustTokenQuotationDeclaration({ ...declaration, ...replacement }), false);
+  }
+});
 
 test("direct macro input preserves parentheses, trailing commas and source identity", () => {
   for (const [source, punctuation] of [["arbitrary()", []], ["arbitrary(first)", []],

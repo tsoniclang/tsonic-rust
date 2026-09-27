@@ -14,6 +14,7 @@ import {
 import {
   rustLifetimeTypeDeclarations,
   rustReferenceOperationDeclarations,
+  rustSyntaxIntrinsicDeclarations,
 } from "../semantics/declarations/index.js";
 import {
   rustLangModule,
@@ -108,6 +109,6 @@ function rustProviderExportsForModule(
         nativePointerProviderDeclaration(rustMutPointerExport),
       ]
     : module.moduleSpecifier === rustLangModule
-      ? [...semantics, ...rustReferenceOperationDeclarations()]
+      ? [...semantics, ...rustReferenceOperationDeclarations(), ...rustSyntaxIntrinsicDeclarations()]
       : semantics;
 }
