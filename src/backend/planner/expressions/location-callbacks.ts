@@ -22,7 +22,7 @@ export function planRustLocationCallback(
     kind: "block", bindings: [{ name, mutable: false, value }],
     value: {
       kind: "closure", move: true,
-      params: parameters.map(name => ({ name, byRefCopy: false })),
+      params: parameters.map(name => ({ pattern: { kind: "binding", name } })),
       body: {
         kind: "method-call", receiver: { kind: "path", path: name }, method: "call",
         args: [{ kind: "tuple-literal", elements: parameters.map(name => ({ kind: "path", path: name })) }],

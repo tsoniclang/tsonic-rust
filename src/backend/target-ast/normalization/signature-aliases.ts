@@ -78,8 +78,8 @@ export function nameRustSignatureTypes(
     readonly body: RustBlock;
   }>(item: Callable, ownerParameters: readonly RustGenericParameter[]): Callable => {
     const nameType = createTypeNamer(item, [...ownerParameters, ...item.generics.parameters]);
-    return { ...item, params: item.params.map(parameter => ({ ...parameter,
-      type: nameType(parameter.type, parameter.name),
+    return { ...item, params: item.params.map((parameter, index) => ({ ...parameter,
+      type: nameType(parameter.type, parameter.pattern.kind === "binding" ? parameter.pattern.name : `Parameter${index}`),
     })), ...(item.returnType === undefined ? {} : { returnType: nameType(item.returnType, "Result") }),
       body: visitBody(item.body, (type, role) => nameType(type, role, "private")),
     };

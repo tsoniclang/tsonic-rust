@@ -54,7 +54,7 @@ export function planRustObjectReferenceView(
       : readRustProjectDispatchedField(reader, source.dispatch.read, roles!.read);
     if (read === undefined) return undefined;
     const getter: RustExpr = {kind: "associated-call", owner: getterType, method: "new", args: [{
-      kind: "closure", move: true, params: [{name: "_receiver", byRefCopy: false}], body: {kind: "call", path: "Ok", args: [read]},
+      kind: "closure", move: true, params: [{ pattern: { kind: "binding" as const, name: "_receiver" } }], body: {kind: "call", path: "Ok", args: [read]},
     }]};
     let setter: RustExpr | undefined;
     if (field.writable) {
@@ -69,7 +69,7 @@ export function planRustObjectReferenceView(
             source.dispatch.read, source.dispatch.write, "=", next, {read: roles!.read, write: roles!.write!});
       if (write === undefined) return undefined;
       setter = {kind: "associated-call", owner: setterType!, method: "new", args: [{kind: "closure", move: true,
-        params: [{name: argumentsName, byRefCopy: false}], body: {kind: "evaluate-then", effect: write, discard: "unit",
+        params: [{ pattern: { kind: "binding" as const, name: argumentsName } }], body: {kind: "evaluate-then", effect: write, discard: "unit",
           value: {kind: "call", path: "Ok", args: [{kind: "tuple-literal", elements: []}]}},
       }]};
     }

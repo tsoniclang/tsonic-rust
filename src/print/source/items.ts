@@ -1,5 +1,6 @@
 import { printRustBlockStatements } from "./blocks.js";
 import { printRustExpr } from "./expressions/core.js";
+import { printRustPattern } from "./patterns.js";
 import { printRustMacroItem } from "./macro-input.js";
 import { printRustAttribute, printRustAttributes as printAttributes } from "./attributes.js";
 import {
@@ -14,6 +15,7 @@ import type {
   RustGenerics,
   RustGenericParameter,
   RustForeignMember,
+  RustFunctionParam,
   RustImplFunction,
   RustItem,
   RustSelfParam,
@@ -208,11 +210,11 @@ function printRustFunction(
 
 function printRustParameters(
   selfParam: RustSelfParam | undefined,
-  parameters: readonly { readonly name: string; readonly mutable?: boolean; readonly type: RustType }[],
+  parameters: readonly RustFunctionParam[],
 ): string {
   const self = printRustSelfParam(selfParam);
   const rest = parameters.map((parameter) =>
-    `${parameter.mutable === true ? "mut " : ""}${parameter.name}: ${printRustType(parameter.type)}`);
+    `${printRustPattern(parameter.pattern, false)}: ${printRustType(parameter.type)}`);
   return [...(self === undefined ? [] : [self]), ...rest].join(", ");
 }
 

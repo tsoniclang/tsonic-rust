@@ -4,7 +4,7 @@ import { collapseRustForwardingClosure } from "../../../dist/backend/target-ast/
 import { printRustExpr } from "../../../dist/print/source/expressions/core.js";
 import { rustItemsReferenceModuleAlias } from "../../../dist/backend/target-ast/inspection/source-module-usage.js";
 
-const parameter = name => ({ name, byRefCopy: false });
+const parameter = name => ({ pattern: { kind: "binding", name: name } });
 const path = name => ({ kind: "path", path: name });
 const genericArguments = [{ kind: "type", type: { kind: "named", path: "rt::TsonicError" } }];
 
@@ -26,7 +26,7 @@ test("forwarding does not erase captures, dereferences, effects or argument orde
   for (const [params, body] of [
     [[parameter("value")], { kind: "call", path: "retain", args: [path("captured")] }],
     [[parameter("value")], { kind: "call", path: "value", args: [path("value")] }],
-    [[{ name: "value", byRefCopy: true }], { kind: "call", path: "retain", args: [path("value")] }],
+    [[{ pattern: { kind: "reference", pattern: { kind: "binding", name: "value" }, mutable: false } }], { kind: "call", path: "retain", args: [path("value")] }],
     [[parameter("first"), parameter("second")], { kind: "call", path: "retain", args: [path("second"), path("first")] }],
     [[parameter("value")], { kind: "call", path: "retain", args: [{ kind: "call", path: "next", args: [] }] }],
     [[parameter("value")], { kind: "invoke", callee: path("callback"), args: [path("value")] }],

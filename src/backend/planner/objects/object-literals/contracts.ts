@@ -164,7 +164,7 @@ export function planContractImplementation(
         visibility: "private",
         generics: emptyRustGenerics,
         selfParam: rustSelfParameter(dispatch.write.selfMode),
-        params: [{ name: "value", type: field.type }],
+        params: [{ pattern: { kind: "binding" as const, name: "value" }, type: field.type }],
         ...(dispatch.write.fallible ? { errorType: fieldErrorType! } : {}),
         body: dispatch.write.fallible
           ? {
@@ -226,12 +226,12 @@ export function planContractImplementation(
         }],
       };
       const implementationName = allocateMemberFieldName(
-        new Set(method.parameters.map((parameter) => parameter.name)),
+        new Set(method.parameters.map((parameter) => parameter.pattern.name)),
         "implementation",
       );
       const overrideName = allocateMemberFieldName(
         new Set([
-          ...method.parameters.map((parameter) => parameter.name),
+          ...method.parameters.map((parameter) => parameter.pattern.name),
           implementationName,
         ]),
         "method_override",
@@ -257,7 +257,7 @@ export function planContractImplementation(
                     kind: "tuple-literal" as const,
                     elements: method.parameters.map((parameter) => ({
                       kind: "path" as const,
-                      path: parameter.name,
+                      path: parameter.pattern.name,
                     })),
                   }],
                 },
@@ -289,7 +289,7 @@ export function planContractImplementation(
             kind: "tuple-literal",
             elements: method.parameters.map((parameter) => ({
               kind: "path" as const,
-              path: parameter.name,
+              path: parameter.pattern.name,
             })),
           }],
         };
@@ -436,7 +436,7 @@ export function planContractImplementation(
         visibility: "private",
         generics: emptyRustGenerics,
         selfParam: rustSelfParameter("ref"),
-        params: [{ name: "value", type: override.callableType }],
+        params: [{ pattern: { kind: "binding" as const, name: "value" }, type: override.callableType }],
         body: {
           statements: [{
             kind: "expr",

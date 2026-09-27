@@ -14,7 +14,7 @@ import {
   isRustVecCarrier,
   rustCarrierSupportsClone,
 } from "../../../../target-model/types/index.js";
-import type { RustExpr, RustFunctionParam, RustStmt, RustType } from "../../../target-ast/nodes.js";
+import type { RustExpr, RustNamedFunctionParam, RustStmt, RustType } from "../../../target-ast/nodes.js";
 import {
   lowerRustValueConversion,
   planRustProjectUpcast,
@@ -36,7 +36,7 @@ import { planRustParameterEntryValue } from "./parameter-entry-conversion.js";
 export function planRustCallableArguments(
   input: {
     readonly declaration: Node;
-    readonly parameters: readonly RustFunctionParam[];
+    readonly parameters: readonly RustNamedFunctionParam[];
     readonly parameterAbis: readonly RustCallableParameterAbi[];
     readonly parameterAdapters: readonly RustCallableParameterAdapter[];
   },
@@ -49,7 +49,7 @@ export function planRustCallableArguments(
   const adaptedArguments: RustExpr[] = [];
   const parameterExpression = (index: number): RustExpr | undefined => {
     const parameter = input.parameters[index];
-    return parameter === undefined ? undefined : { kind: "path", path: parameter.name };
+    return parameter === undefined ? undefined : { kind: "path", path: parameter.pattern.name };
   };
   for (const [implementationIndex, adapter] of input.parameterAdapters.entries()) {
     if (adapter.kind === "omitted") {
@@ -141,7 +141,7 @@ export function planRustCallableArguments(
         method: "map",
         args: [{
           kind: "closure",
-          params: [{ name: elementName, byRefCopy: false }],
+          params: [{ pattern: { kind: "binding" as const, name: elementName } }],
           body: raw.expression,
         }],
       };
@@ -396,7 +396,7 @@ function applyRustCallableValueAdapterRaw(
         method: "map",
         args: [{
           kind: "closure",
-          params: [{ name: elementName, byRefCopy: false }],
+          params: [{ pattern: { kind: "binding" as const, name: elementName } }],
           body: element.expression,
         }],
       };

@@ -50,7 +50,7 @@ import { rustOptionDefaultValue } from "./option-default.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustBlock, RustExpr, RustStmt } from "../../target-ast/nodes.js";
+import type { RustBlock, RustClosureParam, RustExpr, RustPattern, RustStmt } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustReceiverIndependentMethodFactKey } from "../../../analysis/facts/operations/keys.js";
@@ -432,19 +432,18 @@ export function planRustCallableExpressionBody(
     capturedBindings,
   };
   const bindingStatements: RustStmt[] = [];
-  let closureParams: { name: string; mutable: boolean; byRefCopy?: boolean }[];
+  let closureParams: RustClosureParam[];
   let closureMove = nativeClosureProtocol !== undefined && captureFact.captures.length > 0;
   if (callableProtocol === undefined) {
     closureParams = [
       ...leadingParameterPlans.map((parameter) => ({
-        name: parameter.name!,
-        mutable: false,
+        pattern: { kind: "binding" as const, name: parameter.name! },
       })),
-      ...sourceParameterPlans.map((parameter) => ({
-        name: parameter.name,
-        mutable: parameter.mutable && context.input.program.facts.getFact(parameter.parameter, rustSourceParameterAbiFactKey)?.entryConversion === undefined,
-        byRefCopy: parameter.byRefCopy,
-      })),
+      ...sourceParameterPlans.map((parameter): RustClosureParam => {
+        const pattern: RustPattern = { kind: "binding", name: parameter.name,
+          mutable: parameter.mutable && context.input.program.facts.getFact(parameter.parameter, rustSourceParameterAbiFactKey)?.entryConversion === undefined };
+        return { pattern: parameter.byRefCopy ? { kind: "reference", pattern, mutable: false } : pattern };
+      }),
     ];
   } else {
     const allocatedTupleName = allocateRustSyntheticName(
@@ -455,9 +454,9 @@ export function planRustCallableExpressionBody(
       ? `_${allocatedTupleName}`
       : allocatedTupleName;
     closureParams = [
-      ...(ownedStateName === undefined ? [] : [{ name: ownedStateName, mutable: false }]),
-      ...(recursiveName === undefined ? [] : [{ name: recursiveName, mutable: false }]),
-      { name: tupleName, mutable: false },
+      ...(ownedStateName === undefined ? [] : [{ pattern: { kind: "binding" as const, name: ownedStateName } }]),
+      ...(recursiveName === undefined ? [] : [{ pattern: { kind: "binding" as const, name: recursiveName } }]),
+      { pattern: { kind: "binding", name: tupleName } },
     ];
     closureMove = true;
     for (const [index, parameter] of leadingParameterPlans.entries()) {
@@ -583,14 +582,10 @@ export function planRustCallableExpressionBody(
   const onlyStatement = finalizedBlock.statements.length === 1
     ? finalizedBlock.statements[0]
     : undefined;
-  const closure: RustExpr = asynchronous?.kind !== "native-future" && onlyStatement?.kind === "tail" &&
-      closureParams.every((parameter) => !parameter.mutable)
+  const closure: RustExpr = asynchronous?.kind !== "native-future" && onlyStatement?.kind === "tail"
     ? {
       kind: "closure",
-      params: closureParams.map((parameter) => ({
-        name: parameter.name,
-        byRefCopy: parameter.byRefCopy === true,
-      })),
+      params: closureParams,
       ...(closureMove ? { move: true } : {}),
       body: onlyStatement.expr,
     }

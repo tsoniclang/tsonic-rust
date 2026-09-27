@@ -36,7 +36,7 @@ export function planRustSuspendedCallableConstruction(node: Node, context: RustP
     kind: "associated-call", owner: ownerType, method: "from_shared", args: [{
       kind: "associated-call", owner: { kind: "named", path: "alloc::rc::Rc", genericArguments: [{ kind: "type", type: stateType }] },
       method: "new_cyclic", args: [{
-        kind: "closure", params: [{ name: weakName, byRefCopy: false }], move: true,
+        kind: "closure", params: [{ pattern: { kind: "binding" as const, name: weakName } }], move: true,
         body: { kind: "struct-literal", path: stateType.path, fields: [{ name: "state", value: {
           kind: "tuple-literal", elements: bindings.map(binding => ({ kind: "path", path: binding.name })),
         } }, { name: "owner", value: { kind: "method-call", receiver: { kind: "path", path: weakName }, method: "clone", args: [] } }] },

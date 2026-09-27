@@ -35,7 +35,7 @@ export function planRustProjectProjectionImplementations(
       trait: { kind: "named", path: "core::convert::TryFrom", genericArguments: [{ kind: "type", type: sourceType }] },
       members: [{ kind: "type", name: "Error", type: { kind: "unit" } }, { kind: "function",
         name: "try_from", visibility: "private", generics: emptyRustGenerics,
-        params: [{ name: "source", type: sourceType }],
+        params: [{ pattern: { kind: "binding" as const, name: "source" }, type: sourceType }],
         returnType: { kind: "named", path: "Result", genericArguments: [
           { kind: "type", type: { kind: "named", path: "Self" } }, { kind: "type", type: { kind: "unit" } },
         ] },

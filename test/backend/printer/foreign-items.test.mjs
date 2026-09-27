@@ -13,7 +13,7 @@ const integer = { kind: "primitive", name: "u32" };
 const named = path => ({ kind: "named", path });
 const foreign = members => ({ kind: "extern-block", isUnsafe: true, abi: "C", members });
 const declaration = (name, overrides = {}) => ({ kind: "function", name, visibility: "public",
-  generics: emptyRustGenerics, params: [{ name: "value", type: integer }], returnType: integer, ...overrides });
+  generics: emptyRustGenerics, params: [{ pattern: { kind: "binding", name: "value" }, type: integer }], returnType: integer, ...overrides });
 const macro = (delimiter = "parentheses") => ({ kind: "macro-invocation", path: "native::members",
   input: { delimiter, tokens: [] } });
 const surface = item => rustSourceFileContractCandidate("foreign", createRustSourceFile([item]), [])
@@ -52,7 +52,7 @@ test("extern blocks preserve ordered members, native ABI, safety and attributes"
 test("foreign signatures retain lifetime binders without inventing a function body", () => {
   const lifetime = { kind: "named", name: "input" };
   const reference = { kind: "reference", lifetime, mutable: false, referent: integer };
-  const member = declaration("borrow", { params: [{ name: "value", type: reference }], returnType: reference,
+  const member = declaration("borrow", { params: [{ pattern: { kind: "binding", name: "value" }, type: reference }], returnType: reference,
     generics: { parameters: [{ kind: "lifetime", name: "input", outlives: [] }], wherePredicates: [] } });
   assert.equal(printRustItem({ ...foreign([member]), abi: "Rust" }),
     'unsafe extern "Rust" {\n    pub fn borrow<\'input>(value: &\'input u32) -> &\'input u32;\n}');
@@ -61,7 +61,7 @@ test("foreign signatures retain lifetime binders without inventing a function bo
 test("foreign dependencies include member types, exact tokens and both attribute placements", () => {
   const item = { ...foreign([
     declaration("first", { attrs: [rustWordAttribute("member::attribute")],
-      params: [{ name: "value", type: named("argument::Value") }], returnType: named("result::Value"),
+      params: [{ pattern: { kind: "binding", name: "value" }, type: named("argument::Value") }], returnType: named("result::Value"),
       generics: { parameters: [{ kind: "type", name: "Type", bounds: [{ kind: "trait", path: "bound::Trait" }] }],
         wherePredicates: [] } }),
     { kind: "static", name: "VALUE", visibility: "public", mutable: false, type: named("storage::Value") },
@@ -78,7 +78,7 @@ test("foreign dependencies include member types, exact tokens and both attribute
 
 test("foreign declaration normalization preserves authored names and ordered macro members", () => {
   const item = foreign([
-    declaration("foreignName", { params: [{ name: "inputValue", type: integer }] }),
+    declaration("foreignName", { params: [{ pattern: { kind: "binding", name: "inputValue" }, type: integer }] }),
     macro(),
     { kind: "static", name: "nativeValue", visibility: "public", mutable: false, type: integer },
     { kind: "type", name: "native_type", visibility: "public" },
@@ -105,7 +105,7 @@ test("foreign public signatures expose required local types, including foreign t
   const pointer = { kind: "raw-pointer", mutable: false, pointee: named("Opaque") };
   const item = foreign([
     { kind: "type", name: "Opaque", visibility: "private" },
-    declaration("use_value", { params: [{ name: "value", type: named("Value") }], returnType: pointer }),
+    declaration("use_value", { params: [{ pattern: { kind: "binding", name: "value" }, type: named("Value") }], returnType: pointer }),
   ]);
   const result = finalizeRustSourceStyle(createRustSourceFile([value, item]));
   assert.equal(result.items[0].visibility, "public");

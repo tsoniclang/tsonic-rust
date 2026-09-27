@@ -713,14 +713,14 @@ export function planRustLocationStorage(
         { kind: "str-literal", value: operation.operationId },
         {
           kind: "closure",
-          params: [{ name: ownerName, byRefCopy: false }],
+          params: [{ pattern: { kind: "binding" as const, name: ownerName } }],
           body: read,
         },
         {
           kind: "closure",
           params: [
-            { name: ownerName, byRefCopy: false },
-            { name: valueName, byRefCopy: false },
+            { pattern: { kind: "binding" as const, name: ownerName } },
+            { pattern: { kind: "binding" as const, name: valueName } },
           ],
           body: write,
         },

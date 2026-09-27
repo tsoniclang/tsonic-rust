@@ -18,7 +18,7 @@ import {
 } from "../../../../analysis/facts/keys.js";
 import type {
   RustExpr,
-  RustFunctionParam,
+  RustNamedFunctionParam,
   RustImplFunction,
   RustStmt,
   RustType,
@@ -288,7 +288,7 @@ export function planProjectClassConstructor(
     const baseArgs = explicitBase === undefined
       ? parameterPlan.params.map((parameter) => ({
           kind: "path" as const,
-          path: parameter.name,
+          path: parameter.pattern.name,
         }))
       : planRustSelectedSourceCallArguments(explicitBase.call, initializationContext);
     const baseType = rustTypeFromCarrierInContext(base.targetType, context);
@@ -560,8 +560,8 @@ export function planProjectClassConstructor(
   }
   const forwardArgs: RustExpr[] = [
     ...(environmentBorrow === undefined ? [] : [{ kind: "reference" as const,
-      expr: { kind: "path" as const, path: environmentBorrow.name } }]),
-    ...parameterPlan.params.map((parameter) => ({ kind: "path" as const, path: parameter.name })),
+      expr: { kind: "path" as const, path: environmentBorrow.pattern.name } }]),
+    ...parameterPlan.params.map((parameter) => ({ kind: "path" as const, path: parameter.pattern.name })),
   ];
   const construct: RustImplFunction = { kind: "function",
     name: constructorSignature.targetName,
@@ -678,11 +678,11 @@ function planImplicitProjectConstructorParameters(
   signature: RustProjectConstructorSignature,
   context: RustPlanContext,
 ): {
-  readonly params: readonly RustFunctionParam[];
+  readonly params: readonly RustNamedFunctionParam[];
   readonly prelude: readonly never[];
 } | undefined {
   const receiver = context.input.program.projectTypes.openCarrier(definition);
-  const params: RustFunctionParam[] = [];
+  const params: RustNamedFunctionParam[] = [];
   for (const parameter of signature.parameters) {
     const abi = context.input.program.facts.getFact(
       parameter.parameterDeclaration,
@@ -705,7 +705,7 @@ function planImplicitProjectConstructorParameters(
       ));
       return undefined;
     }
-    params.push({ name, type, mutable: false });
+    params.push({ pattern: { kind: "binding" as const, name: name, mutable: false }, type });
   }
   return { params, prelude: [] };
 }

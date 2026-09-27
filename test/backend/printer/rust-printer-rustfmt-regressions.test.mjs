@@ -149,7 +149,7 @@ test("rustfmt-stable calls, closures, conditionals, and borrowed fallible chains
               method: "with",
               args: [{
                 kind: "closure",
-                params: [{ name: "state", mutable: false }],
+                params: [{ pattern: { kind: "binding", name: "state", mutable: false } }],
                 body: {
                   kind: "field",
                   receiver: { kind: "path", path: "state" },
@@ -204,7 +204,7 @@ test("rustfmt-stable calls, closures, conditionals, and borrowed fallible chains
               method: "new",
               args: [{
                 kind: "closure-block",
-                params: [{ name: "callable_arguments", mutable: false }],
+                params: [{ pattern: { kind: "binding", name: "callable_arguments", mutable: false } }],
                 move: true,
                 async: false,
                 body: {

@@ -1,5 +1,6 @@
 import type { RustBlock, RustExpr, RustStmt } from "../nodes.js";
 import { rustMacroInputExpressions } from "../macro-input.js";
+import { rustParametersBindName } from "../patterns.js";
 
 export function rustBlockReferencesPath(block: RustBlock, path: string): boolean {
   return rustStatementsReferencePath(block.statements, path);
@@ -93,11 +94,13 @@ export function rustExpressionReferencesPath(expression: RustExpr, path: string)
     return expression.path === path;
   }
   if (expression.kind === "closure") {
-    return !expression.params.some((parameter) => parameter.name === path) &&
+    const bound = rustParametersBindName(expression.params, path);
+    return bound === undefined || !bound &&
       rustExpressionReferencesPath(expression.body, path);
   }
   if (expression.kind === "closure-block") {
-    return !expression.params.some((parameter) => parameter.name === path) &&
+    const bound = rustParametersBindName(expression.params, path);
+    return bound === undefined || !bound &&
       rustBlockReferencesPath(expression.body, path);
   }
   if (expression.kind === "block") {

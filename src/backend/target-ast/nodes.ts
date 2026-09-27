@@ -170,7 +170,8 @@ export type RustType =
 export type RustPattern =
   | RustMacroInvocation
   | { readonly kind: "wildcard" }
-  | { readonly kind: "binding"; readonly name: string }
+  | { readonly kind: "binding"; readonly name: string; readonly mutable?: boolean }
+  | { readonly kind: "reference"; readonly pattern: RustPattern; readonly mutable: boolean }
   | { readonly kind: "path"; readonly path: string }
   | { readonly kind: "tuple"; readonly elements: readonly RustPattern[] }
   | { readonly kind: "or"; readonly alternatives: readonly RustPattern[] }
@@ -249,10 +250,10 @@ export type RustExpr =
   | { readonly kind: "vec-literal"; readonly elements: readonly RustExpr[] }
   | { readonly kind: "slice-literal"; readonly elements: readonly RustExpr[] }
   | { readonly kind: "array-repeat"; readonly element: RustExpr; readonly length: RustConstArgument }
-  | { readonly kind: "closure"; readonly params: readonly { readonly name: string; readonly byRefCopy: boolean }[]; readonly move?: boolean; readonly body: RustExpr }
+  | { readonly kind: "closure"; readonly params: readonly RustClosureParam[]; readonly move?: boolean; readonly body: RustExpr }
   | {
       readonly kind: "closure-block";
-      readonly params: readonly { readonly name: string; readonly mutable: boolean; readonly byRefCopy?: boolean }[];
+      readonly params: readonly RustClosureParam[];
       readonly move: boolean;
       readonly async: boolean;
       readonly body: RustBlock;
@@ -368,9 +369,17 @@ export interface RustBlock {
 }
 
 export interface RustFunctionParam {
-  readonly name: string;
+  readonly pattern: RustPattern;
   readonly type: RustType;
-  readonly mutable?: boolean;
+}
+
+export interface RustNamedFunctionParam extends RustFunctionParam {
+  readonly pattern: Extract<RustPattern, { readonly kind: "binding" }>;
+}
+
+export interface RustClosureParam {
+  readonly pattern: RustPattern;
+  readonly type?: RustType;
 }
 
 export type RustSelfParam =

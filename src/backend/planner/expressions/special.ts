@@ -278,7 +278,7 @@ export function planOptionalChainExpression(
     method: innerFallible || fact.lowering === "map" ? "map" : "and_then",
     args: [{
       kind: "closure",
-      params: [{ name: receiverName, byRefCopy: false }],
+      params: [{ pattern: { kind: "binding" as const, name: receiverName } }],
       body: innerFallible ? fallibleBody : body,
     }],
   };

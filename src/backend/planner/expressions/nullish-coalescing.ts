@@ -116,14 +116,14 @@ export function planNullishCoalescing(
       fact.rightOptionDepth > 0 ? { kind: "call", path: "Some", args: [value] } : value, right, context);
   }
   const present: RustExpr = convertedPresent !== undefined
-    ? { kind: "closure", params: [{ name: presentValueName, byRefCopy: false }],
+    ? { kind: "closure", params: [{ pattern: { kind: "binding" as const, name: presentValueName } }],
         body: fallbackIsFallible ? { kind: "call", path: "Ok", args: [convertedPresent] } : convertedPresent }
     : fallbackIsFallible && fact.rightOptionDepth === 0
     ? { kind: "path", path: "Ok" }
     : fallbackIsFallible
       ? {
           kind: "closure",
-          params: [{ name: presentValueName, byRefCopy: false }],
+          params: [{ pattern: { kind: "binding" as const, name: presentValueName } }],
           body: {
             kind: "call",
             path: "Ok",

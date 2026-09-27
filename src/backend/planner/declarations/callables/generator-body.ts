@@ -20,7 +20,7 @@ export function planRustGeneratorBody(
     path,
     args: [{
       kind: "closure-block",
-      params: [{ name: controllerName, mutable: false }],
+      params: [{ pattern: { kind: "binding" as const, name: controllerName, mutable: false } }],
       move: true,
       async: true,
       body: applyFallibleShape(applyRustTailShape(body, hasReturnValue), {

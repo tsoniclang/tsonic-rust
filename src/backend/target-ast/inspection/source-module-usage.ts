@@ -134,7 +134,7 @@ function rustFunctionParametersReferenceModuleAlias(
   alias: string,
 ): boolean {
   return parameters.some((parameter) =>
-    rustTypeReferencesModuleAlias(parameter.type, alias));
+    rustTypeReferencesModuleAlias(parameter.type, alias) || rustPatternReferencesModuleAlias(parameter.pattern, alias));
 }
 
 function rustGenericsReferenceModuleAlias(
@@ -445,9 +445,13 @@ function rustExpressionReferencesModuleAlias(expression: RustExpr, alias: string
         expression.length.kind === "path" &&
           rustExpressionReferencesModuleAlias({ kind: "path", path: expression.length.path }, alias);
     case "closure":
-      return rustExpressionReferencesModuleAlias(expression.body, alias);
+      return expression.params.some(parameter => rustPatternReferencesModuleAlias(parameter.pattern, alias) ||
+          rustOptionalTypeReferencesModuleAlias(parameter.type, alias)) ||
+        rustExpressionReferencesModuleAlias(expression.body, alias);
     case "closure-block":
-      return rustBlockReferencesModuleAlias(expression.body, alias);
+      return expression.params.some(parameter => rustPatternReferencesModuleAlias(parameter.pattern, alias) ||
+          rustOptionalTypeReferencesModuleAlias(parameter.type, alias)) ||
+        rustBlockReferencesModuleAlias(expression.body, alias);
     case "await":
       return rustExpressionReferencesModuleAlias(expression.expr, alias);
     case "option-try":
@@ -472,6 +476,8 @@ function rustPatternReferencesModuleAlias(pattern: RustPattern, alias: string): 
     case "wildcard":
     case "binding":
       return false;
+    case "reference":
+      return rustPatternReferencesModuleAlias(pattern.pattern, alias);
     case "path":
       return rustPathReferencesModuleAlias(pattern.path, alias);
     case "tuple":

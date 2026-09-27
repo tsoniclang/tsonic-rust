@@ -69,7 +69,7 @@ export function planRustReferenceObjectFieldLocation(
       { kind: "call", path: "String::from", args: [{ kind: "str-literal", value: operation.operationId }] },
     ] },
     { kind: "closure", move: true, params: [], body: { kind: "call", path: "Ok", args: [read] } },
-    { kind: "closure", move: true, params: [{ name: valueName, byRefCopy: false }], body: {
+    { kind: "closure", move: true, params: [{ pattern: { kind: "binding" as const, name: valueName } }], body: {
       kind: "evaluate-then", effect: write, discard: "unit", value: {
         kind: "call", path: "Ok", args: [{ kind: "tuple-literal", elements: [] }],
       },

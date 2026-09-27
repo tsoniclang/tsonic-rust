@@ -419,7 +419,7 @@ export function planRustBoundProjectMethodCallable(
     method: "new",
     args: [{
       kind: "closure-block",
-      params: [{ name: argumentsName, mutable: false }],
+      params: [{ pattern: { kind: "binding" as const, name: argumentsName, mutable: false } }],
       move: true,
       async: false,
       body: {

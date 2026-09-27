@@ -46,7 +46,7 @@ test("field and closure method chains retain rustfmt vertical layout", () => {
             method: "with_mut",
             args: [{
               kind: "closure",
-              params: [{ name: "state", byRefCopy: false }],
+              params: [{ pattern: { kind: "binding", name: "state" } }],
               body: {
                 kind: "binary",
                 operator: "+=",
@@ -88,7 +88,7 @@ test("compact field receivers stay attached before expanded closure calls", () =
             method: "with_mut",
             args: [{
               kind: "closure",
-              params: [{ name: "state", byRefCopy: false }],
+              params: [{ pattern: { kind: "binding", name: "state" } }],
               body: {
                 kind: "assignment",
                 operator: "=",
@@ -136,7 +136,7 @@ test("let-bound index closures retain rustfmt's vertical method-chain layout", (
             method: "with",
             args: [{
               kind: "closure",
-              params: [{ name: "state", byRefCopy: false }],
+              params: [{ pattern: { kind: "binding", name: "state" } }],
               body: {
                 kind: "index",
                 receiver: {
@@ -191,7 +191,7 @@ test("long indexes continue after one-line method-chain receivers", () => {
               method: "with",
               args: [{
                 kind: "closure",
-                params: [{ name: "state", byRefCopy: false }],
+                params: [{ pattern: { kind: "binding", name: "state" } }],
                 body: {
                   kind: "method-call",
                   receiver: { kind: "path", path: "state.0" },
@@ -253,7 +253,7 @@ test("multiline method-call match arms use rustfmt block arms", () => {
                 method: "with",
                 args: [{
                   kind: "closure",
-                  params: [{ name: "state", byRefCopy: false }],
+                  params: [{ pattern: { kind: "binding", name: "state" } }],
                   body: {
                     kind: "method-call",
                     receiver: { kind: "path", path: "state.0" },
@@ -556,10 +556,7 @@ test("long multiline let initializers reflow from their continuation column", ()
             method: "new",
             args: [{
               kind: "closure-block",
-              params: [{
-                name: "__tsonic_callable_arguments_5",
-                mutable: false,
-              }],
+              params: [{ pattern: { kind: "binding", name: "__tsonic_callable_arguments_5", mutable: false } }],
               move: true,
               async: false,
               body: {
@@ -622,7 +619,7 @@ test("fitting callable closures move below long let bindings without expanding",
             method: "new",
             args: [{
               kind: "closure",
-              params: [{ name: "object_this_2", mutable: false }],
+              params: [{ pattern: { kind: "binding", name: "object_this_2", mutable: false } }],
               body: {
                 kind: "call",
                 path: "String::from",

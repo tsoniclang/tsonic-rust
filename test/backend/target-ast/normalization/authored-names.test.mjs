@@ -70,10 +70,10 @@ test("native C representation and trait implementation exemptions retain their c
 
 test("generic names, parameters and nested binding names are retained without runtime wrappers", () => {
   const generic = { parameters: [{ kind: "type", name: "valueType", bounds: [] }], wherePredicates: [] };
-  const parameter = { name: "inputValue", type: { kind: "named", path: "valueType" } };
+  const parameter = { pattern: { kind: "binding", name: "inputValue" }, type: { kind: "named", path: "valueType" } };
   const statements = [
     { kind: "let", name: "localValue", mutable: false, type: scalar, init: { kind: "int-literal", text: "1" } },
-    { kind: "let", name: "callback", mutable: false, init: { kind: "closure", params: [{ name: "nextValue", byRefCopy: false }],
+    { kind: "let", name: "callback", mutable: false, init: { kind: "closure", params: [{ pattern: { kind: "binding", name: "nextValue" } }],
       body: { kind: "path", path: "nextValue" } } },
     { kind: "tail", expr: { kind: "path", path: "inputValue" } },
   ];
@@ -87,7 +87,7 @@ test("generic names, parameters and nested binding names are retained without ru
   assert.ok(fn.body.innerAttrs.includes(rustLintAttributes.nonSnakeCaseName));
   assert.deepEqual(fn.body.statements.map(statement => statement.kind), statements.map(statement => statement.kind));
   assert.equal(fn.body.statements[0].name, "localValue");
-  assert.equal(fn.body.statements[1].init.params[0].name, "nextValue");
+  assert.equal(fn.body.statements[1].init.params[0].pattern.name, "nextValue");
   assert.deepEqual(finalizeRustSourceStyle(model), model);
   const printed = printRustSourceFile(model);
   assert.match(printed, /fn value<valueType>\(inputValue: valueType\)/u);

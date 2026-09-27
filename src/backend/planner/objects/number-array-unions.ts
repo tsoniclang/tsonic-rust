@@ -19,7 +19,7 @@ export function planRustNumberArrayUnionImplementation(definition: RustGenerated
       const arguments_: RustExpr[] = [{ kind: "path", path: "value" }, ...(indexed ? [{ kind: "path" as const, path: "index" }] : [])];
       return { kind: "function",
         name, visibility: "private", generics: emptyRustGenerics, selfParam: rustSelfParameter("ref"),
-        params: indexed ? [{ name: "index", type: number }] : [],
+        params: indexed ? [{ pattern: { kind: "binding", name: "index" }, type: number }] : [],
         returnType: indexed ? { kind: "named", path: "Option", genericArguments: [{ kind: "type", type: number }] }
           : name === "number_array_copy"
             ? { kind: "named", path: "js_abi::JsArray", genericArguments: [{ kind: "type", type: number }] }

@@ -29,7 +29,7 @@ test("optional closure chains and nested struct arguments stay rustfmt-stable", 
               method: "map",
               args: [{
                 kind: "closure",
-                params: [{ name: "selected", byRefCopy: false }],
+                params: [{ pattern: { kind: "binding", name: "selected" } }],
                 body: {
                   kind: "method-call",
                   receiver: { kind: "path", path: "selected" },
@@ -592,7 +592,7 @@ test("fallible comparison calls expand nested closure arguments at their selecte
                       method: "with",
                       args: [{
                         kind: "closure",
-                        params: [{ name: "module_binding" }],
+                        params: [{ pattern: { kind: "binding", name: "module_binding" } }],
                         body: {
                           kind: "method-call",
                           receiver: { kind: "path", path: "module_binding" },

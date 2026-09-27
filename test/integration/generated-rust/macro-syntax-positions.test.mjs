@@ -47,7 +47,7 @@ test("canonical macro AST compiles in type, pattern, module and local-item posit
       expression: { kind: "path", path: "input" }, arms: [
         { pattern, expression: { kind: "path", path: "found" } },
         { pattern: { kind: "path", path: "None" }, expression: { kind: "int-literal", text: "0" } },
-      ] } }]), params: [{ name: "input", type: { kind: "named", path: "Option",
+      ] } }]), params: [{ pattern: { kind: "binding", name: "input" }, type: { kind: "named", path: "Option",
         genericArguments: [{ kind: "type", type: element }] } }] },
     method("local", [
       { kind: "item", item: invocation("local_item", "brackets") },
@@ -70,6 +70,50 @@ macro_rules! local_item { () => { fn inside() -> u32 { 7 } }; }
     assert_eq!(read(None), 0);
     assert_eq!(local(), 7);
 }`), "");
+});
+
+test("native macro patterns occupy real function and closure parameters", () => {
+  const integer = { kind: "primitive", name: "u32" };
+  const binding = name => ({ kind: "binding", name });
+  const path = name => ({ kind: "path", path: name });
+  const pair = { kind: "tuple", elements: [binding("left"), binding("right")] };
+  const parameter = invocation("pattern", "brackets", [{ kind: "pattern", pattern: pair }]);
+  const sum = { kind: "binary", operator: "+", left: path("left"), right: path("right") };
+  const tuple = { kind: "tuple", elements: [integer, integer] };
+  const direct = { ...method("combine", [{ kind: "tail", expr: sum }]), params: [{ pattern: parameter, type: tuple }] };
+  const closure = { kind: "closure", params: [{ pattern: parameter, type: tuple }], body: sum };
+  const invoke = { ...method("via_closure", [{ kind: "tail", expr: { kind: "invoke", callee: closure, args: [path("values")] } }]),
+    params: [{ pattern: binding("values"), type: tuple }] };
+  assert.equal(nativeProgram("parameters", [direct, invoke], "macro_rules! pattern { ($value:pat) => { $value }; }",
+    "fn main() { assert_eq!(combine((3, 4)), 7); assert_eq!(via_closure((5, 6)), 11); }"), "");
+});
+
+test("native parameter patterns retain shared destructuring, mutable bindings and inferred closure types", () => {
+  const integer = { kind: "primitive", name: "u32" };
+  const reference = { kind: "reference", referent: integer, mutable: false };
+  const binding = { kind: "binding", name: "element", mutable: true };
+  const pattern = { kind: "reference", mutable: false, pattern: binding };
+  const closure = { kind: "closure-block", params: [{ pattern }], move: false, async: false,
+    body: { statements: [{ kind: "assign", target: { kind: "path", path: "element" }, operator: "+=", value: { kind: "int-literal", text: "1" } },
+      { kind: "tail", expr: { kind: "path", path: "element" } }] } };
+  const item = { ...method("increment_copy", [{ kind: "tail", expr: {
+    kind: "invoke", callee: closure, args: [{ kind: "path", path: "value" }],
+  } }]), params: [{ pattern: { kind: "binding", name: "value" }, type: reference }] };
+  assert.equal(nativeProgram("reference-parameters", [item], "",
+    "fn main() { let value = 9; assert_eq!(increment_copy(&value), 10); assert_eq!(value, 9); }"), "");
+});
+
+test("native checking rejects refutable and non-Copy parameter patterns without weakening ownership", () => {
+  const integer = { kind: "primitive", name: "u32" };
+  const parameter = invocation("selected", "parentheses", [{ kind: "pattern", pattern: { kind: "binding", name: "value" } }]);
+  const refutable = { ...method("value", [{ kind: "tail", expr: { kind: "path", path: "value" } }]),
+    params: [{ pattern: parameter, type: { kind: "named", path: "Option", genericArguments: [{ kind: "type", type: integer }] } }] };
+  assert.throws(() => nativeProgram("refutable-parameter", [refutable],
+    "macro_rules! selected { ($value:ident) => { Some($value) }; }", "fn main() {}"), /refutable pattern/u);
+  const borrowed = { ...method("owned", [{ kind: "tail", expr: { kind: "path", path: "value" } }], { kind: "string" }),
+    params: [{ pattern: { kind: "reference", mutable: false, pattern: { kind: "binding", name: "value" } },
+      type: { kind: "reference", mutable: false, referent: { kind: "string" } } }] };
+  assert.throws(() => nativeProgram("noncopy-parameter", [borrowed], "", "fn main() {}"), /cannot move out|does not implement the `Copy`/u);
 });
 
 test("trait and implementation macro members retain native associated-item ordering", () => {
@@ -120,7 +164,7 @@ test("foreign macro members link and execute in their exact native scope", () =>
   const link = name => [rustValueAttribute("link_name", { kind: "string", value: name })];
   const foreign = { kind: "extern-block", isUnsafe: true, abi: "C", members: [
     { kind: "function", name: "doubleValue", visibility: "public", safety: "safe",
-      generics: emptyRustGenerics, params: [{ name: "inputValue", type: integer }], returnType: integer,
+      generics: emptyRustGenerics, params: [{ pattern: { kind: "binding", name: "inputValue" }, type: integer }], returnType: integer,
       attrs: link("proof_double") },
     invocation("foreign_first", "parentheses"),
     { kind: "static", name: "nativeValue", visibility: "public", safety: "safe", mutable: false,

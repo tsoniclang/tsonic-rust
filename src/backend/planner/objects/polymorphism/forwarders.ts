@@ -39,7 +39,7 @@ export function planProjectFieldAccessorCall(
   valueType: RustType,
 ): { readonly expression: RustExpr; readonly errorType?: RustType } | undefined {
   const read = value === undefined;
-  const expectedParameters = read ? [] : [{ name: "value", type: valueType }];
+  const expectedParameters = read ? [] : [{ pattern: { kind: "binding" as const, name: "value" }, type: valueType }];
   if (helper === undefined || helper.selfParam?.kind !== "rc" || helper.isAsync === true ||
     helper.isUnsafe === true || !rustFunctionTypesMatch(
       helper.params,
@@ -374,8 +374,10 @@ function applyRootMethodOverride(
   if (representation === undefined) {
     return undefined;
   }
+  const bindings = callable.params.map(parameter => parameter.pattern.kind === "binding" ? parameter.pattern : undefined);
+  if (bindings.some(binding => binding === undefined)) return rejectRootContractErrorAbi(implementation, context);
   const overrideName = allocateRustLocalName(
-    new Set(callable.params.map((parameter) => parameter.name)),
+    new Set(bindings.map(binding => binding!.name)),
     "method_override",
   );
   return {
@@ -399,9 +401,9 @@ function applyRootMethodOverride(
               method: "call",
               args: [{
                 kind: "tuple-literal",
-                elements: callable.params.map((parameter) => ({
+                elements: bindings.map((binding) => ({
                   kind: "path" as const,
-                  path: parameter.name,
+                  path: binding!.name,
                 })),
               }],
             },

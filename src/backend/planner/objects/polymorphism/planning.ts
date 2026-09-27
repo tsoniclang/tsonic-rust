@@ -360,7 +360,7 @@ function planProjectExternalErrorImplementations(
     members: [{ kind: "function",
       name: "set_stack", visibility: "private", generics: emptyRustGenerics,
       selfParam: { kind: "reference", mutable: false },
-      params: [{ name: "stack", type: { kind: "named", path: "Option", genericArguments: [
+      params: [{ pattern: { kind: "binding" as const, name: "stack" }, type: { kind: "named", path: "Option", genericArguments: [
         { kind: "type", type: { kind: "string" } },
       ] } }],
       body: { statements: [{ kind: "expr", expr: {
@@ -378,9 +378,7 @@ function planProjectExternalErrorImplementations(
       visibility: "private",
       generics: emptyRustGenerics,
       selfParam: { kind: "reference", mutable: false },
-      params: [{
-        name: "formatter",
-        type: {
+      params: [{ pattern: { kind: "binding" as const, name: "formatter" }, type: {
           kind: "reference",
           mutable: true,
           referent: {
@@ -388,8 +386,7 @@ function planProjectExternalErrorImplementations(
             path: "core::fmt::Formatter",
             genericArguments: [{ kind: "lifetime", lifetime: { kind: "placeholder" } }],
           },
-        },
-      }],
+        } }],
       returnType: { kind: "named", path: "core::fmt::Result" },
       body: {
         statements: [{

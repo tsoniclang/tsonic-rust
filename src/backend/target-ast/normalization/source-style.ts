@@ -19,6 +19,7 @@ import { nameRustSignatureTypes } from "./signature-aliases.js";
 import type { RustNamedSignatureScope } from "./signature-aliases.js";
 import { rustItemsReferenceModuleAlias } from "../inspection/source-module-usage.js";
 import { rustTypeEquals } from "../inspection/type-equality.js";
+import { rustPatternBindings } from "../patterns.js";
 import { mergeRustAdjacentConditionalBranches } from "./conditional-branches.js";
 import { appendRustNamingAllowance, finalizeRustFunctionNames, finalizeRustItemNames,
   rustExpressionDeclaresNonSnakeName, rustStatementDeclaresNonSnakeName } from "./authored-names.js";
@@ -167,8 +168,8 @@ function hasErasedGenericParameter(fn: RustImplFunction): boolean {
 }
 
 function hasUnusedParameter(fn: Pick<RustImplFunction, "params" | "body">): boolean {
-  return fn.params.some(parameter => !parameter.name.startsWith("_") &&
-    !rustBlockReferencesPath(fn.body, parameter.name));
+  return fn.params.some(parameter => rustPatternBindings(parameter.pattern)?.some(binding =>
+    !binding.name.startsWith("_") && !rustBlockReferencesPath(fn.body, binding.name)) === true);
 }
 
 function createRustBodyStyler(nameType?: (type: RustType, role: string) => RustType): {

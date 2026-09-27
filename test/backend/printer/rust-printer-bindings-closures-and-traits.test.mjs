@@ -28,7 +28,7 @@ test("borrowed method-chain let initializers reflow as one continuation", () => 
               method: "with",
               args: [{
                 kind: "closure",
-                params: [{ name: "__tsonic_module_binding", mutable: false }],
+                params: [{ pattern: { kind: "binding", name: "__tsonic_module_binding", mutable: false } }],
                 move: false,
                 body: {
                   kind: "method-call",
@@ -304,7 +304,7 @@ test("fallible method calls keep short receivers attached to block arguments", (
                 }],
                 value: {
                   kind: "closure",
-                  params: [{ name: "value", mutable: false }],
+                  params: [{ pattern: { kind: "binding", name: "value", mutable: false } }],
                   move: true,
                   body: {
                     kind: "call",
@@ -348,8 +348,8 @@ test("rustfmt canonicalizes fallible calls with single-expression closures", () 
               args: [{
                 kind: "closure-block",
                 params: [
-                  { name: "left", mutable: false },
-                  { name: "right", mutable: false },
+                  { pattern: { kind: "binding", name: "left", mutable: false } },
+                  { pattern: { kind: "binding", name: "right", mutable: false } },
                 ],
                 move: false,
                 async: false,
@@ -407,7 +407,7 @@ test("long expression closures use a vertical receiver before expanding the clos
                     method: "update_with",
                     args: [{
                       kind: "closure",
-                      params: [{ name: "__tsonic_location_current", byRefCopy: false }],
+                      params: [{ pattern: { kind: "binding", name: "__tsonic_location_current" } }],
                       body: {
                         kind: "binary",
                         operator: "+",
@@ -454,7 +454,7 @@ test("short optional chains stay attached when their fitted closure body expands
             method: "map",
             args: [{
               kind: "closure",
-              params: [{ name: "__tsonic_optional_receiver", byRefCopy: false }],
+              params: [{ pattern: { kind: "binding", name: "__tsonic_optional_receiver" } }],
               body: {
                 kind: "method-call",
                 receiver: {
@@ -465,7 +465,7 @@ test("short optional chains stay attached when their fitted closure body expands
                 method: "with",
                 args: [{
                   kind: "closure",
-                  params: [{ name: "state", byRefCopy: false }],
+                  params: [{ pattern: { kind: "binding", name: "state" } }],
                   body: { kind: "field", receiver: { kind: "path", path: "state" }, name: "0" },
                 }],
               },
@@ -561,7 +561,7 @@ test("nonempty traits use rustfmt-compatible long supertrait headers", () => {
         name: "read",
         generics: emptyRustGenerics,
         selfParam: { kind: "rc" },
-        params: [{ name: "value", type: { kind: "primitive", name: "i32" } }],
+        params: [{ pattern: { kind: "binding", name: "value" }, type: { kind: "primitive", name: "i32" } }],
         returnType: { kind: "primitive", name: "i32" },
       }],
     }],

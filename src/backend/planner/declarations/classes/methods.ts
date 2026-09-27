@@ -319,7 +319,7 @@ export function planProjectMethod(
                 : "rt::BorrowedAsyncGenerator::new",
             args: [{
               kind: "closure-block",
-              params: [{ name: generatorControllerName!, mutable: false }],
+              params: [{ pattern: { kind: "binding" as const, name: generatorControllerName!, mutable: false } }],
               move: true,
               async: true,
               body: applyFallibleShape(
@@ -379,7 +379,7 @@ export function planProjectMethod(
 
 function planDirectProjectMethodOverridePrelude(
   member: Node,
-  params: readonly import("../../../target-ast/nodes.js").RustFunctionParam[],
+  params: readonly import("../../../target-ast/nodes.js").RustNamedFunctionParam[],
   syntheticNames: import("../../names/synthetic.js").RustSyntheticNameState,
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
@@ -421,7 +421,7 @@ function planDirectProjectMethodOverridePrelude(
             kind: "tuple-literal",
             elements: params.map((parameter) => ({
               kind: "path" as const,
-              path: parameter.name,
+              path: parameter.pattern.name,
             })),
           }],
         },

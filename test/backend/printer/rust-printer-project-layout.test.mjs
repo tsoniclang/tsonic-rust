@@ -667,7 +667,7 @@ test("method chains in logical continuations use the continuation body indent", 
       method: "with",
       args: [{
         kind: "closure",
-        params: [{ name: "__tsonic_module_binding", byRefCopy: false }],
+        params: [{ pattern: { kind: "binding", name: "__tsonic_module_binding" } }],
         body: {
           kind: "method-call",
           receiver: { kind: "path", path: "__tsonic_module_binding" },

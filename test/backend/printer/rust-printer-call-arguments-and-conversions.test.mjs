@@ -197,14 +197,14 @@ test("single projection calls keep a short receiver attached when closure argume
               { kind: "str-literal", value: "stable.member.identity" },
               {
                 kind: "closure",
-                params: [{ name: "owner", byRefCopy: false }],
+                params: [{ pattern: { kind: "binding", name: "owner" } }],
                 body: {
                   kind: "method-call",
                   receiver: { kind: "field", receiver: { kind: "path", path: "owner" }, name: "state" },
                   method: "with",
                   args: [{
                     kind: "closure",
-                    params: [{ name: "state", byRefCopy: false }],
+                    params: [{ pattern: { kind: "binding", name: "state" } }],
                     body: { kind: "field", receiver: { kind: "path", path: "state" }, name: "0" },
                   }],
                 },
@@ -212,8 +212,8 @@ test("single projection calls keep a short receiver attached when closure argume
               {
                 kind: "closure",
                 params: [
-                  { name: "owner", byRefCopy: false },
-                  { name: "value", byRefCopy: false },
+                  { pattern: { kind: "binding", name: "owner" } },
+                  { pattern: { kind: "binding", name: "value" } },
                 ],
                 body: {
                   kind: "method-call",
@@ -221,7 +221,7 @@ test("single projection calls keep a short receiver attached when closure argume
                   method: "with_mut",
                   args: [{
                     kind: "closure",
-                    params: [{ name: "state", byRefCopy: false }],
+                    params: [{ pattern: { kind: "binding", name: "state" } }],
                     body: {
                       kind: "assignment",
                       operator: "=",
@@ -730,9 +730,9 @@ test("fallible conversion wrappers own multiline callback method chains", () => 
                     args: [{
                       kind: "closure",
                       params: [
-                        { name: "value", byRefCopy: false },
-                        { name: "index", byRefCopy: false },
-                        { name: "owner", byRefCopy: false },
+                        { pattern: { kind: "binding", name: "value" } },
+                        { pattern: { kind: "binding", name: "index" } },
+                        { pattern: { kind: "binding", name: "owner" } },
                       ],
                       body: {
                         kind: "call",
@@ -788,8 +788,8 @@ test("fallible conversion wrappers stay attached to one callback method", () => 
                     args: [{
                       kind: "closure",
                       params: [
-                        { name: "value", byRefCopy: false },
-                        { name: "_index", byRefCopy: false },
+                        { pattern: { kind: "binding", name: "value" } },
+                        { pattern: { kind: "binding", name: "_index" } },
                       ],
                       body: {
                         kind: "call",
@@ -915,7 +915,7 @@ test("method chains inside expanded call comparisons use argument indentation", 
                   method: "with",
                   args: [{
                     kind: "closure",
-                    params: [{ name: "state", byRefCopy: false }],
+                    params: [{ pattern: { kind: "binding", name: "state" } }],
                     body: { kind: "path", path: "state.1" },
                   }],
                 }],
@@ -960,7 +960,7 @@ test("expanded call comparisons break short receiver chains before the first sel
                 method: "map",
                 args: [{
                   kind: "closure",
-                  params: [{ name: "optional_receiver_2", byRefCopy: false }],
+                  params: [{ pattern: { kind: "binding", name: "optional_receiver_2" } }],
                   body: {
                     kind: "method-call",
                     receiver: { kind: "path", path: "optional_receiver_2" },
@@ -1025,7 +1025,7 @@ test("expanded call arguments keep fitting optional closure chains attached", ()
               method: "and_then",
               args: [{
                 kind: "closure",
-                params: [{ name: "optional_receiver_13", byRefCopy: false }],
+                params: [{ pattern: { kind: "binding", name: "optional_receiver_13" } }],
                 body: {
                   kind: "call",
                   path: "js_abi::regexp_named_groups_get_native",
@@ -1144,7 +1144,7 @@ test("every fitted call layout preserves exact call-site type arguments", () => 
                 method: "map",
                 args: [{
                   kind: "closure",
-                  params: [{ name: "value", byRefCopy: false }],
+                  params: [{ pattern: { kind: "binding", name: "value" } }],
                   body: {
                     kind: "call",
                     path: "Ok",

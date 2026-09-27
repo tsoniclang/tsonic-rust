@@ -131,7 +131,7 @@ function publicMethodSurface(
       encodeRustContractParts([
         "parameter",
         String(index),
-        parameter.name,
+        closedMetadataKey(parameter.pattern),
         closedMetadataKey(parameter.type),
       ])),
     encodeRustContractParts([

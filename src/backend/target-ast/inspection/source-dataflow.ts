@@ -1,9 +1,9 @@
 import type { RustExpr, RustStmt } from "../nodes.js";
+import { rustParametersBindName } from "../patterns.js";
 import {
   rustExpressionChildren,
   rustExpressionReferencesPath,
   rustStatementReferencesPath,
-  rustStatementsReferencePath,
 } from "./source-usage.js";
 
 type FirstAccess = "read" | "write" | "exit" | "none";
@@ -213,13 +213,17 @@ function maxWritesInExpression(expression: RustExpr, path: string): number {
     );
   }
   if (expression.kind === "closure") {
-    return expression.params.some((parameter) => parameter.name === path) ||
+    const bound = rustParametersBindName(expression.params, path);
+    if (bound === undefined) return 2;
+    return bound ||
         maxWritesInExpression(expression.body, path) === 0
       ? 0
       : 2;
   }
   if (expression.kind === "closure-block") {
-    return expression.params.some((parameter) => parameter.name === path) ||
+    const bound = rustParametersBindName(expression.params, path);
+    if (bound === undefined) return 2;
+    return bound ||
         maxWritesInStatements(expression.body.statements, path) === 0
       ? 0
       : 2;
@@ -453,8 +457,7 @@ function firstAccessesInExpression(
         ? new Set(["read"])
         : new Set(["none"]);
     case "closure-block":
-      return rustStatementsReferencePath(expression.body.statements, path) &&
-          !expression.params.some((parameter) => parameter.name === path)
+      return rustExpressionReferencesPath(expression, path)
         ? new Set(["read"])
         : new Set(["none"]);
     case "block":

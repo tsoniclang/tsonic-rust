@@ -88,7 +88,7 @@ export function planRustNativeLayout(layout: RustNativeMemoryLayout, context: Ru
       }
       return {
         read: { kind: "call", path: "core::array::from_fn", args: [
-          { kind: "closure", params: [{ name: index, byRefCopy: false }], body: element.read },
+          { kind: "closure", params: [{ pattern: { kind: "binding" as const, name: index } }], body: element.read },
         ] },
         writes: [{ kind: "for", binding: index,
           iterable: { kind: "range", start: integer(0), end: integer(current.length) },
@@ -130,9 +130,9 @@ export function planRustNativeLayout(layout: RustNativeMemoryLayout, context: Ru
   if (value === undefined) return undefined;
   const writes = value.writes;
   return { kind: "associated-call", owner, method: "new", args: [...dimensions,
-    { kind: "closure", params: [{ name: writes.length === 0 ? "_pointer" : "pointer", byRefCopy: false }], body: value.read },
+    { kind: "closure", params: [{ pattern: { kind: "binding" as const, name: writes.length === 0 ? "_pointer" : "pointer" } }], body: value.read },
     { kind: "closure-block", move: false, async: false,
-      params: [{ name: writes.length === 0 ? "_pointer" : "pointer", mutable: false },
-        { name: writes.length === 0 ? "_value" : "value", mutable: false }], body: { statements: writes } },
+      params: [{ pattern: { kind: "binding" as const, name: writes.length === 0 ? "_pointer" : "pointer", mutable: false } },
+        { pattern: { kind: "binding" as const, name: writes.length === 0 ? "_value" : "value", mutable: false } }], body: { statements: writes } },
   ] };
 }

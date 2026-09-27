@@ -15,7 +15,7 @@ const named = (path, types = []) => ({ kind: "named", path,
 const nested = named("Vec", [named("Option", [named("Vec", [named("Option", [named("Vec", [named("Item")])])])])]);
 const makeFunction = (name, visibility = "private") => ({ kind: "function", name, visibility,
   generics: { parameters: [{ kind: "type", name: "Item", bounds: [{ kind: "trait", path: "Clone" }] }], wherePredicates: [] },
-  params: [{ name: "values", type: nested, mutable: false }], returnType: nested,
+  params: [{ pattern: { kind: "binding", name: "values", mutable: false }, type: nested }], returnType: nested,
   body: { statements: [{ kind: "tail", expr: { kind: "path", path: "values" } }] },
 });
 
@@ -74,7 +74,7 @@ test("borrowed and opaque boundaries remain in the function instead of escaping 
   const boundary = { kind: "reference", mutable: true, referent: { kind: "slice", element: nested } };
   const opaque = { kind: "impl-trait", outlives: [], captures: [], bounds: [{ kind: "callable", trait: "Fn",
     binder: [], parameters: [boundary], result: { kind: "unit" } }] };
-  const result = nameRustSignatureTypes([{ ...makeFunction("read"), params: [{ name: "callback", type: opaque }], returnType: undefined }]);
+  const result = nameRustSignatureTypes([{ ...makeFunction("read"), params: [{ pattern: { kind: "binding", name: "callback" }, type: opaque }], returnType: undefined }]);
   const fn = result.find(item => item.kind === "function");
   assert.equal(fn.params[0].type.kind, "impl-trait");
   const parameter = fn.params[0].type.bounds[0].parameters[0];
@@ -84,14 +84,14 @@ test("borrowed and opaque boundaries remain in the function instead of escaping 
   assert.equal(parameter.referent.element.path, result[0].name);
   assert.deepEqual(result[0].target, nested);
   const borrowedInside = named("Option", [named("Vec", [boundary])]);
-  const unchanged = { ...makeFunction("read"), params: [{ name: "values", type: borrowedInside }], returnType: undefined };
+  const unchanged = { ...makeFunction("read"), params: [{ pattern: { kind: "binding", name: "values" }, type: borrowedInside }], returnType: undefined };
   assert.deepEqual(nameRustSignatureTypes([unchanged]), [unchanged]);
 });
 
 test("const array dimensions are forwarded exactly through signature aliases", () => {
   const dimension = { kind: "path", path: "COUNT" };
   const type = named("Vec", [named("Option", [{ kind: "fixed-array", length: dimension, element: nested }])]);
-  const fn = { ...makeFunction("read"), params: [{ name: "values", type }], returnType: undefined,
+  const fn = { ...makeFunction("read"), params: [{ pattern: { kind: "binding", name: "values" }, type }], returnType: undefined,
     generics: { parameters: [...makeFunction("read").generics.parameters,
       { kind: "const", name: "COUNT", type: { kind: "primitive", name: "usize" } }], wherePredicates: [] } };
   const result = nameRustSignatureTypes([fn]);
@@ -106,7 +106,7 @@ test("impl signature aliases retain owner and call binders without moving their 
     name: "Output", genericArguments: [] };
   const type = named("Callable", [named("Option", [dependent]), named("Result", [dependent, named("Error")])]);
   const method = { ...source, selfParam: { kind: "reference", mutable: false },
-    params: [{ name: "value", type }], returnType: undefined };
+    params: [{ pattern: { kind: "binding", name: "value" }, type }], returnType: undefined };
   const implementation = { kind: "impl", target: named("Wrapper", [named("Owner")]),
     generics: { parameters: [owner], wherePredicates: [] }, members: [method] };
   const result = nameRustSignatureTypes([implementation]);
@@ -156,7 +156,7 @@ test("body type names reuse signature aliases through nested blocks without chan
 
 test("method-local Self does not escape its native impl through a module alias", () => {
   const type = named("Vec", [named("Option", [named("Vec", [named("Option", [named("Self")])])])]);
-  const source = { ...makeFunction("read"), params: [{ name: "value", type }], returnType: undefined };
+  const source = { ...makeFunction("read"), params: [{ pattern: { kind: "binding", name: "value" }, type }], returnType: undefined };
   assert.deepEqual(nameRustSignatureTypes([source]), [source]);
 });
 

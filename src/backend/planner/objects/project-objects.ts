@@ -26,7 +26,7 @@ export function enterRustProjectObjectMutableState(
     method: "with_mut",
     args: [{
       kind: "closure",
-      params: [{ name: stateName, byRefCopy: false }],
+      params: [{ pattern: { kind: "binding" as const, name: stateName } }],
       body,
     }],
   };
@@ -113,7 +113,7 @@ export function readRustProjectObjectField(
     method: "with",
     args: [{
       kind: "closure",
-      params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
+      params: [{ pattern: { kind: "binding" as const, name: rustProjectObjectStateBinding } }],
       body: isRustCopyCarrier(resultCarrier)
         ? field
         : { kind: "method-call", receiver: field, method: "clone", args: [] },
@@ -133,7 +133,7 @@ export function readRustStructuralObjectField(
     method: "with",
     args: [{
       kind: "closure",
-      params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
+      params: [{ pattern: { kind: "binding" as const, name: rustProjectObjectStateBinding } }],
       body: isRustCopyCarrier(resultCarrier)
         ? field
         : { kind: "method-call", receiver: field, method: "clone", args: [] },
@@ -169,7 +169,7 @@ export function writeRustProjectObjectField(
     method: "with_mut",
     args: [{
       kind: "closure",
-      params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
+      params: [{ pattern: { kind: "binding" as const, name: rustProjectObjectStateBinding } }],
       body: {
         kind: "assignment",
         operator,
@@ -209,7 +209,7 @@ export function readRustProjectPrivateField(
     method: "with",
     args: [{
       kind: "closure",
-      params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
+      params: [{ pattern: { kind: "binding" as const, name: rustProjectObjectStateBinding } }],
       body: read(rustProjectObjectStatePath(ownerPath)),
     }],
   };
@@ -245,7 +245,7 @@ export function writeRustProjectPrivateField(
     method: "with_mut",
     args: [{
       kind: "closure",
-      params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
+      params: [{ pattern: { kind: "binding" as const, name: rustProjectObjectStateBinding } }],
       body: write(rustProjectObjectStatePath(ownerPath)),
     }],
   };
@@ -274,7 +274,7 @@ export function readRustProjectMethodOverride(
     method: "with",
     args: [{
       kind: "closure",
-      params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
+      params: [{ pattern: { kind: "binding" as const, name: rustProjectObjectStateBinding } }],
       body: {
         kind: "method-call",
         receiver: rustProjectObjectStatePath(storagePath),
@@ -312,7 +312,7 @@ export function writeRustProjectMethodOverride(
     method: "with_mut",
     args: [{
       kind: "closure",
-      params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
+      params: [{ pattern: { kind: "binding" as const, name: rustProjectObjectStateBinding } }],
       body: {
         kind: "assignment",
         operator: "=",
@@ -352,7 +352,7 @@ export function readRustProjectObjectIndex(
     method: "with",
     args: [{
       kind: "closure",
-      params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
+      params: [{ pattern: { kind: "binding" as const, name: rustProjectObjectStateBinding } }],
       body: isRustCopyCarrier(resultCarrier)
         ? value
         : { kind: "method-call", receiver: value, method: "clone", args: [] },
@@ -383,7 +383,7 @@ export function readRustProjectObjectIndexStorage(
     method: "with",
     args: [{
       kind: "closure",
-      params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
+      params: [{ pattern: { kind: "binding" as const, name: rustProjectObjectStateBinding } }],
       body: {
         kind: "method-call",
         receiver: rustProjectObjectStatePath(storageName),
@@ -422,7 +422,7 @@ export function writeRustProjectObjectIndex(
     method: "with_mut",
     args: [{
       kind: "closure-block",
-      params: [{ name: rustProjectObjectStateBinding, mutable: false }],
+      params: [{ pattern: { kind: "binding" as const, name: rustProjectObjectStateBinding, mutable: false } }],
       move: false,
       async: false,
       body: {
@@ -483,7 +483,7 @@ export function mutateRustProjectObjectIndex(
     method: "with_mut",
     args: [{
       kind: "closure",
-      params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
+      params: [{ pattern: { kind: "binding" as const, name: rustProjectObjectStateBinding } }],
       body,
     }],
   };
@@ -501,7 +501,7 @@ export function writeRustStructuralObjectField(
     method: "with_mut",
     args: [{
       kind: "closure",
-      params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
+      params: [{ pattern: { kind: "binding" as const, name: rustProjectObjectStateBinding } }],
       body: {
         kind: "assignment",
         operator,
@@ -537,7 +537,7 @@ export function mutateRustProjectObjectField(
     method: "with_mut",
     args: [{
       kind: "closure",
-      params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
+      params: [{ pattern: { kind: "binding" as const, name: rustProjectObjectStateBinding } }],
       body,
     }],
   };
@@ -557,7 +557,7 @@ export function mutateRustStructuralObjectField(
         method: "with_mut",
         args: [{
           kind: "closure",
-          params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
+          params: [{ pattern: { kind: "binding" as const, name: rustProjectObjectStateBinding } }],
           body,
         }],
       };

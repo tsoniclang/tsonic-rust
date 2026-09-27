@@ -13,7 +13,7 @@ import {
   rustMutatedReferentFactKey,
   rustSourceParameterAbiFactKey,
 } from "../../../../analysis/facts/keys.js";
-import type { RustExpr, RustFunctionParam, RustStmt } from "../../../target-ast/nodes.js";
+import type { RustExpr, RustNamedFunctionParam, RustStmt } from "../../../target-ast/nodes.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
 import {
   requireRustCarrierRequirements,
@@ -55,7 +55,7 @@ type RustParameterPrelude =
     };
 
 export interface RustCallableParameterPlan {
-  readonly params: readonly RustFunctionParam[];
+  readonly params: readonly RustNamedFunctionParam[];
   readonly prelude: readonly RustParameterPrelude[];
 }
 
@@ -66,7 +66,7 @@ export function planRustCallableParameters(
   options?: { readonly requiredStaticParameters?: readonly Node[] },
 ): RustCallableParameterPlan | undefined {
   const { ast } = context.input.program.source;
-  const params: RustFunctionParam[] = [];
+  const params: RustNamedFunctionParam[] = [];
   const prelude: RustParameterPrelude[] = [];
   for (const parameter of ast.parameters(callable)) {
     if (parameter === undefined) {
@@ -147,9 +147,9 @@ export function planRustCallableParameters(
           ) !== undefined
       );
     params.push({
-      name: parameterName,
+      pattern: { kind: "binding", name: parameterName,
+        mutable: abi?.form !== "default" && abi?.entryConversion === undefined && mutable },
       type: parameterType,
-      mutable: abi?.form !== "default" && abi?.entryConversion === undefined && mutable,
     });
     const entry = planRustParameterEntryConversion(parameter, parameterName, mutable, context);
     if (entry === undefined) return undefined;

@@ -94,14 +94,14 @@ export function planRustSourceCallableValue(
   const implementation: RustExpr = mutableArguments
     ? {
         kind: "closure-block",
-        params: [{ name: argumentsName, mutable: true }],
+        params: [{ pattern: { kind: "binding" as const, name: argumentsName, mutable: true } }],
         move: true,
         async: false,
         body: { statements: [{ kind: "tail", expr: callableResult }] },
       }
     : {
         kind: "closure",
-        params: [{ name: argumentsName, byRefCopy: false }],
+        params: [{ pattern: { kind: "binding" as const, name: argumentsName } }],
         body: callableResult,
       };
   context.usedAliases?.add("rt");

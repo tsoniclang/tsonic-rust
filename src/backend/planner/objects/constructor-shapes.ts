@@ -23,7 +23,7 @@ export function planRustConstructorShape(
     const result = protocol === undefined ? undefined : render(protocol.result);
     const parameters = protocol?.parameters.map((parameter, index) => {
       const type = render(parameter);
-      return type === undefined ? undefined : { name: `argument${index}`, type };
+      return type === undefined ? undefined : { pattern: { kind: "binding" as const, name: `argument${index}` }, type };
     });
     if (result === undefined || parameters === undefined || parameters.some(parameter => parameter === undefined)) return false;
     functions.push({ kind: "function", name, generics: emptyRustGenerics, selfParam: rustSelfParameter(construction || definition.construction === undefined ? "rc" : "ref"),
@@ -42,7 +42,7 @@ export function planRustConstructorShape(
         selfParam: rustSelfParameter(field.property.selfMode), params: [], returnType: selected, errorType });
       if (field.property.setterTargetName !== undefined) functions.push({ kind: "function", name: field.property.setterTargetName,
         deadCode: fieldDeadCode(index, "setter"),
-        generics: emptyRustGenerics, selfParam: rustSelfParameter(field.property.selfMode), params: [{ name: "value", type: selected }],
+        generics: emptyRustGenerics, selfParam: rustSelfParameter(field.property.selfMode), params: [{ pattern: { kind: "binding" as const, name: "value" }, type: selected }],
         returnType: { kind: "unit" }, errorType });
     }
   }
@@ -69,7 +69,7 @@ export function planRustConstructorShape(
     }] },
     { kind: "impl", generics, target: type, trait: { kind: "named", path: "PartialEq" }, members: [{ kind: "function",
       name: "eq", visibility: "private", generics: emptyRustGenerics, selfParam: rustSelfParameter("ref"),
-      params: [{ name: "other", type: { kind: "reference", mutable: false, referent: { kind: "named", path: "Self" } } }],
+      params: [{ pattern: { kind: "binding" as const, name: "other" }, type: { kind: "reference", mutable: false, referent: { kind: "named", path: "Self" } } }],
       returnType: { kind: "primitive", name: "bool" }, body: { statements: [{ kind: "tail", expr: {
         kind: "call", path: "alloc::rc::Rc::ptr_eq", args: [
           { kind: "reference", expr: field("self", "dispatch") }, { kind: "reference", expr: field("other", "dispatch") },

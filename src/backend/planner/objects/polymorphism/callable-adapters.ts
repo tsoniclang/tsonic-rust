@@ -47,7 +47,7 @@ export function planRootCallableForwarder(
   if (shape.errorType !== undefined && (boundary === undefined || !rustTypeEquals(rustErrorType(boundary), shape.errorType))) {
     return reject();
   }
-  const syntheticNames = createRustSyntheticNameState(context.input.program.source.ast, contract, shape.params.map(parameter => parameter.name));
+  const syntheticNames = createRustSyntheticNameState(context.input.program.source.ast, contract, shape.params.map(parameter => parameter.pattern.name));
   const selectedContext = { ...context, syntheticNames, fallibleBoundary: boundary };
   const parameters = shape.params.map(parameter => ({
     ...parameter,

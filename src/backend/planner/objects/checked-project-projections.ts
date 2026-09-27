@@ -18,7 +18,7 @@ export function checkedProjectProjectionSignature(slot: string): RustTraitFuncti
     name: slot,
     generics: projectionGenerics,
     selfParam: rustSelfParameter("rc"),
-    params: [{ name: "output", type: { kind: "reference", mutable: true,
+    params: [{ pattern: { kind: "binding" as const, name: "output" }, type: { kind: "reference", mutable: true,
       referent: { kind: "trait-object", principal: { trait: { kind: "named", path: "core::any::Any" } },
         autoTraits: [] } } }],
   };

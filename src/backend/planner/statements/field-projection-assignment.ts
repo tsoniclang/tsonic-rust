@@ -69,7 +69,7 @@ export function planRustFieldProjectionAssignment(
       kind: "method-call", receiver: { kind: "field", receiver: { kind: "path", path: ownerName }, name: "dispatch" },
       method: rustArrayFieldMutationName(field.fact.dispatch.read), args: [{
         kind: "reference", mutable: true, expr: { kind: "closure",
-          params: [{ name: storageName, byRefCopy: false }], body,
+          params: [{ pattern: { kind: "binding" as const, name: storageName } }], body,
         },
       }],
     };

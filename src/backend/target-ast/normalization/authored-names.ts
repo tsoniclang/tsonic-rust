@@ -1,6 +1,7 @@
 import type { RustAttribute } from "../attributes.js";
 import type { RustExpr, RustGenerics, RustImplFunction, RustItem, RustPattern, RustStmt, RustTraitFunction } from "../nodes.js";
 import { rustLintAttributes } from "./lint-policy.js";
+import { rustPatternBindings } from "../patterns.js";
 
 export type RustNameStyle = "snake" | "camel" | "upper";
 
@@ -53,7 +54,7 @@ export function finalizeRustFunctionNames<Value extends RustImplFunction | RustT
   value: Value, checkName = true,
 ): Value {
   const fn = generic(checkName ? named(value, "snake") : value);
-  return fn.params.some(parameter => rustNameNeedsStyleAllowance(parameter.name, "snake"))
+  return fn.params.some(parameter => patternDeclaresNonSnakeName(parameter.pattern))
     ? { ...fn, attrs: appendRustNamingAllowance(fn.attrs, "snake") } : fn;
 }
 
@@ -109,7 +110,7 @@ export function rustStatementDeclaresNonSnakeName(statement: RustStmt): boolean 
 export function rustExpressionDeclaresNonSnakeName(expression: RustExpr): boolean {
   switch (expression.kind) {
     case "closure":
-    case "closure-block": return expression.params.some(parameter => rustNameNeedsStyleAllowance(parameter.name, "snake"));
+    case "closure-block": return expression.params.some(parameter => patternDeclaresNonSnakeName(parameter.pattern));
     case "block": return expression.bindings.some(binding => rustNameNeedsStyleAllowance(binding.name, "snake"));
     case "match": return expression.arms.some(arm => patternDeclaresNonSnakeName(arm.pattern));
     case "matches": return patternDeclaresNonSnakeName(expression.pattern);
@@ -118,13 +119,5 @@ export function rustExpressionDeclaresNonSnakeName(expression: RustExpr): boolea
 }
 
 function patternDeclaresNonSnakeName(pattern: RustPattern): boolean {
-  switch (pattern.kind) {
-    case "binding": return rustNameNeedsStyleAllowance(pattern.name, "snake");
-    case "tuple":
-    case "tuple-variant": return pattern.elements.some(patternDeclaresNonSnakeName);
-    case "or": return pattern.alternatives.some(patternDeclaresNonSnakeName);
-    case "macro-invocation":
-    case "path":
-    case "wildcard": return false;
-  }
+  return rustPatternBindings(pattern)?.some(binding => rustNameNeedsStyleAllowance(binding.name, "snake")) === true;
 }

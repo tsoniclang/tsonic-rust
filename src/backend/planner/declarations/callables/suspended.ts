@@ -37,8 +37,10 @@ function planImplementation(implementation: RustSuspendedCallableImplementation,
   };
   const expression = planRustCallableExpressionBody(declaration, scoped);
   if (expression?.kind !== "closure" && expression?.kind !== "closure-block") return undefined;
-  const ownerName = expression.params[0]?.name;
-  const argumentsName = expression.params[1]?.name;
+  const owner = expression.params[0]?.pattern;
+  const arguments_ = expression.params[1]?.pattern;
+  const ownerName = owner?.kind === "binding" ? owner.name : undefined;
+  const argumentsName = arguments_?.kind === "binding" ? arguments_.name : undefined;
   if (expression.params.length !== 2 || ownerName === undefined || argumentsName === undefined) return undefined;
   const protocol = rustCallableProtocol(implementation.carrier);
   const callableType = rustTypeFromCarrierInContext(implementation.carrier, scoped);
@@ -77,7 +79,7 @@ function planImplementation(implementation: RustSuspendedCallableImplementation,
     generics: rustGenericsWithAssociatedBounds(parameters, rustDeclarationAssociatedPredicates(declaration, scoped)),
     trait: { kind: "named", path: "rt::CallableImplementation", genericArguments: [{ kind: "type", type: argumentsType }, resultType] },
     members: [{ kind: "function", name: "invoke", visibility: "private", selfParam: { kind: "reference", mutable: false },
-      generics: { parameters: [], wherePredicates: [] }, params: [{ name: argumentsName, type: argumentsType }], returnType: resultType.type,
+      generics: { parameters: [], wherePredicates: [] }, params: [{ pattern: { kind: "binding" as const, name: argumentsName }, type: argumentsType }], returnType: resultType.type,
       body: { statements: [{ kind: "let", name: ownerName, mutable: false, init: {
         kind: "method-call", receiver: { kind: "method-call", receiver: {
           kind: "field", receiver: { kind: "path", path: "self" }, name: "owner",

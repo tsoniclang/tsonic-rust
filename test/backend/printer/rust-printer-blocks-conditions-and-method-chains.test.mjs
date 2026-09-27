@@ -84,7 +84,7 @@ test("a single block argument stays attached to its outer call", () => {
               method: "with_mut",
               args: [{
                 kind: "closure",
-                params: [{ name: "value", byRefCopy: false }],
+                params: [{ pattern: { kind: "binding", name: "value" } }],
                 body: { kind: "path", path: "value" },
               }],
             },
@@ -163,10 +163,10 @@ test("rustfmt canonicalizes trailing conditional closures", () => {
               {
                 kind: "closure",
                 params: [
-                  { name: "sum", byRefCopy: false },
-                  { name: "value", byRefCopy: false },
-                  { name: "current", byRefCopy: false },
-                  { name: "array", byRefCopy: false },
+                  { pattern: { kind: "binding", name: "sum" } },
+                  { pattern: { kind: "binding", name: "value" } },
+                  { pattern: { kind: "binding", name: "current" } },
+                  { pattern: { kind: "binding", name: "array" } },
                 ],
                 body: {
                   kind: "conditional",
@@ -342,7 +342,7 @@ test("conditional expressions move the brace after a multiline method chain", ()
       generics: emptyRustGenerics,
       name: "proof",
       visibility: "public",
-      params: [{ name: "value", type: { kind: "named", path: "Value", genericArguments: [] } }],
+      params: [{ pattern: { kind: "binding", name: "value" }, type: { kind: "named", path: "Value", genericArguments: [] } }],
       returnType: { kind: "string" },
       body: {
         statements: [{
@@ -369,7 +369,7 @@ test("short conditional initializers use rustfmt's single-line form", () => {
       generics: emptyRustGenerics,
       name: "choose",
       visibility: "public",
-      params: [{ name: "flag", type: { kind: "primitive", name: "bool" } }],
+      params: [{ pattern: { kind: "binding", name: "flag" }, type: { kind: "primitive", name: "bool" } }],
       returnType: { kind: "primitive", name: "i32" },
       body: {
         statements: [
@@ -451,7 +451,7 @@ test("long let-bound method chains stay attached to their receiver", () => {
               method: "with",
               args: [{
                 kind: "closure",
-                params: [{ name: "module_binding", byRefCopy: false }],
+                params: [{ pattern: { kind: "binding", name: "module_binding" } }],
                 body: {
                   kind: "method-call",
                   receiver: { kind: "path", path: "module_binding" },
@@ -479,7 +479,7 @@ test("long field-led method chains use rustfmt selector layout", () => {
       generics: emptyRustGenerics,
       name: "proof",
       visibility: "public",
-      params: [{ name: "value", type: { kind: "named", path: "Value", genericArguments: [] } }],
+      params: [{ pattern: { kind: "binding", name: "value" }, type: { kind: "named", path: "Value", genericArguments: [] } }],
       returnType: { kind: "named", path: "bool", genericArguments: [] },
       body: {
         statements: [{
