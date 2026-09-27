@@ -43,6 +43,7 @@ import {
 import { resolveSelectedProviderDeclaration } from "../evidence/selected-source.js";
 import { selectRustProviderOperation } from "../operations/provider-selection.js";
 import { rustProviderArgumentBorrowsString } from "./provider-argument-borrow.js";
+import { rustSourceValueWrapperContains } from "./source-value-wrappers.js";
 
 export interface RustSourceCallableAbiResolver {
   canUseSharedBorrow(
@@ -221,6 +222,7 @@ export function resolveRustContextualParameterAbi(
     readonly authored: RustLifetimeBinder;
     readonly selected: RustLifetimeBinder;
   },
+  contextualValueCarrier?: TargetTypeRef,
 ): RustSourceParameterAbi | undefined {
   const declaration = context.ast.as.AsParameterDeclaration(parameter);
   if (declaration === undefined) {
@@ -247,6 +249,8 @@ export function resolveRustContextualParameterAbi(
     ? selectedParameterCarrier
     : form === "default"
       ? rustOptionElementCarrier(selectedParameterCarrier)
+      : contextualValueCarrier !== undefined
+        ? contextualValueCarrier
       : selectedParameterCarrier.kind === "reference"
         ? authoredCarrier
         : selectedParameterCarrier;
@@ -379,7 +383,13 @@ function parameterCanUseSharedBorrow(
         role === "comparison" || role === "condition" || role === "type-only") continue;
       let operand = reference;
       let call = ast.parent(operand);
-      while (call !== undefined && ast.is.IsParenthesizedExpression(call)) {
+      while (call !== undefined && rustSourceValueWrapperContains(call, operand, ast)) {
+        const sourceFile = ast.getSourceFile(call);
+        if (sourceFile === undefined || !isRustStringCarrier(resolveRustTargetTypeRef(call, {
+          ...context,
+          currentSourceFile: sourceFile,
+          currentSemantics: context.semanticsFor(call),
+        }, options))) return false;
         operand = call;
         call = ast.parent(call);
       }

@@ -49,11 +49,12 @@ export const rustOptionalChainFactKey: RustPlanKey<RustOptionalChainFact> =
 export const rustTypedLocationPlanKey: RustPlanKey<RustTypedLocationPlan> =
   defineRustPlanKey("typedLocationPlan", rustTypedLocationPlanEquals);
 
-export const rustLocationStorageFactKey: RustPlanKey<{
+export const rustBindingStorageFactKey: RustPlanKey<{
+  readonly storage: "location" | "cell" | "borrow-cell";
   readonly valueCarrier: TargetTypeRef;
 }> = defineRustPlanKey(
-  "locationStorage",
-  (left, right) => rustTargetTypeRefEquals(left.valueCarrier, right.valueCarrier),
+  "bindingStorage",
+  (left, right) => left.storage === right.storage && rustTargetTypeRefEquals(left.valueCarrier, right.valueCarrier),
 );
 
 export interface RustClosureCaptureFact {
@@ -62,7 +63,8 @@ export interface RustClosureCaptureFact {
     readonly declaration: Node;
     readonly reference: Node;
     readonly carrier: TargetTypeRef;
-    readonly storage: "value" | "location";
+    readonly storage: "value" | "location" | "cell" | "borrow-cell";
+    readonly mutable?: true;
   }[];
   readonly recursiveDeclaration?: Node;
 }
@@ -78,6 +80,7 @@ export const rustClosureCaptureFactKey: RustPlanKey<RustClosureCaptureFact> = de
         capture.declaration === other.declaration &&
         capture.reference === other.reference &&
         capture.storage === other.storage &&
+        capture.mutable === other.mutable &&
         rustTargetTypeRefEquals(capture.carrier, other.carrier);
     }),
 );

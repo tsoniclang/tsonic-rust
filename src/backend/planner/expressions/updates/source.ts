@@ -234,6 +234,7 @@ function planRustUpdateExpression(
           step,
           returnsPrevious,
           context,
+          promoted,
         );
   }
   const diagnosticCount = context.diagnostics.length;

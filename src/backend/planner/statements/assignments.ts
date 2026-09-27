@@ -264,17 +264,12 @@ export function planRustDirectOperatorCallAssignment(
           { name: locationName, value: promoted.expression },
           {
             name: currentName,
-            value: { kind: "method-call", receiver: locationPath, method: "load", args: [] },
+            value: promoted.read(locationPath),
           },
           { name: valueName, value },
           { name: nextName, value: next },
         ],
-        value: {
-          kind: "method-call",
-          receiver: locationPath,
-          method: "store",
-          args: [{ kind: "path", path: nextName }],
-        },
+        value: promoted.write(locationPath, { kind: "path", path: nextName }),
       },
     }];
   }
@@ -394,7 +389,7 @@ export function planRustSourceAccessorAssignment(
       code: "RUST_UNSAFE_OPERATION_CONTEXT_REQUIRED",
       category: "error",
       source: "tsonic-rust",
-      message: "The selected Rust operation requires an explicit unsafeContext() source region at this use site.",
+      message: "The selected Rust operation requires an explicit unsafecontext() source region at this use site.",
       sourceNode: target,
     });
     return undefined;

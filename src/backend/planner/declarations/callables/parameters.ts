@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { rustInlineBindingStoragePath } from "../../expressions/binding-storage.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import {
@@ -29,7 +30,7 @@ import {
   allocateRustSyntheticName,
 } from "../../names/synthetic.js";
 import type { RustSyntheticNameState } from "../../names/synthetic.js";
-import { rustLocationStorageForDeclaration } from "../../expressions/typed-locations.js";
+import { rustBindingStorageForDeclaration } from "../../expressions/typed-locations.js";
 import { planRustNativeAllocation } from "../../expressions/native-memory.js";
 import { rustNativeBackingKey } from "../../../../target-model/operations/native-memory.js";
 import type { RustBindingExpressionPlanner } from "../../bindings/patterns.js";
@@ -102,7 +103,7 @@ export function planRustCallableParameters(
       return undefined;
     }
     const sourceCarrier = context.input.program.facts.getRuntimeCarrierFact(parameter)?.carrier;
-    const locationStorage = rustLocationStorageForDeclaration(parameter, context);
+    const locationStorage = rustBindingStorageForDeclaration(parameter, context);
     if (pattern !== undefined &&
       (abi?.mode !== "value" || sourceCarrier === undefined || parameterCarrier === undefined ||
         !rustTargetTypeRefEquals(sourceCarrier, parameterCarrier) || locationStorage !== undefined)) {
@@ -176,6 +177,13 @@ export function planRustCallableParameters(
       continue;
     }
     if (locationStorage === undefined) {
+      continue;
+    }
+    if (locationStorage.storage !== "location") {
+      prelude.push({ kind: "statement", statement: {
+        kind: "let", name: parameterName, mutable: false,
+        init: { kind: "call", path: `${rustInlineBindingStoragePath(locationStorage.storage)}::new`, args: [{ kind: "path", path: parameterName }] },
+      } });
       continue;
     }
     if (!requireRustLocationValueCarrier(locationStorage.valueCarrier, parameter, context)) {

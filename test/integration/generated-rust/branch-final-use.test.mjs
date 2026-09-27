@@ -4,7 +4,7 @@ import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-sessi
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 const sourceText = `
-import { addressOf, storePointer } from "@tsonic/core/lang.js";
+import { addressof, storeptr } from "@tsonic/core/lang.js";
 import type { Pointer } from "@tsonic/core/types.js";
 function branch(values: string[]): string[] {
   const result: string[] = [];
@@ -63,13 +63,13 @@ function replaced(): string[] {
   return original;
 }
 function replaceLocation(location: Pointer<string[]>): string {
-  storePointer(location, ["new"]);
+  storeptr(location, ["new"]);
   return "added";
 }
 function pointerReplaced(): string[] {
   let values = ["old"];
   const original = values;
-  const location = addressOf(values);
+  const location = addressof(values);
   values.push(replaceLocation(location));
   if (values[0] !== "new") throw new Error("pointer-replaced binding");
   return original;
@@ -107,7 +107,7 @@ test("last-use facts move loop-local strings on terminal branches but retain rep
       while (owner !== undefined && !source.ast.is.IsFunctionDeclaration(owner)) owner = source.ast.parent(owner);
       const name = owner === undefined ? "" : source.ast.text(source.ast.name(owner));
       const decisions = borrowed.get(name) ?? [];
-      decisions.push(program.valueLifetimes.canBorrowStableBinding(node));
+      decisions.push(program.valueLifetimes.canBorrowStableValue(node));
       borrowed.set(name, decisions);
     }
     source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });

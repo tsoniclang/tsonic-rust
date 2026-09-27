@@ -29,6 +29,7 @@ import type { Node, Type } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustGuardedArrayEntryCarrier } from "../control-flow/array-entry-values.js";
+import { recordBindingWrite } from "../declarations/types-and-bindings.js";
 
 export function applyFlowReadLane(
   walk: RustFactWalk,
@@ -48,6 +49,8 @@ export function applyFlowReadLane(
     parent = walk.context.ast.parent(receiver);
   }
   const parentKind = parent === undefined ? undefined : walk.context.ast.kindName(parent);
+  if (parent !== undefined && walk.context.ast.as.AsCallExpression(parent)?.QuestionDotToken !== undefined &&
+    Node_Expression(walk.context.ast, parent) === receiver) return sourceCarrier;
   const access = parent === undefined ? undefined
     : parentKind === KindPropertyAccessExpression
       ? walk.context.semanticsFor(parent).operations.propertyAccess(parent)
@@ -127,6 +130,7 @@ export function applyFlowReadLane(
     expression,
     selection.fact,
   );
+  if (selection.fact.kind === "option-reference") recordBindingWrite(walk, expression, "referent");
   return selection.fact.selectedCarrier;
 }
 

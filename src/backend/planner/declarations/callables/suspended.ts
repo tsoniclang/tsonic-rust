@@ -61,14 +61,14 @@ function planImplementation(implementation: RustSuspendedCallableImplementation,
   const selfType: RustType = { kind: "named", path: "Self" };
   const state: RustType = { kind: "tuple", elements: storage as RustType[] };
   context.usedAliases?.add("rt");
-  return [{ kind: "struct", name: implementation.stateName, visibility: "crate", derives: [],
+  return [{ kind: "struct", name: implementation.stateName, visibility: "crate",
     generics: { parameters: environment, wherePredicates: [] }, fields: [{ name: "state", type: state, visibility: "crate" }, {
       name: "owner", type: { kind: "named", path: "alloc::rc::Weak", genericArguments: [{ kind: "type", type: selfType }] }, visibility: "crate",
     }],
   }, { kind: "impl", target,
     generics: rustGenericsWithAssociatedBounds(parameters, rustDeclarationAssociatedPredicates(declaration, scoped)),
     trait: { kind: "named", path: "rt::CallableImplementation", genericArguments: [{ kind: "type", type: argumentsType }, resultType] },
-    functions: [{ name: "invoke", visibility: "private", selfParam: { kind: "reference", mutable: false },
+    members: [{ kind: "function", name: "invoke", visibility: "private", selfParam: { kind: "reference", mutable: false },
       generics: { parameters: [], wherePredicates: [] }, params: [{ name: argumentsName, type: argumentsType }], returnType: resultType.type,
       body: { statements: [{ kind: "let", name: ownerName, mutable: false, init: {
         kind: "method-call", receiver: { kind: "method-call", receiver: {

@@ -305,6 +305,7 @@ export function planRustOwnedUpdateLocation(
   step: RustExpr,
   returnsPrevious: boolean,
   context: RustPlanContext,
+  methods: import("../binding-storage.js").RustBindingStorageOperations,
 ): RustExpr | undefined {
   if (context.syntheticNames === undefined) {
     return undefined;
@@ -313,13 +314,8 @@ export function planRustOwnedUpdateLocation(
   const locationPath: RustExpr = { kind: "path", path: locationName };
   return planRustUpdateValue({
     locationBindings: [{ name: locationName, value: location }],
-    read: { kind: "method-call", receiver: locationPath, method: "load", args: [] },
-    write: (value) => ({
-      kind: "method-call",
-      receiver: locationPath,
-      method: "store",
-      args: [value],
-    }),
+    read: methods.read(locationPath),
+    write: (value) => methods.write(locationPath, value),
     update,
     step,
     returnsPrevious,

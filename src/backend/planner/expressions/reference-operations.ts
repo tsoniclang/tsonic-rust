@@ -8,6 +8,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
+import { rustValueCarrierBeforeOptionProjection } from "../../../analysis/facts/value-carrier-queries.js";
 
 export function planRustReferenceOperationCall(
   call: Node,
@@ -28,9 +29,7 @@ export function planRustReferenceOperationCall(
       "Rust reference operation arguments conflict with the exact finalized source occurrence.",
     );
   }
-  const operandCarrier = context.input.program.facts.getRuntimeCarrierFact(
-    fact.operandExpression,
-  )?.carrier;
+  const operandCarrier = rustValueCarrierBeforeOptionProjection(context.input.program.facts, fact.operandExpression);
   if (operandCarrier === undefined ||
     !rustTargetTypeRefEquals(operandCarrier, fact.operandCarrier)) {
     return rejectReferenceOperation(
