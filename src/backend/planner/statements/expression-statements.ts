@@ -734,15 +734,10 @@ export function planRustAssignmentWrite(
             { name: locationName, value: promotedLocation.expression },
             {
               name: currentName,
-              value: { kind: "method-call", receiver: location, method: "load", args: [] },
+              value: promotedLocation.read(location),
             },
           ],
-          value: {
-            kind: "method-call",
-            receiver: location,
-            method: "store",
-            args: [concatenated],
-          },
+          value: promotedLocation.write(location, concatenated),
         },
       }];
     }

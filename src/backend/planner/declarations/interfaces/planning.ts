@@ -1,3 +1,4 @@
+import { rustDeriveAttributes, rustHiddenAttribute } from "../../../target-ast/attributes.js";
 import { carrierOf } from "../classes/planning.js";
 import { diagnosticInput, isValidRustIdentifier, rustProjectTypeHasPublicImplementationAbi } from "../../program/plan-context.js";
 import { rustAuthoredFieldDeadCodeDisposition, rustGeneratedProjectInterfaceFieldDeadCodeDisposition, rustProjectInterfaceDeadCodeDisposition } from "../../liveness/directives.js";
@@ -228,31 +229,29 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
             name: stateMarker.name,
             type: stateMarker.type,
             visibility: storageVisibility,
-            ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
+            ...(publiclyReachable ? { attrs: [rustHiddenAttribute] } : {}),
           }]),
     ];
   const stateItem: RustItem = {
     kind: "struct",
     name: definition.stateName,
     visibility: storageVisibility,
-    ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
-    derives: [],
+    ...(publiclyReachable ? { attrs: [rustHiddenAttribute] } : {}),
     generics,
     fields: valueFields,
   };
   return [...(representation.kind === "value" ? [] : [stateItem]), {
     kind: "struct",
     name: interfaceName,
-    ...(interfaceAttributes.length === 0 ? {} : { attrs: interfaceAttributes }),
     ...(interfaceDeadCode === undefined ? {} : { deadCode: interfaceDeadCode }),
     visibility: interfaceVisibility,
-    derives: representation.kind === "value" ? ["Clone"] : explicitWrapperTraits ? [] : ["Clone", "Debug", "PartialEq"],
+    attrs: [...interfaceAttributes, ...rustDeriveAttributes(representation.kind === "value" ? ["Clone"] : explicitWrapperTraits ? [] : ["Clone", "Debug", "PartialEq"])],
     generics,
     fields: representation.kind === "value" ? valueFields : [{
       name: rustProjectObjectStateField,
       type: stateCarrier!,
       visibility: storageVisibility,
-      ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
+      ...(publiclyReachable ? { attrs: [rustHiddenAttribute] } : {}),
       ...(explicitWrapperTraits ? {} : (() => {
         const deadCode = rustGeneratedProjectInterfaceFieldDeadCodeDisposition(
           context,

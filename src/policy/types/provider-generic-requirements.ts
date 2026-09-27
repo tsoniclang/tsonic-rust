@@ -7,8 +7,6 @@ import {
   isRustCopyCarrier,
   rustCarrierSupportsClone,
   rustCarrierSatisfiesTraitRef,
-  rustCarrierSupportsTrait,
-  rustFutureTargetId,
   substituteRustTargetGenerics,
 } from "../../target-model/types/index.js";
 import type {
@@ -40,7 +38,7 @@ export function rustProviderOperationGenericRequirementsAreSelectable(
     const carrier = bindings.types.get(parameter.name);
     if (carrier === undefined || parameter.requirements.some((requirement) =>
       !rustProviderTypeRequirementIsSatisfied(requirement, carrier, bindings, definitions) &&
-      !rustProviderOperationRequirementIsRustcDecidable(requirement, carrier, bindings, definitions))) {
+      !rustProviderOperationRequirementIsRustcDecidable(requirement, bindings))) {
       return false;
     }
   }
@@ -49,18 +47,10 @@ export function rustProviderOperationGenericRequirementsAreSelectable(
 
 function rustProviderOperationRequirementIsRustcDecidable(
   requirement: RustProviderTypeRequirement,
-  carrier: TargetTypeRef,
   bindings: RustTargetGenericBindings,
-  definitions: RustTypeDefinitions,
 ): boolean {
-  if (rustAnonymousFutureRequirementIsRustcDecidable(requirement, carrier)) {
-    return true;
-  }
   if (typeof requirement !== "object") return false;
-  const trait = substituteProviderTraitRequirement(requirement, bindings);
-  return trait !== undefined &&
-    (trait.lifetimeBinder !== undefined || trait.associatedConstraints.length > 0) &&
-    rustCarrierSupportsTrait(carrier, trait.path, undefined, undefined, definitions);
+  return substituteProviderTraitRequirement(requirement, bindings) !== undefined;
 }
 
 function rustProviderTypeRequirementIsSatisfied(
@@ -96,22 +86,4 @@ function substituteProviderTraitRequirement(
     bindings.consts,
   );
   return trait.kind === "trait-ref" ? trait : undefined;
-}
-
-const rustcDecidableFutureAutoTraits: ReadonlySet<string> = new Set([
-  "core::marker::Send",
-  "core::marker::Sync",
-  "core::marker::Unpin",
-]);
-
-function rustAnonymousFutureRequirementIsRustcDecidable(
-  requirement: RustProviderTypeRequirement,
-  carrier: TargetTypeRef,
-): boolean {
-  return carrier.kind === "target-named" && carrier.id === rustFutureTargetId &&
-    typeof requirement === "object" &&
-    requirement.genericArguments.length === 0 &&
-    requirement.associatedConstraints.length === 0 &&
-    requirement.lifetimeBinder === undefined &&
-    rustcDecidableFutureAutoTraits.has(requirement.path);
 }

@@ -1,3 +1,4 @@
+import { rustHiddenAttribute } from "../../../target-ast/attributes.js";
 import type { Node } from "@tsonic/tsts";
 import { rustClassEnvironmentContext, rustClassEnvironmentParameter } from "../class-environments.js";
 import {
@@ -523,9 +524,9 @@ export function planProjectClassConstructor(
   statements.push({ kind: "tail", expr: state });
   const publishesImplementationAbi = rustProjectTypeHasPublicImplementationAbi(
     context,
-    definition.targetName,
+    definition.targetPath,
   );
-  const initialize: RustImplFunction = {
+  const initialize: RustImplFunction = { kind: "function",
     name: constructorSignature.initializeName,
     visibility: publishesImplementationAbi ? "public" : "crate",
     generics: emptyRustGenerics,
@@ -533,7 +534,7 @@ export function planProjectClassConstructor(
       ? {}
       : {
           attrs: [
-            ...(publishesImplementationAbi ? ["#[doc(hidden)]"] : []),
+            ...(publishesImplementationAbi ? [rustHiddenAttribute] : []),
             ...initializationSafetyAttributes,
           ],
         }),
@@ -562,7 +563,7 @@ export function planProjectClassConstructor(
       expr: { kind: "path" as const, path: environmentBorrow.name } }]),
     ...parameterPlan.params.map((parameter) => ({ kind: "path" as const, path: parameter.name })),
   ];
-  const construct: RustImplFunction = {
+  const construct: RustImplFunction = { kind: "function",
     name: constructorSignature.targetName,
     generics: emptyRustGenerics,
     ...(isUnsafe ? { isUnsafe: true } : {}),

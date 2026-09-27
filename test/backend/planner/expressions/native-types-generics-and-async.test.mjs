@@ -412,7 +412,7 @@ export function main(): void {
     },
   });
   assert.deepEqual(result.diagnostics, []);
-  assert.match(artifactText(result, "src/index.rs"), /entry\[rt::conversions::i32_to_usize\(i\)\?\]/u);
+  assert.match(artifactText(result, "src/index.rs"), /entry\[rt::conversions::checked_integer::<usize>\(i\)\?\]/u);
   assert.equal(validateGeneratedProject("dynamic-tuple-index", result.artifacts, { run: true }).status, 0);
 });
 

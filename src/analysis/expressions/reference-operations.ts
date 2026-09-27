@@ -14,13 +14,10 @@ import { recordBindingWrite } from "../declarations/types-and-bindings.js";
 import { rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
 import { selectRustEquivalentAssignment } from "../../policy/operations/operators/rules.js";
 import {
-  rustLangModule,
   rustSourceOperationExportIds,
   rustSourceOperationSignatureIds,
-  rustSourceProviderVersion,
-  rustSourceVirtualModulesProviderId,
 } from "../../source/semantics/identity.js";
-import { resolveProviderTypeIdentity } from "../../policy/types/resolution/providers.js";
+import { readRustLanguageCall } from "./native-language-call.js";
 import type { Node, ProviderDeclarationIdentity, SourceFile, Type } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -94,24 +91,10 @@ export function readRustReferenceOperation(
   walk: RustFactWalk,
   expression: Node,
 ): RustSourceReferenceOperation | undefined {
-  const semantics = walk.context.semanticsFor(expression);
-  const selection = semantics.operations.call(expression);
-  if (selection?.outcome !== "applicable" || selection.call !== expression ||
-    selection.sourceSelectedSignatureKind !== "resolved") {
-    return undefined;
-  }
-  const signatureDeclaration = semantics.declarations.signatureDeclaration(
-    selection.selectedSignature,
-  );
-  const declaration = resolveProviderTypeIdentity([
-    selection.selectedSignature,
-    ...(signatureDeclaration === undefined ? [] : [signatureDeclaration]),
-  ], walk.context);
-  const operation = declaration?.providerId === rustSourceVirtualModulesProviderId &&
-      declaration.providerVersion === rustSourceProviderVersion &&
-      declaration.providerModuleId === rustLangModule &&
-      declaration.moduleSpecifier === rustLangModule &&
-      declaration.signatureId !== undefined
+  const selected = readRustLanguageCall(walk, expression);
+  if (selected === undefined) return undefined;
+  const { selection, declaration } = selected;
+  const operation = declaration.signatureId !== undefined
     ? referenceOperationBySignature.get(declaration.signatureId)
     : undefined;
   const reference = selection.sourceArguments[0];

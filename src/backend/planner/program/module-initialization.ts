@@ -1,3 +1,4 @@
+import { rustHiddenAttribute } from "../../target-ast/attributes.js";
 import type { SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustPlanningContext } from "../context.js";
@@ -159,7 +160,7 @@ export function planRustCrateInitializer(
     name: functionName,
     visibility: "public",
     generics: emptyRustGenerics,
-    attrs: ["#[doc(hidden)]"],
+    attrs: [rustHiddenAttribute],
     ...(asynchronous ? { isAsync: true } : {}),
     params: [],
     ...(fallible

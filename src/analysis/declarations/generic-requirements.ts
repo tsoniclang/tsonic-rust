@@ -57,7 +57,7 @@ import {
   rustFutureValueFactKey,
   rustFlowReadProjectionFactKey,
   rustProjectDowncastFactKey,
-  rustLocationStorageFactKey,
+  rustBindingStorageFactKey,
   rustSourceParameterAbiFactKey,
   rustSourceCallableReturnFactKey,
   rustTargetOperationFactKey,
@@ -558,7 +558,7 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       indexedField.accessMode === "read-write" ? ["read", "write"] : [indexedField.accessMode])) {
       return "A dependent field operation has no exact read/write trait obligation.";
     }
-    const location = facts.getFact(node, rustLocationStorageFactKey);
+    const location = facts.getFact(node, rustBindingStorageFactKey);
     const objectView = facts.getFact(node, rustObjectReferenceViewKey);
     if (objectView !== undefined) {
       const error = addUse(node, objectView.sourceCarrier, ["clone", "static"]);
@@ -568,7 +568,7 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
         if (fieldError !== undefined) return fieldError;
       }
     }
-    if (location !== undefined) {
+    if (location?.storage === "location") {
       const error = addUse(node, location.valueCarrier, ["clone", "static"]);
       if (error !== undefined) return error;
     }
@@ -696,7 +696,8 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
           : ["clone"];
       for (const capture of captures.captures) {
         const error = addUse(capture.reference, capture.carrier,
-          input.valueLifetimes.canMoveCapture(node, capture.declaration)
+          capture.storage === "cell" || capture.storage === "borrow-cell" ||
+            input.valueLifetimes.canMoveCapture(node, capture.declaration)
             ? required.filter(requirement => requirement !== "clone") : required);
         if (error !== undefined) return error;
       }

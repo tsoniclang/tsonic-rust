@@ -5,6 +5,7 @@ import type {
   RustType,
 } from "../../target-ast/nodes.js";
 import { rustTypeEquals } from "../../target-ast/inspection/type-equality.js";
+import { rustMacroInputExpressions } from "../../target-ast/macro-input.js";
 import { rustBlockTerminates } from "../statements/block-flow.js";
 
 export interface RustFallibleBoundary {
@@ -25,7 +26,7 @@ export type RustFallibleShapeOptions =
 export function rustExpressionUsesTryInCurrentRegion(expression: RustExpr): boolean {
   switch (expression.kind) {
     case "try":
-      return true;
+      return expression.nativeReturn !== true || rustExpressionUsesTryInCurrentRegion(expression.expr);
     case "option-try":
       return rustExpressionUsesTryInCurrentRegion(expression.expr);
     case "bottom":
@@ -56,8 +57,9 @@ export function rustExpressionUsesTryInCurrentRegion(expression: RustExpr): bool
     case "assignment":
       return rustExpressionUsesTryInCurrentRegion(expression.target) ||
         rustExpressionUsesTryInCurrentRegion(expression.value);
-    case "call":
     case "macro-invocation":
+      return rustMacroInputExpressions(expression.input).some(rustExpressionUsesTryInCurrentRegion);
+    case "call":
     case "associated-call":
       return expression.args.some(rustExpressionUsesTryInCurrentRegion);
     case "invoke":
@@ -135,7 +137,7 @@ function applyRustResultExpression(
   if (expression.kind === "bottom") {
     return expression;
   }
-  if (expression.kind === "try" &&
+  if (expression.kind === "try" && expression.nativeReturn !== true &&
     rustTypeEquals(expression.resultErrorType, boundary.errorType)) {
     if (rustTypeEquals(expression.operandErrorType, boundary.errorType)) {
       return expression.expr;

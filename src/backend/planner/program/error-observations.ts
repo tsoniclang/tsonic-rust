@@ -20,7 +20,7 @@ export function planRustErrorObservations(
   const source = method(path("self"), "source_error");
   return {
     kind: "impl", generics: emptyRustGenerics, target: { kind: "named", path: "TsonicError" },
-    functions: [{
+    members: [{ kind: "function",
       name: "source_error", visibility: "public", generics: emptyRustGenerics,
       selfParam: { kind: "reference", mutable: false }, params: [], returnType: optionalSource,
       body: { statements: [{ kind: "tail", expr: { kind: "match", expression: path("self"), arms: [
@@ -33,11 +33,11 @@ export function planRustErrorObservations(
         ...projectVariants.map(name => ({ pattern: variant(`Self::${name}`, { kind: "wildcard" }),
           expression: { kind: "none" as const } })),
       ] } }] },
-    }, ...(includeBuiltinProjection ? [{
+    }, ...(includeBuiltinProjection ? [{ kind: "function",
       name: "is_error", visibility: "public", generics: emptyRustGenerics,
       selfParam: { kind: "reference", mutable: false }, params: [], returnType: { kind: "primitive", name: "bool" },
       body: { statements: [{ kind: "tail", expr: method(source, "is_some") }] },
-    }, {
+    }, { kind: "function",
       name: "is_error_kind", visibility: "public", generics: emptyRustGenerics,
       selfParam: { kind: "reference", mutable: false }, params: [{ name: "kind", type: errorKind }],
       returnType: { kind: "primitive", name: "bool" },
@@ -45,7 +45,7 @@ export function planRustErrorObservations(
         kind: "closure", params: [{ name: "error", byRefCopy: false }],
         body: { kind: "binary", left: method(path("error"), "kind"), operator: "==", right: path("kind") },
       }) }] },
-    }, {
+    }, { kind: "function",
       name: "error_value", visibility: "public", generics: emptyRustGenerics,
       selfParam: { kind: "reference", mutable: false }, params: [], returnType: sourceError,
       body: { statements: [{ kind: "tail", expr: { kind: "match", expression: source, arms: [
@@ -53,7 +53,7 @@ export function planRustErrorObservations(
         { pattern: { kind: "path", path: "None" }, expression: { kind: "unreachable",
           message: "checked flow selected a non-Error thrown value" } },
       ] } }] },
-    }] satisfies NonNullable<Extract<RustItem, { kind: "impl" }>["functions"]> : [])],
+    }] satisfies Extract<RustItem, { kind: "impl" }>["members"] : [])],
   };
 }
 
@@ -61,7 +61,7 @@ export function planRustSuppressedErrorConstructor(): RustItem {
   const error: RustType = { kind: "named", path: "TsonicError" };
   return {
     kind: "impl", generics: emptyRustGenerics, target: error,
-    functions: [{
+    members: [{ kind: "function",
       name: "suppressed", visibility: "public", generics: emptyRustGenerics,
       params: [{ name: "error", type: error }, { name: "suppressed", type: error }], returnType: error,
       body: { statements: [{ kind: "tail", expr: call("Self::Suppressed",

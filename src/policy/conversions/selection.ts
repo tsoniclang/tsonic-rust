@@ -26,6 +26,7 @@ import {
   rustCallableProtocol,
   rustTargetGenericReferences,
   rustTsValueTargetType,
+  rustUnitTargetType,
 } from "../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -66,6 +67,9 @@ export function selectRustSourceValueConversion(
   if (ancestors.some(ancestor => rustTargetTypeRefEquals(ancestor.source, source) &&
     rustTargetTypeRefEquals(ancestor.target, target))) return undefined;
   const nextAncestors = [...ancestors, {source, target}];
+  if (isRustAbsenceCarrier(source) && rustTargetTypeRefEquals(target, rustUnitTargetType())) {
+    return { kind: "semantic-conversion", id: "unit-from-absence" };
+  }
   if (!rustTargetTypeRefEquals(source, target) && rustObjectIdentityErasureMatches(source, target)) {
     return { kind: "object-identity-erasure", source, target };
   }

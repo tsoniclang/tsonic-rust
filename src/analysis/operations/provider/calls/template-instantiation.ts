@@ -257,7 +257,7 @@ interface MutableRustTargetGenericBindings {
   readonly consts: Map<string, RustTargetConstArgument>;
 }
 
-function providerGenericParameterSet(
+export function providerGenericParameterSet(
   parameters: readonly RustProviderGenericParameter[],
 ): RustTargetGenericParameterSet {
   return Object.freeze({
@@ -310,7 +310,7 @@ function providerGenericParameterIsBound(
   }
 }
 
-function mergeDirectGenericArgument(
+export function mergeDirectGenericArgument(
   bindings: MutableRustTargetGenericBindings,
   parameter: RustProviderGenericParameter,
   argument: RustTargetGenericArgument,
@@ -335,7 +335,7 @@ function mergeDirectGenericArgument(
   }
 }
 
-function mergeGenericBindings(
+export function mergeGenericBindings(
   target: MutableRustTargetGenericBindings,
   source: RustTargetGenericBindings,
 ): boolean {

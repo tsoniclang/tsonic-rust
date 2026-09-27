@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
+import { rustLintAttributes } from "../../dist/backend/target-ast/normalization/lint-policy.js";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const sourceRoot = join(repositoryRoot, "src");
@@ -82,10 +83,18 @@ test("generated lint exceptions have one explicit policy owner", () => {
       continue;
     }
     assert.doesNotMatch(text, /#!?\[allow\(/u, `${path} emits an unowned Rust lint exception`);
+    assert.doesNotMatch(text, /rustListAttribute\("(?:allow|expect)"/u, `${path} constructs an unowned Rust lint exception`);
   }
-  const policy = readFileSync(join(sourceRoot, "backend/target-ast/normalization/lint-policy.ts"), "utf8");
-  assert.doesNotMatch(policy, /#!?\[allow\((?![^\]\n]*reason = )[^\]\n]*\)\]/u);
-  assert.match(policy, /reason = /u);
+  for (const [name, attribute] of Object.entries(rustLintAttributes)) {
+    assert.equal(attribute.kind, "list", name);
+    assert.ok(attribute.path === "allow" || attribute.path === "expect", name);
+    assert.equal(attribute.arguments.length, 2, name);
+    assert.equal(attribute.arguments[0].kind, "word", name);
+    assert.equal(attribute.arguments[1].kind, "value", name);
+    assert.equal(attribute.arguments[1].path, "reason", name);
+    assert.equal(attribute.arguments[1].value.kind, "string", name);
+    assert.ok(attribute.arguments[1].value.value.length > 0, name);
+  }
 });
 
 test("Rust compiler reflection remains isolated from semantic and backend layers", () => {
@@ -987,12 +996,22 @@ test("Rust dead-code obligations are planner-local and normalized before output 
   assert.match(normalization, /rustDeadCodeAttribute\(deadCode\)/u);
   assert.match(normalization, /const \{ deadCode, \.\.\.withoutDeadCode \} = owner/u);
   assert.match(outputPlanning, /finalizeRustDeadCode\(/u);
-  assert.match(outputPlanning, /rustBinaryEntryDeclaration\(input\.program\)/u);
+  assert.match(outputPlanning, /resolveBinaryEntry\(input, moduleNameByFileName, diagnostics\)/u);
+  assert.match(entryPoint, /rustBinaryEntryDeclaration\(input\.program\)/u);
   assert.match(entryPoint, /rustProjectEntrySourceFile/u);
-  assert.match(entryPoint, /isRustUnitCarrier\(returnCarrier\)/u);
-  assert.match(lintPolicy, /allow\(dead_code, reason = "retains an unused authored declaration"\)/u);
-  assert.match(lintPolicy, /allow\(dead_code, reason = "retains an unread authored field"\)/u);
-  assert.match(lintPolicy, /expect\(dead_code, reason = "retains unused generated storage"\)/u);
+  assert.match(entryPoint, /hasModifierKind\(statement, "export"\)/u);
+  assert.match(entryPoint, /returnCarrier !== undefined/u);
+  assert.match(entryPoint, /parameters\(statement\)\.length === 0/u);
+  assert.match(entryPoint, /typeParameters\(statement\)\.length === 0/u);
+  for (const [attribute, level, reason] of [
+    [rustLintAttributes.authoredDeadCode, "allow", "retains an unused authored declaration"],
+    [rustLintAttributes.authoredUnreadField, "allow", "retains an unread authored field"],
+    [rustLintAttributes.generatedUnusedStorage, "expect", "retains unused generated storage"],
+  ]) {
+    assert.deepEqual(attribute, { kind: "list", path: level, arguments: [
+      { kind: "word", path: "dead_code" }, { kind: "value", path: "reason", value: { kind: "string", value: reason } },
+    ] });
+  }
   assert.doesNotMatch(lintPolicy, /preserves the checked source contract/u);
 });
 

@@ -1,3 +1,5 @@
+import { rustDeriveAttributes, rustHiddenAttribute } from "../../../target-ast/attributes.js";
+import { planRustAuthoredStructScope } from "../scoped-types.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
 import { applyFallibleShape } from "../../types/fallible-shape.js";
 import { createRustProjectObject, rustProjectObjectStateField, rustProjectObjectType } from "../../objects/project-objects.js";
@@ -90,7 +92,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   const exported = ast.hasModifierKind(node, "export");
   const publiclyReachable = definition !== undefined &&
     context.input.program.projectTypes.programErrorVariant(definition) !== undefined ||
-    rustProjectTypeHasPublicImplementationAbi(context, className);
+    rustProjectTypeHasPublicImplementationAbi(context, definition?.targetPath ?? className);
   const storageVisibility = rustProjectImplementationVisibility(publiclyReachable);
   const structVisibility = exported || publiclyReachable ? "public" as const : "crate" as const;
   if (ast.extendsHeritageElements(node).length > 0 || ast.implementsHeritageElements(node).length > 0) {
@@ -286,7 +288,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   const constructorFn = planConstructor(
     node,
     constructorMember,
-    className,
+    definition.targetPath,
     openType,
     definition.stateName,
     stateMarker,
@@ -370,7 +372,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
           genericArguments: [{ kind: "type" as const, type: property.callableType }],
         },
         visibility: storageVisibility,
-        ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
+        ...(publiclyReachable ? { attrs: [rustHiddenAttribute] } : {}),
       })),
     ...(stateMarker === undefined
       ? []
@@ -378,7 +380,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
           name: stateMarker.name,
           type: stateMarker.type,
           visibility: storageVisibility,
-          ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
+          ...(publiclyReachable ? { attrs: [rustHiddenAttribute] } : {}),
         }]),
   ];
   if (representation.kind !== "value" && stateCarrier === undefined) {
@@ -390,14 +392,13 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
         name: rustProjectObjectStateField,
         type: stateCarrier,
         visibility: storageVisibility,
-        ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
+        ...(publiclyReachable ? { attrs: [rustHiddenAttribute] } : {}),
       };
   const stateItem: RustItem = {
     kind: "struct",
     name: definition.stateName,
     visibility: storageVisibility,
-    ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
-    derives: [],
+    ...(publiclyReachable ? { attrs: [rustHiddenAttribute] } : {}),
     generics,
     fields: valueFields,
   };
@@ -414,9 +415,8 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   const structItem: RustItem = {
     kind: "struct",
     name: className,
-    ...(generatedStructAttributes.length === 0 ? {} : { attrs: generatedStructAttributes }),
     visibility: structVisibility,
-    derives: representation.kind === "value" ? ["Clone"] : explicitWrapperTraits ? [] : ["Clone", "Debug", "PartialEq"],
+    attrs: [...generatedStructAttributes, ...rustDeriveAttributes(representation.kind === "value" ? ["Clone"] : explicitWrapperTraits ? [] : ["Clone", "Debug", "PartialEq"])],
     generics,
     fields: structFields,
   };
@@ -425,11 +425,11 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     kind: "impl",
     generics,
     target: openType,
-    functions: implFunctions,
+    members: implFunctions,
   };
   return [
     ...(representation.kind === "value" ? [] : [stateItem]),
-    structItem,
+    planRustAuthoredStructScope(node, structItem, context),
     ...(explicitWrapperTraits ? rustProjectWrapperTraits(openType, className, generics) : []),
     ...(representation.kind === "value"
       ? []
@@ -646,7 +646,7 @@ function planConstructor(
     publiclyReachable,
   );
   const constructorAttributes = safetyAttributes;
-  return {
+  return { kind: "function",
     name: "new",
     ...(constructorDeadCode === undefined ? {} : { deadCode: constructorDeadCode }),
     generics: emptyRustGenerics,

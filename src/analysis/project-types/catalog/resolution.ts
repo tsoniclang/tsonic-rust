@@ -5,7 +5,7 @@ import {
   selectRustProjectCommonSupertype,
   selectRustProjectRelationship,
 } from "../../../policy/types/project/relationships.js";
-import { rustPascalCaseIdentifier, rustScreamingSnakeIdentifier, rustSnakeCaseIdentifier } from "../../../target-model/names/identifiers.js";
+import { rustPascalCaseIdentifier, rustScreamingSnakeIdentifier, rustSnakeCaseIdentifier, rustTargetIdentifier } from "../../../target-model/names/identifiers.js";
 import {
   rustLifetimeGenericArgument,
   rustSourceTypeCarrier,
@@ -421,12 +421,13 @@ export function createRustProjectTypePolicy(
   const stateMarkerFieldNamesByDefinition = new WeakMap<RustProjectTypeDefinition, string>();
   for (const definition of definitions) {
     const names = new Map<Node, string>();
-    const usedNames = new Set<string>();
     const externalBase = externalBaseByDeclaration.get(definition.declaration);
+    const usedNames = projectMemberNames(definition.declaration, host.ast, host.names);
+    for (const field of externalBase?.fields ?? []) usedNames.add(rustTargetIdentifier(field.sourceName));
     for (const field of externalBase?.fields ?? []) {
       names.set(
         field.declaration,
-        allocateGeneratedName(usedNames, rustSnakeCaseIdentifier(field.sourceName)),
+        rustTargetIdentifier(field.sourceName),
       );
     }
     for (const member of denseNodes(sourceObjectMemberDeclarations(host.ast, definition.declaration)) ?? []) {
@@ -466,7 +467,7 @@ export function createRustProjectTypePolicy(
       }
       const targetName = host.names.nameForDeclaration(member);
       if (targetName !== undefined) {
-        names.set(member, allocateGeneratedName(usedNames, targetName));
+        names.set(member, targetName);
       }
     }
     fieldStorageNamesByDefinition.set(definition, names);
@@ -510,7 +511,7 @@ export function createRustProjectTypePolicy(
     const candidates: RustProjectMemberSlotCandidate[] = [
       ...(externalBaseByDeclaration.get(definition.declaration)?.fields ?? []).map((field) => ({
         declaration: field.declaration,
-        targetName: rustSnakeCaseIdentifier(field.sourceName),
+        targetName: rustTargetIdentifier(field.sourceName),
         roles: ["read", "write"] as readonly RustProjectMemberSlotRole[],
       })),
     ];

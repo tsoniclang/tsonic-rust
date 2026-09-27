@@ -1,3 +1,4 @@
+import { rustHiddenAttribute } from "../../../target-ast/attributes.js";
 import { isRustCopyCarrier } from "../../../../target-model/types/index.js";
 import { rustProjectMemberIsPrivate } from "../../../../analysis/project-types/member-privacy.js";
 import type { RustExpr, RustImplFunction, RustItem, RustType } from "../../../target-ast/nodes.js";
@@ -47,10 +48,10 @@ export function planProjectPrivateStateAccessors(
       receiver: { kind: "path", path: "self" },
       name: field.targetName,
     };
-    functions.push({
+    functions.push({ kind: "function",
       name: readName,
       visibility,
-      ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
+      ...(publiclyReachable ? { attrs: [rustHiddenAttribute] } : {}),
       generics: emptyRustGenerics,
       selfParam: rustSelfParameter("ref"),
       params: [],
@@ -65,10 +66,10 @@ export function planProjectPrivateStateAccessors(
       },
     });
     if (writeName !== undefined) {
-      functions.push({
+      functions.push({ kind: "function",
         name: writeName,
         visibility,
-        ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
+        ...(publiclyReachable ? { attrs: [rustHiddenAttribute] } : {}),
         generics: emptyRustGenerics,
         selfParam: rustSelfParameter("mut-ref"),
         params: [{ name: "value", type: field.type }],
@@ -90,6 +91,6 @@ export function planProjectPrivateStateAccessors(
     kind: "impl",
     generics: rustProjectRepresentationGenerics(representation, context),
     target: stateType,
-    functions,
+    members: functions,
   }];
 }

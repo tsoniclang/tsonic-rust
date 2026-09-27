@@ -205,10 +205,29 @@ export function instantiateSelectedCallTemplate(
     context,
     resolutionOptions,
   );
-  const borrowedStringTypeParameters = rustBorrowedStringTypeParameterNames(template);
   const selectedResultCarrier = request.source.sourceResultType === undefined
     ? undefined
     : resolveRustTargetTypeRef(request.source.sourceResultType, context, resolutionOptions);
+  const generic = selectedProviderCallGenericArguments(request, template, context, resolutionOptions);
+  if (generic === undefined) return undefined;
+  return instantiateProviderOperationTemplate(template, {
+    sourceReceiverCarrier: rawReceiverCarrier,
+    sourceParameterCarriers: selectedParameterCarriers,
+    sourceResultCarrier: selectedResultCarrier,
+    ...generic,
+  }, context.typeDefinitions);
+}
+
+export function selectedProviderCallGenericArguments(
+  request: RustCheckedCallSelectionInput,
+  template: RustProviderOperationTemplate,
+  context: RustOperationPolicyContext,
+  resolutionOptions: RustOperationsProviderOptions,
+): {
+  readonly directGenericArguments: ReadonlyMap<string, RustTargetGenericArgument>;
+  readonly callScopedElisionBindings?: ReadonlyMap<string, RustLifetimeRef>;
+} | undefined {
+  const borrowedStringTypeParameters = rustBorrowedStringTypeParameterNames(template);
   const directGenericArguments = new Map<string, RustTargetGenericArgument>();
   const call = asNode(request.source.call, context);
   const callIdentity = call === undefined ? undefined : sourceNodeIdentity(context.ast, call);
@@ -265,15 +284,12 @@ export function instantiateSelectedCallTemplate(
       directGenericArguments.set(parameter.sourceName, resolved);
     }
   }
-  return instantiateProviderOperationTemplate(template, {
-    sourceReceiverCarrier: rawReceiverCarrier,
-    sourceParameterCarriers: selectedParameterCarriers,
-    sourceResultCarrier: selectedResultCarrier,
+  return {
     directGenericArguments,
     ...(callScopedElisionBindings === undefined
       ? {}
       : { callScopedElisionBindings }),
-  }, context.typeDefinitions);
+  };
 }
 
 function selectedCallParameterInferenceCarriers(
@@ -622,10 +638,15 @@ function selectedCallSourceCarriers(
   if (actual.some((carrier) => carrier === undefined)) {
     return { kind: "missing" };
   }
+  const resolved = {
+    kind: "resolved" as const,
+    carriers: actual as TargetTypeRef[],
+    reconciliations,
+  };
   if (fact.target.form === "call-str-slice" || fact.target.form === "free-call-str-slice") {
     const stringCarrier = rustStringTargetType();
     return actual.every((carrier) => carrier !== undefined && rustTargetTypeRefEquals(carrier, stringCarrier))
-      ? { kind: "resolved", carriers: actual as TargetTypeRef[], reconciliations }
+      ? resolved
       : { kind: "incompatible", sourceIndex: 0 };
   }
   if (fact.target.form === "call-value-slice" || fact.target.form === "call-value-array" ||
@@ -634,7 +655,7 @@ function selectedCallSourceCarriers(
     if (actual.length < form.leadingArguments.length) {
       return { kind: "incompatible", sourceIndex: actual.length };
     }
-    return { kind: "resolved", carriers: actual as TargetTypeRef[], reconciliations };
+    return resolved;
   }
   if (fact.target.form === "receiver-tagged-array") {
     const form = fact.target;
@@ -659,7 +680,7 @@ function selectedCallSourceCarriers(
       return (exact.length > 0 ? exact : convertible).length !== 1;
     });
     return incompatible < 0
-      ? { kind: "resolved", carriers: actual as TargetTypeRef[], reconciliations }
+      ? resolved
       : { kind: "incompatible", sourceIndex: incompatible };
   }
   if (fact.target.form === "call-c-variadic") {
@@ -671,10 +692,10 @@ function selectedCallSourceCarriers(
       sourceIndex >= form.fixedArgumentModes.length &&
       !isRustCVariadicArgumentCarrier(carrier));
     return incompatible < 0
-      ? { kind: "resolved", carriers: actual as TargetTypeRef[], reconciliations }
+      ? resolved
       : { kind: "incompatible", sourceIndex: incompatible };
   }
-  return { kind: "resolved", carriers: actual as TargetTypeRef[], reconciliations };
+  return resolved;
 }
 
 

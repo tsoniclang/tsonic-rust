@@ -12,10 +12,10 @@ test("native pointer operations lower inside one explicit unsafe block", { timeo
     files: {
       "index.ts": `
 import {
-  loadNativePointer,
-  offsetNativePointer,
-  storeNativePointer,
-  unsafeContext,
+  loadnativeptr,
+  offsetnativeptr,
+  storenativeptr,
+  unsafecontext,
 } from "@tsonic/core/lang.js";
 import type { NativePointer, int32, nativeInt } from "@tsonic/core/types.js";
 
@@ -24,9 +24,9 @@ export function copy(
   destination: NativePointer<int32>,
   elementOffset: nativeInt,
 ): NativePointer<int32> {
-  unsafeContext();
-  storeNativePointer(destination, loadNativePointer(source));
-  return offsetNativePointer(source, elementOffset);
+  unsafecontext();
+  storenativeptr(destination, loadnativeptr(source));
+  return offsetnativeptr(source, elementOffset);
 }
 `,
     },
@@ -36,7 +36,7 @@ export function copy(
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /pub fn copy\(source: \*mut i32, destination: \*mut i32, element_offset: isize\) -> \*mut i32/u);
   assert.match(source, /unsafe \{\s*\*destination = \*source;\s*source\.offset\(element_offset\)\s*\}/u);
-  assert.doesNotMatch(source, /loadNativePointer|offsetNativePointer|storeNativePointer|unsafeContext/u);
+  assert.doesNotMatch(source, /loadnativeptr|offsetnativeptr|storenativeptr|unsafecontext/u);
   assert.doesNotMatch(source, /allow\(unused_unsafe/u);
   validateGeneratedProject("explicit-safety-native-pointer-block", result.artifacts);
 });
@@ -45,18 +45,18 @@ test("unsafe expressions and caller contracts remain independent Rust knobs", { 
   const { result } = compileRust({
     files: {
       "index.ts": `
-import { loadNativePointer, safety, unsafeContext } from "@tsonic/core/lang.js";
+import { loadnativeptr, safety, unsafecontext } from "@tsonic/core/lang.js";
 import type { NativePointer, int32 } from "@tsonic/core/types.js";
 
 export function read(pointer: NativePointer<int32>): int32 {
-  return unsafeContext(loadNativePointer(pointer));
+  return unsafecontext(loadnativeptr(pointer));
 }
 
 export function declaredUnsafe(value: int32): int32 {
   return value;
 }
 
-safety(declaredUnsafe).requiresUnsafe();
+safety(declaredUnsafe).requiresunsafe();
 `,
     },
   });
@@ -148,11 +148,11 @@ test("native pointer operations fail closed without an explicit unsafe context",
   const { result } = compileRust({
     files: {
       "index.ts": `
-import { loadNativePointer } from "@tsonic/core/lang.js";
+import { loadnativeptr } from "@tsonic/core/lang.js";
 import type { NativePointer, int32 } from "@tsonic/core/types.js";
 
 export function reject(pointer: NativePointer<int32>): int32 {
-  return loadNativePointer(pointer);
+  return loadnativeptr(pointer);
 }
 `,
     },
@@ -163,7 +163,7 @@ export function reject(pointer: NativePointer<int32>): int32 {
     result.diagnostics.map(({ code, message }) => ({ code, message })),
     [{
       code: "RUST_NATIVE_POINTER_UNSAFE_CONTEXT_REQUIRED",
-      message: "Rust native-pointer 'load' requires an explicit unsafeContext() source region.",
+      message: "Rust native-pointer 'load' requires an explicit unsafecontext() source region.",
     }],
   );
 });
@@ -172,14 +172,14 @@ test("unsafe declaration contracts never create lexical unsafe permission", () =
   const { result } = compileRust({
     files: {
       "index.ts": `
-import { loadNativePointer, safety } from "@tsonic/core/lang.js";
+import { loadnativeptr, safety } from "@tsonic/core/lang.js";
 import type { NativePointer, int32 } from "@tsonic/core/types.js";
 
 export function read(pointer: NativePointer<int32>): int32 {
-  return loadNativePointer(pointer);
+  return loadnativeptr(pointer);
 }
 
-safety(read).requiresUnsafe();
+safety(read).requiresunsafe();
 `,
     },
   });
@@ -189,7 +189,7 @@ safety(read).requiresUnsafe();
     result.diagnostics.map(({ code, message }) => ({ code, message })),
     [{
       code: "RUST_NATIVE_POINTER_UNSAFE_CONTEXT_REQUIRED",
-      message: "Rust native-pointer 'load' requires an explicit unsafeContext() source region.",
+      message: "Rust native-pointer 'load' requires an explicit unsafecontext() source region.",
     }],
   );
 });
@@ -198,17 +198,17 @@ test("safety facts follow aliases and do not match local same-spelled calls", ()
   const { result } = compileRust({
     files: {
       "index.ts": `
-import { unsafeContext as exactUnsafe } from "@tsonic/core/lang.js";
+import { unsafecontext as exactUnsafe } from "@tsonic/core/lang.js";
 import type { int32 } from "@tsonic/core/types.js";
 
-function unsafeContext(value: int32): int32 { return value; }
+function unsafecontext(value: int32): int32 { return value; }
 
 export function exact(value: int32): int32 {
   return exactUnsafe(value);
 }
 
 export function local(value: int32): int32 {
-  return unsafeContext(value);
+  return unsafecontext(value);
 }
 `,
     },
@@ -217,7 +217,7 @@ export function local(value: int32): int32 {
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /pub fn exact\(value: i32\) -> i32 \{\s*unsafe \{ value \}\s*\}/u);
-  assert.match(source, /pub fn local\(value: i32\) -> i32 \{\s*unsafe_context\(value\)\s*\}/u);
+  assert.match(source, /pub fn local\(value: i32\) -> i32 \{\s*unsafecontext\(value\)\s*\}/u);
   assert.match(source, /allow\(unused_unsafe, reason = "explicit source unsafe region"\)/u);
 });
 
@@ -227,11 +227,11 @@ test("unused explicit unsafe regions retain only their exact warning policy", {
   const { result } = compileRust({
     files: {
       "index.ts": `
-import { unsafeContext } from "@tsonic/core/lang.js";
+import { unsafecontext } from "@tsonic/core/lang.js";
 import type { int32 } from "@tsonic/core/types.js";
 
 export function increment(value: int32): int32 {
-  unsafeContext();
+  unsafecontext();
   return value + 1;
 }
 `,
@@ -251,12 +251,12 @@ test("an outer unsafe region does not claim requirements owned by a nested regio
   const { result } = compileRust({
     files: {
       "index.ts": `
-import { loadNativePointer, unsafeContext } from "@tsonic/core/lang.js";
+import { loadnativeptr, unsafecontext } from "@tsonic/core/lang.js";
 import type { int32, NativePointer } from "@tsonic/core/types.js";
 
 export function read(pointer: NativePointer<int32>): int32 {
-  unsafeContext();
-  return unsafeContext(loadNativePointer(pointer));
+  unsafecontext();
+  return unsafecontext(loadnativeptr(pointer));
 }
 `,
     },
@@ -275,12 +275,12 @@ test("lexical unsafe regions include exact operations inside Rust closures", {
   const { result } = compileRust({
     files: {
       "index.ts": `
-import { loadNativePointer, unsafeContext } from "@tsonic/core/lang.js";
+import { loadnativeptr, unsafecontext } from "@tsonic/core/lang.js";
 import type { int32, NativePointer } from "@tsonic/core/types.js";
 
 export function read(pointer: NativePointer<int32>): int32 {
-  unsafeContext();
-  const load = (): int32 => loadNativePointer(pointer);
+  unsafecontext();
+  const load = (): int32 => loadnativeptr(pointer);
   return load();
 }
 `,
@@ -300,11 +300,11 @@ test("safe-only explicit regions inside closures retain their warning policy", {
   const { result } = compileRust({
     files: {
       "index.ts": `
-import { unsafeContext } from "@tsonic/core/lang.js";
+import { unsafecontext } from "@tsonic/core/lang.js";
 import type { int32 } from "@tsonic/core/types.js";
 
 export function read(value: int32): int32 {
-  const load = (): int32 => unsafeContext(value);
+  const load = (): int32 => unsafecontext(value);
   return load();
 }
 `,
@@ -349,7 +349,7 @@ import { safety } from "@tsonic/core/lang.js";
 import type { int32 } from "@tsonic/core/types.js";
 
 export function selected(value: int32): int32 { return value; }
-safety(selected).requiresUnsafe();
+safety(selected).requiresunsafe();
 
 export function rejected(value: int32): int32 {
   return selected(value);
@@ -362,21 +362,21 @@ export function rejected(value: int32): int32 {
     rejected.diagnostics.map(({ code, message }) => ({ code, message })),
     [{
       code: "RUST_UNSAFE_OPERATION_CONTEXT_REQUIRED",
-      message: "The selected Rust operation requires an explicit unsafeContext() source region at this use site.",
+      message: "The selected Rust operation requires an explicit unsafecontext() source region at this use site.",
     }],
   );
 
   const accepted = compileRust({
     files: {
       "index.ts": `
-import { safety, unsafeContext } from "@tsonic/core/lang.js";
+import { safety, unsafecontext } from "@tsonic/core/lang.js";
 import type { int32 } from "@tsonic/core/types.js";
 
 export function selected(value: int32): int32 { return value; }
-safety(selected).requiresUnsafe();
+safety(selected).requiresunsafe();
 
 export function accepted(value: int32): int32 {
-  return unsafeContext(selected(value));
+  return unsafecontext(selected(value));
 }
 `,
     },
@@ -393,7 +393,7 @@ test("method and constructor safety contracts map to their exact Rust function b
   const { result } = compileRust({
     files: {
       "index.ts": `
-import { safety, unsafeContext } from "@tsonic/core/lang.js";
+import { safety, unsafecontext } from "@tsonic/core/lang.js";
 import type { int32 } from "@tsonic/core/types.js";
 
 export class Box {
@@ -402,12 +402,12 @@ export class Box {
   read(): int32 { return this.value; }
 }
 
-safety<Box>().constructor().requiresUnsafe();
-safety<Box>().method(box => box.read).requiresUnsafe();
+safety<Box>().constructor().requiresunsafe();
+safety<Box>().method(box => box.read).requiresunsafe();
 
 export function inspect(value: int32): int32 {
-  const instance = unsafeContext(new Box(value));
-  return unsafeContext(instance.read());
+  const instance = unsafecontext(new Box(value));
+  return unsafecontext(instance.read());
 }
 `,
     },
@@ -426,7 +426,7 @@ test("polymorphic constructor and dispatch safety remain exact Rust ABI contract
   const { result } = compileRust({
     files: {
       "index.ts": `
-import { safety, unsafeContext } from "@tsonic/core/lang.js";
+import { safety, unsafecontext } from "@tsonic/core/lang.js";
 import type { int32 } from "@tsonic/core/types.js";
 
 class Base {
@@ -438,13 +438,13 @@ class Derived extends Base {
   read(): int32 { return this.value + 1; }
 }
 
-safety<Base>().constructor().requiresUnsafe();
-safety<Base>().method(value => value.read).requiresUnsafe();
-safety<Derived>().method(value => value.read).requiresUnsafe();
+safety<Base>().constructor().requiresunsafe();
+safety<Base>().method(value => value.read).requiresunsafe();
+safety<Derived>().method(value => value.read).requiresunsafe();
 
 export function inspect(): int32 {
-  const value = unsafeContext(new Base());
-  return unsafeContext(value.read());
+  const value = unsafecontext(new Base());
+  return unsafecontext(value.read());
 }
 `,
     },
@@ -473,7 +473,7 @@ class Derived extends Base {
   read(): int32 { return 2; }
 }
 
-safety<Base>().method(value => value.read).requiresUnsafe();
+safety<Base>().method(value => value.read).requiresunsafe();
 export function create(): Base { return new Derived(); }
 `,
     },
@@ -494,7 +494,7 @@ import type { int32 } from "@tsonic/core/types.js";
 
 export function selected(value: int32): int32 { return value; }
 safety(selected).safe();
-safety(selected).requiresUnsafe();
+safety(selected).requiresunsafe();
 `,
     },
   });
@@ -516,7 +516,7 @@ import { safety } from "@tsonic/core/lang.js";
 import type { int32 } from "@tsonic/core/types.js";
 
 export class Box { value: int32 = 0; }
-safety<Box>().property(box => box.value).requiresUnsafe();
+safety<Box>().property(box => box.value).requiresunsafe();
 `,
     },
   });
@@ -542,7 +542,7 @@ export class Value {
   get current(): int32 { return this.stored; }
   set current(value: int32) { this.stored = value; }
 }
-safety<Value>().property(value => value.current).getter().requiresUnsafe();
+safety<Value>().property(value => value.current).getter().requiresunsafe();
 
 export function read(value: Value): int32 { return value.current; }
 `,
@@ -552,7 +552,7 @@ export function read(value: Value): int32 { return value.current; }
     rejectedRead.diagnostics.map(({ code, message }) => ({ code, message })),
     [{
       code: "RUST_UNSAFE_OPERATION_CONTEXT_REQUIRED",
-      message: "The selected Rust operation requires an explicit unsafeContext() source region at this use site.",
+      message: "The selected Rust operation requires an explicit unsafecontext() source region at this use site.",
     }],
   );
 
@@ -567,7 +567,7 @@ export class Value {
   get current(): int32 { return this.stored; }
   set current(value: int32) { this.stored = value; }
 }
-safety<Value>().property(value => value.current).setter().requiresUnsafe();
+safety<Value>().property(value => value.current).setter().requiresunsafe();
 
 export function write(value: Value, next: int32): void { value.current = next; }
 `,
@@ -577,14 +577,14 @@ export function write(value: Value, next: int32): void { value.current = next; }
     rejectedWrite.diagnostics.map(({ code, message }) => ({ code, message })),
     [{
       code: "RUST_UNSAFE_OPERATION_CONTEXT_REQUIRED",
-      message: "The selected Rust operation requires an explicit unsafeContext() source region at this use site.",
+      message: "The selected Rust operation requires an explicit unsafecontext() source region at this use site.",
     }],
   );
 
   const accepted = compileRust({
     files: {
       "index.ts": `
-import { safety, unsafeContext } from "@tsonic/core/lang.js";
+import { safety, unsafecontext } from "@tsonic/core/lang.js";
 import type { int32 } from "@tsonic/core/types.js";
 
 export class Value {
@@ -592,15 +592,15 @@ export class Value {
   get current(): int32 { return this.stored; }
   set current(value: int32) { this.stored = value; }
 }
-safety<Value>().property(value => value.current).getter().requiresUnsafe();
-safety<Value>().property(value => value.current).setter().requiresUnsafe();
+safety<Value>().property(value => value.current).getter().requiresunsafe();
+safety<Value>().property(value => value.current).setter().requiresunsafe();
 
 export function read(value: Value): int32 {
-  return unsafeContext(value.current);
+  return unsafecontext(value.current);
 }
 
 export function write(value: Value, next: int32): void {
-  unsafeContext();
+  unsafecontext();
   value.current = next;
 }
 `,
@@ -624,11 +624,11 @@ test("native-pointer source aliases that collapse in TypeScript remain exact in 
   const mismatchedPointee = compileRust({
     files: {
       "index.ts": `
-import { loadNativePointer, unsafeContext } from "@tsonic/core/lang.js";
+import { loadnativeptr, unsafecontext } from "@tsonic/core/lang.js";
 import type { NativePointer, int32, uint8 } from "@tsonic/core/types.js";
 
 export function read(pointer: NativePointer<int32>): uint8 {
-  return unsafeContext(loadNativePointer<uint8>(pointer));
+  return unsafecontext(loadnativeptr<uint8>(pointer));
 }
 `,
     },
@@ -640,11 +640,11 @@ export function read(pointer: NativePointer<int32>): uint8 {
   const mismatchedStore = compileRust({
     files: {
       "index.ts": `
-import { storeNativePointer, unsafeContext } from "@tsonic/core/lang.js";
+import { storenativeptr, unsafecontext } from "@tsonic/core/lang.js";
 import type { NativePointer, int32, uint8 } from "@tsonic/core/types.js";
 
 export function write(pointer: NativePointer<int32>, value: uint8): void {
-  unsafeContext(storeNativePointer(pointer, value));
+  unsafecontext(storenativeptr(pointer, value));
 }
 `,
     },
@@ -658,15 +658,15 @@ test("unsafe block permission ends exactly at the source block boundary", () => 
   const { result } = compileRust({
     files: {
       "index.ts": `
-import { loadNativePointer, unsafeContext } from "@tsonic/core/lang.js";
+import { loadnativeptr, unsafecontext } from "@tsonic/core/lang.js";
 import type { NativePointer, int32 } from "@tsonic/core/types.js";
 
 export function read(pointer: NativePointer<int32>): int32 {
   {
-    unsafeContext();
-    loadNativePointer(pointer);
+    unsafecontext();
+    loadnativeptr(pointer);
   }
-  return loadNativePointer(pointer);
+  return loadnativeptr(pointer);
 }
 `,
     },
@@ -676,7 +676,7 @@ export function read(pointer: NativePointer<int32>): int32 {
     result.diagnostics.map(({ code, message }) => ({ code, message })),
     [{
       code: "RUST_NATIVE_POINTER_UNSAFE_CONTEXT_REQUIRED",
-      message: "Rust native-pointer 'load' requires an explicit unsafeContext() source region.",
+      message: "Rust native-pointer 'load' requires an explicit unsafecontext() source region.",
     }],
   );
 });

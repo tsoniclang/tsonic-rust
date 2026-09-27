@@ -4,7 +4,7 @@ import {
   artifactText,
   compileRustThroughTargetPack,
 } from "../../../helpers/rust-session.mjs";
-import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
+import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../../../helpers/cargo-projects.mjs";
 
 test("native filesystem generics accept strings and retain UTF-8 bytes and errors", { timeout: 300_000 }, () => {
   const { result } = compileRustThroughTargetPack({
@@ -101,24 +101,32 @@ export function main(): void {
   assert.equal(run.status, 0);
 });
 
-test("Rust standard-library operation requirements reject unsupported native traits", { timeout: 300_000 }, () => {
+test("Rust standard-library operation requirements remain checked by the native compiler", { timeout: 300_000 }, () => {
   const { result } = compileRustThroughTargetPack({
     files: {
       "index.ts": `
 import type { float64, int32 } from "@tsonic/core/types.js";
 import { HashMap } from "@tsonic/rust/std/collections.js";
+import { metadata } from "@tsonic/rust/std/fs.js";
 
 export function invalid(): void {
   const map = new HashMap<float64, int32>();
   map.insert(1, 2);
 }
+export function invalidPath(): void { metadata<int32>(3); }
 `,
     },
   });
 
-  assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.some(({ code }) =>
-    code === "RUST_PROVIDER_TYPE_INSTANTIATION_NOT_PROVEN"), JSON.stringify(result.diagnostics));
+  assert.deepEqual(result.diagnostics, []);
+  const root = writeGeneratedProject("native-trait-rejection", result.artifacts);
+  runCargo(root, ["generate-lockfile", "--offline"]);
+  assert.throws(() => runCargo(root, ["check", "--all-targets", "--locked", "--offline"]), error => {
+    assert.match(error.message, /f64: Eq/u);
+    assert.match(error.message, /f64: Hash/u);
+    assert.match(error.message, /i32: AsRef<Path>/u);
+    return true;
+  });
 });
 
 test("Rust standard-library generic arguments fail at source checking, not target fallback", () => {

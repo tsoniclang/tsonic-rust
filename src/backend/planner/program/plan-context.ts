@@ -15,7 +15,7 @@ import { rustSourceItemIdentity } from "./source-package-facades.js";
 import type { RustBlock, RustErrorDomain, RustExpr, RustType } from "../../target-ast/nodes.js";
 import {
   isValidRustIdentifier,
-  rustSnakeCaseIdentifier,
+  rustTargetIdentifier,
 } from "../../../target-model/names/identifiers.js";
 export { isValidRustIdentifier, rustReservedIdentifiers } from "../../../target-model/names/identifiers.js";
 
@@ -34,7 +34,7 @@ export interface RustFlowReadOverride {
 export interface RustCapturedBinding {
   readonly declaration: Node;
   readonly expression: RustExpr;
-  readonly storage: "value" | "location";
+  readonly storage: "value" | "location" | "cell" | "borrow-cell";
   readonly valueCarrier: import("../../../target-model/types/model.js").TargetTypeRef;
   readonly borrowed?: boolean;
 }
@@ -247,16 +247,8 @@ export function registerAliasFromPath(
   context.usedAliases?.add(prefix);
 }
 
-// Naming policy: source declarations use the immutable compilation-wide Rust
-// name plan. This helper applies the same value-name spelling to compiler-owned
-// names that are introduced after that plan is sealed. Provider, library, and
-// capability API identity flows exclusively through operation-row metadata.
 export function rustLocalBindingName(name: string): string {
-  if (/^[A-Z][A-Z0-9_]*$/u.test(name)) {
-    // UPPER_SNAKE names are constant references and pass through unchanged.
-    return name;
-  }
-  return rustSnakeCaseIdentifier(name);
+  return rustTargetIdentifier(name);
 }
 
 export function rustSourceBindingPath(
@@ -292,7 +284,8 @@ export function sourceTypePath(
 ): string | undefined {
   const moduleName = context.moduleNameByFileName.get(value.fileName);
   const typeName = context.input.program.names.nameForSourceType(value.fileName, value.typeName);
-  if (moduleName === undefined || typeName === undefined || !isValidRustIdentifier(typeName)) {
+  if (moduleName === undefined || typeName === undefined ||
+    !typeName.split("::").every(isValidRustIdentifier)) {
     return undefined;
   }
   return sourceModuleItemPath(context, value.fileName, typeName);

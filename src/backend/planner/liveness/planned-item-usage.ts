@@ -11,7 +11,7 @@ export function rustPlannedImplementationsReferenceSelfField(
   fieldName: string,
 ): boolean {
   return items.some((item) =>
-    item.kind === "impl" && item.functions.some((fn) =>
+    item.kind === "impl" && item.members.some((fn) => fn.kind === "function" &&
       rustBlockReferencesSelfField(fn.body, fieldName)));
 }
 
@@ -25,6 +25,10 @@ function rustStatementReferencesSelfField(
   fieldName: string,
 ): boolean {
   switch (statement.kind) {
+    case "macro-statement":
+      return true;
+    case "item":
+      return false;
     case "let":
       return statement.init !== undefined &&
         rustExpressionReferencesSelfField(statement.init, fieldName);

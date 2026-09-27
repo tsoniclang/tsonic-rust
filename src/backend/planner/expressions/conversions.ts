@@ -25,6 +25,7 @@ import { rustFinalizedCarrierTransitionMatches } from "../../../analysis/facts/t
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import {
   rustTargetCallGenericArgumentToAstInContext,
+  rustCallTypeFromCarrierInContext,
   rustTargetGenericArgumentToAstInContext,
   rustTypeFromCarrierInContext,
 } from "../types/render.js";
@@ -49,6 +50,7 @@ import {
 import { invokeRustStructuralObjectMethod } from "../objects/project-storage.js";
 import { applyFinalizedValueConversion } from "./value-conversions.js";
 import { planRustRestAssembly } from "./calls/rest-assembly.js";
+import { rustSeparatedExpressionTokens } from "../../target-ast/macro-input.js";
 
 function providerConstantExpression(argument: RustProviderConstantArgument): RustExpr {
   switch (argument.kind) {
@@ -281,8 +283,10 @@ export function planProviderOperationExpression(
       return scoped({
         kind: "macro-invocation",
         path: form.path,
-        delimiter: form.delimiter,
-        args,
+        input: {
+          delimiter: form.delimiter,
+          tokens: rustSeparatedExpressionTokens(args, ","),
+        },
       });
     case "call-c-variadic":
       registerAliasFromPath(context, form.path);
@@ -405,7 +409,7 @@ export function planProviderOperationExpression(
       return scoped({ kind: "binary", operator: form.operator, left, right });
     }
     case "trait-call": {
-      const owner = rustTypeFromCarrierInContext(form.owner, context);
+      const owner = rustCallTypeFromCarrierInContext(form.owner, context);
       const traitGenericArguments = form.traitGenericArguments.map((argument) =>
         rustTargetGenericArgumentToAstInContext(argument, context));
       if (owner === undefined || traitGenericArguments.some((argument) => argument === undefined)) {

@@ -43,7 +43,9 @@ export function verifyRustFoundationPlan(
       const root = record.path.split("::", 1)[0] ?? record.path;
       require(dependencies.get(root) ?? rustFoundationForPath(record.path));
     }
-    Object.values(record).forEach(inspect);
+    for (const [field, child] of Object.entries(record)) {
+      if (field !== "attrs" && field !== "innerAttrs" && field !== "valueAttrs") inspect(child);
+    }
   };
   for (const artifact of artifacts) {
     if (artifact.kind === "source") {

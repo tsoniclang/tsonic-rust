@@ -114,7 +114,8 @@ export function planRustValueFieldLocation(
     ({ kind: "field", receiver, name }), value);
   const read = (value: RustExpr): RustExpr => {
     const selected = project(value);
-    return isRustCopyCarrier(resultCarrier) ? selected : { kind: "method-call", receiver: selected, method: "clone", args: [] };
+    return isRustCopyCarrier(resultCarrier) || access === "read" && context.input.program.valueLifetimes.canMove(node)
+      ? selected : { kind: "method-call", receiver: selected, method: "clone", args: [] };
   };
   const overridden = context.expressionOverrides?.has(current) === true;
   const rootField = overridden ? undefined : context.input.program.facts.getFact(current, rustTargetOperationFactKey);

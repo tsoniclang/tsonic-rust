@@ -40,6 +40,11 @@ export type RustFlowReadProjectionFact =
       readonly selectedCarrier: TargetTypeRef;
     }
   | {
+      readonly kind: "option-reference";
+      readonly sourceCarrier: TargetTypeRef;
+      readonly selectedCarrier: TargetTypeRef;
+    }
+  | {
       readonly kind: "project-downcast";
       readonly projection: RustProjectProjectionSelection;
       readonly sourceCarrier: TargetTypeRef;

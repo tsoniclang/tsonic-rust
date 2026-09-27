@@ -35,7 +35,7 @@ test("the complete pinned TypeScript utility family lowers and executes", { time
   assert.match(source, /pub\(crate\) struct ModelState/u);
   assert.match(
     source,
-    /#\[allow\(dead_code, reason = "retains an unused authored declaration"\)\]\n#\[derive\([^\n]+\)\]\npub\(crate\) struct Model/u,
+    /#\[derive\([^\n]+\)\]\n#\[allow\(dead_code, reason = "retains an unused authored declaration"\)\]\npub\(crate\) struct Model/u,
   );
   assert.equal(
     source.match(/#\[allow\(dead_code, reason = "retains an unread authored field"\)\]/gu)?.length,

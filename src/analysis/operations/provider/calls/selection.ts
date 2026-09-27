@@ -1,7 +1,6 @@
 import {
   asNode,
   isProjectSourceDeclaration,
-  resolveSelectedProviderDeclaration,
   resolveSelectedSourceProfileMember,
 } from "../../../../policy/evidence/selected-source.js";
 import {
@@ -31,7 +30,7 @@ import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution.js
 import { rustOptionalChainFactKey } from "../../../facts/keys.js";
 import { rustOptionElementCarrier } from "../../../../target-model/types/index.js";
 import { rustRuntimeCarrierKey, rustSelectedCallKey } from "../../../../target-model/facts/selections.js";
-import { selectedCallArgumentCarriers, selectedCallArgumentNodes, selectedCallCalleeDeclaration, selectedCallCalleeSymbol } from "../operators.js";
+import { selectedCallArgumentCarriers, selectedCallArgumentNodes, selectedCallCalleeDeclaration, selectedCallCalleeSymbol, selectedCallProviderDeclaration } from "../operators.js";
 import { selectedValueCarrier } from "../../selected-values.js";
 import { selectJsSurfaceConstructorBySourceOwner, selectJsSurfaceOperation } from "../../../../policy/operations/source-profiles/js/index.js";
 import { selectRustGeneratorSourceCall } from "../../../../policy/types/generator-source-profile.js";
@@ -80,17 +79,9 @@ export function selectRustCheckedCall(
       target: { form: "call", path: "rt::keep_alive", argModes: ["ref"] },
       parameterCarriers: [value], resultCarrier: rustUnitTargetType(),
       isAsync: false, isFallible: false, errorBoundary: "none",
-    }, [value], context, options, { sourceName: "keepAlive" });
+    }, [value], context, options, { sourceName: "keepalive" });
   }
-  const providerEvidence = resolveSelectedProviderDeclaration(
-    context,
-    request.sourceSelectedDeclaration,
-    [
-      { subject: request.source.selectedSignature, precision: "exact" },
-      { subject: selectedCallCalleeDeclaration(request), precision: "declaration" },
-      { subject: selectedCallCalleeSymbol(request), precision: "declaration" },
-    ],
-  );
+  const providerEvidence = selectedCallProviderDeclaration(request, context);
   if (providerEvidence.kind === "conflict") {
     return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_PROVIDER_EVIDENCE_CONFLICT", "Checked call carries conflicting selected provider declaration identities.");
   }
@@ -99,9 +90,11 @@ export function selectRustCheckedCall(
     request.sourceSelectedDeclaration,
     options.sourceProfiles,
   );
-  const calleeSourceMember = resolveSelectedSourceProfileMember(
+  const selectedCalleeDeclaration = selectedCallCalleeDeclaration(request);
+  const calleeSourceMember = selectedCalleeDeclaration !== undefined &&
+    context.ast.is.IsIndexSignatureDeclaration(selectedCalleeDeclaration) ? undefined : resolveSelectedSourceProfileMember(
     context,
-    selectedCallCalleeDeclaration(request),
+    selectedCalleeDeclaration,
     options.sourceProfiles,
   );
   if (selectedSourceMember === undefined && calleeSourceMember !== undefined) {
@@ -461,11 +454,9 @@ export function selectRustCheckedCall(
         undefined, undefined, sourceDeclaration, undefined, receiverCarrier);
       if (result !== undefined) return result;
     }
-    if (declarationKind === "KindFunctionType" || declarationKind === "KindCallSignature") {
-      const runtimeCallable = acceptRuntimeCallableCall(request, context, options);
-      if (runtimeCallable !== undefined) return runtimeCallable;
-    }
-    const structuralMethod = acceptStructuralRuntimeMethodCall(
+    const callableTypeOrArrow = declarationKind === "KindFunctionType" ||
+      declarationKind === "KindCallSignature" || declarationKind === "KindArrowFunction";
+    const structuralMethod = callableTypeOrArrow ? undefined : acceptStructuralRuntimeMethodCall(
       request,
       sourceDeclaration,
       context,
@@ -473,6 +464,12 @@ export function selectRustCheckedCall(
     );
     if (structuralMethod !== undefined) {
       return structuralMethod;
+    }
+    if (callableTypeOrArrow || declarationKind === "KindFunctionExpression") {
+      return acceptRuntimeCallableCall(request, context, options) ?? rejectSelectedOperation(
+        request.source.call, context, "RUST_SOURCE_CALLABLE_CARRIER_MISSING",
+        "The exact selected callable value requires a closed native invocation carrier.",
+      );
     }
     return acceptProjectSourceCall(request, sourceDeclaration, context, options);
   }
@@ -523,7 +520,11 @@ function acceptRuntimeCallableCall(
     );
     if (selection.kind === "reject") return selection;
   }
-  const calleeCarrier = selectedValueCarrier(
+  const optionalInvocation = context.ast.as.AsCallExpression(request.source.call)?.QuestionDotToken !== undefined;
+  const selectedCarrier = optionalInvocation
+    ? resolveRustTargetTypeRef(request.source.sourceCallee.type, context, options) : undefined;
+  const calleeCarrier = optionalInvocation
+    ? rustOptionElementCarrier(selectedCarrier) ?? selectedCarrier : selectedValueCarrier(
     request.source.sourceCallee.expression,
     request.source.sourceCallee.type,
     context,
@@ -685,7 +686,9 @@ function acceptRuntimeCallableCarrierCall(
   if (parameterPlan === undefined) {
     return undefined;
   }
-  const optionalResult = selectRustOptionalCallResult(
+  const optionalResult = sourceStructuralMethod === undefined && sourceConstructorCarrier === undefined
+    ? { kind: "resolved" as const, resultCarrier }
+    : selectRustOptionalCallResult(
     request,
     resultCarrier,
     context,

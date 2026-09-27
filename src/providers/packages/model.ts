@@ -57,7 +57,7 @@ interface RustProviderOperationDefinitionBase<
   // Async provider operations produce future carriers that must be awaited.
   readonly isAsync?: boolean;
   // Exact target invocation safety. This does not grant a lexical unsafe
-  // context; source code must still select an explicit unsafeContext region.
+  // context; source code must still select an explicit unsafecontext region.
   readonly isUnsafe?: boolean;
   readonly immediateCallback?: RustProviderImmediateCallbackDefinition;
 }

@@ -31,7 +31,7 @@ test("AsRef rejects wrong elements, lookalike types and malformed trait argument
   }
 });
 
-test("generic instantiation checks AsRef bounds without a function-name exemption", () => {
+test("generic invocation defers unproved AsRef obligations without creating ownership evidence", () => {
   const template = {
     kind: "provider-operation", operationId: "acme.accept",
     operationKind: "method", target: { form: "call", path: "acme::accept" },
@@ -42,5 +42,10 @@ test("generic instantiation checks AsRef bounds without a function-name exemptio
     isAsync: false, isFallible: false, errorBoundary: "none",
   };
   assert.ok(instantiateProviderOperationTemplate(template, { sourceParameterCarriers: [rustStringTargetType()] }));
-  assert.equal(instantiateProviderOperationTemplate(template, { sourceParameterCarriers: [{ kind: "source-primitive", name: "int32" }] }), undefined);
+  const integer = { kind: "source-primitive", name: "int32" };
+  const selected = instantiateProviderOperationTemplate(template, { sourceParameterCarriers: [integer] });
+  assert.deepEqual(selected.template.parameterCarriers, [integer]);
+  assert.deepEqual(selected.substitutions.types.get("P"), integer);
+  assert.equal(rustCarrierSatisfiesTraitRef(integer, asRef(path)), false);
+  assert.equal(instantiateProviderOperationTemplate(template, { sourceParameterCarriers: [] }), undefined);
 });

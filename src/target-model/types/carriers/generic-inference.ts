@@ -276,7 +276,8 @@ export function inferRustTargetGenericBindings(
           });
       }
       case "closure": {
-        if (right.kind !== "closure" || left.args.length !== right.args.length) return false;
+        if (right.kind !== "closure" || left.args.length !== right.args.length ||
+          (left.callTrait ?? "Fn") !== (right.callTrait ?? "Fn")) return false;
         const nested = matchBinder(left.lifetimeBinder, right.lifetimeBinder, lifetimeContext);
         return nested !== undefined && left.args.every((argument, index) =>
           match(argument, right.args[index]!, nested)) &&

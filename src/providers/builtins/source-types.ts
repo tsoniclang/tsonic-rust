@@ -61,6 +61,7 @@ export function rustBuiltInSourceTypeSemantics(): RustProviderSemantics {
   return Object.freeze({
     exports: Object.freeze([]),
     operations: Object.freeze([]),
+    attributes: Object.freeze([]),
     carrierPaths: Object.freeze({ [rustNativeScalarTargetId]: "char" }),
     carrierTraits: Object.freeze({}),
     binaryHooks: Object.freeze([]),
@@ -69,6 +70,19 @@ export function rustBuiltInSourceTypeSemantics(): RustProviderSemantics {
       rustConstPointerType,
       rustMutPointerType,
       scalarType,
+      Object.freeze({
+        exportId: rustSourceTypeExportIds.slice,
+        providerPackageId: "tsonic-rust-source",
+        providerId: rustSourceVirtualModulesProviderId,
+        providerVersion: rustSourceProviderVersion,
+        providerModuleId: rustTypesModule,
+        moduleSpecifier: rustTypesModule,
+        genericParameters: Object.freeze([{ kind: "type" as const, sourceName: "T" }]),
+        targetCarrier: Object.freeze({
+          kind: "slice" as const,
+          element: Object.freeze({ kind: "type-parameter" as const, name: "T" }),
+        }),
+      }),
     ]),
   });
 }

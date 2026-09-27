@@ -14,7 +14,7 @@ const projectionGenerics: RustGenerics = {
 };
 
 export function checkedProjectProjectionSignature(slot: string): RustTraitFunction {
-  return {
+  return { kind: "function",
     name: slot,
     generics: projectionGenerics,
     selfParam: rustSelfParameter("rc"),

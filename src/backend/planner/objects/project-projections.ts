@@ -33,7 +33,7 @@ export function planRustProjectProjectionImplementations(
     items.push({ kind: "impl", target: targetType,
       generics: representation === undefined ? emptyRustGenerics : rustProjectRepresentationGenerics(representation, context),
       trait: { kind: "named", path: "core::convert::TryFrom", genericArguments: [{ kind: "type", type: sourceType }] },
-      associatedTypes: [{ name: "Error", type: { kind: "unit" } }], functions: [{
+      members: [{ kind: "type", name: "Error", type: { kind: "unit" } }, { kind: "function",
         name: "try_from", visibility: "private", generics: emptyRustGenerics,
         params: [{ name: "source", type: sourceType }],
         returnType: { kind: "named", path: "Result", genericArguments: [
