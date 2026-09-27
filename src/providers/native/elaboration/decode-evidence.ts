@@ -58,11 +58,11 @@ export function decodeNativeEvidence(value: unknown, limits: RustNativeSourceLim
   };
   const scopeDecoder = createNativeScopeDecoder(graph, generics, span);
   const input = record(value);
-  const phase = choice(input.phase, ["declarations", "checked"] as const);
+  const phase = choice(input.phase, ["declarations", "typed", "checked"] as const);
   if (phase === "declarations" && ("occurrences" in input || "effects" in input || "flows" in input)) {
     throw new Error("Native Rust declaration evidence cannot claim checked body evidence.");
   }
-  shape(input, phase === "checked" ? ["phase", "root", "items", "inputs", "probes", "types", "constants", "definitions", "scopes", "expansions", "occurrences", "effects", "flows"] :
+  shape(input, phase !== "declarations" ? ["phase", "root", "items", "inputs", "probes", "types", "constants", "definitions", "scopes", "expansions", "occurrences", "effects", "flows"] :
     ["phase", "root", "items", "inputs", "probes", "types", "constants", "definitions", "scopes", "expansions"]);
   const root = identity(input.root);
   const items = array(input.items, value => { reserve(); return identity(value); });

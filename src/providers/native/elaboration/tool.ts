@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import type { RustLexicalTokenTree } from "../../../target-model/syntax/token-tree.js";
 import { decodeNativeTokenResponse } from "./tokens.js";
 import { decodeNativeEvidence } from "./decode-evidence.js";
-import type { RustNativeDeclarationEvidence, RustNativeEvidence, RustNativeSemanticEvidence } from "./evidence.js";
+import type { RustNativeDeclarationEvidence, RustNativeEvidence, RustNativeSemanticEvidence, RustNativeTypingEvidence } from "./evidence.js";
 import { validateRustNativeEvidenceInputs } from "./freshness.js";
 import { runRustNativeCommand } from "../protocol/bounded-command.js";
 import { defaultRustNativeSourceLimits, validateRustNativeSourceLimits } from "./limits.js";
@@ -19,6 +19,7 @@ export interface RustNativeSourceTool {
   readonly sysroot: string;
   tokens(source: string, edition: string): readonly RustLexicalTokenTree[];
   declarations(arguments_: readonly string[]): RustNativeDeclarationEvidence;
+  typing(arguments_: readonly string[]): RustNativeTypingEvidence;
   check(arguments_: readonly string[]): RustNativeEvidence;
 }
 
@@ -118,6 +119,11 @@ export function createRustNativeSourceTool(options: {
     declarations(arguments_: readonly string[]): RustNativeDeclarationEvidence {
       const evidence = analyze("declarations", arguments_);
       if (evidence.phase !== "declarations") throw new Error("Native Rust source service did not return declaration evidence.");
+      return evidence;
+    },
+    typing(arguments_: readonly string[]): RustNativeTypingEvidence {
+      const evidence = analyze("typed", arguments_);
+      if (evidence.phase !== "typed") throw new Error("Native Rust source service did not return typing evidence.");
       return evidence;
     },
     check(arguments_: readonly string[]): RustNativeEvidence {

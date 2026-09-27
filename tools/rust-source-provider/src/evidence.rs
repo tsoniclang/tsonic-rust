@@ -30,13 +30,23 @@ pub enum Evidence {
         #[serde(flatten)]
         declarations: DeclarationEvidence,
     },
+    Typed {
+        #[serde(flatten)]
+        body: BodyEvidence,
+    },
     Checked {
         #[serde(flatten)]
-        declarations: DeclarationEvidence,
-        occurrences: Vec<Occurrence>,
-        effects: Vec<BodyEffects>,
-        flows: Vec<crate::flow::model::BodyFlow>,
+        body: BodyEvidence,
     },
+}
+
+#[derive(Serialize)]
+pub struct BodyEvidence {
+    #[serde(flatten)]
+    declarations: DeclarationEvidence,
+    occurrences: Vec<Occurrence>,
+    effects: Vec<BodyEffects>,
+    flows: Vec<crate::flow::model::BodyFlow>,
 }
 
 #[derive(Serialize)]
@@ -128,7 +138,7 @@ pub struct StableDefinitionId {
 }
 
 pub fn analyze(arguments: &[String], phase: EvidencePhase, limits: &Limits) -> Result<Vec<u8>, String> {
-    if phase == EvidencePhase::Checked { crate::flow::initialize(limits.maximum_rows)?; }
+    if phase != EvidencePhase::Declarations { crate::flow::initialize(limits.maximum_rows)?; }
     let mut callbacks = EvidenceCallbacks {
         limits, phase, inputs: TrackedInputs::new(limits.maximum_rows),
         effects: TrackedEffects::new(limits.maximum_rows), result: None,
@@ -149,9 +159,11 @@ struct EvidenceCallbacks<'limits> {
 impl Callbacks for EvidenceCallbacks<'_> {
     fn config(&mut self, configuration: &mut interface::Config) {
         configuration.file_loader = Some(Box::new(self.inputs.clone()));
-        if self.phase == EvidencePhase::Checked {
+        if self.phase != EvidencePhase::Declarations {
             configuration.opts.unstable_opts.maximal_hir_to_mir_coverage = true;
             configuration.override_queries = Some(crate::flow::provide);
+        }
+        if self.phase == EvidencePhase::Checked {
             let effects = self.effects.clone();
             configuration.register_lints = Some(Box::new(move |_, store| {
                 let effects = effects.clone();
@@ -165,11 +177,21 @@ impl Callbacks for EvidenceCallbacks<'_> {
         _compiler: &interface::Compiler,
         context: TyCtxt<'tcx>,
     ) -> Compilation {
-        if self.phase == EvidencePhase::Declarations {
-            self.capture(context);
-            Compilation::Stop
-        } else {
-            Compilation::Continue
+        match self.phase {
+            EvidencePhase::Declarations => {
+                self.capture(context);
+                Compilation::Stop
+            },
+            EvidencePhase::Typed => {
+                rustc_hir_analysis::check_crate(context);
+                context.sess.dcx().abort_if_errors();
+                context.par_hir_for_each_module(|module| {
+                    rustc_lint::late_lint_mod(context, module, self.effects.pass());
+                });
+                self.capture(context);
+                Compilation::Stop
+            },
+            EvidencePhase::Checked => Compilation::Continue,
         }
     }
 
@@ -253,7 +275,7 @@ fn collect(context: TyCtxt<'_>, phase: EvidencePhase, limits: &Limits, tracked_i
         collector.graph.reserve(0)?;
         items.push(collector.graph.definition(owner.to_def_id())?);
     }
-    if phase == EvidencePhase::Checked {
+    if phase != EvidencePhase::Declarations {
         for owner in context.hir_body_owners() {
             context.ensure_done().mir_built(owner);
             collector.graph.definition(owner.to_def_id())?;
@@ -288,7 +310,7 @@ fn collect(context: TyCtxt<'_>, phase: EvidencePhase, limits: &Limits, tracked_i
         let definitions = collector.graph.take_definitions();
         let mut complete = definitions.is_empty();
         for definition in definitions { collector.definition(definition)?; }
-        if phase == EvidencePhase::Checked {
+        if phase != EvidencePhase::Declarations {
             let flow = crate::flow::take()?;
             complete &= flow.bodies.is_empty();
             for _ in 0..flow.rows { collector.graph.reserve(0)?; }
@@ -318,7 +340,10 @@ fn collect(context: TyCtxt<'_>, phase: EvidencePhase, limits: &Limits, tracked_i
         constants, expansions, definitions, scopes: collector.scopes };
     Ok(match phase {
         EvidencePhase::Declarations => Evidence::Declarations { declarations },
-        EvidencePhase::Checked => Evidence::Checked { declarations, occurrences: collector.occurrences, effects, flows },
+        EvidencePhase::Typed | EvidencePhase::Checked => {
+            let body = BodyEvidence { declarations, occurrences: collector.occurrences, effects, flows };
+            if phase == EvidencePhase::Typed { Evidence::Typed { body } } else { Evidence::Checked { body } }
+        },
     })
 }
 
@@ -340,7 +365,7 @@ impl Collector<'_, '_> {
             | DefKind::TyAlias | DefKind::ForeignTy | DefKind::Field | DefKind::Const { .. }
             | DefKind::Static { .. } | DefKind::AssocConst { .. } | DefKind::Ctor(..) =>
                 Some(self.context.type_of(id).instantiate_identity().skip_norm_wip()),
-            DefKind::Closure if self.phase == EvidencePhase::Checked =>
+            DefKind::Closure if self.phase != EvidencePhase::Declarations =>
                 Some(self.context.type_of(id).instantiate_identity().skip_norm_wip()),
             _ => None,
         };

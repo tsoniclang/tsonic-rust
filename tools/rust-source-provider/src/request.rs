@@ -28,6 +28,7 @@ pub enum Request {
 #[serde(rename_all = "kebab-case")]
 pub enum EvidencePhase {
     Declarations,
+    Typed,
     Checked,
 }
 

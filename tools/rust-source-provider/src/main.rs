@@ -4,6 +4,7 @@ extern crate rustc_ast;
 extern crate rustc_ast_pretty;
 extern crate rustc_driver;
 extern crate rustc_hir;
+extern crate rustc_hir_analysis;
 extern crate rustc_hir_typeck;
 extern crate rustc_interface;
 extern crate rustc_lint;

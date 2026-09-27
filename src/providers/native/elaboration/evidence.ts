@@ -80,14 +80,21 @@ export interface RustNativeDeclarationEvidence extends RustNativeDeclarationGrap
   readonly phase: "declarations";
 }
 
-export interface RustNativeEvidence extends RustNativeDeclarationGraph {
-  readonly phase: "checked";
+interface RustNativeBodyEvidence extends RustNativeDeclarationGraph {
   readonly occurrences: readonly RustNativeOccurrence[];
   readonly effects: readonly RustNativeBodyEffects[];
   readonly flows: readonly RustNativeBodyFlow[];
 }
 
-export type RustNativeSemanticEvidence = RustNativeDeclarationEvidence | RustNativeEvidence;
+export interface RustNativeTypingEvidence extends RustNativeBodyEvidence {
+  readonly phase: "typed";
+}
+
+export interface RustNativeEvidence extends RustNativeBodyEvidence {
+  readonly phase: "checked";
+}
+
+export type RustNativeSemanticEvidence = RustNativeDeclarationEvidence | RustNativeTypingEvidence | RustNativeEvidence;
 
 export interface RustNativeBodyEffects {
   readonly owner: RustNativeDefinitionId;
