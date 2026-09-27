@@ -2,6 +2,7 @@ import type { AstReader, Node, SourceIntrinsicDeclarationInfo } from "@tsonic/ts
 import type { RustLexicalTokenTree, RustNativeMacroInput, RustNativeTokenTree } from "../../target-model/syntax/token-tree.js";
 import { bindRustTokenQuotation, createRustTokenQuotation } from "../../target-model/syntax/quotation.js";
 import { isRustTokenQuotationDeclaration } from "./syntax-intrinsics.js";
+import { readRustSourceMacroFragment, type RustSourceMacroFragment } from "./macro-fragment.js";
 
 export type RustSourceMacroInputResult<Fragment> =
   | { readonly kind: "available"; readonly input: RustNativeMacroInput<Fragment> }
@@ -9,7 +10,7 @@ export type RustSourceMacroInputResult<Fragment> =
 
 export interface RustSourceMacroInputContext<Fragment> {
   readonly ast: AstReader;
-  readonly fragment: (node: Node) => Fragment;
+  readonly fragment: (source: RustSourceMacroFragment) => Fragment;
   readonly intrinsic: (tag: Node) => SourceIntrinsicDeclarationInfo | undefined;
   readonly tokenize: (source: string) => readonly RustLexicalTokenTree[];
 }
@@ -59,7 +60,9 @@ function sequence<Fragment>(
   for (const [index, node] of nodes.entries()) {
     if (index !== 0) tokens.push(comma);
     if (!context.ast.is.IsOmittedExpression(node)) {
-      tokens.push(Object.freeze({ kind: "fragment", fragment: context.fragment(node!) }));
+      const selected = readRustSourceMacroFragment(node!, context);
+      if (selected.kind === "rejected") return selected;
+      tokens.push(Object.freeze({ kind: "fragment", fragment: context.fragment(selected.fragment) }));
     }
   }
   if (trailingComma) tokens.push(comma);
@@ -96,7 +99,9 @@ function quotation<Fragment>(
       const tail = ast.cookedTemplateText(span.Literal);
       if (tail === undefined) return rejected(span.Literal, "Native token quotation contains invalid or unterminated template text.");
       text.push(tail);
-      fragments.push(context.fragment(span.Expression));
+      const selected = readRustSourceMacroFragment(span.Expression, context);
+      if (selected.kind === "rejected") return selected;
+      fragments.push(context.fragment(selected.fragment));
     }
   } else {
     return rejected(template, "Native token quotation requires template syntax.");

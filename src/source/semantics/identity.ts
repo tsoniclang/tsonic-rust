@@ -11,6 +11,11 @@ export const rustSourceSyntaxExportIds = Object.freeze({
   tokens: "tokens",
 } as const);
 
+export const rustSourceSyntaxMemberIds = Object.freeze({
+  tokenType: "tokens.type",
+  tokenItems: "tokens.items",
+} as const);
+
 export const rustSourceTypeExportIds = Object.freeze({
   life: "Life",
   staticLifetime: "Static",
