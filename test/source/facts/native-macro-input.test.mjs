@@ -28,7 +28,7 @@ function syntax(expression, { quotation = false, tokenize } = {}) {
     ast.forEachChild(node, visit);
   };
   visit(checked.getSourceFile("/src/index.ts"));
-  const call = nodes.find(ast.is.IsCallExpression);
+  const call = nodes.find(node => ast.is.IsCallExpression(node) || ast.is.IsTaggedTemplateExpression(node));
   assert.ok(call);
   const tags = new Set(quotation ? nodes.filter(ast.is.IsTaggedTemplateExpression)
     .map(node => ast.as.AsTaggedTemplateExpression(node).Tag) : []);
@@ -110,6 +110,29 @@ test("exact quotation uses native delimiters and retains each original splice", 
   }
 });
 
+test("selected native tags reuse exact quotation grammar without a tokens wrapper", () => {
+  for (const source of ["`[${first}; ${count}]`", "`{ GET \"/\" => ${handler}; }`", "`(${value},)`", "``", "`${value}; ${count}`"]) {
+    const direct = syntax(`arbitrary${source}`);
+    const explicit = syntax(`arbitrary(quote${source})`, { quotation: true });
+    const normalize = value => {
+      const input = available(value);
+      const visit = token => token.kind === "fragment"
+        ? { kind: "fragment", text: value.ast.text(token.fragment) }
+        : token.kind === "group" ? { ...token, tokens: token.tokens.map(visit) } : token;
+      return { ...input, tokens: input.tokens.map(visit) };
+    };
+    assert.deepEqual(normalize(direct), normalize(explicit));
+    assert.equal(direct.fragments.length, explicit.fragments.length);
+    const visit = tokens => {
+      for (const token of tokens) {
+        if (token.kind === "fragment") assert.ok(direct.fragments.includes(token.fragment));
+        else if (token.kind === "group") visit(token.tokens);
+      }
+    };
+    visit(available(direct).tokens);
+  }
+});
+
 test("quotation preserves Rust literal spelling after ordinary TypeScript escaping", () => {
   const value = syntax("emit(quote`(b\"\\\\xff\", r##\"😀\"##, 'scope, r#type, 9007199254740993_u64)`)", { quotation: true });
   const input = available(value);
@@ -128,7 +151,8 @@ test("quotation splices inside literals, comments or compound identifiers reject
 });
 
 test("native-only input constraints reject without a normal-call workaround", () => {
-  for (const source of ["emit?.(first)", "emit<number>(first)", "emit(quote`first`, second)", "emit(quote<number>`first`)", "emit(quote`\\x`)"]) {
+  for (const source of ["emit?.(first)", "emit<number>(first)", "emit(quote`first`, second)", "emit(quote<number>`first`)", "emit(quote`\\x`)",
+    "emit<number>`first`", "emit`\\x`"]) {
     const value = syntax(source, { quotation: true,
       tokenize: () => assert.fail("Invalid source input must reject before native lexing.") });
     assert.equal(value.result.kind, "rejected");

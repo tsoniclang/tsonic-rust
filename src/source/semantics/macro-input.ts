@@ -18,6 +18,7 @@ export function readRustSourceMacroInput<Fragment>(
   context: RustSourceMacroInputContext<Fragment>,
 ): RustSourceMacroInputResult<Fragment> {
   const { ast } = context;
+  if (ast.is.IsTaggedTemplateExpression(node)) return quotation(node, context);
   if (!ast.is.IsCallExpression(node)) return rejected(node, "Native macro input requires a source invocation.");
   const call = ast.as.AsCallExpression(node)!;
   if (call.QuestionDotToken !== undefined || (call.TypeArguments?.Nodes.length ?? 0) !== 0) {
