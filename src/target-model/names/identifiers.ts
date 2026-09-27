@@ -10,8 +10,8 @@ export const rustReservedIdentifiers: ReadonlySet<string> = new Set([
 const rustRawIdentifierForbidden: ReadonlySet<string> = new Set([
   "crate", "self", "Self", "super",
 ]);
-const rustIdentifierPattern = /^[A-Za-z_][A-Za-z0-9_]*$/u;
-const rustRawIdentifierPattern = /^r#[A-Za-z_][A-Za-z0-9_]*$/u;
+const rustIdentifierPattern = /^(?:_|\p{XID_Start})\p{XID_Continue}*$/u;
+const rustRawIdentifierPattern = /^r#(?:_|\p{XID_Start})\p{XID_Continue}*$/u;
 
 export function rustTargetIdentifier(name: string): string {
   if (rustRawIdentifierPattern.test(name)) {
@@ -19,47 +19,46 @@ export function rustTargetIdentifier(name: string): string {
   }
   return rustReservedIdentifiers.has(name) && !rustRawIdentifierForbidden.has(name)
     ? `r#${name}`
-    : rustRawIdentifierForbidden.has(name) ? `${name.toLowerCase()}_value` : name;
+    : name;
 }
 
 export function isValidRustIdentifier(name: string): boolean {
   if (rustRawIdentifierPattern.test(name)) {
     const semanticName = name.slice(2);
-    return rustReservedIdentifiers.has(semanticName) &&
-      !rustRawIdentifierForbidden.has(semanticName);
+    return semanticName !== "_" && !rustRawIdentifierForbidden.has(semanticName);
   }
-  return rustIdentifierPattern.test(name) && !rustReservedIdentifiers.has(name);
+  return name !== "_" && rustIdentifierPattern.test(name) && !rustReservedIdentifiers.has(name);
+}
+
+export function isValidRustAuthoredIdentifier(name: string): boolean {
+  return !name.startsWith("r#") && isValidRustIdentifier(rustTargetIdentifier(name));
 }
 
 export function rustSnakeCaseIdentifier(sourceName: string): string {
   const words = rustIdentifierWords(sourceName);
   const leadingUnderscore = /^_[^_]/u.test(sourceName) ? "_" : "";
   const value = `${leadingUnderscore}${words.join("_").toLowerCase()}` || "value";
-  return rustTargetIdentifier(/^[0-9]/u.test(value) ? `value_${value}` : value);
+  return generatedIdentifier(/^[0-9]/u.test(value) ? `value_${value}` : value);
 }
 
 export function rustPascalCaseIdentifier(sourceName: string): string {
   const words = rustIdentifierWords(sourceName);
   const value = words.map((word) =>
     `${word.slice(0, 1).toUpperCase()}${word.slice(1).toLowerCase()}`).join("") || "Value";
-  return rustTargetIdentifier(/^[0-9]/u.test(value) ? `Type${value}` : value);
+  return generatedIdentifier(/^[0-9]/u.test(value) ? `Type${value}` : value);
 }
 
 export function rustScreamingSnakeIdentifier(sourceName: string): string {
   const value = rustIdentifierWords(sourceName).join("_").toUpperCase() || "VALUE";
-  return rustTargetIdentifier(/^[0-9]/u.test(value) ? `VALUE_${value}` : value);
+  return generatedIdentifier(/^[0-9]/u.test(value) ? `VALUE_${value}` : value);
 }
 
 export function rustModuleSegmentName(sourceName: string): string {
   let value = sourceName
-    .replace(/([a-z0-9])([A-Z])/gu, "$1_$2")
-    .replace(/([A-Z]+)([A-Z][a-z])/gu, "$1_$2")
-    .toLowerCase()
-    .replace(/[^a-z0-9_]/gu, "_")
-    .replace(/_+/gu, "_")
-    .replace(/^_+|_+$/gu, "") || "module";
+    .replace(/[^\p{XID_Continue}]/gu, "_") || "module";
+  if (value === "_") value = "module";
+  if (!/^(?:_|\p{XID_Start})/u.test(value)) value = `module_${value}`;
   if (
-    /^[0-9]/u.test(value) ||
     value === "main" ||
     value === "lib" ||
     value === "mod" ||
@@ -68,9 +67,7 @@ export function rustModuleSegmentName(sourceName: string): string {
   ) {
     value = `${value}_module`;
   }
-  return value.length <= 120
-    ? value
-    : value.slice(0, 120).replace(/_+$/u, "");
+  return value;
 }
 
 function rustIdentifierWords(sourceName: string): string[] {
@@ -81,4 +78,8 @@ function rustIdentifierWords(sourceName: string): string[] {
     .replace(/([A-Z]+)([A-Z][a-z])/gu, "$1 $2")
     .split(/[^A-Za-z0-9]+/u)
     .filter((word) => word.length > 0);
+}
+
+function generatedIdentifier(name: string): string {
+  return rustTargetIdentifier(rustRawIdentifierForbidden.has(name) ? `${name}_value` : name);
 }

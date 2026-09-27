@@ -2,6 +2,7 @@ import type { AstReader, Node } from "@tsonic/tsts";
 import {
   rustPascalCaseIdentifier,
   rustSnakeCaseIdentifier,
+  rustTargetIdentifier,
 } from "../../../target-model/names/identifiers.js";
 
 export interface RustSyntheticNameState {
@@ -20,8 +21,7 @@ export function createRustSyntheticNameState(
       const name = ast.text(node);
       if (name.length > 0) {
         reserved.add(name);
-        reserved.add(rustSnakeCaseIdentifier(name));
-        reserved.add(rustPascalCaseIdentifier(name));
+        reserved.add(rustTargetIdentifier(name));
       }
     }
     ast.forEachChild(node, (child) => {

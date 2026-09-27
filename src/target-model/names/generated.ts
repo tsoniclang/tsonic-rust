@@ -1,13 +1,14 @@
-import { rustSnakeCaseIdentifier } from "./identifiers.js";
+import { rustSnakeCaseIdentifier, rustTargetIdentifier } from "./identifiers.js";
 
 export function allocateRustGeneratedName(
   usedNames: Set<string>,
   preferred: string,
 ): string {
-  let candidate = preferred;
+  const semanticName = preferred.startsWith("r#") ? preferred.slice(2) : preferred;
+  let candidate = rustTargetIdentifier(semanticName);
   let suffix = 2;
   while (usedNames.has(candidate)) {
-    candidate = `${preferred}_${suffix}`;
+    candidate = rustTargetIdentifier(`${semanticName}_${suffix}`);
     suffix += 1;
   }
   usedNames.add(candidate);
