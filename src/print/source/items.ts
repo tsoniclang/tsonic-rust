@@ -112,7 +112,7 @@ export function printRustItem(item: RustItem): string {
           case "type": {
             const bounds = member.bounds.length === 0
               ? "" : `: ${member.bounds.map(printRustTypeBound).join(" + ")}`;
-            return `    type ${member.name}${bounds};`;
+            return `${printAttributes(member.attrs, 1)}    type ${member.name}${bounds};`;
           }
         }
       }).join("\n");
@@ -132,14 +132,14 @@ export function printRustItem(item: RustItem): string {
         switch (member.kind) {
           case "macro-invocation": return `    ${printRustMacroItem(member)}`;
           case "function": return printRustImplFunction(member, item.trait === undefined);
-          case "type": return `    type ${member.name} = ${printRustType(member.type)};`;
+          case "type": return `${printAttributes(member.attrs, 1)}    type ${member.name} = ${printRustType(member.type)};`;
           case "const": {
             const visibility = item.trait === undefined ? printRustVisibility(member.visibility) : "";
             return `${printAttributes(member.attrs, 1)}    ${visibility}const ${member.name}: ${printRustType(member.type)} = ${printRustExpr(member.value)};`;
           }
         }
       }).join("\n\n");
-      return members.length === 0 ? `${header}}` : `${header}\n${members}\n}`;
+      return `${printAttributes(item.attrs, 0)}${members.length === 0 ? `${header}}` : `${header}\n${members}\n}`}`;
     }
     case "function":
       return printRustFunction(item);

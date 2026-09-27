@@ -19,6 +19,8 @@ import { nameRustSignatureTypes } from "./signature-aliases.js";
 import { rustItemsReferenceModuleAlias } from "../inspection/source-module-usage.js";
 import { rustTypeEquals } from "../inspection/type-equality.js";
 import { mergeRustAdjacentConditionalBranches } from "./conditional-branches.js";
+import { appendRustNamingAllowance, finalizeRustFunctionNames, finalizeRustItemNames,
+  rustExpressionDeclaresNonSnakeName, rustStatementDeclaresNonSnakeName } from "./authored-names.js";
 
 export function finalizeRustSourceStyle(
   model: RustSourceFileModel,
@@ -78,6 +80,7 @@ function finalizeRustItemStyle(
   item: RustItem,
   publicTypes: ReadonlySet<string>,
 ): RustItem {
+  item = finalizeRustItemNames(item);
   if (item.kind === "mod-decl" && item.body !== undefined) return { ...item, body: finalizeRustSourceStyle(item.body) };
   if (item.kind === "function") {
     let attrs = item.params.length <= 7
@@ -102,12 +105,16 @@ function finalizeRustItemStyle(
     };
   }
   if (item.kind === "const" || item.kind === "thread-local") {
-    return { ...item, value: createRustBodyStyler().expression(item.value) };
+    const styler = createRustBodyStyler();
+    const value = styler.expression(item.value);
+    return { ...item, value, ...(styler.requiresNamingAllowance()
+      ? { attrs: appendRustNamingAllowance(item.attrs, "snake") } : {}) };
   }
   return item;
 }
 
 function finalizeRustTraitFunctionStyle(fn: RustTraitFunction): RustTraitFunction {
+  fn = finalizeRustFunctionNames(fn);
   const argumentCount = fn.params.length + (fn.selfParam === undefined ? 0 : 1);
   let attrs = argumentCount <= 7
     ? fn.attrs
@@ -128,6 +135,7 @@ function finalizeRustImplFunctionStyle(
   inherent: boolean,
   publicOwner: boolean,
 ): RustImplFunction {
+  fn = finalizeRustFunctionNames(fn, inherent);
   let attrs = fn.attrs;
   if (hasUnusedParameter(fn)) attrs = appendRustAttribute(attrs, rustLintAttributes.unusedVariables);
   if (inherent && hasErasedGenericParameter(fn)) attrs = appendRustAttribute(attrs, rustLintAttributes.unusedTypeParameters);
@@ -160,11 +168,16 @@ function hasUnusedParameter(fn: Pick<RustImplFunction, "params" | "body">): bool
 function createRustBodyStyler(nameType?: (type: RustType, role: string) => RustType): {
   readonly block: (block: RustBlock) => RustBlock;
   readonly expression: (expression: RustExpr) => RustExpr;
+  readonly requiresNamingAllowance: () => boolean;
 } {
-  return { block: finalizeRustFunctionBodyStyle, expression: finalizeRustExpressionStyle };
+  let requiresNamingAllowance = false;
+  return { block: finalizeRustFunctionBodyStyle, expression: finalizeRustExpressionStyle,
+    requiresNamingAllowance: () => requiresNamingAllowance };
 
 function finalizeRustFunctionBodyStyle(block: RustBlock): RustBlock {
-  return finalizeRustBlockLiveness(finalizeRustBlockStyle(block));
+  const styled = finalizeRustBlockLiveness(finalizeRustBlockStyle(block));
+  return requiresNamingAllowance
+    ? { ...styled, innerAttrs: appendRustNamingAllowance(styled.innerAttrs, "snake") } : styled;
 }
 
 function finalizeRustBlockStyle(block: RustBlock): RustBlock {
@@ -185,10 +198,12 @@ function finalizeRustBlockStyle(block: RustBlock): RustBlock {
 }
 
 function finalizeRustStatementStyle(statement: RustStmt): RustStmt {
+  requiresNamingAllowance ||= rustStatementDeclaresNonSnakeName(statement);
   switch (statement.kind) {
     case "macro-statement":
-    case "item":
       return statement;
+    case "item":
+      return { ...statement, item: finalizeRustItemStyle(statement.item, new Set()) };
     case "let":
       return { ...statement,
         ...(statement.type === undefined || nameType === undefined ? {} : { type: nameType(statement.type, statement.name) }),
@@ -406,6 +421,7 @@ function rustStatementMayContinueLoop(statement: RustStmt, label: string | undef
 }
 
 function finalizeRustExpressionStyle(expression: RustExpr): RustExpr {
+  requiresNamingAllowance ||= rustExpressionDeclaresNonSnakeName(expression);
   let result: RustExpr;
   switch (expression.kind) {
     case "int-literal":

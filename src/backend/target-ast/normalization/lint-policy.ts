@@ -38,6 +38,8 @@ export const rustLintAttributes = Object.freeze({
     rustListAttribute("allow", [rustWordAttribute("clippy::new_ret_no_self"), rustValueAttribute("reason", { kind: "string", value: "authored static member name" })]),
   nonCamelCaseType:
     rustListAttribute("allow", [rustWordAttribute("non_camel_case_types"), rustValueAttribute("reason", { kind: "string", value: "preserves an exact target type identity" })]),
+  nonSnakeCaseName:
+    rustListAttribute("allow", [rustWordAttribute("non_snake_case"), rustValueAttribute("reason", { kind: "string", value: "preserves the authored source name" })]),
   nonUpperCaseGlobal:
     rustListAttribute("allow", [rustWordAttribute("non_upper_case_globals"), rustValueAttribute("reason", { kind: "string", value: "preserves the authored source name" })]),
   pointerDerefOutsideUnsafeFunction:

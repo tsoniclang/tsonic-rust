@@ -442,12 +442,14 @@ export interface RustTraitFunction {
 export interface RustTraitAssociatedType {
   readonly kind: "type";
   readonly name: string;
+  readonly attrs?: readonly RustAttribute[];
   readonly bounds: readonly RustTypeBound[];
 }
 
 export interface RustImplAssociatedType {
   readonly kind: "type";
   readonly name: string;
+  readonly attrs?: readonly RustAttribute[];
   readonly type: RustType;
 }
 
@@ -493,7 +495,7 @@ export type RustItem =
   | { readonly kind: "extern-crate"; readonly name: string }
   | { readonly kind: "struct"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly RustAttribute[]; readonly deadCode?: RustDeadCodeDisposition; readonly generics: RustGenerics; readonly fields: readonly RustStructField[] }
   | { readonly kind: "trait"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly RustAttribute[]; readonly deadCode?: RustDeadCodeDisposition; readonly generics: RustGenerics; readonly superTraits?: readonly RustType[]; readonly members: readonly RustTraitMember[] }
-  | { readonly kind: "impl"; readonly generics: RustGenerics; readonly trait?: RustType; readonly target: RustType; readonly members: readonly RustImplMember[] }
+  | { readonly kind: "impl"; readonly attrs?: readonly RustAttribute[]; readonly generics: RustGenerics; readonly trait?: RustType; readonly target: RustType; readonly members: readonly RustImplMember[] }
   | { readonly kind: "enum"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly RustAttribute[]; readonly deadCode?: RustDeadCodeDisposition; readonly generics: RustGenerics; readonly variants: readonly { readonly name: string; readonly attrs?: readonly RustAttribute[]; readonly deadCode?: RustDeadCodeDisposition; readonly discriminant?: string; readonly fields?: readonly RustType[] }[] }
   | { readonly kind: "type-alias"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly RustAttribute[]; readonly deadCode?: RustDeadCodeDisposition; readonly generics: RustGenerics; readonly target: RustType }
   | { readonly kind: "use"; readonly path: string; readonly alias?: string; readonly visibility?: RustVisibility };
