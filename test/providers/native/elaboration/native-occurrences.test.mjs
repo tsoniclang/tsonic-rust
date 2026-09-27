@@ -126,3 +126,30 @@ pub fn select(input: Result<String, String>) -> impl FnOnce() -> String {
   assert.ok(captures.length > 0);
   for (const capture of captures) assert.ok(canonical.has(nativeNodeKey(capture.base.binding)));
 });
+
+test("duplicated macro input retains distinct native bindings even when every source span agrees", () => {
+  const text = `
+macro_rules! duplicate_block { ($body:block) => { $body $body } }
+pub fn observe(input: u32) {
+    duplicate_block!({ let repeated = input; core::hint::black_box(repeated); });
+}
+`;
+  const start = Buffer.byteLength(text.slice(0, text.indexOf("repeated =")), "utf8");
+  const evidence = tool.check(source("duplicated_bindings", text));
+  const bindings = evidence.occurrences.filter(row => row.kind === "pattern" && row.binding !== null &&
+    row.source?.start === start && row.source.end === start + "repeated".length);
+  assert.equal(bindings.length, 2);
+  assert.deepEqual(bindings[0].source, bindings[1].source);
+  assert.notDeepEqual(bindings[0].id, bindings[1].id);
+  assert.equal(bindings[0].type, bindings[1].type);
+  for (const binding of bindings) {
+    assert.deepEqual(binding.resolution, { kind: "binding", id: binding.id });
+    assert.ok(evidence.occurrences.some(row => row.kind === "expression" && row.resolution?.kind === "binding" &&
+      nativeNodeKey(row.resolution.id) === nativeNodeKey(binding.id)));
+    assert.ok(evidence.effects.some(body => body.accesses.some(access => access.kind === "bind" &&
+      access.base.kind === "local" && nativeNodeKey(access.base.binding) === nativeNodeKey(binding.id))));
+  }
+  const changed = structuredClone(evidence);
+  changed.occurrences.find(row => nativeNodeKey(row.id) === nativeNodeKey(bindings[1].id)).id = bindings[0].id;
+  assert.throws(() => decodeNativeEvidence(changed, defaultRustNativeSourceLimits), /duplicate occurrence/u);
+});
