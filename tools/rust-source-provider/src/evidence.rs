@@ -35,6 +35,7 @@ pub enum Evidence {
         declarations: DeclarationEvidence,
         occurrences: Vec<Occurrence>,
         effects: Vec<BodyEffects>,
+        flows: Vec<crate::flow::model::BodyFlow>,
     },
 }
 
@@ -127,6 +128,7 @@ pub struct StableDefinitionId {
 }
 
 pub fn analyze(arguments: &[String], phase: EvidencePhase, limits: &Limits) -> Result<Vec<u8>, String> {
+    if phase == EvidencePhase::Checked { crate::flow::initialize(limits.maximum_rows)?; }
     let mut callbacks = EvidenceCallbacks {
         limits, phase, inputs: TrackedInputs::new(limits.maximum_rows),
         effects: TrackedEffects::new(limits.maximum_rows), result: None,
@@ -148,6 +150,8 @@ impl Callbacks for EvidenceCallbacks<'_> {
     fn config(&mut self, configuration: &mut interface::Config) {
         configuration.file_loader = Some(Box::new(self.inputs.clone()));
         if self.phase == EvidencePhase::Checked {
+            configuration.opts.unstable_opts.maximal_hir_to_mir_coverage = true;
+            configuration.override_queries = Some(crate::flow::provide);
             let effects = self.effects.clone();
             configuration.register_lints = Some(Box::new(move |_, store| {
                 let effects = effects.clone();
@@ -251,6 +255,7 @@ fn collect(context: TyCtxt<'_>, phase: EvidencePhase, limits: &Limits, tracked_i
     }
     if phase == EvidencePhase::Checked {
         for owner in context.hir_body_owners() {
+            context.ensure_done().mir_built(owner);
             collector.graph.definition(owner.to_def_id())?;
             let mut visitor = BodyVisitor { collector: &mut collector, types: context.typeck(owner), depth: 0 };
             if let ControlFlow::Break(error) = visitor.visit_body(context.hir_body_owned_by(owner)) {
@@ -277,12 +282,28 @@ fn collect(context: TyCtxt<'_>, phase: EvidencePhase, limits: &Limits, tracked_i
         }
         effects.push(BodyEffects { owner: definition_id(body.owner.to_def_id()), accesses });
     }
+    let mut flows = Vec::new();
     loop {
         collector.graph.expand()?;
         let definitions = collector.graph.take_definitions();
-        if definitions.is_empty() { break; }
+        let mut complete = definitions.is_empty();
         for definition in definitions { collector.definition(definition)?; }
+        if phase == EvidencePhase::Checked {
+            let flow = crate::flow::take()?;
+            complete &= flow.bodies.is_empty();
+            for _ in 0..flow.rows { collector.graph.reserve(0)?; }
+            for span in flow.spans { collector.span_expansions(span)?; }
+            for body in &flow.bodies {
+                collector.graph.definition(DefId {
+                    krate: rustc_span::def_id::CrateNum::from_u32(body.owner.krate),
+                    index: rustc_span::def_id::DefIndex::from_u32(body.owner.index),
+                })?;
+            }
+            flows.extend(flow.bodies);
+        }
+        if complete { break; }
     }
+    flows.sort_by_key(|body| (body.owner.krate, body.owner.index));
     let snapshot = tracked_inputs.snapshot()?;
     let inputs = snapshot.files;
     let probes = snapshot.probes;
@@ -297,7 +318,7 @@ fn collect(context: TyCtxt<'_>, phase: EvidencePhase, limits: &Limits, tracked_i
         constants, expansions, definitions, scopes: collector.scopes };
     Ok(match phase {
         EvidencePhase::Declarations => Evidence::Declarations { declarations },
-        EvidencePhase::Checked => Evidence::Checked { declarations, occurrences: collector.occurrences, effects },
+        EvidencePhase::Checked => Evidence::Checked { declarations, occurrences: collector.occurrences, effects, flows },
     })
 }
 

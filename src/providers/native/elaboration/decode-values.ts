@@ -31,6 +31,14 @@ export function boolean(value: unknown): boolean {
   return value;
 }
 
+export function unsignedDecimal(value: unknown, bits: 64 | 128): string {
+  if (typeof value !== "string" || value.length > (bits === 64 ? 20 : 39) ||
+      !/^(?:0|[1-9][0-9]*)$/u.test(value) || BigInt(value) >= 1n << BigInt(bits)) {
+    throw new Error("Native Rust evidence has an invalid exact unsigned integer.");
+  }
+  return value;
+}
+
 export function choice<const Values extends readonly string[]>(value: unknown, values: Values): Values[number] {
   if (typeof value !== "string" || !values.includes(value)) throw new Error("Native Rust evidence has an invalid category.");
   return value;

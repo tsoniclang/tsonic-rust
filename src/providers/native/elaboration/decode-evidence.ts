@@ -15,6 +15,8 @@ import { createNativeConstantDecoder } from "./decode-constants.js";
 import { createNativeScopeDecoder, validateNativeScopeRelations } from "./decode-scopes.js";
 import { createNativeOccurrenceDecoder } from "./decode-occurrences.js";
 import { createNativeEffectDecoder } from "./decode-effects.js";
+import { createNativeFlowDecoder } from "./decode-flow.js";
+import { validateNativeFlowRelations } from "./validate-flow.js";
 import { decodeNativeStableDefinitionId, validateNativeItemInventory } from "./decode-item-inventory.js";
 import { array, boolean, choice, index, record, requireAcyclicParents, shape, text, unique } from "./decode-values.js";
 
@@ -57,10 +59,10 @@ export function decodeNativeEvidence(value: unknown, limits: RustNativeSourceLim
   const scopeDecoder = createNativeScopeDecoder(graph, generics, span);
   const input = record(value);
   const phase = choice(input.phase, ["declarations", "checked"] as const);
-  if (phase === "declarations" && ("occurrences" in input || "effects" in input)) {
+  if (phase === "declarations" && ("occurrences" in input || "effects" in input || "flows" in input)) {
     throw new Error("Native Rust declaration evidence cannot claim checked body evidence.");
   }
-  shape(input, phase === "checked" ? ["phase", "root", "items", "inputs", "probes", "types", "constants", "definitions", "scopes", "expansions", "occurrences", "effects"] :
+  shape(input, phase === "checked" ? ["phase", "root", "items", "inputs", "probes", "types", "constants", "definitions", "scopes", "expansions", "occurrences", "effects", "flows"] :
     ["phase", "root", "items", "inputs", "probes", "types", "constants", "definitions", "scopes", "expansions"]);
   const root = identity(input.root);
   const items = array(input.items, value => { reserve(); return identity(value); });
@@ -114,6 +116,7 @@ export function decodeNativeEvidence(value: unknown, limits: RustNativeSourceLim
   const occurrences = phase === "declarations" ? []
     : array(input.occurrences, createNativeOccurrenceDecoder(graph, generics, { node, span }));
   const effects = phase === "declarations" ? [] : array(input.effects, createNativeEffectDecoder(graph, { node, span }));
+  const flows = phase === "declarations" ? [] : array(input.flows, createNativeFlowDecoder(graph, { node, span }));
   unique(effects.map(row => nativeDefinitionKey(row.owner)), "effect body");
   const typeIds = unique(types.map(row => String(row.id)), "type");
   unique(constants.map(row => String(row.id)), "constant");
@@ -180,9 +183,10 @@ export function decodeNativeEvidence(value: unknown, limits: RustNativeSourceLim
       if (access.fakeRead !== null) requireDefinition(access.fakeRead.closure);
     }
   }
+  validateNativeFlowRelations(flows, requireDefinition, requireBinding, requireSpan);
   return phase === "declarations"
     ? Object.freeze({ phase, root, items, inputs, probes, types, constants, definitions, scopes, expansions })
-    : Object.freeze({ phase, root, items, inputs, probes, types, constants, definitions, scopes, expansions, occurrences, effects });
+    : Object.freeze({ phase, root, items, inputs, probes, types, constants, definitions, scopes, expansions, occurrences, effects, flows });
 }
 
 const definitionKinds = [

@@ -47,7 +47,7 @@ export function createRustNativeSourceTool(options: {
   const sourceRoot = fileURLToPath(new URL("../../../../tools/rust-source-provider/src/", import.meta.url));
   const sourceFiles = ["main.rs", "request.rs", "tokens.rs", "source.rs", "definitions.rs", "inputs.rs", "evidence.rs", "effects.rs",
     "type_model.rs", "type_graph.rs", "type_regions.rs", "type_constants.rs", "type_generics.rs", "scopes.rs",
-    "evidence/adjustments.rs", "evidence/occurrences.rs"];
+    "evidence/adjustments.rs", "evidence/occurrences.rs", "flow.rs", "flow/model.rs", "flow/control.rs", "flow/uses.rs"];
   const hash = createHash("sha256").update(compilerIdentity).update(sysroot);
   for (const file of sourceFiles) hash.update(file).update(readFileSync(join(sourceRoot, file)));
   const binaryRoot = join(cacheRoot, "tool", hash.digest("hex"));

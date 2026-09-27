@@ -7,7 +7,7 @@ import { nativeDefinition, nativeEvidenceFixture, nativeIdentity } from "./nativ
 const node = local => ({ owner: nativeIdentity(1), local });
 
 function evidence(access = {}) {
-  return { ...nativeEvidenceFixture(), phase: "checked", items: [0, 1].map(nativeIdentity),
+  return { ...nativeEvidenceFixture(), phase: "checked", flows: [], items: [0, 1].map(nativeIdentity),
     definitions: [nativeDefinition(0, "module"), nativeDefinition(1, "function"), nativeDefinition(2, "closure")],
     types: [{ id: 0, value: { kind: "primitive", name: "u64" } }],
     occurrences: [

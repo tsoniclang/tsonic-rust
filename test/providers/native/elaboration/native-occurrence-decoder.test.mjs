@@ -7,7 +7,7 @@ const limits = { maximumRows: 10_000, maximumDepth: 16, maximumOutputBytes: 1_04
 const identity = index => ({ krate: 0, index });
 
 function evidence(occurrence) {
-  return { ...nativeEvidenceFixture(), phase: "checked", effects: [], items: [0, 1, 2].map(identity),
+  return { ...nativeEvidenceFixture(), phase: "checked", effects: [], flows: [], items: [0, 1, 2].map(identity),
     definitions: ["module", "function", "associated-function"].map((kind, index) => nativeDefinition(index, kind)),
     types: [{ id: 0, value: { kind: "primitive", name: "u64" } }],
     constants: [{ id: 0, value: { kind: "scalar", type: 0, bytes: 8, bits: "9007199254740993" } }],

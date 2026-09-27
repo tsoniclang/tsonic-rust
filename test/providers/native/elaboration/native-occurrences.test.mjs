@@ -142,12 +142,14 @@ pub fn observe(input: u32) {
   assert.deepEqual(bindings[0].source, bindings[1].source);
   assert.notDeepEqual(bindings[0].id, bindings[1].id);
   assert.equal(bindings[0].type, bindings[1].type);
+  const flowBindings = evidence.flows.flatMap(body => body.locals.flatMap(local => local.binding === null ? [] : [local.binding]));
   for (const binding of bindings) {
     assert.deepEqual(binding.resolution, { kind: "binding", id: binding.id });
     assert.ok(evidence.occurrences.some(row => row.kind === "expression" && row.resolution?.kind === "binding" &&
       nativeNodeKey(row.resolution.id) === nativeNodeKey(binding.id)));
     assert.ok(evidence.effects.some(body => body.accesses.some(access => access.kind === "bind" &&
       access.base.kind === "local" && nativeNodeKey(access.base.binding) === nativeNodeKey(binding.id))));
+    assert.ok(flowBindings.some(identity => nativeNodeKey(identity) === nativeNodeKey(binding.id)));
   }
   const changed = structuredClone(evidence);
   changed.occurrences.find(row => nativeNodeKey(row.id) === nativeNodeKey(bindings[1].id)).id = bindings[0].id;
