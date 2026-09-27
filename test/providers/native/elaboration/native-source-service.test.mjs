@@ -4,6 +4,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { createTestWorkspace } from "../../../../../tsonic/test/scripts/test-workspaces.mjs";
+import { repositoryRoot } from "../../../helpers/rust-session/paths.mjs";
 import { createRustNativeSourceTool, defaultRustNativeSourceLimits } from "../../../../dist/providers/native/elaboration/tool.js";
 import { decodeNativeTokenResponse } from "../../../../dist/providers/native/elaboration/tokens.js";
 import { printRustTokenStream } from "../../../../dist/print/source/macro-input.js";
@@ -12,7 +13,7 @@ import { createRustTokenQuotation, bindRustTokenQuotation } from "../../../../di
 import { validateRustNativeEvidenceInputs } from "../../../../dist/providers/native/elaboration/freshness.js";
 import { decodeNativeEvidence } from "../../../../dist/providers/native/elaboration/decode-evidence.js";
 
-const root = createTestWorkspace("rust-native-source-service");
+const root = createTestWorkspace(join(repositoryRoot, ".temp/generated"), "rust-native-source-service-");
 const cacheRoot = join(root, "cache");
 const tool = createRustNativeSourceTool({ cacheRoot });
 

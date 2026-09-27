@@ -5,12 +5,13 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Worker } from "node:worker_threads";
 import { createTestWorkspace } from "../../../../../tsonic/test/scripts/test-workspaces.mjs";
+import { repositoryRoot } from "../../../helpers/rust-session/paths.mjs";
 import { runRustNativeCommand } from "../../../../dist/providers/native/protocol/bounded-command.js";
 import {
   commandState, nativeCommandErrorBytes,
 } from "../../../../dist/providers/native/protocol/bounded-command-state.js";
 
-export const root = createTestWorkspace("rust-native-command-bounds");
+export const root = createTestWorkspace(join(repositoryRoot, ".temp/generated"), "rust-native-command-bounds-");
 export const protocolRoot = new URL("../../../../dist/providers/native/protocol/", import.meta.url);
 export const posix = { skip: process.platform === "win32" };
 

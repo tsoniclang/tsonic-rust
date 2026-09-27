@@ -3,11 +3,12 @@ import test from "node:test";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createTestWorkspace } from "../../../../../tsonic/test/scripts/test-workspaces.mjs";
+import { repositoryRoot } from "../../../helpers/rust-session/paths.mjs";
 import { createRustNativeSourceTool, defaultRustNativeSourceLimits } from "../../../../dist/providers/native/elaboration/tool.js";
 import { decodeNativeEvidence } from "../../../../dist/providers/native/elaboration/decode-evidence.js";
 import { nativeDefinitionKey } from "../../../../dist/providers/native/elaboration/evidence.js";
 
-const root = createTestWorkspace("rust-native-type-graph");
+const root = createTestWorkspace(join(repositoryRoot, ".temp/generated"), "rust-native-type-graph-");
 const tool = createRustNativeSourceTool({ cacheRoot: join(root, "cache") });
 
 function source(name, text) {

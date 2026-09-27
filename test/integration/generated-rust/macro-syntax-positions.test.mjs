@@ -3,6 +3,7 @@ import test from "node:test";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createTestWorkspace } from "../../../../tsonic/test/scripts/test-workspaces.mjs";
+import { repositoryRoot } from "../../helpers/rust-session/paths.mjs";
 import { emptyRustGenerics } from "../../../dist/backend/target-ast/nodes.js";
 import { printRustItem } from "../../../dist/print/source/items.js";
 import { runRustNativeCommand } from "../../../dist/providers/native/protocol/bounded-command.js";
@@ -19,7 +20,7 @@ function method(name, statements, returnType = { kind: "primitive", name: "u32" 
 }
 
 function nativeProgram(name, items, definitions, consumer) {
-  const root = createTestWorkspace(`rust-macro-positions-${name}`);
+  const root = createTestWorkspace(join(repositoryRoot, ".temp/generated"), `rust-macro-positions-${name}-`);
   const path = join(root, "program.rs");
   const binary = join(root, process.platform === "win32" ? "program.exe" : "program");
   writeFileSync(path, `${definitions}\n${items.map(printRustItem).join("\n")}\n${consumer}\n`);

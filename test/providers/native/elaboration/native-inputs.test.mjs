@@ -5,13 +5,14 @@ import { mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createTestWorkspace } from "../../../../../tsonic/test/scripts/test-workspaces.mjs";
+import { repositoryRoot } from "../../../helpers/rust-session/paths.mjs";
 import { createRustNativeSourceTool, defaultRustNativeSourceLimits } from "../../../../dist/providers/native/elaboration/tool.js";
 import { decodeNativeEvidence } from "../../../../dist/providers/native/elaboration/decode-evidence.js";
 import { validateRustNativeEvidenceInputs } from "../../../../dist/providers/native/elaboration/freshness.js";
 import { runRustNativeCommand } from "../../../../dist/providers/native/protocol/bounded-command.js";
 import { nativeEvidenceFixture } from "./native-evidence-fixture.mjs";
 
-const root = createTestWorkspace("native-source-inputs");
+const root = createTestWorkspace(join(repositoryRoot, ".temp/generated"), "native-source-inputs-");
 const cacheRoot = join(root, "cache");
 const limits = defaultRustNativeSourceLimits;
 const tool = createRustNativeSourceTool({ cacheRoot });
