@@ -431,6 +431,6 @@ test("token response decoding rejects malformed, truncated and wrongly owned dat
     { protocolVersion: 1, kind: "tokens", tokens: [{ kind: "identifier", text: "name", raw: "false" }] },
     { protocolVersion: 1, kind: "tokens", tokens: [{ kind: "literal", text: "" }] },
   ]) {
-    assert.throws(() => decodeNativeTokenResponse(response, defaultRustNativeSourceLimits), /invalid|structured/u);
+    assert.throws(() => decodeNativeTokenResponse(response, 0, defaultRustNativeSourceLimits), /invalid|structured/u);
   }
 });

@@ -15,7 +15,7 @@ const consumers = [
   ["validator", limits => validateRustNativeSourceLimits(limits)],
   ["factory", limits => createRustNativeSourceTool({ cacheRoot: "must-not-be-used", limits })],
   ["type decoder", limits => decodeNativeEvidence(evidence, limits)],
-  ["token decoder", limits => decodeNativeTokenResponse(tokens, limits)],
+  ["token decoder", limits => decodeNativeTokenResponse(tokens, 0, limits)],
 ];
 
 test("native source finite defaults and exact supported ceilings share one contract", () => {
@@ -24,7 +24,7 @@ test("native source finite defaults and exact supported ceilings share one contr
     validateRustNativeSourceLimits(limits);
     if (limits.maximumRows === 1) assert.throws(() => decodeNativeEvidence(evidence, limits), /row limit/u);
     else assert.equal(decodeNativeEvidence(evidence, limits).phase, "declarations");
-    assert.deepEqual(decodeNativeTokenResponse(tokens, limits), []);
+    assert.deepEqual(decodeNativeTokenResponse(tokens, 0, limits), []);
   }
 });
 
@@ -61,9 +61,9 @@ test("native decoders preserve independent row and depth limits", () => {
   const leaf = { kind: "identifier", text: "value", raw: false, source: { start: 2, end: 7 } };
   const response = { ...tokens, tokens: [{ kind: "group", delimiter: "parentheses", source: { start: 0, end: 9 },
     tokens: [{ kind: "group", delimiter: "brackets", source: { start: 1, end: 8 }, tokens: [leaf] }] }] };
-  assert.throws(() => decodeNativeTokenResponse(response, { ...defaults, maximumRows: 2 }), /row limit/u);
-  assert.throws(() => decodeNativeTokenResponse(response, { ...defaults, maximumDepth: 1 }), /depth limit/u);
-  assert.equal(decodeNativeTokenResponse(response, { ...defaults, maximumRows: 3, maximumDepth: 2 }).length, 1);
+  assert.throws(() => decodeNativeTokenResponse(response, 9, { ...defaults, maximumRows: 2 }), /row limit/u);
+  assert.throws(() => decodeNativeTokenResponse(response, 9, { ...defaults, maximumDepth: 1 }), /depth limit/u);
+  assert.equal(decodeNativeTokenResponse(response, 9, { ...defaults, maximumRows: 3, maximumDepth: 2 }).length, 1);
   const twoTypes = { ...evidence, types: [
     { id: 0, value: { kind: "primitive", name: "u32" } },
     { id: 1, value: { kind: "primitive", name: "u64" } },

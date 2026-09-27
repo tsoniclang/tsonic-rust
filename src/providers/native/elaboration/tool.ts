@@ -113,7 +113,7 @@ export function createRustNativeSourceTool(options: {
     compilerIdentity,
     sysroot,
     tokens(source: string, edition: string): readonly RustLexicalTokenTree[] {
-      return decodeNativeTokenResponse(request({ kind: "tokens", source, edition }), limits);
+      return decodeNativeTokenResponse(request({ kind: "tokens", source, edition }), Buffer.byteLength(source, "utf8"), limits);
     },
     declarations(arguments_: readonly string[]): RustNativeDeclarationEvidence {
       const evidence = analyze("declarations", arguments_);
