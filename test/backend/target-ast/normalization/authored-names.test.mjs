@@ -94,3 +94,30 @@ test("generic names, parameters and nested binding names are retained without ru
   assert.match(printed, /let localValue: i32 = 1;/u);
   assert.doesNotMatch(printed, /\b(?:local_value|next_value|input_value)\b/u);
 });
+
+test("local function and implementation bodies use their own existing naming scopes", () => {
+  const localBody = { statements: [
+    { kind: "let", name: "localValue", mutable: false, init: { kind: "int-literal", text: "1" } },
+    { kind: "tail", expr: { kind: "path", path: "localValue" } },
+  ] };
+  const inner = { ...callable, name: "localFunction", visibility: "private", body: localBody };
+  const implementation = { kind: "impl", target: { kind: "named", path: "Local" },
+    generics: emptyRustGenerics, members: [{ ...callable, name: "readValue", body: localBody }] };
+  const statement = item => ({ kind: "item", item });
+  const input = file([{ ...callable, body: { statements: [
+    statement(inner),
+    statement({ kind: "struct", name: "Local", visibility: "private", generics: emptyRustGenerics, fields: [] }),
+    statement(implementation),
+    { kind: "tail", expr: { kind: "call", callee: { kind: "path", path: "localFunction" }, args: [] } },
+  ] } }]);
+  const model = finalizeRustSourceStyle(input);
+  const outer = model.items[0].body;
+  assert.equal(outer.innerAttrs, undefined);
+  assert.deepEqual(outer.statements.map(entry => entry.kind), ["item", "item", "item", "tail"]);
+  for (const fn of [outer.statements[0].item, outer.statements[2].item.members[0]]) {
+    assert.ok(fn.attrs.includes(rustLintAttributes.nonSnakeCaseName));
+    assert.deepEqual(fn.body.innerAttrs, [rustLintAttributes.nonSnakeCaseName]);
+    assert.deepEqual(fn.body.statements, localBody.statements);
+  }
+  assert.deepEqual(finalizeRustSourceStyle(model), model);
+});

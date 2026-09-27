@@ -7,10 +7,15 @@ interface ClosedTypeSummary {
   readonly names: ReadonlySet<string>;
 }
 
+export interface RustNamedSignatureScope {
+  readonly aliases: readonly RustItem[];
+  readonly items: readonly RustItem[];
+}
+
 export function nameRustSignatureTypes(
   items: readonly RustItem[],
   visitBody: (body: RustBlock, nameType: (type: RustType, role: string) => RustType) => RustBlock = body => body,
-): readonly RustItem[] {
+): RustNamedSignatureScope {
   const reserved = new Set(items.flatMap(item => [
     ...("name" in item ? [item.name] : []),
     ...("generics" in item ? item.generics.parameters.map(parameter => parameter.name) : []),
@@ -85,7 +90,7 @@ export function nameRustSignatureTypes(
         type: createTypeNamer(item, item.generics.parameters)(field.type, field.name),
       })) }
       : item);
-  return [...aliases, ...result];
+  return { aliases, items: result };
 }
 
 function summarizeClosedType(type: RustType): ClosedTypeSummary | undefined {

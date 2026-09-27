@@ -16,6 +16,7 @@ import { rustLintAttributes } from "./lint-policy.js";
 import { rustBlockReferencesPath } from "../inspection/source-usage.js";
 import { collapseRustForwardingClosure } from "./forwarding-closures.js";
 import { nameRustSignatureTypes } from "./signature-aliases.js";
+import type { RustNamedSignatureScope } from "./signature-aliases.js";
 import { rustItemsReferenceModuleAlias } from "../inspection/source-module-usage.js";
 import { rustTypeEquals } from "../inspection/type-equality.js";
 import { mergeRustAdjacentConditionalBranches } from "./conditional-branches.js";
@@ -25,13 +26,16 @@ import { appendRustNamingAllowance, finalizeRustFunctionNames, finalizeRustItemN
 export function finalizeRustSourceStyle(
   model: RustSourceFileModel,
 ): RustSourceFileModel {
-  const items = closePublicRustTypeVisibility(nameRustSignatureTypes(model.items,
-    (body, nameType) => createRustBodyStyler(nameType).block(body)));
+  const scope = finalizeRustItemScope(model.items);
+  return { ...model, items: [...scope.aliases, ...scope.items] };
+}
+
+function finalizeRustItemScope(source: readonly RustItem[]): RustNamedSignatureScope {
+  const named = nameRustSignatureTypes(source, (body, nameType) => createRustBodyStyler(nameType).block(body));
+  const items = closePublicRustTypeVisibility([...named.aliases, ...named.items]);
   const publicTypes = publicDeclaredRustTypeNames(items);
-  return {
-    ...model,
-    items: items.map((item) => finalizeRustItemStyle(item, publicTypes)),
-  };
+  const styled = items.map(item => finalizeRustItemStyle(item, publicTypes));
+  return { aliases: styled.slice(0, named.aliases.length), items: styled.slice(named.aliases.length) };
 }
 
 export function rustPublicSignatureTypeNames(model: RustSourceFileModel): readonly string[] {
@@ -181,6 +185,9 @@ function finalizeRustFunctionBodyStyle(block: RustBlock): RustBlock {
 }
 
 function finalizeRustBlockStyle(block: RustBlock): RustBlock {
+  const localItems = block.statements.flatMap(statement => statement.kind === "item" ? [statement.item] : []);
+  const scope = finalizeRustItemScope(localItems);
+  let nextItem = 0;
   const retainsFieldAssignment = block.statements.some((statement, index) => {
       const previous = block.statements[index - 1];
       return previous?.kind === "let" && previous.init?.kind === "associated-call" &&
@@ -193,7 +200,12 @@ function finalizeRustBlockStyle(block: RustBlock): RustBlock {
   return {
     ...block,
     ...(retainsFieldAssignment ? { innerAttrs: appendRustAttribute(block.innerAttrs, rustLintAttributes.fieldReassignWithDefault) } : {}),
-    statements: block.statements.map(finalizeRustStatementStyle),
+    statements: [
+      ...scope.aliases.map((item): RustStmt => ({ kind: "item", item })),
+      ...block.statements.map(statement => statement.kind === "item"
+        ? { ...statement, item: scope.items[nextItem++]! }
+        : finalizeRustStatementStyle(statement)),
+    ],
   };
 }
 
@@ -201,9 +213,8 @@ function finalizeRustStatementStyle(statement: RustStmt): RustStmt {
   requiresNamingAllowance ||= rustStatementDeclaresNonSnakeName(statement);
   switch (statement.kind) {
     case "macro-statement":
-      return statement;
     case "item":
-      return { ...statement, item: finalizeRustItemStyle(statement.item, new Set()) };
+      return statement;
     case "let":
       return { ...statement,
         ...(statement.type === undefined || nameType === undefined ? {} : { type: nameType(statement.type, statement.name) }),

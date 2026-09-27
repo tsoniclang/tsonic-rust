@@ -1,8 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { nameRustSignatureTypes } from "../../../dist/backend/target-ast/normalization/signature-aliases.js";
+import { nameRustSignatureTypes as nameSignatureScope } from "../../../dist/backend/target-ast/normalization/signature-aliases.js";
 import { emptyRustGenerics } from "../../../dist/backend/target-ast/nodes.js";
 import { finalizeRustSourceStyle } from "../../../dist/backend/target-ast/normalization/source-style.js";
+
+function nameRustSignatureTypes(items) {
+  const scope = nameSignatureScope(items);
+  assert.equal(scope.items.length, items.length);
+  return [...scope.aliases, ...scope.items];
+}
 
 const named = (path, types = []) => ({ kind: "named", path,
   genericArguments: types.map(type => ({ kind: "type", type })) });
@@ -10,7 +16,7 @@ const nested = named("Vec", [named("Option", [named("Vec", [named("Option", [nam
 const makeFunction = (name, visibility = "private") => ({ kind: "function", name, visibility,
   generics: { parameters: [{ kind: "type", name: "Item", bounds: [{ kind: "trait", path: "Clone" }] }], wherePredicates: [] },
   params: [{ name: "values", type: nested, mutable: false }], returnType: nested,
-  body: { statements: [], tail: { kind: "path", path: "values" } },
+  body: { statements: [{ kind: "tail", expr: { kind: "path", path: "values" } }] },
 });
 
 test("signature aliases retain exact generic types, share definitions and promote visibility", () => {
@@ -152,4 +158,26 @@ test("method-local Self does not escape its native impl through a module alias",
   const type = named("Vec", [named("Option", [named("Vec", [named("Option", [named("Self")])])])]);
   const source = { ...makeFunction("read"), params: [{ name: "value", type }], returnType: undefined };
   assert.deepEqual(nameRustSignatureTypes([source]), [source]);
+});
+
+test("local signature aliases stay in the original block and reserve every local item name", () => {
+  const collision = { kind: "struct", name: "ReadValues", visibility: "private", generics: emptyRustGenerics, fields: [] };
+  const before = { kind: "expr", expr: { kind: "call", callee: { kind: "path", path: "before" }, args: [] } };
+  const after = { kind: "expr", expr: { kind: "call", callee: { kind: "path", path: "after" }, args: [] } };
+  const source = { kind: "function", name: "outer", visibility: "public", generics: emptyRustGenerics, params: [],
+    body: { statements: [before, { kind: "item", item: collision },
+      { kind: "item", item: makeFunction("read") }, { kind: "item", item: makeFunction("write") }, after] } };
+  const normalized = finalizeRustSourceStyle({ items: [source] });
+  assert.equal(normalized.items.length, 1);
+  const statements = normalized.items[0].body.statements;
+  const alias = statements[0].item;
+  assert.equal(alias.kind, "type-alias");
+  assert.notEqual(alias.name, "ReadValues");
+  assert.deepEqual(alias.target, nested);
+  assert.deepEqual(statements[1], before);
+  assert.equal(statements[2].item.name, "ReadValues");
+  assert.deepEqual(statements.slice(3, 5).map(entry => entry.item.name), ["read", "write"]);
+  for (const entry of statements.slice(3, 5)) assert.equal(entry.item.params[0].type.path, alias.name);
+  assert.deepEqual(statements[5], after);
+  assert.deepEqual(finalizeRustSourceStyle(normalized), normalized);
 });
