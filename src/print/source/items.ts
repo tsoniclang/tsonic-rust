@@ -223,7 +223,7 @@ function printRustSelfParam(selfParam: RustSelfParam | undefined): string | unde
     return undefined;
   }
   if (selfParam.kind === "value") {
-    return "self";
+    return `${selfParam.mutable ? "mut " : ""}self`;
   }
   if (selfParam.kind === "reference") {
     const lifetime = selfParam.lifetime === undefined
@@ -231,7 +231,7 @@ function printRustSelfParam(selfParam: RustSelfParam | undefined): string | unde
       : `${printRustLifetime(selfParam.lifetime)} `;
     return `&${lifetime}${selfParam.mutable ? "mut " : ""}self`;
   }
-  return "self: alloc::rc::Rc<Self>";
+  return `${selfParam.mutable ? "mut " : ""}self: ${printRustType(selfParam.type)}`;
 }
 
 interface PrintedRustGenerics {

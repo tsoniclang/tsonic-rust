@@ -14,7 +14,7 @@ import {
   sourceTypePath,
 } from "../../program/plan-context.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
-import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
+import { rustSelfParameterEquals, rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
 import { planProjectMethod } from "../../declarations/nominal.js";
 import { readRustProjectMethodOverride, rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "../project-objects.js";
 import { rustCallableSpecialization } from "../../declarations/callables/generics.js";
@@ -40,7 +40,7 @@ export function planProjectFieldAccessorCall(
 ): { readonly expression: RustExpr; readonly errorType?: RustType } | undefined {
   const read = value === undefined;
   const expectedParameters = read ? [] : [{ pattern: { kind: "binding" as const, name: "value" }, type: valueType }];
-  if (helper === undefined || helper.selfParam?.kind !== "rc" || helper.isAsync === true ||
+  if (helper === undefined || !rustSelfParameterEquals(helper.selfParam, rustSelfParameter("rc")) || helper.isAsync === true ||
     helper.isUnsafe === true || !rustFunctionTypesMatch(
       helper.params,
       helper.returnType,

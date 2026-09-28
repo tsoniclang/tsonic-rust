@@ -384,9 +384,9 @@ export interface RustClosureParam {
 }
 
 export type RustSelfParam =
-  | { readonly kind: "value" }
+  | { readonly kind: "value"; readonly mutable?: boolean }
   | { readonly kind: "reference"; readonly mutable: boolean; readonly lifetime?: RustLifetime }
-  | { readonly kind: "rc" };
+  | { readonly kind: "typed"; readonly type: RustType; readonly mutable?: boolean };
 
 export type RustVisibility = "private" | "parent" | "crate" | "public";
 

@@ -188,7 +188,8 @@ test("Iterator naming expectations require the exact mutable-reference receiver"
     [{ kind: "reference", mutable: true }, [], true],
     [{ kind: "reference", mutable: false }, [], false],
     [{ kind: "value" }, [], false],
-    [{ kind: "rc" }, [], false],
+    [{ kind: "typed", type: { kind: "named", path: "alloc::rc::Rc",
+      genericArguments: [{ kind: "type", type: { kind: "named", path: "Self" } }] } }, [], false],
     [undefined, [], false],
     [{ kind: "reference", mutable: true }, [{ pattern: { kind: "binding", name: "count" }, type: { kind: "primitive", name: "i32" } }], false],
   ]) {

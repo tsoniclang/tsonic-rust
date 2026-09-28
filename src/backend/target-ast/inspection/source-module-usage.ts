@@ -3,7 +3,6 @@ import type {
   RustExpr,
   RustFunctionParam,
   RustGenericArgument,
-  RustImplFunction,
   RustItem,
   RustPattern,
   RustStmt,
@@ -42,11 +41,7 @@ function rustItemReferencesModuleAlias(item: RustItem, alias: string): boolean {
     case "macro-invocation":
       return rustPathReferencesModuleAlias(item.path, alias) || rustMacroInputReferencesModuleAlias(item.input, alias);
     case "function":
-      return rustGenericsReferenceModuleAlias(item.generics, alias) ||
-        rustFunctionParametersReferenceModuleAlias(item.params, alias) ||
-        rustOptionalTypeReferencesModuleAlias(item.returnType, alias) ||
-        rustOptionalTypeReferencesModuleAlias(item.errorType, alias) ||
-        rustBlockReferencesModuleAlias(item.body, alias);
+      return rustCallableReferencesModuleAlias(item, alias);
     case "const":
     case "thread-local":
       return rustTypeReferencesModuleAlias(item.type, alias) ||
@@ -62,7 +57,7 @@ function rustItemReferencesModuleAlias(item: RustItem, alias: string): boolean {
         }
         return rustAttributesReferenceModuleAlias(member.attrs, alias) || (member.kind === "static"
           ? rustTypeReferencesModuleAlias(member.type, alias)
-          : member.kind === "function" && rustTraitFunctionReferencesModuleAlias(member, alias));
+          : member.kind === "function" && rustCallableReferencesModuleAlias(member, alias));
       });
     case "struct":
       return rustGenericsReferenceModuleAlias(item.generics, alias) ||
@@ -73,7 +68,7 @@ function rustItemReferencesModuleAlias(item: RustItem, alias: string): boolean {
           rustTypeReferencesModuleAlias(type, alias)) === true ||
         item.members.some(member => member.kind === "type"
           ? member.bounds.some(bound => rustTypeBoundReferencesModuleAlias(bound, alias))
-          : member.kind === "function" ? rustTraitFunctionReferencesModuleAlias(member, alias)
+          : member.kind === "function" ? rustCallableReferencesModuleAlias(member, alias)
           : rustPathReferencesModuleAlias(member.path, alias) || rustMacroInputReferencesModuleAlias(member.input, alias));
     case "impl":
       return rustGenericsReferenceModuleAlias(item.generics, alias) ||
@@ -82,7 +77,7 @@ function rustItemReferencesModuleAlias(item: RustItem, alias: string): boolean {
         item.members.some(member => {
           switch (member.kind) {
             case "type": return rustTypeReferencesModuleAlias(member.type, alias);
-            case "function": return rustImplFunctionReferencesModuleAlias(member, alias);
+            case "function": return rustCallableReferencesModuleAlias(member, alias);
             case "const": return rustTypeReferencesModuleAlias(member.type, alias) ||
               rustExpressionReferencesModuleAlias(member.value, alias);
             case "macro-invocation": return rustPathReferencesModuleAlias(member.path, alias) ||
@@ -107,26 +102,16 @@ function rustAttributesReferenceModuleAlias(attributes: readonly RustAttribute[]
     rustMacroInputReferencesModuleAlias({ delimiter: "parentheses", tokens: attribute.tokens }, alias)) === true;
 }
 
-function rustTraitFunctionReferencesModuleAlias(
+export function rustCallableReferencesModuleAlias(
   fn: RustTraitFunction,
   alias: string,
 ): boolean {
   return rustGenericsReferenceModuleAlias(fn.generics, alias) ||
+    (fn.selfParam?.kind === "typed" && rustTypeReferencesModuleAlias(fn.selfParam.type, alias)) ||
     rustFunctionParametersReferenceModuleAlias(fn.params, alias) ||
     rustOptionalTypeReferencesModuleAlias(fn.returnType, alias) ||
     rustOptionalTypeReferencesModuleAlias(fn.errorType, alias) ||
     (fn.body !== undefined && rustBlockReferencesModuleAlias(fn.body, alias));
-}
-
-function rustImplFunctionReferencesModuleAlias(
-  fn: RustImplFunction,
-  alias: string,
-): boolean {
-  return rustGenericsReferenceModuleAlias(fn.generics, alias) ||
-    rustFunctionParametersReferenceModuleAlias(fn.params, alias) ||
-    rustOptionalTypeReferencesModuleAlias(fn.returnType, alias) ||
-    rustOptionalTypeReferencesModuleAlias(fn.errorType, alias) ||
-    rustBlockReferencesModuleAlias(fn.body, alias);
 }
 
 function rustFunctionParametersReferenceModuleAlias(

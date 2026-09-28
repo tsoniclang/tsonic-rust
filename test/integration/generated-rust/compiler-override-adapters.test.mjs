@@ -108,7 +108,8 @@ export function main(): void { const value: Base = new Derived(); value.value(3)
   }));
   const helper = {
     name: "exact_value", visibility: "private", generics: emptyRustGenerics,
-    selfParam: { kind: "rc" }, params: parameters(adapter.implementationParameters),
+    selfParam: { kind: "typed", type: { kind: "named", path: "alloc::rc::Rc",
+      genericArguments: [{ kind: "type", type: { kind: "named", path: "Self" } }] } }, params: parameters(adapter.implementationParameters),
     returnType: rustReturnTypeFromCarrierInContext(adapter.implementationReturnCarrier, context),
     body: { statements: [] },
   };

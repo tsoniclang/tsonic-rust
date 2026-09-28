@@ -2,10 +2,24 @@ import type {
   RustGenericArgument,
   RustLifetime,
   RustLifetimeParameter,
+  RustSelfParam,
   RustTraitReference,
   RustType,
   RustTypeBound,
 } from "../nodes.js";
+
+export function rustSelfParameterEquals(
+  left: RustSelfParam | undefined,
+  right: RustSelfParam | undefined,
+): boolean {
+  if (left === undefined || right === undefined) return left === right;
+  if (left.kind !== right.kind || (left.mutable === true) !== (right.mutable === true)) return false;
+  switch (left.kind) {
+    case "value": return true;
+    case "reference": return right.kind === "reference" && lifetimeEqual(left.lifetime, right.lifetime);
+    case "typed": return right.kind === "typed" && rustTypeEquals(left.type, right.type);
+  }
+}
 
 export function rustTypeEquals(
   left: RustType | undefined,

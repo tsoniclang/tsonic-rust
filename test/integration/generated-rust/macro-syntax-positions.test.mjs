@@ -33,6 +33,51 @@ function nativeProgram(name, items, definitions, consumer) {
     environment: process.env, timeoutMilliseconds: 10_000, maximumDiagnosticBytes: 1024 * 1024 });
 }
 
+test("canonical native receivers preserve alias, pinning and mutable ownership syntax", () => {
+  const named = path => ({ kind: "named", path });
+  const apply = (path, type) => ({ kind: "named", path, genericArguments: [{ kind: "type", type }] });
+  const receiver = type => ({ kind: "typed", type });
+  const field = owner => ({ kind: "field", receiver: { kind: "path", path: owner }, name: "value" });
+  const read = selfParam => ({ ...method("read", [{ kind: "tail", expr: field("self") }]), selfParam });
+  const pin = apply("core::pin::Pin", { kind: "reference", mutable: true, referent: named("Self") });
+  const items = [
+    { kind: "trait", name: "Read", visibility: "public", generics: emptyRustGenerics,
+      members: [{ ...read(receiver(apply("Box", named("Self")))), body: undefined }] },
+    { kind: "impl", trait: named("Read"), target: named("Counter"), generics: emptyRustGenerics,
+      members: [read(receiver(apply("Box", named("Self"))))] },
+    { kind: "impl", target: named("Counter"), generics: emptyRustGenerics, members: [
+      { ...read(receiver(apply("Receiver", named("Self")))), name: "through_alias" },
+      { ...method("consume", [{ kind: "assign", target: field("self"), operator: "+=", value: { kind: "int-literal", text: "1" } },
+        { kind: "tail", expr: field("self") }]), selfParam: { kind: "value", mutable: true } },
+      { ...method("advance", [
+        { kind: "let", pattern: { kind: "binding", name: "value" }, init: {
+          kind: "method-call", receiver: { kind: "path", path: "self" }, method: "get_mut", args: [],
+        } },
+        { kind: "assign", target: field("value"), operator: "+=", value: { kind: "int-literal", text: "1" } },
+        { kind: "tail", expr: field("value") },
+      ]), selfParam: receiver(pin) },
+    ] },
+  ];
+  assert.equal(nativeProgram("typed-receivers", items,
+    "pub struct Counter { pub value: u32 }\npub type Receiver<Value> = Box<Value>;", `fn main() {
+      assert_eq!(Read::read(Box::new(Counter { value: 3 })), 3);
+      assert_eq!(Box::new(Counter { value: 4 }).through_alias(), 4);
+      assert_eq!(Counter { value: 5 }.consume(), 6);
+      let mut counter = Counter { value: 7 };
+      assert_eq!(core::pin::Pin::new(&mut counter).advance(), 8);
+      assert_eq!(counter.value, 8);
+    }`), "");
+});
+
+test("native receiver acceptance belongs to rustc, not the syntax printer", () => {
+  const item = { kind: "impl", target: { kind: "named", path: "Counter" }, generics: emptyRustGenerics,
+    members: [{ ...method("invalid", [{ kind: "tail", expr: { kind: "int-literal", text: "1" } }]),
+      selfParam: { kind: "typed", type: { kind: "primitive", name: "u32" } } }] };
+  assert.match(printRustItem(item), /self: u32/u);
+  assert.throws(() => nativeProgram("invalid-receiver", [item], "pub struct Counter;", "fn main() {}"),
+    /invalid `self` parameter type/u);
+});
+
 test("canonical macro AST compiles in type, pattern, module and local-item positions", () => {
   const element = { kind: "primitive", name: "u32" };
   const generated = invocation("record", "braces");

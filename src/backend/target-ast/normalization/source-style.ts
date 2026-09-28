@@ -17,7 +17,7 @@ import { rustBlockReferencesPath } from "../inspection/source-usage.js";
 import { collapseRustForwardingClosure } from "./forwarding-closures.js";
 import { nameRustSignatureTypes } from "./signature-aliases.js";
 import type { RustNamedSignatureScope } from "./signature-aliases.js";
-import { rustItemsReferenceModuleAlias } from "../inspection/source-module-usage.js";
+import { rustCallableReferencesModuleAlias } from "../inspection/source-module-usage.js";
 import { rustTypeEquals } from "../inspection/type-equality.js";
 import { rustPatternBindings } from "../patterns.js";
 import { mergeRustAdjacentConditionalBranches } from "./conditional-branches.js";
@@ -162,9 +162,8 @@ function finalizeRustImplFunctionStyle(
 }
 
 function hasErasedGenericParameter(fn: RustImplFunction): boolean {
-  const usage: RustItem = { ...fn, kind: "function" };
   return fn.generics.parameters.some(parameter => parameter.kind === "type" &&
-    !rustItemsReferenceModuleAlias([usage], parameter.name));
+    !rustCallableReferencesModuleAlias(fn, parameter.name));
 }
 
 function hasUnusedParameter(fn: Pick<RustImplFunction, "params" | "body">): boolean {
@@ -719,6 +718,7 @@ function publicSignatureTypes(
             ...item.members.flatMap(member => member.kind === "type"
               ? member.bounds.flatMap(rustTypeBoundTypes)
               : member.kind === "function" ? [
+                ...(member.selfParam?.kind === "typed" ? [member.selfParam.type] : []),
                 ...member.params.map(parameter => parameter.type),
                 ...optionalType(member.returnType),
               ] : []),
@@ -731,6 +731,7 @@ function publicSignatureTypes(
           ...item.members.flatMap(member => member.kind === "type" ? [member.type]
             : member.kind === "const" ? (member.visibility === "public" ? [member.type] : [])
             : member.kind === "function" && member.visibility === "public" ? [
+              ...(member.selfParam?.kind === "typed" ? [member.selfParam.type] : []),
               ...member.params.map(parameter => parameter.type), ...optionalType(member.returnType),
             ] : []),
         ]
