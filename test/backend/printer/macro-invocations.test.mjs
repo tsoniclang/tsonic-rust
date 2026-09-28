@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { printRustExpr } from "../../../dist/print/source/expressions/core.js";
-import { rustExpressionChildren } from "../../../dist/backend/target-ast/inspection/source-usage.js";
+import { rustExpressionChildren } from "../../../dist/backend/target-ast/inspection/expression-children.js";
 import { rustSeparatedExpressionTokens } from "../../../dist/backend/target-ast/macro-input.js";
 import { printRustTokenStream } from "../../../dist/print/source/macro-input.js";
 import { finalizeRustSourceStyle } from "../../../dist/backend/target-ast/normalization/source-style.js";

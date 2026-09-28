@@ -1,10 +1,11 @@
 import type { RustExpr, RustStmt } from "../nodes.js";
 import { rustParametersBindName, rustPatternBindsName } from "../patterns.js";
 import {
-  rustExpressionChildren,
   rustExpressionReferencesPath,
   rustStatementReferencesPath,
 } from "./source-usage.js";
+import { rustExpressionChildren } from "./expression-children.js";
+import { rustExpressionContainsExpansion, rustStatementsContainExpansion } from "./macro-expansion.js";
 
 type FirstAccess = "read" | "write" | "exit" | "none";
 
@@ -12,6 +13,7 @@ export function firstDirectPathAccessInStatements(
   statements: readonly RustStmt[],
   path: string,
 ): "read" | "write" | "none" {
+  if (rustStatementsContainExpansion(statements)) return "read";
   for (const statement of statements) {
     if (statement.kind === "let" && rustPatternBindsName(statement.pattern, path) === true) {
       return rustStatementReferencesPath(statement, path)
@@ -45,6 +47,7 @@ export function maxWritesInStatements(
   statements: readonly RustStmt[],
   path: string,
 ): number {
+  if (rustStatementsContainExpansion(statements)) return 2;
   let writes = 0;
   for (const statement of statements) {
     writes = cappedWriteCount(writes + maxWritesInStatement(statement, path));
@@ -59,6 +62,7 @@ export function firstAccessesInStatements(
   statements: readonly RustStmt[],
   path: string,
 ): ReadonlySet<FirstAccess> {
+  if (rustStatementsContainExpansion(statements)) return new Set<FirstAccess>(["none", "read", "write", "exit"]);
   let outcomes = new Set<FirstAccess>(["none"]);
   for (const statement of statements) {
     outcomes = replaceNone(outcomes, firstAccessesInStatement(statement, path));
@@ -193,6 +197,7 @@ function maxWritesInAssignment(
 }
 
 function maxWritesInExpression(expression: RustExpr, path: string): number {
+  if (rustExpressionContainsExpansion(expression)) return 2;
   if (expression.kind === "assignment") {
     return maxWritesInAssignment(expression.target, expression.operator, expression.value, path);
   }
@@ -418,6 +423,8 @@ function firstAccessesInExpression(
   path: string,
 ): ReadonlySet<FirstAccess> {
   switch (expression.kind) {
+    case "macro-invocation":
+      return new Set<FirstAccess>(["none", "read", "write", "exit"]);
     case "path":
       return new Set([expression.path === path ? "read" : "none"]);
     case "int-literal":

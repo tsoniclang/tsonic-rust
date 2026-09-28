@@ -1,6 +1,7 @@
 import type { RustBlock, RustExpr, RustStmt } from "../nodes.js";
-import { rustMacroInputExpressions } from "../macro-input.js";
 import { rustParametersBindName, rustPatternBindsName } from "../patterns.js";
+import { rustExpressionChildren } from "./expression-children.js";
+import { rustExpressionContainsExpansion, rustStatementContainsExpansion, rustStatementsContainExpansion } from "./macro-expansion.js";
 
 export function rustBlockReferencesPath(block: RustBlock, path: string): boolean {
   return rustStatementsReferencePath(block.statements, path);
@@ -10,6 +11,7 @@ export function rustStatementsReferencePath(
   statements: readonly RustStmt[],
   path: string,
 ): boolean {
+  if (rustStatementsContainExpansion(statements)) return true;
   for (const statement of statements) {
     if (rustStatementReferencesPath(statement, path)) {
       return true;
@@ -22,6 +24,7 @@ export function rustStatementsReferencePath(
 }
 
 export function rustStatementReferencesPath(statement: RustStmt, path: string): boolean {
+  if (rustStatementContainsExpansion(statement)) return true;
   switch (statement.kind) {
     case "macro-statement":
       return true;
@@ -97,6 +100,7 @@ function patternBodyReferencesPath(statement: Extract<RustStmt, { kind: "for" | 
 }
 
 export function rustExpressionReferencesPath(expression: RustExpr, path: string): boolean {
+  if (rustExpressionContainsExpansion(expression)) return true;
   if (expression.kind === "path") {
     return expression.path === path;
   }
@@ -123,87 +127,4 @@ export function rustExpressionReferencesPath(expression: RustExpr, path: string)
   }
   return rustExpressionChildren(expression).some((child) =>
     rustExpressionReferencesPath(child, path));
-}
-
-export function rustExpressionChildren(expression: RustExpr): readonly RustExpr[] {
-  switch (expression.kind) {
-    case "int-literal":
-    case "float-literal":
-    case "bool-literal":
-    case "none":
-    case "char-literal":
-    case "string-literal":
-    case "str-literal":
-    case "path":
-    case "associated-value":
-    case "unreachable":
-    case "closure-block":
-      return [];
-    case "bottom":
-    case "numeric-cast":
-    case "unsafe":
-    case "owned-string-from-borrowed-str":
-      return [expression.expression];
-    case "unary":
-      return [expression.operand];
-    case "dereference":
-      return [expression.pointer];
-    case "binary":
-      return [expression.left, expression.right];
-    case "range":
-      return [expression.start, expression.end];
-    case "conditional":
-      return [expression.condition, expression.whenTrue, expression.whenFalse];
-    case "match":
-      return [expression.expression, ...expression.arms.map((arm) => arm.expression)];
-    case "matches":
-      return [expression.expression];
-    case "assignment":
-      return [expression.target, expression.value];
-    case "call":
-    case "associated-call":
-      return expression.args;
-    case "invoke":
-      return [expression.callee, ...expression.args];
-    case "method-call":
-      return [expression.receiver, ...expression.args];
-    case "macro-invocation":
-      return rustMacroInputExpressions(expression.input);
-    case "option-presence":
-    case "field":
-      return [expression.receiver];
-    case "index":
-      return [expression.receiver, expression.index];
-    case "block":
-      return [...expression.bindings.flatMap((binding) => binding.value === undefined ? [] : [binding.value]), expression.value];
-    case "evaluate-then":
-      return [expression.effect, expression.value];
-    case "string-concat":
-      return expression.parts;
-    case "format-write":
-      return [expression.writer, ...expression.args];
-    case "reference":
-      return [expression.expr];
-    case "vec-literal":
-    case "slice-literal":
-    case "tuple-literal":
-      return expression.elements;
-    case "array-repeat":
-      return expression.length.kind === "path"
-        ? [expression.element, { kind: "path", path: expression.length.path }]
-        : [expression.element];
-    case "closure":
-      return [expression.body];
-    case "await":
-    case "option-try":
-    case "try":
-      return [expression.expr];
-    case "return-expression":
-      return expression.expr === undefined ? [] : [expression.expr];
-    case "struct-literal":
-      return [
-        ...expression.fields.map((field) => field.value),
-        ...(expression.base === undefined ? [] : [expression.base]),
-      ];
-  }
 }

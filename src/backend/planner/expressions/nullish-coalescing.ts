@@ -18,7 +18,7 @@ import { applyRustValueConversion } from "./value-conversions.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
-import { rustExpressionExitsCallable } from "../../target-ast/inspection/callable-exits.js";
+import { rustExpressionMayExitCallable } from "../../target-ast/inspection/callable-exits.js";
 import { planRustOptionBranch } from "./option-branch.js";
 
 export function planNullishCoalescing(
@@ -108,7 +108,7 @@ export function planNullishCoalescing(
   const convertedPresent = fact.leftConversion === undefined ? undefined : applyRustValueConversion(context,
     { kind: "path", path: presentValueName }, fact.leftConversion, node, false);
   if (fact.leftConversion !== undefined && convertedPresent === undefined) return undefined;
-  if (rustExpressionExitsCallable(right)) {
+  if (rustExpressionMayExitCallable(right)) {
     const carrier = context.input.program.facts.getRuntimeCarrierFact(leftNode)?.carrier;
     if (carrier === undefined) return undefined;
     const value: RustExpr = convertedPresent ?? { kind: "path", path: presentValueName };

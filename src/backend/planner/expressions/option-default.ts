@@ -3,7 +3,7 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { rustExpressionExitsCallable } from "../../target-ast/inspection/callable-exits.js";
+import { rustExpressionMayExitCallable } from "../../target-ast/inspection/callable-exits.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { planRustOptionBranch } from "./option-branch.js";
 
@@ -13,7 +13,7 @@ export function rustOptionDefaultValue(
   carrier: TargetTypeRef,
   context: RustPlanContext,
 ): RustExpr {
-  if (rustExpressionExitsCallable(fallback)) {
+  if (rustExpressionMayExitCallable(fallback)) {
     const names = context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, context.sourceFile, []);
     const presentName = allocateRustSyntheticName(names, "present_value");
     return planRustOptionBranch(option, carrier, presentName, { kind: "path", path: presentName }, fallback, context);

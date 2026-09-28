@@ -30,7 +30,7 @@ import type { RustOptionalChainFact } from "../../../analysis/facts/keys.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { planCallExpression } from "./calls/basic.js";
-import { rustExpressionExitsCallable } from "../../target-ast/inspection/callable-exits.js";
+import { rustExpressionMayExitCallable } from "../../target-ast/inspection/callable-exits.js";
 
 export function planRegExpCreate(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
@@ -265,7 +265,7 @@ export function planOptionalChainExpression(
       args: [{ kind: "path", path: "core::option::Option::as_ref" }],
     };
   }
-  if (rustExpressionExitsCallable(body)) {
+  if (rustExpressionMayExitCallable(body)) {
     return { kind: "match", expression: borrowedGuard, arms: [
       { pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: receiverName }] },
         expression: fact.lowering === "map" ? { kind: "call", path: "Some", args: [body] } : body },
