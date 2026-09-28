@@ -4,13 +4,8 @@ import { validateRustNativeSourceLimits, type RustNativeSourceLimits } from "./l
 
 export const maximumRustNativeRequestBytes = 64 * 1024 * 1024;
 
-export interface RustNativeSourceFile {
-  readonly path: string;
-  readonly text: string;
-}
-
 export type RustNativeCompilation =
-  | { readonly kind: "compiler"; readonly arguments: readonly string[] }
+  | { readonly kind: "compiler"; readonly directory: string; readonly arguments: readonly string[] }
   | {
       readonly kind: "cargo";
       readonly manifestPath: string;
@@ -20,7 +15,6 @@ export type RustNativeCompilation =
 
 export interface RustNativeSourceRequest {
   readonly compilation: RustNativeCompilation;
-  readonly sources: readonly RustNativeSourceFile[];
 }
 
 export function snapshotRustNativeSourceRequest(
@@ -28,9 +22,8 @@ export function snapshotRustNativeSourceRequest(
   limits: RustNativeSourceLimits,
 ): RustNativeSourceRequest {
   validateRustNativeSourceLimits(limits);
-  if (typeof input !== "object" || input === null || !hasExactObjectKeys(input, ["compilation", "sources"]) ||
-      !isDenseDataArray(input.sources)) {
-    throw new Error("Native Rust source input requires an exact compilation selection and source-file array.");
+  if (typeof input !== "object" || input === null || !hasExactObjectKeys(input, ["compilation"])) {
+    throw new Error("Native Rust source input requires an exact compilation selection.");
   }
   let bytes = 0;
   const reserve = (value: string): void => {
@@ -38,30 +31,22 @@ export function snapshotRustNativeSourceRequest(
     if (bytes > maximumRustNativeRequestBytes) throw new Error("Native Rust source request exceeds the byte limit.");
   };
   const compilation = snapshotCompilation(input.compilation, reserve);
-  const compilationRows = compilation.kind === "compiler" ? compilation.arguments.length : 3;
-  if (compilationRows + input.sources.length > limits.maximumRows) {
+  const compilationRows = compilation.kind === "compiler" ? compilation.arguments.length + 1 : 3;
+  if (compilationRows > limits.maximumRows) {
     throw new Error("Native Rust source input exceeds the row limit.");
   }
-  const paths = new Set<string>();
-  const sources = input.sources.map(file => {
-    if (typeof file !== "object" || file === null || !hasExactObjectKeys(file, ["path", "text"]) ||
-        !isUnicodeText(file.path) || !isAbsolute(file.path) || file.path.includes("\0") || !isUnicodeText(file.text)) {
-      throw new Error("Native Rust source files require absolute Unicode paths and exact Unicode text.");
-    }
-    if (paths.has(file.path)) throw new Error("Native Rust source input has a duplicate filename.");
-    paths.add(file.path);
-    reserve(file.path);
-    reserve(file.text);
-    return Object.freeze({ path: file.path, text: file.text });
-  });
-  return Object.freeze({ compilation, sources: Object.freeze(sources) });
+  return Object.freeze({ compilation });
 }
 
 function snapshotCompilation(input: RustNativeCompilation, reserve: (value: string) => void): RustNativeCompilation {
   if (typeof input !== "object" || input === null) throw new Error("Native Rust compilation requires an exact selection.");
   const kind = Object.getOwnPropertyDescriptor(input, "kind");
   if (kind === undefined || !("value" in kind)) throw new Error("Native Rust compilation requires an exact selection.");
-  if (kind.value === "compiler" && hasExactObjectKeys(input, ["kind", "arguments"]) && input.kind === "compiler") {
+  if (kind.value === "compiler" && hasExactObjectKeys(input, ["kind", "directory", "arguments"]) && input.kind === "compiler") {
+    if (!isUnicodeText(input.directory) || !isAbsolute(input.directory) || input.directory.includes("\0")) {
+      throw new Error("Native Rust compiler directory must be an absolute Unicode path without NUL.");
+    }
+    reserve(input.directory);
     if (!isDenseDataArray(input.arguments) || input.arguments.length === 0) {
       throw new Error("Native Rust compiler arguments require a nonempty data array.");
     }
@@ -71,7 +56,7 @@ function snapshotCompilation(input: RustNativeCompilation, reserve: (value: stri
       }
       reserve(argument);
     }
-    return Object.freeze({ kind: "compiler", arguments: Object.freeze([...input.arguments]) });
+    return Object.freeze({ kind: "compiler", directory: input.directory, arguments: Object.freeze([...input.arguments]) });
   }
   if (kind.value !== "cargo" || !hasExactObjectKeys(input, ["kind", "manifestPath", "packageId", "target"]) || input.kind !== "cargo" ||
       !isUnicodeText(input.manifestPath) || !isAbsolute(input.manifestPath) || input.manifestPath.includes("\0") ||

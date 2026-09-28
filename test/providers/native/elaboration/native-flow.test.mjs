@@ -13,7 +13,7 @@ const tool = createRustNativeSourceTool({ cacheRoot: join(root, "cache") });
 function check(name, text) {
   const path = join(root, `${name}.rs`);
   writeFileSync(path, text);
-  return tool.check({ compilation: { kind: "compiler", arguments: ["--edition=2024", "--crate-type=lib", "-D", "warnings", path] }, sources: [] });
+  return tool.check({ compilation: { kind: "compiler", directory: root, arguments: ["--edition=2024", "--crate-type=lib", "-D", "warnings", path] } });
 }
 
 function bodyFor(evidence, name) {

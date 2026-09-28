@@ -32,7 +32,6 @@ mod type_generics;
 mod scopes;
 
 use std::io::{Read, Write};
-use std::path::PathBuf;
 
 use request::{CompilationInput, Request, Response};
 
@@ -41,16 +40,18 @@ fn execute() -> Result<(), String> {
     if arguments.len() != 2 {
         return Err("Expected request and response file paths.".to_owned());
     }
-    let request_path = PathBuf::from(&arguments[0]);
-    let response_path = PathBuf::from(&arguments[1]);
+    let request_path = std::path::absolute(&arguments[0]).map_err(|error| error.to_string())?;
+    let response_path = std::path::absolute(&arguments[1]).map_err(|error| error.to_string())?;
     let request = read_request(&request_path)?;
     let output = match request {
         Request::Tokens { edition, source, limits, .. } => request::encode_response(&Response::Tokens {
             protocol_version: request::PROTOCOL_VERSION,
             tokens: tokens::read_tokens(&edition, source, &limits)?,
         }, &limits)?,
-        Request::Analyze { compilation: CompilationInput::Compiler { arguments }, sources, phase, limits, .. } =>
-            evidence::analyze(&arguments, sources, phase, &limits)?,
+        Request::Analyze { compilation: CompilationInput::Compiler { directory, arguments }, phase, limits, .. } => {
+            std::env::set_current_dir(directory).map_err(|error| error.to_string())?;
+            evidence::analyze(&arguments, phase, &limits)?
+        }
         Request::Analyze { compilation: CompilationInput::Cargo { manifest_path, package_id, target, target_directory, .. }, limits, .. } =>
             cargo::analyze(&request_path, &response_path, &manifest_path, &package_id, &target, &target_directory, &limits)?,
     };

@@ -21,8 +21,7 @@ function project(name, binary = false, missingSource = false) {
     writeFileSync(target, text);
     return target;
   };
-  const sourcePath = missingSource ? join(directory, "authored.rs")
-    : write("authored.rs", 'compile_error!("previously published source must not be checked");\n');
+  const sourcePath = join(directory, "authored.rs");
   const target = binary ? { kind: "binary", name: "chosen-driver" } : { kind: "library" };
   const manifestPath = write("Cargo.toml", `
 [package]
@@ -77,15 +76,7 @@ fn main() {
     std::fs::write(output.join("proof.rs"), "pub const BUILD_VALUE: u64 = 7;").unwrap();
 }
 `);
-  runRustNativeCommand({ executable: "cargo", arguments: ["generate-lockfile", "--offline", "--manifest-path", manifestPath],
-    directory, environment: { ...process.env }, timeoutMilliseconds: 60_000, maximumDiagnosticBytes: 1_048_576 });
-  const retained = [manifestPath, ...(missingSource ? [] : [sourcePath]), join(directory, "Cargo.lock")]
-    .map(path => [path, readFileSync(path, "utf8")]);
-  const metadata = JSON.parse(runRustNativeCommand({ executable: "cargo",
-    arguments: ["metadata", "--locked", "--offline", "--no-deps", "--format-version=1", "--manifest-path", manifestPath],
-    directory, environment: { ...process.env }, timeoutMilliseconds: 60_000, maximumDiagnosticBytes: 1_048_576 }));
-  const packageId = metadata.packages.find(candidate => candidate.manifest_path === manifestPath).id;
-  const input = { compilation: { kind: "cargo", manifestPath, packageId, target }, sources: [{ path: sourcePath, text: `
+  const sourceText = `
 #[cfg(not(native_proof_selected))]
 compile_error!("the build-script configuration was lost");
 const _: () = assert!(env!("NATIVE_PROOF_VALUE").as_bytes()[0] == b'c');
@@ -95,8 +86,18 @@ include!(concat!(env!("OUT_DIR"), "/proof.rs"));
 pub struct Value;
 pub fn answer() -> u64 { renamed::chosen() + generated() + BUILD_VALUE }
 ${binary ? 'fn main() { assert_eq!(answer(), 49); }' : ''}
-` }] };
-  return { directory, dependency, input, preserved() {
+`;
+  if (!missingSource) write("authored.rs", sourceText);
+  runRustNativeCommand({ executable: "cargo", arguments: ["generate-lockfile", "--offline", "--manifest-path", manifestPath],
+    directory, environment: { ...process.env }, timeoutMilliseconds: 60_000, maximumDiagnosticBytes: 1_048_576 });
+  const retained = [manifestPath, ...(missingSource ? [] : [sourcePath]), join(directory, "Cargo.lock")]
+    .map(path => [path, readFileSync(path, "utf8")]);
+  const metadata = JSON.parse(runRustNativeCommand({ executable: "cargo",
+    arguments: ["metadata", "--locked", "--offline", "--no-deps", "--format-version=1", "--manifest-path", manifestPath],
+    directory, environment: { ...process.env }, timeoutMilliseconds: 60_000, maximumDiagnosticBytes: 1_048_576 }));
+  const packageId = metadata.packages.find(candidate => candidate.manifest_path === manifestPath).id;
+  const input = { compilation: { kind: "cargo", manifestPath, packageId, target } };
+  return { directory, dependency, sourcePath, input, preserved() {
     for (const [path, text] of retained) assert.equal(readFileSync(path, "utf8"), text, path);
     assert.equal(existsSync(sourcePath), !missingSource);
     assert.equal(existsSync(join(directory, "target")), false);
@@ -118,11 +119,9 @@ test("Cargo supplies exact aliases, procedural artifacts, features, build config
   fixture.preserved();
 });
 
-test("Cargo can check a prospective source without installing an empty root or publishing it", { timeout: 300_000 }, () => {
-  const fixture = project("cargo_native_prospective", false, true);
-  const evidence = tool.check(fixture.input);
-  assert.equal(evidence.phase, "checked");
-  assert.ok(evidence.inputs.some(row => row.path === fixture.input.sources[0].path));
+test("Cargo rejects absent real source without installing an empty root or publishing it", { timeout: 300_000 }, () => {
+  const fixture = project("cargo_native_absent", false, true);
+  assert.throws(() => tool.check(fixture.input), /couldn't read|could not read|No such file|cannot find/u);
   fixture.preserved();
 });
 
@@ -177,9 +176,9 @@ ${binary ? '[[bin]]\nname = "different-driver"\npath = "src/driver.rs"' : ""}
 `);
   const libraryPath = write("member/src/native.rs", binary
     ? "pub fn from_library() -> u64 { 47 }\n"
-    : 'compile_error!("the prior library source must not be checked");\n');
+    : "pub fn selected_member() -> u64 { 47 }\n");
   const sourcePath = binary ? write("member/src/driver.rs",
-    'compile_error!("the prior binary source must not be checked");\n') : libraryPath;
+    "fn main() { assert_eq!(different_native_name::from_library(), 47); }\n") : libraryPath;
   runRustNativeCommand({ executable: "cargo", arguments: ["generate-lockfile", "--offline", "--manifest-path", workspaceManifest],
     directory, environment: { ...process.env }, timeoutMilliseconds: 60_000, maximumDiagnosticBytes: 1_048_576 });
   retainedPaths.push(join(directory, "Cargo.lock"));
@@ -189,12 +188,10 @@ ${binary ? '[[bin]]\nname = "different-driver"\npath = "src/driver.rs"' : ""}
     directory, environment: { ...process.env }, timeoutMilliseconds: 60_000, maximumDiagnosticBytes: 1_048_576 }));
   const packageId = metadata.packages.find(candidate => candidate.manifest_path === selectedManifest).id;
   return {
+    sourcePath,
     input: {
       compilation: { kind: "cargo", manifestPath: memberManifest ? selectedManifest : workspaceManifest, packageId,
         target: binary ? { kind: "binary", name: "different-driver" } : { kind: "library" } },
-      sources: [{ path: sourcePath, text: binary
-        ? "fn main() { assert_eq!(different_native_name::from_library(), 47); }\n"
-        : "pub fn selected_member() -> u64 { 47 }\n" }],
     },
     preserved() {
       for (const [path, text] of retained) assert.equal(readFileSync(path, "utf8"), text, path);
@@ -215,17 +212,23 @@ for (const [name, options] of [
   const evidence = tool.check(fixture.input);
   assert.equal(evidence.phase, "checked");
   assert.ok(evidence.definitions.some(row => row.id.krate === 0 && row.name === (options.binary ? "main" : "selected_member")));
-  assert.ok(evidence.inputs.some(row => row.path === fixture.input.sources[0].path));
+  assert.ok(evidence.inputs.some(row => row.path === fixture.sourcePath));
   if (options.binary) assert.ok(evidence.definitions.some(row => row.id.krate !== 0 && row.name === "from_library"));
   fixture.preserved();
 });
 
 test("Cargo root errors and dependency failures cannot publish successful evidence", { timeout: 300_000 }, () => {
   const fixture = project("cargo_native_rejected");
-  assert.throws(() => tool.check({ ...fixture.input, sources: [{ ...fixture.input.sources[0],
-    text: "pub fn invalid() -> u32 { missing() }" }] }), /cannot find function/u);
-  assert.throws(() => tool.typing({ ...fixture.input, sources: [{ ...fixture.input.sources[0],
-    text: 'pub fn invalid() -> u32 { "wrong" }' }] }), /mismatched types/u);
+  const source = readFileSync(fixture.sourcePath, "utf8");
+  const invalid = "pub fn invalid() -> u32 { missing() }";
+  writeFileSync(fixture.sourcePath, invalid);
+  assert.throws(() => tool.check(fixture.input), /cannot find function/u);
+  assert.equal(readFileSync(fixture.sourcePath, "utf8"), invalid);
+  const wrongType = 'pub fn invalid() -> u32 { "wrong" }';
+  writeFileSync(fixture.sourcePath, wrongType);
+  assert.throws(() => tool.typing(fixture.input), /mismatched types/u);
+  assert.equal(readFileSync(fixture.sourcePath, "utf8"), wrongType);
+  writeFileSync(fixture.sourcePath, source);
   writeFileSync(fixture.dependency, 'compile_error!("dependency rejected");\n');
   assert.throws(() => tool.check(fixture.input), /dependency rejected/u);
   fixture.preserved();
@@ -255,11 +258,12 @@ test("Cargo evidence retains independent row and output limits", { timeout: 300_
 
 test("Cargo request selection is exact, immutable, bounded and never guesses a target", () => {
   const valid = { compilation: { kind: "cargo", manifestPath: join(root, "Cargo.toml"), packageId: "package-identity",
-    target: { kind: "binary", name: "authored" } }, sources: [] };
+    target: { kind: "binary", name: "authored" } } };
   const selected = snapshotRustNativeSourceRequest(valid, defaultRustNativeSourceLimits);
   valid.compilation.target.name = "changed";
   assert.equal(selected.compilation.target.name, "authored");
-  for (const value of [selected, selected.compilation, selected.compilation.target, selected.sources]) assert.ok(Object.isFrozen(value));
+  for (const value of [selected, selected.compilation, selected.compilation.target]) assert.ok(Object.isFrozen(value));
+  assert.throws(() => snapshotRustNativeSourceRequest({ ...valid, sources: [] }, defaultRustNativeSourceLimits), /exact compilation/u);
   for (const compilation of [
     { ...valid.compilation, extra: 1 }, { ...valid.compilation, manifestPath: "relative.toml" },
     { ...valid.compilation, manifestPath: `${root}/bad\0path` }, { ...valid.compilation, manifestPath: `${root}/bad\ud800path` },

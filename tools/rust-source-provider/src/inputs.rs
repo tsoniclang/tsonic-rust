@@ -5,14 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use rustc_span::{SourceFileHash, SourceFileHashAlgorithm};
 use rustc_span::source_map::{FileLoader, RealFileLoader};
-use serde::{Deserialize, Serialize};
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct SourceFile {
-    pub path: String,
-    pub text: String,
-}
+use serde::Serialize;
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -43,23 +36,12 @@ struct InputState {
 #[derive(Clone)]
 pub struct TrackedInputs {
     state: Arc<Mutex<InputState>>,
-    sources: Arc<BTreeMap<String, String>>,
     maximum_files: usize,
 }
 
 impl TrackedInputs {
-    pub fn new(maximum_files: usize, sources: Vec<SourceFile>) -> Result<Self, String> {
-        if sources.len() > maximum_files { return Err("Native source inputs exceed the file limit.".to_owned()); }
-        let mut selected = BTreeMap::new();
-        for source in sources {
-            if !Path::new(&source.path).is_absolute() || source.path.contains('\0') {
-                return Err("Native source files require absolute Unicode paths without NUL.".to_owned());
-            }
-            if selected.insert(source.path, source.text).is_some() {
-                return Err("Native source input has a duplicate filename.".to_owned());
-            }
-        }
-        Ok(Self { state: Arc::default(), sources: Arc::new(selected), maximum_files })
+    pub fn new(maximum_files: usize) -> Self {
+        Self { state: Arc::default(), maximum_files }
     }
 
     pub fn snapshot(&self) -> Result<InputSnapshot, String> {
@@ -130,7 +112,7 @@ impl FileLoader for TrackedInputs {
             Err(error) => { self.remember_failure(&error); return false; }
         };
         let path = Path::new(&absolute);
-        let exists = self.sources.contains_key(&absolute) || RealFileLoader.file_exists(path);
+        let exists = RealFileLoader.file_exists(path);
         if let Err(error) = self.record_probe(path, exists) { self.remember_failure(&error); }
         exists
     }
@@ -138,10 +120,7 @@ impl FileLoader for TrackedInputs {
     fn read_file(&self, path: &Path) -> io::Result<String> {
         let absolute = absolute_path(path)?;
         let path = Path::new(&absolute);
-        let text = match self.sources.get(&absolute) {
-            Some(text) => text.clone(),
-            None => RealFileLoader.read_file(path)?,
-        };
+        let text = RealFileLoader.read_file(path)?;
         if let Err(error) = self.record(path, text.as_bytes()) {
             self.remember_failure(&error);
             return Err(error);
@@ -152,10 +131,7 @@ impl FileLoader for TrackedInputs {
     fn read_binary_file(&self, path: &Path) -> io::Result<Arc<[u8]>> {
         let absolute = absolute_path(path)?;
         let path = Path::new(&absolute);
-        let bytes = match self.sources.get(&absolute) {
-            Some(text) => Arc::from(text.as_bytes()),
-            None => RealFileLoader.read_binary_file(path)?,
-        };
+        let bytes = RealFileLoader.read_binary_file(path)?;
         if let Err(error) = self.record(path, &bytes) {
             self.remember_failure(&error);
             return Err(error);

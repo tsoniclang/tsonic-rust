@@ -104,7 +104,7 @@ pub fn run_wrapper() -> Result<i32, String> {
     let request = crate::read_request(&request_path)?;
     let Request::Analyze {
         compilation: CompilationInput::Cargo { target_directory, compiler_identity, sysroot, .. },
-        sources, phase, limits, ..
+        phase, limits, ..
     } = request else {
         return Err("Native Cargo wrapper requires a Cargo analysis request.".to_owned());
     };
@@ -132,7 +132,7 @@ pub fn run_wrapper() -> Result<i32, String> {
     let arguments = std::iter::once(compiler).chain(arguments).map(|argument| {
         argument.into_string().map_err(|_| "Native Cargo compiler arguments require exact Unicode.".to_owned())
     }).collect::<Result<Vec<_>, _>>()?;
-    let output = crate::evidence::analyze(&arguments, sources, phase, &limits)?;
+    let output = crate::evidence::analyze(&arguments, phase, &limits)?;
     crate::write_response(&response_path.with_extension("cargo.json"), &output)?;
     Ok(ROOT_STOP)
 }

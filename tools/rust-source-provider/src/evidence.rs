@@ -13,7 +13,7 @@ use serde::Serialize;
 
 use crate::request::{EvidencePhase, Limits, PROTOCOL_VERSION, Response, encode_response};
 use crate::definitions::definition_kind;
-use crate::inputs::{SourceFile, SourceInput, SourceProbe, TrackedInputs};
+use crate::inputs::{SourceInput, SourceProbe, TrackedInputs};
 use crate::effects::{BodyEffects, TrackedEffects};
 use crate::type_graph::TypeGraph;
 use crate::type_model::{ConstantRow, Generics, TypeId, TypeRow};
@@ -138,10 +138,10 @@ pub struct StableDefinitionId {
     path: String,
 }
 
-pub fn analyze(arguments: &[String], sources: Vec<SourceFile>, phase: EvidencePhase, limits: &Limits) -> Result<Vec<u8>, String> {
+pub fn analyze(arguments: &[String], phase: EvidencePhase, limits: &Limits) -> Result<Vec<u8>, String> {
     if phase != EvidencePhase::Declarations { crate::flow::initialize(limits.maximum_rows)?; }
     let mut callbacks = EvidenceCallbacks {
-        limits, phase, inputs: TrackedInputs::new(limits.maximum_rows, sources)?,
+        limits, phase, inputs: TrackedInputs::new(limits.maximum_rows),
         effects: TrackedEffects::new(limits.maximum_rows), result: None,
     };
     rustc_driver::catch_fatal_errors(|| rustc_driver::run_compiler(arguments, &mut callbacks))

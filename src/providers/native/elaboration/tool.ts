@@ -105,15 +105,14 @@ export function createRustNativeSourceTool(options: {
   const analyze = (phase: RustNativeSemanticEvidence["phase"], input: RustNativeSourceRequest): RustNativeSemanticEvidence => {
     const selected = snapshotRustNativeSourceRequest(input, limits);
     const compilation = selected.compilation.kind === "compiler"
-      ? { kind: "compiler", arguments: [compiler, "--sysroot", sysroot, ...selected.compilation.arguments] }
+      ? { ...selected.compilation, arguments: [compiler, "--sysroot", sysroot, ...selected.compilation.arguments] }
       : { ...selected.compilation, compilerIdentity, sysroot, targetDirectory: join(cacheRoot, "cargo") };
-    const response = request({ kind: "analyze", phase,
-      compilation, sources: selected.sources });
+    const response = request({ kind: "analyze", phase, compilation });
     if (!isRecord(response) || response.kind !== "evidence" || !isRecord(response.evidence)) {
       throw new Error("Native Rust source service did not return semantic evidence.");
     }
     const evidence = decodeNativeEvidence(response.evidence, limits);
-    validateRustNativeEvidenceInputs(evidence, selected.sources);
+    validateRustNativeEvidenceInputs(evidence);
     return evidence;
   };
   return Object.freeze({

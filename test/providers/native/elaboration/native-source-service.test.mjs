@@ -95,7 +95,7 @@ test("native token and evidence locations refer to original UTF-8 bytes, includi
     assert.equal(original.subarray(token.source.start, token.source.end).toString("utf8"), token.text);
   }
   const path = sourceFile("locations.rs", '\uFEFF// 😀\r\npub fn read() -> u32 { 123_u32 }\r\n');
-  const evidence = tool.check({ compilation: { kind: "compiler", arguments: ["--edition=2024", "--crate-type=lib", path] }, sources: [] });
+  const evidence = tool.check({ compilation: { kind: "compiler", directory: root, arguments: ["--edition=2024", "--crate-type=lib", path] } });
   const literal = evidence.occurrences.find(occurrence => occurrence.source !== null &&
     occurrence.source.file === path && occurrence.source.end - occurrence.source.start === 7);
   assert.ok(literal);
@@ -118,7 +118,7 @@ pub fn borrow(input: &Option<String>) -> Option<&String> {
 pub fn read(input: Generated) -> i32 { value!(input.count) }
 pub fn early() -> i32 { leave!(); }
 `);
-  const evidence = tool.check({ compilation: { kind: "compiler", arguments: ["--edition=2024", "--crate-type=lib", path] }, sources: [] });
+  const evidence = tool.check({ compilation: { kind: "compiler", directory: root, arguments: ["--edition=2024", "--crate-type=lib", path] } });
   assert.ok(evidence.definitions.some(definition => definition.name === "Generated" && definition.kind === "struct"));
   const field = evidence.definitions.find(definition => definition.name === "count" && definition.kind === "field");
   assert.ok(field);
@@ -135,7 +135,7 @@ pub fn invalid<'scope>() -> &'scope String {
     borrow!(owned)
 }
 `);
-  assert.throws(() => tool.check({ compilation: { kind: "compiler", arguments: ["--edition=2024", "--crate-type=lib", invalid] }, sources: [] }), /cannot return reference|does not live long enough/u);
+  assert.throws(() => tool.check({ compilation: { kind: "compiler", directory: root, arguments: ["--edition=2024", "--crate-type=lib", invalid] } }), /cannot return reference|does not live long enough/u);
 });
 
 test("native declaration evidence is available before body checking without claiming body acceptance", () => {
@@ -148,7 +148,7 @@ pub fn second(input: Generated) -> Generated { first(input) }
 pub fn invalid() -> Generated { Generated { count: "not a u32" } }
 `);
   const arguments_ = ["--edition=2024", "--crate-type=lib", path];
-  const evidence = tool.declarations({ compilation: { kind: "compiler", arguments: arguments_ }, sources: [] });
+  const evidence = tool.declarations({ compilation: { kind: "compiler", directory: root, arguments: arguments_ } });
   assert.equal(evidence.phase, "declarations");
   assert.ok(!Object.hasOwn(evidence, "occurrences"));
   assert.ok(!Object.hasOwn(evidence, "effects"));
@@ -166,8 +166,8 @@ pub fn invalid() -> Generated { Generated { count: "not a u32" } }
     assert.equal(type.value.kind, "function", name);
     assert.ok(type.value.signature, name);
   }
-  validateRustNativeEvidenceInputs(evidence, []);
-  assert.throws(() => tool.check({ compilation: { kind: "compiler", arguments: arguments_ }, sources: [] }), /mismatched types/u);
+  validateRustNativeEvidenceInputs(evidence);
+  assert.throws(() => tool.check({ compilation: { kind: "compiler", directory: root, arguments: arguments_ } }), /mismatched types/u);
 });
 
 test("native declaration queries still reject unresolved signatures and failed expansion", () => {
@@ -176,7 +176,7 @@ test("native declaration queries still reject unresolved signatures and failed e
     ["failed_expansion", 'compile_error!("expansion rejected");', /expansion rejected/u],
   ]) {
     const path = sourceFile(`${name}.rs`, source);
-    assert.throws(() => tool.declarations({ compilation: { kind: "compiler", arguments: ["--edition=2024", "--crate-type=lib", path] }, sources: [] }), message);
+    assert.throws(() => tool.declarations({ compilation: { kind: "compiler", directory: root, arguments: ["--edition=2024", "--crate-type=lib", path] } }), message);
   }
 });
 
@@ -190,14 +190,14 @@ pub fn outer() {
 }
 `);
   const arguments_ = ["--edition=2024", "--crate-type=lib", path];
-  const evidence = tool.declarations({ compilation: { kind: "compiler", arguments: arguments_ }, sources: [] });
+  const evidence = tool.declarations({ compilation: { kind: "compiler", directory: root, arguments: arguments_ } });
   const local = evidence.definitions.find(definition => definition.name === "Local");
   assert.ok(local);
   const parent = evidence.definitions.find(definition => definition.id.krate === local.parent.krate &&
     definition.id.index === local.parent.index);
   assert.equal(parent.kind, "closure");
   assert.equal(parent.type, null);
-  assert.throws(() => tool.check({ compilation: { kind: "compiler", arguments: arguments_ }, sources: [] }), /mismatched types/u);
+  assert.throws(() => tool.check({ compilation: { kind: "compiler", directory: root, arguments: arguments_ } }), /mismatched types/u);
 });
 
 test("invalid native headers reject as diagnostics rather than crashing the native type collector", () => {
@@ -206,7 +206,7 @@ test("invalid native headers reject as diagnostics rather than crashing the nati
     ["missing_field_argument", "pub struct Boxed<Value>(Value); pub struct Holder { value: Boxed }"],
   ]) {
     const path = sourceFile(`${name}.rs`, source);
-    assert.throws(() => tool.declarations({ compilation: { kind: "compiler", arguments: ["--edition=2024", "--crate-type=lib", path] }, sources: [] }), error => {
+    assert.throws(() => tool.declarations({ compilation: { kind: "compiler", directory: root, arguments: ["--edition=2024", "--crate-type=lib", path] } }), error => {
       assert.match(error.message, /missing generics|generic argument/u);
       assert.doesNotMatch(error.message, /internal compiler error|panicked at|unreachable/u);
       return true;
@@ -220,7 +220,7 @@ pub enum Flag { Off, On(u8), Count { value: u32 } }
 pub struct Unit;
 pub struct Tuple(pub u32);
 `);
-  const evidence = tool.declarations({ compilation: { kind: "compiler", arguments: ["--edition=2024", "--crate-type=lib", path] }, sources: [] });
+  const evidence = tool.declarations({ compilation: { kind: "compiler", directory: root, arguments: ["--edition=2024", "--crate-type=lib", path] } });
   const flag = evidence.definitions.find(definition => definition.name === "Flag");
   assert.ok(flag);
   const variants = evidence.definitions.filter(definition => definition.kind === "variant");
@@ -239,7 +239,7 @@ pub struct Tuple(pub u32);
 test("declaration evidence preserves phase identity, graph integrity and resource limits", () => {
   const path = sourceFile("declaration_mutations.rs", "pub fn identity(input: u64) -> u64 { input }");
   const arguments_ = ["--edition=2024", "--crate-type=lib", path];
-  const evidence = tool.declarations({ compilation: { kind: "compiler", arguments: arguments_ }, sources: [] });
+  const evidence = tool.declarations({ compilation: { kind: "compiler", directory: root, arguments: arguments_ } });
   for (const mutate of [
     value => { delete value.phase; },
     value => { value.phase = "checked"; },
@@ -256,10 +256,10 @@ test("declaration evidence preserves phase identity, graph integrity and resourc
   }
   for (const selection of [{ maximumRows: 1 }, { maximumOutputBytes: 128 }]) {
     const bounded = createRustNativeSourceTool({ cacheRoot, limits: { ...defaultRustNativeSourceLimits, ...selection } });
-    assert.throws(() => bounded.declarations({ compilation: { kind: "compiler", arguments: arguments_ }, sources: [] }), /limit/u);
+    assert.throws(() => bounded.declarations({ compilation: { kind: "compiler", directory: root, arguments: arguments_ } }), /limit/u);
   }
   writeFileSync(path, "pub fn identity(input: i64) -> i64 { input }");
-  assert.throws(() => validateRustNativeEvidenceInputs(evidence, []), /checked input changed/u);
+  assert.throws(() => validateRustNativeEvidenceInputs(evidence), /checked input changed/u);
 });
 
 test("procedural expansion observes real bodies, produces definitions and runs derives", () => {
@@ -308,21 +308,21 @@ native_fixture::echo!(pub fn read() -> i64 { generated() });
 pub fn tag() -> u32 { Generated::TAG }
 `);
   const arguments_ = ["--edition=2024", "--crate-type=lib", "--extern", `native_fixture=${join(output, libraryName)}`];
-  const declarations = tool.declarations({ compilation: { kind: "compiler", arguments: [...arguments_, path] }, sources: [] });
+  const declarations = tool.declarations({ compilation: { kind: "compiler", directory: root, arguments: [...arguments_, path] } });
   assert.equal(declarations.phase, "declarations");
   assert.ok(declarations.definitions.some(definition => definition.name === "generated"));
   assert.ok(declarations.definitions.some(definition => definition.name === "TAG"));
   assert.ok(!declarations.definitions.some(definition => definition.name === "removed"));
   assert.ok(declarations.expansions.some(expansion => expansion.kind === "derive"));
-  const evidence = tool.check({ compilation: { kind: "compiler", arguments: [...arguments_, path] }, sources: [] });
+  const evidence = tool.check({ compilation: { kind: "compiler", directory: root, arguments: [...arguments_, path] } });
   assert.equal(evidence.phase, "checked");
   assert.ok(evidence.expansions.some(expansion => expansion.kind === "attribute"));
   assert.ok(evidence.expansions.some(expansion => expansion.kind === "derive"));
   assert.ok(evidence.definitions.some(definition => definition.name === "generated"));
   assert.ok(!evidence.definitions.some(definition => definition.name === "removed"));
   const invalid = sourceFile("missing_body.rs", `#[native_fixture::require_body] pub fn invalid() {}`);
-  assert.throws(() => tool.declarations({ compilation: { kind: "compiler", arguments: [...arguments_, invalid] }, sources: [] }), /custom attribute panicked/u);
-  assert.throws(() => tool.check({ compilation: { kind: "compiler", arguments: [...arguments_, invalid] }, sources: [] }), /custom attribute panicked/u);
+  assert.throws(() => tool.declarations({ compilation: { kind: "compiler", directory: root, arguments: [...arguments_, invalid] } }), /custom attribute panicked/u);
+  assert.throws(() => tool.check({ compilation: { kind: "compiler", directory: root, arguments: [...arguments_, invalid] } }), /custom attribute panicked/u);
 });
 
 test("native macro effects retain compiler-selected moves, copies, borrows and captures", () => {
@@ -344,7 +344,7 @@ pub fn assign() -> Owned {
     value
 }
 `);
-  const evidence = tool.check({ compilation: { kind: "compiler", arguments: ["--edition=2024", "--crate-type=lib", path] }, sources: [] });
+  const evidence = tool.check({ compilation: { kind: "compiler", directory: root, arguments: ["--edition=2024", "--crate-type=lib", path] } });
   const identity = value => `${value.krate}:${value.index}`;
   const effectsFor = name => {
     const definition = evidence.definitions.find(definition => definition.name === name && definition.kind === "function");
@@ -366,7 +366,7 @@ pub fn assign() -> Owned {
 macro_rules! take { ($value:expr) => { drop($value) }; }
 pub fn invalid(value: String) -> String { take!(value); value }
 `);
-  assert.throws(() => tool.check({ compilation: { kind: "compiler", arguments: ["--edition=2024", "--crate-type=lib", invalid] }, sources: [] }), /use of moved value/u);
+  assert.throws(() => tool.check({ compilation: { kind: "compiler", directory: root, arguments: ["--edition=2024", "--crate-type=lib", invalid] } }), /use of moved value/u);
 });
 
 test("the same native input is rejected by small finite bounds and accepted by adequate bounds", () => {
@@ -383,16 +383,16 @@ test("native source and include inputs are fingerprinted at the compiler's actua
   const include = sourceFile("included.rs", "pub const COUNT: u32 = 7;\n");
   const binary = sourceFile("data.bin", "abcd");
   const path = sourceFile("inputs.rs", 'include!("included.rs");\npub const BYTES: &[u8] = include_bytes!("data.bin");');
-  const evidence = tool.check({ compilation: { kind: "compiler", arguments: ["--edition=2024", "--crate-type=lib", path] }, sources: [] });
+  const evidence = tool.check({ compilation: { kind: "compiler", directory: root, arguments: ["--edition=2024", "--crate-type=lib", path] } });
   for (const input of [path, include, binary]) assert.ok(evidence.inputs.some(row => row.path === input));
-  validateRustNativeEvidenceInputs(evidence, []);
+  validateRustNativeEvidenceInputs(evidence);
   writeFileSync(binary, "abce");
-  assert.throws(() => validateRustNativeEvidenceInputs(evidence, []), /checked input changed/u);
+  assert.throws(() => validateRustNativeEvidenceInputs(evidence), /checked input changed/u);
 });
 
 test("native evidence rejects duplicate identities, missing selected types and wrong categories", () => {
   const path = sourceFile("mutations.rs", "pub fn original(input: u64) -> u64 { input }");
-  const evidence = tool.check({ compilation: { kind: "compiler", arguments: ["--edition=2024", "--crate-type=lib", path] }, sources: [] });
+  const evidence = tool.check({ compilation: { kind: "compiler", directory: root, arguments: ["--edition=2024", "--crate-type=lib", path] } });
   for (const mutate of [
     value => value.types.push(value.types[0]),
     value => value.definitions.push(value.definitions[0]),

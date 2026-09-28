@@ -18,14 +18,14 @@ function source(name, text) {
 }
 
 test("native occurrence selections include exact inferred and explicit generic arguments", () => {
-  const evidence = tool.check({ compilation: { kind: "compiler", arguments: source("arguments", `
+  const evidence = tool.check({ compilation: { kind: "compiler", directory: root, arguments: source("arguments", `
 pub fn identity<Value>(value: Value) -> Value { value }
 pub fn amount<const SIZE: u64>() -> u64 { SIZE }
 pub fn select(input: u64) -> u64 {
     let first = identity(input);
     identity::<u64>(first) + amount::<9007199254740993>()
 }
-`) }, sources: [] });
+`) } });
   const identity = evidence.definitions.find(row => row.name === "identity" && row.id.krate === 0);
   const uses = evidence.occurrences.filter(row => row.kind === "expression" && row.arguments !== null &&
     row.resolution?.kind === "declaration" && nativeDefinitionKey(row.resolution.id) === nativeDefinitionKey(identity.id));
@@ -46,7 +46,7 @@ pub fn select(input: u64) -> u64 {
 });
 
 test("native deref, borrow, coercion and two-phase facts do not depend on container names", () => {
-  const evidence = tool.check({ compilation: { kind: "compiler", arguments: source("adjustments", `
+  const evidence = tool.check({ compilation: { kind: "compiler", directory: root, arguments: source("adjustments", `
 pub struct AuthoredContainer<Value>(Value);
 impl<Value> core::ops::Deref for AuthoredContainer<Value> {
     type Target = Value;
@@ -69,7 +69,7 @@ pub fn use_adjustments() -> usize {
     let _ = converted;
     slice.len() + native.len() + closure(ordinary(1)) as usize
 }
-`) }, sources: [] });
+`) } });
   const operations = evidence.occurrences.flatMap(row => row.kind === "expression"
     ? row.adjustments.map(adjustment => adjustment.operation) : []);
   for (const kind of ["builtin-deref", "overloaded-deref", "borrow-reference", "unsize",
@@ -97,7 +97,7 @@ pub fn mutable(input: &mut Option<String>) -> Option<&mut String> {
 }
 pub fn ordinary() -> u32 { let mut owned_value = 1; owned_value += 1; owned_value }
 `;
-  const evidence = tool.check({ compilation: { kind: "compiler", arguments: source("bindings", text) }, sources: [] });
+  const evidence = tool.check({ compilation: { kind: "compiler", directory: root, arguments: source("bindings", text) } });
   const bytes = Buffer.from(text);
   const named = name => evidence.occurrences.find(row => row.kind === "pattern" && row.binding !== null &&
     row.source !== null && bytes.subarray(row.source.start, row.source.end).toString("utf8").includes(name));
@@ -111,12 +111,12 @@ pub fn ordinary() -> u32 { let mut owned_value = 1; owned_value += 1; owned_valu
 });
 
 test("native alternative patterns and closure captures point to canonical checked bindings", () => {
-  const evidence = tool.check({ compilation: { kind: "compiler", arguments: source("canonical_bindings", `
+  const evidence = tool.check({ compilation: { kind: "compiler", directory: root, arguments: source("canonical_bindings", `
 pub fn select(input: Result<String, String>) -> impl FnOnce() -> String {
     let value = match input { Ok(value) | Err(value) => value };
     move || value
 }
-`) }, sources: [] });
+`) } });
   const bindings = evidence.occurrences.filter(row => row.kind === "pattern" && row.binding !== null);
   const canonical = new Set(bindings.filter(row => nativeNodeKey(row.id) === nativeNodeKey(row.resolution.id))
     .map(row => nativeNodeKey(row.id)));
@@ -135,7 +135,7 @@ pub fn observe(input: u32) {
 }
 `;
   const start = Buffer.byteLength(text.slice(0, text.indexOf("repeated =")), "utf8");
-  const evidence = tool.check({ compilation: { kind: "compiler", arguments: source("duplicated_bindings", text) }, sources: [] });
+  const evidence = tool.check({ compilation: { kind: "compiler", directory: root, arguments: source("duplicated_bindings", text) } });
   const bindings = evidence.occurrences.filter(row => row.kind === "pattern" && row.binding !== null &&
     row.source?.start === start && row.source.end === start + "repeated".length);
   assert.equal(bindings.length, 2);

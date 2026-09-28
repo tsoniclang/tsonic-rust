@@ -20,7 +20,6 @@ pub enum Request {
         protocol_version: u32,
         phase: EvidencePhase,
         compilation: CompilationInput,
-        sources: Vec<crate::inputs::SourceFile>,
         limits: Limits,
     },
 }
@@ -28,7 +27,7 @@ pub enum Request {
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 pub enum CompilationInput {
-    Compiler { arguments: Vec<String> },
+    Compiler { directory: String, arguments: Vec<String> },
     Cargo {
         #[serde(rename = "manifestPath")]
         manifest_path: String,
@@ -87,13 +86,16 @@ impl Request {
         {
             return Err("Native source limits must be positive and within the service ceilings.".to_owned());
         }
-        if let Self::Analyze { compilation, sources, .. } = self {
+        if let Self::Analyze { compilation, .. } = self {
             let input_rows = match compilation {
-                CompilationInput::Compiler { arguments } => {
+                CompilationInput::Compiler { directory, arguments } => {
+                    if !std::path::Path::new(directory).is_absolute() || directory.contains('\0') {
+                        return Err("Native compiler directory must be absolute and cannot contain NUL.".to_owned());
+                    }
                     if arguments.is_empty() || arguments.iter().any(|argument| argument.contains('\0')) {
                         return Err("Native compiler arguments must be nonempty and cannot contain NUL.".to_owned());
                     }
-                    arguments.len()
+                    arguments.len() + 1
                 }
                 CompilationInput::Cargo { manifest_path, package_id, target, compiler_identity, sysroot, target_directory } => {
                     for path in [manifest_path, sysroot, target_directory] {
@@ -115,7 +117,7 @@ impl Request {
                     3
                 }
             };
-            if input_rows > limits.maximum_rows || sources.len() > limits.maximum_rows - input_rows {
+            if input_rows > limits.maximum_rows {
                 return Err("Native source inputs exceed the row limit.".to_owned());
             }
         }
