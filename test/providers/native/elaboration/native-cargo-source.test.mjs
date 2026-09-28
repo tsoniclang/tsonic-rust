@@ -7,7 +7,7 @@ import { repositoryRoot } from "../../../helpers/rust-session/paths.mjs";
 import { createRustNativeSourceTool, defaultRustNativeSourceLimits } from "../../../../dist/providers/native/elaboration/tool.js";
 import { snapshotRustNativeSourceRequest } from "../../../../dist/providers/native/elaboration/input.js";
 import { runRustNativeCommand } from "../../../../dist/providers/native/protocol/bounded-command.js";
-import { nativeStableDefinitionKey } from "../../../../dist/providers/native/elaboration/evidence.js";
+import { nativeDefinitionKey, nativeStableDefinitionKey } from "../../../../dist/providers/native/elaboration/evidence.js";
 
 const root = createTestWorkspace(join(repositoryRoot, ".temp/generated"), "rust-native-cargo-source-");
 const cacheRoot = join(root, "cache");
@@ -111,7 +111,10 @@ test("Cargo supplies exact aliases, procedural artifacts, features, build config
   assert.equal(first.phase, "checked");
   assert.ok(first.definitions.some(row => row.name === "generated" && row.id.krate === 0));
   assert.ok(first.definitions.some(row => row.name === "chosen" && row.id.krate !== 0));
-  assert.ok(first.expansions.some(row => row.kind === "attribute" && row.name.endsWith("supply")));
+  const macro = first.definitions.find(row => row.kind === "macro" && row.name === "supply" && row.id.krate !== 0);
+  assert.ok(macro);
+  assert.ok(first.expansions.some(row => row.kind === "attribute" && row.definition !== null &&
+    nativeDefinitionKey(row.definition) === nativeDefinitionKey(macro.id)));
   assert.ok(first.inputs.some(row => row.path.endsWith("proof.rs")));
   const repeated = tool.check(fixture.input);
   assert.deepEqual(first.definitions.map(row => nativeStableDefinitionKey(row.stable)),
@@ -121,7 +124,7 @@ test("Cargo supplies exact aliases, procedural artifacts, features, build config
 
 test("Cargo rejects absent real source without installing an empty root or publishing it", { timeout: 300_000 }, () => {
   const fixture = project("cargo_native_absent", false, true);
-  assert.throws(() => tool.check(fixture.input), /couldn't read|could not read|No such file|cannot find/u);
+  assert.throws(() => tool.check(fixture.input), /couldn't read|could not read|No such file|cannot find|can't find lib/u);
   fixture.preserved();
 });
 

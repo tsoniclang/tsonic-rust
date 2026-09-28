@@ -37,7 +37,7 @@ pub fn analyze(
     }
     let mut command = Command::new("cargo");
     command.current_dir(directory).args(["rustc", "--locked", "--manifest-path"])
-        .arg(&manifest).args(["--package", package_id, "--target-dir", target_directory, "--message-format=json"]);
+        .arg(&manifest).args(["--package", package_id, "--target-dir", target_directory]);
     match target {
         CargoTarget::Library => { command.arg("--lib"); }
         CargoTarget::Binary { name } => { command.arg("--bin").arg(name); }

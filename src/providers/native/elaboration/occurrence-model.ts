@@ -7,9 +7,23 @@ export type RustNativeResolution =
 
 interface RustNativeOccurrenceBase {
   readonly id: RustNativeNodeId;
+  readonly parent: RustNativeNodeId | null;
   readonly source: RustNativeSourceSpan | null;
   readonly type: number;
   readonly resolution: RustNativeResolution | null;
+}
+
+export interface RustNativeBody {
+  readonly owner: RustNativeDefinitionId;
+  readonly parameters: readonly RustNativeNodeId[];
+  readonly value: RustNativeNodeId;
+  readonly locals: readonly RustNativeLocal[];
+}
+
+export interface RustNativeLocal {
+  readonly id: RustNativeNodeId;
+  readonly pattern: RustNativeNodeId;
+  readonly initializer: RustNativeNodeId | null;
 }
 
 export type RustNativeOccurrence = RustNativeOccurrenceBase & (

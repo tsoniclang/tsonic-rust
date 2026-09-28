@@ -1,6 +1,7 @@
 import type { RustNativeDefinition, RustNativeDefinitionId, RustNativeTypeRow, RustNativeConstantRow } from "./evidence.js";
 import { nativeDefinitionKey } from "./evidence.js";
-import { index, requireAcyclicParents, shape } from "./decode-values.js";
+import { index, shape } from "./decode-values.js";
+import { validateNativeGenericRelations } from "./decode-generics.js";
 
 export function createNativeTypeDecodeContext(reserve: () => void, maximumDepth: number) {
   const typeReferences = new Set<number>();
@@ -33,23 +34,7 @@ export function createNativeTypeDecodeContext(reserve: () => void, maximumDepth:
           throw new Error("Native Rust evidence references the wrong definition kind.");
         }
       }
-      for (const field of ["parent", "predicatesParent"] as const) {
-        requireAcyclicParents(new Map(definitions.map(definition => {
-          const parent = definition.generics?.[field];
-          return [nativeDefinitionKey(definition.id), parent === null || parent === undefined ? null : nativeDefinitionKey(parent)];
-        })), `generic ${field}`);
-      }
-      for (const definition of definitions) {
-        const generics = definition.generics;
-        if (generics === null) continue;
-        const parent = generics.parent === null ? undefined : definitionIds.get(nativeDefinitionKey(generics.parent));
-        const expected = parent?.generics === undefined || parent.generics === null
-          ? 0 : parent.generics.parentCount + parent.generics.parameters.length;
-        if (generics.parentCount !== expected) throw new Error("Native Rust evidence has an inconsistent generic parent count.");
-        for (const [position, parameter] of generics.parameters.entries()) {
-          if (parameter.index !== generics.parentCount + position) throw new Error("Native Rust evidence has inconsistent generic parameter ordering.");
-        }
-      }
+      validateNativeGenericRelations(definitions);
     },
   };
 }

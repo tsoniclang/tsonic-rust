@@ -57,8 +57,11 @@ export function unique(values: readonly string[], kind: string): ReadonlySet<str
   return result;
 }
 
-export function requireAcyclicParents(parents: ReadonlyMap<string, string | null>, kind: string): void {
-  const complete = new Set<string>();
+export function requireAcyclicParents(
+  parents: ReadonlyMap<string, string | null>,
+  kind: string,
+): ReadonlyMap<string, { readonly root: string; readonly depth: number }> {
+  const complete = new Map<string, { readonly root: string; readonly depth: number }>();
   for (const start of parents.keys()) {
     const active = new Set<string>();
     let current: string | null | undefined = start;
@@ -67,6 +70,11 @@ export function requireAcyclicParents(parents: ReadonlyMap<string, string | null
       active.add(current);
       current = parents.get(current);
     }
-    for (const identity of active) complete.add(identity);
+    let ancestry = current === null || current === undefined ? undefined : complete.get(current);
+    for (const identity of [...active].reverse()) {
+      ancestry = Object.freeze({ root: ancestry?.root ?? identity, depth: (ancestry?.depth ?? -1) + 1 });
+      complete.set(identity, ancestry);
+    }
   }
+  return complete;
 }

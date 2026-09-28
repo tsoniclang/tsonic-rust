@@ -1,8 +1,9 @@
+import type { RustNativeDefinition } from "./evidence.js";
 import type { RustNativeAlias, RustNativeArgument, RustNativeClause, RustNativeExistential,
   RustNativeGenerics, RustNativeParameter } from "./type-model.js";
 import type { NativeTypeDecodeContext } from "./decode-type-context.js";
 import type { NativeRegionDecoder } from "./decode-regions.js";
-import { array, boolean, choice, index, record, shape, text, unique } from "./decode-values.js";
+import { array, boolean, choice, index, record, requireAcyclicParents, shape, text, unique } from "./decode-values.js";
 import { nativeDefinitionKey } from "./evidence.js";
 
 export function createNativeGenericDecoder(context: NativeTypeDecodeContext, regions: NativeRegionDecoder) {
@@ -94,11 +95,10 @@ export function createNativeGenericDecoder(context: NativeTypeDecodeContext, reg
       context.reserve();
       const input = shape(value, ["definition", "index", "name", "pureWrtDrop", "value"]);
       const selected = parameterKind(input.value);
-      return Object.freeze({ definition: context.definition(input.definition, selected.kind === "lifetime" ? ["lifetime-parameter"] :
-        selected.kind === "constant" ? ["const-parameter"] : ["type-parameter", "trait", "trait-alias"]),
+      return Object.freeze({ definition: context.definition(input.definition),
         index: index(input.index), name: text(input.name), pureWrtDrop: boolean(input.pureWrtDrop), value: selected });
     });
-    unique(parameters.map(parameter => nativeDefinitionKey(parameter.definition)), "generic parameter");
+    unique(parameters.map(parameter => String(parameter.index)), "generic parameter index");
     return Object.freeze({ parent: input.parent === null ? null : context.definition(input.parent), parentCount: index(input.parentCount),
       hasSelf: boolean(input.hasSelf), parameters, predicatesParent: input.predicatesParent === null ? null : context.definition(input.predicatesParent),
       predicates: array(input.predicates, value => regions.binder(value, clause)) });
@@ -107,3 +107,49 @@ export function createNativeGenericDecoder(context: NativeTypeDecodeContext, reg
 }
 
 export type NativeGenericDecoder = ReturnType<typeof createNativeGenericDecoder>;
+
+export function validateNativeGenericRelations(definitions: readonly RustNativeDefinition[]): void {
+  const byId = new Map(definitions.map(definition => [nativeDefinitionKey(definition.id), definition]));
+  for (const field of ["parent", "predicatesParent"] as const) {
+    requireAcyclicParents(new Map(definitions.map(definition => {
+      const parent = definition.generics?.[field];
+      return [nativeDefinitionKey(definition.id), parent === null || parent === undefined ? null : nativeDefinitionKey(parent)];
+    })), `generic ${field}`);
+  }
+  for (const definition of definitions) {
+    const generics = definition.generics;
+    if (generics === null) continue;
+    const owner = nativeDefinitionKey(definition.id);
+    const parent = generics.parent === null ? undefined : byId.get(nativeDefinitionKey(generics.parent))?.generics;
+    const expected = parent === undefined || parent === null ? 0 : parent.parentCount + parent.parameters.length;
+    if (generics.parentCount !== expected) throw new Error("Native Rust evidence has an inconsistent generic parent count.");
+    const declaresSelf = definition.kind === "trait" || definition.kind === "trait-alias";
+    if (generics.hasSelf !== (declaresSelf || parent?.hasSelf === true) || declaresSelf && generics.parent !== null) {
+      throw new Error("Native Rust evidence has an inconsistent generic Self relationship.");
+    }
+    const declarations = new Set<string>();
+    for (const [position, parameter] of generics.parameters.entries()) {
+      if (parameter.index !== generics.parentCount + position) {
+        throw new Error("Native Rust evidence has inconsistent generic parameter ordering.");
+      }
+      const selected = nativeDefinitionKey(parameter.definition);
+      if (selected === owner) {
+        const implicit = definition.kind === "closure" || definition.kind === "coroutine-body" || definition.kind === "inline-constant";
+        if ((!implicit && !(declaresSelf && position === 0)) || parameter.value.kind !== "type" ||
+            parameter.value.default !== null || parameter.value.synthetic || parameter.pureWrtDrop) {
+          throw new Error("Native Rust evidence has an invalid owner-encoded generic parameter.");
+        }
+      } else {
+        const expectedKind = parameter.value.kind === "lifetime" ? "lifetime-parameter"
+          : parameter.value.kind === "constant" ? "const-parameter" : "type-parameter";
+        if (byId.get(selected)?.kind !== expectedKind || declarations.has(selected)) {
+          throw new Error("Native Rust evidence has an invalid generic parameter declaration.");
+        }
+        declarations.add(selected);
+      }
+    }
+    if (declaresSelf && (generics.parameters.length === 0 || nativeDefinitionKey(generics.parameters[0]!.definition) !== owner)) {
+      throw new Error("Native Rust evidence has no exact trait Self parameter.");
+    }
+  }
+}

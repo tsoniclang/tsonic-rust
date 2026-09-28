@@ -7,16 +7,22 @@ const limits = { maximumRows: 10_000, maximumDepth: 16, maximumOutputBytes: 1_04
 const identity = index => ({ krate: 0, index });
 
 function evidence(occurrence) {
+  const root = occurrence.kind === "expression" ? occurrence : { ...expression(), id: { owner: identity(1), local: 10 } };
+  const associated = { ...nativeDefinition(2, "associated-function"), type: 1 };
   return { ...nativeEvidenceFixture(), phase: "checked", effects: [], flows: [], items: [0, 1, 2].map(identity),
-    definitions: ["module", "function", "associated-function"].map((kind, index) => nativeDefinition(index, kind)),
-    types: [{ id: 0, value: { kind: "primitive", name: "u64" } }],
+    definitions: [nativeDefinition(0, "module"), nativeDefinition(1, "function"), associated],
+    types: [{ id: 0, value: { kind: "primitive", name: "u64" } },
+      { id: 1, value: { kind: "function", definition: identity(2), arguments: [],
+        signature: { variables: [], value: { inputs: [], output: 0, variadic: false, unsafeCall: false, abi: "Rust" } } } }],
     constants: [{ id: 0, value: { kind: "scalar", type: 0, bytes: 8, bits: "9007199254740993" } }],
-    occurrences: [occurrence],
+    occurrences: occurrence === root ? [occurrence] : [occurrence, root],
+    bodies: [{ owner: identity(1), parameters: occurrence.kind === "pattern" ? [occurrence.id] : [],
+      value: root.id, locals: [] }],
   };
 }
 
 function expression(adjustments = []) {
-  return { kind: "expression", id: { owner: identity(1), local: 1 }, source: null,
+  return { kind: "expression", id: { owner: identity(1), local: 1 }, parent: null, source: null,
     type: 0, adjustedType: 0, resolution: null, arguments: null, adjustments };
 }
 
@@ -54,7 +60,7 @@ test("native pattern binding and reference mutability remain independent", () =>
   for (const mutable of [false, true]) {
     for (const reference of [null, ...[false, true].flatMap(mutable =>
       [false, true].map(pinned => ({ mutable, pinned })))]) {
-      const occurrence = { kind: "pattern", id, source: null, type: 0,
+      const occurrence = { kind: "pattern", id, parent: null, source: null, type: 0,
         resolution: { kind: "binding", id }, binding: { mutable, reference },
         adjustments: ["builtin-deref", "overloaded-deref", "pin-deref"].map(kind => ({ kind, source: 0 })) };
       assert.deepEqual(decodeNativeEvidence(evidence(occurrence), limits).occurrences[0], occurrence);
@@ -64,7 +70,7 @@ test("native pattern binding and reference mutability remain independent", () =>
 
 test("malformed or contradictory native occurrence evidence is rejected", () => {
   const binding = { owner: identity(1), local: 1 };
-  const pattern = { kind: "pattern", id: binding, source: null, type: 0,
+  const pattern = { kind: "pattern", id: binding, parent: null, source: null, type: 0,
     resolution: { kind: "binding", id: binding }, binding: { mutable: false, reference: null }, adjustments: [] };
   const cases = [
     { ...expression(), adjustedType: 4 },
@@ -86,7 +92,7 @@ test("malformed or contradictory native occurrence evidence is rejected", () => 
     { ...expression(), id: { ...binding, guess: 0 } },
   ];
   for (const occurrence of cases) assert.throws(() => decodeNativeEvidence(evidence(occurrence), limits));
-  for (const field of ["arguments", "adjustments", "adjustedType"]) {
+  for (const field of ["arguments", "adjustments", "adjustedType", "parent"]) {
     const occurrence = expression();
     delete occurrence[field];
     assert.throws(() => decodeNativeEvidence(evidence(occurrence), limits), /shape/u);

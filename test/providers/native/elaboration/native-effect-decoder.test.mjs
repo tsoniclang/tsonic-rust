@@ -11,13 +11,14 @@ function evidence(access = {}) {
     definitions: [nativeDefinition(0, "module"), nativeDefinition(1, "function"), nativeDefinition(2, "closure")],
     types: [{ id: 0, value: { kind: "primitive", name: "u64" } }],
     occurrences: [
-      { kind: "pattern", id: node(1), source: null, type: 0, resolution: { kind: "binding", id: node(1) },
+      { kind: "pattern", id: node(1), parent: null, source: null, type: 0, resolution: { kind: "binding", id: node(1) },
         binding: { mutable: true, reference: null }, adjustments: [] },
-      { kind: "expression", id: node(2), source: null, type: 0, adjustedType: 0,
+      { kind: "expression", id: node(2), parent: null, source: null, type: 0, adjustedType: 0,
         resolution: { kind: "binding", id: node(1) }, arguments: null, adjustments: [] },
-      { kind: "pattern", id: node(3), source: null, type: 0, resolution: { kind: "binding", id: node(1) },
+      { kind: "pattern", id: node(3), parent: null, source: null, type: 0, resolution: { kind: "binding", id: node(1) },
         binding: { mutable: true, reference: null }, adjustments: [] },
     ],
+    bodies: [{ owner: nativeIdentity(1), parameters: [node(1), node(3)], value: node(2), locals: [] }],
     effects: [{ owner: nativeIdentity(1), accesses: [{ kind: "mutate", place: node(2), diagnostic: node(2),
       source: null, base: { kind: "local", binding: node(1) }, projections: [], fakeRead: null, ...access }] }],
   };

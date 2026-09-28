@@ -17,10 +17,11 @@ function source(name, text) {
   return ["--edition=2024", "--crate-type=lib", path];
 }
 
-function selected(evidence, name) {
-  const definition = evidence.definitions.find(definition => definition.name === name && definition.id.krate === 0);
-  assert.ok(definition, name);
-  return definition;
+function selected(evidence, name, kind) {
+  const definitions = evidence.definitions.filter(definition => definition.name === name && definition.id.krate === 0 &&
+    (kind === undefined || definition.kind === kind));
+  assert.equal(definitions.length, 1, name);
+  return definitions[0];
 }
 
 function type(evidence, id) {
@@ -57,14 +58,14 @@ pub fn higher<Callback>(callback: Callback) where Callback: for<'scope> Fn(&'sco
     const defaults = selected(evidence, "Defaults").generics.parameters;
     assert.deepEqual(type(evidence, defaults[0].value.default), { kind: "primitive", name: "u8" });
     assert.notEqual(defaults[1].value.default, null);
-    const callback = type(evidence, selected(evidence, "Callback").type);
+    const callback = type(evidence, selected(evidence, "Callback", "type-alias").type);
     assert.equal(callback.kind, "function-pointer");
     assert.deepEqual(callback.signature.variables.map(variable => variable.kind), ["lifetime"]);
     const input = type(evidence, callback.signature.value.inputs[0]);
     const output = type(evidence, callback.signature.value.output);
     assert.equal(input.region.kind, "bound");
     assert.deepEqual(input.region, output.region);
-    const project = selected(evidence, "project");
+    const project = selected(evidence, "project", "function");
     assert.ok(project.generics.predicates.some(predicate => predicate.value.kind === "trait"));
     assert.ok(record.generics.predicates.some(predicate => predicate.value.kind === "type-outlives"));
     assert.ok(evidence.types.some(type => type.value.kind === "alias" && type.value.alias.category === "projection"));

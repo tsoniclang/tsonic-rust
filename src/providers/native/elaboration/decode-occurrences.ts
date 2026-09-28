@@ -65,9 +65,10 @@ export function createNativeOccurrenceDecoder(
     context.reserve();
     const input = record(value);
     const kind = choice(input.kind, ["expression", "pattern"]);
-    shape(input, ["kind", "id", "source", "type", "resolution", "adjustments",
+    shape(input, ["kind", "id", "parent", "source", "type", "resolution", "adjustments",
       ...(kind === "expression" ? ["adjustedType", "arguments"] : ["binding"])]);
-    const common = { id: readers.node(input.id), source: readers.span(input.source), type: context.type(input.type),
+    const common = { id: readers.node(input.id), parent: input.parent === null ? null : readers.node(input.parent),
+      source: readers.span(input.source), type: context.type(input.type),
       resolution: resolution(input.resolution) };
     if (kind === "expression") {
       const adjustments = array(input.adjustments, value => {

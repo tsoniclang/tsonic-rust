@@ -13,11 +13,27 @@ use crate::type_model::{Argument, TypeId};
 #[derive(Serialize)]
 pub(crate) struct Occurrence {
     id: NodeId,
+    parent: Option<NodeId>,
     source: Option<SourceSpan>,
     r#type: TypeId,
     resolution: Option<Resolution>,
     #[serde(flatten)]
     detail: Detail,
+}
+
+#[derive(Serialize)]
+pub(crate) struct Body {
+    pub owner: super::DefinitionId,
+    pub parameters: Vec<NodeId>,
+    pub value: NodeId,
+    pub locals: Vec<Local>,
+}
+
+#[derive(Serialize)]
+pub(crate) struct Local {
+    id: NodeId,
+    pattern: NodeId,
+    initializer: Option<NodeId>,
 }
 
 #[derive(Serialize)]
@@ -39,6 +55,8 @@ pub(super) struct BodyVisitor<'collector, 'tcx, 'limits> {
     pub collector: &'collector mut Collector<'tcx, 'limits>,
     pub types: &'tcx TypeckResults<'tcx>,
     pub depth: usize,
+    pub parent: Option<rustc_hir::HirId>,
+    pub locals: Vec<Local>,
 }
 
 impl<'tcx> Visitor<'tcx> for BodyVisitor<'_, 'tcx, '_> {
@@ -85,9 +103,11 @@ impl<'tcx> Visitor<'tcx> for BodyVisitor<'_, 'tcx, '_> {
         })();
         let detail = match detail { Ok(value) => value, Err(error) => return ControlFlow::Break(error) };
         self.record(expression.hir_id, expression.span, self.types.expr_ty(expression), resolution, detail)?;
+        let parent = self.parent.replace(expression.hir_id);
         self.depth += 1;
         let result = intravisit::walk_expr(self, expression);
         self.depth -= 1;
+        self.parent = parent;
         result
     }
 
@@ -109,10 +129,23 @@ impl<'tcx> Visitor<'tcx> for BodyVisitor<'_, 'tcx, '_> {
         })();
         let detail = match detail { Ok(value) => value, Err(error) => return ControlFlow::Break(error) };
         self.record(pattern.hir_id, pattern.span, self.types.pat_ty(pattern), resolution, detail)?;
+        let parent = self.parent.replace(pattern.hir_id);
         self.depth += 1;
         let result = intravisit::walk_pat(self, pattern);
         self.depth -= 1;
+        self.parent = parent;
         result
+    }
+
+    fn visit_local(&mut self, local: &'tcx rustc_hir::LetStmt<'tcx>) -> Self::Result {
+        if let Err(error) = self.collector.graph.reserve(self.depth) {
+            return ControlFlow::Break(error);
+        }
+        self.locals.push(Local {
+            id: node_id(local.hir_id), pattern: node_id(local.pat.hir_id),
+            initializer: local.init.map(|expression| node_id(expression.hir_id)),
+        });
+        intravisit::walk_local(self, local)
     }
 }
 
@@ -125,7 +158,8 @@ impl<'tcx> BodyVisitor<'_, 'tcx, '_> {
             self.collector.span_expansions(span)?;
             let ty = self.collector.graph.ty(ty)?;
             self.collector.occurrences.push(Occurrence {
-                id: node_id(id), source: source_span(self.collector.context, span), r#type: ty, resolution, detail,
+                id: node_id(id), parent: self.parent.map(node_id),
+                source: source_span(self.collector.context, span), r#type: ty, resolution, detail,
             });
             Ok(())
         })();

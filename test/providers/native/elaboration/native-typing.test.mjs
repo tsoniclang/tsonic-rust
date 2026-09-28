@@ -39,7 +39,10 @@ pub fn decision(value: String, condition: bool) -> String { consume!(condition, 
   assert.ok(moves.length >= 2);
   assert.ok(moves.some(access => moves.filter(other =>
     nativeNodeKey(other.base.binding) === nativeNodeKey(access.base.binding)).length >= 2));
-  const expansion = evidence.expansions.find(row => row.kind === "function-like" && row.name === "consume");
+  const macro = evidence.definitions.find(row => row.kind === "macro" && row.name === "consume" && row.id.krate === 0);
+  assert.ok(macro);
+  const expansion = evidence.expansions.find(row => row.kind === "function-like" && row.definition !== null &&
+    nativeDefinitionKey(row.definition) === nativeDefinitionKey(macro.id));
   assert.ok(expansion);
   assert.ok(evidence.occurrences.some(occurrence => occurrence.source !== null &&
     nativeDefinitionKey(expansion.id) === nativeDefinitionKey(occurrence.source.expansion)));
@@ -59,7 +62,7 @@ pub mod nested { pub fn length(value: &str) -> usize { value.len() } }
   const checked = tool.check({ compilation: { kind: "compiler", directory: root, arguments: program.arguments } });
   assert.equal(typed.phase, "typed");
   assert.equal(checked.phase, "checked");
-  for (const key of ["occurrences", "effects", "flows"]) assert.deepEqual(typed[key], checked[key], key);
+  for (const key of ["occurrences", "bodies", "effects", "flows"]) assert.deepEqual(typed[key], checked[key], key);
   assert.ok(typed.effects.length >= 4);
   assert.equal(existsSync(program.output), false);
 });
@@ -105,12 +108,12 @@ test("native typing retains finite row and output budgets", () => {
 });
 
 test("native typing uses the complete body decoder without accepting malformed phase data", () => {
-  const typed = { ...nativeEvidenceFixture(), phase: "typed", occurrences: [], effects: [], flows: [] };
+  const typed = { ...nativeEvidenceFixture(), phase: "typed", occurrences: [], bodies: [], effects: [], flows: [] };
   assert.equal(decodeNativeEvidence(typed, defaultRustNativeSourceLimits).phase, "typed");
   for (const phase of ["declarations", "partial", "typechecked"]) {
     assert.throws(() => decodeNativeEvidence({ ...typed, phase }, defaultRustNativeSourceLimits));
   }
-  for (const key of ["occurrences", "effects", "flows"]) {
+  for (const key of ["occurrences", "bodies", "effects", "flows"]) {
     const missing = { ...typed };
     delete missing[key];
     assert.throws(() => decodeNativeEvidence(missing, defaultRustNativeSourceLimits));

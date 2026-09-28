@@ -20,9 +20,10 @@ function source(name, text) {
 }
 
 function definition(evidence, name, kind) {
-  const selected = evidence.definitions.find(row => row.id.krate === 0 && row.name === name && (kind === undefined || row.kind === kind));
-  assert.ok(selected, `${kind ?? "definition"} ${name}`);
-  return selected;
+  const selected = evidence.definitions.filter(row => row.id.krate === 0 && row.parent !== null && row.name === name &&
+    (kind === undefined || row.kind === kind));
+  assert.equal(selected.length, 1, `${kind ?? "definition"} ${name}`);
+  return selected[0];
 }
 
 function scope(evidence, owner) {
@@ -37,8 +38,11 @@ pub mod definitions {
     pub struct Pair(pub u32);
     pub struct Record { pub value: u32, pub(crate) internal: u32, hidden: u32 }
     pub fn same() -> u32 { 7 }
-    macro_rules! same { () => { 7_u32 }; }
-    pub(crate) use same;
+    mod macros {
+        macro_rules! same { () => { 7_u32 }; }
+        pub(crate) use same;
+    }
+    pub(crate) use macros::same;
     pub mod nested { pub(super) fn limited() {} }
 }
 pub use definitions::Pair as Alias;
@@ -68,6 +72,19 @@ pub fn verify(value: Alias) -> u32 { definitions::same!() + definitions::same() 
     const exported = scope(evidence, definition(evidence, "exported", "module"));
     assert.ok(exported.bindings.some(binding => binding.name === "Pair" && binding.reexports.some(step => step.kind === "glob")));
     assert.ok(Object.isFrozen(exported.bindings));
+  }
+});
+
+test("native same-scope imports cannot redeclare an existing value while reexporting a macro", () => {
+  const input = { compilation: { kind: "compiler", directory: root, arguments: source("duplicate_namespace", `
+pub mod definitions {
+    pub fn same() -> u32 { 7 }
+    macro_rules! same { () => { 7_u32 }; }
+    pub(crate) use same;
+}
+`) } };
+  for (const phase of ["declarations", "typing", "check"]) {
+    assert.throws(() => tool[phase](input), /E0255.*same.*defined multiple times/su);
   }
 });
 
@@ -187,7 +204,27 @@ pub fn ordinary(value: &Record<u32>) -> &u32 { &value.value }
     }
     assert.equal(definition(evidence, "ordinary", "function").receiver, null);
     const signature = name => evidence.types.find(row => row.id === definition(evidence, name).type).value.signature;
-    assert.deepEqual(signature("shared"), signature("borrowed"));
+    const shared = signature("shared");
+    const borrowed = signature("borrowed");
+    const type = id => evidence.types.find(row => row.id === id).value;
+    for (const selected of [shared, borrowed]) {
+      assert.equal(selected.value.abi, "Rust");
+      assert.equal(selected.value.unsafeCall, false);
+      assert.equal(selected.value.variadic, false);
+      assert.equal(selected.variables.length, 1);
+      assert.equal(selected.variables[0].kind, "lifetime");
+      assert.equal(selected.value.inputs.length, 1);
+      for (const value of [type(selected.value.inputs[0]), type(selected.value.output)]) {
+        assert.equal(value.kind, "reference");
+        assert.equal(value.mutable, false);
+        assert.equal(value.region.kind, "bound");
+        assert.equal(value.region.variable, 0);
+        assert.deepEqual(value.region.declaration, selected.variables[0].declaration);
+      }
+    }
+    assert.deepEqual(type(shared.value.inputs[0]).pointee, type(borrowed.value.inputs[0]).pointee);
+    assert.deepEqual(type(shared.value.output).pointee, type(borrowed.value.output).pointee);
+    assert.notDeepEqual(shared.variables[0].declaration, borrowed.variables[0].declaration);
     assert.equal(signature("empty").value.inputs.length, 0);
     assert.ok(Object.isFrozen(definition(evidence, "shared")));
     const malformed = structuredClone(evidence);

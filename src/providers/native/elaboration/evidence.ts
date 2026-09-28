@@ -1,6 +1,6 @@
 import type { RustNativeConstant, RustNativeGenerics, RustNativeType } from "./type-model.js";
 import type { RustNativeScope, RustNativeVisibility } from "./scope-model.js";
-import type { RustNativeOccurrence } from "./occurrence-model.js";
+import type { RustNativeBody, RustNativeOccurrence } from "./occurrence-model.js";
 import type { RustNativeBodyFlow } from "./flow-model.js";
 export type { RustNativeOccurrence } from "./occurrence-model.js";
 
@@ -83,6 +83,7 @@ export interface RustNativeDeclarationEvidence extends RustNativeDeclarationGrap
 
 interface RustNativeBodyEvidence extends RustNativeDeclarationGraph {
   readonly occurrences: readonly RustNativeOccurrence[];
+  readonly bodies: readonly RustNativeBody[];
   readonly effects: readonly RustNativeBodyEffects[];
   readonly flows: readonly RustNativeBodyFlow[];
 }

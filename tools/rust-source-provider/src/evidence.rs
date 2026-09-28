@@ -21,7 +21,7 @@ use crate::scopes::{Scope, Visibility, collect_scope, visibility};
 
 mod adjustments;
 mod occurrences;
-use occurrences::{BodyVisitor, Occurrence};
+use occurrences::{Body, BodyVisitor, Occurrence};
 
 #[derive(Serialize)]
 #[serde(tag = "phase", rename_all = "kebab-case")]
@@ -45,6 +45,7 @@ pub struct BodyEvidence {
     #[serde(flatten)]
     declarations: DeclarationEvidence,
     occurrences: Vec<Occurrence>,
+    bodies: Vec<Body>,
     effects: Vec<BodyEffects>,
     flows: Vec<crate::flow::model::BodyFlow>,
 }
@@ -276,14 +277,22 @@ fn collect(context: TyCtxt<'_>, phase: EvidencePhase, limits: &Limits, tracked_i
         collector.graph.reserve(0)?;
         items.push(collector.graph.definition(owner.to_def_id())?);
     }
+    let mut bodies = Vec::new();
     if phase != EvidencePhase::Declarations {
         for owner in context.hir_body_owners() {
             context.ensure_done().mir_built(owner);
             collector.graph.definition(owner.to_def_id())?;
-            let mut visitor = BodyVisitor { collector: &mut collector, types: context.typeck(owner), depth: 0 };
-            if let ControlFlow::Break(error) = visitor.visit_body(context.hir_body_owned_by(owner)) {
+            let body = context.hir_body_owned_by(owner);
+            collector.graph.reserve(0)?;
+            for _ in body.params { collector.graph.reserve(0)?; }
+            let mut visitor = BodyVisitor { collector: &mut collector, types: context.typeck(owner),
+                depth: 0, parent: None, locals: Vec::new() };
+            if let ControlFlow::Break(error) = visitor.visit_body(body) {
                 return Err(error);
             }
+            bodies.push(Body { owner: definition_id(owner.to_def_id()),
+                parameters: body.params.iter().map(|parameter| node_id(parameter.pat.hir_id)).collect(),
+                value: node_id(body.value.hir_id), locals: visitor.locals });
         }
     }
     collector.graph.definition(root)?;
@@ -342,7 +351,7 @@ fn collect(context: TyCtxt<'_>, phase: EvidencePhase, limits: &Limits, tracked_i
     Ok(match phase {
         EvidencePhase::Declarations => Evidence::Declarations { declarations },
         EvidencePhase::Typed | EvidencePhase::Checked => {
-            let body = BodyEvidence { declarations, occurrences: collector.occurrences, effects, flows };
+            let body = BodyEvidence { declarations, occurrences: collector.occurrences, bodies, effects, flows };
             if phase == EvidencePhase::Typed { Evidence::Typed { body } } else { Evidence::Checked { body } }
         },
     })
