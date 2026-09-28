@@ -53,12 +53,12 @@ fn execute() -> Result<(), String> {
     }
     let request: Request = serde_json::from_slice(&bytes).map_err(|error| error.to_string())?;
     request.validate()?;
-    let output = match &request {
+    let output = match request {
         Request::Tokens { edition, source, limits, .. } => request::encode_response(&Response::Tokens {
             protocol_version: request::PROTOCOL_VERSION,
-            tokens: tokens::read_tokens(edition, source.clone(), limits)?,
-        }, limits)?,
-        Request::Analyze { arguments, phase, limits, .. } => evidence::analyze(arguments, *phase, limits)?,
+            tokens: tokens::read_tokens(&edition, source, &limits)?,
+        }, &limits)?,
+        Request::Analyze { arguments, sources, phase, limits, .. } => evidence::analyze(&arguments, sources, phase, &limits)?,
     };
     let mut file = std::fs::OpenOptions::new()
         .write(true)

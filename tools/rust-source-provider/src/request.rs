@@ -20,6 +20,7 @@ pub enum Request {
         protocol_version: u32,
         phase: EvidencePhase,
         arguments: Vec<String>,
+        sources: Vec<crate::inputs::SourceFile>,
         limits: Limits,
     },
 }
@@ -61,10 +62,13 @@ impl Request {
         {
             return Err("Native source limits must be positive and within the service ceilings.".to_owned());
         }
-        if let Self::Analyze { arguments, .. } = self
-            && (arguments.is_empty() || arguments.iter().any(|argument| argument.contains('\0')))
-        {
-            return Err("Native compiler arguments must be nonempty and cannot contain NUL.".to_owned());
+        if let Self::Analyze { arguments, sources, .. } = self {
+            if arguments.is_empty() || arguments.iter().any(|argument| argument.contains('\0')) {
+                return Err("Native compiler arguments must be nonempty and cannot contain NUL.".to_owned());
+            }
+            if sources.len() > limits.maximum_rows {
+                return Err("Native source inputs exceed the file limit.".to_owned());
+            }
         }
         Ok(())
     }

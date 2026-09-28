@@ -44,7 +44,7 @@ pub use definitions::Pair as Alias;
 pub mod exported { pub use crate::definitions::*; }
 pub fn verify(value: Alias) -> u32 { definitions::same!() + definitions::same() + value.0 }
 `);
-  for (const evidence of [tool.declarations(arguments_), tool.check(arguments_)]) {
+  for (const evidence of [tool.declarations({ arguments: arguments_, sources: [] }), tool.check({ arguments: arguments_, sources: [] })]) {
     const rootScope = scope(evidence, evidence.definitions.find(row => row.id.krate === 0 && row.parent === null));
     const aliases = rootScope.bindings.filter(binding => binding.name === "Alias");
     assert.deepEqual(aliases.map(binding => binding.namespace).sort(), ["type", "value"]);
@@ -71,11 +71,11 @@ pub fn verify(value: Alias) -> u32 { definitions::same!() + definitions::same() 
 });
 
 test("ambiguous native glob imports remain ambiguity evidence rather than a selected definition", () => {
-  const evidence = tool.declarations(source("ambiguous", `
+  const evidence = tool.declarations({ arguments: source("ambiguous", `
 pub mod left { pub struct Value; }
 pub mod right { pub struct Value; }
 pub mod joined { pub use crate::left::*; pub use crate::right::*; }
-`));
+`), sources: [] });
   const joined = scope(evidence, definition(evidence, "joined", "module"));
   assert.ok(!joined.bindings.some(binding => binding.name === "Value"));
   const matches = joined.ambiguities.filter(row => row.main.name === "Value");
@@ -100,7 +100,7 @@ impl<T> Read<T> for Record<T> {
 }
 pub fn invalid() -> u32 { "not an integer" }
 `);
-  const evidence = tool.declarations(arguments_);
+  const evidence = tool.declarations({ arguments: arguments_, sources: [] });
   const implementations = evidence.scopes.filter(row => row.kind === "implementation");
   assert.equal(implementations.length, 2);
   const trait = definition(evidence, "Read", "trait");
@@ -124,11 +124,11 @@ pub fn invalid() -> u32 { "not an integer" }
       }
     }
   }
-  assert.throws(() => tool.check(arguments_), /mismatched types/u);
+  assert.throws(() => tool.check({ arguments: arguments_, sources: [] }), /mismatched types/u);
 });
 
 test("native generated modules expose compiler-resolved members and nested scopes", () => {
-  const evidence = tool.check(source("generated", `
+  const evidence = tool.check({ arguments: source("generated", `
 macro_rules! declare {
     () => { pub mod generated {
         pub struct Value(pub u32);
@@ -138,7 +138,7 @@ macro_rules! declare {
 }
 declare!();
 pub fn read() -> u32 { generated::Visible(7).get() }
-`));
+`), sources: [] });
   const generated = scope(evidence, definition(evidence, "generated", "module"));
   assert.equal(generated.bindings.filter(binding => binding.name === "Visible").length, 2);
   assert.ok(generated.bindings.some(binding => binding.source.context.length > 0));
@@ -147,13 +147,13 @@ pub fn read() -> u32 { generated::Visible(7).get() }
 });
 
 test("native scope mutation controls preserve namespace, visibility, membership and ambiguity boundaries", () => {
-  const evidence = tool.declarations(source("scope_mutations", `
+  const evidence = tool.declarations({ arguments: source("scope_mutations", `
 pub trait Read { fn read(&self) -> u32; }
 pub struct Record;
 impl Read for Record { fn read(&self) -> u32 { 1 } }
 pub mod source { pub struct Value; }
 pub use source::Value as Alias;
-`));
+`), sources: [] });
   const implementation = value => value.scopes.find(row => row.kind === "implementation");
   const alias = value => value.scopes.flatMap(row => row.kind === "named" ? row.bindings : []).find(row => row.name === "Alias");
   for (const mutate of [

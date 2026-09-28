@@ -37,14 +37,14 @@ for (const phase of ["declarations", "check"]) {
     const directory = join(root, phase);
     const child = writeSource(directory, "child.rs", "pub fn value() -> u32 { 7 }\n");
     const source = writeSource(directory, "root.rs", "mod child; pub fn value() -> u32 { child::value() }\n");
-    const evidence = tool[phase](["--edition=2024", "--crate-type=lib", source]);
+    const evidence = tool[phase]({ arguments: ["--edition=2024", "--crate-type=lib", source], sources: [] });
     assert.ok(evidence.probes.some(probe => probe.path === child && probe.exists));
     const alternative = join(directory, "child", "mod.rs");
     assert.ok(evidence.probes.some(probe => probe.path === alternative && !probe.exists));
-    validateRustNativeEvidenceInputs(evidence);
+    validateRustNativeEvidenceInputs(evidence, []);
     writeSource(join(directory, "child"), "mod.rs", "pub fn value() -> u32 { 9 }\n");
-    assert.throws(() => validateRustNativeEvidenceInputs(evidence), /source lookup changed/u);
-    assert.throws(() => tool[phase](["--edition=2024", "--crate-type=lib", source]), /found at both/u);
+    assert.throws(() => validateRustNativeEvidenceInputs(evidence, []), /source lookup changed/u);
+    assert.throws(() => tool[phase]({ arguments: ["--edition=2024", "--crate-type=lib", source], sources: [] }), /found at both/u);
   });
 }
 
@@ -53,19 +53,19 @@ test("native input validation checks disappearance, byte content, length and dir
   const source = writeSource(directory, "input.rs", "abcd");
   const evidence = { ...emptyEvidence(), inputs: [input(source, "abcd")],
     probes: [{ path: directory, exists: true }, { path: source, exists: true }] };
-  validateRustNativeEvidenceInputs(decodeNativeEvidence(evidence, limits));
+  validateRustNativeEvidenceInputs(decodeNativeEvidence(evidence, limits), []);
   writeFileSync(source, "abce");
-  assert.throws(() => validateRustNativeEvidenceInputs(evidence), /input changed/u);
+  assert.throws(() => validateRustNativeEvidenceInputs(evidence, []), /input changed/u);
   writeFileSync(source, "abcde");
-  assert.throws(() => validateRustNativeEvidenceInputs(evidence), /input changed/u);
+  assert.throws(() => validateRustNativeEvidenceInputs(evidence, []), /input changed/u);
   writeFileSync(source, "abcd");
   renameSync(source, join(directory, "moved.rs"));
-  assert.throws(() => validateRustNativeEvidenceInputs(evidence), /lookup changed/u);
+  assert.throws(() => validateRustNativeEvidenceInputs(evidence, []), /lookup changed/u);
   const missing = join(directory, "absent");
   const probeOnly = { ...emptyEvidence(), probes: [{ path: missing, exists: false }] };
-  validateRustNativeEvidenceInputs(probeOnly);
+  validateRustNativeEvidenceInputs(probeOnly, []);
   mkdirSync(missing);
-  assert.throws(() => validateRustNativeEvidenceInputs(probeOnly), /lookup changed/u);
+  assert.throws(() => validateRustNativeEvidenceInputs(probeOnly, []), /lookup changed/u);
 });
 
 test("native input decoding rejects missing, duplicate, contradictory and malformed lookup records", () => {
@@ -104,11 +104,11 @@ test("one native source tool retains its selected environment without mutating c
 const _: () = assert!(env!("TSONIC_NATIVE_INPUT_TEST").as_bytes()[0] == b's');
 pub fn value() -> &'static str { env!("TSONIC_NATIVE_INPUT_TEST") }
 `);
-  assert.equal(selected.check(["--edition=2024", "--crate-type=lib", source]).phase, "checked");
+  assert.equal(selected.check({ arguments: ["--edition=2024", "--crate-type=lib", source], sources: [] }).phase, "checked");
   const changed = createRustNativeSourceTool({ cacheRoot, environment });
-  assert.throws(() => changed.check(["--edition=2024", "--crate-type=lib", source]), /evaluation.*failed|assertion failed/us);
+  assert.throws(() => changed.check({ arguments: ["--edition=2024", "--crate-type=lib", source], sources: [] }), /evaluation.*failed|assertion failed/us);
   assert.equal(environment.TSONIC_NATIVE_INPUT_TEST, "changed");
-  assert.equal(selected.check(["--edition=2024", "--crate-type=lib", source]).phase, "checked");
+  assert.equal(selected.check({ arguments: ["--edition=2024", "--crate-type=lib", source], sources: [] }).phase, "checked");
 });
 
 test("native tracked inputs reject in-compilation changes without fabricating filesystem results", () => {
@@ -122,5 +122,5 @@ test("native tracked inputs reject in-compilation changes without fabricating fi
     environment, directory: root, timeoutMilliseconds: 60_000, maximumDiagnosticBytes: 4 * 1024 * 1024 });
   command(process.env.RUSTC ?? "rustc", ["--sysroot", tool.sysroot, "--edition=2024", "--test", "-D", "warnings",
     "-L", `native=${join(tool.sysroot, "lib")}`, "-C", "prefer-dynamic", "-C", "codegen-units=1", source, "-o", binary]);
-  assert.match(command(binary, []), /6 passed; 0 failed/u);
+  assert.match(command(binary, []), /9 passed; 0 failed/u);
 });

@@ -10,6 +10,7 @@ import { validateRustNativeEvidenceInputs } from "./freshness.js";
 import { runRustNativeCommand } from "../protocol/bounded-command.js";
 import { defaultRustNativeSourceLimits, validateRustNativeSourceLimits } from "./limits.js";
 import type { RustNativeSourceLimits } from "./limits.js";
+import { maximumRustNativeRequestBytes, snapshotRustNativeSourceRequest, type RustNativeSourceRequest } from "./input.js";
 
 export { defaultRustNativeSourceLimits } from "./limits.js";
 export type { RustNativeSourceLimits } from "./limits.js";
@@ -18,9 +19,9 @@ export interface RustNativeSourceTool {
   readonly compilerIdentity: string;
   readonly sysroot: string;
   tokens(source: string, edition: string): readonly RustLexicalTokenTree[];
-  declarations(arguments_: readonly string[]): RustNativeDeclarationEvidence;
-  typing(arguments_: readonly string[]): RustNativeTypingEvidence;
-  check(arguments_: readonly string[]): RustNativeEvidence;
+  declarations(input: RustNativeSourceRequest): RustNativeDeclarationEvidence;
+  typing(input: RustNativeSourceRequest): RustNativeTypingEvidence;
+  check(input: RustNativeSourceRequest): RustNativeEvidence;
 }
 
 export function createRustNativeSourceTool(options: {
@@ -75,20 +76,20 @@ export function createRustNativeSourceTool(options: {
       [variable]: [...libraries, selectedEnvironment[variable]].filter(Boolean).join(delimiter) });
   })();
   const request = (payload: Readonly<Record<string, unknown>>): unknown => {
-    ensureBuilt();
     const identity = `${process.pid}-${randomUUID()}`;
     const requestPath = join(cacheRoot, "requests", `${identity}.json`);
     const responsePath = join(cacheRoot, "responses", `${identity}.json`);
-    mkdirSync(dirname(requestPath), { recursive: true });
-    mkdirSync(dirname(responsePath), { recursive: true });
     const text = JSON.stringify({ protocolVersion: 1, ...payload, limits: {
       maximumRows: limits.maximumRows,
       maximumDepth: limits.maximumDepth,
       maximumOutputBytes: limits.maximumOutputBytes,
     } });
-    if (Buffer.byteLength(text, "utf8") > 64 * 1024 * 1024) {
+    if (Buffer.byteLength(text, "utf8") > maximumRustNativeRequestBytes) {
       throw new Error("Native Rust source request exceeds the byte limit.");
     }
+    ensureBuilt();
+    mkdirSync(dirname(requestPath), { recursive: true });
+    mkdirSync(dirname(responsePath), { recursive: true });
     writeFileSync(requestPath, text, { flag: "wx" });
     command(binary, [requestPath, responsePath], executionEnvironment);
     const status = statSync(responsePath);
@@ -101,13 +102,15 @@ export function createRustNativeSourceTool(options: {
     }
     return response;
   };
-  const analyze = (phase: RustNativeSemanticEvidence["phase"], arguments_: readonly string[]): RustNativeSemanticEvidence => {
-    const response = request({ kind: "analyze", phase, arguments: [compiler, "--sysroot", sysroot, ...arguments_] });
+  const analyze = (phase: RustNativeSemanticEvidence["phase"], input: RustNativeSourceRequest): RustNativeSemanticEvidence => {
+    const selected = snapshotRustNativeSourceRequest(input, limits);
+    const response = request({ kind: "analyze", phase,
+      arguments: [compiler, "--sysroot", sysroot, ...selected.arguments], sources: selected.sources });
     if (!isRecord(response) || response.kind !== "evidence" || !isRecord(response.evidence)) {
       throw new Error("Native Rust source service did not return semantic evidence.");
     }
     const evidence = decodeNativeEvidence(response.evidence, limits);
-    validateRustNativeEvidenceInputs(evidence);
+    validateRustNativeEvidenceInputs(evidence, selected.sources);
     return evidence;
   };
   return Object.freeze({
@@ -116,18 +119,18 @@ export function createRustNativeSourceTool(options: {
     tokens(source: string, edition: string): readonly RustLexicalTokenTree[] {
       return decodeNativeTokenResponse(request({ kind: "tokens", source, edition }), Buffer.byteLength(source, "utf8"), limits);
     },
-    declarations(arguments_: readonly string[]): RustNativeDeclarationEvidence {
-      const evidence = analyze("declarations", arguments_);
+    declarations(input: RustNativeSourceRequest): RustNativeDeclarationEvidence {
+      const evidence = analyze("declarations", input);
       if (evidence.phase !== "declarations") throw new Error("Native Rust source service did not return declaration evidence.");
       return evidence;
     },
-    typing(arguments_: readonly string[]): RustNativeTypingEvidence {
-      const evidence = analyze("typed", arguments_);
+    typing(input: RustNativeSourceRequest): RustNativeTypingEvidence {
+      const evidence = analyze("typed", input);
       if (evidence.phase !== "typed") throw new Error("Native Rust source service did not return typing evidence.");
       return evidence;
     },
-    check(arguments_: readonly string[]): RustNativeEvidence {
-      const evidence = analyze("checked", arguments_);
+    check(input: RustNativeSourceRequest): RustNativeEvidence {
+      const evidence = analyze("checked", input);
       if (evidence.phase !== "checked") throw new Error("Native Rust source service did not return checked evidence.");
       return evidence;
     },

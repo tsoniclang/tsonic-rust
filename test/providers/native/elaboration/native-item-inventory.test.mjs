@@ -31,7 +31,7 @@ function stableItems(evidence) {
 
 test("empty native crates still publish one complete effective root scope", () => {
   const arguments_ = source("empty", "#![no_std]\n");
-  for (const evidence of [tool.declarations(arguments_), tool.check(arguments_)]) {
+  for (const evidence of [tool.declarations({ arguments: arguments_, sources: [] }), tool.check({ arguments: arguments_, sources: [] })]) {
     const rootDefinition = evidence.definitions.find(row => nativeDefinitionKey(row.id) === nativeDefinitionKey(evidence.root));
     assert.equal(rootDefinition.kind, "module");
     assert.equal(rootDefinition.parent, null);
@@ -55,8 +55,8 @@ macro_rules! declare { () => { pub mod generated { pub struct Record; } }; }
 declare!();
 pub fn enclosing() { struct Local; impl Local { fn nested() {} } }
 `);
-  const declarations = tool.declarations(arguments_);
-  const checked = tool.check(arguments_);
+  const declarations = tool.declarations({ arguments: arguments_, sources: [] });
+  const checked = tool.check({ arguments: arguments_, sources: [] });
   assert.deepEqual(stableItems(declarations), stableItems(checked));
   const names = stableItems(checked).map(row => row[2]);
   for (const name of ["empty", "nested", "Choice", "Read", "Value", "native_call", "generated", "Record", "enclosing", "Local"]) {
@@ -99,8 +99,8 @@ pub mod retained {
 }
 pub fn read() -> u32 { generated::value() }
 `), "--extern", `inventory_attributes=${libraryPath}`];
-  const declarations = tool.declarations(arguments_);
-  const checked = tool.check(arguments_);
+  const declarations = tool.declarations({ arguments: arguments_, sources: [] });
+  const checked = tool.check({ arguments: arguments_, sources: [] });
   assert.deepEqual(stableItems(declarations), stableItems(checked));
   for (const evidence of [declarations, checked]) {
     const names = stableItems(evidence).map(row => row[2]);
