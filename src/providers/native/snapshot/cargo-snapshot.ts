@@ -78,10 +78,7 @@ export function createRustCompilerProjectSnapshot(manifestPath: string): RustCom
     if (pkg === undefined || node === undefined) {
       throw new Error(`Cargo metadata dependency '${edge.name}' points to missing package '${edge.pkg}'.`);
     }
-    const libraryTargets = pkg.targets.filter((target) => target.kind.includes("lib"));
-    if (libraryTargets.length !== 1) {
-      throw new Error(`Cargo dependency '${edge.name}' must resolve to exactly one library target; found ${libraryTargets.length}.`);
-    }
+    const libraryTarget = selectLibraryTarget(pkg, edge.name);
     const dependencyManifest = realpathSync(resolve(pkg.manifest_path));
     const source = packageSourceById.get(pkg.id);
     if (source === undefined) {
@@ -96,7 +93,7 @@ export function createRustCompilerProjectSnapshot(manifestPath: string): RustCom
       packageId: pkg.id,
       packageName: pkg.name,
       packageVersion: pkg.version,
-      crateName: libraryTargets[0]!.name,
+      crateName: libraryTarget.name,
       targetCrateName,
       manifestPath: dependencyManifest,
       sourceRoot: source.sourceRoot,
@@ -323,7 +320,7 @@ function selectLibraryTarget(
   dependencyName: string,
 ): CargoPackage["targets"][number] {
   const libraryTargets = pkg.targets.filter((target) =>
-    target.kind.some((kind) => kind === "lib" || kind === "rlib" || kind === "dylib"));
+    target.kind.some((kind) => kind === "lib" || kind === "rlib" || kind === "dylib" || kind === "proc-macro"));
   if (libraryTargets.length !== 1) {
     throw new Error(`Cargo dependency '${dependencyName}' must resolve to exactly one library target; found ${libraryTargets.length}.`);
   }
