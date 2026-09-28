@@ -5,7 +5,7 @@ import { fixtureCratesRoot, repositoryRoot, rustRuntimeCratePath } from "./rust-
 import { validateCargoProject, writeGeneratedArtifacts } from "./cargo-projects.mjs";
 import { createTestWorkspace } from "../../../tsonic/test/scripts/test-workspaces.mjs";
 
-export function createMacroProject(name, { procedural = false } = {}) {
+export function createMacroProject(name, { procedural = false, surfaces = [] } = {}) {
   const root = createTestWorkspace(join(repositoryRoot, ".temp/generated"), `${name}-`);
   const generated = join(root, "generated");
   mkdirSync(join(generated, "src"), { recursive: true });
@@ -17,15 +17,22 @@ export function createMacroProject(name, { procedural = false } = {}) {
     "", "[dependencies]",
     `tsonic_rust_runtime = { path = ${JSON.stringify(rustRuntimeCratePath)} }`,
     `macro_proofs = { package = "acme_testing", path = ${JSON.stringify(join(fixtureCratesRoot, "acme_testing"))} }`,
+    ...(surfaces.includes("js") ? [
+      `tsonic_rust_js = { path = ${JSON.stringify(join(repositoryRoot, "../rust-js/crates/tsonic_rust_js"))} }`,
+    ] : []),
     ...(procedural ? [
       `native_macros = { package = "acme_attributes", path = ${JSON.stringify(join(fixtureCratesRoot, "acme_attributes"))} }`,
+    ] : []),
+    ...(surfaces.includes("js") ? [
+      "", "[patch.crates-io]",
+      `tsonic_rust_runtime = { path = ${JSON.stringify(rustRuntimeCratePath)} }`,
     ] : []),
     "",
   ].join("\n");
   writeFileSync(manifestPath, manifest);
   return {
     root, generated, manifestPath, manifest,
-    target: { id: "rust", options: { outputType: "bin", crateName: name, projectFile: manifestPath } },
+    target: { id: "rust", surfaces, options: { outputType: "bin", crateName: name, projectFile: manifestPath } },
   };
 }
 

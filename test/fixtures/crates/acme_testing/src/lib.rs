@@ -36,6 +36,26 @@ macro_rules! string_value {
 }
 
 #[macro_export]
+macro_rules! owned_text {
+    () => { ::std::string::String::from("café😀") };
+}
+
+#[macro_export]
+macro_rules! empty_values {
+    () => { ::std::vec::Vec::new() };
+}
+
+#[macro_export]
+macro_rules! native_record {
+    () => {{
+        struct NativeOutput {
+            length: u64,
+        }
+        NativeOutput { length: 9_007_199_254_740_993_u64 }
+    }};
+}
+
+#[macro_export]
 macro_rules! twice {
     ($input:expr) => { ($input) + ($input) };
 }
