@@ -170,6 +170,63 @@ pub fn invalid() -> Generated { Generated { count: "not a u32" } }
   assert.throws(() => tool.check({ compilation: { kind: "compiler", directory: root, arguments: arguments_ } }), /mismatched types/u);
 });
 
+test("native field evidence retains selected identities through generics and compiler dereferencing", () => {
+  const source = `
+mod first { pub struct Record<Value> { pub value: Value } }
+mod second { pub struct Record { pub value: u64 } }
+pub struct Wrapper<Value>(pub Value);
+impl<Value> std::ops::Deref for Wrapper<Value> {
+    type Target = Value;
+    fn deref(&self) -> &Value { &self.0 }
+}
+pub union Overlay { pub bits: u64, pub floating: f64 }
+pub fn first(input: first::Record<u32>) -> u32 { input.value }
+pub fn second(input: second::Record) -> u64 { input.value }
+pub fn dereferenced(input: Wrapper<first::Record<u32>>) -> u32 { input.value }
+pub fn positional(input: Wrapper<u32>) -> u32 { input.0 }
+pub fn tuple(input: (u32, u64)) -> u64 { input.1 }
+pub fn union_field(input: Overlay) -> u64 { unsafe { input.bits } }
+macro_rules! local_record {
+    () => {{ struct Generated { count: u64 } Generated { count: 9_007_199_254_740_993 } }};
+}
+pub fn generated() -> u64 { let record = local_record!(); record.count }
+`;
+  const path = sourceFile("field_identities.rs", source);
+  const evidence = tool.check({ compilation: { kind: "compiler", directory: root,
+    arguments: ["--edition=2024", "--crate-type=lib", path] } });
+  function occurrence(functionName, expression) {
+    const functionStart = source.indexOf(`pub fn ${functionName}(`);
+    assert.notEqual(functionStart, -1);
+    const bodyStart = source.indexOf("{", functionStart);
+    assert.notEqual(bodyStart, -1);
+    const bodyEnd = source.indexOf("\n", bodyStart);
+    const expressionStart = source.indexOf(expression, bodyStart);
+    assert.ok(expressionStart > bodyStart && expressionStart < bodyEnd);
+    const start = Buffer.byteLength(source.slice(0, expressionStart));
+    const matches = evidence.occurrences.filter(row => row.kind === "expression" &&
+      row.source?.file === path && row.source.start === start && row.source.end === start + Buffer.byteLength(expression));
+    assert.equal(matches.length, 1);
+    return matches[0];
+  }
+  function field(functionName, expression, fieldPath, primitive) {
+    const selected = occurrence(functionName, expression);
+    const definition = evidence.definitions.find(row => row.path === fieldPath && row.kind === "field");
+    assert.ok(definition, fieldPath);
+    assert.deepEqual(selected.resolution, { kind: "declaration", id: definition.id });
+    assert.deepEqual(evidence.types.find(row => row.id === selected.type)?.value, { kind: "primitive", name: primitive });
+    return selected.resolution.id;
+  }
+  const first = field("first", "input.value", "first::Record::value", "u32");
+  const second = field("second", "input.value", "second::Record::value", "u64");
+  assert.notDeepEqual(first, second);
+  assert.deepEqual(field("dereferenced", "input.value", "first::Record::value", "u32"), first);
+  assert.ok(occurrence("dereferenced", "input").adjustments.some(row => row.operation.kind === "overloaded-deref"));
+  field("positional", "input.0", "Wrapper::0", "u32");
+  assert.equal(occurrence("tuple", "input.1").resolution, null);
+  field("union_field", "input.bits", "Overlay::bits", "u64");
+  field("generated", "record.count", "generated::Generated::count", "u64");
+});
+
 test("native declaration queries still reject unresolved signatures and failed expansion", () => {
   for (const [name, source, message] of [
     ["unresolved_signature", "pub fn read() -> Missing { loop {} }", /cannot find type/u],

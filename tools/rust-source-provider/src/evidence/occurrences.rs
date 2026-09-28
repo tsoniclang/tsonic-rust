@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 
 use rustc_hir::def::Res;
 use rustc_hir::intravisit::{self, Visitor};
-use rustc_middle::ty::TypeckResults;
+use rustc_middle::ty::{self, TypeckResults};
 use rustc_span::Span;
 use serde::Serialize;
 
@@ -47,6 +47,19 @@ impl<'tcx> Visitor<'tcx> for BodyVisitor<'_, 'tcx, '_> {
     fn visit_expr(&mut self, expression: &'tcx rustc_hir::Expr<'tcx>) -> Self::Result {
         let selected_definition = match expression.kind {
             rustc_hir::ExprKind::Path(ref path) => self.types.qpath_res(path, expression.hir_id).opt_def_id(),
+            rustc_hir::ExprKind::Field(receiver, _) => match self.types.expr_ty_adjusted(receiver).kind() {
+                ty::Adt(definition, _) if !definition.is_enum() => {
+                    let Some(index) = self.types.opt_field_index(expression.hir_id) else {
+                        return ControlFlow::Break("A checked native field has no selected index.".to_owned());
+                    };
+                    let Some(field) = definition.non_enum_variant().fields.get(index) else {
+                        return ControlFlow::Break("A checked native field index is outside its owner.".to_owned());
+                    };
+                    Some(field.did)
+                },
+                ty::Tuple(_) => None,
+                _ => return ControlFlow::Break("A checked native field has no aggregate receiver.".to_owned()),
+            },
             _ => self.types.type_dependent_def_id(expression.hir_id),
         };
         if let Some(definition) = selected_definition
@@ -58,7 +71,7 @@ impl<'tcx> Visitor<'tcx> for BodyVisitor<'_, 'tcx, '_> {
                 Res::Local(binding) => Some(Resolution::Binding { id: node_id(binding) }),
                 _ => None,
             },
-            _ => self.types.type_dependent_def_id(expression.hir_id)
+            _ => selected_definition
                 .map(|id| Resolution::Declaration { id: definition_id(id) }),
         };
         let detail = (|| {
