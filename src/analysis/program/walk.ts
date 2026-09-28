@@ -200,7 +200,7 @@ export function selectExpressionOperation(
       return;
     }
     const source = semantics.operations.call(expression);
-    if (source === undefined) {
+    if (source === undefined || source.outcome === "intrinsic") {
       return;
     }
     const sourceSelectedDeclaration = semantics.declarations.signatureDeclaration(source.selectedSignature);

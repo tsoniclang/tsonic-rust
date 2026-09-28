@@ -229,7 +229,8 @@ function collectProjectObjectOrigins(input: RustObjectRepresentationAnalysisInpu
     if (input.ast.is.IsCallExpression(node)) {
       const semantics = input.semantics.forNode(node);
       const call = semantics.operations.call(node);
-      const signature = call === undefined ? undefined : semantics.declarations.signatureDeclaration(call.selectedSignature);
+      const signature = call === undefined || call.outcome === "intrinsic"
+        ? undefined : semantics.declarations.signatureDeclaration(call.selectedSignature);
       const selected = signature === undefined ? undefined : input.navigation.callableImplementation(signature);
       const method = selected?.kind === "resolved" ? selected.implementation.declaration : undefined;
       if (method !== undefined && input.ast.kindName(method) === "KindMethodDeclaration" &&

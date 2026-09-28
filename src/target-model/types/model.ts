@@ -3,7 +3,7 @@ import type {
   ExtensionFactSubject,
   Node,
   ProviderDeclarationIdentity,
-  ResolvedSourceCallInfo,
+  ResolvedSourceSignatureCallInfo,
   Signature,
   SourcePrimitiveKind,
   Symbol,
@@ -199,9 +199,9 @@ export interface RustSelectedTargetSignature {
   readonly sourceCalleeSymbol?: Symbol;
   readonly sourceCalleeDeclaration?: Node;
   readonly sourceReturnType?: Type;
-  readonly sourceArgumentBindings?: ResolvedSourceCallInfo["sourceArgumentBindings"];
-  readonly sourceSelectedSignatureParameters?: ResolvedSourceCallInfo["sourceSelectedSignatureParameters"];
-  readonly sourceSelectedMethodTypeArguments?: ResolvedSourceCallInfo["sourceSelectedMethodTypeArguments"];
+  readonly sourceArgumentBindings?: ResolvedSourceSignatureCallInfo["sourceArgumentBindings"];
+  readonly sourceSelectedSignatureParameters?: ResolvedSourceSignatureCallInfo["sourceSelectedSignatureParameters"];
+  readonly sourceSelectedMethodTypeArguments?: ResolvedSourceSignatureCallInfo["sourceSelectedMethodTypeArguments"];
 }
 
 export interface RustSelectedUnionMethodIdentity {

@@ -418,6 +418,7 @@ function resolveCallSelectionPrerequisites(
     readRustSourceRawAddress(walk.context.source.sourceFacts, expression) !== undefined ||
     selectRustMemoryLayoutObservation(walk.context.source.sourceFacts, expression) !== undefined) return;
   const source = walk.context.semantics(sourceFile).operations.call(expression);
+  if (source?.outcome === "intrinsic") return;
   const receiver = source?.sourceReceiver?.expression;
   if (receiver !== undefined) {
     resolveExpressionCarrier(walk, receiver, sourceFile, undefined);

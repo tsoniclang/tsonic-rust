@@ -693,7 +693,7 @@ function applySelectedRuntimeCallableCall(
   const calleeCarrier = runtimeValue ? resolveExpressionCarrier(walk, callee, sourceFile, carrier) : undefined;
   if (runtimeValue) {
     const source = walk.context.semantics(sourceFile).operations.call(expression);
-    if (source === undefined || calleeCarrier === undefined) return undefined;
+    if (source === undefined || source.outcome === "intrinsic" || calleeCarrier === undefined) return undefined;
     const declaration = walk.context.semantics(sourceFile).declarations.signatureDeclaration(source.selectedSignature);
     const optionalInvocation = walk.context.ast.as.AsCallExpression(expression)?.QuestionDotToken !== undefined;
     const optionalResult = selectRustOptionalCallResult(
