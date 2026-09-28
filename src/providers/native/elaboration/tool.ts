@@ -47,7 +47,7 @@ export function createRustNativeSourceTool(options: {
     throw new Error("Selected Rust compiler did not provide its host and sysroot identity.");
   }
   const sourceRoot = fileURLToPath(new URL("../../../../tools/rust-source-provider/src/", import.meta.url));
-  const sourceFiles = ["main.rs", "request.rs", "tokens.rs", "source.rs", "definitions.rs", "inputs.rs", "evidence.rs", "effects.rs",
+  const sourceFiles = ["main.rs", "request.rs", "cargo.rs", "tokens.rs", "source.rs", "definitions.rs", "inputs.rs", "evidence.rs", "effects.rs",
     "type_model.rs", "type_graph.rs", "type_regions.rs", "type_constants.rs", "type_generics.rs", "scopes.rs",
     "evidence/adjustments.rs", "evidence/occurrences.rs", "flow.rs", "flow/model.rs", "flow/control.rs", "flow/uses.rs"];
   const hash = createHash("sha256").update(compilerIdentity).update(sysroot);
@@ -104,8 +104,11 @@ export function createRustNativeSourceTool(options: {
   };
   const analyze = (phase: RustNativeSemanticEvidence["phase"], input: RustNativeSourceRequest): RustNativeSemanticEvidence => {
     const selected = snapshotRustNativeSourceRequest(input, limits);
+    const compilation = selected.compilation.kind === "compiler"
+      ? { kind: "compiler", arguments: [compiler, "--sysroot", sysroot, ...selected.compilation.arguments] }
+      : { ...selected.compilation, compilerIdentity, sysroot, targetDirectory: join(cacheRoot, "cargo") };
     const response = request({ kind: "analyze", phase,
-      arguments: [compiler, "--sysroot", sysroot, ...selected.arguments], sources: selected.sources });
+      compilation, sources: selected.sources });
     if (!isRecord(response) || response.kind !== "evidence" || !isRecord(response.evidence)) {
       throw new Error("Native Rust source service did not return semantic evidence.");
     }

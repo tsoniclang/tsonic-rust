@@ -48,7 +48,7 @@ pub fn project<'scope, Target>(input: &'scope Target) -> &'scope Target::Item
 where Target: Project, Target::Item: Copy { input.project() }
 pub fn higher<Callback>(callback: Callback) where Callback: for<'scope> Fn(&'scope u32) -> &'scope u32 { let _ = callback; }
 `);
-  for (const evidence of [tool.declarations({ arguments: arguments_, sources: [] }), tool.check({ arguments: arguments_, sources: [] })]) {
+  for (const evidence of [tool.declarations({ compilation: { kind: "compiler", arguments: arguments_ }, sources: [] }), tool.check({ compilation: { kind: "compiler", arguments: arguments_ }, sources: [] })]) {
     const record = selected(evidence, "Record");
     assert.deepEqual(record.generics.parameters.map(parameter => parameter.value.kind), ["lifetime", "type", "constant"]);
     const length = record.generics.parameters[2];
@@ -79,14 +79,14 @@ pub fn higher<Callback>(callback: Callback) where Callback: for<'scope> Fn(&'sco
 });
 
 test("exact 64/128-bit const arguments never pass through JSON numbers", () => {
-  const evidence = tool.declarations({ arguments: source("wide_constants", `
+  const evidence = tool.declarations({ compilation: { kind: "compiler", arguments: source("wide_constants", `
 pub struct Wide<const VALUE: u128>;
 pub struct Holder {
     pub first: Wide<9007199254740993>,
     pub last: Wide<340282366920938463463374607431768211455>,
     pub empty: [(); 9007199254740993],
 }
-`), sources: [] });
+`) }, sources: [] });
   for (const [name, bits] of [["first", "9007199254740993"], ["last", "340282366920938463463374607431768211455"]]) {
     const field = type(evidence, selected(evidence, name).type);
     assert.equal(field.kind, "adt");
@@ -102,7 +102,7 @@ pub struct Holder {
 });
 
 test("native object traits, recursive types and coroutine closures close one graph", () => {
-  const evidence = tool.check({ arguments: source("recursive_closures", `
+  const evidence = tool.check({ compilation: { kind: "compiler", arguments: source("recursive_closures", `
 pub trait Named { fn name(&self) -> &str; }
 pub struct Link { pub next: Option<Box<Link>> }
 pub fn name(input: &(dyn Named + Send)) -> &str { input.name() }
@@ -112,7 +112,7 @@ pub fn callbacks() {
     let plain = |value: u32| value * 2;
     let _result = plain(5);
 }
-`), sources: [] });
+`) }, sources: [] });
   for (const kind of ["dynamic", "closure", "coroutine-closure", "coroutine"]) {
     assert.ok(evidence.types.some(type => type.value.kind === kind), kind);
   }
@@ -124,12 +124,12 @@ pub fn callbacks() {
 });
 
 test("nested semantic references, sorts and bound signatures reject mutation", () => {
-  const evidence = tool.declarations({ arguments: source("nested_mutations", `
+  const evidence = tool.declarations({ compilation: { kind: "compiler", arguments: source("nested_mutations", `
 pub trait Read { type Value; }
 pub struct Data<T: Read, const LENGTH: usize = 8> { pub bytes: [u8; LENGTH], pub value: T::Value }
 pub fn callback(input: for<'a> fn(&'a u32) -> &'a u32) { let _ = input; }
 pub struct Scalar { pub bytes: [u8; 16] }
-`), sources: [] });
+`) }, sources: [] });
   const mutations = [
     value => { value.types.find(row => row.value.kind === "array").value.element = 0xffff_ffff; },
     value => { value.types.find(row => row.value.kind === "array").value.length = 0xffff_ffff; },

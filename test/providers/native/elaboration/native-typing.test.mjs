@@ -25,7 +25,7 @@ test("native typing exposes compiler macro flow without certifying use-after-mov
 macro_rules! consume { ($condition:expr, $value:expr) => { if $condition { drop($value); } }; }
 pub fn decision(value: String, condition: bool) -> String { consume!(condition, value); value }
 `);
-  const evidence = tool.typing({ arguments: program.arguments, sources: [] });
+  const evidence = tool.typing({ compilation: { kind: "compiler", arguments: program.arguments }, sources: [] });
   assert.equal(evidence.phase, "typed");
   const definition = evidence.definitions.find(row => row.name === "decision" && row.id.krate === 0);
   assert.ok(definition);
@@ -44,7 +44,7 @@ pub fn decision(value: String, condition: bool) -> String { consume!(condition, 
   assert.ok(evidence.occurrences.some(occurrence => occurrence.source !== null &&
     nativeDefinitionKey(expansion.id) === nativeDefinitionKey(occurrence.source.expansion)));
   assert.ok(Object.isFrozen(evidence));
-  assert.throws(() => tool.check({ arguments: program.arguments, sources: [] }), /use of moved value/u);
+  assert.throws(() => tool.check({ compilation: { kind: "compiler", arguments: program.arguments }, sources: [] }), /use of moved value/u);
   assert.equal(existsSync(program.output), false);
 });
 
@@ -55,8 +55,8 @@ pub fn decision(value: String, condition: bool) -> String { consume!(condition, 
 pub fn callback(value: String) -> impl FnOnce() -> usize { move || value.len() }
 pub mod nested { pub fn length(value: &str) -> usize { value.len() } }
 `);
-  const typed = tool.typing({ arguments: program.arguments, sources: [] });
-  const checked = tool.check({ arguments: program.arguments, sources: [] });
+  const typed = tool.typing({ compilation: { kind: "compiler", arguments: program.arguments }, sources: [] });
+  const checked = tool.check({ compilation: { kind: "compiler", arguments: program.arguments }, sources: [] });
   assert.equal(typed.phase, "typed");
   assert.equal(checked.phase, "checked");
   for (const key of ["occurrences", "effects", "flows"]) assert.deepEqual(typed[key], checked[key], key);
@@ -72,8 +72,8 @@ test("native typing does not suppress parse, resolution or type errors", () => {
     ["invalid_bound", "pub fn value<T: Copy>(_input: T) {} pub fn caller() { value(String::new()); }", /Copy.*not satisfied|Copy.*not implemented/su],
   ]) {
     const program = input(name, text);
-    assert.throws(() => tool.typing({ arguments: program.arguments, sources: [] }), diagnostic);
-    assert.throws(() => tool.check({ arguments: program.arguments, sources: [] }), diagnostic);
+    assert.throws(() => tool.typing({ compilation: { kind: "compiler", arguments: program.arguments }, sources: [] }), diagnostic);
+    assert.throws(() => tool.check({ compilation: { kind: "compiler", arguments: program.arguments }, sources: [] }), diagnostic);
     assert.equal(existsSync(program.output), false);
   }
 });
@@ -84,10 +84,10 @@ test("native lifetime and unsafe acceptance still requires the checked phase", (
     ["invalid_unsafe", "pub fn value(pointer: *const u32) -> u32 { *pointer }", /dereference of raw pointer is unsafe/u],
   ]) {
     const program = input(name, text);
-    const typed = tool.typing({ arguments: program.arguments, sources: [] });
+    const typed = tool.typing({ compilation: { kind: "compiler", arguments: program.arguments }, sources: [] });
     assert.equal(typed.phase, "typed");
     assert.ok(typed.occurrences.length > 0);
-    assert.throws(() => tool.check({ arguments: program.arguments, sources: [] }), diagnostic);
+    assert.throws(() => tool.check({ compilation: { kind: "compiler", arguments: program.arguments }, sources: [] }), diagnostic);
     assert.equal(existsSync(program.output), false);
   }
 });
@@ -99,7 +99,7 @@ test("native typing retains finite row and output budgets", () => {
     { ...defaultRustNativeSourceLimits, maximumOutputBytes: 64 },
   ]) {
     const bounded = createRustNativeSourceTool({ cacheRoot, limits });
-    assert.throws(() => bounded.typing({ arguments: program.arguments, sources: [] }), /limit/u);
+    assert.throws(() => bounded.typing({ compilation: { kind: "compiler", arguments: program.arguments }, sources: [] }), /limit/u);
     assert.equal(existsSync(program.output), false);
   }
 });

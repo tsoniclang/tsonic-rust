@@ -19,10 +19,35 @@ pub enum Request {
         #[serde(rename = "protocolVersion")]
         protocol_version: u32,
         phase: EvidencePhase,
-        arguments: Vec<String>,
+        compilation: CompilationInput,
         sources: Vec<crate::inputs::SourceFile>,
         limits: Limits,
     },
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
+pub enum CompilationInput {
+    Compiler { arguments: Vec<String> },
+    Cargo {
+        #[serde(rename = "manifestPath")]
+        manifest_path: String,
+        #[serde(rename = "packageId")]
+        package_id: String,
+        target: CargoTarget,
+        #[serde(rename = "compilerIdentity")]
+        compiler_identity: String,
+        sysroot: String,
+        #[serde(rename = "targetDirectory")]
+        target_directory: String,
+    },
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
+pub enum CargoTarget {
+    Library,
+    Binary { name: String },
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
@@ -62,12 +87,36 @@ impl Request {
         {
             return Err("Native source limits must be positive and within the service ceilings.".to_owned());
         }
-        if let Self::Analyze { arguments, sources, .. } = self {
-            if arguments.is_empty() || arguments.iter().any(|argument| argument.contains('\0')) {
-                return Err("Native compiler arguments must be nonempty and cannot contain NUL.".to_owned());
-            }
-            if sources.len() > limits.maximum_rows {
-                return Err("Native source inputs exceed the file limit.".to_owned());
+        if let Self::Analyze { compilation, sources, .. } = self {
+            let input_rows = match compilation {
+                CompilationInput::Compiler { arguments } => {
+                    if arguments.is_empty() || arguments.iter().any(|argument| argument.contains('\0')) {
+                        return Err("Native compiler arguments must be nonempty and cannot contain NUL.".to_owned());
+                    }
+                    arguments.len()
+                }
+                CompilationInput::Cargo { manifest_path, package_id, target, compiler_identity, sysroot, target_directory } => {
+                    for path in [manifest_path, sysroot, target_directory] {
+                        if !std::path::Path::new(path).is_absolute() || path.contains('\0') {
+                            return Err("Native Cargo paths must be absolute and cannot contain NUL.".to_owned());
+                        }
+                    }
+                    if compiler_identity.is_empty() || compiler_identity.contains('\0') {
+                        return Err("Native Cargo checking requires its selected compiler identity.".to_owned());
+                    }
+                    if package_id.is_empty() || package_id.contains('\0') {
+                        return Err("Native Cargo checking requires an exact root package selection.".to_owned());
+                    }
+                    if let CargoTarget::Binary { name } = target {
+                        if name.is_empty() || name.contains('\0') {
+                            return Err("Native Cargo checking requires an exact binary target name.".to_owned());
+                        }
+                    }
+                    3
+                }
+            };
+            if input_rows > limits.maximum_rows || sources.len() > limits.maximum_rows - input_rows {
+                return Err("Native source inputs exceed the row limit.".to_owned());
             }
         }
         Ok(())

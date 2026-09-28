@@ -15,27 +15,32 @@ const limits = defaultRustNativeSourceLimits;
 
 function request(name, text) {
   const path = join(root, `${name}.rs`);
-  return { arguments: ["--edition=2024", "--crate-type=lib", path], sources: [{ path, text }] };
+  return { compilation: { kind: "compiler", arguments: ["--edition=2024", "--crate-type=lib", path] }, sources: [{ path, text }] };
 }
 
 test("native source request snapshots exact immutable arguments and source text", () => {
   const input = request("snapshot", "pub fn café() -> u32 { 7 }\n");
   const selected = snapshotRustNativeSourceRequest(input, limits);
-  input.arguments[0] = "--invalid-option";
+  input.compilation.arguments[0] = "--invalid-option";
   input.sources[0].text = "wrong";
   input.sources.push({ path: join(root, "other.rs"), text: "wrong" });
-  assert.equal(selected.arguments[0], "--edition=2024");
+  assert.equal(selected.compilation.arguments[0], "--edition=2024");
   assert.equal(selected.sources.length, 1);
   assert.equal(selected.sources[0].text, "pub fn café() -> u32 { 7 }\n");
-  for (const value of [selected, selected.arguments, selected.sources, selected.sources[0]]) assert.ok(Object.isFrozen(value));
+  for (const value of [selected, selected.compilation, selected.compilation.arguments, selected.sources, selected.sources[0]]) assert.ok(Object.isFrozen(value));
 });
 
 test("native source requests reject malformed selections instead of retaining an old argument-list API", () => {
   const valid = request("malformed", "pub fn value() {}\n");
   for (const input of [
-    valid.arguments, { arguments: valid.arguments }, { ...valid, extra: true }, { ...valid, arguments: [] },
-    { ...valid, arguments: [null] }, { ...valid, arguments: ["bad\0argument"] },
-    { ...valid, arguments: ["bad\ud800argument"] }, { ...valid, arguments: new Array(1) },
+    valid.compilation.arguments, { arguments: valid.compilation.arguments },
+    { arguments: valid.compilation.arguments, sources: valid.sources }, { ...valid, extra: true },
+    ...[[], [null], ["bad\0argument"], ["bad\ud800argument"], new Array(1)].map(arguments_ =>
+      ({ ...valid, compilation: { kind: "compiler", arguments: arguments_ } })),
+    ...[null, {}, { kind: "compiler" }, { ...valid.compilation, extra: true },
+      Object.create(valid.compilation), Object.defineProperty({}, "kind", {
+        enumerable: true, get() { assert.fail("No getter execution."); },
+      })].map(compilation => ({ ...valid, compilation })),
     { ...valid, sources: new Array(1) }, { ...valid, sources: [null] },
     { ...valid, sources: [{ ...valid.sources[0], extra: true }] },
     { ...valid, sources: [{ path: "relative.rs", text: "" }] },
@@ -45,11 +50,11 @@ test("native source requests reject malformed selections instead of retaining an
     { ...valid, sources: [{ path: valid.sources[0].path, text: 4 }] },
     { ...valid, sources: [valid.sources[0], valid.sources[0]] },
     { ...valid, sources: [Object.create(valid.sources[0])] },
-    Object.defineProperty({ sources: [] }, "arguments", { enumerable: true, get() { assert.fail("No getter execution."); } }),
+    Object.defineProperty({ sources: [] }, "compilation", { enumerable: true, get() { assert.fail("No getter execution."); } }),
   ]) assert.throws(() => snapshotRustNativeSourceRequest(input, limits), /Native Rust/u);
   assert.throws(() => snapshotRustNativeSourceRequest(valid, { ...limits, maximumRows: 3 }), /row limit/u);
   assert.deepEqual(snapshotRustNativeSourceRequest(valid, { ...limits, maximumRows: 4 }), valid);
-  assert.throws(() => tool.check(valid.arguments), /exact arguments/u);
+  assert.throws(() => tool.check(valid.compilation.arguments), /exact compilation/u);
 });
 
 test("native source selections retain finite byte budgets before invoking the compiler", () => {

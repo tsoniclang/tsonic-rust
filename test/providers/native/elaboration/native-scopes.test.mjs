@@ -45,7 +45,7 @@ pub use definitions::Pair as Alias;
 pub mod exported { pub use crate::definitions::*; }
 pub fn verify(value: Alias) -> u32 { definitions::same!() + definitions::same() + value.0 }
 `);
-  for (const evidence of [tool.declarations({ arguments: arguments_, sources: [] }), tool.check({ arguments: arguments_, sources: [] })]) {
+  for (const evidence of [tool.declarations({ compilation: { kind: "compiler", arguments: arguments_ }, sources: [] }), tool.check({ compilation: { kind: "compiler", arguments: arguments_ }, sources: [] })]) {
     const rootScope = scope(evidence, evidence.definitions.find(row => row.id.krate === 0 && row.parent === null));
     const aliases = rootScope.bindings.filter(binding => binding.name === "Alias");
     assert.deepEqual(aliases.map(binding => binding.namespace).sort(), ["type", "value"]);
@@ -72,11 +72,11 @@ pub fn verify(value: Alias) -> u32 { definitions::same!() + definitions::same() 
 });
 
 test("ambiguous native glob imports remain ambiguity evidence rather than a selected definition", () => {
-  const evidence = tool.declarations({ arguments: source("ambiguous", `
+  const evidence = tool.declarations({ compilation: { kind: "compiler", arguments: source("ambiguous", `
 pub mod left { pub struct Value; }
 pub mod right { pub struct Value; }
 pub mod joined { pub use crate::left::*; pub use crate::right::*; }
-`), sources: [] });
+`) }, sources: [] });
   const joined = scope(evidence, definition(evidence, "joined", "module"));
   assert.ok(!joined.bindings.some(binding => binding.name === "Value"));
   const matches = joined.ambiguities.filter(row => row.main.name === "Value");
@@ -101,7 +101,7 @@ impl<T> Read<T> for Record<T> {
 }
 pub fn invalid() -> u32 { "not an integer" }
 `);
-  const evidence = tool.declarations({ arguments: arguments_, sources: [] });
+  const evidence = tool.declarations({ compilation: { kind: "compiler", arguments: arguments_ }, sources: [] });
   const implementations = evidence.scopes.filter(row => row.kind === "implementation");
   assert.equal(implementations.length, 2);
   const trait = definition(evidence, "Read", "trait");
@@ -125,11 +125,11 @@ pub fn invalid() -> u32 { "not an integer" }
       }
     }
   }
-  assert.throws(() => tool.check({ arguments: arguments_, sources: [] }), /mismatched types/u);
+  assert.throws(() => tool.check({ compilation: { kind: "compiler", arguments: arguments_ }, sources: [] }), /mismatched types/u);
 });
 
 test("native generated modules expose compiler-resolved members and nested scopes", () => {
-  const evidence = tool.check({ arguments: source("generated", `
+  const evidence = tool.check({ compilation: { kind: "compiler", arguments: source("generated", `
 macro_rules! declare {
     () => { pub mod generated {
         pub struct Value(pub u32);
@@ -139,7 +139,7 @@ macro_rules! declare {
 }
 declare!();
 pub fn read() -> u32 { generated::Visible(7).get() }
-`), sources: [] });
+`) }, sources: [] });
   const generated = scope(evidence, definition(evidence, "generated", "module"));
   assert.equal(generated.bindings.filter(binding => binding.name === "Visible").length, 2);
   assert.ok(generated.bindings.some(binding => binding.source.context.length > 0));
@@ -173,9 +173,9 @@ impl<Value> Read<Value> for Record<Value> {
 pub fn ordinary(value: &Record<u32>) -> &u32 { &value.value }
 `);
   for (const phase of ["declarations", "typed", "checked"]) {
-    const evidence = phase === "declarations" ? tool.declarations({ arguments: arguments_, sources: [] }) :
-      phase === "typed" ? tool.typing({ arguments: arguments_, sources: [] }) :
-        tool.check({ arguments: arguments_, sources: [] });
+    const evidence = phase === "declarations" ? tool.declarations({ compilation: { kind: "compiler", arguments: arguments_ }, sources: [] }) :
+      phase === "typed" ? tool.typing({ compilation: { kind: "compiler", arguments: arguments_ }, sources: [] }) :
+        tool.check({ compilation: { kind: "compiler", arguments: arguments_ }, sources: [] });
     for (const name of ["shared", "explicit", "mutable", "owned", "boxed"]) {
       assert.equal(definition(evidence, name, "associated-function").receiver, true, name);
     }
@@ -212,11 +212,11 @@ impl Value {
   });
   assert.ifError(compiled.error);
   assert.equal(compiled.status, 0, compiled.stderr);
-  const evidence = tool.check({ arguments: [...source("receiver_consumer", `
+  const evidence = tool.check({ compilation: { kind: "compiler", arguments: [...source("receiver_consumer", `
 pub fn read(value: &receiver_dependency::Value) -> u32 {
     value.receiver() + receiver_dependency::Value::ordinary(value)
 }
-`), "--extern", `receiver_dependency=${library}`], sources: [] });
+`), "--extern", `receiver_dependency=${library}`] }, sources: [] });
   const members = evidence.definitions.filter(row => row.id.krate !== evidence.root.krate &&
     row.kind === "associated-function" && ["receiver", "ordinary"].includes(row.name));
   assert.equal(members.length, 2);
@@ -224,13 +224,13 @@ pub fn read(value: &receiver_dependency::Value) -> u32 {
 });
 
 test("native scope mutation controls preserve namespace, visibility, membership and ambiguity boundaries", () => {
-  const evidence = tool.declarations({ arguments: source("scope_mutations", `
+  const evidence = tool.declarations({ compilation: { kind: "compiler", arguments: source("scope_mutations", `
 pub trait Read { fn read(&self) -> u32; }
 pub struct Record;
 impl Read for Record { fn read(&self) -> u32 { 1 } }
 pub mod source { pub struct Value; }
 pub use source::Value as Alias;
-`), sources: [] });
+`) }, sources: [] });
   const implementation = value => value.scopes.find(row => row.kind === "implementation");
   const alias = value => value.scopes.flatMap(row => row.kind === "named" ? row.bindings : []).find(row => row.name === "Alias");
   for (const mutate of [

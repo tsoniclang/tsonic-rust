@@ -37,14 +37,14 @@ for (const phase of ["declarations", "check"]) {
     const directory = join(root, phase);
     const child = writeSource(directory, "child.rs", "pub fn value() -> u32 { 7 }\n");
     const source = writeSource(directory, "root.rs", "mod child; pub fn value() -> u32 { child::value() }\n");
-    const evidence = tool[phase]({ arguments: ["--edition=2024", "--crate-type=lib", source], sources: [] });
+    const evidence = tool[phase]({ compilation: { kind: "compiler", arguments: ["--edition=2024", "--crate-type=lib", source] }, sources: [] });
     assert.ok(evidence.probes.some(probe => probe.path === child && probe.exists));
     const alternative = join(directory, "child", "mod.rs");
     assert.ok(evidence.probes.some(probe => probe.path === alternative && !probe.exists));
     validateRustNativeEvidenceInputs(evidence, []);
     writeSource(join(directory, "child"), "mod.rs", "pub fn value() -> u32 { 9 }\n");
     assert.throws(() => validateRustNativeEvidenceInputs(evidence, []), /source lookup changed/u);
-    assert.throws(() => tool[phase]({ arguments: ["--edition=2024", "--crate-type=lib", source], sources: [] }), /found at both/u);
+    assert.throws(() => tool[phase]({ compilation: { kind: "compiler", arguments: ["--edition=2024", "--crate-type=lib", source] }, sources: [] }), /found at both/u);
   });
 }
 
@@ -104,11 +104,11 @@ test("one native source tool retains its selected environment without mutating c
 const _: () = assert!(env!("TSONIC_NATIVE_INPUT_TEST").as_bytes()[0] == b's');
 pub fn value() -> &'static str { env!("TSONIC_NATIVE_INPUT_TEST") }
 `);
-  assert.equal(selected.check({ arguments: ["--edition=2024", "--crate-type=lib", source], sources: [] }).phase, "checked");
+  assert.equal(selected.check({ compilation: { kind: "compiler", arguments: ["--edition=2024", "--crate-type=lib", source] }, sources: [] }).phase, "checked");
   const changed = createRustNativeSourceTool({ cacheRoot, environment });
-  assert.throws(() => changed.check({ arguments: ["--edition=2024", "--crate-type=lib", source], sources: [] }), /evaluation.*failed|assertion failed/us);
+  assert.throws(() => changed.check({ compilation: { kind: "compiler", arguments: ["--edition=2024", "--crate-type=lib", source] }, sources: [] }), /evaluation.*failed|assertion failed/us);
   assert.equal(environment.TSONIC_NATIVE_INPUT_TEST, "changed");
-  assert.equal(selected.check({ arguments: ["--edition=2024", "--crate-type=lib", source], sources: [] }).phase, "checked");
+  assert.equal(selected.check({ compilation: { kind: "compiler", arguments: ["--edition=2024", "--crate-type=lib", source] }, sources: [] }).phase, "checked");
 });
 
 test("native tracked inputs reject in-compilation changes without fabricating filesystem results", () => {
