@@ -140,6 +140,86 @@ test("Cargo selects the requested binary and uses the same declared and typed ev
   fixture.preserved();
 });
 
+function workspaceProject(name, { virtual, binary, memberManifest }) {
+  const directory = join(root, name);
+  const retainedPaths = [];
+  const write = (path, text) => {
+    const file = join(directory, path);
+    mkdirSync(join(file, ".."), { recursive: true });
+    writeFileSync(file, text);
+    retainedPaths.push(file);
+    return file;
+  };
+  const workspaceManifest = write("Cargo.toml", `
+${virtual ? "" : `[package]\nname = "${name}_root"\nversion = "0.1.0"\nedition = "2024"`}
+[workspace]
+members = ["member", "decoy"]
+default-members = ["decoy"]
+resolver = "3"
+`);
+  if (!virtual) write("src/lib.rs", 'compile_error!("the workspace root was not selected");\n');
+  write("decoy/Cargo.toml", `
+[package]
+name = "${name}_decoy"
+version = "0.1.0"
+edition = "2024"
+`);
+  write("decoy/src/lib.rs", 'compile_error!("the default member was not selected");\n');
+  const selectedManifest = write("member/Cargo.toml", `
+[package]
+name = "${name}-selected"
+version = "0.1.0"
+edition = "2024"
+[lib]
+name = "different_native_name"
+path = "src/native.rs"
+${binary ? '[[bin]]\nname = "different-driver"\npath = "src/driver.rs"' : ""}
+`);
+  const libraryPath = write("member/src/native.rs", binary
+    ? "pub fn from_library() -> u64 { 47 }\n"
+    : 'compile_error!("the prior library source must not be checked");\n');
+  const sourcePath = binary ? write("member/src/driver.rs",
+    'compile_error!("the prior binary source must not be checked");\n') : libraryPath;
+  runRustNativeCommand({ executable: "cargo", arguments: ["generate-lockfile", "--offline", "--manifest-path", workspaceManifest],
+    directory, environment: { ...process.env }, timeoutMilliseconds: 60_000, maximumDiagnosticBytes: 1_048_576 });
+  retainedPaths.push(join(directory, "Cargo.lock"));
+  const retained = retainedPaths.map(path => [path, readFileSync(path, "utf8")]);
+  const metadata = JSON.parse(runRustNativeCommand({ executable: "cargo",
+    arguments: ["metadata", "--locked", "--offline", "--no-deps", "--format-version=1", "--manifest-path", workspaceManifest],
+    directory, environment: { ...process.env }, timeoutMilliseconds: 60_000, maximumDiagnosticBytes: 1_048_576 }));
+  const packageId = metadata.packages.find(candidate => candidate.manifest_path === selectedManifest).id;
+  return {
+    input: {
+      compilation: { kind: "cargo", manifestPath: memberManifest ? selectedManifest : workspaceManifest, packageId,
+        target: binary ? { kind: "binary", name: "different-driver" } : { kind: "library" } },
+      sources: [{ path: sourcePath, text: binary
+        ? "fn main() { assert_eq!(different_native_name::from_library(), 47); }\n"
+        : "pub fn selected_member() -> u64 { 47 }\n" }],
+    },
+    preserved() {
+      for (const [path, text] of retained) assert.equal(readFileSync(path, "utf8"), text, path);
+      assert.equal(existsSync(join(directory, "target")), false);
+      assert.equal(existsSync(join(directory, "member/target")), false);
+      assert.equal(existsSync(join(cacheRoot, "cargo/tsonic-source-evidence.rmeta")), false);
+    },
+  };
+}
+
+for (const [name, options] of [
+  ["virtual_library", { virtual: true, binary: false, memberManifest: false }],
+  ["package_library", { virtual: false, binary: false, memberManifest: false }],
+  ["member_library", { virtual: true, binary: false, memberManifest: true }],
+  ["virtual_binary", { virtual: true, binary: true, memberManifest: false }],
+]) test(`Cargo retains its selected workspace target for ${name}`, { timeout: 300_000 }, () => {
+  const fixture = workspaceProject(`cargo_native_${name}`, options);
+  const evidence = tool.check(fixture.input);
+  assert.equal(evidence.phase, "checked");
+  assert.ok(evidence.definitions.some(row => row.id.krate === 0 && row.name === (options.binary ? "main" : "selected_member")));
+  assert.ok(evidence.inputs.some(row => row.path === fixture.input.sources[0].path));
+  if (options.binary) assert.ok(evidence.definitions.some(row => row.id.krate !== 0 && row.name === "from_library"));
+  fixture.preserved();
+});
+
 test("Cargo root errors and dependency failures cannot publish successful evidence", { timeout: 300_000 }, () => {
   const fixture = project("cargo_native_rejected");
   assert.throws(() => tool.check({ ...fixture.input, sources: [{ ...fixture.input.sources[0],

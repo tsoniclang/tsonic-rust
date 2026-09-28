@@ -7,8 +7,7 @@ use crate::request::{CargoTarget, CompilationInput, Limits, Request};
 
 const REQUEST_ENV: &str = "TSONIC_NATIVE_CARGO_REQUEST";
 const RESPONSE_ENV: &str = "TSONIC_NATIVE_CARGO_RESPONSE";
-const MANIFEST_ENV: &str = "TSONIC_NATIVE_CARGO_MANIFEST";
-const BINARY_ENV: &str = "TSONIC_NATIVE_CARGO_BINARY";
+const EMIT_ENV: &str = "TSONIC_NATIVE_CARGO_EMIT";
 const ROOT_STOP: i32 = 86;
 const MAXIMUM_CONFIGURATION_BYTES: u64 = 8 * 1024 * 1024;
 
@@ -40,14 +39,15 @@ pub fn analyze(
     command.current_dir(directory).args(["rustc", "--locked", "--manifest-path"])
         .arg(&manifest).args(["--package", package_id, "--target-dir", target_directory, "--message-format=json"]);
     match target {
-        CargoTarget::Library => { command.arg("--lib").env_remove(BINARY_ENV); }
-        CargoTarget::Binary { name } => { command.arg("--bin").arg(name).env(BINARY_ENV, name); }
+        CargoTarget::Library => { command.arg("--lib"); }
+        CargoTarget::Binary { name } => { command.arg("--bin").arg(name); }
     }
-    command.arg("--").arg(format!("--emit=metadata={}", Path::new(target_directory).join("tsonic-source-evidence.rmeta").display()))
+    let emit = evidence_output_argument(target_directory);
+    command.arg("--").arg(&emit)
         .env("RUSTC_WORKSPACE_WRAPPER", std::env::current_exe().map_err(|error| error.to_string())?)
         .env(REQUEST_ENV, request_path)
         .env(RESPONSE_ENV, response_path)
-        .env(MANIFEST_ENV, &manifest)
+        .env(EMIT_ENV, &emit)
         .stdin(Stdio::null());
     let status = command.status().map_err(|error| error.to_string())?;
     if status.code() != Some(101) || !started.try_exists().map_err(|error| error.to_string())? ||
@@ -94,25 +94,22 @@ pub fn run_wrapper() -> Result<i32, String> {
     let mut arguments = std::env::args_os().skip(1);
     let compiler = arguments.next().ok_or("Native Cargo wrapper did not receive the compiler executable.")?;
     let arguments = arguments.collect::<Vec<_>>();
-    let manifest = std::env::var(MANIFEST_ENV).map_err(|_| "Native Cargo wrapper requires its exact manifest.")?;
-    let target = match std::env::var_os(BINARY_ENV) {
-        None => CargoTarget::Library,
-        Some(name) => CargoTarget::Binary { name: name.into_string().map_err(|_| "Native Cargo binary name requires Unicode.")? },
-    };
-    if !is_root(&manifest, &target, &arguments)? {
+    let emit = std::env::var_os(EMIT_ENV).ok_or("Native Cargo wrapper requires its exact output selection.")?;
+    if !arguments.contains(&emit) {
         let status = Command::new(compiler).args(arguments).env_remove(REQUEST_ENV).env_remove(RESPONSE_ENV)
-            .env_remove(MANIFEST_ENV).env_remove(BINARY_ENV)
+            .env_remove(EMIT_ENV)
             .status().map_err(|error| error.to_string())?;
         return Ok(status.code().unwrap_or(1));
     }
     let request = crate::read_request(&request_path)?;
     let Request::Analyze {
-        compilation: CompilationInput::Cargo { manifest_path, target, compiler_identity, sysroot, .. },
+        compilation: CompilationInput::Cargo { target_directory, compiler_identity, sysroot, .. },
         sources, phase, limits, ..
     } = request else {
         return Err("Native Cargo wrapper requires a Cargo analysis request.".to_owned());
     };
-    if !is_root(&manifest_path, &target, &arguments)? {
+    if emit != OsString::from(evidence_output_argument(&target_directory)) ||
+        arguments.iter().filter(|argument| **argument == emit).count() != 1 {
         return Err("Native Cargo wrapper selection differs from its request.".to_owned());
     }
     let started = response_path.with_extension("cargo.started");
@@ -140,29 +137,8 @@ pub fn run_wrapper() -> Result<i32, String> {
     Ok(ROOT_STOP)
 }
 
-fn is_root(manifest_path: &str, target: &CargoTarget, arguments: &[OsString]) -> Result<bool, String> {
-    let Some(directory) = std::env::var_os("CARGO_MANIFEST_DIR") else { return Ok(false); };
-    let manifest = std::fs::canonicalize(manifest_path).map_err(|error| error.to_string())?;
-    let candidate = std::fs::canonicalize(Path::new(&directory).join("Cargo.toml")).map_err(|error| error.to_string())?;
-    if candidate != manifest { return Ok(false); }
-    match target {
-        CargoTarget::Binary { name } => Ok(std::env::var_os("CARGO_BIN_NAME").as_deref() == Some(std::ffi::OsStr::new(name))),
-        CargoTarget::Library => {
-            let mut selected = false;
-            let mut arguments = arguments.iter();
-            while let Some(argument) = arguments.next() {
-                let value = if argument == "--crate-type" {
-                    arguments.next().and_then(|value| value.to_str())
-                } else {
-                    argument.to_str().and_then(|value| value.strip_prefix("--crate-type="))
-                };
-                if let Some(value) = value {
-                    selected |= value.split(',').any(|kind| matches!(kind, "lib" | "rlib" | "dylib" | "cdylib" | "staticlib" | "proc-macro"));
-                }
-            }
-            Ok(selected)
-        }
-    }
+fn evidence_output_argument(target_directory: &str) -> String {
+    format!("--emit=metadata={}", Path::new(target_directory).join("tsonic-source-evidence.rmeta").display())
 }
 
 fn bounded_stdout(command: &mut Command, maximum: u64) -> Result<Vec<u8>, String> {
