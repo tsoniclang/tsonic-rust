@@ -1,5 +1,5 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
-import { tsonicAttributeBuilderFactKey } from "@tsonic/source-core/facts";
+import { createTsonicAttributeApplicationFactIndex } from "@tsonic/source-core/facts";
 import type { TsonicAttributeApplicationFact } from "@tsonic/source-core/facts";
 import { isAstNode } from "@tsonic/target-api/source";
 import type { TargetSourceProgram } from "@tsonic/target-api/source";
@@ -13,20 +13,21 @@ export function createRustAttributeApplicationFactIndex(
 ): RustAttributeApplicationFactIndex {
   const byDeclaration = new Map<Node, TsonicAttributeApplicationFact[]>();
   const ast = source.ast;
-  const visit = (node: Node, sourceFile: SourceFile): void => {
-    const fact = source.sourceFacts.getFact(node, tsonicAttributeBuilderFactKey);
-    if (fact?.kind === "application") {
+  const applications = createTsonicAttributeApplicationFactIndex({
+    ast,
+    sourceFiles: source.sourceFiles.filter(file => !ast.isDeclarationFile(file)),
+    sourceFacts: source.sourceFacts,
+  });
+  for (const sourceFile of source.sourceFiles) {
+    for (const fact of applications.forSourceFile(sourceFile)) {
       const target = selectedTarget(fact, sourceFile);
       if (target !== undefined) {
         const entries = byDeclaration.get(target) ?? [];
         entries.push(fact);
         byDeclaration.set(target, entries);
       }
-      return;
     }
-    ast.forEachChild(node, child => { if (child !== undefined) visit(child, sourceFile); });
-  };
-  for (const file of source.sourceFiles) if (file !== undefined && !ast.isDeclarationFile(file)) visit(file, file);
+  }
   const frozenByDeclaration = new Map([...byDeclaration].map(([node, applications]) => [node, Object.freeze(applications)]));
   return Object.freeze({
     forDeclaration: (node: Node) => frozenByDeclaration.get(node) ?? emptyApplications,
