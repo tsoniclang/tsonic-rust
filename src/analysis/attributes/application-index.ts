@@ -1,15 +1,20 @@
-import type { Node, SourceFile } from "@tsonic/tsts";
+import type { AstReader, Node, ReadonlySourceFactResolver, SourceFile } from "@tsonic/tsts";
 import { createTsonicAttributeApplicationFactIndex } from "@tsonic/source-core/facts";
 import type { TsonicAttributeApplicationFact } from "@tsonic/source-core/facts";
 import { isAstNode } from "@tsonic/target-api/source";
-import type { TargetSourceProgram } from "@tsonic/target-api/source";
+import type { SourceReferenceNavigation } from "@tsonic/target-api/source";
 
 export interface RustAttributeApplicationFactIndex {
   forDeclaration(declaration: Node): readonly TsonicAttributeApplicationFact[];
 }
 
 export function createRustAttributeApplicationFactIndex(
-  source: TargetSourceProgram,
+  source: {
+    readonly ast: AstReader;
+    readonly sourceFiles: readonly SourceFile[];
+    readonly sourceFacts: Pick<ReadonlySourceFactResolver, "getFact">;
+    readonly navigation: Pick<SourceReferenceNavigation, "sourceReferenceFor" | "declarationFor">;
+  },
 ): RustAttributeApplicationFactIndex {
   const byDeclaration = new Map<Node, TsonicAttributeApplicationFact[]>();
   const ast = source.ast;
