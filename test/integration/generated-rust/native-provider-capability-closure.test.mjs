@@ -1,17 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import { test } from "node:test";
 
 import {
   artifactText,
   compileRustThroughTargetPack,
-  fixtureCratesRoot,
-  repositoryRoot,
-  rustRuntimeCratePath,
 } from "../../helpers/rust-session.mjs";
-import { validateCargoProject, writeGeneratedArtifacts } from "../../helpers/cargo-projects.mjs";
-import { createTestWorkspace } from "../../../../tsonic/test/scripts/test-workspaces.mjs";
+import { createMacroProject, verifyMacroProject } from "../../helpers/native-macro-project.mjs";
 
 test("native compiler-resolved macros retain their exact delimiter", { timeout: 300_000 }, () => {
   const project = createMacroProject("native_macro_contract");
@@ -73,28 +67,3 @@ test("native macro repetition uses native count and evaluates its element once, 
   assert.doesNotMatch(source, /repeat_sum!\[[^;\]]+,/u);
   verifyMacroProject(project, result.artifacts);
 });
-
-function createMacroProject(name) {
-  const root = createTestWorkspace(join(repositoryRoot, ".temp/generated"), `${name}-`);
-  const generated = join(root, "generated");
-  mkdirSync(join(generated, "src"), { recursive: true });
-  writeFileSync(join(generated, "src/main.rs"), "fn main() {}\n");
-  const manifestPath = join(root, "Cargo.toml");
-  const manifest = [
-    "[package]", `name = ${JSON.stringify(name)}`, 'version = "0.1.0"', 'edition = "2024"',
-    "", "[workspace]", "", "[[bin]]", `name = ${JSON.stringify(name)}`, 'path = "generated/src/main.rs"',
-    "", "[dependencies]",
-    `tsonic_rust_runtime = { path = ${JSON.stringify(rustRuntimeCratePath)} }`,
-    `macro_proofs = { package = "acme_testing", path = ${JSON.stringify(join(fixtureCratesRoot, "acme_testing"))} }`,
-    "",
-  ].join("\n");
-  writeFileSync(manifestPath, manifest);
-  return { root, generated, manifestPath, manifest };
-}
-
-function verifyMacroProject(project, artifacts) {
-  writeGeneratedArtifacts(project.generated, artifacts);
-  assert.equal(readFileSync(project.manifestPath, "utf8"), project.manifest);
-  validateCargoProject(project.root, { run: true });
-  assert.equal(readFileSync(project.manifestPath, "utf8"), project.manifest);
-}

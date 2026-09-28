@@ -2,12 +2,49 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{ItemFn, ItemMod, LitInt, parse_macro_input};
 
+#[proc_macro]
+pub fn triple(input: TokenStream) -> TokenStream {
+    let expression = parse_macro_input!(input as syn::Expr);
+    quote!((#expression) * 3).into()
+}
+
+#[proc_macro_attribute]
+pub fn replaced(arguments: TokenStream, input: TokenStream) -> TokenStream {
+    let value = parse_macro_input!(arguments as LitInt);
+    let mut function = parse_macro_input!(input as ItemFn);
+    function.block = syn::parse_quote!({ #value });
+    quote!(#function).into()
+}
+
+#[proc_macro_attribute]
+pub fn publish(arguments: TokenStream, input: TokenStream) -> TokenStream {
+    if !arguments.is_empty() {
+        return syn::Error::new(proc_macro::Span::call_site().into(), "publish takes no arguments")
+            .to_compile_error().into();
+    }
+    let mut module = parse_macro_input!(input as ItemMod);
+    let Some((_, items)) = module.content.as_mut() else {
+        return syn::Error::new_spanned(module, "publish requires an inline module")
+            .to_compile_error().into();
+    };
+    let functions: Vec<_> = items.iter().filter_map(|item| {
+        let syn::Item::Fn(function) = item else { return None; };
+        if !matches!(function.vis, syn::Visibility::Public(_)) { return None; }
+        let mut generated = function.clone();
+        generated.sig.ident = quote::format_ident!("generated_{}", function.sig.ident);
+        generated.attrs.clear();
+        Some(syn::Item::Fn(generated))
+    }).collect();
+    items.extend(functions);
+    quote!(#module).into()
+}
+
 #[proc_macro_attribute]
 pub fn offset(arguments: TokenStream, input: TokenStream) -> TokenStream {
     let amount = parse_macro_input!(arguments as LitInt);
     let mut function = parse_macro_input!(input as ItemFn);
     let body = function.block;
-    function.block = syn::parse_quote!({ let result = #body; result + #amount });
+    function.block = syn::parse_quote!({ let result = (|| #body)(); result + #amount });
     quote!(#function).into()
 }
 
