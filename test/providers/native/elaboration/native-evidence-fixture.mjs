@@ -5,7 +5,8 @@ export function nativeDefinition(index, kind) {
     id: nativeIdentity(index),
     stable: { krate: "0123456789abcdef", path: index.toString(16).padStart(16, "0") },
     parent: index === 0 ? null : nativeIdentity(0), path: `crate::item${index}`, name: `item${index}`,
-    kind, macroKinds: [], type: null, generics: null, visibility: null, source: null,
+    kind, macroKinds: [], receiver: kind === "associated-function" ? false : null,
+    type: null, generics: null, visibility: null, source: null,
   };
 }
 

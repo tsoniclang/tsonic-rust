@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { spawnSync } from "node:child_process";
 import { createTestWorkspace } from "../../../../../tsonic/test/scripts/test-workspaces.mjs";
 import { repositoryRoot } from "../../../helpers/rust-session/paths.mjs";
 import { createRustNativeSourceTool, defaultRustNativeSourceLimits } from "../../../../dist/providers/native/elaboration/tool.js";
@@ -144,6 +145,82 @@ pub fn read() -> u32 { generated::Visible(7).get() }
   assert.ok(generated.bindings.some(binding => binding.source.context.length > 0));
   assert.ok(evidence.scopes.some(row => row.kind === "implementation" && row.members.some(member =>
     same(member.definition, definition(evidence, "get", "associated-function").id))));
+});
+
+test("native receivers are compiler-selected even when the signature matches an associated function", () => {
+  const arguments_ = source("receivers", `
+pub trait Read<Value> {
+    fn read(&self) -> &Value;
+    fn from_value(value: &Self) -> &Value { value.read() }
+}
+pub struct Record<Value> { value: Value }
+macro_rules! methods {
+    () => {
+        pub fn shared(&self) -> &Value { &self.value }
+        pub fn explicit(self: &Self) -> &Value { &self.value }
+        pub fn borrowed(value: &Self) -> &Value { &value.value }
+        pub fn mutable(&mut self) -> &mut Value { &mut self.value }
+        pub fn owned(self) -> Value { self.value }
+        pub fn boxed(self: Box<Self>) -> Value { self.value }
+        pub fn create(value: Value) -> Self { Self { value } }
+        pub fn empty() -> bool { false }
+    };
+}
+impl<Value> Record<Value> { methods!(); }
+impl<Value> Read<Value> for Record<Value> {
+    fn read(&self) -> &Value { &self.value }
+}
+pub fn ordinary(value: &Record<u32>) -> &u32 { &value.value }
+`);
+  for (const phase of ["declarations", "typed", "checked"]) {
+    const evidence = phase === "declarations" ? tool.declarations({ arguments: arguments_, sources: [] }) :
+      phase === "typed" ? tool.typing({ arguments: arguments_, sources: [] }) :
+        tool.check({ arguments: arguments_, sources: [] });
+    for (const name of ["shared", "explicit", "mutable", "owned", "boxed"]) {
+      assert.equal(definition(evidence, name, "associated-function").receiver, true, name);
+    }
+    for (const name of ["borrowed", "create", "empty", "from_value"]) {
+      assert.equal(definition(evidence, name, "associated-function").receiver, false, name);
+    }
+    for (const member of evidence.definitions.filter(row => row.name === "read")) {
+      assert.equal(member.receiver, true);
+    }
+    assert.equal(definition(evidence, "ordinary", "function").receiver, null);
+    const signature = name => evidence.types.find(row => row.id === definition(evidence, name).type).value.signature;
+    assert.deepEqual(signature("shared"), signature("borrowed"));
+    assert.equal(signature("empty").value.inputs.length, 0);
+    assert.ok(Object.isFrozen(definition(evidence, "shared")));
+    const malformed = structuredClone(evidence);
+    const implementation = malformed.scopes.find(row => row.kind === "implementation" && row.trait !== null);
+    const member = malformed.definitions.find(row => same(row.id, implementation.members[0].definition));
+    member.receiver = false;
+    assert.throws(() => decodeNativeEvidence(malformed, defaultRustNativeSourceLimits), /trait-member correspondence/u);
+  }
+});
+
+test("native receiver evidence survives external crate metadata without source-name inference", () => {
+  const arguments_ = source("receiver_dependency", `
+pub struct Value;
+impl Value {
+    pub fn receiver(&self) -> u32 { 7 }
+    pub fn ordinary(value: &Self) -> u32 { value.receiver() }
+}
+`);
+  const library = join(root, "libreceiver_dependency.rlib");
+  const compiled = spawnSync(process.env.RUSTC ?? "rustc", [...arguments_, "-o", library], {
+    encoding: "utf8", timeout: 60_000, maxBuffer: 1024 * 1024,
+  });
+  assert.ifError(compiled.error);
+  assert.equal(compiled.status, 0, compiled.stderr);
+  const evidence = tool.check({ arguments: [...source("receiver_consumer", `
+pub fn read(value: &receiver_dependency::Value) -> u32 {
+    value.receiver() + receiver_dependency::Value::ordinary(value)
+}
+`), "--extern", `receiver_dependency=${library}`], sources: [] });
+  const members = evidence.definitions.filter(row => row.id.krate !== evidence.root.krate &&
+    row.kind === "associated-function" && ["receiver", "ordinary"].includes(row.name));
+  assert.equal(members.length, 2);
+  for (const member of members) assert.equal(member.receiver, member.name === "receiver");
 });
 
 test("native scope mutation controls preserve namespace, visibility, membership and ambiguity boundaries", () => {

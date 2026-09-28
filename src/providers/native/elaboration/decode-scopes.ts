@@ -125,7 +125,8 @@ export function validateNativeScopeRelations(scopes: readonly RustNativeScope[],
       } else {
         const selected = declarations.get(nativeDefinitionKey(member.traitMember));
         if (scope.trait === null || selected?.parent === null || selected?.parent === undefined ||
-          nativeDefinitionKey(selected.parent) !== nativeDefinitionKey(scope.trait.definition) || selected.kind !== definition.kind) {
+          nativeDefinitionKey(selected.parent) !== nativeDefinitionKey(scope.trait.definition) || selected.kind !== definition.kind ||
+          selected.receiver !== definition.receiver) {
           throw new Error("Native Rust implementation has an invalid trait-member correspondence.");
         }
       }

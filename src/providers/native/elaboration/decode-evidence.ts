@@ -96,11 +96,12 @@ export function decodeNativeEvidence(value: unknown, limits: RustNativeSourceLim
   });
   const definitions = array(input.definitions, (value): RustNativeDefinition => {
     reserve();
-    const row = shape(value, ["id", "stable", "parent", "path", "name", "kind", "macroKinds", "type", "generics", "visibility", "source"]);
+    const row = shape(value, ["id", "stable", "parent", "path", "name", "kind", "macroKinds", "receiver", "type", "generics", "visibility", "source"]);
     return Object.freeze({ id: identity(row.id), stable: decodeNativeStableDefinitionId(row.stable),
       parent: row.parent === null ? null : identity(row.parent), path: text(row.path),
       name: row.name === null ? null : text(row.name), kind: choice(row.kind, definitionKinds),
       macroKinds: array(row.macroKinds, value => choice(value, ["function-like", "attribute", "derive"] as const)),
+      receiver: row.receiver === null ? null : boolean(row.receiver),
       type: row.type === null ? null : index(row.type), generics: generics.generics(row.generics),
       visibility: row.visibility === null ? null : scopeDecoder.visibility(row.visibility), source: span(row.source) });
   });
@@ -144,10 +145,21 @@ export function decodeNativeEvidence(value: unknown, limits: RustNativeSourceLim
     requireExpansion(value.expansion);
     for (const mark of value.context) requireExpansion(mark.expansion);
   };
+  const typesById = new Map(types.map(row => [row.id, row.value]));
   for (const row of definitions) {
     requireDefinition(row.parent);
     requireType(row.type);
     requireSpan(row.source);
+    if (row.kind === "associated-function") {
+      const type = row.type === null ? undefined : typesById.get(row.type);
+      if (row.receiver === null || type?.kind !== "function" ||
+        nativeDefinitionKey(type.definition) !== nativeDefinitionKey(row.id) ||
+        row.receiver && type.signature.value.inputs.length === 0) {
+        throw new Error("Native Rust associated function has an invalid receiver or signature correspondence.");
+      }
+    } else if (row.receiver !== null) {
+      throw new Error("Native Rust receiver evidence belongs only to an associated function.");
+    }
   }
   validateNativeScopeRelations(scopes, definitions, requireSpan);
   validateNativeItemInventory(root, items, definitions, scopes);

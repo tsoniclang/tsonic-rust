@@ -125,6 +125,7 @@ pub struct Definition {
     name: Option<String>,
     kind: &'static str,
     macro_kinds: Vec<&'static str>,
+    receiver: Option<bool>,
     r#type: Option<TypeId>,
     generics: Option<Generics>,
     visibility: Option<Visibility>,
@@ -393,6 +394,9 @@ impl Collector<'_, '_> {
             name: self.context.opt_item_name(id).map(|name| name.to_string()),
             kind: definition_kind(kind),
             macro_kinds,
+            receiver: if kind == DefKind::AssocFn {
+                Some(self.context.associated_item(id).is_method())
+            } else { None },
             r#type: ty,
             generics,
             visibility,

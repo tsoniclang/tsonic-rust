@@ -48,6 +48,7 @@ export interface RustNativeDefinition {
   readonly name: string | null;
   readonly kind: string;
   readonly macroKinds: readonly ("function-like" | "attribute" | "derive")[];
+  readonly receiver: boolean | null;
   readonly type: number | null;
   readonly generics: RustNativeGenerics | null;
   readonly visibility: RustNativeVisibility | null;
