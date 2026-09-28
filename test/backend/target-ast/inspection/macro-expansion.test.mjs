@@ -67,6 +67,47 @@ test("ordinary shadowing remains precise and unnecessary mutability is removed",
   assert.equal(maxWritesInStatements([statement(closure)], "outer"), 0);
 });
 
+test("shadowed ordinary mutations and match-arm bindings do not write the outer binding", () => {
+  const assignment = { kind: "assignment", target: path("outer"), operator: "=", value: integer("2") };
+  const statements = [binding("outer", integer("1")), statement(assignment)];
+  const expression = { kind: "match", expression: path("input"), arms: [{
+    pattern: { kind: "binding", name: "outer" }, expression: assignment,
+  }] };
+  for (const selected of [statements, [statement(expression)]]) {
+    assert.equal(rustStatementsReferencePath(selected, "outer"), false);
+    assert.equal(maxWritesInStatements(selected, "outer"), 0);
+    assert.deepEqual([...firstAccessesInStatements(selected, "outer")], ["none"]);
+    assert.equal(firstDirectPathAccessInStatements(selected, "outer"), "none");
+  }
+  const expanded = { ...expression, arms: [{ ...expression.arms[0], expression: invocation() }] };
+  assert.equal(rustExpressionReferencesPath(expanded, "outer"), true);
+  assert.equal(maxWritesInStatements([statement(expanded)], "outer"), 2);
+  assert.ok(firstAccessesInStatements([statement(expanded)], "outer").has("read"));
+});
+
+test("opaque later expansion does not erase proven earlier access order", () => {
+  const macro = statement(invocation());
+  const write = { kind: "assign", target: path("outer"), operator: "=", value: integer("1") };
+  assert.deepEqual([...firstAccessesInStatements([write, macro], "outer")], ["write"]);
+  assert.equal(firstDirectPathAccessInStatements([write, macro], "outer"), "write");
+  assert.deepEqual([...firstAccessesInStatements([statement(path("outer")), macro], "outer")], ["read"]);
+});
+
+test("hygienic use inspection does not rescan every nested expression subtree", () => {
+  let reads = 0;
+  let expression = invocation();
+  const depth = 128;
+  for (let index = 0; index < depth; index += 1) {
+    const operand = expression;
+    expression = { kind: "unary", operator: "!", get operand() { reads += 1; return operand; } };
+  }
+  assert.equal(rustExpressionReferencesPath(expression, "outer"), true);
+  assert.equal(reads, depth);
+  reads = 0;
+  assert.equal(maxWritesInStatements([statement(expression)], "outer"), 2);
+  assert.equal(reads, depth);
+});
+
 test("late initialization cannot move across a macro expansion", () => {
   const statements = [
     binding("output"),
@@ -131,14 +172,17 @@ fn capture() -> i32 {
     macro_rules! native_effect { () => { outer }; }
 ${captureBody}
 }
-fn early() -> i32 {
-    macro_rules! native_effect { () => { return 7 }; }
-${printRustBlockStatements({ statements: [{ kind: "tail", expr: macro }] }, 1)}
+fn early(leave: bool) -> i32 {
+    macro_rules! native_effect { () => {{ if leave { return 7; } 9 }}; }
+${printRustBlockStatements({ statements: [{ kind: "tail", expr: {
+    kind: "binary", operator: "+", left: macro, right: integer("1"),
+  } }] }, 1)}
 }
 fn main() {
     assert_eq!(mutate(), 3);
     assert_eq!(capture(), 14);
-    assert_eq!(early(), 7);
+    assert_eq!(early(true), 7);
+    assert_eq!(early(false), 10);
 }
 `, kind: "source" };
   const formatted = formatRustCompileOutput({ artifacts: [artifact] }, "2024");

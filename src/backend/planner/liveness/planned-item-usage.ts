@@ -1,5 +1,4 @@
 import { rustExpressionChildren } from "../../target-ast/inspection/expression-children.js";
-import { rustExpressionContainsExpansion, rustStatementContainsExpansion } from "../../target-ast/inspection/macro-expansion.js";
 import { rustPatternBindings } from "../../target-ast/patterns.js";
 import type {
   RustBlock,
@@ -26,12 +25,11 @@ function rustStatementReferencesSelfField(
   statement: RustStmt,
   fieldName: string,
 ): boolean {
-  if (rustStatementContainsExpansion(statement)) return true;
   switch (statement.kind) {
     case "macro-statement":
       return true;
     case "item":
-      return false;
+      return statement.item.kind === "macro-invocation";
     case "let":
       return rustPatternBindings(statement.pattern) === undefined ||
         (statement.init !== undefined && rustExpressionReferencesSelfField(statement.init, fieldName)) ||
@@ -102,7 +100,11 @@ function rustExpressionReferencesSelfField(
   expression: RustExpr,
   fieldName: string,
 ): boolean {
-  if (rustExpressionContainsExpansion(expression)) return true;
+  if (expression.kind === "macro-invocation") return true;
+  if ((expression.kind === "matches" && rustPatternBindings(expression.pattern) === undefined) ||
+    (expression.kind === "match" && expression.arms.some(arm => rustPatternBindings(arm.pattern) === undefined)) ||
+    ((expression.kind === "closure" || expression.kind === "closure-block") &&
+      expression.params.some(parameter => rustPatternBindings(parameter.pattern) === undefined))) return true;
   if (expression.kind === "field" && expression.name === fieldName &&
     expression.receiver.kind === "path" && expression.receiver.path === "self") {
     return true;
