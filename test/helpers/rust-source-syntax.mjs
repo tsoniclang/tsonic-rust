@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createCompilerSessionFromFiles, createSourceProgramQueries } from "@tsonic/tsts";
+import { createCompilerSessionFromFiles } from "@tsonic/tsts";
 import { createSourceSemanticsVirtualModuleProvider } from "@tsonic/source-core/extension";
 import { rustSyntaxIntrinsicDeclarations } from "../../dist/source/semantics/declarations/syntax.js";
 import { rustLangModule, rustSourceProviderVersion, rustSourceSemanticsExtensionId,
@@ -40,8 +40,7 @@ export function createRustSourceSyntax(sourceText, { modules = [], files = {} } 
     }] },
   });
   assert.deepEqual(session.getDiagnostics("syntactic"), []);
-  session.ensureBound();
-  const source = createSourceProgramQueries(session.program);
+  const source = session.checkSource();
   const ast = source.ast;
   const file = source.getSourceFile("/src/index.ts");
   const queries = source.getSourceFileQueries(file);
