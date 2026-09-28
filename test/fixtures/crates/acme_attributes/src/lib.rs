@@ -17,6 +17,18 @@ pub fn replaced(arguments: TokenStream, input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_attribute]
+pub fn boolean_result(arguments: TokenStream, input: TokenStream) -> TokenStream {
+    if !arguments.is_empty() {
+        return syn::Error::new(proc_macro::Span::call_site().into(), "boolean_result takes no arguments")
+            .to_compile_error().into();
+    }
+    let mut function = parse_macro_input!(input as ItemFn);
+    function.sig.output = syn::parse_quote!(-> bool);
+    function.block = syn::parse_quote!({ true });
+    quote!(#function).into()
+}
+
+#[proc_macro_attribute]
 pub fn publish(arguments: TokenStream, input: TokenStream) -> TokenStream {
     if !arguments.is_empty() {
         return syn::Error::new(proc_macro::Span::call_site().into(), "publish takes no arguments")

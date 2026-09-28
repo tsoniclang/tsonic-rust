@@ -125,3 +125,16 @@ test("a consuming macro cannot silently clone a non-Clone native value", { timeo
   ` } }), /(?:use|borrow) of moved value/u);
   assertMacroProjectUnpublished(project);
 });
+
+test("a contextual source annotation is a native constraint, not evidence of the macro result", { timeout: 300_000 }, () => {
+  const project = createMacroProject("native_macro_result_control");
+  assert.throws(() => compileRustThroughTargetPack({ target: project.target, files: { "index.ts": `
+    import type { int32 } from "@tsonic/core/types.js";
+    import { check, string_value } from "@tsonic/rust/crates/macro_proofs/index.js";
+    export function main(): void {
+      const value: int32 = string_value();
+      check(value === 0);
+    }
+  ` } }), /(?:not assignable|mismatched types)/u);
+  assertMacroProjectUnpublished(project);
+});

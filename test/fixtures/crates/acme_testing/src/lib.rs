@@ -31,6 +31,11 @@ macro_rules! discard {
 }
 
 #[macro_export]
+macro_rules! string_value {
+    () => { "payload" };
+}
+
+#[macro_export]
 macro_rules! twice {
     ($input:expr) => { ($input) + ($input) };
 }

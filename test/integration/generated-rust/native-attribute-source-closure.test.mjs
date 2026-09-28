@@ -72,3 +72,67 @@ test("generated functions retain exact argument types rather than accepting arbi
   });
   assertMacroProjectUnpublished(project);
 });
+
+test("source and generated declarations may have a native-valid recursive dependency", { timeout: 300_000 }, () => {
+  const project = createMacroProject("native_generated_recursion", { procedural: true });
+  const { result } = compileRustThroughTargetPack({ target: project.target, files: {
+    "values.ts": `
+      import type { int32 } from "@tsonic/core/types.js";
+      import { attribute } from "@tsonic/core/lang.js";
+      import { publish } from "@tsonic/rust/crates/native_macros/index.js";
+      attribute.module().add(() => publish());
+      export function count(value: int32): int32 {
+        if (value === 0) { return 0; }
+        return generated_count(value - 1) + 1;
+      }
+    `,
+    "index.ts": `
+      import { check } from "@tsonic/rust/crates/macro_proofs/index.js";
+      import { count, generated_count } from "./values.js";
+      export function main(): void { check(count(8) === 8 && generated_count(9) === 9); }
+    `,
+  } });
+  assert.deepEqual(result.diagnostics, []);
+  const source = result.artifacts.map(artifact => artifact.text).join("\n");
+  assert.doesNotMatch(source, /pub fn generated_count/u);
+  verifyMacroProject(project, result.artifacts);
+});
+
+test("source callers use the effective native signature after an attribute replaces it", { timeout: 300_000 }, () => {
+  const project = createMacroProject("native_replaced_signature", { procedural: true });
+  const { result } = compileRustThroughTargetPack({ target: project.target, files: { "index.ts": `
+    import type { int32 } from "@tsonic/core/types.js";
+    import { attribute } from "@tsonic/core/lang.js";
+    import { boolean_result } from "@tsonic/rust/crates/native_macros/index.js";
+    import { check } from "@tsonic/rust/crates/macro_proofs/index.js";
+    function changed(): int32 { return 7; }
+    attribute<typeof changed>().add(() => boolean_result());
+    export function main(): void { check(changed()); }
+  ` } });
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /fn changed\(\) -> i32/u);
+  assert.match(source, /#\[native_macros::boolean_result(?:\(\))?\]/u);
+  verifyMacroProject(project, result.artifacts);
+});
+
+test("replacing one attributed body does not hide errors in an ordinary source body", { timeout: 300_000 }, () => {
+  const project = createMacroProject("native_replaced_body_control", { procedural: true });
+  assert.throws(() => compileRustThroughTargetPack({ target: project.target, files: { "index.ts": `
+    import type { int32 } from "@tsonic/core/types.js";
+    import { attribute } from "@tsonic/core/lang.js";
+    import { replaced } from "@tsonic/rust/crates/native_macros/index.js";
+    import { check } from "@tsonic/rust/crates/macro_proofs/index.js";
+    function changed(): int32 { return missingInReplacedBody(); }
+    attribute<typeof changed>().add(() => replaced(7));
+    export function main(): void {
+      check(changed() === 7);
+      missingInOrdinaryBody();
+    }
+  ` } }), error => {
+    assert.match(error.message, /Cannot find name 'missingInOrdinaryBody'/u);
+    assert.doesNotMatch(error.message, /Cannot find name 'missingInReplacedBody'/u);
+    return true;
+  });
+  assertMacroProjectUnpublished(project);
+});
