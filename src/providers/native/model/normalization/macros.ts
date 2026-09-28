@@ -1,7 +1,8 @@
 import { canonicalItemId, canonicalItemPath } from "../rustdoc-items.js";
 import { requireArray, requireInnerRecord, requireRecord, requireString } from "../rustdoc-schema.js";
 import type { RustdocDocument } from "../rustdoc-schema.js";
-import type { RustCompilerDependency, RustCompilerMacroExport, RustCompilerMacroKind } from "../model.js";
+import type { RustCompilerDependency } from "../model.js";
+import type { RustCompilerMacroExport, RustCompilerMacroKind } from "../../../model/compiler-exports.js";
 
 export function normalizeMacro(
   document: RustdocDocument,

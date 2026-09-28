@@ -27,6 +27,7 @@ import {
   rustTypesModule,
 } from "../semantics/identity.js";
 import { rustSourceSemanticsModules } from "../profiles/source-modules.js";
+import { resolveRustSourceNativeInput, rustSourceNativeInputFactKey, type RustSourceNativeServices } from "../semantics/native-input.js";
 
 export {
   rustConstPointerExport,
@@ -37,8 +38,13 @@ export {
 };
 
 export function createRustSourceSemanticsExtension(
-  additionalProviders: readonly SourceDeclarationProvider[] = [],
+  options: {
+    readonly providers: readonly SourceDeclarationProvider[];
+    readonly native: RustSourceNativeServices;
+  },
 ): CompilerExtension {
+  const providers = Object.freeze([...options.providers]);
+  const native = Object.freeze({ macro: options.native.macro, tokenize: options.native.tokenize });
   return {
     identity: {
       id: rustSourceSemanticsExtensionId,
@@ -49,6 +55,8 @@ export function createRustSourceSemanticsExtension(
       runsAfter: [sourceSemanticsExtensionId],
     },
     initialize(context): void {
+      context.registerSourceElaborator(rustSourceNativeInputFactKey,
+        demand => resolveRustSourceNativeInput(demand, native));
       context.registerSourceDeclarationProvider(
         createSourceSemanticsVirtualModuleProvider({
           id: rustSourceVirtualModulesProviderId,
@@ -90,7 +98,7 @@ export function createRustSourceSemanticsExtension(
           },
         }),
       );
-      for (const provider of additionalProviders) {
+      for (const provider of providers) {
         context.registerSourceDeclarationProvider(provider);
       }
     },

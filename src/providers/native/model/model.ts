@@ -1,3 +1,5 @@
+import type { RustCompilerExportIdentity, RustCompilerMacroExport } from "../../model/compiler-exports.js";
+
 export const rustCompilerProviderProtocolVersion = 7;
 
 export interface RustCompilerIdentity {
@@ -324,21 +326,6 @@ export interface RustCompilerUnsupportedMember {
   readonly kind: "associated-constant" | "associated-type" | "field" | "method" | "variant";
   readonly name: string;
   readonly reason: string;
-}
-
-interface RustCompilerExportIdentity {
-  readonly id: string;
-  readonly name: string;
-  readonly targetPath: readonly string[];
-}
-
-export type RustCompilerMacroKind = "declarative" | "function" | "attribute" | "derive";
-
-export interface RustCompilerMacroExport extends RustCompilerExportIdentity {
-  readonly kind: "macro";
-  readonly macroKind: RustCompilerMacroKind;
-  readonly helpers: readonly string[];
-  readonly canonicalPath?: readonly string[];
 }
 
 export type RustCompilerExport = RustCompilerMacroExport | RustCompilerOrdinaryExport;

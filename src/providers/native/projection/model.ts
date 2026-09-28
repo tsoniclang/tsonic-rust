@@ -3,9 +3,9 @@ import type { ProviderDeclarationModel, ProviderTypeExpression } from "@tsonic/t
 import type {
   RustCompilerDependency,
   RustCompilerGenericParameter,
-  RustCompilerMacroExport,
   RustCompilerStandardTypeLocation,
 } from "../model/model.js";
+import type { RustCompilerMacroExport } from "../../model/compiler-exports.js";
 import type { RustNamedTypeTraitContract } from "../../../target-model/types/model.js";
 import type { RustProviderModuleDefinition, RustProviderOperationDefinition, RustProviderTypeDefinition } from "../../packages/model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";

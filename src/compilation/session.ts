@@ -31,6 +31,8 @@ import {
   createRustTargetConfiguration,
 } from "../options/rust-target-options.js";
 import { rustRuntimeCrateReference } from "../providers/runtime/source-crates.js";
+import { createRustNativeSourceTool, type RustNativeSourceTool } from "../providers/native/elaboration/tool.js";
+import { join } from "node:path";
 
 type RustCompilationSessionState =
   | "created"
@@ -54,6 +56,7 @@ export function createRustCompilationSession(
     cacheRoot: context.paths.cacheRoot,
   });
   const jsEnabled = context.selectedSurfaceIds.includes(rustJsSourceProfileOwnerId);
+  let nativeSourceTool: RustNativeSourceTool | undefined;
   let state: RustCompilationSessionState = "created";
   return Object.freeze({
     sourceProfileContributions(): TargetSourceProfileContributions {
@@ -69,7 +72,17 @@ export function createRustCompilationSession(
       return Object.freeze({
         semanticsModules: rustSourceSemanticsModules(),
         extensions: Object.freeze([
-          createRustSourceSemanticsExtension(compilerProviderSession.sourceProviders),
+          createRustSourceSemanticsExtension({
+            providers: compilerProviderSession.sourceProviders,
+            native: {
+              macro: declaration => compilerProviderSession.intrinsic(declaration)?.native,
+              tokenize(source) {
+                if (state === "closed") throw new Error("Rust compilation session is closed.");
+                nativeSourceTool ??= createRustNativeSourceTool({ cacheRoot: join(context.paths.cacheRoot, "rust/native-source") });
+                return nativeSourceTool.tokens(source, configuration.edition);
+              },
+            },
+          }),
         ]),
       });
     },
@@ -112,6 +125,7 @@ export function createRustCompilationSession(
         return;
       }
       compilerProviderSession.close();
+      nativeSourceTool = undefined;
       state = "closed";
     },
   });
