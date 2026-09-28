@@ -1,5 +1,6 @@
 import {
   targetSourceProfileDeclaration,
+  typescriptNoLibCallableDeclarations,
   typescriptNoLibUtilityDeclarations,
 } from "@tsonic/target-api/provider";
 import { jsStandardSourceProfileDeclarations, sourceErrorDeclarations } from "@tsonic/js-source-profile";
@@ -14,9 +15,6 @@ const sharedNoLibDeclarations = `
 type PropertyKey = string | number | symbol;
 
 interface Object {}
-interface Function {}
-interface CallableFunction extends Function {}
-interface NewableFunction extends Function {}
 interface IArguments {
   readonly length: number;
   [index: number]: unknown;
@@ -515,6 +513,7 @@ declare var Atomics: Atomics;
 export function rustNativeSourceProfileContributions(): TargetSourceProfileContributions {
   return {
     declarations: [
+      targetSourceProfileDeclaration("typescript-callables.d.ts", typescriptNoLibCallableDeclarations),
       targetSourceProfileDeclaration(
         "typescript-utilities.d.ts",
         typescriptNoLibUtilityDeclarations,
@@ -527,6 +526,7 @@ export function rustNativeSourceProfileContributions(): TargetSourceProfileContr
 export function rustJsSurfaceSourceProfileContributions(): TargetSourceProfileContributions {
   return {
     declarations: [
+      targetSourceProfileDeclaration("typescript-callables.d.ts", typescriptNoLibCallableDeclarations),
       targetSourceProfileDeclaration(
         "typescript-utilities.d.ts",
         typescriptNoLibUtilityDeclarations,
