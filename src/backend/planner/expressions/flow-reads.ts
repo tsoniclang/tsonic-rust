@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustRuntimeUnionProjection } from "../../../target-model/types/carriers/runtime-unions.js";
-import { rustUnionTypePathInContext } from "../types/render.js";
+import { rustTypeFromCarrierInContext } from "../types/render.js";
 import {
   isRustCopyCarrier,
   isRustJsValueCarrier,
@@ -66,29 +66,24 @@ export function planRustFlowReadProjection(
     }
     return { kind: "method-call", receiver: planRustNonConsumingValue(node, expression, context), method: "error_value", args: [] };
   }
-  if (fact.kind === "runtime-union") {
-    if (rustRuntimeUnionProjection(fact.sourceCarrier, fact.selectedCarrier) !== fact.method) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, node), "rust.backend.runtime-union-projection",
-        "The finalized native union projection conflicts with its exact carrier contract.",
-      ));
-      return undefined;
-    }
-    return { kind: "method-call", receiver: planRustNonConsumingValue(node, expression, context), method: fact.method, args: [] };
-  }
   const ownsValue = context.input.program.valueLifetimes.canMove(node);
-  if (fact.kind === "source-union") {
+  if (fact.kind === "source-union" || fact.kind === "runtime-union") {
     const optionalPayload = rustOptionElementCarrier(fact.sourceCarrier);
     const selectedPayload = rustOptionElementCarrier(fact.selectedCarrier);
     const payloadCarrier = selectedPayload ?? fact.selectedCarrier;
-    const variants = context.input.program.typeDefinitions.sourceUnionVariants(fact.dispatchCarrier);
-    const path = rustUnionTypePathInContext(fact.dispatchCarrier, context);
-    const selected = variants?.filter(variant => variant.name === fact.variant &&
-      rustTargetTypeRefEquals(variant.carrier, payloadCarrier));
+    const variants = fact.kind === "source-union"
+      ? context.input.program.typeDefinitions.sourceUnionVariants(fact.dispatchCarrier) : undefined;
+    const selected = fact.kind === "runtime-union"
+      ? rustRuntimeUnionProjection(fact.dispatchCarrier, payloadCarrier)
+      : variants?.filter(variant => variant.name === fact.variant &&
+        rustTargetTypeRefEquals(variant.carrier, payloadCarrier)).length === 1
+        ? { kind: "payload" as const, name: fact.variant } : undefined;
+    const type = rustTypeFromCarrierInContext(fact.dispatchCarrier, context);
+    const path = type?.kind === "named" ? type.path : undefined;
     if (!rustTargetTypeRefEquals(optionalPayload ?? fact.sourceCarrier, fact.dispatchCarrier) ||
       selectedPayload !== undefined && optionalPayload === undefined ||
-      path === undefined || selected?.length !== 1 ||
-      !ownsValue && !rustCarrierSupportsClone(payloadCarrier, context.input.program.typeDefinitions) &&
+      path === undefined || selected?.name !== fact.variant ||
+      selected.kind === "payload" && !ownsValue && !rustCarrierSupportsClone(payloadCarrier, context.input.program.typeDefinitions) &&
         !requireRustCarrierRequirements(payloadCarrier, ["clone"], node, context)) {
       context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
         "rust.backend.source-union-projection", "The selected union payload has no exact non-consuming projection."));
@@ -96,11 +91,13 @@ export function planRustFlowReadProjection(
     }
     const name = allocateRustSyntheticName(context.syntheticNames ??
       createRustSyntheticNameState(context.input.program.source.ast, node, []), "flow_value");
-    const payloadPattern: RustPattern = { kind: "tuple-variant", path: `${path}::${fact.variant}`,
-      elements: [{ kind: "binding", name }] };
+    const payloadPattern: RustPattern = selected.kind === "constant"
+      ? { kind: "path", path: `${path}::${fact.variant}` }
+      : { kind: "tuple-variant", path: `${path}::${fact.variant}`, elements: [{ kind: "binding", name }] };
     const pattern: RustPattern = optionalPayload === undefined ? payloadPattern
       : { kind: "tuple-variant", path: "Some", elements: [payloadPattern] };
-    const payload: RustExpr = ownsValue ? { kind: "path", path: name }
+    const payload: RustExpr = selected.kind === "constant" ? { kind: "bool-literal", value: selected.value }
+      : ownsValue ? { kind: "path", path: name }
       : isRustCopyCarrier(payloadCarrier)
         ? { kind: "dereference", pointer: { kind: "path", path: name } }
         : { kind: "method-call", receiver: { kind: "path", path: name }, method: "clone", args: [] };

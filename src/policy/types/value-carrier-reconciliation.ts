@@ -72,9 +72,12 @@ export function selectRustFlowReadProjection(
     rustTargetTypeRefEquals(selectedCarrier, rustJsErrorTargetType())) {
     return { kind: "projection", fact: { kind: "builtin-error", sourceCarrier, selectedCarrier } };
   }
-  const method = rustRuntimeUnionProjection(sourceCarrier, selectedCarrier);
-  if (method !== undefined) {
-    return { kind: "projection", fact: { kind: "runtime-union", sourceCarrier, selectedCarrier, method } };
+  const nativeVariant = rustRuntimeUnionProjection(dispatchCarrier, selectedPayload ?? selectedCarrier);
+  if (nativeVariant !== undefined) {
+    return selectedPayload !== undefined && rustOptionElementCarrier(sourceCarrier) === undefined
+      ? { kind: "incompatible" }
+      : { kind: "projection", fact: { kind: "runtime-union", sourceCarrier, dispatchCarrier,
+        selectedCarrier, variant: nativeVariant.name } };
   }
   if (isRustProgramErrorCarrier(sourceCarrier)) {
     const selectedDefinition = projectTypes.definitionForCarrier(selectedCarrier);

@@ -17,24 +17,20 @@ export type RustOptionProjectionFact =
       readonly resultCarrier: TargetTypeRef;
     };
 
-export type RustFlowReadProjectionFact =
-  | {
-      readonly kind: "source-union";
+interface RustUnionFlowReadProjection {
       readonly sourceCarrier: TargetTypeRef;
       readonly dispatchCarrier: TargetTypeRef;
       readonly selectedCarrier: TargetTypeRef;
       readonly variant: string;
-    }
+}
+
+export type RustFlowReadProjectionFact =
+  | (RustUnionFlowReadProjection & { readonly kind: "source-union" })
+  | (RustUnionFlowReadProjection & { readonly kind: "runtime-union" })
   | {
       readonly kind: "builtin-error";
       readonly sourceCarrier: TargetTypeRef;
       readonly selectedCarrier: TargetTypeRef;
-    }
-  | {
-      readonly kind: "runtime-union";
-      readonly sourceCarrier: TargetTypeRef;
-      readonly selectedCarrier: TargetTypeRef;
-      readonly method: string;
     }
   | {
       readonly kind: "option-value";

@@ -68,8 +68,8 @@ test("native result union correspondence rejects mismatched carriers", () => {
   const string = rustStringTargetType();
   const boolean = rustSourcePrimitiveTargetType("bool");
   const source = { kind: "target-named", id: rustJsIntlGroupingTargetId };
-  assert.equal(rustRuntimeUnionProjection(source, string), "as_string");
-  assert.equal(rustRuntimeUnionProjection(source, boolean), "as_bool");
+  assert.deepEqual(rustRuntimeUnionProjection(source, string), { kind: "payload", name: "Strategy" });
+  assert.deepEqual(rustRuntimeUnionProjection(source, boolean), { kind: "constant", name: "Disabled", value: false });
   assert.equal(rustRuntimeUnionProjection(source, rustSourcePrimitiveTargetType("int32")), undefined);
   assert.equal(rustRuntimeUnionContract({ ...source, id: "unrelated" }), undefined);
   assert.equal(rustRuntimeUnionContract({ ...source, genericArguments: [{ kind: "type", type: string }] }), undefined);
@@ -104,12 +104,14 @@ test("native result union planning rejects mutated projection evidence", () => {
     diagnostics: [],
   };
   const expression = { kind: "path", path: "grouping" };
-  const fact = { kind: "runtime-union", sourceCarrier: source, selectedCarrier: selected, method: "as_string" };
-  assert.deepEqual(planRustFlowReadProjection(node, expression, fact, context), {
-    kind: "method-call", receiver: expression, method: "as_string", args: [],
-  });
+  const fact = { kind: "runtime-union", sourceCarrier: source, dispatchCarrier: source,
+    selectedCarrier: selected, variant: "Strategy" };
+  const planned = planRustFlowReadProjection(node, expression, fact, context);
+  assert.equal(planned.kind, "match");
+  assert.equal(planned.arms[0].pattern.path, "js_abi::IntlGrouping::Strategy");
   for (const mutation of [
-    { ...fact, method: "as_bool" },
+    { ...fact, variant: "Disabled" },
+    { ...fact, dispatchCarrier: selected },
     { ...fact, sourceCarrier: selected },
     { ...fact, selectedCarrier: rustSourcePrimitiveTargetType("bool") },
   ]) {

@@ -228,20 +228,27 @@ function resolveSelectedFlowReadCarrier(
       ? carrier
       : sourceCarrier;
   }
-  if (rustRuntimeUnionContract(sourceCarrier) !== undefined) {
-    const semantics = walk.context.semanticsFor(expression);
+  const runtimeUnion = rustRuntimeUnionContract(dispatchCarrier);
+  if (runtimeUnion !== undefined) {
     const members = semantics.types.isUnion(selectedType)
       ? semantics.types.unionOrIntersectionTypes(selectedType)
       : [selectedType];
-    const carriers = members.map(member => resolveRustTargetTypeRef(
+    if (members.some(member => member === undefined)) return undefined;
+    const hasAbsence = members.some(member => member !== undefined && semantics.types.isNullish(member));
+    if (hasAbsence && rustOptionElementCarrier(sourceCarrier) === undefined) return undefined;
+    const carriers = members.filter(member => member !== undefined && !semantics.types.isNullish(member)).map(member => resolveRustTargetTypeRef(
       member, rustResolutionContext(walk, expression), walk.operationOptions,
     ));
+    if (hasAbsence && carriers.length === 0) return sourceCarrier;
     if (carriers.length === 0 || carriers.some(carrier =>
-      carrier === undefined || rustRuntimeUnionProjection(sourceCarrier, carrier) === undefined)) {
+      carrier === undefined || rustRuntimeUnionProjection(dispatchCarrier, carrier) === undefined)) {
       return undefined;
     }
     const first = carriers[0]!;
-    return carriers.every(carrier => rustTargetTypeRefEquals(carrier, first)) ? first : sourceCarrier;
+    const selected = carriers.every(carrier => rustTargetTypeRefEquals(carrier, first)) ? first
+      : runtimeUnion.alternatives.every(alternative => carriers.some(carrier =>
+        rustTargetTypeRefEquals(carrier, alternative.carrier))) ? dispatchCarrier : undefined;
+    return selected === undefined ? undefined : hasAbsence ? rustSourceOptionalTargetType(selected) : selected;
   }
   if (rustOptionElementCarrier(sourceCarrier) !== undefined &&
     walk.context.semanticsFor(expression).types.isNullish(selectedType)) {
