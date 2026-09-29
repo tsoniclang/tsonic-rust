@@ -41,7 +41,7 @@ import type { Life, Ref } from "@tsonic/rust/types.js";
 import { load } from "@tsonic/rust/lang.js";
 async function read<L extends Life>(value: Ref<int32, L>): Promise<int32> { return load(value); }
 export function escape<L extends Life>(value: Ref<int32, L>): () => Promise<int32> {
-  const processing: Promise<int32> = read<L>(value);
+  const processing: Promise<int32> = read(value);
   return async (): Promise<int32> => await processing;
 }
 ` } });

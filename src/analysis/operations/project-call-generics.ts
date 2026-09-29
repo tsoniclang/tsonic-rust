@@ -31,7 +31,8 @@ import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectedSourceLiteralIsRepresentable } from "../../policy/types/selected-numeric-literal.js";
 import { rustSpreadElementCarrier } from "../../target-model/operations/rest-assembly.js";
-import { rustLifetimeKey, rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
+import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
+import { rustSourceCallGenericLifetimeArguments } from "../facts/source-call-lifetimes.js";
 import { selectRustIndexedCallKeys } from "./indexed-call-keys.js";
 import { rustIndexedFieldKeyArgument } from "../facts/indexed-field-keys.js";
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
@@ -134,11 +135,13 @@ export function finalizeProjectSourceGenericArguments(
       }
     }
   }
-  const substitutions = rustTargetGenericBindingsForArguments(parameters, finalized);
+  const finalizedArguments = rustSourceCallGenericLifetimeArguments(selected, finalized, callArguments.map(argument =>
+    walk.context.facts.getRuntimeCarrierFact(argument)?.carrier ?? resolveProjectSourceInferenceCarrier(walk, argument)));
+  const substitutions = finalizedArguments === undefined ? undefined : rustTargetGenericBindingsForArguments(parameters, finalizedArguments);
   return substitutions === undefined
     ? undefined
     : Object.freeze({
-        targetGenericArguments: Object.freeze(finalized),
+        targetGenericArguments: finalizedArguments!,
         substitutions,
       });
 }
@@ -212,11 +215,7 @@ function reconcileProjectSourceArgumentTypeParameters(
           },
           { callScopedElisionBindings: callScopedElisions },
         );
-        if (candidate === undefined || candidate.lifetimes.size !== callScopedElisions.size ||
-          [...callScopedElisions].some(([identity, lifetime]) =>
-            !rustLifetimesEqual(candidate.lifetimes.get(identity), lifetime))) {
-          continue;
-        }
+        if (candidate === undefined) continue;
         for (const [name, carrier] of candidate.types) {
           const existing = reconciled.get(name);
           if (existing !== undefined && !rustTargetTypeRefEquals(existing, carrier)) {

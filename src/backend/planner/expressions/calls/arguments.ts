@@ -1,5 +1,5 @@
 import { rustGenericCallableProtocol } from "../../../../target-model/types/carriers/generic-callables.js";
-import { rustSourceCallArgumentCarriers, rustSourceCallResultWithInputLifetimes } from "../../../../analysis/facts/source-call-lifetimes.js";
+import { rustSourceCallArgumentCarriers, rustSourceCallGenericLifetimeArguments, rustSourceCallResultWithInputLifetimes } from "../../../../analysis/facts/source-call-lifetimes.js";
 import {
   isRustCopyCarrier,
   isRustVecCarrier,
@@ -440,8 +440,10 @@ export function sourceCallSelectedMemberMatches(
   const parameters = member.genericParameters ?? [];
   const targetArguments = fact.targetGenericArguments ?? [];
   const selectedArguments = selected.targetGenericArguments ?? [];
+  const finalizedLifetimes = rustSourceCallGenericLifetimeArguments(selected, targetArguments, argumentCarriers);
   if (sourceArguments.length !== parameters.length ||
     parameters.length !== targetArguments.length ||
+    finalizedLifetimes === undefined ||
     selectedArguments.length !== targetArguments.length ||
     parameters.some((parameter, index) =>
       parameter.sourceName !== sourceArguments[index]?.typeParameterName) ||
@@ -453,7 +455,7 @@ export function sourceCallSelectedMemberMatches(
         sourceArgument?.explicitTypeNode === undefined &&
         argument.kind === "type" && targetArgument?.kind === "type";
       return !targetFinalizesInferredType &&
-        !rustTargetGenericArgumentEquals(argument, targetArgument);
+        !rustTargetGenericArgumentEquals(parameter?.kind === "lifetime" ? finalizedLifetimes[index] : argument, targetArgument);
     })) {
     return false;
   }
