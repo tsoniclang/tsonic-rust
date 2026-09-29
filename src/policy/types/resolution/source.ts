@@ -1,4 +1,4 @@
-import { resolveRustSourceUnionCarrier } from "./source-unions.js";
+import { resolveRustSourceUnionCarrier, resolveRustUnionValueCarrier } from "./source-unions.js";
 import {
   ArrayTypeNode_ElementType,
   Node_Type,
@@ -15,6 +15,7 @@ import {
   rustSourceLocationTargetType,
   rustRawPointerTargetType,
   rustAbsenceTargetType,
+  isRustAbsenceCarrier,
   isRustUnitCarrier,
   rustNeverTargetType,
   rustOptionTargetType,
@@ -49,7 +50,6 @@ import {
 } from "./lifetimes.js";
 import { parseSourceIntegerLiteral } from "../../../target-model/syntax/literals.js";
 import { readRustRawLocation, resolveRustMemoryLayoutPointee } from "../../operations/pointers/native-memory.js";
-import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import {
   resolveRustCallableEvidence,
   resolveRustEvidenceNodesToCommonCarrier,
@@ -406,17 +406,17 @@ export function resolveRustTargetTypeSyntax(
     const sourceType = semantics?.types.expressionType(node);
     const selectedCarriers = semanticMembers.map(member => resolveRustAuthoredTargetType(member, context, options, resolving));
     if (selectedCarriers.every(carrier => carrier !== undefined)) {
-      const selected = resolveRustSourceUnionCarrier(selectedCarriers as TargetTypeRef[], values => {
-        const common = options.resolveProjectUnionCarrier(values);
-        if (common !== undefined && values.some(carrier => rustTargetTypeRefEquals(carrier, common))) return common;
-        const valueNodes = semanticMembers.filter((_, index) => !isRustUnitCarrier(selectedCarriers[index]));
-        const valueCarriers = selectedCarriers.filter(carrier => !isRustUnitCarrier(carrier)) as TargetTypeRef[];
+      const selected = resolveRustSourceUnionCarrier(selectedCarriers as TargetTypeRef[], values => resolveRustUnionValueCarrier(values, options, () => {
+        const isValue = (carrier: TargetTypeRef | undefined): boolean =>
+          !isRustUnitCarrier(carrier) && !isRustAbsenceCarrier(carrier);
+        const valueNodes = semanticMembers.filter((_, index) => isValue(selectedCarriers[index]));
+        const valueCarriers = selectedCarriers.filter(isValue) as TargetTypeRef[];
         const valueTypes = valueNodes.map(member => semantics?.types.expressionType(member));
         return semantics === undefined || sourceType === undefined || valueTypes.some(type => type === undefined)
-          ? common
+          ? undefined
           : resolveRustInferredUnion(sourceType, valueTypes as Type[], valueCarriers,
-              { ...context, currentSemantics: semantics, currentSourceFile: sourceFile! }, options) ?? common;
-      });
+              { ...context, currentSemantics: semantics, currentSourceFile: sourceFile! }, options);
+      }));
       if (selected !== undefined) return selected;
     }
     return resolveRustTargetType(sourceType, context, options, resolving);

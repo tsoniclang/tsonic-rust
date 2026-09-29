@@ -10,8 +10,31 @@ import {
   isRustAbsenceCarrier,
   isRustUnitCarrier,
   rustAbsenceTargetType,
+  isRustBigIntCarrier,
+  rustJsNumericTargetType,
+  rustJsStringNumberTargetType,
+  rustSourcePrimitiveTargetType,
+  rustStringTargetType,
 } from "../../../target-model/types/index.js";
 import { rustSourceOptionalTargetType } from "../../../target-model/types/projections.js";
+
+export function resolveRustUnionValueCarrier(
+  values: readonly TargetTypeRef[],
+  options: RustTargetTypeResolutionOptions,
+  resolveInferred: () => TargetTypeRef | undefined,
+): TargetTypeRef | undefined {
+  if (options.jsEnabled && values.length === 2 &&
+    values.some(carrier => rustTargetTypeRefEquals(carrier, rustSourcePrimitiveTargetType("float64")))) {
+    if (values.some(carrier => rustTargetTypeRefEquals(carrier, rustStringTargetType()))) {
+      return rustJsStringNumberTargetType();
+    }
+    if (values.some(isRustBigIntCarrier)) return rustJsNumericTargetType();
+  }
+  const common = options.resolveProjectUnionCarrier(values);
+  return common !== undefined && values.some(carrier => rustTargetTypeRefEquals(carrier, common))
+    ? common
+    : resolveInferred() ?? common;
+}
 
 export function retainRustSourceUnionInstantiation(
   sourceType: Type,

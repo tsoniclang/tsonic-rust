@@ -1,12 +1,10 @@
-import { resolveRustSourceUnionCarrier } from "./source-unions.js";
+import { resolveRustSourceUnionCarrier, resolveRustUnionValueCarrier } from "./source-unions.js";
 import { asNode } from "../../evidence/selected-source.js";
 import { denseDefined } from "./project.js";
 import { resolveRustCallableEvidence } from "./source-evidence.js";
 import { resolveRustTargetType } from "./target.js";
 import { resolveRustInferredUnion } from "./inferred-unions.js";
-import { rustAbsenceTargetType, rustSourcePrimitiveTargetType, rustStringTargetType } from "../../../target-model/types/index.js";
-import { isRustBigIntCarrier, rustJsNumericTargetType, rustJsStringNumberTargetType } from "../../../target-model/types/index.js";
-import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustAbsenceTargetType, rustSourcePrimitiveTargetType } from "../../../target-model/types/index.js";
 import { sourceNodesEqual } from "@tsonic/target-api/source";
 import { rustSourceTypeParameter } from "../../../target-model/names/type-parameters.js";
 import { sourcePrimitiveFactKey } from "@tsonic/tsts";
@@ -135,19 +133,6 @@ export function resolveUnion(
   return resolveRustSourceUnionCarrier([
     ...(valueCarriers as readonly TargetTypeRef[]),
     ...nullishMembers.map(() => rustAbsenceTargetType()),
-  ], (distinct) => {
-    if (options.jsEnabled && distinct.length === 2 &&
-      distinct.some(carrier => rustTargetTypeRefEquals(carrier, rustStringTargetType())) &&
-      distinct.some(carrier => rustTargetTypeRefEquals(carrier, rustSourcePrimitiveTargetType("float64")))) {
-      return rustJsStringNumberTargetType();
-    }
-    if (options.jsEnabled && distinct.length === 2 && distinct.some(isRustBigIntCarrier) &&
-      distinct.some(carrier => rustTargetTypeRefEquals(carrier, rustSourcePrimitiveTargetType("float64")))) {
-      return rustJsNumericTargetType();
-    }
-    const common = options.resolveProjectUnionCarrier(distinct);
-    return common !== undefined && distinct.some(carrier => rustTargetTypeRefEquals(carrier, common))
-      ? common
-      : resolveRustInferredUnion(type, valueMembers, valueCarriers as readonly TargetTypeRef[], context, options) ?? common;
-  });
+  ], distinct => resolveRustUnionValueCarrier(distinct, options, () =>
+    resolveRustInferredUnion(type, valueMembers, valueCarriers as readonly TargetTypeRef[], context, options)));
 }
