@@ -195,12 +195,15 @@ function resolveSelectedFlowReadCarrier(
   if (declaredReadType !== undefined && semantics.types.isIdentical(declaredReadType, selectedType)) {
     return sourceCarrier;
   }
-  const sourceUnion = walk.sourceTypes.sourceUnionForCarrier(sourceCarrier);
+  const dispatchCarrier = rustOptionElementCarrier(sourceCarrier) ?? sourceCarrier;
+  const sourceUnion = walk.sourceTypes.sourceUnionForCarrier(dispatchCarrier);
   if (sourceUnion !== undefined) {
     const selectedTypes = semantics.types.isUnion(selectedType)
       ? semantics.types.unionOrIntersectionTypes(selectedType) : [selectedType];
-    const indexes = walk.sourceTypes.sourceUnionVariantIndexesForTypes(sourceCarrier, selectedTypes);
+    const indexes = walk.sourceTypes.sourceUnionVariantIndexesForTypes(dispatchCarrier, selectedTypes);
     if (indexes?.length === 1) return sourceUnion.variants[indexes[0]!]!.carrier;
+    if (indexes?.length === sourceUnion.variants.length &&
+      selectedTypes.every(type => type !== undefined && !semantics.types.isNullish(type))) return dispatchCarrier;
   }
   if (isRustJsValueCarrier(sourceCarrier)) {
     const carrier = resolveRustTargetTypeRef(
@@ -249,7 +252,6 @@ function resolveSelectedFlowReadCarrier(
   const semanticCarrier = resolveRustTargetTypeRef(
     selectedType, rustResolutionContext(walk, expression), walk.operationOptions,
   );
-  const dispatchCarrier = rustOptionElementCarrier(sourceCarrier) ?? sourceCarrier;
   if (semanticCarrier !== undefined && rustStructuralObjectCarrierValue(semanticCarrier)?.bases?.some(base =>
     rustTargetTypeRefEquals(base, dispatchCarrier))) {
     return semanticCarrier;

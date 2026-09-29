@@ -58,7 +58,7 @@ import {
   resolveRustTypeComponentEvidence,
 } from "./source-evidence.js";
 import { resolveRustAuthoredBroadSourceValueTargetType } from "./broad-values.js";
-import { resolveRustInferredObjectUnion } from "./inferred-unions.js";
+import { resolveRustInferredUnion } from "./inferred-unions.js";
 import { resolveRustConditionalAlias } from "./type-families.js";
 import { tsonicMemoryFieldBindingFactKey, selectTsonicMemoryFieldBinding } from "@tsonic/source-core/facts";
 import { selectRustConditionalNumericCarrier } from "../conditional-numeric-carrier.js";
@@ -414,7 +414,7 @@ export function resolveRustTargetTypeSyntax(
         const valueTypes = valueNodes.map(member => semantics?.types.expressionType(member));
         return semantics === undefined || sourceType === undefined || valueTypes.some(type => type === undefined)
           ? common
-          : resolveRustInferredObjectUnion(sourceType, valueTypes as Type[], valueCarriers,
+          : resolveRustInferredUnion(sourceType, valueTypes as Type[], valueCarriers,
               { ...context, currentSemantics: semantics, currentSourceFile: sourceFile! }, options) ?? common;
       });
       if (selected !== undefined) return selected;

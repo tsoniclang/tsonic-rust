@@ -11,7 +11,7 @@ import {
   rustOptionElementCarrier,
 } from "../../../target-model/types/index.js";
 import type { RustFlowReadProjectionFact } from "../../../analysis/facts/keys.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
 import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { diagnosticInput } from "../program/plan-context.js";
@@ -78,11 +78,13 @@ export function planRustFlowReadProjection(
   }
   const ownsValue = context.input.program.valueLifetimes.canMove(node);
   if (fact.kind === "source-union") {
-    const variants = context.input.program.typeDefinitions.sourceUnionVariants(fact.sourceCarrier);
-    const path = rustUnionTypePathInContext(fact.sourceCarrier, context);
+    const optionalPayload = rustOptionElementCarrier(fact.sourceCarrier);
+    const variants = context.input.program.typeDefinitions.sourceUnionVariants(fact.dispatchCarrier);
+    const path = rustUnionTypePathInContext(fact.dispatchCarrier, context);
     const selected = variants?.filter(variant => variant.name === fact.variant &&
       rustTargetTypeRefEquals(variant.carrier, fact.selectedCarrier));
-    if (path === undefined || selected?.length !== 1 ||
+    if (!rustTargetTypeRefEquals(optionalPayload ?? fact.sourceCarrier, fact.dispatchCarrier) ||
+      path === undefined || selected?.length !== 1 ||
       !ownsValue && !rustCarrierSupportsClone(fact.selectedCarrier, context.input.program.typeDefinitions) &&
         !requireRustCarrierRequirements(fact.selectedCarrier, ["clone"], node, context)) {
       context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
@@ -91,9 +93,12 @@ export function planRustFlowReadProjection(
     }
     const name = allocateRustSyntheticName(context.syntheticNames ??
       createRustSyntheticNameState(context.input.program.source.ast, node, []), "flow_value");
+    const payloadPattern: RustPattern = { kind: "tuple-variant", path: `${path}::${fact.variant}`,
+      elements: [{ kind: "binding", name }] };
+    const pattern: RustPattern = optionalPayload === undefined ? payloadPattern
+      : { kind: "tuple-variant", path: "Some", elements: [payloadPattern] };
     return bindRustFlowMatchSubject({ kind: "match", expression: ownsValue ? expression : { kind: "reference", expr: expression }, arms: [
-      { pattern: { kind: "tuple-variant", path: `${path}::${fact.variant}`,
-        elements: [{ kind: "binding", name }] },
+      { pattern,
         expression: ownsValue ? { kind: "path", path: name }
           : isRustCopyCarrier(fact.selectedCarrier)
             ? { kind: "dereference", pointer: { kind: "path", path: name } }

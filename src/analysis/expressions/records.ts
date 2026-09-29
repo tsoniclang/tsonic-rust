@@ -25,7 +25,8 @@ import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js"
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { resolveExpressionCarrier } from "./carriers.js";
 import { resolveFunctionExpressionCarrier } from "../callables/closures.js";
-import { resolveObjectLiteralMethodCarrier, resolveProjectIndexRecordLiteral, resolveProjectMethodPropertyCarrier, resolveRustRecordShape, selectRustRecordLiteralUnionVariant, selectRustRecordLiteralUnionVariantByCheckedType } from "../objects/record-shapes.js";
+import { resolveObjectLiteralMethodCarrier, resolveProjectIndexRecordLiteral, resolveProjectMethodPropertyCarrier, resolveRustRecordShape, selectRustRecordLiteralUnionVariant } from "../objects/record-shapes.js";
+import { selectRustUnionVariantByCheckedType } from "./union-context.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { resolveTypeNodeCarrier } from "../control-flow/statements.js";
 import { rustProjectInstanceContracts } from "../project-types/type-policy.js";
@@ -361,7 +362,7 @@ export function resolveRecordLiteralCarrier(
       const selectedVariant = sourceUnion === undefined
         ? undefined
         : containsSpread
-          ? selectRustRecordLiteralUnionVariantByCheckedType(
+          ? selectRustUnionVariantByCheckedType(
               walk,
               expression,
               sourceUnion,

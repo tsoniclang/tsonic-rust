@@ -45,6 +45,7 @@ import {
   isRustSourceStringConvertibleCarrier,
   isRustStringCarrier,
   isRustUnitCarrier,
+  isRustCallableCarrier,
   rustOptionElementCarrier,
   rustBigIntTargetType,
   rustAbsenceTargetType,
@@ -643,7 +644,7 @@ function rustTypeofResult(
   if (isRustUnitCarrier(carrier)) {
     return "undefined";
   }
-  if (carrier.kind === "function-pointer") {
+  if (isRustCallableCarrier(carrier)) {
     return "function";
   }
   const sourceType = rustSourceTypeCarrierValue(carrier);

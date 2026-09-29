@@ -350,21 +350,6 @@ export function resolveRustRecordShape(
       };
 }
 
-export function selectRustRecordLiteralUnionVariantByCheckedType(
-  walk: RustFactWalk,
-  expression: Node,
-  union: RustSourceUnion,
-): RustSourceUnionVariant | undefined {
-  const selectedSourceType = walk.context.semanticsFor(expression).types.expressionType(expression);
-  const selectedCarrier = resolveRustTargetTypeRef(
-    selectedSourceType,
-    rustResolutionContext(walk, expression),
-    walk.operationOptions,
-  );
-  const candidates = union.variants.filter((variant) =>
-    rustTargetTypeRefEquals(variant.carrier, selectedCarrier));
-  return candidates.length === 1 ? candidates[0] : undefined;
-}
 export function selectRustRecordLiteralUnionVariant(
   walk: RustFactWalk,
   expression: Node,

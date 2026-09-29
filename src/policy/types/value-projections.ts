@@ -20,6 +20,7 @@ export type RustFlowReadProjectionFact =
   | {
       readonly kind: "source-union";
       readonly sourceCarrier: TargetTypeRef;
+      readonly dispatchCarrier: TargetTypeRef;
       readonly selectedCarrier: TargetTypeRef;
       readonly variant: string;
     }

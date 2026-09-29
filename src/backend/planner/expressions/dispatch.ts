@@ -363,7 +363,7 @@ export function planExpressionInner(
       }
       const operand = planExpression(operandNode, context);
       if (typeof fact.result !== "string") {
-        const carrier = expressionCarrier(operandNode, context);
+        const carrier = rustEffectiveValueCarrier(context.input.program.facts, operandNode);
         const planned = operand === undefined ? undefined
           : planRustRuntimeCategory(planRustNonConsumingValue(operandNode, operand, context), fact.result, context);
         if (carrier === undefined || !rustTargetTypeRefEquals(carrier, fact.result.sourceCarrier) || planned === undefined) {

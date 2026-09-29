@@ -75,6 +75,7 @@ import { resolveRustClassValue } from "../objects/class-values.js";
 import { selectTsonicMemoryFieldBinding, selectTsonicMemoryRecordBinding } from "@tsonic/source-core/facts";
 import { applyFlowReadLane } from "./flow-read.js";
 import { resolveNativeProviderCallableArguments } from "../operations/provider/calls/native-callables.js";
+import { selectRustUnionVariantByCheckedType } from "./union-context.js";
 
 export function resolveExpressionCarrier(
   walk: RustFactWalk,
@@ -87,7 +88,7 @@ export function resolveExpressionCarrier(
   if (walk.rejectedExpressions.has(expression)) return undefined;
   const facts = walk.context.facts;
   const contextualExpected = rustExpressionResolutionExpectation(
-    walk.context.ast,
+    walk,
     expression,
     expected,
   );
@@ -257,20 +258,22 @@ export function resolveExpressionCarrierBeforeFlowReadProjection(
 }
 
 function rustExpressionResolutionExpectation(
-  ast: AstReader,
+  walk: RustFactWalk,
   expression: Node,
   expected: TargetTypeRef | undefined,
 ): TargetTypeRef | undefined {
-  if (!isRustOptionCarrier(expected)) {
-    return expected;
-  }
+  const { ast } = walk.context;
   const kind = ast.kindName(expression);
   if (kind === KindConditionalExpression || kind === KindParenthesizedExpression ||
     kind === KindSatisfiesExpression || kind === "KindAsExpression" ||
     kind === "KindTypeAssertionExpression") {
     return expected;
   }
-  return rustOptionElementCarrier(expected);
+  const present = isRustOptionCarrier(expected) ? rustOptionElementCarrier(expected) : expected;
+  const union = present === undefined ? undefined : walk.sourceTypes.sourceUnionForCarrier(present);
+  return union !== undefined && (ast.is.IsArrowFunction(expression) || ast.is.IsFunctionExpression(expression))
+    ? selectRustUnionVariantByCheckedType(walk, expression, union)?.carrier
+    : present;
 }
 
 function expressionIsPlainAssignment(ast: AstReader, expression: Node): boolean {

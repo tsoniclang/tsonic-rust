@@ -3,10 +3,9 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustSourceTypeCarrierValue, rustSourceUnionTargetType, rustStructuralObjectCarrierValue } from "../../../target-model/types/carriers/source-types.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
-import { isRustNumberArrayPayload } from "../../../target-model/types/carriers/array-unions.js";
 import { rustSourceUnionMemberDeclarationIsOwned } from "../../evidence/source-union-members.js";
 
-export function resolveRustInferredObjectUnion(
+export function resolveRustInferredUnion(
   sourceType: Type,
   members: readonly Type[],
   carriers: readonly TargetTypeRef[],
@@ -14,23 +13,16 @@ export function resolveRustInferredObjectUnion(
   options: RustTargetTypeResolutionOptions,
 ): TargetTypeRef | undefined {
   if (members.length < 2 || members.length !== carriers.length) return undefined;
-  const numberArrayUnion = options.jsEnabled && carriers.every(isRustNumberArrayPayload);
   const alias = context.currentSemantics.declarations.typeAliasSymbol(sourceType);
   if (alias !== undefined && context.currentSemantics.declarations.symbolDeclarations(alias).some(declaration =>
     context.ast.kindName(declaration) === "KindTypeAliasDeclaration" &&
     context.source.navigation.isProjectDeclaration(declaration))) return undefined;
   const arms = carriers.map((carrier, index) => {
     const value = rustSourceTypeCarrierValue(carrier);
-    const declaration = options.sourceTypes.declarationForCarrier(carrier);
     const sourceType = members[index]!;
     const shape = options.sourceTypes.structuralObjectForType(sourceType, carrier);
-    const kind = declaration === undefined ? undefined : context.ast.kindName(declaration);
-    const projectObject = value?.shape === "object" && declaration !== undefined &&
-      (kind === "KindClassDeclaration" || kind === "KindClassExpression" || kind === "KindInterfaceDeclaration") &&
-      context.source.navigation.isProjectDeclaration(declaration);
-    if (!projectObject && shape === undefined && !numberArrayUnion) return undefined;
     const ownerFileName = value?.fileName ?? rustStructuralObjectCarrierValue(carrier)?.ownerFileName ??
-      (numberArrayUnion ? context.ast.getFileName(context.currentSourceFile) : undefined);
+      context.ast.getFileName(context.currentSourceFile);
     if (ownerFileName === undefined) return undefined;
     return { carrier, sourceType, shape, ownerFileName, identity: closedMetadataKey(carrier) };
   });

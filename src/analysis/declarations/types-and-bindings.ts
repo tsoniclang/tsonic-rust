@@ -215,10 +215,6 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
       ? { kind: "type" as const, type: { kind: "type-parameter" as const, identity: parameter.identity, name: parameter.targetName } }
       : { kind: "lifetime" as const, lifetime: parameter.lifetime }) ?? [],
   );
-  const variantMemberDeclarations = new Set(finalizedVariants.flatMap((variant) =>
-    semantics.types.propertyInfos(variant.sourceType).flatMap(property =>
-      [property.symbol, ...property.rootSymbols].flatMap(symbol =>
-        semantics.declarations.symbolDeclarations(symbol)))));
   const selectedProperties = semantics.types.propertyInfos(sourceType).map((property) => {
     const declarations = semantics.declarations.symbolDeclarations(property.symbol);
     if (!isDenseDataArray(declarations) || declarations.length === 0 ||
@@ -227,8 +223,7 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
     }
     const selectedDeclarations = declarations as readonly Node[];
     return selectedDeclarations.every((selected) =>
-      rustSourceUnionMemberDeclarationIsOwned(selected, rustResolutionContext(walk, declaration), walk.operationOptions) &&
-      variantMemberDeclarations.has(selected))
+      rustSourceUnionMemberDeclarationIsOwned(selected, rustResolutionContext(walk, declaration), walk.operationOptions))
       ? {
           symbol: property.symbol,
           declarations: Object.freeze([...selectedDeclarations]),

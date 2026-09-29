@@ -3,7 +3,7 @@ import { asNode } from "../../evidence/selected-source.js";
 import { denseDefined } from "./project.js";
 import { resolveRustCallableEvidence } from "./source-evidence.js";
 import { resolveRustTargetType } from "./target.js";
-import { resolveRustInferredObjectUnion } from "./inferred-unions.js";
+import { resolveRustInferredUnion } from "./inferred-unions.js";
 import { rustAbsenceTargetType, rustSourcePrimitiveTargetType, rustStringTargetType } from "../../../target-model/types/index.js";
 import { isRustBigIntCarrier, rustJsNumericTargetType, rustJsStringNumberTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -147,6 +147,6 @@ export function resolveUnion(
     const common = options.resolveProjectUnionCarrier(distinct);
     return common !== undefined && distinct.some(carrier => rustTargetTypeRefEquals(carrier, common))
       ? common
-      : resolveRustInferredObjectUnion(type, valueMembers, valueCarriers as readonly TargetTypeRef[], context, options) ?? common;
+      : resolveRustInferredUnion(type, valueMembers, valueCarriers as readonly TargetTypeRef[], context, options) ?? common;
   });
 }
