@@ -420,16 +420,19 @@ export function createRustSourceTypeRegistry(
           },
         ) === undefined) return false;
       }
-      const normalized = freezeSourceUnion(union);
       const indexes = sourceUnionIndexesByType.get(key) ?? new WeakMap<Type, readonly number[]>();
       const pendingIndexes = new Map<Type, readonly number[]>([
         [union.sourceType, Object.freeze(union.variants.map((_, index) => index))],
       ]);
       for (const [index, variant] of union.variants.entries()) {
         const selected = Object.freeze([index]);
-        const existing = pendingIndexes.get(variant.sourceType) ?? indexes.get(variant.sourceType);
-        if (existing !== undefined && (existing.length !== 1 || existing[0] !== index)) return false;
-        pendingIndexes.set(variant.sourceType, selected);
+        if (!isDenseDataArray(variant.sourceTypes) || variant.sourceTypes.length === 0 ||
+          variant.sourceTypes.some(type => type === undefined) || new Set(variant.sourceTypes).size !== variant.sourceTypes.length) return false;
+        for (const sourceType of variant.sourceTypes) {
+          const existing = pendingIndexes.get(sourceType) ?? indexes.get(sourceType);
+          if (existing !== undefined && (existing.length !== 1 || existing[0] !== index)) return false;
+          pendingIndexes.set(sourceType, selected);
+        }
       }
       for (const [sourceType, selected] of pendingIndexes) {
         const existing = indexes.get(sourceType);
@@ -437,6 +440,7 @@ export function createRustSourceTypeRegistry(
           existing.some((index, position) => index !== selected[position]))) return false;
       }
       const pendingDeclarationsBySymbol = new Map<Symbol, readonly Node[]>();
+      const normalized = freezeSourceUnion(union);
       for (const property of normalized.selectedProperties) {
         const existingDeclarations = pendingDeclarationsBySymbol.get(property.symbol) ??
           selectedDeclarationsBySymbol.get(property.symbol);
@@ -632,7 +636,7 @@ function freezeSourceUnion(union: RustSourceUnion): RustSourceUnion {
     carrier: union.carrier,
     variants: Object.freeze(union.variants.map((variant) => Object.freeze({
       name: variant.name,
-      sourceType: variant.sourceType,
+      sourceTypes: Object.freeze([...variant.sourceTypes]),
       carrier: variant.carrier,
       ...(variant.shape === undefined
         ? {}

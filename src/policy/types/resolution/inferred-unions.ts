@@ -29,8 +29,9 @@ export function resolveRustInferredUnion(
   });
   if (arms.some(arm => arm === undefined)) return undefined;
   const sorted = arms.filter(arm => arm !== undefined).sort((left, right) => left.identity.localeCompare(right.identity, "en"));
-  if (new Set(sorted.map(arm => arm.identity)).size !== sorted.length) return undefined;
-  const variants = sorted.map((arm, index) => ({ name: `Variant${index}`, sourceType: arm.sourceType,
+  const distinct = sorted.filter((arm, index) => sorted.findIndex(candidate => candidate.identity === arm.identity) === index);
+  const variants = distinct.map((arm, index) => ({ name: `Variant${index}`,
+    sourceTypes: Object.freeze([...new Set(sorted.filter(candidate => candidate.identity === arm.identity).map(candidate => candidate.sourceType))]),
     carrier: arm.carrier, ...(arm.shape === undefined ? {} : { shape: arm.shape }) }));
   const carrier = options.sourceTypes.generatedUnionCarrierForVariants(variants.map(variant => variant.carrier)) ?? rustSourceUnionTargetType(
     sorted[0]!.ownerFileName,

@@ -490,6 +490,14 @@ function materializeProviderValueConversion(
   carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>>,
 ): RustValueConversion {
   switch (conversion.kind) {
+    case "union-map":
+      return {
+        ...conversion,
+        source: materializeProviderCarrier(conversion.source, carrierPaths, carrierTraits),
+        target: materializeProviderCarrier(conversion.target, carrierPaths, carrierTraits),
+        arms: conversion.arms.map(arm => ({ ...arm,
+          carrier: materializeProviderCarrier(arm.carrier, carrierPaths, carrierTraits) })),
+      };
     case "rest-sequence":
       return {
         ...conversion,

@@ -51,9 +51,10 @@ import { rustNumericValueConversionIsSupported } from "./numeric-promotion.js";
 import { rustExactIntegerConversionMatches } from "./exact-integer.js";
 import { rustNumberBoxingSourceKind } from "./number-boxing.js";
 import { rustRestSequenceElements } from "../operations/rest-assembly.js";
-import { isDenseDataArray } from "../metadata/closed-data.js";
+import { closedMetadataEquals, isDenseDataArray } from "../metadata/closed-data.js";
 import { rustNamedTypeCarrierValue } from "../types/carriers/native.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../types/source-union-definitions.js";
+import { selectRustUnionArmMapping, type RustUnionArmMapping } from "../types/union-relations.js";
 
 const boolCarrier = rustSourcePrimitiveTargetType("bool");
 const int32Carrier = rustSourcePrimitiveTargetType("int32");
@@ -79,6 +80,7 @@ interface RustValueConversionContractBase {
 }
 
 export type RustValueConversionContract = RustValueConversionContractBase & (
+  | { readonly lowering: "union-map"; readonly arms: readonly RustUnionArmMapping[] }
   | { readonly lowering: "exact-integer" }
   | {
       readonly lowering: "rest-sequence";
@@ -488,6 +490,13 @@ export function rustValueConversionContract(
         }
       : undefined;
   }
+  if (value.kind === "union-map") {
+    const expected = selectRustUnionArmMapping(value.source, value.target, "source", definitions);
+    return expected === undefined || !closedMetadataEquals(expected, value.arms) ? undefined : {
+      category: "exact", lowering: "union-map", sourceMode: "value", source: value.source,
+      target: value.target, arms: expected, fallible: false,
+    };
+  }
   if (value.kind === "raw-pointer-mut-to-const") {
     if (!isRustTargetTypeRef(value.pointee)) {
       return undefined;
@@ -660,6 +669,7 @@ export function rustValueConversionIdentity(value: RustValueConversion): string 
   if (value.kind === "rest-sequence") {
     return `rest-sequence.${JSON.stringify(value.source)}.${JSON.stringify(value.elementTarget)}.${value.elementConversions.map(conversion => conversion === null ? "identity" : rustValueConversionIdentity(conversion)).join("|")}`;
   }
+  if (value.kind === "union-map") return `union-map.${JSON.stringify(value)}`;
   return value.kind === "semantic-conversion"
     ? value.id
     : value.kind === "numeric-promotion"
@@ -727,6 +737,14 @@ export function substituteRustValueConversion(
           lifetimeSubstitutions,
           constSubstitutions,
         ),
+      });
+    case "union-map":
+      return Object.freeze({ ...value,
+        source: substituteRustTargetGenerics(value.source, substitutions, lifetimeSubstitutions, constSubstitutions),
+        target: substituteRustTargetGenerics(value.target, substitutions, lifetimeSubstitutions, constSubstitutions),
+        arms: Object.freeze(value.arms.map(arm => Object.freeze({ ...arm,
+          carrier: substituteRustTargetGenerics(arm.carrier, substitutions, lifetimeSubstitutions, constSubstitutions),
+        }))),
       });
     case "source-union-variant":
     case "exact-integer":

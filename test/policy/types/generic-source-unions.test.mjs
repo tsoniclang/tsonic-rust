@@ -161,12 +161,12 @@ test("equal target carriers retain distinct source instantiations without ambigu
   const firstType = {};
   const secondType = {};
   const first = { declaration, sourceType: {}, carrier, selectedProperties: [], variants: [
-    { name: "First", sourceType: firstType, carrier: parameter },
-    { name: "Second", sourceType: secondType, carrier: rustSourcePrimitiveTargetType("bool") },
+    { name: "First", sourceTypes: [firstType], carrier: parameter },
+    { name: "Second", sourceTypes: [secondType], carrier: rustSourcePrimitiveTargetType("bool") },
   ] };
   const instantiatedTypes = [{}, {}];
   const second = { ...first, sourceType: {}, variants: first.variants.map((variant, index) => ({
-    ...variant, sourceType: instantiatedTypes[index],
+    ...variant, sourceTypes: [instantiatedTypes[index]],
   })) };
   assert.equal(registry.registerSourceUnion(first), true);
   assert.equal(registry.registerSourceUnion(second), true);
@@ -176,11 +176,35 @@ test("equal target carriers retain distinct source instantiations without ambigu
   assert.deepEqual(registry.sourceUnionVariantIndexesForTypes(carrier, [instantiatedTypes[1]]), [1]);
   assert.equal(registry.sourceUnionVariantIndexesForTypes(carrier, [{}]), undefined);
   const contradictory = { ...second, sourceType: {}, variants: second.variants.map((variant, index) => ({
-    ...variant, sourceType: instantiatedTypes[1 - index],
+    ...variant, sourceTypes: [instantiatedTypes[1 - index]],
   })) };
   assert.equal(registry.registerSourceUnion(contradictory), false);
   assert.equal(registry.sourceUnionVariantIndexesForTypes(carrier, [contradictory.sourceType]), undefined);
   assert.deepEqual(registry.sourceUnionVariantIndexesForTypes(carrier, [instantiatedTypes[1]]), [1]);
+});
+
+test("one native arm retains every checked source member and rejects ambiguous grouping", () => {
+  const registry = createRustSourceTypeRegistry();
+  const carrier = rustSourceUnionTargetType("/src/index.ts", "Flags");
+  const falseType = {};
+  const trueType = {};
+  const integerType = {};
+  const union = { declaration: {}, sourceType: {}, carrier, selectedProperties: [], variants: [
+    { name: "Boolean", sourceTypes: [falseType, trueType], carrier: rustSourcePrimitiveTargetType("bool") },
+    { name: "Integer", sourceTypes: [integerType], carrier: rustSourcePrimitiveTargetType("int64") },
+  ] };
+  assert.equal(registry.registerSourceUnion(union), true);
+  assert.deepEqual(registry.sourceUnionVariantIndexesForTypes(carrier, [falseType]), [0]);
+  assert.deepEqual(registry.sourceUnionVariantIndexesForTypes(carrier, [trueType]), [0]);
+  assert.deepEqual(registry.sourceUnionVariantIndexesForTypes(carrier, [trueType, falseType, integerType]), [0, 1]);
+  assert.ok(Object.isFrozen(registry.sourceUnionForCarrier(carrier).variants[0].sourceTypes));
+  for (const sourceTypes of [[], [falseType, falseType], [falseType, integerType], [undefined]]) {
+    assert.equal(registry.registerSourceUnion({ ...union, sourceType: {}, variants: [
+      { ...union.variants[0], sourceTypes }, union.variants[1],
+    ] }), false);
+  }
+  union.variants[0].sourceTypes.pop();
+  assert.deepEqual(registry.sourceUnionVariantIndexesForTypes(carrier, [trueType]), [0]);
 });
 
 test("structural instantiations reuse only their proven generic storage template", () => {

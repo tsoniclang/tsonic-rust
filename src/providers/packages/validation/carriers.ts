@@ -18,6 +18,7 @@ import type {
   TargetTypeRef,
 } from "../../../target-model/types/model.js";
 import { isRustLifetimeRef } from "../../../target-model/lifetimes/index.js";
+import { isRustUnionArmMappings } from "../../../target-model/types/union-relations.js";
 
 const carrierFieldsByKind: Readonly<Record<RustTargetTypeRef["kind"], readonly string[]>> =
   Object.freeze({
@@ -370,6 +371,11 @@ export function validateValueConversion(
     validateCarrier(conversion.source, definition, `${where}.source`, fail);
     validateCarrier(conversion.target, definition, `${where}.target`, fail);
     requireRustPath(conversion.path, `${where}.path`, fail);
+  } else if (conversion.kind === "union-map") {
+    requireExactKeys(asRecord(conversion), ["kind", "source", "target", "arms"], where, fail);
+    validateCarrier(conversion.source, definition, `${where}.source`, fail);
+    validateCarrier(conversion.target, definition, `${where}.target`, fail);
+    if (!isRustUnionArmMappings(conversion.arms)) fail(`${where}.arms is not a closed union mapping`);
   } else if (conversion.kind === "source-union-variant") {
     requireExactKeys(asRecord(conversion), ["kind", "source", "target", "variantName"], where, fail);
     if (!isRustTargetTypeRef(conversion.source) || !isRustTargetTypeRef(conversion.target) ||

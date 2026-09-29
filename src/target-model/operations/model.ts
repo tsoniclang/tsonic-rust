@@ -8,6 +8,7 @@ import type {
 } from "../types/model.js";
 import type { RustLifetimeBinder } from "../lifetimes/index.js";
 import type { RustExactIntegerConversion } from "../conversions/exact-integer.js";
+import type { RustUnionArmMapping } from "../types/union-relations.js";
 
 export const rustExtensionId = "tsonic.rust";
 
@@ -125,6 +126,8 @@ export type RustValueConversionId =
   | "unit-from-absence";
 
 export type RustNonOptionValueConversion =
+  | { readonly kind: "union-map"; readonly source: TargetTypeRef; readonly target: TargetTypeRef;
+      readonly arms: readonly RustUnionArmMapping[] }
   | RustExactIntegerConversion
   | {
       readonly kind: "object-identity-erasure";

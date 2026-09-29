@@ -46,7 +46,7 @@ export interface RustSourceObjectShape {
 
 export interface RustSourceUnionVariant {
   readonly name: string;
-  readonly sourceType: Type;
+  readonly sourceTypes: readonly Type[];
   readonly carrier: TargetTypeRef;
   readonly shape?: RustSourceObjectShape;
 }

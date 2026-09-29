@@ -1,4 +1,5 @@
 import type { RustValueConversion } from "../../target-model/operations/model.js";
+import { selectRustUnionArmMapping } from "../../target-model/types/union-relations.js";
 import { rustObjectIdentityErasureMatches } from "../../target-model/conversions/object-identity.js";
 import { rustNumericValueConversionIsSupported } from "../../target-model/conversions/numeric-promotion.js";
 import { selectRustExactIntegerConversion } from "../../target-model/conversions/exact-integer.js";
@@ -106,6 +107,8 @@ export function selectRustSourceValueConversion(
     return Object.freeze({ kind: "bottom-coercion", source, target });
   }
   const targetUnion = definitions.sourceUnionVariants(target);
+  const unionMapping = selectRustUnionArmMapping(source, target, "source", definitions);
+  if (unionMapping !== undefined) return { kind: "union-map", source, target, arms: unionMapping };
   const matchingUnionVariants = targetUnion?.filter((variant) =>
     rustTargetTypeRefEquals(variant.carrier, source)) ?? [];
   if (matchingUnionVariants.length === 1) {

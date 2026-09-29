@@ -291,15 +291,22 @@ export function resolveRustEvidenceNodesToCommonCarrier(
     return undefined;
   }
   const carriers = [...new Set(nodes)].map((node) => {
-    const selection = context.currentSemantics.types.authoredSelection(node, selectedType);
-    if (selection.kind !== "authored-members") {
-      return undefined;
-    }
-    const selected = selection.nodes.map((member) =>
-      resolveRustAuthoredTargetType(member, context, options, resolving)
-    );
-    if (selected.length !== 1 || selected[0] === undefined ||
-      selection.selectedNullishTypes.length !== 0) {
+    const semantics = context.currentSemantics;
+    const selection = semantics.types.authoredSelection(node, selectedType);
+    const evidence = new Set([node, ...(selection.kind === "authored-members" ? selection.nodes : []),
+      ...semantics.facts.authoredTypeNodes(node)]);
+    const selected = [...evidence].flatMap(member => {
+      const selection = semantics.types.authoredSelection(member, selectedType);
+      const carrier = resolveRustAuthoredTargetType(member, context, options, resolving);
+      if (selection.kind === "authored-members" && selection.nodes.length === 1 &&
+        selection.nodes[0] === member && selection.selectedNullishTypes.length === 0) return [carrier];
+      const authoredType = semantics.types.authoredType(member);
+      if (authoredType === undefined || semantics.types.refinement(authoredType, selectedType).kind !== "members") return [];
+      const selectedCarrier = resolveRustTargetType(selectedType, context, options, resolving);
+      return carrier !== undefined && rustTargetTypeRefEquals(carrier, selectedCarrier) ? [carrier] : [];
+    });
+    if (selected.length === 0 || selected[0] === undefined || selected.some(carrier =>
+      carrier === undefined || !rustTargetTypeRefEquals(carrier, selected[0]))) {
       return undefined;
     }
     return selected[0];

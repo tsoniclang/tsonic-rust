@@ -28,6 +28,7 @@ import type { RustValueConversion } from "../../../analysis/facts/keys.js";
 import type { RustFinalizedValueConversion } from "../../../analysis/facts/finalized-operation-abi.js";
 import { rustUnionTypePathInContext, rustTypeFromCarrierInContext } from "../types/render.js";
 import { lowerRustExactIntegerConversion } from "./exact-integer.js";
+import { planRustUnionMapping } from "./union-mappings.js";
 
 export function applyRustValueConversion(
   context: RustPlanContext,
@@ -360,6 +361,9 @@ export function lowerRustValueConversion(
         },
       };
     }
+    case "union-map":
+      return planRustUnionMapping(node ?? context.sourceFile, source, contract.source, contract.target,
+        contract.arms, "source", true, false, false, context);
     case "source-union-variant": {
       const variants = context.input.program.typeDefinitions.sourceUnionVariants(contract.target);
       const typePath = rustUnionTypePathInContext(contract.target, context);

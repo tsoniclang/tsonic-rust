@@ -1,5 +1,6 @@
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustRuntimeUnionProjection } from "../../target-model/types/carriers/runtime-unions.js";
+import { selectRustUnionArmMapping } from "../../target-model/types/union-relations.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type {
   RustCallScopedLifetimeReconciliationFact,
@@ -59,6 +60,13 @@ export function selectRustFlowReadProjection(
   const dispatchCarrier = rustOptionElementCarrier(sourceCarrier) ?? sourceCarrier;
   const union = definitions.sourceUnionVariants(dispatchCarrier);
   const selectedPayload = rustOptionElementCarrier(selectedCarrier);
+  const mapping = rustTargetTypeRefEquals(dispatchCarrier, selectedPayload ?? selectedCarrier) ? undefined
+    : selectRustUnionArmMapping(dispatchCarrier, selectedPayload ?? selectedCarrier, "target", definitions);
+  if (mapping !== undefined) {
+    return selectedPayload !== undefined && rustOptionElementCarrier(sourceCarrier) === undefined
+      ? { kind: "incompatible" }
+      : { kind: "projection", fact: { kind: "union-map", sourceCarrier, dispatchCarrier, selectedCarrier, arms: mapping } };
+  }
   if (union !== undefined && selectedPayload !== undefined && rustOptionElementCarrier(sourceCarrier) === undefined) {
     return { kind: "incompatible" };
   }

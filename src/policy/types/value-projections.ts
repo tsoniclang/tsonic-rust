@@ -2,6 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustContextualValueConversion } from "../../target-model/conversions/contextual.js";
 import type { RustProjectProjectionSelection } from "../../target-model/types/project-projections.js";
+import type { RustUnionArmMapping } from "../../target-model/types/union-relations.js";
 export type { RustProjectDowncastFact } from "../../target-model/types/project-projections.js";
 
 export type RustOptionProjectionFact =
@@ -18,13 +19,20 @@ export type RustOptionProjectionFact =
     };
 
 interface RustUnionFlowReadProjection {
-      readonly sourceCarrier: TargetTypeRef;
-      readonly dispatchCarrier: TargetTypeRef;
-      readonly selectedCarrier: TargetTypeRef;
-      readonly variant: string;
+  readonly sourceCarrier: TargetTypeRef;
+  readonly dispatchCarrier: TargetTypeRef;
+  readonly selectedCarrier: TargetTypeRef;
+  readonly variant: string;
 }
 
 export type RustFlowReadProjectionFact =
+  | {
+      readonly kind: "union-map";
+      readonly sourceCarrier: TargetTypeRef;
+      readonly dispatchCarrier: TargetTypeRef;
+      readonly selectedCarrier: TargetTypeRef;
+      readonly arms: readonly RustUnionArmMapping[];
+    }
   | (RustUnionFlowReadProjection & { readonly kind: "source-union" })
   | (RustUnionFlowReadProjection & { readonly kind: "runtime-union" })
   | {

@@ -30,6 +30,7 @@ import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustGuardedArrayEntryCarrier } from "../control-flow/array-entry-values.js";
 import { recordBindingWrite } from "../declarations/types-and-bindings.js";
+import { selectRustUnionArmMapping } from "../../target-model/types/union-relations.js";
 
 export function applyFlowReadLane(
   walk: RustFactWalk,
@@ -209,6 +210,15 @@ function resolveSelectedFlowReadCarrier(
     const selected = indexes?.length === 1 ? sourceUnion.variants[indexes[0]!]!.carrier
       : indexes?.length === sourceUnion.variants.length ? dispatchCarrier : undefined;
     if (selected !== undefined) return hasAbsence ? rustSourceOptionalTargetType(selected) : selected;
+    if (indexes !== undefined && indexes.length > 0) {
+      const resolved = resolveRustTargetTypeRef(selectedType, rustResolutionContext(walk, expression), walk.operationOptions);
+      const payload = rustOptionElementCarrier(resolved) ?? resolved;
+      const mapping = payload === undefined ? undefined : selectRustUnionArmMapping(dispatchCarrier, payload, "target", walk.context.typeDefinitions);
+      if (payload !== undefined && mapping?.length === indexes.length && mapping.every(arm => indexes.some(index =>
+        sourceUnion.variants[index]?.name === arm.source.name))) {
+        return hasAbsence ? rustSourceOptionalTargetType(payload) : payload;
+      }
+    }
   }
   if (isRustJsValueCarrier(sourceCarrier)) {
     const carrier = resolveRustTargetTypeRef(

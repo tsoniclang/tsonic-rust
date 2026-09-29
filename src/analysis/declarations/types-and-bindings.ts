@@ -164,7 +164,7 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
     return;
   }
   const uniqueVariants: {
-    readonly sourceType: Type;
+    readonly sourceTypes: Type[];
     readonly carrier: TargetTypeRef;
   }[] = [];
   const authoredType = Node_Type(ast, declaration);
@@ -180,10 +180,9 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
     if (carrier === undefined) {
       return;
     }
-    if (!uniqueVariants.some((variant) =>
-      rustTargetTypeRefEquals(variant.carrier, carrier))) {
-      uniqueVariants.push({ sourceType: member, carrier });
-    }
+    const existing = uniqueVariants.find(variant => rustTargetTypeRefEquals(variant.carrier, carrier));
+    if (existing === undefined) uniqueVariants.push({ sourceTypes: [member], carrier });
+    else if (!existing.sourceTypes.includes(member)) existing.sourceTypes.push(member);
   }
   if (uniqueVariants.length === 1) {
     const carrier = uniqueVariants[0]!.carrier;
@@ -198,12 +197,12 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
   }
   const finalizedVariants = uniqueVariants.map((variant, index) => {
     const shape = walk.sourceTypes.structuralObjectForType(
-      variant.sourceType,
+      variant.sourceTypes[0]!,
       variant.carrier,
     );
     return {
       name: `Variant${index}`,
-      sourceType: variant.sourceType,
+      sourceTypes: Object.freeze(variant.sourceTypes),
       carrier: variant.carrier,
       ...(shape === undefined ? {} : { shape }),
     };

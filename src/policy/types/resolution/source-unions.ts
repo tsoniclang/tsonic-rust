@@ -51,7 +51,8 @@ export function retainRustSourceUnionInstantiation(
   const semantics = context.currentSemantics;
   if (value === undefined || expectedVariants === undefined || template.declaration === undefined || !semantics.types.isUnion(sourceType)) return undefined;
   const members = semantics.types.unionOrIntersectionTypes(sourceType);
-  if (members.length !== template.variants.length || members.some(member => member === undefined)) return undefined;
+  if (members.length !== template.variants.reduce((count, variant) => count + variant.sourceTypes.length, 0) ||
+    members.some(member => member === undefined)) return undefined;
   const parameters = context.sourceLifetimes.contractFor(template.declaration)?.parameters ?? [];
   if (parameters.length !== value.genericArguments.length) return undefined;
   const substitutions = new Map(context.sourceTypeParameterSubstitutions);
@@ -77,21 +78,23 @@ export function retainRustSourceUnionInstantiation(
     const used = new Set<Type>();
     const variants = template.variants.map((variant, index) => {
       const expected = expectedVariants[index];
-      const origin = sourceDeclarations(variant.sourceType, context);
       const matches = selected.filter(member => {
         if (!rustTargetTypeRefEquals(expected?.carrier, member.carrier)) return false;
-        if (variant.sourceType === member.sourceType) return true;
+        if (variant.sourceTypes.includes(member.sourceType)) return true;
         const declarations = sourceDeclarations(member.sourceType, context);
-        return origin.length !== 0 && declarations.length === origin.length &&
-          declarations.every(declaration => origin.includes(declaration));
+        return variant.sourceTypes.some(type => {
+          const origin = sourceDeclarations(type, context);
+          return origin.length !== 0 && declarations.length === origin.length &&
+            declarations.every(declaration => origin.includes(declaration));
+        });
       });
-      if (matches.length !== 1 || used.has(matches[0]!.sourceType)) return undefined;
+      if (matches.length !== variant.sourceTypes.length || matches.some(member => used.has(member.sourceType))) return undefined;
       const selectedMember = matches[0]!;
-      used.add(selectedMember.sourceType);
+      matches.forEach(member => used.add(member.sourceType));
       const shape = options.sourceTypes.structuralObjectForType(selectedMember.sourceType, selectedMember.carrier);
       return {
         name: variant.name,
-        sourceType: selectedMember.sourceType,
+        sourceTypes: Object.freeze(matches.map(member => member.sourceType)),
         carrier: selectedMember.carrier!,
         ...(shape === undefined ? {} : { shape }),
       };

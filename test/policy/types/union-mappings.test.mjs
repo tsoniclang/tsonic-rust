@@ -1,0 +1,105 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
+import { rustSourcePrimitiveTargetType, rustStringTargetType, rustSourceUnionTargetType } from "../../../dist/target-model/types/index.js";
+import { isRustUnionArmMappings, selectRustUnionArmMapping } from "../../../dist/target-model/types/union-relations.js";
+import { rustValueConversionContract, substituteRustValueConversion } from "../../../dist/target-model/conversions/contracts.js";
+import { planRustUnionMapping } from "../../../dist/backend/planner/expressions/union-mappings.js";
+import { finalizeRustProviderOperationAbi, validateRustFinalizedOperationAbi } from "../../../dist/analysis/facts/finalized-operation-abi.js";
+import { validateValueConversion } from "../../../dist/providers/packages/validation/carriers.js";
+import { rustJsIntlGroupingTargetId } from "../../../dist/target-model/types/carriers/source-types.js";
+import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../helpers/fake-compile-input.mjs";
+
+test("union mappings require complete exact coverage and reject forged or numeric-changing arms", () => {
+  const integer = rustSourcePrimitiveTargetType("int64");
+  const string = rustStringTargetType();
+  const boolean = rustSourcePrimitiveTargetType("bool");
+  const narrow = rustSourceUnionTargetType("/src/index.ts", "Narrow");
+  const wide = rustSourceUnionTargetType("/src/index.ts", "Wide");
+  const wrong = rustSourceUnionTargetType("/src/index.ts", "Wrong");
+  const registry = createRustTypeDefinitionRegistry();
+  for (const [carrier, payloads] of [[narrow, [string, integer]], [wide, [integer, boolean, string]],
+    [wrong, [string, rustSourcePrimitiveTargetType("float64")]]]) {
+    assert.equal(registry.registerSourceUnion({ carrier,
+      variants: payloads.map((carrier, index) => ({ name: `Variant${index}`, carrier })) }, true), true);
+  }
+  const definitions = registry.seal();
+  const widening = selectRustUnionArmMapping(narrow, wide, "source", definitions);
+  const narrowing = selectRustUnionArmMapping(wide, narrow, "target", definitions);
+  assert.deepEqual(widening.map(arm => [arm.source.name, arm.target.name]), [["Variant0", "Variant2"], ["Variant1", "Variant0"]]);
+  assert.deepEqual(narrowing.map(arm => [arm.source.name, arm.target.name]), [["Variant0", "Variant1"], ["Variant2", "Variant0"]]);
+  assert.equal(selectRustUnionArmMapping(wide, narrow, "source", definitions), undefined);
+  assert.equal(selectRustUnionArmMapping(narrow, wide, "target", definitions), undefined);
+  assert.equal(selectRustUnionArmMapping(narrow, wrong, "source", definitions), undefined);
+  assert.equal(selectRustUnionArmMapping(narrow, wrong, "target", definitions), undefined);
+  assert.ok(Object.isFrozen(widening) && widening.every(Object.isFrozen));
+  const conversion = { kind: "union-map", source: narrow, target: wide, arms: widening };
+  assert.equal(rustValueConversionContract(conversion, definitions).lowering, "union-map");
+  assert.deepEqual(substituteRustValueConversion(conversion, new Map()), conversion);
+  const abi = finalizeRustProviderOperationAbi({ operationKind: "method",
+    form: { form: "call", path: "acme::accept", argConversions: [conversion] },
+    sourceArgumentCarriers: [narrow], resultCarrier: boolean, isAsync: false, isFallible: false }, definitions);
+  assert.ok(abi);
+  assert.equal(validateRustFinalizedOperationAbi(abi, definitions), true);
+  assert.equal(validateRustFinalizedOperationAbi(abi), false);
+  const node = fakeStatement({ kindName: "Identifier", pos: 0, end: 5 });
+  const sourceFile = fakeSourceFile({ fileName: "/src/index.ts", text: "value", statements: [node] });
+  const context = { input: { program: { source: { ast: fakeAstReader([sourceFile]) }, typeDefinitions: definitions,
+    names: { nameForSourceType: (_file, name) => name }, configuration: { edition: "2024" } } },
+    sourceFile, diagnostics: [], moduleName: "index", moduleNameByFileName: new Map([["/src/index.ts", "index"]]),
+    externalCrateNameByFileName: new Map() };
+  const expression = { kind: "call", path: "next", args: [] };
+  for (const owned of [false, true]) {
+    const planned = planRustUnionMapping(node, expression, wide, narrow, narrowing, "target", owned, true, true, context);
+    assert.equal(planned.kind, "match");
+    assert.deepEqual(planned.expression, owned ? expression : { kind: "reference", expr: expression });
+    assert.deepEqual(planned.arms[2], { pattern: { kind: "path", path: "None" }, expression: { kind: "path", path: "None" } });
+    const stringPayload = planned.arms[1].expression.args[0].args[0];
+    assert.equal(stringPayload.kind, owned ? "path" : "method-call");
+    if (!owned) assert.equal(stringPayload.method, "clone");
+    assert.equal(planned.arms[3].pattern.kind, "wildcard");
+  }
+  for (const arms of [widening.slice(1), [...widening, widening[0]], widening.toReversed(),
+    widening.map((arm, index) => index === 0 ? { ...arm, target: { kind: "payload", name: "Missing" } } : arm),
+    widening.map((arm, index) => index === 0 ? { ...arm, carrier: boolean } : arm)]) {
+    assert.equal(rustValueConversionContract({ ...conversion, arms }, definitions), undefined);
+    assert.equal(planRustUnionMapping(node, expression, narrow, wide, arms, "source", true, false, false, context), undefined);
+    assert.equal(validateRustFinalizedOperationAbi({ ...abi, targetArguments: [{ ...abi.targetArguments[0],
+      conversion: { ...abi.targetArguments[0].conversion, conversion: { ...conversion, arms } } }] }, definitions), false);
+  }
+  assert.equal(planRustUnionMapping(node, expression, wide, narrow, narrowing, "target", true, false, true, context), undefined);
+});
+
+test("unit variants preserve their native constant and reject broader payloads or malformed metadata", () => {
+  const source = { kind: "target-named", id: rustJsIntlGroupingTargetId };
+  const target = rustSourceUnionTargetType("/src/index.ts", "Grouping");
+  const registry = createRustTypeDefinitionRegistry();
+  assert.equal(registry.registerSourceUnion({ carrier: target, variants: [
+    { name: "Boolean", carrier: rustSourcePrimitiveTargetType("bool") },
+    { name: "String", carrier: rustStringTargetType() },
+  ] }, true), true);
+  const definitions = registry.seal();
+  const arms = selectRustUnionArmMapping(source, target, "source", definitions);
+  assert.ok(isRustUnionArmMappings(arms));
+  assert.deepEqual(arms[0].source, { kind: "constant", name: "Disabled", value: false });
+  assert.deepEqual(arms[0].target, { kind: "payload", name: "Boolean" });
+  for (const coverage of ["source", "target"]) {
+    assert.equal(selectRustUnionArmMapping(target, source, coverage, definitions), undefined);
+  }
+  const conversion = { kind: "union-map", source, target: source,
+    arms: selectRustUnionArmMapping(source, source, "source", definitions) };
+  const fail = message => { throw new Error(message); };
+  assert.doesNotThrow(() => validateValueConversion(conversion, {}, "conversion", source, source, fail));
+  for (const invalidArms of [[], new Array(1), [null], [{ ...arms[0], extra: true }],
+    [{ ...arms[0], carrier: { kind: "source-primitive", name: "missing" } }],
+    [{ ...arms[0], source: { kind: "constant", name: "Disabled", value: 0 } }],
+    [{ ...arms[0], target: { kind: "payload", name: "Boolean", value: false } }]]) {
+    assert.equal(isRustUnionArmMappings(invalidArms), false);
+    assert.throws(() => validateValueConversion({ ...conversion, arms: invalidArms }, {}, "conversion", source, source, fail));
+  }
+  const changed = conversion.arms.map((arm, index) => index === 0
+    ? { ...arm, source: { ...arm.source, value: true } } : arm);
+  assert.ok(isRustUnionArmMappings(changed));
+  assert.equal(rustValueConversionContract({ ...conversion, arms: changed }, definitions), undefined);
+  assert.throws(() => validateValueConversion({ ...conversion, arms: changed }, {}, "conversion", source, source, fail));
+});

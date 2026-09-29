@@ -22,6 +22,7 @@ import { planRustNonConsumingValue } from "./typed-locations.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
 import { planRustOptionalStorageOperation } from "./optional-storage.js";
+import { planRustUnionMapping } from "./union-mappings.js";
 import {
   allocateRustSyntheticName,
   createRustSyntheticNameState,
@@ -67,6 +68,17 @@ export function planRustFlowReadProjection(
     return { kind: "method-call", receiver: planRustNonConsumingValue(node, expression, context), method: "error_value", args: [] };
   }
   const ownsValue = context.input.program.valueLifetimes.canMove(node);
+  if (fact.kind === "union-map") {
+    const sourceElement = rustOptionElementCarrier(fact.sourceCarrier);
+    const targetElement = rustOptionElementCarrier(fact.selectedCarrier);
+    const result = !rustTargetTypeRefEquals(sourceElement ?? fact.sourceCarrier, fact.dispatchCarrier) ? undefined
+      : planRustUnionMapping(node, expression, fact.dispatchCarrier, targetElement ?? fact.selectedCarrier,
+        fact.arms, "target", ownsValue, sourceElement !== undefined, targetElement !== undefined, context);
+    if (result?.kind === "match") return bindRustFlowMatchSubject(result, node, context);
+    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+      "rust.backend.union-map", "Union flow projection requires exact sealed arm and absence correspondence."));
+    return undefined;
+  }
   if (fact.kind === "source-union" || fact.kind === "runtime-union") {
     const optionalPayload = rustOptionElementCarrier(fact.sourceCarrier);
     const selectedPayload = rustOptionElementCarrier(fact.selectedCarrier);

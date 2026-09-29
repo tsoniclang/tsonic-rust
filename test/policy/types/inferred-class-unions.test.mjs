@@ -19,7 +19,7 @@ test("generated union definitions require complete exact payload identities and 
     { ...carrier.value, variants: [] }];
   for (const value of changes) assert.equal(rustSourceUnionCarrierValue({ ...carrier, value }), undefined);
   const record = value => ({ sourceType: {}, carrier: value,
-    variants: value.value.genericArguments.map((argument, index) => ({ name: `Variant${index}`, carrier: argument.type, sourceType: {} })), selectedProperties: [] });
+    variants: value.value.genericArguments.map((argument, index) => ({ name: `Variant${index}`, carrier: argument.type, sourceTypes: [{}] })), selectedProperties: [] });
   const first = record(carrier);
   const second = record(make(payloads.slice(0, 2), "/src/other.ts"));
   const third = record(make(payloads.slice(1), "/src/another.ts"));

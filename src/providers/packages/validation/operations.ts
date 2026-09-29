@@ -380,6 +380,8 @@ function valueConversionCarriers(
   if (conversion === undefined || conversion.kind === "semantic-conversion" ||
     conversion.kind === "numeric-promotion") return [];
   if (conversion.kind === "raw-pointer-mut-to-const") return [conversion.pointee];
+  if (conversion.kind === "union-map") return [conversion.source, conversion.target,
+    ...conversion.arms.map(arm => arm.carrier)];
   if (conversion.kind === "copy-from-reference") return [conversion.target];
   if (conversion.kind === "source-union-variant" || conversion.kind === "object-identity-erasure" || conversion.kind === "bottom-coercion" ||
     conversion.kind === "js-argument-vector-callback" || conversion.kind === "native-upcast" ||

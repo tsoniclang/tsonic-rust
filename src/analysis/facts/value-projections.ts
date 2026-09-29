@@ -23,6 +23,8 @@ export const rustFlowReadProjectionFactKey: RustPlanKey<RustFlowReadProjectionFa
     left.kind === right.kind &&
     rustTargetTypeRefEquals(left.sourceCarrier, right.sourceCarrier) &&
     rustTargetTypeRefEquals(left.selectedCarrier, right.selectedCarrier) &&
+    (left.kind !== "union-map" || right.kind === "union-map" &&
+      rustTargetTypeRefEquals(left.dispatchCarrier, right.dispatchCarrier) && closedMetadataEquals(left.arms, right.arms)) &&
     (left.kind !== "source-union" && left.kind !== "runtime-union" ||
       (right.kind === left.kind && left.variant === right.variant &&
         rustTargetTypeRefEquals(left.dispatchCarrier, right.dispatchCarrier))) &&

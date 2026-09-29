@@ -22,6 +22,7 @@ import { rustProviderOperationFormAcceptsTargetGenericArguments, rustProviderOpe
 import type { RustFinalizedOperationAbi, RustFinalizedOperationResult, RustFinalizedSourceArgument, RustFinalizedSourceArgumentRole, RustFinalizedSourceInput, RustFinalizedTargetInput, RustFinalizedValueConversion } from "./model.js";
 import type { RustProviderConstantArgument } from "../keys.js";
 import { rustLengthEmptinessContractIsValid } from "../../../target-model/operations/length-emptiness.js";
+import { isRustUnionArmMappings } from "../../../target-model/types/union-relations.js";
 
 export function validateRustFinalizedOperationAbi(candidate: unknown, definitions: RustTypeDefinitions = emptyRustTypeDefinitions): candidate is RustFinalizedOperationAbi {
   if (!isClosedMetadata(candidate) || !isRustFinalizedOperationAbiShape(candidate)) {
@@ -385,6 +386,10 @@ function isNonOptionValueConversion(value: unknown): boolean {
 }
 
 function isValueProjectionConversion(value: Record<string, unknown>): boolean {
+  if (value.kind === "union-map") {
+    return hasExactKeys(value, ["kind", "source", "target", "arms"]) &&
+      isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) && isRustUnionArmMappings(value.arms);
+  }
   if (value.kind === "exact-integer") {
     return hasExactKeys(value, ["kind", "source", "target"]) &&
       isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target);
