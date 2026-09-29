@@ -31,21 +31,17 @@ import {
   Node_Expression,
   sourceIntegerLiteralValue,
 } from "@tsonic/target-api/source";
-import { rustRuntimeUnionContract, rustRuntimeUnionProjection } from "../../target-model/types/carriers/runtime-unions.js";
-import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
+import { rustRuntimeUnionProjection } from "../../target-model/types/carriers/runtime-unions.js";
+import { getRustTypeofRuntimeKind } from "../../target-model/types/runtime-kind.js";
 import {
   rustAwaitCarrier,
   getRustGeneratorProtocol,
   isRustBigIntCarrier,
   isRustBoolCarrier,
   isRustIntegerCarrier,
-  isRustAbsenceCarrier,
   isRustNumericCarrier,
   isRustOptionCarrier,
   isRustSourceStringConvertibleCarrier,
-  isRustStringCarrier,
-  isRustUnitCarrier,
-  isRustCallableCarrier,
   rustOptionElementCarrier,
   rustBigIntTargetType,
   rustAbsenceTargetType,
@@ -453,7 +449,7 @@ export function resolveExpressionCarrierUncached(
         : resolveExpressionCarrier(walk, operand, sourceFile, undefined);
       const result = operand === undefined || operandCarrier === undefined
         ? undefined
-        : rustTypeofResult(operandCarrier, walk.context.typeDefinitions);
+        : getRustTypeofRuntimeKind(operandCarrier, walk.context.typeDefinitions);
       if (result === undefined) {
         appendRustDiagnostic(
           walk,
@@ -600,57 +596,4 @@ function resolveTemplateExpressionCarrier(
     substitutions,
   });
   return setCarrierFact(walk, expression, resultCarrier);
-}
-
-function rustTypeofResult(
-  carrier: TargetTypeRef,
-  definitions: import("../../target-model/types/source-union-definitions.js").RustTypeDefinitions,
-  active: ReadonlySet<string> = new Set(),
-): Extract<RustTargetOperationFact, { readonly kind: "typeof" }>["result"] | undefined {
-  const identity = closedMetadataKey(carrier);
-  if (active.has(identity)) return undefined;
-  const sourceVariants = definitions.sourceUnionVariants(carrier);
-  if (sourceVariants !== undefined) {
-    const nested = new Set(active).add(identity);
-    const variants = sourceVariants.map(variant => {
-      const result = rustTypeofResult(variant.carrier, definitions, nested);
-      return result === undefined ? undefined : { ...variant, result };
-    });
-    return variants.some(variant => variant === undefined) ? undefined
-      : { kind: "source-union", sourceCarrier: carrier, variants: variants.map(variant => variant!) };
-  }
-  const runtimeUnion = rustRuntimeUnionContract(carrier);
-  if (runtimeUnion !== undefined) {
-    return { kind: "runtime-union", method: runtimeUnion.typeofMethod, sourceCarrier: carrier };
-  }
-  if (isRustAbsenceCarrier(carrier)) {
-    return "object";
-  }
-  if (carrier.kind === "source-primitive") {
-    if (carrier.name === "bool") {
-      return "boolean";
-    }
-    if (carrier.name === "int64" || carrier.name === "uint64") {
-      return "bigint";
-    }
-    return isRustNumericCarrier(carrier) ? "number" : undefined;
-  }
-  if (isRustStringCarrier(carrier)) {
-    return "string";
-  }
-  if (isRustBigIntCarrier(carrier)) {
-    return "bigint";
-  }
-  if (isRustUnitCarrier(carrier)) {
-    return "undefined";
-  }
-  if (isRustCallableCarrier(carrier)) {
-    return "function";
-  }
-  const sourceType = rustSourceTypeCarrierValue(carrier);
-  if (sourceType?.shape === "enum" ||
-    carrier.kind === "type-parameter" || carrier.kind === "associated-type") {
-    return undefined;
-  }
-  return "object";
 }

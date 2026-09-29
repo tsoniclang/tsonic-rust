@@ -200,10 +200,15 @@ function resolveSelectedFlowReadCarrier(
   if (sourceUnion !== undefined) {
     const selectedTypes = semantics.types.isUnion(selectedType)
       ? semantics.types.unionOrIntersectionTypes(selectedType) : [selectedType];
-    const indexes = walk.sourceTypes.sourceUnionVariantIndexesForTypes(dispatchCarrier, selectedTypes);
-    if (indexes?.length === 1) return sourceUnion.variants[indexes[0]!]!.carrier;
-    if (indexes?.length === sourceUnion.variants.length &&
-      selectedTypes.every(type => type !== undefined && !semantics.types.isNullish(type))) return dispatchCarrier;
+    if (selectedTypes.some(type => type === undefined)) return undefined;
+    const hasAbsence = selectedTypes.some(type => type !== undefined && semantics.types.isNullish(type));
+    const values = selectedTypes.filter(type => type !== undefined && !semantics.types.isNullish(type));
+    if (hasAbsence && rustOptionElementCarrier(sourceCarrier) === undefined) return undefined;
+    if (hasAbsence && values.length === 0) return sourceCarrier;
+    const indexes = walk.sourceTypes.sourceUnionVariantIndexesForTypes(dispatchCarrier, values);
+    const selected = indexes?.length === 1 ? sourceUnion.variants[indexes[0]!]!.carrier
+      : indexes?.length === sourceUnion.variants.length ? dispatchCarrier : undefined;
+    if (selected !== undefined) return hasAbsence ? rustSourceOptionalTargetType(selected) : selected;
   }
   if (isRustJsValueCarrier(sourceCarrier)) {
     const carrier = resolveRustTargetTypeRef(

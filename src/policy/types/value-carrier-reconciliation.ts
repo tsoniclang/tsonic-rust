@@ -58,7 +58,11 @@ export function selectRustFlowReadProjection(
   }
   const dispatchCarrier = rustOptionElementCarrier(sourceCarrier) ?? sourceCarrier;
   const union = definitions.sourceUnionVariants(dispatchCarrier);
-  const selectedVariants = union?.filter(variant => rustTargetTypeRefEquals(variant.carrier, selectedCarrier));
+  const selectedPayload = rustOptionElementCarrier(selectedCarrier);
+  if (union !== undefined && selectedPayload !== undefined && rustOptionElementCarrier(sourceCarrier) === undefined) {
+    return { kind: "incompatible" };
+  }
+  const selectedVariants = union?.filter(variant => rustTargetTypeRefEquals(variant.carrier, selectedPayload ?? selectedCarrier));
   if (selectedVariants?.length === 1) {
     return { kind: "projection", fact: { kind: "source-union", sourceCarrier, dispatchCarrier, selectedCarrier,
       variant: selectedVariants[0]!.name } };

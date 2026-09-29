@@ -111,15 +111,19 @@ export function selectedMemberReceiverCarrier(
     return undefined;
   }
   const refinedCarrier = flowRead?.selectedCarrier ?? sourceCarrier;
+  const sourceRefinement = context.source.semantics.selectValueTypeRefinement(receiver);
+  if (flowRead === undefined && sourceCarrier !== undefined && sourceRefinement.kind === "resolved" &&
+    context.currentSemantics.types.isIdentical(sourceRefinement.declaredType, request.sourceReceiverType)) {
+    return request.optionalChain === true ? rustOptionValueCarrier(sourceCarrier) : sourceCarrier;
+  }
   const sourceUnionCarrier = rustOptionElementCarrier(refinedCarrier) ?? refinedCarrier;
   const sourceUnion = sourceUnionCarrier === undefined
     ? undefined
     : options.sourceTypes.sourceUnionForCarrier(sourceUnionCarrier);
   if (sourceUnion !== undefined && sourceUnionCarrier !== undefined &&
     options.sourceTypes.sourceUnionVariantIndexesForTypes(sourceUnionCarrier, [request.sourceReceiverType]) === undefined) {
-    const refinement = context.source.semantics.selectValueTypeRefinement(receiver);
-    const declaredType = refinement.kind === "resolved"
-      ? context.currentSemantics.types.withoutMissingOrUndefined(refinement.declaredType)
+    const declaredType = sourceRefinement.kind === "resolved"
+      ? context.currentSemantics.types.withoutMissingOrUndefined(sourceRefinement.declaredType)
       : undefined;
     if (declaredType !== undefined) {
       retainRustSourceUnionInstantiation(

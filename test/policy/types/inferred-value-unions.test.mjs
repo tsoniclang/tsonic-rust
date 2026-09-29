@@ -20,12 +20,13 @@ test("union flow projections retain exact optional dispatch and reject altered e
     { name: "Integer", carrier: integer }, { name: "Boolean", carrier: boolean },
   ] }, true), true);
   const definitions = registry.seal();
-  for (const optional of [false, true]) {
+  for (const [optional, retainedAbsence] of [[false, false], [true, false], [true, true]]) {
     const sourceCarrier = optional ? rustOptionTargetType(union) : union;
-    const selected = selectRustFlowReadProjection(sourceCarrier, integer, {}, definitions);
+    const selectedCarrier = retainedAbsence ? rustOptionTargetType(integer) : integer;
+    const selected = selectRustFlowReadProjection(sourceCarrier, selectedCarrier, {}, definitions);
     assert.equal(selected.kind, "projection");
     assert.deepEqual(selected.fact, { kind: "source-union", sourceCarrier,
-      dispatchCarrier: union, selectedCarrier: integer, variant: "Integer" });
+      dispatchCarrier: union, selectedCarrier, variant: "Integer" });
     for (const canMove of [false, true]) {
       const context = { input: { program: {
         source: { ast: fakeAstReader([sourceFile]) },
@@ -41,9 +42,15 @@ test("union flow projections retain exact optional dispatch and reject altered e
       assert.deepEqual(context.diagnostics, []);
       assert.equal(planned.arms[0].pattern.path, optional ? "Some" : "Value::Integer");
       assert.deepEqual(planned.expression, canMove ? input : { kind: "reference", expr: input });
-      assert.equal(planned.arms[0].expression.kind, canMove ? "path" : "dereference");
+      const projected = retainedAbsence ? planned.arms[0].expression.args[0] : planned.arms[0].expression;
+      assert.equal(projected.kind, canMove ? "path" : "dereference");
+      if (retainedAbsence) {
+        assert.equal(planned.arms[0].expression.path, "Some");
+        assert.deepEqual(planned.arms[1], { pattern: { kind: "path", path: "None" }, expression: { kind: "path", path: "None" } });
+      }
       for (const changed of [{ ...selected.fact, dispatchCarrier: sourceCarrier === union ? integer : sourceCarrier },
-        { ...selected.fact, variant: "Missing" }, { ...selected.fact, selectedCarrier: boolean }]) {
+        { ...selected.fact, variant: "Missing" }, { ...selected.fact, selectedCarrier: boolean },
+        ...(!optional ? [{ ...selected.fact, selectedCarrier: rustOptionTargetType(integer) }] : [])]) {
         context.diagnostics.length = 0;
         assert.equal(rustFlowReadProjectionFactKey.equals(selected.fact, changed), false);
         assert.equal(planRustFlowReadProjection(node, input, changed, context), undefined);
@@ -51,6 +58,7 @@ test("union flow projections retain exact optional dispatch and reject altered e
       }
     }
   }
+  assert.equal(selectRustFlowReadProjection(union, rustOptionTargetType(integer), {}, definitions).kind, "incompatible");
 });
 
 for (const surfaces of [[], ["js"]]) {

@@ -79,14 +79,17 @@ export function planRustFlowReadProjection(
   const ownsValue = context.input.program.valueLifetimes.canMove(node);
   if (fact.kind === "source-union") {
     const optionalPayload = rustOptionElementCarrier(fact.sourceCarrier);
+    const selectedPayload = rustOptionElementCarrier(fact.selectedCarrier);
+    const payloadCarrier = selectedPayload ?? fact.selectedCarrier;
     const variants = context.input.program.typeDefinitions.sourceUnionVariants(fact.dispatchCarrier);
     const path = rustUnionTypePathInContext(fact.dispatchCarrier, context);
     const selected = variants?.filter(variant => variant.name === fact.variant &&
-      rustTargetTypeRefEquals(variant.carrier, fact.selectedCarrier));
+      rustTargetTypeRefEquals(variant.carrier, payloadCarrier));
     if (!rustTargetTypeRefEquals(optionalPayload ?? fact.sourceCarrier, fact.dispatchCarrier) ||
+      selectedPayload !== undefined && optionalPayload === undefined ||
       path === undefined || selected?.length !== 1 ||
-      !ownsValue && !rustCarrierSupportsClone(fact.selectedCarrier, context.input.program.typeDefinitions) &&
-        !requireRustCarrierRequirements(fact.selectedCarrier, ["clone"], node, context)) {
+      !ownsValue && !rustCarrierSupportsClone(payloadCarrier, context.input.program.typeDefinitions) &&
+        !requireRustCarrierRequirements(payloadCarrier, ["clone"], node, context)) {
       context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
         "rust.backend.source-union-projection", "The selected union payload has no exact non-consuming projection."));
       return undefined;
@@ -97,12 +100,16 @@ export function planRustFlowReadProjection(
       elements: [{ kind: "binding", name }] };
     const pattern: RustPattern = optionalPayload === undefined ? payloadPattern
       : { kind: "tuple-variant", path: "Some", elements: [payloadPattern] };
+    const payload: RustExpr = ownsValue ? { kind: "path", path: name }
+      : isRustCopyCarrier(payloadCarrier)
+        ? { kind: "dereference", pointer: { kind: "path", path: name } }
+        : { kind: "method-call", receiver: { kind: "path", path: name }, method: "clone", args: [] };
+    const value: RustExpr = selectedPayload === undefined ? payload
+      : { kind: "call", path: "Some", args: [payload] };
     return bindRustFlowMatchSubject({ kind: "match", expression: ownsValue ? expression : { kind: "reference", expr: expression }, arms: [
-      { pattern,
-        expression: ownsValue ? { kind: "path", path: name }
-          : isRustCopyCarrier(fact.selectedCarrier)
-            ? { kind: "dereference", pointer: { kind: "path", path: name } }
-            : { kind: "method-call", receiver: { kind: "path", path: name }, method: "clone", args: [] } },
+      { pattern, expression: value },
+      ...(selectedPayload === undefined ? [] : [{ pattern: { kind: "path" as const, path: "None" },
+        expression: { kind: "path" as const, path: "None" } }]),
       { pattern: { kind: "wildcard" }, expression: { kind: "unreachable",
         message: "TSTS-selected source refinement excluded this union variant" } },
     ] }, node, context);

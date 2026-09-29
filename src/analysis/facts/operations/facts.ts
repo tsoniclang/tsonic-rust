@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import type { RustTypeofResult } from "../../../target-model/types/runtime-kind.js";
 import type { RustProjectDowncastFact } from "../../../target-model/types/project-projections.js";
 import type { RustArgumentMode, RustOperationCarrierRequirement, RustProviderFactOperationKind, RustRuntimeSetOperationKind, RustSourceCallParameterPlan, RustValueConversion } from "../../../target-model/operations/model.js";
 import type { RustFinalizedOperationAbiFor } from "../finalized-operation-abi.js";
@@ -8,12 +9,6 @@ import type {
   RustSelectedUnionMethodIdentity,
   TargetTypeRef,
 } from "../../../target-model/types/model.js";
-
-export type RustTypeofResult =
-  | "boolean" | "number" | "bigint" | "string" | "function" | "object" | "undefined"
-  | { readonly kind: "runtime-union"; readonly method: string; readonly sourceCarrier: TargetTypeRef }
-  | { readonly kind: "source-union"; readonly sourceCarrier: TargetTypeRef;
-      readonly variants: readonly { readonly name: string; readonly carrier: TargetTypeRef; readonly result: RustTypeofResult }[] };
 
 export type RustTargetOperationFact =
   | {
