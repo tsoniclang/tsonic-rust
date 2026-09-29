@@ -197,7 +197,20 @@ function finalizeRustStatementStyle(statement: RustStmt): RustStmt {
         ...(statement.init === undefined ? {} : { init: finalizeRustExpressionStyle(statement.init) }),
       };
     case "expr":
-      return { ...statement, expr: finalizeRustExpressionStyle(statement.expr) };
+    case "tail": {
+      const expression = finalizeRustExpressionStyle(statement.expr);
+      if (expression.kind === "match" && expression.arms.length === 2) {
+        const [present, absent] = expression.arms;
+        const binding = present!.pattern.kind === "tuple-variant" && present!.pattern.path === "Some" &&
+          present!.pattern.elements.length === 1 ? present!.pattern.elements[0] : undefined;
+        if (binding?.kind === "binding" && absent!.pattern.kind === "path" && absent!.pattern.path === "None" &&
+          absent!.expression.kind === "tuple-literal" && absent!.expression.elements.length === 0) {
+          return { kind: "if-let-some", binding: binding.name, expression: expression.expression,
+            body: { statements: [{ kind: "expr", expr: present!.expression }] } };
+        }
+      }
+      return { ...statement, expr: expression };
+    }
     case "assign":
       return {
         ...statement,
@@ -208,8 +221,6 @@ function finalizeRustStatementStyle(statement: RustStmt): RustStmt {
       return statement.expr === undefined
         ? statement
         : { ...statement, expr: finalizeRustExpressionStyle(statement.expr) };
-    case "tail":
-      return { ...statement, expr: finalizeRustExpressionStyle(statement.expr) };
     case "if": {
       const condition = finalizeRustExpressionStyle(statement.condition);
       const then = finalizeRustBlockStyle(statement.then);

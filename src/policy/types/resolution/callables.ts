@@ -124,8 +124,9 @@ export function resolveUnion(
   if (members === undefined) {
     return undefined;
   }
-  const valueMembers = members.filter((member) => !context.currentSemantics.types.isNullish(member));
-  const nullishMembers = members.filter((member) => context.currentSemantics.types.isNullish(member));
+  const absent = (member: Type): boolean => context.currentSemantics.types.isNullish(member) || context.currentSemantics.types.isVoidLike(member);
+  const valueMembers = members.filter(member => !absent(member));
+  const nullishMembers = members.filter(absent);
   const valueCarriers = valueMembers.map((member) =>
     resolveRustTargetType(member, context, options, resolving));
   if (valueCarriers.some((carrier) => carrier === undefined)) {

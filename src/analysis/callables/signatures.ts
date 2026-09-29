@@ -26,6 +26,7 @@ import {
 } from "../facts/keys.js";
 import {
   rustFutureOutputCarrier,
+  rustOptionElementCarrier,
   rustFutureTargetType,
   getRustGeneratorProtocol,
   rustSourceOptionalTargetType,
@@ -338,7 +339,7 @@ function recordCallableValueSignatureFacts(
     : selectedReturnCarrier;
   const parameters = ast.parameters(expression);
   if (selectedCarrier === undefined || parameterCarriers === undefined ||
-    returnCarrier === undefined || parameters.length !== parameterCarriers.length) {
+    returnCarrier === undefined || parameters.length > parameterCarriers.length) {
     return;
   }
   const parameterAbis: import("../../policy/ownership/source-callable-abi.js").RustSourceParameterAbi[] = [];
@@ -378,7 +379,10 @@ function recordCallableValueSignatureFacts(
       walk.context.facts.get(expression, rustGeneratorFactKey)?.resultCarrier ?? returnCarrier)) {
     return;
   }
-  const runtimeParameterCarriers = parameterAbis.map((abi) => abi.parameterCarrier);
+  const runtimeParameterCarriers = [
+    ...parameterAbis.map((abi) => abi.parameterCarrier),
+    ...parameterCarriers.slice(parameters.length),
+  ];
   const valueReturnCarrier = selectedCallableValueReturn(walk, expression, returnCarrier);
   const runtimeCarrier = selectedCarrier.kind === "function-pointer" || selectedCarrier.kind === "closure"
     ? { ...selectedCarrier, args: runtimeParameterCarriers, result: valueReturnCarrier }
@@ -612,11 +616,12 @@ export function recordCallableReturnFact(
       walk.context.sourceLifetimes.contractFor(declaration));
   if (carrier !== undefined) {
     const completion = walk.context.semanticsFor(declaration).operations.callableCompletion(declaration);
+    const absence = rustOptionElementCarrier(carrier) !== undefined;
     walk.context.facts.set(declaration, rustSourceCallableReturnFactKey, {
       returnCarrier: carrier,
       ...(completion === undefined ? {} : { canFallThrough: completion.canFallThrough }),
-      ...(pointer?.undefinedReturn ? { undefinedReturn: true } : {}),
-      ...(pointer?.fallthroughUndefined ? { fallthroughUndefined: true } : {}),
+      ...(absence || pointer?.undefinedReturn ? { undefinedReturn: true } : {}),
+      ...(absence && completion?.canFallThrough || pointer?.fallthroughUndefined ? { fallthroughUndefined: true } : {}),
     }, [{ message: "rust finalized source callable return carrier" }]);
     return true;
   }

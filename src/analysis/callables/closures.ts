@@ -33,7 +33,7 @@ import {
 import { recordBindingPatternFacts, recordDefaultParameterInitializerFacts, setParameterAbiFact } from "../declarations/types-and-bindings.js";
 import { recordStatementFacts } from "../control-flow/statements.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
-import { resolveExpressionCarrier } from "../expressions/carriers.js";
+import { reconcileRequiredCarrier, resolveExpressionCarrier } from "../expressions/carriers.js";
 import { resolveRustContextualParameterAbi } from "../../policy/ownership/source-callable-abi.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { rustResolutionContext } from "../program/walk.js";
@@ -144,7 +144,7 @@ export function resolveFunctionExpressionCarrier(
         selected: selectedExpected.lifetimeBinder,
       }
     : undefined;
-  if (parameters.length !== targetParameterCarriers.length) {
+  if (parameters.length > targetParameterCarriers.length) {
     return undefined;
   }
   if (resolvedSourceCallable !== undefined &&
@@ -265,10 +265,12 @@ export function resolveFunctionExpressionCarrier(
         recordStatementFacts(walk, statement, sourceFile, bodyCarrier);
       }
     } else {
-      bodyCarrier = resolveExpressionCarrier(walk, body, sourceFile, resultExpectation);
-      if (bodyCarrier === undefined) {
+      const resolved = resolveExpressionCarrier(walk, body, sourceFile, resultExpectation);
+      if (resolved === undefined || resultExpectation !== undefined &&
+        !reconcileRequiredCarrier(walk, body, resolved, resultExpectation)) {
         return undefined;
       }
+      bodyCarrier = resultExpectation ?? resolved;
     }
   } finally {
     walk.currentCallableDeclaration = previousCallable;
@@ -279,6 +281,7 @@ export function resolveFunctionExpressionCarrier(
   const finalizedParameterCarriers = [
     ...leadingParameters.map((parameter) => parameter.carrier),
     ...parameterCarriers,
+    ...targetParameterCarriers.slice(parameters.length),
   ];
   const valueResult = generator?.resultCarrier ?? asynchronous?.futureCarrier ?? bodyCarrier;
   const closureCarrier = selectedExpected.kind === "function-pointer" || selectedExpected.kind === "closure"
@@ -311,6 +314,7 @@ export function resolveFunctionExpressionCarrier(
       ? "source"
       : "required-only",
     byRefCopyParams,
+    ignoredParameterCarriers: targetParameterCarriers.slice(parameters.length),
     ...(leadingParameters.length === 0 ? {} : { leadingParameters }),
     resultCarrier: closureCarrier,
   });

@@ -13,6 +13,7 @@ export function resolveRustInferredUnion(
   options: RustTargetTypeResolutionOptions,
 ): TargetTypeRef | undefined {
   if (members.length < 2 || members.length !== carriers.length) return undefined;
+  if (!context.source.navigation.isProjectDeclaration(context.currentSourceFile)) return undefined;
   const alias = context.currentSemantics.declarations.typeAliasSymbol(sourceType);
   if (alias !== undefined && context.currentSemantics.declarations.symbolDeclarations(alias).some(declaration =>
     context.ast.kindName(declaration) === "KindTypeAliasDeclaration" &&

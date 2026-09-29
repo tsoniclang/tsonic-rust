@@ -42,6 +42,7 @@ import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import {
   getRustGeneratorProtocol,
+  rustAwaitCarrier,
   isRustCopyCarrier,
   isRustJsValueCarrier,
   rustOptionElementCarrier,
@@ -706,8 +707,9 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       const future = operand === undefined
         ? undefined
         : facts.getFact(operand, rustFutureValueFactKey);
-      if (operandCarrier?.kind === "target-named" &&
-        operandCarrier.id === rustJsPromiseTargetId && future !== undefined) {
+      const futureCarrier = rustAwaitCarrier(operandCarrier)?.futureCarrier;
+      if (futureCarrier?.kind === "target-named" &&
+        futureCarrier.id === rustJsPromiseTargetId && future !== undefined) {
         const error = addUse(node, future.outputCarrier, ["clone"]);
         if (error !== undefined) return error;
       }

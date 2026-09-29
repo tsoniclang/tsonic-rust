@@ -25,7 +25,7 @@ import {
   Node_Type,
 } from "@tsonic/target-api/source";
 import {
-  isRustAbsenceCarrier,
+  isRustUnitCarrier,
   isRustBigIntCarrier,
   isRustNumericCarrier,
   isRustOptionCarrier,
@@ -588,7 +588,7 @@ function applyOptionLane(
   if (projected !== undefined && isRustOptionCarrier(projected)) {
     return projected;
   }
-  if (isRustAbsenceCarrier(projected)) {
+  if (isRustUnitCarrier(projected)) {
     const existing = walk.context.facts.get(expression, rustTargetOperationFactKey);
     if (existing === undefined) {
       setRustOperationFact(walk, expression, { kind: "option-none", operationId: "tsonic.rust.option.none" });

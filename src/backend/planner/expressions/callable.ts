@@ -22,6 +22,7 @@ import {
   Node_Initializer,
 } from "@tsonic/target-api/source";
 import { planRustCaptureValue } from "./typed-locations.js";
+import { planRustAbsentValue } from "./optional-storage.js";
 import {
   rustAsyncFunctionFactKey,
   rustClosureCaptureFactKey,
@@ -133,7 +134,9 @@ export function planRustCallableExpressionBody(
     !leadingParameters.every((parameter, index) =>
       rustTargetTypeRefEquals(parameter.carrier, allParameterCarriers[index])) ||
     closureFact.byRefCopyParams.length !== sourceParams.length ||
-    allParameterCarriers.length - leadingParameters.length !== sourceParams.length) {
+    allParameterCarriers.length - leadingParameters.length !== sourceParams.length + closureFact.ignoredParameterCarriers.length ||
+    !closureFact.ignoredParameterCarriers.every((carrier, index) =>
+      rustTargetTypeRefEquals(carrier, allParameterCarriers[leadingParameters.length + sourceParams.length + index]))) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.closure-abi",
@@ -445,6 +448,7 @@ export function planRustCallableExpressionBody(
         mutable: parameter.mutable && context.input.program.facts.getFact(parameter.parameter, rustSourceParameterAbiFactKey)?.entryConversion === undefined,
         byRefCopy: parameter.byRefCopy,
       })),
+      ...closureFact.ignoredParameterCarriers.map(() => ({ name: "_", mutable: false })),
     ];
   } else {
     const allocatedTupleName = allocateRustSyntheticName(
@@ -542,7 +546,7 @@ export function planRustCallableExpressionBody(
   }
   const block = retainRustCheckedCompletion({
     statements: [...plannedBody.statements, ...(sourceReturn?.fallthroughUndefined
-      ? [planRustReturnExit({ kind: "path", path: "None" }, bodyContext)] : [])],
+      ? [planRustReturnExit(planRustAbsentValue(bodyResultCarrier, bodyContext), bodyContext)] : [])],
   }, !isRustUnitCarrier(bodyResultCarrier) && generator === undefined ? sourceReturn?.canFallThrough : undefined);
   if (!isRustUnitCarrier(bodyResultCarrier) && !rustBlockTerminates(block)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(

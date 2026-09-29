@@ -289,3 +289,4 @@ export {
   rustCarrierSupportsTrait,
   rustJsClosedValueCarrierTraitPath,
 } from "./carriers/traits.js";
+export { rustAwaitCarrier, type RustAwaitCarrier } from "./await.js";

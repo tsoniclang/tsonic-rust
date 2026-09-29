@@ -2,7 +2,7 @@ import {
   isRustNeverCarrier,
   isRustUnitCarrier,
   rustCallableProtocol,
-  rustFutureOutputCarrier,
+  rustAwaitCarrier,
   rustSourceTypeCarrierValue,
   rustTargetGenericTypeArguments,
   substituteRustTargetGenericArgument,
@@ -65,7 +65,7 @@ export function sourceCallEffectsMatch(
     (effects.awaiting !== "not-applicable" && effects.awaiting !== "infallible" && effects.awaiting !== "fallible")) {
     return false;
   }
-  const isAsync = rustFutureOutputCarrier(fact.resultCarrier) !== undefined;
+  const isAsync = rustAwaitCarrier(fact.resultCarrier) !== undefined;
   if (fact.target.form === "union-method") {
     if (effects.unionBranches?.length !== fact.target.variants.length ||
       !effects.unionBranches.every(branch => branch !== undefined &&

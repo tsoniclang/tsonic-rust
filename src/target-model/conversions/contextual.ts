@@ -9,6 +9,7 @@ import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../types/sou
 import { rustGenericCallableConversionMatches, type RustGenericCallableConversion } from "./generic-callable.js";
 import { rustIntegerTruncationConversionMatches, type RustIntegerTruncationConversion } from "./integer-truncation.js";
 import { rustExactIntegerConversionMatches } from "./exact-integer.js";
+import { rustCallableAbsenceCompletionMatches, type RustCallableAbsenceCompletion } from "./callable-completion.js";
 
 export type RustContextualValueConversion =
   | RustValueConversion
@@ -16,6 +17,7 @@ export type RustContextualValueConversion =
   | RustEmptyRecordConversion
   | RustGenericCallableConversion
   | RustIntegerTruncationConversion
+  | RustCallableAbsenceCompletion
   | {
       readonly kind: "native-trait-object-upcast";
       readonly source: TargetTypeRef;
@@ -33,6 +35,11 @@ export function rustCompilerOwnedContextualConversionMatches(
   conversion: RustContextualValueConversion,
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): boolean {
+  if (conversion.kind === "callable-absence-completion") {
+    return rustTargetTypeRefEquals(conversion.source, sourceCarrier) &&
+      rustTargetTypeRefEquals(conversion.target, targetCarrier) &&
+      rustCallableAbsenceCompletionMatches(sourceCarrier, targetCarrier);
+  }
   if (conversion.kind === "exact-integer") {
     return rustExactIntegerConversionMatches(sourceCarrier, targetCarrier, conversion);
   }
@@ -78,5 +85,6 @@ export function rustContextualValueConversionIsFallible(
     conversion.kind !== "empty-record" &&
     conversion.kind !== "generic-callable-flow" &&
     conversion.kind !== "integer-truncation" &&
+    conversion.kind !== "callable-absence-completion" &&
     rustValueConversionIsFallible(conversion, definitions);
 }

@@ -49,6 +49,7 @@ import { rustValueConversionContract } from "../../../target-model/conversions/c
 import { tryPlanRustNativePointerOperation } from "./native-pointers.js";
 import type { Node } from "@tsonic/tsts";
 import { planRustGenericCallableFlow } from "./generic-callable-flow.js";
+import { planRustCallableAbsenceCompletion } from "./callable-completion.js";
 import { planRustIntegerTruncation } from "./integer-truncation.js";
 import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
@@ -399,6 +400,10 @@ function applyRustContextualValueConversion(
   }
   if (fact.conversion.kind === "generic-callable-flow") {
     return planRustGenericCallableFlow(fact.conversion, expression, context);
+  }
+  if (fact.conversion.kind === "callable-absence-completion") {
+    return rustCompilerOwnedContextualConversionMatches(fact.sourceCarrier, fact.targetCarrier, fact.conversion)
+      ? planRustCallableAbsenceCompletion(fact.conversion, expression, node, context) : undefined;
   }
   if (fact.conversion.kind === "integer-truncation") {
     const selected = planRustIntegerTruncation(expression, fact, context);

@@ -99,6 +99,11 @@ function summarizeClosedType(type: RustType): ClosedTypeSummary | undefined {
         if (value.value.kind === "path") names.add(value.value.path);
         return true;
       }
+      if (value.kind === "lifetime" && value.lifetime.kind === "static") return true;
+      if (value.kind === "lifetime" && value.lifetime.kind === "named") {
+        names.add(value.lifetime.name);
+        return true;
+      }
       return false;
     });
   const visit = (value: RustType, depth: number): boolean => {

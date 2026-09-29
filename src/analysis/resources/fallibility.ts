@@ -41,7 +41,7 @@ import { finalizeRustPreparedCheckedCall } from "../operations/provider/index.js
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { recordSelectedOperationInputs } from "../operations/inputs.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
-import { rustFutureOutputCarrier, rustCallableProtocol } from "../../target-model/types/index.js";
+import { rustAwaitCarrier, rustCallableProtocol } from "../../target-model/types/index.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustGenericCallableEffectsFactKey } from "../facts/generic-callable-effects.js";
 import { rustInheritedProjectConstructor } from "../project-types/type-policy.js";
@@ -75,7 +75,7 @@ function resolveFutureOperationOrigin(
     const operation = walk.context.facts.get(node, rustTargetOperationFactKey) ??
       walk.context.facts.resolve(node, rustTargetOperationFactKey);
     if ((operation?.kind === "provider-operation" && operation.abi.effects.awaiting !== "not-applicable") ||
-      (operation?.kind === "source-call" && rustFutureOutputCarrier(operation.resultCarrier) !== undefined)) {
+      (operation?.kind === "source-call" && rustAwaitCarrier(operation.resultCarrier) !== undefined)) {
       return { expression: node, operation };
     }
     const kind = walk.context.ast.kindName(node);
@@ -554,12 +554,13 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
           walk.context.facts.get(selectedDeclaration, rustAsyncFunctionFactKey) !== undefined;
         if ((operandFact?.kind === "provider-operation" && rustOperationAbiAwaitIsFallible(operandFact.abi)) ||
           (operandFact?.kind === "source-call" && operandFact.target.form === "union-method" &&
-            rustFutureOutputCarrier(operandFact.resultCarrier) !== undefined &&
+            rustAwaitCarrier(operandFact.resultCarrier) !== undefined &&
             operandFact.target.variants.some(variant => fallible.has(variant.declaration))) ||
-          (operandFact?.kind === "source-call" && rustFutureOutputCarrier(operandFact.resultCarrier) !== undefined &&
+          (operandFact?.kind === "source-call" && rustAwaitCarrier(operandFact.resultCarrier) !== undefined &&
             genericCallImplementations(operandFact)?.some(implementation => genericAwaitIsFallible(implementation.declaration)) === true) ||
           (operandFact?.kind === "source-call" && selectedDeclaration !== undefined &&
-            selectedAsync && fallible.has(selectedDeclaration))) {
+            rustAwaitCarrier(operandFact.resultCarrier) !== undefined &&
+            (!selectedAsync || fallible.has(selectedDeclaration)))) {
           found = true;
           return;
         }
@@ -607,7 +608,7 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
     const effects: import("../facts/generic-callable-effects.js").RustGenericCallableEffectsFact = {
       invocation: definition.implementations.some(implementation => genericInvocationIsFallible(implementation.declaration))
         ? "fallible" : "infallible",
-      awaiting: rustFutureOutputCarrier(definition.signature.result) === undefined ? "not-applicable"
+      awaiting: rustAwaitCarrier(definition.signature.result) === undefined ? "not-applicable"
         : definition.implementations.some(implementation => genericAwaitIsFallible(implementation.declaration)) ? "fallible" : "infallible",
     };
     for (const implementation of definition.implementations) {
@@ -762,7 +763,7 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
               ["target.capability=rust.generic-callable.effects"]);
           }
           if (nativeCallable || runtimeCallable || genericImplementations !== undefined || declaration !== undefined) {
-            const isAsync = rustFutureOutputCarrier(operation.resultCarrier) !== undefined;
+            const isAsync = rustAwaitCarrier(operation.resultCarrier) !== undefined;
             const unionBranches = operation.target.form === "union-method"
               ? operation.target.variants.map(variant => ({
                 invocation: genericInvocationIsFallible(variant.declaration) ? "fallible" as const : "infallible" as const,

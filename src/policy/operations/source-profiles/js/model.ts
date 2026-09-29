@@ -8,8 +8,10 @@ import type {
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustJsTypedArrayName } from "../../../../target-model/types/index.js";
 import { rustProviderOperationFormDeclaresWritableInput } from "../../forms.js";
+import type { RustSourceGenericContract } from "../../../../target-model/lifetimes/index.js";
 
 export interface JsOperationRequest {
+  readonly storageContract?: RustSourceGenericContract;
   readonly ownerName: string;
   readonly memberName: string;
   readonly operationKind: "call" | "property" | "indexer" | "constructor" | "property-set" | "index-set" | "delete";

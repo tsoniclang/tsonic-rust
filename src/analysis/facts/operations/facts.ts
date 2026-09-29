@@ -575,6 +575,7 @@ export type RustTargetOperationFact =
       readonly operationId: string;
       readonly parameterForms: "required-only" | "source";
       readonly byRefCopyParams: readonly boolean[];
+      readonly ignoredParameterCarriers: readonly TargetTypeRef[];
       readonly leadingParameters?: readonly {
         readonly kind: "this" | "receiver";
         readonly carrier: TargetTypeRef;

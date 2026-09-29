@@ -57,6 +57,7 @@ import type {
   RustPolicySelection,
 } from "../../../../policy/operations/contracts.js";
 import type { Node } from "@tsonic/tsts";
+import { rustEnclosingStorageContract } from "../../../../policy/ownership/suspended-storage.js";
 import type { RustOperationsProviderOptions } from "../model.js";
 import type { RustSelectedTargetSignature, RustTargetMember, TargetTypeRef } from "../../../../target-model/types/model.js";
 
@@ -346,6 +347,7 @@ export function selectRustCheckedCall(
       ? undefined
       : resolveRustTargetTypeRef(request.source.sourceResultType, context, options);
     const selection = selectJsSurfaceOperation({
+      storageContract: rustEnclosingStorageContract(request.source.call, context.ast, context.sourceLifetimes),
       ownerName: selectedSourceMember.ownerName,
       memberName: selectedSourceMember.memberName,
       operationKind: "call",

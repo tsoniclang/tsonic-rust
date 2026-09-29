@@ -14,6 +14,8 @@ import { missingFactDiagnostic } from "../diagnostics.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import { applyRustFallibleResultExpression } from "../types/fallible-shape.js";
 import { rustCallableConstructionType } from "./fundamentals.js";
+import { rustUnitTargetType } from "../../../target-model/types/index.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 
 export function planRustSourceCallableValue(
   value: RustSourceCallableValueFact,
@@ -79,17 +81,18 @@ export function planRustSourceCallableValue(
     return undefined;
   }
   const currentErrorType = rustErrorType(currentBoundary);
-  const callableResult = applyRustFallibleResultExpression(
-    fallible
+  const completed: RustExpr = fallible
       ? {
           kind: "try",
           expr: invocation,
           resultErrorType: currentErrorType,
           operandErrorType: rustErrorType(sourceBoundary!),
         }
-      : invocation,
-    { errorType: currentErrorType },
-  );
+      : invocation;
+  const callableResult: RustExpr = rustTargetTypeRefEquals(value.resultCarrier, rustUnitTargetType())
+    ? { kind: "evaluate-then", effect: completed, discard: "unit",
+        value: applyRustFallibleResultExpression({ kind: "tuple-literal", elements: [] }, { errorType: currentErrorType }) }
+    : applyRustFallibleResultExpression(completed, { errorType: currentErrorType });
   const mutableArguments = value.argumentModes.some((mode) => mode === "mut-ref");
   const implementation: RustExpr = mutableArguments
     ? {

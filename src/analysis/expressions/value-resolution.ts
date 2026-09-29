@@ -34,7 +34,7 @@ import {
 import { rustRuntimeUnionContract, rustRuntimeUnionProjection } from "../../target-model/types/carriers/runtime-unions.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import {
-  rustFutureOutputCarrier,
+  rustAwaitCarrier,
   getRustGeneratorProtocol,
   isRustBigIntCarrier,
   isRustBoolCarrier,
@@ -251,7 +251,7 @@ export function resolveExpressionCarrierUncached(
       const operandCarrier = operand === undefined
         ? undefined
         : resolveExpressionCarrier(walk, operand, sourceFile, undefined);
-      const output = rustFutureOutputCarrier(operandCarrier);
+      const output = rustAwaitCarrier(operandCarrier)?.resultCarrier;
       if (output === undefined) {
         return undefined;
       }

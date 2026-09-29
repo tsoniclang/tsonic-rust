@@ -1,7 +1,7 @@
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustFutureOutputCarrier } from "../../target-model/types/index.js";
+import { rustFutureOutputCarrier, rustAwaitCarrier } from "../../target-model/types/index.js";
 import { validateRustFinalizedOperationAbi } from "./finalized-operation-abi.js";
 import type {
   RustFutureValueFact,
@@ -50,7 +50,7 @@ export function rustFutureValueForOperation(
     sourceCallEffects.awaiting === "not-applicable") {
     return undefined;
   }
-  const outputCarrier = rustFutureOutputCarrier(operation.resultCarrier);
+  const outputCarrier = rustAwaitCarrier(operation.resultCarrier)?.outputCarrier;
   if (outputCarrier === undefined) {
     return undefined;
   }
@@ -77,6 +77,6 @@ export function rustFutureValueMatchesCarrier(
     (fact.errorBoundary === "provider-native"
       ? fact.errorCarrier !== undefined
       : fact.errorCarrier === undefined) &&
-    rustTargetTypeRefEquals(rustFutureOutputCarrier(carrier), fact.outputCarrier) &&
+    rustTargetTypeRefEquals(rustAwaitCarrier(carrier)?.outputCarrier, fact.outputCarrier) &&
     rustTargetTypeRefEquals(fact.awaitedConversion.targetCarrier, fact.outputCarrier);
 }

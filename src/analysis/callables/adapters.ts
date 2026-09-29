@@ -11,6 +11,7 @@ import { isRustCopyCarrier, isRustVecCarrier, rustCallableProtocol, rustCarrierS
 import { selectRustValueCarrierReconciliation } from "../../policy/types/value-carrier-reconciliation.js";
 import { rustContextualValueConversionIsFallible } from "../../target-model/conversions/contextual.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
+import { isRustUnitCarrier } from "../../target-model/types/index.js";
 
 export function sourceCallableParameterAbis(
   input: { readonly ast: AstReader; readonly facts: RustPlanBuilder },
@@ -190,6 +191,9 @@ export function selectRustCallableValueAdapter(
   }
   const sourceOption = rustOptionElementCarrier(sourceCarrier);
   const targetOption = rustOptionElementCarrier(targetCarrier);
+  if (targetOption !== undefined && isRustUnitCarrier(sourceCarrier)) {
+    return Object.freeze({ kind: "absent-completion", sourceCarrier, targetCarrier });
+  }
   if (targetOption !== undefined && sourceOption === undefined) {
     const element = selectRustCallableValueAdapter(sourceCarrier, targetOption, projectTypes, definitions);
     return element === undefined
@@ -230,6 +234,7 @@ export function rustCallableValueAdapterIsFallible(adapter: RustCallableValueAda
     case "option-map":
       return rustCallableValueAdapterIsFallible(adapter.element, definitions);
     case "identity":
+    case "absent-completion":
     case "call-scoped-lifetime":
     case "project-upcast":
     case "project-structural-view":

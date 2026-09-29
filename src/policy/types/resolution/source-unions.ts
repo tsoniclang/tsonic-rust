@@ -8,6 +8,7 @@ import { resolveRustTargetType } from "./target.js";
 import { rustSourceUnionMemberDeclarationIsOwned } from "../../evidence/source-union-members.js";
 import {
   isRustAbsenceCarrier,
+  isRustUnitCarrier,
   rustAbsenceTargetType,
 } from "../../../target-model/types/index.js";
 import { rustSourceOptionalTargetType } from "../../../target-model/types/projections.js";
@@ -106,7 +107,8 @@ export function resolveRustSourceUnionCarrier(
   members: readonly TargetTypeRef[],
   resolveValues: (values: readonly TargetTypeRef[]) => TargetTypeRef | undefined,
 ): TargetTypeRef | undefined {
-  const values = members.filter((member) => !isRustAbsenceCarrier(member));
+  const hasValue = members.some(member => !isRustUnitCarrier(member));
+  const values = members.filter((member) => !isRustAbsenceCarrier(member) && !(hasValue && isRustUnitCarrier(member)));
   const distinct = values.filter((value, index) =>
     values.findIndex((candidate) => rustTargetTypeRefEquals(candidate, value)) === index);
   const absent = values.length !== members.length;

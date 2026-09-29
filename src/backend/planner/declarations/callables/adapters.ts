@@ -1,6 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { planRustAbsentValue } from "../../expressions/optional-storage.js";
 import { planRustGenericCallableFlow } from "../../expressions/generic-callable-flow.js";
+import { planRustCallableAbsenceCompletion } from "../../expressions/callable-completion.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import type {
   RustCallableParameterAbi,
@@ -10,6 +11,8 @@ import type {
 import { rustValueConversionContract } from "../../../../target-model/conversions/contracts.js";
 import {
   isRustCopyCarrier,
+  isRustUnitCarrier,
+  rustOptionElementCarrier,
   isRustStringCarrier,
   isRustVecCarrier,
   rustCarrierSupportsClone,
@@ -295,6 +298,10 @@ function applyRustCallableValueAdapterRaw(
   context: RustPlanContext,
 ): { readonly expression: RustExpr; readonly fallible: boolean } | undefined {
   switch (adapter.kind) {
+    case "absent-completion":
+      return isRustUnitCarrier(adapter.sourceCarrier) && rustOptionElementCarrier(adapter.targetCarrier) !== undefined
+        ? { expression: { kind: "evaluate-then", effect: expression, discard: "unit",
+            value: planRustAbsentValue(adapter.targetCarrier, context) }, fallible: false } : undefined;
     case "project-structural-view": {
       const projected = planRustProjectStructuralConversion(expression, adapter.sourceCarrier, adapter.targetCarrier, context);
       return projected === undefined ? undefined : { expression: projected, fallible: false };
@@ -304,6 +311,11 @@ function applyRustCallableValueAdapterRaw(
         ? { expression, fallible: false }
         : undefined;
     case "conversion": {
+      if (adapter.conversion.kind === "callable-absence-completion") {
+        if (!rustCompilerOwnedContextualConversionMatches(adapter.sourceCarrier, adapter.targetCarrier, adapter.conversion)) return undefined;
+        const converted = planRustCallableAbsenceCompletion(adapter.conversion, expression, node, context);
+        return converted === undefined ? undefined : { expression: converted, fallible: false };
+      }
       if (adapter.conversion.kind === "generic-callable-flow") {
         const converted = planRustGenericCallableFlow(adapter.conversion, expression, context);
         return converted === undefined ? undefined : { expression: converted, fallible: false };

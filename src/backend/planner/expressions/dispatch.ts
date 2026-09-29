@@ -4,13 +4,8 @@ import { planRustOptionalStorageOperation } from "./optional-storage.js";
 import { rustClassValueFactKey } from "../../../analysis/facts/class-values.js";
 import { planRustClassValueRead } from "../objects/class-values.js";
 import {
-  rustBottomAfterEffect,
-  rustBottomExpression,
-} from "../types/fallible-shape.js";
-import {
   diagnosticInput,
   isValidRustIdentifier,
-  rustActiveErrorType,
   rustSourceBindingPath,
   sourceTypePath,
 } from "../program/plan-context.js";
@@ -20,7 +15,6 @@ import {
   isRustAbsenceCarrier,
   isRustUnitCarrier,
   rustOptionElementCarrier,
-  rustJsPromiseTargetId,
   rustSourceTypeCarrierValue,
 } from "../../../target-model/types/index.js";
 import {
@@ -60,16 +54,12 @@ import {
   planRustNonConsumingValue,
 } from "./typed-locations.js";
 import {
-  rustFutureValueFactKey,
   rustSourceBindingFactKey,
   rustSourceCallableValueFactKey,
   rustYieldFactKey,
 } from "../../../analysis/facts/keys.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { finishProviderOperationExpression, planProviderOperationExpression } from "./conversions.js";
-import { applyFinalizedValueConversion } from "./value-conversions.js";
-import { applyRustErrorBoundary } from "../types/error-boundary.js";
-import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { expressionCarrier, planBigIntLiteral, planDeleteExpression, planGeneratorResumeExpression, planNumericLiteral, planSourceConversion, planTemplateExpression, requireExpressionCarrier, rustOperationFact, selectedOperationMatches } from "./fundamentals.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planArrayLiteral, planElementAccess } from "./elements.js";
@@ -85,7 +75,7 @@ import { planUnaryExpression } from "./updates/source.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { rustEffectiveValueCarrier } from "../../../analysis/facts/value-carrier-queries.js";
 import { rustExpressionContainsStatementBlock } from "../../target-ast/expressions.js";
-import { rustFutureValueMatchesCarrier } from "../../../analysis/facts/future-values.js";
+import { planRustAwaitExpression } from "./await.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { sourceCharCodeUnit } from "../../../target-model/syntax/literals.js";
 import type { Node } from "@tsonic/tsts";
@@ -458,97 +448,8 @@ export function planExpressionInner(
     case "KindRegularExpressionLiteral": {
       return planRegExpCreate(node, context);
     }
-    case "KindAwaitExpression": {
-      const awaitFact = rustOperationFact(node, context);
-      if (awaitFact === undefined || awaitFact.kind !== "await-op") {
-        context.diagnostics.push(missingFactDiagnostic(
-          diagnosticInput(context, node),
-          "rust.backend.async",
-          "Await expressions require a finalized future output fact.",
-        ));
-        return undefined;
-      }
-      if (!requireExpressionCarrier(node, awaitFact.resultCarrier, context, "rust.backend.await-carrier")) {
-        return undefined;
-      }
-      const operand = Node_Expression(context.input.program.source.ast, node);
-      const planned = operand === undefined ? undefined : planExpression(operand, context);
-      if (planned === undefined) {
-        return undefined;
-      }
-      const future = operand === undefined
-        ? undefined
-        : context.input.program.facts.getFact(operand, rustFutureValueFactKey);
-      const operandCarrier = operand === undefined
-        ? undefined
-        : context.input.program.facts.getRuntimeCarrierFact(operand)?.carrier;
-      if (future === undefined || !rustFutureValueMatchesCarrier(future, operandCarrier) ||
-        !rustTargetTypeRefEquals(awaitFact.resultCarrier, future.outputCarrier)) {
-        context.diagnostics.push(missingFactDiagnostic(
-          diagnosticInput(context, node),
-          "rust.backend.await-future-value",
-          "Awaited expression requires one compatible finalized future-value fact.",
-        ));
-        return undefined;
-      }
-      if (operandCarrier?.kind === "target-named" && operandCarrier.id === rustJsPromiseTargetId &&
-        !requireRustCarrierRequirements(
-          future.outputCarrier,
-          ["clone"],
-          node,
-          context,
-        )) {
-        return undefined;
-      }
-      const awaitOperand: RustExpr = operandCarrier?.kind === "target-named" &&
-          operandCarrier.id === rustJsPromiseTargetId
-        ? {
-            kind: "method-call",
-            receiver: planned,
-            method: future.awaiting === "fallible" ? "into_result" : "into_value",
-            args: [],
-          }
-        : planned;
-      let awaited: RustExpr = { kind: "await", expr: awaitOperand };
-      if (future.awaiting === "fallible") {
-        const activeErrorType = rustActiveErrorType(context);
-        if (activeErrorType === undefined) {
-          context.diagnostics.push(unsupportedConstructDiagnostic(
-            diagnosticInput(context, node),
-            "rust.error.call",
-            "Fallible awaits require a finalized fallible lowering context.",
-          ));
-          return undefined;
-        }
-        if (future.errorBoundary === "none") {
-          context.diagnostics.push(missingFactDiagnostic(
-            diagnosticInput(context, node),
-            "rust.backend.await-error-boundary",
-            "A finalized fallible Rust future requires one exact error boundary.",
-          ));
-          return undefined;
-        }
-        awaited = applyRustErrorBoundary(
-          awaited,
-          future.errorBoundary,
-          activeErrorType,
-          rustTypeFromCarrierInContext(future.errorCarrier, context),
-        );
-      }
-      const converted = applyFinalizedValueConversion(
-        context,
-        awaited,
-        future.awaitedConversion,
-        node,
-        "operation-result",
-      );
-      if (converted === undefined || !isRustNeverCarrier(awaitFact.resultCarrier)) {
-        return converted;
-      }
-      return future.awaiting === "fallible"
-        ? rustBottomAfterEffect(converted, "fallible never await returned")
-        : rustBottomExpression(converted);
-    }
+    case "KindAwaitExpression":
+      return planRustAwaitExpression(node, context, planExpression);
     case "KindYieldExpression": {
       const generator = context.generator;
       const fact = context.input.program.facts.getFact(node, rustYieldFactKey);

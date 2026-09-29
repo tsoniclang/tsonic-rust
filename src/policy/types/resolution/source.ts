@@ -15,7 +15,7 @@ import {
   rustSourceLocationTargetType,
   rustRawPointerTargetType,
   rustAbsenceTargetType,
-  isRustAbsenceCarrier,
+  isRustUnitCarrier,
   rustNeverTargetType,
   rustOptionTargetType,
   rustSourcePrimitiveTargetType,
@@ -409,8 +409,8 @@ export function resolveRustTargetTypeSyntax(
       const selected = resolveRustSourceUnionCarrier(selectedCarriers as TargetTypeRef[], values => {
         const common = options.resolveProjectUnionCarrier(values);
         if (common !== undefined && values.some(carrier => rustTargetTypeRefEquals(carrier, common))) return common;
-        const valueNodes = semanticMembers.filter((_, index) => !isRustAbsenceCarrier(selectedCarriers[index]));
-        const valueCarriers = selectedCarriers.filter(carrier => !isRustAbsenceCarrier(carrier)) as TargetTypeRef[];
+        const valueNodes = semanticMembers.filter((_, index) => !isRustUnitCarrier(selectedCarriers[index]));
+        const valueCarriers = selectedCarriers.filter(carrier => !isRustUnitCarrier(carrier)) as TargetTypeRef[];
         const valueTypes = valueNodes.map(member => semantics?.types.expressionType(member));
         return semantics === undefined || sourceType === undefined || valueTypes.some(type => type === undefined)
           ? common

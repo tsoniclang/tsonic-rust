@@ -4,6 +4,7 @@ import type { RustSourceParameterAbiFact } from "./callables-and-resources.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export type RustCallableValueAdapter =
+  | { readonly kind: "absent-completion"; readonly sourceCarrier: TargetTypeRef; readonly targetCarrier: TargetTypeRef }
   | {
       readonly kind: "project-structural-view";
       readonly sourceCarrier: TargetTypeRef;

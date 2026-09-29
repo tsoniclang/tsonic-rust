@@ -19,6 +19,23 @@ const makeFunction = (name, visibility = "private") => ({ kind: "function", name
   body: { statements: [{ kind: "tail", expr: { kind: "path", path: "values" } }] },
 });
 
+test("native lifetime arguments stay exact in factored aliases", () => {
+  for (const lifetime of [{ kind: "static" }, { kind: "named", name: "scope" }]) {
+    const type = { ...nested, genericArguments: [{ kind: "lifetime", lifetime }, ...nested.genericArguments] };
+    const source = { ...makeFunction("read"), params: [{ name: "values", type }], returnType: undefined,
+      generics: { parameters: [...makeFunction("read").generics.parameters,
+        { kind: "lifetime", name: "scope", outlives: [] }], wherePredicates: [] } };
+    const result = nameRustSignatureTypes([source]);
+    assert.deepEqual(result[0].target, type);
+    assert.deepEqual(result[0].generics.parameters.map(parameter => parameter.name),
+      lifetime.kind === "static" ? ["Item"] : ["Item", "scope"]);
+    assert.deepEqual(nameRustSignatureTypes(result), result);
+  }
+  const type = { ...nested, genericArguments: [{ kind: "lifetime", lifetime: { kind: "placeholder" } }, ...nested.genericArguments] };
+  const source = { ...makeFunction("read"), params: [{ name: "values", type }], returnType: undefined };
+  assert.deepEqual(nameRustSignatureTypes([source]), [source]);
+});
+
 test("signature aliases retain exact generic types, share definitions and promote visibility", () => {
   const first = makeFunction("read");
   const second = makeFunction("write", "public");

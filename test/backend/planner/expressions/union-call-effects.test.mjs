@@ -3,6 +3,7 @@ import test from "node:test";
 import { sourceCallEffectsMatch } from "../../../../dist/backend/planner/expressions/calls/source.js";
 import { rustJsPromiseTargetType } from "../../../../dist/target-model/types/carriers/js.js";
 import { int32Carrier } from "../../../helpers/rust-session.mjs";
+import { rustSourceOptionalTargetType } from "../../../../dist/target-model/types/index.js";
 
 test("union invocation and awaiting effects are independently closed for every arm", () => {
   const synchronous = { kind: "source-call", target: { form: "union-method", variants: [{}, {}] }, resultCarrier: int32Carrier };
@@ -15,6 +16,9 @@ test("union invocation and awaiting effects are independently closed for every a
   ], invocation: "infallible", awaiting: "fallible" };
   assert.equal(sourceCallEffectsMatch(synchronous, syncEffects), true);
   assert.equal(sourceCallEffectsMatch(asynchronous, asyncEffects), true);
+  const optional = { ...asynchronous, resultCarrier: rustSourceOptionalTargetType(asynchronous.resultCarrier) };
+  assert.equal(sourceCallEffectsMatch(optional, asyncEffects), true);
+  assert.equal(sourceCallEffectsMatch(optional, syncEffects), false);
   assert.equal(sourceCallEffectsMatch(asynchronous, {
     unionBranches: [{ invocation: "fallible", awaiting: "infallible" }, asyncEffects.unionBranches[1]],
     invocation: "fallible", awaiting: "fallible",
