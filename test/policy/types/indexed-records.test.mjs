@@ -29,8 +29,18 @@ test("native equality uses exact PartialEq contracts, not record or wrapper name
 });
 
 for (const surfaces of [[], ["js"]]) {
+  test(`indexed records reject incompatible keys and readonly mutation on ${surfaces.length === 0 ? "native" : "js"}`, () => {
+    const { result } = compileRust({ surfaces, files: { "index.ts":
+      'export function read(record: Record<string, string>, key: number): string { return record[key]; }',
+    } });
+    assert.ok(result.diagnostics.some(diagnostic => /index/i.test(diagnostic.message)), JSON.stringify(result.diagnostics));
+    assert.equal(result.artifacts.length, 0);
+    assert.throws(() => compileRust({ surfaces, files: { "index.ts":
+      'export function remove(record: Readonly<Record<string, string>>): void { delete record["key"]; }',
+    } }), /Index signature.*only permits reading/);
+  });
   test(`indexed record aliasing, absence and native integers on ${surfaces.length === 0 ? "native" : "js"}`, { timeout: 300_000 }, () => {
-    const { result } = compileRust({ surfaces, packages: [acmeTestingPackage()],
+    const { source, result } = compileRust({ surfaces, packages: [acmeTestingPackage()],
       target: { id: "rust", options: { outputType: "bin", crateName: "indexed_records" } },
       files: { "records.ts": `
         export function read<Value>(record: Record<string, Value | undefined>, key: string): Value | undefined {
@@ -42,10 +52,15 @@ for (const surfaces of [[], ["js"]]) {
           record["present"] = "after";
           return "last";
         }
+        function nextKey(calls: Record<string, number>): string { calls["count"]++; return "present"; }
+        export function countCalls(calls: Record<string, number>): number { return calls["count"]; }
+        export function optionalRead(record: Record<string, string | undefined> | undefined, calls: Record<string, number>): string | undefined {
+          return record?.[nextKey(calls)];
+        }
       `, "index.ts": `
         import { check } from "@acme/testing";
         import type { uint64 } from "@tsonic/core/types.js";
-        import { read, one, copy, change } from "./records.js";
+        import { read, one, copy, change, optionalRead, countCalls } from "./records.js";
         export function main(): void {
           const values: Record<string, uint64> = { first: 9007199254740993n };
           const alias = values;
@@ -60,9 +75,18 @@ for (const surfaces of [[], ["js"]]) {
           const snapshot: Record<string, string | undefined> = { ...optional, present: "changed" };
           check(snapshot["present"] === "changed" && optional["present"] === "yes");
           const ordered: Record<string, string | undefined> = { ...optional, final: change(optional) };
-          check(ordered["present"] === "yes" && ordered["final"] === "last" && optional["present"] === "after");
+          check(ordered["present"] === "yes" && ordered["final"] === "last" && read(optional, "present") === "after");
           const replaced: Record<string, string | undefined> = { present: "before", ...optional };
           check(replaced["present"] === "after");
+          const layered: Record<string, string | undefined> = { ...snapshot, ...optional, present: "last", extra: undefined };
+          check(read(layered, "present") === "last" && read(layered, "extra") === undefined);
+          const calls: Record<string, number> = { count: 0 };
+          check(optionalRead(undefined, calls) === undefined && countCalls(calls) === 0);
+          check(optionalRead(optional, calls) === "after" && countCalls(calls) === 1);
+          let native: uint64 = 9007199254740993n;
+          native += 2n;
+          native -= 1n;
+          check(native === 9007199254740994n);
           let count = 0;
           for (const key in values) { if (values[key] > 9007199254740992n) count++; }
           check(count === 2);
@@ -70,6 +94,7 @@ for (const surfaces of [[], ["js"]]) {
         }
       ` },
     });
+    assert.deepEqual(source.diagnostics, []);
     assert.deepEqual(result.diagnostics, []);
     const run = validateGeneratedProject("indexed-records", result.artifacts, { run: true });
     assert.equal(run.status, 0, JSON.stringify(run));
@@ -77,7 +102,7 @@ for (const surfaces of [[], ["js"]]) {
 }
 
 test("Object operations retain native indexed storage and requested dense results", { timeout: 300_000 }, () => {
-  const { result } = compileRust({ surfaces: ["js"], packages: [acmeTestingPackage()],
+  const { source, result } = compileRust({ surfaces: ["js"], packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName: "indexed_object_api" } },
     files: { "index.ts": `
       import { check } from "@acme/testing";
@@ -97,6 +122,7 @@ test("Object operations retain native indexed storage and requested dense result
       }
     ` },
   });
+  assert.deepEqual(source.diagnostics, []);
   assert.deepEqual(result.diagnostics, []);
   const run = validateGeneratedProject("indexed-object-api", result.artifacts, { run: true });
   assert.equal(run.status, 0, JSON.stringify(run));
