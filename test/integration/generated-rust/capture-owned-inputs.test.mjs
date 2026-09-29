@@ -24,6 +24,9 @@ export function constructed(seed: int32): () => int32 {
 export function text(seed: string): (next: string) => string {
   return next => { seed = next; return forward((seed as string)); };
 }
+export function append(seed: string): (suffix: string) => string {
+  return suffix => { seed = seed + suffix; return seed; };
+}
 export function owner(seed: Shared<int32>): (replace: boolean, next: Shared<int32>) => Shared<int32> {
   return (replace, next) => { if (replace) seed = next; return forward(seed); };
 }
@@ -77,16 +80,16 @@ export function suspended(seed: int32): () => Promise<int32> {
   };
   for (const file of source.sourceFiles) if (source.ast.getFileName(file).endsWith("/index.ts")) visit(file);
   for (const name of ["counter", "constructed"]) assert.deepEqual(storage.get(name), ["cell"], name);
-  for (const name of ["text", "owner", "reentrant"]) assert.deepEqual(storage.get(name), ["borrow-cell"], name);
+  for (const name of ["text", "append", "owner", "reentrant"]) assert.deepEqual(storage.get(name), ["borrow-cell"], name);
   for (const name of ["borrowed", "independent", "repeated", "nested", "retained", "suspended"]) {
     assert.ok(storage.get(name)?.length > 0, name);
     assert.ok(storage.get(name).every(value => value === "location"), name);
   }
 });
 
-test("by-value captured inputs have only the independent handwritten shared callable frame", { timeout: 300_000 }, () => {
+function verifyNativeCaptureOwnership(edition) {
   const { result } = compileRustThroughTargetPack({
-    target: { id: "rust", options: { outputType: "lib", crateName: "capture_owned_inputs" } },
+    target: { id: "rust", options: { outputType: "lib", crateName: "capture_owned_inputs", edition } },
     files: { "index.ts": captures },
   });
   assert.deepEqual(result.diagnostics, []);
@@ -94,7 +97,9 @@ test("by-value captured inputs have only the independent handwritten shared call
   assert.match(output, /core::cell::Cell::new/u);
   assert.match(output, /core::cell::RefCell::new/u);
   assert.doesNotMatch(output, /Location::allocate|capture_seed\w* = seed\.clone\(\)/u);
-  const root = writeGeneratedProject("capture-owned-inputs", result.artifacts);
+  assert.match(output, /let borrowed = capture_seed\.borrow\(\);\s*borrowed\.clone\(\)/u);
+  assert.doesNotMatch(output, /let_and_return/u);
+  const root = writeGeneratedProject(`capture-owned-inputs-${edition}`, result.artifacts);
   mkdirSync(join(root, "tests"), { recursive: true });
   writeFileSync(join(root, "tests/ownership.rs"), nativeOwnershipCostSupport + `
 use capture_owned_inputs::index;
@@ -224,6 +229,16 @@ fn explicit_native_owner_is_not_an_exemption_from_binding_replacement() {
 }
 
 #[test]
+fn self_replacement_ends_the_snapshot_borrow_before_mutable_access() {
+    let first = index::append(String::from("a"));
+    let alias = first.clone();
+    let second = index::append(String::from("b"));
+    assert_eq!(first.call((String::from("x"),)).unwrap(), "ax");
+    assert_eq!(alias.call((String::from("y"),)).unwrap(), "axy");
+    assert_eq!(second.call((String::from("z"),)).unwrap(), "bz");
+}
+
+#[test]
 fn snapshot_borrows_end_before_an_independent_reentrant_invocation() {
     let actual = index::reentrant(String::from("initial"));
     let expected = handwritten_reentrant(String::from("initial"));
@@ -244,5 +259,11 @@ fn snapshot_borrows_end_before_an_independent_reentrant_invocation() {
 }
 `);
   runCargo(root, ["generate-lockfile", "--offline"]);
+  runCargo(root, ["clippy", "--lib", "--locked", "--offline", "--", "-D", "warnings"]);
   runCargo(root, ["test", "--release", "--locked", "--offline", "--test", "ownership"]);
-});
+}
+
+for (const edition of ["2021", "2024"]) {
+  test(`by-value captured inputs have only the handwritten shared callable frame on Rust ${edition}`,
+    { timeout: 300_000 }, () => verifyNativeCaptureOwnership(edition));
+}
