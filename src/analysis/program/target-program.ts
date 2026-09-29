@@ -47,15 +47,22 @@ import { isRustJsArrayCarrier, isRustStringCarrier } from "../../target-model/ty
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustClosureCaptureFactKey, rustTargetOperationFactKey, rustBindingStorageFactKey } from "../facts/keys.js";
 
-const rustJsTimerEpilogue: RustProviderBinaryHookRow = Object.freeze({
-  id: "tsonic.rust.js.timers",
+const rustJsEventLoopEpilogue: RustProviderBinaryHookRow = Object.freeze({
+  id: "tsonic.rust.js.event-loop",
   phase: "after-entry",
-  path: "tsonic_rust_js::abi::run_timers",
+  path: "tsonic_rust_js::event_loop::run_event_loop",
   requiredCrate: "tsonic_rust_js",
   isFallible: true,
   errorBoundary: "target-runtime",
   providerPackageId: "tsonic.rust.js-surface",
   providerVersion: "1",
+});
+
+const rustJsAsyncExecutor: RustProviderBinaryHookRow = Object.freeze({
+  ...rustJsEventLoopEpilogue,
+  id: "tsonic.rust.js.async-executor",
+  phase: "async-execution",
+  path: "tsonic_rust_js::event_loop::block_on",
 });
 
 export function analyzeRustTargetProgram(
@@ -77,10 +84,19 @@ export function analyzeRustTargetProgram(
   }
   const runtimeActivatedCapabilities = new Set(input.runtimeActivatedCapabilityIds);
   const providerBinaryHooks = providerSemantics.binaryHooks.filter(row => runtimeActivatedCapabilities.has(row.providerPackageId));
+  const activeProviderHooks = analyzeRustBinaryHooks(providerBinaryHooks, runtimeReferences.plan.activeCrates);
   const binaryHooks = analyzeRustBinaryHooks(
-    jsEnabled ? [...providerBinaryHooks, rustJsTimerEpilogue] : providerBinaryHooks,
+    jsEnabled ? [...providerBinaryHooks, rustJsEventLoopEpilogue,
+      ...(activeProviderHooks.some(hook => hook.phase === "async-execution") ? [] : [rustJsAsyncExecutor])] : providerBinaryHooks,
     runtimeReferences.plan.activeCrates,
   );
+  if (binaryHooks.filter(hook => hook.phase === "async-execution").length > 1) {
+    return rejectedTargetStage([{
+      code: "RUST_AMBIGUOUS_ASYNC_EXECUTOR", category: "error", source: "tsonic-rust",
+      message: "An executable requires exactly one active provider async executor.",
+      evidence: ["target.capability=rust.runtime.binary-hooks"],
+    }]);
+  }
   const context = createRustAnalysisContext(
     input,
     providerSemantics,

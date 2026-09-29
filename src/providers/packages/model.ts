@@ -152,7 +152,7 @@ export interface RustProviderModuleAliasDefinition {
 
 interface RustProviderBinaryHookDefinitionBase {
   readonly id: string;
-  readonly phase: "before-initialization" | "after-entry";
+  readonly phase: "before-initialization" | "async-execution" | "after-entry";
   readonly path: string;
   readonly requiredCrate: string;
 }

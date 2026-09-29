@@ -54,7 +54,7 @@ import { rustRestSequenceElements } from "../operations/rest-assembly.js";
 import { closedMetadataEquals, isDenseDataArray } from "../metadata/closed-data.js";
 import { rustNamedTypeCarrierValue } from "../types/carriers/native.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../types/source-union-definitions.js";
-import { selectRustUnionArmMapping, selectRustUnionProjection, type RustUnionArmMapping } from "../types/union-relations.js";
+import { rustUnionAlternatives, selectRustUnionArmMapping, selectRustUnionProjection, type RustUnionArmMapping } from "../types/union-relations.js";
 
 const boolCarrier = rustSourcePrimitiveTargetType("bool");
 const int32Carrier = rustSourcePrimitiveTargetType("int32");
@@ -474,9 +474,9 @@ export function rustValueConversionContract(
       : undefined;
   }
   if (value.kind === "source-union-variant") {
-    const union = definitions.sourceUnionVariants(value.target);
+    const union = rustUnionAlternatives(value.target, definitions);
     const matches = union?.filter((variant) =>
-      variant.name === value.variantName &&
+      variant.variant.kind === "payload" && variant.variant.name === value.variantName &&
       rustTargetTypeRefEquals(variant.carrier, value.source)) ?? [];
     return isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) &&
         matches.length === 1

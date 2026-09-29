@@ -27,6 +27,7 @@ import { rustSourceItemIdentity } from "../program/source-package-facades.js";
 import { rustExplicitNamedTypeArguments } from "./generic-defaults.js";
 import { rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
 import { rustClassConstructorInstance } from "../../../target-model/types/carriers/class-constructors.js";
+import { rustRuntimeUnionContract } from "../../../target-model/types/carriers/runtime-unions.js";
 import { rustClassEnvironmentHandleType } from "../objects/class-environment-types.js";
 import { rustLifetimeToAst } from "./lifetime-syntax.js";
 import { rustOptionalStorageTypeArguments } from "./type-projections.js";
@@ -595,7 +596,7 @@ export function rustParameterTypeFromCarrierInContext(
 }
 
 export function rustUnionTypePathInContext(carrier: TargetTypeRef, context: RustTypeRenderingContext): string | undefined {
-  if (rustSourceUnionCarrierValue(carrier) === undefined) return undefined;
+  if (rustSourceUnionCarrierValue(carrier) === undefined && rustRuntimeUnionContract(carrier) === undefined) return undefined;
   const type = rustTypeFromCarrierInContext(carrier, context);
   return type?.kind === "named" ? type.path : undefined;
 }

@@ -24,8 +24,8 @@ import type { Node } from "@tsonic/tsts";
 import type { RustCompletionBoundary, RustPlanContext } from "../program/plan-context.js";
 import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { rustJsErrorTargetType } from "../../../target-model/types/index.js";
-import { resolveRustProgramErrorRoute } from "../program/source-package-errors.js";
+import { rustJsErrorTargetType, rustProgramErrorTargetType } from "../../../target-model/types/index.js";
+import { planRustProgramErrorConstruction } from "../expressions/program-errors.js";
 
 export function planThrowStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const fact = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
@@ -84,50 +84,12 @@ export function planThrowStatement(node: Node, context: RustPlanContext): readon
       return undefined;
     }
     error = value;
-  } else if (fact.error.kind === "runtime") {
-    error = {
-        kind: "call",
-        path: `${activeBoundary.errorTypePath}::from`,
-        args: [value],
-      };
   } else {
-    const definition = context.input.program.projectTypes.definitionForCarrier(fact.error.carrier);
-    const route = definition === undefined ||
-      context.input.program.projectTypes.programErrorVariant(definition) !== fact.error.variant ||
-      !rustTargetTypeRefEquals(
-        context.input.program.projectTypes.openCarrier(definition),
-        fact.error.carrier,
-      )
-      ? undefined
-      : resolveRustProgramErrorRoute(
-          context.sourcePackageErrors,
-          activeBoundary.componentId,
-          definition,
-          fact.error.variant,
-        );
-    if (route === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, expression),
-        "rust.backend.throw-project-error-route",
-        "Project error throw has no exact route through the current source-package error domain.",
-      ));
-      return undefined;
-    }
-    error = route.kind === "local"
-      ? {
-          kind: "call",
-          path: `${activeBoundary.errorTypePath}::${route.variant}`,
-          args: [value],
-        }
-      : {
-          kind: "call",
-          path: `${activeBoundary.errorTypePath}::${route.consumerVariant}`,
-          args: [{
-            kind: "call",
-            path: `${route.ownerTypePath}::${route.ownerVariant}`,
-            args: [value],
-          }],
-        };
+    const constructed = planRustProgramErrorConstruction({ kind: "program-error", source: fact.error.carrier,
+      target: rustProgramErrorTargetType(), ...(fact.error.kind === "project" ? { variant: fact.error.variant } : {}),
+    }, value, expression, context, activeBoundary);
+    if (constructed === undefined) return undefined;
+    error = constructed;
   }
   return [{ kind: "throw", error }];
 }

@@ -12,13 +12,14 @@ export function closeRustCallableResultStorage(
     if (carrier.kind !== "target-named" || carrier.id !== rustJsPromiseTargetId ||
       carrier.genericArguments?.[0]?.kind !== "lifetime" || carrier.genericArguments[0].lifetime.kind !== "placeholder") return carrier;
     const output = rustFutureOutputCarrier(carrier);
+    const error = carrier.genericArguments[2];
     const lifetime = output === undefined || parameters.some(parameter => parameter === undefined) ? undefined
       : selectRustSuspendedStorageLifetime([...(parameters as readonly TargetTypeRef[]), output], contract);
-    if (output === undefined || lifetime === undefined) {
+    if (output === undefined || lifetime === undefined || error?.kind !== "type") {
       unresolved = true;
       return carrier;
     }
-    return rustJsPromiseTargetTypeWithLifetime(output, lifetime);
+    return rustJsPromiseTargetTypeWithLifetime(output, lifetime, error.type);
   });
   return unresolved ? undefined : selected;
 }

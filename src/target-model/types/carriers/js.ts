@@ -89,6 +89,7 @@ export function rustJsPromiseTargetType(output: TargetTypeRef): TargetTypeRef {
 export function rustJsPromiseTargetTypeWithLifetime(
   output: TargetTypeRef,
   lifetime: RustLifetimeRef,
+  error: TargetTypeRef = rustProgramErrorTargetType(),
 ): TargetTypeRef {
   return {
     kind: "target-named",
@@ -96,14 +97,15 @@ export function rustJsPromiseTargetTypeWithLifetime(
     genericArguments: [
       rustLifetimeGenericArgument(lifetime),
       rustTypeGenericArgument(output),
+      rustTypeGenericArgument(error),
     ],
   };
 }
 
 export function rustJsPromiseOutputTargetType(carrier: TargetTypeRef | undefined): TargetTypeRef | undefined {
   if (carrier?.kind !== "target-named" || carrier.id !== rustJsPromiseTargetId) return undefined;
-  const [lifetime, output] = carrier.genericArguments ?? [];
-  return carrier.genericArguments?.length === 2 && lifetime?.kind === "lifetime" && output?.kind === "type"
+  const [lifetime, output, error] = carrier.genericArguments ?? [];
+  return carrier.genericArguments?.length === 3 && lifetime?.kind === "lifetime" && output?.kind === "type" && error?.kind === "type"
     ? output.type
     : undefined;
 }
@@ -113,11 +115,11 @@ export function rustJsPromiseFulfilledResultTargetType(value: TargetTypeRef): Ta
 }
 
 export function rustJsPromiseRejectedResultTargetType(): TargetTypeRef {
-  return { kind: "target-named", id: rustJsPromiseRejectedResultTargetId };
+  return { kind: "target-named", id: rustJsPromiseRejectedResultTargetId, genericArguments: rustTypeGenericArguments([rustProgramErrorTargetType()]) };
 }
 
 export function rustJsPromiseSettledResultTargetType(value: TargetTypeRef): TargetTypeRef {
-  return { kind: "target-named", id: rustJsPromiseSettledResultTargetId, genericArguments: rustTypeGenericArguments([value]) };
+  return { kind: "target-named", id: rustJsPromiseSettledResultTargetId, genericArguments: rustTypeGenericArguments([value, rustProgramErrorTargetType()]) };
 }
 
 export function getRustJsWeakMapTargetTypes(

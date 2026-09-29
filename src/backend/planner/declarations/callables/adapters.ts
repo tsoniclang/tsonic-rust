@@ -25,6 +25,7 @@ import {
 } from "../../names/synthetic.js";
 import { rustCompilerOwnedContextualConversionMatches } from "../../../../target-model/conversions/contextual.js";
 import { planRustEmptyRecordConversion } from "../../expressions/empty-record-conversion.js";
+import { planRustProgramErrorConstruction } from "../../expressions/program-errors.js";
 import { planRustProjectStructuralConversion } from "../../objects/project-structural-views.js";
 
 export function applyRustCallableValueAdapter(
@@ -71,6 +72,11 @@ export function applyRustCallableValueAdapterRaw(
         ? { expression, fallible: false }
         : undefined;
     case "conversion": {
+      if (adapter.conversion.kind === "program-error") {
+        if (!rustCompilerOwnedContextualConversionMatches(adapter.sourceCarrier, adapter.targetCarrier, adapter.conversion)) return undefined;
+        const converted = planRustProgramErrorConstruction(adapter.conversion, expression, node, context);
+        return converted === undefined ? undefined : { expression: converted, fallible: false };
+      }
       if (adapter.conversion.kind === "callable-absence-completion") {
         if (!rustCompilerOwnedContextualConversionMatches(adapter.sourceCarrier, adapter.targetCarrier, adapter.conversion)) return undefined;
         const converted = planRustCallableAbsenceCompletion(adapter.conversion, expression, node, context);

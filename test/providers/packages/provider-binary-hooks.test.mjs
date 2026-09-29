@@ -144,3 +144,17 @@ test("binary hook phases are explicit, immutable and conflict checked", () => {
     collectRustProviderSemanticsFromDefinitions([definition()])), /conflicting definitions/u);
   assert.throws(() => createRustProviderPackage(definition({ binaryEpilogues: [] })), /binaryEpilogues/u);
 });
+
+test("async execution hooks retain their exact provider error and path contracts", () => {
+  const hooks = definition({ binaryHooks: [{
+    id: "executor", phase: "async-execution", path: "runtime::block_on",
+    requiredCrate: "acme_lifecycle", isFallible: true, errorBoundary: "target-runtime",
+  }] });
+  const semantics = collectRustProviderSemanticsFromDefinitions([hooks]);
+  assert.deepEqual(semantics.binaryHooks, [{
+    id: "executor", phase: "async-execution", path: "acme_lifecycle::event_loop::block_on",
+    requiredCrate: "acme_lifecycle", isFallible: true, errorBoundary: "target-runtime",
+    providerPackageId: "acme-lifecycle", providerVersion: "1.0.0",
+  }]);
+  assert.ok(Object.isFrozen(semantics.binaryHooks[0]));
+});

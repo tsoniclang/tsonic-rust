@@ -4,7 +4,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 interface RustBinaryHookPlanBase {
   readonly id: string;
-  readonly phase: "before-initialization" | "after-entry";
+  readonly phase: "before-initialization" | "async-execution" | "after-entry";
   readonly path: string;
 }
 

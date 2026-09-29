@@ -53,6 +53,7 @@ import {
 import { createRustCrateRootSourceFile } from "../project/foundation.js";
 import { verifyRustFoundationPlan } from "../foundation/verify.js";
 import { applyRustFoundationImports } from "../foundation/imports.js";
+import { planRustAsyncExecution } from "./async-execution.js";
 
 export function planRustOutput(input: RustPlanningContext): TargetStageResult<RustOutputPlan> {
   const diagnostics: TargetDiagnostic[] = [];
@@ -175,6 +176,14 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     [structuralShapesModuleName, programModuleName, initializerFacadeModuleName],
   );
   const activeHooks = input.program.binaryHooks;
+  const executors = activeHooks.filter(hook => hook.phase === "async-execution");
+  if (executors.length > 1) {
+    return rejectedTargetStage([{
+      code: "RUST_AMBIGUOUS_ASYNC_EXECUTOR", category: "error", source: "tsonic-rust",
+      message: "Sealed binary hooks require one unambiguous async executor.",
+      evidence: ["target.capability=rust.runtime.binary-hooks"],
+    }]);
+  }
   const hookErrorTypes = new Map<
     (typeof activeHooks)[number],
     import("../../target-ast/nodes.js").RustType
@@ -432,15 +441,15 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
       path: `${crateName}::${binaryEntryExportName}`,
       args: [],
     };
+    const executor = executors[0];
+    const executeAsync = (future: import("../../target-ast/nodes.js").RustExpr) =>
+      planRustAsyncExecution(future, executor, mainErrorType,
+        executor === undefined ? undefined : hookErrorTypes.get(executor));
     const entryExecution = entryFunction.async
-      ? {
-          kind: "call" as const,
-          path: "tsonic_rust_runtime::block_on",
-          args: [entryFunction.async === "js-promise"
+      ? executeAsync(entryFunction.async === "js-promise"
             ? { kind: "method-call" as const, receiver: entryCall,
                 method: entryFunction.fallible ? "into_result" : "into_value", args: [] }
-            : entryCall],
-        }
+            : entryCall)
       : entryCall;
     const completionType: import("../../target-ast/nodes.js").RustType = entryFunction.nativeTermination
       ? { kind: "named", path: "std::process::ExitCode" }
@@ -458,15 +467,11 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
               resultErrorType: mainErrorType,
               operandErrorType: mainErrorType,
               expr: crateInitializer.asynchronous
-                  ? {
-                      kind: "call" as const,
-                      path: "tsonic_rust_runtime::block_on",
-                      args: [{
+                  ? executeAsync({
                         kind: "call" as const,
                         path: `${crateName}::${crateInitializer.functionName}`,
                         args: [],
-                      }],
-                    }
+                      })
                   : {
                       kind: "call" as const,
                       path: `${crateName}::${crateInitializer.functionName}`,
@@ -474,15 +479,11 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
                     },
               }
             : crateInitializer.asynchronous
-              ? {
-                  kind: "call" as const,
-                  path: "tsonic_rust_runtime::block_on",
-                  args: [{
+              ? executeAsync({
                     kind: "call" as const,
                     path: `${crateName}::${crateInitializer.functionName}`,
                     args: [],
-                  }],
-                }
+                  })
               : {
                   kind: "call" as const,
                   path: `${crateName}::${crateInitializer.functionName}`,
@@ -515,6 +516,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
       completionType,
       successfulCompletion,
       epilogueStatements,
+      executeAsync,
       diagnostics,
     );
     if (workerDispatchStatements === undefined || diagnostics.length > 0) {
@@ -612,6 +614,7 @@ function planRustWorkerDispatch(
   completionType: import("../../target-ast/nodes.js").RustType,
   successfulCompletion: import("../../target-ast/nodes.js").RustExpr,
   epilogueStatements: readonly import("../../target-ast/nodes.js").RustStmt[],
+  executeAsync: (future: import("../../target-ast/nodes.js").RustExpr) => import("../../target-ast/nodes.js").RustExpr,
   diagnostics: TargetDiagnostic[],
 ): readonly import("../../target-ast/nodes.js").RustStmt[] | undefined {
   if (entries.length === 0) return Object.freeze([]);
@@ -702,11 +705,7 @@ function planRustWorkerDispatch(
               args: [],
             };
             const execution = entry.asynchronous
-              ? {
-                  kind: "call" as const,
-                  path: "tsonic_rust_runtime::block_on",
-                  args: [call],
-                }
+              ? executeAsync(call)
               : call;
             const invoke = entry.operandErrorType === undefined
               ? execution

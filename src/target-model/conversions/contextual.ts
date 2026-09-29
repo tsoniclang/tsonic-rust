@@ -10,6 +10,7 @@ import { rustGenericCallableConversionMatches, type RustGenericCallableConversio
 import { rustIntegerTruncationConversionMatches, type RustIntegerTruncationConversion } from "./integer-truncation.js";
 import { rustExactIntegerConversionMatches } from "./exact-integer.js";
 import { rustCallableAbsenceCompletionMatches, type RustCallableAbsenceCompletion } from "./callable-completion.js";
+import { rustProgramErrorConversionMatches, type RustProgramErrorConversion } from "./program-error.js";
 
 export type RustContextualValueConversion =
   | RustValueConversion
@@ -18,6 +19,7 @@ export type RustContextualValueConversion =
   | RustGenericCallableConversion
   | RustIntegerTruncationConversion
   | RustCallableAbsenceCompletion
+  | RustProgramErrorConversion
   | {
       readonly kind: "native-trait-object-upcast";
       readonly source: TargetTypeRef;
@@ -35,6 +37,7 @@ export function rustCompilerOwnedContextualConversionMatches(
   conversion: RustContextualValueConversion,
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): boolean {
+  if (conversion.kind === "program-error") return rustProgramErrorConversionMatches(conversion, sourceCarrier, targetCarrier);
   if (conversion.kind === "callable-absence-completion") {
     return rustTargetTypeRefEquals(conversion.source, sourceCarrier) &&
       rustTargetTypeRefEquals(conversion.target, targetCarrier) &&
@@ -80,6 +83,7 @@ export function rustContextualValueConversionIsFallible(
     return conversion.fields.some(field => rustValueConversionIsFallible(field.conversion, definitions));
   }
   return conversion !== undefined &&
+    conversion.kind !== "program-error" &&
     conversion.kind !== "native-trait-object-upcast" &&
     conversion.kind !== "reference-reborrow" &&
     conversion.kind !== "empty-record" &&

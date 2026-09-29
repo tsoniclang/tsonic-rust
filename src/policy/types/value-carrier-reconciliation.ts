@@ -144,6 +144,17 @@ export function selectRustValueCarrierReconciliation(
   if (rustTargetTypeRefEquals(sourceCarrier, targetCarrier)) {
     return { kind: "identity" };
   }
+  if (isRustProgramErrorCarrier(targetCarrier)) {
+    const definition = projectTypes.definitionForCarrier(sourceCarrier);
+    const variant = definition === undefined ? undefined : projectTypes.programErrorVariant(definition);
+    if (rustTargetTypeRefEquals(sourceCarrier, rustJsErrorTargetType()) || definition !== undefined &&
+      variant !== undefined && rustTargetTypeRefEquals(projectTypes.openCarrier(definition), sourceCarrier)) {
+      return { kind: "conversion", fact: { sourceCarrier, targetCarrier, conversion: {
+        kind: "program-error", source: sourceCarrier, target: targetCarrier,
+        ...(variant === undefined ? {} : { variant }),
+      } } };
+    }
+  }
   if (rustGenericCallableSignaturesMatch(sourceCarrier, targetCarrier)) {
     return { kind: "conversion", fact: { sourceCarrier, targetCarrier,
       conversion: { kind: "generic-callable-flow", source: sourceCarrier, target: targetCarrier },

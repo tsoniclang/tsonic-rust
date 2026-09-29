@@ -27,7 +27,13 @@ export function getRustTypeofRuntimeKind(
     const value = getRustTypeofRuntimeKind(optional, definitions, new Set(active).add(identity));
     return value === undefined ? undefined : { kind: "optional", sourceCarrier: carrier, value };
   }
-  const sourceVariants = definitions.sourceUnionVariants(carrier);
+  const runtimeUnion = rustRuntimeUnionContract(carrier);
+  if (runtimeUnion?.typeofMethod !== undefined) {
+    return { kind: "runtime-union", method: runtimeUnion.typeofMethod, sourceCarrier: carrier };
+  }
+  const sourceVariants = definitions.sourceUnionVariants(carrier) ??
+    (runtimeUnion?.alternatives.every(arm => arm.variant.kind === "payload") === true
+      ? runtimeUnion.alternatives.map(arm => ({ name: arm.variant.name, carrier: arm.carrier })) : undefined);
   if (sourceVariants !== undefined) {
     const nested = new Set(active).add(identity);
     const variants = sourceVariants.map(variant => {
@@ -36,10 +42,6 @@ export function getRustTypeofRuntimeKind(
     });
     return variants.some(variant => variant === undefined) ? undefined
       : { kind: "source-union", sourceCarrier: carrier, variants: variants.map(variant => variant!) };
-  }
-  const runtimeUnion = rustRuntimeUnionContract(carrier);
-  if (runtimeUnion !== undefined) {
-    return { kind: "runtime-union", method: runtimeUnion.typeofMethod, sourceCarrier: carrier };
   }
   if (isRustAbsenceCarrier(carrier)) return "object";
   if (carrier.kind === "source-primitive") {

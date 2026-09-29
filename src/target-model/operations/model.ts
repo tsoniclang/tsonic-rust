@@ -466,6 +466,7 @@ export interface RustProviderOperationTemplate<
 
 export interface RustCallbackOperationTemplate {
   readonly shape: "direct" | "map" | "reduce";
+  readonly resultProjection?: "awaited";
   readonly sourceArgumentIndex: number;
   readonly accumulatorArgumentIndex?: number;
   readonly borrowedParameters?: {

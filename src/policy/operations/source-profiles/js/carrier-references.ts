@@ -20,6 +20,7 @@ import {
   rustFutureOutputCarrier,
   rustJsPromiseSettledResultTargetType,
   rustJsPromiseTargetType,
+  rustProgramErrorTargetType,
   rustJsPromiseTargetTypeWithLifetime,
   rustJsRegExpExecArrayTargetType,
   rustJsRegExpIndicesTargetType,
@@ -211,6 +212,8 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
       return rustSourcePrimitiveTargetType("float64");
     case "infer":
       return rustInferCarrier;
+    case "inferred-array":
+      return rustJsArrayTargetType(rustInferCarrier);
     case "selected-method-type-argument":
       return bindings.selectedMethodTypeArguments?.[reference.index];
     case "selected-method-input-array": {
@@ -316,6 +319,8 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
       return rustFutureOutputCarrier(bindings.sourceResult);
     case "promise-output":
       return bindings.promiseOutput;
+    case "program-error":
+      return rustProgramErrorTargetType();
     case "promise-input-output":
       return bindings.promiseInputOutput;
     case "promise-of-input-output":

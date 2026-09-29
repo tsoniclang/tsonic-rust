@@ -6,8 +6,9 @@ import type {
 } from "../../facts/keys.js";
 import {
   rustCallableProtocol,
-  rustJsArrayTargetType,
+  rustFutureOutputCarrier,
 } from "../../../target-model/types/index.js";
+import { mapRustTargetTypes } from "../../../target-model/types/carriers/substitution.js";
 
 export interface RustCallbackOperationSelection {
   readonly fact: RustProviderOperationTemplate;
@@ -28,9 +29,19 @@ export function finalizeRustCallbackOperation(
     return undefined;
   }
   if (selection.callback.shape === "map") {
-    const resultCarrier = rustJsArrayTargetType(callbackProtocol.result);
+    const output = selection.callback.resultProjection === "awaited"
+      ? rustFutureOutputCarrier(callbackProtocol.result)
+      : callbackProtocol.result;
+    if (output === undefined) return undefined;
+    const resultCarrier = replaceRustInferCarrier(selection.fact.resultCarrier, output);
     const parameterCarriers = [...(selection.parameterCarriers ?? [])];
-    parameterCarriers[selection.callback.sourceArgumentIndex] = callback;
+    for (const [index, template] of parameterCarriers.entries()) {
+      if (template === undefined) return undefined;
+      const actual = argumentCarriers[index];
+      const expected = replaceRustInferCarrier(template, callbackProtocol.result);
+      if (actual !== undefined && !rustCallbackCarrierMatchesTemplate(expected, actual)) return undefined;
+      parameterCarriers[index] = actual ?? expected;
+    }
     return {
       ...selection,
       fact: {
@@ -78,7 +89,7 @@ export function finalizeRustCallbackOperation(
   };
 }
 
-function rustCallbackProtocol(
+export function rustCallbackProtocol(
   carrier: TargetTypeRef | undefined,
 ): { readonly representation: "closure" | "function-pointer" | "callable"; readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef; readonly fallible: boolean } | undefined {
   if (carrier?.kind === "closure") {
@@ -91,6 +102,11 @@ function rustCallbackProtocol(
   return callable === undefined
     ? undefined
     : { representation: "callable", parameters: callable.parameters, result: callable.result, fallible: true };
+}
+
+export function replaceRustInferCarrier(template: TargetTypeRef, replacement: TargetTypeRef): TargetTypeRef {
+  return mapRustTargetTypes(template, carrier => carrier.kind === "opaque" && carrier.id === "tsonic.rust.infer"
+    ? replacement : carrier);
 }
 
 function rustCallbackCarrierMatchesTemplate(

@@ -18,6 +18,7 @@ import {
 } from "../../../../target-model/types/index.js";
 import { resolveCarrierRef } from "./carrier-references.js";
 import { selectJsArrayConstruction } from "./array-construction.js";
+import { selectRustJsPromiseConstructor } from "./promises.js";
 import { materializeJsonValueConversions } from "./materialization.js";
 import { selectRustJsonValueConversion } from "../../../conversions/selection.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
@@ -318,6 +319,9 @@ export function selectJsSurfaceConstructorBySourceOwner(request: {
   readonly soleArgumentNumberKind?: "number" | "non-number";
   readonly carrierSupportsProjectIdentity?: (carrier: TargetTypeRef) => boolean;
 }, definitions: RustTypeDefinitions = emptyRustTypeDefinitions): JsOperationSelection | undefined {
+  if (request.sourceOwnerName === "PromiseConstructor") {
+    return selectRustJsPromiseConstructor(request.typeArgumentCarriers, request.argumentCarriers);
+  }
   if (request.sourceOwnerName === "ArrayConstructor") {
     return selectJsArrayConstruction(request.typeArgumentCarriers, request.argumentCarriers, "constructor", request.soleArgumentNumberKind);
   }

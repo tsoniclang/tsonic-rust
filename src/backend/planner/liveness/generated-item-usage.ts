@@ -709,7 +709,8 @@ export function analyzeRustGeneratedItemUsage(input: {
       if (conversion !== undefined && conversion.kind !== "native-trait-object-upcast" &&
         conversion.kind !== "reference-reborrow" && conversion.kind !== "provider-record-copy" &&
         conversion.kind !== "empty-record" && conversion.kind !== "generic-callable-flow" &&
-        conversion.kind !== "integer-truncation" && conversion.kind !== "callable-absence-completion") {
+        conversion.kind !== "integer-truncation" && conversion.kind !== "callable-absence-completion" &&
+        conversion.kind !== "program-error") {
         visitConversion(conversion);
       }
       if (fact !== undefined) visitFact(node, fact);

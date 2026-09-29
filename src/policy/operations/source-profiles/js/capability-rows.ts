@@ -370,7 +370,7 @@ const promiseRows: readonly JsOperationRowData[] = [
       op: "operation",
       operationKind: "property",
       target: { form: "field", name: "reason" },
-      result: { ref: "source-result" },
+      result: { ref: "program-error" },
       evaluation: "pure",
     },
   },

@@ -129,9 +129,9 @@ export function rustFutureOutputCarrier(carrier: TargetTypeRef | undefined): Tar
     return arguments_?.length === 1 ? arguments_[0] : undefined;
   }
   if (carrier.id !== rustJsPromiseTargetId) return undefined;
-  const [lifetime, output] = carrier.genericArguments ?? [];
-  return carrier.genericArguments?.length === 2 &&
-      lifetime?.kind === "lifetime" && output?.kind === "type"
+  const [lifetime, output, error] = carrier.genericArguments ?? [];
+  return carrier.genericArguments?.length === 3 &&
+      lifetime?.kind === "lifetime" && output?.kind === "type" && error?.kind === "type"
     ? output.type
     : undefined;
 }

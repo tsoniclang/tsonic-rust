@@ -1,7 +1,7 @@
 import { acceptRustPolicy } from "../../../../policy/operations/contracts.js";
 import { acceptSelectedCall, mapSelectedTargetTypeArguments, selectRustOptionalCallResult } from "./instantiation.js";
 import { defaultValueFactKey, flowStateFactKey } from "@tsonic/tsts";
-import { finalizeRustCallbackOperation } from "../callbacks.js";
+import { finalizeRustCallbackOperation, replaceRustInferCarrier, rustCallbackProtocol } from "../callbacks.js";
 import { rustSelectedCallTypeParameters } from "../../../../policy/types/resolution/generic-arguments.js";
 import {
   applyRustRegExpReplacementCallbackConversion,
@@ -31,7 +31,7 @@ import type {
   TargetTypeRef,
 } from "../../../../target-model/types/model.js";
 import type { RustRegExpReplacementCallbackContract } from "../regexp-replacement-callback.js";
-import { rustJsStringTargetType, rustStringTargetType } from "../../../../target-model/types/index.js";
+import { rustJsStringTargetType, rustStringTargetType, rustOptionElementCarrier } from "../../../../target-model/types/index.js";
 
 export interface RustPreparedDeferredCheckedCall {
   readonly sourceName: string;
@@ -74,7 +74,8 @@ export function prepareRustDeferredCheckedCall(
       "Selected RegExp replacement callback has no closed lane-specific argument-vector contract from exact callable evidence.",
     );
   }
-  if (arguments_.length !== deferred.parameterCarriers.length) {
+  if (arguments_.length > deferred.parameterCarriers.length ||
+    deferred.parameterCarriers.slice(arguments_.length).some(carrier => rustOptionElementCarrier(carrier) === undefined)) {
     return rejectSelectedOperation(
       request.source.call,
       context,
@@ -126,6 +127,18 @@ export function prepareRustDeferredCheckedCall(
       callbackArgument,
       replaceRustInferCarrier(callbackTemplate, accumulator),
     );
+  } else if (deferred.callback.shape === "map") {
+    const callbackIndex = deferred.callback.sourceArgumentIndex;
+    const argument = arguments_[callbackIndex];
+    if (argument !== undefined) actual[callbackIndex] = resolveArgument(argument, deferred.parameterCarriers[callbackIndex]);
+    const callback = rustCallbackProtocol(actual[callbackIndex]);
+    if (callback !== undefined) {
+      for (const [index, argument] of arguments_.entries()) {
+        if (index === callbackIndex) continue;
+        const template = deferred.parameterCarriers[index];
+        actual[index] = resolveArgument(argument, template === undefined ? undefined : replaceRustInferCarrier(template, callback.result));
+      }
+    }
   } else {
     for (const [index, argument] of arguments_.entries()) {
       actual[index] = resolveArgument(
@@ -259,24 +272,6 @@ function callbackFallibleTemplate(
     isFallible: true,
     errorBoundary: "source-program",
   };
-}
-
-function replaceRustInferCarrier(
-  template: TargetTypeRef,
-  replacement: TargetTypeRef,
-): TargetTypeRef {
-  if (template.kind === "opaque" && template.id === "tsonic.rust.infer") {
-    return replacement;
-  }
-  if (template.kind === "function-pointer" || template.kind === "closure") {
-    return {
-      ...template,
-      args: template.args.map((argument) =>
-        replaceRustInferCarrier(argument, replacement)),
-      result: replaceRustInferCarrier(template.result, replacement),
-    };
-  }
-  return template;
 }
 
 export function mapRustSourceMarkerCall(

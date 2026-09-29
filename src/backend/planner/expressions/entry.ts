@@ -50,6 +50,7 @@ import { tryPlanRustNativePointerOperation } from "./native-pointers.js";
 import type { Node } from "@tsonic/tsts";
 import { planRustGenericCallableFlow } from "./generic-callable-flow.js";
 import { planRustCallableAbsenceCompletion } from "./callable-completion.js";
+import { planRustProgramErrorConstruction } from "./program-errors.js";
 import { planRustIntegerTruncation } from "./integer-truncation.js";
 import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
@@ -400,6 +401,10 @@ function applyRustContextualValueConversion(
   }
   if (fact.conversion.kind === "generic-callable-flow") {
     return planRustGenericCallableFlow(fact.conversion, expression, context);
+  }
+  if (fact.conversion.kind === "program-error") {
+    return rustCompilerOwnedContextualConversionMatches(fact.sourceCarrier, fact.targetCarrier, fact.conversion)
+      ? planRustProgramErrorConstruction(fact.conversion, expression, node, context) : undefined;
   }
   if (fact.conversion.kind === "callable-absence-completion") {
     return rustCompilerOwnedContextualConversionMatches(fact.sourceCarrier, fact.targetCarrier, fact.conversion)

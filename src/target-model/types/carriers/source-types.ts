@@ -45,6 +45,7 @@ export const rustJsSymbolTargetId = "rust.js.JsSymbol";
 export const rustJsWeakMapTargetId = "rust.js.JsWeakMap";
 export const rustJsWeakSetTargetId = "rust.js.JsWeakSet";
 export const rustJsPromiseTargetId = "rust.js.JsPromise";
+export const rustJsPromiseResolutionTargetId = "rust.js.PromiseResolution";
 export const rustJsPromiseFulfilledResultTargetId = "rust.js.PromiseFulfilledResult";
 export const rustJsPromiseRejectedResultTargetId = "rust.js.PromiseRejectedResult";
 export const rustJsPromiseSettledResultTargetId = "rust.js.PromiseSettledResult";

@@ -93,6 +93,7 @@ export type JsCarrierRef =
   | { readonly ref: "jsvalue" }
   | { readonly ref: "float64" }
   | { readonly ref: "infer" }
+  | { readonly ref: "inferred-array" }
   | { readonly ref: "selected-method-type-argument"; readonly index: number }
   | { readonly ref: "selected-method-input-array"; readonly index: number }
   | { readonly ref: "selected-method-output-array"; readonly index: number }
@@ -169,6 +170,7 @@ export type JsCarrierRef =
   | { readonly ref: "date" }
   | { readonly ref: "future-output" }
   | { readonly ref: "promise-output" }
+  | { readonly ref: "program-error" }
   | { readonly ref: "promise-input-output" }
   | { readonly ref: "promise-of-input-output" }
   | { readonly ref: "promise-resolved-value" }

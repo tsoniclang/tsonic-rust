@@ -583,7 +583,7 @@ function validateBinaryHooks(definition: RustProviderPackageDefinition, fail: Fa
       fail,
     );
     requireNonEmpty(epilogue.id, "binary hook id", fail);
-    if (epilogue.phase !== "before-initialization" && epilogue.phase !== "after-entry") {
+    if (epilogue.phase !== "before-initialization" && epilogue.phase !== "async-execution" && epilogue.phase !== "after-entry") {
       fail(`binary hook '${epilogue.id}' requires an exact lifecycle phase`);
     }
     requireRustPath(epilogue.path, `path for binary hook '${epilogue.id}'`, fail);

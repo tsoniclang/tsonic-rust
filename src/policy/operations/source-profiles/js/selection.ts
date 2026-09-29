@@ -56,6 +56,7 @@ import {
   rustUnitTargetType,
 } from "../../../../target-model/types/index.js";
 import { selectJsArrayConstruction } from "./array-construction.js";
+import { selectRustJsPromiseContinuation } from "./promises.js";
 import { jsArgumentCarrierMatchScore } from "./argument-matching.js";
 import { jsOperationRows } from "./rows.js";
 import { selectRustJsonValueConversion } from "../../../conversions/selection.js";
@@ -238,6 +239,9 @@ function firstArgumentId(request: JsOperationRequest): string | undefined {
 }
 
 export function selectJsSurfaceOperation(request: JsOperationRequest, definitions: RustTypeDefinitions = emptyRustTypeDefinitions): JsOperationSelection | undefined {
+  if (request.ownerName === "Promise" && (request.memberName === "then" || request.memberName === "catch")) {
+    return selectRustJsPromiseContinuation(request);
+  }
   const numberArrayUnion = selectRustNumberArrayUnionOperation(request, definitions);
   if (numberArrayUnion !== undefined) return numberArrayUnion;
   const upcasts = rustNamedTypeCarrierValue(request.receiverCarrier)?.upcasts ?? [];

@@ -24,6 +24,7 @@ import {
   rustJsPromiseRejectedResultTargetId,
   rustJsPromiseSettledResultTargetId,
   rustJsPromiseTargetId,
+  rustJsPromiseResolutionTargetId,
   rustJsSymbolTargetId,
   rustJsUint16ArrayTargetId,
   rustJsUint32ArrayTargetId,
@@ -134,12 +135,15 @@ function supportsCloneWithContracts(
       const [value] = rustOnlyTypeGenericArguments(carrier.genericArguments) ?? [];
       return value !== undefined && supports(value);
     }
-    if (carrier.id === rustJsPromiseTargetId ||
-      carrier.id === rustJsPromiseRejectedResultTargetId) {
+    if (carrier.id === rustJsPromiseTargetId) {
       return true;
     }
-    if (carrier.id === rustJsPromiseFulfilledResultTargetId ||
-      carrier.id === rustJsPromiseSettledResultTargetId) {
+    if (carrier.id === rustJsPromiseRejectedResultTargetId || carrier.id === rustJsPromiseSettledResultTargetId) {
+      const arguments_ = rustOnlyTypeGenericArguments(carrier.genericArguments);
+      return arguments_?.length === (carrier.id === rustJsPromiseRejectedResultTargetId ? 1 : 2) && arguments_.every(supports);
+    }
+    if (carrier.id === rustJsPromiseResolutionTargetId ||
+      carrier.id === rustJsPromiseFulfilledResultTargetId) {
       const [value] = rustTargetGenericTypeArguments(carrier.genericArguments);
       return value !== undefined && supports(value);
     }
@@ -480,7 +484,6 @@ const rustUnconditionallyCloneTargetIds: ReadonlySet<string> = new Set([
   rustJsSetTargetId,
   rustJsDateTargetId,
   rustJsPromiseTargetId,
-  rustJsPromiseRejectedResultTargetId,
   rustJsSymbolTargetId,
   rustJsWeakMapTargetId,
   rustJsWeakSetTargetId,
