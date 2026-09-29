@@ -185,6 +185,12 @@ export type JsCarrierRef =
 
 type JsCarrierCapability = "numeric" | "integer" | "numeric-parameter" | "clone" | "stringifiable" | "js-equality" | "project-identity-equality" | "object-identity" | "freezable-object";
 
+export type JsOperationTarget =
+  | Exclude<RustProviderOperationForm, { readonly form: "associated-call" }>
+  | (Omit<Extract<RustProviderOperationForm, { readonly form: "associated-call" }>, "owner"> & {
+      readonly owner: JsCarrierRef;
+    });
+
 export interface JsOperationRowData {
   readonly owner: string;
   readonly member: string;
@@ -214,7 +220,7 @@ export interface JsOperationRowData {
     | {
         readonly op: "operation";
         readonly operationKind: "method" | "constructor" | "property" | "indexer";
-        readonly target: RustProviderOperationForm;
+        readonly target: JsOperationTarget;
         readonly discardedTarget?: RustProviderOperationForm;
         readonly indexedLocationMethod?: string;
         readonly borrowedIndexMethod?: string;
@@ -228,7 +234,7 @@ export interface JsOperationRowData {
 }
     | {
         readonly op: "set";
-        readonly target: RustProviderOperationForm;
+        readonly target: JsOperationTarget;
         readonly params: readonly JsCarrierRef[];
       };
 }
@@ -244,7 +250,9 @@ export function defineJsOperationRows(rows: readonly JsOperationRowData[]): read
     if (row.shape.op === "operation" && row.shape.evaluation === "pure" &&
       (row.shape.operationKind === "constructor" ||
         row.callback !== undefined ||
-        rustProviderOperationFormDeclaresWritableInput(row.shape.target))) {
+        (row.shape.target.form === "associated-call"
+          ? row.shape.target.argModes?.includes("mut-ref") === true
+          : rustProviderOperationFormDeclaresWritableInput(row.shape.target)))) {
       throw new Error(
         `Pure JavaScript operation row '${row.owner}.${row.member}' cannot construct identity, invoke a source callback, or declare writable source inputs.`,
       );

@@ -234,6 +234,12 @@ export function validateOperationForm(
         }
       }
       return;
+    case "associated-call":
+      requireExactKeys(record, ["form", "owner", "method", "argModes"], `${label}.target`, fail);
+      validateCarrier(form.owner, definition, `${label}.target.owner`, fail);
+      requireRustIdentifier(form.method, `${label}.target.method`, fail);
+      validateModes(form.argModes, label, parameterCarriers?.length, fail);
+      return;
     case "trait-call":
       requireExactKeys(
         record,

@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { rustSourceParameterAbiFactKey } from "../facts/keys.js";
 import type { RustSuspendedCallableStorage } from "../facts/keys.js";
-import { selectRustSuspendedStorageLifetime } from "../../policy/ownership/suspended-storage.js";
+import { selectRustCallableStorageLifetime } from "../../policy/ownership/suspended-storage.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustSuspendedOwnedReceiver } from "../facts/callables-and-resources.js";
@@ -83,11 +83,14 @@ export function resolveRustSuspendedCallableStorage(
     carriers.push(carrier);
   }
   const contract = walk.context.sourceLifetimes.contractFor(declaration);
-  const lifetime = selectRustSuspendedStorageLifetime(carriers, contract);
+  const inputCarriers = exactParameters.map(parameter =>
+    walk.context.facts.get(parameter, rustSourceParameterAbiFactKey)?.parameterCarrier);
+  const lifetime = inputCarriers.some(carrier => carrier === undefined) ? undefined
+    : selectRustCallableStorageLifetime(inputCarriers as readonly TargetTypeRef[], carriers, contract);
   if (lifetime === undefined) {
     return {
       kind: "rejected",
-        reason: "A suspended callable's captured lifetimes have no single exact authored storage lifetime; elided, placeholder, or call-scoped captures cannot define escaping storage.",
+      reason: "A suspended callable's captured lifetimes require one exact native storage lifetime from its authored contract or unambiguous input elision.",
     };
   }
   if (lifetime.kind === "static") {

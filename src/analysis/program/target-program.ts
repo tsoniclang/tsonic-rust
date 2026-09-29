@@ -156,7 +156,7 @@ export function analyzeRustTargetProgram(
       const operation = facts.getFact(expression, rustTargetOperationFactKey);
       return operation?.kind === "provider-operation" &&
         (operation.abi.target.form === "method" || operation.abi.target.form === "call" ||
-          operation.abi.target.form === "receiver-method") &&
+          operation.abi.target.form === "receiver-method" || operation.abi.target.form === "associated-call") &&
         operation.abi.result.kind === "sync" && operation.abi.result.carrier.kind !== "reference" &&
         rustTargetTypeRefEquals(operation.abi.result.carrier, facts.getRuntimeCarrierFact(expression)?.carrier);
     },

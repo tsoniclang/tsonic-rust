@@ -31,6 +31,8 @@ import type { RustAnalysisContext } from "../program/context.js";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustSourceTypeDeclarations } from "../../policy/types/source-declarations.js";
+import { closeRustSuspendedStorage } from "../../policy/types/suspended-storage.js";
+import { rustEnclosingStorageContract } from "../../policy/ownership/suspended-storage.js";
 
 export function recordMethodSelfModeFacts(walk: RustFactWalk, sourceFiles: readonly SourceFile[]): void {
   const { ast } = walk.context;
@@ -82,7 +84,15 @@ export function recordClassSignatureFacts(walk: RustFactWalk, declaration: Node)
           ? resolveRustTargetTypeRef(member, rustResolutionContext(walk, member), walk.operationOptions)
           : resolveTypeNodeCarrier(walk, Node_Type(ast, member));
       if (fieldCarrier !== undefined) {
-        setCarrierFact(walk, member, fieldCarrier);
+        const storage = closeRustSuspendedStorage(fieldCarrier, [classCarrier],
+          rustEnclosingStorageContract(member, ast, walk.context.sourceLifetimes), "field");
+        if (storage === undefined) {
+          appendRustDiagnostic(walk, "RUST_FIELD_STORAGE_LIFETIME_NOT_CLOSED",
+            "The field's suspended storage has no exact enclosing native lifetime contract.", member,
+            ["target.capability=rust.field.suspended-storage"]);
+        } else {
+          setCarrierFact(walk, member, storage);
+        }
       }
       continue;
     }

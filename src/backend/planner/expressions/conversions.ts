@@ -409,6 +409,13 @@ export function planProviderOperationExpression(
       }
       return scoped({ kind: "binary", operator: form.operator, left, right });
     }
+    case "associated-call": {
+      const owner = rustCallTypeFromCarrierInContext(form.owner, context);
+      return owner === undefined ? undefined : scoped({
+        kind: "associated-call", owner, method: form.method, args,
+        ...(concreteTargetGenericArguments === undefined ? {} : { genericArguments: concreteTargetGenericArguments }),
+      });
+    }
     case "trait-call": {
       const owner = rustCallTypeFromCarrierInContext(form.owner, context);
       const traitGenericArguments = form.traitGenericArguments.map((argument) =>

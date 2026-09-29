@@ -35,7 +35,7 @@ export function planRustAwaitExpression(
   const future = operand === undefined ? undefined : context.input.program.facts.getFact(operand, rustFutureValueFactKey);
   const operandCarrier = operand === undefined ? undefined : context.input.program.facts.getRuntimeCarrierFact(operand)?.carrier;
   const selection = rustAwaitCarrier(operandCarrier);
-  if (selection === undefined || future === undefined || !rustFutureValueMatchesCarrier(future, operandCarrier) ||
+  if (selection === undefined || future === undefined || !rustFutureValueMatchesCarrier(future, operandCarrier, context.input.program.typeDefinitions) ||
     !rustTargetTypeRefEquals(awaitFact.resultCarrier, selection.resultCarrier)) {
     context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
       "rust.backend.await-future-value", "Awaited expression requires one compatible finalized future-value fact."));

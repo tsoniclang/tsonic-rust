@@ -8,6 +8,7 @@ import {
   substituteRustTargetGenericArgument,
 } from "../../../../target-model/types/index.js";
 import { rustClassStaticCallGenericArguments, rustClassStaticEnvironmentForCall, rustOwnedClassEnvironmentForCall } from "../../objects/class-environments.js";
+import { rustSourceCallArgumentCarriers } from "../../../../analysis/facts/source-call-lifetimes.js";
 import {
   diagnosticInput,
   isValidRustIdentifier,
@@ -103,6 +104,7 @@ export function planSelectedSourceCall(
     selected,
     selected.member.returnType,
     context.input.program.typeFamilies.normalize,
+    rustSourceCallArgumentCarriers(node, context.input.program.source.ast, context.input.program.facts),
   );
   if (!selectedMatches) {
     context.diagnostics.push(missingFactDiagnostic(

@@ -14,6 +14,7 @@ import {
   rustMutatedBindingFactKey,
   rustMutatedReferentFactKey,
   rustResourceManagementFactKey,
+  rustTargetOperationFactKey,
 } from "../../../analysis/facts/keys.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { collectVariableDeclarations, resourceDisposalReceiverMode } from "./resources.js";
@@ -22,6 +23,7 @@ import {
   rustCarrierReferentMutationRequiresMutableBinding,
   rustLocationTargetType,
   rustOptionElementCarrier,
+  rustCallableProtocol,
 } from "../../../target-model/types/index.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planExpression } from "../expressions/index.js";
@@ -196,11 +198,16 @@ function planVariableDeclaration(
   if (initializer !== undefined && init === undefined) {
     return undefined;
   }
+  const initializerOperation = initializer === undefined ? undefined
+    : context.input.program.facts.getFact(initializer, rustTargetOperationFactKey);
+  const selfTypedCallable = locationStorage === undefined && initializerOperation?.kind === "closure" &&
+    rustCallableProtocol(declarationCarrier) !== undefined &&
+    rustTargetTypeRefEquals(initializerOperation.resultCarrier, declarationCarrier);
   return [{
     kind: "let",
     name,
     mutable,
-    ...(rustType === undefined ? {} : { type: rustType }),
+    ...(rustType === undefined || selfTypedCallable ? {} : { type: rustType }),
     ...(init === undefined ? {} : { init }),
   }];
 }

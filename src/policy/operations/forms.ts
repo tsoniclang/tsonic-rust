@@ -25,7 +25,7 @@ export function rustProviderOperationFormAcceptsTargetGenericArguments(
   return form.form === "call" || form.form === "free-call" || form.form === "method" ||
     form.form === "source-module-construction" ||
     form.form === "receiver-method" || form.form === "arg-method" ||
-    form.form === "arg-receiver-method" || form.form === "trait-call" ||
+    form.form === "arg-receiver-method" || form.form === "trait-call" || form.form === "associated-call" ||
     form.form === "call-value-slice" || form.form === "call-value-array";
 }
 
@@ -37,6 +37,7 @@ export function rustProviderOperationFormDeclaresWritableInput(
     case "source-module-construction":
     case "arg-receiver-method":
     case "arg-structural-method":
+    case "associated-call":
       return form.argModes?.includes("mut-ref") === true;
     case "call-c-variadic":
       return form.fixedArgumentModes.includes("mut-ref");
@@ -108,6 +109,7 @@ export function rustProviderOperationSourceReceiverMayMutate(
     case "call":
     case "source-module-construction":
     case "struct-variant":
+    case "associated-call":
     case "expression-macro":
     case "call-c-variadic":
     case "call-str-slice":
@@ -142,6 +144,7 @@ export function rustProviderOperationSourceArgumentMayMutate(
     case "receiver-method":
       return orderedMode(form.argModes, form.argOrder) === "mut-ref";
     case "trait-call":
+    case "associated-call":
       return (form.argModes?.[sourceIndex] ?? "value") === "mut-ref";
     case "call-c-variadic":
       return (form.fixedArgumentModes[sourceIndex] ?? "value") === "mut-ref";
@@ -410,6 +413,13 @@ export function rustProviderOperationFormContractViolation(
         ? undefined
         : "binary operator form must name its exact std trait and two source arguments";
     }
+    case "associated-call":
+      return hasExactKeys(form, ["form", "owner", "method", "argModes"], ["form", "owner", "method"]) &&
+        isRustTargetTypeRef(form.owner) && typeof form.method === "string" &&
+        rustIdentifierPattern.test(form.method) && validateModes(form.argModes) === undefined &&
+        (operationKind === "method" || operationKind === "constructor")
+        ? undefined
+        : "associated call requires one exact owner, method and argument modes";
     case "trait-call":
       return hasExactKeys(
         form,

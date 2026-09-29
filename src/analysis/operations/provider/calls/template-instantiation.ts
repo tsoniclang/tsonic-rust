@@ -517,6 +517,7 @@ export function substituteProviderOperationForm(
           substituteTargetGenericArgument(argument, substitutions)),
       };
     case "associated-value":
+    case "associated-call":
       return {
         ...form,
         owner: substituteProviderCarrier(form.owner, substitutions),

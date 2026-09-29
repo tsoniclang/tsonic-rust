@@ -6,11 +6,22 @@ import {
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { selectRustJsonValueConversion } from "../../../conversions/selection.js";
 import type { RustProviderOperationForm } from "../../../../target-model/operations/model.js";
+import type { JsOperationTarget } from "./model.js";
+import { resolveCarrierRef, type JsLaneBindings } from "./carrier-references.js";
 import type {
   RustTargetGenericArgument,
   RustTargetTraitRef,
   TargetTypeRef,
 } from "../../../../target-model/types/model.js";
+
+export function materializeJsOperationTarget(
+  target: JsOperationTarget,
+  bindings: JsLaneBindings,
+): RustProviderOperationForm | undefined {
+  if (target.form !== "associated-call") return target;
+  const owner = resolveCarrierRef(target.owner, bindings);
+  return owner === undefined ? undefined : { ...target, owner };
+}
 
 function copyStyleOf(
   carrier: TargetTypeRef | undefined,

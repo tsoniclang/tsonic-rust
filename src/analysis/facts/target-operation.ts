@@ -45,6 +45,9 @@ export function rustTargetOperationText(fact: RustTargetOperationFact): string {
     if (target.form === "associated-value") {
       return `${JSON.stringify(target.owner)}::${target.name}`;
     }
+    if (target.form === "associated-call") {
+      return `${JSON.stringify(target.owner)}::${target.method}`;
+    }
     if (target.form === "arg-structural-method") {
       return `structural-method[${target.storageIndex}]`;
     }

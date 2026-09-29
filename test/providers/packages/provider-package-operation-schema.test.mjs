@@ -66,6 +66,19 @@ function providerContext(selectedCapabilities) {
   return captureRustProviderContributions(selectedCapabilities);
 }
 
+test("provider associated calls validate their native owner and arguments", () => {
+  const target = { form: "associated-call", owner: int32Carrier, method: "default" };
+  const operation = { exportId: "@acme/validation::run", operationKind: "method", target,
+    resultCarrier: int32Carrier };
+  assert.doesNotThrow(() => createRustProviderPackage(definition({ operations: [operation] })));
+  for (const mutation of [{ owner: undefined }, { owner: { kind: "invalid" } },
+    { method: "create::<u32>" }, { path: "other::create" }, { argModes: ["ref"] }]) {
+    assert.throws(() => createRustProviderPackage(definition({
+      operations: [{ ...operation, target: { ...target, ...mutation } }],
+    })));
+  }
+});
+
 test("provider operation metadata accepts only structured Rust forms", () => {
   const invalidTargets = [
     {

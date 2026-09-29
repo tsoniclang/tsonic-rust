@@ -1,5 +1,5 @@
 import type { RustSuspendedCallableImplementation } from "../../../../analysis/callables/suspended-values.js";
-import { rustCallableProtocol } from "../../../../target-model/types/index.js";
+import { rustCallableProtocol, rustCallableTargetType } from "../../../../target-model/types/index.js";
 import type { RustBlock, RustGenericParameter, RustItem, RustType } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustTypeParameterFromSourceContract } from "../../../../target-model/names/type-parameters.js";
@@ -13,6 +13,7 @@ import { rustSuspendedCallableStateType } from "../../types/suspended-callables.
 import { rustTypeParameterBounds, rustGenericsWithAssociatedBounds } from "../../types/generic-bounds.js";
 import { rustLifetimeToAst } from "../../types/lifetime-syntax.js";
 import { rustDeclarationAssociatedPredicates } from "../../types/associated-bounds.js";
+import { bindRustElidedCallableInput } from "../../../../target-model/types/carriers/lifetime-elision.js";
 
 export function planRustSuspendedCallableItems(context: RustPlanContext): readonly RustItem[] {
   const fileName = context.input.program.source.ast.getFileName(context.sourceFile);
@@ -41,13 +42,19 @@ function planImplementation(implementation: RustSuspendedCallableImplementation,
   const argumentsName = expression.params[1]?.name;
   if (expression.params.length !== 2 || ownerName === undefined || argumentsName === undefined) return undefined;
   const protocol = rustCallableProtocol(implementation.carrier);
-  const callableType = rustTypeFromCarrierInContext(implementation.carrier, scoped);
-  const argumentsType = protocol === undefined ? undefined : rustTypeFromCarrierInContext({ kind: "tuple", elements: protocol.parameters }, scoped);
-  const resultType = callableType?.kind === "named" ? callableType.genericArguments?.[1] : undefined;
+  const bound = protocol === undefined || implementation.elision === undefined ? undefined
+    : bindRustElidedCallableInput(protocol.parameters, protocol.result, implementation.elision.lifetime);
+  if (implementation.elision !== undefined && bound?.parameterIndex !== implementation.elision.parameterIndex) return undefined;
+  const invocation = bound ?? protocol;
+  const argumentsType = invocation === undefined ? undefined : rustTypeFromCarrierInContext({ kind: "tuple", elements: invocation.parameters }, scoped);
+  const callableType = invocation === undefined ? undefined : rustTypeFromCarrierInContext(
+    bound === undefined ? implementation.carrier : rustCallableTargetType(bound.parameters, bound.result), scoped);
+  const resultArgument = callableType?.kind === "named" ? callableType.genericArguments?.[1] : undefined;
+  const resultType = resultArgument?.kind === "type" ? resultArgument.type : undefined;
   const target = rustSuspendedCallableStateType(implementation, scoped);
   const storage = implementation.storage.map(carrier => rustTypeFromCarrierInContext(carrier, scoped));
   const requirements = context.input.program.declarationGenericRequirements.contractFor(declaration);
-  if (protocol === undefined || argumentsType === undefined || resultType?.kind !== "type" || target === undefined ||
+  if (protocol === undefined || argumentsType === undefined || resultType === undefined || target === undefined ||
       requirements === undefined || storage.some(type => type === undefined)) return undefined;
   const parameters: RustGenericParameter[] = [];
   for (const parameter of implementation.parameters) {
@@ -65,6 +72,9 @@ function planImplementation(implementation: RustSuspendedCallableImplementation,
       ? implementation.environment.lifetimes.some(lifetime => lifetime.identity === source.lifetime.identity)
       : implementation.environment.typeIdentities.includes(source.identity);
   });
+  if (implementation.elision !== undefined) parameters.unshift({
+    kind: "lifetime", name: implementation.elision.lifetime.name, outlives: [],
+  });
   const body: RustBlock = expression.kind === "closure" ? { statements: [{ kind: "tail", expr: expression.body }] } : expression.body;
   const selfType: RustType = { kind: "named", path: "Self" };
   const state: RustType = { kind: "tuple", elements: storage as RustType[] };
@@ -75,9 +85,9 @@ function planImplementation(implementation: RustSuspendedCallableImplementation,
     }],
   }, { kind: "impl", target,
     generics: rustGenericsWithAssociatedBounds(parameters, rustDeclarationAssociatedPredicates(declaration, scoped)),
-    trait: { kind: "named", path: "rt::CallableImplementation", genericArguments: [{ kind: "type", type: argumentsType }, resultType] },
+    trait: { kind: "named", path: "rt::CallableImplementation", genericArguments: [{ kind: "type", type: argumentsType }, { kind: "type", type: resultType }] },
     members: [{ kind: "function", name: "invoke", visibility: "private", selfParam: { kind: "reference", mutable: false },
-      generics: { parameters: [], wherePredicates: [] }, params: [{ name: argumentsName, type: argumentsType }], returnType: resultType.type,
+      generics: { parameters: [], wherePredicates: [] }, params: [{ name: argumentsName, type: argumentsType }], returnType: resultType,
       body: { statements: [{ kind: "let", name: ownerName, mutable: false, init: {
         kind: "method-call", receiver: { kind: "method-call", receiver: {
           kind: "field", receiver: { kind: "path", path: "self" }, name: "owner",

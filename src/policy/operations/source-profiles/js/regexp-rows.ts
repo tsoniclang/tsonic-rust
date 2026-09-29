@@ -182,7 +182,7 @@ function namedResultRows(policy: StringLanePolicy): readonly JsOperationRowData[
 function regexpMethodRows(policy: StringLanePolicy): readonly JsOperationRowData[] {
   const nativeLane = policy.lane === "native";
   const path = (name: string): string => `js_abi::regexp_${name}${policy.pathSuffix}`;
-  const target = (exactMethod: string, nativeName = exactMethod): RustProviderOperationForm =>
+  const target = (exactMethod: string, nativeName = exactMethod): Extract<RustProviderOperationForm, { readonly form: "free-call" | "receiver-method" }> =>
     nativeLane
       ? { form: "free-call", path: path(nativeName), receiverMode: "ref", argModes: ["ref"] }
       : { form: "receiver-method", name: exactMethod, argModes: ["ref"] };
@@ -212,7 +212,7 @@ function stringRegExpRows(policy: StringLanePolicy): readonly JsOperationRowData
   const nativeLane = policy.lane === "native";
   const lane = policy.lane === "native" ? "string" : "js-string";
   const suffix = policy.pathSuffix;
-  const call = (path: string, argModes: readonly ("value" | "ref" | "mut-ref")[]): RustProviderOperationForm => ({ form: "free-call", path: `js_abi::${path}${suffix}`, receiverMode: "ref", argModes });
+  const call = (path: string, argModes: readonly ("value" | "ref" | "mut-ref")[]): Extract<RustProviderOperationForm, { readonly form: "free-call" }> => ({ form: "free-call", path: `js_abi::${path}${suffix}`, receiverMode: "ref", argModes });
   const callbackTarget: RustProviderOperationForm = {
     form: "free-call",
     path: nativeLane

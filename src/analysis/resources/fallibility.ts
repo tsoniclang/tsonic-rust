@@ -56,6 +56,7 @@ import type { RustFactWalk } from "../program/walk.js";
 import type { RustPreparedDeferredCheckedCall } from "../operations/provider/index.js";
 import type { RustTargetOperationFact } from "../facts/keys.js";
 import { rustProjectCallableAdaptersKey } from "../facts/project-callable-adapters.js";
+import { rustFutureValueForSourceStorage } from "../facts/future-values.js";
 
 interface RustFutureOperationOrigin {
   readonly expression: Node;
@@ -552,7 +553,9 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
           : selectedProjectDeclaration(origin.expression);
         const selectedAsync = selectedDeclaration !== undefined &&
           walk.context.facts.get(selectedDeclaration, rustAsyncFunctionFactKey) !== undefined;
-        if ((operandFact?.kind === "provider-operation" && rustOperationAbiAwaitIsFallible(operandFact.abi)) ||
+        if ((origin === undefined && operand !== undefined &&
+            rustFutureValueForSourceStorage(walk.context.facts.getRuntimeCarrierFact(operand)?.carrier) !== undefined) ||
+          (operandFact?.kind === "provider-operation" && rustOperationAbiAwaitIsFallible(operandFact.abi)) ||
           (operandFact?.kind === "source-call" && operandFact.target.form === "union-method" &&
             rustAwaitCarrier(operandFact.resultCarrier) !== undefined &&
             operandFact.target.variants.some(variant => fallible.has(variant.declaration))) ||

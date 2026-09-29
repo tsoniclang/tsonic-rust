@@ -273,6 +273,7 @@ function rustFoundationForProviderOperationForm(
       form.traitGenericArguments.forEach(requireGenericArgument);
       break;
     case "associated-value":
+    case "associated-call":
       requireCarrier(form.owner);
       break;
     case "receiver-method":

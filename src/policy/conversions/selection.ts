@@ -1,6 +1,6 @@
 import type { RustValueConversion } from "../../target-model/operations/model.js";
 import { rustUnionAlternatives, selectRustUnionArmMapping, selectRustUnionProjection } from "../../target-model/types/union-relations.js";
-import { rustObjectIdentityErasureMatches } from "../../target-model/conversions/object-identity.js";
+import { rustNativeRepresentationMatches } from "../../target-model/conversions/native-representation.js";
 import { rustNumericValueConversionIsSupported } from "../../target-model/conversions/numeric-promotion.js";
 import { selectRustExactIntegerConversion } from "../../target-model/conversions/exact-integer.js";
 import { rustNumberBoxingConversionId } from "../../target-model/conversions/number-boxing.js";
@@ -27,7 +27,6 @@ import {
   rustCallableProtocol,
   rustTargetGenericReferences,
   rustTsValueTargetType,
-  rustUnitTargetType,
 } from "../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -68,11 +67,8 @@ export function selectRustSourceValueConversion(
   if (ancestors.some(ancestor => rustTargetTypeRefEquals(ancestor.source, source) &&
     rustTargetTypeRefEquals(ancestor.target, target))) return undefined;
   const nextAncestors = [...ancestors, {source, target}];
-  if (isRustAbsenceCarrier(source) && rustTargetTypeRefEquals(target, rustUnitTargetType())) {
-    return { kind: "semantic-conversion", id: "unit-from-absence" };
-  }
-  if (!rustTargetTypeRefEquals(source, target) && rustObjectIdentityErasureMatches(source, target)) {
-    return { kind: "object-identity-erasure", source, target };
+  if (!rustTargetTypeRefEquals(source, target) && rustNativeRepresentationMatches(source, target)) {
+    return { kind: "native-representation", source, target };
   }
   const upcasts = rustNamedTypeCarrierValue(source)?.upcasts.filter((upcast) =>
     rustTargetTypeRefEquals(upcast.target, target)) ?? [];

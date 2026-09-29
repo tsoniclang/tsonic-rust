@@ -3,7 +3,7 @@ import type {
   TargetTypeRef,
 } from "../types/model.js";
 import type { RustLifetimeRef } from "../lifetimes/index.js";
-import { rustObjectIdentityErasureMatches } from "./object-identity.js";
+import { rustNativeRepresentationMatches } from "./native-representation.js";
 import {
   isRustTargetTypeRef,
   rustTargetTypeRefEquals,
@@ -37,7 +37,6 @@ import {
   rustJsArrayLikeElementTargetType,
   isRustJsArrayCarrier,
   rustAbsenceTargetType,
-  rustUnitTargetType,
   rustTargetGenericReferences,
   rustCarrierSupportsClone,
   rustCarrierCanEnterTsValue,
@@ -178,9 +177,9 @@ export function rustValueConversionContract(
           source: value.source, target: value.target, fallible: true }
       : undefined;
   }
-  if (value.kind === "object-identity-erasure") {
+  if (value.kind === "native-representation") {
     return isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) &&
-      !rustTargetTypeRefEquals(value.source, value.target) && rustObjectIdentityErasureMatches(value.source, value.target)
+      !rustTargetTypeRefEquals(value.source, value.target) && rustNativeRepresentationMatches(value.source, value.target)
       ? { category: "exact", lowering: "identity", sourceMode: "value", source: value.source, target: value.target, fallible: false }
       : undefined;
   }
@@ -625,15 +624,6 @@ export function rustValueConversionContract(
         target: stringCarrier,
         fallible: false,
       };
-    case "unit-from-absence":
-      return {
-        category: "exact",
-        lowering: "identity",
-        sourceMode: "value",
-        source: absenceCarrier,
-        target: rustUnitTargetType(),
-        fallible: false,
-      };
     case "borrowed-str-from-owned-string":
       return {
         category: "ownership",
@@ -667,8 +657,8 @@ export function rustValueConversionIdentity(value: RustValueConversion): string 
   if (value.kind === "exact-integer") {
     return `exact-integer.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}`;
   }
-  if (value.kind === "object-identity-erasure") {
-    return `object-identity-erasure.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}`;
+  if (value.kind === "native-representation") {
+    return `native-representation.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}`;
   }
   if (value.kind === "native-upcast") {
     return `native-upcast.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}.${value.path}`;
@@ -760,7 +750,7 @@ export function substituteRustValueConversion(
     case "source-union-variant":
     case "union-project":
     case "exact-integer":
-    case "object-identity-erasure":
+    case "native-representation":
     case "native-upcast":
     case "bottom-coercion":
     case "js-argument-vector-callback":

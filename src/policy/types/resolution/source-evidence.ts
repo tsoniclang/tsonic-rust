@@ -35,7 +35,7 @@ import { rustTypeFamilyNormalizer } from "../type-family-normalization.js";
 import { rustGenericCallableTargetType } from "../../../target-model/types/carriers/generic-callables.js";
 import { rustTypeParameterFromSourceContract } from "../../../target-model/names/type-parameters.js";
 import { rustGenericCallableOrigin } from "../generic-callable-origin.js";
-import { closeRustCallableResultStorage } from "../callable-result-storage.js";
+import { closeRustSuspendedStorage } from "../suspended-storage.js";
 import { rustSourceSelectionUsesExactBindings } from "./bound-source-selection.js";
 
 export function resolveRustSignatureParameterListTarget(
@@ -103,7 +103,7 @@ export function resolveRustCallableEvidence(
   const declaration = callable.result.declaration;
   const genericContract = context.sourceLifetimes.contractFor(declaration);
   const result = sourceResult === undefined ? undefined
-    : closeRustCallableResultStorage(sourceResult, parameters, genericContract);
+    : closeRustSuspendedStorage(sourceResult, parameters, genericContract, "callable-result");
   if (result === undefined) return undefined;
   if (genericContract !== undefined && genericContract.parameters.length > 0 &&
     genericContract.parameters.every(parameter => parameter.kind === "type")) {

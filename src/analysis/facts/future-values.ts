@@ -1,8 +1,10 @@
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustFutureOutputCarrier, rustAwaitCarrier } from "../../target-model/types/index.js";
+import { rustFutureOutputCarrier, rustAwaitCarrier, rustJsPromiseTargetId, isRustProgramErrorCarrier } from "../../target-model/types/index.js";
 import { validateRustFinalizedOperationAbi } from "./finalized-operation-abi.js";
+import { finalizedConversionIsValid, finalizeValueConversion } from "./finalized-operation/conversions.js";
+import { rustNativeRepresentationMatches } from "../../target-model/conversions/native-representation.js";
 import type {
   RustFutureValueFact,
   RustSourceCallEffectsFact,
@@ -67,11 +69,27 @@ export function rustFutureValueForOperation(
   };
 }
 
+export function rustFutureValueForSourceStorage(carrier: TargetTypeRef | undefined): RustFutureValueFact | undefined {
+  const selected = rustAwaitCarrier(carrier);
+  const future = selected?.futureCarrier;
+  const error = future?.kind === "target-named" ? future.genericArguments?.[2] : undefined;
+  if (selected === undefined || future?.kind !== "target-named" || future.id !== rustJsPromiseTargetId ||
+    error?.kind !== "type" || !isRustProgramErrorCarrier(error.type)) return undefined;
+  return {
+    outputCarrier: selected.outputCarrier,
+    awaitedConversion: { kind: "identity", sourceCarrier: selected.outputCarrier,
+      targetCarrier: selected.outputCarrier, fallible: false },
+    awaiting: "fallible", errorBoundary: "source-program",
+  };
+}
+
 export function rustFutureValueMatchesCarrier(
   fact: RustFutureValueFact,
   carrier: TargetTypeRef | undefined,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): boolean {
   return carrier !== undefined &&
+    finalizedConversionIsValid(fact.awaitedConversion, definitions) &&
     ((fact.awaiting === "infallible" && fact.errorBoundary === "none") ||
       (fact.awaiting === "fallible" && fact.errorBoundary !== "none")) &&
     (fact.errorBoundary === "provider-native"
@@ -79,4 +97,23 @@ export function rustFutureValueMatchesCarrier(
       : fact.errorCarrier === undefined) &&
     rustTargetTypeRefEquals(rustAwaitCarrier(carrier)?.outputCarrier, fact.outputCarrier) &&
     rustTargetTypeRefEquals(fact.awaitedConversion.targetCarrier, fact.outputCarrier);
+}
+
+export function transportRustFutureValue(
+  fact: RustFutureValueFact,
+  sourceCarrier: TargetTypeRef | undefined,
+  targetCarrier: TargetTypeRef | undefined,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
+): RustFutureValueFact | undefined {
+  if (sourceCarrier === undefined || targetCarrier === undefined ||
+    !rustFutureValueMatchesCarrier(fact, sourceCarrier, definitions) ||
+    !rustNativeRepresentationMatches(sourceCarrier, targetCarrier)) return undefined;
+  const outputCarrier = rustAwaitCarrier(targetCarrier)?.outputCarrier;
+  if (outputCarrier === undefined) return undefined;
+  if (rustTargetTypeRefEquals(outputCarrier, fact.outputCarrier)) return fact;
+  if (fact.awaitedConversion.kind !== "identity") return undefined;
+  const awaitedConversion = finalizeValueConversion({
+    kind: "native-representation", source: fact.outputCarrier, target: outputCarrier,
+  }, fact.outputCarrier, outputCarrier);
+  return awaitedConversion === undefined ? undefined : { ...fact, outputCarrier, awaitedConversion };
 }

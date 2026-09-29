@@ -249,7 +249,7 @@ const promiseRows: readonly JsOperationRowData[] = [
     returnedFuture: { awaiting: "infallible", errorBoundary: "none" },
     shape: {
       op: "operation", operationKind: "method",
-      target: { form: "call", path: "js_abi::JsPromise::resolved" },
+      target: { form: "associated-call", owner: { ref: "promise-of-resolved-value" }, method: "resolved" },
       result: { ref: "promise-of-resolved-value" }, params: [{ ref: "promise-resolved-value" }],
     },
   },

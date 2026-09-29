@@ -66,6 +66,7 @@ import { selectRustMemoryLayoutObservation } from "../../policy/operations/point
 import { rustMemoryLayoutObservationKey } from "../../target-model/operations/memory-layout.js";
 import { resolveRustClassValue } from "../objects/class-values.js";
 import { readRustNativeControl, resolveRustNativeControl } from "./native-controls.js";
+import { rustSourceCallArgumentCarriers, rustSourceCallResultWithInputLifetimes } from "../facts/source-call-lifetimes.js";
 
 export function resolveIdentifierCarrier(
   walk: RustFactWalk,
@@ -689,6 +690,9 @@ function applySelectedRuntimeCallableCall(
   )) {
     return undefined;
   }
+  const resultCarrier = rustSourceCallResultWithInputLifetimes(callable.result,
+    finalizedParameters.map(parameter => parameter.parameterCarrier), bindings,
+    rustSourceCallArgumentCarriers(expression, walk.context.ast, walk.context.facts));
   const runtimeValue = selectedSignature.sourceStructuralMethod === undefined && selectedSignature.sourceConstructorCarrier === undefined;
   const calleeCarrier = runtimeValue ? resolveExpressionCarrier(walk, callee, sourceFile, carrier) : undefined;
   if (runtimeValue) {
@@ -698,7 +702,7 @@ function applySelectedRuntimeCallableCall(
     const optionalInvocation = walk.context.ast.as.AsCallExpression(expression)?.QuestionDotToken !== undefined;
     const optionalResult = selectRustOptionalCallResult(
       { source, ...(declaration === undefined ? {} : { sourceSelectedDeclaration: declaration }) },
-      callable.result, rustOperationContext(walk, expression), walk.operationOptions,
+      resultCarrier, rustOperationContext(walk, expression), walk.operationOptions,
       optionalInvocation ? { guard: callee, sourceGuardCarrier: calleeCarrier, selectedGuardCarrier: carrier } : undefined,
     );
     if (optionalResult.kind === "rejected") {
@@ -714,7 +718,7 @@ function applySelectedRuntimeCallableCall(
   const optionalCall = walk.context.facts.get(expression, rustOptionalChainFactKey) ??
     walk.context.facts.resolve(expression, rustOptionalChainFactKey);
   if (optionalCall !== undefined &&
-    (!rustTargetTypeRefEquals(optionalCall.innerResultCarrier, callable.result) ||
+    (!rustTargetTypeRefEquals(optionalCall.innerResultCarrier, resultCarrier) ||
       optionalCall.operationKind !== "method")) {
     appendRustDiagnostic(
       walk,
@@ -725,7 +729,7 @@ function applySelectedRuntimeCallableCall(
     );
     return undefined;
   }
-  const finalResultCarrier = optionalCall?.resultCarrier ?? callable.result;
+  const finalResultCarrier = optionalCall?.resultCarrier ?? resultCarrier;
   const structuralMethod = selectedSignature.sourceStructuralMethod;
   if (structuralMethod !== undefined && (
     selectedSignature.sourceSelectedReceiverCarrier === undefined ||
@@ -770,7 +774,7 @@ function applySelectedRuntimeCallableCall(
     operationId: selectedSignature.member.id,
     target,
     parameters: finalizedParameters,
-    resultCarrier: callable.result,
+    resultCarrier,
     ...(finalized === undefined || finalized.targetGenericArguments.length === 0 ? {} : {
       targetGenericArguments: finalized.targetGenericArguments,
     }),

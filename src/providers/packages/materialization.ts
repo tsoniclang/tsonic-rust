@@ -260,7 +260,7 @@ function materializeProviderOperationForm(
       ),
     };
   }
-  if (form.form === "associated-value") {
+  if (form.form === "associated-value" || form.form === "associated-call") {
     return {
       ...form,
       owner: materializeProviderCarrier(form.owner, carrierPaths, carrierTraits),
@@ -529,7 +529,7 @@ function materializeProviderValueConversion(
     case "source-union-variant":
     case "union-project":
     case "exact-integer":
-    case "object-identity-erasure":
+    case "native-representation":
     case "native-upcast":
     case "bottom-coercion":
     case "js-argument-vector-callback":

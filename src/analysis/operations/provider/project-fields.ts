@@ -21,7 +21,8 @@ export function resolveRustProjectField(
   options: RustOperationsProviderOptions,
 ): RustProjectFieldSelection | undefined {
   const field = rustProjectObjectField(declaration, context.ast);
-  const declared = resolveRustTargetTypeRef(Node_Type(context.ast, declaration) ?? resultType, context, options);
+  const declared = context.facts.getRuntimeCarrierFact(declaration)?.carrier ??
+    resolveRustTargetTypeRef(Node_Type(context.ast, declaration) ?? resultType, context, options);
   const resultCarrier = declared === undefined ? undefined : instantiateRustSelectedMemberCarrier(
     declaration, receiverCarrier, receiverType, declared, context, options);
   const owner = options.projectTypes.definitionContainingDeclaration(declaration);

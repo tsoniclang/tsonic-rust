@@ -1,4 +1,5 @@
 import { rustGenericCallableProtocol } from "../../../../target-model/types/carriers/generic-callables.js";
+import { rustSourceCallArgumentCarriers, rustSourceCallResultWithInputLifetimes } from "../../../../analysis/facts/source-call-lifetimes.js";
 import {
   isRustCopyCarrier,
   isRustVecCarrier,
@@ -232,6 +233,7 @@ export function planRustSelectedSourceCallArguments(
       selected,
       selected.member.returnType,
       context.input.program.typeFamilies.normalize,
+      rustSourceCallArgumentCarriers(call, context.input.program.source.ast, context.input.program.facts),
     )) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, call),
@@ -431,6 +433,7 @@ export function sourceCallSelectedMemberMatches(
   selected: SelectedTargetSignatureFact,
   declaredResultCarrier: TargetTypeRef | undefined,
   normalize: (carrier: TargetTypeRef) => TargetTypeRef,
+  argumentCarriers: readonly (TargetTypeRef | undefined)[] = [],
 ): boolean {
   const member = selected.member;
   const sourceArguments = selected.sourceSelectedMethodTypeArguments ?? [];
@@ -455,7 +458,12 @@ export function sourceCallSelectedMemberMatches(
     return false;
   }
   const substitutions = rustTargetGenericBindingsForArguments(parameters, targetArguments);
-  if (substitutions === undefined) return false;
+  if (substitutions === undefined || !isDenseDataArray(member.parameters)) return false;
+  const parameterCarriers = member.parameters.map(parameter => substituteRustTargetGenerics(parameter.type,
+    substitutions.types, substitutions.lifetimes, substitutions.consts, normalize));
+  const instantiateResult = (carrier: TargetTypeRef): TargetTypeRef => rustSourceCallResultWithInputLifetimes(
+    substituteRustTargetGenerics(carrier, substitutions.types, substitutions.lifetimes, substitutions.consts, normalize),
+    parameterCarriers, selected.sourceArgumentBindings, argumentCarriers);
   const expectedKind = fact.target.form === "constructor" ? "constructor" : "method";
   const expectedTargetName = fact.target.form === "constructor"
     ? fact.target.name
@@ -468,19 +476,12 @@ export function sourceCallSelectedMemberMatches(
           : fact.target.name;
   const selectedReturn = declaredResultCarrier === undefined
     ? undefined
-    : substituteRustTargetGenerics(
-        declaredResultCarrier,
-        substitutions.types,
-        substitutions.lifetimes,
-        substitutions.consts,
-        normalize,
-      );
+    : instantiateResult(declaredResultCarrier);
   const sourceProjection = selected.sourceResultProjection;
   const resultProjection = fact.resultProjection;
   if ((sourceProjection === undefined) !== (resultProjection === undefined)) return false;
   if (sourceProjection !== undefined && resultProjection !== undefined) {
-    const instantiate = (carrier: TargetTypeRef): TargetTypeRef => substituteRustTargetGenerics(carrier,
-      substitutions.types, substitutions.lifetimes, substitutions.consts, normalize);
+    const instantiate = instantiateResult;
     if (!rustTargetTypeRefEquals(instantiate(sourceProjection.sourceCarrier), resultProjection.sourceCarrier) ||
       !rustTargetTypeRefEquals(instantiate(sourceProjection.dispatchCarrier), resultProjection.dispatchCarrier) ||
       !rustTargetTypeRefEquals(instantiate(sourceProjection.targetCarrier), resultProjection.targetCarrier) ||

@@ -18,6 +18,7 @@ import {
 } from "../../../dist/policy/operations/forms.js";
 import { rustStringToBorrowedStrValueConversion } from "../../../dist/public/provider.js";
 import { rustStrTargetType } from "../../../dist/target-model/types/index.js";
+import { rustProviderSourceArgumentMode } from "../../../dist/analysis/operations/provider/calls/provider-argument-shape.js";
 
 const bool = { kind: "source-primitive", name: "bool" };
 const float64 = { kind: "source-primitive", name: "float64" };
@@ -52,6 +53,34 @@ test("native length emptiness correspondence is explicit and rejects inconsisten
   ]) assert.equal(finalizeRustProviderOperationAbi({ ...options, ...mutation }), undefined, JSON.stringify(mutation));
   assert.equal(validateRustFinalizedOperationAbi({ ...abi, effects: { ...abi.effects, evaluation: "observable" } }), false);
   assert.equal(validateRustFinalizedOperationAbi({ ...abi, result: { ...abi.result, carrier: int32, rawCarrier: int32 } }), false);
+});
+
+test("associated calls retain independent owner and method generic arguments", () => {
+  const owner = { kind: "target-named", id: "acme.Owner", genericArguments: [typeArgument(int32)] };
+  const options = {
+    operationKind: "method", form: { form: "associated-call", owner, method: "create", argModes: ["value"] },
+    sourceArgumentCarriers: [int32], resultCarrier: owner,
+    targetGenericArguments: [typeArgument(bool)], isAsync: false, isFallible: false,
+  };
+  const abi = finalizeRustProviderOperationAbi(options);
+  assert.ok(abi);
+  assert.equal(validateRustFinalizedOperationAbi(abi), true);
+  assert.deepEqual(abi.target.owner, owner);
+  assert.deepEqual(abi.targetGenericArguments, [typeArgument(bool)]);
+  for (const mode of ["value", "ref", "mut-ref"]) {
+    const form = { ...options.form, argModes: [mode] };
+    assert.equal(rustProviderSourceArgumentMode(form, 0), mode);
+    assert.equal(rustProviderOperationFormDeclaresWritableInput(form), mode === "mut-ref");
+  }
+  for (const mutation of [
+    { owner: undefined }, { owner: { kind: "unknown" } }, { method: "create::<i32>" },
+    { argModes: [] }, { argModes: ["invalid"] }, { receiverMode: "ref" },
+    { path: "acme::Owner::create" },
+  ]) {
+    const form = { ...options.form, ...mutation };
+    assert.equal(finalizeRustProviderOperationAbi({ ...options, form }), undefined);
+    assert.equal(validateRustFinalizedOperationAbi({ ...abi, target: form }), false);
+  }
 });
 
 test("provider calls retain closed target-only generic arguments", () => {

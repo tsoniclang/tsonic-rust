@@ -258,6 +258,10 @@ export function finalizeTargetInputs(
       const args = mappedArguments(undefined, undefined, undefined);
       return args?.length === 2 ? { targetReceiver: none, targetArguments: args } : undefined;
     }
+    case "associated-call": {
+      const args = mappedArguments(undefined, form.argModes, undefined);
+      return args === undefined ? undefined : { targetReceiver: none, targetArguments: args };
+    }
     case "trait-call": {
       const receiver = form.receiverMode === undefined
         ? undefined

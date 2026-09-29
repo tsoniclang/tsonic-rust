@@ -358,7 +358,7 @@ export function* ambiguous<Left extends Life, Right extends Life>(
   );
   assert.match(
     result.diagnostics[0]?.message ?? "",
-    /no single exact authored storage lifetime/u,
+    /one exact native storage lifetime from its authored contract or unambiguous input elision/u,
   );
 });
 

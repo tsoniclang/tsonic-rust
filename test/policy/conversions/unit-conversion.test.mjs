@@ -8,7 +8,8 @@ test("source absence to native void is an exact zero-cost unit conversion", () =
   const source = rustAbsenceTargetType();
   const target = rustUnitTargetType();
   const conversion = selectRustSourceValueConversion(source, target);
-  assert.deepEqual(conversion, { kind: "semantic-conversion", id: "unit-from-absence" });
+  assert.deepEqual(conversion, { kind: "native-representation", source, target });
+  assert.equal(rustValueConversionContract({ kind: "semantic-conversion", id: "unit-from-absence" }), undefined);
   assert.deepEqual(rustValueConversionContract(conversion), {
     category: "exact", lowering: "identity", sourceMode: "value", source, target, fallible: false,
   });

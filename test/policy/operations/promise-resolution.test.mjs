@@ -15,6 +15,9 @@ test("resolved values require exact source type-argument correspondence", () => 
   const selected = selectJsSurfaceOperation({ ...call,
     argumentMatchesSelectedTypeArgument: (argumentIndex, typeIndex) => argumentIndex === 0 && typeIndex === 0 });
   assert.deepEqual(selected.fact.resultCarrier, rustJsPromiseTargetTypeWithLifetime(value, rustStaticLifetime));
+  assert.deepEqual(selected.fact.target, {
+    form: "associated-call", owner: selected.fact.resultCarrier, method: "resolved",
+  });
   assert.deepEqual(selected.parameterCarriers, [value]);
 });
 

@@ -372,7 +372,7 @@ function operationFormCarriers(form: RustProviderOperationForm): readonly Target
   if (form.form === "trait-call" || form.form === "trait-associated-value") {
     return [form.owner, ...genericArgumentCarriers(form.traitGenericArguments)];
   }
-  if (form.form === "associated-value") {
+  if (form.form === "associated-value" || form.form === "associated-call") {
     return [form.owner];
   }
   return [];
@@ -387,7 +387,7 @@ function valueConversionCarriers(
   if (conversion.kind === "union-map") return [conversion.source, conversion.target,
     ...conversion.arms.flatMap(arm => [arm.carrier, ...arm.source.map(step => step.union), ...arm.target.map(step => step.union)])];
   if (conversion.kind === "copy-from-reference") return [conversion.target];
-  if (conversion.kind === "source-union-variant" || conversion.kind === "union-project" || conversion.kind === "object-identity-erasure" || conversion.kind === "bottom-coercion" ||
+  if (conversion.kind === "source-union-variant" || conversion.kind === "union-project" || conversion.kind === "native-representation" || conversion.kind === "bottom-coercion" ||
     conversion.kind === "js-argument-vector-callback" || conversion.kind === "native-upcast" ||
     conversion.kind === "exact-integer") {
     return [conversion.source, conversion.target];

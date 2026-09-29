@@ -31,7 +31,7 @@ test("opaque identity transport never proves a closed object projection", () => 
     const source = wrap(empty);
     const target = wrap(identity);
     const conversion = selectRustSourceValueConversion(source, target);
-    assert.deepEqual(conversion, { kind: "object-identity-erasure", source, target });
+    assert.deepEqual(conversion, { kind: "native-representation", source, target });
     assert.deepEqual(rustValueConversionContract(conversion), {
       category: "exact", lowering: "identity", sourceMode: "value", source, target, fallible: false,
     });

@@ -14,7 +14,7 @@ import type {
   RustTargetGenericArgument,
   TargetTypeRef,
 } from "../model.js";
-import { rustLifetimeKey } from "../../lifetimes/index.js";
+import { rustLifetimeKey, rustPlaceholderLifetime } from "../../lifetimes/index.js";
 import type { RustLifetimeRef } from "../../lifetimes/index.js";
 
 export function rustTargetTypeContainsTypeParameter(
@@ -48,6 +48,7 @@ export interface RustTargetGenericReferences {
     { readonly kind: "call-scoped-elision" }
   >[];
   readonly hasUnnameableLifetime: boolean;
+  readonly elisionInputs: readonly RustLifetimeRef[];
   readonly constIdentities: readonly string[];
 }
 
@@ -65,6 +66,10 @@ export function rustTargetGenericReferences(
   >>();
   const constIdentities = new Set<string>();
   let hasUnnameableLifetime = false;
+  const elisionLifetimes = new Map<string, RustLifetimeRef>();
+  const anonymousElisions: RustLifetimeRef[] = [];
+  let signatureDepth = 0;
+  let metadataDepth = 0;
   visitType(type, new Set());
   return Object.freeze({
     typeIdentities: Object.freeze([...typeParameters.keys()]),
@@ -77,6 +82,7 @@ export function rustTargetGenericReferences(
       .sort(([left], [right]) => left.localeCompare(right, "en"))
       .map(([, lifetime]) => lifetime)),
     hasUnnameableLifetime,
+    elisionInputs: Object.freeze([...elisionLifetimes.values(), ...anonymousElisions]),
     constIdentities: Object.freeze([...constIdentities].sort()),
   });
 
@@ -86,6 +92,13 @@ export function rustTargetGenericReferences(
   ): void {
     if (lifetime === undefined) return;
     const identity = rustLifetimeKey(lifetime);
+    if (metadataDepth === 0 && !bound.has(identity)) {
+      if (lifetime.kind === "placeholder") {
+        if (signatureDepth === 0) anonymousElisions.push(lifetime);
+      } else {
+        elisionLifetimes.set(identity, lifetime);
+      }
+    }
     if (lifetime.kind === "call-scoped-elision") {
       callScopedElisions.set(identity, lifetime);
       hasUnnameableLifetime = true;
@@ -150,7 +163,10 @@ export function rustTargetGenericReferences(
         value.elements.forEach((element) => visitType(element, bound));
         return;
       case "reference":
-        if (value.lifetime === undefined) hasUnnameableLifetime = true;
+        if (value.lifetime === undefined) {
+          hasUnnameableLifetime = true;
+          if (signatureDepth === 0 && metadataDepth === 0) anonymousElisions.push(rustPlaceholderLifetime);
+        }
         visitLifetime(value.lifetime, bound);
         visitType(value.referent, bound);
         return;
@@ -160,8 +176,10 @@ export function rustTargetGenericReferences(
       case "function-pointer":
       case "closure": {
         const nested = nestedBoundLifetimes(value.lifetimeBinder, bound);
+        signatureDepth += 1;
         value.args.forEach((argument) => visitType(argument, nested));
         visitType(value.result, nested);
+        signatureDepth -= 1;
         return;
       }
       case "trait-ref": {
@@ -224,8 +242,10 @@ export function rustTargetGenericReferences(
         const named = rustNamedTypeCarrierValue(value);
         if (named !== undefined) {
           visitArguments(named.genericArguments, bound);
+          metadataDepth += 1;
           visitArguments(named.genericDefaults, bound);
           named.upcasts.forEach((upcast) => visitType(upcast.target, bound));
+          metadataDepth -= 1;
           return;
         }
         const fixedArray = rustFixedArrayCarrierValue(value);

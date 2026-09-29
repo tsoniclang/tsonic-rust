@@ -30,6 +30,7 @@ export function rustProviderSourceArgumentMode(
     case "receiver-method":
       return orderedMode(form.argModes, form.argOrder);
     case "trait-call":
+    case "associated-call":
       return form.argModes?.[sourceIndex] ?? "value";
     case "call-c-variadic":
       return form.fixedArgumentModes[sourceIndex] ?? "value";

@@ -62,7 +62,7 @@ import { jsOperationRows } from "./rows.js";
 import { selectRustJsonValueConversion } from "../../../conversions/selection.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { rustNamedTypeCarrierValue } from "../../../../target-model/types/carriers/native.js";
-import { materializeJsonValueConversions, materializeTarget, materializeVariadicTarget } from "./materialization.js";
+import { materializeJsOperationTarget, materializeJsonValueConversions, materializeTarget, materializeVariadicTarget } from "./materialization.js";
 import type { JsLane, JsOperationRequest, JsOperationRowData, JsOperationSelection } from "./model.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { resolveCarrierRef, type JsLaneBindings } from "./carrier-references.js";
@@ -366,10 +366,12 @@ export function selectJsSurfaceOperation(request: JsOperationRequest, definition
   const { row, parameterCarriers } = selected;
   const discardResult = request.resultUse === "discarded" &&
     row.shape.op === "operation" && row.shape.discardedTarget !== undefined;
+  const selectedTarget = discardResult && row.shape.op === "operation"
+    ? row.shape.discardedTarget
+    : materializeJsOperationTarget(row.shape.target, bindings);
+  if (selectedTarget === undefined) return undefined;
   const variadicTarget = materializeVariadicTarget(
-    discardResult && row.shape.op === "operation"
-      ? row.shape.discardedTarget!
-      : row.shape.target,
+    selectedTarget,
     bindings.element,
     parameterCarriers,
   );

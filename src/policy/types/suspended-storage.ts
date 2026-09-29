@@ -2,10 +2,11 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustSourceGenericContract } from "../../target-model/lifetimes/index.js";
 import { rustJsPromiseTargetId, rustFutureOutputCarrier, rustJsPromiseTargetTypeWithLifetime } from "../../target-model/types/index.js";
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
-import { selectRustSuspendedStorageLifetime } from "../ownership/suspended-storage.js";
+import { selectRustSuspendedStorageLifetime, selectRustCallableStorageLifetime } from "../ownership/suspended-storage.js";
 
-export function closeRustCallableResultStorage(
+export function closeRustSuspendedStorage(
   result: TargetTypeRef, parameters: readonly (TargetTypeRef | undefined)[], contract: RustSourceGenericContract | undefined,
+  placement: "callable-result" | "field",
 ): TargetTypeRef | undefined {
   let unresolved = false;
   const selected = mapRustTargetTypes(result, carrier => {
@@ -14,7 +15,10 @@ export function closeRustCallableResultStorage(
     const output = rustFutureOutputCarrier(carrier);
     const error = carrier.genericArguments[2];
     const lifetime = output === undefined || parameters.some(parameter => parameter === undefined) ? undefined
-      : selectRustSuspendedStorageLifetime([...(parameters as readonly TargetTypeRef[]), output], contract);
+      : placement === "field"
+        ? selectRustSuspendedStorageLifetime([...(parameters as readonly TargetTypeRef[]), output], contract)
+        : selectRustCallableStorageLifetime(parameters as readonly TargetTypeRef[],
+          [...(parameters as readonly TargetTypeRef[]), output], contract);
     if (output === undefined || lifetime === undefined || error?.kind !== "type") {
       unresolved = true;
       return carrier;

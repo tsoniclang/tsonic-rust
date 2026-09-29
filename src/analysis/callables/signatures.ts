@@ -55,7 +55,7 @@ import { selectRustPointerReturnContract } from "../../policy/operations/pointer
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustGenericCallableProtocol, rustGenericCallableTargetType, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustGenericCallableValueOwner } from "../../policy/types/generic-callable-origin.js";
-import { closeRustCallableResultStorage } from "../../policy/types/callable-result-storage.js";
+import { closeRustSuspendedStorage } from "../../policy/types/suspended-storage.js";
 import { selectRustInferredNumericReturn } from "./inferred-numeric-return.js";
 
 export function recordFunctionSignatureFacts(walk: RustFactWalk, declaration: Node): void {
@@ -612,8 +612,8 @@ export function recordCallableReturnFact(
   const parameterCarriers = walk.context.ast.parameters(declaration).map(parameter =>
     parameter === undefined ? undefined : walk.context.facts.get(parameter, rustSourceParameterAbiFactKey)?.parameterCarrier);
   const carrier = rawCarrier === undefined ? undefined : asynchronous !== undefined || generator !== undefined
-    ? rawCarrier : closeRustCallableResultStorage(rawCarrier, parameterCarriers,
-      walk.context.sourceLifetimes.contractFor(declaration));
+    ? rawCarrier : closeRustSuspendedStorage(rawCarrier, parameterCarriers,
+      walk.context.sourceLifetimes.contractFor(declaration), "callable-result");
   if (carrier !== undefined) {
     const completion = walk.context.semanticsFor(declaration).operations.callableCompletion(declaration);
     const absence = rustOptionElementCarrier(carrier) !== undefined;

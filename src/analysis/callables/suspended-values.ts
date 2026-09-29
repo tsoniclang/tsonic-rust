@@ -9,6 +9,8 @@ import { rustClosureCaptureFactKey, rustTargetOperationFactKey } from "../facts/
 import type { RustClosureCaptureFact } from "../facts/operations/keys.js";
 import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
 import type { RustLifetimeIndex, RustSourceGenericParameterContract } from "../../target-model/lifetimes/index.js";
+import type { RustLifetimeRef } from "../../target-model/lifetimes/index.js";
+import { bindRustElidedCallableInput } from "../../target-model/types/carriers/lifetime-elision.js";
 
 export interface RustSuspendedCallableImplementation {
   readonly declaration: Node;
@@ -20,6 +22,10 @@ export interface RustSuspendedCallableImplementation {
   readonly environment: ReturnType<typeof rustTargetGenericReferences>;
   readonly signature: ReturnType<typeof rustTargetGenericReferences>;
   readonly parameters: readonly RustSourceGenericParameterContract[];
+  readonly elision?: {
+    readonly parameterIndex: number;
+    readonly lifetime: Extract<RustLifetimeRef, { readonly kind: "parameter" }>;
+  };
 }
 
 export interface RustSuspendedCallablePlan {
@@ -61,7 +67,15 @@ export function createRustSuspendedCallablePlan(
     const storage = Object.freeze(captures.map(capture => capture.storage === "location"
       ? rustLocationTargetType(capture.carrier) : capture.carrier));
     const environment = rustTargetGenericReferences({ kind: "tuple", elements: storage });
-    const signature = rustTargetGenericReferences({ kind: "tuple", elements: [...storage, ...protocol.parameters, protocol.result] });
+    const authoredSignature = rustTargetGenericReferences({ kind: "tuple", elements: [...storage, ...protocol.parameters, protocol.result] });
+    const lifetime: Extract<RustLifetimeRef, { readonly kind: "parameter" }> = {
+      kind: "parameter", identity: `suspended-callable:${identity}:input`,
+      name: allocateRustGeneratedName(new Set(authoredSignature.lifetimes.map(selected => selected.name)), "input"),
+    };
+    const bound = authoredSignature.hasUnnameableLifetime && !environment.hasUnnameableLifetime
+      ? bindRustElidedCallableInput(protocol.parameters, protocol.result, lifetime) : undefined;
+    const signature = bound === undefined ? authoredSignature
+      : rustTargetGenericReferences({ kind: "tuple", elements: [...storage, ...bound.parameters, bound.result] });
     if (signature.hasUnnameableLifetime) {
       issues.push({ subject: declaration, message: "A suspended callable signature has no nameable native lifetime contract." });
       continue;
@@ -73,7 +87,8 @@ export function createRustSuspendedCallablePlan(
         if (!available.has(key)) available.set(key, parameter);
       }
     }
-    const requested = [...signature.lifetimes.map(lifetime => lifetime.identity), ...signature.typeIdentities];
+    const requested = [...signature.lifetimes.filter(selected => bound === undefined || selected.identity !== lifetime.identity)
+      .map(selected => selected.identity), ...signature.typeIdentities];
     const parameters = requested.map(key => available.get(key));
     if (parameters.some(parameter => parameter === undefined) || signature.constIdentities.length > 0) {
       issues.push({ subject: declaration, message: "A suspended callable state lost its exact enclosing generic parameter declarations." });
@@ -82,6 +97,7 @@ export function createRustSuspendedCallablePlan(
     implementations.set(declaration, Object.freeze({ declaration, sourceFileName, carrier, captures, storage,
       stateName: allocateRustGeneratedName(usedNames, `CallableState${identity.slice(0, 12)}`), environment, signature,
       parameters: Object.freeze(parameters as RustSourceGenericParameterContract[]),
+      ...(bound === undefined ? {} : { elision: Object.freeze({ parameterIndex: bound.parameterIndex, lifetime }) }),
     }));
   }
   return Object.freeze({ implementations: Object.freeze([...implementations.values()]),
