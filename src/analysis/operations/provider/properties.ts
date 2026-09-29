@@ -21,6 +21,7 @@ import { selectRustBuiltinErrorProperty } from "./builtin-errors.js";
 import { isIntrinsicSourceQualifier } from "./source-qualifiers.js";
 import { selectedRustProviderGlobal } from "../../../policy/evidence/provider-globals.js";
 import { tsonicFixedArrayProviderMember } from "@tsonic/source-core/facts";
+import { selectRustRecordDelete } from "./records.js";
 import type {
   RustCheckedDeleteSelectionInput,
   RustCheckedOperationSelectionResult,
@@ -65,6 +66,8 @@ export function selectRustCheckedDelete(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> {
+  const record = selectRustRecordDelete(request, context, options);
+  if (record !== undefined) return record;
   const identity = resolveSelectedJsSourceMember(
     context,
     request.sourceSelectedDeclaration,

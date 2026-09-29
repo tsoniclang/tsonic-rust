@@ -201,7 +201,7 @@ export function rustFoundationForPath(path: string): RustFoundation {
   }
   if (root === "rt" || root === "tsonic_rust_runtime") {
     const exportPath = path.slice(root.length + "::".length);
-    return exportPath === "block_on" || exportPath === "capture_error_stack"
+    return exportPath === "block_on" || exportPath === "capture_error_stack" || exportPath === "Record"
       ? "std"
       : runtimeCoreExports.has(exportPath) ? "core" : "alloc";
   }

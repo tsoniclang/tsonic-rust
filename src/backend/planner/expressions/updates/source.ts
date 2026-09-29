@@ -16,11 +16,10 @@ import { finishRustSourceAccessorCall, planRustSourceAccessorCall, sourceAccesso
 import { isRustBigIntCarrier, isRustBoolCarrier } from "../../../../target-model/types/index.js";
 import { applyRustValueConversion } from "../value-conversions.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
-import { rustProjectObjectRepresentation } from "../../objects/project-storage.js";
+import { planRustIndexedRecordStorage } from "../../objects/indexed-records.js";
 import { planExpression } from "../entry.js";
 import { planRustMutableProjectReceiver, planRustPromotedStorageLocation } from "../typed-locations.js";
 import { planRustSourceUnionFieldProjection, mutateRustUnionField } from "../unions.js";
-import { readRustProjectObjectIndex, writeRustProjectObjectIndex } from "../../objects/project-objects.js";
 import { planRustSourceStaticFieldStorage } from "../../declarations/classes/static-field-storage.js";
 import { rustTargetOperationFactKey } from "../../../../analysis/facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
@@ -312,9 +311,9 @@ function planRustSourceIndexUpdate(
     ? undefined
     : planExpression(receiverNode, context);
   const key = keyNode === undefined ? undefined : planExpression(keyNode, context);
-  const representation = rustProjectObjectRepresentation(index.receiverCarrier, context);
+  const storage = planRustIndexedRecordStorage(index.receiverCarrier, index.keyCarrier, index.resultCarrier, index.storage, context);
   if (receiverNode === undefined || plannedReceiver === undefined || keyNode === undefined ||
-    key === undefined || representation === undefined ||
+    key === undefined || storage === undefined ||
     !rustTargetTypeRefEquals(expressionCarrier(keyNode, context), index.keyCarrier)) {
     return undefined;
   }
@@ -335,19 +334,14 @@ function planRustSourceIndexUpdate(
       name: keyName,
       value: key,
     }],
-    read: readRustProjectObjectIndex(
+    read: storage.read(
       receiver,
-      index.storageName,
-      selectedKey,
-      index.resultCarrier,
-      representation,
+      { kind: "reference", expr: selectedKey },
     ),
-    write: (value) => writeRustProjectObjectIndex(
+    write: (value) => storage.write(
       receiver,
-      index.storageName,
       selectedKey,
       value,
-      representation,
     ),
     update,
     step,

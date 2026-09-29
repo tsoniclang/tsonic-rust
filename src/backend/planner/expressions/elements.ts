@@ -13,8 +13,8 @@ import {
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planExpression } from "./entry.js";
 import { planRustNonConsumingValue, planRustSharedReceiver, planRustValueRead } from "./typed-locations.js";
-import { readRustProjectObjectIndex } from "../objects/project-objects.js";
-import { rustProjectObjectRepresentation } from "../objects/project-storage.js";
+import { planRustIndexedRecordStorage } from "../objects/indexed-records.js";
+import { applyRustArgumentMode } from "./input-shaping.js";
 import { requireProviderArgumentPassingFacts } from "./calls/arguments.js";
 import { rustOptionalChainFactKey } from "../../../analysis/facts/keys.js";
 import { rustOptionElementCarrier } from "../../../target-model/types/index.js";
@@ -70,9 +70,9 @@ function planElementAccessInner(node: Node, context: RustPlanContext): RustExpr 
       ? undefined
       : planExpression(receiverNode, context);
     const key = keyNode === undefined ? undefined : planExpression(keyNode, context);
-    const representation = rustProjectObjectRepresentation(fact.receiverCarrier, context);
+    const storage = planRustIndexedRecordStorage(fact.receiverCarrier, fact.keyCarrier, fact.resultCarrier, fact.storage, context);
     if (receiverNode === undefined || plannedReceiver === undefined || key === undefined ||
-      representation === undefined || context.syntheticNames === undefined) {
+      storage === undefined || context.syntheticNames === undefined) {
       return undefined;
     }
     const receiverName = allocateRustSyntheticName(context.syntheticNames, "index_receiver");
@@ -84,14 +84,11 @@ function planElementAccessInner(node: Node, context: RustPlanContext): RustExpr 
         value: planRustSharedReceiver(receiverNode, plannedReceiver, context),
       }, {
         name: keyName,
-        value: key,
+        value: applyRustArgumentMode(context, key, "ref", keyNode),
       }],
-      value: readRustProjectObjectIndex(
+      value: storage.read(
         { kind: "path", path: receiverName },
-        fact.storageName,
         { kind: "path", path: keyName },
-        resultCarrier,
-        representation,
       ),
     };
   }

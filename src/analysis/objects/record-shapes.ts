@@ -1,20 +1,14 @@
 import {
-  isRustIntegerCarrier,
-  isRustStringCarrier,
   rustCallableTargetType,
   rustClosureTargetType,
   rustSourceTypeCarrierValue,
   rustStructuralObjectCarrierValue,
-  rustCarrierSupportsClone,
 } from "../../target-model/types/index.js";
 import {
-  KindSpreadAssignment,
   Node_Type,
   ObjectLiteralProperty_Value,
-  SpreadAssignment_Expression,
 } from "@tsonic/target-api/source";
 import { requireDenseSourceNodes } from "../expressions/records.js";
-import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { resolveParameterAbi } from "../declarations/types-and-bindings.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { resolveTypeNodeCarrier } from "../control-flow/statements.js";
@@ -23,11 +17,9 @@ import { rustProjectObjectLayout } from "../project-types/object-layout.js";
 import { rustResolutionContext } from "../program/walk.js";
 import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
-import type { Node, SourceFile, Type } from "@tsonic/tsts";
+import type { Node, Type } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustSourceUnion, RustSourceUnionVariant } from "../project-types/source-type-registry.js";
-import type { RustTargetOperationFact } from "../facts/keys.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export function resolveProjectMethodPropertyCarrier(
@@ -79,136 +71,6 @@ export function resolveProjectMethodPropertyCarrier(
       );
 }
 
-export function resolveProjectIndexRecordLiteral(
-  walk: RustFactWalk,
-  expression: Node,
-  sourceFile: SourceFile,
-  resultCarrier: TargetTypeRef,
-  properties: readonly Node[],
-  definition: import("../project-types/type-policy.js").RustProjectTypeDefinition,
-  layout: import("../project-types/object-layout.js").RustProjectObjectLayout,
-): TargetTypeRef | undefined {
-  if (definition.kind !== "interface" || layout.indexSignatures.length !== 1 ||
-    layout.fields.length !== 0 ||
-    walk.context.projectTypes.isPolymorphic(definition)) {
-    return undefined;
-  }
-  const index = layout.indexSignatures[0]!;
-  const declaredKeyCarrier = walk.context.facts.get(index.keyParameter, rustRuntimeCarrierKey)?.carrier ??
-    resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, index.keyParameter));
-  const declaredValueCarrier = walk.context.facts.get(index.declaration, rustRuntimeCarrierKey)?.carrier ??
-    resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, index.declaration));
-  const keyCarrier = declaredKeyCarrier === undefined
-    ? undefined
-    : walk.context.projectTypes.instantiateMemberCarrier(
-        index.keyParameter,
-        resultCarrier,
-        declaredKeyCarrier,
-      );
-  const valueCarrier = declaredValueCarrier === undefined
-    ? undefined
-    : walk.context.projectTypes.instantiateMemberCarrier(
-        index.declaration,
-        resultCarrier,
-        declaredValueCarrier,
-      );
-  const storageName = walk.context.projectTypes.fieldStorageName(
-    definition,
-    index.declaration,
-  );
-  if (keyCarrier === undefined || valueCarrier === undefined || storageName === undefined ||
-    (!isRustStringCarrier(keyCarrier) && !isRustIntegerCarrier(keyCarrier)) ||
-    !rustCarrierSupportsClone(valueCarrier, walk.context.typeDefinitions)) {
-    return undefined;
-  }
-  const contributions: Extract<
-    RustTargetOperationFact,
-    { readonly kind: "record-index-literal" }
-  >["contributions"][number][] = [];
-  for (const property of properties) {
-    const kind = walk.context.ast.kindName(property);
-    if (kind === KindSpreadAssignment) {
-      const spreadExpression = SpreadAssignment_Expression(walk.context.ast, property);
-      const sourceCarrier = spreadExpression === undefined
-        ? undefined
-        : resolveExpressionCarrier(walk, spreadExpression, sourceFile, undefined);
-      const sourceDefinition = sourceCarrier === undefined
-        ? undefined
-        : walk.context.projectTypes.definitionForCarrier(sourceCarrier);
-      const sourceLayout = sourceDefinition?.kind === "interface"
-        ? rustProjectObjectLayout(sourceDefinition.declaration, walk.context.ast)
-        : undefined;
-      const sourceIndex = sourceLayout?.indexSignatures.length === 1 &&
-          sourceLayout.fields.length === 0 && !walk.context.projectTypes.isPolymorphic(sourceDefinition!)
-        ? sourceLayout.indexSignatures[0]
-        : undefined;
-      const sourceDeclaredKey = sourceIndex === undefined
-        ? undefined
-        : walk.context.facts.get(sourceIndex.keyParameter, rustRuntimeCarrierKey)?.carrier ??
-          resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, sourceIndex.keyParameter));
-      const sourceDeclaredValue = sourceIndex === undefined
-        ? undefined
-        : walk.context.facts.get(sourceIndex.declaration, rustRuntimeCarrierKey)?.carrier ??
-          resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, sourceIndex.declaration));
-      const sourceKey = sourceDeclaredKey === undefined || sourceCarrier === undefined
-        ? undefined
-        : walk.context.projectTypes.instantiateMemberCarrier(
-            sourceIndex!.keyParameter,
-            sourceCarrier,
-            sourceDeclaredKey,
-          );
-      const sourceValue = sourceDeclaredValue === undefined || sourceCarrier === undefined
-        ? undefined
-        : walk.context.projectTypes.instantiateMemberCarrier(
-            sourceIndex!.declaration,
-            sourceCarrier,
-            sourceDeclaredValue,
-          );
-      const sourceStorageName = sourceDefinition === undefined || sourceIndex === undefined
-        ? undefined
-        : walk.context.projectTypes.fieldStorageName(sourceDefinition, sourceIndex.declaration);
-      if (spreadExpression === undefined || sourceCarrier === undefined || sourceIndex === undefined ||
-        sourceStorageName === undefined || !rustTargetTypeRefEquals(sourceKey, keyCarrier) ||
-        !rustTargetTypeRefEquals(sourceValue, valueCarrier)) {
-        return undefined;
-      }
-      contributions.push({
-        kind: "spread",
-        property,
-        expression: spreadExpression,
-        sourceCarrier,
-        sourceStorageName,
-      });
-      continue;
-    }
-    if (kind !== "KindPropertyAssignment" && kind !== "KindShorthandPropertyAssignment") {
-      return undefined;
-    }
-    const name = walk.context.ast.name(property);
-    const sourceName = name === undefined ? "" : walk.context.ast.text(name);
-    const initializer = ObjectLiteralProperty_Value(walk.context.ast, property);
-    if (sourceName.length === 0 || initializer === undefined ||
-      resolveExpressionCarrier(walk, initializer, sourceFile, valueCarrier) === undefined) {
-      return undefined;
-    }
-    contributions.push({
-      kind: "property",
-      property,
-      sourceName,
-      expression: initializer,
-    });
-  }
-  setRustOperationFact(walk, expression, {
-    kind: "record-index-literal",
-    operationId: "tsonic.rust.record.index-literal",
-    resultCarrier,
-    keyCarrier,
-    valueCarrier,
-    storageName,
-    contributions,
-  });
-  return setCarrierFact(walk, expression, resultCarrier);
-}
 
 export function resolveObjectLiteralMethodCarrier(
   walk: RustFactWalk,

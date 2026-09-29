@@ -48,6 +48,7 @@ import { resolveRustTypeComponentEvidence } from "./source-evidence.js";
 import { resolveRustSourceMarker } from "./markers.js";
 import { resolveRustIndexedField } from "./indexed-fields.js";
 import { resolveRustConstructType } from "./constructors.js";
+import { resolveRustIndexedRecordType } from "./records.js";
 
 export function resolveRustFixedArrayTargetType(
   fixedArray: TsonicFixedArrayFact,
@@ -290,14 +291,16 @@ export function resolveStructuralObjectType(
   const struct = valueStruct ?? context.facts.resolve(type, structFactKey) ?? context.facts.get(type, structFactKey);
   if (struct !== undefined && (struct.valueType !== true || struct.fields === undefined)) return undefined;
   const representation = struct === undefined ? "reference" : "value";
+  if (semantics.types.indexInfos(type).length !== 0) {
+    return struct === undefined ? resolveRustIndexedRecordType(type, context, options, resolving, authoredTypeRoot) : undefined;
+  }
   if (semantics.types.isSymbolLike(type)) return undefined;
   const declaredFields = struct === undefined ? undefined : new Map(struct.fields!.map(field => [field.name, field]));
   if (declaredFields !== undefined && declaredFields.size !== struct!.fields!.length) return undefined;
   const constructSignatures = semantics.types.constructSignatures(type);
   const construction = constructSignatures.length === 0 ? undefined : resolveRustConstructType(type, context, options, resolving);
   if (semantics.types.callSignatures(type).length !== 0 ||
-    constructSignatures.length !== 0 && (construction === undefined || representation !== "reference") ||
-    semantics.types.indexInfos(type).length !== 0) {
+    constructSignatures.length !== 0 && (construction === undefined || representation !== "reference")) {
     return undefined;
   }
   const bases: TargetTypeRef[] = [];

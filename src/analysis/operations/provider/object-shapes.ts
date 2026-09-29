@@ -43,6 +43,7 @@ import { selectRustPointerReturnCarrier } from "../../../policy/operations/point
 import { resolveRustUnionMethodContracts, rustUnionMethodOwner, selectRustUnionMethods } from "./calls/union-methods.js";
 import { rustSourceUnionCarrierValue } from "../../../target-model/types/carriers/source-types.js";
 import { rustGenericCallableValueOwner } from "../../../policy/types/generic-callable-origin.js";
+import { selectRustRecordObjectCall } from "./records.js";
 
 export function mapSelectedJsSpecialCall(
   request: RustCheckedCallSelectionInput,
@@ -56,6 +57,8 @@ export function mapSelectedJsSpecialCall(
     memberName,
   );
   if (objectProjection !== undefined) {
+    const record = selectRustRecordObjectCall(request, objectProjection, context, options);
+    if (record !== undefined) return record;
     const sourceArgument = request.source.sourceArguments[0];
     if (objectProjection.projection === "keys" && sourceArgument !== undefined &&
       isRustJsArrayCarrier(selectedValueCarrier(sourceArgument.expression, sourceArgument.type, context, options))) {

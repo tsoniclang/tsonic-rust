@@ -43,6 +43,8 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import {
   getRustGeneratorProtocol,
   isRustCopyCarrier,
+  isRustJsValueCarrier,
+  rustOptionElementCarrier,
   rustCarrierSupportsTrait,
   rustClosureProtocol,
   rustJsPromiseTargetId,
@@ -620,6 +622,18 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       }
     }
     const operation = facts.getFact(node, rustTargetOperationFactKey);
+    if (operation?.kind === "source-index-signature" &&
+      (operation.accessMode === "read" || operation.accessMode === "read-write")) {
+      const requirements: readonly RustGenericRequirement[] = operation.storage.kind === "record" &&
+        (rustOptionElementCarrier(operation.resultCarrier) !== undefined || isRustJsValueCarrier(operation.resultCarrier))
+        ? ["clone", "default"] : ["clone"];
+      const error = addUse(node, operation.resultCarrier, requirements);
+      if (error !== undefined) return error;
+    }
+    if (operation?.kind === "record-index-literal" && operation.contributions.some(contribution => contribution.kind === "spread")) {
+      const error = addUse(node, operation.valueCarrier, ["clone"]);
+      if (error !== undefined) return error;
+    }
     if ((operation?.kind === "source-field" || operation?.kind === "source-union-field") &&
       operation.accessMode !== "write") {
       const fields = operation.kind === "source-field" ? [operation]

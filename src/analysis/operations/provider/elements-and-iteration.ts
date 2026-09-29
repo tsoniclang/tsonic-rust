@@ -66,6 +66,8 @@ import { selectedRustForInKeys } from "./for-in-keys.js";
 import { selectRustCheckedPropertyAccess } from "./properties.js";
 import { rustComputedMemberFactKey } from "../../facts/operations/keys.js";
 import { resolveRustIndexedField } from "../../../policy/types/resolution/indexed-fields.js";
+import { selectRustRecordElement } from "./records.js";
+import { rustRecordCarrierValue } from "../../../target-model/types/carriers/records.js";
 
 export function selectRustCheckedElementAccess(
   request: RustCheckedElementSelectionInput,
@@ -82,6 +84,8 @@ export function selectRustCheckedElementAccess(
   if (isIntrinsicSourceQualifier(request, context, options)) {
     return acceptDeclarationOperation("indexer");
   }
+  const record = selectRustRecordElement(request, selectedReceiverCarrier, context, options);
+  if (record !== undefined) return record;
   if (request.sourceReceiverType !== undefined && request.accessMode !== "delete" &&
     context.currentSemantics.types.selectIndexedAccess(request.sourceReceiverType, request.sourceArgumentType)?.kind === "deferred") {
     const selected = resolveRustIndexedField(request.sourceReceiverType, request.sourceArgumentType,
@@ -223,9 +227,10 @@ export function selectRustCheckedElementAccess(
       return acceptRustMemberOperation(request, "indexer", {
         kind: "source-index-signature",
         operationId: sourceOperationId(context, index.declaration, "index-signature"),
+        accessMode: request.accessMode,
         receiverCarrier: selectedReceiverCarrier!,
         keyCarrier,
-        storageName,
+        storage: { kind: "project-field", name: storageName },
         writable: !context.ast.hasModifierKind(index.declaration, "readonly"),
         resultCarrier,
       }, context, options, elementProvenance(request));
@@ -429,6 +434,7 @@ function rustPropertyKeyIterationLowering(
   if (isRustJsArrayLikeCarrier(iterable)) {
     return { kind: "js-array-index-keys" };
   }
+  if (isRustStringCarrier(rustRecordCarrierValue(iterable)?.key)) return { kind: "record-keys" };
   const keys = iterable === undefined
     ? undefined
     : selectedRustForInKeys(expression, iterable, context, options);

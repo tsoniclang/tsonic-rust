@@ -334,13 +334,13 @@ export function readRustProjectObjectIndex(
     return rustProjectObjectValueRead({
       kind: "index",
       receiver: rustProjectObjectDirectPath(receiver, storageName),
-      index: { kind: "reference", expr: key },
+      index: key,
     }, resultCarrier);
   }
   const value: RustExpr = {
     kind: "index",
     receiver: rustProjectObjectStatePath(storageName),
-    index: { kind: "reference", expr: key },
+    index: key,
   };
   return {
     kind: "method-call",
@@ -360,18 +360,19 @@ export function readRustProjectObjectIndex(
   };
 }
 
-export function readRustProjectObjectIndexStorage(
+export function copyRustProjectObjectIndexStorage(
   receiver: RustExpr,
   storageName: string,
+  destination: RustExpr,
   representation: RustObjectRepresentation,
 ): RustExpr {
+  const copy = (source: RustExpr): RustExpr => ({
+    kind: "call",
+    path: "rt::record::extend_entries",
+    args: [{ kind: "reference", mutable: true, expr: destination }, { kind: "reference", expr: source }],
+  });
   if (representation.kind === "value") {
-    return {
-      kind: "method-call",
-      receiver: rustProjectObjectDirectPath(receiver, storageName),
-      method: "clone",
-      args: [],
-    };
+    return copy(rustProjectObjectDirectPath(receiver, storageName));
   }
   return {
     kind: "method-call",
@@ -384,12 +385,7 @@ export function readRustProjectObjectIndexStorage(
     args: [{
       kind: "closure",
       params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
-      body: {
-        kind: "method-call",
-        receiver: rustProjectObjectStatePath(storageName),
-        method: "clone",
-        args: [],
-      },
+      body: copy(rustProjectObjectStatePath(storageName)),
     }],
   };
 }

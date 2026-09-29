@@ -48,6 +48,8 @@ import {
   isRustStringCarrier,
   rustJsErrorTargetType,
   rustCallableProtocol,
+  rustNamedTypeCarrierValue,
+  rustCarrierSupportsTrait,
   rustSourcePrimitiveTargetType,
   rustStructuralObjectCarrierValue,
   sameRustPrimitiveCarrier,
@@ -451,6 +453,8 @@ export function selectRustBinaryOperator(
       (isRustBoolCarrier(left) && isRustBoolCarrier(right)) ||
       (isRustStringCarrier(left) && isRustStringCarrier(right)) ||
       (isRustJsStrictEqualityCarrier(left) && rustTargetTypeRefEquals(left, right)) ||
+      (rustNamedTypeCarrierValue(left) !== undefined && rustTargetTypeRefEquals(left, right) &&
+        rustCarrierSupportsTrait(left, "core::cmp::PartialEq")) ||
       sameEnum || sameObject || sameStructuralObject;
     return comparable
       ? {

@@ -1,6 +1,5 @@
 import {
   createRustProjectObject,
-  readRustProjectObjectIndexStorage,
   rustProjectObjectDispatchField,
   rustProjectObjectIdentityField,
   rustProjectObjectStateField,
@@ -10,7 +9,6 @@ import {
   readRustStoredObjectField,
   readRustStructuralObjectMethodStorage,
   rustDirectProjectFieldStoragePath,
-  rustProjectObjectRepresentation,
 } from "../objects/project-storage.js";
 import {
   isRustIntegerCarrier,
@@ -21,6 +19,7 @@ import {
   rustStructuralMethodStorageCarrier,
 } from "../../../target-model/types/index.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
+import { planRustIndexedRecordStorage } from "../objects/indexed-records.js";
 import { diagnosticInput, sourceTypePath } from "../program/plan-context.js";
 import { expressionCarrier, requireExpressionCarrier, rustOperationFact } from "./fundamentals.js";
 import {
@@ -31,6 +30,7 @@ import {
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { parseSourceIntegerLiteral } from "../../../target-model/syntax/literals.js";
 import { planExpression } from "./entry.js";
+import { planRustNonConsumingValue } from "./typed-locations.js";
 import { planRustBoundProjectMethodCallable } from "./properties.js";
 import { rustObjectLiteralRequiresDispatchImplementation } from "../objects/object-literal-implementations.js";
 import { constructRustStructuralLiteral } from "../objects/object-literals/structural.js";
@@ -62,7 +62,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
     return planProviderRecordLiteral(node, fact, context);
   }
   if (fact?.kind === "record-index-literal") {
-    return planProjectIndexRecordLiteral(node, fact, context);
+    return planIndexedRecordLiteral(node, fact, context);
   }
   if (fact === undefined || fact.kind !== "record-literal") {
     context.diagnostics.push(missingFactDiagnostic(
@@ -705,7 +705,7 @@ function planProviderRecordLiteral(
   };
 }
 
-function planProjectIndexRecordLiteral(
+function planIndexedRecordLiteral(
   node: Node,
   fact: Extract<RustTargetOperationFact, { readonly kind: "record-index-literal" }>,
   context: RustPlanContext,
@@ -718,14 +718,9 @@ function planProjectIndexRecordLiteral(
   ) || context.syntheticNames === undefined) {
     return undefined;
   }
-  const definition = context.input.program.projectTypes.definitionForCarrier(fact.resultCarrier);
-  const representation = context.input.program.objectRepresentations.representationFor(definition);
-  const wrapperType = rustTypeFromCarrierInContext(fact.resultCarrier, context);
-  const stateType = rustProjectStateType(fact.resultCarrier, context);
+  const storage = planRustIndexedRecordStorage(fact.resultCarrier, fact.keyCarrier, fact.valueCarrier, fact.storage, context);
   const properties = context.input.program.source.ast.properties(node);
-  if (definition?.kind !== "interface" || representation === undefined ||
-    context.input.program.projectTypes.isPolymorphic(definition) ||
-    wrapperType?.kind !== "named" || stateType?.kind !== "named" ||
+  if (storage === undefined ||
     properties.length !== fact.contributions.length ||
     fact.contributions.some((contribution, index) => contribution.property !== properties[index])) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -735,13 +730,9 @@ function planProjectIndexRecordLiteral(
     ));
     return undefined;
   }
-  const mapName = allocateRustSyntheticName(context.syntheticNames, "record_index_entries");
-  const bindings: {
-    readonly name: string;
-    readonly value: RustExpr;
-  }[] = [];
-  const mapPath: RustExpr = { kind: "path", path: mapName };
-  let entries: RustExpr | undefined;
+  const entriesName = allocateRustSyntheticName(context.syntheticNames, "record_entries");
+  const entries: RustExpr = { kind: "path", path: entriesName };
+  const effects: { readonly expression: RustExpr; readonly discard: "unit" | "value" }[] = [];
   for (const contribution of fact.contributions) {
     if (contribution.kind === "property") {
       const initializer = ObjectLiteralProperty_Value(context.input.program.source.ast, contribution.property);
@@ -752,20 +743,8 @@ function planProjectIndexRecordLiteral(
       if (value === undefined || key === undefined) {
         return undefined;
       }
-      const valueName = allocateRustSyntheticName(
-        context.syntheticNames,
-        `record_${contribution.sourceName}`,
-      );
-      bindings.push({ name: valueName, value });
-      const contributionEntries: RustExpr = {
-        kind: "call",
-        path: "core::iter::once",
-        args: [{
-          kind: "tuple-literal",
-          elements: [key, { kind: "path", path: valueName }],
-        }],
-      };
-      entries = appendRustRecordEntries(entries, contributionEntries);
+      effects.push({ expression: { kind: "method-call", receiver: entries, method: "insert", args: [key, value] },
+        discard: "value" });
       continue;
     }
     const spreadExpression = SpreadAssignment_Expression(
@@ -775,71 +754,32 @@ function planProjectIndexRecordLiteral(
     const spread = spreadExpression === contribution.expression
       ? planExpression(contribution.expression, context)
       : undefined;
-    const sourceRepresentation = rustProjectObjectRepresentation(
-      contribution.sourceCarrier,
-      context,
-    );
-    if (spread === undefined || sourceRepresentation === undefined) {
+    const sourceStorage = planRustIndexedRecordStorage(contribution.sourceCarrier, fact.keyCarrier, fact.valueCarrier,
+      contribution.sourceStorage, context);
+    if (spread === undefined || sourceStorage === undefined) {
       return undefined;
     }
-    const spreadName = allocateRustSyntheticName(context.syntheticNames, "record_index_spread");
-    const spreadEntriesName = allocateRustSyntheticName(
-      context.syntheticNames,
-      "record_index_spread_entries",
-    );
-    bindings.push({ name: spreadName, value: spread }, {
-      name: spreadEntriesName,
-      value: readRustProjectObjectIndexStorage(
-        { kind: "path", path: spreadName },
-        contribution.sourceStorageName,
-        sourceRepresentation,
-      ),
-    });
-    const spreadEntries: RustExpr = { kind: "path", path: spreadEntriesName };
-    entries = entries === undefined
-      ? {
-          kind: "method-call",
-          receiver: spreadEntries,
-          method: "into_iter",
-          args: [],
-        }
-      : appendRustRecordEntries(entries, spreadEntries);
+    effects.push({ expression: sourceStorage.copyEntries(
+      planRustNonConsumingValue(contribution.expression, spread, context), entries,
+    ), discard: "unit" });
   }
-  bindings.push({
-    name: mapName,
-    value: entries === undefined
-      ? { kind: "call", path: "std::collections::HashMap::new", args: [] }
-      : {
-          kind: "call",
-          path: "std::collections::HashMap::from_iter",
-          args: [entries],
-        },
-  });
-  context.usedAliases?.add("rt");
+  if (effects.length === 0) {
+    return storage.construct({ kind: "call", path: "std::collections::HashMap::new", args: [] });
+  }
+  let value = storage.construct(entries);
+  for (let index = effects.length - 1; index >= 0; index--) {
+    const effect = effects[index]!;
+    value = { kind: "evaluate-then", effect: effect.expression, discard: effect.discard, value };
+  }
+  const capacity = fact.contributions.filter((contribution) => contribution.kind === "property").length;
   return {
     kind: "block",
-    bindings,
-    value: createRustProjectObject(
-      wrapperType.path,
-      stateType.path,
-      [{ name: fact.storageName, value: mapPath }],
-      representation,
-    ),
+    bindings: [{ name: entriesName, mutable: true, value: {
+      kind: "call", path: "std::collections::HashMap::with_capacity",
+      args: [{ kind: "int-literal", text: capacity.toString(10) }],
+    } }],
+    value,
   };
-}
-
-function appendRustRecordEntries(
-  current: RustExpr | undefined,
-  next: RustExpr,
-): RustExpr {
-  return current === undefined
-    ? next
-    : {
-        kind: "method-call",
-        receiver: current,
-        method: "chain",
-        args: [next],
-      };
 }
 
 function rustProjectIndexLiteralKey(

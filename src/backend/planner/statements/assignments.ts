@@ -10,10 +10,8 @@ import {
   sourceStaticFieldSelectedOperationMatches,
 } from "../expressions/index.js";
 import {
-  readRustProjectObjectIndex,
   rustProjectObjectDispatchField,
   writeRustProjectMethodOverride,
-  writeRustProjectObjectIndex,
 } from "../objects/project-objects.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { diagnosticInput, rustActiveErrorType } from "../program/plan-context.js";
@@ -29,7 +27,7 @@ import { missingFactDiagnostic } from "../diagnostics.js";
 import { planRustMutableProjectReceiver, planRustPromotedStorageLocation } from "../expressions/typed-locations.js";
 import { rustSelectedAccessorRequiresUnsafe } from "../safety/explicit-safety.js";
 import { planRustSourceStaticFieldStorage } from "../declarations/classes/static-field-storage.js";
-import { rustProjectObjectRepresentation } from "../objects/project-storage.js";
+import { planRustIndexedRecordStorage } from "../objects/indexed-records.js";
 import { rustStringConcat } from "../../target-ast/expressions.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { Node } from "@tsonic/tsts";
@@ -535,9 +533,9 @@ export function planRustSourceIndexAssignment(
     : planExpression(receiverNode, context);
   const key = keyNode === undefined ? undefined : planExpression(keyNode, context);
   const value = planExpression(valueNode, context);
-  const representation = rustProjectObjectRepresentation(index.receiverCarrier, context);
+  const storage = planRustIndexedRecordStorage(index.receiverCarrier, index.keyCarrier, index.resultCarrier, index.storage, context);
   if (receiverNode === undefined || plannedReceiver === undefined || keyNode === undefined ||
-    key === undefined || value === undefined || representation === undefined ||
+    key === undefined || value === undefined || storage === undefined ||
     !rustTargetTypeRefEquals(expressionCarrier(keyNode, context), index.keyCarrier)) {
     return undefined;
   }
@@ -567,12 +565,9 @@ export function planRustSourceIndexAssignment(
     const currentName = allocateRustSyntheticName(context.syntheticNames, "index_current");
     bindings.push({
       name: currentName,
-      value: readRustProjectObjectIndex(
+      value: storage.read(
         receiverPath,
-        index.storageName,
-        keyPath,
-        index.resultCarrier,
-        representation,
+        { kind: "reference", expr: keyPath },
       ),
     }, {
       name: valueName,
@@ -594,12 +589,10 @@ export function planRustSourceIndexAssignment(
   } else {
     bindings.push({ name: valueName, value });
   }
-  const write = writeRustProjectObjectIndex(
+  const write = storage.write(
     receiverPath,
-    index.storageName,
     keyPath,
     next,
-    representation,
   );
   if (write === undefined) {
     return undefined;

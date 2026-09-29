@@ -25,7 +25,8 @@ import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js"
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { resolveExpressionCarrier } from "./carriers.js";
 import { resolveFunctionExpressionCarrier } from "../callables/closures.js";
-import { resolveObjectLiteralMethodCarrier, resolveProjectIndexRecordLiteral, resolveProjectMethodPropertyCarrier, resolveRustRecordShape, selectRustRecordLiteralUnionVariant } from "../objects/record-shapes.js";
+import { resolveObjectLiteralMethodCarrier, resolveProjectMethodPropertyCarrier, resolveRustRecordShape, selectRustRecordLiteralUnionVariant } from "../objects/record-shapes.js";
+import { resolveRustIndexedRecordContract, resolveRustIndexedRecordLiteral } from "../objects/indexed-records.js";
 import { selectRustUnionVariantByCheckedType } from "./union-context.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { resolveTypeNodeCarrier } from "../control-flow/statements.js";
@@ -183,19 +184,15 @@ export function resolveRecordLiteralCarrier(
     }
     return carrier;
   }
-  const indexedDefinition = walk.context.projectTypes.definitionForCarrier(selectedExpected);
-  const indexedLayout = indexedDefinition?.kind === "interface"
-    ? rustProjectObjectLayout(indexedDefinition.declaration, ast)
-    : undefined;
-  if (indexedLayout !== undefined && indexedLayout.indexSignatures.length !== 0) {
-    return resolveProjectIndexRecordLiteral(
+  const indexed = resolveRustIndexedRecordContract(walk, selectedExpected);
+  if (indexed !== undefined) {
+    return resolveRustIndexedRecordLiteral(
       walk,
       expression,
       sourceFile,
       selectedExpected,
       properties,
-      indexedDefinition!,
-      indexedLayout,
+      indexed,
     );
   }
   const explicitPropertiesByName = new Map<string, Node>();

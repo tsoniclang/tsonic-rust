@@ -401,7 +401,9 @@ export function recordBindingWrite(walk: RustFactWalk, target: Node | undefined,
     return;
   }
   if (kind === KindPropertyAccessExpression || kind === KindElementAccessExpression) {
-    if (walk.context.facts.get(target, rustTargetOperationFactKey)?.kind === "source-indexed-field") return;
+    const operation = walk.context.facts.get(target, rustTargetOperationFactKey);
+    if (operation?.kind === "source-indexed-field" ||
+      operation?.kind === "source-index-signature" && operation.storage.kind === "record") return;
     const receiver = Node_Expression(walk.context.ast, target);
     const receiverKind = receiver === undefined ? "" : ast.kindName(receiver);
     if (receiverKind === "KindThisExpression" || receiverKind === "KindThisKeyword") {

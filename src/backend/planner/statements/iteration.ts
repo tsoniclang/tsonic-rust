@@ -17,6 +17,7 @@ import {
   Node_Name,
 } from "@tsonic/target-api/source";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
+import { rustRecordCarrierValue } from "../../../target-model/types/carriers/records.js";
 import { finishProviderOperationExpression } from "../expressions/conversions.js";
 import { collectVariableDeclarations, planResourceManagedBody, resourceDisposalReceiverMode, resourceFactForPlanning } from "./resources.js";
 import { createRustLoopTarget, withRustControlTarget } from "./control-flow.js";
@@ -521,7 +522,7 @@ export function planForInStatement(
   const fact = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
   if (fact === undefined || fact.kind !== "iteration" || fact.iterationKind !== "for-in" ||
     (fact.lowering.kind !== "dense-index-keys" && fact.lowering.kind !== "js-array-index-keys" &&
-      fact.lowering.kind !== "static-keys")) {
+      fact.lowering.kind !== "static-keys" && fact.lowering.kind !== "record-keys")) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.for-in",
@@ -531,6 +532,7 @@ export function planForInStatement(
   }
   const selectedIteration = context.input.program.facts.getSelectedTargetIteration(node);
   if (selectedIteration === undefined || selectedIteration.operationKind !== "iteration" ||
+    fact.lowering.kind === "record-keys" && !rustTargetTypeRefEquals(rustRecordCarrierValue(fact.iterableCarrier)?.key, fact.elementCarrier) ||
     selectedIteration.operationId !== fact.operationId || selectedIteration.resultType === undefined ||
     !rustTargetTypeRefEquals(selectedIteration.resultType, fact.elementCarrier)) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -617,11 +619,11 @@ export function planForInStatement(
   const activation = binding.kind === "assignment"
     ? activateForInBinding(binding, { kind: "path", path: keyName })
     : [];
-  const iterable: RustExpr = fact.lowering.kind === "js-array-index-keys"
+  const iterable: RustExpr = fact.lowering.kind === "js-array-index-keys" || fact.lowering.kind === "record-keys"
     ? {
         kind: "method-call",
         receiver: expression,
-        method: "enumerable_own_keys",
+        method: fact.lowering.kind === "record-keys" ? "keys" : "enumerable_own_keys",
         args: [],
       }
     : {
