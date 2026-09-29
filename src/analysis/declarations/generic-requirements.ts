@@ -1,4 +1,6 @@
-import { requirementContractsEqual, stringListsEqual, type RequirementUse, type RequirementContractState } from "./generic-requirement-contract.js";
+import { requirementContractsEqual, requirementUseHasValidStorage, stringListsEqual, type RequirementUse, type RequirementContractState } from "./generic-requirement-contract.js";
+import { substituteElidedLifetime } from "../../target-model/types/carriers/lifetime-elision.js";
+import { rustStaticLifetime } from "../../target-model/lifetimes/index.js";
 import { rustObjectReferenceViewKey } from "../facts/object-reference-views.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
@@ -278,6 +280,7 @@ export function analyzeRustDeclarationGenericRequirements(
       const normalized = normalizeRequirements(requirements);
       return contractByDeclaration.has(declaration) &&
         (usesByNode.get(node) ?? []).some((use) =>
+          requirementUseHasValidStorage(use) &&
           rustTargetTypeRefEquals(use.carrier, carrier) &&
           stringListsEqual(use.requirements, normalized));
     },
@@ -366,14 +369,17 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
     node: Node,
     carrier: TargetTypeRef | undefined,
     requirements: readonly RustGenericRequirement[],
+    nativeStorage = false,
   ): string | undefined => {
     if (carrier === undefined) {
       return "A Rust generic requirement has no exact target carrier.";
     }
     if (!optionalStorage.collect(carrier)) return "A native optional storage projection has no exact generic owner.";
     const normalized = normalizeRequirements(requirements);
+    const requiredCarrier = nativeStorage && normalized.includes("static")
+      ? substituteElidedLifetime(carrier, rustStaticLifetime) : carrier;
     const classified = classifyCarrierRequirements(
-      carrier,
+      requiredCarrier,
       normalized,
       declared,
       byParameter,
@@ -386,7 +392,9 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
     if (!uses.some((use) => use.node === node &&
       rustTargetTypeRefEquals(use.carrier, carrier) &&
       stringListsEqual(use.requirements, normalized))) {
-      uses.push(Object.freeze({ node, carrier, requirements: normalized }));
+      uses.push(Object.freeze({ node, carrier, requirements: normalized,
+        ...(rustTargetTypeRefEquals(carrier, requiredCarrier) ? {} : { nativeStorageCarrier: requiredCarrier }),
+      }));
     }
     return undefined;
   };
@@ -594,7 +602,7 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       }
     }
     if (location?.storage === "location") {
-      const error = addUse(node, location.valueCarrier, ["clone", "static"]);
+      const error = addUse(node, location.valueCarrier, ["clone", "static"], true);
       if (error !== undefined) return error;
     }
     const typedLocation = facts.getFact(node, rustTypedLocationPlanKey);
@@ -736,7 +744,7 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
         const error = addUse(capture.reference, capture.carrier,
           capture.storage === "cell" || capture.storage === "borrow-cell" ||
             input.valueLifetimes.canMoveCapture(node, capture.declaration)
-            ? required.filter(requirement => requirement !== "clone") : required);
+            ? required.filter(requirement => requirement !== "clone") : required, true);
         if (error !== undefined) return error;
       }
     }

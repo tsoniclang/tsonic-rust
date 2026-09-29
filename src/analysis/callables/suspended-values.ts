@@ -9,8 +9,8 @@ import { rustClosureCaptureFactKey, rustTargetOperationFactKey } from "../facts/
 import type { RustClosureCaptureFact } from "../facts/operations/keys.js";
 import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
 import type { RustLifetimeIndex, RustSourceGenericParameterContract } from "../../target-model/lifetimes/index.js";
-import type { RustLifetimeRef } from "../../target-model/lifetimes/index.js";
-import { bindRustElidedCallableInput } from "../../target-model/types/carriers/lifetime-elision.js";
+import { rustStaticLifetime, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
+import { bindRustElidedCallableInput, substituteElidedLifetime } from "../../target-model/types/carriers/lifetime-elision.js";
 
 export interface RustSuspendedCallableImplementation {
   readonly declaration: Node;
@@ -64,8 +64,10 @@ export function createRustSuspendedCallablePlan(
     }
     const sourceFileName = ast.getFileName(ast.getSourceFile(declaration));
     const identity = createHash("sha256").update(`${sourceFileName}:${ast.pos(declaration)}:${ast.end(declaration)}`).digest("hex");
-    const storage = Object.freeze(captures.map(capture => capture.storage === "location"
-      ? rustLocationTargetType(capture.carrier) : capture.carrier));
+    const storage = Object.freeze(captures.map(capture => {
+      const carrier = substituteElidedLifetime(capture.carrier, rustStaticLifetime);
+      return capture.storage === "location" ? rustLocationTargetType(carrier) : carrier;
+    }));
     const environment = rustTargetGenericReferences({ kind: "tuple", elements: storage });
     const authoredSignature = rustTargetGenericReferences({ kind: "tuple", elements: [...storage, ...protocol.parameters, protocol.result] });
     const lifetime: Extract<RustLifetimeRef, { readonly kind: "parameter" }> = {

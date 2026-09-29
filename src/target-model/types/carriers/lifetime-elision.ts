@@ -42,7 +42,7 @@ export function bindRustElidedCallableInput(
   });
 }
 
-function substituteElidedLifetime(type: TargetTypeRef, lifetime: RustLifetimeRef): TargetTypeRef {
+export function substituteElidedLifetime(type: TargetTypeRef, lifetime: RustLifetimeRef): TargetTypeRef {
   return substituteRustTargetGenerics(type, new Map(),
     new Map([[rustLifetimeKey(rustPlaceholderLifetime), lifetime]]), new Map(), (selected, source) => {
       if (source.kind === "function-pointer" || source.kind === "closure") return source;

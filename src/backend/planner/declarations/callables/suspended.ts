@@ -1,5 +1,7 @@
 import type { RustSuspendedCallableImplementation } from "../../../../analysis/callables/suspended-values.js";
-import { rustCallableProtocol, rustCallableTargetType } from "../../../../target-model/types/index.js";
+import { rustCallableProtocol, rustCallableTargetType, rustLocationTargetType } from "../../../../target-model/types/index.js";
+import { rustStaticLifetime } from "../../../../target-model/lifetimes/index.js";
+import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import type { RustBlock, RustGenericParameter, RustItem, RustType } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustTypeParameterFromSourceContract } from "../../../../target-model/names/type-parameters.js";
@@ -13,7 +15,7 @@ import { rustSuspendedCallableStateType } from "../../types/suspended-callables.
 import { rustTypeParameterBounds, rustGenericsWithAssociatedBounds } from "../../types/generic-bounds.js";
 import { rustLifetimeToAst } from "../../types/lifetime-syntax.js";
 import { rustDeclarationAssociatedPredicates } from "../../types/associated-bounds.js";
-import { bindRustElidedCallableInput } from "../../../../target-model/types/carriers/lifetime-elision.js";
+import { bindRustElidedCallableInput, substituteElidedLifetime } from "../../../../target-model/types/carriers/lifetime-elision.js";
 
 export function planRustSuspendedCallableItems(context: RustPlanContext): readonly RustItem[] {
   const fileName = context.input.program.source.ast.getFileName(context.sourceFile);
@@ -31,6 +33,12 @@ export function planRustSuspendedCallableItems(context: RustPlanContext): readon
 
 function planImplementation(implementation: RustSuspendedCallableImplementation, context: RustPlanContext): readonly RustItem[] | undefined {
   const { declaration } = implementation;
+  if (implementation.storage.length !== implementation.captures.length ||
+    !implementation.captures.every((capture, index) => {
+      const carrier = substituteElidedLifetime(capture.carrier, rustStaticLifetime);
+      return rustTargetTypeRefEquals(implementation.storage[index],
+        capture.storage === "location" ? rustLocationTargetType(carrier) : carrier);
+    })) return undefined;
   const scoped: RustPlanContext = { ...rustGeneratedTypeParameterContext(
     implementation.parameters.filter(parameter => parameter.kind === "type").map(rustTypeParameterFromSourceContract), [], context),
     callableDeclaration: declaration,

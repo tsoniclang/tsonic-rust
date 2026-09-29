@@ -105,7 +105,7 @@ export function rustTargetGenericReferences(
       return;
     }
     if (lifetime.kind === "placeholder") {
-      hasUnnameableLifetime = true;
+      if (signatureDepth === 0) hasUnnameableLifetime = true;
       return;
     }
     if ((lifetime.kind === "parameter" || lifetime.kind === "bound") &&
@@ -164,7 +164,7 @@ export function rustTargetGenericReferences(
         return;
       case "reference":
         if (value.lifetime === undefined) {
-          hasUnnameableLifetime = true;
+          if (signatureDepth === 0) hasUnnameableLifetime = true;
           if (signatureDepth === 0 && metadataDepth === 0) anonymousElisions.push(rustPlaceholderLifetime);
         }
         visitLifetime(value.lifetime, bound);

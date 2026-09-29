@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { selectRustCallableStorageLifetime, selectRustSuspendedStorageLifetime } from "../../../dist/policy/ownership/suspended-storage.js";
-import { bindRustElidedCallableInput, instantiateRustElidedCallResult, rustSingleElidedInput } from "../../../dist/target-model/types/carriers/lifetime-elision.js";
+import { bindRustElidedCallableInput, instantiateRustElidedCallResult, rustSingleElidedInput, substituteElidedLifetime } from "../../../dist/target-model/types/carriers/lifetime-elision.js";
+import { requirementUseHasValidStorage } from "../../../dist/analysis/declarations/generic-requirement-contract.js";
+import { rustNativeRepresentationMatches } from "../../../dist/target-model/conversions/native-representation.js";
 import { rustTargetGenericReferences } from "../../../dist/target-model/types/carriers/generic-references.js";
 import { rustJsPromiseTargetTypeWithLifetime, rustUnitTargetType, rustAbsenceTargetType,
   rustSourcePrimitiveTargetType, rustJsErrorTargetType } from "../../../dist/target-model/types/index.js";
@@ -23,9 +25,23 @@ test("suspended input elision follows native signature scopes, never field or am
   const callback = { kind: "function-pointer", args: [{ kind: "reference", referent: rustUnitTargetType(), mutable: false }],
     result: rustUnitTargetType() };
   assert.deepEqual(rustTargetGenericReferences(callback).elisionInputs, []);
+  assert.equal(rustTargetGenericReferences(callback).hasUnnameableLifetime, false);
   assert.equal(rustSingleElidedInput([callback, input]), 1);
   const explicitlyBorrowed = { ...callback, args: [{ ...callback.args[0], lifetime: borrowed }] };
   assert.equal(rustSingleElidedInput([explicitlyBorrowed, input]), undefined);
+});
+
+test("owning storage constrains native inference without granting a borrowed-to-static conversion", () => {
+  const source = promise(inferred);
+  const target = substituteElidedLifetime(source, owned);
+  assert.deepEqual(target, promise(owned));
+  assert.equal(rustNativeRepresentationMatches(source, target), false);
+  assert.deepEqual(substituteElidedLifetime(promise(borrowed), owned), promise(borrowed));
+  const use = { node: {}, carrier: source, nativeStorageCarrier: target, requirements: ["static"] };
+  assert.equal(requirementUseHasValidStorage(use), true);
+  assert.equal(requirementUseHasValidStorage({ ...use, requirements: ["clone"] }), false);
+  assert.equal(requirementUseHasValidStorage({ ...use, carrier: promise(borrowed) }), false);
+  assert.equal(requirementUseHasValidStorage({ ...use, nativeStorageCarrier: promise(owned, rustSourcePrimitiveTargetType("uint64")) }), false);
 });
 
 test("retained invocation signatures name only their sole elided input lifetime", () => {

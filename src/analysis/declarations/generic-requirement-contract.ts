@@ -2,11 +2,19 @@ import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustGenericRequirement, RustDeclarationGenericRequirementContract } from "./generic-requirements.js";
+import { substituteElidedLifetime } from "../../target-model/types/carriers/lifetime-elision.js";
+import { rustStaticLifetime } from "../../target-model/lifetimes/index.js";
 
 export interface RequirementUse {
   readonly node: Node;
   readonly carrier: TargetTypeRef;
   readonly requirements: readonly RustGenericRequirement[];
+  readonly nativeStorageCarrier?: TargetTypeRef;
+}
+
+export function requirementUseHasValidStorage(use: RequirementUse): boolean {
+  return use.nativeStorageCarrier === undefined || use.requirements.includes("static") &&
+    rustTargetTypeRefEquals(use.nativeStorageCarrier, substituteElidedLifetime(use.carrier, rustStaticLifetime));
 }
 
 export interface RequirementContractState extends RustDeclarationGenericRequirementContract {
@@ -55,6 +63,7 @@ export function requirementContractsEqual(
       const other = right.uses[index];
       return other !== undefined && use.node === other.node &&
         rustTargetTypeRefEquals(use.carrier, other.carrier) &&
+        rustTargetTypeRefEquals(use.nativeStorageCarrier, other.nativeStorageCarrier) &&
         stringListsEqual(use.requirements, other.requirements);
     });
 }
