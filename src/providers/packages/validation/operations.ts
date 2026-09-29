@@ -387,7 +387,7 @@ function valueConversionCarriers(
   if (conversion.kind === "union-map") return [conversion.source, conversion.target,
     ...conversion.arms.map(arm => arm.carrier)];
   if (conversion.kind === "copy-from-reference") return [conversion.target];
-  if (conversion.kind === "source-union-variant" || conversion.kind === "object-identity-erasure" || conversion.kind === "bottom-coercion" ||
+  if (conversion.kind === "source-union-variant" || conversion.kind === "union-project" || conversion.kind === "object-identity-erasure" || conversion.kind === "bottom-coercion" ||
     conversion.kind === "js-argument-vector-callback" || conversion.kind === "native-upcast" ||
     conversion.kind === "exact-integer") {
     return [conversion.source, conversion.target];

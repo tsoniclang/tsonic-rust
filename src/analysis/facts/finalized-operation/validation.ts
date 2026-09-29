@@ -386,8 +386,13 @@ function isNonOptionValueConversion(value: unknown): boolean {
 }
 
 function isValueProjectionConversion(value: Record<string, unknown>): boolean {
+  if (value.kind === "union-project") {
+    return hasExactKeys(value, ["kind", "source", "target"]) &&
+      isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target);
+  }
   if (value.kind === "union-map") {
-    return hasExactKeys(value, ["kind", "source", "target", "arms"]) &&
+    return hasExactKeys(value, ["kind", "source", "target", "arms", "coverage"]) &&
+      (value.coverage === "source" || value.coverage === "target") &&
       isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) && isRustUnionArmMappings(value.arms);
   }
   if (value.kind === "exact-integer") {

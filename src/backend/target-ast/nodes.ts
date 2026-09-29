@@ -389,6 +389,7 @@ export type RustDeadCodeDisposition =
   | "generated-retained-constructor"
   | "generated-unconstructed-instance"
   | "generated-unconstructed-shape"
+  | "generated-unconstructed-variant"
   | "generated-unused-dispatch"
   | "generated-unused-storage";
 

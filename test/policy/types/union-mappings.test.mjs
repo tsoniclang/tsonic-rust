@@ -1,14 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
-import { rustSourcePrimitiveTargetType, rustStringTargetType, rustSourceUnionTargetType } from "../../../dist/target-model/types/index.js";
-import { isRustUnionArmMappings, selectRustUnionArmMapping } from "../../../dist/target-model/types/union-relations.js";
+import { rustOptionTargetType, rustSourcePrimitiveTargetType, rustStringTargetType, rustSourceUnionTargetType } from "../../../dist/target-model/types/index.js";
+import { isRustUnionArmMappings, selectRustUnionArmMapping, selectRustUnionProjection } from "../../../dist/target-model/types/union-relations.js";
 import { rustValueConversionContract, substituteRustValueConversion } from "../../../dist/target-model/conversions/contracts.js";
-import { planRustUnionMapping } from "../../../dist/backend/planner/expressions/union-mappings.js";
+import { planRustUnionMapping, planRustUnionProjection } from "../../../dist/backend/planner/expressions/union-mappings.js";
+import { selectRustSourceAssertionConversion, selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
 import { finalizeRustProviderOperationAbi, validateRustFinalizedOperationAbi } from "../../../dist/analysis/facts/finalized-operation-abi.js";
 import { validateValueConversion } from "../../../dist/providers/packages/validation/carriers.js";
 import { rustJsIntlGroupingTargetId } from "../../../dist/target-model/types/carriers/source-types.js";
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../helpers/fake-compile-input.mjs";
+import { visitConversionContract } from "../../../dist/backend/planner/liveness/generated-item-usage-helpers.js";
 
 test("union mappings require complete exact coverage and reject forged or numeric-changing arms", () => {
   const integer = rustSourcePrimitiveTargetType("int64");
@@ -33,9 +35,20 @@ test("union mappings require complete exact coverage and reject forged or numeri
   assert.equal(selectRustUnionArmMapping(narrow, wrong, "source", definitions), undefined);
   assert.equal(selectRustUnionArmMapping(narrow, wrong, "target", definitions), undefined);
   assert.ok(Object.isFrozen(widening) && widening.every(Object.isFrozen));
-  const conversion = { kind: "union-map", source: narrow, target: wide, arms: widening };
+  const conversion = { kind: "union-map", source: narrow, target: wide, coverage: "source", arms: widening };
   assert.equal(rustValueConversionContract(conversion, definitions).lowering, "union-map");
+  const constructed = [];
+  visitConversionContract(rustValueConversionContract(conversion, definitions), () => assert.fail("no field read"),
+    (carrier, variant) => constructed.push([carrier, variant]));
+  assert.deepEqual(constructed, [[wide, "Variant2"], [wide, "Variant0"]]);
   assert.deepEqual(substituteRustValueConversion(conversion, new Map()), conversion);
+  const explicit = selectRustSourceAssertionConversion(wide, narrow, definitions);
+  assert.equal(explicit.coverage, "target");
+  assert.equal(rustValueConversionContract(explicit, definitions).coverage, "target");
+  assert.equal(selectRustSourceValueConversion(wide, narrow, definitions), undefined);
+  for (const coverage of [undefined, "guessed", "source"]) {
+    assert.equal(rustValueConversionContract({ ...explicit, coverage }, definitions), undefined);
+  }
   const abi = finalizeRustProviderOperationAbi({ operationKind: "method",
     form: { form: "call", path: "acme::accept", argConversions: [conversion] },
     sourceArgumentCarriers: [narrow], resultCarrier: boolean, isAsync: false, isFallible: false }, definitions);
@@ -49,6 +62,30 @@ test("union mappings require complete exact coverage and reject forged or numeri
     sourceFile, diagnostics: [], moduleName: "index", moduleNameByFileName: new Map([["/src/index.ts", "index"]]),
     externalCrateNameByFileName: new Map() };
   const expression = { kind: "call", path: "next", args: [] };
+  for (const source of [wide, rustOptionTargetType(wide)]) {
+    for (const target of [string, rustOptionTargetType(string)]) {
+      const selected = selectRustUnionProjection(source, target, definitions);
+      const projection = selectRustSourceAssertionConversion(source, target, definitions);
+      if (source === wide && target !== string) {
+        assert.equal(selected, undefined);
+        assert.equal(projection, undefined);
+        continue;
+      }
+      assert.equal(projection.kind, "union-project");
+      assert.equal(selected.variant.name, "Variant2");
+      assert.equal(rustValueConversionContract(projection, definitions).lowering, "union-project");
+      const planned = planRustUnionProjection(node, expression, source, target, true, context);
+      assert.equal(planned.kind, "match");
+      assert.equal(planned.expression, expression);
+      assert.equal(planned.arms.at(-1).expression.kind, "unreachable");
+      assert.equal(planned.arms.length, target === string ? 2 : 3);
+      assert.deepEqual(substituteRustValueConversion(projection, new Map()), projection);
+    }
+  }
+  for (const target of [rustSourcePrimitiveTargetType("uint64"), rustSourcePrimitiveTargetType("float64")]) {
+    assert.equal(selectRustUnionProjection(wide, target, definitions), undefined);
+    assert.equal(rustValueConversionContract({ kind: "union-project", source: wide, target }, definitions), undefined);
+  }
   for (const owned of [false, true]) {
     const planned = planRustUnionMapping(node, expression, wide, narrow, narrowing, "target", owned, true, true, context);
     assert.equal(planned.kind, "match");
@@ -86,7 +123,7 @@ test("unit variants preserve their native constant and reject broader payloads o
   for (const coverage of ["source", "target"]) {
     assert.equal(selectRustUnionArmMapping(target, source, coverage, definitions), undefined);
   }
-  const conversion = { kind: "union-map", source, target: source,
+  const conversion = { kind: "union-map", source, target: source, coverage: "source",
     arms: selectRustUnionArmMapping(source, source, "source", definitions) };
   const fail = message => { throw new Error(message); };
   assert.doesNotThrow(() => validateValueConversion(conversion, {}, "conversion", source, source, fail));

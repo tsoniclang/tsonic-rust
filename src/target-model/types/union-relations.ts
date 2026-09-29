@@ -3,6 +3,7 @@ import type { RustTypeDefinitions } from "./source-union-definitions.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "./equality.js";
 import { rustRuntimeUnionContract, type RustRuntimeUnionVariant } from "./carriers/runtime-unions.js";
 import { hasExactObjectKeys, isClosedMetadata, isDenseDataArray } from "../metadata/closed-data.js";
+import { rustOptionElementCarrier } from "./carriers/optional.js";
 
 export interface RustUnionArmMapping {
   readonly carrier: TargetTypeRef;
@@ -30,6 +31,20 @@ export function rustUnionAlternatives(carrier: TargetTypeRef, definitions: RustT
   return definitions.sourceUnionVariants(carrier)?.map(variant => ({
     carrier: variant.carrier, variant: { kind: "payload" as const, name: variant.name },
   })) ?? rustRuntimeUnionContract(carrier)?.alternatives;
+}
+
+export function selectRustUnionProjection(source: TargetTypeRef, target: TargetTypeRef, definitions: RustTypeDefinitions) {
+  const sourceElement = rustOptionElementCarrier(source);
+  const targetElement = rustOptionElementCarrier(target);
+  if (targetElement !== undefined && sourceElement === undefined) return undefined;
+  const dispatchCarrier = sourceElement ?? source;
+  const carrier = targetElement ?? target;
+  const alternatives = rustUnionAlternatives(dispatchCarrier, definitions)?.filter(arm =>
+    rustTargetTypeRefEquals(arm.carrier, carrier));
+  return alternatives?.length !== 1 ? undefined : {
+    dispatchCarrier, carrier, variant: alternatives[0]!.variant,
+    sourceOptional: sourceElement !== undefined, targetOptional: targetElement !== undefined,
+  };
 }
 
 export function selectRustUnionArmMapping(

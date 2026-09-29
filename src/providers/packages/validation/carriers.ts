@@ -372,10 +372,15 @@ export function validateValueConversion(
     validateCarrier(conversion.target, definition, `${where}.target`, fail);
     requireRustPath(conversion.path, `${where}.path`, fail);
   } else if (conversion.kind === "union-map") {
-    requireExactKeys(asRecord(conversion), ["kind", "source", "target", "arms"], where, fail);
+    requireExactKeys(asRecord(conversion), ["kind", "source", "target", "arms", "coverage"], where, fail);
+    if (conversion.coverage !== "source" && conversion.coverage !== "target") fail(`${where}.coverage must identify the complete source or target union`);
     validateCarrier(conversion.source, definition, `${where}.source`, fail);
     validateCarrier(conversion.target, definition, `${where}.target`, fail);
     if (!isRustUnionArmMappings(conversion.arms)) fail(`${where}.arms is not a closed union mapping`);
+  } else if (conversion.kind === "union-project") {
+    requireExactKeys(asRecord(conversion), ["kind", "source", "target"], where, fail);
+    validateCarrier(conversion.source, definition, `${where}.source`, fail);
+    validateCarrier(conversion.target, definition, `${where}.target`, fail);
   } else if (conversion.kind === "source-union-variant") {
     requireExactKeys(asRecord(conversion), ["kind", "source", "target", "variantName"], where, fail);
     if (!isRustTargetTypeRef(conversion.source) || !isRustTargetTypeRef(conversion.target) ||

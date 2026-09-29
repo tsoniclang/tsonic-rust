@@ -126,7 +126,8 @@ export type RustValueConversionId =
   | "unit-from-absence";
 
 export type RustNonOptionValueConversion =
-  | { readonly kind: "union-map"; readonly source: TargetTypeRef; readonly target: TargetTypeRef;
+  | { readonly kind: "union-project"; readonly source: TargetTypeRef; readonly target: TargetTypeRef }
+  | { readonly kind: "union-map"; readonly source: TargetTypeRef; readonly target: TargetTypeRef; readonly coverage: "source" | "target";
       readonly arms: readonly RustUnionArmMapping[] }
   | RustExactIntegerConversion
   | {

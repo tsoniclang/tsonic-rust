@@ -1,6 +1,5 @@
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustRuntimeUnionProjection } from "../../target-model/types/carriers/runtime-unions.js";
-import { selectRustUnionArmMapping } from "../../target-model/types/union-relations.js";
+import { selectRustUnionArmMapping, selectRustUnionProjection } from "../../target-model/types/union-relations.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type {
   RustCallScopedLifetimeReconciliationFact,
@@ -67,25 +66,15 @@ export function selectRustFlowReadProjection(
       ? { kind: "incompatible" }
       : { kind: "projection", fact: { kind: "union-map", sourceCarrier, dispatchCarrier, selectedCarrier, arms: mapping } };
   }
-  if (union !== undefined && selectedPayload !== undefined && rustOptionElementCarrier(sourceCarrier) === undefined) {
-    return { kind: "incompatible" };
-  }
-  const selectedVariants = union?.filter(variant => rustTargetTypeRefEquals(variant.carrier, selectedPayload ?? selectedCarrier));
-  if (selectedVariants?.length === 1) {
-    return { kind: "projection", fact: { kind: "source-union", sourceCarrier, dispatchCarrier, selectedCarrier,
-      variant: selectedVariants[0]!.name } };
+  const unionProjection = selectRustUnionProjection(sourceCarrier, selectedCarrier, definitions);
+  if (unionProjection !== undefined) {
+    return { kind: "projection", fact: { kind: union === undefined ? "runtime-union" : "source-union",
+      sourceCarrier, dispatchCarrier, selectedCarrier, variant: unionProjection.variant.name } };
   }
   if ((isRustJsValueCarrier(sourceCarrier) || isRustProgramErrorCarrier(sourceCarrier) &&
     projectTypes.builtinErrorProjectionAvailable === true) &&
     rustTargetTypeRefEquals(selectedCarrier, rustJsErrorTargetType())) {
     return { kind: "projection", fact: { kind: "builtin-error", sourceCarrier, selectedCarrier } };
-  }
-  const nativeVariant = rustRuntimeUnionProjection(dispatchCarrier, selectedPayload ?? selectedCarrier);
-  if (nativeVariant !== undefined) {
-    return selectedPayload !== undefined && rustOptionElementCarrier(sourceCarrier) === undefined
-      ? { kind: "incompatible" }
-      : { kind: "projection", fact: { kind: "runtime-union", sourceCarrier, dispatchCarrier,
-        selectedCarrier, variant: nativeVariant.name } };
   }
   if (isRustProgramErrorCarrier(sourceCarrier)) {
     const selectedDefinition = projectTypes.definitionForCarrier(selectedCarrier);

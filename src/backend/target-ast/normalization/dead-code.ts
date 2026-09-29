@@ -93,6 +93,8 @@ function rustDeadCodeAttribute(disposition: RustDeadCodeDisposition): RustAttrib
       return rustLintAttributes.generatedUnconstructedInstance;
     case "generated-unconstructed-shape":
       return rustLintAttributes.generatedUnconstructedShape;
+    case "generated-unconstructed-variant":
+      return rustLintAttributes.generatedUnconstructedVariant;
     case "generated-unused-dispatch":
       return rustLintAttributes.generatedUnusedDispatch;
     case "generated-unused-storage":

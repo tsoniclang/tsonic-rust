@@ -22,6 +22,8 @@ export const rustLintAttributes = Object.freeze({
     rustListAttribute("expect", [rustWordAttribute("dead_code"), rustValueAttribute("reason", { kind: "string", value: "retains an unconstructed generated instance" })]),
   generatedUnconstructedShape:
     rustListAttribute("expect", [rustWordAttribute("dead_code"), rustValueAttribute("reason", { kind: "string", value: "retains an unconstructed checked source shape" })]),
+  generatedUnconstructedVariant:
+    rustListAttribute("expect", [rustWordAttribute("dead_code"), rustValueAttribute("reason", { kind: "string", value: "retains an unconstructed checked union variant" })]),
   generatedUnusedDispatch:
     rustListAttribute("expect", [rustWordAttribute("dead_code"), rustValueAttribute("reason", { kind: "string", value: "retains an unused generated dispatch slot" })]),
   generatedUnusedStorage:

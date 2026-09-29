@@ -156,6 +156,18 @@ export function rustGeneratedEnumDiscriminantDeadCodeDisposition(
     : "generated-enum-discriminant";
 }
 
+export function rustGeneratedUnionVariantDeadCodeDisposition(
+  context: RustLivenessPlanningContext,
+  carriers: readonly TargetTypeRef[],
+  variantName: string,
+  publiclyReachable: boolean,
+): RustDeadCodeDisposition | undefined {
+  return publiclyReachable ||
+    !carriers.some(carrier => context.input.liveness.isStructuralShapeUsed(carrier)) ||
+    carriers.some(carrier => context.input.liveness.isUnionVariantConstructed(carrier, variantName))
+    ? undefined : "generated-unconstructed-variant";
+}
+
 export function rustStructuralShapeDeadCodeDisposition(
   context: RustLivenessPlanningContext,
   carriers: readonly TargetTypeRef[],

@@ -20,6 +20,7 @@ import {
 import {
   rustStructuralFieldDeadCodeDisposition,
   rustStructuralShapeDeadCodeDisposition,
+  rustGeneratedUnionVariantDeadCodeDisposition,
 } from "../liveness/directives.js";
 import {
   rustTypeFromCarrierInContext,
@@ -87,7 +88,11 @@ export function planRustStructuralShapeModule(
         parameters: union.variantNames.map((_, index) => ({ kind: "type", name: `Payload${index}`, bounds: [] })),
         wherePredicates: [],
       },
-      variants: union.variantNames.map((name, index) => ({ name, fields: [{ kind: "named", path: `Payload${index}` }] })),
+      variants: union.variantNames.map((name, index) => {
+        const deadCode = rustGeneratedUnionVariantDeadCodeDisposition(context, union.sourceCarriers, name, visibility === "public");
+        return { name, fields: [{ kind: "named" as const, path: `Payload${index}` }],
+          ...(deadCode === undefined ? {} : { deadCode }) };
+      }),
     });
     if (union.numberArrayLike) {
       usedAliases.add("js_abi");

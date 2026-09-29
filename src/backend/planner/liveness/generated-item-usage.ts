@@ -84,6 +84,7 @@ export interface RustGeneratedItemUsage {
   isStructuralShapeConstructed(carrier: TargetTypeRef): boolean;
   isStructuralShapeUsed(carrier: TargetTypeRef): boolean;
   isVariantConstructed(declaration: Node, variantName: string): boolean;
+  isUnionVariantConstructed(carrier: TargetTypeRef, variantName: string): boolean;
 }
 
 type RustOperationAbi = Extract<
@@ -106,7 +107,7 @@ export function analyzeRustGeneratedItemUsage(input: {
   readonly projectFieldDispatch: RustProjectFieldDispatchQueries;
   readonly navigation: TargetPlanningSourceNavigation;
 }): RustGeneratedItemUsage {
-  const declarationsByCarrier = new Map<string, Node[]>();
+  const carriersByDeclaration = new Map<Node, string>();
   for (const declaration of input.declarations) {
     const kind = input.ast.kindName(declaration);
     if (kind !== "KindEnumDeclaration" && kind !== "KindTypeAliasDeclaration") continue;
@@ -116,15 +117,12 @@ export function analyzeRustGeneratedItemUsage(input: {
     }
     const carrier = input.facts.getRuntimeCarrierFact(declaration)?.carrier;
     if (carrier === undefined) continue;
-    const key = closedMetadataKey(carrier);
-    const declarations = declarationsByCarrier.get(key) ?? [];
-    declarations.push(declaration);
-    declarationsByCarrier.set(key, declarations);
+    carriersByDeclaration.set(declaration, closedMetadataKey(carrier));
   }
 
   const structuralFieldReads = new Set<string>();
   const structuralFieldWrites = new Set<string>();
-  const variantsByDeclaration = new Map<Node, Set<string>>();
+  const variantsByCarrier = new Map<string, Set<string>>();
   const usedProjectTypes = new WeakSet<Node>();
   const constructedProjectTypes = new WeakSet<Node>();
   const reifiedProjectTypes = new WeakSet<Node>();
@@ -235,14 +233,13 @@ export function analyzeRustGeneratedItemUsage(input: {
     }
   };
   const markVariantConstructed = (carrier: TargetTypeRef, variantName: string): void => {
+    const key = closedMetadataKey(carrier);
     if (rustSourceUnionCarrierValue(carrier)?.origin === "generated") {
-      constructedStructuralShapes.add(closedMetadataKey(carrier));
+      constructedStructuralShapes.add(key);
     }
-    for (const declaration of declarationsByCarrier.get(closedMetadataKey(carrier)) ?? []) {
-      const variants = variantsByDeclaration.get(declaration) ?? new Set<string>();
-      variants.add(variantName);
-      variantsByDeclaration.set(declaration, variants);
-    }
+    const variants = variantsByCarrier.get(key) ?? new Set<string>();
+    variants.add(variantName);
+    variantsByCarrier.set(key, variants);
   };
   const markStructuralShapeConstructed = (carrier: TargetTypeRef | undefined): void => {
     if (carrier !== undefined) constructedStructuralShapes.add(closedMetadataKey(carrier));
@@ -334,6 +331,10 @@ export function analyzeRustGeneratedItemUsage(input: {
       markProjectionUsed(downcast.dispatchCarrier, downcast.targetCarrier, downcast.projection);
     }
     const flow = input.facts.getFact(node, rustFlowReadProjectionFactKey);
+    if (flow?.kind === "union-map") {
+      const target = rustOptionElementCarrier(flow.selectedCarrier) ?? flow.selectedCarrier;
+      for (const arm of flow.arms) markVariantConstructed(target, arm.target.name);
+    }
     if (flow?.kind === "project-downcast") {
       markProjectCarrierFieldUsed(flow.dispatchCarrier, "wrapper-identity");
       markProjectCarrierFieldUsed(flow.dispatchCarrier, "wrapper-dispatch");
@@ -762,6 +763,8 @@ export function analyzeRustGeneratedItemUsage(input: {
     isStructuralShapeUsed: (carrier: TargetTypeRef) =>
       constructedStructuralShapes.has(closedMetadataKey(carrier)) || accessedStructuralShapes.has(closedMetadataKey(carrier)),
     isVariantConstructed: (declaration: Node, variantName: string) =>
-      variantsByDeclaration.get(declaration)?.has(variantName) === true,
+      variantsByCarrier.get(carriersByDeclaration.get(declaration) ?? "")?.has(variantName) === true,
+    isUnionVariantConstructed: (carrier: TargetTypeRef, variantName: string) =>
+      variantsByCarrier.get(closedMetadataKey(carrier))?.has(variantName) === true,
   });
 }

@@ -105,6 +105,9 @@ export function visitConversionContract(
     case "source-union-variant":
       markVariantConstructed(contract.target, contract.variantName);
       return;
+    case "union-map":
+      for (const arm of contract.arms) markVariantConstructed(contract.target, arm.target.name);
+      return;
     case "option-map":
       visitConversionContract(contract.element, markStructuralFieldRead, markVariantConstructed);
       return;
@@ -151,6 +154,7 @@ export function visitConversionContract(
     case "js-argument-vector-callback":
     case "owned-string-from-borrowed-str":
     case "copy-from-reference":
+    case "union-project":
       return;
   }
 }

@@ -1,7 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { rustRuntimeUnionProjection } from "../../../target-model/types/carriers/runtime-unions.js";
-import { rustTypeFromCarrierInContext } from "../types/render.js";
+import { selectRustUnionProjection } from "../../../target-model/types/union-relations.js";
 import {
   isRustCopyCarrier,
   isRustJsValueCarrier,
@@ -11,7 +10,7 @@ import {
   rustOptionElementCarrier,
 } from "../../../target-model/types/index.js";
 import type { RustFlowReadProjectionFact } from "../../../analysis/facts/keys.js";
-import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/nodes.js";
 import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { diagnosticInput } from "../program/plan-context.js";
@@ -22,7 +21,7 @@ import { planRustNonConsumingValue } from "./typed-locations.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
 import { planRustOptionalStorageOperation } from "./optional-storage.js";
-import { planRustUnionMapping } from "./union-mappings.js";
+import { planRustUnionMapping, planRustUnionProjection } from "./union-mappings.js";
 import {
   allocateRustSyntheticName,
   createRustSyntheticNameState,
@@ -80,48 +79,18 @@ export function planRustFlowReadProjection(
     return undefined;
   }
   if (fact.kind === "source-union" || fact.kind === "runtime-union") {
-    const optionalPayload = rustOptionElementCarrier(fact.sourceCarrier);
-    const selectedPayload = rustOptionElementCarrier(fact.selectedCarrier);
-    const payloadCarrier = selectedPayload ?? fact.selectedCarrier;
-    const variants = fact.kind === "source-union"
-      ? context.input.program.typeDefinitions.sourceUnionVariants(fact.dispatchCarrier) : undefined;
-    const selected = fact.kind === "runtime-union"
-      ? rustRuntimeUnionProjection(fact.dispatchCarrier, payloadCarrier)
-      : variants?.filter(variant => variant.name === fact.variant &&
-        rustTargetTypeRefEquals(variant.carrier, payloadCarrier)).length === 1
-        ? { kind: "payload" as const, name: fact.variant } : undefined;
-    const type = rustTypeFromCarrierInContext(fact.dispatchCarrier, context);
-    const path = type?.kind === "named" ? type.path : undefined;
-    if (!rustTargetTypeRefEquals(optionalPayload ?? fact.sourceCarrier, fact.dispatchCarrier) ||
-      selectedPayload !== undefined && optionalPayload === undefined ||
-      path === undefined || selected?.name !== fact.variant ||
-      selected.kind === "payload" && !ownsValue && !rustCarrierSupportsClone(payloadCarrier, context.input.program.typeDefinitions) &&
-        !requireRustCarrierRequirements(payloadCarrier, ["clone"], node, context)) {
+    const definitions = context.input.program.typeDefinitions;
+    const selected = selectRustUnionProjection(fact.sourceCarrier, fact.selectedCarrier, definitions);
+    const kindMatches = (definitions.sourceUnionVariants(fact.dispatchCarrier) !== undefined) === (fact.kind === "source-union");
+    const result = selected === undefined || !kindMatches || selected.variant.name !== fact.variant ||
+      !rustTargetTypeRefEquals(selected.dispatchCarrier, fact.dispatchCarrier) ? undefined
+        : planRustUnionProjection(node, expression, fact.sourceCarrier, fact.selectedCarrier, ownsValue, context);
+    if (result === undefined) {
       context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
         "rust.backend.source-union-projection", "The selected union payload has no exact non-consuming projection."));
       return undefined;
     }
-    const name = allocateRustSyntheticName(context.syntheticNames ??
-      createRustSyntheticNameState(context.input.program.source.ast, node, []), "flow_value");
-    const payloadPattern: RustPattern = selected.kind === "constant"
-      ? { kind: "path", path: `${path}::${fact.variant}` }
-      : { kind: "tuple-variant", path: `${path}::${fact.variant}`, elements: [{ kind: "binding", name }] };
-    const pattern: RustPattern = optionalPayload === undefined ? payloadPattern
-      : { kind: "tuple-variant", path: "Some", elements: [payloadPattern] };
-    const payload: RustExpr = selected.kind === "constant" ? { kind: "bool-literal", value: selected.value }
-      : ownsValue ? { kind: "path", path: name }
-      : isRustCopyCarrier(payloadCarrier)
-        ? { kind: "dereference", pointer: { kind: "path", path: name } }
-        : { kind: "method-call", receiver: { kind: "path", path: name }, method: "clone", args: [] };
-    const value: RustExpr = selectedPayload === undefined ? payload
-      : { kind: "call", path: "Some", args: [payload] };
-    return bindRustFlowMatchSubject({ kind: "match", expression: ownsValue ? expression : { kind: "reference", expr: expression }, arms: [
-      { pattern, expression: value },
-      ...(selectedPayload === undefined ? [] : [{ pattern: { kind: "path" as const, path: "None" },
-        expression: { kind: "path" as const, path: "None" } }]),
-      { pattern: { kind: "wildcard" }, expression: { kind: "unreachable",
-        message: "TSTS-selected source refinement excluded this union variant" } },
-    ] }, node, context);
+    return bindRustFlowMatchSubject(result, node, context);
   }
   if (fact.kind === "option-value" || fact.kind === "option-reference") {
     const reborrow = fact.kind === "option-reference";
