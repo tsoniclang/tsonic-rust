@@ -87,6 +87,22 @@ export function selectRustCallableParameterAdapters(
 ): RustCallableParameterAdapter[] | undefined {
   const adapters: RustCallableParameterAdapter[] = [];
   for (const [implementationIndex, target] of implementationParameters.entries()) {
+    const source = contractParameters[implementationIndex];
+    const runtimeAdapter = source === undefined ? undefined : selectRustCallableValueAdapter(
+      source.parameterCarrier, target.parameterCarrier, projectTypes, definitions,
+    );
+    if (source !== undefined && runtimeAdapter !== undefined &&
+      (source.form === "rest") === (target.form === "rest") &&
+      (source.mode === target.mode || source.mode === "mut-ref" && target.mode === "ref")) {
+      adapters.push(Object.freeze({
+        kind: "runtime-value",
+        contractParameterIndex: implementationIndex,
+        source,
+        target,
+        adapter: runtimeAdapter,
+      }));
+      continue;
+    }
     if (target.form === "rest") {
       if (!isRustVecCarrier(target.parameterCarrier)) {
         return undefined;
@@ -131,28 +147,11 @@ export function selectRustCallableParameterAdapters(
       }));
       continue;
     }
-    const source = contractParameters[implementationIndex];
     if (source === undefined) {
       if (target.form !== "optional" && target.form !== "default") {
         return undefined;
       }
       adapters.push(Object.freeze({ kind: "omitted", target }));
-      continue;
-    }
-    const runtimeAdapter = selectRustCallableValueAdapter(
-      source.parameterCarrier,
-      target.parameterCarrier,
-      projectTypes, definitions,
-    );
-    if (runtimeAdapter !== undefined &&
-      (source.mode === target.mode || source.mode === "mut-ref" && target.mode === "ref")) {
-      adapters.push(Object.freeze({
-        kind: "runtime-value",
-        contractParameterIndex: implementationIndex,
-        source,
-        target,
-        adapter: runtimeAdapter,
-      }));
       continue;
     }
     if (source.form !== "required" ||
