@@ -155,7 +155,7 @@ export function createRustSourceCallableAbiResolver(input: {
         parameter,
         "moved",
         context,
-      ) || isRustVecCarrier(base) && parameterRetainsWholeValue(parameter, context);
+      ) || (isRustVecCarrier(base) || isRustStringCarrier(base)) && parameterRetainsWholeValue(parameter, context);
       const parameterLaneCarrier = form === "required" && typeNode !== undefined
         ? requiresOwnedValue
           ? base
@@ -352,6 +352,9 @@ function parameterUsesFlowState(
 }
 
 function parameterRetainsWholeValue(parameter: Node, context: RustTargetTypeResolutionContext): boolean {
+  const callable = enclosingCallable(context.ast.parent(parameter), context);
+  if (callable !== undefined && (context.ast.hasModifierKind(callable, "async") ||
+    context.semanticsFor(callable).operations.generator(callable) !== undefined)) return true;
   const summary = context.source.navigation.parameterUseSummary(parameter);
   return summary === undefined || summary.uses.some(use => !use.throughMember &&
     (use.captured || use.role === "return" || use.role === "yield" || use.role === "storage" &&
@@ -374,7 +377,7 @@ function parameterCanUseSharedBorrow(
     const name = ast.name(current);
     if (name === undefined || context.source.navigation.sourceReferenceFor(name)?.declaration !== current ||
       ast.body(enclosingCallable(ast.parent(current), context)) === undefined ||
-      parameterUsesFlowState(current, "moved", context)) return false;
+      parameterUsesFlowState(current, "moved", context) || parameterRetainsWholeValue(current, context)) return false;
     const summary = context.source.navigation.parameterUseSummary(current);
     if (summary === undefined || summary.bindingWritten || summary.memberWritten || summary.captured ||
       summary.exported) return false;

@@ -5,6 +5,7 @@ import {
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
   rustJsTypedArrayTargetIds,
+  rustJsPromiseTargetId,
   type RustJsTypedArrayName,
 } from "../../../../target-model/types/index.js";
 
@@ -242,6 +243,26 @@ const timerRows: readonly JsOperationRowData[] = [
 ];
 
 const promiseRows: readonly JsOperationRowData[] = [
+  {
+    owner: "PromiseConstructor", member: "resolve", operationKind: "call", lane: "promise", variant: "value",
+    sourceValueTypeArgument: { argumentIndex: 0, typeArgumentIndex: 0 },
+    returnedFuture: { awaiting: "infallible", errorBoundary: "none" },
+    shape: {
+      op: "operation", operationKind: "method",
+      target: { form: "call", path: "js_abi::JsPromise::resolved" },
+      result: { ref: "promise-of-resolved-value" }, params: [{ ref: "promise-resolved-value" }],
+    },
+  },
+  {
+    owner: "PromiseConstructor", member: "resolve", operationKind: "call", lane: "promise", variant: "promise",
+    firstArgCarrierId: rustJsPromiseTargetId,
+    returnedFuture: { awaiting: "fallible", errorBoundary: "source-program" },
+    shape: {
+      op: "operation", operationKind: "method",
+      target: { form: "call", path: "std::convert::identity" },
+      result: { ref: "resolved-promise" }, params: [{ ref: "resolved-promise" }],
+    },
+  },
   ...(["race", "any"] as const).map((member): JsOperationRowData => ({
     owner: "PromiseConstructor",
     member,

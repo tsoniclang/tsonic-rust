@@ -46,6 +46,7 @@ import { rustInferCarrier } from "./rows.js";
 import { rustJsIntlGroupingTargetId } from "../../../../target-model/types/carriers/source-types.js";
 import type { JsCarrierRef } from "./model.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
+import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 
 export interface JsLaneBindings {
   readonly element?: TargetTypeRef;
@@ -317,6 +318,19 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
       return bindings.promiseInputOutput === undefined
         ? undefined
         : rustJsPromiseTargetType(bindings.promiseInputOutput);
+    case "promise-resolved-value":
+      return bindings.authoredMethodTypeArguments?.[0] ?? bindings.arguments?.[0];
+    case "promise-of-resolved-value": {
+      const value = resolveCarrierRef({ ref: "promise-resolved-value" }, bindings);
+      return value === undefined ? undefined : rustJsPromiseTargetType(value);
+    }
+    case "resolved-promise": {
+      const promise = bindings.arguments?.[0];
+      const output = rustFutureOutputCarrier(promise);
+      const explicit = bindings.authoredMethodTypeArguments?.[0];
+      return output === undefined || explicit !== undefined && !rustTargetTypeRefEquals(output, explicit)
+        ? undefined : promise;
+    }
     case "promise-of-settled-input-output-array":
       return bindings.promiseInputOutput === undefined
         ? undefined

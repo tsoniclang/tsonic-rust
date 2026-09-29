@@ -357,6 +357,16 @@ export function selectRustCheckedCall(
         context.ast.is.IsSpreadElement(argument.expression) ? [index] : []),
       selectedMethodTypeArgumentCarriers,
       authoredMethodTypeArgumentCarriers,
+      argumentMatchesSelectedTypeArgument: (argumentIndex, typeArgumentIndex) => {
+        const argument = request.source.sourceArguments[argumentIndex];
+        const typeArgument = request.source.sourceSelectedMethodTypeArguments?.[typeArgumentIndex];
+        if (argument === undefined || typeArgument === undefined) return false;
+        const types = context.semanticsFor(request.source.call).types;
+        const value = argumentCarriers[argumentIndex];
+        const parameter = selectedMethodTypeArgumentCarriers[typeArgumentIndex];
+        return types.relationship(argument.type, typeArgument.selectedType) === "identical" ||
+          value !== undefined && parameter !== undefined && rustTargetTypeRefEquals(value, parameter);
+      },
       argumentMatchScore: selectedArgumentMatchScore(selectedCallArgumentNodes(request), context, options),
       resolveCallbackArgumentCarrier: (callback) => {
         const adapter = callback.argumentAdapter;

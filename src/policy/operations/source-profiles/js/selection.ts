@@ -299,6 +299,8 @@ export function selectJsSurfaceOperation(request: JsOperationRequest, definition
       candidate.member === request.memberName &&
       candidate.operationKind === request.operationKind &&
       candidate.lane === lane &&
+      (candidate.sourceValueTypeArgument === undefined || request.argumentMatchesSelectedTypeArgument?.(
+        candidate.sourceValueTypeArgument.argumentIndex, candidate.sourceValueTypeArgument.typeArgumentIndex) === true) &&
       (candidate.selectedMethodTypeArgumentArity === undefined ||
         candidate.selectedMethodTypeArgumentArity ===
           (request.selectedMethodTypeArgumentCarriers?.length ?? 0)) &&

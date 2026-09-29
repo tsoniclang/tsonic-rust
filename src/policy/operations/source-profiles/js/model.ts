@@ -33,6 +33,7 @@ export interface JsOperationRequest {
   readonly numericParameterArgument?: (index: number, carrier: TargetTypeRef) => boolean;
   readonly resultUse?: "consumed" | "discarded";
   readonly authoredPropertyKey?: string;
+  readonly argumentMatchesSelectedTypeArgument?: (argumentIndex: number, typeArgumentIndex: number) => boolean;
 }
 
 export interface JsOperationSelection {
@@ -168,6 +169,9 @@ export type JsCarrierRef =
   | { readonly ref: "promise-output" }
   | { readonly ref: "promise-input-output" }
   | { readonly ref: "promise-of-input-output" }
+  | { readonly ref: "promise-resolved-value" }
+  | { readonly ref: "promise-of-resolved-value" }
+  | { readonly ref: "resolved-promise" }
   | { readonly ref: "promise-of-settled-input-output-array" }
   | { readonly ref: "promise-finally-callback" }
   | { readonly ref: "json-replacer-callback" }
@@ -201,6 +205,7 @@ export interface JsOperationRowData {
   readonly numericRest?: true;
   readonly firstArgCarrierId?: string;
   readonly authoredPropertyKey?: true;
+  readonly sourceValueTypeArgument?: { readonly argumentIndex: number; readonly typeArgumentIndex: number };
   readonly shape:
     | {
         readonly op: "operation";
