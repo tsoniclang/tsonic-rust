@@ -65,7 +65,7 @@ fn handwritten(count: usize, mut seed: usize) -> Vec<usize> {
 #[test]
 fn native_mutation_and_allocation_match_handwritten_captures() {
     for count in [0, 1, 10, 10000] {
-        let actual = measure(|| native_capture::index::prefix_sums(std::hint::black_box(count), 7));
+        let actual = measure(|| native_capture::index::prefixSums(std::hint::black_box(count), 7));
         let expected = measure(|| handwritten(std::hint::black_box(count), 7));
         assert_eq!(actual, expected);
     }

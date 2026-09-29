@@ -35,8 +35,8 @@ export function resolveNativeProviderCallableArguments(
     consts: new Map<string, RustTargetConstArgument>() };
   const selected = selectedProviderCallGenericArguments(request, template, context, walk.operationOptions);
   if (selected === undefined) return;
-  for (const [name, argument] of selected.directGenericArguments) {
-    const parameter = parameters.find(value => value.sourceName === name);
+  for (const [identity, argument] of selected.directGenericArguments) {
+    const parameter = parameters.find(value => value.targetIdentity === identity);
     if (parameter === undefined || !mergeDirectGenericArgument(bindings, parameter, argument)) return;
   }
   const receiver = selectedCallReceiverValueCarrier(request, context, walk.operationOptions);

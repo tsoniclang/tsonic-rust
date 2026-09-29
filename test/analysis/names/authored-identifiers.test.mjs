@@ -3,7 +3,7 @@ import test from "node:test";
 import { createCompilerSessionFromFiles, formatDiagnostics } from "@tsonic/tsts";
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { createRustNamePlan } from "../../../dist/analysis/names/plan.js";
-import { isValidRustAuthoredIdentifier, isValidRustIdentifier, rustTargetIdentifier, rustModuleSegmentName } from "../../../dist/target-model/names/identifiers.js";
+import { isValidRustAuthoredIdentifier, isValidRustIdentifier, rustTargetIdentifier, rustModuleSegmentName, rustPackageModuleName } from "../../../dist/target-model/names/identifiers.js";
 import { allocateRustGeneratedName } from "../../../dist/target-model/names/generated.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../../dist/backend/planner/names/synthetic.js";
 import { rustSourceDeclarationTypeName } from "../../../dist/policy/types/source-declarations.js";
@@ -55,7 +55,7 @@ test("Rust preserves authored names rather than recasing or adding unused prefix
   assert.equal(plan.nameForSourceType("/project/index.ts", "http_status"), "http_status");
 });
 
-test("Rust keyword escaping preserves semantic identity without accepting raw source property spellings", () => {
+test("Rust keyword escaping preserves authored identifier identity and keeps literal keys distinct", () => {
   for (const [authored, target] of [["type", "r#type"], ["match", "r#match"], ["makeValue", "makeValue"], ["HTTP_OK", "HTTP_OK"]]) {
     assert.equal(rustTargetIdentifier(authored), target);
     assert.equal(isValidRustIdentifier(target), true);
@@ -65,10 +65,21 @@ test("Rust keyword escaping preserves semantic identity without accepting raw so
     assert.equal(isValidRustAuthoredIdentifier(authored), false);
   }
   assert.equal(isValidRustIdentifier("r#type_2"), true);
-  const rawSpelling = planNames('export interface RecordValue { "r#type": string; }');
-  assert.deepEqual(rawSpelling.plan.diagnostics.map(diagnostic => diagnostic.code), ["RUST_AUTHORED_IDENTIFIER_UNREPRESENTABLE"]);
+  const rawSpelling = planNames('export interface RecordValue { "r#type": string; type: number; }');
+  assert.deepEqual(rawSpelling.plan.diagnostics, []);
+  const fields = rawSpelling.declarations.filter(node => rawSpelling.source.ast.kindName(node) === "KindPropertySignature");
+  assert.deepEqual(fields.map(field => rawSpelling.plan.nameForDeclaration(field)), ["type_2", "r#type"]);
   const { plan } = planNames("export function read(self: string): string { return self; }");
   assert.deepEqual(plan.diagnostics.map(diagnostic => diagnostic.code), ["RUST_AUTHORED_IDENTIFIER_UNREPRESENTABLE"]);
+});
+
+test("literal property storage preserves keys and reserves real authored identifiers", () => {
+  const { plan, source, declarations } = planNames(`
+    export interface Entry { 2: number; value_2: number; "some-key": number; some_key: number; }
+  `);
+  assert.deepEqual(plan.diagnostics, []);
+  const fields = declarations.filter(node => source.ast.kindName(node) === "KindPropertySignature");
+  assert.deepEqual(fields.map(field => plan.nameForDeclaration(field)), ["value_2_2", "value_2", "some_key_2", "some_key"]);
 });
 
 test("Rust preserves valid non-ASCII source identifiers without deleting their characters", () => {
@@ -95,6 +106,14 @@ test("source-derived Rust module names preserve valid authored spelling and case
   for (const name of ["file-name", "1value", "main", "lib", "mod", "type", "Self"]) {
     assert.equal(isValidRustIdentifier(rustModuleSegmentName(name)), true, name);
   }
+});
+
+test("generated package module names do not confuse package punctuation with authored source names", () => {
+  assert.equal(rustPackageModuleName("@acme/engine"), "acme_engine");
+  assert.equal(rustPackageModuleName("acme-engine"), "acme_engine");
+  assert.equal(rustPackageModuleName("type"), "type_module");
+  assert.equal(rustModuleSegmentName("_acme_engine"), "_acme_engine");
+  assert.equal(rustModuleSegmentName("myModule"), "myModule");
 });
 
 for (const kind of ["function", "variable"]) {
@@ -177,4 +196,18 @@ test("Rust private storage does not rename colliding authored public fields", ()
     ["#type", "type_3"], ["type", "r#type"], ["type_2", "type_2"],
   ]);
   assert.equal(allocateRustGeneratedName(new Set(["typeState", "typeState_2"]), "r#typeState"), "typeState_3");
+});
+
+test("private storage and non-identifier property keys share one collision inventory", () => {
+  const { source, plan, declarations } = planNames(`
+    export class Counter {
+      #value_2 = 1;
+      2 = 2;
+      value_2 = 3;
+      read(): number { return this.#value_2 + this[2] + this.value_2; }
+    }
+  `);
+  assert.deepEqual(plan.diagnostics, []);
+  const fields = declarations.filter(node => source.ast.is.IsPropertyDeclaration(node));
+  assert.deepEqual(fields.map(node => plan.nameForDeclaration(node)), ["value_2_3", "value_2_2", "value_2"]);
 });

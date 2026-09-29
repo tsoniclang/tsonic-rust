@@ -23,7 +23,6 @@ export function selectRustInferredNumericReturn(
   const scalar = rustOptionElementCarrier(baseline) ?? baseline;
   if (baseline === undefined || scalar === undefined ||
     Node_Type(ast, declaration) !== undefined || ast.body(declaration) === undefined ||
-    ast.hasModifierKind(declaration, "async") ||
     walk.context.semanticsFor(declaration).operations.generator(declaration) !== undefined) return baseline;
   if (!isRustNumericCarrier(scalar) && !isRustBigIntCarrier(scalar)) {
     return authoredForwardedReturn(walk, declaration) ?? baseline;

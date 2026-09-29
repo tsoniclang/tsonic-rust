@@ -167,7 +167,7 @@ export function genericDefault<T>(): T {
   const emitted = artifactText(explicitDefault.result, "src/index.rs");
   assert.match(emitted, /rt::ModuleCell<i32>/u);
   assert.match(emitted, /<i32 as Default>::default\(\)/u);
-  assert.match(emitted, /pub fn generic_default<T: Default>\(\) -> T/u);
+  assert.match(emitted, /pub fn genericDefault<T: Default>\(\) -> T/u);
   assert.match(emitted, /<T as Default>::default\(\)/u);
   validateGeneratedProject(
     "class-static-explicit-default",

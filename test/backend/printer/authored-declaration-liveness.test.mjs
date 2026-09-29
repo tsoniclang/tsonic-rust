@@ -76,19 +76,19 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   const helpers = artifactText(result, "src/helpers.rs");
   const index = artifactText(result, "src/index.rs");
-  assert.equal(itemHasAttribute(helpers, "fn used_leaf("), false);
-  assert.equal(itemHasAttribute(helpers, "fn unused_leaf("), false);
-  assert.equal(itemHasAttribute(helpers, "fn unused_outer("), true);
-  assert.equal(itemHasAttribute(index, "fn used_middle("), false);
-  assert.equal(itemHasAttribute(index, "fn callback_target("), false);
+  assert.equal(itemHasAttribute(helpers, "fn usedLeaf("), false);
+  assert.equal(itemHasAttribute(helpers, "fn unusedLeaf("), false);
+  assert.equal(itemHasAttribute(helpers, "fn unusedOuter("), true);
+  assert.equal(itemHasAttribute(index, "fn usedMiddle("), false);
+  assert.equal(itemHasAttribute(index, "fn callbackTarget("), false);
   assert.equal(itemHasAttribute(index, "fn invoke("), false);
-  assert.equal(itemHasAttribute(index, "fn used_recursive("), false);
-  assert.equal(itemHasAttribute(index, "fn used_overload("), false);
-  assert.equal(itemHasAttribute(index, "fn unused_overload("), true);
-  assert.equal(itemHasAttribute(index, "fn used_arrow("), false);
-  assert.equal(itemHasAttribute(index, "fn unused_arrow("), true);
-  assert.equal(itemHasAttribute(index, "fn dead_cycle_a("), true);
-  assert.equal(itemHasAttribute(index, "fn dead_cycle_b("), false);
+  assert.equal(itemHasAttribute(index, "fn usedRecursive("), false);
+  assert.equal(itemHasAttribute(index, "fn usedOverload("), false);
+  assert.equal(itemHasAttribute(index, "fn unusedOverload("), true);
+  assert.equal(itemHasAttribute(index, "fn usedArrow("), false);
+  assert.equal(itemHasAttribute(index, "fn unusedArrow("), true);
+  assert.equal(itemHasAttribute(index, "fn deadCycleA("), true);
+  assert.equal(itemHasAttribute(index, "fn deadCycleB("), false);
   assert.equal(itemHasAttribute(index, "fn main("), false);
   validateGeneratedProject("authored-function-liveness", result.artifacts, { run: true });
 });
@@ -134,10 +134,10 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
   assert.equal(itemHasAttribute(source, "struct UsedBox "), false);
-  assert.equal(itemHasAttribute(source, "read_value:"), false);
-  assert.equal(itemHasAttribute(source, "write_only_value:", authoredUnreadField), true);
-  assert.equal(itemHasAttribute(source, "fn used_method("), false);
-  assert.equal(itemHasAttribute(source, "fn unused_method("), true);
+  assert.equal(itemHasAttribute(source, "readValue:"), false);
+  assert.equal(itemHasAttribute(source, "writeOnlyValue:", authoredUnreadField), true);
+  assert.equal(itemHasAttribute(source, "fn usedMethod("), false);
+  assert.equal(itemHasAttribute(source, "fn unusedMethod("), true);
   assert.equal(itemHasAttribute(source, "struct UnusedBox "), false);
   assert.equal(
     itemHasAttribute(source, "struct UnusedBox ", generatedUnconstructedInstance),
@@ -173,11 +173,11 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.equal(itemHasAttribute(source, "fn initialized_dependency("), false);
-  assert.equal(itemHasAttribute(source, "fn unused_dependency("), true);
-  assert.equal(itemHasAttribute(source, "const UNUSED_NATIVE_CONSTANT:"), true);
-  assert.equal(itemHasAttribute(source, "fn public_entry("), false);
-  assert.equal(itemHasAttribute(source, "fn unused_public_entry("), false);
+  assert.equal(itemHasAttribute(source, "fn initializedDependency("), false);
+  assert.equal(itemHasAttribute(source, "fn unusedDependency("), true);
+  assert.equal(itemHasAttribute(source, "const unusedNativeConstant:"), true);
+  assert.equal(itemHasAttribute(source, "fn publicEntry("), false);
+  assert.equal(itemHasAttribute(source, "fn unusedPublicEntry("), false);
   validateGeneratedProject("authored-root-liveness", result.artifacts, { run: true });
 });
 
@@ -213,8 +213,8 @@ export enum PublicChoice { First, Second }
   });
   assert.deepEqual(libraryResult.diagnostics, []);
   const librarySource = artifactText(libraryResult, "src/index.rs");
-  assert.equal(itemHasAttribute(librarySource, "fn exported_but_unused("), false);
-  assert.equal(itemHasAttribute(librarySource, "fn implementation_only("), false);
+  assert.equal(itemHasAttribute(librarySource, "fn exportedButUnused("), false);
+  assert.equal(itemHasAttribute(librarySource, "fn implementationOnly("), false);
   const publicChoice = rustBracedItem(librarySource, "enum PublicChoice");
   assert.equal(itemHasAttribute(publicChoice, "First ="), false);
   assert.equal(itemHasAttribute(publicChoice, "Second ="), false);
@@ -313,8 +313,8 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const shapes = artifactText(result, "src/shapes.rs");
-  assert.equal(itemHasAttribute(shapes, "read_value:", authoredUnreadField), false);
-  assert.equal(itemHasAttribute(shapes, "write_only_value:", authoredUnreadField), true);
+  assert.equal(itemHasAttribute(shapes, "readValue:", authoredUnreadField), false);
+  assert.equal(itemHasAttribute(shapes, "writeOnlyValue:", authoredUnreadField), true);
   assert.equal(itemHasAttribute(shapes, "selected:", authoredUnreadField), false);
   assert.equal(itemHasAttribute(shapes, "get_selected:", authoredUnreadField), false);
   assert.equal(itemHasAttribute(shapes, "set_selected:", authoredUnreadField), false);

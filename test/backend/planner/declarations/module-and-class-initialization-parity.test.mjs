@@ -45,7 +45,7 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/settings.rs");
-  assert.match(source, /pub static DEFAULT:/u);
+  assert.match(source, /pub static default:/u);
   assert.equal(validateGeneratedProject("default-export-expression", result.artifacts, { run: true }).status, 0);
 });
 

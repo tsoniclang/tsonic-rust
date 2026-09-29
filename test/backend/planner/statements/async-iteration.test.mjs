@@ -101,5 +101,5 @@ export async function total(): Promise<int32> {
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /let async_iterator = rows\(\);/u);
-  assert.match(source, /let tsonic_async_iterator: i32 = 4;/u);
+  assert.match(source, /let __tsonic_async_iterator: i32 = 4;/u);
 });

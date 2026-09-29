@@ -63,7 +63,11 @@ export function finalizeRustItemNames(item: RustItem): RustItem {
     case "mod-decl": return named(item, "snake");
     case "const":
     case "thread-local": return named(item, "upper");
-    case "struct": return { ...generic(namedType(item)), fields: item.fields.map(field => named(field, "snake")) };
+    case "struct": {
+      const declaration = generic(namedType(item));
+      return item.fields.some(field => rustNameNeedsStyleAllowance(field.name, "snake"))
+        ? { ...declaration, attrs: appendRustNamingAllowance(declaration.attrs, "snake") } : declaration;
+    }
     case "enum": return { ...generic(namedType(item)), variants: item.variants.map(variant => named(variant, "camel")) };
     case "type-alias": return generic(namedType(item));
     case "trait": return { ...generic(namedType(item)), members: item.members.map(member =>

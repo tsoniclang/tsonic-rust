@@ -8,7 +8,7 @@ import {
   type RustItem,
   type RustSourceFileModel,
 } from "../../target-ast/nodes.js";
-import { rustPublicSignatureTypeNames } from "../../target-ast/normalization/source-style.js";
+import { rustPublicSignatureTypeNames } from "../../target-ast/normalization/signature-visibility.js";
 import { closeRustModuleTypeVisibility } from "../../target-ast/normalization/module-visibility.js";
 import type { RustPlanningContext } from "../context.js";
 import { planRustStructuralShapeModule } from "../objects/structural-shapes.js";

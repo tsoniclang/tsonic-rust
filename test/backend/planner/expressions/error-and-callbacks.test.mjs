@@ -222,8 +222,8 @@ export function roundtrip(text: string): string {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn roundtrip\(text: String\) -> Result<String, rt::TsonicError> \{/u);
-  assert.match(text, /js_abi::json_parse\(&text\)\?/u);
+  assert.match(text, /pub fn roundtrip\(text: &str\) -> Result<String, rt::TsonicError> \{/u);
+  assert.match(text, /js_abi::json_parse\(text\)\?/u);
   assert.match(text, /js_abi::json_stringify\(&value\)\?/u);
 });
 
@@ -274,8 +274,8 @@ export function forwards(text: string): string {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn catches\(text: String\) -> String \{/u);
-  assert.match(text, /pub fn forwards\(text: String\) -> String \{/u);
+  assert.match(text, /pub fn catches\(text: &str\) -> String \{/u);
+  assert.match(text, /pub fn forwards\(text: &str\) -> String \{/u);
   assert.match(text, /catches\(text\)/u);
   assert.doesNotMatch(text, /pub fn (?:catches|forwards)[^{]+TsonicResult/u);
   assert.doesNotMatch(text, /catches\(text\)\?/u);
@@ -501,7 +501,7 @@ export function main(): void {
   assert.match(text, /pub fn new\([^)]*\) -> Result<Derived, rt::TsonicError>/u);
   assert.match(text, /pub fn new\(\) -> Result<Initialized, rt::TsonicError>/u);
   assert.match(text, /fn dispatch_[^(]+\([^)]*\) -> Result<i32, rt::TsonicError>/u);
-  assert.match(text, /fn read_through_base\([^)]*\) -> Result<i32, rt::TsonicError>/u);
+  assert.match(text, /fn readThroughBase\([^)]*\) -> Result<i32, rt::TsonicError>/u);
   assert.equal(validateGeneratedProject("project-fallibility-closure", result.artifacts, { run: true }).status, 0);
 });
 

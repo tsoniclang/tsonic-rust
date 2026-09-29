@@ -128,6 +128,18 @@ export function analyzeRustDeclarationGenericRequirements(
 ): AnalyzeRustDeclarationGenericRequirementsResult {
   const ast = source.ast;
   const diagnostics: TargetDiagnostic[] = [];
+  const storageReads = new WeakMap<Node, ReadonlySet<Node>>();
+  const isStoredValue = (node: Node): boolean => {
+    const owner = source.navigation.sourceReferenceFor(node)?.declaration;
+    if (owner === undefined) return false;
+    let references = storageReads.get(owner);
+    if (references === undefined) {
+      references = new Set(source.navigation.declarationUses(owner)
+        .filter(use => use.role === "storage" && !use.throughMember).map(use => use.reference));
+      storageReads.set(owner, references);
+    }
+    return references.has(node);
+  };
   const declarations = collectRustCallableDeclarations(ast, sourceFiles);
   const declarationById = new Map<string, Node>();
   const idByDeclaration = new WeakMap<Node, string>();
@@ -189,6 +201,7 @@ export function analyzeRustDeclarationGenericRequirements(
         projectTypes,
         objectRepresentations,
         valueLifetimes,
+        isStoredValue,
         idByDeclaration,
         implementationDeclaration,
         contractFor(candidate) {
@@ -281,6 +294,7 @@ export function analyzeRustDeclarationGenericRequirements(
 
 interface ClassifyCallableInput {
   readonly valueLifetimes: RustValueLifetimePlan;
+  readonly isStoredValue: (node: Node) => boolean;
   readonly typeDefinitions: RustTypeDefinitions;
   readonly ast: AstReader;
   readonly declaration: Node;
@@ -526,7 +540,8 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       if (error !== undefined) return error;
     }
     if (carrier !== undefined && ast.is.IsIdentifier(node) &&
-      !input.valueLifetimes.canMove(node) && isRustReturnedValue(node, declaration, ast)) {
+      !input.valueLifetimes.canMove(node) &&
+      (isRustReturnedValue(node, declaration, ast) || input.isStoredValue(node))) {
       const error = addUse(node, carrier, ["clone"]);
       if (error !== undefined) return error;
     }

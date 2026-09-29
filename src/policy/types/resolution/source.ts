@@ -478,7 +478,8 @@ export function resolveRustTargetTypeSyntax(
     const alias = resolveProjectSourceCarrier(selectedTypeSymbol, sourceGenericArguments ?? {
       values: Object.freeze((typeArguments as readonly TargetTypeRef[]).map((type) =>
         Object.freeze({ kind: "type" as const, type }))),
-    }, context, options, referencedDeclaration, selectedType, resolving);
+    }, context, options, referencedDeclaration, selectedType, resolving,
+    selectedType !== undefined && resolving.has(selectedType));
     if (alias !== undefined) return alias;
   }
   const reference = context.source.navigation.sourceReferenceFor(typeName);
@@ -520,6 +521,7 @@ export function resolveRustTargetTypeSyntax(
     referencedDeclaration,
     selectedType,
     resolving,
+    selectedType !== undefined && resolving.has(selectedType),
   );
   if (sourceType !== undefined) {
     return sourceType;

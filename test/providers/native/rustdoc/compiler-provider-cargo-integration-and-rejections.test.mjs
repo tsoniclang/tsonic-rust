@@ -231,24 +231,24 @@ export function main(): void {
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::checked_double\(4\)\?/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /unsafe \{ widget_alias::dangerous\(12\) \}/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /unsafe \{ widget_alias::first_byte\(widget_alias::byte_ptr\(\)\) \}/u);
-  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /fn read_mutable_pointer\(pointer: \*mut u8\) -> u8/u);
-  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /read_const_pointer\(widget_alias::byte_ptr\(\)\)/u);
+  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /fn readMutablePointer\(pointer: \*mut u8\) -> u8/u);
+  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /readConstPointer\(widget_alias::byte_ptr\(\)\)/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::Mode::Payload\(9\)/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::fill\(&mut bytes, 7\)/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::apply\(value, callback\)/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /\*widget_alias::preserve_borrowed::<i32>\(&borrowed\)/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /\*widget_alias::borrowed_answer\(&18\)/u);
-  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /let owned_borrowed_label: String = String::from\(widget_alias::borrowed_label\(\)\);/u);
+  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /let ownedBorrowedLabel: String = String::from\(widget_alias::borrowed_label\(\)\);/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::borrowed_label\(\) != "widget"/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::Widget::into_box_value\(boxed\)/u);
-  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /let pinned: std::pin::Pin<&mut widget_alias::Widget<i32>> =\s*widget_alias::pin_widget\(&mut pinned_widget\);/u);
+  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /let pinned: std::pin::Pin<&mut widget_alias::Widget<i32>> =\s*widget_alias::pin_widget\(&mut pinnedWidget\);/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::Widget::pinned_count\(pinned\)/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::StructuredMode::Named \{ value: 23 \}/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::non_clone_static_value\(&?widget_alias::NON_CLONE_STATIC\)/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::scalar_code\(widget_alias::scalar_smile\(\)\)/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /<widget_alias::Widget<i32> as widget_alias::Metric<i32>>::measure/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /<widget_alias::Widget<i32> as widget_alias::Metric<i32>>::UNIT/u);
-  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /unsafe \{[\s\S]*widget_alias::MUTABLE_COUNT = 4;[\s\S]*widget_alias::MUTABLE_COUNT[\s\S]*bits\.integer[\s\S]*widget_alias::variadic_printf\(format, variadic_value\)/u);
+  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /unsafe \{[\s\S]*widget_alias::MUTABLE_COUNT = 4;[\s\S]*widget_alias::MUTABLE_COUNT[\s\S]*bits\.integer[\s\S]*widget_alias::variadic_printf\(format, variadicValue\)/u);
   writeGeneratedArtifacts(project.root, result.artifacts);
   assert.equal(readFileSync(project.manifestPath, "utf8"), manifestBefore);
   const run = runCargo(project.manifestPath, ["run", "--quiet", "--locked"]);
@@ -303,9 +303,9 @@ export function main(): void {
   });
   assert.deepEqual(result.diagnostics, []);
   const source = result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "";
-  assert.match(source, /let equal_false[^\n]*!probe\.is_some\(\)/u);
-  assert.match(source, /let not_true[^\n]*!probe\.is_some\(\)/u);
-  assert.match(source, /let other_method[^\n]*!probe\.is_none\(\)/u);
+  assert.match(source, /let equalFalse[^\n]*!probe\.is_some\(\)/u);
+  assert.match(source, /let notTrue[^\n]*!probe\.is_some\(\)/u);
+  assert.match(source, /let otherMethod[^\n]*!probe\.is_none\(\)/u);
   assert.doesNotMatch(source, /single\.is_none\(/u);
   assert.match(source, /value\.is_none\(\)/u);
   assert.match(source, /value\.is_some\(\)/u);
@@ -372,8 +372,8 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "";
-  assert.match(source, /widget_alias::require_local_future::<_>\(complete_later\(\)\)/u);
-  assert.match(source, /widget_alias::require_send_static_future::<_>\(complete_later\(\)\)/u);
+  assert.match(source, /widget_alias::require_local_future::<_>\(completeLater\(\)\)/u);
+  assert.match(source, /widget_alias::require_send_static_future::<_>\(completeLater\(\)\)/u);
   writeGeneratedArtifacts(project.root, result.artifacts);
   const run = runCargo(project.manifestPath, ["run", "--quiet", "--locked"]);
   assert.equal(run.status, 0, run.stderr);
@@ -481,22 +481,22 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   const source = result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "";
   assert.match(source, /widget_alias::choose_borrowed_mixed::<i32, 3>\(short, long\)/u);
-  assert.match(source, /fn increment_borrowed<'l>\(value: &'l mut i32\)/u);
+  assert.match(source, /fn incrementBorrowed<'L>\(value: &'L mut i32\)/u);
   assert.match(source, /widget_alias::increment_borrowed\(value\)/u);
-  assert.match(source, /ModuleCell<for<'l> fn\(&'l i32\) -> &'l i32> = rt::ModuleCell::initialized\(borrowed_identity\)/u);
+  assert.match(source, /ModuleCell<for<'L> fn\(&'L i32\) -> &'L i32> = rt::ModuleCell::initialized\(borrowedIdentity\)/u);
   assert.match(
     source,
     /widget_alias::apply_borrowed\(\s*BORROWED_IDENTITY_CALLABLE\.with\(\|module_binding\| module_binding\.load\(\)\),\s*&short,?\s*\)/su,
   );
-  assert.doesNotMatch(source, /for<'l> fn\([^;]+::new/u);
+  assert.doesNotMatch(source, /for<'L> fn\([^;]+::new/u);
   assert.match(source, /widget_alias::inspect_view\(&view\)/u);
-  assert.match(source, /fn read_view<'l>\(view: &'l widget_alias::LifetimeView\) -> i32/u);
+  assert.match(source, /fn readView<'L>\(view: &'L widget_alias::LifetimeView\) -> i32/u);
   assert.match(
     source,
-    /fn read_view<'l>[^}]+<widget_alias::LifetimeView as widget_alias::View>::value\(view\)/u,
+    /fn readView<'L>[^}]+<widget_alias::LifetimeView as widget_alias::View>::value\(view\)/u,
   );
-  assert.match(source, /fn increment_view<'l>\(view: &'l mut widget_alias::LifetimeView\)/u);
-  assert.match(source, /fn increment_view<'l>[^}]+view\.increment\(\)/u);
+  assert.match(source, /fn incrementView<'L>\(view: &'L mut widget_alias::LifetimeView\)/u);
+  assert.match(source, /fn incrementView<'L>[^}]+view\.increment\(\)/u);
   assert.doesNotMatch(source, /widget_alias::LifetimeView::increment\(&mut view\)/u);
   assert.match(source, /widget_alias::opaque_borrow\(&short\)/u);
   assert.match(source, /widget_alias::opaque_mixed::<i32, 3>\(value\)/u);

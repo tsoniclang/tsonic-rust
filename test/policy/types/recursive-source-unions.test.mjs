@@ -11,7 +11,7 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { recursiveSourceUnionFiles } from "../../../../tsonic/test/fixtures/recursive-source-unions.mjs";
 
 const integer = rustSourcePrimitiveTargetType("int32");
-const parameter = { kind: "type-parameter", identity: "Value", name: "Value" };
+const parameter = { kind: "type-parameter", identity: "union/Value", name: "Value" };
 const reference = (name, argument = parameter) => rustSourceUnionTargetType(`/src/${name}.ts`, name, [{ kind: "type", type: argument }]);
 
 test("recursive union references keep immutable exact generic variant contracts", () => {
@@ -23,6 +23,12 @@ test("recursive union references keep immutable exact generic variant contracts"
   assert.equal(JSON.stringify(step).includes("variants"), false);
   const integerStep = reference("Step", integer);
   assert.deepEqual(registry.sourceUnionVariants(integerStep)[0].carrier, integer);
+  const sameName = { ...parameter, identity: "call/Value" };
+  const sameNameStep = reference("Step", sameName);
+  assert.deepEqual(registry.sourceUnionVariants(sameNameStep)[0].carrier, sameName);
+  assert.deepEqual(registry.sourceUnionVariants(sameNameStep)[1].carrier,
+    rustCallableTargetType([integer], sameNameStep));
+  assert.notDeepEqual(registry.sourceUnionVariants(sameNameStep), registry.sourceUnionVariants(step));
   const definitions = registry.seal();
   assert.ok(Object.isFrozen(definitions.sourceUnionVariants(integerStep)));
   assert.ok(Object.isFrozen(definitions.sourceUnionVariants(integerStep)[1].carrier));
@@ -104,7 +110,7 @@ test("recursive clone proofs retain generic and non-Clone requirements without u
   ] }, true), true);
   assert.equal(rustCarrierSupportsClone(reference("Step", integer), registry), true);
   assert.equal(rustCarrierSupportsClone(step, registry), false);
-  assert.equal(rustCarrierSupportsTrait(step, "core::clone::Clone", name => name === "Value", undefined, registry), true);
+  assert.equal(rustCarrierSupportsTrait(step, "core::clone::Clone", identity => identity === parameter.identity, undefined, registry), true);
   const unique = { kind: "reference", mutable: true, referent: integer };
   assert.equal(rustCarrierSupportsClone(reference("Step", unique), registry), false);
   const expanding = reference("Growing");

@@ -30,7 +30,6 @@ import { planExpression } from "../entry.js";
 import {
   planPromotedSourceMethodCall,
   shapeRustSourceCallParameters,
-  sourceCallFinalizedResultCarrier,
   sourceCallSelectedMemberMatches,
 } from "./arguments.js";
 import { planRustNonConsumingValue, planRustPromotedStorageLocation } from "../typed-locations.js";
@@ -102,7 +101,7 @@ export function planSelectedSourceCall(
   const selectedMatches = selected !== undefined && sourceCallSelectedMemberMatches(
     fact,
     selected,
-    sourceCallFinalizedResultCarrier(selected, context),
+    selected.member.returnType,
     context.input.program.typeFamilies.normalize,
   );
   if (!selectedMatches) {

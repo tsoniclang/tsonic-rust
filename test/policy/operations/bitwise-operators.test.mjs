@@ -156,8 +156,8 @@ export function main(): void {
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /left & right/u);
   assert.match(source, /rt::native_shift_left\(one, width\)/u);
-  assert.match(source, /rt::native_unsigned_shift_right\(negative_one, one\)/u);
-  assert.match(source, /rt::native_shift_left\(rt::conversions::u8_to_i32\(high_byte\), one\)/u);
+  assert.match(source, /rt::native_unsigned_shift_right\(negativeOne, one\)/u);
+  assert.match(source, /rt::native_shift_left\(rt::conversions::u8_to_i32\(highByte\), one\)/u);
   validateGeneratedProject("native-bitwise", result.artifacts, { run: true });
 });
 

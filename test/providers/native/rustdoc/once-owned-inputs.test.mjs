@@ -26,6 +26,9 @@ export function block<Value>(status: Result<int32, int32>, seed: Value): Result<
 export function wrapped<Value>(status: Result<int32, int32>, seed: Value): Result<Value, int32> {
   return status.map(_item => forward(((seed satisfies Value))));
 }
+export function explicit<Value>(status: Result<int32, int32>, seed: Value): Result<Value, int32> {
+  return status.map<Value>(_item => forward(seed));
+}
 export function vector(status: Result<int32, int32>, seed: Vec<int32>): Result<Vec<int32>, int32> {
   return status.map(_item => forward(seed));
 }
@@ -113,7 +116,7 @@ fn handwritten_loop<Value: Clone>(status: Result<i32, i32>, count: usize, seed: 
 
 #[test]
 fn external_move_only_owner_keeps_its_native_lifetime_allocation_and_drop() {
-    for variant in 0..3 {
+    for variant in 0..4 {
         for successful in [false, true] {
             let actual_observed = Observations::default();
             let expected_observed = Observations::default();
@@ -124,7 +127,8 @@ fn external_move_only_owner_keeps_its_native_lifetime_allocation_and_drop() {
             let actual = measure(|| match variant {
                 0 => index::owned(status, actual),
                 1 => index::block(status, actual),
-                _ => index::wrapped(status, actual),
+                2 => index::wrapped(status, actual),
+                _ => index::explicit(status, actual),
             });
             let expected = measure(|| handwritten(status, expected));
             assert_eq!(actual.1, expected.1);

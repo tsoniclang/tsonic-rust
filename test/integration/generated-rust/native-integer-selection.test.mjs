@@ -35,16 +35,16 @@ test("native counters, conditional joins and integer floor preserve exact carrie
   });
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
-  for (const name of ["integral_floor", "compound_floor", "negated_floor", "called_conditional", "called_conditional_literal"]) {
+  for (const name of ["integralFloor", "compoundFloor", "negatedFloor", "calledConditional", "calledConditionalLiteral"]) {
     assert.match(output, new RegExp(`fn ${name}\\([^)]*\\) -> (?:Result<)?i32`, "u"), name);
   }
   assert.match(output, /fn conditional\([^)]*\) -> i32/u);
-  assert.match(output, /fn conditional_literal\([^)]*\) -> i32/u);
-  assert.match(output, /fn explicit_float\([^)]*\) -> f64/u);
-  assert.match(output, /fn optional_branch\([^)]*\) -> Option<i32>/u);
+  assert.match(output, /fn conditionalLiteral\([^)]*\) -> i32/u);
+  assert.match(output, /fn explicitFloat\([^)]*\) -> f64/u);
+  assert.match(output, /fn optionalBranch\([^)]*\) -> Option<i32>/u);
   const counted = output.slice(output.indexOf("fn counted("), output.indexOf("fn growing("));
   assert.doesNotMatch(counted, /f64|number_to|float/u);
-  const floor = output.slice(output.indexOf("fn integral_floor("), output.indexOf("fn fractional_floor("));
+  const floor = output.slice(output.indexOf("fn integralFloor("), output.indexOf("fn fractionalFloor("));
   assert.doesNotMatch(floor, /f64|\.floor\(/u);
   validateGeneratedProject("native-integer-selection", result.artifacts, { run: true });
 });

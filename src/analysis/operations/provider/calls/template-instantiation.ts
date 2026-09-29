@@ -68,8 +68,8 @@ export function instantiateProviderOperationTemplate<
     lifetimes: new Map(),
     consts: new Map(),
   };
-  for (const [sourceName, argument] of evidence.directGenericArguments ?? []) {
-    const parameter = parameters.find((candidate) => candidate.sourceName === sourceName);
+  for (const [identity, argument] of evidence.directGenericArguments ?? []) {
+    const parameter = parameters.find((candidate) => candidate.targetIdentity === identity);
     if (parameter === undefined || !mergeDirectGenericArgument(bindings, parameter, argument)) {
       return undefined;
     }

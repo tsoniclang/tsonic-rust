@@ -51,8 +51,8 @@ test("direct local classes preserve lexical captures without per-method allocati
     }
   ` });
   const rust = artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
-  assert.match(rust, /struct LocalInlineClass/);
-  assert.doesNotMatch(rust, /Rc<(?:LocalInlineClass|CreateSelectedClass)>/);
+  assert.match(rust, /struct Inline\b/);
+  assert.doesNotMatch(rust, /Rc<(?:Inline\b|SelectedClass)>/);
   assert.match(rust, /with_context\(/);
 });
 

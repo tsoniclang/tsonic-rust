@@ -70,6 +70,11 @@ export function rustModuleSegmentName(sourceName: string): string {
   return value;
 }
 
+export function rustPackageModuleName(packageName: string): string {
+  const words = rustIdentifierWords(packageName);
+  return rustModuleSegmentName(words.join("_").toLowerCase());
+}
+
 function rustIdentifierWords(sourceName: string): string[] {
   const value = sourceName.startsWith("r#") ? sourceName.slice(2) : sourceName;
   return value

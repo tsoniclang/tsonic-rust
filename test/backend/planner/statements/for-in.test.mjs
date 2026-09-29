@@ -28,6 +28,7 @@ interface Pair {
 interface NumericKeys {
   2: int32;
   10: int32;
+  value_2: int32;
   last: int32;
   first: int32;
 }
@@ -56,10 +57,11 @@ export function main(): void {
   }
   check(shapeKeys === "secondfirst");
 
-  const numeric: NumericKeys = { last: 3, 10: 4, first: 5, 2: 6 };
+  const numeric: NumericKeys = { last: 3, 10: 4, first: 5, 2: 6, value_2: 7 };
+  check(numeric[2] === 6 && numeric[10] === 4 && numeric.value_2 === 7);
   let numericKeys: string = "";
   for (const key in numeric) numericKeys = numericKeys + key + ":";
-  check(numericKeys === "2:10:last:first:");
+  check(numericKeys === "2:10:last:first:value_2:");
 
   let assignedKey: string = "";
   for (assignedKey in [7, 8]) {
@@ -75,7 +77,7 @@ export function main(): void {
   assert.match(source, /JsArray::from_dense\(vec!\[4\.0, 5\.0, 6\.0\]\)\.enumerable_own_keys\(\)/u);
   assert.match(source, /enumerable_own_keys\(\)/u);
   assert.match(source, /String::from\("first"\)/u);
-  assert.match(source, /assigned_key = for_in_key;/u);
+  assert.match(source, /assignedKey = for_in_key;/u);
   assert.doesNotMatch(source, /retains unused generated storage/u);
   assert.equal(validateGeneratedProject("for-in-policies", result.artifacts, { run: true }).status, 0);
 });

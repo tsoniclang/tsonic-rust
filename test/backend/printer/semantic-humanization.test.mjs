@@ -81,14 +81,14 @@ export function run(value: int32): int32 { return apply(value); }
 
   assert.deepEqual(result.diagnostics, []);
   const api = artifactText(result, "src/api.rs");
-  assert.match(api, /pub type IncrementCallable = rt::Callable/u);
-  assert.match(api, /ModuleCell<IncrementCallable>/u);
+  assert.match(api, /pub type IncrementCallableCallable = rt::Callable/u);
+  assert.match(api, /ModuleCell<IncrementCallableCallable>/u);
   assert.doesNotMatch(api, /type_complexity/u);
-  assert.match(api, /pub static INCREMENT/u);
+  assert.match(api, /pub static INCREMENT_CALLABLE/u);
   assert.match(api, /pub fn increment/u);
   assert.doesNotMatch(api, /#\[doc\(hidden\)\]\npub(?:\(crate\))? fn increment/u);
   const index = artifactText(result, "src/index.rs");
-  assert.match(index, /crate::api::INCREMENT\.with\(\|module_binding\| module_binding\.load\(\)\)/u);
+  assert.match(index, /crate::api::INCREMENT_CALLABLE\.with\(\|module_binding\| module_binding\.load\(\)\)/u);
   assert.match(index, /crate::api::increment\(value\)/u);
 });
 
@@ -110,13 +110,13 @@ export const retained = [selected];
 
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
-  assert.match(output, /pub type SelectedCallable = rt::Callable/u);
-  assert.match(output, /ModuleCell<SelectedCallable>/u);
+  assert.match(output, /pub type SelectedCallableCallable = rt::Callable/u);
+  assert.match(output, /ModuleCell<SelectedCallableCallable>/u);
   assert.doesNotMatch(output, /type_complexity/u);
-  assert.match(output, /pub static SELECTED/u);
+  assert.match(output, /pub static SELECTED_CALLABLE/u);
   assert.match(output, /pub fn selected/u);
   assert.doesNotMatch(output, /#\[doc\(hidden\)\]\npub(?:\(crate\))? fn selected/u);
-  assert.match(output, /invoke\(SELECTED\.with\(\|module_binding\| module_binding\.load\(\)\)\)/u);
+  assert.match(output, /invoke\(SELECTED_CALLABLE\.with\(\|module_binding\| module_binding\.load\(\)\)\)/u);
   validateGeneratedProject("observed-module-callable", result.artifacts);
 });
 
@@ -167,7 +167,7 @@ export const later = (): int32 => 1;
 
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
-  assert.match(output, /pub static LATER: rt::ModuleCell/u);
+  assert.match(output, /pub static later: rt::ModuleCell/u);
   assert.doesNotMatch(output, /pub fn later/u);
 });
 
@@ -187,8 +187,8 @@ export function run(): int32 { return fooBar(1) + foo_bar(1); }
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /pub fn foo_bar\(value: i32\) -> i32/u);
-  assert.match(output, /pub fn foo_bar_2\(value: i32\) -> i32/u);
-  assert.match(output, /foo_bar\(1\) \+ foo_bar_2\(1\)/u);
+  assert.match(output, /pub fn fooBar\(value: i32\) -> i32/u);
+  assert.match(output, /fooBar\(1\) \+ foo_bar\(1\)/u);
 });
 
 test("native module functions preserve generic, default, rest, recursive, and function-expression ABIs", { timeout: 300_000 }, () => {
@@ -539,22 +539,22 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
-  const returnAfterStart = output.indexOf("fn return_after_read(");
-  const assertionStart = output.indexOf("fn return_through_assertion(");
-  const finallyStart = output.indexOf("fn return_across_finally(");
-  const catchStart = output.indexOf("fn return_across_catch(");
-  const iterationReturnStart = output.indexOf("fn return_across_array_iteration(");
-  const switchReturnStart = output.indexOf("fn return_across_switch(");
-  const appendStart = output.indexOf("fn append_part(");
-  const appendFailureStart = output.indexOf("fn append_failure(");
+  const returnAfterStart = output.indexOf("fn returnAfterRead(");
+  const assertionStart = output.indexOf("fn returnThroughAssertion(");
+  const finallyStart = output.indexOf("fn returnAcrossFinally(");
+  const catchStart = output.indexOf("fn returnAcrossCatch(");
+  const iterationReturnStart = output.indexOf("fn returnAcrossArrayIteration(");
+  const switchReturnStart = output.indexOf("fn returnAcrossSwitch(");
+  const appendStart = output.indexOf("fn appendPart(");
+  const appendFailureStart = output.indexOf("fn appendFailure(");
   const combineStart = output.indexOf("fn combine(");
-  const mapStart = output.indexOf("fn map_ordinal_total(");
-  const scalarStart = output.indexOf("fn scalar_bound_total(");
-  const mutatingStart = output.indexOf("fn mutating_array_bound(");
-  const aliasedStart = output.indexOf("fn aliased_array_bound(");
-  const externallyMutatedStart = output.indexOf("fn externally_mutated_array_bound(");
-  const selfAppendStart = output.indexOf("fn self_append(");
-  const unstableStart = output.indexOf("fn unstable_bound(");
+  const mapStart = output.indexOf("fn mapOrdinalTotal(");
+  const scalarStart = output.indexOf("fn scalarBoundTotal(");
+  const mutatingStart = output.indexOf("fn mutatingArrayBound(");
+  const aliasedStart = output.indexOf("fn aliasedArrayBound(");
+  const externallyMutatedStart = output.indexOf("fn externallyMutatedArrayBound(");
+  const selfAppendStart = output.indexOf("fn selfAppend(");
+  const unstableStart = output.indexOf("fn unstableBound(");
   assert.ok(returnAfterStart >= 0 && assertionStart > returnAfterStart &&
     finallyStart > assertionStart &&
     catchStart > finallyStart && iterationReturnStart > catchStart &&
@@ -618,7 +618,7 @@ export function main(): void {
   assert.match(mutatingOutput, /let mut index: f64 = 0\.0;[\s\S]*?while index </u);
   assert.match(aliasedOutput, /let mut index: f64 = 0\.0;[\s\S]*?while index </u);
   assert.match(externallyMutatedOutput, /let mut index: f64 = 0\.0;[\s\S]*?while index </u);
-  assert.match(output, /fn unstable_bound[\s\S]*?let mut index: f64 = 0\.0;[\s\S]*?while index < limit/u);
+  assert.match(output, /fn unstableBound[\s\S]*?let mut index: f64 = 0\.0;[\s\S]*?while index < limit/u);
   assert.doesNotMatch(output, /Ok::<_, rt::TsonicError>\(output\)/u);
   validateGeneratedProject("sealed-human-performance", result.artifacts, { run: true });
 });

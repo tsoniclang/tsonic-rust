@@ -10,6 +10,7 @@ import { rustTypeOnlyDeclarationFactKey } from "../../target-model/facts/type-on
 import {
   isValidRustIdentifier,
   rustModuleSegmentName,
+  rustPackageModuleName,
 } from "../../target-model/names/identifiers.js";
 import {
   rustModuleBindingFactKey,
@@ -255,7 +256,7 @@ function sourcePackageFacadeModuleSegments(
   packagePrefixRequired: boolean,
 ): readonly string[] {
   const packagePrefix = packagePrefixRequired
-    ? [rustModuleSegmentName(sourcePackage.name ?? sourcePackage.id)]
+    ? [rustPackageModuleName(sourcePackage.name ?? sourcePackage.id)]
     : [];
   if (
     specifier === "." ||

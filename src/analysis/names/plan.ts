@@ -12,6 +12,7 @@ import { ObjectLiteralProperty_SourceName } from "@tsonic/target-api/source";
 import type { RustRuntimeValueUsePlan } from "../program/runtime-value-uses.js";
 import { rustSourceDeclarationTypeName } from "../../policy/types/source-declarations.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
+import { rustPropertyStorageNames } from "../../target-model/names/property-storage.js";
 
 type RustNameRole =
   | "module-value"
@@ -51,14 +52,29 @@ export function createRustNamePlan(input: {
   const diagnostics: TargetDiagnostic[] = [];
   const reservedNames = new Map<Node, Set<string>>();
   const privateNames = new Map<Node, Map<string, string>>();
+  const propertyNames = new Map<Node, ReadonlyMap<string, string>>();
+  const candidatesByScope = new Map<Node, RustNameCandidate[]>();
   for (const candidate of candidates) {
-    const reserved = reservedNames.get(candidate.scope) ?? new Set<string>();
-    reserved.add(rustTargetIdentifier(candidate.sourceName));
-    reservedNames.set(candidate.scope, reserved);
+    const scoped = candidatesByScope.get(candidate.scope) ?? [];
+    scoped.push(candidate);
+    candidatesByScope.set(candidate.scope, scoped);
+  }
+  for (const [scope, scoped] of candidatesByScope) {
+    const publicNames = scoped.filter(candidate =>
+      input.ast.kindName(input.ast.name(candidate.declaration)) !== "KindPrivateIdentifier");
+    const selected = rustPropertyStorageNames(publicNames.map(candidate => candidate.sourceName));
+    propertyNames.set(scope, selected);
+    reservedNames.set(scope, new Set(selected.values()));
   }
   for (const candidate of candidates) {
     const privateName = input.ast.kindName(input.ast.name(candidate.declaration)) === "KindPrivateIdentifier";
+    const sourceNameNode = input.ast.name(candidate.declaration);
+    const literalKey = sourceNameNode !== undefined &&
+      (input.ast.is.IsStringLiteral(sourceNameNode) || input.ast.is.IsNumericLiteral(sourceNameNode));
     let name = rustTargetIdentifier(candidate.sourceName);
+    if (literalKey) {
+      name = propertyNames.get(candidate.scope)!.get(candidate.sourceName)!;
+    }
     if (privateName) {
       const selected = privateNames.get(candidate.scope) ?? new Map<string, string>();
       name = selected.get(candidate.sourceName) ?? allocateRustGeneratedName(
@@ -67,7 +83,7 @@ export function createRustNamePlan(input: {
       privateNames.set(candidate.scope, selected);
     }
     names.set(candidate.declaration, name);
-    if (!isValidRustIdentifier(name) || !privateName && !isValidRustAuthoredIdentifier(candidate.sourceName)) {
+    if (!isValidRustIdentifier(name) || !privateName && !literalKey && !isValidRustAuthoredIdentifier(candidate.sourceName)) {
       diagnostics.push({
         code: "RUST_AUTHORED_IDENTIFIER_UNREPRESENTABLE",
         category: "error",

@@ -26,6 +26,7 @@ import {
 } from "../facts/keys.js";
 import {
   rustFutureOutputCarrier,
+  rustFutureTargetType,
   getRustGeneratorProtocol,
   rustSourceOptionalTargetType,
   rustCallableProtocol,
@@ -329,9 +330,12 @@ function recordCallableValueSignatureFacts(
   const parameterCarriers = selectedCarrier?.kind === "function-pointer"
     ? selectedCarrier.args
     : closure?.parameters ?? callable?.parameters;
-  const returnCarrier = selectedCarrier?.kind === "function-pointer"
+  const selectedReturnCarrier = selectedCarrier?.kind === "function-pointer"
     ? selectedCarrier.result
     : closure?.result ?? callable?.result;
+  const returnCarrier = Node_Type(ast, declaration) === undefined
+    ? selectRustInferredNumericReturn(walk, expression, selectedReturnCarrier)
+    : selectedReturnCarrier;
   const parameters = ast.parameters(expression);
   if (selectedCarrier === undefined || parameterCarriers === undefined ||
     returnCarrier === undefined || parameters.length !== parameterCarriers.length) {
@@ -408,11 +412,11 @@ function resolveAuthoredCallableValueSignature(
     expression,
     rustResolutionContext(walk, expression),
     walk.operationOptions,
-  )?.returnCarrier ?? resolveRustTargetTypeRef(
+  )?.returnCarrier ?? selectRustInferredNumericReturn(walk, expression, resolveRustTargetTypeRef(
     Node_Type(ast, expression) ?? sourceReturn,
     rustResolutionContext(walk, expression),
     walk.operationOptions,
-  );
+  ));
   if (returnCarrier === undefined || parameterAbis.some((abi) => abi === undefined)) {
     return undefined;
   }
@@ -514,7 +518,7 @@ export function recordCallableSuspensionFacts(walk: RustFactWalk, declaration: N
       rustResolutionContext(walk, declaration),
       walk.operationOptions,
     );
-    const inner = rustFutureOutputCarrier(futureCarrier);
+    const inner = selectRustInferredNumericReturn(walk, declaration, rustFutureOutputCarrier(futureCarrier));
     if (inner !== undefined) {
       const isJsPromise = futureCarrier?.kind === "target-named" &&
         futureCarrier.id === rustJsPromiseTargetId;
@@ -540,7 +544,7 @@ export function recordCallableSuspensionFacts(walk: RustFactWalk, declaration: N
                 ? rustPlaceholderLifetime
                 : storage.storage.lifetime,
           )
-        : futureCarrier!;
+        : rustFutureTargetType(inner);
       walk.context.facts.set(declaration, rustAsyncFunctionFactKey,
         storage?.kind === "resolved"
           ? {

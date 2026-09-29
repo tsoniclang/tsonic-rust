@@ -245,7 +245,7 @@ export function explicitUnitReturn(): void {
   assert.match(text, /value\s*\.partial_cmp\(&10\.0\)\s*\.is_none_or\(\|ordering\| ordering != core::cmp::Ordering::Greater\)/u);
   assert.match(text, /value\s*\.partial_cmp\(&10\.0\)\s*\.is_none_or\(\|ordering\| ordering == core::cmp::Ordering::Less\)/u);
   assert.match(text, /format!\("\{\}\{\}\{\}", left, String::from\("\/"\), right\)/u);
-  assert.match(text, /pub fn explicit_unit_return\(\) \{\}/u);
+  assert.match(text, /pub fn explicitUnitReturn\(\) \{\}/u);
   assert.doesNotMatch(text, /format!\([^\n]*format!/u);
 });
 

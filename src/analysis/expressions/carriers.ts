@@ -34,12 +34,14 @@ import {
 } from "../../target-model/types/index.js";
 import { rustRuntimeUnionContract } from "../../target-model/types/carriers/runtime-unions.js";
 import { recordRustObjectReferenceView } from "./object-reference-views.js";
+import { rustSourceValueWrapperContains } from "../../policy/ownership/source-value-wrappers.js";
 import { selectRustIntegerTruncationConversion } from "../../policy/types/integer-truncation.js";
 import { rustContextualValueConversionFactKey } from "../facts/value-projections.js";
 import { selectRustValueCarrierReconciliation } from "../../policy/types/value-carrier-reconciliation.js";
 import { recordRustValueCarrierReconciliation } from "../facts/value-carrier-queries.js";
 import {
   rustOptionalChainFactKey,
+  rustSourceParameterAbiFactKey,
   rustOptionProjectionFactKey,
   rustPostCheckOperationKind,
   rustTargetOperationFactKey,
@@ -90,11 +92,23 @@ export function resolveExpressionCarrier(
     expected,
   );
   const finalize = (carrier: TargetTypeRef | undefined): TargetTypeRef | undefined => {
+    const retainParameterAbi = (result: TargetTypeRef | undefined): TargetTypeRef | undefined => {
+      const operand = Node_Expression(walk.context.ast, expression);
+      if (result !== undefined && operand !== undefined &&
+        rustSourceValueWrapperContains(expression, operand, walk.context.ast)) {
+        const abi = facts.get(operand, rustSourceParameterAbiFactKey);
+        if (abi !== undefined && rustTargetTypeRefEquals(result, abi.valueCarrier)) {
+          facts.set(expression, rustSourceParameterAbiFactKey, abi,
+            [{ message: "rust unchanged parameter ABI through a checked transparent expression" }]);
+        }
+      }
+      return result;
+    };
     if (purpose === "operation") {
       const refinement = walk.context.source.semantics.selectValueTypeRefinement(expression);
-      return refinement.kind === "resolved" && refinement.refinement.kind === "members"
+      return retainParameterAbi(refinement.kind === "resolved" && refinement.refinement.kind === "members"
         ? applyFlowReadLane(walk, expression, carrier)
-        : carrier;
+        : carrier);
     }
     const selectedOperation = facts.get(expression, rustSelectedOperationKey) ??
       facts.resolve(expression, rustSelectedOperationKey);
@@ -109,7 +123,7 @@ export function resolveExpressionCarrier(
           (carrier === undefined || rustRuntimeUnionContract(carrier) === undefined))
       ? carrier
       : applyFlowReadLane(walk, expression, carrier);
-    return applyOptionLane(walk, expression, flowCarrier, expected, integerConversion);
+    return retainParameterAbi(applyOptionLane(walk, expression, flowCarrier, expected, integerConversion));
   };
   const existing = facts.get(expression, rustRuntimeCarrierKey) ??
     walk.context.facts.resolve(expression, rustRuntimeCarrierKey);

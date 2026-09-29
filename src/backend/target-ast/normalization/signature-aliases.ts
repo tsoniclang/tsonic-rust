@@ -1,4 +1,4 @@
-import type { RustBlock, RustFunctionParam, RustGenericArgument, RustGenericParameter, RustGenerics, RustItem, RustType, RustVisibility } from "../nodes.js";
+import type { RustGenericArgument, RustGenericParameter, RustImplFunction, RustItem, RustType, RustVisibility } from "../nodes.js";
 import { rustTypeEquals } from "../inspection/type-equality.js";
 import { rustPascalCaseIdentifier } from "../../../target-model/names/identifiers.js";
 
@@ -14,7 +14,9 @@ export interface RustNamedSignatureScope {
 
 export function nameRustSignatureTypes(
   items: readonly RustItem[],
-  visitBody: (body: RustBlock, nameType: (type: RustType, role: string) => RustType) => RustBlock = body => body,
+  visitCallable: <Callable extends RustImplFunction>(
+    callable: Callable, nameType: (type: RustType, role: string) => RustType,
+  ) => Callable = callable => callable,
 ): RustNamedSignatureScope {
   const reserved = new Set(items.flatMap(item => [
     ...("name" in item ? [item.name] : []),
@@ -70,18 +72,12 @@ export function nameRustSignatureTypes(
     };
     return nameType;
   };
-  const nameCallable = <Callable extends {
-    readonly name: string; readonly visibility: RustVisibility;
-    readonly params: readonly RustFunctionParam[]; readonly returnType?: RustType;
-    readonly generics: RustGenerics;
-    readonly body: RustBlock;
-  }>(item: Callable, ownerParameters: readonly RustGenericParameter[]): Callable => {
+  const nameCallable = <Callable extends RustImplFunction>(item: Callable, ownerParameters: readonly RustGenericParameter[]): Callable => {
     const nameType = createTypeNamer(item, [...ownerParameters, ...item.generics.parameters]);
-    return { ...item, params: item.params.map(parameter => ({ ...parameter,
+    return visitCallable({ ...item, params: item.params.map(parameter => ({ ...parameter,
       type: nameType(parameter.type, parameter.name),
     })), ...(item.returnType === undefined ? {} : { returnType: nameType(item.returnType, "Result") }),
-      body: visitBody(item.body, (type, role) => nameType(type, role, "private")),
-    };
+    }, (type, role) => nameType(type, role, "private"));
   };
   const result = items.map(item => item.kind === "function" ? nameCallable(item, [])
     : item.kind === "impl" ? { ...item, members: item.members.map(member => member.kind === "function"

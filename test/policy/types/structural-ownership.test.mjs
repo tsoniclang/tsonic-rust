@@ -76,7 +76,7 @@ export function readProvider(value: Pick<Store, "count">): number { return value
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /pub fn read\(/u);
-  assert.match(output, /pub fn read_selected\(/u);
-  assert.match(output, /pub fn read_provider\(/u);
+  assert.match(output, /pub fn readSelected\(/u);
+  assert.match(output, /pub fn readProvider\(/u);
   assert.match(output, /-> i32/u);
 });

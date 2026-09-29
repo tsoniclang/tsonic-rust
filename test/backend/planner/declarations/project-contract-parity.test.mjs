@@ -116,9 +116,9 @@ export function main(): void {
   assert.match(source, /let field_copied: String = base_state\.label\.clone\(\);/u);
   assert.match(source, /let field_second: i32 = base_state\.first \+ 2;/u);
   assert.match(source, /fn letter\(\) -> u16 \{\s*65\s*\}/u);
-  assert.match(source, /fn signed_maximum\(\) -> i128/u);
-  assert.match(source, /fn signed_minimum\(\) -> i128/u);
-  assert.match(source, /fn unsigned_maximum\(\) -> u128/u);
+  assert.match(source, /fn signedMaximum\(\) -> i128/u);
+  assert.match(source, /fn signedMinimum\(\) -> i128/u);
+  assert.match(source, /fn unsignedMaximum\(\) -> u128/u);
   assert.match(source, /unsafe fn dispatch_unsafe_contract_read/u);
 
   const run = validateGeneratedProject("project-contract-parity", result.artifacts, { run: true });

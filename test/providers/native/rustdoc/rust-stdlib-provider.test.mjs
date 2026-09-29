@@ -96,7 +96,7 @@ export function main(): void {
   assert.doesNotMatch(source, /RandomState/u);
   assert.doesNotMatch(source, /\.get::<String>/u);
   assert.match(source, /\.get::<str>\("answer"\)/u);
-  assert.match(source, /\.get::<str>\(&owned_key\)/u);
+  assert.match(source, /\.get::<str>\(&ownedKey\)/u);
   const run = validateGeneratedProject("rust-stdlib-provider", result.artifacts, { run: true });
   assert.equal(run.status, 0);
 });

@@ -29,12 +29,12 @@ test("utility transformations preserve modifiers, overload selection, variadic p
   for (const functionName of expectedFunctions) {
     assert.match(source, new RegExp(`\\b${functionName}\\b`, "u"));
   }
-  assert.match(source, /fn optional_summary\(values: \(i32, Option<String>\)\)/u);
-  assert.match(source, /fn rest_summary\(values: &mut \[bool\]\)/u);
-  assert.match(source, /rest_summary\(&mut \[false\]\)/u);
-  assert.match(source, /rest_summary\(&mut \[true, false\]\)/u);
-  assert.doesNotMatch(source, /rest_summary\(&mut vec!/u);
-  assert.match(source, /fn overload_summary\(values: \(String, Option<String>\)\)/u);
+  assert.match(source, /fn optionalSummary\(values: \(i32, Option<String>\)\)/u);
+  assert.match(source, /fn restSummary\(values: &mut \[bool\]\)/u);
+  assert.match(source, /restSummary\(&mut \[false\]\)/u);
+  assert.match(source, /restSummary\(&mut \[true, false\]\)/u);
+  assert.doesNotMatch(source, /restSummary\(&mut vec!/u);
+  assert.match(source, /fn overloadSummary\(values: \(String, Option<String>\)\)/u);
   assert.match(
     artifactText(result, "src/shapes.rs"),
     /pub\(crate\) struct IdLabelNestedShape/u,
@@ -52,17 +52,17 @@ test("the source checker resolves utility shapes that intentionally have no nati
 });
 
 const expectedFunctions = [
-  "modifier_summary",
-  "optional_summary",
-  "rest_summary",
-  "overload_summary",
-  "construct_optional",
-  "nested_awaited",
-  "call_bound",
-  "choose_literal",
-  "contextual_read",
-  "loud_union",
-  "local_identity_summary",
+  "modifierSummary",
+  "optionalSummary",
+  "restSummary",
+  "overloadSummary",
+  "constructOptional",
+  "nestedAwaited",
+  "callBound",
+  "chooseLiteral",
+  "contextualRead",
+  "loudUnion",
+  "localIdentitySummary",
 ];
 
 const edgeUtilitySource = `

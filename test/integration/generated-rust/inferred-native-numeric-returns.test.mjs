@@ -59,12 +59,39 @@ export function main(): void {
   const output = artifactText(result, "src/counts.rs");
   assert.match(output, /fn forwarded\(values: \[u8; 2\]\) -> usize/u);
   assert.match(output, /fn count\(values: \[u8; 2\]\) -> usize/u);
-  assert.match(output, /fn returned_length\(values: \[u8; 2\]\) -> usize/u);
-  assert.match(output, /fn text_length\([^)]*\) -> usize/u);
+  assert.match(output, /fn returnedLength\(values: \[u8; 2\]\) -> usize/u);
+  assert.match(output, /fn textLength\([^)]*\) -> usize/u);
   assert.match(output, /fn annotated\([^)]*\) -> f64/u);
   assert.match(output, /fn ordinary\(value: f64\) -> f64/u);
   assert.match(output, /fn optional\([^)]*\) -> Option<usize>/u);
   validateGeneratedProject("inferred-native-numeric-returns", result.artifacts, { run: true });
+});
+
+test("inferred async and closure results retain native integers without overriding explicit floating contracts", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"],
+    target: { id: "rust", options: { outputType: "bin", crateName: "native_callable_results" } },
+    files: { "index.ts": `
+import type { int32, int64 } from "@tsonic/core/types.js";
+export async function wide(value: int64) { return value; }
+export async function floating(value: int32): Promise<number> { return value; }
+export function floatingCapture(value: int32): () => number {
+  const callback: () => number = () => value;
+  return callback;
+}
+export async function main(): Promise<void> {
+  const value: int64 = 9007199254740993n;
+  const callback = () => value;
+  if (await wide(value) !== value || callback() !== value ||
+    await floating(3) !== 3 || floatingCapture(5)() !== 5) throw new Error("native callable results");
+}
+` } });
+  assert.deepEqual(result.diagnostics, []);
+  const output = artifactText(result, "src/index.rs");
+  assert.doesNotMatch(output, /i64_to_f64|BigInt/u);
+  assert.match(output, /fn wide\(value: i64\)/u);
+  assert.match(output, /fn floating\(value: i32\)/u);
+  const native = validateGeneratedProject("native-callable-results", result.artifacts, { run: true });
+  assert.equal(native.status, 0, native.stderr || native.stdout);
 });
 
 test("tuple projections borrow retained owners and copy only an owned selected field", { timeout: 300_000 }, () => {
@@ -109,9 +136,9 @@ export function main(): void {
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /let kept: String = pair\.1\.clone\(\);/u);
   assert.match(output, /let moved: String = single\.1;/u);
-  assert.match(output, /let first: String = retained_array\[0\]\.clone\(\);/u);
-  assert.match(output, /owned_array\.into_iter\(\)\.nth\(1\)\.unwrap\(\)/u);
-  assert.match(output, /owned_first\.into_iter\(\)\.next\(\)\.unwrap\(\)/u);
-  assert.doesNotMatch(output, /(?:pair|nested|single|retained_array|owned_array|owned_first)\.clone\(\)|nested\.1\.clone\(\)|create\([^)]*\)\.clone\(\)/u);
+  assert.match(output, /let first: String = retainedArray\[0\]\.clone\(\);/u);
+  assert.match(output, /ownedArray\.into_iter\(\)\.nth\(1\)\.unwrap\(\)/u);
+  assert.match(output, /ownedFirst\.into_iter\(\)\.next\(\)\.unwrap\(\)/u);
+  assert.doesNotMatch(output, /(?:pair|nested|single|retainedArray|ownedArray|ownedFirst)\.clone\(\)|nested\.1\.clone\(\)|create\([^)]*\)\.clone\(\)/u);
   validateGeneratedProject("native-tuple-projection", result.artifacts, { run: true });
 });

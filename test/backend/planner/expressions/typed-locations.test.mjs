@@ -154,8 +154,8 @@ export function retainFunction<T>(
 
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
-  assert.match(output, /pub fn retain_raw<T: 'static>\(value: \*const T\) -> rt::Location<\*const T, rt::TsonicError>/u);
-  assert.match(output, /pub fn retain_function<T: 'static>\(value: fn\(T\) -> T\) -> rt::Location<fn\(T\) -> T, rt::TsonicError>/u);
+  assert.match(output, /pub fn retainRaw<T: 'static>\(value: \*const T\) -> rt::Location<\*const T, rt::TsonicError>/u);
+  assert.match(output, /pub fn retainFunction<T: 'static>\(value: fn\(T\) -> T\) -> rt::Location<fn\(T\) -> T, rt::TsonicError>/u);
   assert.doesNotMatch(output, /retain_(?:raw|function)<T: Clone/u);
   validateGeneratedProject("typed-location-pointer-generics", result.artifacts);
 });
@@ -313,7 +313,7 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /let local: rt::Location<i32, core::convert::Infallible> = rt::Location::allocate\(1\);/u);
-  assert.match(output, /fn allocate_generic<T: Clone \+ 'static>\(value: T\) -> rt::Location<T, rt::TsonicError>/u);
+  assert.match(output, /fn allocateGeneric<T: Clone \+ 'static>\(value: T\) -> rt::Location<T, rt::TsonicError>/u);
   assert.match(output, /rt::Location::try_bind_projected\(/u);
   assert.match(output, /\.project_index\(/u);
   assert.match(output, /rt::Location::<i32, rt::TsonicError>::same/u);
@@ -438,7 +438,7 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
-  assert.match(output, /pub static VALUE: rt::ModuleCell<i32>/u);
+  assert.match(output, /pub static value: rt::ModuleCell<i32>/u);
   assert.match(output, /\.with\(\|module_binding\| module_binding\.location\(\)\)/u);
   validateGeneratedProject("module-location-proof", result.artifacts, { run: true });
 });
@@ -476,15 +476,15 @@ export function publicValue<V>(value: V): Pointer<V> {
   assert.deepEqual(result.diagnostics, []);
   assert.match(
     artifactText(result, "src/storage.rs"),
-    /pub fn allocate_value<T: Clone \+ 'static>\(value: T\) -> rt::Location<T, rt::TsonicError>/u,
+    /pub fn allocateValue<T: Clone \+ 'static>\(value: T\) -> rt::Location<T, rt::TsonicError>/u,
   );
   assert.match(
     artifactText(result, "src/middle.rs"),
-    /pub fn forward_value<U: Clone \+ 'static>\(value: U\) -> rt::Location<U, rt::TsonicError>/u,
+    /pub fn forwardValue<U: Clone \+ 'static>\(value: U\) -> rt::Location<U, rt::TsonicError>/u,
   );
   assert.match(
     artifactText(result, "src/index.rs"),
-    /pub fn public_value<V: Clone \+ 'static>\(value: V\) -> rt::Location<V, rt::TsonicError>/u,
+    /pub fn publicValue<V: Clone \+ 'static>\(value: V\) -> rt::Location<V, rt::TsonicError>/u,
   );
   validateGeneratedProject("typed-location-transitive-contract-lib", result.artifacts);
 });
@@ -730,9 +730,9 @@ export function retainGeneric<T>(value: T): T { retain(value); return value; }
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
   assert.equal(output.match(/rt::keep_alive\(&value\)/gu)?.length, 3);
-  assert.match(output, /fn retain_generic<T>\(value: T\) -> T/u);
+  assert.match(output, /fn retainGeneric<T>\(value: T\) -> T/u);
   assert.doesNotMatch(output, /\.clone\(\)/u);
-  assert.match(output, /keep_alive\(value\)/u);
+  assert.match(output, /keepalive\(value\)/u);
   validateGeneratedProject("typed-location-reachability", result.artifacts);
 });
 
@@ -777,7 +777,7 @@ export function run(value: int32): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
-  assert.match(output, /fn load_pointer\(value: i32\) -> i32/u);
-  assert.match(output, /load_pointer\(value\)/u);
+  assert.match(output, /fn loadptr\(value: i32\) -> i32/u);
+  assert.match(output, /loadptr\(value\)/u);
   assert.doesNotMatch(output, /rt::Location/u);
 });

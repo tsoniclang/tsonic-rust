@@ -101,7 +101,7 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /rt::source_string_less_than\("alpha", "beta"\)/u);
-  assert.match(source, /rt::source_string_greater_than\(&supplementary, &private_use\)/u);
+  assert.match(source, /rt::source_string_greater_than\(&supplementary, &privateUse\)/u);
   validateGeneratedProject("expression-string-ordering", result.artifacts, { run: true });
 });
 
@@ -279,7 +279,7 @@ export function main(): void {
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /rt::source_string\(&count\)/u);
   assert.match(source, /rt::source_string\(&enabled\)/u);
-  assert.match(source, /rt::source_string\(&negative_zero\)/u);
+  assert.match(source, /rt::source_string\(&negativeZero\)/u);
   validateGeneratedProject("expression-substituted-template", result.artifacts, { run: true });
 });
 

@@ -34,8 +34,8 @@ export function copy(
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /pub fn copy\(source: \*mut i32, destination: \*mut i32, element_offset: isize\) -> \*mut i32/u);
-  assert.match(source, /unsafe \{\s*\*destination = \*source;\s*source\.offset\(element_offset\)\s*\}/u);
+  assert.match(source, /pub fn copy\(source: \*mut i32, destination: \*mut i32, elementOffset: isize\) -> \*mut i32/u);
+  assert.match(source, /unsafe \{\s*\*destination = \*source;\s*source\.offset\(elementOffset\)\s*\}/u);
   assert.doesNotMatch(source, /loadnativeptr|offsetnativeptr|storenativeptr|unsafecontext/u);
   assert.doesNotMatch(source, /allow\(unused_unsafe/u);
   validateGeneratedProject("explicit-safety-native-pointer-block", result.artifacts);
@@ -64,7 +64,7 @@ safety(declaredUnsafe).requiresunsafe();
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /pub fn read\(pointer: \*mut i32\) -> i32 \{\s*unsafe \{ \*pointer \}\s*\}/u);
-  assert.match(source, /pub unsafe fn declared_unsafe\(value: i32\) -> i32/u);
+  assert.match(source, /pub unsafe fn declaredUnsafe\(value: i32\) -> i32/u);
   assert.doesNotMatch(source, /pub unsafe fn read/u);
   assert.doesNotMatch(source, /allow\(unused_unsafe/u);
   validateGeneratedProject("explicit-safety-independent-contracts", result.artifacts);
@@ -120,11 +120,11 @@ export function passMut(pointer: mutPtr<u8>): mutPtr<u8> {
   });
   assert.deepEqual(accepted.result.diagnostics, []);
   const source = artifactText(accepted.result, "src/index.rs");
-  assert.match(source, /pub fn preserve_const\(pointer: \*const u8\) -> \*const u8/u);
-  assert.match(source, /pub fn preserve_mut\(pointer: \*mut u8\) -> \*mut u8/u);
+  assert.match(source, /pub fn preserveConst\(pointer: \*const u8\) -> \*const u8/u);
+  assert.match(source, /pub fn preserveMut\(pointer: \*mut u8\) -> \*mut u8/u);
   assert.match(source, /pub fn widen\(pointer: \*mut u8\) -> \*const u8/u);
-  assert.match(source, /pub fn pass_const\(pointer: \*const u8\) -> \*const u8 \{\s*preserve_const\(pointer\)\s*\}/u);
-  assert.match(source, /pub fn pass_mut\(pointer: \*mut u8\) -> \*mut u8 \{\s*preserve_mut\(pointer\)\s*\}/u);
+  assert.match(source, /pub fn passConst\(pointer: \*const u8\) -> \*const u8 \{\s*preserveConst\(pointer\)\s*\}/u);
+  assert.match(source, /pub fn passMut\(pointer: \*mut u8\) -> \*mut u8 \{\s*preserveMut\(pointer\)\s*\}/u);
   validateGeneratedProject("explicit-safety-rust-pointer-mutability", accepted.result.artifacts);
 
   const rejected = compileRust({

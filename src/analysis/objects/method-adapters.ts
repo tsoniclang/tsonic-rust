@@ -10,6 +10,7 @@ import { inferRustTargetTypeParameterBindings, rustTargetTypeContainsTypeParamet
 import type { RustProjectMethodDispatchPlan } from "../project-types/method-dispatch.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
+import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import { sourceCallableParameterAbis, sourceCallableReturnCarrier, substituteRustCallableParameterAbi, projectOwnerTypeSubstitutions, selectRustCallableParameterAdapters, selectRustCallableValueAdapter, rustCallableParameterAdapterIsFallible, rustCallableValueAdapterIsFallible } from "../callables/adapters.js";
 
 export interface RustObjectLiteralMethodAdapterIssue {
@@ -20,6 +21,7 @@ export interface RustObjectLiteralMethodAdapterIssue {
 
 export function recordRustObjectLiteralMethodAdapterFacts(input: {
   readonly ast: AstReader;
+  readonly sourceLifetimes: RustLifetimeIndex;
   readonly facts: RustPlanBuilder;
   readonly projectTypes: RustProjectTypePolicy;
   readonly typeDefinitions: RustTypeDefinitions;
@@ -52,6 +54,7 @@ export function recordRustObjectLiteralMethodAdapterFacts(input: {
 function createObjectLiteralMethodAdapterFact(
   input: {
     readonly ast: AstReader;
+    readonly sourceLifetimes: RustLifetimeIndex;
     readonly facts: RustPlanBuilder;
     readonly projectTypes: RustProjectTypePolicy;
     readonly typeDefinitions: RustTypeDefinitions;
@@ -73,7 +76,7 @@ function createObjectLiteralMethodAdapterFact(
       continue;
     }
     const sourceCallable = contribution.expression;
-    const sourceTypeParameterIdentities = sourceCallableTypeParameterNames(input, sourceCallable);
+    const sourceTypeParameterIdentities = sourceCallableTypeParameterIdentities(input, sourceCallable);
     const sourceParameters = sourceCallableParameterAbis(input, sourceCallable, new Map());
     const sourceReturnCarrier = sourceCallableReturnCarrier(input, sourceCallable, new Map());
     if (sourceTypeParameterIdentities === undefined) {
@@ -208,19 +211,21 @@ function createObjectLiteralMethodAdapterFact(
       });
 }
 
-function sourceCallableTypeParameterNames(
-  input: { readonly ast: AstReader },
+function sourceCallableTypeParameterIdentities(
+  input: { readonly ast: AstReader; readonly sourceLifetimes: RustLifetimeIndex },
   callable: Node,
 ): readonly string[] | undefined {
   const parameters = input.ast.typeParameters(callable);
   if (!isDenseDataArray(parameters) || parameters.some((parameter) => parameter === undefined)) {
     return undefined;
   }
-  const names = (parameters as readonly Node[]).map((parameter) => {
-    const name = input.ast.name(parameter);
-    return name === undefined ? "" : input.ast.text(name);
-  });
-  return names.some((name) => name.length === 0) ? undefined : Object.freeze(names);
+  const identities: string[] = [];
+  for (const parameter of parameters) {
+    const selected = input.sourceLifetimes.parameterFor(parameter);
+    if (selected?.kind !== "type") return undefined;
+    identities.push(selected.identity);
+  }
+  return Object.freeze(identities);
 }
 
 

@@ -25,7 +25,7 @@ test("constructor-only shapes retain parameters through traversal, substitution 
     construction: { declaration, signature, carrier: construction } };
   assert.equal(registry.registerStructuralObject(shape), true);
   const plan = createRustStructuralShapePlan(registry.structuralObjects(), [], () => "source", []);
-  assert.deepEqual(plan.definitions[0].genericParameters, [{ kind: "type", name: "Value" }]);
+  assert.deepEqual(plan.definitions[0].genericParameters, [{ kind: "type", identity: "Value", name: "Value" }]);
   assert.deepEqual(plan.definitions[0].construction.carrier, construction);
   assert.ok(Object.isFrozen(plan.definitions[0].construction));
 });

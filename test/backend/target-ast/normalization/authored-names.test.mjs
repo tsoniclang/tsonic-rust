@@ -35,8 +35,8 @@ test("name allowances belong only to nonconforming declaration scopes", () => {
     { kind: "const", name: "moduleValue", visibility: "public", type: scalar, value: { kind: "int-literal", text: "1" } },
   ]));
   const [record, enumeration, mixed, plain, module, constant] = normalized.items;
-  assert.deepEqual(record.attrs, [rustLintAttributes.nonCamelCaseType]);
-  assert.deepEqual(record.fields[0].attrs, [rustLintAttributes.nonSnakeCaseName]);
+  assert.deepEqual(record.attrs, [rustLintAttributes.nonCamelCaseType, rustLintAttributes.nonSnakeCaseName]);
+  assert.equal(record.fields[0].attrs, undefined);
   assert.equal(record.fields[1].attrs, undefined);
   assert.equal(enumeration.attrs, undefined);
   assert.deepEqual(enumeration.variants[0].attrs, [rustLintAttributes.nonCamelCaseType]);
@@ -72,7 +72,7 @@ test("generic names, parameters and nested binding names are retained without ru
   const generic = { parameters: [{ kind: "type", name: "valueType", bounds: [] }], wherePredicates: [] };
   const parameter = { name: "inputValue", type: { kind: "named", path: "valueType" } };
   const statements = [
-    { kind: "let", name: "localValue", mutable: false, type: scalar, init: { kind: "int-literal", text: "1" } },
+    { kind: "let", name: "localValue", mutable: false, type: scalar, attrs: undefined, init: { kind: "int-literal", text: "1" } },
     { kind: "let", name: "callback", mutable: false, init: { kind: "closure", params: [{ name: "nextValue", byRefCopy: false }],
       body: { kind: "path", path: "nextValue" } } },
     { kind: "tail", expr: { kind: "path", path: "inputValue" } },
@@ -84,7 +84,7 @@ test("generic names, parameters and nested binding names are retained without ru
   assert.deepEqual(fn.generics, generic);
   assert.ok(fn.attrs.includes(rustLintAttributes.nonCamelCaseType));
   assert.ok(fn.attrs.includes(rustLintAttributes.nonSnakeCaseName));
-  assert.ok(fn.body.innerAttrs.includes(rustLintAttributes.nonSnakeCaseName));
+  assert.equal(fn.body.innerAttrs, undefined);
   assert.deepEqual(fn.body.statements.map(statement => statement.kind), statements.map(statement => statement.kind));
   assert.equal(fn.body.statements[0].name, "localValue");
   assert.equal(fn.body.statements[1].init.params[0].name, "nextValue");
@@ -97,7 +97,7 @@ test("generic names, parameters and nested binding names are retained without ru
 
 test("local function and implementation bodies use their own existing naming scopes", () => {
   const localBody = { statements: [
-    { kind: "let", name: "localValue", mutable: false, init: { kind: "int-literal", text: "1" } },
+    { kind: "let", name: "localValue", mutable: false, type: scalar, attrs: undefined, init: { kind: "int-literal", text: "1" } },
     { kind: "tail", expr: { kind: "path", path: "localValue" } },
   ] };
   const inner = { ...callable, name: "localFunction", visibility: "private", body: localBody };
@@ -116,7 +116,7 @@ test("local function and implementation bodies use their own existing naming sco
   assert.deepEqual(outer.statements.map(entry => entry.kind), ["item", "item", "item", "tail"]);
   for (const fn of [outer.statements[0].item, outer.statements[2].item.members[0]]) {
     assert.ok(fn.attrs.includes(rustLintAttributes.nonSnakeCaseName));
-    assert.deepEqual(fn.body.innerAttrs, [rustLintAttributes.nonSnakeCaseName]);
+    assert.equal(fn.body.innerAttrs, undefined);
     assert.deepEqual(fn.body.statements, localBody.statements);
   }
   assert.deepEqual(finalizeRustSourceStyle(model), model);

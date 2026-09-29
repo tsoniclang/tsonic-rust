@@ -233,10 +233,10 @@ export function aliases(): boolean {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /let same_date: js_abi::JsDate = date\.clone\(\);/u);
-  assert.match(text, /let same_pattern: js_abi::JsRegExp = pattern\.clone\(\);/u);
-  assert.match(text, /js_abi::regexp_test_native\(&same_pattern, "1"\)\?/u);
-  assert.match(text, /same_date == date/u);
+  assert.match(text, /let sameDate: js_abi::JsDate = date\.clone\(\);/u);
+  assert.match(text, /let samePattern: js_abi::JsRegExp = pattern\.clone\(\);/u);
+  assert.match(text, /js_abi::regexp_test_native\(&samePattern, "1"\)\?/u);
+  assert.match(text, /sameDate == date/u);
   assert.match(text, /pattern\.last_index\(\) == 1\.0/u);
 });
 

@@ -55,7 +55,7 @@ function createProject(librarySettings) {
   const manifest = join(root, "Cargo.toml");
   const manifestText = [
     "[package]", 'name = "library-target-proof"', 'version = "0.1.0"', 'edition = "2024"',
-    "[workspace]", "[dependencies]",
+    "[workspace]", 'exclude = ["dependency"]', "[dependencies]",
     'selected_alias = { package = "native-package", path = "dependency", default-features = false, features = ["chosen"] }', "",
   ].join("\n");
   const dependencyManifest = join(dependencyRoot, "Cargo.toml");

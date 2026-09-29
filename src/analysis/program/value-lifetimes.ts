@@ -157,9 +157,12 @@ function classifyDeclaration(
   if (summary.captured || summary.exported) return;
   const runtimeUses = summary.uses.filter((use) =>
     use.kind !== "source-linkage" && use.kind !== "type-only");
+  const storageOnly = !summary.bindingWritten && !summary.hasUnclassifiedValueUse &&
+    runtimeUses.every(use => use.role === "storage" && !use.throughMember);
   for (const { reference } of runtimeUses) {
     if (isExactCallableExitValue(reference, declaration, input) ||
-      input.isOwnedString(declaration) && isLastUseOnPath(reference, declaration, input)) {
+      (input.isOwnedString(declaration) || storageOnly) &&
+        isLastUseOnPath(reference, declaration, { ...input, storageOnly })) {
       movableReferences.add(reference);
     }
   }
@@ -228,6 +231,7 @@ function isLastUseOnPath(
     readonly navigation: SourceProgramNavigation;
     readonly mayBorrowArgument: (argument: Node) => boolean;
     readonly isOwnedFieldProjection?: (field: Node) => boolean;
+    readonly storageOnly?: boolean;
   },
   lifetimeCallable?: Node,
 ): boolean {
@@ -251,6 +255,8 @@ function isLastUseOnPath(
     const kind = input.ast.kindName(parent);
     if (input.ast.is.IsCallExpression(parent) || input.ast.is.IsNewExpression(parent)) invocations.add(parent);
     if (!rustSourceValueWrapperContains(parent, current, input.ast) &&
+      !(input.storageOnly === true && ["KindPropertyAssignment", "KindShorthandPropertyAssignment",
+        "KindObjectLiteralExpression", "KindArrayLiteralExpression"].includes(kind)) &&
       !(input.isOwnedFieldProjection?.(parent) === true && Node_Expression(input.ast, parent) === current) &&
       kind !== "KindCallExpression" && kind !== "KindNewExpression" &&
       kind !== "KindReturnStatement" && kind !== "KindExpressionStatement" &&

@@ -380,6 +380,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   });
   for (const issue of recordRustObjectLiteralMethodAdapterFacts({
     ast: walk.context.ast,
+    sourceLifetimes: walk.context.sourceLifetimes,
     facts: walk.context.facts,
     projectTypes: walk.context.projectTypes,
     typeDefinitions: walk.context.typeDefinitions,

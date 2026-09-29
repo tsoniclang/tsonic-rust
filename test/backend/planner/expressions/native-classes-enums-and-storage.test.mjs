@@ -189,7 +189,7 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /let operation_input_1 = next_factor\(\);[\s\S]*?acme_vectors::scale\(&mut retained, operation_input_1\)/u);
+  assert.match(text, /let operation_input_1 = nextFactor\(\);[\s\S]*?acme_vectors::scale\(&mut retained, operation_input_1\)/u);
   assert.doesNotMatch(text, /let (?:mut )?operation_input_0 = retained/u);
   assert.match(text, /let mut operation_input_0 = acme_vectors::Vector::new\(1, 1\);/u);
   assert.match(text, /acme_vectors::mutate_both\(&mut left, &mut right\)/u);
@@ -527,8 +527,8 @@ export function stringCall(receiver: Base, value: string): string {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /fn open_call_specialization_1/u);
-  assert.match(text, /fn open_call_specialization_2/u);
+  assert.match(text, /fn openCall_specialization_1/u);
+  assert.match(text, /fn openCall_specialization_2/u);
   assert.match(text, /fn relay_specialization_1/u);
   assert.match(text, /fn relay_specialization_2/u);
   assert.doesNotMatch(text, /fn open_call</u);
@@ -832,7 +832,7 @@ export function caller(): int32 {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.doesNotMatch(text, /#!\[allow\(non_snake_case\)\]/u);
-  assert.match(text, /pub fn pick_mode\(flag_value: bool\) -> i32/u);
-  assert.match(text, /let mut chosen_value: i32 = 0;/u);
-  assert.match(text, /pick_mode\(true\)/u);
+  assert.match(text, /pub fn pickMode\(flagValue: bool\) -> i32/u);
+  assert.match(text, /let mut chosenValue: i32 = 0;/u);
+  assert.match(text, /pickMode\(true\)/u);
 });

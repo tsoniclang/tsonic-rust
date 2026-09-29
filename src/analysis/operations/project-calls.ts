@@ -48,7 +48,6 @@ import { rustGenericCallableProtocol } from "../../target-model/types/carriers/g
 import { substituteRustValueConversion } from "../../target-model/conversions/contracts.js";
 import { recordSelectedMethodSpecialization } from "./project-method-calls.js";
 import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
-import { rustSuspendedCallableInvocationResult } from "../facts/callable-results.js";
 
 export function applySelectedProjectSourceCall(
   walk: RustFactWalk,
@@ -231,7 +230,7 @@ export function applySelectedProjectSourceCall(
       inputs: inputs as NonNullable<(typeof inputs)[number]>[],
     });
   }
-  const declaredResultCarrier = rustSuspendedCallableInvocationResult(walk.context.facts, selectedDeclaration) ?? selectedMember.returnType;
+  const declaredResultCarrier = selectedMember.returnType;
   const resultCarrier = declaredResultCarrier === undefined
     ? undefined
     : substituteRustTargetGenerics(

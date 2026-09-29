@@ -22,9 +22,8 @@ import {
   sourceProjectFiles,
 } from "@tsonic/target-api/source";
 import { createRustTargetPack } from "../../../dist/index.js";
+import { createRustCompilationSession } from "../../../dist/compilation/session.js";
 import { analyzeRustTargetProgram } from "../../../dist/analysis/program/index.js";
-import { createRustTargetConfiguration } from "../../../dist/options/rust-target-options.js";
-import { composeRustProviderSemantics } from "../../../dist/providers/packages/semantics.js";
 
 export function createRustSession({
   files,
@@ -35,6 +34,7 @@ export function createRustSession({
   entryPoint = "index.ts",
   sourcePackages,
   compilerOptions = {},
+  compileTarget,
 } = {}) {
   const pack = createRustTargetPack();
   target = surfaces.length === 0 || target.surfaces !== undefined
@@ -71,7 +71,9 @@ export function createRustSession({
     selectedCapabilities,
     selectedSurfaces,
   });
-  const targetSession = pack.createCompilationSession(Object.freeze({
+  const createSession = compileTarget === undefined ? pack.createCompilationSession
+    : context => createRustCompilationSession(context, compileTarget);
+  const targetSession = createSession(Object.freeze({
     project,
     projectDirectory: "/src",
     target,
@@ -322,45 +324,18 @@ export function compileRust(options) {
 }
 
 export function analyzeRust(options) {
-  const harness = createRustSession(options);
-  try {
-    const sourceDiagnostics = rustSourceDiagnosticsText(harness);
-    if (sourceDiagnostics !== "") {
-      throw new Error(`TypeScript diagnostics:\n${sourceDiagnostics}`);
-    }
-    const source = checkedRustSource(harness);
-    const runtime = runtimeContributionsForHarness(harness);
-    if (runtime.diagnostics.length !== 0) {
-      throw new Error(runtime.diagnostics.map((diagnostic) => diagnostic.message).join("\n"));
-    }
-    const input = createRustCompileInputFromSession({
-      source,
-      sourcePackages: harness.sourcePackages,
-      project: harness.project,
-      target: harness.target,
-      runtimeReferences: runtime.references,
-      runtimeActivatedCapabilityIds: Object.freeze(harness.runtimeActivatedCapabilities.map(capability => capability.id)),
-      paths: harness.paths,
-    });
-    const configuration = createRustTargetConfiguration(
-      harness.target,
-      "/src",
-      harness.paths.targetOutputRoot,
-    );
-    const analysis = analyzeRustTargetProgram(Object.freeze({
-      input,
-      configuration,
-      providerSemantics: composeRustProviderSemantics(harness.capturedCapabilities),
-      jsEnabled: harness.selectedSurfaces.some((surface) => surface.id === "js"),
-      rootPublishesLibrary: configuration.outputType === "lib",
-    }));
-    if (analysis.kind === "rejected") {
-      throw new Error(analysis.diagnostics.map((diagnostic) => diagnostic.message).join("\n"));
-    }
-    return Object.freeze({ source, program: analysis.value });
-  } finally {
-    harness.targetSession.close();
+  let program;
+  const { source, result } = compileRust({ ...options, compileTarget(request) {
+    const analysis = analyzeRustTargetProgram(request);
+    if (analysis.kind === "rejected") return analysis;
+    program = analysis.value;
+    return { kind: "resolved", value: { artifacts: [] }, diagnostics: [] };
+  } });
+  if (result.diagnostics.length !== 0) {
+    throw new Error(result.diagnostics.map(diagnostic => diagnostic.message).join("\n"));
   }
+  assert.ok(program, "The compilation session must invoke target analysis.");
+  return Object.freeze({ source, program });
 }
 
 export function compileRustThroughTargetPack(options) {

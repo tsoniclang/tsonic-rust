@@ -1,4 +1,5 @@
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
+import { rustPropertyStorageNames } from "../../target-model/names/property-storage.js";
 import type { RustSourceUnion, RustStructuralInstantiation } from "../../policy/types/source-type-registry.js";
 import { createRustGeneratedUnionPlan, type RustGeneratedUnionPlan } from "./generated-union-plan.js";
 import type { RustNativeMemoryLayout, RustNativeObjectField } from "../../target-model/operations/native-memory.js";
@@ -7,7 +8,6 @@ import { rustTargetGenericArgumentEquals, rustTargetTypeRefEquals } from "../../
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import {
   rustPascalCaseIdentifier,
-  rustTargetIdentifier,
 } from "../../target-model/names/identifiers.js";
 import {
   rustStructuralObjectCarrierValue,
@@ -223,7 +223,8 @@ export function createRustStructuralShapePlan(
       const componentId = componentForFile(structural.ownerFileName);
       const usedTypeNames = usedTypeNamesByComponent.get(componentId) ?? new Set<string>();
       usedTypeNamesByComponent.set(componentId, usedTypeNames);
-      const usedFieldNames = new Set(structural.fields.map(field => rustTargetIdentifier(field.sourceName)));
+      const fieldNames = rustPropertyStorageNames(structural.fields.map(field => field.sourceName));
+      const usedFieldNames = new Set(fieldNames.values());
       const nativeDispatch = structural.construction !== undefined || implementations.some(implementation =>
         implementation.kind === "dispatch" && instances.has(closedMetadataKey(implementation.carrier)));
       const fields = structural.fields.map((field, storageIndex): RustStructuralShapeField => {
@@ -234,7 +235,7 @@ export function createRustStructuralShapePlan(
           !rustNativeMemoryLayoutsEqual(candidate.layout, nativeLayout))) {
           throw new Error("Equivalent Rust structural carriers have contradictory native field layouts.");
         }
-        const targetName = rustTargetIdentifier(field.sourceName);
+        const targetName = fieldNames.get(field.sourceName)!;
         const fieldImplementations = implementations.filter((implementation) =>
           implementation.storageIndex === storageIndex &&
           instances.has(closedMetadataKey(implementation.carrier)));

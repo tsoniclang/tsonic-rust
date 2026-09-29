@@ -28,7 +28,7 @@ import { closedMetadataKey } from "../../../../target-model/metadata/closed-data
 import { mapRustSourceMarkerCall } from "./deferred.js";
 import { providerIdentityText, providerOperationFact, rejectSelectedOperation, selectedArgumentMatchScore } from "../result.js";
 import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution.js";
-import { rustOptionalChainFactKey } from "../../../facts/keys.js";
+import { rustModuleBindingFactKey, rustOptionalChainFactKey } from "../../../facts/keys.js";
 import { rustOptionElementCarrier } from "../../../../target-model/types/index.js";
 import { rustRuntimeCarrierKey, rustSelectedCallKey } from "../../../../target-model/facts/selections.js";
 import { selectedCallArgumentCarriers, selectedCallArgumentNodes, selectedCallCalleeDeclaration, selectedCallCalleeSymbol, selectedCallProviderDeclaration } from "../operators.js";
@@ -130,7 +130,8 @@ export function selectRustCheckedCall(
     if (instantiation === undefined) {
       return rejectSelectedOperation(request.source.call, context, "RUST_PROVIDER_TYPE_INSTANTIATION_NOT_PROVEN", `Selected call '${provider.memberName ?? provider.exportName ?? provider.exportId ?? provider.moduleSpecifier}' does not prove one closed instantiation of its Rust provider type parameters.`);
     }
-    const sourceResult = selectRustProviderPointerResult(request.source, context, options, instantiation.substitutions.types);
+    const sourceResult = selectRustProviderPointerResult(request.source, context, options,
+      selection.row.genericParameters ?? [], instantiation.substitutions.types);
     if (sourceResult?.kind === "invalid") {
       return rejectSelectedOperation(request.source.call, context,
         "RUST_PROVIDER_POINTER_RESULT_NOT_PROVEN", sourceResult.reason);
@@ -455,9 +456,13 @@ export function selectRustCheckedCall(
         undefined, undefined, sourceDeclaration, undefined, receiverCarrier);
       if (result !== undefined) return result;
     }
-    const callableTypeOrArrow = declarationKind === "KindFunctionType" ||
-      declarationKind === "KindCallSignature" || declarationKind === "KindArrowFunction";
-    const structuralMethod = callableTypeOrArrow ? undefined : acceptStructuralRuntimeMethodCall(
+    const reference = context.source.navigation.sourceReferenceFor(request.source.sourceCallee.expression);
+    const binding = context.facts.get(reference?.declaration, rustModuleBindingFactKey);
+    const nativeCallable = binding?.storage === "native-callable" &&
+      binding.callableDeclaration === sourceDeclaration;
+    const callableType = declarationKind === "KindFunctionType" || declarationKind === "KindCallSignature" ||
+      !nativeCallable && (declarationKind === "KindArrowFunction" || declarationKind === "KindFunctionExpression");
+    const structuralMethod = callableType ? undefined : acceptStructuralRuntimeMethodCall(
       request,
       sourceDeclaration,
       context,
@@ -466,7 +471,7 @@ export function selectRustCheckedCall(
     if (structuralMethod !== undefined) {
       return structuralMethod;
     }
-    if (callableTypeOrArrow || declarationKind === "KindFunctionExpression") {
+    if (callableType) {
       return acceptRuntimeCallableCall(request, context, options) ?? rejectSelectedOperation(
         request.source.call, context, "RUST_SOURCE_CALLABLE_CARRIER_MISSING",
         "The exact selected callable value requires a closed native invocation carrier.",

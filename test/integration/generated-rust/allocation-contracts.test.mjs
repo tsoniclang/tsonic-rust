@@ -30,14 +30,15 @@ export function main(): void {
   });
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
-  assert.match(output, /const SEPARATOR: &str|const separator: &str/u);
-  assert.match(output, /fn right_paren\(value: &str\)/u);
-  assert.match(output, /fn check_token\(value: &str\)/u);
+  assert.match(output, /const separator: &str/u);
+  assert.match(output, /fn rightParen\(value: &str\)/u);
+  assert.match(output, /fn checkToken\(value: &str\)/u);
   assert.match(output, /fn dispatch\(kind: &str, payload: &str\)/u);
   assert.match(output, /fn retained\(value: String\)/u);
   assert.match(output, /borrow_number_element/u);
   assert.match(output, /sort_borrowed/u);
-  const ensure = output.slice(output.indexOf("fn ensure_slash"), output.indexOf("fn dispatch"));
+  assert.match(output, /fn ensureSlash\(value: String\) -> String/u);
+  const ensure = output.slice(output.indexOf("fn ensureSlash"), output.indexOf("fn dispatch"));
   assert.doesNotMatch(ensure, /value\.clone\(\)/u);
   validateGeneratedProject("native-allocation-contracts", result.artifacts, { run: true });
 });
@@ -108,7 +109,7 @@ export function main(): void {
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /select\(&direct, direct\.clone\(\)\)/u);
   assert.match(output, /select\(&nested, identity\(nested\.clone\(\)\)\)/u);
-  assert.match(output, /after_length\(length\(&completed\), completed\)/u);
+  assert.match(output, /afterLength\(length\(&completed\), completed\)/u);
   assert.match(output, /owned\(copies\.clone\(\), copies\)/u);
   validateGeneratedProject("overlapping-argument-borrows", result.artifacts, { run: true });
 });
