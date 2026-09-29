@@ -386,6 +386,11 @@ export function resolveRustTargetTypeSyntax(
       : undefined;
   }
   if (kind === "KindUnionType") {
+    const sourceType = semantics?.types.expressionType(node);
+    if (semantics !== undefined && sourceType !== undefined &&
+      (semantics.types.isUnknown(sourceType) || semantics.types.isAny(sourceType))) {
+      return resolveRustAuthoredBroadSourceValueTargetType(node, context, options.jsEnabled);
+    }
     const children = denseDefined(ast.children(node));
     if (children === undefined) {
       return undefined;
@@ -403,7 +408,6 @@ export function resolveRustTargetTypeSyntax(
       }
     }
     const semanticMembers = members.filter((child) => ast.kindName(child) !== "KindBarToken");
-    const sourceType = semantics?.types.expressionType(node);
     const selectedCarriers = semanticMembers.map(member => resolveRustAuthoredTargetType(member, context, options, resolving));
     if (selectedCarriers.every(carrier => carrier !== undefined)) {
       const selected = resolveRustSourceUnionCarrier(selectedCarriers as TargetTypeRef[], values => resolveRustUnionValueCarrier(values, options, () => {
