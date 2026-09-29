@@ -460,6 +460,13 @@ export function substituteProviderOperationForm(
   form: RustProviderOperationForm,
   substitutions: RustTargetGenericBindings,
 ): RustProviderOperationForm {
+  if ("trailingArguments" in form && form.trailingArguments !== undefined) {
+    form = { ...form,
+      trailingArguments: form.trailingArguments.map(argument =>
+        argument.kind === "none" && argument.element !== undefined ? { ...argument,
+          element: substituteProviderCarrier(argument.element, substitutions) } : argument),
+    };
+  }
   switch (form.form) {
     case "call-value-slice":
     case "call-value-array":

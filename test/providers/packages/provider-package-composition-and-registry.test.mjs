@@ -183,6 +183,21 @@ test("generic value-slice forms require closed leading and element carriers", ()
   );
 });
 
+test("typed absence constants validate and materialize their exact native carriers", () => {
+  const make = element => definition({ operations: [{ ...definition().operations[0],
+    target: { form: "call", path: "acme_validation::run", trailingArguments: [{ kind: "none", element }] },
+  }] });
+  assert.doesNotThrow(() => createRustProviderPackage(make(int32Carrier)));
+  for (const element of [null, { kind: "guess" }, { kind: "source-primitive", name: "int32", extra: true },
+    { kind: "target-named", id: "acme.Missing" }, { kind: "type-parameter", identity: "T", name: "T" }]) {
+    assert.throws(() => createRustProviderPackage(make(element)));
+  }
+  const definitionWithCarrier = { ...make({ kind: "target-named", id: "acme.Payload" }),
+    carrierPaths: { "acme.Payload": "acme::Payload" } };
+  const rows = collectRustProviderOperationRows(providerContext([createRustProviderPackage(definitionWithCarrier)]));
+  assert.equal(rustNamedTypeCarrierValue(rows[0].target.trailingArguments[0].element).path, "acme::Payload");
+});
+
 test("generic value-array forms require closed paths and element carriers", () => {
   const operation = (target) => ({
     exportId: "@acme/validation::run",

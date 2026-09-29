@@ -171,8 +171,8 @@ export function mapSelectedStringRegExpProtocolCall(
   const trailingArguments: RustProviderConstantArgument[] = [];
   for (let index = 0; index < missingCallableParameters.length; index += 1) {
     const outerParameter = request.source.sourceSelectedSignatureParameters[suppliedCallableParameterCount + index];
-    if (outerParameter?.acceptsOmission !== true ||
-      rustOptionElementCarrier(missingCallableParameters[index]) === undefined) {
+    const element = rustOptionElementCarrier(missingCallableParameters[index]);
+    if (outerParameter?.acceptsOmission !== true || element === undefined) {
       return rejectSelectedOperation(
         request.source.call,
         context,
@@ -180,7 +180,7 @@ export function mapSelectedStringRegExpProtocolCall(
         "The selected String RegExp protocol call omits a parameter that has no exact optional target contract.",
       );
     }
-    trailingArguments.push({ kind: "none" });
+    trailingArguments.push({ kind: "none", element });
   }
   const closedForwardedPlans = forwardedPlans as readonly ProtocolArgumentPlan[];
   return acceptSelectedCall(request, {

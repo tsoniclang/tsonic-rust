@@ -465,7 +465,8 @@ function isProviderConstant(value: unknown): value is RustProviderConstantArgume
     case "boolean":
       return hasExactKeys(value, ["kind", "value"]) && typeof value.value === "boolean";
     case "none":
-      return hasExactKeys(value, ["kind"]);
+      return value.element === undefined ? hasExactKeys(value, ["kind"]) :
+        hasExactKeys(value, ["kind", "element"]) && isRustTargetTypeRef(value.element);
     default:
       return false;
   }

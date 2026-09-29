@@ -163,6 +163,13 @@ function materializeProviderOperationForm(
   carrierPaths: Readonly<Record<string, string>>,
   carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>>,
 ): RustProviderOperationForm {
+  if ("trailingArguments" in form && form.trailingArguments !== undefined) {
+    form = { ...form,
+      trailingArguments: form.trailingArguments.map(argument =>
+        argument.kind === "none" && argument.element !== undefined ? { ...argument,
+          element: materializeProviderCarrier(argument.element, carrierPaths, carrierTraits) } : argument),
+    };
+  }
   const argConversions = "argConversions" in form && form.argConversions !== undefined
     ? [...form.argConversions]
     : undefined;

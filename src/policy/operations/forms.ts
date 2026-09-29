@@ -534,7 +534,8 @@ function constantIsValid(value: RustProviderConstantArgument): boolean {
   if (value.kind === "boolean") {
     return hasExactKeys(value, ["kind", "value"], ["kind", "value"]) && typeof value.value === "boolean";
   }
-  return value.kind === "none" && hasExactKeys(value, ["kind"], ["kind"]);
+  return value.kind === "none" && hasExactKeys(value, ["kind", "element"], ["kind"]) &&
+    (value.element === undefined || isRustTargetTypeRef(value.element));
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {

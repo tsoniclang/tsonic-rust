@@ -77,7 +77,7 @@ export type RustProviderConstantArgument =
   | { readonly kind: "float64"; readonly value: number }
   | { readonly kind: "string"; readonly value: string }
   | { readonly kind: "boolean"; readonly value: boolean }
-  | { readonly kind: "none" };
+  | { readonly kind: "none"; readonly element?: TargetTypeRef };
 
 export type RustProviderChainStep =
   | { readonly kind: "method"; readonly name: string }

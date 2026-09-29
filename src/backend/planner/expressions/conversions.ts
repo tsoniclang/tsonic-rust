@@ -3,6 +3,7 @@ import {
   isRustNeverCarrier,
   rustCarrierSupportsClone,
   rustPrimitiveTypeName,
+  rustOptionTargetType,
 } from "../../../target-model/types/index.js";
 import {
   isRustFinalizedArrayInput,
@@ -51,7 +52,7 @@ import { invokeRustStructuralObjectMethod } from "../objects/project-storage.js"
 import { applyFinalizedValueConversion } from "./value-conversions.js";
 import { planRustRestAssembly } from "./calls/rest-assembly.js";
 
-function providerConstantExpression(argument: RustProviderConstantArgument): RustExpr {
+function providerConstantExpression(argument: RustProviderConstantArgument, context: RustPlanContext): RustExpr | undefined {
   switch (argument.kind) {
     case "integer":
       return { kind: "int-literal", text: String(argument.value) };
@@ -61,8 +62,11 @@ function providerConstantExpression(argument: RustProviderConstantArgument): Rus
       return { kind: "str-literal", value: argument.value };
     case "boolean":
       return { kind: "bool-literal", value: argument.value };
-    case "none":
-      return { kind: "none" };
+    case "none": {
+      if (argument.element === undefined) return { kind: "none" };
+      const owner = rustTypeFromCarrierInContext(rustOptionTargetType(argument.element), context);
+      return owner === undefined ? undefined : { kind: "associated-value", owner, name: "None" };
+    }
   }
 }
 
@@ -589,7 +593,7 @@ export function planFinalizedTargetInput(
   overrides?: RustFinalizedInputPlanOverrides,
 ): RustExpr | undefined {
   if (isRustFinalizedConstantInput(input)) {
-    return providerConstantExpression(input.source.value);
+    return providerConstantExpression(input.source.value, context);
   }
   if (isRustFinalizedTaggedArrayInput(input)) {
     const elements: RustExpr[] = [];

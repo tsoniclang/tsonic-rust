@@ -12,6 +12,7 @@ import {
 import { acceptRustPolicy } from "../../../../policy/operations/contracts.js";
 import { asNode } from "../../../../policy/evidence/selected-source.js";
 import { selectProviderRecordArgument } from "./record-arguments.js";
+import { materializeRustOmittedCallArguments } from "./omitted-arguments.js";
 import { isRustCVariadicArgumentCarrier } from "../../../facts/c-variadic.js";
 import {
   KindCallExpression,
@@ -353,7 +354,11 @@ export function acceptSelectedCall(
   if (instantiation === undefined) {
     return rejectSelectedOperation(request.source.call, context, "RUST_PROVIDER_TYPE_INSTANTIATION_NOT_PROVEN", `Selected call '${callIdentity.sourceName}' does not prove one closed instantiation of its Rust provider type parameters.`);
   }
-  const instantiatedTemplate = instantiation.template;
+  const instantiatedTemplate = materializeRustOmittedCallArguments(request, instantiation.template, context);
+  if (instantiatedTemplate === undefined) {
+    return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_OPERATION_ABI_INCOMPLETE",
+      `Selected call '${callIdentity.sourceName}' has no exact native contract for omitted arguments.`);
+  }
   const sourceArguments = selectedCallSourceCarriers(
     request,
     instantiatedTemplate,

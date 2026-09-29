@@ -349,6 +349,10 @@ function validateProviderCallback(
 }
 
 function operationFormCarriers(form: RustProviderOperationForm): readonly TargetTypeRef[] {
+  if (form.form === "call" || form.form === "free-call" || form.form === "receiver-method") {
+    return (form.trailingArguments ?? []).flatMap(argument =>
+      argument.kind === "none" && argument.element !== undefined ? [argument.element] : []);
+  }
   if (form.form === "source-module-construction") {
     return form.bootstrap.errorCarrier === undefined
       ? []

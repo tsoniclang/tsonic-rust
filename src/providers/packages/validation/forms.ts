@@ -32,7 +32,7 @@ export function validateOperationForm(
       requireExactKeys(record, ["form", "path", "argModes", "argConversions", "argOrder", "trailingArguments", "chain"], `${label}.target`, fail);
       requireRustPath(form.path, `${label}.target.path`, fail);
       validateArgumentMetadata(form, definition, label, parameterCarriers, fail);
-      validateTrailingArguments(form.trailingArguments, label, fail);
+      validateTrailingArguments(form.trailingArguments, definition, label, fail);
       validateChain(form.chain, label, fail);
       return;
     case "source-module-construction":
@@ -218,7 +218,7 @@ export function validateOperationForm(
         fail(`${label}.target.receiverMode contains unsupported mode '${String(form.receiverMode)}'`);
       }
       validateArgumentMetadata(form, definition, label, parameterCarriers, fail);
-      validateTrailingArguments(form.trailingArguments, label, fail);
+      validateTrailingArguments(form.trailingArguments, definition, label, fail);
       return;
     case "binary-operator":
       requireExactKeys(record, ["form", "operator", "trait"], `${label}.target`, fail);
@@ -294,7 +294,7 @@ export function validateOperationForm(
         fail(`${label}.target.mutatesReceiver must be boolean when present`);
       }
       validateArgumentMetadata(form, definition, label, parameterCarriers, fail);
-      validateTrailingArguments(form.trailingArguments, label, fail);
+      validateTrailingArguments(form.trailingArguments, definition, label, fail);
       validateChain(form.chain, label, fail);
       return;
     default:
@@ -396,6 +396,7 @@ function validateModes(
 
 function validateTrailingArguments(
   arguments_: readonly RustProviderConstantArgument[] | undefined,
+  definition: RustProviderPackageDefinition,
   label: string,
   fail: Fail,
 ): void {
@@ -430,7 +431,10 @@ function validateTrailingArguments(
       continue;
     }
     if (argument.kind === "none") {
-      requireExactKeys(record, ["kind"], `${label}.target.trailingArguments[${index}]`, fail);
+      requireExactKeys(record, ["kind", "element"], `${label}.target.trailingArguments[${index}]`, fail);
+      if (argument.element !== undefined) {
+        validateCarrier(argument.element, definition, `${label}.target.trailingArguments[${index}].element`, fail);
+      }
       continue;
     }
     fail(`${label}.target.trailingArguments[${index}] has unsupported kind '${String((argument as { readonly kind?: unknown }).kind)}'`);
