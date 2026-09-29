@@ -214,8 +214,9 @@ function resolveSelectedFlowReadCarrier(
       const resolved = resolveRustTargetTypeRef(selectedType, rustResolutionContext(walk, expression), walk.operationOptions);
       const payload = rustOptionElementCarrier(resolved) ?? resolved;
       const mapping = payload === undefined ? undefined : selectRustUnionArmMapping(dispatchCarrier, payload, "target", walk.context.typeDefinitions);
-      if (payload !== undefined && mapping?.length === indexes.length && mapping.every(arm => indexes.some(index =>
-        sourceUnion.variants[index]?.name === arm.source.name))) {
+      const selectedVariants = mapping === undefined ? undefined : new Set(mapping.map(arm => arm.source[0]!.variant.name));
+      if (payload !== undefined && selectedVariants?.size === indexes.length && indexes.every(index =>
+        selectedVariants.has(sourceUnion.variants[index]!.name))) {
         return hasAbsence ? rustSourceOptionalTargetType(payload) : payload;
       }
     }

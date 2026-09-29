@@ -1,10 +1,10 @@
-import type { Node, Type } from "@tsonic/tsts";
+import type { Type } from "@tsonic/tsts";
+import { sourceBoundTypeRelationship } from "@tsonic/target-api/source";
 import type { RustSourceUnion } from "../source-type-registry.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustSourceUnionCarrierValue } from "../../../target-model/types/carriers/source-types.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { resolveRustTargetType } from "./target.js";
 import { rustSourceUnionMemberDeclarationIsOwned } from "../../evidence/source-union-members.js";
 import {
   isRustAbsenceCarrier,
@@ -17,6 +17,7 @@ import {
   rustStringTargetType,
 } from "../../../target-model/types/index.js";
 import { rustSourceOptionalTargetType } from "../../../target-model/types/projections.js";
+import { retainRustStructuralInstantiation } from "./structural-instantiations.js";
 
 export function resolveRustUnionValueCarrier(
   values: readonly TargetTypeRef[],
@@ -42,14 +43,14 @@ export function retainRustSourceUnionInstantiation(
   carrier: TargetTypeRef,
   context: RustTargetTypeResolutionContext,
   options: RustTargetTypeResolutionOptions,
-  resolving: Set<object>,
 ): TargetTypeRef | undefined {
   const existing = options.sourceTypes.sourceUnionForCarrier(carrier);
   if (existing !== undefined && options.sourceTypes.sourceUnionVariantIndexesForTypes(carrier, [sourceType]) !== undefined) return carrier;
   const value = rustSourceUnionCarrierValue(carrier);
   const expectedVariants = options.sourceTypes.sourceUnionVariants(carrier);
   const semantics = context.currentSemantics;
-  if (value === undefined || expectedVariants === undefined || template.declaration === undefined || !semantics.types.isUnion(sourceType)) return undefined;
+  if (value === undefined || expectedVariants === undefined || expectedVariants.length !== template.variants.length ||
+    template.declaration === undefined || !semantics.types.isUnion(sourceType)) return undefined;
   const members = semantics.types.unionOrIntersectionTypes(sourceType);
   if (members.length !== template.variants.reduce((count, variant) => count + variant.sourceTypes.length, 0) ||
     members.some(member => member === undefined)) return undefined;
@@ -66,67 +67,46 @@ export function retainRustSourceUnionInstantiation(
       substitutions.set(parameter.declaration, { sourceType: binding.argument, carrier: argument.type });
     }
   }
+  const used = new Set<Type>();
   const instantiatedContext = { ...context, sourceTypeParameterSubstitutions: substitutions };
-  const alreadyResolving = resolving.has(sourceType);
-  resolving.add(sourceType);
-  try {
-    const selected = members.map(member => ({
-      sourceType: member,
-      carrier: resolveRustTargetType(member, instantiatedContext, options, resolving),
-    }));
-    if (selected.some(member => member.carrier === undefined)) return undefined;
-    const used = new Set<Type>();
-    const variants = template.variants.map((variant, index) => {
-      const expected = expectedVariants[index];
-      const matches = selected.filter(member => {
-        if (!rustTargetTypeRefEquals(expected?.carrier, member.carrier)) return false;
-        if (variant.sourceTypes.includes(member.sourceType)) return true;
-        const declarations = sourceDeclarations(member.sourceType, context);
-        return variant.sourceTypes.some(type => {
-          const origin = sourceDeclarations(type, context);
-          return origin.length !== 0 && declarations.length === origin.length &&
-            declarations.every(declaration => origin.includes(declaration));
-        });
-      });
-      if (matches.length !== variant.sourceTypes.length || matches.some(member => used.has(member.sourceType))) return undefined;
-      const selectedMember = matches[0]!;
-      matches.forEach(member => used.add(member.sourceType));
-      const shape = options.sourceTypes.structuralObjectForType(selectedMember.sourceType, selectedMember.carrier);
-      return {
-        name: variant.name,
-        sourceTypes: Object.freeze(matches.map(member => member.sourceType)),
-        carrier: selectedMember.carrier!,
-        ...(shape === undefined ? {} : { shape }),
-      };
-    });
-    if (variants.some(variant => variant === undefined)) return undefined;
-    const selectedProperties = semantics.types.propertyInfos(sourceType).map(property => ({
-      symbol: property.symbol,
-      declarations: Object.freeze([...new Set([
-        ...semantics.declarations.symbolDeclarations(property.symbol),
-        ...property.rootSymbols.flatMap(symbol => semantics.declarations.symbolDeclarations(symbol)),
-      ])]),
-    }));
-    if (selectedProperties.some(property => property.declarations.length === 0 ||
-      property.declarations.some(declaration => !rustSourceUnionMemberDeclarationIsOwned(declaration, context, options)))) {
-      return undefined;
-    }
-    return options.sourceTypes.registerSourceUnion({
-      declaration: template.declaration,
-      sourceType,
-      carrier,
-      variants: variants as RustSourceUnion["variants"],
-      selectedProperties,
-    }) ? carrier : undefined;
-  } finally {
-    if (!alreadyResolving) resolving.delete(sourceType);
+  const variants = template.variants.map((variant, index) => {
+    const expected = expectedVariants[index];
+    if (expected === undefined || expected.name !== variant.name) return undefined;
+    const matches = members.filter(member => variant.sourceTypes.some(type =>
+      sourceBoundTypeRelationship(type, member, semantics,
+        declaration => substitutions.get(declaration)?.sourceType) !== undefined));
+    if (matches.length !== variant.sourceTypes.length || matches.some(member => used.has(member))) return undefined;
+    const selectedMember = matches[0]!;
+    if (!retainRustStructuralInstantiation(selectedMember, variant.carrier, expected.carrier,
+      instantiatedContext, options, new Set([sourceType]))) return undefined;
+    matches.forEach(member => used.add(member));
+    const shape = options.sourceTypes.structuralObjectForType(selectedMember, expected.carrier);
+    return {
+      name: variant.name,
+      sourceTypes: Object.freeze(matches),
+      carrier: expected.carrier,
+      ...(shape === undefined ? {} : { shape }),
+    };
+  });
+  if (variants.some(variant => variant === undefined) || used.size !== members.length) return undefined;
+  const selectedProperties = semantics.types.propertyInfos(sourceType).map(property => ({
+    symbol: property.symbol,
+    declarations: Object.freeze([...new Set([
+      ...semantics.declarations.symbolDeclarations(property.symbol),
+      ...property.rootSymbols.flatMap(symbol => semantics.declarations.symbolDeclarations(symbol)),
+    ])]),
+  }));
+  if (selectedProperties.some(property => property.declarations.length === 0 ||
+    property.declarations.some(declaration => !rustSourceUnionMemberDeclarationIsOwned(declaration, context, options)))) {
+    return undefined;
   }
-}
-
-function sourceDeclarations(type: Type, context: RustTargetTypeResolutionContext): readonly Node[] {
-  const declarations = context.currentSemantics.declarations;
-  const symbol = declarations.typeSymbol(type);
-  return symbol === undefined ? [] : declarations.symbolDeclarations(symbol);
+  return options.sourceTypes.registerSourceUnion({
+    declaration: template.declaration,
+    sourceType,
+    carrier,
+    variants: variants as RustSourceUnion["variants"],
+    selectedProperties,
+  }) ? carrier : undefined;
 }
 
 export function resolveRustSourceUnionCarrier(

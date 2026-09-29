@@ -503,7 +503,10 @@ function materializeProviderValueConversion(
         source: materializeProviderCarrier(conversion.source, carrierPaths, carrierTraits),
         target: materializeProviderCarrier(conversion.target, carrierPaths, carrierTraits),
         arms: conversion.arms.map(arm => ({ ...arm,
-          carrier: materializeProviderCarrier(arm.carrier, carrierPaths, carrierTraits) })),
+          carrier: materializeProviderCarrier(arm.carrier, carrierPaths, carrierTraits),
+          source: arm.source.map(step => ({ ...step, union: materializeProviderCarrier(step.union, carrierPaths, carrierTraits) })),
+          target: arm.target.map(step => ({ ...step, union: materializeProviderCarrier(step.union, carrierPaths, carrierTraits) })),
+        })),
       };
     case "rest-sequence":
       return {

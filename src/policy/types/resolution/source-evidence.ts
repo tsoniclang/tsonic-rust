@@ -297,12 +297,16 @@ export function resolveRustEvidenceNodesToCommonCarrier(
       ...semantics.facts.authoredTypeNodes(node)]);
     const selected = [...evidence].flatMap(member => {
       const selection = semantics.types.authoredSelection(member, selectedType);
-      const carrier = resolveRustAuthoredTargetType(member, context, options, resolving);
-      if (selection.kind === "authored-members" && selection.nodes.length === 1 &&
-        selection.nodes[0] === member && selection.selectedNullishTypes.length === 0) return [carrier];
       const authoredType = semantics.types.authoredType(member);
+      if (selection.kind === "authored-members" && selection.nodes.length === 1 &&
+        selection.nodes[0] === member && selection.selectedNullishTypes.length === 0 &&
+        authoredType !== undefined && semantics.types.isIdentical(authoredType, selectedType)) {
+        return [resolveRustAuthoredTargetType(member, context, options, resolving)];
+      }
       if (authoredType === undefined || semantics.types.refinement(authoredType, selectedType).kind !== "members") return [];
       const selectedCarrier = resolveRustTargetType(selectedType, context, options, resolving);
+      if (selectedCarrier === undefined) return [];
+      const carrier = resolveRustAuthoredTargetType(member, context, options, resolving);
       return carrier !== undefined && rustTargetTypeRefEquals(carrier, selectedCarrier) ? [carrier] : [];
     });
     if (selected.length === 0 || selected[0] === undefined || selected.some(carrier =>

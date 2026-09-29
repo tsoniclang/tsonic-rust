@@ -106,7 +106,9 @@ export function visitConversionContract(
       markVariantConstructed(contract.target, contract.variantName);
       return;
     case "union-map":
-      for (const arm of contract.arms) markVariantConstructed(contract.target, arm.target.name);
+      for (const arm of contract.arms) {
+        for (const step of arm.target) markVariantConstructed(step.union, step.variant.name);
+      }
       return;
     case "option-map":
       visitConversionContract(contract.element, markStructuralFieldRead, markVariantConstructed);

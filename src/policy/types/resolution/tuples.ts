@@ -98,25 +98,31 @@ export function resolveRustAuthoredTargetType(
   options: RustTargetTypeResolutionOptions,
   resolving: Set<object>,
 ): TargetTypeRef | undefined {
-  const ownerFile = context.ast.getSourceFile(node);
-  if (ownerFile !== undefined && context.source.semantics.includes(ownerFile) &&
-    ownerFile !== context.currentSemantics.sourceFile) {
-    context = { ...context, currentSemantics: context.semantics(ownerFile) };
+  if (resolving.has(node)) return undefined;
+  resolving.add(node);
+  try {
+    const ownerFile = context.ast.getSourceFile(node);
+    if (ownerFile !== undefined && context.source.semantics.includes(ownerFile) &&
+      ownerFile !== context.currentSemantics.sourceFile) {
+      context = { ...context, currentSemantics: context.semantics(ownerFile) };
+    }
+    const conditional = resolveRustConditionalAlias(node, context, options, resolving);
+    if (conditional !== undefined) return conditional.carrier;
+    const syntax = resolveRustTargetTypeSyntax(node, context, options, resolving);
+    if (syntax !== undefined) return syntax;
+    const sourceFile = context.ast.getSourceFile(node);
+    return sourceFile === undefined || !context.source.semantics.includes(sourceFile)
+      ? undefined
+      : resolveRustTargetType(
+        context.semanticsFor(node).types.expressionType(node),
+        context,
+        options,
+        resolving,
+        node,
+      );
+  } finally {
+    resolving.delete(node);
   }
-  const conditional = resolveRustConditionalAlias(node, context, options, resolving);
-  if (conditional !== undefined) return conditional.carrier;
-  const syntax = resolveRustTargetTypeSyntax(node, context, options, resolving);
-  if (syntax !== undefined) return syntax;
-  const sourceFile = context.ast.getSourceFile(node);
-  return sourceFile === undefined || !context.source.semantics.includes(sourceFile)
-    ? undefined
-    : resolveRustTargetType(
-      context.semanticsFor(node).types.expressionType(node),
-      context,
-      options,
-      resolving,
-      node,
-    );
 }
 
 export function resolveReferencedDeclarationType(

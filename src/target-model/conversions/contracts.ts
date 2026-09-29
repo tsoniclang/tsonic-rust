@@ -751,6 +751,10 @@ export function substituteRustValueConversion(
         target: substituteRustTargetGenerics(value.target, substitutions, lifetimeSubstitutions, constSubstitutions),
         arms: Object.freeze(value.arms.map(arm => Object.freeze({ ...arm,
           carrier: substituteRustTargetGenerics(arm.carrier, substitutions, lifetimeSubstitutions, constSubstitutions),
+          source: Object.freeze(arm.source.map(step => Object.freeze({ ...step,
+            union: substituteRustTargetGenerics(step.union, substitutions, lifetimeSubstitutions, constSubstitutions) }))),
+          target: Object.freeze(arm.target.map(step => Object.freeze({ ...step,
+            union: substituteRustTargetGenerics(step.union, substitutions, lifetimeSubstitutions, constSubstitutions) }))),
         }))),
       });
     case "source-union-variant":

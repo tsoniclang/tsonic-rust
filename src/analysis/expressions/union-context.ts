@@ -10,7 +10,13 @@ export function selectRustUnionVariantByCheckedType(
   expression: Node,
   union: RustSourceUnion,
 ): RustSourceUnionVariant | undefined {
-  const selectedSourceType = walk.context.semanticsFor(expression).types.expressionType(expression);
+  const semantics = walk.context.semanticsFor(expression);
+  const selection = semantics.types.contextualValueSelection(expression);
+  const contextualTypes = selection.kind === "selected" ? [selection.type]
+    : selection.kind === "ambiguous" ? selection.types : [];
+  const callableTypes = contextualTypes.filter(type => semantics.types.callable(type) !== undefined);
+  const selectedSourceType = callableTypes.length === 1 ? callableTypes[0]
+    : semantics.types.expressionType(expression);
   const selectedCarrier = resolveRustTargetTypeRef(
     selectedSourceType,
     rustResolutionContext(walk, expression),

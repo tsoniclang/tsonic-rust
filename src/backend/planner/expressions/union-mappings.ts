@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { rustUnionAlternatives, selectRustUnionArmMapping, selectRustUnionProjection, type RustUnionArmMapping } from "../../../target-model/types/union-relations.js";
+import { rustUnionLeaves, selectRustUnionArmMapping, selectRustUnionProjection, type RustUnionArmMapping } from "../../../target-model/types/union-relations.js";
 import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";
 import { isRustCopyCarrier, rustCarrierSupportsClone } from "../../../target-model/types/index.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
@@ -57,31 +57,36 @@ export function planRustUnionMapping(
   const definitions = context.input.program.typeDefinitions;
   const expected = selectRustUnionArmMapping(source, target, coverage, definitions);
   if (expected === undefined || !closedMetadataEquals(expected, mappings) || targetOptional && !sourceOptional) return undefined;
-  const sourceType = rustTypeFromCarrierInContext(source, context);
-  const targetType = rustTypeFromCarrierInContext(target, context);
-  if (sourceType?.kind !== "named" || targetType?.kind !== "named") return undefined;
   const names = context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []);
   const arms: Extract<RustExpr, { readonly kind: "match" }>["arms"][number][] = [];
   for (const mapping of mappings) {
-    if (mapping.source.kind === "payload" && !owned &&
+    const sourceVariant = mapping.source[mapping.source.length - 1]!.variant;
+    if (sourceVariant.kind === "payload" && !owned &&
       !rustCarrierSupportsClone(mapping.carrier, definitions) &&
       !requireRustCarrierRequirements(mapping.carrier, ["clone"], node, context)) return undefined;
     const name = allocateRustSyntheticName(names, "union_value");
     const bound: RustExpr = { kind: "path", path: name };
-    const value: RustExpr = mapping.source.kind === "constant" ? { kind: "bool-literal", value: mapping.source.value }
+    let value: RustExpr = sourceVariant.kind === "constant" ? { kind: "bool-literal", value: sourceVariant.value }
       : owned ? bound : isRustCopyCarrier(mapping.carrier) ? { kind: "dereference", pointer: bound }
         : { kind: "method-call", receiver: bound, method: "clone", args: [] };
-    const selected: RustExpr = mapping.target.kind === "constant"
-      ? { kind: "path", path: `${targetType.path}::${mapping.target.name}` }
-      : { kind: "call", path: `${targetType.path}::${mapping.target.name}`, args: [value] };
-    const pattern: RustPattern = mapping.source.kind === "constant"
-      ? { kind: "path", path: `${sourceType.path}::${mapping.source.name}` }
-      : { kind: "tuple-variant", path: `${sourceType.path}::${mapping.source.name}`, elements: [{ kind: "binding", name }] };
+    for (const step of [...mapping.target].reverse()) {
+      const type = rustTypeFromCarrierInContext(step.union, context);
+      if (type?.kind !== "named") return undefined;
+      value = step.variant.kind === "constant" ? { kind: "path", path: `${type.path}::${step.variant.name}` }
+        : { kind: "call", path: `${type.path}::${step.variant.name}`, args: [value] };
+    }
+    let pattern: RustPattern = { kind: "binding", name };
+    for (const step of [...mapping.source].reverse()) {
+      const type = rustTypeFromCarrierInContext(step.union, context);
+      if (type?.kind !== "named") return undefined;
+      pattern = step.variant.kind === "constant" ? { kind: "path", path: `${type.path}::${step.variant.name}` }
+        : { kind: "tuple-variant", path: `${type.path}::${step.variant.name}`, elements: [pattern] };
+    }
     arms.push({ pattern: sourceOptional ? { kind: "tuple-variant", path: "Some", elements: [pattern] } : pattern,
-      expression: targetOptional ? { kind: "call", path: "Some", args: [selected] } : selected });
+      expression: targetOptional ? { kind: "call", path: "Some", args: [value] } : value });
   }
   if (targetOptional) arms.push({ pattern: { kind: "path", path: "None" }, expression: { kind: "path", path: "None" } });
-  if (coverage === "target" && mappings.length < (rustUnionAlternatives(source, definitions)?.length ?? 0) ||
+  if (coverage === "target" && mappings.length < (rustUnionLeaves(source, definitions)?.length ?? 0) ||
     sourceOptional && !targetOptional) {
     arms.push({ pattern: { kind: "wildcard" }, expression: { kind: "unreachable", message: "Checked flow excluded this union variant" } });
   }

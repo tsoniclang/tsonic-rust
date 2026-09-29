@@ -99,7 +99,7 @@ export function resolveProjectSourceCarrier(
       });
       const instantiated = substituteRustTargetGenerics(carrier, substitutions, lifetimes);
       if (template === undefined || selectedType === undefined || referenceOnly) return instantiated;
-      const result = retainRustSourceUnionInstantiation(selectedType, template, instantiated, context, options, resolving);
+      const result = retainRustSourceUnionInstantiation(selectedType, template, instantiated, context, options);
       if (result !== undefined) return result;
       continue;
     }

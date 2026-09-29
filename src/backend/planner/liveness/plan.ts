@@ -3,6 +3,8 @@ import { Node_Initializer } from "@tsonic/target-api/source";
 import type { RustTargetProgram } from "../../../analysis/program/model.js";
 import { rustTypeAliasDeclarationFactKey } from "../../../analysis/facts/keys.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { rustSourceUnionDefinitionIdentity } from "../../../target-model/types/source-union-definitions.js";
+import { rustTargetTypeChildren } from "../../../target-model/types/carriers/children.js";
 import { rustTypeOnlyDeclarationFactKey } from "../../../target-model/facts/type-only.js";
 import {
   analyzeRustGeneratedItemUsage,
@@ -137,6 +139,8 @@ export function createRustPlannerLiveness(program: RustTargetProgram): RustPlann
             canonical,
           );
       if (owner.kind === "erased") continue;
+      if (use.kind === "type-only" && owner.kind === "declaration" &&
+        !runtimeUnionUsesDeclaration(owner.declaration, selected, program)) continue;
       addEdge(owner.kind === "root" ? undefined : owner.declaration, selected);
       if (ast.kindName(selected) === "KindClassDeclaration" &&
         isConstructionReference(ast, use.reference, use.role)) {
@@ -235,6 +239,25 @@ function declarationParticipatesInRustLiveness(
   if (program.facts.getFact(declaration, rustTypeOnlyDeclarationFactKey) !== undefined) return false;
   return program.source.ast.kindName(declaration) !== "KindTypeAliasDeclaration" ||
     program.facts.getFact(declaration, rustTypeAliasDeclarationFactKey)?.kind !== "erased";
+}
+
+function runtimeUnionUsesDeclaration(owner: Node, target: Node, program: RustTargetProgram): boolean {
+  const fact = program.facts.getFact(owner, rustTypeAliasDeclarationFactKey);
+  const targetFact = program.facts.getFact(target, rustTypeAliasDeclarationFactKey);
+  if (fact?.kind !== "runtime" || targetFact?.kind !== "runtime") return true;
+  const carrier = program.facts.getRuntimeCarrierFact(target)?.carrier;
+  const identity = carrier === undefined ? undefined : rustSourceUnionDefinitionIdentity(carrier);
+  if (identity === undefined) return true;
+  const pending = fact.variants.map(variant => variant.carrier);
+  const visited = new Set<TargetTypeRef>();
+  while (pending.length > 0) {
+    const current = pending.pop()!;
+    if (visited.has(current)) continue;
+    visited.add(current);
+    if (rustSourceUnionDefinitionIdentity(current) === identity) return true;
+    pending.push(...rustTargetTypeChildren(current));
+  }
+  return false;
 }
 
 function declarationEmitsStandaloneRustItem(

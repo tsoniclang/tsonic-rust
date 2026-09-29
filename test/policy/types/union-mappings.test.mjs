@@ -28,8 +28,8 @@ test("union mappings require complete exact coverage and reject forged or numeri
   const definitions = registry.seal();
   const widening = selectRustUnionArmMapping(narrow, wide, "source", definitions);
   const narrowing = selectRustUnionArmMapping(wide, narrow, "target", definitions);
-  assert.deepEqual(widening.map(arm => [arm.source.name, arm.target.name]), [["Variant0", "Variant2"], ["Variant1", "Variant0"]]);
-  assert.deepEqual(narrowing.map(arm => [arm.source.name, arm.target.name]), [["Variant0", "Variant1"], ["Variant2", "Variant0"]]);
+  assert.deepEqual(widening.map(arm => [arm.source[0].variant.name, arm.target[0].variant.name]), [["Variant0", "Variant2"], ["Variant1", "Variant0"]]);
+  assert.deepEqual(narrowing.map(arm => [arm.source[0].variant.name, arm.target[0].variant.name]), [["Variant0", "Variant1"], ["Variant2", "Variant0"]]);
   assert.equal(selectRustUnionArmMapping(wide, narrow, "source", definitions), undefined);
   assert.equal(selectRustUnionArmMapping(narrow, wide, "target", definitions), undefined);
   assert.equal(selectRustUnionArmMapping(narrow, wrong, "source", definitions), undefined);
@@ -97,7 +97,7 @@ test("union mappings require complete exact coverage and reject forged or numeri
     assert.equal(planned.arms[3].pattern.kind, "wildcard");
   }
   for (const arms of [widening.slice(1), [...widening, widening[0]], widening.toReversed(),
-    widening.map((arm, index) => index === 0 ? { ...arm, target: { kind: "payload", name: "Missing" } } : arm),
+    widening.map((arm, index) => index === 0 ? { ...arm, target: [{ union: wide, variant: { kind: "payload", name: "Missing" } }] } : arm),
     widening.map((arm, index) => index === 0 ? { ...arm, carrier: boolean } : arm)]) {
     assert.equal(rustValueConversionContract({ ...conversion, arms }, definitions), undefined);
     assert.equal(planRustUnionMapping(node, expression, narrow, wide, arms, "source", true, false, false, context), undefined);
@@ -118,8 +118,8 @@ test("unit variants preserve their native constant and reject broader payloads o
   const definitions = registry.seal();
   const arms = selectRustUnionArmMapping(source, target, "source", definitions);
   assert.ok(isRustUnionArmMappings(arms));
-  assert.deepEqual(arms[0].source, { kind: "constant", name: "Disabled", value: false });
-  assert.deepEqual(arms[0].target, { kind: "payload", name: "Boolean" });
+  assert.deepEqual(arms[0].source, [{ union: source, variant: { kind: "constant", name: "Disabled", value: false } }]);
+  assert.deepEqual(arms[0].target, [{ union: target, variant: { kind: "payload", name: "Boolean" } }]);
   for (const coverage of ["source", "target"]) {
     assert.equal(selectRustUnionArmMapping(target, source, coverage, definitions), undefined);
   }
@@ -129,14 +129,46 @@ test("unit variants preserve their native constant and reject broader payloads o
   assert.doesNotThrow(() => validateValueConversion(conversion, {}, "conversion", source, source, fail));
   for (const invalidArms of [[], new Array(1), [null], [{ ...arms[0], extra: true }],
     [{ ...arms[0], carrier: { kind: "source-primitive", name: "missing" } }],
-    [{ ...arms[0], source: { kind: "constant", name: "Disabled", value: 0 } }],
-    [{ ...arms[0], target: { kind: "payload", name: "Boolean", value: false } }]]) {
+    [{ ...arms[0], source: [] }], [{ ...arms[0], target: new Array(1) }],
+    [{ ...arms[0], source: [{ union: source, variant: { kind: "constant", name: "Disabled", value: 0 } }] }],
+    [{ ...arms[0], target: [{ union: target, variant: { kind: "payload", name: "Boolean", value: false } }] }]]) {
     assert.equal(isRustUnionArmMappings(invalidArms), false);
     assert.throws(() => validateValueConversion({ ...conversion, arms: invalidArms }, {}, "conversion", source, source, fail));
   }
   const changed = conversion.arms.map((arm, index) => index === 0
-    ? { ...arm, source: { ...arm.source, value: true } } : arm);
+    ? { ...arm, source: arm.source.map(step => ({ ...step, variant: { ...step.variant, value: true } })) } : arm);
   assert.ok(isRustUnionArmMappings(changed));
   assert.equal(rustValueConversionContract({ ...conversion, arms: changed }, definitions), undefined);
   assert.throws(() => validateValueConversion({ ...conversion, arms: changed }, {}, "conversion", source, source, fail));
+});
+
+test("nested union paths retain exact coverage, terminal array payloads and all construction owners", () => {
+  const integer = rustSourcePrimitiveTargetType("uint64");
+  const string = rustStringTargetType();
+  const boolean = rustSourcePrimitiveTargetType("bool");
+  const inner = rustSourceUnionTargetType("/src/index.ts", "Inner");
+  const nested = rustSourceUnionTargetType("/src/index.ts", "Nested");
+  const flat = rustSourceUnionTargetType("/src/index.ts", "Flat");
+  const array = { kind: "array", element: inner };
+  const registry = createRustTypeDefinitionRegistry();
+  for (const [carrier, payloads] of [[inner, [integer, string, array]], [nested, [boolean, inner]], [flat, [array, string, boolean, integer]]]) {
+    assert.equal(registry.registerSourceUnion({ carrier, variants: payloads.map((carrier, index) => ({ name: `Variant${index}`, carrier })) }, true), true);
+  }
+  const definitions = registry.seal();
+  const arms = selectRustUnionArmMapping(flat, nested, "source", definitions);
+  assert.deepEqual(arms.map(arm => arm.target.map(step => step.variant.name)),
+    [["Variant1", "Variant2"], ["Variant1", "Variant1"], ["Variant0"], ["Variant1", "Variant0"]]);
+  assert.deepEqual(arms.map(arm => arm.carrier), [array, string, boolean, integer]);
+  const conversion = { kind: "union-map", source: flat, target: nested, coverage: "source", arms };
+  const constructed = [];
+  visitConversionContract(rustValueConversionContract(conversion, definitions), () => assert.fail("no structural read"),
+    (carrier, name) => constructed.push([carrier, name]));
+  assert.deepEqual(constructed.slice(0, 2), [[nested, "Variant1"], [inner, "Variant2"]]);
+  for (const target of [arms[0].target.slice(1), arms[0].target.toReversed(),
+    arms[0].target.map(step => ({ ...step, union: flat })),
+    [arms[0].target[0], arms[0].target[0]]]) {
+    assert.equal(rustValueConversionContract({ ...conversion, arms: [{ ...arms[0], target }, ...arms.slice(1)] }, definitions), undefined);
+  }
+  const cycle = { sourceUnionVariants: () => [{ name: "Loop", carrier: nested }] };
+  assert.equal(selectRustUnionArmMapping(nested, flat, "source", cycle), undefined);
 });

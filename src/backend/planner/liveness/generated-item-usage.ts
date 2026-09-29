@@ -332,8 +332,9 @@ export function analyzeRustGeneratedItemUsage(input: {
     }
     const flow = input.facts.getFact(node, rustFlowReadProjectionFactKey);
     if (flow?.kind === "union-map") {
-      const target = rustOptionElementCarrier(flow.selectedCarrier) ?? flow.selectedCarrier;
-      for (const arm of flow.arms) markVariantConstructed(target, arm.target.name);
+      for (const arm of flow.arms) {
+        for (const step of arm.target) markVariantConstructed(step.union, step.variant.name);
+      }
     }
     if (flow?.kind === "project-downcast") {
       markProjectCarrierFieldUsed(flow.dispatchCarrier, "wrapper-identity");

@@ -112,10 +112,6 @@ export function selectedMemberReceiverCarrier(
   }
   const refinedCarrier = flowRead?.selectedCarrier ?? sourceCarrier;
   const sourceRefinement = context.source.semantics.selectValueTypeRefinement(receiver);
-  if (flowRead === undefined && sourceCarrier !== undefined && sourceRefinement.kind === "resolved" &&
-    context.currentSemantics.types.isIdentical(sourceRefinement.declaredType, request.sourceReceiverType)) {
-    return request.optionalChain === true ? rustOptionValueCarrier(sourceCarrier) : sourceCarrier;
-  }
   const sourceUnionCarrier = rustOptionElementCarrier(refinedCarrier) ?? refinedCarrier;
   const sourceUnion = sourceUnionCarrier === undefined
     ? undefined
@@ -127,9 +123,13 @@ export function selectedMemberReceiverCarrier(
       : undefined;
     if (declaredType !== undefined) {
       retainRustSourceUnionInstantiation(
-        declaredType, sourceUnion, sourceUnionCarrier, context, options, new Set(),
+        declaredType, sourceUnion, sourceUnionCarrier, context, options,
       );
     }
+  }
+  if (flowRead === undefined && sourceCarrier !== undefined && sourceRefinement.kind === "resolved" &&
+    context.currentSemantics.types.isIdentical(sourceRefinement.declaredType, request.sourceReceiverType)) {
+    return request.optionalChain === true ? rustOptionValueCarrier(sourceCarrier) : sourceCarrier;
   }
   if (request.optionalChain === true && rustOptionElementCarrier(sourceCarrier) !== undefined) {
     return rustOptionValueCarrier(sourceCarrier);
