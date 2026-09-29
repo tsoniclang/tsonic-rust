@@ -39,6 +39,14 @@ export function resolveProjectSourceCarrier(
   if (symbolDeclarations === undefined) {
     return undefined;
   }
+  if (selectedType !== undefined && symbol !== undefined &&
+    !context.currentSemantics.types.isTypeReference(selectedType) && symbolDeclarations.some(declaration =>
+      context.ast.is.IsClassDeclaration(declaration) || context.ast.is.IsClassExpression(declaration) || context.ast.is.IsInterfaceDeclaration(declaration))) {
+    const apparent = context.currentSemantics.types.apparentType(selectedType);
+    if (apparent !== undefined && apparent !== selectedType && context.currentSemantics.declarations.typeSymbol(apparent) === symbol) {
+      return resolveRustTargetType(apparent, context, options, resolving);
+    }
+  }
   const declarations = selectedDeclaration === undefined
     ? symbolDeclarations
     : [

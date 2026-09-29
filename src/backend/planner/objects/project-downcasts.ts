@@ -1,6 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustSelectedProjectDowncast } from "../../../analysis/facts/value-projections.js";
+import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustProjectDowncastRoute } from "../../../analysis/project-types/type-policy.js";
 import { checkedProjectProjectionResultType, planCheckedProjectProjectionCall } from "./checked-project-projections.js";
@@ -45,24 +46,23 @@ export function planRustProjectDowncast(
   fact: RustProjectDowncastFact,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  return planRustProjectDowncastValue(
-    node,
-    expression,
-    fact.sourceCarrier,
-    fact.dispatchCarrier,
-    fact.targetCarrier,
-    context,
-  );
+  const selected = rustSelectedProjectDowncast(context.input.program.facts, node);
+  if (!closedMetadataEquals(selected, fact)) {
+    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+      "rust.backend.project-downcast", "Project downcast conflicts with its finalized cast or flow evidence."));
+    return undefined;
+  }
+  return planRustProjectProjection(node, expression, fact, context, "borrowed");
 }
 
-export function planRustProjectDowncastValue(
+export function planRustProjectProjection(
   node: Node,
   expression: RustExpr,
-  sourceCarrier: TargetTypeRef,
-  dispatchCarrier: TargetTypeRef,
-  targetCarrier: TargetTypeRef,
+  selected: RustProjectDowncastFact,
   context: RustPlanContext,
+  ownership: "owned" | "borrowed",
 ): RustExpr | undefined {
+  const { sourceCarrier, dispatchCarrier, targetCarrier } = selected;
   const sourceDefinition = context.input.program.projectTypes.definitionForCarrier(dispatchCarrier);
   const targetDefinition = context.input.program.projectTypes.definitionForCarrier(targetCarrier);
   const targetType = rustTypeFromCarrierInContext(targetCarrier, context);
@@ -70,13 +70,12 @@ export function planRustProjectDowncastValue(
   const targetPath = targetValue === undefined
     ? targetType?.kind === "named" ? targetType.path : undefined : sourceTypePath(context, targetValue);
   const optionalElement = rustOptionElementCarrier(sourceCarrier);
-  const selected = rustSelectedProjectDowncast(context.input.program.facts, node);
+  const route = sourceDefinition === undefined ? undefined
+    : context.input.program.projectTypes.downcastRoute(sourceDefinition, targetCarrier);
+  const routeMatches = selected.projection.kind === "generic" || selected.projection.kind === "structural"
+    ? true : route?.kind === selected.projection.kind && route.slot === selected.projection.slot;
   if (sourceDefinition === undefined || targetType === undefined || targetPath === undefined ||
-    (targetDefinition === undefined && selected?.projection?.kind !== "structural") ||
-    selected === undefined || selected.projection === undefined ||
-    !rustTargetTypeRefEquals(selected.sourceCarrier, sourceCarrier) ||
-    !rustTargetTypeRefEquals(selected.dispatchCarrier, dispatchCarrier) ||
-    !rustTargetTypeRefEquals(selected.targetCarrier, targetCarrier) ||
+    (targetDefinition === undefined && selected.projection.kind !== "structural") || !routeMatches ||
     (!rustTargetTypeRefEquals(sourceCarrier, dispatchCarrier) &&
       !rustTargetTypeRefEquals(optionalElement, dispatchCarrier))) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -85,6 +84,10 @@ export function planRustProjectDowncastValue(
       "Project downcast conflicts with its exact source carrier, target carrier, or generated dispatch route.",
     ));
     return undefined;
+  }
+  if (ownership === "owned") {
+    return { kind: "method-call", receiver: { kind: "associated-call", owner: targetType,
+      method: "try_from", args: [expression] }, method: "unwrap", args: [] };
   }
   const valueName = allocateRustSyntheticName(
     context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []),

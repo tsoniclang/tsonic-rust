@@ -548,6 +548,11 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       const error = addUse(node, carrier, ["clone"]);
       if (error !== undefined) return error;
     }
+    const sourceCall = facts.getFact(node, rustTargetOperationFactKey);
+    const resultProjection = sourceCall?.kind === "source-call" ? sourceCall.resultProjection : undefined;
+    if (resultProjection !== undefined && !projections.require({
+      sourceCarrier: resultProjection.sourceCarrier, targetCarrier: resultProjection.targetCarrier,
+    })) return "A selected call result has no closed native projection or generic obligation.";
     const downcast = facts.getFact(node, rustProjectDowncastFactKey);
     const flowProjection = facts.getFact(node, rustFlowReadProjectionFactKey);
     const projectProjection = downcast === undefined ? flowProjection?.kind === "project-downcast"

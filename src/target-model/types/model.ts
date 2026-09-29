@@ -14,6 +14,7 @@ import type {
   RustLifetimeRef,
 } from "../lifetimes/index.js";
 import type { RustValueConversion } from "../operations/model.js";
+import type { RustProjectDowncastFact } from "./project-projections.js";
 
 export type RustTargetConstArgument =
   | { readonly kind: "integer"; readonly value: string }
@@ -179,6 +180,7 @@ export interface RustTargetCallArgumentSlot {
 
 export interface RustSelectedTargetSignature {
   readonly member: RustTargetMember;
+  readonly sourceResultProjection?: RustProjectDowncastFact;
   readonly sourceUnionMethods?: {
     readonly receiverCarrier: RustTargetTypeRef;
     readonly variants: readonly RustSelectedUnionMethod[];

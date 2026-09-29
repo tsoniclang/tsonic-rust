@@ -48,6 +48,7 @@ import { rustGenericCallableProtocol } from "../../target-model/types/carriers/g
 import { substituteRustValueConversion } from "../../target-model/conversions/contracts.js";
 import { recordSelectedMethodSpecialization } from "./project-method-calls.js";
 import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
+import { selectRustSourceCallResult } from "../../policy/types/resolution/call-results.js";
 
 export function applySelectedProjectSourceCall(
   walk: RustFactWalk,
@@ -231,7 +232,7 @@ export function applySelectedProjectSourceCall(
     });
   }
   const declaredResultCarrier = selectedMember.returnType;
-  const resultCarrier = declaredResultCarrier === undefined
+  const nativeResultCarrier = declaredResultCarrier === undefined
     ? undefined
     : substituteRustTargetGenerics(
         declaredResultCarrier,
@@ -240,12 +241,24 @@ export function applySelectedProjectSourceCall(
         substitutions.consts,
         normalizeTypeFamily,
       );
-  if (resultCarrier === undefined) {
+  if (nativeResultCarrier === undefined) {
     return undefined;
   }
+  const sourceResult = selectRustSourceCallResult(walk.operationOptions.projectTypes, nativeResultCarrier, () => {
+    const selected = selectedSignature.sourceResultProjection?.targetCarrier;
+    return selected === undefined ? undefined : substituteRustTargetGenerics(selected,
+      substitutions.types, substitutions.lifetimes, substitutions.consts, normalizeTypeFamily);
+  });
+  if (sourceResult === undefined) {
+    appendRustDiagnostic(walk, "RUST_SOURCE_CALL_RESULT_PROJECTION_MISSING",
+      "The finalized project-source result has no exact native inheritance projection.", expression,
+      ["target.capability=rust.source-call.result-projection"]);
+    return undefined;
+  }
+  const resultCarrier = sourceResult.selectedType;
   if (declaredResultCarrier !== undefined && selectedSignature.sourceReturnType !== undefined &&
     !retainRustStructuralInstantiation(selectedSignature.sourceReturnType, declaredResultCarrier,
-      resultCarrier, storageContext, walk.operationOptions, new Set(), ast.typeNode(selectedDeclaration))) {
+      nativeResultCarrier, storageContext, walk.operationOptions, new Set(), ast.typeNode(selectedDeclaration))) {
     appendRustDiagnostic(walk, "RUST_SOURCE_CALL_RESULT_STORAGE_MISSING",
       "The selected source return type has no exact instantiated structural storage correspondence.", expression,
       ["target.capability=rust.source-call.result-storage"]);
@@ -606,6 +619,7 @@ export function applySelectedProjectSourceCall(
     target,
     parameters,
     ...(targetGenericArguments.length === 0 ? {} : { targetGenericArguments }),
+    ...(sourceResult.projection === undefined ? {} : { resultProjection: sourceResult.projection }),
     resultCarrier,
   });
   return setCarrierFact(walk, expression, finalResultCarrier);

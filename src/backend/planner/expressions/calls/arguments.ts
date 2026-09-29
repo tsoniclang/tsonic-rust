@@ -475,10 +475,26 @@ export function sourceCallSelectedMemberMatches(
         substitutions.consts,
         normalize,
       );
+  const sourceProjection = selected.sourceResultProjection;
+  const resultProjection = fact.resultProjection;
+  if ((sourceProjection === undefined) !== (resultProjection === undefined)) return false;
+  if (sourceProjection !== undefined && resultProjection !== undefined) {
+    const instantiate = (carrier: TargetTypeRef): TargetTypeRef => substituteRustTargetGenerics(carrier,
+      substitutions.types, substitutions.lifetimes, substitutions.consts, normalize);
+    if (!rustTargetTypeRefEquals(instantiate(sourceProjection.sourceCarrier), resultProjection.sourceCarrier) ||
+      !rustTargetTypeRefEquals(instantiate(sourceProjection.dispatchCarrier), resultProjection.dispatchCarrier) ||
+      !rustTargetTypeRefEquals(instantiate(sourceProjection.targetCarrier), resultProjection.targetCarrier) ||
+      !rustTargetTypeRefEquals(resultProjection.sourceCarrier, resultProjection.dispatchCarrier) ||
+      !rustTargetTypeRefEquals(resultProjection.targetCarrier, fact.resultCarrier) ||
+      sourceProjection.projection.kind !== "generic" &&
+        (sourceProjection.projection.kind !== resultProjection.projection.kind ||
+          sourceProjection.projection.slot !== resultProjection.projection.slot)) return false;
+  }
   const identityMatches = member.id === fact.operationId &&
     member.kind === expectedKind &&
     member.targetName === expectedTargetName &&
-    selectedReturn !== undefined && rustTargetTypeRefEquals(selectedReturn, mapRustTargetTypes(fact.resultCarrier, normalize));
+    selectedReturn !== undefined && rustTargetTypeRefEquals(selectedReturn,
+      mapRustTargetTypes(resultProjection?.sourceCarrier ?? fact.resultCarrier, normalize));
   if (!identityMatches) {
     return false;
   }

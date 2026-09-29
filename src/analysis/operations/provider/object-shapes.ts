@@ -9,7 +9,7 @@ import {
   selectRustOptionalCallResult,
 } from "./calls/instantiation.js";
 import { asNode } from "../../../policy/evidence/selected-source.js";
-import { rustOptionElementCarrier } from "../../../target-model/types/index.js";
+import { rustOptionElementCarrier, rustOptionValueCarrier } from "../../../target-model/types/index.js";
 import { Node_Type } from "@tsonic/target-api/source";
 import { rejectSelectedOperation } from "./result.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
@@ -44,6 +44,7 @@ import { resolveRustUnionMethodContracts, rustUnionMethodOwner, selectRustUnionM
 import { rustSourceUnionCarrierValue } from "../../../target-model/types/carriers/source-types.js";
 import { rustGenericCallableValueOwner } from "../../../policy/types/generic-callable-origin.js";
 import { selectRustRecordObjectCall } from "./records.js";
+import { selectRustSourceCallResult } from "../../../policy/types/resolution/call-results.js";
 
 export function mapSelectedJsSpecialCall(
   request: RustCheckedCallSelectionInput,
@@ -677,9 +678,18 @@ export function acceptProjectSourceCall(
       "The selected union methods require exact native parameter contracts and a lossless closed common result.");
   }
   returnType = unionContract?.result ?? returnType;
+  const sourceResult = selectRustSourceCallResult(options.projectTypes, returnType, () => {
+    const type = context.currentSemantics.operations.callResult(request.source)?.selectedReturnType;
+    const carrier = type === undefined ? undefined : resolveRustTargetTypeRef(type, context, options);
+    return request.source.optionalChain ? rustOptionValueCarrier(carrier) : carrier;
+  });
+  if (sourceResult === undefined) {
+    return rejectSelectedOperation(request.source.call, context, "RUST_SOURCE_CALL_RESULT_PROJECTION_MISSING",
+      "The checker-selected project result requires an exact native inheritance projection.");
+  }
   const optionalResult = selectRustOptionalCallResult(
     request,
-    returnType,
+    sourceResult.selectedType,
     context,
     options,
   );
@@ -725,6 +735,7 @@ export function acceptProjectSourceCall(
   };
   const selectedSignature = {
     member,
+    ...(sourceResult.projection === undefined ? {} : { sourceResultProjection: sourceResult.projection }),
     ...(unionContract === undefined ? {} : { sourceUnionMethods: { receiverCarrier: receiverCarrier!, variants: unionContract.methods } }),
     ...(construction || ownerCarrier === undefined
       ? {}

@@ -16,7 +16,7 @@ import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.j
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { planRustProjectDowncastValue } from "../objects/project-downcasts.js";
+import { planRustProjectDowncast } from "../objects/project-downcasts.js";
 import { planRustProgramErrorFlowRead } from "./error-operations.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
@@ -174,12 +174,11 @@ export function planRustFlowReadProjection(
   if (fact.kind === "program-error-variant") {
     return planRustProgramErrorFlowRead(node, expression, fact, context);
   }
-  return planRustProjectDowncastValue(
+  return planRustProjectDowncast(
     node,
     expression,
-    fact.sourceCarrier,
-    fact.dispatchCarrier,
-    fact.selectedCarrier,
+    { sourceCarrier: fact.sourceCarrier, dispatchCarrier: fact.dispatchCarrier,
+      targetCarrier: fact.selectedCarrier, projection: fact.projection },
     context,
   );
 }

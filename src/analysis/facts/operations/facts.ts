@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import type { RustProjectDowncastFact } from "../../../target-model/types/project-projections.js";
 import type { RustArgumentMode, RustOperationCarrierRequirement, RustProviderFactOperationKind, RustRuntimeSetOperationKind, RustSourceCallParameterPlan, RustValueConversion } from "../../../target-model/operations/model.js";
 import type { RustFinalizedOperationAbiFor } from "../finalized-operation-abi.js";
 import type { RustAssignmentOperator, RustOperationSymbol, RustOperatorToken } from "../../../target-model/syntax/tokens.js";
@@ -430,6 +431,7 @@ export type RustTargetOperationFact =
           };
       readonly parameters: readonly RustSourceCallParameterPlan[];
       readonly targetGenericArguments?: readonly RustTargetGenericArgument[];
+      readonly resultProjection?: RustProjectDowncastFact;
       readonly resultCarrier: TargetTypeRef;
     }
   | {
