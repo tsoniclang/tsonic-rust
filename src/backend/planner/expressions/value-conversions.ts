@@ -366,7 +366,7 @@ export function lowerRustValueConversion(
       return planRustUnionMapping(node ?? context.sourceFile, source, contract.source, contract.target,
         contract.arms, contract.coverage, true, false, false, context);
     case "union-project":
-      return planRustUnionProjection(node ?? context.sourceFile, source, contract.source, contract.target, true, context);
+      return planRustUnionProjection(node ?? context.sourceFile, source, contract.source, contract.target, "move", context);
     case "source-union-variant": {
       const variants = rustUnionAlternatives(contract.target, context.input.program.typeDefinitions);
       const type = rustTypeFromCarrierInContext(contract.target, context);

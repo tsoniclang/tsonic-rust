@@ -32,6 +32,7 @@ export function planRustFlowReadProjection(
   expression: RustExpr,
   fact: RustFlowReadProjectionFact,
   context: RustPlanContext,
+  borrowedResult = false,
 ): RustExpr | undefined {
   const sourceCarrier = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
   if (sourceCarrier === undefined ||
@@ -84,7 +85,8 @@ export function planRustFlowReadProjection(
     const kindMatches = (definitions.sourceUnionVariants(fact.dispatchCarrier) !== undefined) === (fact.kind === "source-union");
     const result = selected === undefined || !kindMatches || selected.variant.name !== fact.variant ||
       !rustTargetTypeRefEquals(selected.dispatchCarrier, fact.dispatchCarrier) ? undefined
-        : planRustUnionProjection(node, expression, fact.sourceCarrier, fact.selectedCarrier, ownsValue, context);
+        : planRustUnionProjection(node, expression, fact.sourceCarrier, fact.selectedCarrier,
+          borrowedResult ? "shared-reference" : ownsValue ? "move" : "clone", context);
     if (result === undefined) {
       context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
         "rust.backend.source-union-projection", "The selected union payload has no exact non-consuming projection."));

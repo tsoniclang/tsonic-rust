@@ -14,13 +14,14 @@ export function planRustUnionProjection(
   expression: RustExpr,
   source: TargetTypeRef,
   target: TargetTypeRef,
-  owned: boolean,
+  access: "move" | "clone" | "shared-reference",
   context: RustPlanContext,
 ): Extract<RustExpr, { readonly kind: "match" }> | undefined {
   const selected = selectRustUnionProjection(source, target, context.input.program.typeDefinitions);
   if (selected === undefined) return undefined;
   const type = rustTypeFromCarrierInContext(selected.dispatchCarrier, context);
-  if (type?.kind !== "named" || selected.variant.kind === "payload" && !owned &&
+  if (access === "shared-reference" && selected.targetOptional) return undefined;
+  if (type?.kind !== "named" || selected.variant.kind === "payload" && access === "clone" &&
     !rustCarrierSupportsClone(selected.carrier, context.input.program.typeDefinitions) &&
     !requireRustCarrierRequirements(selected.carrier, ["clone"], node, context)) return undefined;
   const name = allocateRustSyntheticName(context.syntheticNames ??
@@ -30,11 +31,13 @@ export function planRustUnionProjection(
     : { kind: "tuple-variant", path: `${type.path}::${selected.variant.name}`, elements: [{ kind: "binding", name }] };
   const pattern: RustPattern = selected.sourceOptional
     ? { kind: "tuple-variant", path: "Some", elements: [payloadPattern] } : payloadPattern;
-  const payload: RustExpr = selected.variant.kind === "constant" ? { kind: "bool-literal", value: selected.variant.value }
-    : owned ? { kind: "path", path: name }
+  const constant: RustExpr | undefined = selected.variant.kind === "constant"
+    ? { kind: "bool-literal", value: selected.variant.value } : undefined;
+  const payload: RustExpr = constant !== undefined ? access === "shared-reference" ? { kind: "reference", expr: constant } : constant
+    : access !== "clone" ? { kind: "path", path: name }
       : isRustCopyCarrier(selected.carrier) ? { kind: "dereference", pointer: { kind: "path", path: name } }
         : { kind: "method-call", receiver: { kind: "path", path: name }, method: "clone", args: [] };
-  return { kind: "match", expression: owned ? expression : { kind: "reference", expr: expression }, arms: [
+  return { kind: "match", expression: access === "move" ? expression : { kind: "reference", expr: expression }, arms: [
     { pattern, expression: selected.targetOptional ? { kind: "call", path: "Some", args: [payload] } : payload },
     ...(selected.targetOptional ? [{ pattern: { kind: "path" as const, path: "None" },
       expression: { kind: "path" as const, path: "None" } }] : []),

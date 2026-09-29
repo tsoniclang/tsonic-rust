@@ -727,8 +727,10 @@ export function planFinalizedSourceInput(
     return inputOverride;
   }
   const sourceValueOverride = overrides?.sourceValues.get(sourceNode);
+  const sharedInput = sourceValueOverride === undefined && expressionOverride === undefined &&
+    input.conversion.kind === "identity" && input.mode === "ref" && position === "target-argument";
   const plannedExpression = sourceValueOverride ??
-    planExpression(sourceNode, context);
+    planExpression(sourceNode, context, "value", sharedInput ? "shared-reference" : "value");
   if (plannedExpression === undefined) {
     return undefined;
   }
@@ -750,6 +752,7 @@ export function planFinalizedSourceInput(
     ));
     return undefined;
   }
+  if (sharedInput) return rawExpression;
   const converted = applyFinalizedValueConversion(context, rawExpression, input.conversion, sourceNode, "source-input");
   return converted === undefined
     ? undefined

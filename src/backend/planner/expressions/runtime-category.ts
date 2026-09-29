@@ -23,8 +23,9 @@ function planRuntimeCategory(
   context: RustPlanContext,
   borrowed: boolean,
 ): RustExpr | undefined {
-  if (result.kind === "runtime-union") {
-    return { kind: "method-call", receiver: value, method: result.method, args: [] };
+  if (result.kind === "runtime-method") {
+    return { kind: "owned-string-from-borrowed-str",
+      expression: { kind: "method-call", receiver: value, method: result.method, args: [] } };
   }
   if (result.kind === "optional") {
     if (context.syntheticNames === undefined) return undefined;

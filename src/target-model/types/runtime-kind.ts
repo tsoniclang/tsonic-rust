@@ -4,13 +4,13 @@ import { closedMetadataKey } from "../metadata/closed-data.js";
 import { rustRuntimeUnionContract } from "./carriers/runtime-unions.js";
 import {
   isRustAbsenceCarrier, isRustBigIntCarrier, isRustCallableCarrier,
-  isRustNumericCarrier, isRustStringCarrier, isRustUnitCarrier,
+  isRustNumericCarrier, isRustStringCarrier, isRustUnitCarrier, isRustJsValueCarrier, rustJsSymbolTargetId,
   rustOptionElementCarrier, rustSourceTypeCarrierValue,
 } from "./index.js";
 
 export type RustTypeofResult =
-  | "boolean" | "number" | "bigint" | "string" | "function" | "object" | "undefined"
-  | { readonly kind: "runtime-union"; readonly method: string; readonly sourceCarrier: TargetTypeRef }
+  | "boolean" | "number" | "bigint" | "string" | "symbol" | "function" | "object" | "undefined"
+  | { readonly kind: "runtime-method"; readonly method: string; readonly sourceCarrier: TargetTypeRef }
   | { readonly kind: "optional"; readonly sourceCarrier: TargetTypeRef; readonly value: RustTypeofResult }
   | { readonly kind: "source-union"; readonly sourceCarrier: TargetTypeRef;
       readonly variants: readonly { readonly name: string; readonly carrier: TargetTypeRef; readonly result: RustTypeofResult }[] };
@@ -28,8 +28,9 @@ export function getRustTypeofRuntimeKind(
     return value === undefined ? undefined : { kind: "optional", sourceCarrier: carrier, value };
   }
   const runtimeUnion = rustRuntimeUnionContract(carrier);
-  if (runtimeUnion?.typeofMethod !== undefined) {
-    return { kind: "runtime-union", method: runtimeUnion.typeofMethod, sourceCarrier: carrier };
+  const method = isRustJsValueCarrier(carrier) ? "type_of" : runtimeUnion?.typeofMethod;
+  if (method !== undefined) {
+    return { kind: "runtime-method", method, sourceCarrier: carrier };
   }
   const sourceVariants = definitions.sourceUnionVariants(carrier) ??
     (runtimeUnion?.alternatives.every(arm => arm.variant.kind === "payload") === true
@@ -50,6 +51,7 @@ export function getRustTypeofRuntimeKind(
     return isRustNumericCarrier(carrier) ? "number" : undefined;
   }
   if (isRustStringCarrier(carrier)) return "string";
+  if (carrier.kind === "target-named" && carrier.id === rustJsSymbolTargetId) return "symbol";
   if (isRustBigIntCarrier(carrier)) return "bigint";
   if (isRustUnitCarrier(carrier)) return "undefined";
   if (isRustCallableCarrier(carrier)) return "function";

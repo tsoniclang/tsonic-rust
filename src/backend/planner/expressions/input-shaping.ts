@@ -126,7 +126,7 @@ function sourceParameterMatches(
     rustTargetTypeRefEquals(sourceParameterAbi.parameterCarrier, input.parameterCarrier);
 }
 
-function createRustSharedReferenceArgument(
+export function createRustSharedReferenceArgument(
   context: RustPlanContext,
   argument: RustExpr,
   node: Node | undefined,

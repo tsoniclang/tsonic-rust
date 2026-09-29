@@ -74,11 +74,20 @@ test("union mappings require complete exact coverage and reject forged or numeri
       assert.equal(projection.kind, "union-project");
       assert.equal(selected.variant.name, "Variant2");
       assert.equal(rustValueConversionContract(projection, definitions).lowering, "union-project");
-      const planned = planRustUnionProjection(node, expression, source, target, true, context);
+      const planned = planRustUnionProjection(node, expression, source, target, "move", context);
       assert.equal(planned.kind, "match");
       assert.equal(planned.expression, expression);
       assert.equal(planned.arms.at(-1).expression.kind, "unreachable");
       assert.equal(planned.arms.length, target === string ? 2 : 3);
+      const borrowed = planRustUnionProjection(node, expression, source, target, "shared-reference", context);
+      if (target === string) {
+        assert.deepEqual(borrowed.expression, { kind: "reference", expr: expression });
+        assert.equal(borrowed.arms[0].expression.kind, "path");
+        const cloned = planRustUnionProjection(node, expression, source, target, "clone", context);
+        assert.equal(cloned.arms[0].expression.method, "clone");
+      } else {
+        assert.equal(borrowed, undefined);
+      }
       assert.deepEqual(substituteRustValueConversion(projection, new Map()), projection);
     }
   }

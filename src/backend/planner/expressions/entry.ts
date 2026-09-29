@@ -38,6 +38,7 @@ import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagno
 import { planExpressionInner } from "./dispatch.js";
 import { planRustFlowReadProjection } from "./flow-reads.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
+import { createRustSharedReferenceArgument } from "./input-shaping.js";
 import { planRustProjectDowncast } from "../objects/project-downcasts.js";
 import { rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "../objects/project-objects.js";
 import { rustSelectedAccessorRequiresUnsafe, rustSelectedCallRequiresUnsafe, tryPlanRustExplicitSafetyExpression } from "../safety/explicit-safety.js";
@@ -62,8 +63,9 @@ export function planExpression(
   node: Node,
   context: RustPlanContext,
   resultUse: RustExpressionResultUse = "value",
+  access: "value" | "shared-reference" = "value",
 ): RustExpr | undefined {
-  return planProjectedExpression(node, context, resultUse, "option");
+  return planProjectedExpression(node, context, resultUse, "option", access);
 }
 
 export function planExpressionBeforeOptionProjection(
@@ -85,6 +87,7 @@ function planProjectedExpression(
   context: RustPlanContext,
   resultUse: RustExpressionResultUse,
   finalStage: "source" | "contextual" | "option",
+  access: "value" | "shared-reference" = "value",
 ): RustExpr | undefined {
   const override = context.expressionOverrides?.get(node);
   const key = context.input.program.facts.getFact(node, rustIndexedFieldKeyArgument);
@@ -94,9 +97,10 @@ function planProjectedExpression(
     const value: RustExpr = { kind: "path", path: type.path,
       genericArguments: type.genericArguments?.filter(argument => argument.kind === "type" || argument.kind === "const"),
     };
-    if (!key.evaluate) return value;
+    const selected: RustExpr = access === "shared-reference" ? { kind: "reference", expr: value } : value;
+    if (!key.evaluate) return selected;
     const effect = planExpressionBeforeValueProjections(node, context, "discarded");
-    return effect === undefined ? undefined : { kind: "evaluate-then", effect, discard: "value", value };
+    return effect === undefined ? undefined : { kind: "evaluate-then", effect, discard: "value", value: selected };
   }
   const planned = planExpressionBeforeValueProjections(node, context, resultUse);
   if (planned === undefined || resultUse === "discarded") {
@@ -115,6 +119,14 @@ function planProjectedExpression(
   );
   const projection = context.input.program.facts.getFact(node, rustOptionProjectionFactKey);
   const objectView = context.input.program.facts.getFact(node, rustObjectReferenceViewKey);
+  const borrowFlow = access === "shared-reference" && override === undefined &&
+    context.flowReadOverrides?.has(node) !== true &&
+    (flowRead?.kind === "source-union" || flowRead?.kind === "runtime-union") &&
+    rustOptionElementCarrier(flowRead.selectedCarrier) === undefined &&
+    upcast === undefined && downcast === undefined && lifetimeReconciliation === undefined &&
+    contextualConversion === undefined && projection === undefined && objectView === undefined;
+  const finish = (value: RustExpr): RustExpr => access === "value" || borrowFlow ? value
+    : createRustSharedReferenceArgument(context, planRustNonConsumingValue(node, value, context), node);
   let currentCarrier = override?.carrier ??
     flowRead?.sourceCarrier ??
     upcast?.sourceCarrier ??
@@ -132,6 +144,7 @@ function planProjectedExpression(
         planRustNonConsumingValue(node, flowSelected, context),
         flowRead,
         context,
+        borrowFlow,
       );
       if (selected === undefined) {
         return undefined;
@@ -246,7 +259,7 @@ function planProjectedExpression(
     return undefined;
   }
   if (projection !== undefined && rustTargetTypeRefEquals(currentCarrier, projection.resultCarrier)) {
-    return contextuallyConverted;
+    return finish(contextuallyConverted);
   }
   if (projection?.kind === "none") {
     const optionType = rustTypeFromCarrierInContext(projection.resultCarrier, context);
@@ -262,16 +275,16 @@ function planProjectedExpression(
       ? { kind: "associated-value", owner: optionType, name: "None" }
       : planRustOptionalStorageOperation(projection.resultCarrier, "absent", [], context);
     if (contextuallyConverted.kind === "bottom") return contextuallyConverted;
-    return contextuallyConverted.kind === "none" || contextuallyConverted.kind === "path" || contextuallyConverted.kind === "associated-value"
+    return finish(contextuallyConverted.kind === "none" || contextuallyConverted.kind === "path" || contextuallyConverted.kind === "associated-value"
       ? value
       : { kind: "evaluate-then", effect: contextuallyConverted,
-          discard: isRustUnitCarrier(currentCarrier) ? "unit" : "value", value };
+          discard: isRustUnitCarrier(currentCarrier) ? "unit" : "value", value });
   }
-  return projection?.kind === "some"
+  return finish(projection?.kind === "some"
     ? rustOptionalStorageValue(projection.resultCarrier) === undefined
       ? { kind: "call", path: "Some", args: [contextuallyConverted] }
       : planRustOptionalStorageOperation(projection.resultCarrier, "present", [contextuallyConverted], context)
-    : contextuallyConverted;
+    : contextuallyConverted);
 }
 
 export function planExpressionBeforeValueProjections(

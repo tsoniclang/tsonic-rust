@@ -4,6 +4,7 @@ import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "./equality.js";
 import { rustRuntimeUnionContract, type RustRuntimeUnionVariant } from "./carriers/runtime-unions.js";
 import { hasExactObjectKeys, isClosedMetadata, isDenseDataArray } from "../metadata/closed-data.js";
 import { rustOptionElementCarrier } from "./carriers/optional.js";
+import { rustClosedValuePrimitiveProjection } from "./carriers/closed-values.js";
 
 export interface RustUnionPathStep {
   readonly union: TargetTypeRef;
@@ -69,8 +70,10 @@ export function selectRustUnionProjection(source: TargetTypeRef, target: TargetT
   const carrier = targetElement ?? target;
   const alternatives = rustUnionAlternatives(dispatchCarrier, definitions)?.filter(arm =>
     rustTargetTypeRefEquals(arm.carrier, carrier));
-  return alternatives?.length !== 1 ? undefined : {
-    dispatchCarrier, carrier, variant: alternatives[0]!.variant,
+  const variant = alternatives === undefined ? rustClosedValuePrimitiveProjection(dispatchCarrier, carrier)
+    : alternatives.length === 1 ? alternatives[0]!.variant : undefined;
+  return variant === undefined ? undefined : {
+    dispatchCarrier, carrier, variant,
     sourceOptional: sourceElement !== undefined, targetOptional: targetElement !== undefined,
   };
 }
