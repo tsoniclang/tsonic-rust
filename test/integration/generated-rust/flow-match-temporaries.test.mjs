@@ -33,7 +33,7 @@ for (const edition of ["2021", "2024"]) {
     const generated = printRustSourceFile({
       headerComment: "Native temporary destruction proof.",
       items: [{ kind: "function", generics: emptyRustGenerics, visibility: "private", name: "project",
-        params: [{ pattern: { kind: "binding", name: "trace" }, type: { kind: "reference", mutable: false,
+        params: [{ name: "trace", type: { kind: "reference", mutable: false,
           referent: { kind: "named", path: "std::cell::Cell", genericArguments: [
             { kind: "type", type: { kind: "primitive", name: "u32" } },
           ] } } }],

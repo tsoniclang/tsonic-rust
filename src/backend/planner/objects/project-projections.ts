@@ -35,11 +35,11 @@ export function planRustProjectProjectionImplementations(
       trait: { kind: "named", path: "core::convert::TryFrom", genericArguments: [{ kind: "type", type: sourceType }] },
       members: [{ kind: "type", name: "Error", type: { kind: "unit" } }, { kind: "function",
         name: "try_from", visibility: "private", generics: emptyRustGenerics,
-        params: [{ pattern: { kind: "binding" as const, name: "source" }, type: sourceType }],
+        params: [{ name: "source", type: sourceType }],
         returnType: { kind: "named", path: "Result", genericArguments: [
           { kind: "type", type: { kind: "named", path: "Self" } }, { kind: "type", type: { kind: "unit" } },
         ] },
-        body: { statements: [{ kind: "let", pattern: { kind: "binding", name: "selected_dispatch", mutable: false }, init: projection },
+        body: { statements: [{ kind: "let", name: "selected_dispatch", mutable: false, init: projection },
           { kind: "tail", expr: { kind: "match",
           expression: { kind: "path", path: "selected_dispatch" },
           arms: [{ pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: "dispatch" }] },

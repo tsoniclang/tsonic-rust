@@ -19,7 +19,7 @@ export function rustRecordFieldStorageType(field: RustStructuralShapeField, cont
 }
 
 export function rustRecordFieldSelector(field: RustStructuralShapeField, mutable: boolean): RustExpr {
-  return { kind: "closure", params: [{ pattern: { kind: "binding" as const, name: "record" } }], body: {
+  return { kind: "closure", params: [{ name: "record", byRefCopy: false }], body: {
     kind: "reference", mutable, expr: { kind: "field", receiver: { kind: "path", path: "record" }, name: field.targetName },
   } };
 }

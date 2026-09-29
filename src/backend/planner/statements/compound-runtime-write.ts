@@ -24,7 +24,7 @@ export function planRustCompoundRuntimeWrite(
     const carrier = context.input.program.facts.getRuntimeCarrierFact(subject)?.carrier;
     if (value === undefined || carrier === undefined) return undefined;
     const name = allocateRustSyntheticName(context.syntheticNames, base);
-    statements.push({ kind: "let", pattern: { kind: "binding", name, mutable: false }, init: value });
+    statements.push({ kind: "let", name, mutable: false, init: value });
     overrides.set(subject, { expression: { kind: "path", path: name }, carrier, valueForm: "value" });
   }
   const selected = { ...context, expressionOverrides: overrides };
@@ -37,9 +37,9 @@ export function planRustCompoundRuntimeWrite(
   const next = planRustCompoundAssignmentValue(assignment, { kind: "path", path: currentName },
     { kind: "path", path: valueName }, left, context);
   if (next === undefined) return undefined;
-  statements.push({ kind: "let", pattern: { kind: "binding", name: currentName, mutable: false }, init: current },
-    { kind: "let", pattern: { kind: "binding", name: valueName, mutable: false }, init: value },
-    { kind: "let", pattern: { kind: "binding", name: nextName, mutable: false }, init: next });
+  statements.push({ kind: "let", name: currentName, mutable: false, init: current },
+    { kind: "let", name: valueName, mutable: false, init: value },
+    { kind: "let", name: nextName, mutable: false, init: next });
   overrides.set(right, { expression: { kind: "path", path: nextName }, carrier: assignment.resultCarrier, valueForm: "value" });
   const written = planRuntimeSetStatement(expression, write, selected, { target: left, value: right });
   return written === undefined ? undefined : [{ kind: "scope", body: { statements: [...statements, ...written] } }];

@@ -308,7 +308,7 @@ export function negateRustPlannedBooleanExpression(
     method: "is_none_or",
     args: [{
       kind: "closure",
-      params: [{ pattern: { kind: "binding" as const, name: orderingName } }],
+      params: [{ name: orderingName, byRefCopy: false }],
       body: {
         kind: "binary",
         operator: accepted,

@@ -132,7 +132,7 @@ test("long nested callable construction gives the outer call its own break", () 
               method: "new",
               args: [{
                 kind: "closure",
-                params: [{ pattern: { kind: "binding", name: "callable_arguments" } }],
+                params: [{ name: "callable_arguments", byRefCopy: false }],
                 body: { kind: "path", path: "callable_arguments.1" },
               }],
             }],
@@ -179,7 +179,7 @@ test("rustfmt canonicalizes long callable construction with expression callbacks
               method: "new",
               args: [{
                 kind: "closure-block",
-                params: [{ pattern: { kind: "binding", name: "_callable_arguments" } }],
+                params: [{ name: "_callable_arguments", byRefCopy: false }],
                 body: {
                   statements: [{
                     kind: "tail",

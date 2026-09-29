@@ -270,7 +270,7 @@ export function applyRustProviderEvaluationScope(
       method: "with_mut",
       args: [{
         kind: "closure",
-        params: [{ pattern: { kind: "binding" as const, name: location.ownerName } }],
+        params: [{ name: location.ownerName, byRefCopy: false }],
         body: value,
       }],
     };

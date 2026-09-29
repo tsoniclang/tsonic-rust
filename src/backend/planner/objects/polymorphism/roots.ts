@@ -263,7 +263,7 @@ function planRootContractFunctions(
       functions.push({ kind: "function",
         name: rustArrayFieldMutationName(read), visibility: "private", generics: emptyRustGenerics,
         selfParam: rustSelfParameter("ref"),
-        params: [{ pattern: { kind: "binding" as const, name: "action" }, type: rustArrayFieldMutationType(field.type) }],
+        params: [{ name: "action", type: rustArrayFieldMutationType(field.type) }],
         body: { statements: [{ kind: "expr", expr: mutation }] },
       });
     }
@@ -355,7 +355,7 @@ function planRootContractFunctions(
         visibility: "private",
         generics: emptyRustGenerics,
         selfParam: rustSelfParameter(dispatch.write.selfMode),
-        params: [{ pattern: { kind: "binding" as const, name: "value" }, type: field.type }],
+        params: [{ name: "value", type: field.type }],
         ...(dispatch.write.fallible ? { errorType: fieldErrorType! } : {}),
         body: dispatch.write.fallible
           ? {
@@ -527,7 +527,7 @@ function planRootContractFunctions(
             visibility: "private",
             generics: emptyRustGenerics,
             selfParam: rustSelfParameter("ref"),
-            params: [{ pattern: { kind: "binding" as const, name: "value" }, type: property.callableType }],
+            params: [{ name: "value", type: property.callableType }],
             body: {
               statements: [{
                 kind: "expr",

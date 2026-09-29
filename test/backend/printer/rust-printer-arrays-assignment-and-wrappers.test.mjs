@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { emptyRustGenerics } from "../../../dist/backend/target-ast/nodes.js";
 import { printRustSourceFile } from "../../helpers/printed-rust-source.mjs";
 import { printRustExpr } from "../../../dist/print/source/expressions/core.js";
-import { rustExpressionChildren } from "../../../dist/backend/target-ast/inspection/expression-children.js";
+import { rustExpressionChildren } from "../../../dist/backend/target-ast/inspection/source-usage.js";
 import { rustItemsReferenceModuleAlias } from "../../../dist/backend/target-ast/inspection/source-module-usage.js";
 
 test("array repetition retains exact constants and visits its element and named extent", () => {

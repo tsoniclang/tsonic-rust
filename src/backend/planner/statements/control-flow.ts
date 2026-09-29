@@ -201,14 +201,15 @@ function tryPlanSelectedProjectTypeTestIf(
   return {
     handled: true,
     statements: [{
-      kind: "if-let",
-      pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: dispatchName }] },
+      kind: "if-let-some",
+      binding: dispatchName,
       expression: planned.selection.expression,
       body: {
         ...thenBlock,
         statements: [{
           kind: "let",
-          pattern: { kind: "binding", name: selectedName, mutable: false },
+          name: selectedName,
+          mutable: false,
           init: planned.selection.selectedValue({ kind: "path", path: dispatchName }),
         }, ...thenBlock.statements],
       },
@@ -376,12 +377,12 @@ export function planSwitchStatement(
       ? [{ kind: "scope" as const, label: target.label, body: selection }]
       : selection.statements;
     return [
-      { kind: "let", pattern: { kind: "wildcard" }, init: discriminant },
+      { kind: "let", name: "_", mutable: false, init: discriminant },
       ...body,
     ];
   }
   return [
-    { kind: "let", pattern: { kind: "binding", name: discriminantName, mutable: false }, init: discriminant },
+    { kind: "let", name: discriminantName, mutable: false, init: discriminant },
     {
       kind: "scope",
       ...(target.used.value ? { label: target.label } : {}),
@@ -614,7 +615,7 @@ function planCountedForStatement(
     return [{
       kind: "for",
       ...(target.used.value ? { label: target.label } : {}),
-      pattern: { kind: "binding", name: binding },
+      binding,
       iterable: { kind: "range", start, end: bound },
       body,
     }];
@@ -634,13 +635,14 @@ function planCountedForStatement(
   return [{
     kind: "for",
     ...(target.used.value ? { label: target.label } : {}),
-    pattern: { kind: "binding", name: rangeBinding },
+    binding: rangeBinding,
     iterable: { kind: "range", start, end: bound },
     body: {
       ...body,
       statements: [{
         kind: "let",
-        pattern: { kind: "binding", name: binding, mutable: false },
+        name: binding,
+        mutable: false,
         init: {
           kind: "numeric-cast",
           expression: { kind: "path", path: rangeBinding },

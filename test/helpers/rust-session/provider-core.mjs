@@ -71,6 +71,20 @@ export function acmeTestingPackage() {
             returnType: { kind: "never" },
           }],
         },
+        ...["sumParen", "sumBrackets", "sumBraces"].map((name) => ({
+          id: `@acme/testing::${name}`,
+          name,
+          kind: "function",
+          signatures: [{
+            id: `@acme/testing::${name}(left,right)`,
+            name,
+            parameters: [
+              { name: "left", type: { kind: "source-primitive", name: "int32" } },
+              { name: "right", type: { kind: "source-primitive", name: "int32" } },
+            ],
+            returnType: { kind: "source-primitive", name: "int32" },
+          }],
+        })),
       ],
     }],
     operations: [
@@ -88,6 +102,21 @@ export function acmeTestingPackage() {
         resultCarrier: neverCarrier,
         parameterCarriers: [stringCarrier],
       },
+      ...[
+        ["sumParen", "parentheses"],
+        ["sumBrackets", "brackets"],
+        ["sumBraces", "braces"],
+      ].map(([name, delimiter]) => ({
+        exportId: `@acme/testing::${name}`,
+        operationKind: "method",
+        target: {
+          form: "expression-macro",
+          path: "acme_testing::sum_pair",
+          delimiter,
+        },
+        resultCarrier: int32Carrier,
+        parameterCarriers: [int32Carrier, int32Carrier],
+      })),
     ],
     crates: [{ crateName: "acme_testing", cargoPath: resolve(fixtureCratesRoot, "acme_testing") }],
   });

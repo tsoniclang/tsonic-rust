@@ -326,6 +326,9 @@ test("every path-bearing provider operation materializes its declared crate alia
           type: { kind: "source-primitive", name: "int32" },
         },
         functionExport("variant"),
+        functionExport("parentheses"),
+        functionExport("brackets"),
+        functionExport("braces"),
       ],
     }],
     operations: [
@@ -346,6 +349,12 @@ test("every path-bearing provider operation materializes its declared crate alia
         target: { form: "struct-variant", path: "api::Value::Variant", fields: [] },
         resultCarrier: { kind: "source-primitive", name: "int32" },
       },
+      ...["parentheses", "brackets", "braces"].map((delimiter) => ({
+        exportId: `acme.materialized::${delimiter}`,
+        operationKind: "method",
+        target: { form: "expression-macro", path: "api::value", delimiter },
+        resultCarrier: { kind: "source-primitive", name: "int32" },
+      })),
     ],
     aliasImports: [{ alias: "api", path: "acme_runtime::api" }],
     crates: [],
@@ -363,6 +372,12 @@ test("every path-bearing provider operation materializes its declared crate alia
     operations.get("acme.materialized::variant")?.target.path,
     "acme_runtime::api::Value::Variant",
   );
+  for (const delimiter of ["parentheses", "brackets", "braces"]) {
+    assert.equal(
+      operations.get(`acme.materialized::${delimiter}`)?.target.path,
+      "acme_runtime::api::value",
+    );
+  }
 });
 
 test("conflicting provider carrier paths fail before operation facts are recorded", () => {

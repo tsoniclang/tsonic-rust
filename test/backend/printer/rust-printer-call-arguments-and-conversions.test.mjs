@@ -187,7 +187,8 @@ test("single projection calls keep a short receiver attached when closure argume
       body: {
         statements: [{
           kind: "let",
-          pattern: { kind: "binding", name: "projected", mutable: false },
+          name: "projected",
+          mutable: false,
           init: {
             kind: "method-call",
             receiver: { kind: "path", path: "pair" },
@@ -196,14 +197,14 @@ test("single projection calls keep a short receiver attached when closure argume
               { kind: "str-literal", value: "stable.member.identity" },
               {
                 kind: "closure",
-                params: [{ pattern: { kind: "binding", name: "owner" } }],
+                params: [{ name: "owner", byRefCopy: false }],
                 body: {
                   kind: "method-call",
                   receiver: { kind: "field", receiver: { kind: "path", path: "owner" }, name: "state" },
                   method: "with",
                   args: [{
                     kind: "closure",
-                    params: [{ pattern: { kind: "binding", name: "state" } }],
+                    params: [{ name: "state", byRefCopy: false }],
                     body: { kind: "field", receiver: { kind: "path", path: "state" }, name: "0" },
                   }],
                 },
@@ -211,8 +212,8 @@ test("single projection calls keep a short receiver attached when closure argume
               {
                 kind: "closure",
                 params: [
-                  { pattern: { kind: "binding", name: "owner" } },
-                  { pattern: { kind: "binding", name: "value" } },
+                  { name: "owner", byRefCopy: false },
+                  { name: "value", byRefCopy: false },
                 ],
                 body: {
                   kind: "method-call",
@@ -220,7 +221,7 @@ test("single projection calls keep a short receiver attached when closure argume
                   method: "with_mut",
                   args: [{
                     kind: "closure",
-                    params: [{ pattern: { kind: "binding", name: "state" } }],
+                    params: [{ name: "state", byRefCopy: false }],
                     body: {
                       kind: "assignment",
                       operator: "=",
@@ -680,7 +681,8 @@ test("long atomic vectors use rustfmt-compatible element lines", () => {
       body: {
         statements: [{
           kind: "let",
-          pattern: { kind: "binding", name: "values", mutable: false },
+          name: "values",
+          mutable: false,
           init: {
             kind: "vec-literal",
             elements: ["first", "second", "third", "fourth"].map((value) => ({
@@ -728,9 +730,9 @@ test("fallible conversion wrappers own multiline callback method chains", () => 
                     args: [{
                       kind: "closure",
                       params: [
-                        { pattern: { kind: "binding", name: "value" } },
-                        { pattern: { kind: "binding", name: "index" } },
-                        { pattern: { kind: "binding", name: "owner" } },
+                        { name: "value", byRefCopy: false },
+                        { name: "index", byRefCopy: false },
+                        { name: "owner", byRefCopy: false },
                       ],
                       body: {
                         kind: "call",
@@ -786,8 +788,8 @@ test("fallible conversion wrappers stay attached to one callback method", () => 
                     args: [{
                       kind: "closure",
                       params: [
-                        { pattern: { kind: "binding", name: "value" } },
-                        { pattern: { kind: "binding", name: "_index" } },
+                        { name: "value", byRefCopy: false },
+                        { name: "_index", byRefCopy: false },
                       ],
                       body: {
                         kind: "call",
@@ -913,7 +915,7 @@ test("method chains inside expanded call comparisons use argument indentation", 
                   method: "with",
                   args: [{
                     kind: "closure",
-                    params: [{ pattern: { kind: "binding", name: "state" } }],
+                    params: [{ name: "state", byRefCopy: false }],
                     body: { kind: "path", path: "state.1" },
                   }],
                 }],
@@ -958,7 +960,7 @@ test("expanded call comparisons break short receiver chains before the first sel
                 method: "map",
                 args: [{
                   kind: "closure",
-                  params: [{ pattern: { kind: "binding", name: "optional_receiver_2" } }],
+                  params: [{ name: "optional_receiver_2", byRefCopy: false }],
                   body: {
                     kind: "method-call",
                     receiver: { kind: "path", path: "optional_receiver_2" },
@@ -1002,7 +1004,8 @@ test("expanded call arguments keep fitting optional closure chains attached", ()
       body: {
         statements: [{
           kind: "let",
-          pattern: { kind: "binding", name: "letter", mutable: false },
+          name: "letter",
+          mutable: false,
           init: {
             kind: "call",
             path: "rt::option_coalesce",
@@ -1022,7 +1025,7 @@ test("expanded call arguments keep fitting optional closure chains attached", ()
               method: "and_then",
               args: [{
                 kind: "closure",
-                params: [{ pattern: { kind: "binding", name: "optional_receiver_13" } }],
+                params: [{ name: "optional_receiver_13", byRefCopy: false }],
                 body: {
                   kind: "call",
                   path: "js_abi::regexp_named_groups_get_native",
@@ -1077,7 +1080,8 @@ test("every fitted call layout preserves exact call-site type arguments", () => 
       body: {
         statements: [{
           kind: "let",
-          pattern: { kind: "binding", name: "direct", mutable: false },
+          name: "direct",
+          mutable: false,
           init: {
             kind: "call",
             path: "Ok",
@@ -1089,7 +1093,8 @@ test("every fitted call layout preserves exact call-site type arguments", () => 
           },
         }, {
           kind: "let",
-          pattern: { kind: "binding", name: "associated", mutable: false },
+          name: "associated",
+          mutable: false,
           init: {
             kind: "associated-call",
             owner: { kind: "named", path: "Factory" },
@@ -1099,7 +1104,8 @@ test("every fitted call layout preserves exact call-site type arguments", () => 
           },
         }, {
           kind: "let",
-          pattern: { kind: "binding", name: "method", mutable: false },
+          name: "method",
+          mutable: false,
           init: {
             kind: "method-call",
             receiver: { kind: "path", path: "values" },
@@ -1109,7 +1115,8 @@ test("every fitted call layout preserves exact call-site type arguments", () => 
           },
         }, {
           kind: "let",
-          pattern: { kind: "binding", name: "nested", mutable: false },
+          name: "nested",
+          mutable: false,
           init: {
             kind: "call",
             path: "wrap",
@@ -1137,7 +1144,7 @@ test("every fitted call layout preserves exact call-site type arguments", () => 
                 method: "map",
                 args: [{
                   kind: "closure",
-                  params: [{ pattern: { kind: "binding", name: "value" } }],
+                  params: [{ name: "value", byRefCopy: false }],
                   body: {
                     kind: "call",
                     path: "Ok",

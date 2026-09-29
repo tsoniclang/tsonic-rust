@@ -42,12 +42,13 @@ test("owned input evidence requires the selected ordinary call and exact by-valu
   }
 });
 
-test("storage and flow markers cannot become owned calls through a coarse argument fact", () => {
+test("storage markers and native token input cannot become owned calls through a coarse argument fact", () => {
   for (const operation of [
     undefined,
     { kind: "typed-location", operation: "address-of" },
     { kind: "reference-operation", operation: "ref" },
     { kind: "flow-marker" },
+    { kind: "provider-operation", abi: { target: { form: "expression-macro", path: "unrelated_crate::transform" } } },
   ]) {
     assert.equal(query({ operation }), false);
   }

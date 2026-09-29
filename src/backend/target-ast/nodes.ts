@@ -1,5 +1,4 @@
 import { type RustAttribute } from "./attributes.js";
-import type { RustMacroInvocation } from "./macro-input.js";
 // Structured Rust output model for the static-native construct set. The
 // printer is the only place this model becomes text.
 
@@ -110,7 +109,6 @@ export const emptyRustGenerics: RustGenerics = Object.freeze({
 });
 
 export type RustType =
-  | RustMacroInvocation
   | { readonly kind: "infer" }
   | { readonly kind: "primitive"; readonly name: RustPrimitiveTypeName }
   | { readonly kind: "string" }
@@ -168,10 +166,8 @@ export type RustType =
   | { readonly kind: "tuple"; readonly elements: readonly RustType[] };
 
 export type RustPattern =
-  | RustMacroInvocation
   | { readonly kind: "wildcard" }
-  | { readonly kind: "binding"; readonly name: string; readonly mutable?: boolean }
-  | { readonly kind: "reference"; readonly pattern: RustPattern; readonly mutable: boolean }
+  | { readonly kind: "binding"; readonly name: string }
   | { readonly kind: "path"; readonly path: string }
   | { readonly kind: "tuple"; readonly elements: readonly RustPattern[] }
   | { readonly kind: "or"; readonly alternatives: readonly RustPattern[] }
@@ -210,7 +206,12 @@ export type RustExpr =
   | { readonly kind: "assignment"; readonly operator: RustAssignmentOperator; readonly target: RustExpr; readonly value: RustExpr }
   | { readonly kind: "call"; readonly path: string; readonly genericArguments?: readonly RustCallGenericArgument[]; readonly args: readonly RustExpr[] }
   | { readonly kind: "invoke"; readonly callee: RustExpr; readonly args: readonly RustExpr[] }
-  | RustMacroInvocation
+  | {
+      readonly kind: "macro-invocation";
+      readonly path: string;
+      readonly delimiter: "parentheses" | "brackets" | "braces";
+      readonly args: readonly RustExpr[];
+    }
   | { readonly kind: "associated-value"; readonly owner: RustType; readonly trait?: RustType; readonly name: string }
   | { readonly kind: "associated-call"; readonly owner: RustType; readonly trait?: RustType; readonly method: string; readonly genericArguments?: readonly RustCallGenericArgument[]; readonly args: readonly RustExpr[] }
   | {
@@ -250,10 +251,10 @@ export type RustExpr =
   | { readonly kind: "vec-literal"; readonly elements: readonly RustExpr[] }
   | { readonly kind: "slice-literal"; readonly elements: readonly RustExpr[] }
   | { readonly kind: "array-repeat"; readonly element: RustExpr; readonly length: RustConstArgument }
-  | { readonly kind: "closure"; readonly params: readonly RustClosureParam[]; readonly move?: boolean; readonly body: RustExpr }
+  | { readonly kind: "closure"; readonly params: readonly { readonly name: string; readonly byRefCopy: boolean }[]; readonly move?: boolean; readonly body: RustExpr }
   | {
       readonly kind: "closure-block";
-      readonly params: readonly RustClosureParam[];
+      readonly params: readonly { readonly name: string; readonly mutable: boolean; readonly byRefCopy?: boolean }[];
       readonly move: boolean;
       readonly async: boolean;
       readonly body: RustBlock;
@@ -282,10 +283,8 @@ export type {
 } from "../../target-model/operations/error-boundary.js";
 
 export type RustStmt =
-  | { readonly kind: "macro-statement"; readonly invocation: RustMacroInvocation; readonly semicolon: boolean }
   | { readonly kind: "item"; readonly item: RustItem }
-  | ({ readonly kind: "let"; readonly pattern: RustPattern; readonly type?: RustType; readonly attrs?: readonly RustAttribute[] } &
-      ({ readonly init?: RustExpr; readonly else?: never } | { readonly init: RustExpr; readonly else: RustBlock }))
+  | { readonly kind: "let"; readonly name: string; readonly mutable: boolean; readonly type?: RustType; readonly init?: RustExpr; readonly attrs?: readonly RustAttribute[] }
   | { readonly kind: "expr"; readonly expr: RustExpr }
   | { readonly kind: "assign"; readonly target: RustExpr; readonly operator: RustAssignmentOperator; readonly value: RustExpr }
   | { readonly kind: "return"; readonly expr?: RustExpr }
@@ -293,9 +292,9 @@ export type RustStmt =
   | { readonly kind: "if"; readonly condition: RustExpr; readonly then: RustBlock; readonly else?: RustBlock; readonly elseIf?: true; readonly attrs?: readonly RustAttribute[] }
   | { readonly kind: "loop"; readonly label?: string; readonly body: RustBlock; readonly neverFallsThrough?: boolean }
   | { readonly kind: "while"; readonly label?: string; readonly condition: RustExpr; readonly body: RustBlock; readonly attrs?: readonly RustAttribute[] }
-  | { readonly kind: "while-let"; readonly label?: string; readonly pattern: RustPattern; readonly expression: RustExpr; readonly body: RustBlock }
-  | { readonly kind: "for"; readonly label?: string; readonly pattern: RustPattern; readonly iterable: RustExpr; readonly body: RustBlock; readonly attrs?: readonly RustAttribute[] }
-  | { readonly kind: "if-let"; readonly pattern: RustPattern; readonly expression: RustExpr; readonly body: RustBlock; readonly else?: RustBlock; readonly elseIf?: true }
+  | { readonly kind: "while-let-some"; readonly label?: string; readonly binding: string; readonly bindingMutable?: boolean; readonly expression: RustExpr; readonly body: RustBlock }
+  | { readonly kind: "for"; readonly label?: string; readonly binding: string; readonly bindingMutable?: boolean; readonly iterable: RustExpr; readonly body: RustBlock; readonly attrs?: readonly RustAttribute[] }
+  | { readonly kind: "if-let-some"; readonly binding: string; readonly expression: RustExpr; readonly body: RustBlock; readonly else?: RustBlock; readonly elseIf?: true }
   | { readonly kind: "break"; readonly label?: string }
   | { readonly kind: "continue"; readonly label?: string }
   | {
@@ -370,23 +369,15 @@ export interface RustBlock {
 }
 
 export interface RustFunctionParam {
-  readonly pattern: RustPattern;
+  readonly name: string;
   readonly type: RustType;
-}
-
-export interface RustNamedFunctionParam extends RustFunctionParam {
-  readonly pattern: Extract<RustPattern, { readonly kind: "binding" }>;
-}
-
-export interface RustClosureParam {
-  readonly pattern: RustPattern;
-  readonly type?: RustType;
+  readonly mutable?: boolean;
 }
 
 export type RustSelfParam =
-  | { readonly kind: "value"; readonly mutable?: boolean }
+  | { readonly kind: "value" }
   | { readonly kind: "reference"; readonly mutable: boolean; readonly lifetime?: RustLifetime }
-  | { readonly kind: "typed"; readonly type: RustType; readonly mutable?: boolean };
+  | { readonly kind: "rc" };
 
 export type RustVisibility = "private" | "parent" | "crate" | "public";
 
@@ -463,34 +454,10 @@ export interface RustImplAssociatedType {
   readonly type: RustType;
 }
 
-export type RustTraitMember = RustTraitFunction | RustTraitAssociatedType | RustMacroInvocation;
-export type RustImplMember = RustImplFunction | RustImplConstant | RustImplAssociatedType | RustMacroInvocation;
-
-export type RustForeignMember = RustMacroInvocation | {
-  readonly name: string;
-  readonly visibility: RustVisibility;
-  readonly attrs?: readonly RustAttribute[];
-  readonly deadCode?: RustDeadCodeDisposition;
-} & (
-  | {
-      readonly kind: "function";
-      readonly safety?: "safe" | "unsafe";
-      readonly generics: RustGenerics;
-      readonly params: readonly RustFunctionParam[];
-      readonly variadic?: boolean;
-      readonly returnType?: RustType;
-    }
-  | {
-      readonly kind: "static";
-      readonly safety?: "safe" | "unsafe";
-      readonly mutable: boolean;
-      readonly type: RustType;
-    }
-  | { readonly kind: "type" }
-);
+export type RustTraitMember = RustTraitFunction | RustTraitAssociatedType;
+export type RustImplMember = RustImplFunction | RustImplConstant | RustImplAssociatedType;
 
 export type RustItem =
-  | RustMacroInvocation
   | {
       readonly kind: "function";
       readonly name: string;
@@ -526,7 +493,6 @@ export type RustItem =
     }
   | { readonly kind: "mod-decl"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly RustAttribute[]; readonly body?: RustSourceFileModel }
   | { readonly kind: "extern-crate"; readonly name: string }
-  | { readonly kind: "extern-block"; readonly isUnsafe: boolean; readonly abi?: string; readonly attrs?: readonly RustAttribute[]; readonly innerAttrs?: readonly RustAttribute[]; readonly members: readonly RustForeignMember[] }
   | { readonly kind: "struct"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly RustAttribute[]; readonly deadCode?: RustDeadCodeDisposition; readonly generics: RustGenerics; readonly fields: readonly RustStructField[] }
   | { readonly kind: "trait"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly RustAttribute[]; readonly deadCode?: RustDeadCodeDisposition; readonly generics: RustGenerics; readonly superTraits?: readonly RustType[]; readonly members: readonly RustTraitMember[] }
   | { readonly kind: "impl"; readonly attrs?: readonly RustAttribute[]; readonly generics: RustGenerics; readonly trait?: RustType; readonly target: RustType; readonly members: readonly RustImplMember[] }

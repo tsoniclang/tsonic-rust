@@ -22,7 +22,6 @@ import { rustLifetimeKey } from "../../../../target-model/lifetimes/index.js";
 import type {
   RustExpr,
   RustFunctionParam,
-  RustNamedFunctionParam,
   RustType,
 } from "../../../target-ast/nodes.js";
 import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
@@ -55,7 +54,7 @@ export interface ProjectFieldPlan {
 }
 
 export interface ProjectCallableShape {
-  readonly params: readonly RustNamedFunctionParam[];
+  readonly params: readonly RustFunctionParam[];
   readonly returnType?: RustType;
   readonly errorType?: RustType;
   readonly isUnsafe: boolean;
@@ -65,7 +64,7 @@ export interface ProjectMethodPropertyPlan {
   readonly declaration: Node;
   readonly targetName: string;
   readonly callableType: RustType;
-  readonly params: readonly RustNamedFunctionParam[];
+  readonly params: readonly RustFunctionParam[];
   readonly returnType?: RustType;
 }
 

@@ -18,7 +18,7 @@ import { applyRustValueConversion } from "./value-conversions.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
-import { rustExpressionMayExitCallable } from "../../target-ast/inspection/callable-exits.js";
+import { rustExpressionExitsCallable } from "../../target-ast/inspection/callable-exits.js";
 import { planRustOptionBranch } from "./option-branch.js";
 
 export function planNullishCoalescing(
@@ -108,7 +108,7 @@ export function planNullishCoalescing(
   const convertedPresent = fact.leftConversion === undefined ? undefined : applyRustValueConversion(context,
     { kind: "path", path: presentValueName }, fact.leftConversion, node, false);
   if (fact.leftConversion !== undefined && convertedPresent === undefined) return undefined;
-  if (rustExpressionMayExitCallable(right)) {
+  if (rustExpressionExitsCallable(right)) {
     const carrier = context.input.program.facts.getRuntimeCarrierFact(leftNode)?.carrier;
     if (carrier === undefined) return undefined;
     const value: RustExpr = convertedPresent ?? { kind: "path", path: presentValueName };
@@ -116,14 +116,14 @@ export function planNullishCoalescing(
       fact.rightOptionDepth > 0 ? { kind: "call", path: "Some", args: [value] } : value, right, context);
   }
   const present: RustExpr = convertedPresent !== undefined
-    ? { kind: "closure", params: [{ pattern: { kind: "binding" as const, name: presentValueName } }],
+    ? { kind: "closure", params: [{ name: presentValueName, byRefCopy: false }],
         body: fallbackIsFallible ? { kind: "call", path: "Ok", args: [convertedPresent] } : convertedPresent }
     : fallbackIsFallible && fact.rightOptionDepth === 0
     ? { kind: "path", path: "Ok" }
     : fallbackIsFallible
       ? {
           kind: "closure",
-          params: [{ pattern: { kind: "binding" as const, name: presentValueName } }],
+          params: [{ name: presentValueName, byRefCopy: false }],
           body: {
             kind: "call",
             path: "Ok",

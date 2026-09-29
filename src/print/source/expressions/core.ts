@@ -1,7 +1,6 @@
 import { printRustBlockStatements } from "../blocks.js";
 import { escapeRustChar, escapeRustString, printRustPattern } from "../patterns.js";
 import { printRustAttribute } from "../attributes.js";
-import { printRustMacroInvocation } from "../macro-input.js";
 import { printRustConstArgument, printRustType } from "../types.js";
 import {
   printRustAssociatedCallOwner,
@@ -141,8 +140,15 @@ export function printRustExpr(expression: RustExpr): string {
       const elements = expression.elements.map(printRustExpr).join(", ");
       return `(${elements}${expression.elements.length === 1 ? "," : ""})`;
     }
-    case "macro-invocation":
-      return printRustMacroInvocation(expression.path, expression.input);
+    case "macro-invocation": {
+      const [open, close] = expression.delimiter === "parentheses"
+        ? ["(", ")"]
+        : expression.delimiter === "brackets"
+          ? ["[", "]"]
+          : ["{", "}"];
+      const separator = expression.delimiter === "braces" ? " " : "";
+      return `${expression.path}!${separator}${open}${expression.args.map(printRustExpr).join(", ")}${close}`;
+    }
     case "struct-literal": {
       const members = expression.fields.map((field) => {
         const value = printRustExpr(field.value);

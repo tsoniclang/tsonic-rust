@@ -533,7 +533,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
           }
         : entryExecution;
     const entryStatement: import("../../target-ast/nodes.js").RustStmt = entryFunction.nativeTermination
-      ? { kind: "let", pattern: { kind: "binding", name: "entry_result", mutable: false }, init: executedEntry }
+      ? { kind: "let", name: "entry_result", mutable: false, init: executedEntry }
       : { kind: "expr", expr: executedEntry };
     const completedEntry: import("../../target-ast/nodes.js").RustExpr = entryFunction.nativeTermination
       ? { kind: "call", path: "std::process::Termination::report",
@@ -686,11 +686,12 @@ function planRustWorkerDispatch(
         };
     statements.push({
       kind: "let",
-      pattern: { kind: "binding", name: entryName, mutable: false },
+      name: entryName,
+      mutable: false,
       init: bootstrapCall,
     }, {
-      kind: "if-let",
-      pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: entryName }] },
+      kind: "if-let-some",
+      binding: entryName,
       expression: { kind: "path", path: entryName },
       body: {
         statements: [

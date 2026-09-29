@@ -38,7 +38,6 @@ import {
 } from "./declaration-members.js";
 import { sourceTypeGenericParameters } from "./source-generics.js";
 import { projectPrimitiveExport } from "./primitives.js";
-import { materializeClosedMetadata } from "../../../target-model/metadata/closed-data.js";
 import { rustNamedTargetType, rustUnitTargetType } from "../../../target-model/types/index.js";
 import type {
   ProviderExportDeclaration,
@@ -48,13 +47,11 @@ import type {
 import type {
   RustCompilerExport,
   RustCompilerModuleModel,
-  RustCompilerOrdinaryExport,
 } from "../model/model.js";
 import type {
   ProjectionContext,
   ProjectionOwner,
   RustCompilerProviderProjection,
-  RustCompilerIntrinsicProjection,
 } from "./model.js";
 import type {
   RustNamedTypeTraitContract,
@@ -89,25 +86,6 @@ export function projectRustCompilerModule(
   const operations: RustProviderOperationDefinition[] = [];
   const types: RustProviderTypeDefinition[] = [];
   const completeExports = new Set<string>();
-  const intrinsics: RustCompilerIntrinsicProjection[] = [];
-  const intrinsicByName = new Map<string, RustCompilerIntrinsicProjection>();
-  const ordinaryNames = new Set(module.exports.filter(exported => exported.kind !== "macro").map(exported => exported.name));
-  for (const exported of module.exports) {
-    if (exported.kind !== "macro") continue;
-    if (intrinsicByName.has(exported.name)) {
-      throw new Error(`Rust source export '${exported.name}' has more than one macro identity.`);
-    }
-    const intrinsic = Object.freeze({
-      exportId: `${compilerExportId(module.dependency, module.modulePath, exported.name)}::macro`,
-      native: materializeClosedMetadata(exported),
-    });
-    intrinsicByName.set(exported.name, intrinsic);
-    intrinsics.push(intrinsic);
-    if (!ordinaryNames.has(exported.name)) {
-      declarations.push(Object.freeze({ id: intrinsic.exportId, name: exported.name, kind: "intrinsic" }));
-      completeExports.add(intrinsic.exportId);
-    }
-  }
   const carrierPaths = new Map<string, string>();
   const carrierTraits = new Map<string, RustNamedTypeTraitContract>();
   const standardTypes = new Map(module.standardTypeLocations.map((location) => [
@@ -134,14 +112,11 @@ export function projectRustCompilerModule(
     localTypeLocations,
   };
   for (const exported of module.exports) {
-    if (exported.kind === "macro") continue;
     let functionTypeSequence = 0;
     const projected = projectExport(exported, { ...context,
       allocateFunctionTypeIdentity: () => `${owner.providerModuleId}::${exported.name}::function-type:${functionTypeSequence++}`,
     });
-    const intrinsic = intrinsicByName.get(exported.name);
-    declarations.push(intrinsic === undefined ? projected.declaration
-      : Object.freeze({ ...projected.declaration, intrinsicId: intrinsic.exportId }), ...(projected.additionalDeclarations ?? []));
+    declarations.push(projected.declaration, ...(projected.additionalDeclarations ?? []));
     if (!isNominalExport(exported) || nativeExportIsComplete(projected.declaration.id, exported.name, materialization)) {
       completeExports.add(projected.declaration.id);
     }
@@ -163,7 +138,6 @@ export function projectRustCompilerModule(
     module: providerModule,
     operations: Object.freeze(operations),
     types: Object.freeze(types),
-    intrinsics: Object.freeze(intrinsics),
     carrierPaths,
     carrierTraits,
   });
@@ -176,7 +150,7 @@ function nativeExportIsComplete(id: string, name: string,
 }
 
 function projectExport(
-  exported: RustCompilerOrdinaryExport,
+  exported: RustCompilerExport,
   context: ProjectionContext,
 ): ProjectedExport {
   const exportId = compilerExportId(
@@ -373,7 +347,7 @@ function projectTypeAlias(
 
 function projectNominalExport(
   exported: Exclude<
-    RustCompilerOrdinaryExport,
+    RustCompilerExport,
     { readonly kind: "constant" | "static" | "function" | "type-alias" | "primitive" }
   >,
   context: ProjectionContext,

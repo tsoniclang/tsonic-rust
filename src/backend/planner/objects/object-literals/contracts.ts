@@ -164,7 +164,7 @@ export function planContractImplementation(
         visibility: "private",
         generics: emptyRustGenerics,
         selfParam: rustSelfParameter(dispatch.write.selfMode),
-        params: [{ pattern: { kind: "binding" as const, name: "value" }, type: field.type }],
+        params: [{ name: "value", type: field.type }],
         ...(dispatch.write.fallible ? { errorType: fieldErrorType! } : {}),
         body: dispatch.write.fallible
           ? {
@@ -226,12 +226,12 @@ export function planContractImplementation(
         }],
       };
       const implementationName = allocateMemberFieldName(
-        new Set(method.parameters.map((parameter) => parameter.pattern.name)),
+        new Set(method.parameters.map((parameter) => parameter.name)),
         "implementation",
       );
       const overrideName = allocateMemberFieldName(
         new Set([
-          ...method.parameters.map((parameter) => parameter.pattern.name),
+          ...method.parameters.map((parameter) => parameter.name),
           implementationName,
         ]),
         "method_override",
@@ -239,8 +239,8 @@ export function planContractImplementation(
       const overrideStatements = method.override === undefined
         ? []
         : [{
-            kind: "if-let" as const,
-            pattern: { kind: "tuple-variant" as const, path: "Some", elements: [{ kind: "binding" as const, name: overrideName }] },
+            kind: "if-let-some" as const,
+            binding: overrideName,
             expression: readRustProjectMethodOverride(
               { kind: "path", path: "self" },
               method.override.fieldName,
@@ -257,7 +257,7 @@ export function planContractImplementation(
                     kind: "tuple-literal" as const,
                     elements: method.parameters.map((parameter) => ({
                       kind: "path" as const,
-                      path: parameter.pattern.name,
+                      path: parameter.name,
                     })),
                   }],
                 },
@@ -289,7 +289,7 @@ export function planContractImplementation(
             kind: "tuple-literal",
             elements: method.parameters.map((parameter) => ({
               kind: "path" as const,
-              path: parameter.pattern.name,
+              path: parameter.name,
             })),
           }],
         };
@@ -320,7 +320,8 @@ export function planContractImplementation(
           body: {
             statements: [...overrideStatements, {
               kind: "let",
-              pattern: { kind: "binding", name: implementationName, mutable: false },
+              name: implementationName,
+              mutable: false,
               init: {
                 kind: "method-call",
                 receiver: {
@@ -389,7 +390,8 @@ export function planContractImplementation(
         body: {
           statements: [...overrideStatements, {
             kind: "let",
-            pattern: { kind: "binding", name: implementationName, mutable: false },
+            name: implementationName,
+            mutable: false,
             init: {
               kind: "method-call",
               receiver: {
@@ -434,7 +436,7 @@ export function planContractImplementation(
         visibility: "private",
         generics: emptyRustGenerics,
         selfParam: rustSelfParameter("ref"),
-        params: [{ pattern: { kind: "binding" as const, name: "value" }, type: override.callableType }],
+        params: [{ name: "value", type: override.callableType }],
         body: {
           statements: [{
             kind: "expr",

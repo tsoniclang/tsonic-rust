@@ -14,7 +14,6 @@ import {
 import {
   rustLifetimeTypeDeclarations,
   rustReferenceOperationDeclarations,
-  rustSyntaxIntrinsicDeclarations,
 } from "../semantics/declarations/index.js";
 import {
   rustLangModule,
@@ -27,7 +26,6 @@ import {
   rustTypesModule,
 } from "../semantics/identity.js";
 import { rustSourceSemanticsModules } from "../profiles/source-modules.js";
-import { resolveRustSourceNativeInput, rustSourceNativeInputFactKey, type RustSourceNativeServices } from "../semantics/native-input.js";
 
 export {
   rustConstPointerExport,
@@ -38,13 +36,8 @@ export {
 };
 
 export function createRustSourceSemanticsExtension(
-  options: {
-    readonly providers: readonly SourceDeclarationProvider[];
-    readonly native: RustSourceNativeServices;
-  },
+  additionalProviders: readonly SourceDeclarationProvider[] = [],
 ): CompilerExtension {
-  const providers = Object.freeze([...options.providers]);
-  const native = Object.freeze({ macro: options.native.macro, tokenize: options.native.tokenize });
   return {
     identity: {
       id: rustSourceSemanticsExtensionId,
@@ -55,8 +48,6 @@ export function createRustSourceSemanticsExtension(
       runsAfter: [sourceSemanticsExtensionId],
     },
     initialize(context): void {
-      context.registerSourceElaborator(rustSourceNativeInputFactKey,
-        demand => resolveRustSourceNativeInput(demand, native));
       context.registerSourceDeclarationProvider(
         createSourceSemanticsVirtualModuleProvider({
           id: rustSourceVirtualModulesProviderId,
@@ -98,7 +89,7 @@ export function createRustSourceSemanticsExtension(
           },
         }),
       );
-      for (const provider of providers) {
+      for (const provider of additionalProviders) {
         context.registerSourceDeclarationProvider(provider);
       }
     },
@@ -117,6 +108,6 @@ function rustProviderExportsForModule(
         nativePointerProviderDeclaration(rustMutPointerExport),
       ]
     : module.moduleSpecifier === rustLangModule
-      ? [...semantics, ...rustReferenceOperationDeclarations(), ...rustSyntaxIntrinsicDeclarations()]
+      ? [...semantics, ...rustReferenceOperationDeclarations()]
       : semantics;
 }

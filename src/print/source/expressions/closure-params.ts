@@ -1,11 +1,9 @@
-import type { RustClosureParam } from "../../../backend/target-ast/nodes.js";
-import { printRustPattern } from "../patterns.js";
-import { printRustType } from "../types.js";
-
 export function printRustClosureParams(
-  params: readonly RustClosureParam[],
+  params: readonly { readonly name: string; readonly mutable?: boolean; readonly byRefCopy?: boolean }[],
 ): string {
   return params
-    .map((param) => `${printRustPattern(param.pattern, false)}${param.type === undefined ? "" : `: ${printRustType(param.type)}`}`)
+    .map((param) => param.byRefCopy === true
+      ? param.mutable === true ? `&(mut ${param.name})` : `&${param.name}`
+      : `${param.mutable === true ? "mut " : ""}${param.name}`)
     .join(", ");
 }

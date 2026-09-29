@@ -115,7 +115,7 @@ export function collectRustMutableProjectStorageRequirements(
     if (kind === KindCallExpression || kind === KindNewExpression) {
       const semantics = context.semantics(sourceFile);
       const source = semantics.operations.call(node);
-      if (source !== undefined && source.outcome !== "intrinsic") {
+      if (source !== undefined) {
         const selectedDeclaration = semantics.declarations.signatureDeclaration(
           source.selectedSignature,
         );

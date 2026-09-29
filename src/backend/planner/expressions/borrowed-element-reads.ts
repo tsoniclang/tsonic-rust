@@ -41,7 +41,7 @@ export function planRustBorrowedElementLocal(
     carrier: rustStringTargetType(), valueForm: "storage",
   });
   return {
-    statements: bindings.map(binding => ({ kind: "let", pattern: { kind: "binding", name: binding.name, mutable: false }, init: binding.value })),
+    statements: bindings.map(binding => ({ kind: "let", name: binding.name, mutable: false, init: binding.value })),
     context: { ...context, expressionOverrides: overrides },
   };
 }

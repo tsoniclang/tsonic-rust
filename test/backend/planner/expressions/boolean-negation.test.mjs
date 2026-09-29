@@ -5,9 +5,9 @@ import {
   rustExpressionContainsStatementBlock,
 } from "../../../../dist/backend/target-ast/expressions.js";
 import {
+  rustExpressionChildren,
   rustExpressionReferencesPath,
 } from "../../../../dist/backend/target-ast/inspection/source-usage.js";
-import { rustExpressionChildren } from "../../../../dist/backend/target-ast/inspection/expression-children.js";
 import { rustItemsReferenceModuleAlias } from "../../../../dist/backend/target-ast/inspection/source-module-usage.js";
 import { finalizeRustSourceStyle } from "../../../../dist/backend/target-ast/normalization/source-style.js";
 import { rustExpressionUsesTryInCurrentRegion } from "../../../../dist/backend/planner/types/fallible-shape.js";

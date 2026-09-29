@@ -1,31 +1,21 @@
 import type { RustPattern } from "../../backend/target-ast/nodes.js";
-import { printRustMacroInvocation } from "./macro-input.js";
 
-export function printRustPattern(pattern: RustPattern, allowTopAlternation = true): string {
+export function printRustPattern(pattern: RustPattern): string {
   switch (pattern.kind) {
-    case "macro-invocation":
-      return printRustMacroInvocation(pattern.path, pattern.input);
     case "wildcard":
       return "_";
     case "binding":
-      return `${pattern.mutable ? "mut " : ""}${pattern.name}`;
-    case "reference": {
-      const inner = printRustPattern(pattern.pattern);
-      const grouped = pattern.pattern.kind === "or" || pattern.pattern.kind === "binding" && pattern.pattern.mutable;
-      return `&${pattern.mutable ? "mut " : ""}${grouped ? `(${inner})` : inner}`;
-    }
+      return pattern.name;
     case "path":
       return pattern.path;
     case "tuple": {
-      const elements = pattern.elements.map(value => printRustPattern(value)).join(", ");
+      const elements = pattern.elements.map(printRustPattern).join(", ");
       return `(${elements}${pattern.elements.length === 1 ? "," : ""})`;
     }
     case "tuple-variant":
-      return `${pattern.path}(${pattern.elements.map(value => printRustPattern(value)).join(", ")})`;
-    case "or": {
-      const printed = pattern.alternatives.map(value => printRustPattern(value)).join(" | ");
-      return allowTopAlternation ? printed : `(${printed})`;
-    }
+      return `${pattern.path}(${pattern.elements.map(printRustPattern).join(", ")})`;
+    case "or":
+      return pattern.alternatives.map(printRustPattern).join(" | ");
   }
 }
 

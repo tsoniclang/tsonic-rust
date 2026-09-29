@@ -24,5 +24,6 @@ export function rustCallArgumentIsOwned(argument: Node, ast: AstReader, facts: R
     return false;
   }
   const operation = facts.get(call, rustTargetOperationFactKey);
-  return operation?.kind === "source-call" || operation?.kind === "provider-operation";
+  return operation?.kind === "source-call" || operation?.kind === "provider-operation" &&
+    operation.abi.target.form !== "expression-macro";
 }

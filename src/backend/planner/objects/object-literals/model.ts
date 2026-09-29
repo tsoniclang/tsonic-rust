@@ -1,7 +1,7 @@
 import { createImplementationPlan } from "./registry.js";
 import { rustTargetOperationFactKey } from "../../../../analysis/facts/keys.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
-import type { RustNamedFunctionParam, RustItem, RustType } from "../../../target-ast/nodes.js";
+import type { RustFunctionParam, RustItem, RustType } from "../../../target-ast/nodes.js";
 import type { RustCallableParameterAbi, RustCallableParameterAdapter, RustCallableValueAdapter } from "../../../../analysis/facts/keys.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustSyntheticNameState } from "../../names/synthetic.js";
@@ -33,7 +33,7 @@ export interface RustObjectLiteralMethodOverridePlan {
   readonly propertyIdentity: Node;
   readonly fieldName: string;
   readonly callableType: RustType;
-  readonly parameters: readonly RustNamedFunctionParam[];
+  readonly parameters: readonly RustFunctionParam[];
   readonly returnType?: RustType;
   readonly errorType?: RustType;
 }
@@ -42,7 +42,7 @@ export interface RustObjectLiteralMethodDispatchPlan {
   readonly contractMethod: Node;
   readonly variant: RustProjectMethodDispatchVariant;
   readonly implementation: RustObjectLiteralMethodImplementationPlan;
-  readonly parameters: readonly RustNamedFunctionParam[];
+  readonly parameters: readonly RustFunctionParam[];
   readonly adapter?: {
     readonly parameterAbis: readonly RustCallableParameterAbi[];
     readonly parameterAdapters: readonly RustCallableParameterAdapter[];

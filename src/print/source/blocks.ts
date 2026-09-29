@@ -1,7 +1,5 @@
 import { printRustExpr } from "./expressions/core.js";
 import { printRustItem } from "./items.js";
-import { printRustMacroInvocation } from "./macro-input.js";
-import { printRustPattern } from "./patterns.js";
 import { printRustAttribute, printRustAttributes as printRustStatementAttributes } from "./attributes.js";
 import { indentText, printRustType } from "./types.js";
 import type { RustBlock, RustExpr, RustStmt } from "../../backend/target-ast/nodes.js";
@@ -24,16 +22,13 @@ function printRustBlock(block: RustBlock, depth: number, header: string): string
 function printRustStmt(statement: RustStmt, depth: number): string {
   const indent = indentText(depth);
   switch (statement.kind) {
-    case "macro-statement":
-      return `${indent}${printRustMacroInvocation(statement.invocation.path, statement.invocation.input)}${statement.semicolon ? ";" : ""}`;
     case "item":
       return printRustItem(statement.item).split("\n").map(line => `${indent}${line}`).join("\n");
     case "let": {
       const attributes = printRustStatementAttributes(statement.attrs, depth);
       const type = statement.type === undefined ? "" : `: ${printRustType(statement.type)}`;
-      const initializer = statement.init === undefined ? "" : ` = ${printRustLetInitializer(statement.init, statement.else !== undefined)}`;
-      const otherwise = statement.else === undefined ? "" : ` ${printRustBlock(statement.else, depth, "else").slice(indent.length)}`;
-      return `${attributes}${indent}let ${printRustPattern(statement.pattern, false)}${type}${initializer}${otherwise};`;
+      const initializer = statement.init === undefined ? "" : ` = ${printRustExpr(statement.init)}`;
+      return `${attributes}${indent}let ${statement.mutable ? "mut " : ""}${statement.name}${type}${initializer};`;
     }
     case "expr":
       return `${indent}${printRustExpr(statement.expr)};`;
@@ -79,25 +74,25 @@ function printRustStmt(statement: RustStmt, depth: number): string {
       );
       return `${printRustStatementAttributes(statement.attrs, depth)}${block}`;
     }
-    case "while-let":
+    case "while-let-some":
       return printRustBlock(
         statement.body,
         depth,
-        `${statement.label === undefined ? "" : `'${statement.label}: `}while let ${printRustPattern(statement.pattern)} = ${printRustExpr(statement.expression)}`,
+        `${statement.label === undefined ? "" : `'${statement.label}: `}while let Some(${statement.bindingMutable === true ? "mut " : ""}${statement.binding}) = ${printRustExpr(statement.expression)}`,
       );
     case "for": {
       const block = printRustBlock(
         statement.body,
         depth,
-        `${statement.label === undefined ? "" : `'${statement.label}: `}for ${printRustPattern(statement.pattern, false)} in ${printRustExpr(statement.iterable)}`,
+        `${statement.label === undefined ? "" : `'${statement.label}: `}for ${statement.bindingMutable === true ? "mut " : ""}${statement.binding} in ${printRustExpr(statement.iterable)}`,
       );
       return `${printRustStatementAttributes(statement.attrs, depth)}${block}`;
     }
-    case "if-let": {
+    case "if-let-some": {
       const rendered = printRustBlock(
         statement.body,
         depth,
-        `if let ${printRustPattern(statement.pattern)} = ${printRustExpr(statement.expression)}`,
+        `if let Some(${statement.binding}) = ${printRustExpr(statement.expression)}`,
       );
       if (statement.else === undefined) {
         return rendered;
@@ -158,24 +153,16 @@ function printRustStmt(statement: RustStmt, depth: number): string {
   }
 }
 
-function printRustLetInitializer(expression: RustExpr, hasElse: boolean): string {
-  if (expression.kind === "bottom") return printRustLetInitializer(expression.expression, hasElse);
-  const rendered = printRustExpr(expression);
-  if (!hasElse) return rendered;
-  return rendered.endsWith("}") || expression.kind === "binary" &&
-    (expression.operator === "&&" || expression.operator === "||") ? `(${rendered})` : rendered;
-}
-
 function nestedMarkedElseIf(
   marked: true | undefined,
   block: RustBlock,
-): Extract<RustStmt, { readonly kind: "if" | "if-let" }> | undefined {
+): Extract<RustStmt, { readonly kind: "if" | "if-let-some" }> | undefined {
   if (marked !== true || block.statements.length !== 1 ||
     (block.innerAttrs?.length ?? 0) !== 0) {
     return undefined;
   }
   const nested = block.statements[0];
-  if (nested?.kind !== "if" && nested?.kind !== "if-let") {
+  if (nested?.kind !== "if" && nested?.kind !== "if-let-some") {
     return undefined;
   }
   return nested.kind === "if" && (nested.attrs?.length ?? 0) !== 0
@@ -415,9 +402,6 @@ function rustBlockHasCompletionExit(block: RustBlock): boolean {
     if (statement.kind === "completion-exit") {
       return true;
     }
-    if (statement.kind === "let" && statement.else !== undefined) {
-      return rustBlockHasCompletionExit(statement.else);
-    }
     if (statement.kind === "resource-scope" || statement.kind === "try-scope") {
       return statement.propagate;
     }
@@ -425,12 +409,12 @@ function rustBlockHasCompletionExit(block: RustBlock): boolean {
       return rustBlockHasCompletionExit(statement.then) ||
         (statement.else !== undefined && rustBlockHasCompletionExit(statement.else));
     }
-    if (statement.kind === "if-let") {
+    if (statement.kind === "if-let-some") {
       return rustBlockHasCompletionExit(statement.body) ||
         (statement.else !== undefined && rustBlockHasCompletionExit(statement.else));
     }
     if (statement.kind === "loop" || statement.kind === "while" ||
-      statement.kind === "while-let" || statement.kind === "for" ||
+      statement.kind === "while-let-some" || statement.kind === "for" ||
       statement.kind === "scope" || statement.kind === "unsafe-scope") {
       return rustBlockHasCompletionExit(statement.body);
     }

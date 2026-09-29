@@ -8,16 +8,12 @@ const generatedRoot = resolve(repositoryRoot, ".temp/generated");
 
 export function writeGeneratedProject(name, artifacts) {
   const projectRoot = createTestWorkspace(generatedRoot, `${name}-`);
-  writeGeneratedArtifacts(projectRoot, artifacts);
-  return projectRoot;
-}
-
-export function writeGeneratedArtifacts(projectRoot, artifacts) {
   for (const artifact of artifacts) {
     const filePath = join(projectRoot, artifact.path);
     mkdirSync(dirname(filePath), { recursive: true });
     writeFileSync(filePath, artifact.text);
   }
+  return projectRoot;
 }
 
 export function runCargo(projectRoot, args) {
@@ -35,10 +31,6 @@ export function runCargo(projectRoot, args) {
 
 export function validateGeneratedProject(name, artifacts, { run = false } = {}) {
   const projectRoot = writeGeneratedProject(name, artifacts);
-  return validateCargoProject(projectRoot, { run });
-}
-
-export function validateCargoProject(projectRoot, { run = false } = {}) {
   runCargo(projectRoot, ["generate-lockfile", "--offline"]);
   runCargo(projectRoot, ["fmt", "--all", "--check"]);
   runCargo(projectRoot, ["check", "--all-targets", "--locked", "--offline"]);

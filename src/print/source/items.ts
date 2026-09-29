@@ -1,7 +1,5 @@
 import { printRustBlockStatements } from "./blocks.js";
 import { printRustExpr } from "./expressions/core.js";
-import { printRustPattern } from "./patterns.js";
-import { printRustMacroItem } from "./macro-input.js";
 import { printRustAttribute, printRustAttributes as printAttributes } from "./attributes.js";
 import {
   indentText,
@@ -14,8 +12,6 @@ import {
 import type {
   RustGenerics,
   RustGenericParameter,
-  RustForeignMember,
-  RustFunctionParam,
   RustImplFunction,
   RustItem,
   RustSelfParam,
@@ -42,18 +38,8 @@ export function printRustSourceFile(model: RustSourceFileModel): string {
 
 export function printRustItem(item: RustItem): string {
   switch (item.kind) {
-    case "macro-invocation":
-      return printRustMacroItem(item);
     case "extern-crate":
       return `extern crate ${item.name};`;
-    case "extern-block": {
-      const abi = item.abi === undefined ? "" : ` ${JSON.stringify(item.abi)}`;
-      const members = [
-        ...(item.innerAttrs ?? []).map(attribute => `    ${printRustAttribute(attribute, true)}`),
-        ...item.members.map(printRustForeignMember),
-      ].join("\n");
-      return `${printAttributes(item.attrs, 0)}${item.isUnsafe ? "unsafe " : ""}extern${abi} {${members.length === 0 ? "}" : `\n${members}\n}`}`;
-    }
     case "mod-decl": {
       const declaration = `${printAttributes(item.attrs, 0)}${printRustVisibility(item.visibility)}mod ${item.name}`;
       if (item.body === undefined) return `${declaration};`;
@@ -118,7 +104,6 @@ export function printRustItem(item: RustItem): string {
       const header = appendRustWhereEnding(declaration, generics, 0, "{");
       const members = item.members.map(member => {
         switch (member.kind) {
-          case "macro-invocation": return `    ${printRustMacroItem(member)}`;
           case "function": return printRustTraitFunction(member);
           case "type": {
             const bounds = member.bounds.length === 0
@@ -141,7 +126,6 @@ export function printRustItem(item: RustItem): string {
       const header = appendRustWhereEnding(declaration, generics, 0, "{");
       const members = item.members.map(member => {
         switch (member.kind) {
-          case "macro-invocation": return `    ${printRustMacroItem(member)}`;
           case "function": return printRustImplFunction(member, item.trait === undefined);
           case "type": return `${printAttributes(member.attrs, 1)}    type ${member.name} = ${printRustType(member.type)};`;
           case "const": {
@@ -159,21 +143,6 @@ export function printRustItem(item: RustItem): string {
 
 function printRustStructField(field: RustStructField): string {
   return `${printAttributes(field.attrs, 1)}    ${printRustVisibility(field.visibility)}${field.name}: ${printRustType(field.type)},`;
-}
-
-function printRustForeignMember(member: RustForeignMember): string {
-  if (member.kind === "macro-invocation") return `    ${printRustMacroItem(member)}`;
-  const prefix = `${printAttributes(member.attrs, 1)}    ${printRustVisibility(member.visibility)}`;
-  if (member.kind === "type") return `${prefix}type ${member.name};`;
-  const safety = member.safety === undefined ? "" : `${member.safety} `;
-  if (member.kind === "static") {
-    return `${prefix}${safety}static ${member.mutable ? "mut " : ""}${member.name}: ${printRustType(member.type)};`;
-  }
-  const generics = printRustGenerics(member.generics);
-  const parameters = [printRustParameters(undefined, member.params), ...(member.variadic ? ["..."] : [])]
-    .filter(value => value.length > 0).join(", ");
-  return appendRustWhereEnding(`${prefix}${safety}fn ${member.name}${generics.parameters}(${parameters})${printRustReturnSuffix(member.returnType)}`,
-    generics, 1, ";");
 }
 
 function printRustTraitFunction(fn: RustTraitFunction): string {
@@ -210,11 +179,11 @@ function printRustFunction(
 
 function printRustParameters(
   selfParam: RustSelfParam | undefined,
-  parameters: readonly RustFunctionParam[],
+  parameters: readonly { readonly name: string; readonly mutable?: boolean; readonly type: RustType }[],
 ): string {
   const self = printRustSelfParam(selfParam);
   const rest = parameters.map((parameter) =>
-    `${printRustPattern(parameter.pattern, false)}: ${printRustType(parameter.type)}`);
+    `${parameter.mutable === true ? "mut " : ""}${parameter.name}: ${printRustType(parameter.type)}`);
   return [...(self === undefined ? [] : [self]), ...rest].join(", ");
 }
 
@@ -223,7 +192,7 @@ function printRustSelfParam(selfParam: RustSelfParam | undefined): string | unde
     return undefined;
   }
   if (selfParam.kind === "value") {
-    return `${selfParam.mutable ? "mut " : ""}self`;
+    return "self";
   }
   if (selfParam.kind === "reference") {
     const lifetime = selfParam.lifetime === undefined
@@ -231,7 +200,7 @@ function printRustSelfParam(selfParam: RustSelfParam | undefined): string | unde
       : `${printRustLifetime(selfParam.lifetime)} `;
     return `&${lifetime}${selfParam.mutable ? "mut " : ""}self`;
   }
-  return `${selfParam.mutable ? "mut " : ""}self: ${printRustType(selfParam.type)}`;
+  return "self: alloc::rc::Rc<Self>";
 }
 
 interface PrintedRustGenerics {

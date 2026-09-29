@@ -9,7 +9,7 @@ const literal = (value) => ({ kind: "int-literal", text: String(value) });
 const assign = (name, value) => ({ kind: "assign", target: path(name), operator: "=", value });
 const block = (...statements) => ({ statements });
 const branch = (then, otherwise) => ({ kind: "if", condition: path("flag"), then, else: otherwise });
-const declaration = { kind: "let", pattern: { kind: "binding", name: "result", mutable: true }, type: { kind: "primitive", name: "i32" } };
+const declaration = { kind: "let", name: "result", type: { kind: "primitive", name: "i32" }, mutable: true };
 
 function normalize(conditional, following = []) {
   return finalizeRustBlockLiveness(block(declaration, conditional, ...following, {
@@ -34,7 +34,7 @@ test("conditional initialization retains exact side effects and nested branches"
     value: path("offset"),
   });
   assert.equal(result.init.whenFalse.kind, "conditional");
-  assert.equal(normalize(conditional, [assign("result", literal(5))]).statements[0].pattern.mutable, true);
+  assert.equal(normalize(conditional, [assign("result", literal(5))]).statements[0].mutable, true);
 });
 
 test("conditional initialization leaves unsafe-to-move bindings unchanged", () => {
@@ -43,8 +43,8 @@ test("conditional initialization leaves unsafe-to-move bindings unchanged", () =
   const cases = [
     branch(block({ kind: "expr", expr: path("result") }, terminal), complete),
     branch(block(assign("result", path("result"))), complete),
-    branch(block({ kind: "let", pattern: { kind: "binding", name: "result", mutable: false }, init: literal(0) }, terminal), complete),
-    branch(block({ kind: "let", pattern: { kind: "binding", name: "local", mutable: false }, init: path("result") }, terminal), complete),
+    branch(block({ kind: "let", name: "result", mutable: false, init: literal(0) }, terminal), complete),
+    branch(block({ kind: "let", name: "local", mutable: false, init: path("result") }, terminal), complete),
     branch(block({ kind: "return", expr: literal(0) }, terminal), complete),
     branch(complete, block()),
     { ...branch(complete, complete), else: undefined },

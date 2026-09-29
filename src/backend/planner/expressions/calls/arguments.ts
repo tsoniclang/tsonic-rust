@@ -414,7 +414,7 @@ export function planPromotedSourceMethodCall(
     method: "with_mut",
     args: [{
       kind: "closure",
-      params: [{ pattern: { kind: "binding" as const, name: ownerName } }],
+      params: [{ name: ownerName, byRefCopy: false }],
       body: call,
     }],
   };

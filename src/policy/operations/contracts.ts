@@ -3,7 +3,6 @@ import type {
   Node,
   ProviderDeclarationIdentity,
   ResolvedSourceIterationInfo,
-  ResolvedSourceSignatureCallInfo,
   SourceFile,
   Symbol,
   Type,
@@ -23,6 +22,10 @@ import type {
   RustCallbackOperationTemplate,
   RustProviderOperationTemplate,
 } from "../../target-model/operations/model.js";
+
+type ResolvedSourceCallInfo = NonNullable<
+  ReturnType<SourceFileSemantics["operations"]["call"]>
+>;
 
 type ResolvedSourcePropertyAccessInfo = NonNullable<
   ReturnType<SourceFileSemantics["operations"]["propertyAccess"]>
@@ -87,7 +90,7 @@ export function rustPolicyTargetDiagnostic(
 
 export interface RustCheckedCallSelectionInput {
   readonly target?: "rust";
-  readonly source: ResolvedSourceSignatureCallInfo;
+  readonly source: ResolvedSourceCallInfo;
   readonly sourceSelectedDeclaration?: Node;
 }
 

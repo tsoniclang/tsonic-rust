@@ -94,8 +94,7 @@ export function selectRustInferredNumericReturn(
         if (kind === "KindCallExpression") {
           const semantics = walk.context.semanticsFor(expression);
           const call = semantics.operations.call(expression);
-          const target = call === undefined || call.outcome === "intrinsic"
-            ? undefined : semantics.declarations.signatureDeclaration(call.selectedSignature);
+          const target = call === undefined ? undefined : semantics.declarations.signatureDeclaration(call.selectedSignature);
           if (target !== undefined && ast.body(target) !== undefined) {
             const sourceResult = call === undefined ? undefined : semantics.operations.callResult(call);
             const carrier = facts.get(target, rustSourceCallableReturnFactKey)?.returnCarrier ??

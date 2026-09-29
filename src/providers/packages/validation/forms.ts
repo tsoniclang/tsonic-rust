@@ -101,6 +101,13 @@ export function validateOperationForm(
         }
       }
       return;
+    case "expression-macro":
+      requireExactKeys(record, ["form", "path", "delimiter"], `${label}.target`, fail);
+      requireRustPath(form.path, `${label}.target.path`, fail);
+      if (form.delimiter !== "parentheses" && form.delimiter !== "brackets" && form.delimiter !== "braces") {
+        fail(`${label}.target.delimiter is not an exact Rust macro delimiter`);
+      }
+      return;
     case "call-c-variadic":
       requireExactKeys(record, ["form", "path", "fixedArgumentModes"], `${label}.target`, fail);
       requireRustPath(form.path, `${label}.target.path`, fail);

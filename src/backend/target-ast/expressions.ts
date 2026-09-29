@@ -1,5 +1,4 @@
 import type { RustExpr } from "./nodes.js";
-import { rustMacroInputExpressions } from "./macro-input.js";
 
 export function negateRustBooleanExpression(expression: RustExpr): RustExpr {
   if (expression.kind === "bool-literal") {
@@ -83,10 +82,11 @@ export function rustBorrowedStringView(expression: RustExpr): RustExpr {
 
 export function tupleRustClosureArguments(
   expression: RustExpr,
+  argumentName: string,
   arity: number,
 ): RustExpr | undefined {
   if (expression.kind === "block") {
-    const value = tupleRustClosureArguments(expression.value, arity);
+    const value = tupleRustClosureArguments(expression.value, argumentName, arity);
     return value === undefined ? undefined : { ...expression, value };
   }
   if (expression.kind !== "closure" && expression.kind !== "closure-block") {
@@ -95,14 +95,34 @@ export function tupleRustClosureArguments(
   if (expression.params.length !== arity) {
     return undefined;
   }
+  const bindings = expression.params.map((parameter, index) => ({
+    kind: "let" as const,
+    name: parameter.name,
+    mutable: "mutable" in parameter && parameter.mutable,
+    init: parameter.byRefCopy === true
+      ? {
+          kind: "dereference" as const,
+          pointer: {
+            kind: "field" as const,
+            receiver: { kind: "path" as const, path: argumentName },
+            name: String(index),
+          },
+        }
+      : {
+          kind: "field" as const,
+          receiver: { kind: "path" as const, path: argumentName },
+          name: String(index),
+        },
+  }));
+  const body = expression.kind === "closure"
+    ? { statements: [...bindings, { kind: "tail" as const, expr: expression.body }] }
+    : { ...expression.body, statements: [...bindings, ...expression.body.statements] };
   return {
-    ...expression,
-    params: [{
-      pattern: { kind: "tuple", elements: expression.params.map(parameter => parameter.pattern) },
-      ...(expression.params.some(parameter => parameter.type !== undefined) ? {
-        type: { kind: "tuple" as const, elements: expression.params.map(parameter => parameter.type ?? { kind: "infer" as const }) },
-      } : {}),
-    }],
+    kind: "closure-block",
+    params: [{ name: argumentName, mutable: false }],
+    move: expression.move === true,
+    async: expression.kind === "closure-block" && expression.async,
+    body,
   };
 }
 
@@ -157,7 +177,7 @@ export function rustExpressionContainsStatementBlock(expression: RustExpr): bool
       return rustExpressionContainsStatementBlock(expression.receiver) ||
         expression.args.some(rustExpressionContainsStatementBlock);
     case "macro-invocation":
-      return rustMacroInputExpressions(expression.input).some(rustExpressionContainsStatementBlock);
+      return expression.args.some(rustExpressionContainsStatementBlock);
     case "option-presence":
     case "field":
       return rustExpressionContainsStatementBlock(expression.receiver);

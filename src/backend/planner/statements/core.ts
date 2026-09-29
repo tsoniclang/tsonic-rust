@@ -67,7 +67,7 @@ function planStatementInner(node: Node, context: RustPlanContext): readonly Rust
       const environment = context.input.program.classValues.forDeclaration(node)?.environment;
       if (environment === undefined) return [];
       const value = planRustClassEnvironmentValue(node, context);
-      return value === undefined ? undefined : [{ kind: "let", pattern: { kind: "binding", name: environment.bindingName, mutable: false }, init: value }];
+      return value === undefined ? undefined : [{ kind: "let", name: environment.bindingName, mutable: false, init: value }];
     }
     case "KindTypeAliasDeclaration": {
       return context.input.program.facts.getFact(node, rustTypeAliasDeclarationFactKey)?.kind === "erased"

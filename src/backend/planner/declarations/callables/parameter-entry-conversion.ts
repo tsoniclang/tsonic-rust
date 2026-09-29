@@ -19,7 +19,7 @@ export function planRustParameterEntryConversion(
   if (abi?.entryConversion === undefined) return [];
   const type = rustTypeFromCarrierInContext(abi.valueCarrier, context);
   const init = planRustParameterEntryValue(abi, { kind: "path", path: name }, parameter, context);
-  return type === undefined || init === undefined ? undefined : [{ kind: "let", pattern: { kind: "binding", name, mutable }, type, init }];
+  return type === undefined || init === undefined ? undefined : [{ kind: "let", name, type, mutable, init }];
 }
 
 export function planRustParameterEntryValue(

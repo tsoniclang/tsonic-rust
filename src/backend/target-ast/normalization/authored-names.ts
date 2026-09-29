@@ -1,7 +1,6 @@
 import type { RustAttribute } from "../attributes.js";
 import type { RustExpr, RustGenerics, RustImplFunction, RustItem, RustPattern, RustStmt, RustTraitFunction } from "../nodes.js";
 import { rustLintAttributes } from "./lint-policy.js";
-import { rustPatternBindings } from "../patterns.js";
 
 export type RustNameStyle = "snake" | "camel" | "upper";
 
@@ -54,7 +53,7 @@ export function finalizeRustFunctionNames<Value extends RustImplFunction | RustT
   value: Value, checkName = true,
 ): Value {
   const fn = generic(checkName ? named(value, "snake") : value);
-  return fn.params.some(parameter => patternDeclaresNonSnakeName(parameter.pattern))
+  return fn.params.some(parameter => rustNameNeedsStyleAllowance(parameter.name, "snake"))
     ? { ...fn, attrs: appendRustNamingAllowance(fn.attrs, "snake") } : fn;
 }
 
@@ -71,36 +70,23 @@ export function finalizeRustItemNames(item: RustItem): RustItem {
       member.kind === "type" ? named(member, "camel") : member) };
     case "impl": return { ...generic(item), members: item.members.map(member =>
       member.kind === "const" && item.trait === undefined ? named(member, "upper") : member) };
-    case "extern-block": return { ...item, members: item.members.map(member =>
-      member.kind === "function" ? finalizeRustFunctionNames(member)
-        : member.kind === "static" ? named(member, "upper")
-          : member.kind === "type" ? named(member, "camel") : member) };
     case "extern-crate":
-    case "use":
-    case "macro-invocation": return item;
+    case "use": return item;
   }
 }
 
 function namedType<Value extends { readonly name: string; readonly attrs?: readonly RustAttribute[] }>(value: Value): Value {
-  const hasCRepresentation = value.attrs?.some(attribute => attribute.path === "repr" && attribute.tokens.some(token =>
-    token.kind === "group" && token.delimiter === "parentheses" && token.tokens.some((argument, index, arguments_) => {
-      const previous = arguments_[index - 1];
-      const next = arguments_[index + 1];
-      const isName = argument.kind === "identifier" ? argument.text === "C"
-        : argument.kind === "fragment" && argument.fragment.kind === "expression" &&
-          argument.fragment.expression.kind === "path" && argument.fragment.expression.path === "C";
-      return isName && (previous === undefined || previous.kind === "punctuation" && previous.text === ",") &&
-        (next === undefined || next.kind === "punctuation" && next.text === ",");
-    }))) === true;
+  const hasCRepresentation = value.attrs?.some(attribute => attribute.kind === "list" && attribute.path === "repr" &&
+    attribute.arguments.some(argument => argument.kind === "word" && argument.path === "C")) === true;
   return hasCRepresentation ? value : named(value, "camel");
 }
 
 export function rustStatementDeclaresNonSnakeName(statement: RustStmt): boolean {
   switch (statement.kind) {
-    case "let":
+    case "let": return rustNameNeedsStyleAllowance(statement.name, "snake");
     case "for":
-    case "while-let":
-    case "if-let": return patternDeclaresNonSnakeName(statement.pattern);
+    case "while-let-some":
+    case "if-let-some": return rustNameNeedsStyleAllowance(statement.binding, "snake");
     case "try-scope": return statement.catchClause !== undefined &&
       rustNameNeedsStyleAllowance(statement.catchClause.binding, "snake");
     default: return false;
@@ -110,7 +96,7 @@ export function rustStatementDeclaresNonSnakeName(statement: RustStmt): boolean 
 export function rustExpressionDeclaresNonSnakeName(expression: RustExpr): boolean {
   switch (expression.kind) {
     case "closure":
-    case "closure-block": return expression.params.some(parameter => patternDeclaresNonSnakeName(parameter.pattern));
+    case "closure-block": return expression.params.some(parameter => rustNameNeedsStyleAllowance(parameter.name, "snake"));
     case "block": return expression.bindings.some(binding => rustNameNeedsStyleAllowance(binding.name, "snake"));
     case "match": return expression.arms.some(arm => patternDeclaresNonSnakeName(arm.pattern));
     case "matches": return patternDeclaresNonSnakeName(expression.pattern);
@@ -119,5 +105,12 @@ export function rustExpressionDeclaresNonSnakeName(expression: RustExpr): boolea
 }
 
 function patternDeclaresNonSnakeName(pattern: RustPattern): boolean {
-  return rustPatternBindings(pattern)?.some(binding => rustNameNeedsStyleAllowance(binding.name, "snake")) === true;
+  switch (pattern.kind) {
+    case "binding": return rustNameNeedsStyleAllowance(pattern.name, "snake");
+    case "tuple":
+    case "tuple-variant": return pattern.elements.some(patternDeclaresNonSnakeName);
+    case "or": return pattern.alternatives.some(patternDeclaresNonSnakeName);
+    case "path":
+    case "wildcard": return false;
+  }
 }

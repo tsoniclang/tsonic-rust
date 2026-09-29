@@ -187,7 +187,7 @@ export function planRustProjectTypeTest(
       method: "is_some_and",
       args: [{
         kind: "closure",
-        params: [{ pattern: { kind: "binding" as const, name: "value" } }],
+        params: [{ name: "value", byRefCopy: false }],
         body: {
           kind: "option-presence",
           receiver: projected,

@@ -18,7 +18,8 @@ test("borrowed method-chain let initializers reflow as one continuation", () => 
       body: {
         statements: [{
           kind: "let",
-          pattern: { kind: "binding", name: "__tsonic_location", mutable: false },
+          name: "__tsonic_location",
+          mutable: false,
           init: {
             kind: "reference",
             expr: {
@@ -27,7 +28,7 @@ test("borrowed method-chain let initializers reflow as one continuation", () => 
               method: "with",
               args: [{
                 kind: "closure",
-                params: [{ pattern: { kind: "binding", name: "__tsonic_module_binding", mutable: false } }],
+                params: [{ name: "__tsonic_module_binding", mutable: false }],
                 move: false,
                 body: {
                   kind: "method-call",
@@ -61,7 +62,8 @@ test("typed let bindings keep fitting call openings before expanded arrays", () 
       body: {
         statements: [{
           kind: "let",
-          pattern: { kind: "binding", name: "concatenated", mutable: false },
+          name: "concatenated",
+          mutable: false,
           type: {
             kind: "named",
             path: "js_abi::JsArray",
@@ -113,7 +115,8 @@ test("typed let bindings keep expanded ordinary calls attached", () => {
       body: {
         statements: [{
           kind: "let",
-          pattern: { kind: "binding", name: "point", mutable: false },
+          name: "point",
+          mutable: false,
           type: { kind: "primitive", name: "f64" },
           init: {
             kind: "call",
@@ -157,7 +160,8 @@ test("typed let bindings keep a fitting call base before a fallible selector", (
       body: {
         statements: [{
           kind: "let",
-          pattern: { kind: "binding", name: "temporary", mutable: false },
+          name: "temporary",
+          mutable: false,
           type: { kind: "string" },
           init: {
             kind: "try",
@@ -195,7 +199,8 @@ test("typed let bindings move an expanded call base to one continuation", () => 
       body: {
         statements: [{
           kind: "let",
-          pattern: { kind: "binding", name: "merged", mutable: false },
+          name: "merged",
+          mutable: false,
           type: { kind: "named", path: "tsonic_rust_node::buffer::Buffer" },
           init: {
             kind: "try",
@@ -247,7 +252,8 @@ test("fitting string concatenations remain on typed binding lines", () => {
       body: {
         statements: [{
           kind: "let",
-          pattern: { kind: "binding", name: "file", mutable: false },
+          name: "file",
+          mutable: false,
           type: { kind: "string" },
           init: {
             kind: "string-concat",
@@ -298,7 +304,7 @@ test("fallible method calls keep short receivers attached to block arguments", (
                 }],
                 value: {
                   kind: "closure",
-                  params: [{ pattern: { kind: "binding", name: "value", mutable: false } }],
+                  params: [{ name: "value", mutable: false }],
                   move: true,
                   body: {
                     kind: "call",
@@ -342,8 +348,8 @@ test("rustfmt canonicalizes fallible calls with single-expression closures", () 
               args: [{
                 kind: "closure-block",
                 params: [
-                  { pattern: { kind: "binding", name: "left", mutable: false } },
-                  { pattern: { kind: "binding", name: "right", mutable: false } },
+                  { name: "left", mutable: false },
+                  { name: "right", mutable: false },
                 ],
                 move: false,
                 async: false,
@@ -401,7 +407,7 @@ test("long expression closures use a vertical receiver before expanding the clos
                     method: "update_with",
                     args: [{
                       kind: "closure",
-                      params: [{ pattern: { kind: "binding", name: "__tsonic_location_current" } }],
+                      params: [{ name: "__tsonic_location_current", byRefCopy: false }],
                       body: {
                         kind: "binary",
                         operator: "+",
@@ -448,7 +454,7 @@ test("short optional chains stay attached when their fitted closure body expands
             method: "map",
             args: [{
               kind: "closure",
-              params: [{ pattern: { kind: "binding", name: "__tsonic_optional_receiver" } }],
+              params: [{ name: "__tsonic_optional_receiver", byRefCopy: false }],
               body: {
                 kind: "method-call",
                 receiver: {
@@ -459,7 +465,7 @@ test("short optional chains stay attached when their fitted closure body expands
                 method: "with",
                 args: [{
                   kind: "closure",
-                  params: [{ pattern: { kind: "binding", name: "state" } }],
+                  params: [{ name: "state", byRefCopy: false }],
                   body: { kind: "field", receiver: { kind: "path", path: "state" }, name: "0" },
                 }],
               },
@@ -554,9 +560,8 @@ test("nonempty traits use rustfmt-compatible long supertrait headers", () => {
       members: [{ kind: "function",
         name: "read",
         generics: emptyRustGenerics,
-        selfParam: { kind: "typed", type: { kind: "named", path: "alloc::rc::Rc",
-          genericArguments: [{ kind: "type", type: { kind: "named", path: "Self" } }] } },
-        params: [{ pattern: { kind: "binding", name: "value" }, type: { kind: "primitive", name: "i32" } }],
+        selfParam: { kind: "rc" },
+        params: [{ name: "value", type: { kind: "primitive", name: "i32" } }],
         returnType: { kind: "primitive", name: "i32" },
       }],
     }],
@@ -583,8 +588,7 @@ test("nonempty traits retain rustfmt-compatible fitted supertrait headers", () =
       members: [{ kind: "function",
         name: "read",
         generics: emptyRustGenerics,
-        selfParam: { kind: "typed", type: { kind: "named", path: "alloc::rc::Rc",
-          genericArguments: [{ kind: "type", type: { kind: "named", path: "Self" } }] } },
+        selfParam: { kind: "rc" },
         params: [],
         returnType: { kind: "named", path: "String" },
       }],

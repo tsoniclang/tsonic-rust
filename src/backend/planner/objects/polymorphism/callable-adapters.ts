@@ -47,7 +47,7 @@ export function planRootCallableForwarder(
   if (shape.errorType !== undefined && (boundary === undefined || !rustTypeEquals(rustErrorType(boundary), shape.errorType))) {
     return reject();
   }
-  const syntheticNames = createRustSyntheticNameState(context.input.program.source.ast, contract, shape.params.map(parameter => parameter.pattern.name));
+  const syntheticNames = createRustSyntheticNameState(context.input.program.source.ast, contract, shape.params.map(parameter => parameter.name));
   const selectedContext = { ...context, syntheticNames, fallibleBoundary: boundary };
   const parameters = shape.params.map(parameter => ({
     ...parameter,
@@ -75,7 +75,7 @@ export function planRootCallableForwarder(
     });
     if (overrideResult === undefined) return reject();
     statements.push({
-      kind: "if-let", pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: overrideName }] },
+      kind: "if-let-some", binding: overrideName,
       expression: readRustProjectMethodOverride({ kind: "path", path: "self" }, overrideStoragePath, representation),
       body: { statements: [{ kind: "return", expr: overrideResult }] },
     });

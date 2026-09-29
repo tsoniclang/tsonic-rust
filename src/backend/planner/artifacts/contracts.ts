@@ -47,7 +47,7 @@ export function rustFunctionSurface(
       encodeRustContractParts([
         "parameter",
         String(index),
-        closedMetadataKey(parameter.pattern),
+        parameter.name,
         closedMetadataKey(parameter.type),
       ])),
     encodeRustContractParts([

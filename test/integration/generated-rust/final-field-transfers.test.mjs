@@ -52,11 +52,11 @@ export function main(): void {
 ` } });
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
-  for (const name of ["extract", "after_read", "retained", "finalized", "branch", "observed"]) {
+  for (const name of ["extract", "afterRead", "retained", "finalized", "branch", "observed"]) {
     assert.ok(output.includes(`fn ${name}(`), name);
   }
-  const extract = output.slice(output.indexOf("fn extract"), output.indexOf("fn after_read"));
-  const after = output.slice(output.indexOf("fn after_read"), output.indexOf("fn retained"));
+  const extract = output.slice(output.indexOf("fn extract"), output.indexOf("fn afterRead"));
+  const after = output.slice(output.indexOf("fn afterRead"), output.indexOf("fn retained"));
   assert.doesNotMatch(extract, /value\.text\.clone\(\)/u);
   assert.doesNotMatch(after, /value\.text\.clone\(\)/u);
   assert.match(output.slice(output.indexOf("fn retained")), /value\.text\.clone\(\)/u);

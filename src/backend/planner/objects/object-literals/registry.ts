@@ -14,7 +14,7 @@ import { rustProjectInstanceContracts } from "../../../../analysis/project-types
 import { rustProjectObjectIdentityField, rustProjectObjectStateField } from "../project-objects.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import type {
-  RustNamedFunctionParam,
+  RustFunctionParam,
   RustItem,
   RustStructField,
   RustType,
@@ -243,7 +243,7 @@ export function createImplementationPlan(
   const methodOverrideFor = (
     contractMethod: Node,
     implementation: RustObjectLiteralMethodImplementationPlan,
-    parameters: readonly RustNamedFunctionParam[],
+    parameters: readonly RustFunctionParam[],
     returnType: RustType | undefined,
     errorType: RustType | undefined,
   ): RustObjectLiteralMethodOverridePlan | undefined | false => {

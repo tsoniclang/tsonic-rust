@@ -44,12 +44,6 @@ function rustPublicSurface(items: readonly RustItem[]): string {
 
 function publicItemSurface(item: RustItem): readonly string[] {
   switch (item.kind) {
-    case "macro-invocation":
-      return [closedMetadataKey(item)];
-    case "extern-block": {
-      const members = item.members.filter(member => member.kind === "macro-invocation" || member.visibility === "public");
-      return members.length === 0 ? [] : [closedMetadataKey({ ...item, members })];
-    }
     case "function":
       return item.visibility === "public"
         ? [encodeRustContractParts([closedMetadataKey(item.attrs ?? []), rustFunctionSurface({
@@ -99,7 +93,7 @@ function publicItemSurface(item: RustItem): readonly string[] {
       }
       return item.members.flatMap(member => member.kind === "function"
         ? member.visibility === "public" ? [publicMethodSurface(closedMetadataKey(item.target), member)] : []
-        : member.kind === "macro-invocation" || member.kind === "const" && member.visibility === "public"
+        : member.kind === "const" && member.visibility === "public"
           ? [closedMetadataKey({ target: item.target, generics: item.generics, member })] : []);
     case "mod-decl":
       return item.visibility === "public"
@@ -131,7 +125,7 @@ function publicMethodSurface(
       encodeRustContractParts([
         "parameter",
         String(index),
-        closedMetadataKey(parameter.pattern),
+        parameter.name,
         closedMetadataKey(parameter.type),
       ])),
     encodeRustContractParts([

@@ -225,6 +225,7 @@ function rustFoundationForProviderOperationForm(
       form.argConversions?.forEach(requireConversion);
       break;
     case "struct-variant":
+    case "expression-macro":
     case "call-c-variadic":
     case "call-str-slice":
     case "free-call-str-slice":

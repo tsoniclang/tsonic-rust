@@ -14,7 +14,7 @@ import {
   sourceTypePath,
 } from "../../program/plan-context.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
-import { rustSelfParameterEquals, rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
+import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
 import { planProjectMethod } from "../../declarations/nominal.js";
 import { readRustProjectMethodOverride, rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "../project-objects.js";
 import { rustCallableSpecialization } from "../../declarations/callables/generics.js";
@@ -39,8 +39,8 @@ export function planProjectFieldAccessorCall(
   valueType: RustType,
 ): { readonly expression: RustExpr; readonly errorType?: RustType } | undefined {
   const read = value === undefined;
-  const expectedParameters = read ? [] : [{ pattern: { kind: "binding" as const, name: "value" }, type: valueType }];
-  if (helper === undefined || !rustSelfParameterEquals(helper.selfParam, rustSelfParameter("rc")) || helper.isAsync === true ||
+  const expectedParameters = read ? [] : [{ name: "value", type: valueType }];
+  if (helper === undefined || helper.selfParam?.kind !== "rc" || helper.isAsync === true ||
     helper.isUnsafe === true || !rustFunctionTypesMatch(
       helper.params,
       helper.returnType,
@@ -260,7 +260,8 @@ function planRootCallableImplementation(
           ...planned.body,
           statements: [{
             kind: "let",
-            pattern: { kind: "binding", name: thisBindingName, mutable: false },
+            name: thisBindingName,
+            mutable: false,
             init: thisPlan.binding,
           }, ...planned.body.statements],
         },
@@ -373,10 +374,8 @@ function applyRootMethodOverride(
   if (representation === undefined) {
     return undefined;
   }
-  const bindings = callable.params.map(parameter => parameter.pattern.kind === "binding" ? parameter.pattern : undefined);
-  if (bindings.some(binding => binding === undefined)) return rejectRootContractErrorAbi(implementation, context);
   const overrideName = allocateRustLocalName(
-    new Set(bindings.map(binding => binding!.name)),
+    new Set(callable.params.map((parameter) => parameter.name)),
     "method_override",
   );
   return {
@@ -384,8 +383,8 @@ function applyRootMethodOverride(
     body: {
       ...callable.body,
       statements: [{
-        kind: "if-let",
-        pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: overrideName }] },
+        kind: "if-let-some",
+        binding: overrideName,
         expression: readRustProjectMethodOverride(
           { kind: "path", path: "self" },
           overrideStoragePath,
@@ -400,9 +399,9 @@ function applyRootMethodOverride(
               method: "call",
               args: [{
                 kind: "tuple-literal",
-                elements: bindings.map((binding) => ({
+                elements: callable.params.map((parameter) => ({
                   kind: "path" as const,
-                  path: binding!.name,
+                  path: parameter.name,
                 })),
               }],
             },

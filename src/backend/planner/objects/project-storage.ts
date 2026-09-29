@@ -379,7 +379,7 @@ function writeRustStoredObjectFieldStorage(
       if (context.syntheticNames === undefined) return undefined;
       const valueName = allocateRustSyntheticName(context.syntheticNames, "field_value");
       return { kind: "method-call", receiver: location, method: "with_mut", args: [{ kind: "closure",
-        params: [{ pattern: { kind: "binding" as const, name: valueName } }], body: { kind: "assignment", operator,
+        params: [{ name: valueName, byRefCopy: false }], body: { kind: "assignment", operator,
           target: { kind: "dereference", pointer: { kind: "path", path: valueName } }, value } }] };
     }
     return field.storage === "property"
@@ -450,7 +450,7 @@ function mutateRustStoredObjectFieldStorage(
       const body = mutation({ kind: "dereference", pointer: { kind: "path", path: valueName } });
       return body === undefined ? undefined : { kind: "method-call",
         receiver: readRustStructuralObjectField(receiver, field.targetName, rustLocationTargetType(field.carrier)),
-        method: "with_mut", args: [{ kind: "closure", params: [{ pattern: { kind: "binding" as const, name: valueName } }], body }] };
+        method: "with_mut", args: [{ kind: "closure", params: [{ name: valueName, byRefCopy: false }], body }] };
     }
     if (field.method === true || access === "property" && field.readonly) {
       return undefined;

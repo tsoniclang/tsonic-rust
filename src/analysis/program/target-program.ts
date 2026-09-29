@@ -149,7 +149,7 @@ export function analyzeRustTargetProgram(
       if (selected?.kind !== "source-field" || selected.storage !== "project-object" ||
         selected.valueSemantics.kind !== "stored" || selected.dispatch !== undefined) return false;
       const definition = context.projectTypes.definitionForCarrier(selected.receiverCarrier);
-      if (definition === undefined || context.attributeApplications.forDeclaration(definition.declaration).length !== 0 ||
+      if (definition === undefined ||
         objectRepresentations.representationFor(definition)?.kind !== "value") return false;
       const receiver = Node_Expression(context.ast, field);
       const declaration = receiver === undefined ? undefined : context.source.navigation.sourceReferenceFor(receiver)?.declaration;

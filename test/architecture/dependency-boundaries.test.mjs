@@ -82,7 +82,6 @@ test("Rust package exposes only approved audience entrypoints", async () => {
     "LICENSE",
     "README.md",
     "dist",
-    "tools/rust-source-provider/src",
     "!dist/**/*.tsbuildinfo",
     "!dist/**/.temp/**",
   ]);

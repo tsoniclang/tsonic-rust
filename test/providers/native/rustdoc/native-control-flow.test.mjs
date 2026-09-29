@@ -85,25 +85,39 @@ fn generic_ownership_and_drop_are_native() {
 
 test("native ranges and iterator adapters retain monomorphized collection and borrowed predicates", { timeout: 300_000 }, () => {
   const { result } = compileRustThroughTargetPack({
-    target: { id: "rust", options: { outputType: "bin", crateName: "native_iterators" } },
+    target: { id: "rust", options: { outputType: "lib", crateName: "native_iterators" } },
     files: { "index.ts": `
 import type { nativeUint } from "@tsonic/core/types.js";
 import { range, load } from "@tsonic/rust/lang.js";
 import { Vec } from "@tsonic/rust/std/vec.js";
-import { println } from "@tsonic/rust/std/index.js";
-export function main(): void {
+export function values(): Vec<nativeUint> {
   const count: nativeUint = 4;
-  const values = range<nativeUint>(0, count).map(value => value + 1).collect<Vec<nativeUint>>();
-  const matches = range<nativeUint>(0, count).filter(value => load(value) < 2).count();
-  println("{} {} {}", values.len(), matches, range<nativeUint>(4, 4).count());
+  return range<nativeUint>(0, count).map(value => value + 1).collect<Vec<nativeUint>>();
+}
+export function matches(): nativeUint {
+  return range<nativeUint>(0, 4).filter(value => load(value) < 2).count();
+}
+export function empty(): nativeUint {
+  return range<nativeUint>(4, 4).count();
 }
 ` },
   });
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
   assert.doesNotMatch(output, /JsArray|Callable::|Location::|Box::new/u);
-  const run = validateGeneratedProject("native-iterators", result.artifacts, { run: true });
-  assert.equal(run.stdout, "4 2 0\n");
+  const root = writeGeneratedProject("native-iterators", result.artifacts);
+  mkdirSync(join(root, "tests"), { recursive: true });
+  writeFileSync(join(root, "tests/iterators.rs"), `
+use native_iterators::index::{empty, matches, values};
+#[test]
+fn native_iteration_results() {
+    assert_eq!(values(), vec![1, 2, 3, 4]);
+    assert_eq!(matches(), 2);
+    assert_eq!(empty(), 0);
+}
+`);
+  runCargo(root, ["generate-lockfile", "--offline"]);
+  runCargo(root, ["test", "--locked", "--offline"]);
 });
 
 test("native Result entrypoint uses native Termination without an additional error carrier", { timeout: 300_000 }, () => {

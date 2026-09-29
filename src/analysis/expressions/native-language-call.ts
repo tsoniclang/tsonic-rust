@@ -1,4 +1,5 @@
-import type { Node, ProviderDeclarationIdentity, ResolvedSourceSignatureCallInfo } from "@tsonic/tsts";
+import type { Node, ProviderDeclarationIdentity } from "@tsonic/tsts";
+import type { ResolvedSourceCallInfo } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
 import { resolveProviderTypeIdentity } from "../../policy/types/resolution/providers.js";
 import {
@@ -8,7 +9,7 @@ import {
 } from "../../source/semantics/identity.js";
 
 export interface RustLanguageCall {
-  readonly selection: ResolvedSourceSignatureCallInfo;
+  readonly selection: ResolvedSourceCallInfo;
   readonly declaration: ProviderDeclarationIdentity;
 }
 

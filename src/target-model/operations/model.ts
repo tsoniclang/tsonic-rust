@@ -268,6 +268,7 @@ export type RustProviderOperationForm =
       readonly argOrder?: readonly number[];
     }
   | { readonly form: "struct-variant"; readonly path: string; readonly fields: readonly string[] }
+  | { readonly form: "expression-macro"; readonly path: string; readonly delimiter: "parentheses" | "brackets" | "braces" }
   | {
       readonly form: "call-c-variadic";
       readonly path: string;

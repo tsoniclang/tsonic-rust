@@ -51,7 +51,7 @@ export function createStructuralLiteralImplementation(
   const functions: RustImplFunction[] = [];
   const selected = (name: string): RustExpr => ({ kind: "field", receiver: { kind: "path", path: "state" }, name });
   const read = (name: string, copy = false): RustExpr => ({ kind: "method-call", receiver: { kind: "path", path: "self" },
-    method: "with", args: [{ kind: "closure", params: [{ pattern: { kind: "binding" as const, name: "state" } }],
+    method: "with", args: [{ kind: "closure", params: [{ name: "state", byRefCopy: false }],
       body: copy ? selected(name) : { kind: "method-call", receiver: selected(name), method: "clone", args: [] } }] });
   const receiver: RustExpr = { kind: "struct-literal", path: wrapper.path,
     fields: [{ name: "dispatch", value: { kind: "path", path: "self" } }] };
@@ -73,15 +73,15 @@ export function createStructuralLiteralImplementation(
       const result = protocol === undefined ? undefined : rustTypeFromCarrierInContext(protocol.result, context);
       const params = protocol?.parameters.map((carrier, index) => {
         const type = rustTypeFromCarrierInContext(carrier, context);
-        return type === undefined ? undefined : { pattern: { kind: "binding" as const, name: `argument${index}` }, type };
+        return type === undefined ? undefined : { name: `argument${index}`, type };
       });
       if (protocol === undefined || storage === undefined || result === undefined || params === undefined ||
         params.some(parameter => parameter === undefined) || !store(field.targetName, storageIndex, "value", storage)) return undefined;
       functions.push({ kind: "function", name: field.targetName, visibility: "private", generics: emptyRustGenerics,
         selfParam: rustSelfParameter("rc"), params: params as NonNullable<typeof params[number]>[], returnType: result, errorType,
-        body: { statements: [{ kind: "let", pattern: { kind: "binding", name: "callable", mutable: false }, init: read(field.targetName) }, { kind: "tail", expr: {
+        body: { statements: [{ kind: "let", name: "callable", mutable: false, init: read(field.targetName) }, { kind: "tail", expr: {
           kind: "method-call", receiver: { kind: "path", path: "callable" }, method: "call", args: [{ kind: "tuple-literal",
-            elements: [...(field.receiverIndependent ? [] : [receiver]), ...params.map(parameter => ({ kind: "path" as const, path: parameter!.pattern.name }))] }],
+            elements: [...(field.receiverIndependent ? [] : [receiver]), ...params.map(parameter => ({ kind: "path" as const, path: parameter!.name }))] }],
         } }] } });
       continue;
     }
@@ -111,7 +111,7 @@ export function createStructuralLiteralImplementation(
       getter = { kind: "call", path: "Ok", args: [read(field.targetName, isRustCopyCarrier(field.carrier))] };
       if (property.setterTargetName !== undefined) {
         let write: RustExpr = { kind: "method-call", receiver: { kind: "path", path: "self" }, method: "with_mut", args: [{
-          kind: "closure-block", params: [{ pattern: { kind: "binding" as const, name: "state", mutable: false } }], move: false, async: false,
+          kind: "closure-block", params: [{ name: "state", mutable: false }], move: false, async: false,
           body: { statements: [{ kind: "assign", target: selected(field.targetName), operator: "=", value: { kind: "path", path: "value" } }] },
         }] };
         const freeze = context.input.program.frozenDataWrites.receiverFor("structural-object", carrier, storageIndex);
@@ -125,7 +125,7 @@ export function createStructuralLiteralImplementation(
     if (property.setterTargetName !== undefined) {
       if (setter === undefined) return undefined;
       functions.push({ kind: "function", name: property.setterTargetName, visibility: "private", generics: emptyRustGenerics,
-        selfParam: rustSelfParameter(property.selfMode), params: [{ pattern: { kind: "binding" as const, name: "value" }, type }], returnType: { kind: "unit" }, errorType,
+        selfParam: rustSelfParameter(property.selfMode), params: [{ name: "value", type }], returnType: { kind: "unit" }, errorType,
         body: { statements: [{ kind: "tail", expr: setter }] } });
     }
   }

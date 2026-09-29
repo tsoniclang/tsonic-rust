@@ -230,7 +230,7 @@ function fromImplementation(
       name: "from",
       visibility: "private",
       generics: emptyRustGenerics,
-      params: [{ pattern: { kind: "binding" as const, name: "value" }, type: source }],
+      params: [{ name: "value", type: source }],
       returnType: namedType("Self"),
       body: {
         statements: [{
@@ -265,7 +265,7 @@ function displayImplementation(projectVariants: readonly {
       visibility: "private",
       generics: emptyRustGenerics,
       selfParam: { kind: "reference", mutable: false },
-      params: [{ pattern: { kind: "binding" as const, name: "formatter" }, type: formatterType }],
+      params: [{ name: "formatter", type: formatterType }],
       returnType: namedType("core::fmt::Result"),
       body: {
         statements: [{
@@ -329,7 +329,9 @@ function debugImplementation(): RustItem {
       visibility: "private",
       generics: emptyRustGenerics,
       selfParam: { kind: "reference", mutable: false },
-      params: [{ pattern: { kind: "binding" as const, name: "formatter" }, type: {
+      params: [{
+        name: "formatter",
+        type: {
           kind: "reference",
           mutable: true,
           referent: {
@@ -337,7 +339,8 @@ function debugImplementation(): RustItem {
             path: "core::fmt::Formatter",
             genericArguments: [{ kind: "lifetime", lifetime: { kind: "placeholder" } }],
           },
-        } }],
+        },
+      }],
       returnType: namedType("core::fmt::Result"),
       body: {
         statements: [{
@@ -386,8 +389,8 @@ function finishResourceFunction(): RustItem {
     attrs: [rustHiddenAttribute],
     generics: oneTypeParameterGenerics,
     params: [
-      { pattern: { kind: "binding" as const, name: "body" }, type: resultType(completion) },
-      { pattern: { kind: "binding" as const, name: "cleanup" }, type: resultType(unitType) },
+      { name: "body", type: resultType(completion) },
+      { name: "cleanup", type: resultType(unitType) },
     ],
     returnType: resultType(completion),
     body: {
@@ -460,8 +463,8 @@ function finishFinallyFunction(): RustItem {
     attrs: [rustHiddenAttribute],
     generics: oneTypeParameterGenerics,
     params: [
-      { pattern: { kind: "binding" as const, name: "body" }, type: resultType(completion) },
-      { pattern: { kind: "binding" as const, name: "finally" }, type: resultType(completion) },
+      { name: "body", type: resultType(completion) },
+      { name: "finally", type: resultType(completion) },
     ],
     returnType: resultType(completion),
     body: {

@@ -302,8 +302,13 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
           context.syntheticNames,
           "record_method",
         );
+        const argumentsName = allocateRustSyntheticName(
+          context.syntheticNames,
+          "method_arguments",
+        );
         const tupledClosure = tupleRustClosureArguments(
           closure,
+          argumentsName,
           implementation.parameterCount + 1,
         );
         if (tupledClosure === undefined) {

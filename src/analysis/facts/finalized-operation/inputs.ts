@@ -129,6 +129,10 @@ export function finalizeTargetInputs(
         ? undefined
         : { targetReceiver: none, targetArguments: args };
     }
+    case "expression-macro": {
+      const args = mappedArguments(undefined, undefined, undefined);
+      return args === undefined ? undefined : { targetReceiver: none, targetArguments: args };
+    }
     case "call-c-variadic": {
       const fixed = form.fixedArgumentModes.map((mode, sourceIndex) =>
         input.argument(sourceIndex, mode));

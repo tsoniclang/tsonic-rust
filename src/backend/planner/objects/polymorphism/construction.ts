@@ -18,7 +18,7 @@ import {
 } from "../../../../analysis/facts/keys.js";
 import type {
   RustExpr,
-  RustNamedFunctionParam,
+  RustFunctionParam,
   RustImplFunction,
   RustStmt,
   RustType,
@@ -232,7 +232,8 @@ export function planProjectClassConstructor(
     };
     statements.push({
       kind: "let",
-      pattern: { kind: "binding", name, mutable: true },
+      name,
+      mutable: true,
       type: field.type,
     });
     values.set(field.declaration, expression);
@@ -287,7 +288,7 @@ export function planProjectClassConstructor(
     const baseArgs = explicitBase === undefined
       ? parameterPlan.params.map((parameter) => ({
           kind: "path" as const,
-          path: parameter.pattern.name,
+          path: parameter.name,
         }))
       : planRustSelectedSourceCallArguments(explicitBase.call, initializationContext);
     const baseType = rustTypeFromCarrierInContext(base.targetType, context);
@@ -351,7 +352,8 @@ export function planProjectClassConstructor(
     }
     statements.push({
       kind: "let",
-      pattern: { kind: "binding", name: baseStateName, mutable: true },
+      name: baseStateName,
+      mutable: true,
       init: baseInitialization,
     });
     bodyIndex = constructor === undefined ? 0 : 1;
@@ -376,7 +378,7 @@ export function planProjectClassConstructor(
       return undefined;
     }
     const baseName = allocateRustSyntheticName(syntheticNames, "external_base");
-    statements.push({ kind: "let", pattern: { kind: "binding", name: baseName, mutable: false }, init: baseError });
+    statements.push({ kind: "let", name: baseName, mutable: false, init: baseError });
     const basePath: RustExpr = { kind: "path", path: baseName };
     for (const externalField of externalBase.fields) {
       const field = ownLayer.fields.find((candidate) =>
@@ -558,8 +560,8 @@ export function planProjectClassConstructor(
   }
   const forwardArgs: RustExpr[] = [
     ...(environmentBorrow === undefined ? [] : [{ kind: "reference" as const,
-      expr: { kind: "path" as const, path: environmentBorrow.pattern.name } }]),
-    ...parameterPlan.params.map((parameter) => ({ kind: "path" as const, path: parameter.pattern.name })),
+      expr: { kind: "path" as const, path: environmentBorrow.name } }]),
+    ...parameterPlan.params.map((parameter) => ({ kind: "path" as const, path: parameter.name })),
   ];
   const construct: RustImplFunction = { kind: "function",
     name: constructorSignature.targetName,
@@ -587,7 +589,8 @@ export function planProjectClassConstructor(
       statements: [
         {
           kind: "let",
-          pattern: { kind: "binding", name: stateName, mutable: false },
+          name: stateName,
+          mutable: false,
           init: fallible ? {
             kind: "try",
             resultErrorType: constructorErrorType!,
@@ -607,12 +610,14 @@ export function planProjectClassConstructor(
         },
         {
           kind: "let",
-          pattern: { kind: "binding", name: identityName, mutable: false },
+          name: identityName,
+          mutable: false,
           init: { kind: "call", path: "rt::ObjectIdentity::new", args: [] },
         },
         {
           kind: "let",
-          pattern: { kind: "binding", name: rootName, mutable: false },
+          name: rootName,
+          mutable: false,
           init: {
             kind: "call",
             path: "alloc::rc::Rc::new",
@@ -673,11 +678,11 @@ function planImplicitProjectConstructorParameters(
   signature: RustProjectConstructorSignature,
   context: RustPlanContext,
 ): {
-  readonly params: readonly RustNamedFunctionParam[];
+  readonly params: readonly RustFunctionParam[];
   readonly prelude: readonly never[];
 } | undefined {
   const receiver = context.input.program.projectTypes.openCarrier(definition);
-  const params: RustNamedFunctionParam[] = [];
+  const params: RustFunctionParam[] = [];
   for (const parameter of signature.parameters) {
     const abi = context.input.program.facts.getFact(
       parameter.parameterDeclaration,
@@ -700,7 +705,7 @@ function planImplicitProjectConstructorParameters(
       ));
       return undefined;
     }
-    params.push({ pattern: { kind: "binding" as const, name: name, mutable: false }, type });
+    params.push({ name, type, mutable: false });
   }
   return { params, prelude: [] };
 }

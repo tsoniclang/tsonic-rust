@@ -5,7 +5,7 @@ import type { RustClassValueDefinition } from "../../../analysis/objects/class-v
 import { rustSourceBindingFactKey } from "../../../analysis/facts/keys.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustSourceBindingPath, sourceModuleItemPath, rustSourceItemIsPubliclyReachable } from "../program/plan-context.js";
-import { emptyRustGenerics, type RustCallGenericArgument, type RustExpr, type RustNamedFunctionParam, type RustItem, type RustStructField } from "../../target-ast/nodes.js";
+import { emptyRustGenerics, type RustCallGenericArgument, type RustExpr, type RustFunctionParam, type RustItem, type RustStructField } from "../../target-ast/nodes.js";
 import { isRustCopyCarrier, rustLocationTargetType } from "../../../target-model/types/index.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustProjectGenerics, rustProjectStateMarker } from "./polymorphism/names.js";
@@ -74,7 +74,7 @@ export function planRustClassEnvironmentItems(declaration: Node, context: RustPl
         method: "addr", args: [] },
     ), { kind: "impl", generics, target: identityOwner, trait: { kind: "named", path: "PartialEq" }, members: [{ kind: "function",
       name: "eq", visibility: "private", generics: emptyRustGenerics, selfParam: rustSelfParameter("ref"),
-      params: [{ pattern: { kind: "binding" as const, name: "other" }, type: { kind: "reference", mutable: false, referent: { kind: "named", path: "Self" } } }],
+      params: [{ name: "other", type: { kind: "reference", mutable: false, referent: { kind: "named", path: "Self" } } }],
       returnType: { kind: "primitive", name: "bool" }, body: { statements: [{ kind: "tail", expr: {
         kind: "call", path: "core::ptr::eq", args: [{ kind: "path", path: "self" }, { kind: "path", path: "other" }],
       } }] },
@@ -137,12 +137,12 @@ export function rustClassEnvironmentParameter(
   declaration: Node,
   context: RustPlanContext,
   mode: "owned" | "borrowed",
-): RustNamedFunctionParam | undefined {
+): RustFunctionParam | undefined {
   const environment = context.input.program.classValues.forDeclaration(declaration)?.environment;
   if (environment === undefined) return undefined;
   const type = mode === "owned" ? rustClassEnvironmentHandleType(environment.carrier, context)
     : rustClassEnvironmentType(environment.carrier, context);
-  return type === undefined ? undefined : { pattern: { kind: "binding", name: environment.parameterName },
+  return type === undefined ? undefined : { name: environment.parameterName,
     type: mode === "owned" ? type : { kind: "reference", mutable: false, referent: type } };
 }
 

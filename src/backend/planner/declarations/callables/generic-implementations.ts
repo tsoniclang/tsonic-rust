@@ -102,7 +102,9 @@ function planImplementation(
   const state: RustType = { kind: "named", path: implementation.stateName,
     genericArguments: environment.map(parameter => ({ kind: "type", type: { kind: "named", path: parameter.name } })),
   };
-  const ownerParams: readonly RustFunctionParam[] = captures.length === 0 ? [] : [{ pattern: { kind: "binding" as const, name: owner }, type: suspended ? shared(state) : { kind: "reference", referent: state, mutable: false } }];
+  const ownerParams: readonly RustFunctionParam[] = captures.length === 0 ? [] : [{ name: owner,
+    type: suspended ? shared(state) : { kind: "reference", referent: state, mutable: false },
+  }];
   return [{ kind: "struct", name: implementation.stateName, visibility: "public",
     generics, fields,
   }, ...(definition.storage === "value" ? genericCallableCopyStateItems(state, generics) : []),
@@ -200,9 +202,9 @@ function planDefinition(definition: RustGenericCallableDefinition, context: Rust
     name: "call", visibility: "public", selfParam: { kind: "reference", mutable: false },
     generics: { parameters: definition.signature.typeParameters.map(parameter => ({ kind: "type", name: parameter.name, bounds: [] })),
       wherePredicates: [...predicates.values()],
-    }, params: parameterTypes.map((type, index) => ({ pattern: { kind: "binding", name: `argument_${index}` }, type: type! })),
+    }, params: parameterTypes.map((type, index) => ({ name: `argument_${index}`, type: type! })),
     returnType: resultType,
-    body: { statements: nativeFuture ? [{ kind: "let", pattern: { kind: "binding", name: "owner", mutable: false },
+    body: { statements: nativeFuture ? [{ kind: "let", name: "owner", mutable: false,
       init: { kind: "method-call", receiver: { kind: "path", path: "self" }, method: "clone", args: [] },
     }, { kind: "tail", expr: { kind: "invoke", callee: { kind: "closure-block", params: [], move: true, async: true,
       body: { statements: [{ kind: "tail", expr: dispatch }] },

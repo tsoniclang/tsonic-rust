@@ -83,9 +83,9 @@ export function rustArrayEntryPayloadExcludesNullish(walk: RustFactWalk, express
         const call = ast.parent(use.reference);
         if (call === undefined || ast.kindName(call) !== "KindCallExpression" || Node_Expression(ast, call) !== use.reference) return false;
         const selected = walk.context.semanticsFor(call).operations.call(call);
-        if (selected === undefined || selected.outcome === "intrinsic") return false;
-        const argument = selected.sourceSelectedMethodTypeArguments?.[index];
-        const selectedDeclaration = walk.context.semanticsFor(call).declarations.signatureDeclaration(selected.selectedSignature);
+        const argument = selected?.sourceSelectedMethodTypeArguments?.[index];
+        const selectedDeclaration = selected === undefined ? undefined
+          : walk.context.semanticsFor(call).declarations.signatureDeclaration(selected.selectedSignature);
         const implementation = selectedDeclaration === undefined ? undefined : source.navigation.callableImplementation(selectedDeclaration);
         return implementation?.kind === "resolved" && implementation.implementation.declaration === callable &&
           argument !== undefined && excludes(argument.selectedType, call);

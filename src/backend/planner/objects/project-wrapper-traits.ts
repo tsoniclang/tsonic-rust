@@ -28,7 +28,7 @@ export function rustProjectWrapperTraits(
     }),
     implementation("core::fmt::Debug", { kind: "function",
       name: "fmt", visibility: "private", generics: emptyRustGenerics,
-      selfParam: rustSelfParameter("ref"), params: [{ pattern: { kind: "binding" as const, name: "formatter" }, type: {
+      selfParam: rustSelfParameter("ref"), params: [{ name: "formatter", type: {
         kind: "reference", mutable: true, referent: {
           kind: "named", path: "core::fmt::Formatter",
           genericArguments: [{ kind: "lifetime", lifetime: { kind: "placeholder" } }],
@@ -47,7 +47,7 @@ export function rustProjectWrapperTraits(
     }),
     implementation("PartialEq", { kind: "function",
       name: "eq", visibility: "private", generics: emptyRustGenerics,
-      selfParam: rustSelfParameter("ref"), params: [{ pattern: { kind: "binding" as const, name: "other" }, type: {
+      selfParam: rustSelfParameter("ref"), params: [{ name: "other", type: {
         kind: "reference", mutable: false, referent: { kind: "named", path: "Self" },
       } }], returnType: { kind: "primitive", name: "bool" },
       body: { statements: [{ kind: "tail", expr: {

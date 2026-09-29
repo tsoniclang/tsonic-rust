@@ -1,10 +1,20 @@
-import type { RustAttribute } from "../../backend/target-ast/attributes.js";
+import type { RustAttribute, RustAttributeArgument } from "../../backend/target-ast/attributes.js";
 import { indentText } from "./types.js";
-import { printRustTokenStream } from "./macro-input.js";
+import { escapeRustString } from "./patterns.js";
 
 export function printRustAttribute(attribute: RustAttribute, inner = false): string {
-  const separator = attribute.tokens.length === 0 || attribute.tokens[0]!.kind === "group" ? "" : " ";
-  return `#${inner ? "!" : ""}[${attribute.path}${separator}${printRustTokenStream(attribute.tokens)}]`;
+  return `#${inner ? "!" : ""}[${printRustAttributeArgument(attribute)}]`;
+}
+
+function printRustAttributeArgument(argument: RustAttributeArgument): string {
+  switch (argument.kind) {
+    case "word": return argument.path;
+    case "list": return `${argument.path}(${argument.arguments.map(printRustAttributeArgument).join(", ")})`;
+    case "value": return `${argument.path} = ${printRustAttributeArgument(argument.value)}`;
+    case "string": return `"${escapeRustString(argument.value)}"`;
+    case "integer": return String(argument.value);
+    case "boolean": return argument.value ? "true" : "false";
+  }
 }
 
 export function printRustAttributes(

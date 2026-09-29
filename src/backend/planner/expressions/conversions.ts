@@ -277,6 +277,14 @@ export function planProviderOperationExpression(
             fields: form.fields.map((name, index) => ({ name, value: args[index]! })),
           }
         : undefined);
+    case "expression-macro":
+      registerAliasFromPath(context, form.path);
+      return scoped({
+        kind: "macro-invocation",
+        path: form.path,
+        delimiter: form.delimiter,
+        args,
+      });
     case "call-c-variadic":
       registerAliasFromPath(context, form.path);
       return scoped({

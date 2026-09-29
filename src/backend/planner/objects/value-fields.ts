@@ -151,7 +151,7 @@ export function planRustValueFieldLocation(
         ? { kind: "method-call", receiver: root, method: "clone", args: [] } : root }],
       read: read({ kind: "method-call", receiver: storage, method: "load", args: [] }),
       write: value => ({ kind: "method-call", receiver: storage, method: "with_mut", args: [{
-        kind: "closure", params: [{ pattern: { kind: "binding" as const, name: ownerName } }],
+        kind: "closure", params: [{ name: ownerName, byRefCopy: false }],
         body: { kind: "assignment", operator: "=", target: project({ kind: "path", path: ownerName }), value },
       }] }),
     };

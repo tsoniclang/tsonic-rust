@@ -1,6 +1,5 @@
 import { type RustAttribute } from "../attributes.js";
-import type { RustBlock, RustExpr, RustPattern, RustStmt } from "../nodes.js";
-import { rustPatternBindings, rustPatternBindsName } from "../patterns.js";
+import type { RustBlock, RustExpr, RustStmt } from "../nodes.js";
 import { rustLintAttributes } from "../normalization/lint-policy.js";
 import {
   firstAccessesInStatements,
@@ -42,11 +41,10 @@ function foldTrivialTerminalBinding(
   const bindingIndex = statements.length - 2;
   const binding = statements[bindingIndex];
   const terminal = statements[bindingIndex + 1];
-  if (binding?.kind !== "let" || binding.pattern.kind !== "binding" || binding.else !== undefined ||
-    binding.init === undefined || binding.pattern.mutable ||
+  if (binding?.kind !== "let" || binding.init === undefined || binding.mutable ||
     binding.type !== undefined || (binding.attrs?.length ?? 0) > 0 ||
     terminal === undefined || (terminal.kind !== "tail" && terminal.kind !== "return") ||
-    terminal.expr?.kind !== "path" || terminal.expr.path !== binding.pattern.name) {
+    terminal.expr?.kind !== "path" || terminal.expr.path !== binding.name) {
     return statements;
   }
   return [
@@ -60,9 +58,6 @@ function finalizeRustNestedStatementLiveness(
   following: readonly RustStmt[],
 ): RustStmt {
   switch (statement.kind) {
-    case "let":
-      return statement.else === undefined ? statement
-        : { ...statement, else: finalizeRustBlockLiveness(statement.else) };
     case "if":
       return {
         ...statement,
@@ -71,7 +66,7 @@ function finalizeRustNestedStatementLiveness(
           ? {}
           : { else: finalizeRustBlockLiveness(statement.else, following) }),
       };
-    case "if-let":
+    case "if-let-some":
       return {
         ...statement,
         body: finalizeRustBlockLiveness(statement.body, following),
@@ -84,7 +79,7 @@ function finalizeRustNestedStatementLiveness(
       return { ...statement, body: finalizeRustBlockLiveness(statement.body, following) };
     case "loop":
     case "while":
-    case "while-let":
+    case "while-let-some":
     case "for":
       return { ...statement, body: finalizeRustBlockLiveness(statement.body) };
     case "resource-scope":
@@ -114,6 +109,7 @@ function finalizeRustNestedStatementLiveness(
               },
             }),
       };
+    case "let":
     case "expr":
     case "assign":
     case "return":
@@ -123,7 +119,6 @@ function finalizeRustNestedStatementLiveness(
     case "completion-exit":
     case "index-assign":
     case "throw":
-    case "macro-statement":
     case "item":
       return statement;
   }
@@ -134,24 +129,25 @@ function finalizeRustStatementLiveness(
   following: readonly RustStmt[],
 ): RustStmt {
   if (statement.kind === "let") {
-    const bindings = rustPatternBindings(statement.pattern);
-    if (bindings === undefined) return statement;
-    let pattern = statement.pattern;
-    if (pattern.kind === "binding" && pattern.mutable) {
-      const writes = maxWritesInStatements(following, pattern.name);
-      if (writes === 0 || statement.init === undefined && writes < 2) pattern = { ...pattern, mutable: false };
+    const writes = maxWritesInStatements(following, statement.name);
+    const mutabilityIsUnnecessary = writes === 0 ||
+      statement.init === undefined && writes < 2;
+    const normalized = statement.mutable && mutabilityIsUnnecessary
+      ? { ...statement, mutable: false }
+      : statement;
+    if (statement.name === "_" || statement.name.startsWith("_")) {
+      return normalized;
     }
-    let attrs = statement.attrs;
-    for (const binding of bindings) {
-      if (binding.name.startsWith("_")) continue;
-      if (!rustStatementsReferencePath(following, binding.name)) {
-        attrs = appendRustAttribute(attrs, rustLintAttributes.unusedVariables);
-      } else if (pattern.kind === "binding" && pattern.mutable && statement.init !== undefined &&
-        !firstAccessesInStatements(following, binding.name).has("read")) {
-        attrs = appendRustAttribute(attrs, rustLintAttributes.unusedAssignments);
-      }
+    let attrs = normalized.attrs;
+    if (!rustStatementsReferencePath(following, statement.name)) {
+      attrs = appendRustAttribute(attrs, rustLintAttributes.unusedVariables);
+      return { ...normalized, attrs };
     }
-    return { ...statement, pattern, attrs };
+    if (normalized.mutable && normalized.init !== undefined &&
+      !firstAccessesInStatements(following, statement.name).has("read")) {
+      attrs = appendRustAttribute(attrs, rustLintAttributes.unusedAssignments);
+    }
+    return { ...normalized, attrs };
   }
   if (statement.kind === "assign" && statement.operator === "=" &&
     statement.target.kind === "path") {
@@ -173,14 +169,14 @@ function combineDirectLateInitializers(
   statements: readonly RustStmt[],
 ): readonly RustStmt[] {
   const replacements = new Map<number, {
-    readonly declaration: Extract<RustStmt, { readonly kind: "let" }> & { readonly pattern: Extract<RustPattern, { kind: "binding" }> };
+    readonly declaration: Extract<RustStmt, { readonly kind: "let" }>;
     readonly initializer: RustExpr;
   }>();
   const combinedDeclarations = new Set<number>();
 
   for (let declarationIndex = 0; declarationIndex < statements.length; declarationIndex += 1) {
     const declaration = statements[declarationIndex];
-    if (declaration === undefined || declaration.kind !== "let" || declaration.pattern.kind !== "binding" || declaration.init !== undefined) {
+    if (declaration === undefined || declaration.kind !== "let" || declaration.init !== undefined) {
       continue;
     }
     for (let assignmentIndex = declarationIndex + 1;
@@ -190,28 +186,27 @@ function combineDirectLateInitializers(
       if (candidate === undefined) {
         break;
       }
-      const name = declaration.pattern.name;
-      if (candidate.kind === "let" && rustPatternBindsName(candidate.pattern, name) !== false) {
+      if (candidate.kind === "let" && candidate.name === declaration.name) {
         break;
       }
-      if (!rustStatementReferencesPath(candidate, name)) {
+      if (!rustStatementReferencesPath(candidate, declaration.name)) {
         if (statementAlwaysExits(candidate)) {
           break;
         }
         continue;
       }
       if (candidate.kind === "assign" && candidate.operator === "=" &&
-        candidate.target.kind === "path" && candidate.target.path === name &&
-        !rustExpressionReferencesPath(candidate.value, name)) {
+        candidate.target.kind === "path" && candidate.target.path === declaration.name &&
+        !rustExpressionReferencesPath(candidate.value, declaration.name)) {
         replacements.set(assignmentIndex, {
-          declaration: { ...declaration, pattern: declaration.pattern },
+          declaration,
           initializer: candidate.value,
         });
         combinedDeclarations.add(declarationIndex);
       } else {
-        const initializer = conditionalLateInitializer(candidate, name);
+        const initializer = conditionalLateInitializer(candidate, declaration.name);
         if (initializer !== undefined) {
-          replacements.set(assignmentIndex, { declaration: { ...declaration, pattern: declaration.pattern }, initializer });
+          replacements.set(assignmentIndex, { declaration, initializer });
           combinedDeclarations.add(declarationIndex);
         }
       }
@@ -230,8 +225,7 @@ function combineDirectLateInitializers(
     const following = statements.slice(index + 1);
     return [{
       ...replacement.declaration,
-      pattern: { ...replacement.declaration.pattern,
-        mutable: maxWritesInStatements(following, replacement.declaration.pattern.name) > 0 },
+      mutable: maxWritesInStatements(following, replacement.declaration.name) > 0,
       init: replacement.initializer,
       attrs: replacement.declaration.attrs,
     }];
@@ -297,7 +291,7 @@ function branchAssignmentValue(
       value = {
         kind: "block",
         bindings: bindings.map((declaration) => ({
-          name: declaration.pattern.name,
+          name: declaration.name,
           value: declaration.init,
           ...(declaration.type === undefined ? {} : { type: declaration.type }),
         })),
@@ -327,15 +321,12 @@ function isBranchBindingDeclaration(
   targetPath: string,
 ): statement is Extract<RustStmt, { readonly kind: "let" }> & {
   readonly init: RustExpr;
-  readonly pattern: Extract<RustPattern, { kind: "binding" }>;
 } {
   return statement.kind === "let" &&
-    statement.pattern.kind === "binding" &&
-    statement.else === undefined &&
     statement.init !== undefined &&
-    statement.pattern.mutable !== true &&
+    statement.mutable !== true &&
     (statement.attrs?.length ?? 0) === 0 &&
-    statement.pattern.name !== targetPath &&
+    statement.name !== targetPath &&
     !rustExpressionReferencesPath(statement.init, targetPath);
 }
 

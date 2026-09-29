@@ -509,9 +509,9 @@ test("provider parameter passing is metadata-derived and backend-gated", () => {
 
 test("optional chains consume exact TSTS evidence through one finalized Option fact", () => {
   const contracts = readFileSync(join(sourceRoot, "policy/operations/contracts.ts"), "utf8");
-  assert.match(contracts, /readonly source: ResolvedSourceSignatureCallInfo/u);
-  assert.doesNotMatch(contracts, /readonly optionalChain: ResolvedSourceSignatureCallInfo/u);
-  assert.doesNotMatch(contracts, /readonly sourceReceiver\?: ResolvedSourceSignatureCallInfo/u);
+  assert.match(contracts, /readonly source: ResolvedSourceCallInfo/u);
+  assert.doesNotMatch(contracts, /readonly optionalChain: ResolvedSourceCallInfo/u);
+  assert.doesNotMatch(contracts, /readonly sourceReceiver\?: ResolvedSourceCallInfo/u);
   assert.match(contracts, /readonly sourceReceiverType\?: Type/u);
 
   const semantics = readFileSync(

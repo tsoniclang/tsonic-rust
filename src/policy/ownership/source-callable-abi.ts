@@ -396,7 +396,7 @@ function parameterCanUseSharedBorrow(
       if (call === undefined || !ast.is.IsCallExpression(call)) return false;
       const semantics = context.semanticsFor(call);
       const selected = semantics.operations.call(call);
-      if (selected === undefined || selected.outcome === "intrinsic" || selected.sourceArguments.some(argument =>
+      if (selected === undefined || selected.sourceArguments.some(argument =>
         ast.is.IsSpreadElement(argument.expression))) return false;
       const argumentIndex = selected.sourceArguments.findIndex(argument => argument.expression === operand);
       const declaration = semantics.declarations.signatureDeclaration(selected.selectedSignature);

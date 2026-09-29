@@ -54,7 +54,9 @@ export function projectIdentityImplementations(
         visibility: "private",
         generics: emptyRustGenerics,
         selfParam: rustSelfParameter("ref"),
-        params: [{ pattern: { kind: "binding" as const, name: "formatter" }, type: {
+        params: [{
+          name: "formatter",
+          type: {
             kind: "reference",
             mutable: true,
             referent: {
@@ -62,7 +64,8 @@ export function projectIdentityImplementations(
               path: "core::fmt::Formatter",
               genericArguments: [{ kind: "lifetime", lifetime: { kind: "placeholder" } }],
             },
-          } }],
+          },
+        }],
         returnType: { kind: "named", path: "core::fmt::Result" },
         body: {
           statements: [{
@@ -87,11 +90,14 @@ export function projectIdentityImplementations(
         visibility: "private",
         generics: emptyRustGenerics,
         selfParam: rustSelfParameter("ref"),
-        params: [{ pattern: { kind: "binding" as const, name: "other" }, type: {
+        params: [{
+          name: "other",
+          type: {
             kind: "reference",
             referent: { kind: "named", path: "Self" },
             mutable: false,
-          } }],
+          },
+        }],
         returnType: { kind: "primitive", name: "bool" },
         body: {
           statements: [{
@@ -210,7 +216,7 @@ export function planProjectDispatchTrait(
         name: rustArrayFieldMutationName(read), generics: emptyRustGenerics,
         ...(contentDeadCode === undefined ? {} : { deadCode: contentDeadCode }),
         selfParam: rustSelfParameter("ref"),
-        params: [{ pattern: { kind: "binding" as const, name: "action" }, type: rustArrayFieldMutationType(field.type) }],
+        params: [{ name: "action", type: rustArrayFieldMutationType(field.type) }],
       });
     }
     functions.push({ kind: "function",
@@ -237,7 +243,7 @@ export function planProjectDispatchTrait(
         ...(writeDeadCode === undefined ? {} : { deadCode: writeDeadCode }),
         generics: emptyRustGenerics,
         selfParam: rustSelfParameter(dispatch.write.selfMode),
-        params: [{ pattern: { kind: "binding" as const, name: "value" }, type: field.type }],
+        params: [{ name: "value", type: field.type }],
         ...(dispatch.write.fallible
           ? { errorType: rustErrorType(fieldErrorBoundary!) }
           : {}),
@@ -349,7 +355,7 @@ export function planProjectDispatchTrait(
       ...(deadCode === undefined ? {} : { deadCode }),
       generics: emptyRustGenerics,
       selfParam: rustSelfParameter("ref"),
-      params: [{ pattern: { kind: "binding" as const, name: "value" }, type: property.callableType }],
+      params: [{ name: "value", type: property.callableType }],
     });
   }
   const superTraits = context.input.program.projectTypes.heritageForDefinition(definition).map((edge) =>

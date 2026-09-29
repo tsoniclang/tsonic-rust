@@ -71,7 +71,7 @@ export function planRustClassValueImplementations(declaration: Node, context: Ru
         const target = planRustSourceStaticFieldStorage(fact, local);
         if (target === undefined) return undefined;
         functions.push({ kind: "function", name: storage.property.setterTargetName, visibility: "private", generics: emptyRustGenerics,
-          selfParam: rustSelfParameter("ref"), params: [{ pattern: { kind: "binding" as const, name: "value" }, type }], returnType: { kind: "unit" },
+          selfParam: rustSelfParameter("ref"), params: [{ name: "value", type }], returnType: { kind: "unit" },
           errorType: rustErrorType(boundary), body: { statements: [{ kind: "tail", expr: { kind: "block", bindings: target.bindings,
             value: { kind: "evaluate-then", effect: target.write({ kind: "path", path: "value" }), discard: "unit",
               value: { kind: "call", path: "Ok", args: [{ kind: "tuple-literal", elements: [] }] } } } }] } });

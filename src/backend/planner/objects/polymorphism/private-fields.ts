@@ -72,7 +72,7 @@ export function planProjectPrivateStateAccessors(
         ...(publiclyReachable ? { attrs: [rustHiddenAttribute] } : {}),
         generics: emptyRustGenerics,
         selfParam: rustSelfParameter("mut-ref"),
-        params: [{ pattern: { kind: "binding" as const, name: "value" }, type: field.type }],
+        params: [{ name: "value", type: field.type }],
         body: {
           statements: [{
             kind: "expr",

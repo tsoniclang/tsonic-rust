@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { printRustExpr } from "../../../dist/print/source/expressions/core.js";
-import { rustExpressionChildren } from "../../../dist/backend/target-ast/inspection/expression-children.js";
-import { rustExpressionReferencesPath } from "../../../dist/backend/target-ast/inspection/source-usage.js";
+import { rustExpressionChildren, rustExpressionReferencesPath } from "../../../dist/backend/target-ast/inspection/source-usage.js";
 import { firstAccessesInStatements, maxWritesInStatements } from "../../../dist/backend/target-ast/inspection/source-dataflow.js";
 
 test("native block lets preserve definite assignment, lexical shadowing and external writes", () => {

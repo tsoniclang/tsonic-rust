@@ -120,7 +120,8 @@ export function planRustBindingPattern(
       }
       statements.push({
         kind: "let",
-        pattern: { kind: "binding", name: bindingName, mutable: context.input.program.facts.getFact(element, rustMutatedBindingFactKey) !== undefined },
+        name: bindingName,
+        mutable: context.input.program.facts.getFact(element, rustMutatedBindingFactKey) !== undefined,
         type: bindingType,
         init: normalized,
       });
@@ -143,7 +144,7 @@ export function planRustBindingPattern(
       return undefined;
     }
     const temporary = allocateRustSyntheticName(context.syntheticNames, "binding");
-    statements.push({ kind: "let", pattern: { kind: "binding", name: temporary, mutable: false }, init: normalized });
+    statements.push({ kind: "let", name: temporary, mutable: false, init: normalized });
     const nested = planRustBindingPattern(
       name,
       { kind: "path", path: temporary },

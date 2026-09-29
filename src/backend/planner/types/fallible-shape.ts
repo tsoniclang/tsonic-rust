@@ -5,7 +5,6 @@ import type {
   RustType,
 } from "../../target-ast/nodes.js";
 import { rustTypeEquals } from "../../target-ast/inspection/type-equality.js";
-import { rustMacroInputExpressions } from "../../target-ast/macro-input.js";
 import { rustBlockTerminates } from "../statements/block-flow.js";
 
 export interface RustFallibleBoundary {
@@ -58,7 +57,7 @@ export function rustExpressionUsesTryInCurrentRegion(expression: RustExpr): bool
       return rustExpressionUsesTryInCurrentRegion(expression.target) ||
         rustExpressionUsesTryInCurrentRegion(expression.value);
     case "macro-invocation":
-      return rustMacroInputExpressions(expression.input).some(rustExpressionUsesTryInCurrentRegion);
+      return expression.args.some(rustExpressionUsesTryInCurrentRegion);
     case "call":
     case "associated-call":
       return expression.args.some(rustExpressionUsesTryInCurrentRegion);
@@ -215,9 +214,6 @@ export function applyFallibleShape(
         expr: result(statement.expr),
       };
     }
-    if (statement.kind === "let" && statement.else !== undefined) {
-      return { ...statement, else: { ...statement.else, statements: statement.else.statements.map(wrap) } };
-    }
     if (statement.kind === "if") {
       return {
         ...statement,
@@ -225,7 +221,7 @@ export function applyFallibleShape(
         ...(statement.else === undefined ? {} : { else: { statements: statement.else.statements.map(wrap) } }),
       };
     }
-    if (statement.kind === "if-let") {
+    if (statement.kind === "if-let-some") {
       return {
         ...statement,
         body: { statements: statement.body.statements.map(wrap) },
@@ -235,7 +231,7 @@ export function applyFallibleShape(
       };
     }
     if (statement.kind === "loop" || statement.kind === "while" || statement.kind === "for" ||
-      statement.kind === "while-let") {
+      statement.kind === "while-let-some") {
       return { ...statement, body: { statements: statement.body.statements.map(wrap) } };
     }
     if (statement.kind === "scope" || statement.kind === "unsafe-scope") {

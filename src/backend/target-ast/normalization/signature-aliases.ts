@@ -22,7 +22,6 @@ export function nameRustSignatureTypes(
     ...(item.kind === "impl" ? item.members.flatMap(member => member.kind === "function"
       ? member.generics.parameters.map(parameter => parameter.name) : []) : []),
     ...(item.kind === "use" ? [item.alias ?? item.path.split("::").slice(-1)[0]!] : []),
-    ...(item.kind === "extern-block" ? item.members.flatMap(member => "name" in member ? [member.name] : []) : []),
   ]));
   const aliases: Extract<RustItem, { readonly kind: "type-alias" }>[] = [];
   const createTypeNamer = (item: { readonly name: string; readonly visibility: RustVisibility },
@@ -78,8 +77,8 @@ export function nameRustSignatureTypes(
     readonly body: RustBlock;
   }>(item: Callable, ownerParameters: readonly RustGenericParameter[]): Callable => {
     const nameType = createTypeNamer(item, [...ownerParameters, ...item.generics.parameters]);
-    return { ...item, params: item.params.map((parameter, index) => ({ ...parameter,
-      type: nameType(parameter.type, parameter.pattern.kind === "binding" ? parameter.pattern.name : `Parameter${index}`),
+    return { ...item, params: item.params.map(parameter => ({ ...parameter,
+      type: nameType(parameter.type, parameter.name),
     })), ...(item.returnType === undefined ? {} : { returnType: nameType(item.returnType, "Result") }),
       body: visitBody(item.body, (type, role) => nameType(type, role, "private")),
     };
@@ -109,8 +108,6 @@ function summarizeClosedType(type: RustType): ClosedTypeSummary | undefined {
   const visit = (value: RustType, depth: number): boolean => {
     weight += depth * 10;
     switch (value.kind) {
-      case "macro-invocation":
-        return false;
       case "named":
         names.add(value.path);
         return arguments_(value.genericArguments, depth + 1);

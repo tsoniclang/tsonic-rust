@@ -281,8 +281,8 @@ function planResourceCleanup(
   }
   return {
     statements: [{
-      kind: "if-let",
-      pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: cleanupResourceName }] },
+      kind: "if-let-some",
+      binding: cleanupResourceName,
       expression: {
         kind: "method-call",
         receiver: { kind: "path", path: resourceName },

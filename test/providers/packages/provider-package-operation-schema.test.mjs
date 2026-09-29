@@ -111,7 +111,7 @@ test("provider operation metadata accepts only structured Rust forms", () => {
   }
 });
 
-test("provider operation metadata preserves references and variants but cannot manufacture macro call signatures", () => {
+test("provider operation metadata preserves native reference, variant, and macro forms exactly", () => {
   const valueDefinition = definition({
     modules: [{
       moduleSpecifier: "@acme/validation",
@@ -166,14 +166,11 @@ test("provider operation metadata preserves references and variants but cannot m
     fields: ["left", "right"],
   })));
   for (const delimiter of ["parentheses", "brackets", "braces"]) {
-    assert.throws(
-      () => createRustProviderPackage(binaryDefinition({
-        form: "expression-macro",
-        path: "acme_validation::sum_pair",
-        delimiter,
-      })),
-      /unsupported operation form 'expression-macro'/u,
-    );
+    assert.doesNotThrow(() => createRustProviderPackage(binaryDefinition({
+      form: "expression-macro",
+      path: "acme_validation::sum_pair",
+      delimiter,
+    })));
   }
 
   assert.throws(
@@ -198,7 +195,7 @@ test("provider operation metadata preserves references and variants but cannot m
       path: "acme_validation::sum_pair",
       delimiter: "guess",
     })),
-    /unsupported operation form 'expression-macro'/u,
+    /not an exact Rust macro delimiter/u,
   );
   assert.throws(
     () => createRustProviderPackage({

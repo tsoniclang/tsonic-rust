@@ -13,7 +13,7 @@ import {
   rustMutatedReferentFactKey,
   rustSourceParameterAbiFactKey,
 } from "../../../../analysis/facts/keys.js";
-import type { RustExpr, RustNamedFunctionParam, RustStmt } from "../../../target-ast/nodes.js";
+import type { RustExpr, RustFunctionParam, RustStmt } from "../../../target-ast/nodes.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
 import {
   requireRustCarrierRequirements,
@@ -55,7 +55,7 @@ type RustParameterPrelude =
     };
 
 export interface RustCallableParameterPlan {
-  readonly params: readonly RustNamedFunctionParam[];
+  readonly params: readonly RustFunctionParam[];
   readonly prelude: readonly RustParameterPrelude[];
 }
 
@@ -66,7 +66,7 @@ export function planRustCallableParameters(
   options?: { readonly requiredStaticParameters?: readonly Node[] },
 ): RustCallableParameterPlan | undefined {
   const { ast } = context.input.program.source;
-  const params: RustNamedFunctionParam[] = [];
+  const params: RustFunctionParam[] = [];
   const prelude: RustParameterPrelude[] = [];
   for (const parameter of ast.parameters(callable)) {
     if (parameter === undefined) {
@@ -147,9 +147,9 @@ export function planRustCallableParameters(
           ) !== undefined
       );
     params.push({
-      pattern: { kind: "binding", name: parameterName,
-        mutable: abi?.form !== "default" && abi?.entryConversion === undefined && mutable },
+      name: parameterName,
       type: parameterType,
+      mutable: abi?.form !== "default" && abi?.entryConversion === undefined && mutable,
     });
     const entry = planRustParameterEntryConversion(parameter, parameterName, mutable, context);
     if (entry === undefined) return undefined;
@@ -181,7 +181,7 @@ export function planRustCallableParameters(
     }
     if (locationStorage.storage !== "location") {
       prelude.push({ kind: "statement", statement: {
-        kind: "let", pattern: { kind: "binding", name: parameterName, mutable: false },
+        kind: "let", name: parameterName, mutable: false,
         init: { kind: "call", path: `${rustInlineBindingStoragePath(locationStorage.storage)}::new`, args: [{ kind: "path", path: parameterName }] },
       } });
       continue;
@@ -199,7 +199,8 @@ export function planRustCallableParameters(
       kind: "statement",
       statement: {
         kind: "let",
-        pattern: { kind: "binding", name: parameterName, mutable: false },
+        name: parameterName,
+        mutable: false,
         init: allocation,
       },
     });
@@ -225,7 +226,8 @@ export function planRustCallableParameterPrelude(
       }
       statements.push({
         kind: "let",
-        pattern: { kind: "binding", name: entry.name, mutable: entry.mutable },
+        name: entry.name,
+        mutable: entry.mutable,
         init: rustOptionDefaultValue({ kind: "path", path: entry.name }, initializer, entry.carrier, context),
       });
       continue;

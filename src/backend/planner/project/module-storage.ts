@@ -133,7 +133,7 @@ export function rustModuleCellAccess(
     method: "with",
     args: [{
       kind: "closure",
-      params: [{ pattern: { kind: "binding" as const, name: cellName } }],
+      params: [{ name: cellName, byRefCopy: false }],
       body: {
         kind: "method-call",
         receiver: { kind: "path", path: cellName },

@@ -67,9 +67,9 @@ export function planRustIndexedFieldImplementation(
       members: [{ kind: "function", name: access === "read" ? "read_field" : "write_field", visibility: "private",
         generics: emptyRustGenerics,
         params: [
-          { pattern: { kind: "binding" as const, name: "owner" }, type: { kind: "reference", referent: owner, mutable: false } },
-          { pattern: { kind: "binding" as const, name: "_key" }, type: { kind: "reference", referent: keyType, mutable: false } },
-          ...(access === "read" ? [] : [{ pattern: { kind: "binding" as const, name: "value" }, type: output }]),
+          { name: "owner", type: { kind: "reference", referent: owner, mutable: false } },
+          { name: "_key", type: { kind: "reference", referent: keyType, mutable: false } },
+          ...(access === "read" ? [] : [{ name: "value", type: output }]),
         ], returnType: result,
         body: { statements: access === "read"
           ? [{ kind: "tail", expr: { kind: "call", path: "Ok", args: [value] } }]

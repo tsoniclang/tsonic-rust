@@ -5,7 +5,6 @@ import type {
   RustCompilerGenericParameter,
   RustCompilerStandardTypeLocation,
 } from "../model/model.js";
-import type { RustCompilerMacroExport } from "../../model/compiler-exports.js";
 import type { RustNamedTypeTraitContract } from "../../../target-model/types/model.js";
 import type { RustProviderModuleDefinition, RustProviderOperationDefinition, RustProviderTypeDefinition } from "../../packages/model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
@@ -16,14 +15,8 @@ export interface RustCompilerProviderProjection {
   readonly module: RustProviderModuleDefinition;
   readonly operations: readonly RustProviderOperationDefinition[];
   readonly types: readonly RustProviderTypeDefinition[];
-  readonly intrinsics: readonly RustCompilerIntrinsicProjection[];
   readonly carrierPaths: ReadonlyMap<string, string>;
   readonly carrierTraits: ReadonlyMap<string, RustNamedTypeTraitContract>;
-}
-
-export interface RustCompilerIntrinsicProjection {
-  readonly exportId: string;
-  readonly native: RustCompilerMacroExport;
 }
 
 export interface ProjectionOwner {

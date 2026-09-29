@@ -77,10 +77,7 @@ import {
   type RustGeneratedDeclarationUseRegistry,
 } from "./generated-declaration-uses.js";
 
-import { createRustAttributeApplicationFactIndex, type RustAttributeApplicationFactIndex } from "../attributes/application-index.js";
-
 export interface RustAnalysisContext extends RustSourcePolicyContext {
-  readonly attributeApplications: RustAttributeApplicationFactIndex;
   readonly typeDefinitions: RustTypeDefinitionRegistry;
   readonly typeFamilies: RustSourceTypeFamilyRegistry;
   readonly pointerBacking: TsonicPointerBackingDemands;
@@ -133,7 +130,6 @@ export function createRustAnalysisContext(
     sourceFacts: input.source.sourceFacts,
     navigation: input.source.navigation,
   });
-  const attributeApplications = createRustAttributeApplicationFactIndex(input.source);
   const runtimeValueUses = createRustRuntimeValueUsePlan({
     ast,
     navigation: input.source.navigation,
@@ -185,7 +181,6 @@ export function createRustAnalysisContext(
     frozenDataWrites: createRustFrozenDataWriteRegistry(),
     classValues: createRustClassValueRegistry(),
     providerSemantics,
-    attributeApplications,
     safetyApplications,
     runtimeValueUses,
     generatedDeclarationUses: createRustGeneratedDeclarationUseRegistry(),

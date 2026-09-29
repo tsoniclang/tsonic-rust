@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { artifactText, compileRustThroughTargetPack, repositoryRoot } from "../../../helpers/rust-session.mjs";
 import { runCargo, writeGeneratedProject } from "../../../helpers/cargo-projects.mjs";
@@ -16,14 +16,13 @@ import type { Box } from "@tsonic/rust/std/boxed.js";
 import type { Error as NativeError } from "@tsonic/rust/std/error.js";
 import { Result } from "@tsonic/rust/core/result.js";
 import { read_to_string } from "@tsonic/rust/std/fs.js";
-import { println } from "@tsonic/rust/std/index.js";
 import { propagate } from "@tsonic/rust/lang.js";
 type Outcome<T> = Result<T, Box<Dyn<NativeError>>>;
 function read(path: string): Outcome<string> {
   return Result.Ok<string, Box<Dyn<NativeError>>>(propagate(read_to_string(path)));
 }
 export function main(): Outcome<void> {
-  println("{}", propagate(read("fixture.txt")));
+  propagate(read("fixture.txt"));
   return Result.Ok<void, Box<Dyn<NativeError>>>(undefined);
 }
 ` },
@@ -46,8 +45,18 @@ export function main(): Outcome<void> {
   writeFileSync(join(root, "fixture.txt"), "native success");
   const success = spawnSync(binary, [], { cwd: root, encoding: "utf8", timeout: 10_000 });
   assert.equal(success.status, 0, success.stderr);
-  assert.equal(success.stdout, "native success\n");
+  assert.equal(success.stdout, "");
   assert.equal(success.stderr, "");
+  appendFileSync(join(root, "src/index.rs"), `
+#[cfg(test)]
+mod native_tests {
+    #[test]
+    fn success_retains_exact_file_contents() {
+        assert_eq!(super::read("fixture.txt".to_owned()).unwrap(), "native success");
+    }
+}
+`);
+  runCargo(root, ["test", "--locked", "--offline"]);
 });
 
 test("native propagation leaves invalid error conversions to the exact native From contract", { timeout: 300_000 }, () => {

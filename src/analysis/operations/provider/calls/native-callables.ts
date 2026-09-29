@@ -19,7 +19,7 @@ export function resolveNativeProviderCallableArguments(
 ): void {
   const semantics = walk.context.semantics(sourceFile);
   const source = semantics.operations.call(call);
-  if (source === undefined || source.outcome === "intrinsic") return;
+  if (source === undefined) return;
   const declaration = semantics.declarations.signatureDeclaration(source.selectedSignature);
   const request = { source, ...(declaration === undefined ? {} : { sourceSelectedDeclaration: declaration }) };
   const context = rustOperationContext(walk, call);

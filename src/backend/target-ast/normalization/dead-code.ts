@@ -57,12 +57,8 @@ function finalizeRustItemDeadCode(item: RustItem): RustItem {
     }
     case "mod-decl":
       return item.body === undefined ? item : { ...item, body: finalizeRustDeadCode(item.body) };
-    case "extern-block":
-      return { ...item, members: item.members.map(member => member.kind === "macro-invocation"
-        ? member : finalizeRustDeadCodeOwner(member)) };
     case "extern-crate":
     case "use":
-    case "macro-invocation":
       return item;
   }
 }

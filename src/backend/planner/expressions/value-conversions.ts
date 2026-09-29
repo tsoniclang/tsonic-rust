@@ -146,7 +146,7 @@ export function lowerRustValueConversion(
       return {
         kind: "method-call", receiver: {
           kind: "method-call", receiver: iterator, method: "map",
-          args: [{ kind: "closure", params: [{ pattern: { kind: "binding" as const, name: itemName } }], body: converted }],
+          args: [{ kind: "closure", params: [{ name: itemName, byRefCopy: false }], body: converted }],
         }, method: "collect", genericArguments: [{ kind: "type", type: collectionType }], args: [],
       };
     }
@@ -184,7 +184,7 @@ export function lowerRustValueConversion(
               method: "map",
               args: [{
                 kind: "closure",
-                params: [{ pattern: { kind: "binding" as const, name: valueName } }],
+                params: [{ name: valueName, byRefCopy: false }],
                 body: converted,
               }],
             },
@@ -208,7 +208,7 @@ export function lowerRustValueConversion(
             path: "js_abi::js_value_from_array",
             args: [source, {
               kind: "closure",
-              params: [{ pattern: { kind: "binding" as const, name: valueName } }],
+              params: [{ name: valueName, byRefCopy: false }],
               body: converted,
           }],
         };
@@ -355,7 +355,7 @@ export function lowerRustValueConversion(
         value: {
           kind: "closure",
           move: true,
-          params: [{ pattern: { kind: "binding" as const, name: argumentsName } }],
+          params: [{ name: argumentsName, byRefCopy: false }],
           body,
         },
       };
@@ -423,7 +423,7 @@ export function lowerRustValueConversion(
         method: "map",
         args: [directMapper ?? {
           kind: "closure",
-          params: [{ pattern: { kind: "binding" as const, name: valueName } }],
+          params: [{ name: valueName, byRefCopy: false }],
           body: converted,
         }],
       };
@@ -504,8 +504,8 @@ function lowerStructuralToJsonValueConversion(
       kind: "closure",
       move: true,
       params: [
-        { pattern: { kind: "binding" as const, name: sourceName } },
-        { pattern: { kind: "binding" as const, name: keyName } },
+        { name: sourceName, byRefCopy: false },
+        { name: keyName, byRefCopy: false },
       ],
       body: {
         kind: "call",
@@ -616,7 +616,7 @@ function lowerStructuralObjectJsValueConversion(
         method: "map",
         args: [{
           kind: "closure",
-          params: [{ pattern: { kind: "binding" as const, name: valueName } }],
+          params: [{ name: valueName, byRefCopy: false }],
           body: {
             kind: "tuple-literal",
             elements: [

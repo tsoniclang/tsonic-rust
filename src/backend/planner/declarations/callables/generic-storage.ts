@@ -43,7 +43,7 @@ export function genericCallableStorageItems(
   ] };
   items.push({ kind: "impl", trait: { kind: "named", path: "PartialEq" }, target, generics, members: [{ kind: "function",
     name: "eq", visibility: "private", selfParam: rustSelfParameter("ref"), generics: emptyRustGenerics,
-    params: [{ pattern: { kind: "binding" as const, name: "other" }, type: { kind: "reference", referent: { kind: "named", path: "Self" }, mutable: false } }],
+    params: [{ name: "other", type: { kind: "reference", referent: { kind: "named", path: "Self" }, mutable: false } }],
     returnType: { kind: "primitive", name: "bool" }, body: { statements: [{ kind: "tail", expr: equality }] },
   }] }, { kind: "impl", trait: { kind: "named", path: "Eq" }, target, generics, members: [] });
   return items;

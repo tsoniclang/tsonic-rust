@@ -140,7 +140,8 @@ test("long typed bindings expand the type before attaching the initializer", () 
       body: {
         statements: [{
           kind: "let",
-          pattern: { kind: "binding", name: "aliasedHandle", mutable: false },
+          name: "aliasedHandle",
+          mutable: false,
           type: callableType,
           init: { kind: "path", path: "handler_factory" },
         }],
@@ -193,7 +194,8 @@ test("fallible nested calls remain compact when their selected line fits", () =>
       body: {
         statements: [{
           kind: "let",
-          pattern: { kind: "binding", name: "bytes", mutable: false },
+          name: "bytes",
+          mutable: false,
           type: { kind: "named", path: "tsonic_rust_node::buffer::Buffer" },
           init: {
             kind: "try",
@@ -453,8 +455,7 @@ test("format macro arguments keep borrowed nested calls attached to their call",
         name: "proof",
         generics: emptyRustGenerics,
         visibility: "private",
-        selfParam: { kind: "typed", type: { kind: "named", path: "alloc::rc::Rc",
-          genericArguments: [{ kind: "type", type: { kind: "named", path: "Self" } }] } },
+        selfParam: { kind: "rc" },
         params: [],
         body: { statements: [{ kind: "tail", expr: expression }] },
       }],
@@ -666,7 +667,7 @@ test("method chains in logical continuations use the continuation body indent", 
       method: "with",
       args: [{
         kind: "closure",
-        params: [{ pattern: { kind: "binding", name: "__tsonic_module_binding" } }],
+        params: [{ name: "__tsonic_module_binding", byRefCopy: false }],
         body: {
           kind: "method-call",
           receiver: { kind: "path", path: "__tsonic_module_binding" },

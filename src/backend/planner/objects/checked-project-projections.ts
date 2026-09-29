@@ -18,7 +18,7 @@ export function checkedProjectProjectionSignature(slot: string): RustTraitFuncti
     name: slot,
     generics: projectionGenerics,
     selfParam: rustSelfParameter("rc"),
-    params: [{ pattern: { kind: "binding" as const, name: "output" }, type: { kind: "reference", mutable: true,
+    params: [{ name: "output", type: { kind: "reference", mutable: true,
       referent: { kind: "trait-object", principal: { trait: { kind: "named", path: "core::any::Any" } },
         autoTraits: [] } } }],
   };
@@ -50,7 +50,7 @@ export function planCheckedProjectProjectionImplementation(
   for (const [index, carrier] of eligible.entries()) {
     const type = checkedProjectProjectionResultType(carrier, context);
     if (type === undefined) return undefined;
-    statements.push({ kind: "if-let", pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: "selected" }] },
+    statements.push({ kind: "if-let-some", binding: "selected",
       expression: { kind: "method-call", receiver: { kind: "path", path: "output" },
         method: "downcast_mut", genericArguments: [{ kind: "type", type }], args: [] },
       body: { statements: [{ kind: "assign", operator: "=",

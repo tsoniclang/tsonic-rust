@@ -17,9 +17,8 @@ import { rustBlockReferencesPath } from "../inspection/source-usage.js";
 import { collapseRustForwardingClosure } from "./forwarding-closures.js";
 import { nameRustSignatureTypes } from "./signature-aliases.js";
 import type { RustNamedSignatureScope } from "./signature-aliases.js";
-import { rustCallableReferencesModuleAlias } from "../inspection/source-module-usage.js";
+import { rustItemsReferenceModuleAlias } from "../inspection/source-module-usage.js";
 import { rustTypeEquals } from "../inspection/type-equality.js";
-import { rustPatternBindings } from "../patterns.js";
 import { mergeRustAdjacentConditionalBranches } from "./conditional-branches.js";
 import { appendRustNamingAllowance, finalizeRustFunctionNames, finalizeRustItemNames,
   rustExpressionDeclaresNonSnakeName, rustStatementDeclaresNonSnakeName } from "./authored-names.js";
@@ -60,8 +59,6 @@ function publicDeclaredRustTypeNames(items: readonly RustItem[]): ReadonlySet<st
 function declaredRustTypeNames(items: readonly RustItem[], publicOnly = false): ReadonlySet<string> {
   return new Set(items.flatMap(item => item.kind === "mod-decl" && item.body !== undefined
     ? [...declaredRustTypeNames(item.body.items, publicOnly)].map(name => `${item.name}::${name}`)
-    : item.kind === "extern-block" ? item.members.flatMap(member => member.kind === "type" &&
-      (!publicOnly || member.visibility === "public") ? [member.name] : [])
     : (item.kind === "struct" || item.kind === "trait" || item.kind === "enum" ||
         item.kind === "type-alias") && (!publicOnly || item.visibility === "public") ? [item.name] : []));
 }
@@ -162,13 +159,14 @@ function finalizeRustImplFunctionStyle(
 }
 
 function hasErasedGenericParameter(fn: RustImplFunction): boolean {
+  const usage: RustItem = { ...fn, kind: "function" };
   return fn.generics.parameters.some(parameter => parameter.kind === "type" &&
-    !rustCallableReferencesModuleAlias(fn, parameter.name));
+    !rustItemsReferenceModuleAlias([usage], parameter.name));
 }
 
 function hasUnusedParameter(fn: Pick<RustImplFunction, "params" | "body">): boolean {
-  return fn.params.some(parameter => rustPatternBindings(parameter.pattern)?.some(binding =>
-    !binding.name.startsWith("_") && !rustBlockReferencesPath(fn.body, binding.name)) === true);
+  return fn.params.some(parameter => !parameter.name.startsWith("_") &&
+    !rustBlockReferencesPath(fn.body, parameter.name));
 }
 
 function createRustBodyStyler(nameType?: (type: RustType, role: string) => RustType): {
@@ -192,12 +190,12 @@ function finalizeRustBlockStyle(block: RustBlock): RustBlock {
   let nextItem = 0;
   const retainsFieldAssignment = block.statements.some((statement, index) => {
       const previous = block.statements[index - 1];
-      return previous?.kind === "let" && previous.pattern.kind === "binding" && previous.else === undefined && previous.init?.kind === "associated-call" &&
+      return previous?.kind === "let" && previous.init?.kind === "associated-call" &&
         previous.init.trait?.kind === "named" && previous.init.trait.path === "core::default::Default" &&
         previous.init.method === "default" && previous.init.args.length === 0 &&
         statement.kind === "assign" && statement.operator === "=" && statement.target.kind === "field" &&
-        statement.target.receiver.kind === "path" && statement.target.receiver.path === previous.pattern.name &&
-        !rustBlockReferencesPath({ statements: [{ kind: "expr", expr: statement.value }] }, previous.pattern.name);
+        statement.target.receiver.kind === "path" && statement.target.receiver.path === previous.name &&
+        !rustBlockReferencesPath({ statements: [{ kind: "expr", expr: statement.value }] }, previous.name);
   });
   return {
     ...block,
@@ -214,16 +212,13 @@ function finalizeRustBlockStyle(block: RustBlock): RustBlock {
 function finalizeRustStatementStyle(statement: RustStmt): RustStmt {
   requiresNamingAllowance ||= rustStatementDeclaresNonSnakeName(statement);
   switch (statement.kind) {
-    case "macro-statement":
     case "item":
       return statement;
-    case "let": {
-      const typed = statement.type === undefined || nameType === undefined ? statement
-        : { ...statement, type: nameType(statement.type, statement.pattern.kind === "binding" ? statement.pattern.name : "Pattern") };
-      if (typed.init === undefined) return typed;
-      return { ...typed, init: finalizeRustExpressionStyle(typed.init),
-        ...(typed.else === undefined ? {} : { else: finalizeRustBlockStyle(typed.else) }) };
-    }
+    case "let":
+      return { ...statement,
+        ...(statement.type === undefined || nameType === undefined ? {} : { type: nameType(statement.type, statement.name) }),
+        ...(statement.init === undefined ? {} : { init: finalizeRustExpressionStyle(statement.init) }),
+      };
     case "expr":
       return { ...statement, expr: finalizeRustExpressionStyle(statement.expr) };
     case "assign":
@@ -273,7 +268,7 @@ function finalizeRustStatementStyle(statement: RustStmt): RustStmt {
         : statement.attrs;
       return { ...statement, attrs, condition, body: finalizeRustBlockStyle(statement.body) };
     }
-    case "while-let":
+    case "while-let-some":
       return {
         ...statement,
         expression: finalizeRustExpressionStyle(statement.expression),
@@ -282,8 +277,8 @@ function finalizeRustStatementStyle(statement: RustStmt): RustStmt {
     case "for": {
       const body = finalizeRustBlockStyle(statement.body);
       let attrs = statement.attrs;
-      if (rustPatternBindings(statement.pattern)?.some(binding =>
-        !binding.name.startsWith("_") && !rustBlockReferencesPath(body, binding.name)) === true) {
+      if (!rustBlockReferencesPath(body, statement.binding) &&
+        statement.binding !== "_" && !statement.binding.startsWith("_")) {
         attrs = appendRustAttribute(attrs, rustLintAttributes.unusedVariables);
       }
       const finalStatement = body.statements[body.statements.length - 1];
@@ -298,7 +293,7 @@ function finalizeRustStatementStyle(statement: RustStmt): RustStmt {
         body,
       };
     }
-    case "if-let":
+    case "if-let-some":
       return {
         ...statement,
         expression: finalizeRustExpressionStyle(statement.expression),
@@ -393,8 +388,6 @@ function rustBlockMayContinueLoop(block: RustBlock, label: string | undefined): 
 
 function rustStatementMayContinueLoop(statement: RustStmt, label: string | undefined): boolean {
   switch (statement.kind) {
-    case "macro-statement":
-      return true;
     case "item":
       return false;
     case "continue":
@@ -402,7 +395,7 @@ function rustStatementMayContinueLoop(statement: RustStmt, label: string | undef
     case "if":
       return rustBlockMayContinueLoop(statement.then, label) ||
         (statement.else !== undefined && rustBlockMayContinueLoop(statement.else, label));
-    case "if-let":
+    case "if-let-some":
       return rustBlockMayContinueLoop(statement.body, label) ||
         (statement.else !== undefined && rustBlockMayContinueLoop(statement.else, label));
     case "scope":
@@ -419,11 +412,10 @@ function rustStatementMayContinueLoop(statement: RustStmt, label: string | undef
           rustBlockMayContinueLoop(statement.finallyClause.body, label));
     case "loop":
     case "while":
-    case "while-let":
+    case "while-let-some":
     case "for":
       return label !== undefined && rustBlockMayContinueLoop(statement.body, label);
     case "let":
-      return statement.else !== undefined && rustBlockMayContinueLoop(statement.else, label);
     case "expr":
     case "assign":
     case "return":
@@ -596,7 +588,7 @@ function finalizeRustExpressionStyle(expression: RustExpr): RustExpr {
       result = { ...expression, expr: finalizeRustExpressionStyle(expression.expr) };
       break;
     case "macro-invocation":
-      result = expression;
+      result = { ...expression, args: expression.args.map(finalizeRustExpressionStyle) };
       break;
     case "vec-literal":
     case "slice-literal":
@@ -665,10 +657,6 @@ function closePublicRustTypeVisibility(
 
 function exposeScopedRustTypes(items: readonly RustItem[], publicTypes: ReadonlySet<string>): readonly RustItem[] {
   return items.map(item => {
-    if (item.kind === "extern-block") {
-      return { ...item, members: item.members.map(member => member.kind === "type" && publicTypes.has(member.name)
-        ? { ...member, visibility: "public" as const } : member) };
-    }
     if (item.kind === "mod-decl" && item.body !== undefined) {
       const prefix = `${item.name}::`;
       const names = new Set([...publicTypes].filter(name => name.startsWith(prefix)).map(name => name.slice(prefix.length)));
@@ -718,7 +706,6 @@ function publicSignatureTypes(
             ...item.members.flatMap(member => member.kind === "type"
               ? member.bounds.flatMap(rustTypeBoundTypes)
               : member.kind === "function" ? [
-                ...(member.selfParam?.kind === "typed" ? [member.selfParam.type] : []),
                 ...member.params.map(parameter => parameter.type),
                 ...optionalType(member.returnType),
               ] : []),
@@ -731,21 +718,15 @@ function publicSignatureTypes(
           ...item.members.flatMap(member => member.kind === "type" ? [member.type]
             : member.kind === "const" ? (member.visibility === "public" ? [member.type] : [])
             : member.kind === "function" && member.visibility === "public" ? [
-              ...(member.selfParam?.kind === "typed" ? [member.selfParam.type] : []),
               ...member.params.map(parameter => parameter.type), ...optionalType(member.returnType),
             ] : []),
         ]
         : [];
     case "type-alias":
       return publicTypes.has(item.name) ? [item.target] : [];
-    case "extern-block":
-      return item.members.flatMap(member => member.kind === "macro-invocation" || member.visibility !== "public"
-        ? [] : member.kind === "static" ? [member.type] : member.kind === "function"
-          ? [...member.params.map(parameter => parameter.type), ...optionalType(member.returnType)] : []);
     case "mod-decl":
     case "extern-crate":
     case "use":
-    case "macro-invocation":
       return [];
   }
 }
@@ -770,8 +751,6 @@ function rustTypeBoundTypes(bound: RustTypeBound): readonly RustType[] {
 
 function rustTypeNames(type: RustType): readonly string[] {
   switch (type.kind) {
-    case "macro-invocation":
-      return [];
     case "infer":
       return [];
     case "named":

@@ -158,7 +158,9 @@ test("Rust item printer preserves mixed generic order, outlives bounds, GAT cons
           }],
         }],
       },
-      params: [{ pattern: { kind: "binding", name: "value" }, type: {
+      params: [{
+        name: "value",
+        type: {
           kind: "named",
           path: "crate::Family",
           genericArguments: [
@@ -193,7 +195,8 @@ test("Rust item printer preserves mixed generic order, outlives bounds, GAT cons
               ],
             },
           ],
-        } }],
+        },
+      }],
       returnType: {
         kind: "reference",
         mutable: false,

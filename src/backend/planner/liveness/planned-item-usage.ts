@@ -1,5 +1,4 @@
-import { rustExpressionChildren } from "../../target-ast/inspection/expression-children.js";
-import { rustPatternBindings } from "../../target-ast/patterns.js";
+import { rustExpressionChildren } from "../../target-ast/inspection/source-usage.js";
 import type {
   RustBlock,
   RustExpr,
@@ -12,8 +11,8 @@ export function rustPlannedImplementationsReferenceSelfField(
   fieldName: string,
 ): boolean {
   return items.some((item) =>
-    item.kind === "impl" && item.members.some((member) => member.kind === "macro-invocation" ||
-      member.kind === "function" && rustBlockReferencesSelfField(member.body, fieldName)));
+    item.kind === "impl" && item.members.some((fn) => fn.kind === "function" &&
+      rustBlockReferencesSelfField(fn.body, fieldName)));
 }
 
 function rustBlockReferencesSelfField(block: RustBlock, fieldName: string): boolean {
@@ -26,14 +25,11 @@ function rustStatementReferencesSelfField(
   fieldName: string,
 ): boolean {
   switch (statement.kind) {
-    case "macro-statement":
-      return true;
     case "item":
-      return statement.item.kind === "macro-invocation";
+      return false;
     case "let":
-      return rustPatternBindings(statement.pattern) === undefined ||
-        (statement.init !== undefined && rustExpressionReferencesSelfField(statement.init, fieldName)) ||
-        (statement.else !== undefined && rustBlockReferencesSelfField(statement.else, fieldName));
+      return statement.init !== undefined &&
+        rustExpressionReferencesSelfField(statement.init, fieldName);
     case "expr":
     case "tail":
       return rustExpressionReferencesSelfField(statement.expr, fieldName);
@@ -55,16 +51,16 @@ function rustStatementReferencesSelfField(
     case "while":
       return rustExpressionReferencesSelfField(statement.condition, fieldName) ||
         rustBlockReferencesSelfField(statement.body, fieldName);
-    case "while-let":
-      return rustPatternBindings(statement.pattern) === undefined || rustExpressionReferencesSelfField(statement.expression, fieldName) ||
+    case "while-let-some":
+      return rustExpressionReferencesSelfField(statement.expression, fieldName) ||
         rustBlockReferencesSelfField(statement.body, fieldName);
-    case "if-let":
-      return rustPatternBindings(statement.pattern) === undefined || rustExpressionReferencesSelfField(statement.expression, fieldName) ||
+    case "if-let-some":
+      return rustExpressionReferencesSelfField(statement.expression, fieldName) ||
         rustBlockReferencesSelfField(statement.body, fieldName) ||
         (statement.else !== undefined &&
           rustBlockReferencesSelfField(statement.else, fieldName));
     case "for":
-      return rustPatternBindings(statement.pattern) === undefined || rustExpressionReferencesSelfField(statement.iterable, fieldName) ||
+      return rustExpressionReferencesSelfField(statement.iterable, fieldName) ||
         rustBlockReferencesSelfField(statement.body, fieldName);
     case "completion-exit":
       return statement.expr !== undefined &&
@@ -100,11 +96,6 @@ function rustExpressionReferencesSelfField(
   expression: RustExpr,
   fieldName: string,
 ): boolean {
-  if (expression.kind === "macro-invocation") return true;
-  if ((expression.kind === "matches" && rustPatternBindings(expression.pattern) === undefined) ||
-    (expression.kind === "match" && expression.arms.some(arm => rustPatternBindings(arm.pattern) === undefined)) ||
-    ((expression.kind === "closure" || expression.kind === "closure-block") &&
-      expression.params.some(parameter => rustPatternBindings(parameter.pattern) === undefined))) return true;
   if (expression.kind === "field" && expression.name === fieldName &&
     expression.receiver.kind === "path" && expression.receiver.path === "self") {
     return true;

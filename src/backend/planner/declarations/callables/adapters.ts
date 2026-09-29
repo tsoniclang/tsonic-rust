@@ -14,7 +14,7 @@ import {
   isRustVecCarrier,
   rustCarrierSupportsClone,
 } from "../../../../target-model/types/index.js";
-import type { RustExpr, RustNamedFunctionParam, RustStmt, RustType } from "../../../target-ast/nodes.js";
+import type { RustExpr, RustFunctionParam, RustStmt, RustType } from "../../../target-ast/nodes.js";
 import {
   lowerRustValueConversion,
   planRustProjectUpcast,
@@ -36,7 +36,7 @@ import { planRustParameterEntryValue } from "./parameter-entry-conversion.js";
 export function planRustCallableArguments(
   input: {
     readonly declaration: Node;
-    readonly parameters: readonly RustNamedFunctionParam[];
+    readonly parameters: readonly RustFunctionParam[];
     readonly parameterAbis: readonly RustCallableParameterAbi[];
     readonly parameterAdapters: readonly RustCallableParameterAdapter[];
   },
@@ -49,7 +49,7 @@ export function planRustCallableArguments(
   const adaptedArguments: RustExpr[] = [];
   const parameterExpression = (index: number): RustExpr | undefined => {
     const parameter = input.parameters[index];
-    return parameter === undefined ? undefined : { kind: "path", path: parameter.pattern.name };
+    return parameter === undefined ? undefined : { kind: "path", path: parameter.name };
   };
   for (const [implementationIndex, adapter] of input.parameterAdapters.entries()) {
     if (adapter.kind === "omitted") {
@@ -141,7 +141,7 @@ export function planRustCallableArguments(
         method: "map",
         args: [{
           kind: "closure",
-          params: [{ pattern: { kind: "binding" as const, name: elementName } }],
+          params: [{ name: elementName, byRefCopy: false }],
           body: raw.expression,
         }],
       };
@@ -228,7 +228,8 @@ export function planRustCallableArguments(
     const bindingName = allocateRustSyntheticName(names, "adapted_argument");
     statements.push({
       kind: "let",
-      pattern: { kind: "binding", name: bindingName, mutable: true },
+      name: bindingName,
+      mutable: true,
       init: adapted,
     });
     adaptedArguments.push({
@@ -395,7 +396,7 @@ function applyRustCallableValueAdapterRaw(
         method: "map",
         args: [{
           kind: "closure",
-          params: [{ pattern: { kind: "binding" as const, name: elementName } }],
+          params: [{ name: elementName, byRefCopy: false }],
           body: element.expression,
         }],
       };
