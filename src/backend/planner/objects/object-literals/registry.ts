@@ -302,7 +302,7 @@ export function createImplementationPlan(
       return undefined;
     }
     const substitutions = new Map(projectTypeSubstitutions(owner, ownerRelation.targetType));
-    variant.sourceTypeParameterNames.forEach((name, index) => {
+    variant.sourceTypeParameterIdentities.forEach((name, index) => {
       const target = variant.targetTypeArguments[index];
       if (target !== undefined) {
         substitutions.set(name, target);
@@ -320,7 +320,7 @@ export function createImplementationPlan(
       },
       {
         methodTypeArgumentSubstitutions: new Map(
-          variant.sourceTypeParameterNames.map((name, index) =>
+          variant.sourceTypeParameterIdentities.map((name, index) =>
             [name, variant.targetTypeArguments[index]!] as const),
         ),
       },
@@ -342,25 +342,11 @@ export function createImplementationPlan(
       (shape.errorType === undefined || shape.isUnsafe)) {
       return undefined;
     }
-    const usedContractParameters = new Set(dispatch.parameterAdapters.flatMap((adapter) => {
-      switch (adapter.kind) {
-        case "runtime-value":
-        case "logical-value":
-        case "sequence-rest":
-          return [adapter.contractParameterIndex];
-        case "fixed-rest":
-          return adapter.contractParameterIndexes;
-        case "omitted":
-          return [];
-      }
-    }));
     methods.push({
       contractMethod: dispatch.contractMethod,
       variant,
       implementation,
-      parameters: shape.params.map((parameter, index) => usedContractParameters.has(index)
-        ? parameter
-        : { ...parameter, name: parameter.name.startsWith("_") ? parameter.name : `_${parameter.name}` }),
+      parameters: shape.params,
       adapter: {
         parameterAbis: dispatch.parameters,
         parameterAdapters: dispatch.parameterAdapters,
@@ -495,7 +481,6 @@ export function createImplementationPlan(
     kind: "struct",
     name: stateName,
     visibility: "private",
-    derives: [],
     generics: emptyRustGenerics,
     fields: [
       ...finalizedStateFields.map((field): RustStructField => ({
@@ -532,7 +517,6 @@ export function createImplementationPlan(
     kind: "struct",
     name: rootName,
     visibility: "private",
-    derives: [],
     generics: emptyRustGenerics,
     fields: [{
       name: rustProjectObjectIdentityField,

@@ -30,14 +30,15 @@ export function main(): void {
   });
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
-  assert.match(output, /const SEPARATOR: &str|const separator: &str/u);
-  assert.match(output, /fn right_paren\(value: &str\)/u);
-  assert.match(output, /fn check_token\(value: &str\)/u);
+  assert.match(output, /const separator: &str/u);
+  assert.match(output, /fn rightParen\(value: &str\)/u);
+  assert.match(output, /fn checkToken\(value: &str\)/u);
   assert.match(output, /fn dispatch\(kind: &str, payload: &str\)/u);
   assert.match(output, /fn retained\(value: String\)/u);
   assert.match(output, /borrow_number_element/u);
   assert.match(output, /sort_borrowed/u);
-  const ensure = output.slice(output.indexOf("fn ensure_slash"), output.indexOf("fn dispatch"));
+  assert.match(output, /fn ensureSlash\(value: String\) -> String/u);
+  const ensure = output.slice(output.indexOf("fn ensureSlash"), output.indexOf("fn dispatch"));
   assert.doesNotMatch(ensure, /value\.clone\(\)/u);
   validateGeneratedProject("native-allocation-contracts", result.artifacts, { run: true });
 });
@@ -108,7 +109,7 @@ export function main(): void {
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /select\(&direct, direct\.clone\(\)\)/u);
   assert.match(output, /select\(&nested, identity\(nested\.clone\(\)\)\)/u);
-  assert.match(output, /after_length\(length\(&completed\), completed\)/u);
+  assert.match(output, /afterLength\(length\(&completed\), completed\)/u);
   assert.match(output, /owned\(copies\.clone\(\), copies\)/u);
   validateGeneratedProject("overlapping-argument-borrows", result.artifacts, { run: true });
 });
@@ -117,7 +118,7 @@ test("static string selection preserves exported bindings and deferred default r
   for (const [source, storage] of [
     ['const value = "ready"; export function read(): string { return value; }', "native-const"],
     ['export const value = "public";', "module-cell"],
-    ['import { addressOf, loadPointer } from "@tsonic/core/lang.js"; let value = "ready"; export function read(): string { return loadPointer(addressOf(value)); }', "module-cell"],
+    ['import { addressof, loadptr } from "@tsonic/core/lang.js"; let value = "ready"; export function read(): string { return loadptr(addressof(value)); }', "module-cell"],
     ['export const result = read(); const value = "later"; function read(input: string = value): string { return input; }', "module-cell"],
     ['const value = "ready"; export const result = read(); function read(input: string = value): string { return input; }', "native-const"],
   ]) {
@@ -133,8 +134,8 @@ test("static string selection preserves exported bindings and deferred default r
     assert.equal(program.facts.getFact(declaration, rustModuleBindingFactKey)?.storage, storage, source);
   }
   assert.throws(() => analyzeRust({ surfaces: ["js"], files: { "index.ts":
-    'import { addressOf } from "@tsonic/core/lang.js"; const value = "ready"; export const pointer = addressOf(value);',
-  } }), /addressOf\(\.\.\.\) requires writable storage/u);
+    'import { addressof } from "@tsonic/core/lang.js"; const value = "ready"; export const pointer = addressof(value);',
+  } }), /addressof\(\.\.\.\) requires writable storage/u);
 });
 
 test("address-of rejects imported constants before target planning", () => {
@@ -142,10 +143,10 @@ test("address-of rejects imported constants before target planning", () => {
     assert.throws(() => analyzeRust({ surfaces: ["js"], files: {
       "values.ts": `export const fixed = 7;`,
       "exports.ts": `export { fixed } from "./values.js";`,
-      "index.ts": `import { addressOf } from "@tsonic/core/lang.js";
+      "index.ts": `import { addressof } from "@tsonic/core/lang.js";
         import { fixed } from "./${module}.js";
-        export function reject(): void { addressOf(fixed); }`,
-    } }), /addressOf\(\.\.\.\) requires writable storage/u);
+        export function reject(): void { addressof(fixed); }`,
+    } }), /addressof\(\.\.\.\) requires writable storage/u);
   }
 });
 

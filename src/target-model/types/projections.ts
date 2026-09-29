@@ -12,7 +12,7 @@ export type RustOptionalStorageProjection = Extract<TargetTypeRef, { readonly ki
 
 export function rustOptionalStorageProjection(value: TargetTypeRef): RustOptionalStorageProjection {
   const identity = createHash("sha256").update(closedMetadataKey(value)).digest("hex").slice(0, 16);
-  return Object.freeze({ kind: "type-parameter", name: `OptionalStorage${identity}`, optionalStorageValue: value });
+  return Object.freeze({ kind: "type-parameter", identity: `optional-storage:${identity}`, name: `OptionalStorage${identity}`, optionalStorageValue: value });
 }
 
 export function rustSourceOptionalTargetType(value: TargetTypeRef): TargetTypeRef {

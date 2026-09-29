@@ -49,7 +49,7 @@ export function main(): void {
 ` },
   });
   assert.deepEqual(result.diagnostics, []);
-  assert.match(result.artifacts.map(artifact => artifact.text).join("\n"), /fn exit_with_status\(\) -> !/u);
+  assert.match(result.artifacts.map(artifact => artifact.text).join("\n"), /fn exitWithStatus\(\) -> !/u);
   validateGeneratedProject("compiler-provider-node", result.artifacts, { run: true });
 });
 

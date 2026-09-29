@@ -8,6 +8,7 @@ import {
   isRustProgramErrorCarrier,
   rustJsErrorTargetType,
   rustCarrierSupportsClone,
+  rustOptionElementCarrier,
 } from "../../../target-model/types/index.js";
 import type { RustFlowReadProjectionFact } from "../../../analysis/facts/keys.js";
 import type { RustExpr } from "../../target-ast/nodes.js";
@@ -21,7 +22,6 @@ import { planRustNonConsumingValue } from "./typed-locations.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
 import { planRustOptionalStorageOperation } from "./optional-storage.js";
-import { rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
 import {
   allocateRustSyntheticName,
   createRustSyntheticNameState,
@@ -76,13 +76,7 @@ export function planRustFlowReadProjection(
     }
     return { kind: "method-call", receiver: planRustNonConsumingValue(node, expression, context), method: fact.method, args: [] };
   }
-  const operation = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
-  const ownsValue = context.input.program.valueLifetimes.canMove(node) ||
-    operation?.kind === "provider-operation" &&
-      (operation.abi.target.form === "method" || operation.abi.target.form === "call" ||
-        operation.abi.target.form === "receiver-method") &&
-      operation.abi.result.kind === "sync" && operation.abi.result.carrier.kind !== "reference" &&
-      rustTargetTypeRefEquals(operation.abi.result.carrier, fact.sourceCarrier);
+  const ownsValue = context.input.program.valueLifetimes.canMove(node);
   if (fact.kind === "source-union") {
     const variants = context.input.program.typeDefinitions.sourceUnionVariants(fact.sourceCarrier);
     const path = rustUnionTypePathInContext(fact.sourceCarrier, context);
@@ -108,12 +102,19 @@ export function planRustFlowReadProjection(
         message: "TSTS-selected source refinement excluded this union variant" } },
     ] }, node, context);
   }
-  if (fact.kind === "option-value") {
+  if (fact.kind === "option-value" || fact.kind === "option-reference") {
+    const reborrow = fact.kind === "option-reference";
+    if (reborrow && (fact.selectedCarrier.kind !== "reference" || !fact.selectedCarrier.mutable ||
+      !rustTargetTypeRefEquals(rustOptionElementCarrier(fact.sourceCarrier), fact.selectedCarrier))) {
+      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+        "rust.backend.flow-read-reference", "An optional exclusive-reference projection requires the exact native reference payload."));
+      return undefined;
+    }
     if (rustOptionalStorageValue(fact.sourceCarrier) !== undefined) {
       return planRustOptionalStorageOperation(fact.sourceCarrier, ownsValue ? "into_present" : "clone_present",
         [ownsValue ? expression : { kind: "reference", expr: expression }], context);
     }
-    if (!ownsValue && !rustCarrierSupportsClone(fact.selectedCarrier, context.input.program.typeDefinitions) &&
+    if (!ownsValue && !reborrow && !rustCarrierSupportsClone(fact.selectedCarrier, context.input.program.typeDefinitions) &&
       (context.callableDeclaration === undefined ||
         !requireRustCarrierRequirements(fact.selectedCarrier, ["clone"], node, context))) {
       context.diagnostics.push(missingFactDiagnostic(
@@ -132,7 +133,8 @@ export function planRustFlowReadProjection(
       expression: ownsValue ? expression : {
         kind: "method-call",
         receiver: expression,
-        method: "as_ref",
+        method: reborrow ? "as_deref_mut" : "as_ref",
+        receiverMode: reborrow ? "mut-ref" : "ref",
         args: [],
       },
       arms: [
@@ -142,7 +144,7 @@ export function planRustFlowReadProjection(
             path: "Some",
             elements: [{ kind: "binding", name: valueName }],
           },
-          expression: ownsValue ? { kind: "path", path: valueName } : isRustCopyCarrier(fact.selectedCarrier)
+          expression: ownsValue || reborrow ? { kind: "path", path: valueName } : isRustCopyCarrier(fact.selectedCarrier)
             ? {
                 kind: "dereference",
                 pointer: { kind: "path", path: valueName },

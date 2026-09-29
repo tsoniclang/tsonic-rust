@@ -50,7 +50,7 @@ function substituteCarrierParts(
           return rustSourceOptionalTargetType(substituteRustTargetGenerics(type.optionalStorageValue,
             substitutions, lifetimeSubstitutions, constSubstitutions, normalize));
         }
-        const replacement = substitutions.get(type.name);
+        const replacement = substitutions.get(type.identity);
         return replacement === undefined ? type : normalize === undefined
           ? replacement : mapRustTargetTypes(replacement, normalize);
       })();
@@ -348,7 +348,7 @@ function substituteCarrierParts(
         const scopedLifetimes = new Map(lifetimeSubstitutions);
         for (const index of constructor.boundParameterIndexes) {
           const argument = arguments_[index]!;
-          if (argument.kind === "type" && argument.type.kind === "type-parameter") scopedTypes.delete(argument.type.name);
+          if (argument.kind === "type" && argument.type.kind === "type-parameter") scopedTypes.delete(argument.type.identity);
           if (argument.kind === "lifetime") scopedLifetimes.delete(rustLifetimeKey(argument.lifetime));
         }
         return rustClassConstructorTargetType(substituteRustTargetGenerics(constructor.instance, scopedTypes,

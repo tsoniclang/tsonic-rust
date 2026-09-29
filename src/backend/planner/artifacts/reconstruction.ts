@@ -317,6 +317,8 @@ function rustSourceFileItemNames(model: RustSourceFileModel): readonly string[] 
       case "type-alias":
         return [item.name];
       case "mod-decl":
+        return item.body === undefined ? [] : rustSourceFileItemNames(item.body)
+          .map(name => `${item.name}::${name}`);
       case "impl":
       case "use":
       case "extern-crate":

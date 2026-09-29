@@ -73,7 +73,7 @@ test("provider calls retain closed target-only generic arguments", () => {
     form: { form: "call", path: "core::mem::size_of" },
     sourceArgumentCarriers: [],
     resultCarrier: usize,
-    targetGenericArguments: [typeArgument({ kind: "type-parameter", name: "" })],
+    targetGenericArguments: [typeArgument({ kind: "type-parameter", identity: "Invalid", name: "" })],
     isAsync: false,
     isFallible: false,
   }), undefined);
@@ -981,7 +981,7 @@ test("finalized ABI validation is total and rejects every mutated closed-contrac
     { ...abi, targetArguments: [{ ...abi.targetArguments[0], source: { kind: "argument", sourceIndex: 7 } }] },
     {
       ...abi,
-      targetGenericArguments: [typeArgument({ kind: "type-parameter", name: "" })],
+      targetGenericArguments: [typeArgument({ kind: "type-parameter", identity: "Invalid", name: "" })],
     },
     { ...abi, result: { ...abi.result, unexpected: true } },
   ];

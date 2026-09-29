@@ -1,5 +1,4 @@
 import { rustGenericCallableProtocol } from "../../../../target-model/types/carriers/generic-callables.js";
-import { rustSuspendedCallableInvocationResult } from "../../../../analysis/facts/callable-results.js";
 import {
   isRustCopyCarrier,
   isRustVecCarrier,
@@ -231,7 +230,7 @@ export function planRustSelectedSourceCallArguments(
     !sourceCallSelectedMemberMatches(
       fact,
       selected,
-      sourceCallFinalizedResultCarrier(selected, context),
+      selected.member.returnType,
       context.input.program.typeFamilies.normalize,
     )) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -485,7 +484,8 @@ export function sourceCallSelectedMemberMatches(
   }
   const callableCarrier = fact.target.form === "callable" ? fact.target.carrier
     : fact.target.form === "structural-method" || fact.target.form === "constructor-value" ? fact.target.callableCarrier : undefined;
-  const genericNames = parameters.flatMap(parameter => parameter.kind === "type" ? [parameter.sourceName] : []);
+  const genericNames = parameters.flatMap(parameter => parameter.kind === "type"
+    ? [{ kind: "type-parameter" as const, identity: parameter.targetIdentity, name: parameter.sourceName }] : []);
   const callable = rustGenericCallableProtocol(callableCarrier, genericNames) ??
     rustNativeCallableProtocol(callableCarrier) ?? rustCallableProtocol(callableCarrier);
   if (callable !== undefined) {
@@ -524,13 +524,6 @@ export function sourceCallSelectedMemberMatches(
         mapRustTargetTypes(factParameter.parameterCarrier, normalize),
       ) && mode === factParameter.mode;
     });
-}
-
-export function sourceCallFinalizedResultCarrier(
-  selected: SelectedTargetSignatureFact,
-  context: RustPlanContext,
-): TargetTypeRef | undefined {
-  return rustSuspendedCallableInvocationResult(context.input.program.facts, selected.sourceDeclaration) ?? selected.member.returnType;
 }
 
 export function requireProviderArgumentPassingFacts(

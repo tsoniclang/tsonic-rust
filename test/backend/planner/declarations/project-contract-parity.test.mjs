@@ -17,7 +17,7 @@ test("project overloads, preconstruction fields, wide primitives, and bodyless s
     },
     files: {
       "index.ts": `
-import { safety, unsafeContext } from "@tsonic/core/lang.js";
+import { safety, unsafecontext } from "@tsonic/core/lang.js";
 import type { char, int32, int64, uint64 } from "@tsonic/core/types.js";
 import type { i128, isize, u128, usize } from "@tsonic/rust/types.js";
 import { check } from "@acme/testing";
@@ -66,8 +66,8 @@ class UnsafeImplementation implements UnsafeContract {
   read(value: int32): int32 { return value; }
 }
 
-safety<UnsafeContract>().method(value => value.read).requiresUnsafe();
-safety<UnsafeImplementation>().method(value => value.read).requiresUnsafe();
+safety<UnsafeContract>().method(value => value.read).requiresunsafe();
+safety<UnsafeImplementation>().method(value => value.read).requiresunsafe();
 
 function letter(): char { return "A"; }
 function signed64Maximum(): int64 { return 9223372036854775807n; }
@@ -94,7 +94,7 @@ export function main(): void {
   check(derived.second === 42);
 
   const unsafeValue: UnsafeContract = new UnsafeImplementation();
-  check(unsafeContext(unsafeValue.read(42)) === 42);
+  check(unsafecontext(unsafeValue.read(42)) === 42);
 
   check(signed64Maximum() === 9223372036854775807n);
   check(unsigned64Maximum() === 18446744073709551615n);
@@ -116,9 +116,9 @@ export function main(): void {
   assert.match(source, /let field_copied: String = base_state\.label\.clone\(\);/u);
   assert.match(source, /let field_second: i32 = base_state\.first \+ 2;/u);
   assert.match(source, /fn letter\(\) -> u16 \{\s*65\s*\}/u);
-  assert.match(source, /fn signed_maximum\(\) -> i128/u);
-  assert.match(source, /fn signed_minimum\(\) -> i128/u);
-  assert.match(source, /fn unsigned_maximum\(\) -> u128/u);
+  assert.match(source, /fn signedMaximum\(\) -> i128/u);
+  assert.match(source, /fn signedMinimum\(\) -> i128/u);
+  assert.match(source, /fn unsignedMaximum\(\) -> u128/u);
   assert.match(source, /unsafe fn dispatch_unsafe_contract_read/u);
 
   const run = validateGeneratedProject("project-contract-parity", result.artifacts, { run: true });
@@ -357,7 +357,7 @@ class Implementation implements Contract {
   read(value: int32): int32 { return value; }
 }
 
-safety<Contract>().method(value => value.read).requiresUnsafe();
+safety<Contract>().method(value => value.read).requiresunsafe();
 export function create(): Contract { return new Implementation(); }
 `,
     },

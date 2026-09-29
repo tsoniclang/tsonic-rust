@@ -232,7 +232,7 @@ function rustTargetTypeRefEqualsValidated(
       return right.kind === left.kind && left.id === right.id &&
         genericArgumentListsEqual(left.genericArguments, right.genericArguments, lifetimeContext);
     case "type-parameter":
-      return right.kind === left.kind && left.name === right.name &&
+      return right.kind === left.kind && left.identity === right.identity &&
         optionalTargetTypesEqual(left.optionalStorageValue, right.optionalStorageValue, lifetimeContext);
     case "opaque":
       return right.kind === left.kind && left.id === right.id;
@@ -287,6 +287,7 @@ function rustTargetTypeRefEqualsValidated(
     }
     case "closure": {
       if (right.kind !== left.kind) return false;
+      if ((left.callTrait ?? "Fn") !== (right.callTrait ?? "Fn")) return false;
       if ((left.fallible === true) !== (right.fallible === true)) return false;
       const nested = matchLifetimeBinders(
         left.lifetimeBinder,
@@ -361,7 +362,8 @@ function validateRustTargetTypeRef(
           (value.genericArguments === undefined ||
             validateGenericArguments(value.genericArguments, validateChild));
       case "type-parameter":
-        return hasExactKeys(value, ["kind", "name", "optionalStorageValue"], ["kind", "name"]) &&
+        return hasExactKeys(value, ["kind", "identity", "name", "optionalStorageValue"], ["kind", "identity", "name"]) &&
+          nonEmptyString(value.identity) &&
           typeof value.name === "string" && value.name.length > 0 &&
           (value.optionalStorageValue === undefined || validateChild(value.optionalStorageValue));
       case "array":
@@ -410,9 +412,10 @@ function validateRustTargetTypeRef(
       case "closure":
         return hasExactKeys(
           value,
-          ["kind", "args", "result", "lifetimeBinder", "fallible"],
+          ["kind", "args", "result", "lifetimeBinder", "fallible", "callTrait"],
           ["kind", "args", "result"],
         ) && validateChildren(value.args) && validateChild(value.result) &&
+          (value.callTrait === undefined || value.callTrait === "Fn" || value.callTrait === "FnMut" || value.callTrait === "FnOnce") &&
           (value.fallible === undefined || typeof value.fallible === "boolean") &&
           (value.lifetimeBinder === undefined || validateLifetimeBinder(value.lifetimeBinder));
       case "opaque":

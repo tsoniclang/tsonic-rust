@@ -1,3 +1,5 @@
+import { rustDeriveAttributes, rustHiddenAttribute } from "../../../target-ast/attributes.js";
+import { planRustAuthoredStructScope } from "../scoped-types.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
 import { applyFallibleShape } from "../../types/fallible-shape.js";
 import { createRustProjectObject, rustProjectObjectStateField, rustProjectObjectType } from "../../objects/project-objects.js";
@@ -56,6 +58,7 @@ import {
   rustProjectMemberStorageVisibility,
 } from "../../objects/project-storage-abi.js";
 import { rustProjectObjectIdentityImplementation } from "../../objects/project-identity.js";
+import { rustProjectTypeParameterContext } from "../../names/type-parameters.js";
 import { rustProjectWrapperTraits } from "../../objects/project-wrapper-traits.js";
 import { rustClassEnvironmentContext, rustClassEnvironmentParameter } from "../../objects/class-environments.js";
 import { rustClassEnvironmentHandleType } from "../../objects/class-environment-types.js";
@@ -90,7 +93,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   const exported = ast.hasModifierKind(node, "export");
   const publiclyReachable = definition !== undefined &&
     context.input.program.projectTypes.programErrorVariant(definition) !== undefined ||
-    rustProjectTypeHasPublicImplementationAbi(context, className);
+    rustProjectTypeHasPublicImplementationAbi(context, definition?.targetPath ?? className);
   const storageVisibility = rustProjectImplementationVisibility(publiclyReachable);
   const structVisibility = exported || publiclyReachable ? "public" as const : "crate" as const;
   if (ast.extendsHeritageElements(node).length > 0 || ast.implementsHeritageElements(node).length > 0) {
@@ -109,6 +112,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     ));
     return undefined;
   }
+  context = rustProjectTypeParameterContext(definition, context, "declaration");
   const representation = context.input.program.objectRepresentations.representationFor(definition);
   if (representation === undefined || representation.kind === "open-hierarchy" ||
     representation.kind === "closed-hierarchy") {
@@ -283,18 +287,23 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     ));
     return undefined;
   }
+  const implementationContext = rustProjectTypeParameterContext(definition, context, "implementation");
+  const implementationType = rustTypeFromCarrierInContext(context.input.program.projectTypes.openCarrier(definition), implementationContext);
+  const implementationGenerics = rustProjectGenerics(definition, implementationContext);
+  const implementationFields = fields.map(field => ({ ...field, type: rustTypeFromCarrierInContext(field.carrier, implementationContext) }));
+  if (implementationType === undefined || implementationFields.some(field => field.type === undefined)) return undefined;
   const constructorFn = planConstructor(
     node,
     constructorMember,
-    className,
-    openType,
+    definition.targetPath,
+    implementationType,
     definition.stateName,
-    stateMarker,
-    fields,
+    rustProjectStateMarker(definition, implementationContext),
+    implementationFields as readonly PlannedProjectObjectField[],
     methodProperties,
     representation,
     publiclyReachable,
-    context,
+    implementationContext,
   );
   if (failed || constructorFn === undefined) {
     return undefined;
@@ -302,7 +311,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   const implFunctions: RustImplFunction[] = [constructorFn];
   for (const method of methods) {
     if (context.input.program.projectTypes.memberSlotName(method, "static") !== undefined) continue;
-    const planned = planProjectMethodVariants(method, context);
+    const planned = planProjectMethodVariants(method, implementationContext);
     if (planned === undefined) {
       return undefined;
     }
@@ -321,7 +330,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
       ));
       return undefined;
     }
-    const planned = planProjectMethod(accessor.declaration, context, {
+    const planned = planProjectMethod(accessor.declaration, implementationContext, {
       targetName,
       safetyPlacement: accessor.role === "read" ? "getter" : "setter",
     });
@@ -370,7 +379,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
           genericArguments: [{ kind: "type" as const, type: property.callableType }],
         },
         visibility: storageVisibility,
-        ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
+        ...(publiclyReachable ? { attrs: [rustHiddenAttribute] } : {}),
       })),
     ...(stateMarker === undefined
       ? []
@@ -378,7 +387,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
           name: stateMarker.name,
           type: stateMarker.type,
           visibility: storageVisibility,
-          ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
+          ...(publiclyReachable ? { attrs: [rustHiddenAttribute] } : {}),
         }]),
   ];
   if (representation.kind !== "value" && stateCarrier === undefined) {
@@ -390,14 +399,13 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
         name: rustProjectObjectStateField,
         type: stateCarrier,
         visibility: storageVisibility,
-        ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
+        ...(publiclyReachable ? { attrs: [rustHiddenAttribute] } : {}),
       };
   const stateItem: RustItem = {
     kind: "struct",
     name: definition.stateName,
     visibility: storageVisibility,
-    ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
-    derives: [],
+    ...(publiclyReachable ? { attrs: [rustHiddenAttribute] } : {}),
     generics,
     fields: valueFields,
   };
@@ -414,22 +422,21 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   const structItem: RustItem = {
     kind: "struct",
     name: className,
-    ...(generatedStructAttributes.length === 0 ? {} : { attrs: generatedStructAttributes }),
     visibility: structVisibility,
-    derives: representation.kind === "value" ? ["Clone"] : explicitWrapperTraits ? [] : ["Clone", "Debug", "PartialEq"],
+    attrs: [...generatedStructAttributes, ...rustDeriveAttributes(representation.kind === "value" ? ["Clone"] : explicitWrapperTraits ? [] : ["Clone", "Debug", "PartialEq"])],
     generics,
     fields: structFields,
   };
-  const defaultImplementation = rustDefaultImplementation(openType, generics, constructorFn);
+  const defaultImplementation = rustDefaultImplementation(implementationType, implementationGenerics, constructorFn);
   const implementation: RustItem = {
     kind: "impl",
-    generics,
-    target: openType,
-    functions: implFunctions,
+    generics: implementationGenerics,
+    target: implementationType,
+    members: implFunctions,
   };
   return [
     ...(representation.kind === "value" ? [] : [stateItem]),
-    structItem,
+    planRustAuthoredStructScope(node, structItem, context),
     ...(explicitWrapperTraits ? rustProjectWrapperTraits(openType, className, generics) : []),
     ...(representation.kind === "value"
       ? []
@@ -646,7 +653,7 @@ function planConstructor(
     publiclyReachable,
   );
   const constructorAttributes = safetyAttributes;
-  return {
+  return { kind: "function",
     name: "new",
     ...(constructorDeadCode === undefined ? {} : { deadCode: constructorDeadCode }),
     generics: emptyRustGenerics,

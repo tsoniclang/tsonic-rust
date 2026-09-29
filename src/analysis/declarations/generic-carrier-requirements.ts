@@ -2,7 +2,7 @@ import type { RustTypeDefinitions } from "../../target-model/types/source-union-
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustGenericRequirement } from "./generic-requirements.js";
 import { rustCarrierSupportsSourceNumeric } from "../../target-model/types/carriers/source-numeric.js";
-import { rustTargetTypeParameterNames } from "../../target-model/types/carriers/generic-references.js";
+import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
 import { isRustNeverCarrier, rustCarrierSupportsTrait, rustFixedArrayCarrierValue,
   rustNamedTypeCarrierValue, rustSourceTypeCarrierValue, rustTargetGenericTypeArguments,
   rustTargetLifetimeArguments, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
@@ -25,8 +25,8 @@ export function classifyCarrierRequirements(
     }
     if (requirement === "source-numeric") {
       if (carrier.kind === "type-parameter") {
-        if (!declared.has(carrier.name)) return false;
-        byParameter.get(carrier.name)!.add(requirement);
+        if (!declared.has(carrier.identity)) return false;
+        byParameter.get(carrier.identity)!.add(requirement);
       } else if (!rustCarrierSupportsSourceNumeric(carrier)) return false;
       continue;
     }
@@ -57,8 +57,8 @@ function classifyStaticCarrier(
 ): boolean {
   switch (carrier.kind) {
     case "type-parameter":
-      if (declared.has(carrier.name)) {
-        byParameter.get(carrier.name)!.add("static");
+      if (declared.has(carrier.identity)) {
+        byParameter.get(carrier.identity)!.add("static");
       }
       return true;
     case "array":
@@ -123,7 +123,7 @@ function classifyStaticCarrier(
         carrier.bounds.every((bound) =>
           classifyStaticCarrier(bound, declared, byParameter, associatedSupports));
     case "closure":
-      return !rustTargetTypeParameterNames(carrier).some(name => declared.has(name));
+      return !rustTargetTypeParameterIdentities(carrier).some(name => declared.has(name));
     case "associated-type":
       return associatedSupports(carrier, "static");
     default:

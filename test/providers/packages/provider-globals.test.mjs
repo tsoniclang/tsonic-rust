@@ -55,7 +55,7 @@ export function local(selectedValue: number): number { return selectedValue; }
   assert.deepEqual(result.diagnostics, []);
   const output = result.artifacts.map(artifact => artifact.text).join("\n");
   assert.equal(output.match(/acme::value\(\)/gu)?.length, 3);
-  assert.match(output, /fn local\(selected_value: f64\)/u);
+  assert.match(output, /fn local\(selectedValue: f64\)/u);
 });
 
 test("provider globals do not admit writes or dynamic indexing", () => {

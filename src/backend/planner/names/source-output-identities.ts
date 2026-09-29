@@ -8,6 +8,7 @@ import type { TargetSourcePackageGraph } from "@tsonic/target-api";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import {
   rustModuleSegmentName,
+  rustPackageModuleName,
 } from "../../../target-model/names/identifiers.js";
 
 export interface RustSourceFileOutputIdentity {
@@ -119,7 +120,7 @@ export function planRustSourceOutputIdentities(
     seenSourcePaths.set(sourcePathIdentity, fileName);
     const localComponent = sourcePackage.componentId === rootPackage.componentId;
     const localSegments = (packageCountByComponent.get(sourcePackage.componentId) ?? 0) > 1
-      ? [rustModuleSegmentName(sourcePackage.name ?? "package"), ...sourceSegments]
+      ? [rustPackageModuleName(sourcePackage.name ?? "package"), ...sourceSegments]
       : sourceSegments;
     sourcePaths.push({
       fileName,
@@ -422,7 +423,7 @@ function externalSourcePackageCrateNames(
         ));
         return undefined;
       }
-      const base = rustModuleSegmentName((names as string[]).sort(compareNames).join("_"));
+      const base = rustPackageModuleName((names as string[]).sort(compareNames).join("_"));
       return { component, base };
     })
     .filter((entry): entry is NonNullable<typeof entry> => entry !== undefined);

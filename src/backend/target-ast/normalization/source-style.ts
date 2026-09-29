@@ -1,99 +1,101 @@
+import { type RustAttribute } from "../attributes.js";
 import type {
   RustBlock,
   RustExpr,
-  RustGenericArgument,
   RustImplFunction,
   RustItem,
   RustSourceFileModel,
   RustStmt,
   RustTraitFunction,
   RustType,
-  RustTypeBound,
 } from "../nodes.js";
 import { finalizeRustBlockLiveness } from "../inspection/source-liveness.js";
+import { firstAccessesInStatements } from "../inspection/source-dataflow.js";
 import { rustLintAttributes } from "./lint-policy.js";
-import { rustBlockReferencesPath } from "../inspection/source-usage.js";
+import { rustBlockReferencesPath, rustExpressionReferencesPath } from "../inspection/source-usage.js";
 import { collapseRustForwardingClosure } from "./forwarding-closures.js";
 import { nameRustSignatureTypes } from "./signature-aliases.js";
+import type { RustNamedSignatureScope } from "./signature-aliases.js";
+import { closePublicRustTypeVisibility, publicDeclaredRustTypeNames } from "./signature-visibility.js";
 import { rustItemsReferenceModuleAlias } from "../inspection/source-module-usage.js";
 import { rustTypeEquals } from "../inspection/type-equality.js";
 import { mergeRustAdjacentConditionalBranches } from "./conditional-branches.js";
+import { appendRustNamingAllowance, finalizeRustFunctionNames, finalizeRustItemNames,
+  rustExpressionDeclaresNonSnakeName, rustStatementDeclaresNonSnakeName } from "./authored-names.js";
 
 export function finalizeRustSourceStyle(
   model: RustSourceFileModel,
 ): RustSourceFileModel {
-  const items = closePublicRustTypeVisibility(nameRustSignatureTypes(model.items,
-    (body, nameType) => createRustBodyStyler(nameType).block(body)));
+  const scope = finalizeRustItemScope(model.items);
+  return { ...model, items: [...scope.aliases, ...scope.items] };
+}
+
+function finalizeRustItemScope(source: readonly RustItem[]): RustNamedSignatureScope {
+  const named = nameRustSignatureTypes(source, (fn, nameType) => {
+    const styler = createRustBodyStyler(nameType);
+    const body = styler.block(fn.body);
+    return { ...fn, body, ...(styler.requiresNamingAllowance()
+      ? { attrs: appendRustNamingAllowance(fn.attrs, "snake") } : {}) };
+  });
+  const items = closePublicRustTypeVisibility([...named.aliases, ...named.items]);
   const publicTypes = publicDeclaredRustTypeNames(items);
-  return {
-    ...model,
-    items: items.map((item) => finalizeRustItemStyle(item, publicTypes)),
-  };
+  const styled = items.map(item => finalizeRustItemStyle(item, publicTypes));
+  return { aliases: styled.slice(0, named.aliases.length), items: styled.slice(named.aliases.length) };
 }
 
-export function rustPublicSignatureTypeNames(model: RustSourceFileModel): readonly string[] {
-  const items = closePublicRustTypeVisibility(model.items);
-  const publicTypes = publicDeclaredRustTypeNames(items);
-  return Object.freeze([...new Set(items.flatMap((item) =>
-    publicSignatureTypes(item, publicTypes).flatMap(rustTypeNames)))].sort((left, right) =>
-      left.localeCompare(right, "en")));
-}
-
-export function exposeRustSignatureTypes(
-  model: RustSourceFileModel,
-  requiredNames: ReadonlySet<string>,
-): RustSourceFileModel {
-  return { ...model, items: closePublicRustTypeVisibility(model.items, requiredNames) };
-}
-
-function publicDeclaredRustTypeNames(items: readonly RustItem[]): ReadonlySet<string> {
-  return new Set(items.flatMap((item) =>
-    (item.kind === "struct" || item.kind === "trait" || item.kind === "enum" ||
-        item.kind === "type-alias") && item.visibility === "public"
-      ? [item.name]
-      : []));
-}
 
 function finalizeRustItemStyle(
   item: RustItem,
   publicTypes: ReadonlySet<string>,
 ): RustItem {
+  item = finalizeRustItemNames(item);
+  if (item.kind === "mod-decl" && item.body !== undefined) return { ...item, body: finalizeRustSourceStyle(item.body) };
   if (item.kind === "function") {
     let attrs = item.params.length <= 7
       ? item.attrs
       : appendRustAttribute(item.attrs, rustLintAttributes.tooManyArguments);
     if (hasErasedGenericParameter(item)) attrs = appendRustAttribute(attrs, rustLintAttributes.unusedTypeParameters);
     if (hasUnusedParameter(item)) attrs = appendRustAttribute(attrs, rustLintAttributes.unusedVariables);
+    if (hasOverwrittenParameter(item)) attrs = appendRustAttribute(attrs, rustLintAttributes.unusedAssignments);
     return { ...item, attrs };
   }
   if (item.kind === "trait") {
     return {
       ...item,
-      functions: item.functions.map(finalizeRustTraitFunctionStyle),
+      members: item.members.map(member => member.kind === "function" ? finalizeRustTraitFunctionStyle(member) : member),
     };
   }
   if (item.kind === "impl") {
     const publicOwner = item.target.kind === "named" && publicTypes.has(item.target.path);
     return {
       ...item,
-      functions: item.functions.map((fn) =>
-        finalizeRustImplFunctionStyle(fn, item.trait === undefined, publicOwner)),
+      members: item.members.map(member => member.kind === "function"
+        ? finalizeRustImplFunctionStyle(member, item.trait === undefined, publicOwner) : member),
     };
   }
   if (item.kind === "const" || item.kind === "thread-local") {
-    return { ...item, value: createRustBodyStyler().expression(item.value) };
+    const styler = createRustBodyStyler();
+    const value = styler.expression(item.value);
+    return { ...item, value, ...(styler.requiresNamingAllowance()
+      ? { attrs: appendRustNamingAllowance(item.attrs, "snake") } : {}) };
   }
   return item;
 }
 
 function finalizeRustTraitFunctionStyle(fn: RustTraitFunction): RustTraitFunction {
+  fn = finalizeRustFunctionNames(fn);
   const argumentCount = fn.params.length + (fn.selfParam === undefined ? 0 : 1);
   let attrs = argumentCount <= 7
     ? fn.attrs
     : appendRustAttribute(fn.attrs, rustLintAttributes.tooManyArguments);
-  const body = fn.body === undefined ? undefined : createRustBodyStyler().block(fn.body);
+  const styler = createRustBodyStyler();
+  const body = fn.body === undefined ? undefined : styler.block(fn.body);
+  if (styler.requiresNamingAllowance()) attrs = appendRustNamingAllowance(attrs, "snake");
   if (body !== undefined && hasUnusedParameter({ ...fn, body })) {
     attrs = appendRustAttribute(attrs, rustLintAttributes.unusedVariables);
+  }
+  if (body !== undefined && hasOverwrittenParameter({ ...fn, body })) {
+    attrs = appendRustAttribute(attrs, rustLintAttributes.unusedAssignments);
   }
   return {
     ...fn,
@@ -107,8 +109,10 @@ function finalizeRustImplFunctionStyle(
   inherent: boolean,
   publicOwner: boolean,
 ): RustImplFunction {
+  fn = finalizeRustFunctionNames(fn, inherent);
   let attrs = fn.attrs;
   if (hasUnusedParameter(fn)) attrs = appendRustAttribute(attrs, rustLintAttributes.unusedVariables);
+  if (hasOverwrittenParameter(fn)) attrs = appendRustAttribute(attrs, rustLintAttributes.unusedAssignments);
   if (inherent && hasErasedGenericParameter(fn)) attrs = appendRustAttribute(attrs, rustLintAttributes.unusedTypeParameters);
   const argumentCount = fn.params.length + (fn.selfParam === undefined ? 0 : 1);
   if (inherent && argumentCount > 7) {
@@ -136,17 +140,31 @@ function hasUnusedParameter(fn: Pick<RustImplFunction, "params" | "body">): bool
     !rustBlockReferencesPath(fn.body, parameter.name));
 }
 
+function hasOverwrittenParameter(fn: Pick<RustImplFunction, "params" | "body">): boolean {
+  return fn.params.some(parameter => {
+    if (!parameter.mutable || parameter.name.startsWith("_")) return false;
+    const accesses = firstAccessesInStatements(fn.body.statements, parameter.name);
+    return accesses.has("write") && !accesses.has("read");
+  });
+}
+
 function createRustBodyStyler(nameType?: (type: RustType, role: string) => RustType): {
   readonly block: (block: RustBlock) => RustBlock;
   readonly expression: (expression: RustExpr) => RustExpr;
+  readonly requiresNamingAllowance: () => boolean;
 } {
-  return { block: finalizeRustFunctionBodyStyle, expression: finalizeRustExpressionStyle };
+  let requiresNamingAllowance = false;
+  return { block: finalizeRustFunctionBodyStyle, expression: finalizeRustExpressionStyle,
+    requiresNamingAllowance: () => requiresNamingAllowance };
 
 function finalizeRustFunctionBodyStyle(block: RustBlock): RustBlock {
   return finalizeRustBlockLiveness(finalizeRustBlockStyle(block));
 }
 
 function finalizeRustBlockStyle(block: RustBlock): RustBlock {
+  const localItems = block.statements.flatMap(statement => statement.kind === "item" ? [statement.item] : []);
+  const scope = finalizeRustItemScope(localItems);
+  let nextItem = 0;
   const retainsFieldAssignment = block.statements.some((statement, index) => {
       const previous = block.statements[index - 1];
       return previous?.kind === "let" && previous.init?.kind === "associated-call" &&
@@ -159,12 +177,20 @@ function finalizeRustBlockStyle(block: RustBlock): RustBlock {
   return {
     ...block,
     ...(retainsFieldAssignment ? { innerAttrs: appendRustAttribute(block.innerAttrs, rustLintAttributes.fieldReassignWithDefault) } : {}),
-    statements: block.statements.map(finalizeRustStatementStyle),
+    statements: [
+      ...scope.aliases.map((item): RustStmt => ({ kind: "item", item })),
+      ...block.statements.map(statement => statement.kind === "item"
+        ? { ...statement, item: scope.items[nextItem++]! }
+        : finalizeRustStatementStyle(statement)),
+    ],
   };
 }
 
 function finalizeRustStatementStyle(statement: RustStmt): RustStmt {
+  requiresNamingAllowance ||= rustStatementDeclaresNonSnakeName(statement);
   switch (statement.kind) {
+    case "item":
+      return statement;
     case "let":
       return { ...statement,
         ...(statement.type === undefined || nameType === undefined ? {} : { type: nameType(statement.type, statement.name) }),
@@ -339,6 +365,8 @@ function rustBlockMayContinueLoop(block: RustBlock, label: string | undefined): 
 
 function rustStatementMayContinueLoop(statement: RustStmt, label: string | undefined): boolean {
   switch (statement.kind) {
+    case "item":
+      return false;
     case "continue":
       return statement.label === label;
     case "if":
@@ -378,6 +406,7 @@ function rustStatementMayContinueLoop(statement: RustStmt, label: string | undef
 }
 
 function finalizeRustExpressionStyle(expression: RustExpr): RustExpr {
+  requiresNamingAllowance ||= rustExpressionDeclaresNonSnakeName(expression);
   let result: RustExpr;
   switch (expression.kind) {
     case "int-literal":
@@ -546,10 +575,16 @@ function finalizeRustExpressionStyle(expression: RustExpr): RustExpr {
       result = { ...expression, element: finalizeRustExpressionStyle(expression.element) };
       break;
     case "closure":
-      result = collapseRustForwardingClosure({ ...expression, body: finalizeRustExpressionStyle(expression.body) });
+      result = collapseRustForwardingClosure({ ...expression,
+        params: expression.params.map(parameter => closureParameter(parameter,
+          rustExpressionReferencesPath(expression.body, parameter.name))),
+        body: finalizeRustExpressionStyle(expression.body) });
       break;
     case "closure-block":
-      result = { ...expression, body: finalizeRustFunctionBodyStyle(expression.body) };
+      result = { ...expression,
+        params: expression.params.map(parameter => closureParameter(parameter,
+          rustBlockReferencesPath(expression.body, parameter.name))),
+        body: finalizeRustFunctionBodyStyle(expression.body) };
       break;
     case "await":
     case "option-try":
@@ -582,230 +617,19 @@ function finalizeRustExpressionStyle(expression: RustExpr): RustExpr {
 
 }
 
-function closePublicRustTypeVisibility(
-  items: readonly RustItem[],
-  requiredNames: ReadonlySet<string> = new Set(),
-): readonly RustItem[] {
-  const localTypes = new Set(items.flatMap((item) =>
-    item.kind === "struct" || item.kind === "enum" || item.kind === "trait" ||
-        item.kind === "type-alias"
-      ? [item.name]
-      : []));
-  const publicTypes = new Set(items.flatMap((item) =>
-    (item.kind === "struct" || item.kind === "enum" || item.kind === "trait" ||
-        item.kind === "type-alias") && (item.visibility === "public" || requiredNames.has(item.name))
-      ? [item.name]
-      : []));
-  for (;;) {
-    const required = new Set<string>();
-    for (const item of items) {
-      for (const type of publicSignatureTypes(item, publicTypes)) {
-        collectLocalRustTypeNames(type, localTypes, required);
-      }
-    }
-    const additions = [...required].filter((name) => !publicTypes.has(name));
-    if (additions.length === 0) {
-      break;
-    }
-    for (const name of additions) {
-      publicTypes.add(name);
-    }
-  }
-  return items.map((item) =>
-    (item.kind === "struct" || item.kind === "enum" || item.kind === "trait" ||
-        item.kind === "type-alias") && publicTypes.has(item.name) &&
-        item.visibility !== "public"
-      ? { ...item, visibility: "public",
-          ...(item.kind === "trait" ? {
-            functions: item.functions.map(({ deadCode, ...method }) => method),
-          } : {}),
-        }
-      : item);
+function closureParameter<Parameter extends { readonly name: string; readonly attrs?: readonly RustAttribute[] }>(
+  parameter: Parameter, used: boolean,
+): Parameter {
+  return used || parameter.name.startsWith("_") ? parameter : {
+    ...parameter, attrs: appendRustAttribute(parameter.attrs, rustLintAttributes.unusedVariables),
+  };
 }
 
-function publicSignatureTypes(
-  item: RustItem,
-  publicTypes: ReadonlySet<string>,
-): readonly RustType[] {
-  switch (item.kind) {
-    case "function":
-      return item.visibility === "public"
-        ? [...item.params.map((parameter) => parameter.type), ...optionalType(item.returnType)]
-        : [];
-    case "const":
-    case "thread-local":
-      return item.visibility === "public" ? [item.type] : [];
-    case "struct":
-      return publicTypes.has(item.name)
-        ? item.fields.filter((field) => field.visibility === "public").map((field) => field.type)
-        : [];
-    case "enum":
-      return publicTypes.has(item.name)
-        ? item.variants.flatMap((variant) => variant.fields ?? [])
-        : [];
-    case "trait":
-      return publicTypes.has(item.name)
-        ? [
-            ...(item.superTraits ?? []),
-            ...(item.associatedTypes ?? []).flatMap((type) =>
-              type.bounds.flatMap(rustTypeBoundTypes)),
-            ...item.functions.flatMap((fn) => [
-              ...fn.params.map((parameter) => parameter.type),
-              ...optionalType(fn.returnType),
-            ]),
-          ]
-        : [];
-    case "impl":
-      return [...rustTypeNames(item.target), ...optionalType(item.trait).flatMap(rustTypeNames)]
-        .some((name) => publicTypes.has(name))
-        ? [
-          ...(item.associatedTypes ?? []).map((type) => type.type),
-          ...item.functions.flatMap((fn) => fn.visibility === "public"
-          ? [
-              ...fn.params.map((parameter) => parameter.type),
-              ...optionalType(fn.returnType),
-            ]
-          : []),
-        ]
-        : [];
-    case "type-alias":
-      return publicTypes.has(item.name) ? [item.target] : [];
-    case "mod-decl":
-    case "extern-crate":
-    case "use":
-      return [];
-  }
-}
-
-function optionalType(type: RustType | undefined): readonly RustType[] {
-  return type === undefined ? [] : [type];
-}
-
-function rustTypeBoundTypes(bound: RustTypeBound): readonly RustType[] {
-  switch (bound.kind) {
-    case "trait":
-      return [{ kind: "named", path: bound.path }];
-    case "trait-type":
-      return [bound.reference.trait];
-    case "callable":
-      return [...bound.parameters, bound.result];
-    case "lifetime":
-    case "maybe-sized":
-      return [];
-  }
-}
-
-function collectLocalRustTypeNames(
-  type: RustType,
-  localTypes: ReadonlySet<string>,
-  result: Set<string>,
-): void {
-  for (const name of rustTypeNames(type)) {
-    if (localTypes.has(name)) {
-      result.add(name);
-    }
-  }
-}
-
-function rustTypeNames(type: RustType): readonly string[] {
-  switch (type.kind) {
-    case "infer":
-      return [];
-    case "named":
-      return [
-        type.path,
-        ...rustGenericArgumentTypeNames(type.genericArguments),
-      ];
-    case "qualified":
-      return [
-        ...rustTypeNames(type.owner),
-        ...(type.trait === undefined ? [] : rustTypeNames(type.trait)),
-        ...rustGenericArgumentTypeNames(type.genericArguments),
-      ];
-    case "trait-object":
-      return [
-        ...rustTypeNames(type.principal.trait),
-        ...type.autoTraits.flatMap((trait) => rustTypeNames(trait.trait)),
-      ];
-    case "impl-trait":
-      return [
-        ...type.bounds.flatMap(rustTypeBoundNames),
-        ...rustGenericArgumentTypeNames(type.captures),
-      ];
-    case "reference":
-      return rustTypeNames(type.referent);
-    case "raw-pointer":
-      return rustTypeNames(type.pointee);
-    case "fixed-array":
-    case "slice":
-      return rustTypeNames(type.element);
-    case "function-pointer":
-    case "callable-trait":
-      return [...type.parameters.flatMap(rustTypeNames), ...rustTypeNames(type.result)];
-    case "tuple":
-      return type.elements.flatMap(rustTypeNames);
-    case "primitive":
-    case "string":
-    case "str":
-    case "unit":
-    case "never":
-      return [];
-  }
-}
-
-function rustTypeBoundNames(bound: RustTypeBound): readonly string[] {
-  switch (bound.kind) {
-    case "trait":
-      return [bound.path];
-    case "trait-type":
-      return rustTypeNames(bound.reference.trait);
-    case "callable":
-      return [
-        ...bound.parameters.flatMap(rustTypeNames),
-        ...rustTypeNames(bound.result),
-      ];
-    case "lifetime":
-    case "maybe-sized":
-      return [];
-  }
-}
-
-function rustGenericArgumentTypeNames(
-  arguments_: readonly RustGenericArgument[] | undefined,
-): readonly string[] {
-  return (arguments_ ?? []).flatMap((argument) => {
-    switch (argument.kind) {
-      case "type":
-        return rustTypeNames(argument.type);
-      case "associated-equality":
-        return [
-          ...rustGenericArgumentTypeNames(argument.genericArguments),
-          ...rustTypeNames(argument.type),
-        ];
-      case "associated-bounds":
-        return [
-          ...rustGenericArgumentTypeNames(argument.genericArguments),
-          ...argument.bounds.flatMap((bound) =>
-            bound.kind === "trait-type"
-              ? rustTypeNames(bound.reference.trait)
-              : bound.kind === "callable"
-                ? [
-                    ...bound.parameters.flatMap(rustTypeNames),
-                    ...rustTypeNames(bound.result),
-                  ]
-                : []),
-        ];
-      case "lifetime":
-      case "const":
-        return [];
-    }
-  });
-}
 
 function appendRustAttribute(
-  attrs: readonly string[] | undefined,
-  attribute: string,
-): readonly string[] {
+  attrs: readonly RustAttribute[] | undefined,
+  attribute: RustAttribute,
+): readonly RustAttribute[] {
   return attrs?.includes(attribute) === true
     ? attrs
     : [...attrs ?? [], attribute];

@@ -26,6 +26,7 @@ export function projectDefinition(
   const sourceName = rustSourceDeclarationTypeName(declaration, ast);
   const targetName = namePlan.nameForDeclaration(declaration);
   const fileName = ast.getFileName(sourceFile);
+  const targetPath = namePlan.nameForSourceType(fileName, sourceName);
   const rawParameters = ast.typeParameters(declaration);
   const parameters = denseNodes(rawParameters);
   const ownContract = genericContract?.filter(parameter => ast.parent(parameter.declaration) === declaration);
@@ -35,15 +36,10 @@ export function projectDefinition(
   const ordinaryParameters = contractMatches
     ? genericContract.filter((parameter) => parameter.kind === "type")
     : undefined;
-  const sourceTypeParameterNames = ordinaryParameters?.map((parameter) =>
-    parameter.sourceName);
-  const targetParameterNames = ordinaryParameters?.map((parameter) =>
-    parameter.targetName);
-  return sourceName.length === 0 || targetName === undefined || fileName.length === 0 ||
+  return sourceName.length === 0 || targetName === undefined || targetPath === undefined || fileName.length === 0 ||
       parameters === undefined || !contractMatches || genericContract === undefined ||
-      sourceTypeParameterNames === undefined ||
-      sourceTypeParameterNames.some((name) => name.length === 0) ||
-      targetParameterNames === undefined || targetParameterNames.some((name) => name === undefined)
+      ordinaryParameters === undefined || ordinaryParameters.some(parameter =>
+        parameter.identity.length === 0 || parameter.sourceName.length === 0 || parameter.targetName.length === 0)
     ? undefined
     : (() => {
         const stateName = allocateGeneratedName(
@@ -63,10 +59,10 @@ export function projectDefinition(
         fileName,
         sourceName,
         targetName,
+        targetPath,
         kind,
         genericParameters: Object.freeze([...genericContract]),
-        typeParameterNames: Object.freeze(sourceTypeParameterNames),
-        targetTypeParameterNames: Object.freeze(targetParameterNames as string[]),
+        typeParameterIdentities: Object.freeze(ordinaryParameters!.map(parameter => parameter.identity)),
         stateName,
         dispatchName,
         ...(rootName === undefined ? {} : { rootName }),
@@ -88,6 +84,8 @@ export function sourceFileIdentifierNames(
     if (targetName !== undefined) {
       result.add(targetName);
     }
+    const targetScope = namePlan.scopeForDeclaration(node);
+    if (targetScope !== undefined) result.add(targetScope);
     ast.forEachChild(node, visit);
   };
   visit(sourceFile);

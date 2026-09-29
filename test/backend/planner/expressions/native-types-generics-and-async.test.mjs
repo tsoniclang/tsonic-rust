@@ -54,9 +54,9 @@ export function collide(): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /let foo_bar_2: i32 = 1;/u);
+  assert.match(text, /let fooBar: i32 = 1;/u);
   assert.match(text, /let foo_bar: i32 = 2;/u);
-  assert.match(text, /foo_bar_2 \+ foo_bar/u);
+  assert.match(text, /fooBar \+ foo_bar/u);
 });
 
 test("Rust keyword-shaped source identifiers use exact raw identifiers", () => {
@@ -412,7 +412,7 @@ export function main(): void {
     },
   });
   assert.deepEqual(result.diagnostics, []);
-  assert.match(artifactText(result, "src/index.rs"), /entry\[rt::conversions::i32_to_usize\(i\)\?\]/u);
+  assert.match(artifactText(result, "src/index.rs"), /entry\[rt::conversions::checked_integer::<usize>\(i\)\?\]/u);
   assert.equal(validateGeneratedProject("dynamic-tuple-index", result.artifacts, { run: true }).status, 0);
 });
 

@@ -7,12 +7,12 @@ import { memoryAbiCapability, nativeLocationProofSource } from "../../../helpers
 import { nativeFieldProofSource, nativeArrayProofSource } from "../../../helpers/native-record-proof.mjs";
 
 for (const [name, body] of [
-  ["self", `export function make(): Pointer<typeof make> { return allocatePointer<typeof make>(make); }`],
-  ["mutual", `function first(): Pointer<typeof second> { return allocatePointer<typeof second>(second); }
-    export function second(): Pointer<typeof first> { return allocatePointer<typeof first>(first); }`],
+  ["self", `export function make(): Pointer<typeof make> { return allocateptr<typeof make>(make); }`],
+  ["mutual", `function first(): Pointer<typeof second> { return allocateptr<typeof second>(second); }
+    export function second(): Pointer<typeof first> { return allocateptr<typeof first>(first); }`],
 ]) {
   test(`recursive pointer return carrier rejects ${name} without unbounded classification`, { timeout: 30_000 }, () => {
-    const source = `import { allocatePointer } from "@tsonic/core/lang.js";
+    const source = `import { allocateptr } from "@tsonic/core/lang.js";
       import type { Pointer } from "@tsonic/core/types.js";
       ${body}`;
     const helper = new URL("../../../helpers/rust-session.mjs", import.meta.url).href;
@@ -34,17 +34,17 @@ test("pointer recursion guards preserve nominal recursion and independent finite
   const { result } = compileRust({
     target: { id: "rust", options: { outputType: "bin" } },
     files: { "index.ts": `
-      import { allocatePointer, loadPointer } from "@tsonic/core/lang.js";
+      import { allocateptr, loadptr } from "@tsonic/core/lang.js";
       import type { Pointer, uint32 } from "@tsonic/core/types.js";
       class Link { next: Link | undefined = undefined; }
-      function link(): Pointer<Link> { return allocatePointer(new Link()); }
+      function link(): Pointer<Link> { return allocateptr(new Link()); }
       function value(): uint32 { return 7; }
-      function first(): Pointer<typeof value> { return allocatePointer(value); }
-      function second(): Pointer<typeof value> { return allocatePointer(value); }
+      function first(): Pointer<typeof value> { return allocateptr(value); }
+      function second(): Pointer<typeof value> { return allocateptr(value); }
       export function main(): void {
-        const item = loadPointer(link());
-        const left = loadPointer(first());
-        const right = loadPointer(second());
+        const item = loadptr(link());
+        const left = loadptr(first());
+        const right = loadptr(second());
         if (item.next !== undefined || left() !== 7 || right() !== 7) throw new Error("pointer carrier recursion");
       }
     ` },
@@ -93,29 +93,29 @@ test("cross-file equivalent layouts preserve one native backing location", { tim
       "layout.ts": `
         import { abi } from "test:abi";
         import type { uint32 } from "@tsonic/core/types.js";
-        import { memoryLayout } from "@tsonic/core/lang.js";
-        export const remote = memoryLayout<uint32>(abi, 4, 4, 4);
+        import { memorylayout } from "@tsonic/core/lang.js";
+        export const remote = memorylayout<uint32>({ datalayout: abi, bytesize: 4, bytealignment: 4, stride: 4, fields: [] });
       `,
       "index.ts": `
         import { abi } from "test:abi";
         import { remote } from "./layout.js";
         import type { uint32 } from "@tsonic/core/types.js";
-        import { memoryLayout, addressOf, toRawPointer, reinterpretRawPointer, loadPointer,
-          storePointer, equalPointer, equalRawPointer, unsafeContext } from "@tsonic/core/lang.js";
-        const local = memoryLayout<uint32>(abi, 4, 4, 4);
+        import { memorylayout, addressof, torawptr, reinterpretrawptr, loadptr,
+          storeptr, equalptr, equalrawptr, unsafecontext } from "@tsonic/core/lang.js";
+        const local = memorylayout<uint32>({ datalayout: abi, bytesize: 4, bytealignment: 4, stride: 4, fields: [] });
         function run(): boolean {
-          unsafeContext();
+          unsafecontext();
           let value: uint32 = 7;
-          const pointer = addressOf(value);
-          const first = toRawPointer(pointer, local);
-          const second = toRawPointer(pointer, remote);
-          const left = reinterpretRawPointer(first, local);
-          const right = reinterpretRawPointer(second, remote);
+          const pointer = addressof(value);
+          const first = torawptr(pointer, local);
+          const second = torawptr(pointer, remote);
+          const left = reinterpretrawptr(first, local);
+          const right = reinterpretrawptr(second, remote);
           if (left === undefined || right === undefined) return false;
-          storePointer(left, 9);
-          if (value !== 9 || loadPointer(right) !== 9) return false;
+          storeptr(left, 9);
+          if (value !== 9 || loadptr(right) !== 9) return false;
           value = 17;
-          return loadPointer(right) === 17 && equalPointer(pointer, left) && equalRawPointer(first, second);
+          return loadptr(right) === 17 && equalptr(pointer, left) && equalrawptr(first, second);
         }
         export function main(): void { if (!run()) throw new Error("cross-file native aliasing"); }
       `,
@@ -151,49 +151,49 @@ test("native array value reads clone proven owned handles while storage writes r
 });
 
 for (const [name, source, diagnostic] of [
-  ["conflicting array layouts", `import { addressOf } from "@tsonic/core/lang.js";
-    const packed = memoryLayout<uint32>(abi, 4, 1, 4);
+  ["conflicting array layouts", `import { addressof } from "@tsonic/core/lang.js";
+    const packed = memorylayout<uint32>({ datalayout: abi, bytesize: 4, bytealignment: 1, stride: 4, fields: [] });
     export function expose(): void {
       const values: uint32[] = [1, 2];
       const alias = values;
-      toRawPointer(addressOf(values[0]), word);
-      toRawPointer(addressOf(alias[0]), packed);
+      torawptr(addressof(values[0]), word);
+      torawptr(addressof(alias[0]), packed);
     }`, "RUST_NATIVE_BACKING_NOT_PROVEN"],
-  ["escaping array storage", `import { addressOf } from "@tsonic/core/lang.js";
+  ["escaping array storage", `import { addressof } from "@tsonic/core/lang.js";
     declare function escape(values: uint32[]): void;
     export function expose(): void {
       const values: uint32[] = [1];
-      toRawPointer(addressOf(values[0]), word);
+      torawptr(addressof(values[0]), word);
       escape(values);
     }`, "RUST_NATIVE_BACKING_NOT_PROVEN"],
-  ["captured array storage", `import { addressOf } from "@tsonic/core/lang.js";
+  ["captured array storage", `import { addressof } from "@tsonic/core/lang.js";
     export function expose(): void {
       const values: uint32[] = [1];
-      toRawPointer(addressOf(values[0]), word);
+      torawptr(addressof(values[0]), word);
       const read = () => values[0];
       read();
     }`, "RUST_NATIVE_BACKING_NOT_PROVEN"],
-  ["conflicting object field layouts", `import { addressOf } from "@tsonic/core/lang.js";
-    const packed = memoryLayout<uint32>(abi, 4, 1, 4);
+  ["conflicting object field layouts", `import { addressof } from "@tsonic/core/lang.js";
+    const packed = memorylayout<uint32>({ datalayout: abi, bytesize: 4, bytealignment: 1, stride: 4, fields: [] });
     export function expose(): void {
       const cell: { value: uint32 } = { value: 1 };
       const alias = cell;
-      toRawPointer(addressOf(cell.value), word);
-      toRawPointer(addressOf(alias.value), packed);
+      torawptr(addressof(cell.value), word);
+      torawptr(addressof(alias.value), packed);
     }`, "RUST_NATIVE_BACKING_NOT_PROVEN"],
-  ["open caller", `export function expose(pointer: Pointer<uint32>) { return toRawPointer(pointer, word); }`, "RUST_NATIVE_BACKING_NOT_PROVEN"],
-  ["conflicting inferred pointees", `import type { int32 } from "@tsonic/core/types.js"; export function expose(flag: boolean) { return flag ? allocatePointer<uint32>(1) : allocatePointer<int32>(2); }`, "RUST_MISSING_TARGET_FACT"],
-  ["logical projection", `export function expose() { const pointer = allocatePointer<uint32>(1); return toRawPointer(projectPointer<uint32, uint32>(pointer, value => value, value => value), word); }`, "RUST_NATIVE_BACKING_NOT_PROVEN"],
-  ["incompatible scalar size", `const wrong = memoryLayout<uint32>(abi, 8, 4, 8); export function expose(raw: RawPointer | undefined) { unsafeContext(); return reinterpretRawPointer(raw, wrong); }`, "RUST_RAW_LOCATION_NOT_PROVEN"],
-  ["unsafe context", `export function expose(raw: RawPointer | undefined): Pointer<uint32> | undefined { return reinterpretRawPointer(raw, word); }`, "RUST_NATIVE_POINTER_UNSAFE_CONTEXT_REQUIRED"],
-  ["invalid bit patterns", `const invalid = memoryLayout<boolean>(abi, 1, 1, 1); export function expose(raw: RawPointer | undefined) { unsafeContext(); return reinterpretRawPointer(raw, invalid); }`, "RUST_RAW_LOCATION_NOT_PROVEN"],
+  ["open caller", `export function expose(pointer: Pointer<uint32>) { return torawptr(pointer, word); }`, "RUST_NATIVE_BACKING_NOT_PROVEN"],
+  ["conflicting inferred pointees", `import type { int32 } from "@tsonic/core/types.js"; export function expose(flag: boolean) { return flag ? allocateptr<uint32>(1) : allocateptr<int32>(2); }`, "RUST_MISSING_TARGET_FACT"],
+  ["logical projection", `export function expose() { const pointer = allocateptr<uint32>(1); return torawptr(projectptr<uint32, uint32>(pointer, value => value, value => value), word); }`, "RUST_NATIVE_BACKING_NOT_PROVEN"],
+  ["incompatible scalar size", `const wrong = memorylayout<uint32>({ datalayout: abi, bytesize: 8, bytealignment: 4, stride: 8, fields: [] }); export function expose(raw: RawPointer | undefined) { unsafecontext(); return reinterpretrawptr(raw, wrong); }`, "RUST_RAW_LOCATION_NOT_PROVEN"],
+  ["unsafe context", `export function expose(raw: RawPointer | undefined): Pointer<uint32> | undefined { return reinterpretrawptr(raw, word); }`, "RUST_NATIVE_POINTER_UNSAFE_CONTEXT_REQUIRED"],
+  ["invalid bit patterns", `const invalid = memorylayout<boolean>({ datalayout: abi, bytesize: 1, bytealignment: 1, stride: 1, fields: [] }); export function expose(raw: RawPointer | undefined) { unsafecontext(); return reinterpretrawptr(raw, invalid); }`, "RUST_RAW_LOCATION_NOT_PROVEN"],
 ]) {
   test(`native memory rejects ${name} without publishing artifacts`, () => {
     const { result } = compileRust({ capabilities: [memoryAbiCapability("rust")], files: { "index.ts": `
 import { abi } from "test:abi";
-import { memoryLayout, toRawPointer, reinterpretRawPointer, allocatePointer, projectPointer, unsafeContext } from "@tsonic/core/lang.js";
+import { memorylayout, torawptr, reinterpretrawptr, allocateptr, projectptr, unsafecontext } from "@tsonic/core/lang.js";
 import type { Pointer, RawPointer, uint32 } from "@tsonic/core/types.js";
-const word = memoryLayout<uint32>(abi, 4, 4, 4);
+const word = memorylayout<uint32>({ datalayout: abi, bytesize: 4, bytealignment: 4, stride: 4, fields: [] });
 ${source}
 ` } });
     assert.ok(result.diagnostics.some(item => item.code === diagnostic), JSON.stringify(result.diagnostics, null, 2));
@@ -208,21 +208,21 @@ test("huge fixed-array metadata observations erase before native value admission
     files: {
       "layouts.ts": `
         import { abi } from "test:abi";
-        import { memoryLayout, memoryArrayLayout } from "@tsonic/core/lang.js";
-        export const empty = memoryLayout<{}>(abi, 0, 1, 0);
-        export const remote = memoryArrayLayout(abi, 0, 1, 0, empty, 9007199254740993n);
+        import { memorylayout, memoryarraylayout } from "@tsonic/core/lang.js";
+        export const empty = memorylayout<{}>({ datalayout: abi, bytesize: 0, bytealignment: 1, stride: 0, fields: [] });
+        export const remote = memoryarraylayout({ datalayout: abi, bytesize: 0, bytealignment: 1, stride: 0, elementlayout: empty, length: 9007199254740993n });
       `,
       "index.ts": `
         import { abi } from "test:abi";
         import { empty, remote } from "./layouts.js";
-        import { memoryArrayLayout, sizeOf, alignOf, strideOf } from "@tsonic/core/lang.js";
+        import { memoryarraylayout, sizeof, alignof, strideof } from "@tsonic/core/lang.js";
         import type { nativeUint } from "@tsonic/core/types.js";
         export function direct(): nativeUint {
-          return sizeOf(memoryArrayLayout(abi, 0, 1, 0, empty, 9007199254740993n));
+          return sizeof(memoryarraylayout({ datalayout: abi, bytesize: 0, bytealignment: 1, stride: 0, elementlayout: empty, length: 9007199254740993n }));
         }
-        export function remoteSize(): nativeUint { return sizeOf(remote); }
-        export function remoteAlignment(): nativeUint { return alignOf(remote); }
-        export function remoteStride(): nativeUint { return strideOf(remote); }
+        export function remoteSize(): nativeUint { return sizeof(remote); }
+        export function remoteAlignment(): nativeUint { return alignof(remote); }
+        export function remoteStride(): nativeUint { return strideof(remote); }
         export function main(): void {
           if (direct() !== 0 || remoteSize() !== 0 || remoteAlignment() !== 1 || remoteStride() !== 0) {
             throw new Error("fixed-array metadata observation");
@@ -235,30 +235,30 @@ test("huge fixed-array metadata observations erase before native value admission
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /pub fn direct\(\) -> usize \{\s*0usize\s*\}/u);
   for (const artifact of result.artifacts.filter(artifact => artifact.path.endsWith(".rs"))) {
-    assert.doesNotMatch(artifact.text, /9007199254740993|memoryArrayLayout|NativeLayout|NativeArray/u);
+    assert.doesNotMatch(artifact.text, /9007199254740993|memoryarraylayout|NativeLayout|NativeArray/u);
   }
   assert.equal(validateGeneratedProject("huge-fixed-array-metadata", result.artifacts, { run: true }).status, 0);
 });
 
 for (const [name, declarations, selectedLayout, body, diagnostic, accepted] of [
-  ["direct fixed array", "", "array", "return reinterpretRawPointer(raw, array);",
+  ["direct fixed array", "", "array", "return reinterpretrawptr(raw, array);",
     "RUST_RAW_LOCATION_NOT_PROVEN", true],
   ["nested fixed array", `
-    const nested = memoryArrayLayout<FixedArray<uint32, 2>, 3>(abi, 24, 4, 24, array, 3);
-  `, "nested", "return reinterpretRawPointer(raw, nested);", "RUST_RAW_LOCATION_NOT_PROVEN", true],
+    const nested = memoryarraylayout<FixedArray<uint32, 2>, 3>({ datalayout: abi, bytesize: 24, bytealignment: 4, stride: 24, elementlayout: array, length: 3 });
+  `, "nested", "return reinterpretrawptr(raw, nested);", "RUST_RAW_LOCATION_NOT_PROVEN", true],
   ["record containing a fixed array", `
     interface Container { values: FixedArray<uint32, 2> }
-    const record = memoryLayout<Container>(abi, 8, 4, 8,
-      memoryField((value: Container) => value.values, 0, 4, array));
-  `, "record", "return reinterpretRawPointer(raw, record);", "RUST_RAW_LOCATION_NOT_PROVEN", false],
+    const record = memorylayout<Container>({ datalayout: abi, bytesize: 8, bytealignment: 4, stride: 8,
+      fields: [memoryfield({ select: (value: Container) => value.values, byteoffset: 0, bytealignment: 4, fieldlayout: array })] });
+  `, "record", "return reinterpretrawptr(raw, record);", "RUST_RAW_LOCATION_NOT_PROVEN", false],
   ["fixed-array physical backing", "", "array", `
     let values: FixedArray<uint32, 2> = [1, 2];
-    return toRawPointer(addressOf(values), array);
+    return torawptr(addressof(values), array);
   `, "RUST_NATIVE_BACKING_NOT_PROVEN", true],
   ["huge zero-sized fixed array", `
-    const zero = memoryLayout<{}>(abi, 0, 1, 0);
-    const huge = memoryArrayLayout<{}, 9007199254740993n>(abi, 0, 1, 0, zero, 9007199254740993n);
-  `, "huge", "return reinterpretRawPointer(raw, huge);", "RUST_RAW_LOCATION_NOT_PROVEN", false],
+    const zero = memorylayout<{}>({ datalayout: abi, bytesize: 0, bytealignment: 1, stride: 0, fields: [] });
+    const huge = memoryarraylayout<{}, 9007199254740993n>({ datalayout: abi, bytesize: 0, bytealignment: 1, stride: 0, elementlayout: zero, length: 9007199254740993n });
+  `, "huge", "return reinterpretrawptr(raw, huge);", "RUST_RAW_LOCATION_NOT_PROVEN", false],
 ]) {
   test(`native physical layouts ${accepted ? "admit" : "reject unproved reference storage for"} ${name}`, () => {
     const { result } = compileRust({
@@ -266,14 +266,14 @@ for (const [name, declarations, selectedLayout, body, diagnostic, accepted] of [
       files: { "index.ts": `
         import { abi } from "test:abi";
         import type { FixedArray, RawPointer, uint32 } from "@tsonic/core/types.js";
-        import { memoryLayout, memoryArrayLayout, memoryField, addressOf, toRawPointer,
-          reinterpretRawPointer, unsafeContext, sizeOf } from "@tsonic/core/lang.js";
-        const word = memoryLayout<uint32>(abi, 4, 4, 4);
-        const array = memoryArrayLayout<uint32, 2>(abi, 8, 4, 8, word, 2);
+        import { memorylayout, memoryarraylayout, memoryfield, addressof, torawptr,
+          reinterpretrawptr, unsafecontext, sizeof } from "@tsonic/core/lang.js";
+        const word = memorylayout<uint32>({ datalayout: abi, bytesize: 4, bytealignment: 4, stride: 4, fields: [] });
+        const array = memoryarraylayout<uint32, 2>({ datalayout: abi, bytesize: 8, bytealignment: 4, stride: 8, elementlayout: word, length: 2 });
         ${declarations}
-        export function size() { return sizeOf(${selectedLayout}); }
+        export function size() { return sizeof(${selectedLayout}); }
         export function expose(raw: RawPointer | undefined) {
-          unsafeContext();
+          unsafecontext();
           ${body}
         }
       ` },
@@ -295,20 +295,20 @@ test("huge zero-sized native arrays retain their exact extent without element lo
     target: { id: "rust", options: { outputType: "bin", crateName: "huge_zero_array" } },
     files: { "index.ts": `
 import { abi } from "test:abi";
-import { allocatePointer, loadPointer, memoryArrayLayout, memoryLayout,
-  reinterpretRawPointer, storePointer, struct, toRawPointer, unsafeContext } from "@tsonic/core/lang.js";
+import { allocateptr, loadptr, memoryarraylayout, memorylayout,
+  reinterpretrawptr, storeptr, struct, torawptr, unsafecontext } from "@tsonic/core/lang.js";
 const Empty = struct({});
 type Empty = typeof Empty;
-const empty = memoryLayout<Empty>(abi, 0, 1, 0);
-const huge = memoryArrayLayout<Empty, 9007199254740993n>(abi, 0, 1, 0, empty, 9007199254740993n);
+const empty = memorylayout<Empty>({ datalayout: abi, bytesize: 0, bytealignment: 1, stride: 0, fields: [] });
+const huge = memoryarraylayout<Empty, 9007199254740993n>({ datalayout: abi, bytesize: 0, bytealignment: 1, stride: 0, elementlayout: empty, length: 9007199254740993n });
 export function main(): void {
-  unsafeContext();
-  const origin = allocatePointer<Empty>({});
-  const raw = toRawPointer(origin, empty);
-  const pointer = reinterpretRawPointer(raw, huge);
+  unsafecontext();
+  const origin = allocateptr<Empty>({});
+  const raw = torawptr(origin, empty);
+  const pointer = reinterpretrawptr(raw, huge);
   if (pointer === undefined) throw new Error("zero-sized pointer");
-  const value = loadPointer(pointer);
-  storePointer(pointer, value);
+  const value = loadptr(pointer);
+  storeptr(pointer, value);
 }
 ` },
   });

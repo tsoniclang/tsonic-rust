@@ -4,10 +4,10 @@ import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { rustCompilerProviderProtocolVersion } from "../model/model.js";
 import { isDeclaredCacheDirectory } from "./cache-directory.js";
+import { snapshotStandardMetadataArtifacts } from "./standard-metadata.js";
 import type {
   RustCompilerCargoProjectSnapshot,
   RustCompilerDependency,
-  RustCompilerMetadataArtifact,
   RustCompilerPackageSource,
   RustCompilerProjectSnapshot,
   RustCompilerStandardLibrarySnapshot,
@@ -22,7 +22,6 @@ const commandBufferLimit = 256 * 1024 * 1024;
 const metadataTimeoutMilliseconds = 120_000;
 const excludedDirectories = new Set([".git", ".temp", "node_modules", "target"]);
 const standardLibraryCrates = Object.freeze(["alloc", "core", "std"]);
-const standardMetadataArtifactLimit = 256;
 
 interface CargoMetadata {
   readonly packages: readonly CargoPackage[];
@@ -78,10 +77,7 @@ export function createRustCompilerProjectSnapshot(manifestPath: string): RustCom
     if (pkg === undefined || node === undefined) {
       throw new Error(`Cargo metadata dependency '${edge.name}' points to missing package '${edge.pkg}'.`);
     }
-    const libraryTargets = pkg.targets.filter((target) => target.kind.includes("lib"));
-    if (libraryTargets.length !== 1) {
-      throw new Error(`Cargo dependency '${edge.name}' must resolve to exactly one library target; found ${libraryTargets.length}.`);
-    }
+    const libraryTarget = selectLibraryTarget(pkg, edge.name);
     const dependencyManifest = realpathSync(resolve(pkg.manifest_path));
     const source = packageSourceById.get(pkg.id);
     if (source === undefined) {
@@ -96,7 +92,7 @@ export function createRustCompilerProjectSnapshot(manifestPath: string): RustCom
       packageId: pkg.id,
       packageName: pkg.name,
       packageVersion: pkg.version,
-      crateName: libraryTargets[0]!.name,
+      crateName: libraryTarget.name,
       targetCrateName,
       manifestPath: dependencyManifest,
       sourceRoot: source.sourceRoot,
@@ -232,40 +228,6 @@ export function verifyRustCompilerStandardLibraryMetadata(
   }
 }
 
-function snapshotStandardMetadataArtifacts(
-  targetLibraryDirectory: string,
-): readonly RustCompilerMetadataArtifact[] {
-  const files = readdirSync(targetLibraryDirectory, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && /^lib[A-Za-z0-9_]+-[0-9a-f]+\.rmeta$/u.test(entry.name))
-    .map((entry) => entry.name)
-    .sort(compareText);
-  if (files.length === 0 || files.length > standardMetadataArtifactLimit) {
-    throw new Error(
-      `Installed Rust target library exposes ${files.length} metadata artifacts; expected 1-${standardMetadataArtifactLimit}.`,
-    );
-  }
-  const names = new Set<string>();
-  return Object.freeze(files.map((name): RustCompilerMetadataArtifact => {
-    const match = /^lib([A-Za-z0-9_]+)-[0-9a-f]+\.rmeta$/u.exec(name);
-    const crateName = match?.[1];
-    if (crateName === undefined || names.has(crateName)) {
-      throw new Error(
-        `Installed Rust target library has no unique metadata artifact identity for '${name}'.`,
-      );
-    }
-    names.add(crateName);
-    const path = realpathSync(join(targetLibraryDirectory, name));
-    const stat = statSync(path);
-    return Object.freeze({
-      crateName,
-      path,
-      byteLength: stat.size,
-      modifiedMilliseconds: stat.mtimeMs,
-      digest: createHash("sha256").update(readFileSync(path)).digest("hex"),
-    });
-  }));
-}
-
 export function verifyRustCompilerDependencySource(
   snapshot: RustCompilerProjectSnapshot,
   dependency: RustCompilerDependency,
@@ -323,7 +285,7 @@ function selectLibraryTarget(
   dependencyName: string,
 ): CargoPackage["targets"][number] {
   const libraryTargets = pkg.targets.filter((target) =>
-    target.kind.some((kind) => kind === "lib" || kind === "rlib" || kind === "dylib"));
+    target.kind.some((kind) => kind === "lib" || kind === "rlib" || kind === "dylib" || kind === "proc-macro"));
   if (libraryTargets.length !== 1) {
     throw new Error(`Cargo dependency '${dependencyName}' must resolve to exactly one library target; found ${libraryTargets.length}.`);
   }

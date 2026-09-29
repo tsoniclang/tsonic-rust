@@ -44,6 +44,7 @@ export interface RustLifetimeParameterContract {
 export interface RustTypeLifetimeContract {
   readonly kind: "type";
   readonly declaration: Node;
+  readonly identity: string;
   readonly sourceName: string;
   readonly targetName: string;
   readonly outlives: readonly RustLifetimeRef[];

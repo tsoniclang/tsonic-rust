@@ -20,22 +20,22 @@ test("the complete pinned TypeScript utility family lowers and executes", { time
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /patch_id/u);
-  assert.match(source, /required_id/u);
-  assert.match(source, /read_only_id/u);
-  assert.match(source, /picked_id/u);
-  assert.match(source, /omitted_label/u);
-  assert.match(source, /record_total/u);
-  assert.match(source, /awaited_value/u);
-  assert.match(source, /call_detached/u);
-  assert.match(source, /construct_pair/u);
-  assert.match(source, /contextual_value/u);
-  assert.match(source, /fn format\(_value: i32, suffix: String\) -> String/u);
-  assert.match(source, /fn choose<T[^>]*>\(value: T, _fallback: T\) -> T/u);
+  assert.match(source, /patchId/u);
+  assert.match(source, /requiredId/u);
+  assert.match(source, /readOnlyId/u);
+  assert.match(source, /pickedId/u);
+  assert.match(source, /omittedLabel/u);
+  assert.match(source, /recordTotal/u);
+  assert.match(source, /awaitedValue/u);
+  assert.match(source, /callDetached/u);
+  assert.match(source, /constructPair/u);
+  assert.match(source, /contextualValue/u);
+  assert.match(source, /fn format\(value: i32, suffix: String\) -> String/u);
+  assert.match(source, /fn choose<T[^>]*>\(value: T, fallback: T\) -> T/u);
   assert.match(source, /pub\(crate\) struct ModelState/u);
   assert.match(
     source,
-    /#\[allow\(dead_code, reason = "retains an unused authored declaration"\)\]\n#\[derive\([^\n]+\)\]\npub\(crate\) struct Model/u,
+    /#\[derive\([^\n]+\)\]\n#\[allow\(dead_code, reason = "retains an unused authored declaration"\)\]\npub\(crate\) struct Model/u,
   );
   assert.equal(
     source.match(/#\[allow\(dead_code, reason = "retains an unread authored field"\)\]/gu)?.length,

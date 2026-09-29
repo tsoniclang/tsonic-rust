@@ -267,7 +267,7 @@ export type {
 export {
   rustTargetGenericReferences,
   rustTargetTypeContainsTypeParameter,
-  rustTargetTypeParameterNames,
+  rustTargetTypeParameterIdentities,
 } from "./carriers/generic-references.js";
 export type { RustTargetGenericReferences } from "./carriers/generic-references.js";
 export { rustSourceOptionalTargetType } from "./projections.js";

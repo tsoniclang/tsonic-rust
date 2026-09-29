@@ -1,14 +1,23 @@
 import type { RustExpr } from "../../target-ast/nodes.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
-import { rustTypeFromCarrierInContext, type RustTypeRenderingContext } from "../types/render.js";
+import { rustTypeFromCarrierInContext } from "../types/render.js";
+import type { RustPlanContext } from "../program/plan-context.js";
+import { rustExpressionExitsCallable } from "../../target-ast/inspection/callable-exits.js";
+import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
+import { planRustOptionBranch } from "./option-branch.js";
 
 export function rustOptionDefaultValue(
   option: RustExpr,
   fallback: RustExpr,
   carrier: TargetTypeRef,
-  context: RustTypeRenderingContext,
+  context: RustPlanContext,
 ): RustExpr {
+  if (rustExpressionExitsCallable(fallback)) {
+    const names = context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, context.sourceFile, []);
+    const presentName = allocateRustSyntheticName(names, "present_value");
+    return planRustOptionBranch(option, carrier, presentName, { kind: "path", path: presentName }, fallback, context);
+  }
   const value = rustOptionalStorageValue(carrier);
   if (value !== undefined) {
     const valueType = rustTypeFromCarrierInContext(value, context);

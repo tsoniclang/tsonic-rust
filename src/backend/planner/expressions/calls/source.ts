@@ -30,7 +30,6 @@ import { planExpression } from "../entry.js";
 import {
   planPromotedSourceMethodCall,
   shapeRustSourceCallParameters,
-  sourceCallFinalizedResultCarrier,
   sourceCallSelectedMemberMatches,
 } from "./arguments.js";
 import { planRustNonConsumingValue, planRustPromotedStorageLocation } from "../typed-locations.js";
@@ -102,7 +101,7 @@ export function planSelectedSourceCall(
   const selectedMatches = selected !== undefined && sourceCallSelectedMemberMatches(
     fact,
     selected,
-    sourceCallFinalizedResultCarrier(selected, context),
+    selected.member.returnType,
     context.input.program.typeFamilies.normalize,
   );
   if (!selectedMatches) {
@@ -193,7 +192,7 @@ export function planSelectedSourceCall(
     const contract = context.input.program.declarationGenericRequirements.contractFor(selectedDeclaration);
     if (contract !== undefined) {
       const substitutions = new Map(contract.typeParameters.map((parameter, index) =>
-        [parameter.name, targetTypeArguments[index]!] as const));
+        [parameter.identity, targetTypeArguments[index]!] as const));
       targetAstGenericArguments.push(...rustOptionalStorageCallArguments(selectedDeclaration, substitutions, context));
     }
   }

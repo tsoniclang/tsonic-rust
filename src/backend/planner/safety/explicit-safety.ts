@@ -1,3 +1,4 @@
+import { type RustAttribute } from "../../target-ast/attributes.js";
 import type {
   Node,
   SourceFile,
@@ -158,7 +159,7 @@ export function rustSafetyAttributesForDeclaration(
   declaration: Node,
   isUnsafe: boolean,
   input: RustPlanningContext,
-): readonly string[] {
+): readonly RustAttribute[] {
   let hasNativePointerOperation = false;
   let hasUnusedExplicitUnsafeContext = false;
   walkDeclarationSubtree(declaration, input, (node) => {

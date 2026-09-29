@@ -1,3 +1,4 @@
+import { rustDeriveAttributes, rustHiddenAttribute } from "../../target-ast/attributes.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustPlanningContext } from "../context.js";
 import { rustRuntimeErrorTypeIdentity } from "./source-package-errors.js";
@@ -160,8 +161,7 @@ export function planRustProgramErrorModule(
       generics: emptyRustGenerics,
       name: programErrorName,
       visibility: "public",
-      attrs: ["#[doc(hidden)]"],
-      derives: ["Clone"],
+      attrs: [rustHiddenAttribute, ...rustDeriveAttributes(["Clone"])],
       variants: [
         { name: "Runtime", fields: [runtimeErrorType] },
         ...exactProjectVariants.map(({ variant, type }) => ({ name: variant, fields: [type] })),
@@ -199,7 +199,7 @@ export function planRustProgramErrorModule(
       generics: emptyRustGenerics,
       trait: namedType("core::error::Error"),
       target: programErrorType,
-      functions: [],
+      members: [],
     },
     sourceStringImplementation(),
     planRustSuppressedErrorConstructor(),
@@ -226,7 +226,7 @@ function fromImplementation(
     generics: emptyRustGenerics,
     trait: namedType("core::convert::From", [source]),
     target: programErrorType,
-    functions: [{
+    members: [{ kind: "function",
       name: "from",
       visibility: "private",
       generics: emptyRustGenerics,
@@ -260,7 +260,7 @@ function displayImplementation(projectVariants: readonly {
     generics: emptyRustGenerics,
     trait: namedType("core::fmt::Display"),
     target: programErrorType,
-    functions: [{
+    members: [{ kind: "function",
       name: "fmt",
       visibility: "private",
       generics: emptyRustGenerics,
@@ -324,7 +324,7 @@ function debugImplementation(): RustItem {
     generics: emptyRustGenerics,
     trait: namedType("core::fmt::Debug"),
     target: programErrorType,
-    functions: [{
+    members: [{ kind: "function",
       name: "fmt",
       visibility: "private",
       generics: emptyRustGenerics,
@@ -358,7 +358,7 @@ function sourceStringImplementation(): RustItem {
     generics: emptyRustGenerics,
     trait: namedType("tsonic_rust_runtime::ToSourceString"),
     target: programErrorType,
-    functions: [{
+    members: [{ kind: "function",
       name: "to_source_string",
       visibility: "private",
       generics: emptyRustGenerics,
@@ -386,7 +386,7 @@ function finishResourceFunction(): RustItem {
     kind: "function",
     name: "finish_resource",
     visibility: "public",
-    attrs: ["#[doc(hidden)]"],
+    attrs: [rustHiddenAttribute],
     generics: oneTypeParameterGenerics,
     params: [
       { name: "body", type: resultType(completion) },
@@ -460,7 +460,7 @@ function finishFinallyFunction(): RustItem {
     kind: "function",
     name: "finish_finally",
     visibility: "public",
-    attrs: ["#[doc(hidden)]"],
+    attrs: [rustHiddenAttribute],
     generics: oneTypeParameterGenerics,
     params: [
       { name: "body", type: resultType(completion) },

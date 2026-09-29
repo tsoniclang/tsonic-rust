@@ -1,7 +1,6 @@
 import {
   functionSignatureDigest,
   operationRow,
-  targetTraitPath,
   typeRequirements,
 } from "./operations.js";
 import {
@@ -23,6 +22,7 @@ import {
   sourceCallableGenericParameters,
 } from "./source-generics.js";
 import { compilerFunctionResult } from "./representability.js";
+import { withCallableGenericProjections } from "./callable-generics.js";
 import {
   rustBorrowedStrToStringValueConversion,
 } from "../../../target-model/conversions/model.js";
@@ -59,10 +59,12 @@ export function projectFunction(
     : `${exportId}::${constructor ? "constructor" : instanceMethod ? "method" : "static"}:${fn.name}`;
   const signatureId = `${memberId ?? exportId}::signature:${functionSignatureDigest(fn)}`;
   const ownerGenerics = context.currentType?.genericParameters ?? [];
-  const functionContext = withProjectionGenericParameters(
+  const functionContext = withCallableGenericProjections(fn, withProjectionGenericParameters(
     context,
     fn.genericParameters,
-  );
+  ));
+  const sourceGenerics = fn.genericParameters.filter(parameter => parameter.kind !== "type" ||
+    !functionContext.callableGenerics?.has(parameter.identity.itemId));
   const parameters: ProviderParameterDeclaration[] = [];
   const parameterCarriers: TargetTypeRef[] = [];
   const argumentModes: ("value" | "ref" | "mut-ref")[] = [];
@@ -119,11 +121,11 @@ export function projectFunction(
     context.currentType !== undefined && !instanceMethod && !constructor
       ? selectedOwnerGenerics
       : [],
-    fn.genericParameters,
+    sourceGenerics,
   );
   const operationGenerics = combineGenericParameters(
     selectedOwnerGenerics,
-    fn.genericParameters,
+    sourceGenerics,
   );
   const operationGenericBindings = providerGenericBindingsFor(
     operationGenerics,
@@ -131,10 +133,7 @@ export function projectFunction(
   );
   const operationTypeNames = operationGenericBindings.flatMap((parameter) =>
     parameter.kind === "type" ? [parameter.sourceName] : []);
-  const targetGenericArguments = targetGenericParameterArguments(
-    fn.genericParameters,
-    functionContext,
-  );
+  const targetGenericArguments = targetGenericParameterArguments(fn.genericParameters, functionContext);
 
   const target = fn.traitDispatch === undefined
     ? ordinaryFunctionTarget(
@@ -147,7 +146,7 @@ export function projectFunction(
     : {
         form: "trait-call" as const,
         owner: requireCurrentType(context).carrier,
-        traitPath: targetTraitPath(fn.traitDispatch.path, functionContext),
+        traitPath: targetTraitFor(fn.traitDispatch, functionContext, "parameter", "target-default").path,
         traitGenericArguments: fn.traitDispatch.genericArguments.map((argument) =>
           targetGenericArgumentFor(argument, functionContext, "result")),
         method: fn.name,

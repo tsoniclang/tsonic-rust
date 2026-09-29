@@ -557,6 +557,13 @@ export function collectModuleStandardTypeLocations(
   };
   for (const exported of module.exports) {
     switch (exported.kind) {
+      case "primitive":
+        exported.methods.forEach(visitFunction);
+        exported.associatedConstants.forEach((constant) => {
+          visitType(constant.type);
+          if (constant.traitDispatch !== undefined) visitTrait(constant.traitDispatch);
+        });
+        break;
       case "constant":
       case "static":
         visitType(exported.type);
@@ -576,7 +583,7 @@ export function collectModuleStandardTypeLocations(
         exported.methods.forEach(visitFunction);
         exported.associatedConstants.forEach((constant) => {
           visitType(constant.type);
-          visitTrait(constant.traitDispatch);
+          if (constant.traitDispatch !== undefined) visitTrait(constant.traitDispatch);
         });
         break;
       case "enum":
@@ -592,7 +599,7 @@ export function collectModuleStandardTypeLocations(
         exported.methods.forEach(visitFunction);
         exported.associatedConstants.forEach((constant) => {
           visitType(constant.type);
-          visitTrait(constant.traitDispatch);
+          if (constant.traitDispatch !== undefined) visitTrait(constant.traitDispatch);
         });
         break;
       case "trait":
@@ -602,7 +609,7 @@ export function collectModuleStandardTypeLocations(
         exported.methods.forEach(visitFunction);
         exported.associatedConstants.forEach((constant) => {
           visitType(constant.type);
-          visitTrait(constant.traitDispatch);
+          if (constant.traitDispatch !== undefined) visitTrait(constant.traitDispatch);
         });
         exported.associatedTypes.forEach((associated) => {
           visitParameters(associated.genericParameters);

@@ -6,7 +6,7 @@ import {
 } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
-test("authored declarations use one exact idiomatic Rust name plan", { timeout: 300_000 }, () => {
+test("authored declarations preserve exact names without renaming unused parameters", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     target: { id: "rust", options: { outputType: "bin", crateName: "clean_rust_names" } },
     files: {
@@ -50,16 +50,16 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /const CURRENT_VALUE: i32 = 40;/u);
-  assert.match(source, /#\[doc\(hidden\)\][\s\S]*pub struct BuildResultState \{\s*pub output_dir: String,\s*pub pages_built: i32,/u);
+  assert.match(source, /const currentValue: i32 = 40;/u);
+  assert.match(source, /#\[doc\(hidden\)\][\s\S]*pub struct BuildResultState \{\s*pub outputDir: String,\s*pub pagesBuilt: i32,/u);
   assert.match(source, /pub struct BuildResult/u);
   assert.match(source, /#\[doc\(hidden\)\]\s*pub state: rt::ObjectRef<BuildResultState>/u);
-  assert.match(source, /pub fn page_label\([^)]*prefix_text: String/u);
-  assert.match(source, /pub fn build_site\(site_dir: String\) -> BuildResult/u);
-  assert.match(source, /pub fn select_used\(_unused_value: i32, used_value: i32\) -> i32/u);
-  assert.match(source, /pub fn preserve_collision\(_value: i32, _value_2: i32\) -> i32/u);
-  assert.match(source, /build_site\(String::from\("site"\)\)\.page_label/u);
-  assert.doesNotMatch(source, /\b(?:currentValue|outputDir|pagesBuilt|pageLabel|prefixText|buildSite|siteDir)\b/u);
+  assert.match(source, /pub fn pageLabel\([^)]*prefixText: String/u);
+  assert.match(source, /pub fn buildSite\(siteDir: String\) -> BuildResult/u);
+  assert.match(source, /pub fn selectUsed\(unusedValue: i32, usedValue: i32\) -> i32/u);
+  assert.match(source, /pub fn preserveCollision\(_value: i32, value: i32\) -> i32/u);
+  assert.match(source, /buildSite\(String::from\("site"\)\)\.pageLabel/u);
+  assert.doesNotMatch(source, /\b(?:CURRENT_VALUE|output_dir|pages_built|page_label|prefix_text|build_site|site_dir|_unused_value|_value_2)\b/u);
   assert.doesNotMatch(source, /__tsonic_state|state\.\d/u);
   assert.doesNotMatch(source, /^#!\[allow\(/mu);
   validateGeneratedProject("clean-rust-names", result.artifacts);
@@ -80,9 +80,9 @@ export function totalValue(): int32 { return fooBar() + foo_bar(); }
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /pub fn foo_bar_2\(\) -> i32/u);
+  assert.match(source, /pub fn fooBar\(\) -> i32/u);
   assert.match(source, /pub fn foo_bar\(\) -> i32/u);
-  assert.match(source, /pub fn total_value\(\) -> i32 \{\s*foo_bar_2\(\) \+ foo_bar\(\)/u);
+  assert.match(source, /pub fn totalValue\(\) -> i32 \{\s*fooBar\(\) \+ foo_bar\(\)/u);
 });
 
 test("generic state retains exact type identity even when authored fields do not mention it", { timeout: 300_000 }, () => {
@@ -163,8 +163,8 @@ export function readEntry(): string {
   assert.match(artifactText(result, "src/lib.rs"), /#\[doc\(hidden\)\]\npub mod shapes_2;/u);
   const shapes = artifactText(result, "src/shapes_2.rs");
   assert.match(shapes, /pub struct OutputDirPagesBuiltShape \{/u);
-  assert.match(shapes, /pub output_dir: String,/u);
-  assert.match(shapes, /pub pages_built: f64,/u);
+  assert.match(shapes, /pub outputDir: String,/u);
+  assert.match(shapes, /pub pagesBuilt: f64,/u);
   assert.match(shapes, /pub struct EntryShape \{/u);
   assert.match(
     shapes,
@@ -172,11 +172,11 @@ export function readEntry(): string {
   );
   assert.match(shapes, /pub struct ValueShape \{/u);
   assert.match(shapes, /pub struct ValueShape2 \{/u);
-  assert.match(shapes, /pub struct FooBarFooBarShape \{\s*pub foo_bar: f64,\s*pub foo_bar_2: f64,/u);
+  assert.match(shapes, /pub struct FooBarFooBarShape \{\s*pub foo_bar: f64,\s*pub fooBar: f64,/u);
   const producer = artifactText(result, "src/producer.rs");
   const consumer = artifactText(result, "src/consumer.rs");
   assert.match(producer, /crate::shapes_2::OutputDirPagesBuiltShape/u);
-  assert.match(consumer, /crate::producer::make_entry\(\)\.with\(\|state\| state\.output_dir\.clone\(\)\)/u);
+  assert.match(consumer, /crate::producer::makeEntry\(\)\.with\(\|state\| state\.outputDir\.clone\(\)\)/u);
   assert.doesNotMatch(`${shapes}\n${producer}\n${consumer}`, /ObjectHandle<\(/u);
   assert.doesNotMatch(`${shapes}\n${producer}\n${consumer}`, /state\.\d/u);
   validateGeneratedProject("clean-structural-shapes", result.artifacts);

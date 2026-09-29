@@ -19,101 +19,25 @@ import type { RustLifetimeRef } from "../../lifetimes/index.js";
 
 export function rustTargetTypeContainsTypeParameter(
   type: TargetTypeRef,
-  selectedNames: ReadonlySet<string>,
+  selectedIdentities: ReadonlySet<string>,
 ): boolean {
-  return visitRustTargetTypeParameters(type, (name) => selectedNames.has(name));
+  return rustTargetTypeParameterIdentities(type).some(identity => selectedIdentities.has(identity));
 }
 
-export function rustTargetTypeParameterNames(type: TargetTypeRef): readonly string[] {
-  const names = new Set<string>();
-  visitRustTargetTypeParameters(type, (name) => {
-    names.add(name);
-    return false;
-  });
-  return Object.freeze([...names].sort());
+export function rustTargetTypeParameterIdentities(type: TargetTypeRef): readonly string[] {
+  return rustTargetGenericReferences(type).typeIdentities;
 }
 
 export function visitRustTargetTypeParameters(
   type: TargetTypeRef,
-  visit: (name: string) => boolean,
+  visit: (parameter: Extract<TargetTypeRef, { readonly kind: "type-parameter" }>) => boolean,
 ): boolean {
-  switch (type.kind) {
-    case "type-parameter":
-      return type.optionalStorageValue === undefined ? visit(type.name) : visitRustTargetTypeParameters(type.optionalStorageValue, visit);
-    case "target-named":
-      return visitGenericArgumentTypes(type.genericArguments, visit);
-    case "array":
-      return visitRustTargetTypeParameters(type.element, visit);
-    case "slice":
-      return visitRustTargetTypeParameters(type.element, visit);
-    case "tuple":
-      return type.elements.some((element) =>
-        visitRustTargetTypeParameters(element, visit));
-    case "reference":
-      return visitRustTargetTypeParameters(type.referent, visit);
-    case "pointer":
-      return visitRustTargetTypeParameters(type.pointee, visit);
-    case "function-pointer":
-    case "closure":
-      return type.args.some((argument) =>
-        visitRustTargetTypeParameters(argument, visit)) ||
-        visitRustTargetTypeParameters(type.result, visit);
-    case "trait-ref":
-      return visitGenericArgumentTypes(type.genericArguments, visit) ||
-        type.associatedConstraints.some((constraint) =>
-          visitGenericArgumentTypes(constraint.genericArguments, visit) ||
-          (constraint.kind === "equality"
-            ? visitRustTargetTypeParameters(constraint.type, visit)
-            : constraint.traits.some((trait) =>
-                visitRustTargetTypeParameters(trait, visit))));
-    case "associated-type":
-      return visitRustTargetTypeParameters(type.owner, visit) ||
-        (type.trait !== undefined && visitRustTargetTypeParameters(type.trait, visit)) ||
-        visitGenericArgumentTypes(type.genericArguments, visit);
-    case "target-specific": {
-      const constructorArguments = rustClassConstructorFreeArguments(type);
-      if (constructorArguments !== undefined) return visitGenericArgumentTypes(constructorArguments, visit);
-      const callable = rustGenericCallableValue(type);
-      if (callable !== undefined) return callable.environment.some(argument => visitRustTargetTypeParameters(argument, visit));
-      const sourceType = rustSourceTypeCarrierValue(type);
-      if (sourceType !== undefined) {
-        return visitGenericArgumentTypes(sourceType.genericArguments, visit);
-      }
-      const structuralObject = rustStructuralObjectCarrierValue(type);
-      if (structuralObject !== undefined) {
-        return structuralObject.bases.some(base => visitRustTargetTypeParameters(base, visit)) || structuralObject.fields.some((field) =>
-          visitRustTargetTypeParameters(field.type, visit)) ||
-          structuralObject.construction !== undefined && visitRustTargetTypeParameters(structuralObject.construction, visit);
-      }
-      const sourceUnion = rustSourceUnionCarrierValue(type);
-      if (sourceUnion !== undefined) {
-        return visitGenericArgumentTypes(sourceUnion.genericArguments, visit);
-      }
-      const namedType = rustNamedTypeCarrierValue(type);
-      if (namedType !== undefined) {
-        return visitGenericArgumentTypes(namedType.genericArguments, visit) ||
-          visitGenericArgumentTypes(namedType.genericDefaults, visit) ||
-          namedType.upcasts.some((upcast) => visitRustTargetTypeParameters(upcast.target, visit));
-      }
-      const fixedArray = rustFixedArrayCarrierValue(type);
-      return fixedArray !== undefined &&
-        visitRustTargetTypeParameters(fixedArray.element, visit);
-    }
-    default:
-      return false;
-  }
-}
-
-function visitGenericArgumentTypes(
-  arguments_: readonly RustTargetGenericArgument[] | undefined,
-  visit: (name: string) => boolean,
-): boolean {
-  return arguments_?.some((argument) =>
-    argument.kind === "type" && visitRustTargetTypeParameters(argument.type, visit)) === true;
+  return rustTargetGenericReferences(type).typeParameters.some(visit);
 }
 
 export interface RustTargetGenericReferences {
-  readonly typeNames: readonly string[];
+  readonly typeIdentities: readonly string[];
+  readonly typeParameters: readonly Extract<TargetTypeRef, { readonly kind: "type-parameter" }>[];
   readonly lifetimes: readonly Extract<
     RustLifetimeRef,
     { readonly kind: "parameter" | "bound" }
@@ -130,7 +54,7 @@ export interface RustTargetGenericReferences {
 export function rustTargetGenericReferences(
   type: TargetTypeRef,
 ): RustTargetGenericReferences {
-  const typeNames = new Set<string>();
+  const typeParameters = new Map<string, Extract<TargetTypeRef, { readonly kind: "type-parameter" }>>();
   const lifetimes = new Map<string, Extract<
     RustLifetimeRef,
     { readonly kind: "parameter" | "bound" }
@@ -143,7 +67,8 @@ export function rustTargetGenericReferences(
   let hasUnnameableLifetime = false;
   visitType(type, new Set());
   return Object.freeze({
-    typeNames: Object.freeze([...typeNames].sort()),
+    typeIdentities: Object.freeze([...typeParameters.keys()]),
+    typeParameters: Object.freeze([...typeParameters.values()]),
     lifetimes: Object.freeze([...lifetimes]
       .sort(([left], [right]) => left.localeCompare(right, "en"))
       .map(([, lifetime]) => lifetime)),
@@ -211,7 +136,7 @@ export function rustTargetGenericReferences(
   function visitType(value: TargetTypeRef, bound: ReadonlySet<string>): void {
     switch (value.kind) {
       case "type-parameter":
-        if (value.optionalStorageValue === undefined) typeNames.add(value.name);
+        if (value.optionalStorageValue === undefined) typeParameters.set(value.identity, value);
         else visitType(value.optionalStorageValue, bound);
         return;
       case "target-named":
@@ -286,6 +211,7 @@ export function rustTargetGenericReferences(
         }
         const structural = rustStructuralObjectCarrierValue(value);
         if (structural !== undefined) {
+          structural.bases.forEach(base => visitType(base, bound));
           structural.fields.forEach((field) => visitType(field.type, bound));
           if (structural.construction !== undefined) visitType(structural.construction, bound);
           return;

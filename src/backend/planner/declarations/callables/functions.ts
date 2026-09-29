@@ -153,7 +153,7 @@ function planRustFunctionItem(
   const specialization = source.specialization === undefined
     ? undefined
     : rustCallableSpecialization(
-        source.specialization.sourceTypeParameterNames,
+        source.specialization.sourceTypeParameterIdentities,
         source.specialization.targetTypeArguments,
       );
   if (source.specialization !== undefined && specialization === undefined) {

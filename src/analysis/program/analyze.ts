@@ -28,7 +28,7 @@ import type { RustFactWalk } from "./walk.js";
 import type { RustOperationsProviderOptions } from "../operations/provider/index.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
-import { rustLocationStorageFactKey } from "../facts/keys.js";
+import { rustBindingStorageFactKey } from "../facts/keys.js";
 import { rustTypedLocationStorageRootReference } from "../operations/typed-locations.js";
 import { selectRustAddressOfSourceOperation } from "../../policy/operations/typed-locations/source-typed-locations.js";
 import { rustProjectCallableTargetName } from "../facts/source-member-name.js";
@@ -118,7 +118,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     inferredNumericReturns: new Map(),
     resolvingNumericReturns: new Set(),
     postCheckOperations: new WeakMap<object, "binary" | "unary-minus" | "unary-plus">(),
-    capturedBindingStorage: new Map<Node, "value" | "location">(),
+    capturedBindingStorage: new Map(),
     objectLiteralMethodExpressions: [],
     objectLiteralMethodSpreadExpressions: [],
     moduleBindings,
@@ -229,8 +229,8 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     sourceFiles: projectSourceFiles,
     hasPromotedStorage(declaration) {
       return promotedStorageDeclarations.has(declaration) ||
-        context.facts.get(declaration, rustLocationStorageFactKey) !== undefined ||
-        context.facts.resolve(declaration, rustLocationStorageFactKey) !== undefined;
+        context.facts.get(declaration, rustBindingStorageFactKey) !== undefined ||
+        context.facts.resolve(declaration, rustBindingStorageFactKey) !== undefined;
     },
     hasMutableStorageUse(declaration) {
       return mutableStorageDeclarations.declarations.has(declaration);
@@ -380,6 +380,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   });
   for (const issue of recordRustObjectLiteralMethodAdapterFacts({
     ast: walk.context.ast,
+    sourceLifetimes: walk.context.sourceLifetimes,
     facts: walk.context.facts,
     projectTypes: walk.context.projectTypes,
     typeDefinitions: walk.context.typeDefinitions,

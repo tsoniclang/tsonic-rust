@@ -46,6 +46,7 @@ export type RustProviderTypeRequirement =
     };
 
 export interface RustProviderTypeParameterRequirement {
+  readonly identity: string;
   readonly name: string;
   readonly requirements: readonly RustProviderTypeRequirement[];
 }
@@ -54,6 +55,7 @@ export type RustProviderGenericParameter =
   | {
       readonly kind: "type";
       readonly sourceName: string;
+      readonly targetIdentity: string;
       readonly maybeSized?: true;
       readonly defaultArgument?: RustTargetGenericArgument;
     }
@@ -119,7 +121,8 @@ export type RustValueConversionId =
   | "js-value-clone"
   | "ts-value-clone"
   | "owned-string-from-borrowed-str"
-  | "borrowed-str-from-owned-string";
+  | "borrowed-str-from-owned-string"
+  | "unit-from-absence";
 
 export type RustNonOptionValueConversion =
   | RustExactIntegerConversion

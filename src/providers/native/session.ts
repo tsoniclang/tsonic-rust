@@ -2,6 +2,7 @@ import {
   TstsSourceProviderContractVersion,
 } from "@tsonic/tsts";
 import { resolve } from "node:path";
+import { refineNativeExportDeclaration } from "./projection/declaration-state.js";
 import type {
   ExtensionDiagnostic,
   ProviderDeclarationModel,
@@ -285,7 +286,7 @@ function createCompilerProvider(
         const projection = projectRustCompilerModule(module, {
           providerModuleId: expectedModuleId,
           moduleSpecifier: resolution.moduleSpecifier,
-        });
+        }, request.materialization);
         options.registry.add(projection);
         return materializeClosedMetadata(projection.declarationModel);
       } catch (error) {
@@ -312,6 +313,7 @@ function createProjectionRegistry(options: {
   const modules = new Map<string, {
     readonly providerModuleId: string;
     readonly exports: Map<string, RustProviderModuleDefinition["exports"][number]>;
+    readonly completeExports: Set<string>;
     readonly imports: Map<string, Set<string>>;
   }>();
   const operationsByIdentity = new Map<string, RustProviderOperationDefinition>();
@@ -333,11 +335,15 @@ function createProjectionRegistry(options: {
       const module = existingModule ?? {
         providerModuleId: projection.module.providerModuleId,
         exports: new Map(),
+        completeExports: new Set<string>(),
         imports: new Map(),
       };
       modules.set(projection.module.moduleSpecifier, module);
       for (const exported of projection.module.exports) {
-        addExact(module.exports, exported.id, exported, "export");
+        const complete = projection.completeExports.has(exported.id);
+        module.exports.set(exported.id, refineNativeExportDeclaration(module.exports.get(exported.id), exported,
+          module.completeExports.has(exported.id), complete));
+        if (complete) module.completeExports.add(exported.id);
       }
       for (const imported of projection.module.imports ?? []) {
         const names = module.imports.get(imported.moduleSpecifier) ?? new Set<string>();

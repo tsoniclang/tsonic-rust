@@ -48,7 +48,6 @@ import { rustGenericCallableProtocol } from "../../target-model/types/carriers/g
 import { substituteRustValueConversion } from "../../target-model/conversions/contracts.js";
 import { recordSelectedMethodSpecialization } from "./project-method-calls.js";
 import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
-import { rustSuspendedCallableInvocationResult } from "../facts/callable-results.js";
 
 export function applySelectedProjectSourceCall(
   walk: RustFactWalk,
@@ -231,7 +230,7 @@ export function applySelectedProjectSourceCall(
       inputs: inputs as NonNullable<(typeof inputs)[number]>[],
     });
   }
-  const declaredResultCarrier = rustSuspendedCallableInvocationResult(walk.context.facts, selectedDeclaration) ?? selectedMember.returnType;
+  const declaredResultCarrier = selectedMember.returnType;
   const resultCarrier = declaredResultCarrier === undefined
     ? undefined
     : substituteRustTargetGenerics(
@@ -279,7 +278,8 @@ export function applySelectedProjectSourceCall(
   const selectedCallableCarrier = optionalCall?.selectedGuardCarrier ?? callableCalleeCarrier;
   const selectedNativeCallable = rustNativeCallableProtocol(selectedCallableCarrier);
   const selectedGenericCallable = rustGenericCallableProtocol(selectedCallableCarrier,
-    (selectedSignature.sourceSelectedMethodTypeArguments ?? []).map(argument => argument.typeParameterName));
+    (selectedSignature.member.genericParameters ?? []).flatMap(parameter => parameter.kind === "type"
+      ? [{ kind: "type-parameter" as const, identity: parameter.targetIdentity, name: parameter.sourceName }] : []));
   const indirectCallable = selectedCallableCarrier !== undefined &&
     (selectedNativeCallable !== undefined || selectedGenericCallable !== undefined ||
       rustCallableProtocol(selectedCallableCarrier) !== undefined) &&

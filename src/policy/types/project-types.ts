@@ -46,10 +46,10 @@ export interface RustProjectTypeDefinition {
   readonly fileName: string;
   readonly sourceName: string;
   readonly targetName: string;
+  readonly targetPath: string;
   readonly kind: "class" | "interface";
   readonly genericParameters: readonly RustSourceGenericParameterContract[];
-  readonly typeParameterNames: readonly string[];
-  readonly targetTypeParameterNames: readonly string[];
+  readonly typeParameterIdentities: readonly string[];
   readonly stateName: string;
   readonly dispatchName: string;
   readonly rootName?: string;

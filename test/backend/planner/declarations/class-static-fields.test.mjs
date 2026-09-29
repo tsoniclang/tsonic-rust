@@ -129,7 +129,7 @@ export function main(): void {
   assert.equal(run.status, 0, run.stdout + run.stderr);
 });
 
-test("static class fields require explicit initialization and defaultValue uses exact Rust Default evidence", { timeout: 300_000 }, () => {
+test("static class fields require explicit initialization and defaultvalue uses exact Rust Default evidence", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
@@ -150,15 +150,15 @@ export class Invalid {
   const explicitDefault = compileRust({
     files: {
       "index.ts": `
-import { defaultValue } from "@tsonic/core/lang.js";
+import { defaultvalue } from "@tsonic/core/lang.js";
 import type { int32 } from "@tsonic/core/types.js";
 
 export class Exact {
-  static value: int32 = defaultValue<int32>();
+  static value: int32 = defaultvalue<int32>();
 }
 
 export function genericDefault<T>(): T {
-  return defaultValue<T>();
+  return defaultvalue<T>();
 }
 `,
     },
@@ -167,7 +167,7 @@ export function genericDefault<T>(): T {
   const emitted = artifactText(explicitDefault.result, "src/index.rs");
   assert.match(emitted, /rt::ModuleCell<i32>/u);
   assert.match(emitted, /<i32 as Default>::default\(\)/u);
-  assert.match(emitted, /pub fn generic_default<T: Default>\(\) -> T/u);
+  assert.match(emitted, /pub fn genericDefault<T: Default>\(\) -> T/u);
   assert.match(emitted, /<T as Default>::default\(\)/u);
   validateGeneratedProject(
     "class-static-explicit-default",
@@ -177,10 +177,10 @@ export function genericDefault<T>(): T {
   const unsupportedDefault = compileRust({
     files: {
       "index.ts": `
-import { defaultValue } from "@tsonic/core/lang.js";
+import { defaultvalue } from "@tsonic/core/lang.js";
 
 export function invalid(): () => void {
-  return defaultValue<() => void>();
+  return defaultvalue<() => void>();
 }
 `,
     },

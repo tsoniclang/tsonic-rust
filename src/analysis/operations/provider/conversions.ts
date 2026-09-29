@@ -39,11 +39,12 @@ export function selectRustCheckedConversion(
 ): RustPolicySelection<RustCheckedConversionSelectionResult> {
   if (request.conversionKind === "call-argument") {
     const targetCarrier = request.targetParameter.type;
-    const selectedTypeParameterNames = new Set(
-      request.selectedSignature.sourceSelectedMethodTypeArguments?.map((argument) => argument.typeParameterName) ?? [],
+    const selectedTypeParameterIdentities = new Set(
+      request.selectedSignature.member.genericParameters?.flatMap((parameter) =>
+        parameter.kind === "type" ? [parameter.targetIdentity] : []) ?? [],
     );
-    if (selectedTypeParameterNames.size > 0 &&
-      rustTargetTypeContainsTypeParameter(targetCarrier, selectedTypeParameterNames)) {
+    if (selectedTypeParameterIdentities.size > 0 &&
+      rustTargetTypeContainsTypeParameter(targetCarrier, selectedTypeParameterIdentities)) {
       return acceptRustPolicy({}, [
         { message: "rust deferred the selected generic source-call argument carrier to post-check target substitution" },
       ]);

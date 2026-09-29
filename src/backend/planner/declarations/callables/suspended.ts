@@ -2,6 +2,8 @@ import type { RustSuspendedCallableImplementation } from "../../../../analysis/c
 import { rustCallableProtocol } from "../../../../target-model/types/index.js";
 import type { RustBlock, RustGenericParameter, RustItem, RustType } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
+import { rustTypeParameterFromSourceContract } from "../../../../target-model/names/type-parameters.js";
+import { rustGeneratedTypeParameterContext } from "../../names/type-parameters.js";
 import { diagnosticInput } from "../../program/plan-context.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
 import { createRustSyntheticNameState } from "../../names/synthetic.js";
@@ -28,7 +30,9 @@ export function planRustSuspendedCallableItems(context: RustPlanContext): readon
 
 function planImplementation(implementation: RustSuspendedCallableImplementation, context: RustPlanContext): readonly RustItem[] | undefined {
   const { declaration } = implementation;
-  const scoped: RustPlanContext = { ...context, callableDeclaration: declaration,
+  const scoped: RustPlanContext = { ...rustGeneratedTypeParameterContext(
+    implementation.parameters.filter(parameter => parameter.kind === "type").map(rustTypeParameterFromSourceContract), [], context),
+    callableDeclaration: declaration,
     syntheticNames: createRustSyntheticNameState(context.input.program.source.ast, declaration, []),
   };
   const expression = planRustCallableExpressionBody(declaration, scoped);
@@ -50,25 +54,29 @@ function planImplementation(implementation: RustSuspendedCallableImplementation,
     if (parameter.kind === "lifetime") {
       parameters.push({ kind: "lifetime", name: parameter.lifetime.name, outlives: parameter.outlives.map(rustLifetimeToAst) });
     } else {
-      const required = [...requirements.typeParameters, ...requirements.capturedTypeParameters].find(selected => selected.name === parameter.targetName);
-      parameters.push({ kind: "type", name: parameter.targetName, bounds: rustTypeParameterBounds(parameter, required?.requirements ?? []) });
+      const required = [...requirements.typeParameters, ...requirements.capturedTypeParameters].find(selected => selected.identity === parameter.identity);
+      parameters.push({ kind: "type", name: scoped.typeParameterNames?.get(parameter.identity) ?? parameter.targetName,
+        bounds: rustTypeParameterBounds(parameter, required?.requirements ?? []) });
     }
   }
-  const environment = parameters.filter(parameter => parameter.kind === "lifetime"
-    ? implementation.environment.lifetimes.some(lifetime => lifetime.name === parameter.name)
-    : parameter.kind === "type" && implementation.environment.typeNames.includes(parameter.name));
+  const environment = parameters.filter((_parameter, index) => {
+    const source = implementation.parameters[index]!;
+    return source.kind === "lifetime"
+      ? implementation.environment.lifetimes.some(lifetime => lifetime.identity === source.lifetime.identity)
+      : implementation.environment.typeIdentities.includes(source.identity);
+  });
   const body: RustBlock = expression.kind === "closure" ? { statements: [{ kind: "tail", expr: expression.body }] } : expression.body;
   const selfType: RustType = { kind: "named", path: "Self" };
   const state: RustType = { kind: "tuple", elements: storage as RustType[] };
   context.usedAliases?.add("rt");
-  return [{ kind: "struct", name: implementation.stateName, visibility: "crate", derives: [],
+  return [{ kind: "struct", name: implementation.stateName, visibility: "crate",
     generics: { parameters: environment, wherePredicates: [] }, fields: [{ name: "state", type: state, visibility: "crate" }, {
       name: "owner", type: { kind: "named", path: "alloc::rc::Weak", genericArguments: [{ kind: "type", type: selfType }] }, visibility: "crate",
     }],
   }, { kind: "impl", target,
     generics: rustGenericsWithAssociatedBounds(parameters, rustDeclarationAssociatedPredicates(declaration, scoped)),
     trait: { kind: "named", path: "rt::CallableImplementation", genericArguments: [{ kind: "type", type: argumentsType }, resultType] },
-    functions: [{ name: "invoke", visibility: "private", selfParam: { kind: "reference", mutable: false },
+    members: [{ kind: "function", name: "invoke", visibility: "private", selfParam: { kind: "reference", mutable: false },
       generics: { parameters: [], wherePredicates: [] }, params: [{ name: argumentsName, type: argumentsType }], returnType: resultType.type,
       body: { statements: [{ kind: "let", name: ownerName, mutable: false, init: {
         kind: "method-call", receiver: { kind: "method-call", receiver: {

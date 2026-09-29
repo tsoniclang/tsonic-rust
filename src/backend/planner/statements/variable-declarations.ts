@@ -5,7 +5,8 @@ import {
   Node_Name,
   Node_Type,
 } from "@tsonic/target-api/source";
-import { rustLocationStorageForDeclaration } from "../expressions/typed-locations.js";
+import { rustBindingStorageForDeclaration } from "../expressions/typed-locations.js";
+import { rustInlineBindingStoragePath, rustInlineBindingStorageType } from "../expressions/binding-storage.js";
 import { planRustNativeAllocation } from "../expressions/native-memory.js";
 import { rustNativeBackingKey, rustNativeArrayStorageKey } from "../../../target-model/operations/native-memory.js";
 import { nativeRustArrayType } from "../expressions/native-arrays.js";
@@ -29,7 +30,7 @@ import { requireRustLocationValueCarrier } from "../types/generic-requirements.j
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
+import type { RustExpr, RustStmt, RustType } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustCompileTimeSourceKey } from "../../../target-model/facts/source-declarations.js";
 
@@ -75,7 +76,7 @@ function planVariableDeclaration(
   }
   const initializer = Node_Initializer(context.input.program.source.ast, declaration);
   const nativeArray = context.input.program.facts.getFact(declaration, rustNativeArrayStorageKey);
-  const locationStorage = nativeArray === undefined ? rustLocationStorageForDeclaration(declaration, context) : undefined;
+  const locationStorage = nativeArray === undefined ? rustBindingStorageForDeclaration(declaration, context) : undefined;
   if (initializer === undefined && locationStorage !== undefined) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, declaration),
@@ -92,9 +93,9 @@ function planVariableDeclaration(
   const annotatedCarrier = typeNode === undefined
     ? undefined
     : context.input.program.facts.getRuntimeCarrierFact(typeNode)?.carrier;
-  let rustType;
+  let rustType: RustType | undefined;
   if (typeNode !== undefined) {
-    const renderedCarrier = locationStorage === undefined
+    const renderedCarrier = locationStorage?.storage !== "location"
       ? annotatedCarrier
       : rustLocationTargetType(locationStorage.valueCarrier);
     rustType = rustTypeFromCarrierInContext(renderedCarrier, context);
@@ -117,7 +118,7 @@ function planVariableDeclaration(
     return undefined;
   }
   if (rustType === undefined) {
-    const renderedCarrier = locationStorage === undefined
+    const renderedCarrier = locationStorage?.storage !== "location"
       ? declarationCarrier
       : rustLocationTargetType(locationStorage.valueCarrier);
     rustType = rustTypeFromCarrierInContext(renderedCarrier, context);
@@ -142,6 +143,9 @@ function planVariableDeclaration(
     return undefined;
   }
   const ownedBinding = declarationCarrier.kind !== "pointer" && declarationCarrier.kind !== "reference";
+  if (locationStorage !== undefined && locationStorage.storage !== "location" && rustType !== undefined) {
+    rustType = rustInlineBindingStorageType(locationStorage.storage, rustType);
+  }
   if (nativeArray !== undefined) {
     rustType = nativeRustArrayType(declaration, context);
     if (rustType === undefined) return undefined;
@@ -171,6 +175,8 @@ function planVariableDeclaration(
     }
     if (locationStorage === undefined) {
       init = planned;
+    } else if (locationStorage.storage !== "location") {
+      init = { kind: "call", path: `${rustInlineBindingStoragePath(locationStorage.storage)}::new`, args: [planned] };
     } else {
       if (!requireRustLocationValueCarrier(
         locationStorage.valueCarrier,

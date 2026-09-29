@@ -1,4 +1,5 @@
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
+import { rustPropertyStorageNames } from "../../target-model/names/property-storage.js";
 import type { RustSourceUnion, RustStructuralInstantiation } from "../../policy/types/source-type-registry.js";
 import { createRustGeneratedUnionPlan, type RustGeneratedUnionPlan } from "./generated-union-plan.js";
 import type { RustNativeMemoryLayout, RustNativeObjectField } from "../../target-model/operations/native-memory.js";
@@ -7,7 +8,6 @@ import { rustTargetGenericArgumentEquals, rustTargetTypeRefEquals } from "../../
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import {
   rustPascalCaseIdentifier,
-  rustSnakeCaseIdentifier,
 } from "../../target-model/names/identifiers.js";
 import {
   rustStructuralObjectCarrierValue,
@@ -64,7 +64,7 @@ export type RustStructuralShapeGenericParameter =
       readonly kind: "lifetime";
       readonly lifetime: Extract<RustLifetimeRef, { readonly kind: "parameter" }>;
     }
-  | { readonly kind: "type"; readonly name: string };
+  | { readonly kind: "type"; readonly identity: string; readonly name: string };
 
 export interface RustStructuralShapePlan extends RustGeneratedUnionPlan {
   readonly definitions: readonly RustStructuralShapeDefinition[];
@@ -223,7 +223,8 @@ export function createRustStructuralShapePlan(
       const componentId = componentForFile(structural.ownerFileName);
       const usedTypeNames = usedTypeNamesByComponent.get(componentId) ?? new Set<string>();
       usedTypeNamesByComponent.set(componentId, usedTypeNames);
-      const usedFieldNames = new Set<string>();
+      const fieldNames = rustPropertyStorageNames(structural.fields.map(field => field.sourceName));
+      const usedFieldNames = new Set(fieldNames.values());
       const nativeDispatch = structural.construction !== undefined || implementations.some(implementation =>
         implementation.kind === "dispatch" && instances.has(closedMetadataKey(implementation.carrier)));
       const fields = structural.fields.map((field, storageIndex): RustStructuralShapeField => {
@@ -234,10 +235,7 @@ export function createRustStructuralShapePlan(
           !rustNativeMemoryLayoutsEqual(candidate.layout, nativeLayout))) {
           throw new Error("Equivalent Rust structural carriers have contradictory native field layouts.");
         }
-        const targetName = allocateSnakeName(
-          usedFieldNames,
-          rustSnakeCaseIdentifier(field.sourceName),
-        );
+        const targetName = fieldNames.get(field.sourceName)!;
         const fieldImplementations = implementations.filter((implementation) =>
           implementation.storageIndex === storageIndex &&
           instances.has(closedMetadataKey(implementation.carrier)));
@@ -259,13 +257,13 @@ export function createRustStructuralShapePlan(
                     ? "rc" as const : "ref" as const,
                   getterTargetName: allocateSnakeName(
                     usedFieldNames,
-                    `get_${targetName}`,
+                    `get_${field.sourceName}`,
                   ),
                   ...(!field.readonly
                     ? {
                         setterTargetName: allocateSnakeName(
                           usedFieldNames,
-                          `set_${targetName}`,
+                          `set_${field.sourceName}`,
                         ),
                       }
                     : {}),
@@ -297,14 +295,15 @@ export function createRustStructuralShapePlan(
             kind: "lifetime" as const,
             lifetime: lifetime as Extract<RustLifetimeRef, { readonly kind: "parameter" }>,
           })),
-          ...genericReferences.typeNames.map((name) => Object.freeze({
+          ...genericReferences.typeParameters.map((parameter) => Object.freeze({
             kind: "type" as const,
-            name,
+            identity: parameter.identity,
+            name: parameter.name,
           })),
         ]),
         genericArguments: Object.freeze([
           ...genericReferences.lifetimes.map(lifetime => ({ kind: "lifetime" as const, lifetime })),
-          ...genericReferences.typeNames.map(name => ({ kind: "type" as const, type: { kind: "type-parameter" as const, name } })),
+          ...genericReferences.typeParameters.map(type => ({ kind: "type" as const, type })),
         ]),
         fields: Object.freeze(fields),
         ...(structural.construction === undefined ? {} : { construction: Object.freeze({
@@ -378,9 +377,9 @@ export function createRustStructuralShapePlan(
 
 export function structuralStorageKey(carrier: TargetTypeRef, componentForFile: (fileName: string) => string): string {
   const substitutions = new Map<string, TargetTypeRef>();
-  visitRustTargetTypeParameters(carrier, (name) => {
-    if (!substitutions.has(name)) {
-      substitutions.set(name, { kind: "type-parameter", name: `ShapeParameter${substitutions.size}` });
+  visitRustTargetTypeParameters(carrier, (parameter) => {
+    if (!substitutions.has(parameter.identity)) {
+      substitutions.set(parameter.identity, { kind: "type-parameter", identity: `structural-shape:${substitutions.size}`, name: `ShapeParameter${substitutions.size}` });
     }
     return false;
   });
@@ -398,7 +397,7 @@ function instantiateStructuralDefinition(
     return definition;
   }
   const parameters = new Set(definition.genericParameters.flatMap(parameter =>
-    parameter.kind === "type" ? [parameter.name] : []));
+    parameter.kind === "type" ? [parameter.identity] : []));
   const shape = rustStructuralObjectCarrierValue(carrier);
   const aligned = shape === undefined ? carrier : rustStructuralObjectTargetType(definition.ownerFileName, shape.fields, shape.representation, shape.construction, shape.bases);
   const bindings = inferRustTargetTypeParameterBindings(definition.carrier, aligned, parameters);

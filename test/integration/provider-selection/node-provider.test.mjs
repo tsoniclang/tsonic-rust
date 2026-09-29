@@ -158,7 +158,7 @@ export function defaultedOptions(path: string): void {
   );
   assert.match(
     text,
-    /RmOptions\s*\{\s*recursive:\s*Some\(true\),\s*force:\s*Some\(true\),\s*max_retries:\s*Some\(rt::conversions::checked_integer::<u32>\(max_retries\)\?\),\s*retry_delay_ms:\s*Some\(rt::conversions::checked_integer::<u64>\(retry_delay\)\?\),\s*\}/u,
+    /RmOptions\s*\{\s*recursive:\s*Some\(true\),\s*force:\s*Some\(true\),\s*max_retries:\s*Some\(rt::conversions::checked_integer::<u32>\(maxRetries\)\?\),\s*retry_delay_ms:\s*Some\(rt::conversions::checked_integer::<u64>\(retryDelay\)\?\),\s*\}/u,
   );
   assert.match(
     text,
@@ -215,7 +215,7 @@ export function appendSeparator(value: string): string {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn owned_separator\(\) -> String \{[\s\S]*String::from\(tsonic_rust_node::path::sep\(\)\)/u);
+  assert.match(text, /pub fn ownedSeparator\(\) -> String \{[\s\S]*String::from\(tsonic_rust_node::path::sep\(\)\)/u);
   assert.match(text, /ends_with_at_end\(value, tsonic_rust_node::path::sep\(\)\)/u);
   assert.match(text, /format!\("\{\}\{\}", value, tsonic_rust_node::path::sep\(\)\)/u);
   assert.doesNotMatch(text, /sep\(\)\.to_string\(\)/u);
@@ -248,7 +248,7 @@ export function verify(value: boolean): void {
   assert.match(text, /tsonic_rust_node::assert::ok_with_message\(value, "value must be true"\)\?/u);
   assert.match(
     text,
-    /tsonic_rust_node::assert::ok_with_message\(\s*sum_is_four\(2\.0, 2\.0\),\s*"nested operations must be finalized",\s*\)\?/u,
+    /tsonic_rust_node::assert::ok_with_message\(\s*sumIsFour\(2\.0, 2\.0\),\s*"nested operations must be finalized",\s*\)\?/u,
   );
 });
 

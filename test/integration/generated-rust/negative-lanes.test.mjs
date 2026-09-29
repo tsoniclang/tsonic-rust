@@ -24,7 +24,7 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub static VALUE: rt::ModuleCell<i32>/u);
+  assert.match(text, /pub static value: rt::ModuleCell<i32>/u);
   assert.match(text, /pub fn module_init/u);
   assert.match(
     text,
@@ -163,6 +163,6 @@ export class Box {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn no_annotation\(a: f64\) -> f64/u);
+  assert.match(text, /pub fn noAnnotation\(a: f64\) -> f64/u);
   assert.match(text, /fn dispatch_box_value\(self: alloc::rc::Rc<Self>\) -> f64/u);
 });

@@ -1,8 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { nameRustSignatureTypes } from "../../../dist/backend/target-ast/normalization/signature-aliases.js";
+import { nameRustSignatureTypes as nameSignatureScope } from "../../../dist/backend/target-ast/normalization/signature-aliases.js";
 import { emptyRustGenerics } from "../../../dist/backend/target-ast/nodes.js";
 import { finalizeRustSourceStyle } from "../../../dist/backend/target-ast/normalization/source-style.js";
+
+function nameRustSignatureTypes(items) {
+  const scope = nameSignatureScope(items);
+  assert.equal(scope.items.length, items.length);
+  return [...scope.aliases, ...scope.items];
+}
 
 const named = (path, types = []) => ({ kind: "named", path,
   genericArguments: types.map(type => ({ kind: "type", type })) });
@@ -10,7 +16,7 @@ const nested = named("Vec", [named("Option", [named("Vec", [named("Option", [nam
 const makeFunction = (name, visibility = "private") => ({ kind: "function", name, visibility,
   generics: { parameters: [{ kind: "type", name: "Item", bounds: [{ kind: "trait", path: "Clone" }] }], wherePredicates: [] },
   params: [{ name: "values", type: nested, mutable: false }], returnType: nested,
-  body: { statements: [], tail: { kind: "path", path: "values" } },
+  body: { statements: [{ kind: "tail", expr: { kind: "path", path: "values" } }] },
 });
 
 test("signature aliases retain exact generic types, share definitions and promote visibility", () => {
@@ -34,7 +40,7 @@ test("signature aliases retain exact generic types, share definitions and promot
 
 test("signature aliases avoid declarations, imports and generic parameter names", () => {
   for (const collision of [
-    { kind: "struct", name: "ReadValues", visibility: "private", generics: emptyRustGenerics, fields: [], derives: [] },
+    { kind: "struct", name: "ReadValues", visibility: "private", generics: emptyRustGenerics, fields: [] },
     { kind: "use", path: "models::ReadValues" },
     { kind: "use", path: "models::Other", alias: "ReadValues" },
     { ...makeFunction("other"), generics: { parameters: [{ kind: "type", name: "ReadValues", bounds: [] }], wherePredicates: [] } },
@@ -46,7 +52,7 @@ test("signature aliases avoid declarations, imports and generic parameter names"
 });
 
 test("complex struct fields reuse exact native aliases without changing storage or generic bounds", () => {
-  const source = { kind: "struct", name: "Entries", visibility: "public", derives: [],
+  const source = { kind: "struct", name: "Entries", visibility: "public",
     generics: makeFunction("read").generics,
     fields: [{ name: "entries", type: nested, visibility: "public" },
       { name: "count", type: { kind: "primitive", name: "usize" }, visibility: "private" }],
@@ -102,16 +108,16 @@ test("impl signature aliases retain owner and call binders without moving their 
   const method = { ...source, selfParam: { kind: "reference", mutable: false },
     params: [{ name: "value", type }], returnType: undefined };
   const implementation = { kind: "impl", target: named("Wrapper", [named("Owner")]),
-    generics: { parameters: [owner], wherePredicates: [] }, functions: [method] };
+    generics: { parameters: [owner], wherePredicates: [] }, members: [method] };
   const result = nameRustSignatureTypes([implementation]);
   const alias = result.find(item => item.kind === "type-alias");
   const native = result.find(item => item.kind === "impl");
   assert.deepEqual(alias.target, type);
   assert.deepEqual(alias.generics.parameters, ["Owner", "Item"].map(name => ({ kind: "type", name, bounds: [] })));
   assert.deepEqual(native.generics, implementation.generics);
-  assert.deepEqual(native.functions[0].generics, method.generics);
-  assert.deepEqual(native.functions[0].body, method.body);
-  assert.deepEqual(native.functions[0].params[0].type.genericArguments,
+  assert.deepEqual(native.members[0].generics, method.generics);
+  assert.deepEqual(native.members[0].body, method.body);
+  assert.deepEqual(native.members[0].params[0].type.genericArguments,
     ["Owner", "Item"].map(path => ({ kind: "type", type: { kind: "named", path } })));
   assert.deepEqual(nameRustSignatureTypes(result), result);
 });
@@ -121,10 +127,10 @@ test("impl alias allocation reserves method-local type parameter names", () => {
   const method = { ...source, generics: { parameters: [...source.generics.parameters,
     { kind: "type", name: "ReadValues", bounds: [] }], wherePredicates: [] } };
   const result = nameRustSignatureTypes([{ kind: "impl", target: named("Container"), generics: emptyRustGenerics,
-    functions: [method] }]);
+    members: [method] }]);
   const alias = result.find(item => item.kind === "type-alias");
   assert.notEqual(alias.name, "ReadValues");
-  assert.deepEqual(result.find(item => item.kind === "impl").functions[0].generics, method.generics);
+  assert.deepEqual(result.find(item => item.kind === "impl").members[0].generics, method.generics);
 });
 
 test("body type names reuse signature aliases through nested blocks without changing storage or effects", () => {
@@ -152,4 +158,26 @@ test("method-local Self does not escape its native impl through a module alias",
   const type = named("Vec", [named("Option", [named("Vec", [named("Option", [named("Self")])])])]);
   const source = { ...makeFunction("read"), params: [{ name: "value", type }], returnType: undefined };
   assert.deepEqual(nameRustSignatureTypes([source]), [source]);
+});
+
+test("local signature aliases stay in the original block and reserve every local item name", () => {
+  const collision = { kind: "struct", name: "ReadValues", visibility: "private", generics: emptyRustGenerics, fields: [] };
+  const before = { kind: "expr", expr: { kind: "call", callee: { kind: "path", path: "before" }, args: [] } };
+  const after = { kind: "expr", expr: { kind: "call", callee: { kind: "path", path: "after" }, args: [] } };
+  const source = { kind: "function", name: "outer", visibility: "public", generics: emptyRustGenerics, params: [],
+    body: { statements: [before, { kind: "item", item: collision },
+      { kind: "item", item: makeFunction("read") }, { kind: "item", item: makeFunction("write") }, after] } };
+  const normalized = finalizeRustSourceStyle({ items: [source] });
+  assert.equal(normalized.items.length, 1);
+  const statements = normalized.items[0].body.statements;
+  const alias = statements[0].item;
+  assert.equal(alias.kind, "type-alias");
+  assert.notEqual(alias.name, "ReadValues");
+  assert.deepEqual(alias.target, nested);
+  assert.deepEqual(statements[1], before);
+  assert.equal(statements[2].item.name, "ReadValues");
+  assert.deepEqual(statements.slice(3, 5).map(entry => entry.item.name), ["read", "write"]);
+  for (const entry of statements.slice(3, 5)) assert.equal(entry.item.params[0].type.path, alias.name);
+  assert.deepEqual(statements[5], after);
+  assert.deepEqual(finalizeRustSourceStyle(normalized), normalized);
 });

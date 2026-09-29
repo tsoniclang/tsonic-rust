@@ -54,6 +54,7 @@ export const rustStrRefType: RustType = {
 };
 
 interface RustSourceTypeRendering {
+  readonly typeParameterNames?: ReadonlyMap<string, string>;
   readonly pathFor: (value: { readonly fileName: string; readonly typeName: string }) => string | undefined;
   readonly additionalArgumentsFor: (carrier: TargetTypeRef) => readonly RustGenericArgument[];
 }
@@ -132,7 +133,7 @@ export function rustTypeFromCarrier(
     };
   }
   if (carrier.kind === "type-parameter") {
-    return { kind: "named", path: carrier.name };
+    return { kind: "named", path: resolveSourceTypePath?.typeParameterNames?.get(carrier.identity) ?? carrier.name };
   }
   if (carrier.kind === "reference") {
     const referent = !carrier.mutable && carrier.referent.kind === "target-named" &&
@@ -194,7 +195,7 @@ export function rustTypeFromCarrier(
           kind: "impl-trait",
           bounds: [{
             kind: "callable",
-            trait: "Fn",
+            trait: carrier.callTrait ?? "Fn",
             binder: carrier.lifetimeBinder === undefined ? [] : rustLifetimeBinderToAst(carrier.lifetimeBinder),
             parameters: parameters as RustType[],
             result: carrier.fallible === true ? {
@@ -462,6 +463,7 @@ export function isFloatCarrier(carrier: TargetTypeRef | undefined): boolean {
 }
 
 export interface RustTypeRenderingContext {
+    readonly typeParameterNames?: ReadonlyMap<string, string>;
     readonly moduleName: string;
     readonly moduleNameByFileName: ReadonlyMap<string, string>;
     readonly externalCrateNameByFileName: ReadonlyMap<string, string>;
@@ -488,7 +490,7 @@ export interface RustTypeRenderingContext {
 export function rustTypeFromCarrierInContext(
   carrier: TargetTypeRef | undefined,
   context: RustTypeRenderingContext,
-  position: "general" | "parameter" | "return" = "general",
+  position: "general" | "parameter" | "return" | "inferred-call" = "general",
 ): RustType | undefined {
   const selectedCarrier = carrier === undefined ||
       context.typeParameterSubstitutions === undefined &&
@@ -569,10 +571,14 @@ export function rustTypeFromCarrierInContext(
   };
   const rendered = rustTypeFromCarrier(
     selectedCarrier,
-    { pathFor: resolveSourceTypePath, additionalArgumentsFor: type => rustOptionalStorageTypeArguments(type, context) },
+    { typeParameterNames: context.typeParameterNames,
+      pathFor: resolveSourceTypePath, additionalArgumentsFor: type => rustOptionalStorageTypeArguments(type, context) },
     resolveStructuralShape,
   );
-  if (!rustTypeIsLegalInPosition(rendered, position)) {
+  if (position === "inferred-call" && rendered !== undefined && rustTypeContainsImplTrait(rendered)) {
+    return { kind: "infer" };
+  }
+  if (!rustTypeIsLegalInPosition(rendered, position === "inferred-call" ? "general" : position)) {
     return undefined;
   }
   collectAliasesFromRustType(rendered, (path) => {
@@ -810,17 +816,23 @@ export function rustTargetCallGenericArgumentToAstInContext(
   argument: Extract<RustTargetGenericArgument, { readonly kind: "type" | "const" }>,
   context: RustTypeRenderingContext,
 ): RustCallGenericArgument | undefined {
-  if (
-    argument.kind === "type" &&
-    argument.type.kind === "target-named" &&
-    argument.type.id === rustFutureTargetId
-  ) {
-    return { kind: "type", type: { kind: "infer" } };
+  if (argument.kind === "type") {
+    const type = rustCallTypeFromCarrierInContext(argument.type, context);
+    return type === undefined ? undefined : { kind: "type", type };
   }
   const rendered = rustTargetGenericArgumentToAstInContext(argument, context);
   return rendered?.kind === "type" || rendered?.kind === "const"
     ? rendered
     : undefined;
+}
+
+export function rustCallTypeFromCarrierInContext(
+  carrier: TargetTypeRef,
+  context: RustTypeRenderingContext,
+): RustType | undefined {
+  return carrier.kind === "target-named" && carrier.id === rustFutureTargetId
+    ? { kind: "infer" }
+    : rustTypeFromCarrierInContext(carrier, context, "inferred-call");
 }
 
 function rustLifetimeBinderToAst(

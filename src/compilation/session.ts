@@ -42,6 +42,7 @@ type RustCompilationSessionState =
 
 export function createRustCompilationSession(
   context: TargetCompilationSessionContext,
+  compileRequest: typeof compileRustTarget = compileRustTarget,
 ): TargetCompilationSession {
   const configuration = createRustTargetConfiguration(
     context.target,
@@ -96,7 +97,7 @@ export function createRustCompilationSession(
     compile(input: TargetCompileInput): TargetCompileResult {
       requireState(state, "runtime-contributed", "compile");
       state = "compiled";
-      return compileRustTarget(Object.freeze({
+      return compileRequest(Object.freeze({
         input,
         configuration,
         providerSemantics: mergeRustProviderSemantics(

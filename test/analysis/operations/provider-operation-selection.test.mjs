@@ -17,12 +17,12 @@ test("provider optional argument inference preserves native carriers and absence
   const int64 = { kind: "source-primitive", name: "int64" };
   const uint64 = { kind: "source-primitive", name: "uint64" };
   const float64 = { kind: "source-primitive", name: "float64" };
-  const parameter = { kind: "type-parameter", name: "Value" };
+  const parameter = { kind: "type-parameter", identity: "Value", name: "Value" };
   const template = {
     kind: "provider-operation", operationId: "acme.optional", operationKind: "method",
     target: { form: "call", path: "acme::optional" }, resultCarrier: unit,
     parameterCarriers: [rustOptionTargetType(parameter)],
-    genericParameters: [{ kind: "type", sourceName: "Value", defaultArgument: { kind: "type", type: float64 } }],
+    genericParameters: [{ kind: "type", targetIdentity: "Value", sourceName: "Value", defaultArgument: { kind: "type", type: float64 } }],
     isAsync: false, isFallible: false, errorBoundary: "target-runtime",
   };
   for (const carrier of [int64, uint64]) {
@@ -37,7 +37,7 @@ test("provider optional argument inference preserves native carriers and absence
     const result = instantiateProviderOperationTemplate(template, { sourceParameterCarriers: [absent] });
     assert.deepEqual(result?.substitutions.types.get("Value"), float64);
     assert.equal(instantiateProviderOperationTemplate({ ...template,
-      genericParameters: [{ kind: "type", sourceName: "Value" }],
+      genericParameters: [{ kind: "type", targetIdentity: "Value", sourceName: "Value" }],
     }, { sourceParameterCarriers: [absent] }), undefined);
   }
   assert.equal(instantiateProviderOperationTemplate(template, { sourceParameterCarriers: [undefined] }), undefined);
@@ -102,10 +102,11 @@ test("borrowed native string inference requires an exact ?Sized generic paramete
     operationKind: "method",
     target: { form: "call", path: "acme::borrowed", argModes: ["ref"] },
     resultCarrier: unit,
-    parameterCarriers: [{ kind: "type-parameter", name: "Q" }],
+    parameterCarriers: [{ kind: "type-parameter", identity: "Q", name: "Q" }],
     genericParameters: [{
       kind: "type",
       sourceName: "Q",
+      targetIdentity: "Q",
       ...(maybeSized ? { maybeSized: true } : {}),
     }],
     isAsync: false,
@@ -115,6 +116,36 @@ test("borrowed native string inference requires an exact ?Sized generic paramete
 
   assert.deepEqual([...rustBorrowedStringTypeParameterNames(template(false))], []);
   assert.deepEqual([...rustBorrowedStringTypeParameterNames(template(true))], ["Q"]);
+});
+
+test("explicit provider arguments bind exact identities rather than equal parameter spellings", () => {
+  const left = { kind: "type-parameter", identity: "owner:left:0", name: "Value" };
+  const right = { kind: "type-parameter", identity: "owner:right:0", name: "Value" };
+  const int32 = { kind: "source-primitive", name: "int32" };
+  const string = { kind: "target-named", id: "rust.std.String" };
+  const template = {
+    kind: "provider-operation", operationId: "acme.exact-binders", operationKind: "method",
+    target: { form: "call", path: "acme::exact" },
+    resultCarrier: { kind: "tuple", elements: [left, right] }, parameterCarriers: [],
+    genericParameters: [left, right].map(parameter => ({
+      kind: "type", sourceName: parameter.name, targetIdentity: parameter.identity,
+    })), isAsync: false, isFallible: false, errorBoundary: "none",
+  };
+  const argumentsByIdentity = new Map([
+    [left.identity, { kind: "type", type: int32 }],
+    [right.identity, { kind: "type", type: string }],
+  ]);
+  const selected = instantiateProviderOperationTemplate(template, { directGenericArguments: argumentsByIdentity });
+  assert.deepEqual(selected?.template.resultCarrier, { kind: "tuple", elements: [int32, string] });
+  assert.deepEqual([...selected.substitutions.types], [[left.identity, int32], [right.identity, string]]);
+  for (const invalid of [
+    new Map([["Value", { kind: "type", type: int32 }]]),
+    new Map([["unknown:0", { kind: "type", type: int32 }]]),
+    new Map([[left.identity, { kind: "type", type: int32 }]]),
+    new Map([[left.identity, { kind: "const", value: { kind: "literal", value: "1" } }]]),
+  ]) {
+    assert.equal(instantiateProviderOperationTemplate(template, { directGenericArguments: invalid }), undefined);
+  }
 });
 
 test("exact provider signature identity wins over its explicit overload-group row", () => {

@@ -31,7 +31,7 @@ export function instantiateRustSourceUnionVariants(
   if (identity === undefined || identity !== rustSourceUnionDefinitionIdentity(definition.carrier)) return undefined;
   const references = rustTargetGenericReferences(definition.carrier);
   const bindings = inferRustTargetGenericBindings(definition.carrier, carrier, {
-    typeNames: new Set(references.typeNames), lifetimeIdentities: new Set(references.lifetimeIdentities),
+    typeIdentities: new Set(references.typeIdentities), lifetimeIdentities: new Set(references.lifetimeIdentities),
     constIdentities: new Set(),
   });
   if (bindings === undefined) return undefined;

@@ -37,6 +37,9 @@ import { prepareRustDeferredCheckedCall } from "../operations/provider/index.js"
 import { readRustSourceNativePointerOperation, readRustSourceSafetyBuilder, readRustSourceUnsafeContext } from "../../policy/safety/source-explicit-safety.js";
 import { recordExportAssignmentFacts, resolveTypeNodeCarrier } from "../control-flow/statements.js";
 import { resolveExpressionCarrier } from "./carriers.js";
+import { selectRustFlowReadProjection } from "../../policy/types/value-carrier-reconciliation.js";
+import { recordRustFlowReadProjection } from "../facts/value-carrier-queries.js";
+import { selectRustOptionalCallResult } from "../operations/provider/calls/instantiation.js";
 import {
   readRustReferenceOperation,
   resolvedRustReferenceOperationCarrier,
@@ -62,6 +65,7 @@ import { readRustSourceRawPointerIdentity } from "../../policy/operations/pointe
 import { selectRustMemoryLayoutObservation } from "../../policy/operations/pointers/layout-observations.js";
 import { rustMemoryLayoutObservationKey } from "../../target-model/operations/memory-layout.js";
 import { resolveRustClassValue } from "../objects/class-values.js";
+import { readRustNativeControl, resolveRustNativeControl } from "./native-controls.js";
 
 export function resolveIdentifierCarrier(
   walk: RustFactWalk,
@@ -301,6 +305,7 @@ export function isSharedSourceMarkerOperation(
 ): boolean {
   const sourceFacts = walk.context.source.sourceFacts;
   return readRustReferenceOperation(walk, expression) !== undefined ||
+    readRustNativeControl(walk, expression) !== undefined ||
     selectTsonicMemoryFieldBinding(walk.context.ast, sourceFacts, expression) !== undefined ||
     selectTsonicMemoryRecordBinding(walk.context.ast, sourceFacts, expression) !== undefined ||
     readRustRawLocation(walk.context.ast, sourceFacts, expression) !== undefined ||
@@ -323,6 +328,10 @@ function resolveSharedSourceMarkerCarrier(
   expected: TargetTypeRef | undefined,
 ): RustSharedSourceMarkerCarrierResolution {
   const sourceFacts = walk.context.source.sourceFacts;
+  const nativeControl = readRustNativeControl(walk, expression);
+  if (nativeControl !== undefined) {
+    return { handled: true, ...resolveRustNativeControl(walk, expression, sourceFile, nativeControl) };
+  }
   const memoryBinding = resolveRustMemoryBindingCarrier(walk, expression, sourceFile);
   if (memoryBinding !== undefined) return memoryBinding;
   const rawLocation = resolveRustRawLocationCarrier(walk, expression, sourceFile);
@@ -555,7 +564,8 @@ function applySelectedRuntimeCallableCall(
   if (!isDenseDataArray(callArguments) || callArguments.some(argument => argument === undefined)) return undefined;
   const carrier = selectedSignature.sourceCallableCarrier;
   const genericNames = (selectedSignature.member.genericParameters ?? [])
-    .flatMap(parameter => parameter.kind === "type" ? [parameter.sourceName] : []);
+    .flatMap(parameter => parameter.kind === "type" ? [{ kind: "type-parameter" as const,
+      identity: parameter.targetIdentity, name: parameter.sourceName }] : []);
   const protocol = rustGenericCallableProtocol(carrier, genericNames) ??
     rustNativeCallableProtocol(carrier) ?? rustCallableProtocol(carrier);
   const finalized = finalizeProjectSourceGenericArguments(walk, selectedSignature, callArguments as readonly Node[], undefined);
@@ -679,6 +689,28 @@ function applySelectedRuntimeCallableCall(
   )) {
     return undefined;
   }
+  const runtimeValue = selectedSignature.sourceStructuralMethod === undefined && selectedSignature.sourceConstructorCarrier === undefined;
+  const calleeCarrier = runtimeValue ? resolveExpressionCarrier(walk, callee, sourceFile, carrier) : undefined;
+  if (runtimeValue) {
+    const source = walk.context.semantics(sourceFile).operations.call(expression);
+    if (source === undefined || calleeCarrier === undefined) return undefined;
+    const declaration = walk.context.semantics(sourceFile).declarations.signatureDeclaration(source.selectedSignature);
+    const optionalInvocation = walk.context.ast.as.AsCallExpression(expression)?.QuestionDotToken !== undefined;
+    const optionalResult = selectRustOptionalCallResult(
+      { source, ...(declaration === undefined ? {} : { sourceSelectedDeclaration: declaration }) },
+      callable.result, rustOperationContext(walk, expression), walk.operationOptions,
+      optionalInvocation ? { guard: callee, sourceGuardCarrier: calleeCarrier, selectedGuardCarrier: carrier } : undefined,
+    );
+    if (optionalResult.kind === "rejected") {
+      appendRustDiagnostic(walk, "RUST_OPTIONAL_CALL_CONTRACT_INVALID", optionalResult.message,
+        expression, ["target.capability=rust.optional-call.exact-callee"]);
+      return undefined;
+    }
+    if (optionalResult.fact !== undefined) {
+      walk.context.facts.set(expression, rustOptionalChainFactKey, optionalResult.fact,
+        [{ message: "rust exact runtime-callable optional guard" }]);
+    }
+  }
   const optionalCall = walk.context.facts.get(expression, rustOptionalChainFactKey) ??
     walk.context.facts.resolve(expression, rustOptionalChainFactKey);
   if (optionalCall !== undefined &&
@@ -744,7 +776,21 @@ function applySelectedRuntimeCallableCall(
     }),
   });
   if (target.form === "callable") {
-    resolveExpressionCarrier(walk, callee, sourceFile, carrier);
+    const resolved = calleeCarrier;
+    if (optionalCall === undefined) {
+      const projection = resolved === undefined ? undefined : selectRustFlowReadProjection(
+        resolved, carrier, walk.context.projectTypes, walk.context.typeDefinitions,
+      );
+      if (projection === undefined || projection.kind === "incompatible") {
+        appendRustDiagnostic(walk, "RUST_RUNTIME_CALLABLE_VALUE_CONFLICT",
+          "The runtime callee cannot project to its exact checked callable carrier.", callee,
+          ["target.capability=rust.source-call.runtime-callable-value"]);
+        return undefined;
+      }
+      if (projection.kind === "projection") {
+        recordRustFlowReadProjection(walk.context.facts, callee, projection.fact);
+      }
+    }
   } else if (target.form === "constructor-value") {
     resolveExpressionCarrier(walk, callee, sourceFile, target.receiverCarrier);
   }

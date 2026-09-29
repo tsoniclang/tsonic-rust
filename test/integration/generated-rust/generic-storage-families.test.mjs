@@ -149,11 +149,11 @@ test("inferred pointer loads retain conditional family arguments across nested c
       "storage.ts": storageDeclarations,
       "reader.ts": `
 import type { Pointer } from "@tsonic/core/types.js";
-import { loadPointer } from "@tsonic/core/lang.js";
+import { loadptr } from "@tsonic/core/lang.js";
 import type { Storage as Selected } from "./storage.js";
 export class Box<T> { value: T; constructor(value: T) { this.value = value; } }
 export function read<T>(pointer: Pointer<Box<Selected<T>>>): Selected<T> {
-  return loadPointer(pointer).value;
+  return loadptr(pointer).value;
 }
 export function retained<T>(pointer: Pointer<Box<Selected<T>>>): Pointer<Box<Selected<T>>> {
   const value = pointer;
@@ -163,16 +163,16 @@ export function retained<T>(pointer: Pointer<Box<Selected<T>>>): Pointer<Box<Sel
       "index.ts": `
 import { check } from "@acme/testing";
 import type { uint32 } from "@tsonic/core/types.js";
-import { allocatePointer } from "@tsonic/core/lang.js";
+import { allocateptr } from "@tsonic/core/lang.js";
 import { storageKey } from "./storage.js";
 import { Box, read, retained } from "./reader.js";
 class Value { declare readonly [storageKey]: { count: uint32 }; }
 export function main(): void {
   const maximum: uint32 = 4294967295;
-  const scalar = allocatePointer(new Box<uint32>(maximum));
+  const scalar = allocateptr(new Box<uint32>(maximum));
   check(read<uint32>(retained<uint32>(scalar)) === maximum);
   const data: { count: uint32 } = { count: maximum };
-  const record = allocatePointer(new Box(data));
+  const record = allocateptr(new Box(data));
   const alias = read<Value>(retained<Value>(record));
   alias.count = 7;
   check(data.count === 7 && read<Value>(record).count === 7);
@@ -188,15 +188,15 @@ test("pointer transport rejects explicitly floating storage as an annotated uint
   const { result } = compileRust({ surfaces: ["js"], files: {
     "index.ts": `
 import type { Pointer, uint32 } from "@tsonic/core/types.js";
-import { allocatePointer, loadPointer } from "@tsonic/core/lang.js";
+import { allocateptr, loadptr } from "@tsonic/core/lang.js";
 class Box<T> { value: T; constructor(value: T) { this.value = value; } }
 function read(pointer: Pointer<Box<{ count: uint32 }>>): uint32 {
-  return loadPointer(pointer).value.count;
+  return loadptr(pointer).value.count;
 }
 export function example(): uint32 {
   const maximum: uint32 = 4294967295;
   const data: { count: number } = { count: maximum };
-  return read(allocatePointer(new Box(data)));
+  return read(allocateptr(new Box(data)));
 }
 ` },
   });
@@ -211,16 +211,16 @@ test("pointer transport retains inferred native fields without floating storage"
     target: { id: "rust", options: { outputType: "bin", crateName: "inferred_native_pointer" } },
     files: { "index.ts": `
 import type { Pointer, uint32 } from "@tsonic/core/types.js";
-import { allocatePointer, loadPointer } from "@tsonic/core/lang.js";
+import { allocateptr, loadptr } from "@tsonic/core/lang.js";
 import { check } from "@acme/testing";
 class Box<T> { value: T; constructor(value: T) { this.value = value; } }
 function read(pointer: Pointer<Box<{ count: uint32 }>>): uint32 {
-  return loadPointer(pointer).value.count;
+  return loadptr(pointer).value.count;
 }
 export function main(): void {
   const maximum: uint32 = 4294967295;
   const data = { count: maximum };
-  const pointer = allocatePointer(new Box(data));
+  const pointer = allocateptr(new Box(data));
   check(read(pointer) === maximum);
   data.count = 7;
   check(read(pointer) === 7);
@@ -238,16 +238,16 @@ for (const surfaces of [[], ["js"]]) {
       target: { id: "rust", options: { outputType: "bin", crateName: "generic_reference_interfaces" } },
       files: { "index.ts": `
 import type { Pointer, uint8 } from "@tsonic/core/types.js";
-import { allocatePointer, loadPointer } from "@tsonic/core/lang.js";
+import { allocateptr, loadptr } from "@tsonic/core/lang.js";
 import { check } from "@acme/testing";
 interface Holder<T> { value: T; }
 function keep<T>(value: Holder<T>): Holder<T> { return value; }
 function replace<T>(holder: Holder<T>, value: T): void { holder.value = value; }
 export function main(): void {
-  const holder: Holder<Pointer<uint8>> = { value: allocatePointer<uint8>(7) };
+  const holder: Holder<Pointer<uint8>> = { value: allocateptr<uint8>(7) };
   const alias = keep(holder);
-  replace(alias, allocatePointer<uint8>(11));
-  check(loadPointer(holder.value) === 11);
+  replace(alias, allocateptr<uint8>(11));
+  check(loadptr(holder.value) === 11);
 }
 ` },
     });

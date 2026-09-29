@@ -6,7 +6,7 @@ import type {
   RustSourceTypeFamilyRegistry,
 } from "../../target-model/types/type-families.js";
 import type { RustTargetGenericArgument, RustTargetTraitRef, TargetTypeRef } from "../../target-model/types/model.js";
-import { rustTargetTypeParameterNames } from "../../target-model/types/carriers/generic-references.js";
+import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
 import { inferRustTargetTypeParameterBindings, rustTargetTypePatternsAreNominallyDisjoint } from "../../target-model/types/carriers/generic-inference.js";
 import { substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
 import { rustNamedTypeCarrierValue, rustSourceTypeCarrierValue } from "../../target-model/types/index.js";
@@ -41,7 +41,7 @@ export function createRustSourceTypeFamilyRegistry(): RustSourceTypeFamilyRegist
   };
   const instantiate = (template: RustSourceTypeFamilyImplementation, owner: TargetTypeRef): RustSourceTypeFamilyImplementation | undefined => {
     const bindings = inferRustTargetTypeParameterBindings(template.owner, owner,
-      new Set(rustTargetTypeParameterNames(template.owner)));
+      new Set(rustTargetTypeParameterIdentities(template.owner)));
     return bindings === undefined ? undefined : Object.freeze({ ...template, owner,
       output: substituteRustTargetTypeParameters(template.output, bindings) });
   };
@@ -101,8 +101,8 @@ export function createRustSourceTypeFamilyRegistry(): RustSourceTypeFamilyRegist
         Object.keys(implementation.field).sort().join(",") !== "readonly,sharedWrite,storage,storageIndex" :
         implementation.field !== undefined) return false;
       const trait = selectedTrait(implementation);
-      const parameterNames = new Set(rustTargetTypeParameterNames(implementation.owner));
-      if (!rustTargetTypeParameterNames(implementation.output).every(name => parameterNames.has(name))) return false;
+      const parameterNames = new Set(rustTargetTypeParameterIdentities(implementation.owner));
+      if (!rustTargetTypeParameterIdentities(implementation.output).every(name => parameterNames.has(name))) return false;
       const identity = key(trait, implementation.owner);
       const existing = implementations.get(identity);
       if (existing !== undefined) {
@@ -159,7 +159,7 @@ export function createRustSourceTypeFamilyRegistry(): RustSourceTypeFamilyRegist
 function validArguments(family: RustSourceTypeFamily, arguments_: readonly RustTargetGenericArgument[]): boolean {
   if (!Array.isArray(arguments_)) return false;
   const trait = { ...family.trait, genericArguments: arguments_ };
-  return isRustTargetTypeRef(trait) && rustTargetTypeParameterNames(trait).length === 0 &&
+  return isRustTargetTypeRef(trait) && rustTargetTypeParameterIdentities(trait).length === 0 &&
     (family.kind === "conditional" ? arguments_.length === 0 :
       arguments_.length === 1 && arguments_[0]?.kind === "type");
 }

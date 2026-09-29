@@ -46,7 +46,7 @@ function publicItemSurface(item: RustItem): readonly string[] {
   switch (item.kind) {
     case "function":
       return item.visibility === "public"
-        ? [rustFunctionSurface({
+        ? [encodeRustContractParts([closedMetadataKey(item.attrs ?? []), rustFunctionSurface({
             name: item.name,
             isAsync: item.isAsync === true,
             ...(item.errorType === undefined ? {} : { errorType: item.errorType }),
@@ -55,7 +55,7 @@ function publicItemSurface(item: RustItem): readonly string[] {
             ...(item.returnType === undefined
               ? {}
               : { returnType: item.returnType }),
-          })]
+          })])]
         : [];
     case "const":
     case "thread-local":
@@ -67,8 +67,7 @@ function publicItemSurface(item: RustItem): readonly string[] {
         ? [encodeRustContractParts([
             "struct",
             item.name,
-            ...item.attrs ?? [],
-            ...item.derives,
+            ...(item.attrs ?? []).map(closedMetadataKey),
             encodeRustContractParts(["generics", closedMetadataKey(item.generics)]),
             ...item.fields.map((field) =>
               encodeRustContractParts([
@@ -83,20 +82,23 @@ function publicItemSurface(item: RustItem): readonly string[] {
       return item.visibility === "public" ? [closedMetadataKey(item)] : [];
     case "impl":
       if (item.trait !== undefined) {
-        return (item.associatedTypes?.length ?? 0) === 0 ? [] : [closedMetadataKey({
-          kind: "associated-type-implementation",
+        const members = item.members.filter(member => member.kind !== "function");
+        return members.length === 0 ? [] : [closedMetadataKey({
+          kind: "associated-implementation",
           trait: item.trait,
           target: item.target,
           generics: item.generics,
-          associatedTypes: item.associatedTypes,
+          members,
         })];
       }
-      return item.functions
-        .filter((fn) => fn.visibility === "public")
-        .map((fn) => publicMethodSurface(closedMetadataKey(item.target), fn));
+      return item.members.flatMap(member => member.kind === "function"
+        ? member.visibility === "public" ? [publicMethodSurface(closedMetadataKey(item.target), member)] : []
+        : member.kind === "const" && member.visibility === "public"
+          ? [closedMetadataKey({ target: item.target, generics: item.generics, member })] : []);
     case "mod-decl":
       return item.visibility === "public"
-        ? [encodeRustContractParts(["module", item.name])]
+        ? [encodeRustContractParts(["module", item.name, closedMetadataKey(item.attrs ?? []),
+            ...(item.body === undefined ? [] : [closedMetadataKey(item.body)])])]
         : [];
     case "extern-crate":
     case "use":

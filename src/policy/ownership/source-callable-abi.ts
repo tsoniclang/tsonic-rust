@@ -40,9 +40,11 @@ import {
   Node_Expression,
   Node_Type,
 } from "@tsonic/target-api/source";
-import { resolveSelectedProviderDeclaration } from "../evidence/selected-source.js";
+import { resolveSelectedProviderDeclaration, resolveSelectedSourceProfileMember } from "../evidence/selected-source.js";
 import { selectRustProviderOperation } from "../operations/provider-selection.js";
+import { selectJsSurfaceOperation } from "../operations/source-profiles/js/index.js";
 import { rustProviderArgumentBorrowsString } from "./provider-argument-borrow.js";
+import { rustSourceValueWrapperContains } from "./source-value-wrappers.js";
 
 export interface RustSourceCallableAbiResolver {
   canUseSharedBorrow(
@@ -92,7 +94,7 @@ export function instantiateRustSourceParameterValueCarrier(
     substituteSelected(abi.parameterCarrier),
     selectedParameterCarrier,
     {
-      typeNames: new Set(references.typeNames.filter((name) => !selectedBindings.types.has(name))),
+      typeIdentities: new Set(references.typeIdentities.filter((name) => !selectedBindings.types.has(name))),
       lifetimeIdentities: new Set(references.lifetimeIdentities.filter((identity) => !selectedBindings.lifetimes.has(identity))),
       constIdentities: new Set(references.constIdentities.filter((identity) => !selectedBindings.consts.has(identity))),
     },
@@ -221,6 +223,7 @@ export function resolveRustContextualParameterAbi(
     readonly authored: RustLifetimeBinder;
     readonly selected: RustLifetimeBinder;
   },
+  contextualValueCarrier?: TargetTypeRef,
 ): RustSourceParameterAbi | undefined {
   const declaration = context.ast.as.AsParameterDeclaration(parameter);
   if (declaration === undefined) {
@@ -247,6 +250,8 @@ export function resolveRustContextualParameterAbi(
     ? selectedParameterCarrier
     : form === "default"
       ? rustOptionElementCarrier(selectedParameterCarrier)
+      : contextualValueCarrier !== undefined
+        ? contextualValueCarrier
       : selectedParameterCarrier.kind === "reference"
         ? authoredCarrier
         : selectedParameterCarrier;
@@ -379,7 +384,13 @@ function parameterCanUseSharedBorrow(
         role === "comparison" || role === "condition" || role === "type-only") continue;
       let operand = reference;
       let call = ast.parent(operand);
-      while (call !== undefined && ast.is.IsParenthesizedExpression(call)) {
+      while (call !== undefined && rustSourceValueWrapperContains(call, operand, ast)) {
+        const sourceFile = ast.getSourceFile(call);
+        if (sourceFile === undefined || !isRustStringCarrier(resolveRustTargetTypeRef(call, {
+          ...context,
+          currentSourceFile: sourceFile,
+          currentSemantics: context.semanticsFor(call),
+        }, options))) return false;
         operand = call;
         call = ast.parent(call);
       }
@@ -390,6 +401,23 @@ function parameterCanUseSharedBorrow(
         ast.is.IsSpreadElement(argument.expression))) return false;
       const argumentIndex = selected.sourceArguments.findIndex(argument => argument.expression === operand);
       const declaration = semantics.declarations.signatureDeclaration(selected.selectedSignature);
+      const member = resolveSelectedSourceProfileMember(context, declaration, options.sourceProfiles);
+      if (argumentIndex >= 0 && member?.profile === "js") {
+        if (!options.jsEnabled) return false;
+        const sourceFile = ast.getSourceFile(call);
+        if (sourceFile === undefined) return false;
+        const callContext = { ...context, currentSourceFile: sourceFile, currentSemantics: semantics };
+        const operation = selectJsSurfaceOperation({
+          ownerName: member.ownerName, memberName: member.memberName, operationKind: "call",
+          receiverCarrier: selected.sourceReceiver === undefined ? undefined :
+            resolveRustTargetTypeRef(selected.sourceReceiver.expression, callContext, options),
+          argumentCarriers: selected.sourceArguments.map(argument =>
+            resolveRustTargetTypeRef(argument.expression, callContext, options)),
+        }, context.typeDefinitions);
+        if (operation?.fact.kind !== "provider-operation" ||
+          !rustProviderArgumentBorrowsString(operation.fact, argumentIndex)) return false;
+        continue;
+      }
       const provider = resolveSelectedProviderDeclaration(context, declaration, [
         { subject: selected.selectedSignature, precision: "exact" },
       ]);

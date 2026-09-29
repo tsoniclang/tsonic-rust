@@ -414,7 +414,7 @@ export function createRustSourceTypeRegistry(
         const references = rustTargetGenericReferences(byDeclaration.carrier);
         if (value.genericArguments.length === 0 || inferRustTargetGenericBindings(
           byDeclaration.carrier, union.carrier, {
-            typeNames: new Set(references.typeNames),
+            typeIdentities: new Set(references.typeIdentities),
             lifetimeIdentities: new Set(references.lifetimeIdentities),
             constIdentities: new Set(),
           },

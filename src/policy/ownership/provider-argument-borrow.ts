@@ -1,9 +1,10 @@
-import type { RustProviderOperationRow } from "../../providers/packages/model.js";
+import type { RustProviderOperationTemplate } from "../../target-model/operations/model.js";
 import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
 import { isRustStringCarrier } from "../../target-model/types/index.js";
 
 export function rustProviderArgumentBorrowsString(
-  row: RustProviderOperationRow,
+  row: Pick<RustProviderOperationTemplate, "target" | "genericParameters" | "parameterCarriers"> &
+    { readonly isAsync?: boolean },
   argumentIndex: number,
 ): boolean {
   const form = row.target;

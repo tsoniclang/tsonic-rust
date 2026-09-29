@@ -4,7 +4,7 @@ import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import type { RustGenericCallableOrigin, RustGenericCallableSignature } from "../../target-model/types/carriers/generic-callables.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { closedMetadataKey, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
-import { rustTargetTypeParameterNames } from "../../target-model/types/carriers/generic-references.js";
+import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
 import { substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
@@ -109,15 +109,15 @@ export function createRustGenericCallablePlan(
       const implementationIdentity = createHash("sha256").update(`${sourceFileName}:${ast.pos(node)}:${ast.end(node)}`).digest("hex");
       const substitutions = new Map<string, TargetTypeRef>();
       for (const [index, argument] of value.environment.entries()) {
-        if (argument.kind === "type-parameter") substitutions.set(argument.name,
-          { kind: "type-parameter", name: value.signature.environmentParameters[index]! });
+        if (argument.kind === "type-parameter") substitutions.set(argument.identity,
+          value.signature.environmentParameters[index]!);
       }
       const captures = capture?.captures.map(selected => Object.freeze({ ...selected,
         storageCarrier: snapshotClosedMetadata(substituteRustTargetTypeParameters(selected.carrier, substitutions)),
       }));
       if (sourceFileName.length === 0 || capture === undefined || captures === undefined ||
         capture.recursiveDeclaration !== undefined || captures.some(selected =>
-          rustTargetTypeParameterNames(selected.storageCarrier).some(name => !value.signature.environmentParameters.includes(name)))) {
+          rustTargetTypeParameterIdentities(selected.storageCarrier).some(identity => !value.signature.environmentParameters.some(parameter => parameter.identity === identity)))) {
         issues.push({ subject: node, message: "A generic callable environment has no exact closed capture contract; recursive or hidden existential captures are not erased." });
       } else {
         const implementation = Object.freeze({ declaration: node, carrier, sourceFileName,

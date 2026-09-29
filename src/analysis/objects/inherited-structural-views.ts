@@ -14,7 +14,7 @@ export function closeRustInheritedStructuralViews(walk: RustFactWalk): void {
       const relationship = projectTypes.relationship(carrier, owner);
       const parameters = rustTargetGenericReferences(carrier);
       const bindings = relationship.kind !== "related" ? undefined : inferRustTargetGenericBindings(relationship.targetType, view.sourceCarrier, {
-        typeNames: new Set(parameters.typeNames), lifetimeIdentities: new Set(parameters.lifetimeIdentities), constIdentities: new Set(parameters.constIdentities),
+        typeIdentities: new Set(parameters.typeIdentities), lifetimeIdentities: new Set(parameters.lifetimeIdentities), constIdentities: new Set(parameters.constIdentities),
       });
       const selectedCarrier = bindings === undefined ? undefined : substituteRustTargetGenerics(carrier, bindings.types, bindings.lifetimes, bindings.consts);
       const semantics = walk.context.semanticsFor(concrete.declaration);

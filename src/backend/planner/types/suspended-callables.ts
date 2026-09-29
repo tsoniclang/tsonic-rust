@@ -1,6 +1,7 @@
 import type { RustSuspendedCallableImplementation } from "../../../analysis/callables/suspended-values.js";
 import type { RustType } from "../../target-ast/nodes.js";
 import type { RustTypeRenderingContext } from "./render.js";
+import { rustTypeFromCarrierInContext } from "./render.js";
 import { rustLifetimeToAst } from "./lifetime-syntax.js";
 
 export function rustSuspendedCallableStateType(
@@ -10,8 +11,10 @@ export function rustSuspendedCallableStateType(
   if (module === undefined) return undefined;
   const external = context.externalCrateNameByFileName.get(implementation.sourceFileName);
   const crate = external !== undefined && external !== context.crateName ? external : "crate";
+  const types = implementation.environment.typeParameters.map(parameter => rustTypeFromCarrierInContext(parameter, context));
+  if (types.some(type => type === undefined)) return undefined;
   return { kind: "named", path: `${crate}::${module}::${implementation.stateName}`, genericArguments: [
     ...implementation.environment.lifetimes.map(lifetime => ({ kind: "lifetime" as const, lifetime: rustLifetimeToAst(lifetime) })),
-    ...implementation.environment.typeNames.map(path => ({ kind: "type" as const, type: { kind: "named" as const, path } })),
+    ...types.map(type => ({ kind: "type" as const, type: type! })),
   ] };
 }

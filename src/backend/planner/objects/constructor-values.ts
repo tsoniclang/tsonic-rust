@@ -6,7 +6,7 @@ import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustClassEnvironmentContext } from "./class-environments.js";
 import { rustClassEnvironmentType } from "./class-environment-types.js";
 import { planRustClassValueForwarder } from "./class-value-callables.js";
-import { rustProjectGenerics } from "./polymorphism/names.js";
+import { planRustProjectGenerics } from "./polymorphism/names.js";
 import { rustSelfParameter } from "../declarations/callables/self-parameter.js";
 import { readRustSourceStaticField, planRustSourceStaticFieldStorage } from "../declarations/classes/static-field-storage.js";
 import { createRustSyntheticNameState } from "../names/synthetic.js";
@@ -32,8 +32,8 @@ export function planRustClassValueImplementations(declaration: Node, context: Ru
     if (target === undefined || sourceArguments === undefined) return undefined;
     const bound = sourceArguments.flatMap((argument, index) => !environment.genericParameterIndexes.includes(index) &&
       (argument.kind === "type" && argument.type.kind === "type-parameter" || argument.kind === "lifetime" && argument.lifetime.kind === "parameter") ? [index] : []);
-    const generics = rustProjectImplementationGenerics(rustClassConstructorTargetType(view.sourceCarrier, bound), definition,
-      rustProjectGenerics(definition, context, environment.genericParameterIndexes), context);
+    const generics = rustProjectImplementationGenerics(rustClassConstructorTargetType(view.sourceCarrier, bound),
+      planRustProjectGenerics(definition, [], context, environment.genericParameterIndexes), context);
     if (generics === undefined) return undefined;
     const shape = context.input.program.structuralShapes.definitionForCarrier(view.targetCarrier);
     const wrapper = rustTypeFromCarrierInContext(view.targetCarrier, context);
@@ -64,13 +64,13 @@ export function planRustClassValueImplementations(declaration: Node, context: Ru
         storageFileName: field.fileName, storageName: field.targetName, resultCarrier: storage.carrier };
       const read = readRustSourceStaticField(fact, local);
       if (read === undefined) return undefined;
-      functions.push({ name: storage.property.getterTargetName, visibility: "private", generics: emptyRustGenerics,
+      functions.push({ kind: "function", name: storage.property.getterTargetName, visibility: "private", generics: emptyRustGenerics,
         selfParam: rustSelfParameter("ref"), params: [], returnType: type, errorType: rustErrorType(boundary),
         body: { statements: [{ kind: "tail", expr: { kind: "call", path: "Ok", args: [read] } }] } });
       if (storage.property.setterTargetName !== undefined) {
         const target = planRustSourceStaticFieldStorage(fact, local);
         if (target === undefined) return undefined;
-        functions.push({ name: storage.property.setterTargetName, visibility: "private", generics: emptyRustGenerics,
+        functions.push({ kind: "function", name: storage.property.setterTargetName, visibility: "private", generics: emptyRustGenerics,
           selfParam: rustSelfParameter("ref"), params: [{ name: "value", type }], returnType: { kind: "unit" },
           errorType: rustErrorType(boundary), body: { statements: [{ kind: "tail", expr: { kind: "block", bindings: target.bindings,
             value: { kind: "evaluate-then", effect: target.write({ kind: "path", path: "value" }), discard: "unit",
@@ -78,7 +78,7 @@ export function planRustClassValueImplementations(declaration: Node, context: Ru
       }
     }
     items.push({ kind: "impl", generics, target,
-      trait: { kind: "named", path: `${ownerPath}${shape.dispatchName}`, genericArguments: wrapper.genericArguments }, functions });
+      trait: { kind: "named", path: `${ownerPath}${shape.dispatchName}`, genericArguments: wrapper.genericArguments }, members: functions });
   }
   return items;
 }

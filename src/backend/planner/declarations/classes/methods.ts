@@ -295,7 +295,7 @@ export function planProjectMethod(
       return undefined;
     }
     const generics = genericPlan.finalizeGenerics();
-    return {
+    return { kind: "function",
       name: methodName,
       ...(deadCode === undefined ? {} : { deadCode }),
       ...(isUnsafe ? { isUnsafe: true } : {}),
@@ -355,7 +355,7 @@ export function planProjectMethod(
   if (overridePrelude === undefined) {
     return undefined;
   }
-  return {
+  return { kind: "function",
     name: methodName,
     ...(deadCode === undefined ? {} : { deadCode }),
     ...(isUnsafe ? { isUnsafe: true } : {}),
@@ -452,7 +452,7 @@ export function planProjectMethodVariants(
   const methods: RustImplFunction[] = [];
   for (const variant of variants) {
     const specialization = rustCallableSpecialization(
-      variant.sourceTypeParameterNames,
+      variant.sourceTypeParameterIdentities,
       variant.targetTypeArguments,
     );
     if (specialization === undefined) {

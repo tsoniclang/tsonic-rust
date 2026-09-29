@@ -38,7 +38,7 @@ test("native upcast facts reject missing, mismatched and ambiguous projections",
 });
 
 test("native upcast generic substitution retains the projection and exact target", () => {
-  const parameter = { kind: "type-parameter", name: "Element" };
+  const parameter = { kind: "type-parameter", identity: "Element", name: "Element" };
   const target = { kind: "array", element: parameter };
   const generic = rustNamedTargetType("acme.View", "acme::View", [{ kind: "type", type: parameter }], [], undefined, [{ target, path: "acme::as_view" }]);
   const selected = selectRustSourceValueConversion(generic, target);

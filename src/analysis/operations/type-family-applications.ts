@@ -20,8 +20,8 @@ export function realizeRustSelectedTypeFamilies(
   for (const [index, parameter] of parameters.entries()) {
     const argument = targetArguments[index];
     if (parameter.kind !== "type" || argument?.kind !== "type") continue;
-    types.set(parameter.sourceName, sourceArguments[index]!.selectedType);
-    carriers.set(parameter.sourceName, argument.type);
+    types.set(parameter.targetIdentity, sourceArguments[index]!.selectedType);
+    carriers.set(parameter.targetIdentity, argument.type);
   }
   const visit = (carrier: TargetTypeRef): boolean => {
     if (carrier.kind === "associated-type" && carrier.trait?.sourceItem !== undefined) {
@@ -31,7 +31,7 @@ export function realizeRustSelectedTypeFamilies(
         return rustTargetTypeChildren(carrier).every(visit);
       }
       const declaration = walk.sourceTypes.declarationForCarrier(owner);
-      const type = carrier.owner.kind === "type-parameter" ? types.get(carrier.owner.name)
+      const type = carrier.owner.kind === "type-parameter" ? types.get(carrier.owner.identity)
         : declaration === undefined ? undefined : walk.context.semanticsFor(declaration).declarations.declaredType(declaration);
       if (family?.kind !== "conditional" || type === undefined) return false;
       const application = walk.context.semanticsFor(node).types.instantiateAlias(family.declaration, [type]);

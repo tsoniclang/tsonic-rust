@@ -53,7 +53,7 @@ export function collectRustImplicitInterfaceContracts(walk: RustFactWalk): reado
     if (openSource === undefined || selectedSource === undefined || openTarget === undefined || selectedTarget === undefined ||
       sourceValue === undefined || targetValue === undefined) return;
     const names = (value: NonNullable<typeof sourceValue>) => new Set(value.genericArguments.flatMap(argument =>
-      argument.kind === "type" && argument.type.kind === "type-parameter" ? [argument.type.name] : []));
+      argument.kind === "type" && argument.type.kind === "type-parameter" ? [argument.type.identity] : []));
     const targetNames = names(targetValue);
     const substitutions = new Map<string, TargetTypeRef>();
     const members: RustImplicitInterfaceContract["members"][number][] = [];

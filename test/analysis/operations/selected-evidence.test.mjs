@@ -485,11 +485,11 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
   const repeatedRead = source.slice(
-    source.indexOf("fn read_twice("),
-    source.indexOf("fn read_after_assignment("),
+    source.indexOf("fn readTwice("),
+    source.indexOf("fn readAfterAssignment("),
   );
   const assignedRead = source.slice(
-    source.indexOf("fn read_after_assignment("),
+    source.indexOf("fn readAfterAssignment("),
     source.indexOf("pub fn main("),
   );
   assert.equal(repeatedRead.match(/downcast_value_to_text_value\(\)/gu)?.length, 1);
@@ -593,10 +593,10 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /sum_to\(value - 1\)/u);
-  assert.match(source, /fn sum_to_arrow\(value: i32\) -> i32/u);
-  assert.match(source, /sum_to_arrow\(value - 1\)/u);
-  assert.doesNotMatch(source, /SUM_TO_ARROW|ModuleCell<.*sum_to_arrow/u);
+  assert.match(source, /sumTo\(value - 1\)/u);
+  assert.match(source, /fn sumToArrow\(value: i32\) -> i32/u);
+  assert.match(source, /sumToArrow\(value - 1\)/u);
+  assert.doesNotMatch(source, /SUM_TO_ARROW|ModuleCell<.*sumToArrow/u);
   assert.equal(validateGeneratedProject("project-recursion", result.artifacts, { run: true }).status, 0);
 });
 
@@ -696,7 +696,7 @@ export function currentPlatform(): string {
   assert.deepEqual(result.diagnostics, []);
   assert.match(
     artifactText(result, "src/index.rs"),
-    /pub fn current_platform\(\) -> String \{\n    acme_environment::platform\(\)\n\}/u,
+    /pub fn currentPlatform\(\) -> String \{\n    acme_environment::platform\(\)\n\}/u,
   );
 });
 
@@ -716,7 +716,7 @@ export function currentPlatform(platform: string): string {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /pub fn current_platform\(platform: String\) -> String \{\n    platform\n\}/u);
+  assert.match(source, /pub fn currentPlatform\(platform: String\) -> String \{\n    platform\n\}/u);
   assert.doesNotMatch(source, /platform\.clone\(\)/u);
 });
 

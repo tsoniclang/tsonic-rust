@@ -6,6 +6,7 @@ import {
   snapshotTargetPlanningSourceNavigation,
   targetSourceSyntaxProgram,
 } from "@tsonic/target-api/analysis";
+import { Node_Expression } from "@tsonic/target-api/source";
 import { analyzeRustProgram } from "./analyze.js";
 import { analyzeRustNumericRepresentations } from "../numeric/representations.js";
 import { createRustAnalysisContext } from "./context.js";
@@ -18,6 +19,7 @@ import { createRustModuleInitializationPlan } from "../module-initialization/ana
 import { analyzeRustProviderErrorCarriers } from "./provider-errors.js";
 import { analyzeRustDeclarationGenericRequirements } from "../declarations/generic-requirements.js";
 import { analyzeRustValueLifetimes } from "./value-lifetimes.js";
+import { rustCallArgumentIsOwned } from "../facts/parameter-passing.js";
 import { analyzeRustBorrowedElementReads } from "./borrowed-element-reads.js";
 import {
   analyzeRustBinaryHooks,
@@ -42,7 +44,8 @@ import { rustFoundationForCarrier } from "../foundation/requirements.js";
 import { maximumRustFoundation } from "../../target-model/foundation/model.js";
 import { analyzeRustProjectFlowReadSelections } from "../control-flow/project-flow-read-selections.js";
 import { isRustJsArrayCarrier, isRustStringCarrier } from "../../target-model/types/index.js";
-import { rustClosureCaptureFactKey } from "../facts/keys.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustClosureCaptureFactKey, rustTargetOperationFactKey, rustBindingStorageFactKey } from "../facts/keys.js";
 
 const rustJsTimerEpilogue: RustProviderBinaryHookRow = Object.freeze({
   id: "tsonic.rust.js.timers",
@@ -126,7 +129,32 @@ export function analyzeRustTargetProgram(
     isOwnedString: (declaration) => isRustStringCarrier(facts.getRuntimeCarrierFact(declaration)?.carrier),
     hasSharedIdentityStorage: (declaration) => isRustJsArrayCarrier(facts.getRuntimeCarrierFact(declaration)?.carrier),
     mayBorrowArgument: (argument) => facts.getArgumentPassingFact(argument)?.mode !== "by-value",
+    isOwnedCallArgument: (argument) => rustCallArgumentIsOwned(argument, context.ast, facts),
+    isSharedBorrowArgument: (argument) => facts.getArgumentPassingFact(argument)?.mode === "borrow-shared",
     capturesFor: (closure) => facts.getFact(closure, rustClosureCaptureFactKey),
+    isOnceCallable: (closure) => {
+      const carrier = facts.getRuntimeCarrierFact(closure)?.carrier;
+      return carrier?.kind === "closure" && carrier.callTrait === "FnOnce";
+    },
+    isOwnedOperationResult: (expression) => {
+      const operation = facts.getFact(expression, rustTargetOperationFactKey);
+      return operation?.kind === "provider-operation" &&
+        (operation.abi.target.form === "method" || operation.abi.target.form === "call" ||
+          operation.abi.target.form === "receiver-method") &&
+        operation.abi.result.kind === "sync" && operation.abi.result.carrier.kind !== "reference" &&
+        rustTargetTypeRefEquals(operation.abi.result.carrier, facts.getRuntimeCarrierFact(expression)?.carrier);
+    },
+    canMoveStoredField: (field) => {
+      const selected = facts.getFact(field, rustTargetOperationFactKey);
+      if (selected?.kind !== "source-field" || selected.storage !== "project-object" ||
+        selected.valueSemantics.kind !== "stored" || selected.dispatch !== undefined) return false;
+      const definition = context.projectTypes.definitionForCarrier(selected.receiverCarrier);
+      if (definition === undefined ||
+        objectRepresentations.representationFor(definition)?.kind !== "value") return false;
+      const receiver = Node_Expression(context.ast, field);
+      const declaration = receiver === undefined ? undefined : context.source.navigation.sourceReferenceFor(receiver)?.declaration;
+      return declaration !== undefined && facts.getFact(declaration, rustBindingStorageFactKey) === undefined;
+    },
   });
   const declarationGenericRequirements = analyzeRustDeclarationGenericRequirements(
     context.source,

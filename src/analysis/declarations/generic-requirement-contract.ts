@@ -41,13 +41,13 @@ export function requirementContractsEqual(
     left.capturedTypeParameters.length === right.capturedTypeParameters.length &&
     left.capturedTypeParameters.every((parameter, index) => {
       const other = right.capturedTypeParameters[index];
-      return other !== undefined && parameter.name === other.name &&
+      return other !== undefined && parameter.identity === other.identity &&
         stringListsEqual(parameter.requirements, other.requirements);
     }) &&
     left.typeParameters.length === right.typeParameters.length &&
     left.typeParameters.every((parameter, index) => {
       const other = right.typeParameters[index];
-      return other !== undefined && parameter.name === other.name &&
+      return other !== undefined && parameter.identity === other.identity &&
         stringListsEqual(parameter.requirements, other.requirements);
     }) &&
     left.uses.length === right.uses.length &&

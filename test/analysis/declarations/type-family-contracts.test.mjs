@@ -15,7 +15,7 @@ import { rustIndexedFieldKey, rustIndexedFieldProjection, rustIndexedFieldTrait 
 
 const signed = { kind: "source-primitive", name: "int32" };
 const unsigned = { kind: "source-primitive", name: "uint32" };
-const parameter = { kind: "type-parameter", name: "T" };
+const parameter = { kind: "type-parameter", identity: "T", name: "T" };
 const family = {
   kind: "conditional",
   declaration: {}, parameter: {},
@@ -104,7 +104,7 @@ test("type families retain disjoint nested nominal templates and subsume only th
       assert.equal(registry.implementations().length, 3);
       for (const name of names) {
         assert.deepEqual(registry.implementation(family.trait, owner(name, unsigned)).output, owner(name, unsigned));
-        const renamed = { kind: "type-parameter", name: "Renamed" };
+        const renamed = { kind: "type-parameter", identity: "Renamed", name: "Renamed" };
         assert.equal(registry.registerImplementation(make(name, renamed)), true);
         assert.equal(registry.registerImplementation({ ...make(name, unsigned), output: signed }), false);
         assert.equal(registry.registerImplementation({ ...make(name, unsigned), sourceFileName: "/foreign.ts" }), false);
@@ -168,7 +168,7 @@ test("associated-output obligations are distinct from input Clone and propagate 
   assert.equal(collector.collect(projection), true);
   assert.equal(collector.require(projection, "clone"), true);
   assert.deepEqual(collector.seal(), [{ carrier: projection, requirements: ["clone"] }]);
-  assert.equal(collector.require({ ...projection, owner: { kind: "type-parameter", name: "Unbound" } }, "clone"), false);
+  assert.equal(collector.require({ ...projection, owner: { kind: "type-parameter", identity: "Unbound", name: "Unbound" } }, "clone"), false);
 });
 
 test("normalization uses proved implementations and rejects recursive output equations", () => {
@@ -186,13 +186,13 @@ test("structural shapes retain the independent requirements of nested generic re
   registry.register(family);
   const declaration = {};
   const record = rustSourceTypeCarrier("/holder.ts", "Holder", "object", [{ kind: "type", type: parameter }]);
-  const definition = { declaration, genericParameters: [{ kind: "type", targetName: "T" }] };
+  const definition = { declaration, genericParameters: [{ kind: "type", identity: "T", targetName: "T" }] };
   const policy = { definitionForCarrier: carrier => rustTargetTypeRefEquals(carrier, record) ? definition : undefined };
-  const contract = { declaration, typeParameters: [{ name: "T", requirements: ["clone"] }],
+  const contract = { declaration, typeParameters: [{ identity: "T", name: "T", requirements: ["clone"] }],
     associatedTypes: [{ carrier: projection, requirements: ["default"] }] };
   const shape = { kind: "tuple", elements: [record] };
   const selected = analyzeRustShapeGenericRequirements(shape, policy, registry, owner => owner === declaration ? contract : undefined);
-  assert.deepEqual(selected.typeParameters, [{ name: "T", requirements: ["clone"] }]);
+  assert.deepEqual(selected.typeParameters, [{ identity: "T", name: "T", requirements: ["clone"] }]);
   assert.deepEqual(selected.associatedTypes, [{ carrier: projection, requirements: ["default"] }]);
   assert.equal(analyzeRustShapeGenericRequirements(shape, policy, registry, () => undefined), undefined);
 });
@@ -218,7 +218,7 @@ test("indexed families distinguish exact keys and retain readonly storage and in
   }
   assert.deepEqual(rustTypeFamilyNormalizer(registry)(rustIndexedFieldProjection(owner, countKey)), signed);
   assert.deepEqual(rustTypeFamilyNormalizer(registry)(rustIndexedFieldProjection(owner, labelKey)), unsigned);
-  const open = rustIndexedFieldProjection(parameter, { kind: "type-parameter", name: "Key" });
+  const open = rustIndexedFieldProjection(parameter, { kind: "type-parameter", identity: "Key", name: "Key" });
   const collector = createRustAssociatedRequirementCollector(new Set(["T", "Key"]), registry, () => false);
   assert.equal(collector.requireField(open, ["read", "write"]), true);
   assert.equal(collector.requireField(rustIndexedFieldProjection(owner, labelKey), ["read"]), true);

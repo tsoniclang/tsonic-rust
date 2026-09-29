@@ -549,7 +549,7 @@ export function probe(text: string, index: int32): string {
 });
 
 test("array copy and stringification rows reject unproven generic element traits", () => {
-  const receiver = rustVecTargetType({ kind: "type-parameter", name: "T" });
+  const receiver = rustVecTargetType({ kind: "type-parameter", identity: "T", name: "T" });
   assert.equal(selectJsSurfaceOperation({
     ownerName: "Array",
     memberName: "slice",

@@ -75,7 +75,7 @@ test("Rust converts typed-location facts into one target-owned selection", () =>
   ]);
   assert.doesNotMatch(
     selection,
-    /\baddressOf\b|\ballocatePointer\b|\bequalPointer\b|\bloadPointer\b|\bstorePointer\b/u,
+    /\b(?:addressOf|allocatePointer|equalPointer|loadPointer|storePointer|addressof|allocateptr|equalptr|loadptr|storeptr)\b/u,
   );
 });
 
@@ -103,7 +103,7 @@ test("provider argument-flow markers remain neutral while Rust references are ex
     const text = source(file);
     assert.match(
       text,
-      /import\s*\{[^}]*\b(?:sharedBorrow|mutableBorrow)\b[^}]*\}\s*from\s*"@tsonic\/core\/lang\.js"/u,
+      /import\s*\{[^}]*\b(?:sharedborrow|mutableborrow)\b[^}]*\}\s*from\s*"@tsonic\/core\/lang\.js"/u,
     );
   }
 

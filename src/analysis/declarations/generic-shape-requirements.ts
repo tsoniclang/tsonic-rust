@@ -5,7 +5,7 @@ import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type
 import type { Node } from "@tsonic/tsts";
 import { createRustAssociatedRequirementCollector } from "./associated-requirements.js";
 import { classifyCarrierRequirements } from "./generic-carrier-requirements.js";
-import { rustTargetTypeParameterNames } from "../../target-model/types/carriers/generic-references.js";
+import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustSourceTypeCarrierValue } from "../../target-model/types/index.js";
 import { substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
@@ -21,7 +21,8 @@ export function analyzeRustShapeGenericRequirements(
   contractFor: (declaration: Node) => RustDeclarationGenericRequirementContract | undefined,
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): RustShapeGenericRequirementContract | undefined {
-  const names = rustTargetTypeParameterNames(carrier);
+  const bindings = rustTargetGenericReferences(carrier).typeParameters;
+  const names = bindings.map(parameter => parameter.identity);
   const declared = new Set(names);
   const parameters = new Map(names.map(name => [name, new Set<RustGenericRequirement>()] as const));
   const classify = (type: TargetTypeRef, requirements: readonly RustGenericRequirement[]): boolean =>
@@ -50,9 +51,9 @@ export function analyzeRustShapeGenericRequirements(
         const argument = source!.genericArguments[index];
         if (parameter.kind !== argument?.kind) return false;
         if (parameter.kind !== "type" || argument.kind !== "type") continue;
-        const requirement = contract.typeParameters.find(entry => entry.name === parameter.targetName);
+        const requirement = contract.typeParameters.find(entry => entry.identity === parameter.identity);
         if (requirement === undefined || !classify(argument.type, requirement.requirements)) return false;
-        substitutions.set(parameter.targetName, argument.type);
+        substitutions.set(parameter.identity, argument.type);
       }
       for (const requirement of contract.associatedTypes) {
         const projection = substituteRustTargetTypeParameters(requirement.carrier, substitutions);
@@ -65,8 +66,8 @@ export function analyzeRustShapeGenericRequirements(
   };
   if (!visit(carrier)) return undefined;
   return Object.freeze({
-    typeParameters: Object.freeze(names.map(name => Object.freeze({ name,
-      requirements: Object.freeze([...parameters.get(name)!].sort()) }))),
+    typeParameters: Object.freeze(bindings.map(parameter => Object.freeze({ identity: parameter.identity, name: parameter.name,
+      requirements: Object.freeze([...parameters.get(parameter.identity)!].sort()) }))),
     associatedTypes: associated.seal(),
   });
 }

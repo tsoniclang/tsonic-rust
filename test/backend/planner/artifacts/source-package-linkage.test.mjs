@@ -258,8 +258,8 @@ export function increment(value: int32): int32 {
   const implementation = artifactText(result, "src/index.rs");
   assert.match(library, /#\[doc\(hidden\)\]\s+pub mod index;/u);
   assert.match(library, /pub use crate::index::increment;/u);
-  assert.doesNotMatch(library, /pub use crate::index::internal_increment;/u);
-  assert.match(implementation, /pub fn internal_increment\(value: i32\) -> i32/u);
+  assert.doesNotMatch(library, /pub use crate::index::internalIncrement;/u);
+  assert.match(implementation, /pub fn internalIncrement\(value: i32\) -> i32/u);
   assert.match(implementation, /pub fn increment\(value: i32\) -> i32/u);
   assert.doesNotMatch(implementation, /#\[doc\(hidden\)\]/u);
   validateGeneratedProject("exact-source-facade-lib", result.artifacts);

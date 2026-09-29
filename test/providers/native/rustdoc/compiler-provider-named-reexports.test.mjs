@@ -421,6 +421,7 @@ function privateReaderReexports(memberKind) {
       trait: { id: "reader", path: "other::Reader", args: null },
       for: resolvedPath("record"),
       items: ["impl-member"],
+      provided_trait_methods: [],
       is_unsafe: false,
       is_negative: false,
       is_synthetic: false,

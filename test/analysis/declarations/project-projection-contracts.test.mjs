@@ -13,11 +13,11 @@ const source = rustSourceTypeCarrier(base.fileName, base.sourceName, "object", [
 const target = type => rustSourceTypeCarrier(box.fileName, box.sourceName, "object", [{ kind: "type", type }]);
 const numberType = { kind: "source-primitive", name: "float64" };
 const stringType = { kind: "target-named", id: "rust.std.String", genericArguments: [] };
-const open = target({ kind: "type-parameter", name: "Value" });
+const open = target({ kind: "type-parameter", identity: "Value", name: "Value" });
 
 test("structural checked slots preserve exact bases and propagate static member requirements", () => {
   const field = type => ({ sourceName: "value", type, presence: "required", readonly: true });
-  const structural = rustStructuralObjectTargetType("/source.ts", [field({ kind: "type-parameter", name: "Value" })], "reference", undefined, [source]);
+  const structural = rustStructuralObjectTargetType("/source.ts", [field({ kind: "type-parameter", identity: "Value", name: "Value" })], "reference", undefined, [source]);
   const checked = { ...policy, checkedProjectionSlot: definition => definition === base ? "project_base" : undefined };
   assert.deepEqual(selectRustProjectProjection(source, structural, checked), { kind: "structural", slot: "project_base" });
   assert.equal(selectRustProjectProjection(source, structural, { ...checked, checkedProjectionSlot: () => undefined }), undefined);

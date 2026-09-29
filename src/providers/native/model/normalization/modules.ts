@@ -248,6 +248,19 @@ function normalizeExport(
     targetPath: Object.freeze([...targetPath]),
   };
   const root = rootNormalizationContext(document, dependency, item, resolveItem);
+  if (hasInnerKind(item, "primitive")) {
+    const primitive = requireInnerRecord(item, "primitive", `Rust primitive '${name}'`);
+    const primitiveName = requireString(primitive.name, "Rust primitive name");
+    const members = normalizeTypeMembers(document, primitive, dependency, [], itemIdentity, resolveItem, primitiveName);
+    return Object.freeze({
+      kind: "primitive",
+      ...identity,
+      type: Object.freeze({ kind: "primitive", name: primitiveName }),
+      methods: members.methods,
+      associatedConstants: members.associatedConstants,
+      unsupportedMembers: members.unsupported,
+    });
+  }
   if (hasInnerKind(item, "constant")) {
     const constant = requireInnerRecord(item, "constant", `Rust constant '${name}'`);
     return Object.freeze({
@@ -501,6 +514,13 @@ function sameModuleExportDependencies(
     if (fn.traitDispatch !== undefined) visitTrait(fn.traitDispatch);
   };
   switch (exported.kind) {
+    case "primitive":
+      exported.methods.forEach(visitFunction);
+      exported.associatedConstants.forEach((constant) => {
+        visitType(constant.type);
+        if (constant.traitDispatch !== undefined) visitTrait(constant.traitDispatch);
+      });
+      break;
     case "constant":
     case "static":
       visitType(exported.type);
@@ -519,7 +539,7 @@ function sameModuleExportDependencies(
       exported.methods.forEach(visitFunction);
       exported.associatedConstants.forEach((constant) => {
         visitType(constant.type);
-        visitTrait(constant.traitDispatch);
+        if (constant.traitDispatch !== undefined) visitTrait(constant.traitDispatch);
       });
       break;
     case "enum":
@@ -534,7 +554,7 @@ function sameModuleExportDependencies(
       exported.methods.forEach(visitFunction);
       exported.associatedConstants.forEach((constant) => {
         visitType(constant.type);
-        visitTrait(constant.traitDispatch);
+        if (constant.traitDispatch !== undefined) visitTrait(constant.traitDispatch);
       });
       break;
     case "trait":
@@ -543,7 +563,7 @@ function sameModuleExportDependencies(
       exported.methods.forEach(visitFunction);
       exported.associatedConstants.forEach((constant) => {
         visitType(constant.type);
-        visitTrait(constant.traitDispatch);
+        if (constant.traitDispatch !== undefined) visitTrait(constant.traitDispatch);
       });
       exported.associatedTypes.forEach((associated) => {
         visitGenericParameters(associated.genericParameters);
@@ -600,7 +620,7 @@ function findModule(
 }
 
 function providerExportKind(kind: string | undefined): boolean {
-  return kind === "constant" || kind === "enum" || kind === "function" ||
+  return kind === "primitive" || kind === "constant" || kind === "enum" || kind === "function" ||
     kind === "static" || kind === "struct" || kind === "trait" ||
     kind === "type_alias" || kind === "union";
 }

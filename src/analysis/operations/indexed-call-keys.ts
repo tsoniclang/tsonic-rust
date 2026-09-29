@@ -24,10 +24,10 @@ export function selectRustIndexedCallKeys(
     if (carrier.kind === "associated-type" && carrier.trait?.id === rustIndexedFieldTrait.id) {
       const argument = carrier.trait.genericArguments[0];
       if (argument?.kind !== "type" || argument.type.kind !== "type-parameter") return false;
-      const ownerName = carrier.owner.kind === "type-parameter" ? carrier.owner.name : undefined;
-      const ownerIndex = ownerName === undefined ? -1 : parameters.findIndex(parameter => parameter.kind === "type" && parameter.sourceName === ownerName);
-      const keyName = argument.type.name;
-      const keyIndex = parameters.findIndex(parameter => parameter.kind === "type" && parameter.sourceName === keyName);
+      const ownerName = carrier.owner.kind === "type-parameter" ? carrier.owner.identity : undefined;
+      const ownerIndex = ownerName === undefined ? -1 : parameters.findIndex(parameter => parameter.kind === "type" && parameter.targetIdentity === ownerName);
+      const keyName = argument.type.identity;
+      const keyIndex = parameters.findIndex(parameter => parameter.kind === "type" && parameter.targetIdentity === keyName);
       if (keyIndex < 0) return true;
       const owner = ownerIndex < 0 ? { kind: "type" as const, type: carrier.owner } : arguments_[ownerIndex];
       const ownerType = ownerIndex < 0 ? walk.sourceTypes.structuralObjectForCarrier(carrier.owner)?.sourceType
@@ -48,7 +48,7 @@ export function selectRustIndexedCallKeys(
     const parameter = selected.member.parameters[binding.sourceParameterIndex];
     const argument = callArguments[binding.sourceArgumentIndex];
     const type = parameter?.type;
-    const carrier = type?.kind === "type-parameter" ? keys.get(type.name) : undefined;
+    const carrier = type?.kind === "type-parameter" ? keys.get(type.identity) : undefined;
     if (carrier === undefined || carrier.kind === "type-parameter") continue;
     if (argument === undefined || binding.sourceForm !== "value") return false;
     const kind = walk.context.ast.kindName(argument);

@@ -62,7 +62,7 @@ export function resolveProjectSourceCarrier(
           instances.some(candidate => !rustTargetTypeRefEquals(candidate, instance))) return undefined;
         const bound = parameters.flatMap((parameter, index) => {
           const argument = arguments_[index]!;
-          const open = parameter.kind === "type" ? argument.kind === "type" && argument.type.kind === "type-parameter" && argument.type.name === parameter.targetName
+          const open = parameter.kind === "type" ? argument.kind === "type" && argument.type.kind === "type-parameter" && argument.type.identity === parameter.identity
             : argument.kind === "lifetime" && rustLifetimeKey(argument.lifetime) === rustLifetimeKey(parameter.lifetime);
           return own.has(parameter.declaration) && open ? [index] : [];
         });
@@ -86,7 +86,7 @@ export function resolveProjectSourceCarrier(
       const lifetimes = new Map<string, RustLifetimeRef>();
       parameters.forEach((parameter, index) => {
         const argument = genericArguments.values[index]!;
-        if (parameter.kind === "type" && argument.kind === "type") substitutions.set(parameter.targetName, argument.type);
+        if (parameter.kind === "type" && argument.kind === "type") substitutions.set(parameter.identity, argument.type);
         if (parameter.kind === "lifetime" && argument.kind === "lifetime") lifetimes.set(rustLifetimeKey(parameter.lifetime), argument.lifetime);
       });
       const instantiated = substituteRustTargetGenerics(carrier, substitutions, lifetimes);
@@ -132,7 +132,7 @@ export function resolveProjectSourceCarrier(
       const lifetimes = new Map<string, RustLifetimeRef>();
       parameters.forEach((parameter, index) => {
         const argument = genericArguments.values[index]!;
-        if (parameter.kind === "type" && argument.kind === "type") substitutions.set(parameter.targetName, argument.type);
+        if (parameter.kind === "type" && argument.kind === "type") substitutions.set(parameter.identity, argument.type);
         if (parameter.kind === "lifetime" && argument.kind === "lifetime") lifetimes.set(rustLifetimeKey(parameter.lifetime), argument.lifetime);
       });
       const instantiated = substituteRustTargetGenerics(carrier, substitutions, lifetimes);

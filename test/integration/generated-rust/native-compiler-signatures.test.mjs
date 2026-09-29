@@ -90,7 +90,7 @@ test("nested generic structural storage retains exact substituted fields", { tim
 test("conditional storage in nested generic signatures preserves both checked branches", { timeout: 300_000 }, () => {
   compileAndRun("native_conditional_storage", { "index.ts": `
     import type { Pointer } from "@tsonic/core/types.js";
-    import { allocatePointer, loadPointer } from "@tsonic/core/lang.js";
+    import { allocateptr, loadptr } from "@tsonic/core/lang.js";
     interface Stored<Storage> { readonly storage: Storage; }
     type StorageOf<Value> = Value extends Stored<infer Storage> ? Storage : Value;
     type Pair<Key, Value> = { readonly key: StorageOf<Key>; readonly value: StorageOf<Value> };
@@ -107,11 +107,11 @@ test("conditional storage in nested generic signatures preserves both checked br
     function project<Key, Value>(callback: (value: Slice<Pair<Key, Value>>) => StorageOf<Value>,
       value: Slice<Pair<Key, Value>>): StorageOf<Value> { return callback(value); }
     export function main(): void {
-      const pointer = allocatePointer(new Job(7));
+      const pointer = allocateptr(new Job(7));
       const values: Pair<string, Pointer<Job<number>> | undefined> = { key: "item", value: pointer };
       const result = read<string, number>(input => {
         const location = input.first.value;
-        return location === undefined ? 0 : loadPointer(location).value;
+        return location === undefined ? 0 : loadptr(location).value;
       }, new Slice(values));
       const absent: Pair<string, Pointer<Job<number>> | undefined> = { key: "none", value: undefined };
       const empty = read<string, number>(input => input.first.value === undefined ? 1 : 0, new Slice(absent));

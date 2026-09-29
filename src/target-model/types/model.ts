@@ -65,7 +65,7 @@ export type RustTargetTypeRef =
       readonly genericArguments?: readonly RustTargetGenericArgument[];
       readonly sourceAbsence?: true;
     }
-  | { readonly kind: "type-parameter"; readonly name: string; readonly optionalStorageValue?: RustTargetTypeRef }
+  | { readonly kind: "type-parameter"; readonly identity: string; readonly name: string; readonly optionalStorageValue?: RustTargetTypeRef }
   | { readonly kind: "array"; readonly element: RustTargetTypeRef; readonly rank?: number }
   | { readonly kind: "slice"; readonly element: RustTargetTypeRef }
   | { readonly kind: "tuple"; readonly elements: readonly RustTargetTypeRef[] }
@@ -87,6 +87,7 @@ export type RustTargetTypeRef =
   | RustTargetTraitRef
   | {
       readonly kind: "closure";
+      readonly callTrait?: "Fn" | "FnMut" | "FnOnce";
       readonly args: readonly RustTargetTypeRef[];
       readonly result: RustTargetTypeRef;
       readonly fallible?: boolean;
@@ -143,6 +144,7 @@ export type RustTargetGenericParameter =
   | {
       readonly kind: "type";
       readonly sourceName: string;
+      readonly targetIdentity: string;
     }
   | {
       readonly kind: "lifetime";

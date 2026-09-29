@@ -1,3 +1,4 @@
+import { rustHiddenAttribute } from "../../../target-ast/attributes.js";
 import {
   projectCallableShape,
   projectOwnAccessors,
@@ -32,6 +33,7 @@ import { rustArrayFieldMutationName, rustArrayFieldMutationType } from "./array-
 import { planRustProjectProjectionImplementations } from "../project-projections.js";
 import { rustStructuralDispatchType } from "../project-structural-types.js";
 import { checkedProjectProjectionSignature } from "../checked-project-projections.js";
+import { rustProjectTypeParameterContext } from "../../names/type-parameters.js";
 
 export function projectIdentityImplementations(
   definition: RustProjectTypeDefinition,
@@ -47,7 +49,7 @@ export function projectIdentityImplementations(
       generics,
       trait: { kind: "named", path: "core::fmt::Debug" },
       target: wrapperType,
-      functions: [{
+      members: [{ kind: "function",
         name: "fmt",
         visibility: "private",
         generics: emptyRustGenerics,
@@ -83,7 +85,7 @@ export function projectIdentityImplementations(
       generics,
       trait: { kind: "named", path: "PartialEq" },
       target: wrapperType,
-      functions: [{
+      members: [{ kind: "function",
         name: "eq",
         visibility: "private",
         generics: emptyRustGenerics,
@@ -123,7 +125,7 @@ export function projectIdentityImplementations(
       generics,
       trait: { kind: "named", path: "Eq" },
       target: wrapperType,
-      functions: [],
+      members: [],
     },
     rustProjectObjectIdentityImplementation(wrapperType, generics, {
       kind: "reference",
@@ -141,12 +143,13 @@ export function planProjectDispatchTrait(
   carrier: TargetTypeRef,
   context: RustPlanContext,
 ): RustItem | undefined {
+  context = rustProjectTypeParameterContext(definition, context, "implementation");
   const representation = context.input.program.objectRepresentations.representationFor(definition);
   if (representation === undefined) {
     return undefined;
   }
   const publiclyReachable = context.input.program.projectTypes.programErrorVariant(definition) !== undefined ||
-    rustProjectTypeHasPublicImplementationAbi(context, definition.targetName);
+    rustProjectTypeHasPublicImplementationAbi(context, definition.targetPath);
   const fields = projectOwnFields(definition, carrier, context);
   if (fields === undefined) {
     return undefined;
@@ -169,7 +172,7 @@ export function planProjectDispatchTrait(
       route.target.declaration,
       publiclyReachable,
     );
-    functions.push({
+    functions.push({ kind: "function",
       name: route.slot,
       ...(deadCode === undefined ? {} : { deadCode }),
       generics: emptyRustGenerics,
@@ -209,14 +212,14 @@ export function planProjectDispatchTrait(
       const contentDeadCode = rustGeneratedDispatchDeadCodeDisposition(
         context, definition.declaration, field.declaration, "content", publiclyReachable,
       );
-      functions.push({
+      functions.push({ kind: "function",
         name: rustArrayFieldMutationName(read), generics: emptyRustGenerics,
         ...(contentDeadCode === undefined ? {} : { deadCode: contentDeadCode }),
         selfParam: rustSelfParameter("ref"),
         params: [{ name: "action", type: rustArrayFieldMutationType(field.type) }],
       });
     }
-    functions.push({
+    functions.push({ kind: "function",
       name: read,
       ...(readDeadCode === undefined ? {} : { deadCode: readDeadCode }),
       generics: emptyRustGenerics,
@@ -235,7 +238,7 @@ export function planProjectDispatchTrait(
         "write",
         publiclyReachable,
       );
-      functions.push({
+      functions.push({ kind: "function",
         name: write!,
         ...(writeDeadCode === undefined ? {} : { deadCode: writeDeadCode }),
         generics: emptyRustGenerics,
@@ -269,7 +272,7 @@ export function planProjectDispatchTrait(
       accessor.role,
       publiclyReachable,
     );
-    functions.push({
+    functions.push({ kind: "function",
       name: slot,
       ...(deadCode === undefined ? {} : { deadCode }),
       generics: emptyRustGenerics,
@@ -286,7 +289,7 @@ export function planProjectDispatchTrait(
     }
     for (const variant of context.input.program.projectMethodDispatch.variantsForMember(member)) {
       const specialization = rustCallableSpecialization(
-        variant.sourceTypeParameterNames,
+        variant.sourceTypeParameterIdentities,
         variant.targetTypeArguments,
       );
       const shape = specialization === undefined
@@ -308,7 +311,7 @@ export function planProjectDispatchTrait(
           role,
           publiclyReachable,
         );
-        return {
+        return { kind: "function",
         name,
         ...(deadCode === undefined ? {} : { deadCode }),
         generics: emptyRustGenerics,
@@ -347,7 +350,7 @@ export function planProjectDispatchTrait(
       "write",
       publiclyReachable,
     );
-    functions.push({
+    functions.push({ kind: "function",
       name: write,
       ...(deadCode === undefined ? {} : { deadCode }),
       generics: emptyRustGenerics,
@@ -370,10 +373,10 @@ export function planProjectDispatchTrait(
     kind: "trait",
     name: rustProjectDispatchTraitName(definition),
     visibility,
-    ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
+    ...(publiclyReachable ? { attrs: [rustHiddenAttribute] } : {}),
     ...(deadCode === undefined ? {} : { deadCode }),
     generics,
     ...(superTraits.length === 0 ? {} : { superTraits: superTraits as readonly RustType[] }),
-    functions,
+    members: functions,
   };
 }

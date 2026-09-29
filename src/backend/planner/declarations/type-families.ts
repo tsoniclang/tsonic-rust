@@ -11,6 +11,7 @@ import { rustAuthoredDeadCodeDisposition } from "../liveness/directives.js";
 import { rustGenericRequirementBounds } from "../types/generic-bounds.js";
 import { rustAssociatedPredicates } from "../types/associated-bounds.js";
 import { planRustIndexedFieldImplementation } from "./classes/indexed-fields.js";
+import { rustGeneratedTypeParameterContext } from "../names/type-parameters.js";
 
 export function planRustTypeFamilyDeclaration(
   declaration: Node,
@@ -25,14 +26,16 @@ export function planRustTypeFamilyDeclaration(
   return [{
     kind: "trait", visibility: "public", name, generics: emptyRustGenerics,
     ...(deadCode === undefined ? {} : { deadCode }),
-    associatedTypes: [{ name: "Output", bounds: [] }], functions: [],
+    members: [{ kind: "type", name: "Output", bounds: [] }],
   }];
 }
 
 export function planRustTypeFamilyImplementations(context: RustPlanContext): readonly RustItem[] {
   const fileName = context.input.program.source.ast.getFileName(context.sourceFile);
   const items: RustItem[] = [];
+  const baseContext = context;
   for (const implementation of context.input.program.typeFamilies.implementations) {
+    context = baseContext;
     if (implementation.sourceFileName !== fileName) continue;
     if (implementation.family.kind === "indexed") {
       const selected = planRustIndexedFieldImplementation(implementation, context);
@@ -41,18 +44,19 @@ export function planRustTypeFamilyImplementations(context: RustPlanContext): rea
       else items.push(...selected);
       continue;
     }
+    const contract = context.input.program.declarationGenericRequirements.contractForCarrier({
+      kind: "tuple", elements: [implementation.owner, implementation.output],
+    });
+    if (contract !== undefined) context = rustGeneratedTypeParameterContext(contract.typeParameters, [], context);
     const owner = rustTypeFromCarrierInContext(implementation.owner, context);
     const trait = rustTypeFromCarrierInContext({ ...implementation.family.trait,
       genericArguments: implementation.arguments }, context);
     const output = rustTypeFromCarrierInContext(implementation.output, context);
     const parameters = rustTargetGenericReferences(implementation.owner);
     const definition = context.input.program.projectTypes.definitionForCarrier(implementation.owner);
-    const contract = context.input.program.declarationGenericRequirements.contractForCarrier({
-      kind: "tuple", elements: [implementation.owner, implementation.output],
-    });
     const compoundGenerics: RustGenerics | undefined = contract === undefined ||
       parameters.lifetimes.length !== 0 || parameters.constIdentities.length !== 0 ? undefined : {
-        parameters: contract.typeParameters.map(parameter => ({ kind: "type", name: parameter.name,
+        parameters: contract.typeParameters.map(parameter => ({ kind: "type", name: context.typeParameterNames?.get(parameter.identity) ?? parameter.name,
           bounds: rustGenericRequirementBounds(parameter.requirements) })),
         wherePredicates: rustAssociatedPredicates(contract.associatedTypes, context),
       };
@@ -63,7 +67,7 @@ export function planRustTypeFamilyImplementations(context: RustPlanContext): rea
       continue;
     }
     items.push({ kind: "impl", trait, target: owner, generics,
-      associatedTypes: [{ name: "Output", type: output }], functions: [] });
+      members: [{ kind: "type", name: "Output", type: output }] });
   }
   return items;
 }

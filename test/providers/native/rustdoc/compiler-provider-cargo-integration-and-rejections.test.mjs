@@ -40,7 +40,7 @@ test("Cargo provider virtual imports compile, execute, and preserve the user-own
   const source = `
 import type { FixedArray, int32 } from "@tsonic/core/types.js";
 import type { FunctionPointer } from "@tsonic/core/types.js";
-import { unsafeContext } from "@tsonic/core/lang.js";
+import { unsafecontext } from "@tsonic/core/lang.js";
 import type { constPtr, i8, mutPtr, u8 } from "@tsonic/rust/types.js";
 import { Box } from "@tsonic/rust/std/boxed.js";
 import type { Pair } from "@tsonic/rust/crates/widget_alias/index.js";
@@ -50,11 +50,11 @@ import { triple } from "@tsonic/rust/crates/widget_alias/math.js";
 import { ExactToken, exact_token, default_exact_token, exact_token_value, signed_const_value } from "@tsonic/rust/crates/widget_alias/index.js";
 
 function readMutablePointer(pointer: mutPtr<u8>): u8 {
-  return unsafeContext(first_byte(pointer));
+  return unsafecontext(first_byte(pointer));
 }
 
 function readConstPointer(pointer: constPtr<u8>): u8 {
-  return unsafeContext(first_byte(pointer));
+  return unsafecontext(first_byte(pointer));
 }
 
 class DomainError extends Error {
@@ -128,10 +128,10 @@ export function main(): void {
   if (preserve_borrowed(borrowed) !== 6) {
     throw new Error("inferred provider lifetime mapping failed");
   }
-  if (unsafeContext(dangerous(12)) !== 12) {
+  if (unsafecontext(dangerous(12)) !== 12) {
     throw new Error("unsafe function mapping failed");
   }
-  if (unsafeContext(first_byte(byte_ptr())) !== 23) {
+  if (unsafecontext(first_byte(byte_ptr())) !== 23) {
     throw new Error("raw pointer mapping failed");
   }
   if (readConstPointer(byte_ptr()) !== 23) {
@@ -153,7 +153,7 @@ export function main(): void {
     throw new Error("static or unit enum mapping failed");
   }
   {
-    unsafeContext();
+    unsafecontext();
     MUTABLE_COUNT.value = 4;
     if (MUTABLE_COUNT.value !== 4) {
       throw new Error("mutable static mapping failed");
@@ -231,24 +231,24 @@ export function main(): void {
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::checked_double\(4\)\?/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /unsafe \{ widget_alias::dangerous\(12\) \}/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /unsafe \{ widget_alias::first_byte\(widget_alias::byte_ptr\(\)\) \}/u);
-  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /fn read_mutable_pointer\(pointer: \*mut u8\) -> u8/u);
-  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /read_const_pointer\(widget_alias::byte_ptr\(\)\)/u);
+  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /fn readMutablePointer\(pointer: \*mut u8\) -> u8/u);
+  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /readConstPointer\(widget_alias::byte_ptr\(\)\)/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::Mode::Payload\(9\)/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::fill\(&mut bytes, 7\)/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::apply\(value, callback\)/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /\*widget_alias::preserve_borrowed::<i32>\(&borrowed\)/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /\*widget_alias::borrowed_answer\(&18\)/u);
-  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /let owned_borrowed_label: String = String::from\(widget_alias::borrowed_label\(\)\);/u);
+  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /let ownedBorrowedLabel: String = String::from\(widget_alias::borrowed_label\(\)\);/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::borrowed_label\(\) != "widget"/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::Widget::into_box_value\(boxed\)/u);
-  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /let pinned: std::pin::Pin<&mut widget_alias::Widget<i32>> =\s*widget_alias::pin_widget\(&mut pinned_widget\);/u);
+  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /let pinned: std::pin::Pin<&mut widget_alias::Widget<i32>> =\s*widget_alias::pin_widget\(&mut pinnedWidget\);/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::Widget::pinned_count\(pinned\)/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::StructuredMode::Named \{ value: 23 \}/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::non_clone_static_value\(&?widget_alias::NON_CLONE_STATIC\)/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::scalar_code\(widget_alias::scalar_smile\(\)\)/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /<widget_alias::Widget<i32> as widget_alias::Metric<i32>>::measure/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /<widget_alias::Widget<i32> as widget_alias::Metric<i32>>::UNIT/u);
-  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /unsafe \{[\s\S]*widget_alias::MUTABLE_COUNT = 4;[\s\S]*widget_alias::MUTABLE_COUNT[\s\S]*bits\.integer[\s\S]*widget_alias::variadic_printf\(format, variadic_value\)/u);
+  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /unsafe \{[\s\S]*widget_alias::MUTABLE_COUNT = 4;[\s\S]*widget_alias::MUTABLE_COUNT[\s\S]*bits\.integer[\s\S]*widget_alias::variadic_printf\(format, variadicValue\)/u);
   writeGeneratedArtifacts(project.root, result.artifacts);
   assert.equal(readFileSync(project.manifestPath, "utf8"), manifestBefore);
   const run = runCargo(project.manifestPath, ["run", "--quiet", "--locked"]);
@@ -303,9 +303,9 @@ export function main(): void {
   });
   assert.deepEqual(result.diagnostics, []);
   const source = result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "";
-  assert.match(source, /let equal_false[^\n]*!probe\.is_some\(\)/u);
-  assert.match(source, /let not_true[^\n]*!probe\.is_some\(\)/u);
-  assert.match(source, /let other_method[^\n]*!probe\.is_none\(\)/u);
+  assert.match(source, /let equalFalse[^\n]*!probe\.is_some\(\)/u);
+  assert.match(source, /let notTrue[^\n]*!probe\.is_some\(\)/u);
+  assert.match(source, /let otherMethod[^\n]*!probe\.is_none\(\)/u);
   assert.doesNotMatch(source, /single\.is_none\(/u);
   assert.match(source, /value\.is_none\(\)/u);
   assert.match(source, /value\.is_some\(\)/u);
@@ -372,8 +372,8 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "";
-  assert.match(source, /widget_alias::require_local_future::<_>\(complete_later\(\)\)/u);
-  assert.match(source, /widget_alias::require_send_static_future::<_>\(complete_later\(\)\)/u);
+  assert.match(source, /widget_alias::require_local_future::<_>\(completeLater\(\)\)/u);
+  assert.match(source, /widget_alias::require_send_static_future::<_>\(completeLater\(\)\)/u);
   writeGeneratedArtifacts(project.root, result.artifacts);
   const run = runCargo(project.manifestPath, ["run", "--quiet", "--locked"]);
   assert.equal(run.status, 0, run.stderr);
@@ -481,22 +481,22 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   const source = result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "";
   assert.match(source, /widget_alias::choose_borrowed_mixed::<i32, 3>\(short, long\)/u);
-  assert.match(source, /fn increment_borrowed<'l>\(value: &'l mut i32\)/u);
+  assert.match(source, /fn incrementBorrowed<'L>\(value: &'L mut i32\)/u);
   assert.match(source, /widget_alias::increment_borrowed\(value\)/u);
-  assert.match(source, /ModuleCell<for<'l> fn\(&'l i32\) -> &'l i32> = rt::ModuleCell::initialized\(borrowed_identity\)/u);
+  assert.match(source, /ModuleCell<for<'L> fn\(&'L i32\) -> &'L i32> = rt::ModuleCell::initialized\(borrowedIdentity\)/u);
   assert.match(
     source,
     /widget_alias::apply_borrowed\(\s*BORROWED_IDENTITY_CALLABLE\.with\(\|module_binding\| module_binding\.load\(\)\),\s*&short,?\s*\)/su,
   );
-  assert.doesNotMatch(source, /for<'l> fn\([^;]+::new/u);
+  assert.doesNotMatch(source, /for<'L> fn\([^;]+::new/u);
   assert.match(source, /widget_alias::inspect_view\(&view\)/u);
-  assert.match(source, /fn read_view<'l>\(view: &'l widget_alias::LifetimeView\) -> i32/u);
+  assert.match(source, /fn readView<'L>\(view: &'L widget_alias::LifetimeView\) -> i32/u);
   assert.match(
     source,
-    /fn read_view<'l>[^}]+<widget_alias::LifetimeView as widget_alias::View>::value\(view\)/u,
+    /fn readView<'L>[^}]+<widget_alias::LifetimeView as widget_alias::View>::value\(view\)/u,
   );
-  assert.match(source, /fn increment_view<'l>\(view: &'l mut widget_alias::LifetimeView\)/u);
-  assert.match(source, /fn increment_view<'l>[^}]+view\.increment\(\)/u);
+  assert.match(source, /fn incrementView<'L>\(view: &'L mut widget_alias::LifetimeView\)/u);
+  assert.match(source, /fn incrementView<'L>[^}]+view\.increment\(\)/u);
   assert.doesNotMatch(source, /widget_alias::LifetimeView::increment\(&mut view\)/u);
   assert.match(source, /widget_alias::opaque_borrow\(&short\)/u);
   assert.match(source, /widget_alias::opaque_mixed::<i32, 3>\(value\)/u);
@@ -555,11 +555,11 @@ export function rejected(value: Widget<string>): Widget<string> {
     target: { id: "rust", options: { projectFile: project.manifestPath } },
     files: {
       "index.ts": `
-import { unsafeContext } from "@tsonic/core/lang.js";
+import { unsafecontext } from "@tsonic/core/lang.js";
 import type { float32, int32 } from "@tsonic/core/types.js";
 import { integer_format, variadic_printf } from "@tsonic/rust/crates/widget_alias/index.js";
 export function rejected(value: float32): int32 {
-  return unsafeContext(variadic_printf(integer_format(), value));
+  return unsafecontext(variadic_printf(integer_format(), value));
 }
 `,
     },

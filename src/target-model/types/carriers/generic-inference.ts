@@ -24,7 +24,7 @@ export function inferRustTargetTypeParameterBindings(
   parameterNames: ReadonlySet<string>,
 ): ReadonlyMap<string, TargetTypeRef> | undefined {
   return inferRustTargetGenericBindings(pattern, actual, {
-    typeNames: parameterNames,
+    typeIdentities: parameterNames,
     lifetimeIdentities: new Set(),
     constIdentities: new Set(),
   })?.types;
@@ -66,7 +66,7 @@ function disjointArguments(left: readonly RustTargetGenericArgument[], right: re
 }
 
 export interface RustTargetGenericParameterSet {
-  readonly typeNames: ReadonlySet<string>;
+  readonly typeIdentities: ReadonlySet<string>;
   readonly lifetimeIdentities: ReadonlySet<string>;
   readonly constIdentities: ReadonlySet<string>;
 }
@@ -191,10 +191,10 @@ export function inferRustTargetGenericBindings(
     right: TargetTypeRef,
     lifetimeContext: LifetimeInferenceContext,
   ): boolean {
-    if (left.kind === "type-parameter" && parameters.typeNames.has(left.name)) {
-      const existing = types.get(left.name);
+    if (left.kind === "type-parameter" && parameters.typeIdentities.has(left.identity)) {
+      const existing = types.get(left.identity);
       if (existing === undefined) {
-        types.set(left.name, right);
+        types.set(left.identity, right);
         return true;
       }
       return rustTargetTypeRefEquals(existing, right);
@@ -276,7 +276,8 @@ export function inferRustTargetGenericBindings(
           });
       }
       case "closure": {
-        if (right.kind !== "closure" || left.args.length !== right.args.length) return false;
+        if (right.kind !== "closure" || left.args.length !== right.args.length ||
+          (left.callTrait ?? "Fn") !== (right.callTrait ?? "Fn")) return false;
         const nested = matchBinder(left.lifetimeBinder, right.lifetimeBinder, lifetimeContext);
         return nested !== undefined && left.args.every((argument, index) =>
           match(argument, right.args[index]!, nested)) &&

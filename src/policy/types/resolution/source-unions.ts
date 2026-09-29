@@ -42,52 +42,58 @@ export function retainRustSourceUnionInstantiation(
     }
   }
   const instantiatedContext = { ...context, sourceTypeParameterSubstitutions: substitutions };
-  const selected = members.map(member => ({
-    sourceType: member,
-    carrier: resolveRustTargetType(member, instantiatedContext, options, resolving),
-  }));
-  if (selected.some(member => member.carrier === undefined)) return undefined;
-  const used = new Set<Type>();
-  const variants = template.variants.map((variant, index) => {
-    const expected = expectedVariants[index];
-    const origin = sourceDeclarations(variant.sourceType, context);
-    const matches = selected.filter(member => {
-      if (!rustTargetTypeRefEquals(expected?.carrier, member.carrier)) return false;
-      if (variant.sourceType === member.sourceType) return true;
-      const declarations = sourceDeclarations(member.sourceType, context);
-      return origin.length !== 0 && declarations.length === origin.length &&
-        declarations.every(declaration => origin.includes(declaration));
+  const alreadyResolving = resolving.has(sourceType);
+  resolving.add(sourceType);
+  try {
+    const selected = members.map(member => ({
+      sourceType: member,
+      carrier: resolveRustTargetType(member, instantiatedContext, options, resolving),
+    }));
+    if (selected.some(member => member.carrier === undefined)) return undefined;
+    const used = new Set<Type>();
+    const variants = template.variants.map((variant, index) => {
+      const expected = expectedVariants[index];
+      const origin = sourceDeclarations(variant.sourceType, context);
+      const matches = selected.filter(member => {
+        if (!rustTargetTypeRefEquals(expected?.carrier, member.carrier)) return false;
+        if (variant.sourceType === member.sourceType) return true;
+        const declarations = sourceDeclarations(member.sourceType, context);
+        return origin.length !== 0 && declarations.length === origin.length &&
+          declarations.every(declaration => origin.includes(declaration));
+      });
+      if (matches.length !== 1 || used.has(matches[0]!.sourceType)) return undefined;
+      const selectedMember = matches[0]!;
+      used.add(selectedMember.sourceType);
+      const shape = options.sourceTypes.structuralObjectForType(selectedMember.sourceType, selectedMember.carrier);
+      return {
+        name: variant.name,
+        sourceType: selectedMember.sourceType,
+        carrier: selectedMember.carrier!,
+        ...(shape === undefined ? {} : { shape }),
+      };
     });
-    if (matches.length !== 1 || used.has(matches[0]!.sourceType)) return undefined;
-    const selectedMember = matches[0]!;
-    used.add(selectedMember.sourceType);
-    const shape = options.sourceTypes.structuralObjectForType(selectedMember.sourceType, selectedMember.carrier);
-    return {
-      name: variant.name,
-      sourceType: selectedMember.sourceType,
-      carrier: selectedMember.carrier!,
-      ...(shape === undefined ? {} : { shape }),
-    };
-  });
-  if (variants.some(variant => variant === undefined)) return undefined;
-  const selectedProperties = semantics.types.propertyInfos(sourceType).map(property => ({
-    symbol: property.symbol,
-    declarations: Object.freeze([...new Set([
-      ...semantics.declarations.symbolDeclarations(property.symbol),
-      ...property.rootSymbols.flatMap(symbol => semantics.declarations.symbolDeclarations(symbol)),
-    ])]),
-  }));
-  if (selectedProperties.some(property => property.declarations.length === 0 ||
-    property.declarations.some(declaration => !rustSourceUnionMemberDeclarationIsOwned(declaration, context, options)))) {
-    return undefined;
+    if (variants.some(variant => variant === undefined)) return undefined;
+    const selectedProperties = semantics.types.propertyInfos(sourceType).map(property => ({
+      symbol: property.symbol,
+      declarations: Object.freeze([...new Set([
+        ...semantics.declarations.symbolDeclarations(property.symbol),
+        ...property.rootSymbols.flatMap(symbol => semantics.declarations.symbolDeclarations(symbol)),
+      ])]),
+    }));
+    if (selectedProperties.some(property => property.declarations.length === 0 ||
+      property.declarations.some(declaration => !rustSourceUnionMemberDeclarationIsOwned(declaration, context, options)))) {
+      return undefined;
+    }
+    return options.sourceTypes.registerSourceUnion({
+      declaration: template.declaration,
+      sourceType,
+      carrier,
+      variants: variants as RustSourceUnion["variants"],
+      selectedProperties,
+    }) ? carrier : undefined;
+  } finally {
+    if (!alreadyResolving) resolving.delete(sourceType);
   }
-  return options.sourceTypes.registerSourceUnion({
-    declaration: template.declaration,
-    sourceType,
-    carrier,
-    variants: variants as RustSourceUnion["variants"],
-    selectedProperties,
-  }) ? carrier : undefined;
 }
 
 function sourceDeclarations(type: Type, context: RustTargetTypeResolutionContext): readonly Node[] {

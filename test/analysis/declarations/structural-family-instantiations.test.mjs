@@ -7,9 +7,10 @@ import { retainRustStructuralInstantiation } from "../../../dist/policy/types/re
 import { rustGenericsWithAssociatedBounds } from "../../../dist/backend/planner/types/generic-bounds.js";
 import { rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from "../../../dist/target-model/types/carriers/source-types.js";
 import { selectRustStructuralFieldProjection } from "../../../dist/policy/types/structural-fields.js";
+import { closedMetadataKey } from "../../../dist/target-model/metadata/closed-data.js";
 
 const scalar = { kind: "source-primitive", name: "int32" };
-const parameter = { kind: "type-parameter", name: "T" };
+const parameter = { kind: "type-parameter", identity: "T", name: "T" };
 const projection = identity => ({ kind: "associated-type", owner: parameter, name: "Output",
   trait: { kind: "trait-ref", id: identity, path: identity,
     sourceItem: { fileName: "/source.ts", typeName: identity }, genericArguments: [], associatedConstraints: [] } });
@@ -121,7 +122,7 @@ function fixture() {
 
 test("structural storage parameterizes independent family outputs without reversing their source argument", () => {
   const template = carrier([projection("Storage"), projection("Container"), projection("Storage"),
-    { kind: "type-parameter", name: "Storage0" }]);
+    { kind: "type-parameter", identity: "Storage0", name: "Storage0" }]);
   const fields = rustStructuralObjectCarrierValue(rustStructuralGenericCarrier(template).carrier).fields;
   assert.deepEqual(fields.map(entry => entry.type.name), ["Storage1", "Storage2", "Storage1", "Storage0"]);
   assert.deepEqual(rustStructuralGenericCarrier(carrier([scalar])).carrier, carrier([scalar]));
@@ -160,7 +161,8 @@ test("selected record instantiation retains exact reordered members and one gene
   assert.equal(plan.definitions[0].genericParameters.length, 2);
   assert.deepEqual(plan.definitionForCarrier(plan.definitions[0].carrier), plan.definitions[0]);
   assert.deepEqual(plan.definitionForCarrier(plan.definitions[0].carrier).genericArguments.map(argument => argument.type),
-    [{ kind: "type-parameter", name: "Storage0" }, { kind: "type-parameter", name: "Storage1" }]);
+    ["Storage", "Container"].map((name, index) => ({ kind: "type-parameter",
+      identity: `structural-storage:${closedMetadataKey(projection(name))}`, name: `Storage${index}` })));
   const selected = plan.definitionForCarrier(input.selectedCarrier);
   assert.deepEqual(selected.genericArguments.map(argument => argument.type), [scalar, scalar]);
   assert.deepEqual(selected.fields.map(entry => entry.carrier), [scalar, scalar]);

@@ -43,7 +43,7 @@ test("source fields retain exact declaration identity when reselected", () => {
   const fact = {
     kind: "source-field", operationId: "field", declaration,
     accessMode: "read", storage: "project-object", storageIndex: 0,
-    receiverCarrier: { kind: "type-parameter", name: "Owner" },
+    receiverCarrier: { kind: "type-parameter", identity: "Owner", name: "Owner" },
     resultCarrier: { kind: "source-primitive", name: "int32" },
     valueSemantics: { kind: "stored" },
   };

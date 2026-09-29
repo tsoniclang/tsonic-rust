@@ -649,7 +649,7 @@ test("trait signatures count their semicolon and break before long return types"
       generics: emptyRustGenerics,
       name: "Contract",
       visibility: "crate",
-      functions: [{
+      members: [{ kind: "function",
         name: "__tsonic_downcast",
         generics: emptyRustGenerics,
         selfParam: { kind: "rc" },

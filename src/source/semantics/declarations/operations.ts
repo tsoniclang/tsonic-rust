@@ -76,6 +76,19 @@ export function rustReferenceOperationDeclarations(): readonly ProviderExportDec
         referenceTypeParameters,
       ),
     ]),
+    functionDeclaration(rustSourceOperationExportIds.range, [
+      signature(rustSourceOperationSignatureIds.range,
+        [{ name: "start", type: value }, { name: "end", type: value }],
+        { kind: "provider-ref", moduleSpecifier: "@tsonic/rust/core/ops.js",
+          exportName: "Range", typeArguments: [value] }),
+    ]),
+    functionDeclaration(rustSourceOperationExportIds.propagate, [
+      signature(rustSourceOperationSignatureIds.propagate,
+        [{ name: "result", type: { kind: "provider-ref",
+          moduleSpecifier: "@tsonic/rust/core/result.js", exportName: "Result",
+          typeArguments: [value, typeParameter("E")] } }],
+        value, [{ name: "T" }, { name: "E" }]),
+    ]),
   ];
 }
 

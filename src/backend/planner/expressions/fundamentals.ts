@@ -31,7 +31,7 @@ import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagno
 import { negateRustBooleanExpression, rustStringConcat } from "../../target-ast/expressions.js";
 import { parseSourceBigIntLiteral } from "../../../target-model/syntax/literals.js";
 import { planExpression } from "./entry.js";
-import { planRustFallibleReturnExpression } from "../statements/completion-exits.js";
+import { planRustReturnExpression } from "../statements/completion-exits.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
 import { requireProviderArgumentPassingFacts } from "./calls/arguments.js";
 import { rustArgumentPassingMode } from "../../../analysis/facts/parameter-passing.js";
@@ -92,9 +92,10 @@ export function planGeneratorResumeExpression(
         path: "rt::GeneratorResume::Return",
         elements: [{ kind: "binding", name: returnName }],
       },
-      expression: planRustFallibleReturnExpression(
+      expression: planRustReturnExpression(
         { kind: "path", path: returnName },
         context,
+        true,
       ),
     }, {
       pattern: {

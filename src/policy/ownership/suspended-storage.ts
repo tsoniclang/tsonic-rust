@@ -12,7 +12,7 @@ export function selectRustSuspendedStorageLifetime(
     const references = rustTargetGenericReferences(carrier);
     if (references.hasUnnameableLifetime) return undefined;
     for (const lifetime of references.lifetimes) candidates.set(rustLifetimeKey(lifetime), lifetime);
-    for (const name of references.typeNames) {
+    for (const name of references.typeIdentities) {
       const parameter = contract?.parameters.find(parameter => parameter.kind === "type" && parameter.targetName === name);
       for (const lifetime of parameter?.kind === "type" ? parameter.outlives : []) {
         if (lifetime.kind !== "static") candidates.set(rustLifetimeKey(lifetime), lifetime);

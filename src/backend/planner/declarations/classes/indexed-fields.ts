@@ -10,6 +10,7 @@ import { rustGenericRequirementBounds } from "../../types/generic-bounds.js";
 import { rustAssociatedPredicates } from "../../types/associated-bounds.js";
 import { readRustStoredObjectField, writeRustStoredObjectField } from "../../objects/project-storage.js";
 import { createRustSyntheticNameState } from "../../names/synthetic.js";
+import { rustGeneratedTypeParameterContext } from "../../names/type-parameters.js";
 
 export function planRustIndexedFieldImplementation(
   implementation: RustSourceTypeFamilyImplementation,
@@ -18,19 +19,21 @@ export function planRustIndexedFieldImplementation(
   const field = implementation.field;
   const key = implementation.arguments[0];
   if (implementation.family.kind !== "indexed" || field === undefined || key?.kind !== "type") return undefined;
+  const contract = context.input.program.declarationGenericRequirements.contractForCarrier({
+    kind: "tuple", elements: [implementation.owner, implementation.output],
+  });
+  if (contract === undefined) return undefined;
+  context = rustGeneratedTypeParameterContext(contract.typeParameters, [], context);
   const owner = rustTypeFromCarrierInContext(implementation.owner, context);
   const keyType = rustTypeFromCarrierInContext(key.type, context);
   const output = rustTypeFromCarrierInContext(implementation.output, context);
   const error = rustTypeFromCarrierInContext(rustProgramErrorTargetType(), context);
   const boundary = rustCurrentErrorBoundary(context);
-  const contract = context.input.program.declarationGenericRequirements.contractForCarrier({
-    kind: "tuple", elements: [implementation.owner, implementation.output],
-  });
   const parameters = rustTargetGenericReferences(implementation.owner);
   if (owner === undefined || keyType === undefined || output === undefined || error === undefined || boundary === undefined ||
-    contract === undefined || parameters.lifetimes.length !== 0 || parameters.constIdentities.length !== 0) return undefined;
+    parameters.lifetimes.length !== 0 || parameters.constIdentities.length !== 0) return undefined;
   const generics: RustGenerics = {
-    parameters: contract.typeParameters.map(parameter => ({ kind: "type", name: parameter.name,
+    parameters: contract.typeParameters.map(parameter => ({ kind: "type", name: context.typeParameterNames?.get(parameter.identity) ?? parameter.name,
       bounds: rustGenericRequirementBounds(parameter.requirements) })),
     wherePredicates: rustAssociatedPredicates(contract.associatedTypes, context),
   };
@@ -40,7 +43,7 @@ export function planRustIndexedFieldImplementation(
   if (storage === undefined) return undefined;
   const trait: RustType = { kind: "named", path: "rt::Field", genericArguments: [{ kind: "type", type: keyType }] };
   const items: RustItem[] = [{ kind: "impl", trait, target: storage, generics,
-    associatedTypes: [{ name: "Output", type: output }, { name: "Storage", type: storage }], functions: [],
+    members: [{ kind: "type", name: "Output", type: output }, { kind: "type", name: "Storage", type: storage }],
   }];
   for (const access of field.sharedWrite ? ["read", "write"] as const : ["read"] as const) {
     const bodyContext: RustPlanContext = { ...context, fallibleBoundary: boundary,
@@ -61,7 +64,7 @@ export function planRustIndexedFieldImplementation(
       trait: { kind: "named", path: access === "read" ? "rt::ReadFieldOf" : "rt::WriteFieldOf", genericArguments: [
         { kind: "type", type: owner }, { kind: "type", type: keyType }, { kind: "type", type: error },
       ] },
-      functions: [{ name: access === "read" ? "read_field" : "write_field", visibility: "private",
+      members: [{ kind: "function", name: access === "read" ? "read_field" : "write_field", visibility: "private",
         generics: emptyRustGenerics,
         params: [
           { name: "owner", type: { kind: "reference", referent: owner, mutable: false } },

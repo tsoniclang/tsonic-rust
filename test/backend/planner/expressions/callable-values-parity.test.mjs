@@ -132,7 +132,7 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /fn parse_positive\(value: i32\) -> Result<i32, rt::TsonicError>/u);
+  assert.match(source, /fn parsePositive\(value: i32\) -> Result<i32, rt::TsonicError>/u);
   assert.doesNotMatch(source, /rt::Callable<\(i32,\), rt::TsonicResult<i32>>/u);
   assert.match(source, /Err\(rt::TsonicError::from\(rt::JsError::error\("negative"\)\)\)/u);
   validateGeneratedProject("callable-top-level", result.artifacts, { run: true });
@@ -227,7 +227,8 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /rt::Location::allocate\(seed\)/u);
+  assert.match(source, /core::cell::Cell::new\(seed\)/u);
+  assert.doesNotMatch(source, /Location::allocate|capture_value = value\.clone/u);
   assert.match(source, /rt::Callable::<\(\), rt::TsonicResult<i32>>::new/u);
   validateGeneratedProject("callable-capture", result.artifacts, { run: true });
 });

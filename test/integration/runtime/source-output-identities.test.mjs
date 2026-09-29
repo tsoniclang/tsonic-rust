@@ -263,7 +263,7 @@ export function childValue(): string { return "child"; }
   );
   assert.match(
     artifactText(result, "src/index.rs"),
-    /crate::template::parent_value\(\).*crate::template::template_2::child_value\(\)/su,
+    /crate::template::parentValue\(\).*crate::template::template_2::childValue\(\)/su,
   );
 });
 

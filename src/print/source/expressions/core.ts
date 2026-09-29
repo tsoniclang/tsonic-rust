@@ -1,5 +1,6 @@
 import { printRustBlockStatements } from "../blocks.js";
 import { escapeRustChar, escapeRustString, printRustPattern } from "../patterns.js";
+import { printRustAttribute } from "../attributes.js";
 import { printRustConstArgument, printRustType } from "../types.js";
 import {
   printRustAssociatedCallOwner,
@@ -224,15 +225,15 @@ function printRustBlockExpressionContents(
   printValue: (value: RustExpr) => string = printRustExpr,
 ): string {
   const bindings = expression.bindings.map((binding) => {
-    const attributes = binding.attrs?.join(" ") ?? "";
+    const attributes = binding.attrs?.map(attribute => printRustAttribute(attribute)).join(" ") ?? "";
     const initializer = binding.value === undefined ? "" : ` = ${printRustExpr(binding.value)}`;
     const declaration = `let ${binding.mutable === true ? "mut " : ""}${binding.name}${binding.type === undefined ? "" : `: ${printRustType(binding.type)}`}${initializer};`;
     return attributes.length === 0 ? declaration : `${attributes} ${declaration}`;
   });
   return [
-    ...(expression.innerAttrs ?? []),
+    ...(expression.innerAttrs ?? []).map(attribute => printRustAttribute(attribute, true)),
     ...bindings,
-    ...(expression.valueAttrs ?? []),
+    ...(expression.valueAttrs ?? []).map(attribute => printRustAttribute(attribute)),
     printValue(expression.value),
   ].join(" ");
 }

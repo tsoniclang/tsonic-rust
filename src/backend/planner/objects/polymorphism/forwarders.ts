@@ -93,6 +93,7 @@ export function planProjectDowncastRouteImplementation(
   return returnType === undefined
     ? undefined
     : {
+        kind: "function",
         name: route.slot,
         visibility: "private",
         generics: emptyRustGenerics,
@@ -117,7 +118,7 @@ export function planRootMethodImplementation(
   context: RustPlanContext,
 ): RustImplFunction | undefined {
   const specialization = rustCallableSpecialization(
-    variant.sourceTypeParameterNames,
+    variant.sourceTypeParameterIdentities,
     variant.targetTypeArguments,
   );
   return specialization === undefined
@@ -284,7 +285,7 @@ export function planRootMethodForwarder(
   }
   const contractRelation = context.input.program.projectTypes.relationship(concreteCarrier, contractOwner);
   const specialization = rustCallableSpecialization(
-    variant.sourceTypeParameterNames,
+    variant.sourceTypeParameterIdentities,
     variant.targetTypeArguments,
   );
   const contractShape = contractRelation.kind === "related" && specialization !== undefined

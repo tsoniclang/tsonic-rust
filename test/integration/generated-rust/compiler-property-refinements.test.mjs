@@ -58,7 +58,7 @@ for (const surfaces of [[], ["js"]]) {
     });
     assert.deepEqual(result.diagnostics, []);
     const source = result.artifacts.find(artifact => artifact.path === "src/index.rs").text;
-    assert.match(source, /fn has_present_text\(text: &str\) -> bool \{\s*true\s*\}/u);
+    assert.match(source, /fn hasPresentText\(text: &str\) -> bool \{\s*true\s*\}/u);
     assert.equal(validateGeneratedProject(`nullish-member-storage-${surfaces[0] ?? "native"}`, result.artifacts, { run: true }).status, 0);
   });
 }

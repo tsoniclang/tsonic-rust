@@ -112,10 +112,10 @@ function classifyAdapter(
       walk.context.sourceLifetimes.parameterFor(parameter)?.kind !== "lifetime");
     if (parameters.length !== (variant?.targetTypeArguments.length ?? 0)) return undefined;
     for (const [index, parameter] of parameters.entries()) {
-      const name = parameter === undefined ? undefined : ast.name(parameter);
+      const selected = walk.context.sourceLifetimes.parameterFor(parameter);
       const argument = variant?.targetTypeArguments[index];
-      if (name === undefined || argument === undefined) return undefined;
-      result.set(ast.text(name), argument);
+      if (selected?.kind !== "type" || argument === undefined) return undefined;
+      result.set(selected.identity, argument);
     }
     return result;
   }

@@ -9,10 +9,10 @@ const integer = { kind: "source-primitive", name: "uint64" };
 
 function fixture(options = {}) {
   const selected = providerIndexedPolicyFixture(options.keys);
-  const parameters = [{ kind: "type", sourceName: "T" }];
+  const parameters = [{ kind: "type", targetIdentity: "T", sourceName: "T" }];
   const argument = { kind: "type", type: integer };
   const carrier = rustNamedTargetType("native.box", "native::Box", [argument]);
-  const generic = rustNamedTargetType("native.box", "native::Box", [{ kind: "type", type: { kind: "type-parameter", name: "T" } }]);
+  const generic = rustNamedTargetType("native.box", "native::Box", [{ kind: "type", type: { kind: "type-parameter", identity: "T", name: "T" } }]);
   const owner = { providerId: "fixture", providerVersion: "1", providerModuleId: "native", moduleSpecifier: "@fixture/native", exportId: "box", exportName: "Box" };
   const facts = new Map();
   const rows = selected.evidence.properties.map((member, index) => {
@@ -20,7 +20,7 @@ function fixture(options = {}) {
     if (!options.missingFact || index === 0) for (const subject of member.subjects) facts.set(subject, identity);
     return { ...identity, operationKind: "property", target: { form: "receiver-field", name: `field_${index}` },
       resultCarrier: options.conflicting && index === 1
-        ? { kind: "source-primitive", name: "int64" } : { kind: "type-parameter", name: "T" } };
+        ? { kind: "source-primitive", name: "int64" } : { kind: "type-parameter", identity: "T", name: "T" } };
   });
   const get = (subject, key) => key === providerVirtualDeclarationFactKey && !options.unowned ? facts.get(subject) : undefined;
   const context = {

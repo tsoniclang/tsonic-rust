@@ -94,15 +94,15 @@ export function inferred(value: Ref<int32, Placeholder>): Ref<int32, Placeholder
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /pub type Shared<'l> = &'l i32;/u);
-  assert.match(source, /pub struct View<'l>/u);
-  assert.match(source, /value: &'l i32/u);
-  assert.match(source, /pub fn open_view<'l>\(value: &'l i32\) -> View<'l>/u);
-  assert.match(source, /pub fn pick<'a, 'b: 'a, T: 'a \+ \?Sized>/u);
-  assert.match(source, /short: &'a T/u);
-  assert.match(source, /long: &'b T/u);
-  assert.match(source, /-> &'a T/u);
-  assert.match(source, /value: &'a &'b mut i32/u);
+  assert.match(source, /pub type Shared<'L> = &'L i32;/u);
+  assert.match(source, /pub struct View<'L>/u);
+  assert.match(source, /value: &'L i32/u);
+  assert.match(source, /pub fn openView<'L>\(value: &'L i32\) -> View<'L>/u);
+  assert.match(source, /pub fn pick<'A, 'B: 'A, T: 'A \+ \?Sized>/u);
+  assert.match(source, /short: &'A T/u);
+  assert.match(source, /long: &'B T/u);
+  assert.match(source, /-> &'A T/u);
+  assert.match(source, /value: &'A &'B mut i32/u);
   assert.match(source, /value: &'static i32/u);
   assert.match(source, /value: &'_ i32/u);
   validateGeneratedProject("native-lifetime-declaration-proof", result.artifacts);
@@ -228,7 +228,7 @@ export function main(): void {
   assert.match(source, /\*value \+= 1;/u);
   assert.match(source, /\*target = \*source \+ 1;/u);
   assert.match(source, /fn read\(value: &i32\) -> i32/u);
-  assert.match(source, /fn choose<'a, 'b: 'a>/u);
+  assert.match(source, /fn choose<'A, 'B: 'A>/u);
   assert.match(source, /read\(choose\(&value, &copied\)\)/u);
   assert.match(source, /increment\(&mut value\)/u);
   assert.match(source, /read\(&value\)/u);
@@ -313,21 +313,21 @@ export async function* borrowedAsyncValues<L extends Life>(
   const source = artifactText(result, "src/index.rs");
   assert.match(
     source,
-    /#\[allow\(clippy::needless_lifetimes, reason = "explicit lifetime contract"\)\]\npub async fn retain<'l>/u,
+    /#\[allow\(clippy::needless_lifetimes, reason = "explicit lifetime contract"\)\]\n#\[allow\(non_snake_case, reason = "preserves the authored source name"\)\]\npub async fn retain<'L>/u,
   );
-  assert.match(source, /pub async fn retain<'l>\(value: &'l i32\) -> &'l i32/u);
-  assert.match(source, /reader: impl for<'l> Fn\(&'l i32\) -> i32/u);
-  assert.match(source, /pub fn accept_reader\(reader: impl for<'l> Fn\(&'l i32\) -> i32\) -> i32/u);
+  assert.match(source, /pub async fn retain<'L>\(value: &'L i32\) -> &'L i32/u);
+  assert.match(source, /reader: impl for<'L> Fn\(&'L i32\) -> i32/u);
+  assert.match(source, /pub fn acceptReader\(reader: impl for<'L> Fn\(&'L i32\) -> i32\) -> i32/u);
   assert.match(source, /reader\(&value\)/u);
-  assert.match(source, /pub fn static_reader\(value: &'static i32\)/u);
-  assert.match(source, /pub fn invoke_captured\(value: &'static i32\)/u);
+  assert.match(source, /pub fn staticReader\(value: &'static i32\)/u);
+  assert.match(source, /pub fn invokeCaptured\(value: &'static i32\)/u);
   assert.match(source, /value: &'static i32/u);
   assert.match(source, /\*value/u);
-  assert.match(source, /pub fn borrowed_values<'l>\(value: &'l i32\) -> rt::BorrowedGenerator<'l, i32, \(\), \(\)>/u);
-  assert.match(source, /let mut generator: rt::BorrowedGenerator<'_, i32, \(\), \(\)> = borrowed_values\(&value\);/u);
-  assert.match(source, /pub fn borrowed_pair<'short, 'middle: 'short, 'long: 'middle>/u);
-  assert.match(source, /-> rt::BorrowedGenerator<'short, i32, i32, \(\)>/u);
-  assert.match(source, /pub fn borrowed_async_values<'l>\(value: &'l i32\) -> rt::BorrowedAsyncGenerator<'l, i32, \(\), \(\)>/u);
+  assert.match(source, /pub fn borrowedValues<'L>\(value: &'L i32\) -> rt::BorrowedGenerator<'L, i32, \(\), \(\)>/u);
+  assert.match(source, /let mut generator: rt::BorrowedGenerator<'_, i32, \(\), \(\)> = borrowedValues\(&value\);/u);
+  assert.match(source, /pub fn borrowedPair<'Short, 'Middle: 'Short, 'Long: 'Middle>/u);
+  assert.match(source, /-> rt::BorrowedGenerator<'Short, i32, i32, \(\)>/u);
+  assert.match(source, /pub fn borrowedAsyncValues<'L>\(value: &'L i32\) -> rt::BorrowedAsyncGenerator<'L, i32, \(\), \(\)>/u);
   assert.match(source, /rt::BorrowedGenerator::new/u);
   validateGeneratedProject("native-lifetime-retention-proof", result.artifacts);
 });
@@ -412,7 +412,7 @@ export function invalid<L extends Life>(value: Ref<int32, L>): Ref<int32, L> {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /pub fn invalid<'l>\(_value: &'l i32\) -> &'l i32/u);
+  assert.match(source, /pub fn invalid<'L>\(value: &'L i32\) -> &'L i32/u);
   assert.match(source, /&local/u);
 
   const projectRoot = writeGeneratedProject("invalid-native-lifetime-proof", result.artifacts);

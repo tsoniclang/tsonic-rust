@@ -10,7 +10,7 @@ import { allocateRustSyntheticTypeName, type RustSyntheticNameState } from "../.
 import { rustSelfParameter } from "../../declarations/callables/self-parameter.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { rustStructuralDispatchType } from "../project-structural-types.js";
-import { rustStructuralShapeGenerics } from "../structural-generics.js";
+import { rustStructuralShapeGenerics, rustStructuralShapeContext } from "../structural-generics.js";
 import { checkRustDataWrite } from "../data-writes.js";
 import type { RustStructuralObjectFieldInitializer } from "../project-storage.js";
 
@@ -36,8 +36,9 @@ export function createStructuralLiteralImplementation(
   const shape = context.input.program.structuralShapes.definitions.find(candidate =>
     candidate.targetName === instance?.targetName && candidate.componentId === instance.componentId);
   if (shape?.dispatchName === undefined || shape.construction !== undefined) return undefined;
-  const wrapper = rustTypeFromCarrierInContext(shape.carrier, context);
   const instantiatedWrapper = rustTypeFromCarrierInContext(carrier, context);
+  context = rustStructuralShapeContext(shape, context);
+  const wrapper = rustTypeFromCarrierInContext(shape.carrier, context);
   const trait = rustStructuralDispatchType(shape.carrier, context);
   const errorType = rustTypeFromCarrierInContext(rustProgramErrorTargetType(), context);
   if (wrapper?.kind !== "named" || instantiatedWrapper?.kind !== "named" || trait === undefined || errorType === undefined) return undefined;
@@ -76,7 +77,7 @@ export function createStructuralLiteralImplementation(
       });
       if (protocol === undefined || storage === undefined || result === undefined || params === undefined ||
         params.some(parameter => parameter === undefined) || !store(field.targetName, storageIndex, "value", storage)) return undefined;
-      functions.push({ name: field.targetName, visibility: "private", generics: emptyRustGenerics,
+      functions.push({ kind: "function", name: field.targetName, visibility: "private", generics: emptyRustGenerics,
         selfParam: rustSelfParameter("rc"), params: params as NonNullable<typeof params[number]>[], returnType: result, errorType,
         body: { statements: [{ kind: "let", name: "callable", mutable: false, init: read(field.targetName) }, { kind: "tail", expr: {
           kind: "method-call", receiver: { kind: "path", path: "callable" }, method: "call", args: [{ kind: "tuple-literal",
@@ -118,20 +119,20 @@ export function createStructuralLiteralImplementation(
         setter = { kind: "evaluate-then", effect: write, discard: "unit", value: { kind: "call", path: "Ok", args: [{ kind: "tuple-literal", elements: [] }] } };
       }
     }
-    functions.push({ name: property.getterTargetName, visibility: "private", generics: emptyRustGenerics,
+    functions.push({ kind: "function", name: property.getterTargetName, visibility: "private", generics: emptyRustGenerics,
       selfParam: rustSelfParameter(property.selfMode), params: [], returnType: type, errorType,
       body: { statements: [{ kind: "tail", expr: getter }] } });
     if (property.setterTargetName !== undefined) {
       if (setter === undefined) return undefined;
-      functions.push({ name: property.setterTargetName, visibility: "private", generics: emptyRustGenerics,
+      functions.push({ kind: "function", name: property.setterTargetName, visibility: "private", generics: emptyRustGenerics,
         selfParam: rustSelfParameter(property.selfMode), params: [{ name: "value", type }], returnType: { kind: "unit" }, errorType,
         body: { statements: [{ kind: "tail", expr: setter }] } });
     }
   }
   return Object.freeze({ kind: "structural", expression, wrapperPath: instantiatedWrapper.path, stateName,
     slots: Object.freeze(slots), items: Object.freeze<RustItem[]>([
-      { kind: "struct", name: stateName, visibility: "crate", generics, derives: [], fields },
-      { kind: "impl", target: root, trait, generics, functions },
+      { kind: "struct", name: stateName, visibility: "crate", generics, fields },
+      { kind: "impl", target: root, trait, generics, members: functions },
     ]) });
 }
 

@@ -64,7 +64,7 @@ test("Rust safety planning consumes closed target facts without semantic reconst
       /getResolvedSignature|getResolvedSymbol|getSymbolAtLocation|getPropertyOfType|getTypeAtLocation|getTypeFromTypeNode/u,
     );
   }
-  assert.doesNotMatch(nativePlanner, /loadNativePointer|storeNativePointer|offsetNativePointer/u);
+  assert.doesNotMatch(nativePlanner, /loadNativePointer|storeNativePointer|offsetNativePointer|loadnativeptr|storenativeptr|offsetnativeptr/u);
   assert.doesNotMatch(nativePlanner, /sourceFacts|sourceName|memberName|propertyName/u);
 });
 

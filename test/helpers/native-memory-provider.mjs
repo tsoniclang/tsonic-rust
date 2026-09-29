@@ -5,20 +5,20 @@ export const nativeProviderInferredProofSource = `
 import * as native from "test:memory";
 import { abi } from "test:abi";
 import type { uint32 } from "@tsonic/core/types.js";
-import { memoryLayout, reinterpretRawPointer, loadPointer, storePointer, unsafeContext } from "@tsonic/core/lang.js";
-const word = memoryLayout<uint32>(abi, 4, 4, 4);
+import { memorylayout, reinterpretrawptr, loadptr, storeptr, unsafecontext } from "@tsonic/core/lang.js";
+const word = memorylayout<uint32>({ datalayout: abi, bytesize: 4, bytealignment: 4, stride: 4, fields: [] });
 export function run(): boolean {
-  unsafeContext();
+  unsafecontext();
   const raw = native.identity(native.acquire(31));
-  const pointer = reinterpretRawPointer(raw, word);
+  const pointer = reinterpretrawptr(raw, word);
   if (pointer === undefined) return false;
-  storePointer(native.relay(pointer), 52);
-  return native.readOriginal() === 52 && loadPointer(pointer) === 52;
+  storeptr(native.relay(pointer), 52);
+  return native.readOriginal() === 52 && loadptr(pointer) === 52;
 }
 export function released(): boolean { native.collect(); return native.liveLeases() === 0; }
 export function ordinaryLocation(): boolean {
   const pointer = native.identity(native.location(71));
-  return loadPointer(native.relay<uint32>(pointer)) === 71;
+  return loadptr(native.relay<uint32>(pointer)) === 71;
 }
 export function main(): void {
   if (!run() || !released() || !ordinaryLocation() || !released()) throw new Error("native inferred pointer lease");
@@ -31,7 +31,8 @@ export function nativeMemoryProvider(cratePath, { missingRelation = false, wrong
   const word = { kind: "source-primitive", name: "uint32" };
   const genericSource = { kind: "provider-ref", moduleSpecifier: "@tsonic/core/types.js", exportName: "Pointer",
     typeArguments: [{ kind: "type-parameter", name: "Value" }] };
-  const genericCarrier = rustSourceLocationTargetType({ kind: "type-parameter", name: "Value" });
+  const parameterCarrier = { kind: "type-parameter", identity: "memory:Value", name: "Value" };
+  const genericCarrier = rustSourceLocationTargetType(parameterCarrier);
   const definitions = [
     ["acquire", "acquire", [{ name: "value", type: word }],
       { kind: "provider-ref", moduleSpecifier: "@tsonic/core/types.js", exportName: "RawPointer" }, rustRawPointerTargetType()],
@@ -45,8 +46,8 @@ export function nativeMemoryProvider(cratePath, { missingRelation = false, wrong
     ["relay", "relay", [{ name: "pointer", type: genericSource }], genericSource, genericCarrier,
       [{ name: "Value" }], [genericCarrier]],
     ["identity", "identity", [{ name: "value", type: { kind: "type-parameter", name: "Value" } }],
-      { kind: "type-parameter", name: "Value" }, { kind: "type-parameter", name: "Value" },
-      [{ name: "Value" }], [{ kind: "type-parameter", name: "Value" }]],
+      { kind: "type-parameter", name: "Value" }, parameterCarrier,
+      [{ name: "Value" }], [parameterCarrier]],
   ];
   return createRustProviderPackage({
     id: "native-memory-proof", displayName: "Native memory proof", version: "1",
@@ -70,10 +71,10 @@ export function nativeMemoryProvider(cratePath, { missingRelation = false, wrong
           : resultCarrier,
         parameterCarriers: parameterCarriers ?? parameters.map(() => word),
         ...(typeParameters === undefined ? {} : {
-          genericParameters: typeParameters.map(parameter => ({ kind: "type", sourceName: parameter.name })),
+          genericParameters: typeParameters.map(parameter => ({ kind: "type", targetIdentity: `memory:${parameter.name}`, sourceName: parameter.name })),
         }),
         ...(typeParameters !== undefined || name === "location" ? { targetGenericArguments: [
-          ...(typeParameters ?? []).map(parameter => ({ kind: "type", type: { kind: "type-parameter", name: parameter.name } })),
+          ...(typeParameters ?? []).map(parameter => ({ kind: "type", type: { kind: "type-parameter", identity: `memory:${parameter.name}`, name: parameter.name } })),
           ...(name === "location" || name === "relay" ? [{ kind: "type", type: rustProgramErrorTargetType() }] : []),
         ] } : {}),
       })),
@@ -85,36 +86,36 @@ export const nativeProviderProofSource = `
 import { acquire as openRegion } from "test:memory";
 import * as native from "test:memory";
 import { abi } from "test:abi";
-import { memoryLayout, reinterpretRawPointer, toRawPointer, loadPointer, storePointer,
-  offsetRawPointer, equalPointer, keepAlive, unsafeContext } from "@tsonic/core/lang.js";
+import { memorylayout, reinterpretrawptr, torawptr, loadptr, storeptr,
+  offsetrawptr, equalptr, keepalive, unsafecontext } from "@tsonic/core/lang.js";
 import type { Pointer, RawPointer, uint32 } from "@tsonic/core/types.js";
-const word = memoryLayout<uint32>(abi, 4, 4, 4);
+const word = memorylayout<uint32>({ datalayout: abi, bytesize: 4, bytealignment: 4, stride: 4, fields: [] });
 function acquire(): uint32 { return 99; }
 function retained(): Pointer<uint32> {
-  unsafeContext();
+  unsafecontext();
   const raw = openRegion(31);
   const saved: RawPointer[] = [raw];
   const holder: { pointer: RawPointer } = { pointer: saved[0] };
-  const first = reinterpretRawPointer(holder.pointer, word);
-  const second = reinterpretRawPointer(offsetRawPointer(raw, 4, abi), word);
+  const first = reinterpretrawptr(holder.pointer, word);
+  const second = reinterpretrawptr(offsetrawptr(raw, 4, abi), word);
   if (first === undefined || second === undefined) throw new Error("missing native view");
-  storePointer(first, 39);
-  storePointer(second, 44);
+  storeptr(first, 39);
+  storeptr(second, 44);
   native.collect();
   if (native.liveLeases() !== 1 || native.readOriginal() !== 39 || native.readSecond() !== 44) {
     throw new Error("provider storage was copied or released");
   }
-  keepAlive(raw);
+  keepalive(raw);
   return first;
 }
 export function run(): boolean {
-  unsafeContext();
+  unsafecontext();
   const first = retained();
   native.collect();
-  const roundTrip = reinterpretRawPointer(toRawPointer(first, word), word);
-  if (roundTrip === undefined || !equalPointer(first, roundTrip)) return false;
-  storePointer(roundTrip, 52);
-  return acquire() === 99 && native.liveLeases() === 1 && native.readOriginal() === 52 && loadPointer(first) === 52;
+  const roundTrip = reinterpretrawptr(torawptr(first, word), word);
+  if (roundTrip === undefined || !equalptr(first, roundTrip)) return false;
+  storeptr(roundTrip, 52);
+  return acquire() === 99 && native.liveLeases() === 1 && native.readOriginal() === 52 && loadptr(first) === 52;
 }
 export function released(): boolean { native.collect(); return native.liveLeases() === 0; }
 export function main(): void {
@@ -127,7 +128,7 @@ export function ordinaryLocation(): boolean {
   const pointer = native.location(71);
   const inferred = native.relay(native.identity(pointer));
   const explicit = native.relay<uint32>(inferred);
-  storePointer(explicit, 72);
-  return loadPointer(pointer) === 72 && equalPointer(pointer, explicit);
+  storeptr(explicit, 72);
+  return loadptr(pointer) === 72 && equalptr(pointer, explicit);
 }
 `;

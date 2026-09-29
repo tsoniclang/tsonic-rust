@@ -85,8 +85,8 @@ export async function chooseAliasedAsync(flag: boolean): Promise<int32> {
   assert.match(source, /fn stop\([^)]*message: String\) -> Result<\(\), rt::TsonicError>/u);
   assert.match(source, /\.stop\(String::from\("sync"\)\)\?/u);
   assert.match(source, /unreachable!/u);
-  assert.match(source, /fn stop_async\(\) -> js_abi::JsPromise<'static, \(\)>/u);
-  assert.match(source, /stop_async\(\)\.into_result\(\)\.await\?/u);
+  assert.match(source, /fn stopAsync\(\) -> js_abi::JsPromise<'static, \(\)>/u);
+  assert.match(source, /stopAsync\(\)\.into_result\(\)\.await\?/u);
   validateGeneratedProject("never-fallible", result.artifacts);
 });
 

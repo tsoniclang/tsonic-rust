@@ -1,3 +1,4 @@
+import { rustTypeParameterFromSourceContract } from "../../target-model/names/type-parameters.js";
 import { rustCallableInvocationResult } from "../facts/callable-results.js";
 import {
   KindFunctionExpression,
@@ -25,6 +26,7 @@ import {
 } from "../facts/keys.js";
 import {
   rustFutureOutputCarrier,
+  rustFutureTargetType,
   getRustGeneratorProtocol,
   rustSourceOptionalTargetType,
   rustCallableProtocol,
@@ -165,7 +167,7 @@ export function recordPredeclaredNativeFunctionBindingFacts(
         continue;
       }
       const valueName = candidate.valueObserved
-        ? walk.context.names.nameForDeclaration(declaration)
+        ? walk.context.names.callableValueNameForDeclaration(declaration)
         : undefined;
       const value = finalizedNativeCallableValue(
         walk,
@@ -321,16 +323,19 @@ function recordCallableValueSignatureFacts(
       rustResolutionContext(walk, declaration),
       walk.operationOptions,
     ));
-  const ownNames = walk.context.sourceLifetimes.contractFor(expression)?.parameters
-    .flatMap(parameter => parameter.kind === "type" ? [parameter.targetName] : []);
-  const callable = rustGenericCallableProtocol(selectedCarrier, ownNames) ?? rustCallableProtocol(selectedCarrier);
+  const ownParameters = walk.context.sourceLifetimes.contractFor(expression)?.parameters
+    .flatMap(parameter => parameter.kind === "type" ? [rustTypeParameterFromSourceContract(parameter)] : []);
+  const callable = rustGenericCallableProtocol(selectedCarrier, ownParameters) ?? rustCallableProtocol(selectedCarrier);
   const closure = rustClosureProtocol(selectedCarrier);
   const parameterCarriers = selectedCarrier?.kind === "function-pointer"
     ? selectedCarrier.args
     : closure?.parameters ?? callable?.parameters;
-  const returnCarrier = selectedCarrier?.kind === "function-pointer"
+  const selectedReturnCarrier = selectedCarrier?.kind === "function-pointer"
     ? selectedCarrier.result
     : closure?.result ?? callable?.result;
+  const returnCarrier = Node_Type(ast, declaration) === undefined
+    ? selectRustInferredNumericReturn(walk, expression, selectedReturnCarrier)
+    : selectedReturnCarrier;
   const parameters = ast.parameters(expression);
   if (selectedCarrier === undefined || parameterCarriers === undefined ||
     returnCarrier === undefined || parameters.length !== parameterCarriers.length) {
@@ -377,8 +382,8 @@ function recordCallableValueSignatureFacts(
   const valueReturnCarrier = selectedCallableValueReturn(walk, expression, returnCarrier);
   const runtimeCarrier = selectedCarrier.kind === "function-pointer" || selectedCarrier.kind === "closure"
     ? { ...selectedCarrier, args: runtimeParameterCarriers, result: valueReturnCarrier }
-    : rustGenericCallableValue(selectedCarrier) !== undefined && ownNames !== undefined
-      ? rustGenericCallableTargetType(ownNames, runtimeParameterCarriers, valueReturnCarrier, rustGenericCallableValue(selectedCarrier)!.origin)
+    : rustGenericCallableValue(selectedCarrier) !== undefined && ownParameters !== undefined
+      ? rustGenericCallableTargetType(ownParameters, runtimeParameterCarriers, valueReturnCarrier, rustGenericCallableValue(selectedCarrier)!.origin)
     : rustCallableTargetType(runtimeParameterCarriers, valueReturnCarrier);
   if (runtimeCarrier !== undefined) setCarrierFact(walk, declaration, runtimeCarrier);
 }
@@ -407,11 +412,11 @@ function resolveAuthoredCallableValueSignature(
     expression,
     rustResolutionContext(walk, expression),
     walk.operationOptions,
-  )?.returnCarrier ?? resolveRustTargetTypeRef(
+  )?.returnCarrier ?? selectRustInferredNumericReturn(walk, expression, resolveRustTargetTypeRef(
     Node_Type(ast, expression) ?? sourceReturn,
     rustResolutionContext(walk, expression),
     walk.operationOptions,
-  );
+  ));
   if (returnCarrier === undefined || parameterAbis.some((abi) => abi === undefined)) {
     return undefined;
   }
@@ -513,7 +518,7 @@ export function recordCallableSuspensionFacts(walk: RustFactWalk, declaration: N
       rustResolutionContext(walk, declaration),
       walk.operationOptions,
     );
-    const inner = rustFutureOutputCarrier(futureCarrier);
+    const inner = selectRustInferredNumericReturn(walk, declaration, rustFutureOutputCarrier(futureCarrier));
     if (inner !== undefined) {
       const isJsPromise = futureCarrier?.kind === "target-named" &&
         futureCarrier.id === rustJsPromiseTargetId;
@@ -539,7 +544,7 @@ export function recordCallableSuspensionFacts(walk: RustFactWalk, declaration: N
                 ? rustPlaceholderLifetime
                 : storage.storage.lifetime,
           )
-        : futureCarrier!;
+        : rustFutureTargetType(inner);
       walk.context.facts.set(declaration, rustAsyncFunctionFactKey,
         storage?.kind === "resolved"
           ? {
@@ -563,9 +568,11 @@ export function recordCallableSuspensionFacts(walk: RustFactWalk, declaration: N
   }
 }
 
-function selectedSourceCallableReturn(walk: RustFactWalk, declaration: Node) {
+export function selectedSourceCallableReturn(walk: RustFactWalk, declaration: Node) {
   const semantics = walk.context.semanticsFor(declaration);
-  const callableType = semantics.declarations.declaredValueType(declaration);
+  const callableType = walk.context.ast.is.IsArrowFunction(declaration) || walk.context.ast.is.IsFunctionExpression(declaration)
+    ? semantics.types.expressionType(declaration)
+    : semantics.declarations.declaredValueType(declaration);
   if (callableType === undefined) {
     return undefined;
   }

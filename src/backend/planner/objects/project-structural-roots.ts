@@ -5,7 +5,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustClassEnvironmentHandleType } from "./class-environment-types.js";
 import { rustProjectRootType, rustProjectStateType } from "./polymorphism/names.js";
-import { rustProjectRepresentationGenerics } from "./polymorphism/names.js";
+import { planRustProjectRepresentationGenerics } from "./polymorphism/names.js";
 import type { RustGenerics } from "../../target-ast/nodes.js";
 import { rustProjectImplementationContext, rustProjectImplementationGenerics } from "./polymorphism/implementation-generics.js";
 
@@ -18,8 +18,8 @@ export function rustStructuralViewImplementationContext(
 export function rustStructuralViewImplementationGenerics(
   carrier: TargetTypeRef, representation: RustObjectRepresentation, context: RustPlanContext,
 ): RustGenerics | undefined {
-  const selected = rustProjectRepresentationGenerics(representation, context);
-  return rustProjectImplementationGenerics(carrier, representation.definition, selected, context);
+  const selected = planRustProjectRepresentationGenerics(representation, context);
+  return rustProjectImplementationGenerics(carrier, selected, context);
 }
 
 export function rustStructuralViewRootType(

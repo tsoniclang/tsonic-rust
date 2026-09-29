@@ -8,12 +8,12 @@ import type {
   RustProjectTypeDefinition,
   RustProjectTypePolicy,
 } from "./type-policy.js";
-import { rustTargetTypeParameterNames } from "../../target-model/types/index.js";
+import { rustTargetTypeParameterIdentities } from "../../target-model/types/index.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 
 export interface RustProjectMethodDispatchVariant {
   readonly declaration: Node;
-  readonly sourceTypeParameterNames: readonly string[];
+  readonly sourceTypeParameterIdentities: readonly string[];
   readonly targetTypeArguments: readonly TargetTypeRef[];
   readonly virtualSlot: string;
   readonly exactSlot: string;
@@ -50,7 +50,7 @@ export interface RustProjectMethodDispatchPlanRegistry extends RustProjectMethod
 
 interface PendingVariant {
   readonly declaration: Node;
-  readonly sourceTypeParameterNames: readonly string[];
+  readonly sourceTypeParameterIdentities: readonly string[];
   readonly targetTypeArguments: readonly TargetTypeRef[];
 }
 
@@ -73,20 +73,20 @@ export function createRustProjectMethodDispatchPlanRegistry(): RustProjectMethod
       if (owner === undefined || parameters === undefined) {
         return { kind: "rejected", reason: "Selected project method has no exact owner or dense type-parameter list." };
       }
-      const sourceTypeParameterNames = parameters
+      const sourceTypeParameterIdentities = parameters
         .filter((parameter) =>
           sourceLifetimes.parameterFor(parameter)?.kind !== "lifetime")
         .map((parameter) => {
-          const name = ast.name(parameter);
-          return name === undefined ? "" : ast.text(name);
+          const selected = sourceLifetimes.parameterFor(parameter);
+          return selected?.kind === "type" ? selected.identity : "";
         });
-      if (sourceTypeParameterNames.some((name) => name.length === 0) ||
-        sourceTypeParameterNames.length !== targetTypeArguments.length) {
+      if (sourceTypeParameterIdentities.some((name) => name.length === 0) ||
+        sourceTypeParameterIdentities.length !== targetTypeArguments.length) {
         return { kind: "rejected", reason: "Selected project method type arguments do not match its exact declaration arity." };
       }
       const openNames = new Set(targetTypeArguments.flatMap((argument) =>
-        rustTargetTypeParameterNames(argument)));
-      if ([...openNames].some((name) => !owner.typeParameterNames.includes(name))) {
+        rustTargetTypeParameterIdentities(argument)));
+      if ([...openNames].some((name) => !owner.typeParameterIdentities.includes(name))) {
         return {
           kind: "rejected",
           reason: "Rust dynamic dispatch requires a finite method specialization; this call retains a type parameter outside the receiver contract.",
@@ -94,7 +94,7 @@ export function createRustProjectMethodDispatchPlanRegistry(): RustProjectMethod
       }
       addPending(pending, {
         declaration,
-        sourceTypeParameterNames: Object.freeze(sourceTypeParameterNames),
+        sourceTypeParameterIdentities: Object.freeze(sourceTypeParameterIdentities),
         targetTypeArguments: Object.freeze([...targetTypeArguments]),
       });
       return { kind: "accepted" };
@@ -145,8 +145,8 @@ function createRustProjectMethodDispatchPlan(
         ?.filter((parameter) =>
           input.sourceLifetimes.parameterFor(parameter)?.kind !== "lifetime")
         .map((parameter) => {
-          const name = input.ast.name(parameter);
-          return name === undefined ? "" : input.ast.text(name);
+          const selected = input.sourceLifetimes.parameterFor(parameter);
+          return selected?.kind === "type" ? selected.identity : "";
         });
       if (names === undefined || names.some((name) => name.length === 0) ||
         names.length !== variant.targetTypeArguments.length) {
@@ -154,7 +154,7 @@ function createRustProjectMethodDispatchPlan(
       }
       addPending(pending, {
         declaration: implementation,
-        sourceTypeParameterNames: Object.freeze(names),
+        sourceTypeParameterIdentities: Object.freeze(names),
         targetTypeArguments: variant.targetTypeArguments,
       });
     }
@@ -186,7 +186,7 @@ function createRustProjectMethodDispatchPlan(
       if (sourceParameters.length === 0) {
         byMember.set(member, Object.freeze([Object.freeze({
           declaration: member,
-          sourceTypeParameterNames: Object.freeze([]),
+          sourceTypeParameterIdentities: Object.freeze([]),
           targetTypeArguments: Object.freeze([]),
           virtualSlot: baseVirtual,
           exactSlot: baseExact,
@@ -200,7 +200,7 @@ function createRustProjectMethodDispatchPlan(
         const ordinal = index + 1;
         return Object.freeze({
           declaration: member,
-          sourceTypeParameterNames: candidate.sourceTypeParameterNames,
+          sourceTypeParameterIdentities: candidate.sourceTypeParameterIdentities,
           targetTypeArguments: candidate.targetTypeArguments,
           virtualSlot: allocateRustGeneratedName(
             usedNames,

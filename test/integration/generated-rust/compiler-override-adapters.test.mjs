@@ -76,8 +76,8 @@ test("callable adapters cannot infer conversions from incompatible native slots"
     definitionForCarrier: () => undefined,
     relationship: () => ({ kind: "unrelated" }),
   };
-  const source = { kind: "type-parameter", name: "Source" };
-  const target = { kind: "type-parameter", name: "Target" };
+  const source = { kind: "type-parameter", identity: "Source", name: "Source" };
+  const target = { kind: "type-parameter", identity: "Target", name: "Target" };
   const parameter = carrier => ({ form: "required", mode: "value", valueCarrier: carrier, parameterCarrier: carrier });
   assert.equal(selectRustCallableParameterAdapters([parameter(source)], [parameter(target)], projectTypes), undefined);
   assert.equal(selectRustCallableParameterAdapters([], [parameter(target)], projectTypes), undefined);
