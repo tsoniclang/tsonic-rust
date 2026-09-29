@@ -273,7 +273,7 @@ export function selectRustCheckedElementAccess(
   if (nativeIndexIdentity !== undefined &&
     (nativeIndexIdentity.ownerName === "Array" || nativeIndexIdentity.ownerName === "ReadonlyArray") &&
     nativeIndexIdentity.memberName === "index" &&
-    nativeArrayReceiver !== undefined && (isRustCopyCarrier(nativeArrayReceiver.element) || rustCarrierSupportsClone(nativeArrayReceiver.element, context.typeDefinitions))) {
+    nativeArrayReceiver !== undefined) {
     const sourceIndex = selectedValueCarrier(request.argument, request.sourceArgumentType, context, options);
     const index = selectRustNativeIndex(sourceIndex) ?? selectRustNativeIndex(normalizeSelectedOperationInputCarrier(
       request.argument, sourceIndex, rustSourcePrimitiveTargetType("int32"), context, options,
@@ -293,6 +293,8 @@ export function selectRustCheckedElementAccess(
       isAsync: false,
       isFallible: false,
       errorBoundary: "none",
+      ...((request.accessMode === "read" || request.accessMode === "read-write") && !isRustCopyCarrier(nativeArrayReceiver.element)
+        ? { carrierRequirements: [{ carrier: nativeArrayReceiver.element, requirement: "clone" as const }] } : {}),
     };
     const fact = finalizeProviderOperationFromSubjects(template, request.receiver, [request.argument], context, options, selectedReceiverCarrier, [index.carrier]);
     if (fact === undefined) {

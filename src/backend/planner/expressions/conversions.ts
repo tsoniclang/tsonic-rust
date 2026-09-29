@@ -1,7 +1,6 @@
 import {
   isRustCopyCarrier,
   isRustNeverCarrier,
-  rustCarrierSupportsClone,
   rustPrimitiveTypeName,
   rustOptionTargetType,
 } from "../../../target-model/types/index.js";
@@ -51,6 +50,7 @@ import {
 import { invokeRustStructuralObjectMethod } from "../objects/project-storage.js";
 import { applyFinalizedValueConversion } from "./value-conversions.js";
 import { planRustRestAssembly } from "./calls/rest-assembly.js";
+import { rustCarrierHasCloneContract } from "../types/generic-requirements.js";
 
 function providerConstantExpression(argument: RustProviderConstantArgument, context: RustPlanContext): RustExpr | undefined {
   switch (argument.kind) {
@@ -384,7 +384,7 @@ export function planProviderOperationExpression(
       if (isRustCopyCarrier(fact.resultCarrier)) {
         return scoped(place);
       }
-      if (!rustCarrierSupportsClone(fact.resultCarrier, context.input.program.typeDefinitions)) {
+      if (!rustCarrierHasCloneContract(fact.resultCarrier, context)) {
         context.diagnostics.push(unsupportedConstructDiagnostic(
           diagnosticInput(context, operationNode),
           `rust.backend.provider-${form.form}-read-ownership`,

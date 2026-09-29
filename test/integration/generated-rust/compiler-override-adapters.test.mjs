@@ -7,6 +7,7 @@ import { selectRustCallableParameterAdapters } from "../../../dist/analysis/call
 import { planRootCallableForwarder } from "../../../dist/backend/planner/objects/polymorphism/callable-adapters.js";
 import { emptyRustGenerics } from "../../../dist/backend/target-ast/nodes.js";
 import { rustParameterTypeFromCarrierInContext, rustReturnTypeFromCarrierInContext } from "../../../dist/backend/planner/types/render.js";
+import { planRustCallableArguments } from "../../../dist/backend/planner/declarations/callables/parameter-adapters.js";
 
 const files = {
   "base.ts": `
@@ -134,4 +135,39 @@ export function main(): void { const value: Base = new Derived(); value.value(3)
     assert.equal(diagnostics.length, 1);
     assert.equal(diagnostics[0].code, "RUST_MISSING_TARGET_FACT");
   }
+});
+
+test("rest dispatch rejects reordered logical heads and forged tail offsets", () => {
+  const { program } = analyzeRust({ files: { "index.ts": `
+class Base { read(...values: number[]): number { return values[0]; } }
+class Derived extends Base { read(first: number, ...rest: number[]): number { return first; } }
+export function main(): void { const value: Base = new Derived(); value.read(1, 2); }
+` } });
+  const definition = program.projectTypes.definitions.find(entry => entry.sourceName === "Derived");
+  const adapters = program.facts.getFact(definition.declaration, rustProjectCallableAdaptersKey);
+  const adapter = adapters.find(entry => entry.contract !== entry.implementation);
+  assert.ok(adapter);
+  const context = {
+    input: { program }, sourceFile: definition.sourceFile, diagnostics: [], usedAliases: new Set(),
+    moduleName: "index", structuralShapesModuleName: "shapes",
+    moduleNameByFileName: new Map(), externalCrateNameByFileName: new Map(),
+    externalItemPathByIdentity: new Map(), externalStructuralShapeModuleByFileName: new Map(),
+  };
+  const selection = {
+    declaration: adapter.implementation, parameterAbis: adapter.parameters,
+    parameters: adapter.parameters.map((abi, index) => ({ name: `argument_${index}`,
+      type: rustParameterTypeFromCarrierInContext(abi.parameterCarrier, context) })),
+    parameterAdapters: adapter.parameterAdapters,
+  };
+  assert.deepEqual(adapter.parameterAdapters.map(parameter => parameter.kind), ["rest-element", "rest"]);
+  assert.ok(planRustCallableArguments(selection, context));
+  const head = adapter.parameterAdapters[0];
+  const tail = adapter.parameterAdapters[1];
+  for (const replacement of [
+    [tail, head],
+    [{ ...head, offset: 1 }, tail],
+    [head, { ...tail, segments: [{ ...tail.segments[0], offset: 0 }] }],
+    [head, { ...tail, segments: [{ ...tail.segments[0], contractParameterIndex: 1 }] }],
+    [head, { ...tail, segments: [tail.segments[0], tail.segments[0]] }],
+  ]) assert.equal(planRustCallableArguments({ ...selection, parameterAdapters: replacement }, context), undefined);
 });

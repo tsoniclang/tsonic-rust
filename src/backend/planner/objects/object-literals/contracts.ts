@@ -6,7 +6,8 @@ import {
   writeRustProjectObjectField,
   writeRustProjectMethodOverride,
 } from "../project-objects.js";
-import { applyRustCallableValueAdapter, planRustCallableArguments } from "../../declarations/callables/adapters.js";
+import { applyRustCallableValueAdapter } from "../../declarations/callables/adapters.js";
+import { planRustCallableArguments } from "../../declarations/callables/parameter-adapters.js";
 import { projectOwnFields, projectOwnMethods } from "../polymorphism/model.js";
 import { rustProjectDispatchTraitType } from "../polymorphism/names.js";
 import type {

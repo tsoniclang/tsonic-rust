@@ -7,9 +7,9 @@ export function rustCallableAdapterValues(callable: {
   return [callable.resultAdapter, ...callable.parameterAdapters.flatMap((parameter): readonly RustCallableValueAdapter[] => {
     switch (parameter.kind) {
       case "runtime-value":
-      case "logical-value": return [parameter.adapter];
-      case "sequence-rest": return [parameter.elementAdapter];
-      case "fixed-rest": return parameter.elementAdapters;
+      case "logical-value":
+      case "rest-element": return [parameter.adapter];
+      case "rest": return parameter.segments.map(segment => segment.adapter);
       case "omitted": return [];
     }
   })];

@@ -72,7 +72,7 @@ for (const owner of ["class", "object", "project"]) {
         target: closures[1].carrier },
     } } };
     const dispatch = { resultAdapter: { kind: "identity" }, parameterAdapters: [
-      { kind: "fixed-rest", elementAdapters: [adapter] },
+      { kind: "rest", segments: [{ kind: "value", adapter }] },
     ] };
     if (owner === "class") planInput.classValueAdapters.push({ subject: closures[0], adapter });
     if (owner === "object") closures[0].objectAdapters = { dispatches: [dispatch] };

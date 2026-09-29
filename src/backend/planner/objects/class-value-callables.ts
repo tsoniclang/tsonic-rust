@@ -4,7 +4,8 @@ import type { RustExpr, RustFunctionParam, RustImplFunction } from "../../target
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustCurrentErrorBoundary, rustErrorBoundaryForProjectMember, rustErrorType, sourceModuleItemPath } from "../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
-import { applyRustCallableValueAdapter, planRustCallableArguments } from "../declarations/callables/adapters.js";
+import { applyRustCallableValueAdapter } from "../declarations/callables/adapters.js";
+import { planRustCallableArguments } from "../declarations/callables/parameter-adapters.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { rustSelfParameter } from "../declarations/callables/self-parameter.js";
 import { applyRustFallibleResultExpression } from "../types/fallible-shape.js";

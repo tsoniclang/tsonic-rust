@@ -1,13 +1,14 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { RustPlanBuilder } from "../facts/plan-store.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustCallableParameterAbi, RustCallableParameterAdapter, RustCallableValueAdapter } from "../facts/callable-adapters.js";
+import type { RustCallableParameterAbi, RustCallableParameterAdapter, RustCallableRestSegment, RustCallableValueAdapter } from "../facts/callable-adapters.js";
 import { rustSourceParameterAbiFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
 import { rustCallableInvocationResult } from "../facts/callable-results.js";
 import type { RustProjectTypeDefinition, RustProjectTypePolicy } from "../project-types/type-policy.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
-import { isRustCopyCarrier, isRustVecCarrier, rustCallableProtocol, rustCarrierSupportsClone, rustClosureProtocol, rustOptionElementCarrier, rustSourceTypeCarrierValue, rustTargetGenericTypeArguments, substituteRustTargetTypeParameters } from "../../target-model/types/index.js";
+import { isRustCopyCarrier, rustCallableProtocol, rustCarrierSupportsClone, rustClosureProtocol, rustOptionElementCarrier, rustSourceTypeCarrierValue, rustTargetGenericTypeArguments, substituteRustTargetTypeParameters } from "../../target-model/types/index.js";
+import { rustRestSequenceElements } from "../../target-model/operations/rest-assembly.js";
 import { selectRustValueCarrierReconciliation } from "../../policy/types/value-carrier-reconciliation.js";
 import { rustContextualValueConversionIsFallible } from "../../target-model/conversions/contextual.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
@@ -85,66 +86,46 @@ export function selectRustCallableParameterAdapters(
   projectTypes: RustProjectTypePolicy,
   definitions: RustTypeDefinitions,
 ): RustCallableParameterAdapter[] | undefined {
+  const wellFormed = (parameters: readonly RustCallableParameterAbi[]) => isDenseDataArray(parameters) &&
+    parameters.every((parameter, index) => parameter.form !== "rest" || index === parameters.length - 1 &&
+      parameter.mode === "value" && callableRestElement(parameter.parameterCarrier) !== undefined);
+  if (!wellFormed(contractParameters) || !wellFormed(implementationParameters)) return undefined;
   const adapters: RustCallableParameterAdapter[] = [];
-  for (const [implementationIndex, target] of implementationParameters.entries()) {
-    const source = contractParameters[implementationIndex];
+  let sourceIndex = 0;
+  let restOffset = 0;
+  for (const target of implementationParameters) {
+    const source = contractParameters[sourceIndex];
     const runtimeAdapter = source === undefined ? undefined : selectRustCallableValueAdapter(
       source.parameterCarrier, target.parameterCarrier, projectTypes, definitions,
     );
-    if (source !== undefined && runtimeAdapter !== undefined &&
+    if (source !== undefined && restOffset === 0 && runtimeAdapter !== undefined &&
       (source.form === "rest") === (target.form === "rest") &&
       (source.mode === target.mode || source.mode === "mut-ref" && target.mode === "ref")) {
       adapters.push(Object.freeze({
         kind: "runtime-value",
-        contractParameterIndex: implementationIndex,
+        contractParameterIndex: sourceIndex,
         source,
         target,
         adapter: runtimeAdapter,
       }));
+      sourceIndex += 1;
       continue;
     }
     if (target.form === "rest") {
-      if (!isRustVecCarrier(target.parameterCarrier)) {
-        return undefined;
+      const element = callableRestElement(target.parameterCarrier);
+      if (element === undefined) return undefined;
+      const segments: RustCallableRestSegment[] = [];
+      for (; sourceIndex < contractParameters.length; sourceIndex += 1) {
+        const source = contractParameters[sourceIndex]!;
+        const sourceElement = source.form === "rest" ? callableRestElement(source.parameterCarrier) : source.valueCarrier;
+        const adapter = sourceElement === undefined ? undefined :
+          selectRustCallableValueAdapter(sourceElement, element, projectTypes, definitions);
+        if (adapter === undefined || source.form !== "required" && source.form !== "rest") return undefined;
+        segments.push(Object.freeze(source.form === "rest"
+          ? { kind: "sequence", contractParameterIndex: sourceIndex, source, offset: restOffset, adapter }
+          : { kind: "value", contractParameterIndex: sourceIndex, source, adapter }));
       }
-      const targetElementCarrier = target.parameterCarrier.element;
-      const remaining = contractParameters.slice(implementationIndex);
-      const sourceRest = remaining.length === 1 && remaining[0]?.form === "rest"
-        ? remaining[0]
-        : undefined;
-      if (sourceRest !== undefined && isRustVecCarrier(sourceRest.parameterCarrier)) {
-        const elementAdapter = selectRustCallableValueAdapter(
-          sourceRest.parameterCarrier.element,
-          targetElementCarrier,
-          projectTypes, definitions,
-        );
-        if (elementAdapter === undefined) {
-          return undefined;
-        }
-        adapters.push(Object.freeze({
-          kind: "sequence-rest",
-          contractParameterIndex: implementationIndex,
-          source: sourceRest,
-          target,
-          elementAdapter,
-        }));
-        continue;
-      }
-      if (remaining.some((source) => source.form !== "required")) {
-        return undefined;
-      }
-      const elementAdapters = remaining.map((source) =>
-        selectRustCallableValueAdapter(source.valueCarrier, targetElementCarrier, projectTypes, definitions));
-      if (elementAdapters.some((adapter) => adapter === undefined)) {
-        return undefined;
-      }
-      adapters.push(Object.freeze({
-        kind: "fixed-rest",
-        contractParameterIndexes: Object.freeze(remaining.map((_source, index) => implementationIndex + index)),
-        sources: Object.freeze(remaining),
-        target,
-        elementAdapters: Object.freeze(elementAdapters as RustCallableValueAdapter[]),
-      }));
+      adapters.push(Object.freeze({ kind: "rest", segments: Object.freeze(segments), target }));
       continue;
     }
     if (source === undefined) {
@@ -154,7 +135,7 @@ export function selectRustCallableParameterAdapters(
       adapters.push(Object.freeze({ kind: "omitted", target }));
       continue;
     }
-    if (source.form !== "required" ||
+    if (source.form !== "required" && source.form !== "rest" ||
       source.mode !== "value" && !isRustCopyCarrier(source.valueCarrier) &&
         !rustCarrierSupportsClone(source.valueCarrier, definitions)) {
       return undefined;
@@ -162,21 +143,23 @@ export function selectRustCallableParameterAdapters(
     const targetLogicalCarrier = target.form === "optional"
       ? rustOptionElementCarrier(target.parameterCarrier)
       : target.valueCarrier;
-    const logicalAdapter = targetLogicalCarrier === undefined
+    const sourceLogicalCarrier = source.form === "rest" ? callableRestElement(source.parameterCarrier) : source.valueCarrier;
+    const logicalAdapter = targetLogicalCarrier === undefined || sourceLogicalCarrier === undefined
       ? undefined
-      : selectRustCallableValueAdapter(source.valueCarrier, targetLogicalCarrier, projectTypes, definitions);
+      : selectRustCallableValueAdapter(sourceLogicalCarrier, targetLogicalCarrier, projectTypes, definitions);
     if (logicalAdapter === undefined) {
       return undefined;
     }
-    adapters.push(Object.freeze({
-      kind: "logical-value",
-      contractParameterIndex: implementationIndex,
-      source,
-      target,
-      adapter: logicalAdapter,
-    }));
+    adapters.push(Object.freeze(source.form === "rest"
+      ? { kind: "rest-element", contractParameterIndex: sourceIndex, source, offset: restOffset++, target, adapter: logicalAdapter }
+      : { kind: "logical-value", contractParameterIndex: sourceIndex++, source, target, adapter: logicalAdapter }));
   }
   return adapters;
+}
+
+export function callableRestElement(carrier: TargetTypeRef): TargetTypeRef | undefined {
+  const sequence = rustRestSequenceElements(carrier);
+  return sequence?.collection === "vec" || sequence?.collection === "js-array" ? sequence.elements[0] : undefined;
 }
 
 export function selectRustCallableValueAdapter(
@@ -248,11 +231,10 @@ export function rustCallableParameterAdapterIsFallible(
   switch (adapter.kind) {
     case "runtime-value":
     case "logical-value":
+    case "rest-element":
       return rustCallableValueAdapterIsFallible(adapter.adapter, definitions);
-    case "fixed-rest":
-      return adapter.elementAdapters.some(element => rustCallableValueAdapterIsFallible(element, definitions));
-    case "sequence-rest":
-      return rustCallableValueAdapterIsFallible(adapter.elementAdapter, definitions);
+    case "rest":
+      return adapter.segments.some(segment => rustCallableValueAdapterIsFallible(segment.adapter, definitions));
     case "omitted":
       return false;
   }

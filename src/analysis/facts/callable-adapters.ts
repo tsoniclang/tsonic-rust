@@ -52,6 +52,21 @@ export interface RustCallableParameterAbi {
   readonly entryConversion?: RustSourceParameterAbiFact["entryConversion"];
 }
 
+export type RustCallableRestSegment =
+  | {
+      readonly kind: "value";
+      readonly contractParameterIndex: number;
+      readonly source: RustCallableParameterAbi;
+      readonly adapter: RustCallableValueAdapter;
+    }
+  | {
+      readonly kind: "sequence";
+      readonly contractParameterIndex: number;
+      readonly source: RustCallableParameterAbi;
+      readonly offset: number;
+      readonly adapter: RustCallableValueAdapter;
+    };
+
 export type RustCallableParameterAdapter =
   | {
       readonly kind: "runtime-value";
@@ -72,16 +87,15 @@ export type RustCallableParameterAdapter =
       readonly target: RustCallableParameterAbi;
     }
   | {
-      readonly kind: "fixed-rest";
-      readonly contractParameterIndexes: readonly number[];
-      readonly sources: readonly RustCallableParameterAbi[];
+      readonly kind: "rest";
+      readonly segments: readonly RustCallableRestSegment[];
       readonly target: RustCallableParameterAbi;
-      readonly elementAdapters: readonly RustCallableValueAdapter[];
     }
   | {
-      readonly kind: "sequence-rest";
+      readonly kind: "rest-element";
       readonly contractParameterIndex: number;
       readonly source: RustCallableParameterAbi;
+      readonly offset: number;
       readonly target: RustCallableParameterAbi;
-      readonly elementAdapter: RustCallableValueAdapter;
+      readonly adapter: RustCallableValueAdapter;
     };
