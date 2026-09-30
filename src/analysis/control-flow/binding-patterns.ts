@@ -40,7 +40,7 @@ import type {
 } from "../project-types/source-type-registry.js";
 import { isRustStructuralObjectFieldDeclaration } from "../../policy/types/source-shapes.js";
 import { rustProjectObjectLayout } from "../project-types/object-layout.js";
-import { selectRustBindingNormalization } from "../../policy/types/binding-normalization.js";
+import { rustBindingNormalizationContract } from "../../target-model/types/binding-normalization.js";
 
 export interface RustBindingPatternFactContext {
   readonly ast: AstReader;
@@ -187,7 +187,7 @@ function selectArrayProjection(
       projection = { kind: "js-array-element", index };
     }
   }
-  const selected = projectedCarrier === undefined ? undefined : selectRustBindingNormalization(
+  const selected = projectedCarrier === undefined ? undefined : rustBindingNormalizationContract(
     projectedCarrier, defaultCarrier, projection?.kind === "js-array-element" ? rustJsArrayLikeElementTargetType(sourceCarrier) : undefined);
   return projectedCarrier === undefined || projection === undefined || selected === undefined ? undefined
     : { projectedCarrier, ...selected, projection };
@@ -271,7 +271,7 @@ function selectObjectProjection(
     return undefined;
   }
   const projectedCarrier = field?.carrier;
-  const selected = projectedCarrier === undefined ? undefined : selectRustBindingNormalization(projectedCarrier, defaultCarrier);
+  const selected = projectedCarrier === undefined ? undefined : rustBindingNormalizationContract(projectedCarrier, defaultCarrier);
   return field === undefined || projectedCarrier === undefined || selected === undefined
     ? undefined
     : {

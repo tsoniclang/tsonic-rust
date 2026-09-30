@@ -12,7 +12,8 @@ import { rustUnionTypePathInContext } from "../../types/render.js";
 import { planExpression } from "../entry.js";
 import { planRustNonConsumingValue } from "../typed-locations.js";
 import { applyRustValueConversion } from "../value-conversions.js";
-import { rustValueConversionContract, substituteRustValueConversion } from "../../../../target-model/conversions/contracts.js";
+import { rustValueConversionContract } from "../../../../target-model/conversions/contracts.js";
+import { substituteRustValueConversion } from "../../../../target-model/conversions/substitution.js";
 import { closedMetadataEquals } from "../../../../target-model/metadata/closed-data.js";
 import { planRustVirtualProjectMethodCall } from "../../objects/project-method-dispatch.js";
 

@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
 import { rustOptionTargetType, rustSourcePrimitiveTargetType, rustStringTargetType, rustSourceUnionTargetType } from "../../../dist/target-model/types/index.js";
-import { isRustUnionArmMappings, selectRustUnionArmMapping, selectRustUnionProjection } from "../../../dist/target-model/types/union-relations.js";
-import { rustValueConversionContract, substituteRustValueConversion } from "../../../dist/target-model/conversions/contracts.js";
+import { isRustUnionArmMappings, selectRustUnionArmMapping, rustUnionProjectionContract } from "../../../dist/target-model/types/union-relations.js";
+import { rustValueConversionContract } from "../../../dist/target-model/conversions/contracts.js";
+import { substituteRustValueConversion } from "../../../dist/target-model/conversions/substitution.js";
 import { planRustUnionMapping, planRustUnionProjection } from "../../../dist/backend/planner/expressions/union-mappings.js";
 import { selectRustSourceAssertionConversion, selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
 import { finalizeRustProviderOperationAbi, validateRustFinalizedOperationAbi } from "../../../dist/analysis/facts/finalized-operation-abi.js";
@@ -64,7 +65,7 @@ test("union mappings require complete exact coverage and reject forged or numeri
   const expression = { kind: "call", path: "next", args: [] };
   for (const source of [wide, rustOptionTargetType(wide)]) {
     for (const target of [string, rustOptionTargetType(string)]) {
-      const selected = selectRustUnionProjection(source, target, definitions);
+      const selected = rustUnionProjectionContract(source, target, definitions);
       const projection = selectRustSourceAssertionConversion(source, target, definitions);
       if (source === wide && target !== string) {
         assert.equal(selected, undefined);
@@ -92,7 +93,7 @@ test("union mappings require complete exact coverage and reject forged or numeri
     }
   }
   for (const target of [rustSourcePrimitiveTargetType("uint64"), rustSourcePrimitiveTargetType("float64")]) {
-    assert.equal(selectRustUnionProjection(wide, target, definitions), undefined);
+    assert.equal(rustUnionProjectionContract(wide, target, definitions), undefined);
     assert.equal(rustValueConversionContract({ kind: "union-project", source: wide, target }, definitions), undefined);
   }
   for (const owned of [false, true]) {

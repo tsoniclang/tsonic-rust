@@ -73,8 +73,9 @@ export function finalizeProjectSourceGenericArguments(
     finalized,
   );
   if (initialSubstitutions === undefined) return undefined;
-  const typeParameterNames = new Set(parameters.flatMap((parameter) =>
-    parameter.kind === "type" ? [parameter.targetIdentity] : []));
+  const typeParameterNames = new Set(parameters.flatMap((parameter, index) =>
+    parameter.kind === "type" && sourceArguments[index]!.explicitTypeNode === undefined
+      ? [parameter.targetIdentity] : []));
   const inferred = reconcileProjectSourceArgumentTypeParameters(
     walk,
     selected,

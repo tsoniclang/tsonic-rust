@@ -56,7 +56,7 @@ import { rustMemoryLayoutObservationKey } from "../../target-model/operations/me
 import { rustRawLocationPlanKey } from "../../target-model/operations/native-memory.js";
 import { rustMemoryBindingPlanKey } from "../../target-model/operations/memory-bindings.js";
 import { rustRestSequenceElements } from "../../target-model/operations/rest-assembly.js";
-import { selectRustArrayLiteralSpread } from "../../policy/types/array-literal.js";
+import { rustArrayLiteralSpreadContract } from "../../target-model/types/array-literal.js";
 
 export function recordSelectedOperationInputs(
   walk: RustFactWalk,
@@ -288,7 +288,7 @@ export function resolveArrayLiteralCarrier(
     if (omittedOptionalElementIndexes !== undefined) {
       const inferred = expected === undefined && omittedOptionalElementIndexes.length === 0 &&
         !presentElements.some(element => ast.is.IsSpreadElement(element));
-      const carriers = presentElements.map((element, index) => resolveExpressionCarrier(
+      const carriers = presentElements.map((element, index) => resolveArrayElementCarrier(
         walk, element, sourceFile, inferred ? undefined : selected.elements[index],
       ));
       if (carriers.some(carrier => carrier === undefined)) return undefined;
@@ -322,7 +322,7 @@ export function resolveArrayLiteralCarrier(
       return undefined;
     }
     for (const element of presentElements) {
-      resolveExpressionCarrier(walk, element, sourceFile, fixedArray.element);
+      if (resolveArrayElementCarrier(walk, element, sourceFile, fixedArray.element) === undefined) return undefined;
     }
     setRustOperationFact(walk, expression, { kind: "fixed-array-literal", operationId: "tsonic.rust.fixed-array.literal" });
     return setCarrierFact(walk, expression, expected);
@@ -361,10 +361,10 @@ export function resolveArrayLiteralCarrier(
   for (const element of presentElements) {
     const spread = ast.is.IsSpreadElement(element);
     const operand = spread ? Node_Expression(ast, element) : element;
-    const carrier = operand === undefined ? undefined : resolveExpressionCarrier(
+    const carrier = operand === undefined ? undefined : resolveArrayElementCarrier(
       walk, operand, sourceFile, spread ? undefined : expectedElement);
     if (carrier === undefined) return undefined;
-    if (spread && selectRustArrayLiteralSpread(carrier, expectedElement) === undefined) {
+    if (spread && rustArrayLiteralSpreadContract(carrier, expectedElement) === undefined) {
       appendRustDiagnostic(walk, "RUST_ARRAY_SPREAD_CARRIER_MISMATCH",
         "Array spread requires a finalized dense sequence with the exact destination element carrier.", element, []);
       return undefined;
@@ -384,6 +384,21 @@ export function resolveArrayLiteralCarrier(
     contributions: Object.freeze(contributions),
   });
   return setCarrierFact(walk, expression, resultCarrier);
+}
+
+function resolveArrayElementCarrier(
+  walk: RustFactWalk,
+  expression: Node,
+  sourceFile: SourceFile,
+  expected: TargetTypeRef | undefined,
+): TargetTypeRef | undefined {
+  const carrier = resolveExpressionCarrier(walk, expression, sourceFile, expected);
+  if (carrier !== undefined && expected !== undefined && !rustTargetTypeRefEquals(carrier, expected)) {
+    appendRustDiagnostic(walk, "RUST_ARRAY_ELEMENT_CARRIER_MISMATCH",
+      "Array element requires an exact carrier matching its selected destination storage.", expression, []);
+    return undefined;
+  }
+  return carrier;
 }
 
 function contextualTupleOmissions(

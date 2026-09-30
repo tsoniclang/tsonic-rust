@@ -1,5 +1,5 @@
 import type { RustValueConversion } from "../../target-model/operations/model.js";
-import { rustUnionAlternatives, selectRustUnionArmMapping, selectRustUnionProjection } from "../../target-model/types/union-relations.js";
+import { rustUnionAlternatives, selectRustUnionArmMapping, rustUnionProjectionContract } from "../../target-model/types/union-relations.js";
 import { rustNativeRepresentationMatches } from "../../target-model/conversions/native-representation.js";
 import { rustNumericValueConversionIsSupported } from "../../target-model/conversions/numeric-promotion.js";
 import { selectRustExactIntegerConversion } from "../../target-model/conversions/exact-integer.js";
@@ -283,7 +283,7 @@ export function selectRustSourceAssertionConversion(
   target: TargetTypeRef,
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): RustValueConversion | undefined {
-  if (selectRustUnionProjection(source, target, definitions) !== undefined) return { kind: "union-project", source, target };
+  if (rustUnionProjectionContract(source, target, definitions) !== undefined) return { kind: "union-project", source, target };
   const mapping = selectRustUnionArmMapping(source, target, "target", definitions);
   if (mapping !== undefined) return { kind: "union-map", source, target, coverage: "target", arms: mapping };
   if (source.kind === "source-primitive" && target.kind === "source-primitive" && target.name === "int32") {

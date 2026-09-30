@@ -1,7 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustCallableParameterAbi, RustCallableParameterAdapter, RustCallableRestSegment } from "../../../../analysis/facts/callable-adapters.js";
-import { callableRestElement, selectRustCallableParameterAdapters, rustCallableValueAdapterIsFallible } from "../../../../analysis/callables/adapters.js";
-import { closedMetadataEquals } from "../../../../target-model/metadata/closed-data.js";
+import { callableRestElement, rustCallableParameterAdaptersMatch, rustCallableValueAdapterIsFallible } from "../../../../analysis/callables/adapters.js";
 import { isRustCopyCarrier, isRustJsArrayCarrier, isRustStringCarrier, rustCarrierSupportsClone, rustOptionTargetType, rustVecTargetType } from "../../../../target-model/types/index.js";
 import type { RustExpr, RustFunctionParam, RustStmt, RustType } from "../../../target-ast/nodes.js";
 import { planRustAbsentValue } from "../../expressions/optional-storage.js";
@@ -23,10 +22,9 @@ export function planRustCallableArguments(
   context: RustPlanContext,
 ): { readonly statements: readonly RustStmt[]; readonly adaptedArguments: readonly RustExpr[] } | undefined {
   const definitions = context.input.program.typeDefinitions;
-  const expected = selectRustCallableParameterAdapters(input.parameterAbis,
-    input.parameterAdapters.map(adapter => adapter.target), context.input.program.projectTypes, definitions);
-  if (input.parameters.length !== input.parameterAbis.length || expected === undefined ||
-    !closedMetadataEquals(expected, input.parameterAdapters)) return undefined;
+  if (input.parameters.length !== input.parameterAbis.length ||
+    !rustCallableParameterAdaptersMatch(input.parameterAbis, input.parameterAdapters,
+      context.input.program.projectTypes, definitions)) return undefined;
   const statements: RustStmt[] = [];
   const adaptedArguments: RustExpr[] = [];
   const names = context.syntheticNames ?? createRustSyntheticNameState(

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { acmeTestingPackage, analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
+import { acmeTestingPackage, analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { rustProjectCallableAdaptersKey } from "../../../dist/analysis/facts/project-callable-adapters.js";
 import { selectRustCallableParameterAdapters } from "../../../dist/analysis/callables/adapters.js";
@@ -49,6 +49,7 @@ test("checked overrides adapt widened inputs and narrowed outputs without changi
     target: { id: "rust", options: { outputType: "bin", crateName: "override_adapter_proof" } },
   });
   assert.deepEqual(result.diagnostics, []);
+  assert.doesNotMatch(artifactText(result, "src/index.rs"), /SourceNumeric::strict_equal\([^\n]*&\*/u);
   validateGeneratedProject("override-adapter-proof", result.artifacts, { run: true });
 });
 
@@ -164,6 +165,10 @@ export function main(): void { const value: Base = new Derived(); value.read(1, 
   const head = adapter.parameterAdapters[0];
   const tail = adapter.parameterAdapters[1];
   for (const replacement of [
+    [null, tail],
+    [{ ...head, target: undefined }, tail],
+    [{ ...head, target: { ...head.target, parameterCarrier: undefined } }, tail],
+    [{ ...head, target: { ...head.target, mode: "unknown" } }, tail],
     [tail, head],
     [{ ...head, offset: 1 }, tail],
     [head, { ...tail, segments: [{ ...tail.segments[0], offset: 0 }] }],

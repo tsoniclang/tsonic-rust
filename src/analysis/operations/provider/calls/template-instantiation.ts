@@ -15,7 +15,7 @@ import {
   rustTargetGenericArgumentEquals,
   rustTargetTypeRefEquals,
 } from "../../../../target-model/types/equality.js";
-import { substituteRustValueConversion } from "../../../../target-model/conversions/contracts.js";
+import { substituteRustValueConversion } from "../../../../target-model/conversions/substitution.js";
 import { rustLifetimeKey } from "../../../../target-model/lifetimes/index.js";
 import type {
   RustProviderFactOperationKind,

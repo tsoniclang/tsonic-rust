@@ -5,6 +5,12 @@ import type { RustGenericRequirement, RustDeclarationGenericRequirementContract 
 import { substituteElidedLifetime } from "../../target-model/types/carriers/lifetime-elision.js";
 import { rustStaticLifetime } from "../../target-model/lifetimes/index.js";
 
+export function normalizeRustGenericRequirements(requirements: readonly RustGenericRequirement[]): readonly RustGenericRequirement[] {
+  const order: readonly RustGenericRequirement[] = ["clone", "default", "static", "source-numeric"];
+  const selected = new Set(requirements);
+  return Object.freeze(order.filter(requirement => selected.has(requirement)));
+}
+
 export interface RequirementUse {
   readonly node: Node;
   readonly carrier: TargetTypeRef;

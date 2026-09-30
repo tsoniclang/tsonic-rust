@@ -40,7 +40,7 @@ import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustCarrierHasCloneContract } from "../types/generic-requirements.js";
 import { rustOptionDefaultValue } from "../expressions/option-default.js";
 import { planRustCheckedSourceOptional } from "../expressions/optional-storage.js";
-import { selectRustBindingNormalization } from "../../../policy/types/binding-normalization.js";
+import { rustBindingNormalizationContract } from "../../../target-model/types/binding-normalization.js";
 import { rustEffectiveValueCarrier } from "../../../analysis/facts/value-carrier-queries.js";
 
 export type RustBindingExpressionPlanner = (
@@ -400,7 +400,7 @@ function normalizeBindingValue(
   const checkedElement = fact.projection.kind === "js-array-element" ? rustJsArrayLikeElementTargetType(fact.sourceCarrier) : undefined;
   const defaultCarrier = initializer === undefined ? undefined : rustEffectiveValueCarrier(context.input.program.facts, initializer);
   if (initializer !== undefined && defaultCarrier === undefined) return rejectProjection(element, context, "Binding default has no finalized value carrier.");
-  const selected = selectRustBindingNormalization(fact.projectedCarrier, defaultCarrier, checkedElement);
+  const selected = rustBindingNormalizationContract(fact.projectedCarrier, defaultCarrier, checkedElement);
   if (selected === undefined || selected.normalization !== fact.normalization ||
     !rustTargetTypeRefEquals(selected.storageCarrier, fact.storageCarrier) ||
     !rustTargetTypeRefEquals(selected.bindingCarrier, fact.bindingCarrier)) {

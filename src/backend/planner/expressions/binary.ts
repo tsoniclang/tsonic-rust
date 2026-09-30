@@ -442,12 +442,10 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
   if (fact.kind === "operator-call") {
     return planRustOperatorCallExpression(
       fact,
-      left,
-      right,
+      { expression: left, form: "value", node: leftNode },
+      { expression: right, form: "value", node: rightNode },
       node,
       context,
-      leftNode,
-      rightNode,
     );
   }
   if (fact.kind === "operator-token") {
@@ -549,12 +547,10 @@ function isExplicitRustNullishValue(expression: RustExpr): boolean {
 
 export function planRustOperatorCallExpression(
   fact: Extract<RustTargetOperationFact, { readonly kind: "operator-call" }>,
-  left: RustExpr,
-  right: RustExpr,
+  left: { readonly expression: RustExpr; readonly form: "value" | "shared-reference"; readonly node?: Node },
+  right: { readonly expression: RustExpr; readonly form: "value" | "shared-reference"; readonly node?: Node },
   node: Node,
   context: RustPlanContext,
-  leftNode?: Node,
-  rightNode?: Node,
 ): RustExpr | undefined {
   registerAliasFromPath(context, fact.path);
   const activeErrorType = rustActiveErrorType(context);
@@ -568,19 +564,20 @@ export function planRustOperatorCallExpression(
   }
   const operands = [
     {
-      expression: left,
-      node: leftNode,
+      ...left,
       mode: fact.operandModes[0],
       conversion: fact.leftConversion,
     },
     {
-      expression: right,
-      node: rightNode,
+      ...right,
       mode: fact.operandModes[1],
       conversion: fact.rightConversion,
     },
-  ].map(({ expression, node: operandNode, mode, conversion }) => {
-    const converted = applyRustValueConversion(context, expression, conversion, operandNode);
+  ].map(({ expression, form, node: operandNode, mode, conversion }) => {
+    if (form === "shared-reference" && mode === "mut-ref") return undefined;
+    if (form === "shared-reference" && mode === "ref" && conversion === undefined) return expression;
+    const value: RustExpr = form === "shared-reference" ? { kind: "dereference", pointer: expression } : expression;
+    const converted = applyRustValueConversion(context, value, conversion, operandNode);
     if (converted === undefined) {
       return undefined;
     }

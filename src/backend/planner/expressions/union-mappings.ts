@@ -1,7 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { rustUnionLeaves, selectRustUnionArmMapping, selectRustUnionProjection, type RustUnionArmMapping } from "../../../target-model/types/union-relations.js";
-import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";
+import { rustUnionLeaves, rustUnionArmMappingsMatch, rustUnionProjectionContract, type RustUnionArmMapping } from "../../../target-model/types/union-relations.js";
 import { isRustCopyCarrier, rustCarrierSupportsClone } from "../../../target-model/types/index.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
@@ -18,7 +17,7 @@ export function planRustUnionProjection(
   access: "move" | "clone" | "shared-reference",
   context: RustPlanContext,
 ): Extract<RustExpr, { readonly kind: "match" }> | undefined {
-  const selected = selectRustUnionProjection(source, target, context.input.program.typeDefinitions);
+  const selected = rustUnionProjectionContract(source, target, context.input.program.typeDefinitions);
   if (selected === undefined) return undefined;
   const type = rustTypeFromCarrierInContext(selected.dispatchCarrier, context);
   if (access === "shared-reference" && selected.targetOptional) return undefined;
@@ -59,8 +58,7 @@ export function planRustUnionMapping(
   context: RustPlanContext,
 ): RustExpr | undefined {
   const definitions = context.input.program.typeDefinitions;
-  const expected = selectRustUnionArmMapping(source, target, coverage, definitions);
-  if (expected === undefined || !closedMetadataEquals(expected, mappings) || targetOptional && !sourceOptional) return undefined;
+  if (!rustUnionArmMappingsMatch(source, target, coverage, definitions, mappings) || targetOptional && !sourceOptional) return undefined;
   const names = context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []);
   const arms: Extract<RustExpr, { readonly kind: "match" }>["arms"][number][] = [];
   for (const mapping of mappings) {

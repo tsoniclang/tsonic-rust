@@ -1,8 +1,4 @@
-import type {
-  RustTargetConstArgument,
-  TargetTypeRef,
-} from "../types/model.js";
-import type { RustLifetimeRef } from "../lifetimes/index.js";
+import type { TargetTypeRef } from "../types/model.js";
 import { rustNativeRepresentationMatches } from "./native-representation.js";
 import {
   isRustTargetTypeRef,
@@ -42,7 +38,6 @@ import {
   rustCarrierCanEnterTsValue,
   rustCarrierSupportsTrait,
   rustJsClosedValueCarrierTraitPath,
-  substituteRustTargetGenerics,
   rustTsValueTargetType,
 } from "../types/index.js";
 import type { RustPrimitiveTypeName } from "../syntax/tokens.js";
@@ -53,7 +48,7 @@ import { rustRestSequenceElements } from "../operations/rest-assembly.js";
 import { closedMetadataEquals, isDenseDataArray } from "../metadata/closed-data.js";
 import { rustNamedTypeCarrierValue } from "../types/carriers/native.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../types/source-union-definitions.js";
-import { rustUnionAlternatives, selectRustUnionArmMapping, selectRustUnionProjection, type RustUnionArmMapping } from "../types/union-relations.js";
+import { rustUnionAlternatives, selectRustUnionArmMapping, rustUnionProjectionContract, type RustUnionArmMapping } from "../types/union-relations.js";
 
 const boolCarrier = rustSourcePrimitiveTargetType("bool");
 const int32Carrier = rustSourcePrimitiveTargetType("int32");
@@ -498,7 +493,7 @@ export function rustValueConversionContract(
     };
   }
   if (value.kind === "union-project") {
-    return selectRustUnionProjection(value.source, value.target, definitions) === undefined ? undefined : {
+    return rustUnionProjectionContract(value.source, value.target, definitions) === undefined ? undefined : {
       category: "projection", lowering: "union-project", sourceMode: "value", source: value.source,
       target: value.target, fallible: false,
     };
@@ -700,206 +695,6 @@ export function rustValueConversionIdentity(value: RustValueConversion): string 
             : `option-map.${rustValueConversionIdentity(value.elementConversion)}`;
 }
 
-export function substituteRustValueConversion(
-  value: RustValueConversion,
-  substitutions: ReadonlyMap<string, TargetTypeRef>,
-  lifetimeSubstitutions: ReadonlyMap<string, RustLifetimeRef> = new Map(),
-  constSubstitutions: ReadonlyMap<string, RustTargetConstArgument> = new Map(),
-): RustValueConversion {
-  switch (value.kind) {
-    case "rest-sequence":
-      return Object.freeze({
-        ...value,
-        source: substituteRustTargetGenerics(value.source, substitutions, lifetimeSubstitutions, constSubstitutions),
-        elementTarget: substituteRustTargetGenerics(value.elementTarget, substitutions, lifetimeSubstitutions, constSubstitutions),
-        elementConversions: value.elementConversions.map(conversion => conversion === null ? null :
-          substituteRustValueConversion(conversion, substitutions, lifetimeSubstitutions, constSubstitutions)) as typeof value.elementConversions,
-      });
-    case "copy-from-reference":
-      return Object.freeze({
-        ...value,
-        target: substituteRustTargetGenerics(
-          value.target,
-          substitutions,
-          lifetimeSubstitutions,
-          constSubstitutions,
-        ),
-      });
-    case "raw-pointer-mut-to-const":
-      return Object.freeze({
-        ...value,
-        pointee: substituteRustTargetGenerics(
-          value.pointee,
-          substitutions,
-          lifetimeSubstitutions,
-          constSubstitutions,
-        ),
-      });
-    case "union-map":
-      return Object.freeze({ ...value,
-        source: substituteRustTargetGenerics(value.source, substitutions, lifetimeSubstitutions, constSubstitutions),
-        target: substituteRustTargetGenerics(value.target, substitutions, lifetimeSubstitutions, constSubstitutions),
-        arms: Object.freeze(value.arms.map(arm => Object.freeze({ ...arm,
-          carrier: substituteRustTargetGenerics(arm.carrier, substitutions, lifetimeSubstitutions, constSubstitutions),
-          source: Object.freeze(arm.source.map(step => Object.freeze({ ...step,
-            union: substituteRustTargetGenerics(step.union, substitutions, lifetimeSubstitutions, constSubstitutions) }))),
-          target: Object.freeze(arm.target.map(step => Object.freeze({ ...step,
-            union: substituteRustTargetGenerics(step.union, substitutions, lifetimeSubstitutions, constSubstitutions) }))),
-        }))),
-      });
-    case "source-union-variant":
-    case "union-project":
-    case "exact-integer":
-    case "native-representation":
-    case "native-upcast":
-    case "bottom-coercion":
-    case "js-argument-vector-callback":
-      return Object.freeze({
-        ...value,
-        source: substituteRustTargetGenerics(
-          value.source,
-          substitutions,
-          lifetimeSubstitutions,
-          constSubstitutions,
-        ),
-        target: substituteRustTargetGenerics(
-          value.target,
-          substitutions,
-          lifetimeSubstitutions,
-          constSubstitutions,
-        ),
-      });
-    case "js-value-from-option":
-    case "js-value-from-array":
-      return Object.freeze({
-        ...value,
-        source: substituteRustTargetGenerics(
-          value.source,
-          substitutions,
-          lifetimeSubstitutions,
-          constSubstitutions,
-        ),
-        element: substituteRustTargetGenerics(
-          value.element,
-          substitutions,
-          lifetimeSubstitutions,
-          constSubstitutions,
-        ),
-        elementConversion: substituteRustValueConversion(
-          value.elementConversion,
-          substitutions,
-          lifetimeSubstitutions,
-          constSubstitutions,
-        ) as typeof value.elementConversion,
-      });
-    case "js-value-from-closed-carrier":
-    case "ts-value-from-closed-carrier":
-      return Object.freeze({
-        ...value,
-        source: substituteRustTargetGenerics(
-          value.source,
-          substitutions,
-          lifetimeSubstitutions,
-          constSubstitutions,
-        ),
-      });
-    case "js-value-from-source-union":
-      return Object.freeze({
-        ...value,
-        source: substituteRustTargetGenerics(
-          value.source,
-          substitutions,
-          lifetimeSubstitutions,
-          constSubstitutions,
-        ),
-        variants: Object.freeze(value.variants.map((variant) => Object.freeze({
-          ...variant,
-          carrier: substituteRustTargetGenerics(
-            variant.carrier,
-            substitutions,
-            lifetimeSubstitutions,
-            constSubstitutions,
-          ),
-          conversion: substituteRustValueConversion(
-            variant.conversion,
-            substitutions,
-            lifetimeSubstitutions,
-            constSubstitutions,
-          ) as typeof variant.conversion,
-        }))),
-      });
-    case "js-value-from-structural-to-json":
-      return Object.freeze({
-        ...value,
-        source: substituteRustTargetGenerics(
-          value.source,
-          substitutions,
-          lifetimeSubstitutions,
-          constSubstitutions,
-        ),
-        resultCarrier: substituteRustTargetGenerics(
-          value.resultCarrier,
-          substitutions,
-          lifetimeSubstitutions,
-          constSubstitutions,
-        ),
-        resultConversion: substituteRustValueConversion(
-          value.resultConversion,
-          substitutions,
-          lifetimeSubstitutions,
-          constSubstitutions,
-        ) as typeof value.resultConversion,
-      });
-    case "js-value-from-structural-object":
-      return Object.freeze({
-        ...value,
-        source: substituteRustTargetGenerics(
-          value.source,
-          substitutions,
-          lifetimeSubstitutions,
-          constSubstitutions,
-        ),
-        fields: Object.freeze(value.fields.map((field) => Object.freeze({
-          ...field,
-          sourceCarrier: substituteRustTargetGenerics(
-            field.sourceCarrier,
-            substitutions,
-            lifetimeSubstitutions,
-            constSubstitutions,
-          ),
-          conversion: substituteRustValueConversion(
-            field.conversion,
-            substitutions,
-            lifetimeSubstitutions,
-            constSubstitutions,
-          ) as typeof field.conversion,
-        }))),
-      });
-    case "option-some":
-      return Object.freeze({
-        ...value,
-        element: substituteRustTargetGenerics(
-          value.element,
-          substitutions,
-          lifetimeSubstitutions,
-          constSubstitutions,
-        ),
-      });
-    case "option-map":
-      return Object.freeze({
-        ...value,
-        elementConversion: substituteRustValueConversion(
-          value.elementConversion,
-          substitutions,
-          lifetimeSubstitutions,
-          constSubstitutions,
-        ) as typeof value.elementConversion,
-      });
-    case "semantic-conversion":
-    case "numeric-promotion":
-      return value;
-  }
-}
 
 function callbackProtocol(
   carrier: TargetTypeRef,

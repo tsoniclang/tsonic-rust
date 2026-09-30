@@ -11,7 +11,7 @@ import { planRustNonConsumingValue } from "../typed-locations.js";
 import { planNativeRustArray } from "../native-arrays.js";
 import { rustNativeArrayStorageKey } from "../../../../target-model/operations/native-memory.js";
 import { rustJsArrayTargetType, rustOptionElementCarrier, rustVecTargetType } from "../../../../target-model/types/index.js";
-import { selectRustArrayLiteralSpread } from "../../../../policy/types/array-literal.js";
+import { rustArrayLiteralSpreadContract } from "../../../../target-model/types/array-literal.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { rustCarrierHasCloneContract, rustCarrierHasCopyContract } from "../../types/generic-requirements.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
@@ -29,7 +29,12 @@ export function planArrayLiteral(node: Node, context: RustPlanContext): RustExpr
   const sources = context.input.program.source.ast.elements(node);
   if (fact.kind === "tuple-literal") {
     const elements: RustExpr[] = [];
-    for (const source of sources) {
+    for (const [index, source] of sources.entries()) {
+      if (source === undefined || fact.resultCarrier.kind !== "tuple" || !rustTargetTypeRefEquals(
+        context.expressionOverrides?.get(source)?.carrier ?? rustEffectiveValueCarrier(context.input.program.facts, source),
+        fact.resultCarrier.elements[index])) {
+        return reject(node, context, "Tuple contribution does not match its exact finalized destination storage.");
+      }
       const value = source === undefined ? undefined : planExpression(source, context);
       if (value === undefined) return undefined;
       elements.push(value);
@@ -48,17 +53,18 @@ export function planArrayLiteral(node: Node, context: RustPlanContext): RustExpr
     return reject(node, context, "Array contributions conflict with the finalized source element count.");
   }
   const elements: RustExpr[] = [];
-  const spreads: (ReturnType<typeof selectRustArrayLiteralSpread>)[] = [];
+  const spreads: (ReturnType<typeof rustArrayLiteralSpreadContract>)[] = [];
   for (const [index, source] of sources.entries()) {
     const contribution = fact.contributions[index]!;
     const spread = source !== undefined && context.input.program.source.ast.is.IsSpreadElement(source);
     const expression = spread ? Node_Expression(context.input.program.source.ast, source!) : source;
     if (expression === undefined || spread !== (contribution.kind === "spread") ||
+      !spread && !rustTargetTypeRefEquals(contribution.carrier, fact.elementCarrier) ||
       !rustTargetTypeRefEquals(context.expressionOverrides?.get(expression)?.carrier ??
         rustEffectiveValueCarrier(context.input.program.facts, expression), contribution.carrier)) {
       return reject(node, context, "Array contribution does not match its exact finalized source expression.");
     }
-    const sequence = spread ? selectRustArrayLiteralSpread(contribution.carrier, fact.elementCarrier) : undefined;
+    const sequence = spread ? rustArrayLiteralSpreadContract(contribution.carrier, fact.elementCarrier) : undefined;
     if (spread && (sequence === undefined || !rustCarrierHasCloneContract(fact.elementCarrier, context))) {
       return reject(node, context, "Array spread requires one checked dense sequence and an exact native Clone contract.");
     }
@@ -80,7 +86,7 @@ export function planArrayLiteral(node: Node, context: RustPlanContext): RustExpr
 
 function planSpreadArray(
   elements: readonly RustExpr[],
-  spreads: readonly ReturnType<typeof selectRustArrayLiteralSpread>[],
+  spreads: readonly ReturnType<typeof rustArrayLiteralSpreadContract>[],
   carriers: readonly TargetTypeRef[],
   elementCarrier: TargetTypeRef,
   context: RustPlanContext,

@@ -488,7 +488,8 @@ export function planRustCompoundAssignmentValue(
   context: RustPlanContext,
 ): RustExpr | undefined {
   if (assignment.kind === "operator-call") {
-    return planRustOperatorCallExpression(assignment, current, value, node, context);
+    return planRustOperatorCallExpression(assignment,
+      { expression: current, form: "value" }, { expression: value, form: "value" }, node, context);
   }
   const operator = assignment.operator;
   if (!isRustAssignmentOperator(operator)) {

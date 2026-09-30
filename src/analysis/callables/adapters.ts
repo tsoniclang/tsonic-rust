@@ -5,8 +5,8 @@ import type { RustCallableParameterAbi, RustCallableParameterAdapter, RustCallab
 import { rustSourceParameterAbiFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
 import { rustCallableInvocationResult } from "../facts/callable-results.js";
 import type { RustProjectTypeDefinition, RustProjectTypePolicy } from "../project-types/type-policy.js";
-import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
+import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { closedMetadataEquals, isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { isRustCopyCarrier, rustCallableProtocol, rustCarrierSupportsClone, rustClosureProtocol, rustOptionElementCarrier, rustSourceTypeCarrierValue, rustTargetGenericTypeArguments, substituteRustTargetTypeParameters } from "../../target-model/types/index.js";
 import { rustRestSequenceElements } from "../../target-model/operations/rest-assembly.js";
 import { selectRustValueCarrierReconciliation } from "../../policy/types/value-carrier-reconciliation.js";
@@ -87,8 +87,12 @@ export function selectRustCallableParameterAdapters(
   definitions: RustTypeDefinitions,
 ): RustCallableParameterAdapter[] | undefined {
   const wellFormed = (parameters: readonly RustCallableParameterAbi[]) => isDenseDataArray(parameters) &&
-    parameters.every((parameter, index) => parameter.form !== "rest" || index === parameters.length - 1 &&
-      parameter.mode === "value" && callableRestElement(parameter.parameterCarrier) !== undefined);
+    parameters.every((parameter, index) => parameter !== null && typeof parameter === "object" &&
+      ["required", "optional", "default", "rest"].includes(parameter.form) &&
+      ["value", "ref", "mut-ref"].includes(parameter.mode) &&
+      isRustTargetTypeRef(parameter.valueCarrier) && isRustTargetTypeRef(parameter.parameterCarrier) &&
+      (parameter.form !== "rest" || index === parameters.length - 1 &&
+        parameter.mode === "value" && callableRestElement(parameter.parameterCarrier) !== undefined));
   if (!wellFormed(contractParameters) || !wellFormed(implementationParameters)) return undefined;
   const adapters: RustCallableParameterAdapter[] = [];
   let sourceIndex = 0;
@@ -160,6 +164,17 @@ export function selectRustCallableParameterAdapters(
 export function callableRestElement(carrier: TargetTypeRef): TargetTypeRef | undefined {
   const sequence = rustRestSequenceElements(carrier);
   return sequence?.collection === "vec" || sequence?.collection === "js-array" ? sequence.elements[0] : undefined;
+}
+
+export function rustCallableParameterAdaptersMatch(
+  parameters: readonly RustCallableParameterAbi[],
+  adapters: readonly RustCallableParameterAdapter[],
+  projectTypes: RustProjectTypePolicy,
+  definitions: RustTypeDefinitions,
+): boolean {
+  if (!isDenseDataArray(adapters) || adapters.some(adapter => adapter === null || typeof adapter !== "object")) return false;
+  const contract = selectRustCallableParameterAdapters(parameters, adapters.map(adapter => adapter.target), projectTypes, definitions);
+  return contract !== undefined && closedMetadataEquals(contract, adapters);
 }
 
 export function selectRustCallableValueAdapter(

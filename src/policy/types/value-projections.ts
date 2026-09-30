@@ -1,4 +1,6 @@
 import type { Node } from "@tsonic/tsts";
+import type { RustBindingNormalization } from "../../target-model/types/binding-normalization.js";
+export type { RustBindingNormalization } from "../../target-model/types/binding-normalization.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustContextualValueConversion } from "../../target-model/conversions/contextual.js";
 import type { RustProjectProjectionSelection } from "../../target-model/types/project-projections.js";
@@ -129,11 +131,6 @@ export type RustBindingProjection =
   | { readonly kind: "vec-rest"; readonly start: number }
   | { readonly kind: "js-array-rest"; readonly start: number };
 
-export type RustBindingNormalization =
-  | "identity"
-  | "default-on-none"
-  | "checked-array"
-  | "checked-array-default";
 
 export interface RustBindingProjectionFact {
   readonly sourceCarrier: TargetTypeRef;

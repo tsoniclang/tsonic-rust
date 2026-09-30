@@ -4,10 +4,7 @@ import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
-import { selectRustUnionEquality } from "../../../policy/operations/operators/union-equality.js";
-import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";
-import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { rustSourcePrimitiveTargetType } from "../../../target-model/types/index.js";
+import { rustUnionEqualityFactMatches } from "../../../analysis/facts/operations/union-equality.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustUnionPattern } from "./union-patterns.js";
@@ -27,15 +24,9 @@ export function planRustUnionEquality(
   const rightNode = BinaryExpression_Right(ast, node);
   const token = BinaryExpression_OperatorToken(ast, node);
   const operator = token === undefined ? undefined : ast.kindName(token);
-  const expected = isRustTargetTypeRef(fact.leftCarrier) && isRustTargetTypeRef(fact.rightCarrier)
-    ? selectRustUnionEquality(fact.leftCarrier, fact.rightCarrier, context.input.program.typeDefinitions) : undefined;
   if (leftNode === undefined || rightNode === undefined || context.syntheticNames === undefined ||
-    typeof fact.negated !== "boolean" || typeof fact.exhaustive !== "boolean" ||
-    operator !== (fact.negated ? "KindExclamationEqualsEqualsToken" : "KindEqualsEqualsEqualsToken") ||
-    expected === undefined || expected.exhaustive !== fact.exhaustive || !closedMetadataEquals(expected.arms, fact.arms) ||
-    !rustTargetTypeRefEquals(effectivePlannedExpressionCarrier(leftNode, context), fact.leftCarrier) ||
-    !rustTargetTypeRefEquals(effectivePlannedExpressionCarrier(rightNode, context), fact.rightCarrier) ||
-    !rustTargetTypeRefEquals(fact.resultCarrier, rustSourcePrimitiveTargetType("bool")) ||
+    !rustUnionEqualityFactMatches(fact, operator, effectivePlannedExpressionCarrier(leftNode, context),
+      effectivePlannedExpressionCarrier(rightNode, context), context.input.program.typeDefinitions) ||
     !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.union-equality-result") ||
     !selectedOperationMatches(context.input.program.facts.getSelectedTargetOperator(node),
       fact.operationId, "operator", fact.resultCarrier, fact.operationId)) {
@@ -62,8 +53,11 @@ export function planRustUnionEquality(
     const rightValue = operand(arm.right, rightName);
     let comparison: RustExpr | undefined;
     if (arm.operation.kind === "operator-call") {
+      const argument = (value: RustExpr) => value.kind === "dereference"
+        ? { expression: value.pointer, form: "shared-reference" as const }
+        : { expression: value, form: "value" as const };
       comparison = planRustOperatorCallExpression({ ...arm.operation, operator: arm.operation.rustOperator,
-        operationId: fact.operationId }, leftValue, rightValue, node, context);
+        operationId: fact.operationId }, argument(leftValue), argument(rightValue), node, context);
     } else {
       const convertedLeft = applyRustValueConversion(context, leftValue, arm.operation.leftConversion, undefined);
       const convertedRight = applyRustValueConversion(context, rightValue, arm.operation.rightConversion, undefined);

@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { selectRustUnionProjection } from "../../../target-model/types/union-relations.js";
+import { rustUnionProjectionContract } from "../../../target-model/types/union-relations.js";
 import {
   isRustCopyCarrier,
   isRustJsValueCarrier,
@@ -81,7 +81,7 @@ export function planRustFlowReadProjection(
   }
   if (fact.kind === "source-union" || fact.kind === "runtime-union") {
     const definitions = context.input.program.typeDefinitions;
-    const selected = selectRustUnionProjection(fact.sourceCarrier, fact.selectedCarrier, definitions);
+    const selected = rustUnionProjectionContract(fact.sourceCarrier, fact.selectedCarrier, definitions);
     const kindMatches = (definitions.sourceUnionVariants(fact.dispatchCarrier) !== undefined) === (fact.kind === "source-union");
     const result = selected === undefined || !kindMatches || selected.variant.name !== fact.variant ||
       !rustTargetTypeRefEquals(selected.dispatchCarrier, fact.dispatchCarrier) ? undefined

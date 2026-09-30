@@ -45,7 +45,7 @@ import type { RustFactWalk } from "../program/walk.js";
 import type { RustSelectedTargetSignature, TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTargetOperationFact } from "../facts/keys.js";
 import { rustGenericCallableProtocol } from "../../target-model/types/carriers/generic-callables.js";
-import { substituteRustValueConversion } from "../../target-model/conversions/contracts.js";
+import { substituteRustValueConversion } from "../../target-model/conversions/substitution.js";
 import { recordSelectedMethodSpecialization } from "./project-method-calls.js";
 import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
 import { selectRustSourceCallResult } from "../../policy/types/resolution/call-results.js";

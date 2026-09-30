@@ -2,7 +2,7 @@ import type { TargetTypeRef } from "./model.js";
 import type { RustTypeDefinitions } from "./source-union-definitions.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "./equality.js";
 import { rustRuntimeUnionContract, type RustRuntimeUnionVariant } from "./carriers/runtime-unions.js";
-import { hasExactObjectKeys, isClosedMetadata, isDenseDataArray } from "../metadata/closed-data.js";
+import { closedMetadataEquals, hasExactObjectKeys, isClosedMetadata, isDenseDataArray } from "../metadata/closed-data.js";
 import { rustOptionElementCarrier } from "./carriers/optional.js";
 import { rustClosedValuePrimitiveProjection } from "./carriers/closed-values.js";
 
@@ -62,7 +62,7 @@ export function rustUnionLeaves(carrier: TargetTypeRef, definitions: RustTypeDef
   return visit(carrier, []) ? Object.freeze(leaves) : undefined;
 }
 
-export function selectRustUnionProjection(source: TargetTypeRef, target: TargetTypeRef, definitions: RustTypeDefinitions) {
+export function rustUnionProjectionContract(source: TargetTypeRef, target: TargetTypeRef, definitions: RustTypeDefinitions) {
   const sourceElement = rustOptionElementCarrier(source);
   const targetElement = rustOptionElementCarrier(target);
   if (targetElement !== undefined && sourceElement === undefined) return undefined;
@@ -104,4 +104,15 @@ export function selectRustUnionArmMapping(
   }
   return mappings.length === 0 || coverage === "target" && selectedTargets.size !== targetArms.length
     ? undefined : Object.freeze(mappings);
+}
+
+export function rustUnionArmMappingsMatch(
+  source: TargetTypeRef,
+  target: TargetTypeRef,
+  coverage: "source" | "target",
+  definitions: RustTypeDefinitions,
+  mappings: readonly RustUnionArmMapping[],
+): boolean {
+  const contract = selectRustUnionArmMapping(source, target, coverage, definitions);
+  return contract !== undefined && closedMetadataEquals(contract, mappings);
 }
