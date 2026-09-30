@@ -48,10 +48,10 @@ import { rustExactIntegerConversionMatches } from "./exact-integer.js";
 import { rustUnsignedIntegerCounterpart } from "./integer-refinement.js";
 import { rustNumberBoxingSourceKind } from "./number-boxing.js";
 import { rustRestSequenceElements } from "../operations/rest-assembly.js";
-import { closedMetadataEquals, isDenseDataArray } from "../metadata/closed-data.js";
+import { closedMetadataEquals, isDenseDataArray, hasExactObjectKeys } from "../metadata/closed-data.js";
 import { rustNamedTypeCarrierValue } from "../types/carriers/native.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../types/source-union-definitions.js";
-import { rustUnionAlternatives, selectRustUnionArmMapping, rustUnionProjectionContract, type RustUnionArmMapping } from "../types/union-relations.js";
+import { rustUnionInjectionVariant, selectRustUnionArmMapping, rustUnionProjectionContract, type RustUnionArmMapping } from "../types/union-relations.js";
 
 const boolCarrier = rustSourcePrimitiveTargetType("bool");
 const int32Carrier = rustSourcePrimitiveTargetType("int32");
@@ -481,12 +481,9 @@ export function rustValueConversionContract(
       : undefined;
   }
   if (value.kind === "source-union-variant") {
-    const union = rustUnionAlternatives(value.target, definitions);
-    const matches = union?.filter((variant) =>
-      variant.variant.kind === "payload" && variant.variant.name === value.variantName &&
-      rustTargetTypeRefEquals(variant.carrier, value.source)) ?? [];
-    return isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) &&
-        matches.length === 1
+    return hasExactObjectKeys(value, ["kind", "source", "target", "variantName"]) &&
+        isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) &&
+        rustUnionInjectionVariant(value.source, value.target, definitions)?.name === value.variantName
       ? {
           category: "exact",
           lowering: "source-union-variant",

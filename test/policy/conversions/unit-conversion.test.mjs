@@ -4,9 +4,29 @@ import { selectRustSourceValueConversion } from "../../../dist/policy/conversion
 import { rustValueConversionContract, rustValueConversionIdentity } from "../../../dist/target-model/conversions/contracts.js";
 import { rustAbsenceTargetType, rustUnitTargetType, rustOptionTargetType, rustFutureTargetType,
   rustJsPromiseTargetTypeWithLifetime, rustSourcePrimitiveTargetType, rustJsErrorTargetType,
+  rustJsValueTargetType, rustJsArrayTargetType, rustStringTargetType,
 } from "../../../dist/target-model/types/index.js";
 import { substituteRustValueConversion } from "../../../dist/target-model/conversions/substitution.js";
 import { finalizeValueConversion, finalizedConversionIsValid } from "../../../dist/analysis/facts/finalized-operation/conversions.js";
+
+test("closed native array injection retains its exact payload and rejects forged carriers", () => {
+  const source = rustJsArrayTargetType(rustJsValueTargetType());
+  const target = rustJsValueTargetType();
+  const conversion = selectRustSourceValueConversion(source, target);
+  assert.deepEqual(conversion, { kind: "source-union-variant", source, target, variantName: "Array" });
+  const finalized = finalizeValueConversion(conversion, source, target);
+  assert.equal(finalizedConversionIsValid(finalized), true);
+  assert.equal(finalized.fallible, false);
+  for (const malformed of [
+    { ...conversion, variantName: "Object" },
+    { ...conversion, source: rustJsArrayTargetType(rustStringTargetType()) },
+    { ...conversion, target: rustJsErrorTargetType() },
+    { ...conversion, guessed: true },
+  ]) {
+    assert.equal(rustValueConversionContract(malformed), undefined);
+    assert.equal(finalizedConversionIsValid({ ...finalized, conversion: malformed }), false);
+  }
+});
 
 test("source absence to native void is an exact zero-cost unit conversion", () => {
   const source = rustAbsenceTargetType();

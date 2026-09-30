@@ -29,7 +29,7 @@ import type { RustFinalizedValueConversion } from "../../../analysis/facts/final
 import { rustUnionTypePathInContext, rustTypeFromCarrierInContext } from "../types/render.js";
 import { lowerRustExactIntegerConversion } from "./exact-integer.js";
 import { planRustUnionMapping, planRustUnionProjection } from "./union-mappings.js";
-import { rustUnionAlternatives } from "../../../target-model/types/union-relations.js";
+import { rustUnionInjectionVariant } from "../../../target-model/types/union-relations.js";
 import { planRustCheckedSourceOptional } from "./optional-storage.js";
 
 export function applyRustValueConversion(
@@ -369,12 +369,9 @@ export function lowerRustValueConversion(
     case "union-project":
       return planRustUnionProjection(node ?? context.sourceFile, source, contract.source, contract.target, "move", context);
     case "source-union-variant": {
-      const variants = rustUnionAlternatives(contract.target, context.input.program.typeDefinitions);
       const type = rustTypeFromCarrierInContext(contract.target, context);
-      if (variants === undefined || type?.kind !== "named" ||
-        variants.filter((variant) =>
-          variant.variant.kind === "payload" && variant.variant.name === contract.variantName &&
-          rustTargetTypeRefEquals(variant.carrier, contract.source)).length !== 1) {
+      if (type?.kind !== "named" || rustUnionInjectionVariant(contract.source, contract.target,
+        context.input.program.typeDefinitions)?.name !== contract.variantName) {
         context.diagnostics.push(missingFactDiagnostic(
           diagnosticInput(context, node ?? context.sourceFile),
           "rust.backend.source-union-conversion",

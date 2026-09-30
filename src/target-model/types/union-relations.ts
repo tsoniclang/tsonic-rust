@@ -4,7 +4,7 @@ import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "./equality.js";
 import { rustRuntimeUnionContract, type RustRuntimeUnionVariant } from "./carriers/runtime-unions.js";
 import { closedMetadataEquals, hasExactObjectKeys, isClosedMetadata, isDenseDataArray } from "../metadata/closed-data.js";
 import { rustOptionElementCarrier } from "./carriers/optional.js";
-import { rustClosedValuePrimitiveProjection } from "./carriers/closed-values.js";
+import { rustClosedValuePayloadProjection } from "./carriers/closed-values.js";
 
 export interface RustUnionPathStep {
   readonly union: TargetTypeRef;
@@ -45,6 +45,15 @@ export function rustUnionAlternatives(carrier: TargetTypeRef, definitions: RustT
   })) ?? rustRuntimeUnionContract(carrier)?.alternatives;
 }
 
+export function rustUnionInjectionVariant(source: TargetTypeRef, target: TargetTypeRef, definitions: RustTypeDefinitions):
+  Extract<RustRuntimeUnionVariant, { readonly kind: "payload" }> | undefined {
+  const payload = rustClosedValuePayloadProjection(target, source);
+  if (payload?.kind === "payload") return payload;
+  const variants = rustUnionAlternatives(target, definitions)?.filter(alternative =>
+    alternative.variant.kind === "payload" && rustTargetTypeRefEquals(alternative.carrier, source));
+  return variants?.length === 1 && variants[0]!.variant.kind === "payload" ? variants[0]!.variant : undefined;
+}
+
 export function rustUnionLeaves(carrier: TargetTypeRef, definitions: RustTypeDefinitions):
   readonly { readonly carrier: TargetTypeRef; readonly path: readonly RustUnionPathStep[] }[] | undefined {
   const leaves: { readonly carrier: TargetTypeRef; readonly path: readonly RustUnionPathStep[] }[] = [];
@@ -71,7 +80,7 @@ export function rustUnionProjectionContract(source: TargetTypeRef, target: Targe
   const allAlternatives = rustUnionAlternatives(dispatchCarrier, definitions);
   const alternatives = allAlternatives?.filter(arm =>
     rustTargetTypeRefEquals(arm.carrier, carrier));
-  const variant = alternatives === undefined ? rustClosedValuePrimitiveProjection(dispatchCarrier, carrier)
+  const variant = alternatives === undefined ? rustClosedValuePayloadProjection(dispatchCarrier, carrier)
     : alternatives.length === 1 ? alternatives[0]!.variant : undefined;
   return variant === undefined ? undefined : {
     dispatchCarrier, carrier, variant,

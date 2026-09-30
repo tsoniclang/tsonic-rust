@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { getRustTypeofRuntimeKind } from "../../dist/target-model/types/runtime-kind.js";
-import { rustOptionTargetType, rustStringTargetType, rustSourcePrimitiveTargetType, rustJsValueTargetType, rustJsSymbolTargetType, rustJsStringTargetType } from "../../dist/target-model/types/index.js";
+import { rustOptionTargetType, rustStringTargetType, rustSourcePrimitiveTargetType, rustJsValueTargetType, rustJsSymbolTargetType, rustJsStringTargetType, rustJsArrayTargetType } from "../../dist/target-model/types/index.js";
 import { emptyRustTypeDefinitions } from "../../dist/target-model/types/source-union-definitions.js";
 import { planRustRuntimeCategory } from "../../dist/backend/planner/expressions/runtime-category.js";
 import { rustClosedValueCategoryProjection } from "../../dist/target-model/types/carriers/closed-values.js";
@@ -29,6 +29,7 @@ test("closed runtime values expose exact categories without claiming exhaustive 
     [rustSourcePrimitiveTargetType("int32"), "Int32", false],
     [rustSourcePrimitiveTargetType("float32"), "Float32", false],
     [rustSourcePrimitiveTargetType("float64"), "Number", false],
+    [rustJsArrayTargetType(rustJsValueTargetType()), "Array", false],
   ]) {
     assert.deepEqual(rustUnionProjectionContract(source, carrier, emptyRustTypeDefinitions)?.variant,
       { kind: "payload", name: variant });
@@ -36,6 +37,7 @@ test("closed runtime values expose exact categories without claiming exhaustive 
   }
   assert.equal(getRustTypeofRuntimeKind(rustJsSymbolTargetType(), emptyRustTypeDefinitions), "symbol");
   assert.equal(rustUnionProjectionContract(source, rustSourcePrimitiveTargetType("int128"), emptyRustTypeDefinitions), undefined);
+  assert.equal(rustUnionProjectionContract(source, rustJsArrayTargetType(rustStringTargetType()), emptyRustTypeDefinitions), undefined);
 });
 
 test("optional runtime categories preserve their exact present kind and reject forged nested facts", () => {

@@ -1,5 +1,5 @@
 import type { RustValueConversion } from "../../target-model/operations/model.js";
-import { rustUnionAlternatives, selectRustUnionArmMapping, rustUnionProjectionContract } from "../../target-model/types/union-relations.js";
+import { rustUnionInjectionVariant, selectRustUnionArmMapping, rustUnionProjectionContract } from "../../target-model/types/union-relations.js";
 import { rustNativeRepresentationMatches } from "../../target-model/conversions/native-representation.js";
 import { rustNumericValueConversionIsSupported } from "../../target-model/conversions/numeric-promotion.js";
 import { selectRustExactIntegerConversion } from "../../target-model/conversions/exact-integer.js";
@@ -106,17 +106,15 @@ export function selectRustSourceValueConversion(
   if (isRustNeverCarrier(source)) {
     return Object.freeze({ kind: "bottom-coercion", source, target });
   }
-  const targetUnion = rustUnionAlternatives(target, definitions);
   const unionMapping = selectRustUnionArmMapping(source, target, "source", definitions);
   if (unionMapping !== undefined) return { kind: "union-map", source, target, coverage: "source", arms: unionMapping };
-  const matchingUnionVariants = targetUnion?.filter((variant) =>
-    variant.variant.kind === "payload" && rustTargetTypeRefEquals(variant.carrier, source)) ?? [];
-  if (matchingUnionVariants.length === 1) {
+  const injection = rustUnionInjectionVariant(source, target, definitions);
+  if (injection !== undefined) {
     return Object.freeze({
       kind: "source-union-variant",
       source,
       target,
-      variantName: matchingUnionVariants[0]!.variant.name,
+      variantName: injection.name,
     });
   }
   if (source.kind === "pointer" && target.kind === "pointer" &&

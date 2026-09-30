@@ -33,6 +33,7 @@ import { recordBindingWrite } from "../declarations/types-and-bindings.js";
 import { selectRustUnionArmMapping } from "../../target-model/types/union-relations.js";
 import { rustClosedValueCategoryProjection } from "../../target-model/types/carriers/closed-values.js";
 import { rustSourceOptionalElementCarrier } from "../../target-model/types/carriers/optional.js";
+import { selectRustClosedArrayView } from "../../policy/types/closed-array-views.js";
 
 export function applyFlowReadLane(
   walk: RustFactWalk,
@@ -230,8 +231,11 @@ function resolveSelectedFlowReadCarrier(
     }
   }
   if (isRustJsValueCarrier(sourceCarrier)) {
+    const resolution = rustResolutionContext(walk, expression);
+    const array = selectRustClosedArrayView(selectedType, resolution, walk.operationOptions);
+    if (array !== undefined) return array;
     const carrier = resolveRustTargetTypeRef(
-      selectedType, rustResolutionContext(walk, expression), walk.operationOptions,
+      selectedType, resolution, walk.operationOptions,
     );
     return carrier !== undefined && (rustTargetTypeRefEquals(carrier, rustJsErrorTargetType()) ||
       rustClosedValueCategoryProjection(carrier)) ? carrier : sourceCarrier;
