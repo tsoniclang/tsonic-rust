@@ -48,6 +48,39 @@ import { recordCallableReturnFact, recordCallableSuspensionFacts, selectedSource
 import { rustCapturedBindingStorage } from "./capture-storage.js";
 import { selectRustInferredNumericReturn } from "./inferred-numeric-return.js";
 
+export function resolveFunctionExpressionSignature(
+  walk: RustFactWalk,
+  expression: Node,
+  sourceCarrier?: TargetTypeRef,
+) {
+  const { ast } = walk.context;
+  const genericParameters = walk.context.sourceLifetimes.contractFor(expression)?.parameters
+    .flatMap(parameter => parameter.kind === "type" ? [rustTypeParameterFromSourceContract(parameter)] : []);
+  const parameters = ast.parameters(expression);
+  const sourceSelected = sourceCarrier ?? resolveRustTargetTypeRef(
+    expression, rustResolutionContext(walk, expression), walk.operationOptions,
+  );
+  const sourceProtocol = sourceSelected?.kind === "function-pointer"
+    ? { parameters: sourceSelected.args, result: sourceSelected.result }
+    : rustGenericCallableProtocol(sourceSelected, genericParameters) ?? rustClosureProtocol(sourceSelected) ?? rustCallableProtocol(sourceSelected);
+  const sourceResult = sourceProtocol === undefined ? undefined
+    : ast.hasModifierKind(expression, "async") ? sourceProtocol.result
+    : selectRustInferredNumericReturn(walk, expression, sourceProtocol.result);
+  if (sourceSelected === undefined || sourceProtocol === undefined || sourceResult === undefined) return undefined;
+  const parameterCarriers = sourceProtocol.parameters.map((carrier, index) =>
+    Node_Initializer(ast, parameters[index]) === undefined ? carrier : rustSourceOptionalTargetType(carrier));
+  const carrier = sourceSelected.kind === "function-pointer" || sourceSelected.kind === "closure"
+    ? { ...sourceSelected, args: parameterCarriers, result: sourceResult }
+    : rustGenericCallableValue(sourceSelected) !== undefined && genericParameters !== undefined
+      ? rustGenericCallableTargetType(genericParameters, parameterCarriers, sourceResult, rustGenericCallableValue(sourceSelected)!.origin)
+      : rustCallableTargetType(parameterCarriers, sourceResult);
+  return carrier === undefined ? undefined : {
+    carrier,
+    sourceCarrier: sourceSelected,
+    protocol: { ...sourceProtocol, result: sourceResult },
+  };
+}
+
 export function resolveFunctionExpressionCarrier(
   walk: RustFactWalk,
   expression: Node,
@@ -67,37 +100,11 @@ export function resolveFunctionExpressionCarrier(
   const genericParameters = walk.context.sourceLifetimes.contractFor(expression)?.parameters
     .flatMap(parameter => parameter.kind === "type" ? [rustTypeParameterFromSourceContract(parameter)] : []);
   const parameters = ast.parameters(expression);
-  const sourceSelected = options?.sourceCarrier ?? (expected === undefined
-    ? resolveRustTargetTypeRef(
-        expression,
-        rustResolutionContext(walk, expression),
-        walk.operationOptions,
-      )
-    : undefined);
-  const sourceProtocol = sourceSelected?.kind === "function-pointer"
-    ? { parameters: sourceSelected.args, result: sourceSelected.result }
-    : rustGenericCallableProtocol(sourceSelected, genericParameters) ?? rustClosureProtocol(sourceSelected) ?? rustCallableProtocol(sourceSelected);
-  const sourceResult = sourceProtocol === undefined ? undefined
-    : ast.hasModifierKind(expression, "async") ? sourceProtocol.result
-    : selectRustInferredNumericReturn(walk, expression, sourceProtocol.result);
-  const resolvedSourceCallable = sourceProtocol === undefined || sourceResult === undefined ? undefined
-    : { ...sourceProtocol, result: sourceResult };
-  const fallbackParameterCarriers = resolvedSourceCallable?.parameters.map((carrier, index) =>
-    Node_Initializer(ast, parameters[index]) === undefined
-      ? carrier
-      : rustSourceOptionalTargetType(carrier));
-  const selectedExpected = expected ?? (sourceSelected === undefined ||
-      resolvedSourceCallable === undefined || fallbackParameterCarriers === undefined
-    ? undefined
-    : sourceSelected.kind === "function-pointer" || sourceSelected.kind === "closure"
-    ? {
-        ...sourceSelected,
-        args: fallbackParameterCarriers,
-        result: resolvedSourceCallable.result,
-      }
-    : rustGenericCallableValue(sourceSelected) !== undefined && genericParameters !== undefined
-      ? rustGenericCallableTargetType(genericParameters, fallbackParameterCarriers, resolvedSourceCallable.result, rustGenericCallableValue(sourceSelected)!.origin)
-      : rustCallableTargetType(fallbackParameterCarriers, resolvedSourceCallable.result));
+  const inferred = expected === undefined || options?.sourceCarrier !== undefined
+    ? resolveFunctionExpressionSignature(walk, expression, options?.sourceCarrier) : undefined;
+  const sourceSelected = options?.sourceCarrier ?? inferred?.sourceCarrier;
+  const resolvedSourceCallable = inferred?.protocol;
+  const selectedExpected = expected ?? inferred?.carrier;
   if (selectedExpected === undefined || (selectedExpected.kind !== "function-pointer" &&
     rustClosureProtocol(selectedExpected) === undefined &&
     rustGenericCallableProtocol(selectedExpected, genericParameters) === undefined &&

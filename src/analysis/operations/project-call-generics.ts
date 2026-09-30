@@ -32,7 +32,7 @@ import { rustIndexedFieldKeyArgument } from "../facts/indexed-field-keys.js";
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 import { rustOptionalStorageValue, rustSourceOptionalTargetType } from "../../target-model/types/projections.js";
 import { resolveParameterAbi } from "../declarations/types-and-bindings.js";
-import { resolveExpressionCarrier } from "../expressions/carriers.js";
+import { resolveFunctionExpressionSignature } from "../callables/closures.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type {
@@ -312,8 +312,7 @@ function resolveProjectSourceInferenceCarrier(
 ): TargetTypeRef | undefined {
   const kind = walk.context.ast.kindName(argument);
   if (walk.context.ast.is.IsArrowFunction(argument) || walk.context.ast.is.IsFunctionExpression(argument)) {
-    const sourceFile = walk.context.ast.getSourceFile(argument);
-    return sourceFile === undefined ? undefined : resolveExpressionCarrier(walk, argument, sourceFile, undefined);
+    return resolveFunctionExpressionSignature(walk, argument)?.carrier;
   }
   if (kind === KindSpreadElement) {
     const inner = Node_Expression(walk.context.ast, argument);

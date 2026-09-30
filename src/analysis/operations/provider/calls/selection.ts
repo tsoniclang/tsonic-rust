@@ -527,8 +527,6 @@ function acceptRuntimeCallableCall(
   }
   const callee = request.source.sourceCallee.expression;
   if (context.ast.kindName(callee) === "KindPropertyAccessExpression") {
-    const selected = resolveRustTargetTypeRef(request.source.sourceCallee.type, context, options);
-    if (runtimeCallableProtocol(selected) === undefined) return undefined;
     const property = context.currentSemantics.operations.propertyAccess(callee);
     if (property === undefined) return undefined;
     const selection = selectRustCheckedPropertyAccess(
