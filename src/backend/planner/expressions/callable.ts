@@ -61,6 +61,8 @@ import { planRustGeneratorBody } from "../declarations/callables/generator-body.
 import { wrapRustJsPromiseBody } from "../declarations/callables/async-promise.js";
 import { planRustSuspendedCallableConstruction } from "./suspended-callables.js";
 import { planRustParameterEntryConversion } from "../declarations/callables/parameter-entry-conversion.js";
+import { finalizedConversionIsValid } from "../../../analysis/facts/finalized-operation/conversions.js";
+import { applyFinalizedValueConversion } from "./value-conversions.js";
 
 export function planCallableExpression(
   node: Node,
@@ -577,6 +579,22 @@ export function planRustCallableExpressionBody(
   } else if (asynchronous?.kind === "js-promise") {
     context.usedAliases?.add("js_abi");
     finalizedBlock = wrapRustJsPromiseBody(loweredBody, bodyIsFallible);
+  }
+  if (closureFact.invocationResult !== undefined) {
+    const conversion = closureFact.invocationResult;
+    const tail = finalizedBlock.statements[finalizedBlock.statements.length - 1];
+    if (!finalizedConversionIsValid(conversion, context.input.program.typeDefinitions) ||
+      !rustTargetTypeRefEquals(conversion.sourceCarrier, generator?.resultCarrier ?? asynchronous?.futureCarrier) ||
+      !rustTargetTypeRefEquals(conversion.targetCarrier, resultCarrier) ||
+      asynchronous?.kind === "native-future" || tail?.kind !== "tail") {
+      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+        "rust.backend.closure-result-conversion", "A suspended closure result conversion requires its exact constructed value and invocation ABI."));
+      return undefined;
+    }
+    const converted = applyFinalizedValueConversion(callableClosureContext, tail.expr,
+      conversion, node, "operation-result");
+    if (converted === undefined) return undefined;
+    finalizedBlock = { statements: [...finalizedBlock.statements.slice(0, -1), { kind: "tail", expr: converted }] };
   }
   if (suspended && resultIsFallible && asynchronous?.kind !== "native-future") {
     finalizedBlock = applyFallibleShape(finalizedBlock, {

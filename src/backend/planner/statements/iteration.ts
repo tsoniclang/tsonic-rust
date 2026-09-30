@@ -460,7 +460,8 @@ export function planForOfStatement(
           : nonConsumingIterable],
       }
     : fact.lowering.kind === "js-array"
-      ? { kind: "method-call", receiver: nonConsumingIterable, method: "iter_values", args: [] }
+      ? { kind: "method-call", receiver: nonConsumingIterable.kind === "reference"
+          ? nonConsumingIterable.expr : nonConsumingIterable, method: "iter_values", args: [] }
       : fact.lowering.kind === "receiver-method"
         ? { kind: "method-call", receiver: nonConsumingIterable, method: fact.lowering.name, args: [] }
       : fact.lowering.kind === "owned-call"

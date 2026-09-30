@@ -8,6 +8,7 @@ import { rustSourceTypeCarrierValue } from "../../target-model/types/index.js";
 import { setCarrierFact } from "../operations/project-calls.js";
 import { rustSourceTypeDeclarations } from "../../policy/types/source-declarations.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
+import { sourceCallableInterface } from "@tsonic/target-api/source";
 
 export function recordRustInterfaceRepresentationAliases(
   walk: RustFactWalk,
@@ -43,19 +44,24 @@ export function recordRustInterfaceRepresentationAliases(
     const declaredType = semantics.declarations.declaredType(declaration);
     const symbol = declaredType === undefined ? undefined : semantics.declarations.typeSymbol(declaredType);
     const declarations = symbol === undefined ? undefined : semantics.declarations.symbolDeclarations(symbol);
+    const callable = sourceCallableInterface(declaredType, semantics, ast);
+    if (callable !== undefined && declarations !== undefined) {
+      for (const merged of declarations) facts.set(merged, rustTypeOnlyDeclarationFactKey, { reason: "representation-alias" });
+      return true;
+    }
     if (declaredType !== undefined && declarations !== undefined && declarations.length > 0 &&
       declarations.every(member => ast.kindName(member) === "KindInterfaceDeclaration") &&
       semantics.types.constructSignatures(declaredType).length !== 0) {
       const carrier = resolveRustTargetTypeRef(declaredType, rustResolutionContext(walk, declaration), walk.operationOptions);
       if (carrier === undefined || rustSourceTypeCarrierValue(carrier) !== undefined) {
         appendRustDiagnostic(walk, "RUST_CONSTRUCTOR_INTERFACE_NOT_CLOSED",
-          "A constructor interface requires one complete checked construction and static-member representation.", declaration, []);
+          "An interface representation requires its complete checked callable, construction and member contract.", declaration, []);
         return false;
       }
       for (const merged of declarations) {
         if (!walk.sourceTypes.registerRepresentationAlias(merged, carrier) || setCarrierFact(walk, merged, carrier) === undefined) {
           appendRustDiagnostic(walk, "RUST_INTERFACE_REPRESENTATION_CONFLICT",
-            "Merged constructor interfaces require one exact native representation.", merged, []);
+            "Merged interfaces require one exact native representation.", merged, []);
           return false;
         }
         facts.set(merged, rustTypeOnlyDeclarationFactKey, { reason: "representation-alias" });

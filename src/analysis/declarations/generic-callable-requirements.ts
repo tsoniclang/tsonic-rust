@@ -21,7 +21,7 @@ import type { RustObjectRepresentationPlan } from "../project-types/object-repre
 import { createRustProjectProjectionRequirementCollector } from "./project-projection-requirements.js";
 import type { RustValueLifetimePlan } from "../program/value-lifetimes.js";
 import { KindBinaryExpression, KindExpressionStatement, Node_Expression } from "@tsonic/target-api/source";
-import { rustValueCarrierBeforeOptionProjection } from "../facts/value-carrier-queries.js";
+import { rustEffectiveValueCarrier, rustValueCarrierBeforeOptionProjection } from "../facts/value-carrier-queries.js";
 import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
@@ -472,7 +472,8 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       }
     }
     const projection = facts.getFact(node, rustFlowReadProjectionFactKey);
-    if (projection?.kind === "option-value" || projection?.kind === "source-union") {
+    if ((projection?.kind === "option-value" || projection?.kind === "source-union") &&
+      !input.valueLifetimes.canMove(node)) {
       const error = addUse(node, projection.selectedCarrier, ["clone"]);
       if (error !== undefined) return error;
     }
@@ -493,9 +494,7 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
     }
     if (ast.kindName(node) === "KindAwaitExpression") {
       const operand = Node_Expression(ast, node);
-      const operandCarrier = operand === undefined
-        ? undefined
-        : facts.getRuntimeCarrierFact(operand)?.carrier;
+      const operandCarrier = rustEffectiveValueCarrier(facts, operand);
       const future = operand === undefined
         ? undefined
         : facts.getFact(operand, rustFutureValueFactKey);

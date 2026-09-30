@@ -341,7 +341,7 @@ function resolveSelectedFlowReadCarrier(
     return undefined;
   }
   const includesNullish = selectedMembers.some((member) =>
-    member !== undefined && walk.context.semanticsFor(expression).types.isNullish(member));
+    member !== undefined && (semantics.types.isNullish(member) || semantics.types.isVoidLike(member)));
   if (includesNullish) {
     return sourceCarrier;
   }

@@ -20,6 +20,8 @@ import { retainRustStructuralInstantiation } from "./structural-instantiations.j
 import { rustTypeFamilyNormalizer } from "../type-family-normalization.js";
 import { rustClassConstructorTargetType } from "../../../target-model/types/carriers/class-constructors.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { sourceCallableInterface } from "@tsonic/target-api/source";
+import { resolveCallableType } from "./callables.js";
 
 export interface RustResolvedProjectGenericArguments {
   readonly values: readonly RustTargetGenericArgument[];
@@ -56,6 +58,10 @@ export function resolveProjectSourceCarrier(
         ...symbolDeclarations.filter((declaration) => declaration !== selectedDeclaration),
       ];
   for (const declaration of declarations) {
+    if (context.ast.is.IsInterfaceDeclaration(declaration) && selectedType !== undefined &&
+      sourceCallableInterface(selectedType, context.currentSemantics, context.ast) !== undefined) {
+      return resolveCallableType(selectedType, context, options, resolving);
+    }
     const carrier = options.sourceTypes.carrierForDeclaration(declaration, context.ast);
     if (selectedType !== undefined && (context.ast.is.IsClassDeclaration(declaration) || context.ast.is.IsClassExpression(declaration))) {
       const signatures = context.currentSemantics.types.constructSignatures(selectedType);

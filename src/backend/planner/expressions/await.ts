@@ -16,6 +16,7 @@ import { allocateRustSyntheticName, createRustSyntheticNameState } from "../name
 import { applyFinalizedValueConversion } from "./value-conversions.js";
 import { requireExpressionCarrier, rustOperationFact } from "./fundamentals.js";
 import { planRustAbsentValue } from "./optional-storage.js";
+import { rustEffectiveValueCarrier } from "../../../analysis/facts/value-carrier-queries.js";
 
 export function planRustAwaitExpression(
   node: Node,
@@ -33,7 +34,7 @@ export function planRustAwaitExpression(
   const planned = operand === undefined ? undefined : planExpression(operand, context);
   if (planned === undefined) return undefined;
   const future = operand === undefined ? undefined : context.input.program.facts.getFact(operand, rustFutureValueFactKey);
-  const operandCarrier = operand === undefined ? undefined : context.input.program.facts.getRuntimeCarrierFact(operand)?.carrier;
+  const operandCarrier = rustEffectiveValueCarrier(context.input.program.facts, operand);
   const selection = rustAwaitCarrier(operandCarrier);
   if (selection === undefined || future === undefined || !rustFutureValueMatchesCarrier(future, operandCarrier, context.input.program.typeDefinitions) ||
     !rustTargetTypeRefEquals(awaitFact.resultCarrier, selection.resultCarrier)) {

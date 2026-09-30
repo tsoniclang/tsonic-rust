@@ -24,7 +24,9 @@ export function resolveCallableType(
   resolving: Set<object>,
 ): TargetTypeRef | undefined {
   const callable = context.currentSemantics.types.callable(type);
-  if (callable === undefined) {
+  if (callable === undefined || context.currentSemantics.types.propertyInfos(type).length !== 0 ||
+    context.currentSemantics.types.indexInfos(type).length !== 0 ||
+    context.currentSemantics.types.constructSignatures(type).length !== 0) {
     return undefined;
   }
   const declaration = callable.result.declaration;

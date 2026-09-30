@@ -114,17 +114,7 @@ export function selectRustFlowReadProjection(
     if (selectedCarrier.kind === "reference" && selectedCarrier.mutable) {
       return { kind: "projection", fact: { kind: "option-reference", sourceCarrier, selectedCarrier } };
     }
-    return rustCarrierSupportsTrait(
-      selectedCarrier,
-      "core::clone::Clone",
-      () => true,
-      (projection, trait) => trait === "core::clone::Clone" && projection.trait?.sourceItem !== undefined, definitions,
-    )
-      ? {
-          kind: "projection",
-          fact: { kind: "option-value", sourceCarrier, selectedCarrier },
-        }
-      : { kind: "incompatible" };
+    return { kind: "projection", fact: { kind: "option-value", sourceCarrier, selectedCarrier } };
   }
   const sourceDefinition = projectTypes.definitionForCarrier(dispatchCarrier);
   const targetDefinition = projectTypes.definitionForCarrier(selectedCarrier);

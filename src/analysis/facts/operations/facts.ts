@@ -5,7 +5,7 @@ import type { RustSwitchComparison } from "../../../target-model/operations/swit
 import type { RustClosedTypeTestPlan, RustProjectTypeTestPlan } from "../../../target-model/operations/type-tests.js";
 import type { RustProjectDowncastFact } from "../../../target-model/types/project-projections.js";
 import type { RustArgumentMode, RustOperationCarrierRequirement, RustProviderFactOperationKind, RustRuntimeSetOperationKind, RustSourceCallParameterPlan, RustValueConversion } from "../../../target-model/operations/model.js";
-import type { RustFinalizedOperationAbiFor } from "../finalized-operation-abi.js";
+import type { RustFinalizedOperationAbiFor, RustFinalizedValueConversion } from "../finalized-operation-abi.js";
 import type { RustAssignmentOperator, RustOperationSymbol, RustOperatorToken } from "../../../target-model/syntax/tokens.js";
 import type {
   RustTargetGenericArgument,
@@ -592,6 +592,7 @@ export type RustTargetOperationFact =
       readonly parameterForms: "required-only" | "source";
       readonly byRefCopyParams: readonly boolean[];
       readonly ignoredParameterCarriers: readonly TargetTypeRef[];
+      readonly invocationResult?: RustFinalizedValueConversion;
       readonly leadingParameters?: readonly {
         readonly kind: "this" | "receiver";
         readonly carrier: TargetTypeRef;

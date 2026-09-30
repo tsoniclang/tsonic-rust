@@ -47,6 +47,8 @@ import { rustGenericCallableProtocol, rustGenericCallableTargetType, rustGeneric
 import { recordCallableReturnFact, recordCallableSuspensionFacts, selectedSourceCallableReturn } from "./signatures.js";
 import { rustCapturedBindingStorage } from "./capture-storage.js";
 import { selectRustInferredNumericReturn } from "./inferred-numeric-return.js";
+import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
+import { finalizeValueConversion } from "../facts/finalized-operation/conversions.js";
 
 export function resolveFunctionExpressionSignature(
   walk: RustFactWalk,
@@ -232,7 +234,15 @@ export function resolveFunctionExpressionCarrier(
         (ast.kindName(body) === KindBlock ? selectedSourceCallableReturn(walk, expression) : undefined),
       rustResolutionContext(walk, expression), walk.operationOptions))
     : selectedResult;
-  const selectedValueResult = generator?.resultCarrier ?? asynchronous?.futureCarrier ?? selectedResultExpectation;
+  const suspendedResult = generator?.resultCarrier ?? asynchronous?.futureCarrier;
+  const invocationResult = suspendedResult === undefined || selectedResultExpectation === undefined ||
+      rustTargetTypeRefEquals(suspendedResult, selectedResultExpectation)
+    ? undefined : finalizeValueConversion(selectRustSourceValueConversion(suspendedResult,
+        selectedResultExpectation, walk.context.typeDefinitions), suspendedResult,
+        selectedResultExpectation, walk.context.typeDefinitions);
+  if (suspendedResult !== undefined && selectedResultExpectation !== undefined &&
+      !rustTargetTypeRefEquals(suspendedResult, selectedResultExpectation) && invocationResult === undefined) return undefined;
+  const selectedValueResult = invocationResult?.targetCarrier ?? suspendedResult ?? selectedResultExpectation;
   const selectedBodyResult = generator?.returnType ?? asynchronous?.outputCarrier ?? selectedResultExpectation;
   const selectedReturnFact = generator?.resultCarrier ?? selectedBodyResult;
   if (finalizedReturn !== undefined && selectedReturnFact !== undefined &&
@@ -295,7 +305,7 @@ export function resolveFunctionExpressionCarrier(
     ...parameterCarriers,
     ...targetParameterCarriers.slice(parameters.length),
   ];
-  const valueResult = generator?.resultCarrier ?? asynchronous?.futureCarrier ?? bodyCarrier;
+  const valueResult = invocationResult?.targetCarrier ?? suspendedResult ?? bodyCarrier;
   const closureCarrier = selectedExpected.kind === "function-pointer" || selectedExpected.kind === "closure"
     ? { ...selectedExpected, args: finalizedParameterCarriers, result: valueResult }
     : rustGenericCallableValue(selectedExpected) !== undefined && genericParameters !== undefined
@@ -327,6 +337,7 @@ export function resolveFunctionExpressionCarrier(
       : "required-only",
     byRefCopyParams,
     ignoredParameterCarriers: targetParameterCarriers.slice(parameters.length),
+    ...(invocationResult === undefined ? {} : { invocationResult }),
     ...(leadingParameters.length === 0 ? {} : { leadingParameters }),
     resultCarrier: closureCarrier,
   });

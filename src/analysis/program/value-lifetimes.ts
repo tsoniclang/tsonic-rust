@@ -162,8 +162,12 @@ function classifyDeclaration(
   const storageOnly = !summary.bindingWritten && !summary.hasUnclassifiedValueUse &&
     runtimeUses.every(use => use.role === "storage" && !use.throughMember);
   for (const { reference } of runtimeUses) {
+    const expression = transparentUseExpression(reference, input.ast);
+    const parent = input.ast.parent(expression);
+    const awaited = parent !== undefined && input.ast.kindName(parent) === "KindAwaitExpression" &&
+      Node_Expression(input.ast, parent) === expression;
     if (isExactCallableExitValue(reference, declaration, input) ||
-      (input.isOwnedString(declaration) || storageOnly) &&
+      (input.isOwnedString(declaration) || storageOnly || awaited) &&
         isLastUseOnPath(reference, declaration, { ...input, storageOnly })) {
       movableReferences.add(reference);
     }
@@ -261,6 +265,7 @@ function isLastUseOnPath(
         "KindObjectLiteralExpression", "KindArrayLiteralExpression"].includes(kind)) &&
       !(input.isOwnedFieldProjection?.(parent) === true && Node_Expression(input.ast, parent) === current) &&
       kind !== "KindCallExpression" && kind !== "KindNewExpression" &&
+      kind !== "KindAwaitExpression" &&
       kind !== "KindReturnStatement" && kind !== "KindExpressionStatement" &&
       kind !== "KindVariableDeclaration" && kind !== "KindVariableDeclarationList" &&
       kind !== "KindVariableStatement" && kind !== "KindBlock" &&
