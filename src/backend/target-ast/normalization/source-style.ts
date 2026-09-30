@@ -19,7 +19,7 @@ import type { RustNamedSignatureScope } from "./signature-aliases.js";
 import { closePublicRustTypeVisibility, publicDeclaredRustTypeNames } from "./signature-visibility.js";
 import { rustItemsReferenceModuleAlias } from "../inspection/source-module-usage.js";
 import { rustTypeEquals } from "../inspection/type-equality.js";
-import { mergeRustAdjacentConditionalBranches } from "./conditional-branches.js";
+import { mergeRustAdjacentConditionalBranches, simplifyRustBooleanConditional } from "./conditional-branches.js";
 import { appendRustNamingAllowance, finalizeRustFunctionNames, finalizeRustItemNames,
   rustExpressionDeclaresNonSnakeName, rustStatementDeclaresNonSnakeName } from "./authored-names.js";
 
@@ -227,6 +227,15 @@ function finalizeRustStatementStyle(statement: RustStmt): RustStmt {
       const otherwise = statement.else === undefined
         ? undefined
         : finalizeRustBlockStyle(statement.else);
+      const consequent = then.statements.length === 1 ? then.statements[0] : undefined;
+      const alternative = otherwise?.statements.length === 1 ? otherwise.statements[0] : undefined;
+      if ((consequent?.kind === "return" || consequent?.kind === "tail") && alternative?.kind === consequent.kind &&
+        consequent.expr !== undefined && alternative.expr !== undefined &&
+        (then.innerAttrs?.length ?? 0) === 0 && (otherwise?.innerAttrs?.length ?? 0) === 0 &&
+        (statement.attrs?.length ?? 0) === 0) {
+        const returned = simplifyRustBooleanConditional(condition, consequent.expr, alternative.expr);
+        if (returned !== undefined) return { kind: consequent.kind, expr: returned };
+      }
       let attrs = statement.attrs;
       if (condition.kind === "binary" && (condition.operator === "==" || condition.operator === "!=") &&
         condition.left.kind === "path" && condition.right.kind === "path" && condition.left.path === condition.right.path) {
@@ -478,7 +487,8 @@ function finalizeRustExpressionStyle(expression: RustExpr): RustExpr {
         whenFalse.kind === "tuple-literal" && whenFalse.elements.length === 0) {
         return { kind: "evaluate-then", effect: condition, discard: "value", value: whenTrue };
       }
-      result = mergeRustAdjacentConditionalBranches(condition, whenTrue, whenFalse) ?? {
+      result = simplifyRustBooleanConditional(condition, whenTrue, whenFalse) ??
+        mergeRustAdjacentConditionalBranches(condition, whenTrue, whenFalse) ?? {
         ...expression,
         condition,
         whenTrue,
@@ -552,8 +562,7 @@ function finalizeRustExpressionStyle(expression: RustExpr): RustExpr {
       result = { ...expression, expression: finalizeRustExpressionStyle(expression.expression) };
       break;
     case "evaluate-then":
-      if (expression.discard === "unit" &&
-        expression.effect.kind === "tuple-literal" && expression.effect.elements.length === 0) {
+      if (expression.effect.kind === "tuple-literal" && expression.effect.elements.length === 0) {
         return finalizeRustExpressionStyle(expression.value);
       }
       result = {

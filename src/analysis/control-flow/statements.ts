@@ -41,14 +41,8 @@ import {
   VariableStatement_DeclarationList,
   sourceIntegerInduction,
 } from "@tsonic/target-api/source";
-import {
-  isRustBigIntCarrier,
-  isRustBoolCarrier,
-  isRustNumericCarrier,
-  isRustStringCarrier,
-  rustProgramErrorTargetType,
-  rustSourceTypeCarrierValue,
-} from "../../target-model/types/index.js";
+import { rustOptionElementCarrier, rustProgramErrorTargetType } from "../../target-model/types/index.js";
+import { rustSwitchCarrierSupportsEquality, selectRustSwitchComparison } from "../../policy/operations/control-flow/switch.js";
 import {
   rustAsyncFunctionFactKey,
   rustGeneratorFactKey,
@@ -65,7 +59,6 @@ import { recordThrowFacts } from "../resources/suspension.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
-import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
@@ -423,22 +416,22 @@ function recordSwitchFacts(
     if (ast.kindName(clause) === KindCaseClause) {
       const carrier = expression === undefined
         ? undefined
-        : resolveExpressionCarrier(walk, expression, sourceFile, discriminantCarrier);
-      if (expression === undefined || carrier === undefined ||
-        !rustTargetTypeRefEquals(carrier, discriminantCarrier)) {
+        : resolveExpressionCarrier(walk, expression, sourceFile, rustOptionElementCarrier(discriminantCarrier) ?? discriminantCarrier);
+      const comparison = carrier === undefined ? undefined : selectRustSwitchComparison(discriminantCarrier, carrier);
+      if (expression === undefined || carrier === undefined || comparison === undefined) {
         appendRustDiagnostic(
           walk,
           "RUST_SWITCH_CASE_NOT_CLOSED",
-          "Switch case selection requires the exact discriminant carrier.",
+          "Switch case selection requires an exact native equality and absence relationship.",
           clause,
           ["target.capability=rust.switch"],
         );
         failed = true;
       } else {
-        finalizedClauses.push({ clause, expression, carrier });
+        finalizedClauses.push(Object.freeze({ clause, expression, carrier, comparison: Object.freeze(comparison) }));
       }
     } else {
-      finalizedClauses.push({ clause });
+      finalizedClauses.push(Object.freeze({ clause }));
     }
     const statements = CaseOrDefaultClause_Statements(ast, clause);
     if (statements === undefined || statements.some((child) => child === undefined)) {
@@ -454,18 +447,10 @@ function recordSwitchFacts(
       kind: "switch",
       operationId: "tsonic.rust.control.switch.strict-equality",
       discriminantCarrier,
-      clauses: finalizedClauses,
+      clauses: Object.freeze(finalizedClauses),
     });
   }
 }
-
-function rustSwitchCarrierSupportsEquality(carrier: TargetTypeRef): boolean {
-  const sourceType = rustSourceTypeCarrierValue(carrier);
-  return isRustNumericCarrier(carrier) || isRustBigIntCarrier(carrier) || isRustBoolCarrier(carrier) ||
-    isRustStringCarrier(carrier) || sourceType?.shape === "enum";
-}
-
-
 
 export function resolveTypeNodeCarrier(walk: RustFactWalk, typeNode: Node | undefined): TargetTypeRef | undefined {
   if (typeNode === undefined) {

@@ -87,7 +87,14 @@ export function rustFoundationForTargetOperationFact(
       break;
     case "switch":
       requireCarrier(fact.discriminantCarrier);
-      fact.clauses.forEach((clause) => requireCarrier(clause.carrier));
+      fact.clauses.forEach((clause) => {
+        requireCarrier(clause.carrier);
+        if (clause.comparison?.kind !== "native") return;
+        const operation = clause.comparison.operation;
+        requireConversion(operation.leftConversion);
+        requireConversion(operation.rightConversion);
+        if (operation.kind === "operator-call") require(rustFoundationForPath(operation.path));
+      });
       break;
     case "provider-operation":
     case "runtime-set":

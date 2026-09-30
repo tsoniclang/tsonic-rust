@@ -1,20 +1,14 @@
 import {
-  CaseBlock_Clauses,
-  CaseOrDefaultClause_Expression,
-  CaseOrDefaultClause_Statements,
   DoStatement_Statement,
   LabeledStatement_Label,
   LabeledStatement_Statement,
   IterationStatement_Statement,
-  SwitchStatement_CaseBlock,
-  SwitchStatement_Expression,
   ForStatement_Condition,
   ForStatement_Incrementor,
   ForStatement_Initializer,
   BinaryExpression_Left,
   IfStatement_ElseStatement,
   IfStatement_ThenStatement,
-  KindCaseClause,
   KindDoStatement,
   KindForStatement,
   KindForInStatement,
@@ -25,7 +19,7 @@ import {
   Node_Expression,
 } from "@tsonic/target-api/source";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { collectVariableDeclarations, directResourceDeclaration, planResourceManagedBody, resourceFactForPlanning, rustBlockDefinitelyExits } from "./resources.js";
+import { collectVariableDeclarations, planResourceManagedBody, resourceFactForPlanning, rustBlockDefinitelyExits } from "./resources.js";
 import { diagnosticInput, isValidRustIdentifier } from "../program/plan-context.js";
 import {
   expressionCarrier,
@@ -35,9 +29,8 @@ import {
   planNumericLiteralWithCarrier,
 } from "../expressions/index.js";
 import { isRustBoolCarrier } from "../../../target-model/types/index.js";
-import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
-import { negateRustBooleanExpression } from "../../target-ast/expressions.js";
-import { planBlockLike, planStatementSequence } from "./core.js";
+import { missingFactDiagnostic } from "../diagnostics.js";
+import { planBlockLike } from "./core.js";
 import { planExpressionAsStatement } from "./expression-statements.js";
 import { planVariableStatement } from "./variable-declarations.js";
 import { planForInStatement, planForOfStatement } from "./iteration.js";
@@ -51,7 +44,7 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { planSelectedRustProjectTypeTest } from "../expressions/binary.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustCountedLoopRepresentation } from "../../../analysis/control-flow/counted-loop-representations.js";
-import type { RustBlock, RustExpr, RustStmt } from "../../target-ast/nodes.js";
+import type { RustBlock, RustStmt } from "../../target-ast/nodes.js";
 import type { RustControlTarget, RustLoopTarget, RustPlanContext } from "../program/plan-context.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
@@ -261,154 +254,6 @@ export function planLabeledStatement(
   }
 }
 
-export function planSwitchStatement(
-  node: Node,
-  context: RustPlanContext,
-): readonly RustStmt[] | undefined {
-  const { ast } = context.input.program.source;
-  const fact = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
-  const discriminantNode = SwitchStatement_Expression(ast, node);
-  const clauseNodes = CaseBlock_Clauses(ast, SwitchStatement_CaseBlock(ast, node));
-  if (fact?.kind !== "switch" || discriminantNode === undefined || clauseNodes === undefined ||
-    clauseNodes.some((clause) => clause === undefined) || fact.clauses.length !== clauseNodes.length ||
-    fact.clauses.some((clause, index) => clause.clause !== clauseNodes[index])) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.switch-selection",
-      "Switch lowering requires one exact finalized discriminant and clause selection fact.",
-    ));
-    return undefined;
-  }
-  if (context.syntheticNames === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.switch-names",
-      "Switch lowering requires finalized hygienic-name state.",
-    ));
-    return undefined;
-  }
-  const discriminant = planExpression(discriminantNode, context);
-  const target = createRustBreakTarget(context, "switch");
-  if (discriminant === undefined || target === undefined) {
-    return undefined;
-  }
-  const switchContext = withRustControlTarget(context, target);
-  const sections: { readonly expression?: RustExpr; readonly body: RustBlock }[] = [];
-  for (let index = 0; index < clauseNodes.length; index += 1) {
-    const clause = clauseNodes[index]!;
-    const selected = fact.clauses[index]!;
-    const sourceExpression = CaseOrDefaultClause_Expression(ast, clause);
-    const statements = CaseOrDefaultClause_Statements(ast, clause);
-    if (statements === undefined || statements.some((statement) => statement === undefined) ||
-      (ast.kindName(clause) === KindCaseClause &&
-        (sourceExpression === undefined || selected.expression !== sourceExpression ||
-          selected.carrier === undefined ||
-          !rustTargetTypeRefEquals(selected.carrier, fact.discriminantCarrier)))) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, clause),
-        "rust.backend.switch-clause",
-        "Switch clause conflicts with its finalized source selection fact.",
-      ));
-      return undefined;
-    }
-    if (statements.some((statement) =>
-      statement !== undefined && directResourceDeclaration(statement, context) !== undefined)) {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        diagnosticInput(context, clause),
-        "rust.backend.switch-resource-scope",
-        "A switch-clause resource declaration requires an explicit block so its lexical disposal boundary is exact.",
-      ));
-      return undefined;
-    }
-    const expression = sourceExpression === undefined
-      ? undefined
-      : planExpression(sourceExpression, context);
-    if (sourceExpression !== undefined && expression === undefined) {
-      return undefined;
-    }
-    const body = planStatementSequence(
-      statements,
-      clause,
-      switchContext,
-    );
-    if (body === undefined) {
-      return undefined;
-    }
-    sections.push({
-      ...(expression === undefined
-        ? {}
-        : { expression: switchCaseComparisonExpression(expression) }),
-      body,
-    });
-  }
-
-  const fallthroughBody = (start: number): RustBlock => {
-    const statements: RustStmt[] = [];
-    for (let index = start; index < sections.length; index += 1) {
-      const section = sections[index]!;
-      statements.push(...section.body.statements);
-      if (rustBlockDefinitelyExits(section.body)) {
-        break;
-      }
-    }
-    return { statements };
-  };
-  const defaultIndex = sections.findIndex((section) => section.expression === undefined);
-  let selection: RustBlock = defaultIndex < 0
-    ? { statements: [] }
-    : fallthroughBody(defaultIndex);
-  const discriminantName = allocateRustSyntheticName(context.syntheticNames, "switch_value");
-  for (let index = sections.length - 1; index >= 0; index -= 1) {
-    const section = sections[index]!;
-    if (section.expression === undefined) {
-      continue;
-    }
-    selection = {
-      statements: [{
-        kind: "if",
-        condition: switchGuardCondition(discriminantName, section.expression),
-        then: fallthroughBody(index),
-        ...(selection.statements.length === 0 ? {} : { else: selection }),
-      }],
-    };
-  }
-  if (sections.every((section) => section.expression === undefined)) {
-    const body = target.used.value
-      ? [{ kind: "scope" as const, label: target.label, body: selection }]
-      : selection.statements;
-    return [
-      { kind: "let", name: "_", mutable: false, init: discriminant },
-      ...body,
-    ];
-  }
-  return [
-    { kind: "let", name: discriminantName, mutable: false, init: discriminant },
-    {
-      kind: "scope",
-      ...(target.used.value ? { label: target.label } : {}),
-      body: selection,
-    },
-  ];
-}
-
-function switchCaseComparisonExpression(expression: RustExpr): RustExpr {
-  return expression.kind === "string-literal"
-    ? { kind: "str-literal", value: expression.value }
-    : expression;
-}
-
-function switchGuardCondition(discriminantName: string, expression: RustExpr): RustExpr {
-  const discriminant: RustExpr = { kind: "path", path: discriminantName };
-  if (expression.kind === "bool-literal") {
-    return expression.value ? discriminant : negateRustBooleanExpression(discriminant);
-  }
-  return {
-    kind: "binary",
-    operator: "==",
-    left: discriminant,
-    right: expression,
-  };
-}
 
 export function planWhileStatement(
   node: Node,
@@ -682,7 +527,7 @@ export function createRustLoopTarget(
   return target;
 }
 
-function createRustBreakTarget(
+export function createRustBreakTarget(
   context: RustPlanContext,
   kind: "switch" | "label",
   sourceLabel?: string,

@@ -619,6 +619,13 @@ export function analyzeRustGeneratedItemUsage(input: {
           markProjectWrapperCloneUsed(fact.iterableCarrier);
         }
         return;
+      case "switch":
+        for (const clause of fact.clauses) {
+          if (clause.comparison?.kind !== "native") continue;
+          visitConversion(clause.comparison.operation.leftConversion);
+          visitConversion(clause.comparison.operation.rightConversion);
+        }
+        return;
       case "string-concat":
       case "conditional":
       case "template-string":
@@ -626,7 +633,6 @@ export function analyzeRustGeneratedItemUsage(input: {
       case "void-expression":
       case "identity-expression":
       case "non-null-expression":
-      case "switch":
       case "array-literal":
       case "option-check":
       case "option-equality":

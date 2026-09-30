@@ -1,5 +1,18 @@
 import type { RustExpr } from "../nodes.js";
 import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";
+import { negateRustBooleanExpression } from "../expressions.js";
+
+export function simplifyRustBooleanConditional(
+  condition: RustExpr,
+  whenTrue: RustExpr,
+  whenFalse: RustExpr,
+): RustExpr | undefined {
+  if (whenTrue.kind !== "bool-literal" || whenFalse.kind !== "bool-literal") return undefined;
+  if (whenTrue.value === whenFalse.value) {
+    return { kind: "evaluate-then", effect: condition, discard: "value", value: whenTrue };
+  }
+  return whenTrue.value ? condition : negateRustBooleanExpression(condition);
+}
 
 export function mergeRustAdjacentConditionalBranches(
   condition: RustExpr,
