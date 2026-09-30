@@ -1,4 +1,5 @@
 import type { Node, Type } from "@tsonic/tsts";
+import { TypeReferenceNode_TypeName } from "@tsonic/target-api/source";
 import type { RustSelectedTargetSignature, RustTargetGenericArgument, TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustSourceTypeParameters } from "../../../target-model/names/type-parameters.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
@@ -54,8 +55,10 @@ export function bindRustSourceAliasArguments(
   const authoredApplication = authoredType === undefined ? undefined : context.currentSemantics.types.aliasApplication(authoredType);
   if (authoredApplication !== undefined && authoredApplication.declaration !== application.declaration) return undefined;
   const parameters = context.ast.typeParameters(application.declaration);
-  const argumentNodes = authoredTypeNode !== undefined && authoredApplication !== undefined &&
-    context.ast.is.IsTypeReferenceNode(authoredTypeNode) ? context.ast.typeArguments(authoredTypeNode) : [];
+  const reference = authoredTypeNode === undefined || !context.ast.is.IsTypeReferenceNode(authoredTypeNode)
+    ? undefined : context.source.navigation.sourceReferenceFor(TypeReferenceNode_TypeName(context.ast, authoredTypeNode));
+  const argumentNodes = authoredTypeNode !== undefined && reference?.declaration === application.declaration
+    ? context.ast.typeArguments(authoredTypeNode) : [];
   const substitutions = new Map(context.sourceTypeParameterSubstitutions);
   for (const binding of application.bindings) {
     const owner = context.ast.parent(binding.declaration);
@@ -66,8 +69,8 @@ export function bindRustSourceAliasArguments(
     const argumentNode = argumentNodes[parameters.indexOf(binding.declaration)];
     const authoredBinding = authoredApplication?.bindings.find(candidate => candidate.declaration === binding.declaration);
     const carrier = argumentNode !== undefined ? resolveRustAuthoredTargetType(argumentNode, context, options, resolving)
-      : authoredBinding !== undefined ? resolveRustTargetType(authoredBinding.argument, context, options, resolving)
       : existing?.sourceType === binding.argument ? existing.carrier
+      : authoredBinding !== undefined ? resolveRustTargetType(authoredBinding.argument, context, options, resolving)
       : resolveRustTargetType(binding.argument, context, options, resolving);
     if (carrier === undefined) return undefined;
     substitutions.set(binding.declaration, { sourceType: binding.argument, carrier });

@@ -29,7 +29,7 @@ import { asNode } from "../../evidence/selected-source.js";
 import { denseDefined, resolveProjectSourceCarrier } from "./project.js";
 import { fieldFactKey, functionPointerFactKey, pointerFactKey, structFactKey } from "@tsonic/tsts";
 import { resolveRustSourceMarker } from "./markers.js";
-import { instantiateProviderTargetType, providerCarrierFromRelations, resolveOwnedSourceProfileTypeName, resolveProviderTypeIdentity, resolveSourceProfileCarrierFromArguments } from "./providers.js";
+import { instantiateProviderTargetType, providerCarrierFromRelations, resolveOwnedSourceProfileTypeName, resolveOwnedSourceProfileTypeNameForDeclaration, resolveProviderTypeIdentity, resolveSourceProfileCarrierFromArguments } from "./providers.js";
 import { resolveCallableType, resolveSourcePrimitive, resolveSourceTypeParameter } from "./callables.js";
 import { resolveReferencedDeclarationType, resolveRustAuthoredTargetType, resolveRustTupleElementTargetTypeWithState, rustParameterLaneTargetType } from "./tuples.js";
 import { resolveRustFixedArrayTargetType, resolveRustTargetType, resolveStructuralObjectType } from "./target.js";
@@ -506,11 +506,9 @@ export function resolveRustTargetTypeSyntax(
       ? undefined
       : instantiateProviderTargetType(relation, providerArguments, context.typeDefinitions);
   }
-  const sourceProfileName = resolveOwnedSourceProfileTypeName(
-    selectedTypeSymbol,
-    context,
-    options.sourceProfiles,
-  );
+  const sourceProfileName = referencedDeclaration === undefined
+    ? resolveOwnedSourceProfileTypeName(selectedTypeSymbol, context, options.sourceProfiles)
+    : resolveOwnedSourceProfileTypeNameForDeclaration(referencedDeclaration, context, options.sourceProfiles);
   if (sourceProfileName !== undefined) {
     return resolveSourceProfileCarrierFromArguments(sourceProfileName, typeArguments as TargetTypeRef[], options);
   }
