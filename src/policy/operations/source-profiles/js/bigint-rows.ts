@@ -3,6 +3,23 @@ import { rustInt32ToFloat64ValueConversion } from "../../../../target-model/conv
 
 export const bigintOperationRows: readonly JsOperationRowData[] = [
   {
+    owner: "NumberConstructor", member: "call", operationKind: "call", lane: "number", variant: "empty",
+    shape: { op: "operation", operationKind: "method", target: { form: "call", path: "f64::default" }, result: { ref: "float64" } },
+  },
+  ...(["bool", "absence", "jsvalue"] as const).map((carrier): JsOperationRowData => ({
+    owner: "NumberConstructor", member: "call", operationKind: "call", lane: "number", variant: carrier,
+    shape: { op: "operation", operationKind: "method",
+      target: { form: "call", path: "js_abi::number_from_value", argModes: ["ref"] },
+      params: [{ ref: carrier }], result: { ref: "float64" } },
+  })),
+  {
+    owner: "NumberConstructor", member: "call", operationKind: "call", lane: "number", variant: "optional",
+    requirements: [{ carrier: { ref: "argument", index: 0 }, capability: "optional-number" }],
+    shape: { op: "operation", operationKind: "method",
+      target: { form: "call", path: "js_abi::number_from_value", argModes: ["ref"] },
+      params: [{ ref: "argument", index: 0 }], result: { ref: "float64" } },
+  },
+  {
     owner: "NumberConstructor", member: "call", operationKind: "call", lane: "number",
     variant: "string",
     shape: {

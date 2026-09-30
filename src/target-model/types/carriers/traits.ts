@@ -1,5 +1,5 @@
 import { isRustBigIntCarrier, isRustJsStringCarrier, isRustAbsenceCarrier, isRustStringCarrier, isRustUnitCarrier } from "./js.js";
-import { isRustIntegerCarrier, rustFutureTargetId, rustPrimitiveTypeName } from "./primitives.js";
+import { isRustIntegerCarrier, isRustNumericCarrier, rustFutureTargetId, rustPrimitiveTypeName } from "./primitives.js";
 import { rustRawPointerTargetId } from "./source-types.js";
 import { rustGenericCallableValue } from "./generic-callables.js";
 import { rustClassConstructorInstance } from "./class-constructors.js";
@@ -531,9 +531,20 @@ const rustUnconditionallyDefaultTargetIds: ReadonlySet<string> = new Set([
 ]);
 
 export function isRustSourceStringConvertibleCarrier(carrier: TargetTypeRef | undefined): boolean {
+  const optional = rustOptionElementCarrier(carrier);
+  if (optional !== undefined) return isRustSourceStringConvertibleCarrier(optional);
   return isRustStringCarrier(carrier) || isRustUnitCarrier(carrier) ||
     isRustAbsenceCarrier(carrier) ||
     isRustBigIntCarrier(carrier) ||
     (carrier?.kind === "target-named" && carrier.id === rustProgramErrorTargetId) ||
     (carrier?.kind === "source-primitive" && carrier.name !== "char");
+}
+
+export function isRustSourceNumberConvertibleCarrier(carrier: TargetTypeRef | undefined): boolean {
+  const optional = rustOptionElementCarrier(carrier);
+  if (optional !== undefined) return isRustSourceNumberConvertibleCarrier(optional);
+  return carrier?.kind === "source-primitive" && carrier.name === "bool" ||
+    isRustNumericCarrier(carrier) || isRustStringCarrier(carrier) || isRustBigIntCarrier(carrier) ||
+    isRustUnitCarrier(carrier) || isRustAbsenceCarrier(carrier) ||
+    carrier?.kind === "target-named" && (carrier.id === rustJsValueTargetId || carrier.id === rustJsNumericTargetId);
 }

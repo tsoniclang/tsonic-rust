@@ -3,6 +3,8 @@ import {
   type RustTypeDefinitions,
 } from "../../../../target-model/types/source-union-definitions.js";
 import { selectRustNumberArrayUnionOperation } from "./number-array-unions.js";
+import { isRustSourceNumberConvertibleCarrier } from "../../../../target-model/types/carriers/traits.js";
+import { rustOptionElementCarrier } from "../../../../target-model/types/carriers/optional.js";
 import { selectRustNumericRestCarrier } from "./numeric-rest.js";
 import { rustJsArrayEntriesElementTargetType } from "../../../../target-model/types/carriers/array-entries.js";
 import {
@@ -533,6 +535,8 @@ function carrierRequirementsMatch(
           (carrier !== undefined && request.canRequireClone?.(carrier) === true);
       case "stringifiable":
         return isRustSourceStringConvertibleCarrier(carrier);
+      case "optional-number":
+        return rustOptionElementCarrier(carrier) !== undefined && isRustSourceNumberConvertibleCarrier(carrier);
       case "js-equality":
         return rustCarrierSupportsJsEquality(carrier);
       case "project-identity-equality":
