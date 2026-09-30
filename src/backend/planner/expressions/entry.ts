@@ -122,6 +122,7 @@ function planProjectedExpression(
   const borrowFlow = access === "shared-reference" && override === undefined &&
     context.flowReadOverrides?.has(node) !== true &&
     (flowRead?.kind === "source-union" || flowRead?.kind === "runtime-union") &&
+    flowRead.project === undefined &&
     rustOptionElementCarrier(flowRead.selectedCarrier) === undefined &&
     upcast === undefined && downcast === undefined && lifetimeReconciliation === undefined &&
     contextualConversion === undefined && projection === undefined && objectView === undefined;

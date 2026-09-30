@@ -169,7 +169,8 @@ export function rustProjectStateMarker(
   readonly type: RustType;
   readonly value: RustExpr;
 } | undefined {
-  if (parameterIndexes.length === 0) {
+  const parameters = planRustProjectGenerics(definition, [], context, parameterIndexes).bindings.map(binding => binding.parameter);
+  if (parameters.length === 0) {
     return undefined;
   }
   return {
@@ -181,17 +182,15 @@ export function rustProjectStateMarker(
         kind: "type",
         type: {
           kind: "tuple",
-          elements: parameterIndexes.map((index): RustType => {
-            const parameter = definition.genericParameters[index];
-            if (parameter === undefined) throw new Error("A native state marker has an invalid generic parameter index.");
+          elements: parameters.map((parameter): RustType => {
             return parameter.kind === "lifetime"
               ? {
                   kind: "reference",
                   referent: { kind: "unit" },
                   mutable: false,
-                  lifetime: rustLifetimeToAst(parameter.lifetime),
+                  lifetime: { kind: "named", name: parameter.name },
                 }
-              : { kind: "named", path: context.typeParameterNames?.get(parameter.identity) ?? parameter.targetName };
+              : { kind: "named", path: parameter.name };
           }),
         },
       }],

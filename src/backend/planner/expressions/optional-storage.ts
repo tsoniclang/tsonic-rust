@@ -67,3 +67,11 @@ export function planRustAbsentValue(carrier: TargetTypeRef, context: RustTypeRen
   }
   throw new Error("A source absence requires finalized native optional storage.");
 }
+
+export function planRustPresentValue(
+  carrier: TargetTypeRef, value: RustExpr, context: RustTypeRenderingContext,
+): RustExpr {
+  if (rustOptionalStorageValue(carrier) !== undefined) return planRustOptionalStorageOperation(carrier, "present", [value], context);
+  if (isRustOptionCarrier(carrier)) return { kind: "call", path: "Some", args: [value] };
+  throw new Error("A source present value requires finalized native optional storage.");
+}

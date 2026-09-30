@@ -1,5 +1,7 @@
 import type { Node } from "@tsonic/tsts";
-import { planRustAbsentValue } from "../../expressions/optional-storage.js";
+import { planRustAbsentValue, planRustPresentValue } from "../../expressions/optional-storage.js";
+import { planRustOptionBranch } from "../../expressions/option-branch.js";
+import { rustOptionalStorageValue } from "../../../../target-model/types/projections.js";
 import { planRustGenericCallableFlow } from "../../expressions/generic-callable-flow.js";
 import { planRustCallableAbsenceCompletion } from "../../expressions/callable-completion.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
@@ -139,6 +141,8 @@ export function applyRustCallableValueAdapterRaw(
     case "call-scoped-lifetime":
       return { expression, fallible: false };
     case "option-some": {
+      if (!rustTargetTypeRefEquals(adapter.sourceCarrier, adapter.element.sourceCarrier) ||
+        !rustTargetTypeRefEquals(rustOptionElementCarrier(adapter.targetCarrier), adapter.element.targetCarrier)) return undefined;
       const element = applyRustCallableValueAdapterRaw(expression, adapter.element, node, context);
       if (element === undefined) {
         return undefined;
@@ -149,16 +153,19 @@ export function applyRustCallableValueAdapterRaw(
               kind: "method-call",
               receiver: element.expression,
               method: "map",
-              args: [{ kind: "path", path: "Some" }],
+              args: [{ kind: "closure", params: [{ name: "value", byRefCopy: false }],
+                body: planRustPresentValue(adapter.targetCarrier, { kind: "path", path: "value" }, context) }],
             },
             fallible: true,
           }
         : {
-            expression: { kind: "call", path: "Some", args: [element.expression] },
+            expression: planRustPresentValue(adapter.targetCarrier, element.expression, context),
             fallible: false,
           };
     }
     case "option-map": {
+      if (!rustTargetTypeRefEquals(rustOptionElementCarrier(adapter.sourceCarrier), adapter.element.sourceCarrier) ||
+        !rustTargetTypeRefEquals(rustOptionElementCarrier(adapter.targetCarrier), adapter.element.targetCarrier)) return undefined;
       const names = context.syntheticNames ?? createRustSyntheticNameState(
         context.input.program.source.ast,
         node,
@@ -173,6 +180,15 @@ export function applyRustCallableValueAdapterRaw(
       );
       if (element === undefined) {
         return undefined;
+      }
+      if (rustOptionalStorageValue(adapter.sourceCarrier) !== undefined || rustOptionalStorageValue(adapter.targetCarrier) !== undefined) {
+        const absent = planRustAbsentValue(adapter.targetCarrier, context);
+        const present = element.fallible ? { kind: "method-call" as const, receiver: element.expression, method: "map",
+          args: [{ kind: "closure" as const, params: [{ name: "value", byRefCopy: false }],
+            body: planRustPresentValue(adapter.targetCarrier, { kind: "path", path: "value" }, context) }] }
+          : planRustPresentValue(adapter.targetCarrier, element.expression, context);
+        return { expression: planRustOptionBranch(expression, adapter.sourceCarrier, elementName, present,
+          element.fallible ? { kind: "call", path: "Ok", args: [absent] } : absent, context), fallible: element.fallible };
       }
       const mapped: RustExpr = {
         kind: "method-call",

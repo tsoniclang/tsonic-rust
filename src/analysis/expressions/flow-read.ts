@@ -177,7 +177,7 @@ function selectedFlowReadSource(
   const refinement = walk.context.source.semantics.selectValueTypeRefinement(expression);
   const readsCheckedPayload = refinement.kind === "resolved" && refinement.refinement.kind === "exact" &&
     rustOptionElementCarrier(sourceCarrier) !== undefined && !preservesAbsence;
-  return refinement.kind === "resolved" && (refinement.refinement.kind === "members" || readsCheckedPayload)
+  return refinement.kind === "resolved" && (refinement.refinement.kind !== "exact" || readsCheckedPayload)
     ? { declaration: refinement.reference.declaration, type: refinement.selectedType }
     : undefined;
 }
@@ -280,6 +280,9 @@ function resolveSelectedFlowReadCarrier(
   const semanticCarrier = resolveRustTargetTypeRef(
     selectedType, rustResolutionContext(walk, expression), walk.operationOptions,
   );
+  if (semanticCarrier !== undefined && walk.context.projectTypes.definitionForCarrier(semanticCarrier) !== undefined) {
+    return semanticCarrier;
+  }
   if (semanticCarrier !== undefined && rustStructuralObjectCarrierValue(semanticCarrier)?.bases?.some(base =>
     rustTargetTypeRefEquals(base, dispatchCarrier))) {
     return semanticCarrier;

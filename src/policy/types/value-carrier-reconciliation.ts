@@ -71,6 +71,21 @@ export function selectRustFlowReadProjection(
     return { kind: "projection", fact: { kind: union === undefined ? "runtime-union" : "source-union",
       sourceCarrier, dispatchCarrier, selectedCarrier, variant: unionProjection.variant.name } };
   }
+  if (selectedPayload === undefined) {
+    const candidates = rustUnionAlternatives(dispatchCarrier, definitions)?.flatMap(arm => {
+      const projection = selectRustProjectProjection(arm.carrier, selectedCarrier, projectTypes);
+      return projection === undefined ? [] : [{ arm, projection }];
+    });
+    if (candidates?.length === 1) {
+      const { arm, projection } = candidates[0]!;
+      return { kind: "projection", fact: {
+        kind: union === undefined ? "runtime-union" : "source-union",
+        sourceCarrier, dispatchCarrier, selectedCarrier, variant: arm.variant.name,
+        project: { sourceCarrier: arm.carrier, dispatchCarrier: arm.carrier,
+          targetCarrier: selectedCarrier, projection },
+      } };
+    }
+  }
   if ((isRustJsValueCarrier(sourceCarrier) || isRustProgramErrorCarrier(sourceCarrier) &&
     projectTypes.builtinErrorProjectionAvailable === true) &&
     rustTargetTypeRefEquals(selectedCarrier, rustJsErrorTargetType())) {

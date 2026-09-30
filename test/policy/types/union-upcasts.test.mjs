@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { selectRustValueCarrierReconciliation } from "../../../dist/policy/types/value-carrier-reconciliation.js";
+import { selectRustValueCarrierReconciliation, selectRustFlowReadProjection } from "../../../dist/policy/types/value-carrier-reconciliation.js";
+import { rustFlowReadProjectionMatches } from "../../../dist/analysis/facts/flow-read-projections.js";
+import { rustFlowReadProjectionFactKey } from "../../../dist/analysis/facts/value-projections.js";
 import { selectRustCallableValueAdapter } from "../../../dist/analysis/callables/adapters.js";
 import { recordRustValueCarrierReconciliation, rustEffectiveValueCarrier } from "../../../dist/analysis/facts/value-carrier-queries.js";
 import { rustProjectUpcastFactKey, rustContextualValueConversionFactKey } from "../../../dist/analysis/facts/keys.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
-import { rustStringTargetType } from "../../../dist/target-model/types/index.js";
+import { rustOptionTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
 
 const derived = { kind: "target-named", id: "test.Derived" };
 const base = { kind: "target-named", id: "test.Base" };
@@ -41,6 +43,36 @@ test("native upcasts precede exact union injection in expression and callable co
   const adapter = selectRustCallableValueAdapter(derived, union, projectTypes, definitions);
   assert.deepEqual(adapter.upcast, selected.upcast);
   assert.deepEqual(adapter.conversion, selected.fact.conversion);
+});
+
+test("union flow retains exact nominal payload refinement and rejects forged or ambiguous routes", () => {
+  const { definitions } = policy([rustStringTargetType(), base]);
+  const projectTypes = {
+    definitionForCarrier: carrier => carrier === base || carrier === derived ? carrier : undefined,
+    relationship: (source, target) => source === derived && target === base
+      ? { kind: "related", targetType: base } : { kind: "unrelated" },
+    downcastRoute: () => ({ kind: "closed", slot: "projectChild" }),
+  };
+  for (const sourceCarrier of [union, rustOptionTargetType(union)]) {
+    const selected = selectRustFlowReadProjection(sourceCarrier, derived, projectTypes, definitions);
+    assert.equal(selected.kind, "projection");
+    assert.equal(selected.fact.variant, "Variant1");
+    assert.deepEqual(selected.fact.project, { sourceCarrier: base, dispatchCarrier: base, targetCarrier: derived,
+      projection: { kind: "closed", slot: "projectChild" } });
+    assert.equal(rustFlowReadProjectionMatches(selected.fact, projectTypes, definitions), true);
+    for (const changed of [
+      { ...selected.fact, variant: "Variant0" }, { ...selected.fact, project: undefined },
+      { ...selected.fact, project: { ...selected.fact.project, targetCarrier: base } },
+      { ...selected.fact, project: { ...selected.fact.project, projection: { kind: "generic" } } },
+      { ...selected.fact, project: { ...selected.fact.project, projection: { kind: "closed", slot: "forged" } } },
+    ]) {
+      assert.equal(rustFlowReadProjectionMatches(changed, projectTypes, definitions), false);
+      assert.equal(rustFlowReadProjectionFactKey.equals(selected.fact, changed), false);
+    }
+  }
+  const duplicate = { ...definitions, sourceUnionVariants: carrier => carrier === union
+    ? [{ name: "First", carrier: base }, { name: "Second", carrier: base }] : undefined };
+  assert.equal(selectRustFlowReadProjection(union, derived, projectTypes, duplicate).kind, "incompatible");
 });
 
 test("exact union payloads win and ambiguous native upcasts remain rejected", () => {

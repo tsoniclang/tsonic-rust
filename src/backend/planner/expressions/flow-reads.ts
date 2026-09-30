@@ -1,5 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustFlowReadProjectionMatches } from "../../../analysis/facts/flow-read-projections.js";
 import { rustUnionProjectionContract } from "../../../target-model/types/union-relations.js";
 import {
   isRustCopyCarrier,
@@ -15,7 +16,7 @@ import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.j
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { planRustProjectDowncast } from "../objects/project-downcasts.js";
+import { planRustProjectDowncast, planRustProjectProjection } from "../objects/project-downcasts.js";
 import { planRustProgramErrorFlowRead } from "./error-operations.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
@@ -81,16 +82,33 @@ export function planRustFlowReadProjection(
   }
   if (fact.kind === "source-union" || fact.kind === "runtime-union") {
     const definitions = context.input.program.typeDefinitions;
-    const selected = rustUnionProjectionContract(fact.sourceCarrier, fact.selectedCarrier, definitions);
+    if (!rustFlowReadProjectionMatches(fact, context.input.program.projectTypes, definitions)) {
+      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+        "rust.backend.source-union-projection", "Union flow projection conflicts with its sealed native payload relation."));
+      return undefined;
+    }
+    const payloadCarrier = fact.project?.sourceCarrier ?? fact.selectedCarrier;
+    const selected = rustUnionProjectionContract(fact.sourceCarrier, payloadCarrier, definitions);
     const kindMatches = (definitions.sourceUnionVariants(fact.dispatchCarrier) !== undefined) === (fact.kind === "source-union");
     const result = selected === undefined || !kindMatches || selected.variant.name !== fact.variant ||
       !rustTargetTypeRefEquals(selected.dispatchCarrier, fact.dispatchCarrier) ? undefined
-        : planRustUnionProjection(node, expression, fact.sourceCarrier, fact.selectedCarrier,
-          borrowedResult ? "shared-reference" : ownsValue ? "move" : "clone", context);
+        : planRustUnionProjection(node, expression, fact.sourceCarrier, payloadCarrier,
+          fact.project !== undefined || borrowedResult ? "shared-reference" : ownsValue ? "move" : "clone", context);
     if (result === undefined) {
       context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
         "rust.backend.source-union-projection", "The selected union payload has no exact non-consuming projection."));
       return undefined;
+    }
+    if (fact.project !== undefined) {
+      if (!rustTargetTypeRefEquals(fact.project.targetCarrier, fact.selectedCarrier) ||
+        !rustTargetTypeRefEquals(fact.project.sourceCarrier, fact.project.dispatchCarrier)) {
+        context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+          "rust.backend.source-union-projection", "Union payload refinement conflicts with its exact selected carrier."));
+        return undefined;
+      }
+      const projected = planRustProjectProjection(node, result.arms[0]!.expression, fact.project, context, "borrowed");
+      if (projected === undefined) return undefined;
+      return bindRustFlowMatchSubject({ ...result, arms: [{ ...result.arms[0]!, expression: projected }, ...result.arms.slice(1)] }, node, context);
     }
     return bindRustFlowMatchSubject(result, node, context);
   }

@@ -4,6 +4,7 @@ export type { RustBindingNormalization } from "../../target-model/types/binding-
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustContextualValueConversion } from "../../target-model/conversions/contextual.js";
 import type { RustProjectProjectionSelection } from "../../target-model/types/project-projections.js";
+import type { RustProjectDowncastFact } from "../../target-model/types/project-projections.js";
 import type { RustUnionArmMapping } from "../../target-model/types/union-relations.js";
 export type { RustProjectDowncastFact } from "../../target-model/types/project-projections.js";
 
@@ -25,6 +26,7 @@ interface RustUnionFlowReadProjection {
   readonly dispatchCarrier: TargetTypeRef;
   readonly selectedCarrier: TargetTypeRef;
   readonly variant: string;
+  readonly project?: RustProjectDowncastFact;
 }
 
 export type RustFlowReadProjectionFact =

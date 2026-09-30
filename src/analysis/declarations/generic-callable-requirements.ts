@@ -302,6 +302,12 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       }
       return undefined;
     };
+    if (node === declaration && definition !== undefined) {
+      for (const inherited of input.projectTypes.directSupertypes(input.projectTypes.openCarrier(definition)) ?? []) {
+        const inheritedError = collectType(inherited);
+        if (inheritedError !== undefined) return inheritedError;
+      }
+    }
     const carrier = facts.getRuntimeCarrierFact(node)?.carrier;
     const bindingProjection = facts.getFact(node, rustBindingProjectionFactKey);
     for (const copied of bindingProjection === undefined ? [] : rustBindingProjectionCloneCarriers(bindingProjection)) {
@@ -330,8 +336,10 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
     })) return "A selected call result has no closed native projection or generic obligation.";
     const downcast = facts.getFact(node, rustProjectDowncastFactKey);
     const flowProjection = facts.getFact(node, rustFlowReadProjectionFactKey);
+    const unionProject = flowProjection?.kind === "source-union" || flowProjection?.kind === "runtime-union"
+      ? flowProjection.project : undefined;
     const projectProjection = downcast === undefined ? flowProjection?.kind === "project-downcast"
-      ? { sourceCarrier: flowProjection.dispatchCarrier, targetCarrier: flowProjection.selectedCarrier } : undefined
+      ? { sourceCarrier: flowProjection.dispatchCarrier, targetCarrier: flowProjection.selectedCarrier } : unionProject
       : { sourceCarrier: downcast.dispatchCarrier, targetCarrier: downcast.targetCarrier };
     if (projectProjection !== undefined) {
       if (!projections.require(projectProjection)) return "A checked project projection has no closed native conversion or generic obligation.";
@@ -612,6 +620,12 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
   const error = visit(declaration);
   if (error !== undefined) {
     return { kind: "rejected", reason: error };
+  }
+  if (definition !== undefined && input.objectRepresentations.representationFor(definition)?.dispatchObjectLifetime?.kind === "static") {
+    for (const requirement of optionalStorage.seal()) {
+      const storageError = addUse(declaration, requirement.carrier, ["static"]);
+      if (storageError !== undefined) return { kind: "rejected", reason: storageError };
+    }
   }
   return {
     kind: "resolved",
