@@ -3,6 +3,15 @@ import type { JsOperationRowData } from "./model.js";
 export const stringConstructionRows: readonly JsOperationRowData[] = [
   {
     owner: "StringConstructor", member: "call", operationKind: "call", lane: "string",
+    variant: "closed-value", fallible: true,
+    shape: {
+      op: "operation", operationKind: "method",
+      target: { form: "call", path: "js_abi::closed_value_string", argModes: ["ref"] },
+      params: [{ ref: "jsvalue" }], result: { ref: "string" },
+    },
+  },
+  {
+    owner: "StringConstructor", member: "call", operationKind: "call", lane: "string",
     variant: "empty",
     shape: {
       op: "operation", operationKind: "method",

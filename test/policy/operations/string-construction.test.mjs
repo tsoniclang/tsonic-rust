@@ -82,13 +82,19 @@ export function main(): void {
   assert.equal(native.status, 0, JSON.stringify(native));
 });
 
-test("String construction does not invent dynamic object conversion or call identity", () => {
-  assert.equal(selectJsSurfaceOperation({
+test("String construction selects only its exact closed conversion and call identity", () => {
+  const closed = selectJsSurfaceOperation({
     ownerName: "StringConstructor", memberName: "call", operationKind: "call",
     argumentCarriers: [rustJsValueTargetType()],
-  }), undefined);
+  });
+  assert.equal(closed?.fact.target.path, "js_abi::closed_value_string");
+  assert.equal(closed?.fact.isFallible, true);
   assert.equal(selectJsSurfaceOperation({
     ownerName: "LocalConstructor", memberName: "call", operationKind: "call", argumentCarriers: [],
+  }), undefined);
+  assert.equal(selectJsSurfaceOperation({
+    ownerName: "StringConstructor", memberName: "call", operationKind: "call",
+    argumentCarriers: [{ kind: "target-named", id: "unproved.Object" }],
   }), undefined);
 });
 
