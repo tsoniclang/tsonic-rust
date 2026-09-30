@@ -25,6 +25,12 @@ export function rustOptionElementCarrier(
   return arguments_?.length === 1 ? arguments_[0] : undefined;
 }
 
+export function rustSourceOptionalElementCarrier(carrier: TargetTypeRef | undefined): TargetTypeRef | undefined {
+  return carrier?.kind === "type-parameter" && carrier.optionalStorageValue !== undefined ||
+    carrier?.kind === "target-named" && carrier.sourceAbsence === true
+    ? rustOptionElementCarrier(carrier) : undefined;
+}
+
 export function rustOptionNestingDepth(
   option: TargetTypeRef | undefined,
   value: TargetTypeRef | undefined,

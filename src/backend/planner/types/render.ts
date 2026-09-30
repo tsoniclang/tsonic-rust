@@ -484,6 +484,7 @@ export interface RustTypeRenderingContext {
         readonly classValues: import("../../../analysis/objects/class-values.js").RustClassValuePlan;
         readonly declarationGenericRequirements: import("../../../analysis/declarations/generic-requirements.js").RustDeclarationGenericRequirementIndex;
         readonly projectTypes: import("../../../analysis/project-types/type-policy.js").RustProjectTypePolicy;
+        readonly typeFamilies: import("../../../target-model/types/type-families.js").RustSourceTypeFamilyPlan;
       };
     };
 }

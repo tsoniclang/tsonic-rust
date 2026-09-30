@@ -462,7 +462,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
       }
       continue;
     }
-    const value = valuesByStorageIndex.get(field.storageIndex);
+    let value = valuesByStorageIndex.get(field.storageIndex);
     if (value === undefined) {
       const storageCarrier = field.method === true
         ? rustStructuralMethodStorageCarrier(
@@ -478,11 +478,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
       if (optionType === undefined) {
         return undefined;
       }
-      structuralInitializers.push({
-        kind: field.method === true ? "method" : "stored",
-        value: { kind: "none" },
-      });
-      continue;
+      value = { kind: "none" };
     }
     structuralInitializers.push({
       kind: field.method === true ? "method" : "stored",

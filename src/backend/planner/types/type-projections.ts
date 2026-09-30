@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustOptionalStorageRequirement } from "../../../analysis/declarations/type-projections.js";
 import type { RustGenericParameter, RustCallGenericArgument } from "../../target-ast/nodes.js";
-import { substituteRustTargetTypeParameters } from "../../../target-model/types/carriers/substitution.js";
+import { substituteRustTargetGenerics } from "../../../target-model/types/carriers/substitution.js";
 import { rustTypeFromCarrierInContext, type RustTypeRenderingContext } from "./render.js";
 import { rustGenericRequirementBounds } from "./generic-bounds.js";
 import { rustSourceTypeCarrierValue } from "../../../target-model/types/carriers/source-types.js";
@@ -34,7 +34,8 @@ export function rustOptionalStorageCallArguments(
   if (contract === undefined) throw new Error("A source call lost its sealed generic requirements.");
   return contract.optionalStorage.filter(entry => !entry.captured && (typeParameterNames === undefined ||
     rustTargetTypeParameterIdentities(entry.carrier).every(name => typeParameterNames.has(name)))).map(entry => {
-    const carrier = substituteRustTargetTypeParameters(entry.carrier, substitutions);
+    const carrier = substituteRustTargetGenerics(entry.carrier, substitutions, new Map(), new Map(),
+      context.input.program.typeFamilies.normalize);
     const type = rustTypeFromCarrierInContext(carrier, context);
     if (type === undefined) throw new Error("An optional storage argument has no exact native type.");
     return { kind: "type", type };

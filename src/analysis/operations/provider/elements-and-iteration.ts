@@ -46,6 +46,7 @@ import { rustProjectObjectIndexSignature } from "../../project-types/object-layo
 import { rustRuntimeCarrierKey } from "../../../target-model/facts/selections.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectedValueCarrier } from "../selected-values.js";
+import { canRequireSourceClone } from "./clone-requirements.js";
 import { rustEffectiveValueCarrier } from "../../facts/value-carrier-queries.js";
 import { selectJsSurfaceOperation } from "../../../policy/operations/source-profiles/js/index.js";
 import { selectRustFixedArrayElementAccess } from "./structural-properties.js";
@@ -109,6 +110,7 @@ export function selectRustCheckedElementAccess(
     ...(selectedReceiverCarrier === undefined ? {} : { receiverCarrier: selectedReceiverCarrier }),
     argumentCarriers: [selectedArgumentCarrier],
     argumentMatchScore: selectedArgumentMatchScore([request.argument], context, options),
+    canRequireClone: carrier => canRequireSourceClone(carrier, request.expression, context, options.sourceTypes.typeFamilies),
   }, context.typeDefinitions);
   if (selectedIndexOperation === undefined && request.sourceReceiverType !== undefined && request.sourceSelectedSymbol !== undefined &&
     request.sourceSelectedElementIndex === undefined) {

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { acmeTestingPackage, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
+import { independentStorageFamilyFiles } from "../../../../tsonic/test/fixtures/generic-storage-families.mjs";
 
 const storageDeclarations = `
 export declare const storageKey: unique symbol;
@@ -97,44 +98,12 @@ export function main(): void {
 
 test("independent generic storage families retain distinct nested results", { timeout: 300_000 }, () => {
   const { result } = compileRust({
-    surfaces: ["js"], packages: [acmeTestingPackage()],
+    surfaces: ["js"],
     target: { id: "rust", options: { outputType: "bin", crateName: "independent_storage_families" } },
     files: {
-      "storage.ts": storageDeclarations,
-      "nested.ts": `
-import type { ContainerStorage, Storage as Selected } from "./storage.js";
-export type Local<T> = Selected<T>;
-export type Pair<T> = { value: Local<T>; container: ContainerStorage<T> };
-export function pair<T>(value: Local<T>, container: ContainerStorage<T>): Pair<T> {
-  return { value, container };
-}
-export function first<T>(values: Local<T>[]): Local<T> { return values[0]; }
-`,
-      "index.ts": `
-import { check } from "@acme/testing";
-import { containerKey, storageKey } from "./storage.js";
-import { first, pair } from "./nested.js";
-type Left = { count: number };
-type Right = { label: string };
-class Both {
-  declare readonly [storageKey]: Left;
-  declare readonly [containerKey]: Right;
-}
-export function main(): void {
-  const left = { count: 3 };
-  const right = { label: "right" };
-  const stored = pair<Both>(left, right);
-  stored.value.count = 9;
-  stored.container.label = "changed";
-  check(left.count === 9 && right.label === "changed");
-  const values = [left];
-  const selected = first<Both>(values);
-  selected.count = 12;
-  check(stored.value.count === 12);
-  const ordinary = pair<number>(4, 5);
-  check(ordinary.value === 4 && ordinary.container === 5);
-}
-`,
+      ...independentStorageFamilyFiles,
+      "index.ts": independentStorageFamilyFiles["index.ts"] +
+        '\nexport function main(): void { if (!run()) throw new Error("independent storage families"); }',
     },
   });
   assert.deepEqual(result.diagnostics, []);

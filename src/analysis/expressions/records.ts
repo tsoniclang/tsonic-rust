@@ -289,7 +289,7 @@ export function resolveRecordLiteralCarrier(
               implementationDeclaration,
               sourceName: field.sourceName,
               carrier,
-              presence: "required" as const,
+              presence: field.presence,
               readonly: ast.hasModifierKind(field.declaration, "readonly"),
             };
       });
@@ -303,7 +303,7 @@ export function resolveRecordLiteralCarrier(
       readonly sourceName: string;
       readonly storageIndex: number;
       readonly carrier: TargetTypeRef;
-      readonly presence: "required";
+      readonly presence: "required" | "optional";
       readonly readonly: boolean;
     }[] = [];
     for (const field of contractFields as readonly {
@@ -311,13 +311,13 @@ export function resolveRecordLiteralCarrier(
       readonly implementationDeclaration: Node;
       readonly sourceName: string;
       readonly carrier: TargetTypeRef;
-      readonly presence: "required";
+      readonly presence: "required" | "optional";
       readonly readonly: boolean;
     }[]) {
       const existing = projectFields.find((candidate) =>
         candidate.implementationDeclaration === field.implementationDeclaration);
       if (existing !== undefined) {
-        if (!rustTargetTypeRefEquals(existing.carrier, field.carrier)) {
+        if (!rustTargetTypeRefEquals(existing.carrier, field.carrier) || existing.presence !== field.presence) {
           return undefined;
         }
         existing.contractDeclarations.push(field.contractDeclaration);
@@ -329,7 +329,7 @@ export function resolveRecordLiteralCarrier(
         sourceName: field.sourceName,
         storageIndex: projectFields.length,
         carrier: field.carrier,
-        presence: "required",
+        presence: field.presence,
         readonly: field.readonly,
       });
     }
@@ -344,7 +344,7 @@ export function resolveRecordLiteralCarrier(
       readonly sourceName: string;
       readonly storageIndex: number;
       readonly carrier: TargetTypeRef;
-      readonly presence: "required";
+      readonly presence: "required" | "optional";
       readonly readonly: boolean;
       readonly accessor?: {
         readonly getter: true;

@@ -3,7 +3,6 @@ import {
   inferRustTargetTypeParameterBindings,
   isRustNumericCarrier,
   rustOptionElementCarrier,
-  rustOptionTargetType,
   rustJsArrayLikeElementTargetType,
   rustFixedArrayCarrierValue,
   rustTargetGenericBindingsForArguments,
@@ -188,7 +187,7 @@ function reconcileProjectSourceArgumentTypeParameters(
             const selected = substituteRustTargetGenerics(value, initialSubstitutions.types,
               initialSubstitutions.lifetimes, initialSubstitutions.consts);
             return rustTargetTypeRefEquals(selected, rustSourceOptionalTargetType(selected))
-              ? value : rustOptionTargetType(value);
+              ? value : rustSourceOptionalTargetType(value);
           });
       const actualCarrier = actual === undefined ? undefined : binding.sourceForm === "spread-element"
         ? binding.spreadElementIndex === undefined

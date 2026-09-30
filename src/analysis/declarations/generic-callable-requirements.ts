@@ -13,7 +13,8 @@ import { isRustDeclarationPathUse, isRustReturnedValue, isRustIndependentCallabl
 import { createRustAssociatedRequirementCollector } from "./associated-requirements.js";
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
-import { substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
+import { mapRustTargetTypes, substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
+import { rustTypeFamilyNormalizer } from "../../policy/types/type-family-normalization.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustJsArrayEntriesElementTargetType } from "../../target-model/types/carriers/array-entries.js";
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
@@ -115,6 +116,7 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
   const byParameter = new Map([...declared].map((name) =>
     [name, new Set<RustGenericRequirement>()] as const));
   const optionalStorage = createRustOptionalStorageCollector(new Set(exactNames), declared, byParameter);
+  const normalizeFamily = rustTypeFamilyNormalizer(input.typeFamilies);
   if (definition !== undefined) {
     const dispatchLifetime = input.objectRepresentations.representationFor(definition)?.dispatchObjectLifetime;
     for (const name of exactNames) {
@@ -135,12 +137,12 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
     if (carrier === undefined) {
       return "A Rust generic requirement has no exact target carrier.";
     }
-    if (!optionalStorage.collect(carrier)) return "A native optional storage projection has no exact generic owner.";
+    if (!optionalStorage.collect(mapRustTargetTypes(carrier, normalizeFamily))) return "A native optional storage projection has no exact generic owner.";
     const normalized = normalizeRustGenericRequirements(requirements);
     const requiredCarrier = nativeStorage && normalized.includes("static")
       ? substituteElidedLifetime(carrier, rustStaticLifetime) : carrier;
     const classified = classifyCarrierRequirements(
-      requiredCarrier,
+      mapRustTargetTypes(requiredCarrier, normalizeFamily),
       normalized,
       declared,
       byParameter,
@@ -250,6 +252,7 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       return undefined;
     }
     const collectType = (carrier: TargetTypeRef): string | undefined => {
+      carrier = mapRustTargetTypes(carrier, normalizeFamily);
       if (!optionalStorage.collect(carrier)) return "A native optional storage projection has no exact generic owner.";
       if (!associated.collect(carrier)) return "A dependent Rust type has no exact family implementation or generic obligation.";
       const sourceType = rustSourceTypeCarrierValue(carrier);

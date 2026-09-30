@@ -43,7 +43,7 @@ import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality
 import { sourceCallMarkerByIdentity } from "../model.js";
 import { mapSelectedStringRegExpProtocolCall } from "../regexp-protocols.js";
 import { selectedRustRegExpReplacementCallbackEvidence } from "../regexp-replacement-callback.js";
-import { canRequireSourceClone } from "./clone-requirements.js";
+import { canRequireSourceClone } from "../clone-requirements.js";
 import { selectRustRuntimeCallableGenerics } from "./runtime-callable-generics.js";
 import { rustLifetimeKey } from "../../../../target-model/lifetimes/index.js";
 import { rustOperandSupportsSourceNumeric } from "../../generic-numeric.js";
@@ -387,7 +387,7 @@ export function selectRustCheckedCall(
           : undefined;
       },
       carrierSupportsProjectIdentity: options.projectCarrierSupportsObjectIdentity,
-      canRequireClone: carrier => canRequireSourceClone(carrier, request.source.call, context),
+      canRequireClone: carrier => canRequireSourceClone(carrier, request.source.call, context, options.sourceTypes.typeFamilies),
       numericParameterArgument: (index, carrier) => {
         const argument = selectedCallArgumentNodes(request)[index];
         return argument !== undefined && carrier.kind === "type-parameter" &&

@@ -34,6 +34,8 @@ import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 
 import { classifyRustCallableRequirements } from "./generic-callable-requirements.js";
 import { normalizeRustGenericRequirements } from "./generic-requirement-contract.js";
+import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
+import { rustTypeFamilyNormalizer } from "../../policy/types/type-family-normalization.js";
 
 export type RustGenericRequirement = "clone" | "default" | "static" | "source-numeric";
 
@@ -211,6 +213,7 @@ export function analyzeRustDeclarationGenericRequirements(
       usesByNode.set(use.node, uses);
     }
   }
+  const normalizeFamily = rustTypeFamilyNormalizer(typeFamilies);
   const index: RustDeclarationGenericRequirementIndex = Object.freeze({
     projectionImplementationsFor: createRustProjectProjectionImplementationIndex(projectionRequirements, projectTypes),
     contractFor(declaration: Node) {
@@ -222,7 +225,7 @@ export function analyzeRustDeclarationGenericRequirements(
       if (contract === undefined) return false;
       const parameters = [...contract.typeParameters, ...contract.capturedTypeParameters,
         ...contract.optionalStorage.map(entry => ({ identity: entry.carrier.identity, requirements: entry.requirements }))];
-      return rustCarrierSupportsTrait(carrier, "core::clone::Clone", (name, trait) =>
+      return rustCarrierSupportsTrait(mapRustTargetTypes(carrier, normalizeFamily), "core::clone::Clone", (name, trait) =>
         trait === "core::clone::Clone" && parameters.some(parameter =>
           parameter.identity === name && parameter.requirements.includes("clone")),
         (projection, trait) => trait === "core::clone::Clone" && contract.associatedTypes.some(requirement =>

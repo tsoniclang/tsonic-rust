@@ -181,7 +181,7 @@ export function resolveRustRecordShape(
             sourceName: field.sourceName,
             storageIndex: field.storageIndex,
             carrier: instantiated,
-            presence: "required" as const,
+            presence: field.presence,
           };
     });
     return fields.some((field) => field === undefined)
@@ -192,7 +192,7 @@ export function resolveRustRecordShape(
             readonly sourceName: string;
             readonly storageIndex: number;
             readonly carrier: TargetTypeRef;
-            readonly presence: "required";
+            readonly presence: "required" | "optional";
           }[],
         };
   }

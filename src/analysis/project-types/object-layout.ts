@@ -6,6 +6,7 @@ export interface RustProjectObjectField {
   readonly declaration: Node;
   readonly sourceName: string;
   readonly storageIndex: number;
+  readonly presence: "required" | "optional";
 }
 
 export interface RustProjectObjectIndexSignature {
@@ -81,7 +82,8 @@ export function rustProjectObjectLayout(
       return undefined;
     }
     seen.add(sourceName);
-    fields.push({ declaration: member, sourceName, storageIndex: fields.length });
+    fields.push({ declaration: member, sourceName, storageIndex: fields.length,
+      presence: ast.questionToken(member) === undefined ? "required" : "optional" });
   }
   return {
     declaration,

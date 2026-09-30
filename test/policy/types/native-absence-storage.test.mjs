@@ -4,6 +4,8 @@ import { rustSourceOptionalTargetType, rustOptionalStorageProjection } from "../
 import { substituteRustTargetTypeParameters, rustOptionTargetType, rustAbsenceTargetType, rustJsValueTargetType,
   rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
+import { rustSourceOptionalElementCarrier } from "../../../dist/target-model/types/carriers/optional.js";
+import { inferRustTargetTypeParameterBindings } from "../../../dist/target-model/types/carriers/generic-inference.js";
 
 test("source absence normalization retains one native layer and genuine native options", () => {
   const value = rustSourcePrimitiveTargetType("int64");
@@ -38,4 +40,23 @@ test("native absence metadata rejects malformed carrier claims", () => {
   assert.equal(isRustTargetTypeRef({ kind: "target-named", id: "rust.std.Option", sourceAbsence: true,
     genericArguments: [{ kind: "type", type: value }, { kind: "type", type: value }] }), false);
   assert.equal(isRustTargetTypeRef({ kind: "type-parameter", identity: "Value", name: "Value", optionalStorageValue: {} }), false);
+});
+
+test("source optional inference retains native payloads without unwrapping explicit native options", () => {
+  const value = rustSourcePrimitiveTargetType("int64");
+  const parameter = { kind: "type-parameter", identity: "Value", name: "Value" };
+  const identities = new Set([parameter.identity]);
+  const optional = rustSourceOptionalTargetType(parameter);
+  const native = rustOptionTargetType(value);
+  assert.equal(rustSourceOptionalElementCarrier(native), undefined);
+  assert.deepEqual(rustSourceOptionalElementCarrier(rustSourceOptionalTargetType(native)), native);
+  assert.deepEqual(rustSourceOptionalElementCarrier(optional), parameter);
+  assert.deepEqual(inferRustTargetTypeParameterBindings(optional, value, identities), new Map([["Value", value]]));
+  assert.deepEqual(inferRustTargetTypeParameterBindings(optional, rustSourceOptionalTargetType(value), identities), new Map([["Value", value]]));
+  assert.deepEqual(inferRustTargetTypeParameterBindings(optional, rustAbsenceTargetType(), identities), new Map());
+  assert.deepEqual(inferRustTargetTypeParameterBindings(optional, native, identities), new Map([["Value", native]]));
+  assert.equal(inferRustTargetTypeParameterBindings(rustOptionTargetType(parameter), value, identities), undefined);
+  assert.equal(inferRustTargetTypeParameterBindings(
+    { kind: "tuple", elements: [optional, parameter] },
+    { kind: "tuple", elements: [value, rustSourcePrimitiveTargetType("uint64")] }, identities), undefined);
 });

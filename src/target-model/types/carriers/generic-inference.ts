@@ -16,6 +16,8 @@ import type {
   TargetTypeRef,
 } from "../model.js";
 import { rustLifetimeKey, rustLifetimesEqual } from "../../lifetimes/index.js";
+import { isRustAbsenceCarrier } from "./native.js";
+import { rustSourceOptionalElementCarrier } from "./optional.js";
 import type { RustLifetimeRef } from "../../lifetimes/index.js";
 
 export function inferRustTargetTypeParameterBindings(
@@ -198,6 +200,11 @@ export function inferRustTargetGenericBindings(
         return true;
       }
       return rustTargetTypeRefEquals(existing, right);
+    }
+    const optional = rustSourceOptionalElementCarrier(left);
+    if (optional !== undefined) {
+      return isRustAbsenceCarrier(right) ||
+        match(optional, rustSourceOptionalElementCarrier(right) ?? right, lifetimeContext);
     }
     if (left.kind !== right.kind) {
       return false;

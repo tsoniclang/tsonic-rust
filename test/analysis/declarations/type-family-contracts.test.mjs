@@ -12,6 +12,7 @@ import { rustTypeFromCarrier } from "../../../dist/backend/planner/types/render.
 import { selectRustFlowReadProjection } from "../../../dist/policy/types/value-carrier-reconciliation.js";
 import { rustOptionTargetType, rustSourceLocationTargetType } from "../../../dist/target-model/types/index.js";
 import { rustIndexedFieldKey, rustIndexedFieldProjection, rustIndexedFieldTrait } from "../../../dist/target-model/types/carriers/indexed-fields.js";
+import { rustSourceOptionalTargetType } from "../../../dist/target-model/types/projections.js";
 
 const signed = { kind: "source-primitive", name: "int32" };
 const unsigned = { kind: "source-primitive", name: "uint32" };
@@ -25,13 +26,15 @@ const family = {
 };
 const projection = { kind: "associated-type", owner: parameter, trait: family.trait, name: "Output" };
 
-test("source family optional reads retain a later Clone obligation without admitting native unknown associated types", () => {
-  const selected = selectRustFlowReadProjection(rustOptionTargetType(projection), projection, {});
-  assert.equal(selected.kind, "projection");
-  assert.equal(selected.fact.kind, "option-value");
-  assert.deepEqual(selected.fact.selectedCarrier, projection);
+test("optional carrier selection records the exact payload independently of move or clone demand", () => {
   const native = { ...projection, trait: { ...family.trait, sourceItem: undefined } };
-  assert.equal(selectRustFlowReadProjection(rustOptionTargetType(native), native, {}).kind, "incompatible");
+  for (const carrier of [projection, native]) {
+    const selected = selectRustFlowReadProjection(rustOptionTargetType(carrier), carrier, {});
+    assert.equal(selected.kind, "projection");
+    assert.equal(selected.fact.kind, "option-value");
+    assert.deepEqual(selected.fact.selectedCarrier, carrier);
+    assert.equal(rustCarrierSupportsTrait(carrier, "core::clone::Clone"), false);
+  }
 });
 
 test("dependent type families retain exact identity and reject conflicting output revisions", () => {
@@ -72,6 +75,19 @@ test("generic family implementations preserve native argument widths on every us
   const concrete = substituteRustTargetGenerics(unresolved, new Map([["T", signed]]), new Map(), new Map(), rustTypeFamilyNormalizer(registry));
   assert.deepEqual(concrete, { kind: "tuple", elements: [signed] });
   assert.equal(registry.registerImplementation({ family, arguments: [], owner: signed, output: parameter, sourceFileName: "/storage.ts" }), false);
+});
+
+test("optional storage normalizes exact selected family outputs without inventing closed generic parameters", () => {
+  const registry = createRustSourceTypeFamilyRegistry();
+  registry.register(family);
+  registry.registerImplementation({ family, arguments: [], owner: signed, output: unsigned, sourceFileName: "/storage.ts" });
+  const storage = rustSourceOptionalTargetType(projection);
+  const normalize = rustTypeFamilyNormalizer(registry);
+  assert.deepEqual(substituteRustTargetGenerics(storage, new Map([["T", signed]]), new Map(), new Map(), normalize),
+    rustSourceOptionalTargetType(unsigned));
+  assert.deepEqual(mapRustTargetTypes(storage, normalize), storage);
+  const foreign = { ...projection, trait: { ...family.trait, id: "foreign" } };
+  assert.deepEqual(mapRustTargetTypes(rustSourceOptionalTargetType(foreign), normalize), rustSourceOptionalTargetType(foreign));
 });
 
 test("type family templates replace equivalent concrete demands without overlapping impls", () => {

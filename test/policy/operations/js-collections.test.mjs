@@ -5,6 +5,7 @@ import { selectJsSurfaceOperation } from "../../../dist/policy/operations/source
 import {
   rustJsMapTargetType,
   rustJsSetTargetType,
+  rustJsArrayTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
 } from "../../../dist/target-model/types/index.js";
@@ -70,6 +71,28 @@ test("generic collection clone obligations require an explicit source declaratio
   const selected = selectJsSurfaceOperation({ ...request, canRequireClone: carrier => carrier === parameter });
   assert.deepEqual(selected.fact.carrierRequirements, [{ carrier: parameter, requirement: "clone" }]);
   assert.deepEqual(selected.resultCarrier, { kind: "array", element: parameter });
+});
+
+test("owned array reads retain their exact native Clone obligation", () => {
+  const parameter = { kind: "type-parameter", identity: "Element", name: "Element" };
+  for (const ownerName of ["Array", "ReadonlyArray"]) {
+    for (const [memberName, operationKind] of [["index", "indexer"], ["at", "call"]]) {
+      const request = { ownerName, memberName, operationKind,
+        receiverCarrier: rustJsArrayTargetType(parameter),
+        argumentCarriers: [rustSourcePrimitiveTargetType("int32")],
+      };
+      assert.equal(selectJsSurfaceOperation(request), undefined);
+      assert.equal(selectJsSurfaceOperation({ ...request, canRequireClone: () => false }), undefined);
+      const selected = selectJsSurfaceOperation({ ...request, canRequireClone: carrier => carrier === parameter });
+      assert.deepEqual(selected?.fact.carrierRequirements, [{ carrier: parameter, requirement: "clone" }]);
+      assert.deepEqual(selected?.fact.sourceResultCarrier, parameter);
+    }
+    const length = selectJsSurfaceOperation({ ownerName, memberName: "length", operationKind: "property",
+      receiverCarrier: rustJsArrayTargetType(parameter), argumentCarriers: [],
+    });
+    assert.ok(length);
+    assert.equal(length.fact.carrierRequirements, undefined);
+  }
 });
 
 test("generated Rust proves complete Map and Set collection operations", { timeout: 300_000 }, () => {

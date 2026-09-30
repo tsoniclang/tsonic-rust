@@ -32,6 +32,7 @@ import { rustGuardedArrayEntryCarrier } from "../control-flow/array-entry-values
 import { recordBindingWrite } from "../declarations/types-and-bindings.js";
 import { selectRustUnionArmMapping } from "../../target-model/types/union-relations.js";
 import { rustClosedValueCategoryProjection } from "../../target-model/types/carriers/closed-values.js";
+import { rustSourceOptionalElementCarrier } from "../../target-model/types/carriers/optional.js";
 
 export function applyFlowReadLane(
   walk: RustFactWalk,
@@ -200,12 +201,14 @@ function resolveSelectedFlowReadCarrier(
   if (declaredReadType !== undefined && semantics.types.isIdentical(declaredReadType, selectedType)) {
     return sourceCarrier;
   }
+  const selectedTypes = semantics.types.isUnion(selectedType)
+    ? semantics.types.unionOrIntersectionTypes(selectedType) : [selectedType];
+  if (selectedTypes.some(type => type === undefined)) return undefined;
+  const includesAbsence = selectedTypes.some(type => type !== undefined &&
+    (semantics.types.isNullish(type) || semantics.types.isVoidLike(type)));
   const dispatchCarrier = rustOptionElementCarrier(sourceCarrier) ?? sourceCarrier;
   const sourceUnion = walk.sourceTypes.sourceUnionForCarrier(dispatchCarrier);
   if (sourceUnion !== undefined) {
-    const selectedTypes = semantics.types.isUnion(selectedType)
-      ? semantics.types.unionOrIntersectionTypes(selectedType) : [selectedType];
-    if (selectedTypes.some(type => type === undefined)) return undefined;
     const hasAbsence = selectedTypes.some(type => type !== undefined && semantics.types.isNullish(type));
     const values = selectedTypes.filter(type => type !== undefined && !semantics.types.isNullish(type));
     if (hasAbsence && rustOptionElementCarrier(sourceCarrier) === undefined) return undefined;
@@ -301,7 +304,7 @@ function resolveSelectedFlowReadCarrier(
     if (authored.kind === "authored-members") {
       if (authored.nodes.length === 1 && authored.nodes[0] === typeNode &&
         authored.selectedNullishTypes.length === 0) {
-        return sourceCarrier;
+        return includesAbsence ? sourceCarrier : rustSourceOptionalElementCarrier(sourceCarrier) ?? sourceCarrier;
       }
       const selectedMembers = authored.nodes.map((node) =>
         resolveRustTargetTypeRef(
@@ -334,15 +337,7 @@ function resolveSelectedFlowReadCarrier(
       ? semanticCarrier
       : sourceCarrier;
   }
-  const selectedMembers = walk.context.semanticsFor(expression).types.isUnion(selectedType)
-    ? walk.context.semanticsFor(expression).types.unionOrIntersectionTypes(selectedType)
-    : [selectedType];
-  if (selectedMembers.some((member) => member === undefined)) {
-    return undefined;
-  }
-  const includesNullish = selectedMembers.some((member) =>
-    member !== undefined && (semantics.types.isNullish(member) || semantics.types.isVoidLike(member)));
-  if (includesNullish) {
+  if (includesAbsence) {
     return sourceCarrier;
   }
   return semanticCarrier !== undefined &&
