@@ -131,15 +131,14 @@ export type RustBindingProjection =
 
 export type RustBindingNormalization =
   | "identity"
-  | "expect-some"
-  | "flatten-option"
   | "default-on-none"
-  | "flatten-expect-some"
-  | "flatten-default-on-none";
+  | "checked-array"
+  | "checked-array-default";
 
 export interface RustBindingProjectionFact {
   readonly sourceCarrier: TargetTypeRef;
   readonly projectedCarrier: TargetTypeRef;
+  readonly storageCarrier: TargetTypeRef;
   readonly bindingCarrier: TargetTypeRef;
   readonly projection: RustBindingProjection;
   readonly normalization: RustBindingNormalization;

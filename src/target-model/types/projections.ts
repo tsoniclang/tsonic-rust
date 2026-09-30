@@ -25,5 +25,6 @@ export function rustSourceOptionalTargetType(value: TargetTypeRef): TargetTypeRe
 }
 
 export function rustOptionalStorageValue(type: TargetTypeRef | undefined): TargetTypeRef | undefined {
-  return type?.kind === "type-parameter" ? type.optionalStorageValue : undefined;
+  return type?.kind === "type-parameter" ? type.optionalStorageValue
+    : type?.kind === "target-named" && type.id === rustJsValueTargetId ? type : undefined;
 }

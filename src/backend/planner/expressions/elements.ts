@@ -1,5 +1,5 @@
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { planNativeRustArray, planNativeRustArrayAccess } from "./native-arrays.js";
+import { planNativeRustArrayAccess } from "./native-arrays.js";
 import { rustNativeArrayStorageKey } from "../../../target-model/operations/native-memory.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import { effectiveMemberResultCarrier, planOptionalChainExpression } from "./special.js";
@@ -17,7 +17,6 @@ import { planRustIndexedRecordStorage } from "../objects/indexed-records.js";
 import { applyRustArgumentMode } from "./input-shaping.js";
 import { requireProviderArgumentPassingFacts } from "./calls/arguments.js";
 import { rustOptionalChainFactKey } from "../../../analysis/facts/keys.js";
-import { rustOptionElementCarrier } from "../../../target-model/types/index.js";
 import { rustComputedMemberFactKey } from "../../../analysis/facts/operations/keys.js";
 import { planPropertyAccess } from "./properties.js";
 import { planRustIndexedFieldRead } from "./indexed-fields.js";
@@ -255,99 +254,4 @@ function planIndexedProjection(
     bindings: [{ name, value: selected }],
     value: { kind: "evaluate-then", effect, discard: "value", value: { kind: "path", path: name } },
   });
-}
-
-export function planArrayLiteral(node: Node, context: RustPlanContext): RustExpr | undefined {
-  const fact = rustOperationFact(node, context);
-  if (fact !== undefined && fact.kind === "tuple-literal") {
-    if (!requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.tuple-literal-carrier")) {
-      return undefined;
-    }
-    const elements: RustExpr[] = [];
-    for (const element of context.input.program.source.ast.elements(node)) {
-      if (element === undefined) {
-        context.diagnostics.push(missingFactDiagnostic(
-          diagnosticInput(context, node),
-          "rust.backend.tuple-element",
-          "Tuple literal contains an undefined element slot.",
-        ));
-        return undefined;
-      }
-      const planned = planExpression(element, context);
-      if (planned === undefined) {
-        return undefined;
-      }
-      elements.push(planned);
-    }
-    const tupleCarrier = fact.resultCarrier.kind === "tuple"
-      ? fact.resultCarrier
-      : undefined;
-    if (
-      tupleCarrier === undefined ||
-      elements.length + fact.omittedOptionalElementIndexes.length !==
-        tupleCarrier.elements.length ||
-      fact.omittedOptionalElementIndexes.some((index, omittedIndex) =>
-        index !== elements.length + omittedIndex ||
-        rustOptionElementCarrier(tupleCarrier.elements[index]) === undefined
-      )
-    ) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, node),
-        "rust.backend.tuple-optional-elements",
-        "Tuple literal omission evidence conflicts with its exact finalized Rust tuple carrier.",
-      ));
-      return undefined;
-    }
-    for (const _index of fact.omittedOptionalElementIndexes) {
-      elements.push({ kind: "none" });
-    }
-    return { kind: "tuple-literal", elements };
-  }
-  if (fact === undefined || fact.kind !== "array-literal") {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.array-literal",
-      "Array literals require a finalized Rust array lane fact.",
-    ));
-    return undefined;
-  }
-  if (!requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.array-literal-carrier")) {
-    return undefined;
-  }
-  const sourceElements = context.input.program.source.ast.elements(node);
-  const hasHoles = sourceElements.some((element) =>
-    element !== undefined && context.input.program.source.ast.kindName(element) === "KindOmittedExpression");
-  if (hasHoles) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(diagnosticInput(context, node),
-      "rust.array.sparse-literal",
-      "Sparse array literals are not supported by native dense arrays; use explicit undefined elements."));
-    return undefined;
-  }
-  const elements: RustExpr[] = [];
-  for (const element of sourceElements) {
-    if (element === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, node),
-        "rust.backend.array-element",
-        "Array literal contains an undefined element slot.",
-      ));
-      return undefined;
-    }
-    const planned = planExpression(element, context);
-    if (planned === undefined) {
-      return undefined;
-    }
-    elements.push(planned);
-  }
-  if (fact.lane === "native") {
-    const array: RustExpr = { kind: "vec-literal", elements };
-    return context.input.program.facts.getFact(node, rustNativeArrayStorageKey) === undefined
-      ? array : planNativeRustArray(node, array, context);
-  }
-  context.usedAliases?.add("js_abi");
-  return {
-    kind: "call",
-    path: "js_abi::JsArray::from_dense",
-    args: [{ kind: "vec-literal", elements }],
-  };
 }

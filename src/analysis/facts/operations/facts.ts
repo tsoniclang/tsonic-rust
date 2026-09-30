@@ -159,6 +159,10 @@ export type RustTargetOperationFact =
       readonly elementCarrier: TargetTypeRef;
       readonly resultCarrier: TargetTypeRef;
       readonly length: number;
+      readonly contributions: readonly {
+        readonly kind: "value" | "spread";
+        readonly carrier: TargetTypeRef;
+      }[];
     }
   | {
       readonly kind: "runtime-set";

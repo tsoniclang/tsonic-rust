@@ -87,6 +87,7 @@ export const rustBindingProjectionFactKey: RustPlanKey<RustBindingProjectionFact
   defineRustPlanKey("bindingProjection", (left, right) =>
     rustTargetTypeRefEquals(left.sourceCarrier, right.sourceCarrier) &&
     rustTargetTypeRefEquals(left.projectedCarrier, right.projectedCarrier) &&
+    rustTargetTypeRefEquals(left.storageCarrier, right.storageCarrier) &&
     rustTargetTypeRefEquals(left.bindingCarrier, right.bindingCarrier) &&
     closedMetadataEquals(left.projection, right.projection) &&
     left.normalization === right.normalization);

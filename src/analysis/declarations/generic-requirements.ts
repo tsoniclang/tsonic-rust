@@ -55,6 +55,7 @@ import {
   rustTargetGenericTypeArguments,
 } from "../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { rustBindingProjectionCloneCarriers } from "../../policy/types/binding-normalization.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import {
   rustAsyncFunctionFactKey,
@@ -64,6 +65,7 @@ import {
   rustFlowReadProjectionFactKey,
   rustProjectDowncastFactKey,
   rustBindingStorageFactKey,
+  rustBindingProjectionFactKey,
   rustSourceParameterAbiFactKey,
   rustSourceCallableReturnFactKey,
   rustTargetOperationFactKey,
@@ -542,9 +544,15 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       return undefined;
     };
     const carrier = facts.getRuntimeCarrierFact(node)?.carrier;
+    const bindingProjection = facts.getFact(node, rustBindingProjectionFactKey);
+    for (const copied of bindingProjection === undefined ? [] : rustBindingProjectionCloneCarriers(bindingProjection)) {
+      const error = addUse(node, copied, ["clone"]);
+      if (error !== undefined) return error;
+    }
     for (const signatureCarrier of [
       facts.getFact(node, rustSourceCallableReturnFactKey)?.returnCarrier,
       facts.getFact(node, rustSourceParameterAbiFactKey)?.parameterCarrier,
+      facts.getFact(node, rustBindingProjectionFactKey)?.storageCarrier,
     ]) {
       if (signatureCarrier === undefined) continue;
       const error = collectType(signatureCarrier);
@@ -636,6 +644,10 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       }
     }
     const operation = facts.getFact(node, rustTargetOperationFactKey);
+    if (operation?.kind === "array-literal" && operation.contributions.some(contribution => contribution.kind === "spread")) {
+      const error = addUse(node, operation.elementCarrier, ["clone"]);
+      if (error !== undefined) return error;
+    }
     if (operation?.kind === "source-index-signature" &&
       (operation.accessMode === "read" || operation.accessMode === "read-write")) {
       const requirements: readonly RustGenericRequirement[] = operation.storage.kind === "record" &&

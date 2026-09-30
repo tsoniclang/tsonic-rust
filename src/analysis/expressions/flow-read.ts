@@ -84,7 +84,7 @@ export function applyFlowReadLane(
     });
     return entryCarrier;
   }
-  const selectedSource = selectedFlowReadSource(walk, expression, sourceCarrier);
+  const selectedSource = selectedFlowReadSource(walk, expression, sourceCarrier, parentKind === "KindTypeOfExpression");
   if (selectedSource === undefined) {
     return sourceCarrier;
   }
@@ -140,6 +140,7 @@ function selectedFlowReadSource(
   walk: RustFactWalk,
   expression: Node,
   sourceCarrier: TargetTypeRef,
+  preservesAbsence: boolean,
 ): { readonly declaration?: Node; readonly type: Type } | undefined {
   const sourceFile = walk.context.ast.getSourceFile(expression);
   if (sourceFile === undefined || !walk.context.source.semantics.includes(sourceFile)) {
@@ -174,7 +175,9 @@ function selectedFlowReadSource(
         };
   }
   const refinement = walk.context.source.semantics.selectValueTypeRefinement(expression);
-  return refinement.kind === "resolved" && refinement.refinement.kind === "members"
+  const readsCheckedPayload = refinement.kind === "resolved" && refinement.refinement.kind === "exact" &&
+    rustOptionElementCarrier(sourceCarrier) !== undefined && !preservesAbsence;
+  return refinement.kind === "resolved" && (refinement.refinement.kind === "members" || readsCheckedPayload)
     ? { declaration: refinement.reference.declaration, type: refinement.selectedType }
     : undefined;
 }

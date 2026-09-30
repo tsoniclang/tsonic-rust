@@ -98,7 +98,7 @@ export function resolveBinaryOperandCarriers(
   if (leftNode === undefined || rightNode === undefined || operatorToken === undefined) {
     return undefined;
   }
-  const operatorKind = walk.context.ast.kindName(operatorToken);
+  let operatorKind = walk.context.ast.kindName(operatorToken);
   if (operatorKind === KindQuestionQuestionToken) {
     leftNode = rustUnparenthesizedExpression(walk.context.ast, leftNode);
     rightNode = rustUnparenthesizedExpression(walk.context.ast, rightNode);
@@ -127,8 +127,6 @@ export function resolveBinaryOperandCarriers(
       )
     : undefined;
   if (rustBinaryResultCarrierIsIndependentOfOperands(operatorKind)) {
-    const strictEquality = operatorKind === KindEqualsEqualsEqualsToken ||
-      operatorKind === KindExclamationEqualsEqualsToken;
     let { left, right } = resolveContextualBinaryOperandCarriers(
       walk,
       leftNode,
@@ -136,6 +134,12 @@ export function resolveBinaryOperandCarriers(
       sourceFile,
       undefined,
     );
+    if (isRustAbsenceCarrier(left) || isRustAbsenceCarrier(right)) {
+      if (operatorKind === "KindEqualsEqualsToken") operatorKind = KindEqualsEqualsEqualsToken;
+      if (operatorKind === "KindExclamationEqualsToken") operatorKind = KindExclamationEqualsEqualsToken;
+    }
+    const strictEquality = operatorKind === KindEqualsEqualsEqualsToken ||
+      operatorKind === KindExclamationEqualsEqualsToken;
     if (strictEquality && left !== undefined && right !== undefined &&
       left.kind !== "type-parameter" && right.kind !== "type-parameter" &&
       selectRustBinaryOperator(operatorKind, left, right) === undefined) {

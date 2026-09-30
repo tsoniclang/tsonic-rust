@@ -17,6 +17,7 @@ import {
 import {
   isRustCopyCarrier,
   isRustJsArrayCarrier,
+  rustJsArrayLikeElementTargetType,
   isRustVecCarrier,
   rustFixedArrayCarrierValue,
   rustTargetConstInteger,
@@ -32,13 +33,15 @@ import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagno
 import {
   diagnosticInput,
   isValidRustIdentifier,
-  rustActiveErrorType,
 } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustCarrierHasCloneContract } from "../types/generic-requirements.js";
 import { rustOptionDefaultValue } from "../expressions/option-default.js";
+import { planRustCheckedSourceOptional } from "../expressions/optional-storage.js";
+import { selectRustBindingNormalization } from "../../../policy/types/binding-normalization.js";
+import { rustEffectiveValueCarrier } from "../../../analysis/facts/value-carrier-queries.js";
 
 export type RustBindingExpressionPlanner = (
   node: Node,
@@ -393,23 +396,18 @@ function normalizeBindingValue(
   context: RustPlanContext,
   planExpression: RustBindingExpressionPlanner,
 ): RustExpr | undefined {
-  const flattened = fact.normalization === "flatten-option" ||
-      fact.normalization === "flatten-expect-some" ||
-      fact.normalization === "flatten-default-on-none"
-    ? { kind: "method-call" as const, receiver: value, method: "flatten", args: [] }
-    : value;
-  if (fact.normalization === "identity" || fact.normalization === "flatten-option") {
-    return flattened;
-  }
-  if (fact.normalization === "expect-some" || fact.normalization === "flatten-expect-some") {
-    return {
-      kind: "method-call",
-      receiver: flattened,
-      method: "expect",
-      args: [{ kind: "str-literal", value: "statically non-null destructuring binding" }],
-    };
-  }
   const initializer = Node_Initializer(context.input.program.source.ast, element);
+  const checkedElement = fact.projection.kind === "js-array-element" ? rustJsArrayLikeElementTargetType(fact.sourceCarrier) : undefined;
+  const defaultCarrier = initializer === undefined ? undefined : rustEffectiveValueCarrier(context.input.program.facts, initializer);
+  if (initializer !== undefined && defaultCarrier === undefined) return rejectProjection(element, context, "Binding default has no finalized value carrier.");
+  const selected = selectRustBindingNormalization(fact.projectedCarrier, defaultCarrier, checkedElement);
+  if (selected === undefined || selected.normalization !== fact.normalization ||
+    !rustTargetTypeRefEquals(selected.storageCarrier, fact.storageCarrier) ||
+    !rustTargetTypeRefEquals(selected.bindingCarrier, fact.bindingCarrier)) {
+    return rejectProjection(element, context, "Binding normalization conflicts with its exact native projection and default.");
+  }
+  const stored = checkedElement === undefined ? value : planRustCheckedSourceOptional(value, checkedElement, context);
+  if (selected.normalization === "identity" || selected.normalization === "checked-array") return stored;
   const fallback = initializer === undefined ? undefined : planExpression(initializer, context);
   if (fallback === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -419,33 +417,7 @@ function normalizeBindingValue(
     ));
     return undefined;
   }
-  const activeErrorType = rustActiveErrorType(context);
-  if (activeErrorType === undefined) {
-    return rustOptionDefaultValue(flattened, fallback, fact.projectedCarrier, context);
-  }
-  const result = (value: RustExpr): RustExpr => ({
-    kind: "call",
-    path: "Ok",
-    genericArguments: [
-      { kind: "type", type: { kind: "infer" } },
-      { kind: "type", type: activeErrorType },
-    ],
-    args: [value],
-  });
-  return {
-    kind: "try",
-    resultErrorType: activeErrorType,
-    operandErrorType: activeErrorType,
-    expr: {
-      kind: "method-call",
-      receiver: flattened,
-      method: "map_or_else",
-      args: [
-        { kind: "closure", params: [], body: result(fallback) },
-        { kind: "path", path: "Ok" },
-      ],
-    },
-  };
+  return rustOptionDefaultValue(stored, fallback, selected.storageCarrier, context, selected.bindingCarrier);
 }
 
 function ownedProjection(

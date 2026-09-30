@@ -39,7 +39,7 @@ export function analyzeRustValueLifetimes(input: {
     if (input.ast.is.IsCallExpression(node) || input.ast.is.IsNewExpression(node) || input.isOwnedOperationResult(node)) {
       movableReferences.add(node);
     }
-    if (kind === "KindVariableDeclaration" || kind === "KindParameter") {
+    if (kind === "KindVariableDeclaration" || kind === "KindParameter" || kind === "KindBindingElement") {
       classifyDeclaration(node, input, movableReferences);
       const summary = input.navigation.declarationUseSummary(node);
       const immutableString = input.isOwnedString(node) && !summary.hasUnclassifiedValueUse &&
@@ -83,9 +83,9 @@ export function analyzeRustValueLifetimes(input: {
     const receiver = Node_Expression(input.ast, field);
     if (receiver === undefined || !input.ast.is.IsIdentifier(receiver)) continue;
     const declaration = input.navigation.sourceReferenceFor(receiver)?.declaration;
-    if (declaration === undefined || input.ast.kindName(declaration) !== "KindVariableDeclaration" ||
+    if (declaration === undefined || !["KindVariableDeclaration", "KindBindingElement"].includes(input.ast.kindName(declaration)) ||
       enclosingCallable(declaration, input.ast) === undefined) continue;
-    const kind = input.ast.variableDeclarationKind(declaration);
+    const kind = input.ast.variableDeclarationKind(bindingDeclarationOwner(declaration, input.ast));
     const summary = input.navigation.declarationUseSummary(declaration);
     if (kind === "using" || kind === "await using" || summary.captured || summary.exported ||
       summary.bindingWritten || isInsideRepeatedRegion(receiver, declaration, input.ast)) continue;
@@ -127,7 +127,7 @@ function isSingleOwnedCapture(
   const owner = enclosingCallable(declaration, ast);
   const parent = ast.parent(closure);
   if (owner === undefined || parent === undefined || enclosingCallable(parent, ast) !== owner) return false;
-  const declarationKind = ast.variableDeclarationKind(declaration);
+  const declarationKind = ast.variableDeclarationKind(bindingDeclarationOwner(declaration, ast));
   if (declarationKind === "using" || declarationKind === "await using" ||
     isInsideRepeatedRegion(closure, declaration, ast)) return false;
   const summary = navigation.declarationUseSummary(declaration);
@@ -151,7 +151,7 @@ function classifyDeclaration(
   movableReferences: WeakSet<Node>,
 ): void {
   if (enclosingCallable(declaration, input.ast) === undefined) return;
-  const declarationKind = input.ast.variableDeclarationKind(declaration);
+  const declarationKind = input.ast.variableDeclarationKind(bindingDeclarationOwner(declaration, input.ast));
   if (declarationKind === "using" || declarationKind === "await using") return;
   const summary = input.navigation.declarationUseSummary(declaration);
   if (summary.captured || summary.exported) return;
@@ -286,8 +286,19 @@ function transparentUseExpression(reference: Node, ast: AstReader): Node {
   return expression;
 }
 
+function bindingDeclarationOwner(declaration: Node, ast: AstReader): Node {
+  let current = declaration;
+  while (["KindBindingElement", "KindArrayBindingPattern", "KindObjectBindingPattern"].includes(ast.kindName(current))) {
+    const parent = ast.parent(current);
+    if (parent === undefined) return current;
+    current = parent;
+  }
+  return current;
+}
+
 function declarationLifetimeBlock(declaration: Node, ast: AstReader): Node | undefined {
-  if (ast.kindName(declaration) === "KindParameter" || ast.variableDeclarationKind(declaration) === "var") {
+  const owner = bindingDeclarationOwner(declaration, ast);
+  if (ast.kindName(owner) === "KindParameter" || ast.variableDeclarationKind(owner) === "var") {
     return ast.body(enclosingCallable(declaration, ast));
   }
   let current = ast.parent(declaration);

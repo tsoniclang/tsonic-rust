@@ -36,7 +36,7 @@ export {
 } from "./properties.js";
 export {
   planArrayLiteral,
-} from "./elements.js";
+} from "./array-literals/planning.js";
 export {
   sourceIndexSelectedOperationMatches,
   sourceUnionFieldSelectedOperationMatches,

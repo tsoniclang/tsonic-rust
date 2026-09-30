@@ -152,7 +152,7 @@ test("fixed-array destructuring retains exact remainder carriers and native slic
     assert.deepEqual(carriers.get(firstName), element);
     assert.deepEqual(carriers.get(restName), remainder);
     assert.deepEqual(facts.getFact(rest, rustBindingProjectionFactKey), {
-      sourceCarrier, projectedCarrier: remainder, bindingCarrier: remainder,
+      sourceCarrier, projectedCarrier: remainder, storageCarrier: remainder, bindingCarrier: remainder,
       projection: { kind: "fixed-array-rest", start: 1 }, normalization: "identity",
     });
     const diagnostics = [];

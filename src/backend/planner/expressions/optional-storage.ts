@@ -1,9 +1,11 @@
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
+import { rustOptionalStorageValue, rustSourceOptionalTargetType } from "../../../target-model/types/projections.js";
 import { isRustAbsenceCarrier, isRustOptionCarrier, isRustUnitCarrier } from "../../../target-model/types/index.js";
 import { rustRuntimeUnionContract } from "../../../target-model/types/carriers/runtime-unions.js";
 import type { RustExpr } from "../../target-ast/nodes.js";
 import { rustTypeFromCarrierInContext, type RustTypeRenderingContext } from "../types/render.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustOptionTargetType, rustOptionElementCarrier, isRustJsValueCarrier } from "../../../target-model/types/index.js";
 
 export function planRustOptionalStorageOperation(
   carrier: TargetTypeRef,
@@ -12,9 +14,37 @@ export function planRustOptionalStorageOperation(
   context: RustTypeRenderingContext,
 ): RustExpr {
   const value = rustOptionalStorageValue(carrier);
+  if (value === undefined) throw new Error("A native optional operation lost its storage contract.");
+  return planOptionalStorageCall(carrier, value, method, args, context);
+}
+
+export function planRustCheckedSourceOptional(
+  expression: RustExpr,
+  element: TargetTypeRef,
+  context: RustTypeRenderingContext,
+): RustExpr {
+  const storage = rustSourceOptionalTargetType(element);
+  if (rustTargetTypeRefEquals(storage, rustOptionTargetType(element))) return expression;
+  if (rustOptionElementCarrier(element) !== undefined && rustTargetTypeRefEquals(storage, element)) {
+    return { kind: "method-call", receiver: expression, method: "flatten", args: [] };
+  }
+  if (isRustJsValueCarrier(element)) {
+    context.usedAliases?.add("js_abi");
+    return { kind: "method-call", receiver: expression, method: "unwrap_or", args: [{ kind: "path", path: "js_abi::JsValue::Null" }] };
+  }
+  return planOptionalStorageCall(storage, element, "from_option", [expression], context);
+}
+
+function planOptionalStorageCall(
+  carrier: TargetTypeRef,
+  value: TargetTypeRef,
+  method: string,
+  args: readonly RustExpr[],
+  context: RustTypeRenderingContext,
+): RustExpr {
   const owner = rustTypeFromCarrierInContext(carrier, context);
   const valueType = rustTypeFromCarrierInContext(value, context);
-  if (value === undefined || owner === undefined || valueType === undefined) {
+  if (owner === undefined || valueType === undefined) {
     throw new Error("A native optional storage operation lost its finalized value and storage types.");
   }
   context.usedAliases?.add("rt");

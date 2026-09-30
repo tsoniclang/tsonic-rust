@@ -257,7 +257,8 @@ export function rustBinaryResultCarrierIsIndependentOfOperands(
   operatorKindOrText: string,
 ): boolean {
   const operatorKind = operatorKindByText[operatorKindOrText] ?? operatorKindOrText;
-  return comparisonTokens[operatorKind] !== undefined || equalityTokens[operatorKind] !== undefined;
+  return comparisonTokens[operatorKind] !== undefined || equalityTokens[operatorKind] !== undefined ||
+    operatorKind === "KindEqualsEqualsToken" || operatorKind === "KindExclamationEqualsToken";
 }
 
 export function rustBinaryRightCarrierIsIndependentOfLeft(

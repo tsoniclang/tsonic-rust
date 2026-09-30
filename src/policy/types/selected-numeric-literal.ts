@@ -18,6 +18,10 @@ type SourcePrimitiveName = Extract<
   { readonly kind: "source-primitive" }
 >["name"];
 
+export function isUnannotatedRustNumericLiteral(node: Node, ast: AstReader): boolean {
+  return selectedNumericLiteralValue(node, ast) !== undefined || sourceIntegerLiteralValue(ast, node) !== undefined;
+}
+
 export function selectedIntegerLiteralJoin(
   node: Node, carrier: TargetTypeRef | undefined, ast: AstReader,
 ): TargetTypeRef | undefined {

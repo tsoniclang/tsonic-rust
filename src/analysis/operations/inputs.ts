@@ -55,6 +55,8 @@ import { rustRawAddressPlanKey } from "../../target-model/operations/raw-address
 import { rustMemoryLayoutObservationKey } from "../../target-model/operations/memory-layout.js";
 import { rustRawLocationPlanKey } from "../../target-model/operations/native-memory.js";
 import { rustMemoryBindingPlanKey } from "../../target-model/operations/memory-bindings.js";
+import { rustRestSequenceElements } from "../../target-model/operations/rest-assembly.js";
+import { selectRustArrayLiteralSpread } from "../../policy/types/array-literal.js";
 
 export function recordSelectedOperationInputs(
   walk: RustFactWalk,
@@ -327,7 +329,11 @@ export function resolveArrayLiteralCarrier(
   }
   if (expectedElement === undefined) {
     for (const element of presentElements) {
-      const carrier = resolveExpressionCarrier(walk, element, sourceFile, undefined);
+      const spread = ast.is.IsSpreadElement(element);
+      const operand = spread ? Node_Expression(ast, element) : element;
+      const source = operand === undefined ? undefined : resolveExpressionCarrier(walk, operand, sourceFile, undefined);
+      const sequence = source === undefined || !spread ? undefined : rustRestSequenceElements(source);
+      const carrier = spread ? sequence?.elements[0] : source;
       if (carrier !== undefined) {
         expectedElement = carrier;
         break;
@@ -351,8 +357,19 @@ export function resolveArrayLiteralCarrier(
     );
     return undefined;
   }
+  const contributions: { readonly kind: "value" | "spread"; readonly carrier: TargetTypeRef }[] = [];
   for (const element of presentElements) {
-    resolveExpressionCarrier(walk, element, sourceFile, expectedElement);
+    const spread = ast.is.IsSpreadElement(element);
+    const operand = spread ? Node_Expression(ast, element) : element;
+    const carrier = operand === undefined ? undefined : resolveExpressionCarrier(
+      walk, operand, sourceFile, spread ? undefined : expectedElement);
+    if (carrier === undefined) return undefined;
+    if (spread && selectRustArrayLiteralSpread(carrier, expectedElement) === undefined) {
+      appendRustDiagnostic(walk, "RUST_ARRAY_SPREAD_CARRIER_MISMATCH",
+        "Array spread requires a finalized dense sequence with the exact destination element carrier.", element, []);
+      return undefined;
+    }
+    contributions.push(Object.freeze({ kind: spread ? "spread" : "value", carrier }));
   }
   const resultCarrier = lane === "js"
     ? rustJsArrayTargetType(expectedElement)
@@ -364,6 +381,7 @@ export function resolveArrayLiteralCarrier(
     elementCarrier: expectedElement,
     resultCarrier,
     length: elements.length,
+    contributions: Object.freeze(contributions),
   });
   return setCarrierFact(walk, expression, resultCarrier);
 }

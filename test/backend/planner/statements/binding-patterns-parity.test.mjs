@@ -76,12 +76,12 @@ export function read(): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /binding\s*\.first\(\)[\s\S]*\.cloned\(\)[\s\S]*\.map_or_else/u);
+  assert.match(source, /binding\.first\(\)\.cloned\(\)\.unwrap_or\(9\)/u);
   assert.match(source, /binding\[1\.\.binding\.len\(\)\]\.to_vec\(\)/u);
   validateGeneratedProject("binding-native-vector", result.artifacts);
 });
 
-test("JavaScript array binding uses hole-aware get and slice operations", { timeout: 300_000 }, () => {
+test("JavaScript array binding uses checked get and slice operations", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     surfaces: ["js"],
     files: {
@@ -99,7 +99,7 @@ export function read(): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /binding\s*\.get\(0\)[\s\S]*\.map_or_else/u);
+  assert.match(source, /binding\.get\(0\)\.unwrap_or\(9\)/u);
   assert.match(source, /let rest: js_abi::JsArray<i32> = binding\.slice_from\(1\.0\);/u);
   validateGeneratedProject("binding-js-array", result.artifacts);
 });

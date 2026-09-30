@@ -62,7 +62,8 @@ import { allocateRustSyntheticName, createRustSyntheticNameState } from "../name
 import { finishProviderOperationExpression, planProviderOperationExpression } from "./conversions.js";
 import { expressionCarrier, planBigIntLiteral, planDeleteExpression, planGeneratorResumeExpression, planNumericLiteral, planSourceConversion, planTemplateExpression, requireExpressionCarrier, rustOperationFact, selectedOperationMatches } from "./fundamentals.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
-import { planArrayLiteral, planElementAccess } from "./elements.js";
+import { planElementAccess } from "./elements.js";
+import { planArrayLiteral } from "./array-literals/planning.js";
 import { planBinaryExpression } from "./binary.js";
 import { planAssignmentExpression } from "./assignment.js";
 import { planCallExpression } from "./calls/basic.js";

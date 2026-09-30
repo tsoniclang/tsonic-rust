@@ -6,19 +6,26 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { rustExpressionExitsCallable } from "../../target-ast/inspection/callable-exits.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { planRustOptionBranch } from "./option-branch.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { planRustOptionalStorageOperation } from "./optional-storage.js";
 
 export function rustOptionDefaultValue(
   option: RustExpr,
   fallback: RustExpr,
   carrier: TargetTypeRef,
   context: RustPlanContext,
+  resultCarrier?: TargetTypeRef,
 ): RustExpr {
+  const value = rustOptionalStorageValue(carrier);
+  const retainStorage = rustTargetTypeRefEquals(resultCarrier, carrier) && !rustTargetTypeRefEquals(value, carrier);
+  const present = (expression: RustExpr): RustExpr => !retainStorage ? expression
+    : value === undefined ? { kind: "call", path: "Some", args: [expression] }
+      : planRustOptionalStorageOperation(carrier, "present", [expression], context);
   if (rustExpressionExitsCallable(fallback)) {
     const names = context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, context.sourceFile, []);
     const presentName = allocateRustSyntheticName(names, "present_value");
-    return planRustOptionBranch(option, carrier, presentName, { kind: "path", path: presentName }, fallback, context);
+    return planRustOptionBranch(option, carrier, presentName, present({ kind: "path", path: presentName }), fallback, context);
   }
-  const value = rustOptionalStorageValue(carrier);
   if (value !== undefined) {
     const valueType = rustTypeFromCarrierInContext(value, context);
     const storageType = rustTypeFromCarrierInContext(carrier, context);
@@ -26,13 +33,14 @@ export function rustOptionDefaultValue(
     context.usedAliases?.add("rt");
     return { kind: "call", path: "rt::optional_storage_coalesce", genericArguments: [
       { kind: "type", type: valueType }, { kind: "type", type: storageType }, { kind: "type", type: { kind: "infer" } },
-    ], args: [option, { kind: "path", path: "core::convert::identity" }, { kind: "closure", params: [], body: fallback }] };
+    ], args: [option, retainStorage ? { kind: "closure", params: [{ name: "value", byRefCopy: false }], body: present({ kind: "path", path: "value" }) }
+      : { kind: "path", path: "core::convert::identity" }, { kind: "closure", params: [], body: fallback }] };
   }
   const eager = rustDefaultMayEvaluateEagerly(fallback);
   return {
     kind: "method-call",
     receiver: option,
-    method: eager ? "unwrap_or" : "unwrap_or_else",
+    method: retainStorage ? eager ? "or" : "or_else" : eager ? "unwrap_or" : "unwrap_or_else",
     args: eager
       ? [fallback]
       : [{ kind: "closure", params: [], body: fallback }],
@@ -45,6 +53,8 @@ function rustDefaultMayEvaluateEagerly(expression: RustExpr): boolean {
     case "float-literal":
     case "bool-literal":
     case "none":
+    case "path":
+    case "associated-value":
       return true;
     case "unary":
       return rustDefaultMayEvaluateEagerly(expression.operand);
