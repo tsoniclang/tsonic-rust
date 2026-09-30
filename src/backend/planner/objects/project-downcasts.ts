@@ -4,10 +4,10 @@ import { rustSelectedProjectDowncast } from "../../../analysis/facts/value-proje
 import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustProjectDowncastRoute } from "../../../analysis/project-types/type-policy.js";
+import type { RustProjectTypeTestPlan } from "../../../target-model/operations/type-tests.js";
 import { checkedProjectProjectionResultType, planCheckedProjectProjectionCall } from "./checked-project-projections.js";
 import type {
   RustProjectDowncastFact,
-  RustTargetOperationFact,
 } from "../../../analysis/facts/keys.js";
 import {
   isRustCopyCarrier,
@@ -28,11 +28,6 @@ import {
   allocateRustSyntheticName,
   createRustSyntheticNameState,
 } from "../names/synthetic.js";
-
-type RustProjectTypeTestFact = Extract<
-  RustTargetOperationFact,
-  { readonly kind: "project-type-test" }
->;
 
 export interface RustProjectTypeTestSelectionPlan {
   readonly expression: RustExpr;
@@ -152,7 +147,7 @@ function planRustNonConsumingProjectValue(
 export function planRustProjectTypeTest(
   node: Node,
   expression: RustExpr,
-  fact: RustProjectTypeTestFact,
+  fact: RustProjectTypeTestPlan,
   context: RustPlanContext,
 ): RustExpr | undefined {
   if (fact.lowering.kind === "constant") {
@@ -212,7 +207,7 @@ export function planRustProjectTypeTest(
 export function planRustProjectTypeTestSelection(
   node: Node,
   expression: RustExpr,
-  fact: RustProjectTypeTestFact,
+  fact: RustProjectTypeTestPlan,
   context: RustPlanContext,
 ): RustProjectTypeTestSelectionPlan | undefined {
   if (fact.lowering.kind !== "dispatch") {

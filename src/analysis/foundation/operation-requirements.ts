@@ -1,6 +1,7 @@
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { RustTargetOperationFact } from "../facts/operations/facts.js";
 import type { RustValueConversion } from "../../target-model/operations/model.js";
+import type { RustClosedTypeTestPlan } from "../../target-model/operations/type-tests.js";
 import type {
   RustTargetGenericArgument,
   RustTargetTypeRef,
@@ -35,6 +36,17 @@ export function rustFoundationForTargetOperationFact(
   };
 
   switch (fact.kind) {
+    case "closed-type-test": {
+      requireCarrier(fact.sourceCarrier);
+      requireCarrier(fact.targetCarrier);
+      const visit = (test: RustClosedTypeTestPlan): void => {
+        if (test.kind === "project") requireCarrier(test.plan.dispatchCarrier);
+        else if (test.kind === "option") { requireCarrier(test.element); visit(test.test); }
+        else if (test.kind === "union") test.arms.forEach(arm => { requireCarrier(arm.carrier); visit(arm.test); });
+      };
+      visit(fact.test);
+      break;
+    }
     case "union-equality":
       requireCarrier(fact.leftCarrier);
       requireCarrier(fact.rightCarrier);

@@ -1,0 +1,81 @@
+import type { RustProjectTypePolicy } from "../../types/project-types.js";
+import type { RustClosedTypeTestPlan, RustProjectTypeTestPlan } from "../../../target-model/operations/type-tests.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustUnionAlternatives } from "../../../target-model/types/union-relations.js";
+import { isRustAbsenceCarrier, isRustJsValueCarrier, isRustProgramErrorCarrier,
+  rustOptionElementCarrier, rustStructuralObjectCarrierValue, rustTsValueTargetType,
+} from "../../../target-model/types/index.js";
+import { rustNamedTypeCarrierValue } from "../../../target-model/types/carriers/native.js";
+import { getRustTypeofRuntimeKind } from "../../../target-model/types/runtime-kind.js";
+
+export function selectRustProjectTypeTestPlan(
+  sourceCarrier: TargetTypeRef,
+  targetCarrier: TargetTypeRef,
+  projectTypes: RustProjectTypePolicy,
+): RustProjectTypeTestPlan | undefined {
+  const dispatchCarrier = rustOptionElementCarrier(sourceCarrier) ?? sourceCarrier;
+  const sourceDefinition = projectTypes.definitionForCarrier(dispatchCarrier);
+  const targetDefinition = projectTypes.definitionForCarrier(targetCarrier);
+  if (sourceDefinition === undefined || targetDefinition?.kind !== "class") return undefined;
+  const sourceToTarget = projectTypes.relationship(dispatchCarrier, targetDefinition);
+  const concreteTypes = projectTypes.concreteClassesFor(sourceDefinition);
+  const ancestryProven = projectTypes.classLineage(sourceDefinition)?.includes(targetDefinition) === true &&
+    concreteTypes.length > 0 && concreteTypes.every(concrete =>
+      projectTypes.classLineage(concrete)?.includes(targetDefinition) === true);
+  let lowering: RustProjectTypeTestPlan["lowering"];
+  if (ancestryProven && sourceToTarget.kind === "related" && rustTargetTypeRefEquals(sourceToTarget.targetType, targetCarrier)) {
+    lowering = rustOptionElementCarrier(sourceCarrier) === undefined
+      ? { kind: "constant", value: true } : { kind: "option-presence" };
+  } else {
+    const targetToSource = projectTypes.relationship(targetCarrier, sourceDefinition);
+    if (targetToSource.kind === "ambiguous" || sourceToTarget.kind === "ambiguous") return undefined;
+    if (projectTypes.downcastRoute(sourceDefinition, targetCarrier) !== undefined) lowering = { kind: "dispatch" };
+    else if (targetToSource.kind === "related" && rustTargetTypeRefEquals(targetToSource.targetType, dispatchCarrier)) return undefined;
+    else lowering = { kind: "constant", value: false };
+  }
+  return Object.freeze({ sourceCarrier, dispatchCarrier, targetCarrier, lowering: Object.freeze(lowering) });
+}
+
+export function selectRustClosedTypeTestPlan(
+  source: TargetTypeRef,
+  target: TargetTypeRef,
+  projectTypes: RustProjectTypePolicy,
+  definitions: RustTypeDefinitions,
+  ancestors: readonly TargetTypeRef[] = [],
+): RustClosedTypeTestPlan | undefined {
+  if (ancestors.some(ancestor => rustTargetTypeRefEquals(ancestor, source))) return undefined;
+  const nextAncestors = [...ancestors, source];
+  const optional = rustOptionElementCarrier(source);
+  if (optional !== undefined) {
+    const test = selectRustClosedTypeTestPlan(optional, target, projectTypes, definitions, nextAncestors);
+    return test === undefined ? undefined : Object.freeze({ kind: "option", element: optional, test });
+  }
+  const alternatives = rustUnionAlternatives(source, definitions);
+  if (alternatives !== undefined) {
+    const arms = alternatives.map(arm => {
+      const test = selectRustClosedTypeTestPlan(arm.carrier, target, projectTypes, definitions, nextAncestors);
+      return test === undefined ? undefined : Object.freeze({ ...arm, test });
+    });
+    return arms.length === 0 || arms.some(arm => arm === undefined) ? undefined
+      : Object.freeze({ kind: "union", arms: Object.freeze(arms as NonNullable<typeof arms[number]>[]) });
+  }
+  if (source.kind === "type-parameter" || source.kind === "associated-type" ||
+    source.kind === "trait-object" || source.kind === "reference" ||
+    isRustJsValueCarrier(source) || rustTargetTypeRefEquals(source, rustTsValueTargetType()) || isRustProgramErrorCarrier(source) ||
+    rustStructuralObjectCarrierValue(source) !== undefined) return undefined;
+  const sourceDefinition = projectTypes.definitionForCarrier(source);
+  const targetDefinition = projectTypes.definitionForCarrier(target);
+  if (sourceDefinition !== undefined && targetDefinition !== undefined) {
+    const plan = selectRustProjectTypeTestPlan(source, target, projectTypes);
+    return plan === undefined ? undefined : Object.freeze({ kind: "project", plan });
+  }
+  if (sourceDefinition !== undefined && projectTypes.externalBaseForDefinition(sourceDefinition) !== undefined) return undefined;
+  if (isRustAbsenceCarrier(source) || source.kind === "source-primitive") return Object.freeze({ kind: "constant", value: false });
+  const native = rustNamedTypeCarrierValue(source);
+  if (sourceDefinition === undefined && native === undefined && getRustTypeofRuntimeKind(source, definitions) === undefined) return undefined;
+  const upcasts = native?.upcasts.filter(upcast => rustTargetTypeRefEquals(upcast.target, target)) ?? [];
+  if (upcasts.length > 1) return undefined;
+  return Object.freeze({ kind: "constant", value: rustTargetTypeRefEquals(source, target) || upcasts.length === 1 });
+}

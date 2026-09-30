@@ -213,6 +213,7 @@ export function selectRustCallableValueAdapter(
         sourceCarrier,
         targetCarrier,
         conversion: selected.fact.conversion,
+        ...(selected.upcast === undefined ? {} : { upcast: selected.upcast }),
       });
     case "project-upcast":
       return Object.freeze({ kind: "project-upcast", sourceCarrier, targetCarrier });

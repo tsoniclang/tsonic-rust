@@ -3,6 +3,27 @@ import type { RustSourceObjectShape } from "../source-type-registry.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import { resolveRustCallableEvidence } from "./source-evidence.js";
 import { rustCallableProtocol } from "../../../target-model/types/carriers/callables.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { resolveRustTargetType } from "./target.js";
+
+export function resolveRustConstructInstance(
+  type: Type,
+  context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
+): TargetTypeRef | undefined {
+  const semantics = context.currentSemantics;
+  const signatures = semantics.types.constructSignatures(type);
+  const results = signatures.map(signature => {
+    const declaration = semantics.declarations.signatureDeclaration(signature);
+    const result = semantics.types.returnType(signature);
+    return declaration === undefined || result === undefined || context.ast.typeParameters(declaration).length !== 0
+      ? undefined : resolveRustTargetType(result, context, options, new Set());
+  });
+  const instance = results[0];
+  return instance !== undefined && results.every(result => result !== undefined && rustTargetTypeRefEquals(result, instance))
+    ? instance : undefined;
+}
 
 export function resolveRustConstructSignature(
   signature: Signature,

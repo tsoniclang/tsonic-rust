@@ -2,6 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustTypeofResult } from "../../../target-model/types/runtime-kind.js";
 import type { RustUnionEqualityArm } from "../../../target-model/operations/binary.js";
 import type { RustSwitchComparison } from "../../../target-model/operations/switch.js";
+import type { RustClosedTypeTestPlan, RustProjectTypeTestPlan } from "../../../target-model/operations/type-tests.js";
 import type { RustProjectDowncastFact } from "../../../target-model/types/project-projections.js";
 import type { RustArgumentMode, RustOperationCarrierRequirement, RustProviderFactOperationKind, RustRuntimeSetOperationKind, RustSourceCallParameterPlan, RustValueConversion } from "../../../target-model/operations/model.js";
 import type { RustFinalizedOperationAbiFor } from "../finalized-operation-abi.js";
@@ -241,17 +242,18 @@ export type RustTargetOperationFact =
       readonly resultCarrier: TargetTypeRef;
       readonly value: boolean;
     }
-  | {
+  | (RustProjectTypeTestPlan & {
       readonly kind: "project-type-test";
       readonly operationId: string;
+      readonly resultCarrier: TargetTypeRef;
+    })
+  | {
+      readonly kind: "closed-type-test";
+      readonly operationId: string;
       readonly sourceCarrier: TargetTypeRef;
-      readonly dispatchCarrier: TargetTypeRef;
       readonly targetCarrier: TargetTypeRef;
       readonly resultCarrier: TargetTypeRef;
-      readonly lowering:
-        | { readonly kind: "dispatch" }
-        | { readonly kind: "constant"; readonly value: boolean }
-        | { readonly kind: "option-presence" };
+      readonly test: RustClosedTypeTestPlan;
     }
   | {
       readonly kind: "program-error-type-test";
@@ -819,6 +821,7 @@ export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact):
     case "typed-location":
     case "native-pointer":
     case "project-type-test":
+    case "closed-type-test":
     case "program-error-type-test":
     case "program-error-equality":
     case "builtin-error-type-test":

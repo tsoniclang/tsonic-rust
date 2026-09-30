@@ -39,6 +39,7 @@ import {
 } from "../../../target-model/conversions/contracts.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import type { RustValueConversion } from "../../../target-model/operations/model.js";
+import type { RustClosedTypeTestPlan } from "../../../target-model/operations/type-tests.js";
 import type { RustPlanQueries } from "../../../target-model/facts/selections.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustProjectProjectionSelection } from "../../../target-model/types/project-projections.js";
@@ -575,6 +576,17 @@ export function analyzeRustGeneratedItemUsage(input: {
           markProjectCarrierFieldUsed(fact.dispatchCarrier, "wrapper-dispatch");
         }
         return;
+      case "closed-type-test": {
+        const visit = (test: RustClosedTypeTestPlan): void => {
+          if (test.kind === "project" && test.plan.lowering.kind === "dispatch") {
+            markDowncastUsed(test.plan.dispatchCarrier, test.plan.targetCarrier);
+            markProjectCarrierFieldUsed(test.plan.dispatchCarrier, "wrapper-dispatch");
+          } else if (test.kind === "option") visit(test.test);
+          else if (test.kind === "union") test.arms.forEach(arm => visit(arm.test));
+        };
+        visit(fact.test);
+        return;
+      }
       case "source-method-property":
         if (isRustPreconstructionThisOperation(input.ast, node)) return;
         markProjectCarrierFieldUsed(fact.receiverCarrier, "wrapper-dispatch");

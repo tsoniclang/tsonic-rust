@@ -32,6 +32,7 @@ import { planNullishAssignment } from "./nullish-assignment.js";
 import { planCompoundAssignmentExpression } from "./compound-assignment.js";
 import { planRustProgramErrorEquality, planRustProgramErrorTypeTest } from "./error-operations.js";
 import { planRustBuiltinErrorTypeTest } from "./builtin-errors.js";
+import { planRustClosedTypeTest } from "./type-tests.js";
 import {
   planRustProjectTypeTest,
   planRustProjectTypeTestSelection,
@@ -103,6 +104,7 @@ export function planSelectedRustProjectTypeTest(
 export function planBinaryExpression(node: Node, context: RustPlanContext, resultUse: RustExpressionResultUse = "value"): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
   if (fact?.kind === "union-equality") return planRustUnionEquality(node, fact, context);
+  if (fact?.kind === "closed-type-test") return planRustClosedTypeTest(node, fact, context);
   if ((fact?.kind === "operator-token" || fact?.kind === "operator-call") &&
     fact.operator !== "=" && isRustAssignmentOperator(fact.operator)) {
     return planCompoundAssignmentExpression(node, fact, context);

@@ -72,7 +72,7 @@ export function rustTargetOperationText(fact: RustTargetOperationFact): string {
     return fact.conversion === undefined ? "identity" : "runtime-conversion";
   }
   if (fact.kind === "project-type-test" || fact.kind === "program-error-type-test" ||
-    fact.kind === "builtin-error-type-test") {
+    fact.kind === "builtin-error-type-test" || fact.kind === "closed-type-test") {
     return fact.kind;
   }
   return fact.operationId;

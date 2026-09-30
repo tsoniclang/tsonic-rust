@@ -47,6 +47,11 @@ export function recordRustValueCarrierReconciliation(
     ]);
     return;
   }
+  if (reconciliation.upcast !== undefined) {
+    facts.set(subject, rustProjectUpcastFactKey, reconciliation.upcast, [
+      { message: "rust exact project payload upcast before contextual conversion" },
+    ]);
+  }
   facts.set(
     subject,
     rustContextualValueConversionFactKey,

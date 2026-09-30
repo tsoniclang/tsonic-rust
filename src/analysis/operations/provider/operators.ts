@@ -37,6 +37,8 @@ import { rustContextualValueConversionFactKey } from "../../facts/value-projecti
 import { selectJsSurfaceOperation } from "../../../policy/operations/source-profiles/js/index.js";
 import { selectRustProviderOperation } from "../../../policy/operations/provider-selection.js";
 import { selectRustBuiltinErrorTypeTest } from "./builtin-errors.js";
+import { selectRustClosedTypeTest } from "./type-tests.js";
+import { selectRustProjectTypeTestPlan } from "../../../policy/operations/operators/type-tests.js";
 import type {
   RustCheckedCallSelectionInput,
   RustCheckedOperationSelectionResult,
@@ -134,6 +136,8 @@ function selectRustProjectTypeTest(
   }
   if (sourceCarrier === undefined || dispatchCarrier === undefined || sourceDefinition === undefined ||
     targetDefinition === undefined || targetCarrier === undefined) {
+    const closed = sourceCarrier === undefined ? undefined : selectRustClosedTypeTest(request, sourceCarrier, context, options);
+    if (closed !== undefined) return closed;
     return rejectSelectedOperation(
       request.expression,
       context,
@@ -141,49 +145,17 @@ function selectRustProjectTypeTest(
       "Checked instanceof requires exact project source, concrete class declaration, and closed target carrier evidence.",
     );
   }
-  const sourceToTarget = options.projectTypes.relationship(dispatchCarrier, targetDefinition);
-  const concreteTypes = options.projectTypes.concreteClassesFor(sourceDefinition);
-  const ancestryProven = options.projectTypes.classLineage(sourceDefinition)?.includes(targetDefinition) === true &&
-    concreteTypes.length > 0 && concreteTypes.every((concrete) =>
-      options.projectTypes.classLineage(concrete)?.includes(targetDefinition) === true);
-  let lowering: Extract<RustTargetOperationFact, { readonly kind: "project-type-test" }>["lowering"];
-  if (ancestryProven && sourceToTarget.kind === "related" && rustTargetTypeRefEquals(sourceToTarget.targetType, targetCarrier)) {
-    lowering = rustOptionElementCarrier(sourceCarrier) === undefined
-      ? { kind: "constant", value: true }
-      : { kind: "option-presence" };
-  } else {
-    const targetToSource = options.projectTypes.relationship(targetCarrier, sourceDefinition);
-    if (targetToSource.kind === "ambiguous" || sourceToTarget.kind === "ambiguous") {
-      return rejectSelectedOperation(
-        request.expression,
-        context,
-        "RUST_PROJECT_TYPE_TEST_AMBIGUOUS",
-        "Checked instanceof has more than one exact project heritage instantiation.",
-      );
-    }
-    if (options.projectTypes.downcastRoute(sourceDefinition, targetCarrier) !== undefined) {
-      lowering = { kind: "dispatch" };
-    } else if (targetToSource.kind === "related" &&
-      rustTargetTypeRefEquals(targetToSource.targetType, dispatchCarrier)) {
-      return rejectSelectedOperation(
-        request.expression,
-        context,
-        "RUST_PROJECT_TYPE_TEST_ROUTE_MISSING",
-        "Checked instanceof requires one closed generated project downcast route.",
-      );
-    } else {
-      lowering = { kind: "constant", value: false };
-    }
+  const plan = selectRustProjectTypeTestPlan(sourceCarrier, targetCarrier, options.projectTypes);
+  if (plan === undefined) {
+    return rejectSelectedOperation(request.expression, context, "RUST_PROJECT_TYPE_TEST_ROUTE_MISSING",
+      "Checked instanceof requires an unambiguous closed generated project downcast route.");
   }
   const resultCarrier = rustSourcePrimitiveTargetType("bool");
   const fact: RustTargetOperationFact = {
     kind: "project-type-test",
-    operationId: `tsonic.rust.project-type-test.${lowering.kind}`,
-    sourceCarrier,
-    dispatchCarrier,
-    targetCarrier,
+    operationId: `tsonic.rust.project-type-test.${plan.lowering.kind}`,
+    ...plan,
     resultCarrier,
-    lowering,
   };
   return acceptRustOperation(request.expression, fact, context, {
     sourceExpression: request.expression,

@@ -1,5 +1,5 @@
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { selectRustUnionArmMapping, rustUnionProjectionContract } from "../../target-model/types/union-relations.js";
+import { selectRustUnionArmMapping, rustUnionProjectionContract, rustUnionAlternatives } from "../../target-model/types/union-relations.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type {
   RustCallScopedLifetimeReconciliationFact,
@@ -33,7 +33,7 @@ export type RustValueCarrierReconciliation =
       readonly kind: "call-scoped-lifetime";
       readonly fact: RustCallScopedLifetimeReconciliationFact;
     }
-  | { readonly kind: "conversion"; readonly fact: RustContextualValueConversionFact }
+  | { readonly kind: "conversion"; readonly fact: RustContextualValueConversionFact; readonly upcast?: RustProjectUpcastFact }
   | { readonly kind: "project-upcast"; readonly fact: RustProjectUpcastFact }
   | { readonly kind: "incompatible"; readonly reason: "ambiguous" | "unrelated" };
 
@@ -220,12 +220,22 @@ export function selectRustValueCarrierReconciliation(
     };
   }
   const conversion = selectRustSourceValueConversion(sourceCarrier, targetCarrier, definitions);
-  return conversion === undefined
-    ? { kind: "incompatible", reason: "unrelated" }
-    : {
-        kind: "conversion",
-        fact: { sourceCarrier, targetCarrier, conversion },
-      };
+  if (conversion !== undefined) return { kind: "conversion", fact: { sourceCarrier, targetCarrier, conversion } };
+  const candidates: { readonly upcast: RustProjectUpcastFact; readonly fact: RustContextualValueConversionFact }[] = [];
+  for (const arm of rustUnionAlternatives(targetCarrier, definitions) ?? []) {
+    if (arm.variant.kind !== "payload") continue;
+    const definition = projectTypes.definitionForCarrier(arm.carrier);
+    if (definition === undefined) continue;
+    const relationship = projectTypes.relationship(sourceCarrier, definition);
+    if (relationship.kind === "ambiguous") return { kind: "incompatible", reason: "ambiguous" };
+    if (relationship.kind !== "related" || !rustTargetTypeRefEquals(relationship.targetType, arm.carrier)) continue;
+    const injection = selectRustSourceValueConversion(arm.carrier, targetCarrier, definitions);
+    if (injection?.kind !== "source-union-variant") continue;
+    candidates.push({ upcast: { sourceCarrier, targetCarrier: arm.carrier },
+      fact: { sourceCarrier: arm.carrier, targetCarrier, conversion: injection } });
+  }
+  return candidates.length === 1 ? { kind: "conversion", ...candidates[0]! }
+    : { kind: "incompatible", reason: candidates.length > 1 ? "ambiguous" : "unrelated" };
 }
 
 export function selectRustNativeTraitObjectUpcast(
