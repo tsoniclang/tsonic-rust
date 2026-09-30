@@ -11,18 +11,9 @@ import {
   substituteRustTargetGenerics,
 } from "../../target-model/types/index.js";
 import {
-  KindBinaryExpression,
   KindArrayLiteralExpression,
-  KindCallExpression,
-  KindElementAccessExpression,
-  KindIdentifier,
-  KindNewExpression,
-  KindNonNullExpression,
   KindObjectLiteralExpression,
   KindParenthesizedExpression,
-  KindPostfixUnaryExpression,
-  KindPrefixUnaryExpression,
-  KindPropertyAccessExpression,
   KindSatisfiesExpression,
   KindSpreadElement,
   Node_Expression,
@@ -41,6 +32,7 @@ import { rustIndexedFieldKeyArgument } from "../facts/indexed-field-keys.js";
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 import { rustOptionalStorageValue, rustSourceOptionalTargetType } from "../../target-model/types/projections.js";
 import { resolveParameterAbi } from "../declarations/types-and-bindings.js";
+import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type {
@@ -319,6 +311,10 @@ function resolveProjectSourceInferenceCarrier(
   argument: Node,
 ): TargetTypeRef | undefined {
   const kind = walk.context.ast.kindName(argument);
+  if (walk.context.ast.is.IsArrowFunction(argument) || walk.context.ast.is.IsFunctionExpression(argument)) {
+    const sourceFile = walk.context.ast.getSourceFile(argument);
+    return sourceFile === undefined ? undefined : resolveExpressionCarrier(walk, argument, sourceFile, undefined);
+  }
   if (kind === KindSpreadElement) {
     const inner = Node_Expression(walk.context.ast, argument);
     return inner === undefined
@@ -330,13 +326,7 @@ function resolveProjectSourceInferenceCarrier(
             walk.operationOptions,
           );
   }
-  if (kind !== KindIdentifier && kind !== KindCallExpression &&
-    kind !== KindNewExpression && kind !== KindPropertyAccessExpression &&
-    kind !== KindElementAccessExpression && kind !== KindBinaryExpression &&
-    kind !== KindPrefixUnaryExpression && kind !== KindPostfixUnaryExpression &&
-    kind !== KindParenthesizedExpression && kind !== KindNonNullExpression &&
-    kind !== KindSatisfiesExpression && kind !== "KindAsExpression" &&
-    kind !== "KindTypeAssertionExpression") {
+  if (kind === KindArrayLiteralExpression || kind === KindObjectLiteralExpression) {
     return undefined;
   }
   return resolveRustTargetTypeRef(

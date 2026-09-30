@@ -74,9 +74,14 @@ export function resolveFunctionExpressionCarrier(
         walk.operationOptions,
       )
     : undefined);
-  const resolvedSourceCallable = sourceSelected?.kind === "function-pointer"
+  const sourceProtocol = sourceSelected?.kind === "function-pointer"
     ? { parameters: sourceSelected.args, result: sourceSelected.result }
     : rustGenericCallableProtocol(sourceSelected, genericParameters) ?? rustClosureProtocol(sourceSelected) ?? rustCallableProtocol(sourceSelected);
+  const sourceResult = sourceProtocol === undefined ? undefined
+    : ast.hasModifierKind(expression, "async") ? sourceProtocol.result
+    : selectRustInferredNumericReturn(walk, expression, sourceProtocol.result);
+  const resolvedSourceCallable = sourceProtocol === undefined || sourceResult === undefined ? undefined
+    : { ...sourceProtocol, result: sourceResult };
   const fallbackParameterCarriers = resolvedSourceCallable?.parameters.map((carrier, index) =>
     Node_Initializer(ast, parameters[index]) === undefined
       ? carrier
