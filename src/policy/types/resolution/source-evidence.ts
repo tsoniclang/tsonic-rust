@@ -295,6 +295,10 @@ export function resolveRustEvidenceNodesToCommonCarrier(
     const selection = semantics.types.authoredSelection(node, selectedType);
     const evidence = new Set([node, ...(selection.kind === "authored-members" ? selection.nodes : []),
       ...semantics.facts.authoredTypeNodes(node)]);
+    for (const member of evidence) {
+      const nested = semantics.types.authoredSelection(member, selectedType);
+      if (nested.kind === "authored-members") nested.nodes.forEach(selected => evidence.add(selected));
+    }
     const selected = [...evidence].flatMap(member => {
       const selection = semantics.types.authoredSelection(member, selectedType);
       const authoredType = semantics.types.authoredType(member);

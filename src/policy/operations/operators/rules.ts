@@ -1,4 +1,5 @@
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustBinaryOperatorSelection } from "../../../target-model/operations/binary.js";
 import { selectRustNumericConstraintComparison, selectRustNumericUnionComparison } from "../numeric/union.js";
 import { rustCarrierSupportsSourceNumeric } from "../../../target-model/types/carriers/source-numeric.js";
 import type { RustArgumentMode, RustValueConversion } from "../../../target-model/operations/model.js";
@@ -64,30 +65,6 @@ import {
   selectRustNumericBinaryPromotion,
   selectRustNumericComparisonPromotion,
 } from "../numeric/promotion.js";
-
-export type RustBinaryOperatorSelection =
-  | {
-      readonly kind: "operator-token";
-      readonly rustOperator: RustBinaryOperator;
-      readonly resultCarrier: TargetTypeRef;
-      readonly leftConversion?: RustValueConversion;
-      readonly rightConversion?: RustValueConversion;
-    }
-  | {
-      readonly kind: "operator-call";
-      readonly rustOperator: RustOperationSymbol;
-      readonly resultCarrier: TargetTypeRef;
-      readonly path: string;
-      readonly fallible: boolean;
-      readonly operandModes: readonly [RustArgumentMode, RustArgumentMode];
-      readonly leftConversion?: RustValueConversion;
-      readonly rightConversion?: RustValueConversion;
-    }
-  | {
-      readonly kind: "string-concat";
-      readonly rustOperator: "+";
-      readonly resultCarrier: TargetTypeRef;
-    };
 
 export type RustCompoundAssignmentSelection =
   | {

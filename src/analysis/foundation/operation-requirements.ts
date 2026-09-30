@@ -35,6 +35,17 @@ export function rustFoundationForTargetOperationFact(
   };
 
   switch (fact.kind) {
+    case "union-equality":
+      requireCarrier(fact.leftCarrier);
+      requireCarrier(fact.rightCarrier);
+      fact.arms.forEach(arm => {
+        requireCarrier(arm.left.carrier);
+        requireCarrier(arm.right.carrier);
+        requireConversion(arm.operation.leftConversion);
+        requireConversion(arm.operation.rightConversion);
+        if (arm.operation.kind === "operator-call") require(rustFoundationForPath(arm.operation.path));
+      });
+      break;
     case "operator-token":
       requireCarrier(fact.resultCarrier);
       requireConversion(fact.leftConversion);

@@ -1,5 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustTypeofResult } from "../../../target-model/types/runtime-kind.js";
+import type { RustUnionEqualityArm } from "../../../target-model/operations/binary.js";
 import type { RustProjectDowncastFact } from "../../../target-model/types/project-projections.js";
 import type { RustArgumentMode, RustOperationCarrierRequirement, RustProviderFactOperationKind, RustRuntimeSetOperationKind, RustSourceCallParameterPlan, RustValueConversion } from "../../../target-model/operations/model.js";
 import type { RustFinalizedOperationAbiFor } from "../finalized-operation-abi.js";
@@ -11,6 +12,16 @@ import type {
 } from "../../../target-model/types/model.js";
 
 export type RustTargetOperationFact =
+  | {
+      readonly kind: "union-equality";
+      readonly operationId: string;
+      readonly leftCarrier: TargetTypeRef;
+      readonly rightCarrier: TargetTypeRef;
+      readonly resultCarrier: TargetTypeRef;
+      readonly negated: boolean;
+      readonly arms: readonly RustUnionEqualityArm[];
+      readonly exhaustive: boolean;
+    }
   | {
       readonly kind: "native-range";
       readonly operationId: string;
@@ -771,6 +782,7 @@ export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact):
     case "default-value":
     case "object-shape-projection":
     case "operator-token":
+    case "union-equality":
     case "operator-call":
     case "string-concat":
     case "template-string":

@@ -1,4 +1,4 @@
-import type { RustBinaryOperatorSelection } from "../operators/rules.js";
+import type { RustBinaryOperatorSelection } from "../../../target-model/operations/binary.js";
 import { selectRustSourceValueConversion } from "../../conversions/selection.js";
 import { rustJsNumericTargetType, rustSourcePrimitiveTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";

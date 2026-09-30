@@ -1,5 +1,6 @@
 import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
 import { planRustOptionalStorageOperation } from "./optional-storage.js";
+import { planRustUnionEquality } from "./union-equality.js";
 import {
   isRustBoolCarrier,
   isRustStringCarrier,
@@ -101,6 +102,7 @@ export function planSelectedRustProjectTypeTest(
 
 export function planBinaryExpression(node: Node, context: RustPlanContext, resultUse: RustExpressionResultUse = "value"): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
+  if (fact?.kind === "union-equality") return planRustUnionEquality(node, fact, context);
   if ((fact?.kind === "operator-token" || fact?.kind === "operator-call") &&
     fact.operator !== "=" && isRustAssignmentOperator(fact.operator)) {
     return planCompoundAssignmentExpression(node, fact, context);
