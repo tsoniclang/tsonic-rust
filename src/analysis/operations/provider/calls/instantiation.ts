@@ -10,6 +10,7 @@ import {
   rustTypeGenericArgument,
 } from "../../../../target-model/types/index.js";
 import { acceptRustPolicy } from "../../../../policy/operations/contracts.js";
+import { selectedRustCallSignature } from "./signatures.js";
 import { asNode } from "../../../../policy/evidence/selected-source.js";
 import { selectProviderRecordArgument } from "./record-arguments.js";
 import { materializeRustOmittedCallArguments } from "./omitted-arguments.js";
@@ -517,18 +518,7 @@ export function acceptSelectedCall(
     returnType: fact.resultCarrier,
     ...(callIdentity.providerDeclaration === undefined ? {} : { providerDeclaration: callIdentity.providerDeclaration }),
   };
-  const selectedSignature = {
-      member,
-      ...(request.source.selectedSignature === undefined ? {} : { sourceSignature: request.source.selectedSignature }),
-      ...(request.sourceSelectedDeclaration === undefined ? {} : { sourceDeclaration: request.sourceSelectedDeclaration }),
-      ...(selectedCallCalleeSymbol(request) === undefined ? {} : { sourceCalleeSymbol: selectedCallCalleeSymbol(request) }),
-      ...(selectedCallCalleeDeclaration(request) === undefined ? {} : { sourceCalleeDeclaration: selectedCallCalleeDeclaration(request) }),
-      ...(request.source.sourceResultType === undefined ? {} : { sourceReturnType: request.source.sourceResultType }),
-      sourceArgumentBindings: request.source.sourceArgumentBindings,
-      sourceSelectedSignatureParameters: request.source.sourceSelectedSignatureParameters,
-      ...(request.source.sourceSelectedMethodTypeArguments === undefined ? {} : { sourceSelectedMethodTypeArguments: request.source.sourceSelectedMethodTypeArguments }),
-      ...(callIdentity.providerDeclaration === undefined ? {} : { providerDeclaration: callIdentity.providerDeclaration }),
-    };
+  const selectedSignature = selectedRustCallSignature(request, member);
   context.facts.set(request.source.call, rustSelectedCallKey, selectedSignature, evidence);
   return acceptRustPolicy({ selectedSignature }, evidence);
 }

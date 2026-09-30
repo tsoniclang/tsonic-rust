@@ -7,9 +7,10 @@ import { planRustClosedTypeTest } from "../../../../dist/backend/planner/express
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
 
-test("closed nominal tests reject missing, forged and reordered test evidence", () => {
+for (const kind of ["nominal", "array"]) test(`closed ${kind} tests reject missing, forged and reordered test evidence`, () => {
+  const operation = kind === "array" ? "Array.isArray(value)" : "value instanceof RegExp";
   const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts":
-    "export function test(value: string | RegExp | undefined): boolean { return value instanceof RegExp; }" } });
+    `export function test(value: string | RegExp | readonly string[] | undefined): boolean { return ${operation}; }` } });
   const { ast } = program.source;
   const operations = [];
   const visit = node => {
@@ -39,7 +40,9 @@ test("closed nominal tests reject missing, forged and reordered test evidence", 
   cyclic.test = cyclic;
   for (const changes of [
     { operationId: "changed" }, { resultCarrier: rustSourcePrimitiveTargetType("int32") },
-    { sourceCarrier: fact.targetCarrier }, { targetCarrier: rustSourcePrimitiveTargetType("int32") },
+    { sourceCarrier: fact.predicate.targetCarrier }, { predicate: { kind: "nominal", targetCarrier: rustSourcePrimitiveTargetType("int32") } },
+    { predicate: undefined }, { predicate: null }, { predicate: { kind: "unknown" } },
+    { predicate: { ...fact.predicate, unexpected: true } }, { sourceCarrier: null },
     { test: undefined }, { test: null }, { test: cyclic }, { test: { kind: "constant", value: true } },
     ...mutatedArms.map(selected => ({ test: { ...fact.test, test: { ...fact.test.test, arms: selected } } })),
   ]) {

@@ -19,6 +19,7 @@ import {
 } from "../../../../target-model/types/index.js";
 import { readRustSourceKeepAlive } from "../../../../policy/operations/pointers/reachability.js";
 import { acceptProjectSourceCall, mapSelectedJsSpecialCall } from "../object-shapes.js";
+import { selectRustArrayTypeTest } from "../type-tests.js";
 import { checkedPropertySelectionInput, selectRustCheckedPropertyAccess } from "../properties.js";
 import { acceptRustPolicy } from "../../../../policy/operations/contracts.js";
 import { acceptSelectedCall, checkedCallIsConstruction, instantiateSelectedCallTemplate, selectedCallReceiverValueCarrier, selectRustOptionalCallResult } from "./instantiation.js";
@@ -223,6 +224,9 @@ export function selectRustCheckedCall(
     });
   }
   if (selectedSourceMember !== undefined) {
+    if (selectedSourceMember.ownerName === "ArrayConstructor" && selectedSourceMember.memberName === "isArray") {
+      return selectRustArrayTypeTest(request, context, options);
+    }
     const receiverCarrier = selectedCallReceiverValueCarrier(
       request,
       context,

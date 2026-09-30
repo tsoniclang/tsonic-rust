@@ -1,10 +1,10 @@
 import type { RustProjectTypePolicy } from "../../types/project-types.js";
-import type { RustClosedTypeTestPlan, RustProjectTypeTestPlan } from "../../../target-model/operations/type-tests.js";
+import type { RustClosedTypePredicate, RustClosedTypeTestPlan, RustProjectTypeTestPlan } from "../../../target-model/operations/type-tests.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustUnionAlternatives } from "../../../target-model/types/union-relations.js";
-import { isRustAbsenceCarrier, isRustJsValueCarrier, isRustProgramErrorCarrier,
+import { isRustAbsenceCarrier, isRustJsArrayCarrier, isRustVecCarrier, isRustJsValueCarrier, isRustProgramErrorCarrier,
   rustOptionElementCarrier, rustStructuralObjectCarrierValue, rustTsValueTargetType,
 } from "../../../target-model/types/index.js";
 import { rustNamedTypeCarrierValue } from "../../../target-model/types/carriers/native.js";
@@ -40,7 +40,7 @@ export function selectRustProjectTypeTestPlan(
 
 export function selectRustClosedTypeTestPlan(
   source: TargetTypeRef,
-  target: TargetTypeRef,
+  predicate: RustClosedTypePredicate,
   projectTypes: RustProjectTypePolicy,
   definitions: RustTypeDefinitions,
   ancestors: readonly TargetTypeRef[] = [],
@@ -49,18 +49,28 @@ export function selectRustClosedTypeTestPlan(
   const nextAncestors = [...ancestors, source];
   const optional = rustOptionElementCarrier(source);
   if (optional !== undefined) {
-    const test = selectRustClosedTypeTestPlan(optional, target, projectTypes, definitions, nextAncestors);
+    const test = selectRustClosedTypeTestPlan(optional, predicate, projectTypes, definitions, nextAncestors);
     return test === undefined ? undefined : Object.freeze({ kind: "option", element: optional, test });
   }
   const alternatives = rustUnionAlternatives(source, definitions);
   if (alternatives !== undefined) {
     const arms = alternatives.map(arm => {
-      const test = selectRustClosedTypeTestPlan(arm.carrier, target, projectTypes, definitions, nextAncestors);
+      const test = selectRustClosedTypeTestPlan(arm.carrier, predicate, projectTypes, definitions, nextAncestors);
       return test === undefined ? undefined : Object.freeze({ ...arm, test });
     });
     return arms.length === 0 || arms.some(arm => arm === undefined) ? undefined
       : Object.freeze({ kind: "union", arms: Object.freeze(arms as NonNullable<typeof arms[number]>[]) });
   }
+  if (predicate.kind === "array") {
+    if (isRustJsValueCarrier(source)) return Object.freeze({ kind: "runtime-array" });
+    if (source.kind === "array" || source.kind === "tuple" || isRustJsArrayCarrier(source) || isRustVecCarrier(source)) {
+      return Object.freeze({ kind: "constant", value: true });
+    }
+    return isRustAbsenceCarrier(source) || getRustTypeofRuntimeKind(source, definitions) !== undefined ||
+      projectTypes.definitionForCarrier(source) !== undefined || rustStructuralObjectCarrierValue(source) !== undefined
+      ? Object.freeze({ kind: "constant", value: false }) : undefined;
+  }
+  const target = predicate.targetCarrier;
   if (source.kind === "type-parameter" || source.kind === "associated-type" ||
     source.kind === "trait-object" || source.kind === "reference" ||
     isRustJsValueCarrier(source) || rustTargetTypeRefEquals(source, rustTsValueTargetType()) || isRustProgramErrorCarrier(source) ||

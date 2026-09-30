@@ -21,16 +21,21 @@ export function planRustClosedTypeTest(
   context: RustPlanContext,
 ): RustExpr | undefined {
   const ast = context.input.program.source.ast;
-  const left = BinaryExpression_Left(ast, node);
+  const nominal = fact.predicate?.kind === "nominal";
+  const arguments_ = ast.is.IsCallExpression(node) ? ast.arguments(node) : [];
+  const left = nominal ? BinaryExpression_Left(ast, node) : arguments_[0];
   const token = BinaryExpression_OperatorToken(ast, node);
-  if (left === undefined || token === undefined || ast.kindName(token) !== "KindInstanceOfKeyword" ||
+  const syntaxMatches = nominal ? token !== undefined && ast.kindName(token) === "KindInstanceOfKeyword"
+    : ast.is.IsCallExpression(node) && arguments_.length === 1 && left !== undefined && !ast.is.IsSpreadElement(left);
+  if (left === undefined || !syntaxMatches ||
     !rustClosedTypeTestMatches(fact, context.input.program.projectTypes, context.input.program.typeDefinitions) ||
     !rustTargetTypeRefEquals(effectivePlannedExpressionCarrier(left, context), fact.sourceCarrier) ||
     !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.closed-type-test-result") ||
-    !selectedOperationMatches(context.input.program.facts.getSelectedTargetOperator(node),
-      fact.operationId, "operator", fact.resultCarrier, "closed-type-test")) {
+    !selectedOperationMatches(nominal ? context.input.program.facts.getSelectedTargetOperator(node)
+      : context.input.program.facts.getSelectedTargetOperation(node),
+      fact.operationId, nominal ? "operator" : "method", fact.resultCarrier, "closed-type-test")) {
     context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
-      "rust.backend.closed-type-test", "Nominal type test requires its exact closed constructor, carrier and retained test plan."));
+      "rust.backend.closed-type-test", "Type predicate requires its exact selected operation, carrier and retained test plan."));
     return undefined;
   }
   const expression = planExpression(left, context, "value", "shared-reference");
@@ -46,6 +51,10 @@ function planTest(
 ): RustExpr | undefined {
   if (test.kind === "constant") return { kind: "evaluate-then", effect: expression, discard: "value",
     value: { kind: "bool-literal", value: test.value } };
+  if (test.kind === "runtime-array") {
+    context.usedAliases?.add("js_abi");
+    return { kind: "call", path: "js_abi::array_is_array_value", args: [expression] };
+  }
   if (test.kind === "project") return planRustProjectTypeTest(node, expression, test.plan, context);
   if (context.syntheticNames === undefined) return undefined;
   if (test.kind === "option") {

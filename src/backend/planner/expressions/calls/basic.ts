@@ -32,6 +32,7 @@ import { planRustReferenceOperationCall } from "../reference-operations.js";
 import { planRustBorrowedElementRead } from "../borrowed-element-reads.js";
 import { planRustNativeControl } from "../native-controls.js";
 import { planRustProjectProjection } from "../../objects/project-downcasts.js";
+import { planRustClosedTypeTest } from "../type-tests.js";
 
 export function planCallExpression(node: Node, context: RustPlanContext, resultUse: RustExpressionResultUse = "value"): RustExpr | undefined {
   const borrowed = context.input.program.borrowedElementReads.forExpression(node);
@@ -48,6 +49,7 @@ export function planCallExpression(node: Node, context: RustPlanContext, resultU
 function planCallExpressionInner(node: Node, context: RustPlanContext, resultUse: RustExpressionResultUse): RustExpr | undefined {
   const { ast } = context.input.program.source;
   const fact = rustOperationFact(node, context);
+  if (fact?.kind === "closed-type-test") return planRustClosedTypeTest(node, fact, context);
   const callCarrier = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
   const innerResultCarrier = fact?.kind === "source-call" ||
       fact?.kind === "provider-operation" ||

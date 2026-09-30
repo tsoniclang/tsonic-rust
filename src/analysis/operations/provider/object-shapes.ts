@@ -22,6 +22,7 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
 import { selectedCallCalleeDeclaration, selectedCallCalleeSymbol, selectedSourceValueCarrier } from "./operators.js";
 import { selectedValueCarrier } from "../selected-values.js";
+import { selectedRustCallSignature } from "./calls/signatures.js";
 import {
   selectedAuthoredObjectFields,
   selectObjectAssignmentFields,
@@ -386,28 +387,8 @@ function mapSelectedObjectShapeProjection(
     returnType: innerResultCarrier,
   };
   const selectedSignature = {
-    member,
+    ...selectedRustCallSignature(request, member),
     ...(!selection.static ? { sourceSelectedReceiverCarrier: sourceValueCarrier } : {}),
-    ...(request.source.selectedSignature === undefined
-      ? {}
-      : { sourceSignature: request.source.selectedSignature }),
-    ...(request.sourceSelectedDeclaration === undefined
-      ? {}
-      : { sourceDeclaration: request.sourceSelectedDeclaration }),
-    ...(selectedCallCalleeSymbol(request) === undefined
-      ? {}
-      : { sourceCalleeSymbol: selectedCallCalleeSymbol(request) }),
-    ...(selectedCallCalleeDeclaration(request) === undefined
-      ? {}
-      : { sourceCalleeDeclaration: selectedCallCalleeDeclaration(request) }),
-    ...(request.source.sourceResultType === undefined
-      ? {}
-      : { sourceReturnType: request.source.sourceResultType }),
-    sourceArgumentBindings: request.source.sourceArgumentBindings,
-    sourceSelectedSignatureParameters: request.source.sourceSelectedSignatureParameters,
-    ...(request.source.sourceSelectedMethodTypeArguments === undefined
-      ? {}
-      : { sourceSelectedMethodTypeArguments: request.source.sourceSelectedMethodTypeArguments }),
   };
   context.facts.set(request.source.call, rustTargetOperationFactKey, fact, evidence);
   if (optionalResult.fact !== undefined) {

@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustTypeofResult } from "../../../target-model/types/runtime-kind.js";
 import type { RustUnionEqualityArm } from "../../../target-model/operations/binary.js";
 import type { RustSwitchComparison } from "../../../target-model/operations/switch.js";
-import type { RustClosedTypeTestPlan, RustProjectTypeTestPlan } from "../../../target-model/operations/type-tests.js";
+import type { RustClosedTypePredicate, RustClosedTypeTestPlan, RustProjectTypeTestPlan } from "../../../target-model/operations/type-tests.js";
 import type { RustProjectDowncastFact } from "../../../target-model/types/project-projections.js";
 import type { RustArgumentMode, RustOperationCarrierRequirement, RustProviderFactOperationKind, RustRuntimeSetOperationKind, RustSourceCallParameterPlan, RustValueConversion } from "../../../target-model/operations/model.js";
 import type { RustFinalizedOperationAbiFor, RustFinalizedValueConversion } from "../finalized-operation-abi.js";
@@ -251,7 +251,7 @@ export type RustTargetOperationFact =
       readonly kind: "closed-type-test";
       readonly operationId: string;
       readonly sourceCarrier: TargetTypeRef;
-      readonly targetCarrier: TargetTypeRef;
+      readonly predicate: RustClosedTypePredicate;
       readonly resultCarrier: TargetTypeRef;
       readonly test: RustClosedTypeTestPlan;
     }

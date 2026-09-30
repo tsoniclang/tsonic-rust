@@ -38,9 +38,10 @@ export function rustFoundationForTargetOperationFact(
   switch (fact.kind) {
     case "closed-type-test": {
       requireCarrier(fact.sourceCarrier);
-      requireCarrier(fact.targetCarrier);
+      if (fact.predicate.kind === "nominal") requireCarrier(fact.predicate.targetCarrier);
       const visit = (test: RustClosedTypeTestPlan): void => {
         if (test.kind === "project") requireCarrier(test.plan.dispatchCarrier);
+        else if (test.kind === "runtime-array") require(rustFoundationForPath("js_abi::array_is_array_value"));
         else if (test.kind === "option") { requireCarrier(test.element); visit(test.test); }
         else if (test.kind === "union") test.arms.forEach(arm => { requireCarrier(arm.carrier); visit(arm.test); });
       };
