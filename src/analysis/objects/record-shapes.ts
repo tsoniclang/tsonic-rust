@@ -7,6 +7,7 @@ import {
 import {
   Node_Type,
   ObjectLiteralProperty_Value,
+  sourcePresentCallableType,
 } from "@tsonic/target-api/source";
 import { requireDenseSourceNodes } from "../expressions/records.js";
 import { resolveParameterAbi } from "../declarations/types-and-bindings.js";
@@ -89,7 +90,8 @@ export function resolveObjectLiteralMethodCarrier(
     "Authored object-literal method contains an undefined parameter slot.",
   );
   const authoredReturnType = Node_Type(walk.context.ast, method);
-  if (parameters !== undefined && authoredReturnType !== undefined &&
+  if (typeParameters?.length === 0 && !walk.context.ast.hasModifierKind(method, "async") &&
+    parameters !== undefined && authoredReturnType !== undefined &&
     parameters.every((parameter) => Node_Type(walk.context.ast, parameter) !== undefined)) {
     const parameterCarriers = parameters.map((parameter) =>
       resolveParameterAbi(walk, parameter)?.parameterCarrier);
@@ -102,32 +104,12 @@ export function resolveObjectLiteralMethodCarrier(
     }
   }
   const selected = resolveRustTargetTypeRef(
-    selectedType,
+    sourcePresentCallableType(selectedType, walk.context.semanticsFor(method)) ?? selectedType,
     rustResolutionContext(walk, method),
     walk.operationOptions,
   );
   if (selected !== undefined) {
     return selected;
-  }
-  const returnCarrier = walk.context.facts.get(
-    method,
-    rustSourceCallableReturnFactKey,
-  )?.returnCarrier ?? walk.context.facts.resolve(
-    method,
-    rustSourceCallableReturnFactKey,
-  )?.returnCarrier ?? resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, method));
-  if (typeParameters !== undefined && typeParameters.length > 0 &&
-    parameters !== undefined && returnCarrier !== undefined) {
-    const parameterCarriers = parameters.map((parameter) =>
-      (walk.context.facts.get(parameter, rustSourceParameterAbiFactKey) ??
-        walk.context.facts.resolve(parameter, rustSourceParameterAbiFactKey) ??
-        resolveParameterAbi(walk, parameter))?.parameterCarrier);
-    if (!parameterCarriers.some((carrier) => carrier === undefined)) {
-      return rustClosureTargetType(
-        parameterCarriers as readonly TargetTypeRef[],
-        returnCarrier,
-      );
-    }
   }
   return resolveRustTargetTypeRef(
     implementationType,

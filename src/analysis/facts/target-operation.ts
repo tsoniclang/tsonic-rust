@@ -12,6 +12,19 @@ import type { RustFinalizedOperationAbi } from "./finalized-operation-abi.js";
 import { rustValueConversionIsFallible } from "../../target-model/conversions/contracts.js";
 import { rustStructuralFieldIsFallible } from "../objects/structural-shape-plan.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
+import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
+export function rustSourceCallCallableStorageCarrier(
+  fact: RustTargetOperationFact | undefined,
+  storage: RustStructuralStorageLookup,
+): TargetTypeRef | undefined {
+  if (fact?.kind !== "source-call") return undefined;
+  const target = fact.target;
+  if (target.form === "callable") return target.carrier;
+  if (target.form === "constructor-value") return target.callableCarrier;
+  if (target.form !== "structural-method") return undefined;
+  const field = storage.field(target.receiverCarrier, target.storageIndex);
+  return field?.presence === "optional" ? rustOptionElementCarrier(field.methodStorageCarrier) : field?.methodStorageCarrier;
+}
 
 export function rustTargetOperationText(fact: RustTargetOperationFact): string {
   if (fact.kind === "provider-operation") {
@@ -112,7 +125,7 @@ export interface RustStructuralStorageLookup {
   field(
     carrier: TargetTypeRef,
     storageIndex: number,
-  ): { readonly storage: "stored" | "property" | "bound" } | undefined;
+  ): { readonly storage: "stored" | "property" | "bound"; readonly presence: "required" | "optional"; readonly methodStorageCarrier?: TargetTypeRef } | undefined;
 }
 
 export interface RustProjectFieldDispatchLookup {
@@ -206,10 +219,10 @@ export function rustTargetOperationIsFallible(
   }
   if (fact.kind === "source-call" &&
     (fact.target.form === "callable" || fact.target.form === "structural-method" || fact.target.form === "constructor-value")) {
-    return fact.target.form !== "callable" ||
+    return rustGenericCallableValue(rustSourceCallCallableStorageCarrier(fact, structuralStorage)) === undefined && (fact.target.form !== "callable" ||
       (fact.target.carrier.kind === "closure"
         ? fact.target.carrier.fallible === true
-        : fact.target.carrier.kind !== "function-pointer" && rustGenericCallableValue(fact.target.carrier) === undefined);
+        : fact.target.carrier.kind !== "function-pointer"));
   }
   if (fact.kind === "provider-operation" || fact.kind === "runtime-set") {
     return rustOperationAbiInvocationIsFallible(fact.abi);

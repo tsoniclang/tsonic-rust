@@ -49,6 +49,7 @@ import { rustCapturedBindingStorage } from "./capture-storage.js";
 import { selectRustInferredNumericReturn } from "./inferred-numeric-return.js";
 import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
 import { finalizeValueConversion } from "../facts/finalized-operation/conversions.js";
+import { rustCompileTimeSourceKey } from "../../target-model/facts/source-declarations.js";
 
 export function resolveFunctionExpressionSignature(
   walk: RustFactWalk,
@@ -219,7 +220,8 @@ export function resolveFunctionExpressionCarrier(
   if (body === undefined) {
     return undefined;
   }
-  recordCallableSuspensionFacts(walk, expression);
+  const receiver = leadingParameters.find(parameter => parameter.kind === "this")?.carrier;
+  recordCallableSuspensionFacts(walk, expression, receiver?.kind === "reference" ? undefined : receiver);
   const generator = walk.context.facts.get(expression, rustGeneratorFactKey);
   const asynchronous = walk.context.facts.get(expression, rustAsyncFunctionFactKey);
   if (walk.context.semanticsFor(expression).operations.generator(expression) !== undefined
@@ -366,6 +368,7 @@ export function collectRustLexicalCaptures(
     ast.kindName(expression) !== "KindClassExpression") recursiveDeclaration = expression;
   for (const capture of selected.captures) {
     const declaration = capture.declaration;
+    if (walk.context.facts.get(declaration, rustCompileTimeSourceKey) === true) continue;
     if (declaration === valueDeclaration) { recursiveDeclaration = declaration; continue; }
     const kind = ast.kindName(declaration);
     if (kind !== KindParameter && kind !== KindVariableDeclaration && kind !== KindBindingElement) continue;

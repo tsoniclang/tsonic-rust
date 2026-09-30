@@ -12,8 +12,8 @@ export function rustCarrierHasCopyContract(
   carrier: TargetTypeRef | undefined,
   context: RustPlanContext,
 ): boolean {
-  return carrier !== undefined && (isRustCopyCarrier(carrier) ||
-    context.input.program.callableValues.generic.definitionFor(carrier)?.copy === true);
+  return isRustCopyCarrier(carrier, selected =>
+    context.input.program.callableValues.generic.definitionFor(selected)?.copy === true);
 }
 
 export function rustCarrierHasCloneContract(

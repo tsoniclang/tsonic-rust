@@ -21,7 +21,7 @@ import { planRustNonConsumingValue } from "./typed-locations.js";
 import { planSelectedSourceCall } from "./calls/source.js";
 import { readRustStructuralObjectMethodStorage } from "../objects/project-storage.js";
 import { requireProviderArgumentPassingFacts } from "./calls/arguments.js";
-import { rustOptionElementCarrier, rustOptionNestingDepth, rustOptionTargetType, rustStructuralMethodStorageCarrier } from "../../../target-model/types/index.js";
+import { rustOptionElementCarrier, rustOptionNestingDepth, rustStructuralMethodCallableCarrier } from "../../../target-model/types/index.js";
 import { rustTargetOperationIsFallible } from "../../../analysis/facts/target-operation.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { Node } from "@tsonic/tsts";
@@ -31,6 +31,8 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { planCallExpression } from "./calls/basic.js";
 import { rustExpressionExitsCallable } from "../../target-ast/inspection/callable-exits.js";
+import { planRustAbsentValue, planRustCheckedSourceOptional } from "./optional-storage.js";
+import { rustOptionalStorageValue, rustSourceOptionalTargetType } from "../../../target-model/types/projections.js";
 
 export function planRegExpCreate(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
@@ -174,7 +176,7 @@ export function planOptionalChainExpression(
   );
   const guardDepth = rustOptionNestingDepth(fact.sourceGuardCarrier, fact.selectedGuardCarrier);
   const finalRelationshipValid = fact.lowering === "map"
-    ? rustTargetTypeRefEquals(fact.resultCarrier, rustOptionTargetType(fact.innerResultCarrier))
+    ? rustTargetTypeRefEquals(fact.resultCarrier, rustSourceOptionalTargetType(fact.innerResultCarrier))
     : rustOptionElementCarrier(fact.innerResultCarrier) !== undefined &&
       rustTargetTypeRefEquals(fact.resultCarrier, fact.innerResultCarrier);
   if (fact.expression !== node || fact.operationKind !== expectedKind ||
@@ -224,7 +226,7 @@ export function planOptionalChainExpression(
   const overrides = new Map(context.expressionOverrides ?? []);
   overrides.set(fact.guard, {
     expression: { kind: "path", path: receiverName },
-    carrier: fact.selectedGuardCarrier,
+    carrier: structuralMethodGuard?.selectedStorageCarrier ?? fact.selectedGuardCarrier,
     valueForm: "shared-reference",
   });
   const body = planInner({ ...context, expressionOverrides: overrides });
@@ -267,16 +269,18 @@ export function planOptionalChainExpression(
     };
   }
   if (rustExpressionExitsCallable(body)) {
-    return { kind: "match", expression: borrowedGuard, arms: [
+    const selected: RustExpr = { kind: "match", expression: borrowedGuard, arms: [
       { pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: receiverName }] },
         expression: fact.lowering === "map" ? { kind: "call", path: "Some", args: [body] } : body },
-      { pattern: { kind: "path", path: "None" }, expression: { kind: "none" } },
+      { pattern: { kind: "path", path: "None" }, expression: fact.lowering === "map" ? { kind: "none" }
+        : planRustAbsentValue(fact.resultCarrier, context) },
     ] };
+    return fact.lowering === "map" ? planRustCheckedSourceOptional(selected, fact.innerResultCarrier, context) : selected;
   }
   const mapped: RustExpr = {
     kind: "method-call",
     receiver: borrowedGuard,
-    method: innerFallible || fact.lowering === "map" ? "map" : "and_then",
+    method: innerFallible || fact.lowering === "map" || rustOptionalStorageValue(fact.innerResultCarrier) !== undefined ? "map" : "and_then",
     args: [{
       kind: "closure",
       params: [{ name: receiverName, byRefCopy: false }],
@@ -284,7 +288,8 @@ export function planOptionalChainExpression(
     }],
   };
   if (!innerFallible) {
-    return mapped;
+    return fact.lowering === "map" || rustOptionalStorageValue(fact.innerResultCarrier) !== undefined
+      ? planRustCheckedSourceOptional(mapped, fact.innerResultCarrier, context) : mapped;
   }
   const transposed: RustExpr = {
     kind: "try",
@@ -292,15 +297,14 @@ export function planOptionalChainExpression(
     operandErrorType: activeErrorType!,
     expr: { kind: "method-call", receiver: mapped, method: "transpose", args: [] },
   };
-  return fact.lowering === "and-then"
-    ? { kind: "method-call", receiver: transposed, method: "flatten", args: [] }
-    : transposed;
+  return planRustCheckedSourceOptional(transposed, fact.innerResultCarrier, context);
 }
 
 interface RustOptionalStructuralMethodGuard {
   readonly receiverNode: Node;
   readonly receiverCarrier: TargetTypeRef;
   readonly storageIndex: number;
+  readonly selectedStorageCarrier: TargetTypeRef;
 }
 
 function exactOptionalStructuralMethodGuard(
@@ -326,16 +330,12 @@ function exactOptionalStructuralMethodGuard(
   if (callee !== fact.guard || field?.method !== true || field.presence !== "optional") {
     return undefined;
   }
-  const storageCarrier = rustStructuralMethodStorageCarrier(
-    operation.target.receiverCarrier,
-    field.carrier,
-    field.presence,
-  );
+  const storageCarrier = field.methodStorageCarrier;
   const selectedStorageCarrier = rustOptionElementCarrier(storageCarrier);
   if (receiverNode === undefined || storageCarrier === undefined ||
     selectedStorageCarrier === undefined ||
-    !rustTargetTypeRefEquals(fact.sourceGuardCarrier, storageCarrier) ||
-    !rustTargetTypeRefEquals(fact.selectedGuardCarrier, selectedStorageCarrier)) {
+    !rustTargetTypeRefEquals(fact.sourceGuardCarrier, field.carrier) ||
+    !rustTargetTypeRefEquals(fact.selectedGuardCarrier, rustStructuralMethodCallableCarrier(field.carrier, field.presence))) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.optional-structural-method-guard",
@@ -347,6 +347,7 @@ function exactOptionalStructuralMethodGuard(
     receiverNode,
     receiverCarrier: operation.target.receiverCarrier,
     storageIndex: operation.target.storageIndex,
+    selectedStorageCarrier,
   };
 }
 

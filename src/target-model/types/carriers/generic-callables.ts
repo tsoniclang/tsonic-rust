@@ -89,15 +89,16 @@ export function rustGenericCallableValue(carrier: TargetTypeRef | undefined): Ru
 
 export function rustGenericCallableProtocol(
   carrier: TargetTypeRef | undefined,
-  typeParameters?: readonly Extract<TargetTypeRef, { readonly kind: "type-parameter" }>[],
+  typeArguments?: readonly TargetTypeRef[],
 ): { readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef } | undefined {
   const value = rustGenericCallableValue(carrier);
-  if (value === undefined || typeParameters !== undefined &&
-    typeParameters.length !== value.signature.typeParameters.length) return undefined;
+  if (value === undefined || typeArguments !== undefined &&
+    (!isDenseDataArray(typeArguments) || typeArguments.length !== value.signature.typeParameters.length ||
+      !typeArguments.every(isRustTargetTypeRef))) return undefined;
   const substitutions = new Map<string, TargetTypeRef>(value.signature.environmentParameters.map((parameter, index) =>
     [parameter.identity, value.environment[index]!]));
-  if (typeParameters !== undefined) value.signature.typeParameters.forEach((parameter, index) =>
-    substitutions.set(parameter.identity, typeParameters[index]!));
+  if (typeArguments !== undefined) value.signature.typeParameters.forEach((parameter, index) =>
+    substitutions.set(parameter.identity, typeArguments[index]!));
   return {
     parameters: value.signature.parameters.map(parameter => substituteRustTargetTypeParameters(parameter, substitutions)),
     result: substituteRustTargetTypeParameters(value.signature.result, substitutions),

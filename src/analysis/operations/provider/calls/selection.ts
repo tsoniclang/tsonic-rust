@@ -8,7 +8,6 @@ import {
   rustJsErrorTargetType,
   rustCallableProtocol,
   rustStructuralMethodCallableCarrier,
-  rustStructuralMethodStorageCarrier,
   rustStructuralObjectCarrierValue,
   rustStringTargetType,
   rustSourcePrimitiveTargetType,
@@ -595,21 +594,12 @@ function acceptStructuralRuntimeMethodCall(
     projection.field.resultCarrier,
     projection.field.presence,
   );
-  const storageCarrier = rustStructuralMethodStorageCarrier(
-    receiverCarrier,
-    projection.field.resultCarrier,
-    projection.field.presence,
-  );
-  const selectedStorageCarrier = projection.field.presence === "optional"
-    ? rustOptionElementCarrier(storageCarrier)
-    : undefined;
-  if (callableCarrier === undefined || storageCarrier === undefined ||
-    (projection.field.presence === "optional" && selectedStorageCarrier === undefined)) {
+  if (callableCarrier === undefined) {
     return rejectSelectedOperation(
       request.source.call,
       context,
       "RUST_STRUCTURAL_METHOD_CONTRACT_INVALID",
-      "The selected structural method does not have one exact public callable and receiver-bound storage contract.",
+      "The selected structural method does not have one exact public callable contract.",
     );
   }
   if (projection.field.presence === "optional" && !request.source.optionalChain) {
@@ -623,8 +613,8 @@ function acceptStructuralRuntimeMethodCall(
   const optionalGuard = projection.field.presence === "optional"
     ? {
         guard: request.source.sourceCallee.expression,
-        sourceGuardCarrier: storageCarrier,
-        selectedGuardCarrier: selectedStorageCarrier!,
+        sourceGuardCarrier: projection.field.resultCarrier,
+        selectedGuardCarrier: callableCarrier,
       }
     : undefined;
   if (optionalGuard !== undefined) {

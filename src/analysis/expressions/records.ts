@@ -11,6 +11,7 @@ import {
   rustEmptyObjectTargetType,
   rustCallableProtocol,
   rustStructuralMethodCallableCarrier,
+  rustStructuralMethodStorageCarrier,
   rustClosureProtocol,
   rustCallableTargetType,
   rustStructuralPropertyValueCarrier,
@@ -44,6 +45,8 @@ import type { RustTargetOperationFact } from "../facts/keys.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { projectRecordMemberImplementation, selectedProjectMethodContracts } from "../objects/record-member-contracts.js";
 import { resolveProviderRecordLiteral } from "./provider-records.js";
+import { rustGenericCallableProtocol } from "../../target-model/types/carriers/generic-callables.js";
+import { rustTypeParameterFromSourceContract } from "../../target-model/names/type-parameters.js";
 
 export function requireDenseSourceNodes(
   walk: RustFactWalk,
@@ -619,7 +622,9 @@ export function resolveRecordLiteralCarrier(
           );
       const selectedCallableCarrier = rustOptionElementCarrier(selectedMemberCarrier) ??
         selectedMemberCarrier;
-      const selectedCallable = rustCallableProtocol(selectedCallableCarrier);
+      const methodParameters = walk.context.sourceLifetimes.contractFor(property)?.parameters
+        .flatMap(parameter => parameter.kind === "type" ? [rustTypeParameterFromSourceContract(parameter)] : []);
+      const selectedCallable = rustGenericCallableProtocol(selectedCallableCarrier, methodParameters) ?? rustCallableProtocol(selectedCallableCarrier);
       const selectedClosure = rustClosureProtocol(selectedCallableCarrier);
       const selectedParameterCarriers = selectedCallableCarrier?.kind === "function-pointer"
         ? selectedCallableCarrier.args
@@ -648,7 +653,7 @@ export function resolveRecordLiteralCarrier(
               targetField.carrier,
               targetField.presence,
             );
-        const targetCallable = rustCallableProtocol(targetCallableCarrier);
+        const targetCallable = rustGenericCallableProtocol(targetCallableCarrier, methodParameters) ?? rustCallableProtocol(targetCallableCarrier);
         if (selectedElement?.elementKind !== "method" ||
           selectedDeclaration === undefined || targetField === undefined ||
           selectedParameterCarriers === undefined || selectedResultCarrier === undefined ||
@@ -659,11 +664,9 @@ export function resolveRecordLiteralCarrier(
           !rustTargetTypeRefEquals(targetCallable.result, selectedResultCarrier)) {
           return undefined;
         }
-        const methodCarrier = rustCallableTargetType(
-          [resultCarrier, ...selectedParameterCarriers],
-          selectedResultCarrier,
-        );
-        if (resolveFunctionExpressionCarrier(walk, property, sourceFile, methodCarrier, {
+        const storedMethod = rustStructuralMethodStorageCarrier(resultCarrier, targetField.carrier, targetField.presence);
+        const methodCarrier = targetField.presence === "optional" ? rustOptionElementCarrier(storedMethod) : storedMethod;
+        if (methodCarrier === undefined || resolveFunctionExpressionCarrier(walk, property, sourceFile, methodCarrier, {
           leadingParameters: [{ kind: "this", carrier: resultCarrier }],
           preserveSourceParameterForms: true,
           selectedMethodDeclaration: selectedDeclaration,

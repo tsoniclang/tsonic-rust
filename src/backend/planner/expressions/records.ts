@@ -16,7 +16,6 @@ import {
   isRustStringCarrier,
   rustOptionElementCarrier,
   rustSourceTypeCarrierValue,
-  rustStructuralMethodStorageCarrier,
 } from "../../../target-model/types/index.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustIndexedRecordStorage } from "../objects/indexed-records.js";
@@ -200,11 +199,9 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
         return undefined;
       }
       const independent = context.input.program.facts.getFact(contribution.expression, rustReceiverIndependentMethodFactKey);
-      const storageCarrier = independent?.carrier ?? rustStructuralMethodStorageCarrier(
-        fact.resultCarrier,
-        field.carrier,
-        field.presence,
-      );
+      const storageCarrier = independent?.carrier ?? context.input.program.structuralShapes.field(
+        fact.resultCarrier, field.storageIndex,
+      )?.methodStorageCarrier;
       const rawStorageCarrier = field.presence === "optional"
         ? rustOptionElementCarrier(storageCarrier)
         : storageCarrier;
@@ -465,11 +462,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
     let value = valuesByStorageIndex.get(field.storageIndex);
     if (value === undefined) {
       const storageCarrier = field.method === true
-        ? rustStructuralMethodStorageCarrier(
-            fact.resultCarrier,
-            field.carrier,
-            field.presence,
-          )
+        ? context.input.program.structuralShapes.field(fact.resultCarrier, field.storageIndex)?.methodStorageCarrier
         : field.carrier;
       const optionType = field.presence === "optional" &&
           rustOptionElementCarrier(storageCarrier) !== undefined

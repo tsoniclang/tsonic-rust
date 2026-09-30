@@ -79,6 +79,15 @@ export function planArrayLiteral(node: Node, context: RustPlanContext): RustExpr
     ? { kind: "vec-literal" as const, elements }
     : planSpreadArray(elements, spreads, fact.contributions.map(contribution => contribution.carrier), fact.elementCarrier, context);
   if (array === undefined) return undefined;
+  if (fact.length === 0) {
+    const owner = rustTypeFromCarrierInContext(fact.resultCarrier, context);
+    if (owner === undefined) return reject(node, context, "Empty array construction requires its exact native element storage type.");
+    const empty: RustExpr = { kind: "associated-call", owner,
+      method: fact.lane === "native" ? "new" : "from_dense", args: fact.lane === "native" ? [] : [array] };
+    if (fact.lane === "js") { context.usedAliases?.add("js_abi"); return empty; }
+    return context.input.program.facts.getFact(node, rustNativeArrayStorageKey) === undefined
+      ? empty : planNativeRustArray(node, empty, context);
+  }
   if (fact.lane === "native") return context.input.program.facts.getFact(node, rustNativeArrayStorageKey) === undefined
     ? array : planNativeRustArray(node, array, context);
   context.usedAliases?.add("js_abi");

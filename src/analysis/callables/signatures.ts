@@ -461,7 +461,7 @@ function selectedCallableValueReturn(
   return rustCallableInvocationResult(walk.context.facts, declaration) ?? synchronousReturn;
 }
 
-export function recordCallableSuspensionFacts(walk: RustFactWalk, declaration: Node): void {
+export function recordCallableSuspensionFacts(walk: RustFactWalk, declaration: Node, ownedReceiver?: TargetTypeRef): void {
   const { ast } = walk.context;
   const sourceReturn = selectedSourceCallableReturn(walk, declaration);
   const sourceGenerator = walk.context.semanticsFor(declaration).operations.generator(declaration);
@@ -485,7 +485,7 @@ export function recordCallableSuspensionFacts(walk: RustFactWalk, declaration: N
         protocol.yieldType,
         protocol.returnType,
         protocol.nextType,
-      ]);
+      ], ownedReceiver);
       if (storage.kind === "rejected") {
         appendRustDiagnostic(
           walk,
@@ -538,7 +538,7 @@ export function recordCallableSuspensionFacts(walk: RustFactWalk, declaration: N
       const isJsPromise = futureCarrier?.kind === "target-named" &&
         futureCarrier.id === rustJsPromiseTargetId;
       const storage = isJsPromise
-        ? resolveRustSuspendedCallableStorage(walk, declaration, [inner])
+        ? resolveRustSuspendedCallableStorage(walk, declaration, [inner], ownedReceiver)
         : undefined;
       if (storage?.kind === "rejected") {
         appendRustDiagnostic(

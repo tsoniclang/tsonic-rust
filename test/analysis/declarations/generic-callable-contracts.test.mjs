@@ -6,11 +6,26 @@ import { substituteRustTargetTypeParameters } from "../../../dist/target-model/t
 import { rustTargetTypeParameterIdentities } from "../../../dist/target-model/types/carriers/generic-references.js";
 import { rustFutureTargetType } from "../../../dist/target-model/types/carriers/primitives.js";
 import { rustOptionTargetType } from "../../../dist/target-model/types/carriers/optional.js";
+import { rustStructuralMethodCallableCarrier, rustStructuralMethodStorageCarrier } from "../../../dist/target-model/types/carriers/callables.js";
 
 const parameter = name => ({ kind: "type-parameter", identity: name, name });
 const number = { kind: "source-primitive", name: "float64" };
 const string = { kind: "target-named", id: "rust.std.String" };
 const origin = { fileName: "/factory.ts", declarationIdentity: "/factory.ts\u000010\u000020\u000050" };
+
+test("generic structural storage retains exact call binders, receivers and selected type arguments", () => {
+  const callable = rustGenericCallableTargetType([parameter("Value")], [parameter("Value")], parameter("Value"), origin);
+  assert.equal(rustStructuralMethodCallableCarrier(callable, "required"), callable);
+  const stored = rustStructuralMethodStorageCarrier(parameter("Owner"), callable, "required");
+  assert.deepEqual(rustGenericCallableValue(stored).environment, [parameter("Owner")]);
+  assert.deepEqual(rustGenericCallableValue(stored).origin, origin);
+  assert.deepEqual(rustGenericCallableProtocol(stored, [number]), { parameters: [parameter("Owner"), number], result: number });
+  const optional = rustStructuralMethodStorageCarrier(parameter("Owner"), rustOptionTargetType(callable), "optional");
+  assert.deepEqual(optional, rustOptionTargetType(stored));
+  assert.equal(rustGenericCallableProtocol(stored, []), undefined);
+  assert.equal(rustGenericCallableProtocol(stored, [{ kind: "unknown" }]), undefined);
+  assert.equal(rustGenericCallableProtocol(stored, Array(1)), undefined);
+});
 
 test("closed opaque-future callables retain zero binders and exact environments", () => {
   for (const result of [rustFutureTargetType(parameter("Owner")), rustOptionTargetType(rustFutureTargetType(parameter("Owner")))]) {

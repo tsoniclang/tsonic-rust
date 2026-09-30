@@ -125,6 +125,7 @@ export function readRustStructuralObjectField(
   receiver: RustExpr,
   storagePath: string | readonly string[],
   resultCarrier: TargetTypeRef,
+  copy = isRustCopyCarrier(resultCarrier),
 ): RustExpr {
   const field = rustStructuralObjectStatePath(storagePath);
   return {
@@ -134,7 +135,7 @@ export function readRustStructuralObjectField(
     args: [{
       kind: "closure",
       params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
-      body: isRustCopyCarrier(resultCarrier)
+      body: copy
         ? field
         : { kind: "method-call", receiver: field, method: "clone", args: [] },
     }],

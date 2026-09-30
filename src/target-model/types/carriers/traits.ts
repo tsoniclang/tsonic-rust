@@ -51,21 +51,25 @@ import {
 export const rustJsClosedValueCarrierTraitPath =
   "tsonic_rust_js::value::JsClosedValueCarrier";
 
-export function isRustCopyCarrier(carrier: TargetTypeRef | undefined): boolean {
+export function isRustCopyCarrier(
+  carrier: TargetTypeRef | undefined,
+  selectedCopy: (carrier: TargetTypeRef) => boolean = () => false,
+): boolean {
   if (carrier === undefined) {
     return false;
   }
+  if (selectedCopy(carrier)) return true;
   if (carrier.kind === "source-primitive" || carrier.kind === "function-pointer" ||
     carrier.kind === "pointer" || carrier.kind === "reference" && carrier.mutable === false) {
     return true;
   }
   if (carrier.kind === "tuple") {
-    return carrier.elements.every(isRustCopyCarrier);
+    return carrier.elements.every(element => isRustCopyCarrier(element, selectedCopy));
   }
   if (carrier.kind === "target-named") {
     if (carrier.id === rustOptionTargetId) {
       const [value] = rustOnlyTypeGenericArguments(carrier.genericArguments) ?? [];
-      return value !== undefined && isRustCopyCarrier(value);
+      return value !== undefined && isRustCopyCarrier(value, selectedCopy);
     }
     if (rustUnconditionallyCopyTargetIds.has(carrier.id)) {
       return true;
@@ -73,11 +77,11 @@ export function isRustCopyCarrier(carrier: TargetTypeRef | undefined): boolean {
   }
   const fixedArray = rustFixedArrayCarrierValue(carrier);
   if (fixedArray !== undefined) {
-    return isRustCopyCarrier(fixedArray.element);
+    return isRustCopyCarrier(fixedArray.element, selectedCopy);
   }
   const structural = rustStructuralObjectCarrierValue(carrier);
   if (structural !== undefined) {
-    return structural.representation === "value" && structural.fields.every(field => field.bound !== true && isRustCopyCarrier(field.type));
+    return structural.representation === "value" && structural.fields.every(field => field.bound !== true && isRustCopyCarrier(field.type, selectedCopy));
   }
   const namedType = rustNamedTypeCarrierValue(carrier);
   if (namedType !== undefined) {

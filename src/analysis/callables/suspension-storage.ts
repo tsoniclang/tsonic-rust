@@ -19,6 +19,7 @@ export function resolveRustSuspendedCallableStorage(
   walk: RustFactWalk,
   declaration: Node,
   storedCarriers: readonly TargetTypeRef[],
+  ownedInputReceiver?: TargetTypeRef,
 ): RustSuspendedCallableStorageResolution {
   const { ast } = walk.context;
   const body = ast.body(declaration);
@@ -57,10 +58,11 @@ export function resolveRustSuspendedCallableStorage(
 
   const owner = walk.context.projectTypes.definitionContainingDeclaration(declaration);
   const representation = walk.context.objectRepresentations.representationFor(owner);
-  const ownsReceiver = receiverOccurrences.length > 0 && !ast.hasModifierKind(declaration, "static") &&
-    owner !== undefined && representation !== undefined && representation.kind !== "value";
+  const receiverCarrier = ownedInputReceiver ?? (owner !== undefined && representation !== undefined && representation.kind !== "value"
+    ? walk.context.projectTypes.openCarrier(owner) : undefined);
+  const ownsReceiver = receiverOccurrences.length > 0 && !ast.hasModifierKind(declaration, "static") && receiverCarrier !== undefined;
   const ownedReceiver: RustSuspendedOwnedReceiver | undefined = ownsReceiver
-    ? Object.freeze({ carrier: walk.context.projectTypes.openCarrier(owner), occurrences: Object.freeze(receiverOccurrences) })
+    ? Object.freeze({ carrier: receiverCarrier!, occurrences: Object.freeze(receiverOccurrences) })
     : undefined;
   if (receiverOccurrences.length > 0 && !ast.hasModifierKind(declaration, "static") && ownedReceiver === undefined) {
     return {

@@ -34,7 +34,6 @@ import {
   rustStructuralPropertyGetterStorageCarrier,
   rustStructuralPropertySetterStorageCarrier,
   rustStructuralPropertyValueCarrier,
-  rustStructuralMethodStorageCarrier,
   rustCallableProtocol,
 } from "../../../target-model/types/index.js";
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
@@ -160,13 +159,7 @@ export function planRustStructuralShapeModule(
         } };
     };
     for (const [storageIndex, field] of definition.fields.entries()) {
-      const methodStorageCarrier = field.receiverIndependent === true ? field.carrier : field.method === true
-        ? rustStructuralMethodStorageCarrier(
-            definition.carrier,
-            field.carrier,
-            field.presence,
-          )
-        : undefined;
+      const methodStorageCarrier = field.methodStorageCarrier;
       const storageCarrier = field.method === true ? methodStorageCarrier
         : field.nativeLayout === undefined ? field.carrier : rustLocationTargetType(field.carrier);
       if (storageCarrier === undefined) {

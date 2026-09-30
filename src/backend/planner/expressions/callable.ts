@@ -17,7 +17,6 @@ import {
 } from "../../../target-model/types/index.js";
 import {
   KindArrayBindingPattern,
-  KindFunctionExpression,
   KindObjectBindingPattern,
   Node_Initializer,
 } from "@tsonic/target-api/source";
@@ -61,6 +60,7 @@ import { planRustGeneratorBody } from "../declarations/callables/generator-body.
 import { wrapRustJsPromiseBody } from "../declarations/callables/async-promise.js";
 import { planRustSuspendedCallableConstruction } from "./suspended-callables.js";
 import { planRustParameterEntryConversion } from "../declarations/callables/parameter-entry-conversion.js";
+import { planRustCallableLeadingParameters } from "../declarations/callables/leading-parameters.js";
 import { finalizedConversionIsValid } from "../../../analysis/facts/finalized-operation/conversions.js";
 import { applyFinalizedValueConversion } from "./value-conversions.js";
 
@@ -290,16 +290,8 @@ export function planRustCallableExpressionBody(
       "rust.backend.closure-invocation-owner", "A suspended callable's retained owner conflicts with its finalized callable contract."));
     return undefined;
   }
-  const leadingParameterPlans = (independent === undefined ? leadingParameters : []).map((parameter) => ({
-    ...parameter,
-    name: context.syntheticNames === undefined
-      ? undefined
-      : allocateRustSyntheticName(
-          context.syntheticNames,
-          parameter.kind === "this" ? "_object_this" : "_object_receiver",
-        ),
-  }));
-  if (leadingParameterPlans.some((parameter) => parameter.name === undefined)) {
+  const leadingPlan = planRustCallableLeadingParameters(node, independent === undefined ? leadingParameters : [], context);
+  if (leadingPlan === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.closure-leading-parameter",
@@ -307,40 +299,9 @@ export function planRustCallableExpressionBody(
     ));
     return undefined;
   }
-  const expressionOverrides = new Map(context.expressionOverrides ?? []);
-  for (const parameter of leadingParameterPlans) {
-    if (parameter.kind !== "this") {
-      continue;
-    }
-    const visitThis = (candidate: Node): void => {
-      const kind = context.input.program.source.ast.kindName(candidate);
-      if (kind === "KindThisExpression" || kind === "KindThisKeyword") {
-        const carrier = context.input.program.facts.getRuntimeCarrierFact(candidate)?.carrier;
-        if (rustTargetTypeRefEquals(carrier, parameter.carrier)) {
-          expressionOverrides.set(candidate, {
-            carrier: parameter.carrier,
-            valueForm: "value",
-            expression: { kind: "path", path: parameter.name! },
-          });
-        }
-        return;
-      }
-      if (candidate !== node &&
-        (kind === KindFunctionExpression || kind === "KindFunctionDeclaration" ||
-          kind === "KindMethodDeclaration" || kind === "KindGetAccessor" ||
-          kind === "KindSetAccessor" || kind === "KindClassDeclaration")) {
-        return;
-      }
-      context.input.program.source.ast.forEachChild(candidate, (child) => {
-        if (child !== undefined) {
-          visitThis(child);
-        }
-      });
-    };
-    visitThis(node);
-  }
+  const leadingParameterPlans = leadingPlan.parameters;
   const closureContext: RustPlanContext = {
-    ...context,
+    ...leadingPlan.context,
     callableDeclaration: node,
     controlFlow: { nextLoopId: 0 },
     controlTargets: undefined,
@@ -350,7 +311,6 @@ export function planRustCallableExpressionBody(
     generator: generator === undefined ? undefined : {
       declaration: node, controllerName: controllerName!, protocol: generator,
     },
-    expressionOverrides,
   };
   const captureBindings: { readonly name: string; readonly value: RustExpr }[] = [];
   const capturedBindings = [...(context.capturedBindings ?? [])];

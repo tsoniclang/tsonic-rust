@@ -26,6 +26,10 @@ export function planRustCheckedSourceOptional(
   const storage = rustSourceOptionalTargetType(element);
   if (rustTargetTypeRefEquals(storage, rustOptionTargetType(element))) return expression;
   if (rustOptionElementCarrier(element) !== undefined && rustTargetTypeRefEquals(storage, element)) {
+    if (rustOptionalStorageValue(element) !== undefined) {
+      return { kind: "method-call", receiver: expression, method: "unwrap_or_else", args: [{ kind: "closure", params: [],
+        body: planRustOptionalStorageOperation(element, "absent", [], context) }] };
+    }
     return { kind: "method-call", receiver: expression, method: "flatten", args: [] };
   }
   if (isRustJsValueCarrier(element)) {

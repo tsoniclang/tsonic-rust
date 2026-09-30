@@ -19,7 +19,7 @@ import {
   rustTypeGenericArguments,
 } from "../generic-arguments.js";
 import type { RustLifetimeRef } from "../../lifetimes/index.js";
-import { rustGenericCallableValue } from "./generic-callables.js";
+import { rustGenericCallableProtocol, rustGenericCallableTargetType, rustGenericCallableValue } from "./generic-callables.js";
 
 export function rustLocationTargetType(
   pointee: TargetTypeRef,
@@ -80,7 +80,8 @@ export function rustStructuralMethodCallableCarrier(
   const callableCarrier = presence === "optional"
     ? rustOptionElementCarrier(fieldCarrier)
     : fieldCarrier;
-  return rustCallableProtocol(callableCarrier) === undefined ? undefined : callableCarrier;
+  return rustCallableProtocol(callableCarrier) === undefined && rustGenericCallableValue(callableCarrier) === undefined
+    ? undefined : callableCarrier;
 }
 
 export function rustStructuralMethodStorageCarrier(
@@ -89,6 +90,14 @@ export function rustStructuralMethodStorageCarrier(
   presence: "required" | "optional",
 ): TargetTypeRef | undefined {
   const callableCarrier = rustStructuralMethodCallableCarrier(fieldCarrier, presence);
+  const generic = rustGenericCallableValue(callableCarrier);
+  if (generic !== undefined) {
+    const protocol = rustGenericCallableProtocol(callableCarrier);
+    const storage = protocol === undefined ? undefined : rustGenericCallableTargetType(
+      generic.signature.typeParameters, [receiverCarrier, ...protocol.parameters], protocol.result, generic.origin,
+    );
+    return storage === undefined ? undefined : presence === "optional" ? rustOptionTargetType(storage) : storage;
+  }
   const callable = rustCallableProtocol(callableCarrier);
   if (callable === undefined) {
     return undefined;

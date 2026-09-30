@@ -47,6 +47,7 @@ import { collectRustImplicitInterfaceContracts } from "../project-types/implicit
 import { rustTypeOnlyDeclarationFactKey } from "../../target-model/facts/type-only.js";
 import { finalizeRustCopiedMethods } from "../objects/copied-methods.js";
 import { closeRustInheritedStructuralViews } from "../objects/inherited-structural-views.js";
+import { createRustSourceProfileCallableAliasQuery } from "../../policy/operations/source-profiles/callable-aliases.js";
 
 export function analyzeRustProgram(context: RustAnalysisContext): void {
   const { ast } = context;
@@ -178,7 +179,15 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   if (projectTypes.issues.length > 0) {
     return;
   }
+  const callableAlias = createRustSourceProfileCallableAliasQuery(context, sourceProfiles);
   const collectPromotedStorage = (node: Node): void => {
+    if (ast.is.IsVariableDeclaration(node)) {
+      const alias = callableAlias(node);
+      if (alias !== undefined) {
+        for (const declaration of alias.declarations) context.facts.set(declaration, rustCompileTimeSourceKey, true);
+        return;
+      }
+    }
     if (recordRustValueStructDeclaration(walk, node)) return;
     context.pointerBacking.record(node);
     const metadata = context.memoryMetadata.declaration(node);

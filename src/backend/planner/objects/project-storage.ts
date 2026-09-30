@@ -3,12 +3,14 @@ import { planRustNativeMemoryCall } from "../expressions/native-memory.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { RustAssignmentOperator } from "../../../target-model/syntax/tokens.js";
 import { rustProjectObjectLayout } from "../../../analysis/project-types/object-layout.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr, RustCallGenericArgument } from "../../target-ast/nodes.js";
+import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustActiveErrorType } from "../program/plan-context.js";
 import { rustTargetRuntimeErrorType } from "../types/error-boundary.js";
 import { checkRustDataWrite } from "./data-writes.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
+import { rustCarrierHasCopyContract } from "../types/generic-requirements.js";
 import type { RustStructuralShapeField } from "../../../analysis/objects/structural-shape-plan.js";
 import { readRustBoundRecordField, writeRustBoundRecordField, mutateRustBoundRecordField } from "./record-fields.js";
 import {
@@ -35,7 +37,6 @@ import {
   rustStructuralPropertySetterStorageCarrier,
   rustStructuralPropertyValueCarrier,
   rustStructuralMethodCallableCarrier,
-  rustStructuralMethodStorageCarrier,
 } from "../../../target-model/types/index.js";
 
 export type RustStructuralObjectFieldInitializer =
@@ -201,7 +202,7 @@ export function readRustStoredObjectField(
           resultCarrier,
           context,
         )
-      : readRustStructuralObjectField(receiver, path, resultCarrier);
+      : readRustStructuralObjectField(receiver, path, resultCarrier, rustCarrierHasCopyContract(resultCarrier, context));
   }
   const path = rustDirectProjectFieldStoragePath(receiverCarrier, storageIndex, context);
   const representation = rustProjectObjectRepresentation(receiverCarrier, context);
@@ -218,15 +219,13 @@ export function readRustStructuralObjectMethodStorage(
 ): RustExpr | undefined {
   const field = context.input.program.structuralShapes.field(receiverCarrier, storageIndex);
   if (field?.nativeMethod === true) return undefined;
-  const storageCarrier = field?.receiverIndependent === true ? field.carrier : field?.method === true
-    ? rustStructuralMethodStorageCarrier(receiverCarrier, field.carrier, field.presence)
-    : undefined;
+  const storageCarrier = field?.methodStorageCarrier;
   if (field === undefined || storageCarrier === undefined) {
     return undefined;
   }
   return field.receiverIndependent === true
     ? readRustStoredObjectField("structural-object", receiverCarrier, receiver, storageIndex, storageCarrier, context)
-    : readRustStructuralObjectField(receiver, field.targetName, storageCarrier);
+    : readRustStructuralObjectField(receiver, field.targetName, storageCarrier, rustCarrierHasCopyContract(storageCarrier, context));
 }
 
 export interface RustStructuralMethodStorageOverride {
@@ -242,15 +241,16 @@ export function invokeRustStructuralObjectMethod(
   resultCarrier: TargetTypeRef,
   context: RustPlanContext,
   storageOverride?: RustStructuralMethodStorageOverride,
+  typeArguments: readonly TargetTypeRef[] = [],
+  genericArguments: readonly RustCallGenericArgument[] = [],
 ): RustExpr | undefined {
   const field = context.input.program.structuralShapes.field(receiverCarrier, storageIndex);
   const callableCarrier = field?.method === true
     ? rustStructuralMethodCallableCarrier(field.carrier, field.presence)
     : undefined;
-  const callable = rustCallableProtocol(callableCarrier);
-  const storageCarrier = field?.receiverIndependent === true ? field.carrier : field?.method === true
-    ? rustStructuralMethodStorageCarrier(receiverCarrier, field.carrier, field.presence)
-    : undefined;
+  const generic = rustGenericCallableValue(callableCarrier);
+  const callable = generic === undefined ? rustCallableProtocol(callableCarrier) : rustGenericCallableProtocol(callableCarrier, typeArguments);
+  const storageCarrier = field?.methodStorageCarrier;
   const rawStorageCarrier = field?.presence === "optional"
     ? rustOptionElementCarrier(storageCarrier)
     : storageCarrier;
@@ -269,7 +269,7 @@ export function invokeRustStructuralObjectMethod(
     const dispatch: RustExpr = { kind: "field", receiver, name: "dispatch" };
     return { kind: "method-call", receiver: context.input.program.structuralShapes.definitionForCarrier(receiverCarrier)?.construction === undefined
       ? { kind: "method-call", receiver: dispatch, method: "clone", args: [] } : dispatch,
-      method: field.targetName, args: arguments_ };
+      method: field.targetName, args: arguments_, ...(genericArguments.length === 0 ? {} : { genericArguments }) };
   }
   const receiverName = allocateRustSyntheticName(
     context.syntheticNames,
@@ -282,6 +282,9 @@ export function invokeRustStructuralObjectMethod(
   const receiverPath: RustExpr = { kind: "path", path: receiverName };
   const method = storageOverride?.expression ?? readRustStructuralObjectMethodStorage(receiverCarrier, receiverPath, storageIndex, context);
   if (method === undefined) return undefined;
+  const inputs: readonly RustExpr[] = [...(field.receiverIndependent === true ? [] : [{
+    kind: "method-call", receiver: receiverPath, method: "clone", args: [],
+  } satisfies RustExpr]), ...arguments_];
   return {
     kind: "block",
     bindings: [{ name: receiverName, value: receiver }, {
@@ -292,15 +295,8 @@ export function invokeRustStructuralObjectMethod(
       kind: "method-call",
       receiver: { kind: "path", path: methodName },
       method: "call",
-      args: [{
-        kind: "tuple-literal",
-        elements: [...(field.receiverIndependent === true ? [] : [{
-          kind: "method-call",
-          receiver: receiverPath,
-          method: "clone",
-          args: [],
-        } satisfies RustExpr]), ...arguments_],
-      }],
+      ...(genericArguments.length === 0 ? {} : { genericArguments }),
+      args: generic === undefined ? [{ kind: "tuple-literal", elements: inputs }] : inputs,
     },
   };
 }

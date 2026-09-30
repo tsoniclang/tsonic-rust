@@ -16,7 +16,7 @@ import {
 import { rustAuthoredDeadCodeDisposition } from "../../liveness/directives.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustReturnTypeFromCarrierInContext } from "../../types/render.js";
-import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey, rustSourceCallableReturnFactKey } from "../../../../analysis/facts/keys.js";
+import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey, rustSourceCallableReturnFactKey, rustTargetOperationFactKey } from "../../../../analysis/facts/keys.js";
 import { requireRustCarrierRequirements } from "../../types/generic-requirements.js";
 import {
   planRustCallableGenerics,
@@ -43,6 +43,8 @@ import { rustLintAttributes } from "../../../target-ast/normalization/lint-polic
 import { wrapRustJsPromiseBody } from "./async-promise.js";
 import { planRustReturnExit } from "../../statements/completion-exits.js";
 import { planRustGeneratorBody } from "./generator-body.js";
+import { planRustCallableLeadingParameters } from "./leading-parameters.js";
+import { rustTypeFromCarrierInContext } from "../../types/render.js";
 
 export { applyRustTailShape, rustBlockTerminates } from "../../statements/block-flow.js";
 
@@ -185,7 +187,17 @@ function planRustFunctionItem(
   if (parameterPlan === undefined) {
     return undefined;
   }
-  const params = parameterPlan.params;
+  const operation = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
+  const leading = planRustCallableLeadingParameters(node, operation?.kind === "closure" ? operation.leadingParameters ?? [] : [],
+    { ...context, syntheticNames });
+  if (leading === undefined) return undefined;
+  const leadingParams = leading.parameters.map(parameter => {
+    const type = rustTypeFromCarrierInContext(parameter.carrier, context);
+    return type === undefined ? undefined : { name: parameter.name, type };
+  });
+  if (leadingParams.some(parameter => parameter === undefined)) return undefined;
+  context = leading.context;
+  const params = [...leadingParams as NonNullable<typeof leadingParams[number]>[], ...parameterPlan.params];
   const returnTypeNode = Node_Type(ast, node);
   const sourceReturn = context.input.program.facts.getFact(node, rustSourceCallableReturnFactKey);
   const returnCarrier = generatorFact?.resultCarrier ?? asyncFact?.outputCarrier ??

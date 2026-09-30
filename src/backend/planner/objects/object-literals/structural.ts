@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { isRustCopyCarrier, rustCallableProtocol, rustCallableTargetType,
-  rustProgramErrorTargetType, rustStructuralMethodStorageCarrier,
+  rustProgramErrorTargetType,
   rustStructuralPropertyValueCarrier, rustUnitTargetType } from "../../../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { emptyRustGenerics, type RustExpr, type RustImplFunction, type RustItem, type RustStructField,
@@ -68,8 +68,7 @@ export function createStructuralLiteralImplementation(
     if (type === undefined || field.nativeLayout !== undefined || field.storage === "bound") return undefined;
     if (field.method) {
       const protocol = rustCallableProtocol(field.carrier);
-      const storage = field.receiverIndependent ? field.carrier
-        : rustStructuralMethodStorageCarrier(shape.carrier, field.carrier, field.presence);
+      const storage = field.methodStorageCarrier;
       const result = protocol === undefined ? undefined : rustTypeFromCarrierInContext(protocol.result, context);
       const params = protocol?.parameters.map((carrier, index) => {
         const type = rustTypeFromCarrierInContext(carrier, context);

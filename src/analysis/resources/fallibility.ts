@@ -43,6 +43,7 @@ import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { recordSelectedOperationInputs } from "../operations/inputs.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
 import { rustAwaitCarrier, rustCallableProtocol } from "../../target-model/types/index.js";
+import { rustSourceCallCallableStorageCarrier } from "../facts/target-operation.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustGenericCallableEffectsFactKey } from "../facts/generic-callable-effects.js";
 import { rustInheritedProjectConstructor } from "../project-types/type-policy.js";
@@ -279,9 +280,8 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
     for (const implementation of definition.implementations) registerCallableDeclaration(implementation.declaration);
   }
   const genericCallImplementations = (operation: import("../facts/keys.js").RustTargetOperationFact | undefined) => {
-    if (operation?.kind !== "source-call" || operation.target.form !== "callable" ||
-      rustGenericCallableValue(operation.target.carrier) === undefined) return undefined;
-    return genericCallables.definitionFor(operation.target.carrier)?.implementations;
+    const carrier = rustSourceCallCallableStorageCarrier(operation, walk.context.structuralShapes);
+    return rustGenericCallableValue(carrier) === undefined ? undefined : genericCallables.definitionFor(carrier!)?.implementations;
   };
   const genericInvocationIsFallible = (declaration: Node): boolean =>
     fallible.has(declaration) && walk.context.facts.get(declaration, rustAsyncFunctionFactKey) === undefined &&
@@ -770,7 +770,7 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
             (operation.target.form === "structural-method" || operation.target.form === "constructor-value") &&
               rustCallableProtocol(operation.target.callableCarrier) !== undefined;
           const genericImplementations = genericCallImplementations(operation);
-          if (operation.target.form === "callable" && rustGenericCallableValue(operation.target.carrier) !== undefined &&
+          if (rustGenericCallableValue(rustSourceCallCallableStorageCarrier(operation, walk.context.structuralShapes)) !== undefined &&
             (genericImplementations === undefined || genericImplementations.length === 0)) {
             appendRustDiagnostic(walk, "RUST_GENERIC_CALLABLE_EFFECTS_NOT_CLOSED",
               "A generic invocation has no exact native implementation family for effect classification.", node,

@@ -87,7 +87,10 @@ export function resolveProjectSourceCarrier(
     }
     if (context.ast.kindName(declaration) === "KindInterfaceDeclaration" && selectedType !== undefined &&
       rustSourceTypeCarrierValue(carrier) !== undefined &&
-      context.currentSemantics.types.constructSignatures(selectedType).length !== 0) {
+      (context.currentSemantics.types.constructSignatures(selectedType).length !== 0 ||
+        context.currentSemantics.types.propertyInfos(selectedType).some(property => property.optional &&
+          context.currentSemantics.declarations.symbolDeclarations(property.symbol).some(member =>
+            context.ast.kindName(member) === "KindMethodSignature")))) {
       return resolveStructuralObjectType(selectedType, context, options, resolving, declaration);
     }
     const presentCarrier = rustOptionElementCarrier(carrier) ?? carrier;

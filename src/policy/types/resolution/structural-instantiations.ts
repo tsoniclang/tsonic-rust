@@ -11,6 +11,7 @@ import { rustTypeFamilyNormalizer } from "../type-family-normalization.js";
 import { mapRustTargetTypes } from "../../../target-model/types/carriers/substitution.js";
 import { bindRustSourceAliasArguments } from "./generic-arguments.js";
 import { rustCallableProtocol } from "../../../target-model/types/carriers/callables.js";
+import { rustGenericCallableProtocol } from "../../../target-model/types/carriers/generic-callables.js";
 import { isRustErasedNominalMember } from "../source-shapes.js";
 
 export function retainRustStructuralInstantiation(
@@ -23,7 +24,7 @@ export function retainRustStructuralInstantiation(
   authoredTypeNode?: Node,
 ): boolean {
   if (!containsStructuralStorage(templateCarrier)) return true;
-  if (rustCallableProtocol(templateCarrier) !== undefined) {
+  if (rustGenericCallableProtocol(templateCarrier) !== undefined || rustCallableProtocol(templateCarrier) !== undefined) {
     const signatures = context.currentSemantics.types.callSignatures(sourceType);
     return signatures.length === 1 && retainSignature(signatures[0]!, templateCarrier, carrier, context, options, resolving);
   }
@@ -76,6 +77,7 @@ export function retainRustStructuralInstantiation(
       selected.destination.declarations.length !== field.declarations.length ||
       selected.destination.declarations.some(declaration => !field.declarations.includes(declaration))) return undefined;
     const authoredNodes = [...new Set(field.declarations.flatMap(declaration => {
+      if (context.ast.is.IsMethodDeclaration(declaration) || context.ast.kindName(declaration) === "KindMethodSignature") return [];
       const type = context.ast.typeNode(declaration);
       return type === undefined ? [] : [type];
     }))];
@@ -106,7 +108,7 @@ function containsStructuralStorage(carrier: TargetTypeRef): boolean {
   let current = carrier;
   for (;;) {
     if (rustStructuralObjectCarrierValue(current) !== undefined) return true;
-    const callable = rustCallableProtocol(current);
+    const callable = rustGenericCallableProtocol(current) ?? rustCallableProtocol(current);
     if (callable !== undefined) return [callable.result, ...callable.parameters].some(containsStructuralStorage);
     const element = current.kind === "array" ? current.element :
       isRustJsArrayCarrier(current) ? rustJsArrayLikeElementTargetType(current) : undefined;
@@ -119,8 +121,8 @@ function retainSignature(
   signature: Signature, templateCarrier: TargetTypeRef, carrier: TargetTypeRef,
   context: RustTargetTypeResolutionContext, options: RustTargetTypeResolutionOptions, resolving: Set<object>,
 ): boolean {
-  const template = rustCallableProtocol(templateCarrier);
-  const selected = rustCallableProtocol(carrier);
+  const template = rustGenericCallableProtocol(templateCarrier) ?? rustCallableProtocol(templateCarrier);
+  const selected = rustGenericCallableProtocol(carrier) ?? rustCallableProtocol(carrier);
   const result = context.currentSemantics.types.returnType(signature);
   const parameters = context.currentSemantics.types.signatureParameterInfos(signature);
   if (template === undefined || selected === undefined || result === undefined ||

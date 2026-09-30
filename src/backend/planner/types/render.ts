@@ -73,7 +73,7 @@ export function rustTypeFromCarrier(
     return (reference?.binder?.length ?? 0) === 0 ? reference?.trait : undefined;
   }
   if (isRustNeverCarrier(carrier)) {
-    return undefined;
+    return { kind: "named", path: "core::convert::Infallible" };
   }
   if (isRustAbsenceCarrier(carrier)) {
     return { kind: "unit" };

@@ -51,6 +51,7 @@ import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js
 import { planRustUnionMethodCall } from "./union-methods.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../../../target-model/types/carriers/generic-callables.js";
 import { rustGenericCallableEffectsFactKey } from "../../../../analysis/facts/generic-callable-effects.js";
+import { rustSourceCallCallableStorageCarrier } from "../../../../analysis/facts/target-operation.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { rustExpressionReferencesPath } from "../../../target-ast/inspection/source-usage.js";
 import { propagateRustBottomOperand } from "../bottom-operands.js";
@@ -419,6 +420,8 @@ export function planSelectedSourceCall(
                 expression: storageOverride.expression,
                 carrier: storageOverride.carrier,
               },
+          targetTypeArguments,
+          callGenericArguments,
         );
       }
       break;
@@ -450,8 +453,9 @@ export function planSelectedSourceCall(
     ));
     return undefined;
   }
-  if (fact.target.form === "callable" && rustGenericCallableValue(fact.target.carrier) !== undefined) {
-    const definition = context.input.program.callableValues.generic.definitionFor(fact.target.carrier);
+  const callableCarrier = rustSourceCallCallableStorageCarrier(fact, context.input.program.structuralShapes);
+  if (rustGenericCallableValue(callableCarrier) !== undefined) {
+    const definition = context.input.program.callableValues.generic.definitionFor(callableCarrier!);
     if (definition === undefined || !definition.implementations.every(implementation => {
       const selected = context.input.program.facts.getFact(implementation.declaration, rustGenericCallableEffectsFactKey);
       return selected?.invocation === effects.invocation && selected.awaiting === effects.awaiting;
@@ -467,11 +471,6 @@ export function planSelectedSourceCall(
     return isRustNeverCarrier(fact.resultCarrier) ? rustBottomExpression(planned) : planned;
   }
   const resultErrorType = rustActiveErrorType(context);
-  const callableCarrier = fact.target.form === "callable"
-    ? fact.target.carrier
-    : fact.target.form === "structural-method" || fact.target.form === "constructor-value"
-      ? fact.target.callableCarrier
-      : undefined;
   const genericDefinition = callableCarrier === undefined ? undefined
     : context.input.program.callableValues.generic.definitionFor(callableCarrier);
   const genericDeclaration = genericDefinition?.implementations[0]?.declaration;

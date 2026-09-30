@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustCallTypeFromCarrierInContext, rustTypeFromCarrierInContext } from "../../../../dist/backend/planner/types/render.js";
-import { rustNamedTargetType } from "../../../../dist/target-model/types/index.js";
+import { rustCallTypeFromCarrierInContext, rustReturnTypeFromCarrier, rustTypeFromCarrierInContext } from "../../../../dist/backend/planner/types/render.js";
+import { rustNamedTargetType, rustVecTargetType } from "../../../../dist/target-model/types/index.js";
 
 const scalar = { kind: "source-primitive", name: "native-uint" };
 const callable = { kind: "closure", callTrait: "FnMut", args: [scalar], result: scalar };
@@ -22,4 +22,14 @@ test("native anonymous call inference does not conceal an unresolved component",
   assert.equal(rustCallTypeFromCarrierInContext({ ...owner, value: { ...owner.value,
     genericArguments: [...owner.value.genericArguments, { kind: "type", type: unresolved }],
   } }, {}), undefined);
+});
+
+test("bottom storage is uninhabited while diverging return types remain native never", () => {
+  const bottom = { kind: "target-specific", target: "rust", name: "never" };
+  const storage = { kind: "named", path: "core::convert::Infallible" };
+  assert.deepEqual(rustTypeFromCarrierInContext(bottom, {}), storage);
+  assert.deepEqual(rustReturnTypeFromCarrier(bottom), { kind: "never" });
+  assert.deepEqual(rustTypeFromCarrierInContext(rustVecTargetType(bottom), {}), {
+    kind: "named", path: "Vec", genericArguments: [{ kind: "type", type: storage }],
+  });
 });
