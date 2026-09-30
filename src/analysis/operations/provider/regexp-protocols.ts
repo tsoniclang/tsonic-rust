@@ -260,7 +260,7 @@ function selectProtocolArgument(
     ? {
         sourceCarrier,
         mode: "value",
-        conversion: { kind: "option-some", element: sourceCarrier },
+        conversion: { kind: "option-some", source: sourceCarrier, element: sourceCarrier },
       }
     : undefined;
 }

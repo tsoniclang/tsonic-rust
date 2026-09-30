@@ -73,6 +73,10 @@ export function rustAbsenceTargetType(): TargetTypeRef {
   return { kind: "target-named", id: rustAbsenceTargetId };
 }
 
+export function isRustAbsenceCarrier(carrier: TargetTypeRef | undefined): boolean {
+  return carrier?.kind === "target-named" && carrier.id === rustAbsenceTargetId;
+}
+
 
 export function rustVecTargetType(element: TargetTypeRef): TargetTypeRef {
   return { kind: "array", element };

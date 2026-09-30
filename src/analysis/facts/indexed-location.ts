@@ -14,7 +14,10 @@ export function rustIndexedLocationContract(
       !/^[A-Za-z_][A-Za-z0-9_]*$/u.test(fact.indexedLocationMethod) ||
       !validateRustFinalizedOperationAbi(abi, definitions) || abi.operationKind !== "indexer" ||
       abi.effects.invocation !== "infallible" || abi.effects.safety !== "safe" ||
-      abi.result.kind !== "sync" || abi.result.conversion.kind !== "identity" ||
+      abi.result.kind !== "sync" ||
+      (abi.result.conversion.kind !== "identity" &&
+        (abi.result.conversion.conversion.kind !== "source-optional" ||
+          !rustTargetTypeRefEquals(abi.result.conversion.conversion.element, fact.sourceResultCarrier))) ||
       abi.target.form !== "receiver-method" || abi.targetGenericArguments.length !== 0 ||
       abi.sourceReceiver.kind !== "receiver" || abi.sourceReceiver.disposition !== "runtime" ||
       abi.sourceArguments.length !== 1 || abi.sourceArguments[0]?.disposition !== "runtime" ||
@@ -25,7 +28,7 @@ export function rustIndexedLocationContract(
       !isRustFinalizedSourceInput(index) || index.source.kind !== "argument" ||
       index.source.sourceIndex !== 0 || index.mode !== "value" ||
       fact.sourceResultCarrier === undefined ||
-      !rustTargetTypeRefEquals(rustOptionElementCarrier(abi.result.carrier), fact.sourceResultCarrier)) {
+      !rustTargetTypeRefEquals(rustOptionElementCarrier(abi.result.rawCarrier), fact.sourceResultCarrier)) {
     return undefined;
   }
   return {

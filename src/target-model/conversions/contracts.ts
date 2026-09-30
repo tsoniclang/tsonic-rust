@@ -9,6 +9,7 @@ import type {
   RustValueConversionId,
 } from "../operations/model.js";
 import {
+  isRustAbsenceCarrier,
   isRustNeverCarrier,
   rustJsNumericTargetType,
   rustJsStringNumberTargetType,
@@ -439,12 +440,14 @@ export function rustValueConversionContract(
     } : undefined;
   }
   if (value.kind === "option-some") {
-    return isRustTargetTypeRef(value.element)
+    return isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.element) &&
+      (!isRustAbsenceCarrier(value.source) || rustTargetTypeRefEquals(value.source, value.element)) &&
+      rustNativeRepresentationMatches(value.source, value.element)
       ? {
           category: "exact",
           lowering: "option-some",
           sourceMode: "value",
-          source: value.element,
+          source: value.source,
           target: rustOptionTargetType(value.element),
           fallible: false,
         }
@@ -699,7 +702,9 @@ export function rustValueConversionIdentity(value: RustValueConversion): string 
               ? `js-value-from-structural-to-json.${JSON.stringify(value.source)}.${value.storageIndex}.${value.passesPropertyKey}.${rustValueConversionIdentity(value.resultConversion)}`
             : value.kind === "js-value-from-structural-object"
               ? `js-value-from-structural-object.${JSON.stringify(value.source)}.${value.fields.map((field) => `${field.sourceName}:${rustValueConversionIdentity(field.conversion)}`).join("|")}`
-            : value.kind === "option-some" || value.kind === "source-optional"
+            : value.kind === "option-some"
+              ? `${value.kind}.${JSON.stringify(value.source)}.${JSON.stringify(value.element)}`
+            : value.kind === "source-optional"
               ? `${value.kind}.${JSON.stringify(value.element)}`
             : `option-map.${rustValueConversionIdentity(value.elementConversion)}`;
 }

@@ -433,7 +433,8 @@ function valueConversionCarriers(
     return [conversion.source, conversion.elementTarget,
       ...conversion.elementConversions.flatMap(element => element === null ? [] : valueConversionCarriers(element))];
   }
-  if (conversion.kind === "option-some" || conversion.kind === "source-optional") return [conversion.element];
+  if (conversion.kind === "option-some") return [conversion.source, conversion.element];
+  if (conversion.kind === "source-optional") return [conversion.element];
   return valueConversionCarriers(conversion.elementConversion);
 }
 

@@ -2,7 +2,7 @@ import type { TargetTypeRef } from "./model.js";
 import { rustTargetTypeRefEquals } from "./equality.js";
 import { rustOptionElementCarrier } from "./carriers/optional.js";
 import { rustOptionalStorageValue, rustSourceOptionalTargetType } from "./projections.js";
-import { isRustAbsenceCarrier } from "./carriers/js.js";
+import { isRustAbsenceCarrier } from "./carriers/native.js";
 
 export type RustBindingNormalization =
   | "identity"

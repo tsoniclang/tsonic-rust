@@ -87,8 +87,9 @@ export function selectRustSourceValueConversion(
   }
   const sourceOptionElement = rustOptionElementCarrier(source);
   const targetOptionElement = rustOptionElementCarrier(target);
-  if (targetOptionElement !== undefined && rustTargetTypeRefEquals(source, targetOptionElement)) {
-    return { kind: "option-some", element: source };
+  if (targetOptionElement !== undefined && (rustTargetTypeRefEquals(source, targetOptionElement) ||
+    !isRustAbsenceCarrier(source) && rustNativeRepresentationMatches(source, targetOptionElement))) {
+    return { kind: "option-some", source, element: targetOptionElement };
   }
   if (sourceOptionElement !== undefined && targetOptionElement !== undefined) {
     const elementConversion = selectRustSourceValueConversion(

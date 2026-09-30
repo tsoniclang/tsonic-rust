@@ -1,7 +1,8 @@
 import type { RustTargetGenericArgument, TargetTypeRef } from "../types/model.js";
 import { rustTargetGenericArgumentEquals, rustTargetTypeRefEquals } from "../types/equality.js";
 import { rustLifetimesEqual } from "../lifetimes/index.js";
-import { isRustAbsenceCarrier, isRustUnitCarrier } from "../types/carriers/js.js";
+import { isRustUnitCarrier } from "../types/carriers/js.js";
+import { isRustAbsenceCarrier } from "../types/carriers/native.js";
 import { rustEmptyObjectTargetId, rustObjectIdentityTargetId } from "../types/carriers/source-types.js";
 
 export function rustNativeRepresentationMatches(source: TargetTypeRef, target: TargetTypeRef): boolean {

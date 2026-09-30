@@ -1,8 +1,24 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { retainRustCheckedCompletion, rustBlockTerminates } from "../../../../dist/backend/planner/statements/block-flow.js";
+import { applyRustTailShape, retainRustCheckedCompletion, rustBlockTerminates } from "../../../../dist/backend/planner/statements/block-flow.js";
 import { acmeTestingPackage, artifactText, compileRust } from "../../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
+
+test("unit completion omits only a final pure unit literal and retains preceding effects", () => {
+  const effect = { kind: "expr", expr: { kind: "call", path: "record", args: [] } };
+  const unit = { kind: "tuple-literal", elements: [] };
+  for (const kind of ["return", "tail"]) {
+    const body = { statements: [effect, { kind, expr: unit }] };
+    assert.deepEqual(applyRustTailShape(body, false), { statements: [effect] });
+    assert.deepEqual(applyRustTailShape(body, true).statements[1], { kind: "tail", expr: unit });
+    const effectful = { statements: [{ kind, expr: effect.expr }] };
+    assert.deepEqual(applyRustTailShape(effectful, false).statements, [{ kind: "tail", expr: effect.expr }]);
+  }
+  const nested = { statements: [{ kind: "scope", body: { statements: [{ kind: "tail", expr: unit }] } }] };
+  assert.deepEqual(applyRustTailShape(nested, false), { statements: [{ kind: "scope", body: { statements: [] } }] });
+  const earlyReturn = { statements: [{ kind: "return", expr: unit }, effect] };
+  assert.equal(applyRustTailShape(earlyReturn, false), earlyReturn);
+});
 
 test("only an exact no-fallthrough proof adds a safe terminal assertion", () => {
   const body = { statements: [{ kind: "let", name: "value", mutable: false, init: { kind: "bool-literal", value: true } }] };

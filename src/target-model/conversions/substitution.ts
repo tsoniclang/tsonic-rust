@@ -178,8 +178,12 @@ export function substituteRustValueConversion(
           ) as typeof field.conversion,
         }))),
       });
-    case "source-optional":
     case "option-some":
+      return Object.freeze({ ...value,
+        source: substituteRustTargetGenerics(value.source, substitutions, lifetimeSubstitutions, constSubstitutions),
+        element: substituteRustTargetGenerics(value.element, substitutions, lifetimeSubstitutions, constSubstitutions),
+      });
+    case "source-optional":
       return Object.freeze({
         ...value,
         element: substituteRustTargetGenerics(

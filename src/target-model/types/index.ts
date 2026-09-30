@@ -58,7 +58,6 @@ export {
   isRustJsStringCarrier,
   isRustJsValueCarrier,
   isRustNeverCarrier,
-  isRustAbsenceCarrier,
   isRustProgramErrorCarrier,
   isRustStringCarrier,
   isRustUnitCarrier,
@@ -119,6 +118,7 @@ export {
   rustOptionTargetType,
 } from "./carriers/optional.js";
 export {
+  isRustAbsenceCarrier,
   isRustNamedTypeTraitContract,
   rustBigIntTargetType,
   rustEmptyObjectTargetType,

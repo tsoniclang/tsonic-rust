@@ -11,20 +11,6 @@ export function locationMethodReceiver(
     : expression;
 }
 
-export function locationIndexExpression(expression: RustExpr | undefined): RustExpr | undefined {
-  if (expression?.kind === "index") {
-    return expression.index;
-  }
-  return expression?.kind === "evaluate-then" && expression.value.kind === "index"
-    ? {
-        kind: "evaluate-then",
-        effect: expression.effect,
-        discard: expression.discard,
-        value: expression.value.index,
-      }
-    : undefined;
-}
-
 export function typedLocationFactMatchesPlan(
   fact: Extract<RustTargetOperationFact, { readonly kind: "typed-location" }>,
   plan: RustTypedLocationPlan,

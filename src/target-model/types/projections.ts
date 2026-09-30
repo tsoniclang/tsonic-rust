@@ -1,8 +1,7 @@
 import { createHash } from "node:crypto";
 import type { TargetTypeRef } from "./model.js";
 import { closedMetadataKey } from "../metadata/closed-data.js";
-import { rustAbsenceTargetType } from "./carriers/native.js";
-import { isRustAbsenceCarrier } from "./carriers/js.js";
+import { isRustAbsenceCarrier, rustAbsenceTargetType } from "./carriers/native.js";
 import { rustOptionTargetType } from "./carriers/optional.js";
 import { rustJsValueTargetId } from "./carriers/source-types.js";
 

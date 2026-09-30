@@ -1,4 +1,5 @@
-import { isRustBigIntCarrier, isRustJsStringCarrier, isRustAbsenceCarrier, isRustStringCarrier, isRustUnitCarrier } from "./js.js";
+import { isRustBigIntCarrier, isRustJsStringCarrier, isRustStringCarrier, isRustUnitCarrier } from "./js.js";
+import { isRustAbsenceCarrier } from "./native.js";
 import { isRustIntegerCarrier, isRustNumericCarrier, rustFutureTargetId, rustPrimitiveTypeName } from "./primitives.js";
 import { rustRawPointerTargetId } from "./source-types.js";
 import { rustGenericCallableValue } from "./generic-callables.js";

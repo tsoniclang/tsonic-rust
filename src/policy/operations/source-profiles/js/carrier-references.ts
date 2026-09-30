@@ -40,6 +40,7 @@ import {
   rustClosureTargetType,
   rustAbsenceTargetType,
   rustOptionTargetType,
+  rustSourceOptionalTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
   rustUnitTargetType,
@@ -135,11 +136,11 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
     case "string-array":
       return rustJsArrayTargetType(rustStringTargetType());
     case "optional-string-array":
-      return rustJsArrayTargetType(rustOptionTargetType(rustStringTargetType()));
+      return rustJsArrayTargetType(rustSourceOptionalTargetType(rustStringTargetType()));
     case "js-string-array":
       return rustJsArrayTargetType(rustJsStringTargetType());
     case "optional-js-string-array":
-      return rustJsArrayTargetType(rustOptionTargetType(rustJsStringTargetType()));
+      return rustJsArrayTargetType(rustSourceOptionalTargetType(rustJsStringTargetType()));
     case "regexp":
       return rustJsRegExpTargetType();
     case "regexp-exec-array":

@@ -1,6 +1,5 @@
 import type { Node } from "@tsonic/tsts";
 import { rustBindingStorageOperations, type RustBindingStorageOperations } from "./binding-storage.js";
-import { locationIndexExpression } from "./location-expressions.js";
 import type {
   RustAssignmentOperator,
   RustBinaryOperator,
@@ -728,16 +727,19 @@ export function planRustLocationStorage(
     };
   }
   if (kind === "KindElementAccessExpression") {
-    const ordinary = planExpression(expression, context);
     const indexNode = ElementAccessExpression_ArgumentExpression(context.input.program.source.ast, expression);
-    const index = locationIndexExpression(ordinary);
-    if (index === undefined || indexNode === undefined) {
+    const indexInput = operation?.kind === "provider-operation" &&
+      operation.abi.operationKind === "indexer" && operation.abi.target.form === "index" &&
+      operation.abi.targetArguments.length === 1 ? operation.abi.targetArguments[0] : undefined;
+    if (indexInput === undefined || indexNode === undefined) {
       return rejectLocationStorage(
         expression,
         context,
         "The finalized Rust element storage is not one exact built-in index operation.",
       );
     }
+    const index = planFinalizedTargetInput(context, indexInput, receiverNode, [indexNode], expression);
+    if (index === undefined) return undefined;
     return {
       kind: "method-call",
       receiver: receiverLocation,

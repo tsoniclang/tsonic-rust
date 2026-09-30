@@ -343,7 +343,8 @@ function isFinalizedConversion(value: unknown): value is RustFinalizedValueConve
       typeof value.conversion.sourceFallible === "boolean") ||
     isValueProjectionConversion(value.conversion) ||
     (value.conversion.kind === "option-some" &&
-      hasExactKeys(value.conversion, ["kind", "element"]) &&
+      hasExactKeys(value.conversion, ["kind", "source", "element"]) &&
+      isRustTargetTypeRef(value.conversion.source) &&
       isRustTargetTypeRef(value.conversion.element)) ||
     (value.conversion.kind === "option-map" &&
       hasExactKeys(value.conversion, ["kind", "elementConversion"]) &&

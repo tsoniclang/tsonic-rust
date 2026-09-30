@@ -44,11 +44,12 @@ export function applyRustTailShape(body: RustBlock, hasReturnValue: boolean): Ru
   if (last === undefined) {
     return body;
   }
+  if (!hasReturnValue && (last.kind === "return" || last.kind === "tail") &&
+    last.expr?.kind === "tuple-literal" && last.expr.elements.length === 0) {
+    return { ...body, statements: body.statements.slice(0, lastIndex) };
+  }
   let tail: RustStmt = last;
   if (last.kind === "return" && last.expr !== undefined) {
-    if (!hasReturnValue && last.expr.kind === "tuple-literal" && last.expr.elements.length === 0) {
-      return { ...body, statements: body.statements.slice(0, lastIndex) };
-    }
     tail = { kind: "tail", expr: last.expr };
   } else if (!hasReturnValue && last.kind === "return" && last.expr === undefined) {
     return { ...body, statements: body.statements.slice(0, lastIndex) };

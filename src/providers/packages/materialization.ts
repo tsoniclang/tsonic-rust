@@ -607,8 +607,12 @@ function materializeProviderValueConversion(
           ) as typeof field.conversion,
         })),
       };
-    case "source-optional":
     case "option-some":
+      return { ...conversion,
+        source: materializeProviderCarrier(conversion.source, carrierPaths, carrierTraits),
+        element: materializeProviderCarrier(conversion.element, carrierPaths, carrierTraits),
+      };
+    case "source-optional":
       return {
         ...conversion,
         element: materializeProviderCarrier(conversion.element, carrierPaths, carrierTraits),
