@@ -107,7 +107,9 @@ export function selectedMemberReceiverCarrier(
   }
   const flowRead = context.facts.get(receiver, rustFlowReadProjectionFactKey) ??
     context.facts.resolve(receiver, rustFlowReadProjectionFactKey);
-  if (flowRead !== undefined && !rustTargetTypeRefEquals(sourceCarrier, flowRead.sourceCarrier)) {
+  const guardedCarrier = request.optionalChain === true ? rustOptionValueCarrier(sourceCarrier) : sourceCarrier;
+  if (flowRead !== undefined && !rustTargetTypeRefEquals(sourceCarrier, flowRead.sourceCarrier) &&
+    !rustTargetTypeRefEquals(guardedCarrier, flowRead.sourceCarrier)) {
     return undefined;
   }
   const refinedCarrier = flowRead?.selectedCarrier ?? sourceCarrier;
@@ -132,7 +134,9 @@ export function selectedMemberReceiverCarrier(
     return request.optionalChain === true ? rustOptionValueCarrier(sourceCarrier) : sourceCarrier;
   }
   if (request.optionalChain === true && rustOptionElementCarrier(sourceCarrier) !== undefined) {
-    return rustOptionValueCarrier(sourceCarrier);
+    const indexes = sourceUnionCarrier === undefined ? undefined :
+      options.sourceTypes.sourceUnionVariantIndexesForTypes(sourceUnionCarrier, [request.sourceReceiverType]);
+    return indexes?.length === 1 ? sourceUnion?.variants[indexes[0]!]!.carrier : guardedCarrier;
   }
   if (flowRead !== undefined) return flowRead.selectedCarrier;
   if (sourceUnionCarrier !== undefined &&
@@ -301,11 +305,7 @@ export function acceptRustMemberOperation(
     context,
     options,
   );
-  const selectedGuardCarrier = selectedMemberReceiverCarrier(
-    request,
-    context,
-    options,
-  );
+  const selectedGuardCarrier = operationReceiverCarrier;
   const selection = selectRustOptionalChain({
     expression: request.expression,
     guard: request.receiver,

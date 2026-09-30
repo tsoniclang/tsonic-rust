@@ -46,9 +46,10 @@ test("optional runtime categories preserve their exact present kind and reject f
     const context = { input: { program: { typeDefinitions: emptyRustTypeDefinitions } }, syntheticNames: {} };
     const input = { kind: "path", path: "value" };
     const planned = planRustRuntimeCategory(input, selected, context);
-    assert.deepEqual(planned.expression, { kind: "reference", expr: input });
-    assert.deepEqual(planned.arms[0].expression, { kind: "string-literal", value: kind });
-    assert.deepEqual(planned.arms[1].expression, { kind: "string-literal", value: "object" });
+    assert.equal(planned.kind, "owned-string-from-borrowed-str");
+    assert.deepEqual(planned.expression.expression, { kind: "reference", expr: input });
+    assert.deepEqual(planned.expression.arms[0].expression, { kind: "str-literal", value: kind });
+    assert.deepEqual(planned.expression.arms[1].expression, { kind: "str-literal", value: "object" });
     assert.equal(planRustRuntimeCategory(input, { ...selected, value: "boolean" }, context), undefined);
     assert.equal(planRustRuntimeCategory(input, { ...selected, sourceCarrier: value }, context), undefined);
   }

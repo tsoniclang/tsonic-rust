@@ -386,6 +386,9 @@ function isNonOptionValueConversion(value: unknown): boolean {
 }
 
 function isValueProjectionConversion(value: Record<string, unknown>): boolean {
+  if (value.kind === "source-optional") {
+    return hasExactKeys(value, ["kind", "element"]) && isRustTargetTypeRef(value.element);
+  }
   if (value.kind === "union-project") {
     return hasExactKeys(value, ["kind", "source", "target"]) &&
       isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target);

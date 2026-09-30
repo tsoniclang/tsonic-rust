@@ -3,6 +3,8 @@ import type { RustClosureCaptureFact } from "../facts/operations/keys.js";
 import { rustSourceValueWrapperContains } from "../../policy/ownership/source-value-wrappers.js";
 import {
   Node_Expression,
+  ForInOrOfStatement_Initializer,
+  ForInOrOfStatement_Statement,
   sourceNodesEqual,
   type SourceProgramNavigation,
 } from "@tsonic/target-api/source";
@@ -300,6 +302,11 @@ function declarationLifetimeBlock(declaration: Node, ast: AstReader): Node | und
   const owner = bindingDeclarationOwner(declaration, ast);
   if (ast.kindName(owner) === "KindParameter" || ast.variableDeclarationKind(owner) === "var") {
     return ast.body(enclosingCallable(declaration, ast));
+  }
+  const list = ast.parent(owner);
+  const loop = list === undefined ? undefined : ast.parent(list);
+  if (loop !== undefined && (ast.is.IsForOfStatement(loop) || ast.is.IsForInStatement(loop))) {
+    if (ForInOrOfStatement_Initializer(ast, loop) === list) return ForInOrOfStatement_Statement(ast, loop);
   }
   let current = ast.parent(declaration);
   while (current !== undefined) {

@@ -3,6 +3,8 @@ import {
   rustSourceTypeCarrier,
   rustSourceTypeCarrierValue,
   rustSourceUnionCarrierValue,
+  rustOptionElementCarrier,
+  rustSourceOptionalTargetType,
   rustStructuralObjectCarrierValue,
 } from "../../../target-model/types/index.js";
 import type { Node, Symbol, Type } from "@tsonic/tsts";
@@ -82,14 +84,15 @@ export function resolveProjectSourceCarrier(
       context.currentSemantics.types.constructSignatures(selectedType).length !== 0) {
       return resolveStructuralObjectType(selectedType, context, options, resolving, declaration);
     }
-    const union = rustSourceUnionCarrierValue(carrier);
+    const presentCarrier = rustOptionElementCarrier(carrier) ?? carrier;
+    const union = rustSourceUnionCarrierValue(presentCarrier);
     if (union !== undefined && carrier !== undefined) {
       const contract = context.sourceLifetimes.contractFor(declaration);
       const parameters = contract?.parameters ?? [];
       if (parameters.length !== genericArguments.values.length ||
         parameters.some((parameter, index) => parameter.kind !== genericArguments.values[index]?.kind)) continue;
       if (parameters.length === 0) return carrier;
-      const template = options.sourceTypes.sourceUnionForCarrier(carrier);
+      const template = options.sourceTypes.sourceUnionForCarrier(presentCarrier!);
       const substitutions = new Map<string, TargetTypeRef>();
       const lifetimes = new Map<string, RustLifetimeRef>();
       parameters.forEach((parameter, index) => {
@@ -99,8 +102,9 @@ export function resolveProjectSourceCarrier(
       });
       const instantiated = substituteRustTargetGenerics(carrier, substitutions, lifetimes);
       if (template === undefined || selectedType === undefined || referenceOnly) return instantiated;
-      const result = retainRustSourceUnionInstantiation(selectedType, template, instantiated, context, options);
-      if (result !== undefined) return result;
+      const optional = rustOptionElementCarrier(instantiated);
+      const result = retainRustSourceUnionInstantiation(selectedType, template, optional ?? instantiated, context, options);
+      if (result !== undefined) return optional === undefined ? result : rustSourceOptionalTargetType(result);
       continue;
     }
     const sourceType = rustSourceTypeCarrierValue(carrier);

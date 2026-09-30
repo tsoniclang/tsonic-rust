@@ -392,6 +392,9 @@ export function validateValueConversion(
     if (!isRustNeverCarrier(conversion.source) || !isRustTargetTypeRef(conversion.target)) {
       fail(`${where} is not an exact Rust bottom coercion`);
     }
+  } else if (conversion.kind === "source-optional") {
+    requireExactKeys(asRecord(conversion), ["kind", "element"], where, fail);
+    validateCarrier(conversion.element, definition, `${where}.element`, fail);
   } else if (conversion.kind === "option-map") {
     requireExactKeys(asRecord(conversion), ["kind", "elementConversion"], where, fail);
     validateValueConversion(

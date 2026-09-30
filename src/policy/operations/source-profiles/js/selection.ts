@@ -55,6 +55,7 @@ import {
   rustRegExpStringIteratorTargetId,
   isRustCallableCarrier,
   rustAbsenceTargetType,
+  rustSourceOptionalTargetType,
   rustUnitTargetType,
 } from "../../../../target-model/types/index.js";
 import { selectJsArrayConstruction } from "./array-construction.js";
@@ -432,16 +433,22 @@ export function selectJsSurfaceOperation(request: JsOperationRequest, definition
       ...(selectedParameterCarriers === undefined ? {} : { parameterCarriers: selectedParameterCarriers }),
     };
   }
-  const resultCarrier = discardResult
+  const rawResultCarrier = discardResult
     ? rustUnitTargetType()
     : resolveCarrierRef(row.shape.result, bindings);
   const sourceResultCarrier = row.shape.sourceResult === undefined
     ? undefined
     : resolveCarrierRef(row.shape.sourceResult, bindings);
-  if (resultCarrier === undefined ||
+  if (rawResultCarrier === undefined ||
     (row.shape.sourceResult !== undefined && sourceResultCarrier === undefined)) {
     return undefined;
   }
+  const absentElement = !discardResult && row.shape.sourceAbsence !== undefined && row.shape.resultConversion === undefined
+    ? rustOptionElementCarrier(rawResultCarrier) : undefined;
+  const resultCarrier = absentElement === undefined ? rawResultCarrier : rustSourceOptionalTargetType(absentElement);
+  const resultConversion = discardResult ? undefined : absentElement !== undefined &&
+      !rustTargetTypeRefEquals(rawResultCarrier, resultCarrier)
+    ? { kind: "source-optional" as const, element: absentElement } : row.shape.resultConversion;
   const copyReference = row.shape.result.ref === "option-of-map-value" ? bindings.mapValue : bindings.element;
   const callback = row.callback === undefined
     ? undefined
@@ -503,9 +510,9 @@ export function selectJsSurfaceOperation(request: JsOperationRequest, definition
       ...(row.shape.evaluation === undefined ? {} : { evaluation: row.shape.evaluation }),
       errorBoundary: row.fallible === true ? "provider-native" : "none",
       ...(row.fallible === true ? { errorCarrier: rustJsErrorTargetType() } : {}),
-      ...(discardResult || row.shape.resultConversion === undefined
+      ...(resultConversion === undefined
         ? {}
-        : { resultConversion: row.shape.resultConversion }),
+        : { resultConversion }),
     },
     resultCarrier,
     ...(selectedParameterCarriers === undefined ? {} : { parameterCarriers: selectedParameterCarriers }),

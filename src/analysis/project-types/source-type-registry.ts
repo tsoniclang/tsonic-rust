@@ -26,6 +26,7 @@ import {
   rustSourceTypeCarrier,
   rustSourceTypeCarrierValue,
   rustSourceUnionCarrierValue,
+  rustOptionElementCarrier,
   rustStructuralObjectCarrierValue,
 } from "../../target-model/types/index.js";
 import type {
@@ -132,7 +133,7 @@ export function createRustSourceTypeRegistry(
     typeFamilies,
     sourceUnionVariants: typeDefinitions.sourceUnionVariants,
     reserveSourceUnion(declaration, carrier) {
-      const value = rustSourceUnionCarrierValue(carrier);
+      const value = rustSourceUnionCarrierValue(rustOptionElementCarrier(carrier) ?? carrier);
       const existing = carriersByDeclaration.get(declaration);
       if (value?.origin !== "authored" || existing !== undefined && !rustTargetTypeRefEquals(existing, carrier)) return false;
       carriersByDeclaration.set(declaration, carrier);
@@ -452,7 +453,7 @@ export function createRustSourceTypeRegistry(
       }
       const existingCarrier = union.declaration === undefined ? undefined : carriersByDeclaration.get(union.declaration);
       if (byDeclaration === undefined && existingCarrier !== undefined &&
-        !rustTargetTypeRefEquals(existingCarrier, normalized.carrier)) {
+        !rustTargetTypeRefEquals(rustOptionElementCarrier(existingCarrier) ?? existingCarrier, normalized.carrier)) {
         return false;
       }
       const declarationKey = `${value.fileName}::${value.typeName}`;
@@ -466,7 +467,7 @@ export function createRustSourceTypeRegistry(
       }, byDeclaration === undefined && union.declaration !== undefined)) return false;
       if (byDeclaration === undefined && union.declaration !== undefined) {
         sourceUnionsByDeclaration.set(union.declaration, normalized);
-        carriersByDeclaration.set(union.declaration, normalized.carrier);
+        carriersByDeclaration.set(union.declaration, existingCarrier ?? normalized.carrier);
         pendingUnions.delete(union.declaration);
       }
       if (byKey === undefined) sourceUnionsByKey.set(key, normalized);

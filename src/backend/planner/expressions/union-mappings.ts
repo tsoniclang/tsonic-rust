@@ -41,7 +41,9 @@ export function planRustUnionProjection(
     { pattern, expression: selected.targetOptional ? { kind: "call", path: "Some", args: [payload] } : payload },
     ...(selected.targetOptional ? [{ pattern: { kind: "path" as const, path: "None" },
       expression: { kind: "path" as const, path: "None" } }] : []),
-    { pattern: { kind: "wildcard" }, expression: { kind: "unreachable", message: "The selected native union variant is absent" } },
+    ...(selected.exhaustive ? [] : [{ pattern: { kind: "wildcard" as const }, expression: {
+      kind: "unreachable" as const, message: "The selected native union variant is absent",
+    } }]),
   ] };
 }
 

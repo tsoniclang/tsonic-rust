@@ -21,6 +21,7 @@ import {
   rustJsSymbolTargetType,
   rustNeverTargetType,
   rustOptionTargetType,
+  rustSourceOptionalTargetType,
   rustJsValueTargetType,
   rustJsErrorTargetType,
   rustOptionElementCarrier,
@@ -74,6 +75,7 @@ interface RustValueConversionContractBase {
 }
 
 export type RustValueConversionContract = RustValueConversionContractBase & (
+  | { readonly lowering: "source-optional"; readonly element: TargetTypeRef }
   | { readonly lowering: "union-project" }
   | { readonly lowering: "union-map"; readonly coverage: "source" | "target"; readonly arms: readonly RustUnionArmMapping[] }
   | { readonly lowering: "exact-integer" }
@@ -429,6 +431,13 @@ export function rustValueConversionContract(
           fallible: false,
         };
   }
+  if (value.kind === "source-optional") {
+    return isRustTargetTypeRef(value.element) ? {
+      category: "exact", lowering: "source-optional", sourceMode: "value",
+      source: rustOptionTargetType(value.element), target: rustSourceOptionalTargetType(value.element),
+      element: value.element, fallible: false,
+    } : undefined;
+  }
   if (value.kind === "option-some") {
     return isRustTargetTypeRef(value.element)
       ? {
@@ -690,8 +699,8 @@ export function rustValueConversionIdentity(value: RustValueConversion): string 
               ? `js-value-from-structural-to-json.${JSON.stringify(value.source)}.${value.storageIndex}.${value.passesPropertyKey}.${rustValueConversionIdentity(value.resultConversion)}`
             : value.kind === "js-value-from-structural-object"
               ? `js-value-from-structural-object.${JSON.stringify(value.source)}.${value.fields.map((field) => `${field.sourceName}:${rustValueConversionIdentity(field.conversion)}`).join("|")}`
-            : value.kind === "option-some"
-              ? `option-some.${JSON.stringify(value.element)}`
+            : value.kind === "option-some" || value.kind === "source-optional"
+              ? `${value.kind}.${JSON.stringify(value.element)}`
             : `option-map.${rustValueConversionIdentity(value.elementConversion)}`;
 }
 

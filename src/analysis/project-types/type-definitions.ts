@@ -34,7 +34,7 @@ export function createRustTypeDefinitionRegistry(): RustTypeDefinitionRegistry {
       const value = rustSourceUnionCarrierValue(definition.carrier);
       const identity = rustSourceUnionDefinitionIdentity(definition.carrier);
       if (identity === undefined || value === undefined || !isDenseDataArray(definition.variants) ||
-        definition.variants.length < 2 ||
+        definition.variants.length < 1 ||
         definition.variants.some(variant => variant === null || typeof variant !== "object" ||
           !hasExactObjectKeys(variant, ["name", "carrier"]) || typeof variant.name !== "string" || variant.name.length === 0 ||
           !isRustTargetTypeRef(variant.carrier)) ||

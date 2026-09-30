@@ -17,7 +17,9 @@ import {
   rustProviderOperationFormDeclaresWritableInput,
 } from "../../../dist/policy/operations/forms.js";
 import { rustStringToBorrowedStrValueConversion } from "../../../dist/public/provider.js";
-import { rustStrTargetType } from "../../../dist/target-model/types/index.js";
+import { rustStrTargetType, rustOptionTargetType, rustSourceOptionalTargetType } from "../../../dist/target-model/types/index.js";
+import { rustValueConversionContract } from "../../../dist/target-model/conversions/contracts.js";
+import { substituteRustValueConversion } from "../../../dist/target-model/conversions/substitution.js";
 import { rustProviderSourceArgumentMode } from "../../../dist/analysis/operations/provider/calls/provider-argument-shape.js";
 
 const bool = { kind: "source-primitive", name: "bool" };
@@ -31,6 +33,32 @@ const sourceNullish = { kind: "target-named", id: "rust.native.absence" };
 const unit = { kind: "tuple", elements: [] };
 const usize = { kind: "source-primitive", name: "native-uint" };
 const typeArgument = (type) => ({ kind: "type", type });
+
+test("source optional results normalize absence without changing explicit native Option storage", () => {
+  const optional = rustSourceOptionalTargetType(int32);
+  const nativeOptional = rustOptionTargetType(int32);
+  for (const element of [int32, optional, nativeOptional]) {
+    const conversion = { kind: "source-optional", element };
+    const contract = rustValueConversionContract(conversion);
+    assert.deepEqual(contract.source, rustOptionTargetType(element));
+    assert.deepEqual(contract.target, rustSourceOptionalTargetType(element));
+    assert.equal(contract.fallible, false);
+    const options = { operationKind: "method", form: { form: "call", path: "acme::lookup" },
+      sourceArgumentCarriers: [], resultCarrier: contract.target, resultConversion: conversion, isAsync: false, isFallible: false };
+    const abi = finalizeRustProviderOperationAbi(options);
+    assert.ok(abi);
+    assert.equal(validateRustFinalizedOperationAbi(abi), true);
+    assert.deepEqual(abi.result.rawCarrier, contract.source);
+    for (const invalid of [{ kind: "source-optional" }, { ...conversion, extra: true }, { ...conversion, element: {} }]) {
+      assert.equal(finalizeRustProviderOperationAbi({ ...options, resultConversion: invalid }), undefined);
+    }
+  }
+  assert.deepEqual(rustValueConversionContract({ kind: "source-optional", element: optional }).target, optional);
+  assert.deepEqual(rustOptionTargetType(nativeOptional).genericArguments[0].type, nativeOptional);
+  const parameter = { kind: "type-parameter", identity: "T", name: "T" };
+  assert.deepEqual(substituteRustValueConversion({ kind: "source-optional", element: parameter }, new Map([["T", optional]])),
+    { kind: "source-optional", element: optional });
+});
 
 test("native length emptiness correspondence is explicit and rejects inconsistent evidence", () => {
   const options = {

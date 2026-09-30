@@ -14,7 +14,8 @@ export function planRustRuntimeCategory(
 ): RustExpr | undefined {
   const selected = getRustTypeofRuntimeKind(result.sourceCarrier, context.input.program.typeDefinitions);
   if (selected === undefined || closedMetadataKey(selected) !== closedMetadataKey(result)) return undefined;
-  return planRuntimeCategory(value, result, context, borrowed);
+  const expression = planRuntimeCategory(value, result, context, borrowed);
+  return expression === undefined ? undefined : { kind: "owned-string-from-borrowed-str", expression };
 }
 
 function planRuntimeCategory(
@@ -24,19 +25,18 @@ function planRuntimeCategory(
   borrowed: boolean,
 ): RustExpr | undefined {
   if (result.kind === "runtime-method") {
-    return { kind: "owned-string-from-borrowed-str",
-      expression: { kind: "method-call", receiver: value, method: result.method, args: [] } };
+    return { kind: "method-call", receiver: value, method: result.method, args: [] };
   }
   if (result.kind === "optional") {
     if (context.syntheticNames === undefined) return undefined;
     const binding = typeof result.value === "string" ? undefined : allocateRustSyntheticName(context.syntheticNames, "typeof_value");
-    const expression = typeof result.value === "string" ? { kind: "string-literal" as const, value: result.value }
+    const expression = typeof result.value === "string" ? { kind: "str-literal" as const, value: result.value }
       : planRuntimeCategory({ kind: "path", path: binding! }, result.value, context, true);
     if (expression === undefined) return undefined;
     return { kind: "match", expression: borrowed ? value : { kind: "reference", expr: value }, arms: [
       { pattern: { kind: "tuple-variant", path: "Some", elements: [binding === undefined
         ? { kind: "wildcard" } : { kind: "binding", name: binding }] }, expression },
-      { pattern: { kind: "path", path: "None" }, expression: { kind: "string-literal", value: "object" } },
+      { pattern: { kind: "path", path: "None" }, expression: { kind: "str-literal", value: "object" } },
     ] };
   }
   const path = rustUnionTypePathInContext(result.sourceCarrier, context);
@@ -47,7 +47,7 @@ function planRuntimeCategory(
     if (declared?.name !== variant.name || !rustTargetTypeRefEquals(declared.carrier, variant.carrier)) return undefined;
     const binding = typeof variant.result === "string" ? undefined
       : allocateRustSyntheticName(context.syntheticNames!, "typeof_value");
-    const expression = typeof variant.result === "string" ? { kind: "string-literal" as const, value: variant.result }
+    const expression = typeof variant.result === "string" ? { kind: "str-literal" as const, value: variant.result }
       : planRuntimeCategory({ kind: "path", path: binding! }, variant.result, context, true);
     return expression === undefined ? undefined : {
       pattern: { kind: "tuple-variant" as const, path: `${path}::${variant.name}`,

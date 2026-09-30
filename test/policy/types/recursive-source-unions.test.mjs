@@ -8,11 +8,40 @@ import { selectRustSourceValueConversion } from "../../../dist/policy/conversion
 import { finalizeRustProviderOperationAbi, validateRustFinalizedOperationAbi } from "../../../dist/analysis/facts/finalized-operation-abi.js";
 import { acmeTestingPackage, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
-import { recursiveSourceUnionFiles } from "../../../../tsonic/test/fixtures/recursive-source-unions.mjs";
+import { recursiveSourceUnionFiles, recursiveCollectionUnionFiles, recursiveCollectionUnionIdentitySource,
+  recursiveGenericCollectionUnionFiles, recursiveOptionalCollectionUnionFiles, recursiveOptionalCollectionUnionJsFiles } from "../../../../tsonic/test/fixtures/recursive-source-unions.mjs";
 
 const integer = rustSourcePrimitiveTargetType("int32");
 const parameter = { kind: "type-parameter", identity: "union/Value", name: "Value" };
 const reference = (name, argument = parameter) => rustSourceUnionTargetType(`/src/${name}.ts`, name, [{ kind: "type", type: argument }]);
+
+for (const surfaces of [[], ["js"]]) {
+  test(`recursive collection unions retain one absence state on ${surfaces[0] ?? "native"} profile`, { timeout: 300_000 }, () => {
+    const files = surfaces.length === 0 ? recursiveOptionalCollectionUnionFiles : recursiveOptionalCollectionUnionJsFiles;
+    const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
+      files: { ...files, "index.ts": `${files["index.ts"]}
+export function main(): void { if (!run()) throw new Error("recursive optional collections"); }` } });
+    assert.deepEqual(result.diagnostics, []);
+    const source = artifactText(result, "src/tree.rs");
+    assert.doesNotMatch(source, /String::from\("(?:number|object)"\)|child\.clone\(\)|children\.clone\(\)/u);
+    assert.equal(validateGeneratedProject(`recursive-optional-collection-unions-${surfaces[0] ?? "native"}`, result.artifacts, { run: true }).status, 0);
+  });
+  test(`recursive collection union templates preserve exact instantiations on ${surfaces[0] ?? "native"} profile`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
+      files: { ...recursiveGenericCollectionUnionFiles, "index.ts": `${recursiveGenericCollectionUnionFiles["index.ts"]}
+export function main(): void { if (!run()) throw new Error("recursive generic collections"); }` } });
+    assert.deepEqual(result.diagnostics, []);
+    assert.equal(validateGeneratedProject(`recursive-generic-collection-unions-${surfaces[0] ?? "native"}`, result.artifacts, { run: true }).status, 0);
+  });
+  test(`recursive collection unions preserve native payloads on ${surfaces[0] ?? "native"} profile`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
+      files: { ...recursiveCollectionUnionFiles, "index.ts": `${recursiveCollectionUnionFiles["index.ts"]}
+${surfaces.length === 0 ? "" : recursiveCollectionUnionIdentitySource}
+export function main(): void { if (!run()${surfaces.length === 0 ? "" : " || !aliases()"}) throw new Error("recursive collections"); }` } });
+    assert.deepEqual(result.diagnostics, []);
+    assert.equal(validateGeneratedProject(`recursive-collection-unions-${surfaces[0] ?? "native"}`, result.artifacts, { run: true }).status, 0);
+  });
+}
 
 test("recursive union references keep immutable exact generic variant contracts", () => {
   const registry = createRustTypeDefinitionRegistry();
@@ -83,7 +112,7 @@ test("union registration rejects incomplete, malformed and contradictory contrac
   const sparse = new Array(2);
   sparse[1] = variants[1];
   for (const bad of [null, {}, { ...valid, extra: true }, { ...valid, variants: sparse },
-    { ...valid, variants: [null, variants[1]] }, { ...valid, variants: variants.slice(1) },
+    { ...valid, variants: [null, variants[1]] }, { ...valid, variants: [] },
     { ...valid, variants: [variants[0], { ...variants[1], name: "First" }] },
     { ...valid, variants: [variants[0], { name: "Second", carrier: {} }] },
     { ...valid, variants: [variants[0], { ...variants[1], extra: true }] }]) {

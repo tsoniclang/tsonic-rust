@@ -125,6 +125,7 @@ export type RustValueConversionId =
   | "borrowed-str-from-owned-string";
 
 export type RustNonOptionValueConversion =
+  | { readonly kind: "source-optional"; readonly element: TargetTypeRef }
   | { readonly kind: "union-project"; readonly source: TargetTypeRef; readonly target: TargetTypeRef }
   | { readonly kind: "union-map"; readonly source: TargetTypeRef; readonly target: TargetTypeRef; readonly coverage: "source" | "target";
       readonly arms: readonly RustUnionArmMapping[] }

@@ -51,7 +51,7 @@ export function retainRustSourceUnionInstantiation(
   const semantics = context.currentSemantics;
   if (value === undefined || expectedVariants === undefined || expectedVariants.length !== template.variants.length ||
     template.declaration === undefined || !semantics.types.isUnion(sourceType)) return undefined;
-  const members = semantics.types.unionOrIntersectionTypes(sourceType);
+  const members = semantics.types.unionOrIntersectionTypes(sourceType).filter(member => !semantics.types.isNullish(member));
   if (members.length !== template.variants.reduce((count, variant) => count + variant.sourceTypes.length, 0) ||
     members.some(member => member === undefined)) return undefined;
   const parameters = context.sourceLifetimes.contractFor(template.declaration)?.parameters ?? [];

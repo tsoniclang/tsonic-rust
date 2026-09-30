@@ -80,8 +80,10 @@ export function resolveRustTargetType(
   if (type === undefined) return undefined;
   if (resolving.has(type)) {
     const symbol = context.currentSemantics.declarations.typeAliasSymbol(type);
-    if (symbol === undefined || !context.currentSemantics.declarations.symbolDeclarations(symbol).some(declaration =>
-      rustSourceUnionCarrierValue(options.sourceTypes.carrierForDeclaration(declaration, context.ast)) !== undefined)) return undefined;
+    if (symbol === undefined || !context.currentSemantics.declarations.symbolDeclarations(symbol).some(declaration => {
+      const carrier = options.sourceTypes.carrierForDeclaration(declaration, context.ast);
+      return rustSourceUnionCarrierValue(rustOptionElementCarrier(carrier) ?? carrier) !== undefined;
+    })) return undefined;
     const arguments_ = context.currentSemantics.types.effectiveTypeArguments(type)?.map(argument =>
       resolveRustTargetType(argument, context, options, resolving)) ?? [];
     return arguments_.some(argument => argument === undefined) ? undefined : resolveProjectSourceCarrier(symbol,

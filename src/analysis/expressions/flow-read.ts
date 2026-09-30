@@ -211,6 +211,7 @@ function resolveSelectedFlowReadCarrier(
     if (hasAbsence && rustOptionElementCarrier(sourceCarrier) === undefined) return undefined;
     if (hasAbsence && values.length === 0) return sourceCarrier;
     const indexes = walk.sourceTypes.sourceUnionVariantIndexesForTypes(dispatchCarrier, values);
+    if (hasAbsence && indexes?.length === sourceUnion.variants.length) return sourceCarrier;
     const selected = indexes?.length === 1 ? sourceUnion.variants[indexes[0]!]!.carrier
       : indexes?.length === sourceUnion.variants.length ? dispatchCarrier : undefined;
     if (selected !== undefined) return hasAbsence ? rustSourceOptionalTargetType(selected) : selected;

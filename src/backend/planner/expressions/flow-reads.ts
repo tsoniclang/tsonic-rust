@@ -35,7 +35,8 @@ export function planRustFlowReadProjection(
   context: RustPlanContext,
   borrowedResult = false,
 ): RustExpr | undefined {
-  const sourceCarrier = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
+  const sourceCarrier = context.expressionOverrides?.get(node)?.carrier ??
+    context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
   if (sourceCarrier === undefined ||
     !rustTargetTypeRefEquals(sourceCarrier, fact.sourceCarrier)) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -68,7 +69,7 @@ export function planRustFlowReadProjection(
     }
     return { kind: "method-call", receiver: planRustNonConsumingValue(node, expression, context), method: "error_value", args: [] };
   }
-  const ownsValue = context.input.program.valueLifetimes.canMove(node);
+  const ownsValue = !borrowedResult && context.input.program.valueLifetimes.canMove(node);
   if (fact.kind === "union-map") {
     const sourceElement = rustOptionElementCarrier(fact.sourceCarrier);
     const targetElement = rustOptionElementCarrier(fact.selectedCarrier);
@@ -124,7 +125,7 @@ export function planRustFlowReadProjection(
       return planRustOptionalStorageOperation(fact.sourceCarrier, ownsValue ? "into_present" : "clone_present",
         [ownsValue ? expression : { kind: "reference", expr: expression }], context);
     }
-    if (!ownsValue && !reborrow && !rustCarrierSupportsClone(fact.selectedCarrier, context.input.program.typeDefinitions) &&
+    if (!ownsValue && !reborrow && !borrowedResult && !rustCarrierSupportsClone(fact.selectedCarrier, context.input.program.typeDefinitions) &&
       (context.callableDeclaration === undefined ||
         !requireRustCarrierRequirements(fact.selectedCarrier, ["clone"], node, context))) {
       context.diagnostics.push(missingFactDiagnostic(
@@ -154,7 +155,7 @@ export function planRustFlowReadProjection(
             path: "Some",
             elements: [{ kind: "binding", name: valueName }],
           },
-          expression: ownsValue || reborrow ? { kind: "path", path: valueName } : isRustCopyCarrier(fact.selectedCarrier)
+          expression: ownsValue || reborrow || borrowedResult ? { kind: "path", path: valueName } : isRustCopyCarrier(fact.selectedCarrier)
             ? {
                 kind: "dereference",
                 pointer: { kind: "path", path: valueName },

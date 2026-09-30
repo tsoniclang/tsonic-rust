@@ -121,6 +121,37 @@ test("last-use facts move loop-local strings on terminal branches but retain rep
   assert.deepEqual(borrowed.get("pointerReplaced"), [true]);
 });
 
+test("iteration-local move facts distinguish fresh bindings from repeated, captured and function-scoped values", () => {
+  const { source, program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+function take(value: string): string { return value; }
+export function run(values: string[]): void {
+  for (const fresh of values) take(fresh);
+  for (const repeated of values) { take(repeated); take(repeated); }
+  for (const outer of values) { for (const inner of values) { take(outer); take(inner); } }
+  for (var scoped of values) take(scoped);
+  const callbacks: (() => string)[] = [];
+  for (const captured of values) callbacks.push(() => take(captured));
+}
+` } });
+  const decisions = new Map();
+  const visit = node => {
+    if (source.ast.is.IsIdentifier(node) && source.ast.is.IsCallExpression(source.ast.parent(node))) {
+      const name = source.ast.text(node);
+      if (["fresh", "repeated", "outer", "inner", "scoped", "captured"].includes(name)) {
+        const uses = decisions.get(name) ?? [];
+        uses.push(program.valueLifetimes.canMove(node));
+        decisions.set(name, uses);
+      }
+    }
+    source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  for (const file of source.sourceFiles) if (source.ast.getFileName(file).endsWith("/index.ts")) visit(file);
+  assert.deepEqual(decisions, new Map([
+    ["fresh", [true]], ["repeated", [false, true]], ["outer", [false]],
+    ["inner", [true]], ["scoped", [false]], ["captured", [false]],
+  ]));
+});
+
 test("branch ownership and stable receiver borrowing compile and preserve alias replacement", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"],
     target: { id: "rust", options: { outputType: "bin", crateName: "branch_final_use" } },

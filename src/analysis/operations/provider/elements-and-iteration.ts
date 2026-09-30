@@ -46,6 +46,7 @@ import { rustProjectObjectIndexSignature } from "../../project-types/object-layo
 import { rustRuntimeCarrierKey } from "../../../target-model/facts/selections.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectedValueCarrier } from "../selected-values.js";
+import { rustEffectiveValueCarrier } from "../../facts/value-carrier-queries.js";
 import { selectJsSurfaceOperation } from "../../../policy/operations/source-profiles/js/index.js";
 import { selectRustFixedArrayElementAccess } from "./structural-properties.js";
 import { isIntrinsicSourceQualifier } from "./source-qualifiers.js";
@@ -347,7 +348,8 @@ export function selectRustCheckedIteration(
 ): RustPolicySelection<RustCheckedOperationSelectionResult> {
   const source = request.source;
   if (source.iterationKind === "for-in") {
-    const iterable = resolveRustTargetTypeRef(request.expression, context, options);
+    const iterable = rustEffectiveValueCarrier(context.facts, request.expression) ??
+      resolveRustTargetTypeRef(request.expression, context, options);
     const elementCarrier = resolveRustTargetTypeRef(source.sourceElementType, context, options);
     if (elementCarrier === undefined || !isRustStringCarrier(elementCarrier)) {
       return rejectSelectedOperation(
@@ -380,7 +382,8 @@ export function selectRustCheckedIteration(
       sourceResultType: source.sourceElementType,
     }, elementCarrier);
   }
-  const iterable = resolveRustTargetTypeRef(request.expression, context, options);
+  const iterable = rustEffectiveValueCarrier(context.facts, request.expression) ??
+    resolveRustTargetTypeRef(request.expression, context, options);
   const targetIteration = rustIterableTargetPolicy(iterable, context.typeDefinitions);
   if (targetIteration === undefined) {
     return rejectSelectedOperation(

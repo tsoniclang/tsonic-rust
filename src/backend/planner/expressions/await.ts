@@ -43,7 +43,7 @@ export function planRustAwaitExpression(
   }
   const promise = selection.futureCarrier.kind === "target-named" && selection.futureCarrier.id === rustJsPromiseTargetId;
   if (promise && !requireRustCarrierRequirements(future.outputCarrier, ["clone"], node, context)) return undefined;
-  const name = allocateRustSyntheticName(createRustSyntheticNameState(context.input.program.source.ast, node, []), "__tsonic_future");
+  const name = allocateRustSyntheticName(createRustSyntheticNameState(context.input.program.source.ast, node, []), "future");
   const value: RustExpr = selection.optional ? { kind: "path", path: name } : planned;
   const awaitOperand: RustExpr = promise
     ? { kind: "method-call", receiver: value, method: future.awaiting === "fallible" ? "into_result" : "into_value", args: [] }

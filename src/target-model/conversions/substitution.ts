@@ -178,6 +178,7 @@ export function substituteRustValueConversion(
           ) as typeof field.conversion,
         }))),
       });
+    case "source-optional":
     case "option-some":
       return Object.freeze({
         ...value,

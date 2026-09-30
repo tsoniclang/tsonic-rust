@@ -271,7 +271,8 @@ function rustExpressionResolutionExpectation(
   }
   const present = isRustOptionCarrier(expected) ? rustOptionElementCarrier(expected) : expected;
   const union = present === undefined ? undefined : walk.sourceTypes.sourceUnionForCarrier(present);
-  return union !== undefined && (ast.is.IsArrowFunction(expression) || ast.is.IsFunctionExpression(expression))
+  return union !== undefined && (ast.is.IsArrowFunction(expression) || ast.is.IsFunctionExpression(expression) ||
+    ast.is.IsArrayLiteralExpression(expression))
     ? selectRustUnionVariantByCheckedType(walk, expression, union)?.carrier
     : present;
 }

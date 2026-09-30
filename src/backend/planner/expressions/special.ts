@@ -202,9 +202,10 @@ export function planOptionalChainExpression(
     rustFlowReadProjectionFactKey,
   );
   if (structuralMethodGuard === undefined && guardFlowRead !== undefined &&
-    (guardFlowRead.kind !== "option-value" ||
-      !rustTargetTypeRefEquals(guardFlowRead.sourceCarrier, fact.sourceGuardCarrier) ||
-      !rustTargetTypeRefEquals(guardFlowRead.selectedCarrier, fact.selectedGuardCarrier))) {
+    !rustTargetTypeRefEquals(guardFlowRead.sourceCarrier, fact.selectedGuardCarrier) &&
+    !(guardFlowRead.kind === "option-value" &&
+      rustTargetTypeRefEquals(guardFlowRead.sourceCarrier, fact.sourceGuardCarrier) &&
+      rustTargetTypeRefEquals(guardFlowRead.selectedCarrier, fact.selectedGuardCarrier))) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, fact.guard),
       "rust.backend.optional-chain-flow-read",

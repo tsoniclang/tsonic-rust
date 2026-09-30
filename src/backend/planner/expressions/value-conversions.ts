@@ -30,6 +30,7 @@ import { rustUnionTypePathInContext, rustTypeFromCarrierInContext } from "../typ
 import { lowerRustExactIntegerConversion } from "./exact-integer.js";
 import { planRustUnionMapping, planRustUnionProjection } from "./union-mappings.js";
 import { rustUnionAlternatives } from "../../../target-model/types/union-relations.js";
+import { planRustCheckedSourceOptional } from "./optional-storage.js";
 
 export function applyRustValueConversion(
   context: RustPlanContext,
@@ -387,6 +388,8 @@ export function lowerRustValueConversion(
         args: [source],
       };
     }
+    case "source-optional":
+      return planRustCheckedSourceOptional(source, contract.element, context);
     case "option-some":
       return { kind: "call", path: "Some", args: [source] };
     case "option-map": {

@@ -134,13 +134,26 @@ test("no source-name target guessing in the backend", () => {
     if (!path.includes("/backend/")) {
       continue;
     }
-    const productText = text.replace(/from "node:[a-z_/-]+"/gu, "");
+    const productText = sourceSelectionText(text);
     const tokens = path.endsWith("/backend/emission/rustfmt.ts")
       ? bannedTokens
       : [...bannedTokens, "readFileSync"];
     for (const token of tokens) {
       assert.ok(!productText.includes(token), `${path} contains banned source-name token ${token}`);
     }
+  }
+});
+
+function sourceSelectionText(text) {
+  return text.replace(/from "node:[a-z_/-]+"/gu, "")
+    .replace(/\bmethod:\s*"push"(?=\s*[,}])/gu, "method: native_method");
+}
+
+test("source-name guard permits native AST methods but rejects source-name dispatch", () => {
+  assert.ok(!sourceSelectionText('({ kind: "method-call", receiver, method: "push", args: [value] })').includes('"push"'));
+  for (const source of ['if (sourceName === "push") select();', 'if (member === "push") lower();',
+    'const names = ["push"];', '({ name: "push", selected: true })']) {
+    assert.ok(sourceSelectionText(source).includes('"push"'), source);
   }
 });
 
@@ -621,7 +634,7 @@ test("provider-backed backend lanes require finalized operation facts", () => {
       "indexer",
       readFileSync(join(sourceRoot, "backend/planner/expressions/elements.ts"), "utf8"),
       "export function planElementAccess(",
-      "export function planArrayLiteral(",
+      "function planIndexedProjection(",
     ],
   ];
   for (const [lane, text, start, end] of lanes) {
@@ -864,7 +877,9 @@ test("project-source backend calls require the exact finalized selected member A
   assert.match(selectedGate, /const factParameter = fact\.parameters\[index\];/u);
   assert.match(selectedGate, /if \(factParameter === undefined\) return false;/u);
   assert.match(selectedGate, /mapRustTargetTypes\(factParameter\.parameterCarrier, normalize\)/u);
-  assert.match(selectedGate, /mapRustTargetTypes\(fact\.resultCarrier, normalize\)/u);
+  assert.match(selectedGate, /mapRustTargetTypes\(resultProjection\?\.sourceCarrier \?\? fact\.resultCarrier, normalize\)/u);
+  assert.match(selectedGate, /rustTargetTypeRefEquals\(resultProjection\.targetCarrier, fact\.resultCarrier\)/u);
+  assert.match(selectedGate, /\(sourceProjection === undefined\) !== \(resultProjection === undefined\)/u);
   assert.match(selectedGate, /mode === factParameter\.mode/u);
   assert.doesNotMatch(selectedGate, /sourceName ===|memberName|includes\(|toLowerCase/u);
 });

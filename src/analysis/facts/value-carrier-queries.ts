@@ -99,8 +99,11 @@ export function rustEffectiveValueCarrier(
 export function rustValueCarrierTransitionTarget(
   facts: RustPlanQueries,
   subject: ExtensionFactSubject | undefined,
+  source: TargetTypeRef | undefined = facts.getRuntimeCarrierFact(subject)?.carrier,
 ): TargetTypeRef | undefined {
-  const source = facts.getRuntimeCarrierFact(subject)?.carrier;
+  const raw = facts.getRuntimeCarrierFact(subject)?.carrier;
+  const flow = facts.getFact(subject, rustFlowReadProjectionFactKey);
+  if (!rustTargetTypeRefEquals(source, raw) && !rustTargetTypeRefEquals(source, flow?.sourceCarrier)) return undefined;
   const effective = rustEffectiveValueCarrier(facts, subject);
   return source === undefined || effective === undefined ||
       rustTargetTypeRefEquals(source, effective)

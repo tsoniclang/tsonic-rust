@@ -697,10 +697,7 @@ export function planFinalizedSourceInput(
   const expressionOverride = context.expressionOverrides?.get(sourceNode);
   const originalCarrier = context.input.program.facts.getRuntimeCarrierFact(sourceNode)?.carrier;
   const sourceCarrier = expressionOverride?.carrier ?? originalCarrier;
-  const convertedCarrier = expressionOverride === undefined ||
-      rustTargetTypeRefEquals(expressionOverride.carrier, originalCarrier)
-    ? rustValueCarrierTransitionTarget(context.input.program.facts, sourceNode)
-    : undefined;
+  const convertedCarrier = rustValueCarrierTransitionTarget(context.input.program.facts, sourceNode, sourceCarrier);
   if (sourceCarrier === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, sourceNode),
@@ -727,7 +724,8 @@ export function planFinalizedSourceInput(
     return inputOverride;
   }
   const sourceValueOverride = overrides?.sourceValues.get(sourceNode);
-  const sharedInput = sourceValueOverride === undefined && expressionOverride === undefined &&
+  const sharedInput = sourceValueOverride === undefined &&
+    (expressionOverride === undefined || expressionOverride.valueForm === "shared-reference") &&
     input.conversion.kind === "identity" && input.mode === "ref" && position === "target-argument";
   const plannedExpression = sourceValueOverride ??
     planExpression(sourceNode, context, "value", sharedInput ? "shared-reference" : "value");

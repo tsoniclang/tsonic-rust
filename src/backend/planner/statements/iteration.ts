@@ -1,5 +1,4 @@
 import {
-  applyRustArgumentMode,
   planExpression,
   planFinalizedSourceInput,
   planFinalizedTargetInput,
@@ -333,7 +332,8 @@ export function planForOfStatement(
     return undefined;
   }
   const iterableNode = Node_Expression(context.input.program.source.ast, node);
-  const iterable = iterableNode === undefined ? undefined : planExpression(iterableNode, context);
+  const borrowedIterable = fact.lowering.kind === "borrowed" && fact.lowering.input === "reference" || fact.lowering.kind === "js-array";
+  const iterable = iterableNode === undefined ? undefined : planExpression(iterableNode, context, "value", borrowedIterable ? "shared-reference" : "value");
   if (iterable === undefined) {
     return undefined;
   }
@@ -456,7 +456,7 @@ export function planForOfStatement(
         kind: "call",
         path: `rt::iter_${fact.lowering.style}`,
         args: [fact.lowering.input === "reference"
-          ? applyRustArgumentMode(context, nonConsumingIterable, "ref", iterableNode)
+          ? iterable
           : nonConsumingIterable],
       }
     : fact.lowering.kind === "js-array"

@@ -25,7 +25,8 @@ export function planArrayLiteral(node: Node, context: RustPlanContext): RustExpr
   if (fact?.kind !== "array-literal" && fact?.kind !== "tuple-literal") {
     return reject(node, context, "Array literals require a finalized Rust construction fact.");
   }
-  if (!requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.array-literal-carrier")) return undefined;
+  if (!requireExpressionCarrier(node, fact.resultCarrier, context,
+    fact.kind === "tuple-literal" ? "rust.backend.tuple-literal-carrier" : "rust.backend.array-literal-carrier")) return undefined;
   const sources = context.input.program.source.ast.elements(node);
   if (fact.kind === "tuple-literal") {
     const elements: RustExpr[] = [];

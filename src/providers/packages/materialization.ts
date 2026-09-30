@@ -607,6 +607,7 @@ function materializeProviderValueConversion(
           ) as typeof field.conversion,
         })),
       };
+    case "source-optional":
     case "option-some":
       return {
         ...conversion,

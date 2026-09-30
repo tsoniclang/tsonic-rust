@@ -352,11 +352,11 @@ export function planExpressionInner(
         ));
         return undefined;
       }
-      const operand = planExpression(operandNode, context);
+      const operand = planExpression(operandNode, context, "value", typeof fact.result === "string" ? "value" : "shared-reference");
       if (typeof fact.result !== "string") {
         const carrier = rustEffectiveValueCarrier(context.input.program.facts, operandNode);
         const planned = operand === undefined ? undefined
-          : planRustRuntimeCategory(planRustNonConsumingValue(operandNode, operand, context), fact.result, context);
+          : planRustRuntimeCategory(operand, fact.result, context, true);
         if (carrier === undefined || !rustTargetTypeRefEquals(carrier, fact.result.sourceCarrier) || planned === undefined) {
           context.diagnostics.push(missingFactDiagnostic(
             diagnosticInput(context, node), "rust.backend.runtime-union-typeof",

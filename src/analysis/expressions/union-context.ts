@@ -11,6 +11,11 @@ export function selectRustUnionVariantByCheckedType(
   union: RustSourceUnion,
 ): RustSourceUnionVariant | undefined {
   const semantics = walk.context.semanticsFor(expression);
+  if (walk.context.ast.is.IsArrayLiteralExpression(expression)) {
+    const candidates = union.variants.filter(variant => variant.sourceTypes.length > 0 &&
+      variant.sourceTypes.every(type => semantics.types.isArrayLike(type)));
+    return candidates.length === 1 ? candidates[0] : undefined;
+  }
   const selection = semantics.types.contextualValueSelection(expression);
   const contextualTypes = selection.kind === "selected" ? [selection.type]
     : selection.kind === "ambiguous" ? selection.types : [];

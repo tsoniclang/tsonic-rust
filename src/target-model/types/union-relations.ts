@@ -68,13 +68,15 @@ export function rustUnionProjectionContract(source: TargetTypeRef, target: Targe
   if (targetElement !== undefined && sourceElement === undefined) return undefined;
   const dispatchCarrier = sourceElement ?? source;
   const carrier = targetElement ?? target;
-  const alternatives = rustUnionAlternatives(dispatchCarrier, definitions)?.filter(arm =>
+  const allAlternatives = rustUnionAlternatives(dispatchCarrier, definitions);
+  const alternatives = allAlternatives?.filter(arm =>
     rustTargetTypeRefEquals(arm.carrier, carrier));
   const variant = alternatives === undefined ? rustClosedValuePrimitiveProjection(dispatchCarrier, carrier)
     : alternatives.length === 1 ? alternatives[0]!.variant : undefined;
   return variant === undefined ? undefined : {
     dispatchCarrier, carrier, variant,
     sourceOptional: sourceElement !== undefined, targetOptional: targetElement !== undefined,
+    exhaustive: allAlternatives?.length === 1 && (sourceElement === undefined || targetElement !== undefined),
   };
 }
 
