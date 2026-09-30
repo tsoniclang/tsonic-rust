@@ -123,7 +123,8 @@ export function planRustCaptureValue(
   context: RustPlanContext,
 ): RustExpr {
   const captured = rustCapturedBinding(node, context);
-  const capturedValue: RustExpr = captured?.expression ?? { kind: "path", path };
+  const selectedValue: RustExpr = captured?.expression ?? { kind: "path", path };
+  const capturedValue = selectedValue.kind === "reference" ? selectedValue.expr : selectedValue;
   if (storage === "cell" || storage === "borrow-cell") return capturedValue;
   if (storage === "location") {
     return {
@@ -290,7 +291,8 @@ export function rustRawLocationRoot(
   const captured = rustCapturedBinding(expression, context);
   const sourcePath = captured === undefined ? rustSourceBindingPath(context, binding) : undefined;
   if (captured === undefined && sourcePath === undefined) return undefined;
-  const value: RustExpr = captured?.expression ?? { kind: "path", path: sourcePath! };
+  const selectedValue: RustExpr = captured?.expression ?? { kind: "path", path: sourcePath! };
+  const value = selectedValue.kind === "reference" ? selectedValue.expr : selectedValue;
   return storage?.storage === "module-cell"
     ? rustModuleCellAccess(value, "location", [])
     : value;

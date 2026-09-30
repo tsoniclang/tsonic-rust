@@ -89,7 +89,7 @@ test("complex struct fields reuse exact native aliases without changing storage 
 
 test("borrowed and opaque boundaries remain in the function instead of escaping into aliases", () => {
   const boundary = { kind: "reference", mutable: true, referent: { kind: "slice", element: nested } };
-  const opaque = { kind: "impl-trait", outlives: [], captures: [], bounds: [{ kind: "callable", trait: "Fn",
+  const opaque = { kind: "impl-trait", outlives: [], bounds: [{ kind: "callable", trait: "Fn",
     binder: [], parameters: [boundary], result: { kind: "unit" } }] };
   const result = nameRustSignatureTypes([{ ...makeFunction("read"), params: [{ name: "callback", type: opaque }], returnType: undefined }]);
   const fn = result.find(item => item.kind === "function");

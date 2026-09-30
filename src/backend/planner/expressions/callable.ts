@@ -403,9 +403,9 @@ export function planRustCallableExpressionBody(
     capturedBindings.push({
       declaration: capture.declaration,
       expression: ownedStateName === undefined ? { kind: "path", path: name } : {
-        kind: "field", receiver: {
+        kind: "reference", expr: { kind: "field", receiver: {
           kind: "field", receiver: { kind: "path", path: ownedStateName }, name: "state",
-        }, name: String(index),
+        }, name: String(index) },
       },
       storage: capture.storage,
       valueCarrier: capture.carrier,

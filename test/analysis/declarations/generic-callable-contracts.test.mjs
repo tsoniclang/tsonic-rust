@@ -4,11 +4,31 @@ import { rustGenericCallableTargetType, rustGenericCallableValue, rustGenericCal
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { substituteRustTargetTypeParameters } from "../../../dist/target-model/types/carriers/substitution.js";
 import { rustTargetTypeParameterIdentities } from "../../../dist/target-model/types/carriers/generic-references.js";
+import { rustFutureTargetType } from "../../../dist/target-model/types/carriers/primitives.js";
+import { rustOptionTargetType } from "../../../dist/target-model/types/carriers/optional.js";
 
 const parameter = name => ({ kind: "type-parameter", identity: name, name });
 const number = { kind: "source-primitive", name: "float64" };
 const string = { kind: "target-named", id: "rust.std.String" };
 const origin = { fileName: "/factory.ts", declarationIdentity: "/factory.ts\u000010\u000020\u000050" };
+
+test("closed opaque-future callables retain zero binders and exact environments", () => {
+  for (const result of [rustFutureTargetType(parameter("Owner")), rustOptionTargetType(rustFutureTargetType(parameter("Owner")))]) {
+    const carrier = rustGenericCallableTargetType([], [parameter("Owner")], result, origin);
+    assert.deepEqual(rustGenericCallableValue(carrier).signature.typeParameters, []);
+    assert.deepEqual(rustGenericCallableValue(carrier).environment, [parameter("Owner")]);
+    const concrete = substituteRustTargetTypeParameters(carrier, new Map([["Owner", number]]));
+    assert.deepEqual(rustGenericCallableProtocol(concrete, []), {
+      parameters: [number], result: substituteRustTargetTypeParameters(result, new Map([["Owner", number]])),
+    });
+    assert.equal(rustGenericCallableProtocol(concrete, [parameter("Extra")]), undefined);
+  }
+  assert.equal(rustGenericCallableTargetType([], [], number, origin), undefined);
+  const valid = rustGenericCallableTargetType([], [], rustFutureTargetType(number), origin);
+  assert.equal(rustGenericCallableValue({ ...valid, value: { ...valid.value,
+    signature: { ...valid.value.signature, result: number },
+  } }), undefined);
+});
 
 test("quantified callables retain alpha equivalence without leaking call binders", () => {
   const first = rustGenericCallableTargetType([parameter("Value")], [parameter("Value"), parameter("Owner")], parameter("Value"), origin);

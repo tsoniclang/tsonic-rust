@@ -606,6 +606,9 @@ function finalizeRustExpressionStyle(expression: RustExpr): RustExpr {
           rustBlockReferencesPath(expression.body, parameter.name))),
         body: finalizeRustFunctionBodyStyle(expression.body) };
       break;
+    case "async-block":
+      result = { ...expression, body: finalizeRustFunctionBodyStyle(expression.body) };
+      break;
     case "await":
     case "option-try":
     case "try":

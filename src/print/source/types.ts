@@ -54,7 +54,7 @@ export function printRustType(type: RustType): string {
       const bounds = [
         ...type.bounds.map(printRustTypeBound),
         ...type.outlives.map(printRustLifetime),
-        ...(type.captures.length === 0
+        ...(type.captures === undefined
           ? []
           : [`use<${type.captures.map(printRustGenericArgument).join(", ")}>`]),
       ];

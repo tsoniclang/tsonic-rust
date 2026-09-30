@@ -56,6 +56,7 @@ import { planRustIntegerTruncation } from "./integer-truncation.js";
 import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { rustNativeFutureCallableResult } from "../../../target-model/types/carriers/generic-callables.js";
 
 export type RustExpressionResultUse = "value" | "discarded";
 
@@ -264,7 +265,8 @@ function planProjectedExpression(
   }
   if (projection?.kind === "none") {
     const optionType = rustTypeFromCarrierInContext(projection.resultCarrier, context);
-    if (optionType === undefined || rustOptionElementCarrier(projection.resultCarrier) === undefined) {
+    const anonymous = rustNativeFutureCallableResult(projection.resultCarrier)?.optional === true;
+    if (optionType === undefined && !anonymous || rustOptionElementCarrier(projection.resultCarrier) === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, node),
         "rust.backend.option-none-carrier",
@@ -273,7 +275,8 @@ function planProjectedExpression(
       return undefined;
     }
     const value: RustExpr = rustOptionalStorageValue(projection.resultCarrier) === undefined
-      ? { kind: "associated-value", owner: optionType, name: "None" }
+      ? anonymous ? { kind: "path", path: "None" }
+        : { kind: "associated-value", owner: optionType!, name: "None" }
       : planRustOptionalStorageOperation(projection.resultCarrier, "absent", [], context);
     if (contextuallyConverted.kind === "bottom") return contextuallyConverted;
     return finish(contextuallyConverted.kind === "none" || contextuallyConverted.kind === "path" || contextuallyConverted.kind === "associated-value"

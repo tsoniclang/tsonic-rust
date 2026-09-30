@@ -39,6 +39,6 @@ export function planRustGenericCallableValue(
   }
   const state: RustExpr = { kind: "struct-literal", path, fields };
   return { kind: "associated-call", owner, method: implementation.variantName,
-    args: [definition.storage === "shared" ? { kind: "call", path: "alloc::rc::Rc::new", args: [state] } : state],
+    args: [implementation.storage === "shared" ? { kind: "call", path: "alloc::rc::Rc::new", args: [state] } : state],
   };
 }

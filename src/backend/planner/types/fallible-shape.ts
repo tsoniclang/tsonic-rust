@@ -107,6 +107,7 @@ export function rustExpressionUsesTryInCurrentRegion(expression: RustExpr): bool
       return expression.elements.some(rustExpressionUsesTryInCurrentRegion);
     case "closure":
     case "closure-block":
+    case "async-block":
     case "int-literal":
     case "float-literal":
     case "bool-literal":

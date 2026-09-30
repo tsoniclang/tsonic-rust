@@ -37,7 +37,7 @@ function input() {
     if (key === rustContextualValueConversionFactKey && node.conversion !== undefined) return { conversion: node.conversion };
     if (!closures.includes(node)) return undefined;
     if (key === rustTargetOperationFactKey) return { kind: "closure", resultCarrier: node.carrier };
-    if (key === rustClosureCaptureFactKey) return { captures: [] };
+    if (key === rustClosureCaptureFactKey) return { captures: node.captures ?? [] };
     return undefined;
   } };
   const names = { nameForDeclaration: () => undefined, functionNameForDeclaration: () => undefined, callableValueNameForDeclaration: () => undefined };
@@ -97,8 +97,10 @@ test("unrelated equal-signature implementations do not acquire a common owner or
   assert.deepEqual(second.implementations.map(value => value.declaration), [closures[1]]);
   assert.equal(first.ownerFileName, "/first.ts");
   assert.equal(second.ownerFileName, "/second.ts");
-  assert.equal(first.storage, "value");
-  assert.equal(second.storage, "shared");
+  assert.equal(first.copy, true);
+  assert.equal(first.implementations[0].storage, "value");
+  assert.equal(second.copy, false);
+  assert.equal(second.implementations[0].storage, "shared");
   assert.equal(plan.definitionFor(structuredClone(closures[0].carrier)), first);
 });
 
@@ -117,22 +119,22 @@ test("only retained value-flow edges join otherwise independent callable contrac
 test("closed returned Copy environments stay inline unless selected operations observe their identity", () => {
   const { closures, planInput, create } = input();
   const closed = new Set(planInput.sourceFiles);
-  assert.equal(create(closed).definitionFor(closures[1].carrier).storage, "value");
+  assert.equal(create(closed).definitionFor(closures[1].carrier).copy, true);
   const comparison = { operation: { kind: "operator-token", operator: "==" },
     binary: { Left: { carrier: closures[1].carrier }, Right: { carrier: closures[1].carrier } } };
   planInput.sourceFiles[0].nodes.push(comparison);
-  assert.equal(create(closed).definitionFor(closures[1].carrier).storage, "shared");
-  assert.equal(create(closed).definitionFor(closures[0].carrier).storage, "value");
+  assert.equal(create(closed).definitionFor(closures[1].carrier).copy, false);
+  assert.equal(create(closed).definitionFor(closures[0].carrier).copy, true);
 });
 
 test("provider transport and open exports cannot silently lose callable identity", () => {
   const { closures, planInput, create } = input();
-  assert.equal(create().definitionFor(closures[1].carrier).storage, "shared");
+  assert.equal(create().definitionFor(closures[1].carrier).copy, false);
   planInput.sourceFiles[0].nodes.push({ operation: { kind: "runtime-call", abi: {
     sourceArguments: [{ disposition: "runtime", carrier: closures[1].carrier }],
   } } });
-  assert.equal(create(new Set(planInput.sourceFiles)).definitionFor(closures[1].carrier).storage, "shared");
-  assert.equal(create(new Set(planInput.sourceFiles)).definitionFor(closures[0].carrier).storage, "value");
+  assert.equal(create(new Set(planInput.sourceFiles)).definitionFor(closures[1].carrier).copy, false);
+  assert.equal(create(new Set(planInput.sourceFiles)).definitionFor(closures[0].carrier).copy, true);
 });
 
 test("generic callable flow closure is deterministic, transitive and fail-closed", () => {
@@ -163,7 +165,27 @@ test("implementations selected for one exact contextual contract share its nativ
   assert.deepEqual(plan.issues, []);
   assert.equal(plan.definitions.length, 1);
   assert.equal(plan.definitions[0].implementations.length, 2);
-  assert.equal(plan.definitions[0].storage, "shared");
+  assert.equal(plan.definitions[0].copy, false);
+  assert.equal(plan.definitions[0].identityObserved, true);
+  assert.deepEqual(plan.definitions[0].implementations.map(value => value.storage), ["shared", "shared"]);
+});
+
+test("a non-Copy environment does not heap-allocate independent Copy variants", () => {
+  const { closures, planInput, create } = input();
+  closures[1].carrier = closures[0].carrier;
+  closures[1].captures = [{ storage: "location", carrier: { kind: "source-primitive", name: "float64" } }];
+  const plan = create(new Set(planInput.sourceFiles));
+  assert.deepEqual(plan.issues, []);
+  assert.equal(plan.definitions[0].copy, false);
+  assert.equal(plan.definitions[0].identityObserved, false);
+  assert.deepEqual(plan.definitions[0].implementations.map(value => value.storage), ["value", "shared"]);
+  assert.equal(plan.implementationFor(closures[0]), plan.definitions[0].implementations[0]);
+  const comparison = { operation: { kind: "operator-token", operator: "==" },
+    binary: { Left: { carrier: closures[0].carrier }, Right: { carrier: closures[1].carrier } } };
+  planInput.sourceFiles[0].nodes.push(comparison);
+  const observed = create(new Set(planInput.sourceFiles));
+  assert.equal(observed.definitions[0].identityObserved, true);
+  assert.deepEqual(observed.definitions[0].implementations.map(value => value.storage), ["shared", "shared"]);
 });
 
 test("contradictory signatures under one origin fail closed instead of selecting another family", () => {

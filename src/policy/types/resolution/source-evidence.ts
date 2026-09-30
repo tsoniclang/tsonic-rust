@@ -32,7 +32,7 @@ import { inferRustTargetTypeParameterBindings } from "../../../target-model/type
 import { mapRustTargetTypes } from "../../../target-model/types/carriers/substitution.js";
 import { resolveBoundSourceTypeParameter } from "./callables.js";
 import { rustTypeFamilyNormalizer } from "../type-family-normalization.js";
-import { rustGenericCallableTargetType } from "../../../target-model/types/carriers/generic-callables.js";
+import { rustGenericCallableTargetType, rustNativeFutureCallableResult } from "../../../target-model/types/carriers/generic-callables.js";
 import { rustTypeParameterFromSourceContract } from "../../../target-model/names/type-parameters.js";
 import { rustGenericCallableOrigin } from "../generic-callable-origin.js";
 import { closeRustSuspendedStorage } from "../suspended-storage.js";
@@ -120,6 +120,10 @@ export function resolveRustCallableEvidence(
           result,
           lifetimeBinder: genericContract.lifetimeBinder,
         });
+  }
+  if (rustNativeFutureCallableResult(result) !== undefined) {
+    const origin = rustGenericCallableOrigin(context.ast, declaration);
+    return origin === undefined ? undefined : rustGenericCallableTargetType([], parameters as readonly TargetTypeRef[], result, origin);
   }
   if (!options.jsEnabled && parameters.some(parameter => parameter?.kind === "array") &&
     declaration !== undefined && context.ast.kindName(declaration) === "KindFunctionType") {

@@ -42,6 +42,7 @@ import {
   sourceIntegerInduction,
 } from "@tsonic/target-api/source";
 import { rustOptionElementCarrier, rustProgramErrorTargetType } from "../../target-model/types/index.js";
+import { rustGenericCallableValueOwner } from "../../policy/types/generic-callable-origin.js";
 import { rustSwitchCarrierSupportsEquality, selectRustSwitchComparison } from "../../policy/operations/control-flow/switch.js";
 import {
   rustAsyncFunctionFactKey,
@@ -129,7 +130,8 @@ export function recordVariableStatementFacts(walk: RustFactWalk, statement: Node
       );
       continue;
     }
-    const annotated = resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, declaration));
+    const annotated = rustGenericCallableValueOwner(walk.context.ast, declaration,
+      resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, declaration)));
     const predeclared = walk.context.facts.get(declaration, rustRuntimeCarrierKey)?.carrier ??
       walk.context.facts.resolve(declaration, rustRuntimeCarrierKey)?.carrier;
     const initializer = Node_Initializer(walk.context.ast, declaration);

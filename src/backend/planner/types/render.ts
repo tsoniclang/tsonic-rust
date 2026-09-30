@@ -204,7 +204,6 @@ export function rustTypeFromCarrier(
             } : result,
           }],
           outlives: Object.freeze([]),
-          captures: Object.freeze([]),
         };
   }
   const fixedArray = rustFixedArrayCarrierValue(carrier);
@@ -330,7 +329,7 @@ export function rustTypeFromCarrier(
             reference,
           })),
           outlives: carrier.outlives.map(rustLifetimeToAst),
-          captures,
+          ...(captures.length === 0 ? {} : { captures }),
         };
   }
   if (carrier.kind === "associated-type") {

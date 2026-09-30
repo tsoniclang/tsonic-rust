@@ -9,13 +9,15 @@ export function genericCallableStorageItems(
   variants: Extract<RustItem, { readonly kind: "enum" }>["variants"],
 ): readonly RustItem[] {
   const receiver: RustExpr = { kind: "path", path: "self" };
-  const clone: RustExpr = definition.storage === "value"
+  const clone: RustExpr = definition.copy
     ? { kind: "dereference", pointer: receiver }
     : { kind: "match", expression: receiver, arms: definition.implementations.map(implementation => ({
         pattern: { kind: "tuple-variant", path: `Self::${implementation.variantName}`,
           elements: [{ kind: "binding", name: "environment" }] },
         expression: { kind: "call", path: `Self::${implementation.variantName}`,
-          args: [{ kind: "method-call", receiver: { kind: "path", path: "environment" }, method: "clone", args: [] }] },
+          args: [implementation.storage === "value"
+            ? { kind: "dereference", pointer: { kind: "path", path: "environment" } }
+            : { kind: "method-call", receiver: { kind: "path", path: "environment" }, method: "clone", args: [] }] },
       })) };
   const items: RustItem[] = [{ kind: "enum", name: definition.targetName, visibility: "public",
     generics, variants },
@@ -23,10 +25,11 @@ export function genericCallableStorageItems(
     name: "clone", visibility: "private", selfParam: rustSelfParameter("ref"), generics: emptyRustGenerics,
     params: [], returnType: { kind: "named", path: "Self" }, body: { statements: [{ kind: "tail", expr: clone }] },
   }] }];
-  if (definition.storage === "value") {
+  if (definition.copy) {
     items.push({ kind: "impl", trait: { kind: "named", path: "Copy" }, target, generics, members: [] });
     return items;
   }
+  if (!definition.identityObserved) return items;
   const equality: RustExpr = { kind: "match", expression: { kind: "tuple-literal", elements: [
     receiver, { kind: "path", path: "other" },
   ] }, arms: [

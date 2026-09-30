@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import type { RustGenericCallableOrigin, RustGenericCallableSignature } from "../../target-model/types/carriers/generic-callables.js";
-import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
+import { rustGenericCallableValue, rustNativeFutureCallableResult } from "../../target-model/types/carriers/generic-callables.js";
 import { closedMetadataKey, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
 import { substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
@@ -27,6 +27,7 @@ export interface RustGenericCallableImplementation {
   readonly variantName: string;
   readonly stateName: string;
   readonly functionName: string;
+  readonly storage: "value" | "shared";
   readonly captures: readonly (RustClosureCaptureFact["captures"][number] & { readonly storageCarrier: TargetTypeRef })[];
   readonly substitutions: readonly (readonly [string, TargetTypeRef])[];
 }
@@ -35,7 +36,9 @@ export interface RustGenericCallableDefinition {
   readonly identity: string;
   readonly origin: RustGenericCallableOrigin;
   readonly targetName: string;
-  readonly storage: "value" | "shared";
+  readonly nativeFutureDispatchName?: string;
+  readonly copy: boolean;
+  readonly identityObserved: boolean;
   readonly ownerFileName: string;
   readonly signature: RustGenericCallableSignature;
   readonly implementations: readonly RustGenericCallableImplementation[];
@@ -95,6 +98,13 @@ export function createRustGenericCallablePlan(
     for (const child of rustTargetTypeChildren(carrier)) retainIdentity(child);
   };
   identityCarriers.forEach(retainIdentity);
+  for (const declaration of closures) {
+    const selected = navigation.expressionValueFlow(declaration);
+    if ((!selected.escapes || closedSourceFiles.has(ast.getSourceFile(declaration)!)) &&
+      !selected.identityCompared && !selected.hasUnclassifiedUse) continue;
+    const operation = facts.getFact(declaration, rustTargetOperationFactKey);
+    if (operation?.kind === "closure") retainIdentity(operation.resultCarrier);
+  }
   issues.push(...flow.issues);
   closures.sort((left, right) => ast.getFileName(ast.getSourceFile(left)).localeCompare(ast.getFileName(ast.getSourceFile(right)), "en") || ast.pos(left) - ast.pos(right));
   for (const node of closures) {
@@ -124,6 +134,11 @@ export function createRustGenericCallablePlan(
           variantName: allocateRustGeneratedName(usedNames, `Implementation${implementationIdentity.slice(0, 12)}`),
           stateName: allocateRustGeneratedName(usedNames, `CallableEnvironment${implementationIdentity.slice(0, 12)}`),
           functionName: allocateRustGeneratedName(usedNames, `call_generic_${implementationIdentity.slice(0, 12)}`),
+          storage: !identityFamilies.has(identity) &&
+            (facts.getFact(node, rustAsyncFunctionFactKey) === undefined || rustNativeFutureCallableResult(value.signature.result) !== undefined) &&
+            facts.getFact(node, rustGeneratorFactKey) === undefined &&
+            captures.every(selected => selected.storage === "value" && isRustCopyCarrier(selected.storageCarrier))
+              ? "value" as const : "shared" as const,
           captures: Object.freeze(captures), substitutions: snapshotClosedMetadata([...substitutions]),
         });
         const group = groups.get(identity);
@@ -140,17 +155,13 @@ export function createRustGenericCallablePlan(
   }
   const definitions = [...groups].sort(([left], [right]) => left.localeCompare(right, "en")).map(([identity, group]) => {
     group.implementations.sort((left, right) => left.sourceFileName.localeCompare(right.sourceFileName, "en") || ast.pos(left.declaration) - ast.pos(right.declaration));
-    const storage = group.implementations.every(implementation => {
-      const flow = navigation.expressionValueFlow(implementation.declaration);
-      return (!flow.escapes || closedSourceFiles.has(ast.getSourceFile(implementation.declaration)!)) &&
-        !identityFamilies.has(identity) && !flow.identityCompared && !flow.hasUnclassifiedUse &&
-        facts.getFact(implementation.declaration, rustAsyncFunctionFactKey) === undefined &&
-        facts.getFact(implementation.declaration, rustGeneratorFactKey) === undefined &&
-        implementation.captures.every(capture => capture.storage === "value" && isRustCopyCarrier(capture.storageCarrier));
-    }) ? "value" as const : "shared" as const;
     const nativeIdentity = createHash("sha256").update(identity).digest("hex");
     return Object.freeze({ identity, origin: group.origin, targetName: allocateRustGeneratedName(usedNames, `GenericCallable${nativeIdentity.slice(0, 12)}`),
-      storage,
+      ...(rustNativeFutureCallableResult(group.signature.result) === undefined ? {} : {
+        nativeFutureDispatchName: allocateRustGeneratedName(usedNames, `CallableFuture${nativeIdentity.slice(0, 12)}`),
+      }),
+      copy: group.implementations.every(implementation => implementation.storage === "value"),
+      identityObserved: identityFamilies.has(identity),
       ownerFileName: group.implementations[0]!.sourceFileName, signature: group.signature,
       implementations: Object.freeze(group.implementations),
     });

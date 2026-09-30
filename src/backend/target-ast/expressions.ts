@@ -127,7 +127,7 @@ export function tupleRustClosureArguments(
 }
 
 export function rustExpressionContainsStatementBlock(expression: RustExpr): boolean {
-  if (expression.kind === "block" || expression.kind === "closure-block" ||
+  if (expression.kind === "block" || expression.kind === "closure-block" || expression.kind === "async-block" ||
     expression.kind === "evaluate-then" || expression.kind === "match") {
     return true;
   }

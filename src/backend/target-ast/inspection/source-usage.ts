@@ -97,6 +97,7 @@ export function rustExpressionReferencesPath(expression: RustExpr, path: string)
     return !expression.params.some((parameter) => parameter.name === path) &&
       rustBlockReferencesPath(expression.body, path);
   }
+  if (expression.kind === "async-block") return rustBlockReferencesPath(expression.body, path);
   if (expression.kind === "block") {
     for (const binding of expression.bindings) {
       if (binding.value !== undefined && rustExpressionReferencesPath(binding.value, path)) {
@@ -125,6 +126,7 @@ export function rustExpressionChildren(expression: RustExpr): readonly RustExpr[
     case "associated-value":
     case "unreachable":
     case "closure-block":
+    case "async-block":
       return [];
     case "bottom":
     case "numeric-cast":

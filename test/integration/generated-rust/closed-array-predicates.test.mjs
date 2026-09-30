@@ -10,7 +10,7 @@ test("closed array predicates retain native union payloads and evaluate once", {
     "index.ts": closedArrayPredicateFiles["index.ts"] + '\nexport function main(): void { if (!run()) throw new Error("array predicates"); }',
   } });
   assert.deepEqual(result.diagnostics, []);
-  const source = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.content).join("\n");
+  const source = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
   assert.doesNotMatch(source, /js_value_from_array|js_value_from_source_union/u);
   validateGeneratedProject("closed-array-predicates", result.artifacts, { run: true });
 });

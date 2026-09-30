@@ -421,6 +421,7 @@ function rustExpressionReferencesModuleAlias(expression: RustExpr, alias: string
     case "closure":
       return rustExpressionReferencesModuleAlias(expression.body, alias);
     case "closure-block":
+    case "async-block":
       return rustBlockReferencesModuleAlias(expression.body, alias);
     case "await":
       return rustExpressionReferencesModuleAlias(expression.expr, alias);

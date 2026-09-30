@@ -33,6 +33,7 @@ import {
   rustSelfModeFactKey,
   rustSourceAccessorEffectsFactKey,
   rustSourceCallEffectsFactKey,
+  rustSourceCallableReturnFactKey,
   rustTargetOperationFactKey,
 } from "../facts/keys.js";
 import { appendRustDiagnostic, rustOperationContext } from "../program/walk.js";
@@ -286,7 +287,8 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
     fallible.has(declaration) && walk.context.facts.get(declaration, rustAsyncFunctionFactKey) === undefined &&
       walk.context.facts.get(declaration, rustGeneratorFactKey) === undefined;
   const genericAwaitIsFallible = (declaration: Node): boolean =>
-    walk.context.facts.get(declaration, rustAsyncFunctionFactKey) === undefined || fallible.has(declaration);
+    walk.context.facts.get(declaration, rustSourceCallableReturnFactKey)?.implementationCompletion === undefined &&
+      (walk.context.facts.get(declaration, rustAsyncFunctionFactKey) === undefined || fallible.has(declaration));
   for (const usage of walk.context.projectMethodProperties.usages) {
     if (usage.writable) {
       fallible.add(usage.declaration);
@@ -607,6 +609,15 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
     }
   }
   const ownedCallbackClosures = new Set<Node>();
+  for (const declaration of declarations) {
+    const result = walk.context.facts.get(declaration, rustAsyncFunctionFactKey)?.futureCarrier ??
+      walk.context.facts.get(declaration, rustSourceCallableReturnFactKey)?.returnCarrier;
+    walk.context.facts.set(declaration, rustSourceCallEffectsFactKey, {
+      invocation: genericInvocationIsFallible(declaration) ? "fallible" : "infallible",
+      awaiting: rustAwaitCarrier(result) === undefined ? "not-applicable"
+        : genericAwaitIsFallible(declaration) ? "fallible" : "infallible",
+    }, [{ message: "rust finalized callable declaration invocation and return effects" }]);
+  }
   for (const definition of genericCallables.definitions) {
     const effects: import("../facts/generic-callable-effects.js").RustGenericCallableEffectsFact = {
       invocation: definition.implementations.some(implementation => genericInvocationIsFallible(implementation.declaration))

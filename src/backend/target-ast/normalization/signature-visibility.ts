@@ -180,7 +180,7 @@ function rustTypeNames(type: RustType): readonly string[] {
     case "impl-trait":
       return [
         ...type.bounds.flatMap(rustTypeBoundNames),
-        ...rustGenericArgumentTypeNames(type.captures),
+        ...rustGenericArgumentTypeNames(type.captures ?? []),
       ];
     case "reference":
       return rustTypeNames(type.referent);

@@ -3,6 +3,8 @@ import { isRustTargetTypeRef } from "../equality.js";
 import { hasExactObjectKeys, isDenseDataArray, snapshotClosedMetadata } from "../../metadata/closed-data.js";
 import { rustTargetGenericReferences, rustTargetTypeParameterIdentities } from "./generic-references.js";
 import { substituteRustTargetTypeParameters } from "./substitution.js";
+import { rustFutureOutputCarrier, rustFutureTargetId } from "./primitives.js";
+import { rustOptionElementCarrier } from "./optional.js";
 
 export interface RustGenericCallableSignature {
   readonly typeParameters: readonly Extract<TargetTypeRef, { readonly kind: "type-parameter" }>[];
@@ -31,7 +33,8 @@ export function rustGenericCallableTargetType(
   if (!isDenseDataArray(typeParameters) || typeParameters.some(parameter => !isRustTargetTypeRef(parameter) ||
     parameter.kind !== "type-parameter" || parameter.optionalStorageValue !== undefined)) return undefined;
   const bound = new Set(typeParameters.map(parameter => parameter.identity));
-  if (typeParameters.length === 0 || bound.size !== typeParameters.length) return undefined;
+  if (bound.size !== typeParameters.length || typeParameters.length === 0 &&
+    rustNativeFutureCallableResult(result) === undefined) return undefined;
   const free = [...new Map([...parameters, result].flatMap(type => rustTargetGenericReferences(type).typeParameters)
     .filter(parameter => !bound.has(parameter.identity)).map(parameter => [parameter.identity, parameter])).values()];
   const callParameters = typeParameters.map((_parameter, index) => protocolParameter("Call", index));
@@ -69,14 +72,15 @@ export function rustGenericCallableValue(carrier: TargetTypeRef | undefined): Ru
   const signature = selected.signature;
   if (typeof signature !== "object" || signature === null || Array.isArray(signature) ||
     !hasExactObjectKeys(signature, ["environmentParameters", "parameters", "result", "typeParameters"]) ||
-    !isDenseDataArray(signature.typeParameters) || signature.typeParameters.length === 0 ||
+    !isDenseDataArray(signature.typeParameters) ||
     signature.typeParameters.some((parameter, index) => !isProtocolParameter(parameter, "Call", index)) ||
     !isDenseDataArray(signature.environmentParameters) ||
     signature.environmentParameters.some((parameter, index) => !isProtocolParameter(parameter, "Environment", index)) ||
     !isDenseDataArray(signature.parameters) || !signature.parameters.every(isRustTargetTypeRef) ||
     !isRustTargetTypeRef(signature.result) || !isDenseDataArray(selected.environment) ||
     selected.environment.length !== signature.environmentParameters.length ||
-    !selected.environment.every(isRustTargetTypeRef)) return undefined;
+    !selected.environment.every(isRustTargetTypeRef) || signature.typeParameters.length === 0 &&
+    rustNativeFutureCallableResult(signature.result) === undefined) return undefined;
   const allowed = new Set([...signature.typeParameters, ...signature.environmentParameters].map(parameter => parameter.identity));
   if ([...signature.parameters, signature.result].flatMap(rustTargetTypeParameterIdentities)
     .some(name => !allowed.has(name))) return undefined;
@@ -98,6 +102,16 @@ export function rustGenericCallableProtocol(
     parameters: value.signature.parameters.map(parameter => substituteRustTargetTypeParameters(parameter, substitutions)),
     result: substituteRustTargetTypeParameters(value.signature.result, substitutions),
   };
+}
+
+export function rustNativeFutureCallableResult(
+  result: TargetTypeRef,
+): { readonly output: TargetTypeRef; readonly optional: boolean } | undefined {
+  const optional = rustOptionElementCarrier(result);
+  const future = optional ?? result;
+  if (future.kind !== "target-named" || future.id !== rustFutureTargetId) return undefined;
+  const output = rustFutureOutputCarrier(future);
+  return output === undefined ? undefined : { output, optional: optional !== undefined };
 }
 
 function protocolParameter(scope: "Call" | "Environment", index: number): Extract<TargetTypeRef, { readonly kind: "type-parameter" }> {

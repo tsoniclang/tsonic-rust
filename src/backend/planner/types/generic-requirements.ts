@@ -13,7 +13,7 @@ export function rustCarrierHasCopyContract(
   context: RustPlanContext,
 ): boolean {
   return carrier !== undefined && (isRustCopyCarrier(carrier) ||
-    context.input.program.callableValues.generic.definitionFor(carrier)?.storage === "value");
+    context.input.program.callableValues.generic.definitionFor(carrier)?.copy === true);
 }
 
 export function rustCarrierHasCloneContract(

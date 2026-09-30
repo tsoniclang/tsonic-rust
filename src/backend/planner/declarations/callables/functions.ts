@@ -35,7 +35,7 @@ import {
   planRustCallableParameterPrelude,
   planRustCallableParameters,
 } from "./parameters.js";
-import { resolveRustCallableBodyReturnType } from "./return-types.js";
+import { resolveRustCallableBodyReturnType, resolveRustCallableOutwardReturnType } from "./return-types.js";
 import { rustDeclarationRequiresUnsafe } from "../../safety/explicit-safety.js";
 import { rustSafetyAttributesForDeclaration } from "../../safety/explicit-safety.js";
 import { applyFallibleShape } from "../../types/fallible-shape.js";
@@ -209,7 +209,7 @@ function planRustFunctionItem(
   const isNever = isRustNeverCarrier(returnCarrier);
   const returnType = isUnit || fallible && isNever
     ? undefined
-    : rustReturnTypeFromCarrierInContext(returnCarrier, context);
+    : resolveRustCallableOutwardReturnType(node, returnCarrier, context);
   if (!isUnit && !(fallible && isNever) && returnType === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, returnTypeNode ?? node),

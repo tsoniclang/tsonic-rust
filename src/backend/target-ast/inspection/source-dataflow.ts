@@ -222,6 +222,7 @@ function maxWritesInExpression(expression: RustExpr, path: string): number {
       ? 0
       : 2;
   }
+  if (expression.kind === "async-block") return maxWritesInStatements(expression.body.statements, path) === 0 ? 0 : 2;
   if (expression.kind === "block") {
     let writes = 0;
     for (const binding of expression.bindings) {
@@ -453,6 +454,9 @@ function firstAccessesInExpression(
           !expression.params.some((parameter) => parameter.name === path)
         ? new Set(["read"])
         : new Set(["none"]);
+    case "async-block":
+      return rustStatementsReferencePath(expression.body.statements, path)
+        ? new Set(["read"]) : new Set(["none"]);
     case "block":
       return firstAccessesInBlockExpression(expression, path);
     case "return-expression":

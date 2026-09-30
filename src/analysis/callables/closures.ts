@@ -73,8 +73,8 @@ export function resolveFunctionExpressionSignature(
     Node_Initializer(ast, parameters[index]) === undefined ? carrier : rustSourceOptionalTargetType(carrier));
   const carrier = sourceSelected.kind === "function-pointer" || sourceSelected.kind === "closure"
     ? { ...sourceSelected, args: parameterCarriers, result: sourceResult }
-    : rustGenericCallableValue(sourceSelected) !== undefined && genericParameters !== undefined
-      ? rustGenericCallableTargetType(genericParameters, parameterCarriers, sourceResult, rustGenericCallableValue(sourceSelected)!.origin)
+    : rustGenericCallableValue(sourceSelected) !== undefined
+      ? rustGenericCallableTargetType(genericParameters ?? [], parameterCarriers, sourceResult, rustGenericCallableValue(sourceSelected)!.origin)
       : rustCallableTargetType(parameterCarriers, sourceResult);
   return carrier === undefined ? undefined : {
     carrier,
@@ -242,7 +242,7 @@ export function resolveFunctionExpressionCarrier(
         selectedResultExpectation, walk.context.typeDefinitions);
   if (suspendedResult !== undefined && selectedResultExpectation !== undefined &&
       !rustTargetTypeRefEquals(suspendedResult, selectedResultExpectation) && invocationResult === undefined) return undefined;
-  const selectedValueResult = invocationResult?.targetCarrier ?? suspendedResult ?? selectedResultExpectation;
+  const selectedValueResult = selectedResultExpectation ?? suspendedResult;
   const selectedBodyResult = generator?.returnType ?? asynchronous?.outputCarrier ?? selectedResultExpectation;
   const selectedReturnFact = generator?.resultCarrier ?? selectedBodyResult;
   if (finalizedReturn !== undefined && selectedReturnFact !== undefined &&
@@ -305,11 +305,11 @@ export function resolveFunctionExpressionCarrier(
     ...parameterCarriers,
     ...targetParameterCarriers.slice(parameters.length),
   ];
-  const valueResult = invocationResult?.targetCarrier ?? suspendedResult ?? bodyCarrier;
+  const valueResult = selectedValueResult ?? bodyCarrier;
   const closureCarrier = selectedExpected.kind === "function-pointer" || selectedExpected.kind === "closure"
     ? { ...selectedExpected, args: finalizedParameterCarriers, result: valueResult }
-    : rustGenericCallableValue(selectedExpected) !== undefined && genericParameters !== undefined
-      ? rustGenericCallableTargetType(genericParameters, finalizedParameterCarriers, valueResult, rustGenericCallableValue(selectedExpected)!.origin)
+    : rustGenericCallableValue(selectedExpected) !== undefined
+      ? rustGenericCallableTargetType(genericParameters ?? [], finalizedParameterCarriers, valueResult, rustGenericCallableValue(selectedExpected)!.origin)
     : rustCallableTargetType(finalizedParameterCarriers, valueResult);
   if (closureCarrier === undefined ||
     !recordCallableReturnFact(walk, expression, generator?.resultCarrier ?? bodyCarrier)) return undefined;

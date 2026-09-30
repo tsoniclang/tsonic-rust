@@ -138,7 +138,7 @@ export type RustType =
       readonly kind: "impl-trait";
       readonly bounds: readonly RustTypeBound[];
       readonly outlives: readonly RustLifetime[];
-      readonly captures: readonly RustGenericArgument[];
+      readonly captures?: readonly RustGenericArgument[];
     }
   | {
       readonly kind: "reference";
@@ -260,6 +260,7 @@ export type RustExpr =
       readonly body: RustBlock;
     }
   | { readonly kind: "await"; readonly expr: RustExpr }
+  | { readonly kind: "async-block"; readonly move: boolean; readonly body: RustBlock }
   | { readonly kind: "option-try"; readonly expr: RustExpr }
   | {
       readonly kind: "try";

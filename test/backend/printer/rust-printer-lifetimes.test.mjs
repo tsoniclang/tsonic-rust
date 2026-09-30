@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import { printRustSourceFile } from "../../helpers/printed-rust-source.mjs";
 import { printRustType } from "../../../dist/print/source/types.js";
+import { rustTypeEquals } from "../../../dist/backend/target-ast/inspection/type-equality.js";
 
 const namedLifetime = (name) => ({ kind: "named", name });
 const lifetimeParameter = (name, outlives = []) => ({
@@ -13,6 +14,15 @@ const lifetimeParameter = (name, outlives = []) => ({
 const traitReference = (path, genericArguments = [], binder) => ({
   trait: { kind: "named", path, genericArguments },
   ...(binder === undefined ? {} : { binder }),
+});
+
+test("opaque return capture omission and an exact empty capture set are distinct", () => {
+  const implicit = { kind: "impl-trait", bounds: [{ kind: "trait-type", reference: traitReference("core::future::Future") }], outlives: [] };
+  const precise = { ...implicit, captures: [] };
+  assert.equal(printRustType(implicit), "impl core::future::Future");
+  assert.equal(printRustType(precise), "impl core::future::Future + use<>");
+  assert.equal(rustTypeEquals(implicit, precise), false);
+  assert.equal(rustTypeEquals(precise, { ...precise, captures: [] }), true);
 });
 
 test("Rust type printer preserves omitted, named, static, placeholder, and nested reference lifetimes", () => {
