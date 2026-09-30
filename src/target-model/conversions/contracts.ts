@@ -45,6 +45,7 @@ import {
 import type { RustPrimitiveTypeName } from "../syntax/tokens.js";
 import { rustNumericValueConversionIsSupported } from "./numeric-promotion.js";
 import { rustExactIntegerConversionMatches } from "./exact-integer.js";
+import { rustUnsignedIntegerCounterpart } from "./integer-refinement.js";
 import { rustNumberBoxingSourceKind } from "./number-boxing.js";
 import { rustRestSequenceElements } from "../operations/rest-assembly.js";
 import { closedMetadataEquals, isDenseDataArray } from "../metadata/closed-data.js";
@@ -548,15 +549,16 @@ export function rustValueConversionContract(
       fallible: false,
     };
   }
-  if (value.kind === "numeric-promotion") {
+  if (value.kind === "numeric-promotion" || value.kind === "integer-refinement") {
     const source = rustSourcePrimitiveTargetType(value.source);
     const target = rustSourcePrimitiveTargetType(value.target);
     const targetType = rustPrimitiveTypeName(value.target);
     return isRustNumericCarrier(source) && isRustNumericCarrier(target) &&
-        rustNumericValueConversionIsSupported(value.source, value.target) &&
+        (value.kind === "numeric-promotion" ? rustNumericValueConversionIsSupported(value.source, value.target)
+          : value.proof === "nonnegative" && rustUnsignedIntegerCounterpart(value.source) === value.target) &&
         targetType !== undefined
       ? {
-          category: "numeric-promotion",
+          category: value.kind === "integer-refinement" ? "exact" : "numeric-promotion",
           lowering: "numeric-cast",
           sourceMode: "value",
           source,
@@ -676,8 +678,8 @@ export function rustValueConversionIdentity(value: RustValueConversion): string 
   if (value.kind === "union-map" || value.kind === "union-project") return `${value.kind}.${JSON.stringify(value)}`;
   return value.kind === "semantic-conversion"
     ? value.id
-    : value.kind === "numeric-promotion"
-      ? `numeric-promotion.${value.source}.${value.target}`
+    : value.kind === "numeric-promotion" || value.kind === "integer-refinement"
+      ? `${value.kind}.${value.source}.${value.target}`
       : value.kind === "raw-pointer-mut-to-const"
         ? `raw-pointer-mut-to-const.${JSON.stringify(value.pointee)}`
         : value.kind === "copy-from-reference"

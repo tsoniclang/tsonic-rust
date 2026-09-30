@@ -313,6 +313,9 @@ function isFinalizedConversion(value: unknown): value is RustFinalizedValueConve
     (value.conversion.kind === "numeric-promotion" &&
       hasExactKeys(value.conversion, ["kind", "source", "target"]) &&
       typeof value.conversion.source === "string" && typeof value.conversion.target === "string") ||
+    (value.conversion.kind === "integer-refinement" &&
+      hasExactKeys(value.conversion, ["kind", "source", "target", "proof"]) && value.conversion.proof === "nonnegative" &&
+      typeof value.conversion.source === "string" && typeof value.conversion.target === "string") ||
     (value.conversion.kind === "raw-pointer-mut-to-const" &&
       hasExactKeys(value.conversion, ["kind", "pointee"]) &&
       isRustTargetTypeRef(value.conversion.pointee)) ||
@@ -361,6 +364,8 @@ function isNonOptionValueConversion(value: unknown): boolean {
     (value.kind === "numeric-promotion" &&
       hasExactKeys(value, ["kind", "source", "target"]) &&
       typeof value.source === "string" && typeof value.target === "string") ||
+    (value.kind === "integer-refinement" && hasExactKeys(value, ["kind", "source", "target", "proof"]) &&
+      value.proof === "nonnegative" && typeof value.source === "string" && typeof value.target === "string") ||
     (value.kind === "raw-pointer-mut-to-const" &&
       hasExactKeys(value, ["kind", "pointee"]) && isRustTargetTypeRef(value.pointee)) ||
     (value.kind === "copy-from-reference" &&

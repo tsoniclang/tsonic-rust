@@ -205,6 +205,7 @@ export function substituteRustValueConversion(
       });
     case "semantic-conversion":
     case "numeric-promotion":
+    case "integer-refinement":
       return value;
   }
 }

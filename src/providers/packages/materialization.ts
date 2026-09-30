@@ -628,6 +628,7 @@ function materializeProviderValueConversion(
       };
     case "semantic-conversion":
     case "numeric-promotion":
+    case "integer-refinement":
       return conversion;
   }
 }

@@ -382,7 +382,7 @@ function valueConversionCarriers(
   conversion: import("../../../target-model/operations/model.js").RustValueConversion | undefined,
 ): readonly TargetTypeRef[] {
   if (conversion === undefined || conversion.kind === "semantic-conversion" ||
-    conversion.kind === "numeric-promotion") return [];
+    conversion.kind === "numeric-promotion" || conversion.kind === "integer-refinement") return [];
   if (conversion.kind === "raw-pointer-mut-to-const") return [conversion.pointee];
   if (conversion.kind === "union-map") return [conversion.source, conversion.target,
     ...conversion.arms.flatMap(arm => [arm.carrier, ...arm.source.map(step => step.union), ...arm.target.map(step => step.union)])];

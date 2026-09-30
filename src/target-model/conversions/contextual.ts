@@ -1,6 +1,6 @@
 import type { RustValueConversion } from "../operations/model.js";
 import type { TargetTypeRef } from "../types/model.js";
-import { rustValueConversionIsFallible } from "./contracts.js";
+import { rustValueConversionContract, rustValueConversionIsFallible } from "./contracts.js";
 import { rustTargetTypeRefEquals } from "../types/equality.js";
 import { rustCarrierSupportsTrait } from "../types/carriers/traits.js";
 import { rustProviderRecordCopyMatches, type RustProviderRecordCopy } from "./provider-record.js";
@@ -45,6 +45,11 @@ export function rustCompilerOwnedContextualConversionMatches(
   }
   if (conversion.kind === "exact-integer") {
     return rustExactIntegerConversionMatches(sourceCarrier, targetCarrier, conversion);
+  }
+  if (conversion.kind === "integer-refinement") {
+    const contract = rustValueConversionContract(conversion, definitions);
+    return contract !== undefined && rustTargetTypeRefEquals(contract.source, sourceCarrier) &&
+      rustTargetTypeRefEquals(contract.target, targetCarrier);
   }
   if (conversion.kind === "integer-truncation") {
     return rustIntegerTruncationConversionMatches(sourceCarrier, targetCarrier, conversion);

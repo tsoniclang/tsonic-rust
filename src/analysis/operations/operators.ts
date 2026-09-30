@@ -21,6 +21,7 @@ import {
   Node_Expression,
 } from "@tsonic/target-api/source";
 import { selectRustGenericNumericOperation } from "./generic-numeric.js";
+import { selectRustGuardedIntegerOperation } from "../../policy/operations/numeric/guarded.js";
 import { selectRustProgramErrorEquality } from "./error-equality.js";
 import { selectRustUnionEquality } from "../../policy/operations/operators/union-equality.js";
 import { rustUnionAlternatives } from "../../target-model/types/union-relations.js";
@@ -614,6 +615,8 @@ export function resolvePostCheckBinaryCarrier(
           };
     } else {
       const binary = selectRustBinaryOperator(operatorKind, left, right) ??
+        selectRustGuardedIntegerOperation({ ast: walk.context.ast, navigation: walk.context.source.navigation,
+          sourceFacts: walk.context.source.sourceFacts }, operatorKind, leftNode, rightNode, left, right) ??
         selectRustGenericNumericOperation(walk, expression, operatorKind, leftNode, rightNode, left, right);
       if (binary !== undefined) {
         fact = binary.kind === "string-concat"

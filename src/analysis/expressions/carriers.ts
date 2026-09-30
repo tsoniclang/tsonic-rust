@@ -52,6 +52,7 @@ import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { selectedSourceLiteralIsRepresentable } from "../../policy/types/selected-numeric-literal.js";
 import { selectProviderRecordArgument } from "../operations/provider/calls/record-arguments.js";
 import { selectRustExactIntegerConversion } from "../../target-model/conversions/exact-integer.js";
+import { selectRustGuardedIntegerConversion } from "../../policy/conversions/integer-refinement.js";
 import { isRustAssignmentOperator, isRustNumericBinaryOperator } from "../../policy/operations/operators/rules.js";
 import { recordAssignmentWrite, recordBindingWrite } from "../declarations/types-and-bindings.js";
 import { recordSelectedOperationInputs } from "../operations/inputs.js";
@@ -519,14 +520,16 @@ function applyOptionLane(
   if (resolved !== undefined && target !== undefined &&
     !rustTargetTypeRefEquals(resolved, target)) {
     const retained = walk.context.facts.get(expression, rustContextualValueConversionFactKey);
-    const exactInteger = integerConversion === "exact"
-      ? selectRustExactIntegerConversion(resolved, target) : undefined;
+    const refined = selectRustGuardedIntegerConversion({ ast: walk.context.ast, navigation: walk.context.source.navigation,
+      sourceFacts: walk.context.source.sourceFacts }, expression, resolved, target);
+    const exactInteger = refined ?? (integerConversion === "exact"
+      ? selectRustExactIntegerConversion(resolved, target) : undefined);
     if (exactInteger !== undefined || retained?.conversion.kind === "exact-integer" &&
       rustTargetTypeRefEquals(retained.sourceCarrier, resolved) &&
       rustTargetTypeRefEquals(retained.targetCarrier, target)) {
       walk.context.facts.set(expression, rustContextualValueConversionFactKey, {
         sourceCarrier: resolved, targetCarrier: target,
-        conversion: { kind: "exact-integer", source: resolved, target },
+        conversion: exactInteger ?? { kind: "exact-integer", source: resolved, target },
       }, [{ message: "rust exact native integer storage" }]);
       projected = target;
     } else {
