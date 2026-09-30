@@ -99,7 +99,7 @@ export function selectStructuralSourceProperty(
       }
       if (matches.length !== 0) return undefined;
       const projectFields = selectedDeclarations.map(declaration => resolveRustProjectField(
-        declaration, variant.carrier, variant.sourceTypes[0]!, undefined, context, options)).filter(field => field !== undefined);
+        declaration, variant.carrier, variant.sourceTypes[0]!, context, options)).filter(field => field !== undefined);
       if (projectFields.length !== 1) return undefined;
       const selected = projectFields[0]!;
       return { resultCarrier: selected.resultCarrier, field: {

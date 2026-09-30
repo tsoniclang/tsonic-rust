@@ -6,6 +6,15 @@ import {
   compileRust,
 } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
+import { rustFoundationForSelectedCall } from "../../../dist/analysis/foundation/requirements.js";
+import { rustStringTargetType } from "../../../dist/target-model/types/index.js";
+
+test("selected static calls retain their owning carrier's native foundation", () => {
+  const member = { id: "owner.create", sourceName: "create", targetName: "create", kind: "method", parameters: [],
+    returnType: { kind: "source-primitive", name: "int32" } };
+  assert.equal(rustFoundationForSelectedCall({ member }), "core");
+  assert.equal(rustFoundationForSelectedCall({ member, sourceSelectedOwnerCarrier: rustStringTargetType() }), "alloc");
+});
 
 test("core foundation emits and builds a no-std primitive library", { timeout: 300_000 }, () => {
   const { result } = compileRust({

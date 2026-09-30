@@ -155,6 +155,7 @@ export function rustFoundationForSelectedCall(
 ): RustFoundation {
   let foundation = rustFoundationForPath(selection.member.targetName);
   const carriers = [
+    selection.sourceSelectedOwnerCarrier,
     selection.sourceSelectedReceiverCarrier,
     selection.sourceCallableCarrier,
     selection.member.returnType,

@@ -113,9 +113,20 @@ export function applySelectedProjectSourceCall(
       selectedParameter?.parameterDeclaration,
       ast,
     );
-    const parameterAbi = parameterDeclaration === undefined
+    let parameterAbi = parameterDeclaration === undefined
       ? undefined
       : resolveParameterAbi(walk, parameterDeclaration);
+    const owner = selectedSignature.sourceSelectedOwnerCarrier;
+    if (parameterAbi !== undefined && parameterDeclaration !== undefined && owner !== undefined) {
+      const parameterCarrier = walk.context.projectTypes.instantiateMemberCarrier(
+        parameterDeclaration, owner, parameterAbi.parameterCarrier,
+      );
+      const valueCarrier = walk.context.projectTypes.instantiateMemberCarrier(
+        parameterDeclaration, owner, parameterAbi.valueCarrier,
+      );
+      parameterAbi = parameterCarrier === undefined || valueCarrier === undefined
+        ? undefined : { ...parameterAbi, parameterCarrier, valueCarrier };
+    }
     const parameterInputs = bindings.filter((binding) =>
       binding.sourceParameterIndex === index);
     if (parameterAbi === undefined ||

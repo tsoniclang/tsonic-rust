@@ -186,6 +186,7 @@ export interface RustSelectedTargetSignature {
     readonly variants: readonly RustSelectedUnionMethod[];
   };
   readonly sourceSelectedReceiverCarrier?: RustTargetTypeRef;
+  readonly sourceSelectedOwnerCarrier?: RustTargetTypeRef;
   readonly sourceCallableCarrier?: RustTargetTypeRef;
   readonly sourceCallableParameterIndexes?: readonly number[];
   readonly sourceConstructorCarrier?: RustTargetTypeRef;

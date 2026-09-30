@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { rustOptionalChainFactKey, rustTargetOperationFactKey } from "../../../dist/analysis/facts/operations/keys.js";
 import { createRustPlanBuilder } from "../../../dist/analysis/facts/plan-store.js";
+import { rustSelectedTargetSignatureEquals } from "../../../dist/target-model/types/equality.js";
 
 const integer = { kind: "source-primitive", name: "int32" };
 const text = { kind: "target-named", id: "rust.std.String" };
@@ -10,6 +11,17 @@ const second = Object.create(null);
 Object.defineProperty(first, "Parent", { get() { throw new Error("AST traversal is forbidden"); } });
 Object.defineProperty(second, "Parent", { get() { throw new Error("AST traversal is forbidden"); } });
 const sourceNodes = new Set([first, second]);
+
+test("selected callable identity includes the exact generic owner independently of its receiver", () => {
+  const signature = {
+    member: { id: "owner.read", sourceName: "read", targetName: "read", kind: "method", parameters: [], returnType: integer },
+    sourceSelectedOwnerCarrier: integer,
+    sourceSelectedReceiverCarrier: text,
+  };
+  assert.equal(rustSelectedTargetSignatureEquals(signature, copyMetadata(signature)), true);
+  assert.equal(rustSelectedTargetSignatureEquals(signature, { ...signature, sourceSelectedOwnerCarrier: text }), false);
+  assert.equal(rustSelectedTargetSignatureEquals(signature, { ...signature, sourceSelectedOwnerCarrier: undefined }), false);
+});
 
 function copyMetadata(value, replace = undefined) {
   if (sourceNodes.has(value)) return replace?.(value) ?? value;

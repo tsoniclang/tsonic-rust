@@ -1,4 +1,3 @@
-import { Node_Type } from "@tsonic/target-api/source";
 import type { Node, Type } from "@tsonic/tsts";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
 import type { RustOperationPolicyContext } from "../../../policy/operations/contracts.js";
@@ -16,13 +15,12 @@ export function resolveRustProjectField(
   declaration: Node,
   receiverCarrier: TargetTypeRef,
   receiverType: Type | undefined,
-  resultType: Type | undefined,
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): RustProjectFieldSelection | undefined {
   const field = rustProjectObjectField(declaration, context.ast);
   const declared = context.facts.getRuntimeCarrierFact(declaration)?.carrier ??
-    resolveRustTargetTypeRef(Node_Type(context.ast, declaration) ?? resultType, context, options);
+    resolveRustTargetTypeRef(declaration, context, options);
   const resultCarrier = declared === undefined ? undefined : instantiateRustSelectedMemberCarrier(
     declaration, receiverCarrier, receiverType, declared, context, options);
   const owner = options.projectTypes.definitionContainingDeclaration(declaration);

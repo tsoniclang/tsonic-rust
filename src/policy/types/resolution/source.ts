@@ -19,6 +19,7 @@ import {
   isRustUnitCarrier,
   rustNeverTargetType,
   rustOptionTargetType,
+  rustSourceOptionalTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
   rustTupleTargetType,
@@ -164,6 +165,14 @@ export function resolveRustTargetTypeRef(
   const selectedCallResult = context.facts.getSelectedTargetCall(subject)?.member.returnType;
   if (selectedCallResult !== undefined) {
     return selectedCallResult;
+  }
+  if (node !== undefined && (context.ast.is.IsPropertyDeclaration(node) || context.ast.is.IsPropertySignatureDeclaration(node))) {
+    const typeNode = Node_Type(context.ast, node);
+    if (typeNode !== undefined) {
+      const carrier = resolveRustAuthoredTargetType(typeNode, context, options, new Set<object>());
+      return carrier === undefined || context.ast.questionToken(node) === undefined
+        ? carrier : rustSourceOptionalTargetType(carrier);
+    }
   }
   const primitive = resolveSourcePrimitive(subject, context);
   if (primitive !== undefined) {

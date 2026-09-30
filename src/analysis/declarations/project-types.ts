@@ -80,9 +80,7 @@ export function recordClassSignatureFacts(walk: RustFactWalk, declaration: Node)
     if (memberKind === "KindPropertyDeclaration" || sourceParameterIsProperty(ast, member)) {
       const fieldCarrier = sourceParameterIsProperty(ast, member)
         ? walk.context.facts.get(member, rustRuntimeCarrierKey)?.carrier
-        : Node_Type(ast, member) === undefined
-          ? resolveRustTargetTypeRef(member, rustResolutionContext(walk, member), walk.operationOptions)
-          : resolveTypeNodeCarrier(walk, Node_Type(ast, member));
+        : resolveRustTargetTypeRef(member, rustResolutionContext(walk, member), walk.operationOptions);
       if (fieldCarrier !== undefined) {
         const storage = closeRustSuspendedStorage(fieldCarrier, [classCarrier],
           rustEnclosingStorageContract(member, ast, walk.context.sourceLifetimes), "field");
@@ -248,7 +246,7 @@ export function recordInterfaceFacts(walk: RustFactWalk, declaration: Node): voi
   for (const member of members) {
     const memberKind = ast.kindName(member);
     if (memberKind === "KindPropertySignature") {
-      const fieldCarrier = resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, member));
+      const fieldCarrier = resolveRustTargetTypeRef(member, rustResolutionContext(walk, member), walk.operationOptions);
       if (fieldCarrier !== undefined) {
         setCarrierFact(walk, member, fieldCarrier);
       }

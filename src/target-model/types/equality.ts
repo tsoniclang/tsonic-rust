@@ -98,6 +98,7 @@ export function rustSelectedTargetSignatureEquals(
 ): boolean {
   return closedMetadataEquals(left.member, right.member) &&
     rustTargetTypeRefEquals(left.sourceConstructorCarrier, right.sourceConstructorCarrier) &&
+    rustTargetTypeRefEquals(left.sourceSelectedOwnerCarrier, right.sourceSelectedOwnerCarrier) &&
     rustTargetTypeRefEquals(
       left.sourceSelectedReceiverCarrier,
       right.sourceSelectedReceiverCarrier,

@@ -736,6 +736,7 @@ export function acceptProjectSourceCall(
   const selectedSignature = {
     member,
     ...(sourceResult.projection === undefined ? {} : { sourceResultProjection: sourceResult.projection }),
+    ...(ownerCarrier === undefined ? {} : { sourceSelectedOwnerCarrier: ownerCarrier }),
     ...(unionContract === undefined ? {} : { sourceUnionMethods: { receiverCarrier: receiverCarrier!, variants: unionContract.methods } }),
     ...(construction || ownerCarrier === undefined
       ? {}

@@ -452,8 +452,7 @@ export function selectRustCheckedPropertyAccess(
       }
     }
     const field = selectedReceiverCarrier === undefined ? undefined : resolveRustProjectField(
-      declaration, selectedReceiverCarrier, request.sourceReceiverType,
-      request.optionalChain === true ? undefined : request.sourceResultType, context, options);
+      declaration, selectedReceiverCarrier, request.sourceReceiverType, context, options);
     if (field !== undefined) {
       if (request.accessMode === "delete") {
         return rejectSelectedOperation(

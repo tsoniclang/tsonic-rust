@@ -64,7 +64,7 @@ export function selectRustProjectStructuralView(
       fields.push({ declaration: member, storageIndex: field.storageIndex, accessor, readAdapter });
     } else {
       if (pair.source.declarations.length !== 1) return false;
-      const selected = resolveRustProjectField(member, sourceCarrier, sourceType, pair.source.property.type, context, walk.operationOptions);
+      const selected = resolveRustProjectField(member, sourceCarrier, sourceType, context, walk.operationOptions);
       const readAdapter = selected === undefined ? undefined : selectRustCallableValueAdapter(
         selected.resultCarrier, field.resultCarrier, walk.context.projectTypes, walk.context.typeDefinitions);
       if (selected === undefined || readAdapter === undefined || !field.readonly && !rustTargetTypeRefEquals(selected.resultCarrier, field.resultCarrier) ||
