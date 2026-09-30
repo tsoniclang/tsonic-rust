@@ -19,6 +19,7 @@ import { createRustModuleInitializationPlan } from "../module-initialization/ana
 import { analyzeRustProviderErrorCarriers } from "./provider-errors.js";
 import { analyzeRustDeclarationGenericRequirements } from "../declarations/generic-requirements.js";
 import { analyzeRustValueLifetimes } from "./value-lifetimes.js";
+import { analyzeRustLocalStorageAliases } from "../storage/local-aliases.js";
 import { rustCallArgumentIsOwned } from "../facts/parameter-passing.js";
 import { analyzeRustBorrowedElementReads } from "./borrowed-element-reads.js";
 import {
@@ -205,6 +206,8 @@ export function analyzeRustTargetProgram(
     })));
   }
   const program: RustTargetProgram = Object.freeze({
+    localStorageAliases: analyzeRustLocalStorageAliases({ ast: context.ast,
+      navigation: context.source.navigation, sourceFiles: context.sourceFiles, facts }),
     numericRepresentations: analyzeRustNumericRepresentations({ source: context.source,
       sourceFiles: context.sourceFiles, facts }),
     host: Object.freeze({

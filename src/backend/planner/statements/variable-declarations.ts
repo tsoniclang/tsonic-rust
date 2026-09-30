@@ -61,6 +61,8 @@ function planVariableDeclaration(
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
   if (context.input.program.facts.getFact(declaration, rustCompileTimeSourceKey)) return [];
+  const storageOwner = context.input.program.localStorageAliases.owner(declaration);
+  if (storageOwner !== undefined && storageOwner !== declaration) return [];
   const { ast } = context.input.program.source;
   const nameNode = Node_Name(context.input.program.source.ast, declaration);
   const nameKind = nameNode === undefined ? "" : ast.kindName(nameNode);
@@ -164,7 +166,7 @@ function planVariableDeclaration(
       return representation !== undefined && representation.kind !== "value";
     });
   const mutable = nativeArray !== undefined ? sourceUseSummary.bindingWritten : locationStorage === undefined &&
-    (sourceUseSummary.bindingWritten ||
+    (context.input.program.localStorageAliases.requiresMutableOwner(declaration) || sourceUseSummary.bindingWritten ||
       context.input.program.facts.getFact(declaration, rustMutatedBindingFactKey) !== undefined ||
       (objectRepresentation?.kind === "value" && sourceUseSummary.memberWritten) ||
       (ownedBinding && referentMutationRequiresMutableBinding &&

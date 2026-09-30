@@ -3,6 +3,7 @@ import test from "node:test";
 import { acmeTestingPackage, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { independentStorageFamilyFiles } from "../../../../tsonic/test/fixtures/generic-storage-families.mjs";
+import { structuralArrayStorageSource } from "../../../../tsonic/test/fixtures/structural-array-storage.mjs";
 
 const storageDeclarations = `
 export declare const storageKey: unique symbol;
@@ -96,19 +97,35 @@ export function main(): void {
   validateGeneratedProject("generic-storage-families", result.artifacts, { run: true });
 });
 
-test("independent generic storage families retain distinct nested results", { timeout: 300_000 }, () => {
-  const { result } = compileRust({
-    surfaces: ["js"],
-    target: { id: "rust", options: { outputType: "bin", crateName: "independent_storage_families" } },
-    files: {
-      ...independentStorageFamilyFiles,
-      "index.ts": independentStorageFamilyFiles["index.ts"] +
-        '\nexport function main(): void { if (!run()) throw new Error("independent storage families"); }',
-    },
+for (const surfaces of [[], ["js"]]) {
+  test(`independent generic storage families retain distinct nested results (${surfaces[0] ?? "native"})`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({
+      surfaces,
+      target: { id: "rust", options: { outputType: "bin", crateName: "independent_storage_families" } },
+      files: {
+        ...independentStorageFamilyFiles,
+        "index.ts": independentStorageFamilyFiles["index.ts"] +
+          '\nexport function main(): void { if (!run()) throw new Error("independent storage families"); }',
+      },
+    });
+    assert.deepEqual(result.diagnostics, []);
+    validateGeneratedProject(`independent-storage-families-${surfaces[0] ?? "native"}`, result.artifacts, { run: true });
   });
-  assert.deepEqual(result.diagnostics, []);
-  validateGeneratedProject("independent-storage-families", result.artifacts, { run: true });
-});
+  test(`inferred structural arrays preserve backing and element aliases (${surfaces[0] ?? "native"})`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces,
+      target: { id: "rust", options: { outputType: "bin", crateName: "structural_array_storage" } },
+      files: { "index.ts": structuralArrayStorageSource +
+        '\nexport function main(): void { if (!run()) throw new Error("structural array storage"); }' },
+    });
+    assert.deepEqual(result.diagnostics, []);
+    if (surfaces.length === 0) {
+      const generated = result.artifacts.filter(artifact => artifact.path.endsWith(".rs"))
+        .map(artifact => artifact.text).join("\n");
+      assert.doesNotMatch(generated, /values\.clone\(\)|(?:let|let mut) alias\b/u);
+    }
+    validateGeneratedProject(`structural-array-storage-${surfaces[0] ?? "native"}`, result.artifacts, { run: true });
+  });
+}
 
 test("inferred pointer loads retain conditional family arguments across nested classes", { timeout: 300_000 }, () => {
   const { result } = compileRust({

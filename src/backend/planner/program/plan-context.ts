@@ -256,12 +256,15 @@ export function rustSourceBindingPath(
   context: RustPlanContext,
   binding: RustSourceBindingFact,
 ): string | undefined {
+  const storageDeclaration = binding.scope === "lexical"
+    ? context.input.program.localStorageAliases.owner(binding.sourceDeclaration) ?? binding.sourceDeclaration
+    : binding.sourceDeclaration;
   const moduleBinding = binding.scope === "module"
     ? context.input.program.facts.getFact(binding.sourceDeclaration, rustModuleBindingFactKey)
     : undefined;
   const name = moduleBinding?.storage === "native-callable" && moduleBinding.value !== undefined
     ? moduleBinding.value.name
-    : context.input.program.names.nameForDeclaration(binding.sourceDeclaration);
+    : context.input.program.names.nameForDeclaration(storageDeclaration);
   if (name === undefined || !isValidRustIdentifier(name)) {
     return undefined;
   }

@@ -44,6 +44,7 @@ import type { RustFoundationPlan } from "../foundation/plan.js";
 import type { RustProjectFlowReadSelectionIndex } from "../control-flow/project-flow-read-selections.js";
 import type { RustGeneratedDeclarationUse } from "./generated-declaration-uses.js";
 import type { RustSourceTypeFamilyPlan } from "../../target-model/types/type-families.js";
+import type { RustLocalStorageAliasPlan } from "../storage/local-aliases.js";
 
 export interface RustTargetAnalysisRequest {
   readonly input: TargetCompileInput;
@@ -60,6 +61,7 @@ export interface RustPlanningHost {
 }
 
 export interface RustTargetProgram {
+  readonly localStorageAliases: RustLocalStorageAliasPlan;
   readonly numericRepresentations: RustNumericRepresentations;
   readonly typeDefinitions: import("../../target-model/types/source-union-definitions.js").RustTypeDefinitions;
   readonly typeFamilies: RustSourceTypeFamilyPlan;
