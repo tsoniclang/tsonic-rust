@@ -94,7 +94,7 @@ export interface RustPlanContext {
   readonly controlTargets?: readonly RustControlTarget[];
   readonly completionBoundary?: RustCompletionBoundary;
   readonly functionReturnType?: RustType;
-  readonly functionUndefinedReturn?: boolean;
+  readonly functionAbsenceReturnCarrier?: TargetTypeRef;
   readonly asyncContext?: boolean;
   readonly explicitUnsafeContextDepth?: number;
   // Exact Result error ABI for the active function or synthetic try region.

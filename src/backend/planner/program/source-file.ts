@@ -278,7 +278,7 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
     syntheticNames,
     controlFlow: { nextLoopId: 0 },
     functionReturnType: { kind: "unit" },
-    functionUndefinedReturn: false,
+    functionAbsenceReturnCarrier: undefined,
     ...(asynchronous ? { asyncContext: true } : {}),
     ...(errorBoundary === undefined ? {} : { fallibleBoundary: errorBoundary }),
   };

@@ -298,7 +298,7 @@ function planRustFunctionItem(
     syntheticNames,
     controlFlow: { nextLoopId: 0 },
     functionReturnType: bodyReturnType,
-    functionUndefinedReturn: sourceReturn?.undefinedReturn === true,
+    functionAbsenceReturnCarrier: sourceReturn?.undefinedReturn === true ? returnCarrier : undefined,
     ...(isAsync ? { asyncContext: true } : {}),
     ...(generatorFact === undefined
       ? {}

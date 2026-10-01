@@ -59,6 +59,7 @@ import { rustGenericCallableProtocol, rustGenericCallableTargetType, rustGeneric
 import { rustGenericCallableValueOwner } from "../../policy/types/generic-callable-origin.js";
 import { closeRustSuspendedStorage } from "../../policy/types/suspended-storage.js";
 import { selectRustInferredReturn } from "./inferred-return.js";
+import { rustOptionalStorageValue } from "../../target-model/types/projections.js";
 
 export function recordFunctionSignatureFacts(walk: RustFactWalk, declaration: Node): void {
   recordCallableParameterSignatureFacts(walk, declaration);
@@ -627,7 +628,7 @@ export function recordCallableReturnFact(
       walk.context.sourceLifetimes.contractFor(declaration), "callable-result");
   if (carrier !== undefined) {
     const completion = walk.context.semanticsFor(declaration).operations.callableCompletion(declaration);
-    const absence = rustOptionElementCarrier(carrier) !== undefined;
+    const absence = rustOptionElementCarrier(carrier) !== undefined || rustOptionalStorageValue(carrier) !== undefined;
     const implementationResult = asynchronous !== undefined || generator !== undefined || sourceReturn === undefined
       ? undefined : resolveRustTargetTypeRef(sourceReturn, rustResolutionContext(walk, declaration), walk.operationOptions);
     walk.context.facts.set(declaration, rustSourceCallableReturnFactKey, {

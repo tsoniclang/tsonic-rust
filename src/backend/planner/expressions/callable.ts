@@ -393,7 +393,7 @@ export function planRustCallableExpressionBody(
   }
   const callableClosureContext: RustPlanContext = {
     ...closureContext,
-    functionUndefinedReturn: false,
+    functionAbsenceReturnCarrier: undefined,
     capturedBindings,
   };
   const bindingStatements: RustStmt[] = [];
@@ -493,7 +493,7 @@ export function planRustCallableExpressionBody(
   const bodyContext: RustPlanContext = {
     ...callableClosureContext,
     functionReturnType: resultType,
-    functionUndefinedReturn: sourceReturn?.undefinedReturn === true,
+    functionAbsenceReturnCarrier: sourceReturn?.undefinedReturn === true ? bodyResultCarrier : undefined,
   };
   const plannedBody = ast.kindName(bodyNode) === "KindBlock"
     ? context.planBlock(bodyNode, bodyContext)

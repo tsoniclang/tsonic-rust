@@ -36,6 +36,7 @@ import { rustTypeAliasDeclarationFactKey } from "../../../analysis/facts/keys.js
 import { planRustBorrowedElementLocal } from "../expressions/borrowed-element-reads.js";
 import { rustBlockTerminates } from "./block-flow.js";
 import { planRustClassEnvironmentValue } from "../objects/class-environments.js";
+import { planRustAbsentValue } from "../expressions/optional-storage.js";
 
 export type RustAssignmentOperationFact = Extract<
   RustTargetOperationFact,
@@ -80,7 +81,8 @@ function planStatementInner(node: Node, context: RustPlanContext): readonly Rust
     case KindReturnStatement: {
       const expression = Node_Expression(context.input.program.source.ast, node);
       const planned = expression === undefined
-        ? context.functionUndefinedReturn ? { kind: "path" as const, path: "None" } : undefined
+        ? context.functionAbsenceReturnCarrier === undefined ? undefined
+          : planRustAbsentValue(context.functionAbsenceReturnCarrier, context)
         : planExpression(expression, context);
       if (expression !== undefined && planned === undefined) {
         return undefined;
