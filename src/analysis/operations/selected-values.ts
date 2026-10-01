@@ -6,6 +6,8 @@ import { selectRustFlowReadProjection } from "../../policy/types/value-carrier-r
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { recordRustFlowReadProjection, rustEffectiveValueCarrier } from "../facts/value-carrier-queries.js";
+import { rustPolicyNode } from "../../policy/model/context.js";
+import { selectRustGuardedValueCarrier } from "./native-flow-refinement.js";
 
 export function selectedValueCarrier(
   expression: ExtensionFactSubject,
@@ -19,6 +21,10 @@ export function selectedValueCarrier(
     (stored === undefined || !rustTargetTypeRefEquals(effective, stored))) {
     return effective;
   }
+  const reference = rustPolicyNode(context, expression);
+  const guarded = stored === undefined || reference === undefined ? undefined
+    : selectRustGuardedValueCarrier(reference, stored, context, options);
+  if (guarded !== undefined) return guarded;
   const selected = resolveRustTargetTypeRef(selectedType, context, options);
   if (stored === undefined || selected === undefined || rustTargetTypeRefEquals(stored, selected)) {
     return selected ?? stored;

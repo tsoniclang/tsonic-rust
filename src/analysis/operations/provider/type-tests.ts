@@ -14,6 +14,7 @@ import { selectedValueCarrier } from "../selected-values.js";
 import { rustArgumentPassingKey, rustSelectedCallKey, rustSelectedOperationKey } from "../../../target-model/facts/selections.js";
 import { rustTargetOperationFactKey } from "../../facts/keys.js";
 import { selectedRustCallSignature } from "./calls/signatures.js";
+import { selectRustArrayTypeGuard } from "../../../policy/operations/source-profiles/js/type-tests.js";
 
 export function selectRustArrayTypeTest(
   request: RustCheckedCallSelectionInput,
@@ -22,14 +23,15 @@ export function selectRustArrayTypeTest(
 ): RustPolicySelection<RustCheckedCallSelectionResult> {
   const argument = request.source.sourceArguments[0];
   const sourceCarrier = argument === undefined ? undefined : selectedValueCarrier(argument.expression, argument.type, context, options);
-  const predicate = Object.freeze({ kind: "array" as const });
-  const test = sourceCarrier === undefined ? undefined
-    : selectRustClosedTypeTestPlan(sourceCarrier, predicate, options.projectTypes, context.typeDefinitions);
+  const guard = selectRustArrayTypeGuard(context, request.source, options.sourceProfiles);
+  const test = sourceCarrier === undefined || guard === undefined ? undefined
+    : selectRustClosedTypeTestPlan(sourceCarrier, guard.predicate, options.projectTypes, context.typeDefinitions);
   if (request.source.sourceArguments.length !== 1 || argument === undefined || context.ast.is.IsSpreadElement(argument.expression) ||
-    sourceCarrier === undefined || test === undefined) {
+    sourceCarrier === undefined || test === undefined || guard === undefined) {
     return rejectSelectedOperation(request.source.call, context, "RUST_ARRAY_TYPE_TEST_NOT_CLOSED",
       "Array.isArray requires one exact closed native carrier and its payload test.");
   }
+  const predicate = guard.predicate;
   const operationId = `tsonic.rust.closed-type-test.${closedMetadataKey(predicate)}`;
   const resultCarrier = rustSourcePrimitiveTargetType("bool");
   const evidence = [{ message: "Rust closed array predicate retains its source storage without conversion" }];

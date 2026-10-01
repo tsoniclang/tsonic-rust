@@ -23,6 +23,7 @@ import {
   resolveSelectedSourceProfilePropertyMembers,
 } from "../../../policy/evidence/selected-source.js";
 import { selectRustFlowReadProjection } from "../../../policy/types/value-carrier-reconciliation.js";
+import { selectRustGuardedValueCarrier } from "../native-flow-refinement.js";
 import { rustRuntimeUnionProjection } from "../../../target-model/types/carriers/runtime-unions.js";
 import { recordRustFlowReadProjection } from "../../facts/value-carrier-queries.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
@@ -105,6 +106,7 @@ export function selectedMemberReceiverCarrier(
   if (request.sourceReceiverType === undefined) {
     return undefined;
   }
+  if (sourceCarrier !== undefined) selectRustGuardedValueCarrier(receiver, sourceCarrier, context, options);
   const flowRead = context.facts.get(receiver, rustFlowReadProjectionFactKey) ??
     context.facts.resolve(receiver, rustFlowReadProjectionFactKey);
   const guardedCarrier = request.optionalChain === true ? rustOptionValueCarrier(sourceCarrier) : sourceCarrier;
