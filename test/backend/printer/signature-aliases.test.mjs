@@ -87,6 +87,63 @@ test("complex struct fields reuse exact native aliases without changing storage 
   assert.deepEqual(nameRustSignatureTypes(result), result);
 });
 
+test("generated trait signatures share exact aliases with implementations without changing their native contracts", () => {
+  const callable = makeFunction("read");
+  const { visibility: _visibility, body: _body, ...callableSignature } = callable;
+  const signature = { ...callableSignature, generics: emptyRustGenerics };
+  const associated = { kind: "type", name: "Output", bounds: [] };
+  const trait = { kind: "trait", name: "Reader", visibility: "public", generics: callable.generics,
+    members: [signature, associated] };
+  const result = nameRustSignatureTypes([callable, trait]);
+  const aliases = result.filter(item => item.kind === "type-alias");
+  const selected = result.find(item => item.kind === "trait");
+  assert.equal(aliases.length, 1);
+  assert.equal(aliases[0].visibility, "public");
+  assert.deepEqual(aliases[0].target, nested);
+  assert.deepEqual(selected.generics, trait.generics);
+  assert.equal(selected.members[0].params[0].type.path, aliases[0].name);
+  assert.equal(selected.members[0].returnType.path, aliases[0].name);
+  assert.deepEqual(selected.members[0].generics, signature.generics);
+  assert.deepEqual(selected.members[1], associated);
+  assert.deepEqual(result.find(item => item.kind === "function").body, callable.body);
+  assert.deepEqual(nameRustSignatureTypes(result), result);
+});
+
+test("trait aliases preserve native owner binders and reserve method-local parameters", () => {
+  const callable = makeFunction("read");
+  const { visibility: _visibility, body: _body, ...signature } = callable;
+  const type = { ...nested, genericArguments: [
+    { kind: "lifetime", lifetime: { kind: "named", name: "scope" } },
+    { kind: "const", value: { kind: "path", path: "CAPACITY" } },
+    ...nested.genericArguments,
+  ] };
+  const generics = { parameters: [
+    ...callable.generics.parameters,
+    { kind: "lifetime", name: "scope", outlives: [] },
+    { kind: "const", name: "CAPACITY", type: { kind: "primitive", name: "usize" } },
+  ], wherePredicates: [] };
+  const method = { ...signature, params: [{ name: "values", type }], returnType: type,
+    generics: { parameters: [{ kind: "type", name: "ReadValues", bounds: [] }], wherePredicates: [] } };
+  const trait = { kind: "trait", name: "Reader", visibility: "public", generics, members: [method] };
+  const result = nameRustSignatureTypes([trait]);
+  const alias = result.find(item => item.kind === "type-alias");
+  const selected = result.find(item => item.kind === "trait");
+  assert.equal(alias.name, "ReadValues2");
+  assert.deepEqual(alias.target, type);
+  assert.deepEqual(alias.generics.parameters.map(parameter => parameter.name), ["Item", "scope", "CAPACITY"]);
+  assert.deepEqual(selected.generics, generics);
+  assert.deepEqual(selected.members[0].generics, method.generics);
+  assert.deepEqual(selected.members[0].params[0].type.genericArguments, [
+    { kind: "type", type: { kind: "named", path: "Item" } },
+    { kind: "lifetime", lifetime: { kind: "named", name: "scope" } },
+    { kind: "const", value: { kind: "path", path: "CAPACITY" } },
+  ]);
+  assert.deepEqual(nameRustSignatureTypes(result), result);
+  const selfType = named("Vec", [named("Option", [named("Vec", [named("Option", [named("Vec", [named("Self")])])])])]);
+  const selfTrait = { ...trait, members: [{ ...method, params: [{ name: "values", type: selfType }], returnType: selfType }] };
+  assert.deepEqual(nameRustSignatureTypes([selfTrait]), [selfTrait]);
+});
+
 test("borrowed and opaque boundaries remain in the function instead of escaping into aliases", () => {
   const boundary = { kind: "reference", mutable: true, referent: { kind: "slice", element: nested } };
   const opaque = { kind: "impl-trait", outlives: [], bounds: [{ kind: "callable", trait: "Fn",

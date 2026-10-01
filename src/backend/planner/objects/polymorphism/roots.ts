@@ -461,12 +461,13 @@ function planRootContractFunctions(
       functions.push(virtualMethod);
       if (contract.kind === "class" && !context.input.program.source.ast.hasModifierKind(member, "abstract")) {
         const inherited = context.input.program.projectTypes.classLineage(concrete)?.includes(contract) === true;
-        const exactImplementation = inherited ? member : virtualImplementation;
-        const exactImplementationMethod = implementationFor(
-          exactImplementation,
-          variant.targetTypeArguments,
-        );
-        const exactMethod = exactImplementationMethod === undefined
+        const exactImplementation = inherited
+          ? projectMemberImplementation(contract, member, context)
+          : virtualImplementation;
+        const exactImplementationMethod = exactImplementation === undefined
+          ? undefined
+          : implementationFor(exactImplementation, variant.targetTypeArguments);
+        const exactMethod = exactImplementation === undefined || exactImplementationMethod === undefined
           ? undefined
           : planRootMethodForwarder(
               concreteCarrier,

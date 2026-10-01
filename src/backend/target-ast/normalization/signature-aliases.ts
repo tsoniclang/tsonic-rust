@@ -1,4 +1,4 @@
-import type { RustGenericArgument, RustGenericParameter, RustImplFunction, RustItem, RustType, RustVisibility } from "../nodes.js";
+import type { RustGenericArgument, RustGenericParameter, RustImplFunction, RustItem, RustTraitFunction, RustType, RustVisibility } from "../nodes.js";
 import { rustTypeEquals } from "../inspection/type-equality.js";
 import { rustPascalCaseIdentifier } from "../../../target-model/names/identifiers.js";
 
@@ -21,7 +21,7 @@ export function nameRustSignatureTypes(
   const reserved = new Set(items.flatMap(item => [
     ...("name" in item ? [item.name] : []),
     ...("generics" in item ? item.generics.parameters.map(parameter => parameter.name) : []),
-    ...(item.kind === "impl" ? item.members.flatMap(member => member.kind === "function"
+    ...(item.kind === "impl" || item.kind === "trait" ? item.members.flatMap(member => member.kind === "function"
       ? member.generics.parameters.map(parameter => parameter.name) : []) : []),
     ...(item.kind === "use" ? [item.alias ?? item.path.split("::").slice(-1)[0]!] : []),
   ]));
@@ -72,12 +72,19 @@ export function nameRustSignatureTypes(
     };
     return nameType;
   };
-  const nameCallable = <Callable extends RustImplFunction>(item: Callable, ownerParameters: readonly RustGenericParameter[]): Callable => {
-    const nameType = createTypeNamer(item, [...ownerParameters, ...item.generics.parameters]);
-    return visitCallable({ ...item, params: item.params.map(parameter => ({ ...parameter,
+  const nameSignature = <Callable extends RustImplFunction | RustTraitFunction>(
+    item: Callable, ownerParameters: readonly RustGenericParameter[], visibility: RustVisibility,
+  ) => {
+    const nameType = createTypeNamer({ name: item.name, visibility }, [...ownerParameters, ...item.generics.parameters]);
+    const callable: Callable = { ...item, params: item.params.map(parameter => ({ ...parameter,
       type: nameType(parameter.type, parameter.name),
     })), ...(item.returnType === undefined ? {} : { returnType: nameType(item.returnType, "Result") }),
-    }, (type, role) => nameType(type, role, "private"));
+    };
+    return { callable, nameType };
+  };
+  const nameCallable = <Callable extends RustImplFunction>(item: Callable, ownerParameters: readonly RustGenericParameter[]): Callable => {
+    const { callable, nameType } = nameSignature(item, ownerParameters, item.visibility);
+    return visitCallable(callable, (type, role) => nameType(type, role, "private"));
   };
   const result = items.map(item => item.kind === "function" ? nameCallable(item, [])
     : item.kind === "impl" ? { ...item, members: item.members.map(member => member.kind === "function"
@@ -85,6 +92,8 @@ export function nameRustSignatureTypes(
       : item.kind === "struct" ? { ...item, fields: item.fields.map(field => ({ ...field,
         type: createTypeNamer(item, item.generics.parameters)(field.type, field.name),
       })) }
+      : item.kind === "trait" ? { ...item, members: item.members.map(member => member.kind === "function"
+        ? nameSignature(member, item.generics.parameters, item.visibility).callable : member) }
       : item);
   return { aliases, items: result };
 }

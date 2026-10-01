@@ -563,12 +563,12 @@ export function createRustProjectTypePolicy(
       }
     }
     for (const candidate of candidates) {
-      const canonical = candidate.roles.some((role) => role === "virtual" || role === "exact")
-        ? canonicalCallable(candidate.declaration)
-        : candidate.declaration;
-      const canonicalNames = canonicalSlotNames.get(canonical) ??
-        new Map<RustProjectMemberSlotRole, string>();
       for (const role of candidate.roles) {
+        const canonical = role === "method-write"
+          ? canonicalCallable(candidate.declaration)
+          : candidate.declaration;
+        const canonicalNames = canonicalSlotNames.get(canonical) ??
+          new Map<RustProjectMemberSlotRole, string>();
         const existing = canonicalNames.get(role);
         const preferredRole = role === "virtual"
           ? "dispatch"
@@ -580,8 +580,8 @@ export function createRustProjectTypePolicy(
         canonicalNames.set(role, name);
         setMemberSlotName(candidate.declaration, role, name);
         setMemberSlotName(canonical, role, name);
+        canonicalSlotNames.set(canonical, canonicalNames);
       }
-      canonicalSlotNames.set(canonical, canonicalNames);
     }
   }
 

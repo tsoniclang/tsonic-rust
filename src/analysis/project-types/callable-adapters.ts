@@ -47,7 +47,12 @@ export function recordRustProjectCallableAdapterFacts(walk: RustFactWalk): void 
             record(member, implementation, variant.virtualSlot, variant);
             if (owner.kind === "class" && !ast.hasModifierKind(member, "abstract")) {
               const inherited = projectTypes.classLineage(concrete)?.includes(owner) === true;
-              record(member, inherited ? member : implementation, variant.exactSlot, variant);
+              const exact = inherited ? projectTypes.memberImplementation(owner, member) : selected;
+              if (exact.kind !== "resolved") {
+                reject(walk, member, "Exact project dispatch has no checked implementation in its declaring class.");
+              } else {
+                record(member, exact.implementation.declaration, variant.exactSlot, variant);
+              }
             }
           }
         }

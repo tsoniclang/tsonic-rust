@@ -139,6 +139,20 @@ export function selectedMemberReceiverCarrier(
     return indexes?.length === 1 ? sourceUnion?.variants[indexes[0]!]!.carrier : guardedCarrier;
   }
   if (flowRead !== undefined) return flowRead.selectedCarrier;
+  if (sourceUnion !== undefined && sourceUnionCarrier !== undefined && refinedCarrier !== undefined &&
+    sourceRefinement.kind === "resolved" && sourceRefinement.refinement.kind === "members") {
+    const indexes = options.sourceTypes.sourceUnionVariantIndexesForTypes(
+      sourceUnionCarrier, sourceRefinement.refinement.types,
+    );
+    const selected = indexes?.length === 1 ? sourceUnion.variants[indexes[0]!]!.carrier : undefined;
+    if (selected !== undefined) {
+      const projection = selectRustFlowReadProjection(refinedCarrier, selected, options.projectTypes, context.typeDefinitions);
+      if (projection.kind === "projection") {
+        recordRustFlowReadProjection(context.facts, receiver, projection.fact);
+        return selected;
+      }
+    }
+  }
   if (sourceUnionCarrier !== undefined &&
     options.sourceTypes.sourceUnionVariantIndexesForTypes(
       sourceUnionCarrier,
@@ -245,11 +259,10 @@ export function selectedMemberReceiverCarrier(
   if (optionElement !== undefined) {
     return undefined;
   }
-  const refinement = context.source.semantics.selectValueTypeRefinement(receiver);
-  if (refinement.kind === "resolved" && refinement.refinement.kind === "exact") {
+  if (sourceRefinement.kind === "resolved" && sourceRefinement.refinement.kind === "exact") {
     return sourceCarrier;
   }
-  if (refinement.kind === "resolved" && refinement.refinement.kind === "members" &&
+  if (sourceRefinement.kind === "resolved" && sourceRefinement.refinement.kind === "members" &&
     options.sourceTypes.sourceUnionForCarrier(sourceCarrier) !== undefined) {
     return sourceCarrier;
   }
