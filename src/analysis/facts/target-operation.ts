@@ -148,6 +148,8 @@ export function rustTargetOperationIsFallible(
   if (fact.kind === "regexp-create") {
     return true;
   }
+  if (fact.kind === "union-property") return fact.variants.some(variant => variant.operation !== undefined &&
+    rustTargetOperationIsFallible(variant.operation, structuralStorage, projectFieldDispatch, frozenDataWrites, definitions));
   if (fact.kind === "typed-location") {
     return fact.operation === "load" || fact.operation === "store";
   }

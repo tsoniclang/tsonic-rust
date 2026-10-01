@@ -33,6 +33,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { planRustComputedMemberExpression } from "./computed-members.js";
+import { planRustUnionProperty } from "./union-properties.js";
 
 export function planPropertyAccess(node: Node, context: RustPlanContext): RustExpr | undefined {
   const borrowed = context.input.program.borrowedElementReads.forExpression(node);
@@ -48,6 +49,7 @@ export function planPropertyAccess(node: Node, context: RustPlanContext): RustEx
 }
 function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
+  if (fact?.kind === "union-property") return planRustUnionProperty(node, fact, context);
   if (fact?.kind === "source-index-signature") return planRustSourceIndexRead(node, fact, context, planExpression);
   if (fact?.kind === "builtin-error-property") {
     return planRustBuiltinErrorProperty(node, fact, context);

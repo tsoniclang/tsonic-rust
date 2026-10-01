@@ -15,6 +15,15 @@ import type {
 
 export type RustTargetOperationFact =
   | {
+      readonly kind: "union-property";
+      readonly operationId: string;
+      readonly unionCarrier: TargetTypeRef;
+      readonly selectedVariantIndexes: readonly number[];
+      readonly variants: readonly { readonly name: string; readonly carrier: TargetTypeRef;
+        readonly operation?: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }> }[];
+      readonly resultCarrier: TargetTypeRef;
+    }
+  | {
       readonly kind: "union-equality";
       readonly operationId: string;
       readonly leftCarrier: TargetTypeRef;
@@ -801,6 +810,7 @@ export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact):
     case "source-static-field":
     case "source-accessor":
     case "source-union-field":
+    case "union-property":
     case "source-call":
     case "source-enum-member":
     case "provider-record-literal":

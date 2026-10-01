@@ -16,6 +16,7 @@ import { createRustTypeDefinitionRegistry, type RustTypeDefinitionRegistry } fro
 import {
   KindStringLiteral,
   Node_Type,
+  sourceTypeSyntaxRoot,
   ObjectLiteralProperty_SourceName,
   sourceClassFieldIsTypeOnly,
   sourceObjectMemberDeclarations,
@@ -537,7 +538,7 @@ function closedStringUnionVariants(
   declaration: Node,
   ast: AstReader,
 ): readonly RustSourceEnumVariant[] | undefined {
-  const aliasType = Node_Type(ast, declaration);
+  const aliasType = sourceTypeSyntaxRoot(ast, Node_Type(ast, declaration));
   if (aliasType === undefined || ast.kindName(aliasType) !== "KindUnionType") {
     return undefined;
   }

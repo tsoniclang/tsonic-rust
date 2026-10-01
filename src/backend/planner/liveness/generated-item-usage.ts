@@ -445,6 +445,9 @@ export function analyzeRustGeneratedItemUsage(input: {
       case "runtime-set":
         visitAbi(fact.abi);
         return;
+      case "union-property":
+        fact.variants.forEach(variant => { if (variant.operation !== undefined) visitAbi(variant.operation.abi); });
+        return;
       case "object-shape-projection":
         if (fact.projection === "values" || fact.projection === "entries") {
           for (const field of fact.fields) {

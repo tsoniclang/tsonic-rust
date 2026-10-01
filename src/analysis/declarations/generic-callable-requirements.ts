@@ -480,8 +480,10 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       const error = addUse(node, projection.selectedCarrier, ["clone"]);
       if (error !== undefined) return error;
     }
-    if (operation?.kind === "provider-operation") {
-      for (const argument of operation.abi.sourceArguments) {
+    const providerOperations = operation?.kind === "provider-operation" ? [operation]
+      : operation?.kind === "union-property" ? operation.variants.flatMap(variant => variant.operation === undefined ? [] : [variant.operation]) : [];
+    for (const providerOperation of providerOperations) {
+      for (const argument of providerOperation.abi.sourceArguments) {
         if (argument.disposition !== "runtime" || argument.mode !== "value" ||
           argument.form !== "value" || isRustCopyCarrier(argument.carrier)) continue;
         const expression = ast.arguments(node)[argument.sourceIndex];
@@ -490,7 +492,7 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
         const error = addUse(expression, argument.carrier, ["clone"]);
         if (error !== undefined) return error;
       }
-      for (const requirement of operation.carrierRequirements ?? []) {
+      for (const requirement of providerOperation.carrierRequirements ?? []) {
         const error = addUse(node, requirement.carrier, [requirement.requirement]);
         if (error !== undefined) return error;
       }

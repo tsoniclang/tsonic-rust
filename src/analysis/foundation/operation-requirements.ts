@@ -207,6 +207,14 @@ export function rustFoundationForTargetOperationFact(
       fact.variants.forEach((variant) => requireCarrier(variant.carrier));
       requireCarrier(fact.resultCarrier);
       break;
+    case "union-property":
+      requireCarrier(fact.unionCarrier);
+      requireCarrier(fact.resultCarrier);
+      for (const variant of fact.variants) {
+        requireCarrier(variant.carrier);
+        if (variant.operation !== undefined) require(rustFoundationForTargetOperationFact(variant.operation, definitions));
+      }
+      break;
     case "source-call":
       if (fact.target.form === "method") {
         requireCarrier(fact.target.dispatch?.ownerCarrier);

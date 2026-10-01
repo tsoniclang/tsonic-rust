@@ -499,6 +499,7 @@ function genericOperationKind(fact: RustTargetOperationFact): RustTargetOperatio
     case "source-static-field":
     case "source-accessor":
     case "source-union-field":
+    case "union-property":
     case "source-enum-member":
       return "property";
     case "iteration":

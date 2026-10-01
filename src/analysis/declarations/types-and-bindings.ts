@@ -10,6 +10,7 @@ import {
   Node_Initializer,
   Node_Name,
   Node_Type,
+  sourceTypeSyntaxRoot,
 } from "@tsonic/target-api/source";
 import {
   rustMutatedBindingFactKey,
@@ -37,14 +38,15 @@ import { rustSourceUnionMemberDeclarationIsOwned } from "../../policy/evidence/s
 
 export function reserveTypeAliasUnion(walk: RustFactWalk, declaration: Node): void {
   const {ast} = walk.context;
-  const root = Node_Type(ast, declaration);
+  const authoredType = Node_Type(ast, declaration);
+  const root = sourceTypeSyntaxRoot(ast, authoredType);
   if (root === undefined || ast.kindName(root) !== "KindUnionType" ||
     walk.sourceTypes.enumVariantsForDeclaration(declaration) !== undefined ||
     walk.sourceTypes.carrierForDeclaration(declaration, ast) !== undefined) return;
   const semantics = walk.context.semanticsFor(declaration);
   const sourceType = semantics.declarations.declaredType(declaration);
   if (sourceType === undefined || !semantics.types.isUnion(sourceType)) return;
-  const carrier = resolveRustTargetTypeRef(root, rustResolutionContext(walk, declaration), walk.operationOptions);
+  const carrier = resolveRustTargetTypeRef(authoredType, rustResolutionContext(walk, declaration), walk.operationOptions);
   if (carrier !== undefined) return;
   const contract = walk.context.sourceLifetimes.contractFor(declaration);
   if (ast.typeParameters(declaration).length !== (contract?.parameters.length ?? 0)) return;

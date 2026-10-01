@@ -35,6 +35,7 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { selectRustNumberArrayUnionMember } from "./number-array-unions.js";
 import { rustClassConstructorInstance } from "../../../target-model/types/carriers/class-constructors.js";
 import { selectRustRecordProperty } from "./records.js";
+import { selectRustUnionProperty } from "../union-properties.js";
 
 export function checkedPropertySelectionInput(
   context: RustOperationPolicyContext,
@@ -216,6 +217,8 @@ export function selectRustCheckedPropertyAccess(
   if (global !== undefined) {
     return mapProviderCheckedOperation(request.expression, global, "property", context, options, undefined, []);
   }
+  const unionProperty = selectRustUnionProperty(request, selectedReceiverCarrier, context, options);
+  if (unionProperty !== undefined) return unionProperty;
   const numericArrayMember = selectRustNumberArrayUnionMember(request, selectedReceiverCarrier, context, options);
   if (numericArrayMember !== undefined) return numericArrayMember;
   const record = selectRustRecordProperty(request, selectedReceiverCarrier, context, options);

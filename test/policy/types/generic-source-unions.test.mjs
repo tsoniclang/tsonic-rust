@@ -150,7 +150,19 @@ test("generic structural storage preserves exact arguments while sharing alpha-e
   assert.notEqual(plan.definitionForCarrier(integer).targetName, plan.definitionForCarrier(unsigned).targetName);
   assert.equal(plan.field(renamed, -1), undefined);
   assert.equal(plan.field(renamed, 0.5), undefined);
-  assert.equal(plan.definitionForCarrier(shape(parameter("New"), parameter("Other"))), undefined);
+  const instantiated = shape(parameter("New"), parameter("Other"));
+  const selected = plan.definitionForCarrier(instantiated);
+  assert.ok(selected);
+  assert.equal(selected.targetName, first.targetName);
+  assert.deepEqual(selected.genericArguments, [{ kind: "type", type: parameter("New") }, { kind: "type", type: parameter("Other") }]);
+  assert.deepEqual(plan.field(instantiated, 0).carrier, parameter("New"));
+  assert.deepEqual(plan.field(instantiated, 1).carrier, parameter("Other"));
+  const mismatched = rustStructuralObjectTargetType("/src/region.ts", [
+    { sourceName: "different", type: parameter("New"), readonly: false, presence: "required" },
+    { sourceName: "second", type: parameter("Other"), readonly: false, presence: "required" },
+  ]);
+  assert.equal(plan.definitionForCarrier(mismatched), undefined);
+  assert.equal(plan.definitionForCarrier(shape(parameter("Same"), parameter("Same"), true)), undefined);
 });
 
 test("equal target carriers retain distinct source instantiations without ambiguous refinements", () => {
