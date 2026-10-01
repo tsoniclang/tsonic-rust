@@ -54,7 +54,7 @@ import { selectProviderRecordArgument } from "../operations/provider/calls/recor
 import { selectRustExactIntegerConversion } from "../../target-model/conversions/exact-integer.js";
 import { selectRustGuardedIntegerConversion } from "../../policy/conversions/integer-refinement.js";
 import { isRustAssignmentOperator, isRustNumericBinaryOperator } from "../../policy/operations/operators/rules.js";
-import { recordAssignmentWrite, recordBindingWrite } from "../declarations/types-and-bindings.js";
+import { recordAssignmentWrite } from "../declarations/types-and-bindings.js";
 import { recordSelectedOperationInputs } from "../operations/inputs.js";
 import { resolveBinaryOperandCarriers } from "../operations/operators.js";
 import { resolveExpressionCarrierUncached } from "./value-resolution.js";
@@ -302,8 +302,8 @@ function recordExpressionBindingEffects(walk: RustFactWalk, expression: Node): v
     const fact = walk.context.facts.get(expression, rustTargetOperationFactKey);
     if (fact?.kind === "operator-token" && (fact.operator === "+=" || fact.operator === "-=")) {
       const operand = Node_Operand(ast, expression);
-      recordBindingWrite(walk, operand);
       if (operand !== undefined) recordRustCompoundWrite(walk, expression, operand, fact.resultCarrier);
+      recordAssignmentWrite(walk, expression, operand);
     }
   }
 }

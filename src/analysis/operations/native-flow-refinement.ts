@@ -1,9 +1,11 @@
-import type { Node } from "@tsonic/tsts";
+import type { Node, Type } from "@tsonic/tsts";
 import type { RustOperationPolicyContext } from "../../policy/operations/contracts.js";
+import type { RustSourcePolicyContext } from "../../policy/model/context.js";
 import type { RustTargetTypeResolutionOptions } from "../../policy/types/resolution.js";
 import type { RustProjectTypePolicy } from "../../policy/types/project-types.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { selectRustNativeFlowMembers } from "../../policy/types/resolution/native-flow-refinement.js";
+import { selectRustNativeFlowMembers, selectRustNativeFlowTypeMembers } from "../../policy/types/resolution/native-flow-refinement.js";
+import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { rustUnionLeaves } from "../../target-model/types/union-relations.js";
 import { selectRustArrayTypeGuard } from "../../policy/operations/source-profiles/js/type-tests.js";
 import { selectRustFlowReadProjection } from "../../policy/types/value-carrier-reconciliation.js";
@@ -34,10 +36,22 @@ export function selectRustGuardedValueCarrier(
 export function selectRustGuardedValueMembers(
   reference: Node,
   sourceCarrier: TargetTypeRef,
-  context: RustOperationPolicyContext,
+  context: RustSourcePolicyContext,
   options: RustTargetTypeResolutionOptions & { readonly projectTypes: RustProjectTypePolicy },
 ): ReturnType<typeof rustUnionLeaves> {
   return selectRustNativeFlowMembers({ ...context, navigation: context.source.navigation,
     sourceFacts: context.source.sourceFacts }, reference, sourceCarrier, options.projectTypes, context.typeDefinitions,
+    expression => selectRustArrayTypeGuard(context, context.semanticsFor(expression).operations.call(expression), options.sourceProfiles));
+}
+
+export function selectRustGuardedSourceValueTypes(
+  reference: Node,
+  sourceType: Type,
+  context: RustOperationPolicyContext,
+  options: RustTargetTypeResolutionOptions & { readonly projectTypes: RustProjectTypePolicy },
+): readonly Type[] | undefined {
+  return selectRustNativeFlowTypeMembers({ ...context, navigation: context.source.navigation,
+    sourceFacts: context.source.sourceFacts }, reference, sourceType,
+    type => resolveRustTargetTypeRef(type, context, options), options.projectTypes, context.typeDefinitions,
     expression => selectRustArrayTypeGuard(context, context.semanticsFor(expression).operations.call(expression), options.sourceProfiles));
 }

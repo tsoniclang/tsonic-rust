@@ -36,6 +36,8 @@ import { selectRustNumberArrayUnionMember } from "./number-array-unions.js";
 import { rustClassConstructorInstance } from "../../../target-model/types/carriers/class-constructors.js";
 import { selectRustRecordProperty } from "./records.js";
 import { selectRustUnionProperty } from "../union-properties.js";
+import { selectRustGuardedSourceValueTypes } from "../native-flow-refinement.js";
+import { selectJsSurfaceMemberRead } from "../../../policy/operations/source-profiles/js/member-reads.js";
 
 export function checkedPropertySelectionInput(
   context: RustOperationPolicyContext,
@@ -250,6 +252,8 @@ export function selectRustCheckedPropertyAccess(
     request.sourceSelectedSymbol,
     request.sourceSelectedDeclaration,
     options.sourceProfiles,
+    request.sourceReceiverType === undefined ? undefined :
+      selectRustGuardedSourceValueTypes(request.receiver, request.sourceReceiverType, context, options),
   );
   const builtinError = selectRustBuiltinErrorProperty(
     request, selectedReceiverCarrier, sourceProfileMembers, context, options,
@@ -329,7 +333,7 @@ export function selectRustCheckedPropertyAccess(
     return externalProjectField;
   }
 
-  const jsIdentity = resolveSelectedJsSourceMember(context, request.sourceSelectedDeclaration, options.sourceProfiles);
+  const jsIdentity = sourceProfileMembers?.profile === "js" ? sourceProfileMembers.members[0] : undefined;
   if (jsIdentity !== undefined) {
     if (!options.jsEnabled) {
       return rejectSelectedOperation(request.expression, context, "RUST_JS_SURFACE_REQUIRED", "The selected property belongs to the explicit JavaScript source profile, which is not active.");
@@ -339,15 +343,13 @@ export function selectRustCheckedPropertyAccess(
     const authoredPropertyKey = propertyNameNode === undefined
       ? undefined
       : context.ast.text(propertyNameNode);
-    const selection = selectJsSurfaceOperation({
-      ownerName: jsIdentity.ownerName,
-      memberName: jsIdentity.memberName,
+    const selection = selectJsSurfaceMemberRead(sourceProfileMembers!.members, {
       operationKind: "property",
       ...(receiverCarrier === undefined ? {} : { receiverCarrier }),
       ...(jsIdentity.memberName === "index" && authoredPropertyKey !== undefined
         ? { authoredPropertyKey }
         : {}),
-    }, context.typeDefinitions);
+    }, true, context.typeDefinitions);
     if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {
       return rejectSelectedOperation(
         request.expression,

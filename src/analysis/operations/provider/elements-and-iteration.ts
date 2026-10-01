@@ -3,9 +3,7 @@ import { rustJsArrayEntriesElementTargetType, rustJsArrayEntryTargetType } from 
 import {
   asNode,
   isProjectSourceDeclaration,
-  resolveSelectedJsSourceMember,
   resolveSelectedProviderDeclaration,
-  resolveSelectedSourceProfileMember,
 } from "../../../policy/evidence/selected-source.js";
 import {
   isRustCopyCarrier,
@@ -48,7 +46,8 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { selectedValueCarrier } from "../selected-values.js";
 import { canRequireSourceClone } from "./clone-requirements.js";
 import { rustEffectiveValueCarrier } from "../../facts/value-carrier-queries.js";
-import { selectJsSurfaceOperation } from "../../../policy/operations/source-profiles/js/index.js";
+import { selectJsSurfaceMemberRead } from "../../../policy/operations/source-profiles/js/member-reads.js";
+import { selectRustSourceProfileIndexMembers } from "./selected-members.js";
 import { selectRustFixedArrayElementAccess } from "./structural-properties.js";
 import { isIntrinsicSourceQualifier } from "./source-qualifiers.js";
 import { tsonicFixedArrayProviderMember } from "@tsonic/source-core/facts";
@@ -88,8 +87,9 @@ export function selectRustCheckedElementAccess(
   }
   const record = selectRustRecordElement(request, selectedReceiverCarrier, context, options);
   if (record !== undefined) return record;
-  if (request.sourceReceiverType !== undefined && request.accessMode !== "delete" &&
-    context.currentSemantics.types.selectIndexedAccess(request.sourceReceiverType, request.sourceArgumentType)?.kind === "deferred") {
+  const indexed = request.sourceReceiverType === undefined ? undefined
+    : context.semanticsFor(request.expression).types.selectIndexedAccess(request.sourceReceiverType, request.sourceArgumentType);
+  if (request.sourceReceiverType !== undefined && request.accessMode !== "delete" && indexed?.kind === "deferred") {
     const selected = resolveRustIndexedField(request.sourceReceiverType, request.sourceArgumentType,
       context, options, new Set(), selectedReceiverCarrier);
     if (selected?.result.kind !== "associated-type" || selectedReceiverCarrier === undefined) {
@@ -102,23 +102,22 @@ export function selectRustCheckedElementAccess(
       accessMode: request.accessMode,
     }, context, options, elementProvenance(request));
   }
-  const jsIdentity = resolveSelectedJsSourceMember(context, request.sourceSelectedDeclaration, options.sourceProfiles);
-  const selectedArgumentCarrier = jsIdentity === undefined ? undefined : selectedValueCarrier(
+  const indexMembers = selectRustSourceProfileIndexMembers(request, context, options, indexed);
+  const jsMembers = indexMembers?.profile === "js" ? indexMembers.members : undefined;
+  const jsIdentity = jsMembers?.[0];
+  const selectedArgumentCarrier = jsMembers === undefined ? undefined : selectedValueCarrier(
     request.argument, request.sourceArgumentType, context, options);
-  const selectedIndexOperation = jsIdentity === undefined ? undefined : selectJsSurfaceOperation({
-    ownerName: jsIdentity.ownerName, memberName: jsIdentity.memberName, operationKind: "indexer",
+  const selectedIndexOperation = jsMembers === undefined ? undefined : selectJsSurfaceMemberRead(jsMembers, {
+    operationKind: "indexer",
     ...(selectedReceiverCarrier === undefined ? {} : { receiverCarrier: selectedReceiverCarrier }),
     argumentCarriers: [selectedArgumentCarrier],
     argumentMatchScore: selectedArgumentMatchScore([request.argument], context, options),
     canRequireClone: carrier => canRequireSourceClone(carrier, request.expression, context, options.sourceTypes.typeFamilies),
-  }, context.typeDefinitions);
+  }, indexMembers?.readonly === true, context.typeDefinitions);
   if (selectedIndexOperation === undefined && request.sourceReceiverType !== undefined && request.sourceSelectedSymbol !== undefined &&
     request.sourceSelectedElementIndex === undefined) {
-    const selected = context.semanticsFor(request.expression).types.selectIndexedAccess(
-      request.sourceReceiverType, request.sourceArgumentType,
-    );
-    const member = selected?.kind === "resolved" && selected.members.length === 1
-      ? selected.members[0] : undefined;
+    const member = indexed?.kind === "resolved" && indexed.members.length === 1
+      ? indexed.members[0] : undefined;
     if (member?.kind === "property" && member.property.symbol === request.sourceSelectedSymbol) {
       const declarationKind = request.sourceSelectedDeclaration === undefined ? undefined :
         context.ast.kindName(request.sourceSelectedDeclaration);
@@ -144,11 +143,7 @@ export function selectRustCheckedElementAccess(
       return result;
     }
   }
-  const sourceProfileIdentity = resolveSelectedSourceProfileMember(
-    context,
-    request.sourceSelectedDeclaration,
-    options.sourceProfiles,
-  );
+  const sourceProfileIdentity = indexMembers?.members[0];
   const providerEvidence = resolveSelectedProviderDeclaration(
     context,
     request.sourceSelectedDeclaration,

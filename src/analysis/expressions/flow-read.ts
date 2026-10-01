@@ -35,6 +35,7 @@ import { selectRustUnionArmMapping } from "../../target-model/types/union-relati
 import { rustClosedValueCategoryProjection } from "../../target-model/types/carriers/closed-values.js";
 import { rustSourceOptionalElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { selectRustClosedArrayView } from "../../policy/types/closed-array-views.js";
+import { selectRustGuardedValueMembers } from "../operations/native-flow-refinement.js";
 
 export function applyFlowReadLane(
   walk: RustFactWalk,
@@ -209,6 +210,17 @@ function resolveSelectedFlowReadCarrier(
   const includesAbsence = selectedTypes.some(type => type !== undefined &&
     (semantics.types.isNullish(type) || semantics.types.isVoidLike(type)));
   const dispatchCarrier = rustOptionElementCarrier(sourceCarrier) ?? sourceCarrier;
+  const resolution = rustResolutionContext(walk, expression);
+  const guarded = selectRustGuardedValueMembers(expression, dispatchCarrier, resolution, walk.operationOptions);
+  const guardedCarrier = guarded?.length === 1 ? guarded[0]!.carrier : undefined;
+  if (guardedCarrier !== undefined) {
+    const selected = walk.context.projectTypes.definitionForCarrier(guardedCarrier)?.kind === "class"
+      ? resolveRustTargetTypeRef(selectedType, resolution, walk.operationOptions) : undefined;
+    const carrier = selected !== undefined && walk.context.projectTypes.definitionForCarrier(selected)?.kind === "class" &&
+      selectRustFlowReadProjection(sourceCarrier, selected, walk.context.projectTypes, walk.context.typeDefinitions).kind === "projection"
+      ? selected : guardedCarrier;
+    return includesAbsence ? rustSourceOptionalTargetType(carrier) : carrier;
+  }
   const sourceUnion = walk.sourceTypes.sourceUnionForCarrier(dispatchCarrier);
   if (sourceUnion !== undefined) {
     const hasAbsence = selectedTypes.some(type => type !== undefined && semantics.types.isNullish(type));

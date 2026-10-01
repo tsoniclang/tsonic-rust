@@ -7,11 +7,14 @@ import type {
   ProviderDeclarationIdentity,
   ProviderMemberKey,
   Symbol,
+  TypeIndexInfo,
+  Type,
 } from "@tsonic/tsts";
 import type { RustSourcePolicyContext } from "../model/context.js";
 import { rustPolicyNode } from "../model/context.js";
 import type { RustSourceProfileRegistry } from "../types/source-profile.js";
 import { jsSourceSemanticsIdentity } from "@tsonic/js-source-profile";
+import { selectedSourcePropertyDeclarations } from "@tsonic/target-api/source";
 
 export interface RustSelectedSourceMemberIdentity {
   readonly profile: "native" | "js";
@@ -271,23 +274,39 @@ export function resolveSelectedSourceProfilePropertyMembers(
   selectedSymbol: Symbol | undefined,
   selectedDeclaration: Node | undefined,
   sourceProfiles: RustSourceProfileRegistry,
+  sourceTypes?: readonly Type[],
 ): RustSelectedSourceMemberSet | undefined {
-  if (selectedDeclaration !== undefined) {
-    const selected = resolveSelectedSourceProfileMember(
-      context,
-      selectedDeclaration,
-      sourceProfiles,
-    );
-    return selected === undefined
-      ? undefined
-      : { profile: selected.profile, members: Object.freeze([selected]) };
-  }
   const expression = rustPolicyNode(context, expressionSubject);
-  if (expression === undefined || selectedSymbol === undefined) {
+  if (expression === undefined) {
     return undefined;
   }
-  const declarations = context.semanticsFor(expression)
-    .declarations.symbolDeclarations(selectedSymbol);
+  const declarations = selectedSourcePropertyDeclarations(context.semanticsFor(expression), selectedDeclaration, selectedSymbol, sourceTypes);
+  return declarations === undefined ? undefined : resolveSelectedSourceProfileMembers(context, declarations, sourceProfiles);
+}
+
+export function resolveSelectedSourceProfileIndexMembers(
+  context: RustSourcePolicyContext,
+  selectedIndexes: readonly TypeIndexInfo[],
+  sourceProfiles: RustSourceProfileRegistry,
+): RustSelectedSourceMemberSet | undefined {
+  if (selectedIndexes.length === 0) return undefined;
+  const declarations = new Set<Node>();
+  for (const index of selectedIndexes) {
+    const components = index.declaration === undefined ? index.components : [index.declaration];
+    if (components.length === 0) return undefined;
+    for (const declaration of components) {
+      if (declaration === undefined) return undefined;
+      declarations.add(declaration);
+    }
+  }
+  return resolveSelectedSourceProfileMembers(context, [...declarations], sourceProfiles);
+}
+
+function resolveSelectedSourceProfileMembers(
+  context: RustSourcePolicyContext,
+  declarations: readonly Node[],
+  sourceProfiles: RustSourceProfileRegistry,
+): RustSelectedSourceMemberSet | undefined {
   const members = declarations.map((declaration) =>
     resolveSelectedSourceProfileMember(context, declaration, sourceProfiles)
   );

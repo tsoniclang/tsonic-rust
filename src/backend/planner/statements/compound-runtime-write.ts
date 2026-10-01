@@ -8,6 +8,7 @@ import { planExpression } from "../expressions/entry.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustCompoundAssignmentValue } from "./assignments.js";
 import { planRuntimeSetStatement } from "./iteration.js";
+import { planRustRuntimeIndexInputs } from "../expressions/runtime-index-inputs.js";
 
 export function planRustCompoundRuntimeWrite(
   expression: Node, left: Node, right: Node, assignment: RustAssignmentOperationPlan,
@@ -17,17 +18,11 @@ export function planRustCompoundRuntimeWrite(
   const receiverNode = Node_Expression(context.input.program.source.ast, left);
   const indexNode = ElementAccessExpression_ArgumentExpression(context.input.program.source.ast, left);
   if (write === undefined || receiverNode === undefined || indexNode === undefined || context.syntheticNames === undefined) return undefined;
-  const overrides = new Map(context.expressionOverrides ?? []);
-  const statements: RustStmt[] = [];
-  for (const [subject, base] of [[receiverNode, "write_receiver"], [indexNode, "write_index"]] as const) {
-    const value = planExpression(subject, context);
-    const carrier = context.input.program.facts.getRuntimeCarrierFact(subject)?.carrier;
-    if (value === undefined || carrier === undefined) return undefined;
-    const name = allocateRustSyntheticName(context.syntheticNames, base);
-    statements.push({ kind: "let", name, mutable: false, init: value });
-    overrides.set(subject, { expression: { kind: "path", path: name }, carrier, valueForm: "value" });
-  }
-  const selected = { ...context, expressionOverrides: overrides };
+  const inputs = planRustRuntimeIndexInputs(receiverNode, indexNode, write.abi, "write", context);
+  if (inputs === undefined) return undefined;
+  const selected = inputs.context;
+  const overrides = new Map(selected.expressionOverrides);
+  const statements: RustStmt[] = inputs.bindings.map(binding => ({ kind: "let", name: binding.name, mutable: false, init: binding.value }));
   const current = planExpression(left, selected);
   const value = planExpression(right, context);
   if (current === undefined || value === undefined) return undefined;
@@ -41,6 +36,6 @@ export function planRustCompoundRuntimeWrite(
     { kind: "let", name: valueName, mutable: false, init: value },
     { kind: "let", name: nextName, mutable: false, init: next });
   overrides.set(right, { expression: { kind: "path", path: nextName }, carrier: assignment.resultCarrier, valueForm: "value" });
-  const written = planRuntimeSetStatement(expression, write, selected, { target: left, value: right });
+  const written = planRuntimeSetStatement(expression, write, { ...selected, expressionOverrides: overrides }, { target: left, value: right });
   return written === undefined ? undefined : [{ kind: "scope", body: { statements: [...statements, ...written] } }];
 }

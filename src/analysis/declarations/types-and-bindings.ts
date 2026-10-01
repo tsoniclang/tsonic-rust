@@ -20,6 +20,7 @@ import {
   rustTypeAliasDeclarationFactKey,
 } from "../facts/keys.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
+import { rustCompoundWriteFactKey } from "../facts/operations/keys.js";
 import { flowStateFactKey } from "@tsonic/tsts";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { recordRustBindingPatternFacts } from "../control-flow/binding-patterns.js";
@@ -442,7 +443,8 @@ export function recordAssignmentWrite(
   target: Node | undefined,
 ): void {
   const targetKind = target === undefined ? "" : walk.context.ast.kindName(target);
-  const operation = walk.context.facts.get(expression, rustTargetOperationFactKey);
+  const operation = walk.context.facts.get(expression, rustCompoundWriteFactKey) ??
+    walk.context.facts.get(expression, rustTargetOperationFactKey);
   if ((targetKind === KindPropertyAccessExpression || targetKind === KindElementAccessExpression) &&
     operation?.kind === "runtime-set" && operation.abi.targetReceiver.kind === "input" &&
     operation.abi.targetReceiver.input.mode === "ref") {

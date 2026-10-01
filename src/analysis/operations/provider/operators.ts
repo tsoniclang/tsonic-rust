@@ -17,6 +17,8 @@ import {
 import { acceptDeclarationOperation, acceptRustOperation, isDeclarationFileSubject, normalizeSelectedLiteralCarrier, normalizeSelectedOperationInputCarrier, providerIdentityText, providerOperationTemplate, rejectSelectedOperation, selectedArgumentMatchScore } from "./result.js";
 import { acceptRustPolicy } from "../../../policy/operations/contracts.js";
 import { asNode, resolveSelectedJsSourceMember, resolveSelectedProviderDeclaration } from "../../../policy/evidence/selected-source.js";
+import { selectRustSourceProfileIndexMembers } from "./selected-members.js";
+import { selectJsSurfaceMemberWrite } from "../../../policy/operations/source-profiles/js/member-reads.js";
 import {
   ElementAccessExpression_ArgumentExpression,
   KindBigIntLiteral,
@@ -34,7 +36,6 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { selectedValueCarrier } from "../selected-values.js";
 import { selectRustExactIntegerConversion } from "../../../target-model/conversions/exact-integer.js";
 import { rustContextualValueConversionFactKey } from "../../facts/value-projections.js";
-import { selectJsSurfaceOperation } from "../../../policy/operations/source-profiles/js/index.js";
 import { selectRustProviderOperation } from "../../../policy/operations/provider-selection.js";
 import { selectRustBuiltinErrorTypeTest } from "./builtin-errors.js";
 import { selectRustClosedTypeTest } from "./type-tests.js";
@@ -278,18 +279,26 @@ function mapSelectedAssignment(
   const providerIdentity = providerWriteEvidence.kind === "selected"
     ? providerWriteEvidence.identity
     : selectedLeft?.provenance?.providerDeclaration;
-  const jsIdentity = resolveSelectedJsSourceMember(context, selectedDeclaration, options.sourceProfiles);
-  const receiver = selectedLeft?.provenance?.sourceReceiver;
-  const receiverCarrier = rustEffectiveValueCarrier(context.facts, receiver) ??
-    resolveRustTargetTypeRef(receiver, context, options);
   const operationKind = selectedLeft?.operationKind === "property"
     ? "property-set"
     : selectedLeft?.operationKind === "indexer"
       ? "index-set"
       : undefined;
-  if (operationKind === undefined) {
-    return undefined;
-  }
+  if (operationKind === undefined) return undefined;
+  const leftNode = asNode(request.left, context);
+  const indexed = leftNode === undefined ? undefined : context.semanticsFor(leftNode).operations.elementAccess(leftNode);
+  const indexMembers = indexed === undefined || leftNode === undefined ? undefined : selectRustSourceProfileIndexMembers({
+    expression: leftNode, receiver: indexed.receiver.expression, sourceReceiverType: indexed.receiver.type,
+    sourceArgumentType: indexed.argument.type,
+  }, context, options);
+  const directIdentity = resolveSelectedJsSourceMember(context, selectedDeclaration, options.sourceProfiles);
+  const jsMembers = operationKind === "index-set"
+    ? indexMembers?.profile === "js" ? indexMembers.members : undefined
+    : directIdentity === undefined ? undefined : [directIdentity];
+  const jsIdentity = jsMembers?.[0];
+  const receiver = selectedLeft?.provenance?.sourceReceiver;
+  const receiverCarrier = rustEffectiveValueCarrier(context.facts, receiver) ??
+    resolveRustTargetTypeRef(receiver, context, options);
   if (providerIdentity !== undefined) {
     const providerSelection = mapSelectedProviderAssignment(
       request,
@@ -314,7 +323,6 @@ function mapSelectedAssignment(
   if (jsIdentity === undefined || !options.jsEnabled) {
     return undefined;
   }
-  const leftNode = asNode(request.left, context);
   const indexNode = operationKind === "index-set" && leftNode !== undefined
     ? ElementAccessExpression_ArgumentExpression(context.ast, leftNode)
     : undefined;
@@ -330,9 +338,7 @@ function mapSelectedAssignment(
   if (assignmentSubjects === undefined) {
     return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_ASSIGNMENT_EVIDENCE_MISSING", "Selected JavaScript assignment has no closed index/value source evidence.");
   }
-  const selection = selectJsSurfaceOperation({
-    ownerName: jsIdentity.ownerName,
-    memberName: jsIdentity.memberName,
+  const selection = selectJsSurfaceMemberWrite(jsMembers!, {
     operationKind,
     receiverCarrier,
     argumentCarriers: assignmentSubjects.map((subject) =>
@@ -341,7 +347,7 @@ function mapSelectedAssignment(
     ...(jsIdentity.memberName === "index" && authoredPropertyKey !== undefined
       ? { authoredPropertyKey }
       : {}),
-  }, context.typeDefinitions);
+  }, indexMembers?.readonly === true, context.typeDefinitions);
   if (selection === undefined || selection.fact.kind !== "runtime-set") {
     return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_ASSIGNMENT_UNSUPPORTED", `The selected JavaScript assignment '${jsIdentity.ownerName}.${jsIdentity.memberName}' has no closed Rust setter operation.`);
   }
