@@ -40,7 +40,6 @@ import type { RustSourceCallableAbiResolver } from "../../policy/ownership/sourc
 import type { RustSourceProfileRegistry } from "../../policy/types/source-profile.js";
 import type { RustSourceTypeRegistry } from "../project-types/source-type-registry.js";
 import type { RustTargetTypeResolutionContext } from "../../policy/types/resolution.js";
-import { resolveRustConstructInstance } from "../../policy/types/resolution.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustCaptureStorage } from "../callables/capture-storage.js";
 
@@ -338,17 +337,12 @@ export function selectExpressionOperation(
   const rightReference = right === undefined
     ? undefined
     : walk.context.source.navigation.sourceReferenceFor(right);
-  const constructorType = operator === "instanceof" && right !== undefined
-    ? context.currentSemantics.types.expressionType(right) : undefined;
-  const sourceConstructorInstance = constructorType === undefined ? undefined
-    : resolveRustConstructInstance(constructorType, context, walk.operationOptions);
   recordPolicySelection(walk, expression, selectRustCheckedOperator({
     target: "rust",
     expression,
     operator,
     ...(left === undefined ? {} : { left }),
     ...(right === undefined ? {} : { right }),
-    ...(sourceConstructorInstance === undefined ? {} : { sourceConstructorInstance }),
     ...(rightReference?.declaration === undefined
       ? {}
       : { sourceRightDeclaration: rightReference.declaration }),

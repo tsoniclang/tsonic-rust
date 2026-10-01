@@ -13,6 +13,7 @@ import { recordRustFlowReadProjection } from "../facts/value-carrier-queries.js"
 import { rustFlowReadProjectionFactKey } from "../facts/keys.js";
 import { rustFlowReadProjectionMatches } from "../facts/flow-read-projections.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { resolveRustInstanceType } from "../../policy/types/resolution/instance-tests.js";
 
 export function selectRustGuardedValueCarrier(
   reference: Node,
@@ -41,7 +42,8 @@ export function selectRustGuardedValueMembers(
 ): ReturnType<typeof rustUnionLeaves> {
   return selectRustNativeFlowMembers({ ...context, navigation: context.source.navigation,
     sourceFacts: context.source.sourceFacts }, reference, sourceCarrier, options.projectTypes, context.typeDefinitions,
-    expression => selectRustArrayTypeGuard(context, context.semanticsFor(expression).operations.call(expression), options.sourceProfiles));
+    expression => selectRustArrayTypeGuard(context, context.semanticsFor(expression).operations.call(expression), options.sourceProfiles),
+    guard => resolveRustInstanceType(guard.declaration, guard.sourceConstructor, context, options));
 }
 
 export function selectRustGuardedSourceValueTypes(
@@ -53,5 +55,6 @@ export function selectRustGuardedSourceValueTypes(
   return selectRustNativeFlowTypeMembers({ ...context, navigation: context.source.navigation,
     sourceFacts: context.source.sourceFacts }, reference, sourceType,
     type => resolveRustTargetTypeRef(type, context, options), options.projectTypes, context.typeDefinitions,
-    expression => selectRustArrayTypeGuard(context, context.semanticsFor(expression).operations.call(expression), options.sourceProfiles));
+    expression => selectRustArrayTypeGuard(context, context.semanticsFor(expression).operations.call(expression), options.sourceProfiles),
+    guard => resolveRustInstanceType(guard.declaration, guard.sourceConstructor, context, options));
 }

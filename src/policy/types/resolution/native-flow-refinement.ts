@@ -1,5 +1,5 @@
 import type { Node, Type } from "@tsonic/tsts";
-import { selectSourceGuardedValueMembers, selectSourceGuardedTypeMembers, selectSourceNativeValueGuard, type SourceValueFlowQueryContext, type SourceNativeGuard } from "@tsonic/target-api/source";
+import { selectSourceGuardedValueMembers, selectSourceGuardedTypeMembers, selectSourceNativeValueGuard, type SourceValueFlowQueryContext, type SourceNativeGuard, type SourceNativeValueGuard } from "@tsonic/target-api/source";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import type { RustClosedTypePredicate } from "../../../target-model/operations/type-tests.js";
@@ -15,11 +15,12 @@ export function selectRustNativeFlowMembers(
   projectTypes: RustProjectTypePolicy,
   definitions: RustTypeDefinitions,
   selectGuard: (expression: Node) => SourceNativeGuard<RustClosedTypePredicate> | undefined,
+  resolveNominal: (guard: Extract<SourceNativeValueGuard, { readonly kind: "nominal" }>) => TargetTypeRef | undefined,
 ): ReturnType<typeof rustUnionLeaves> {
   const members = rustUnionLeaves(sourceCarrier, definitions);
   if (members === undefined) return undefined;
   return selectSourceGuardedValueMembers(context, reference, members,
-    expression => selectNativeGuard(context, expression, projectTypes, selectGuard),
+    expression => selectNativeGuard(context, expression, selectGuard, resolveNominal),
     (member, predicate) => testNativeCarrier(member.carrier, predicate, projectTypes, definitions));
 }
 
@@ -33,9 +34,10 @@ export function selectRustNativeFlowTypeMembers(
   projectTypes: RustProjectTypePolicy,
   definitions: RustTypeDefinitions,
   selectGuard: (expression: Node) => SourceNativeGuard<RustClosedTypePredicate> | undefined,
+  resolveNominal: (guard: Extract<SourceNativeValueGuard, { readonly kind: "nominal" }>) => TargetTypeRef | undefined,
 ): readonly Type[] | undefined {
   return selectSourceGuardedTypeMembers(context, reference, sourceType,
-    expression => selectNativeGuard(context, expression, projectTypes, selectGuard),
+    expression => selectNativeGuard(context, expression, selectGuard, resolveNominal),
     (type, predicate) => {
       const carrier = resolveCarrier(type);
       return carrier === undefined ? undefined : testNativeCarrier(carrier, predicate, projectTypes, definitions);
@@ -45,16 +47,14 @@ export function selectRustNativeFlowTypeMembers(
 function selectNativeGuard(
   context: SourceValueFlowQueryContext,
   expression: Node,
-  projectTypes: RustProjectTypePolicy,
   selectGuard: (expression: Node) => SourceNativeGuard<RustClosedTypePredicate> | undefined,
+  resolveNominal: (guard: Extract<SourceNativeValueGuard, { readonly kind: "nominal" }>) => TargetTypeRef | undefined,
 ): SourceNativeGuard<Predicate> | undefined {
   const native = selectSourceNativeValueGuard(context, expression);
   if (native?.kind === "typeof") return { sourceOperand: native.sourceOperand, predicate: native };
   if (native?.kind === "nominal") {
-    const definition = projectTypes.definitionForDeclaration(native.declaration);
-    if (definition?.kind === "class" && definition.genericParameters.length === 0) {
-      return { sourceOperand: native.sourceOperand, predicate: { kind: "nominal", targetCarrier: projectTypes.openCarrier(definition) } };
-    }
+    const targetCarrier = resolveNominal(native);
+    if (targetCarrier !== undefined) return { sourceOperand: native.sourceOperand, predicate: { kind: "nominal", targetCarrier } };
   }
   return selectGuard(expression);
 }
