@@ -8,6 +8,9 @@ import { rustUnionLeaves } from "../../target-model/types/union-relations.js";
 import { selectRustArrayTypeGuard } from "../../policy/operations/source-profiles/js/type-tests.js";
 import { selectRustFlowReadProjection } from "../../policy/types/value-carrier-reconciliation.js";
 import { recordRustFlowReadProjection } from "../facts/value-carrier-queries.js";
+import { rustFlowReadProjectionFactKey } from "../facts/keys.js";
+import { rustFlowReadProjectionMatches } from "../facts/flow-read-projections.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 export function selectRustGuardedValueCarrier(
   reference: Node,
@@ -15,6 +18,9 @@ export function selectRustGuardedValueCarrier(
   context: RustOperationPolicyContext,
   options: RustTargetTypeResolutionOptions & { readonly projectTypes: RustProjectTypePolicy },
 ): TargetTypeRef | undefined {
+  const existing = context.facts.getFact(reference, rustFlowReadProjectionFactKey);
+  if (existing !== undefined) return rustTargetTypeRefEquals(existing.sourceCarrier, sourceCarrier) &&
+    rustFlowReadProjectionMatches(existing, options.projectTypes, context.typeDefinitions) ? existing.selectedCarrier : undefined;
   const members = selectRustGuardedValueMembers(reference, sourceCarrier, context, options);
   if (members !== undefined && members.length > 1) return sourceCarrier;
   const selected = members?.length === 1 ? members[0]?.carrier : undefined;

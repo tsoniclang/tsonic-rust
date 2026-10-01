@@ -1,5 +1,5 @@
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { selectRustUnionArmMapping, rustUnionProjectionContract, rustUnionAlternatives, rustUnionLeaves } from "../../target-model/types/union-relations.js";
+import { selectRustUnionArmMapping, rustUnionProjectionContract, rustUnionLeaves } from "../../target-model/types/union-relations.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type {
   RustCallScopedLifetimeReconciliationFact,
@@ -227,8 +227,8 @@ export function selectRustValueCarrierReconciliation(
   const conversion = selectRustSourceValueConversion(sourceCarrier, targetCarrier, definitions);
   if (conversion !== undefined) return { kind: "conversion", fact: { sourceCarrier, targetCarrier, conversion } };
   const candidates: { readonly upcast: RustProjectUpcastFact; readonly fact: RustContextualValueConversionFact }[] = [];
-  for (const arm of rustUnionAlternatives(targetCarrier, definitions) ?? []) {
-    if (arm.variant.kind !== "payload") continue;
+  for (const arm of rustUnionLeaves(targetCarrier, definitions) ?? []) {
+    if (arm.path[arm.path.length - 1]?.variant.kind !== "payload") continue;
     const definition = projectTypes.definitionForCarrier(arm.carrier);
     if (definition === undefined) continue;
     const relationship = projectTypes.relationship(sourceCarrier, definition);

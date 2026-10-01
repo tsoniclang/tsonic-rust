@@ -45,6 +45,27 @@ test("native upcasts precede exact union injection in expression and callable co
   assert.deepEqual(adapter.conversion, selected.fact.conversion);
 });
 
+test("native upcasts retain the complete nested union destination and reject ambiguous payloads", () => {
+  const nested = { kind: "target-named", id: "test.Nested" };
+  const { projectTypes, definitions } = policy([rustStringTargetType(), base]);
+  const nestedDefinitions = { ...definitions, sourceUnionVariants: carrier => carrier === nested
+    ? [{ name: "Flag", carrier: { kind: "source-primitive", name: "bool" } }, { name: "Values", carrier: union }]
+    : definitions.sourceUnionVariants(carrier) };
+  const selected = selectRustValueCarrierReconciliation(derived, nested, projectTypes, nestedDefinitions);
+  assert.equal(selected.kind, "conversion");
+  assert.deepEqual(selected.upcast, { sourceCarrier: derived, targetCarrier: base });
+  assert.deepEqual(selected.fact, { sourceCarrier: base, targetCarrier: nested,
+    conversion: { kind: "source-union-variant", source: base, target: nested, variantName: "Values" } });
+  for (const changed of [
+    { ...projectTypes, relationship: () => ({ kind: "unrelated" }) },
+    { ...projectTypes, relationship: () => ({ kind: "ambiguous" }) },
+    { ...projectTypes, relationship: () => ({ kind: "related", targetType: otherBase }) },
+  ]) assert.equal(selectRustValueCarrierReconciliation(derived, nested, changed, nestedDefinitions).kind, "incompatible");
+  const duplicate = { ...nestedDefinitions, sourceUnionVariants: carrier => carrier === nested
+    ? [{ name: "First", carrier: union }, { name: "Second", carrier: union }] : definitions.sourceUnionVariants(carrier) };
+  assert.equal(selectRustValueCarrierReconciliation(derived, nested, projectTypes, duplicate).kind, "incompatible");
+});
+
 test("union flow retains exact nominal payload refinement and rejects forged or ambiguous routes", () => {
   const { definitions } = policy([rustStringTargetType(), base]);
   const projectTypes = {
