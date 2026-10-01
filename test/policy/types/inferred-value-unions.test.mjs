@@ -34,7 +34,7 @@ test("union flow projections retain exact optional dispatch and reject altered e
         facts: { getRuntimeCarrierFact: () => ({ carrier: sourceCarrier }) },
         names: { nameForSourceType: (_file, name) => name },
         valueLifetimes: { canMove: () => canMove },
-        typeDefinitions: definitions, configuration: { edition: "2024" },
+        projectTypes, typeDefinitions: definitions, configuration: { edition: "2024" },
       } }, sourceFile, diagnostics: [], moduleName: "index",
         moduleNameByFileName: new Map([["/src/index.ts", "index"]]),
         externalCrateNameByFileName: new Map() };

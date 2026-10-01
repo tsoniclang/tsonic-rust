@@ -8,7 +8,7 @@ import { ElementAccessExpression_ArgumentExpression, Node_Expression } from "@ts
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 import { expressionCarrier, requireExpressionCarrier, selectedOperationMatches } from "../expressions/fundamentals.js";
 import { effectiveMemberResultCarrier } from "../expressions/special.js";
-import { applyRustArgumentMode } from "../expressions/input-shaping.js";
+import type { planExpression as planRustExpression } from "../expressions/entry.js";
 import { planRustSharedReceiver } from "../expressions/typed-locations.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { diagnosticInput } from "../program/plan-context.js";
@@ -21,7 +21,7 @@ import { rustProjectObjectRepresentation } from "./project-storage.js";
 import { createRustProjectObject, copyRustProjectObjectIndexStorage, readRustProjectObjectIndex, writeRustProjectObjectIndex } from "./project-objects.js";
 
 type SourceIndexFact = Extract<RustTargetOperationFact, { readonly kind: "source-index-signature" }>;
-type ExpressionPlanner = (node: Node, context: RustPlanContext) => RustExpr | undefined;
+type ExpressionPlanner = typeof planRustExpression;
 
 export function sourceIndexSelectedOperationMatches(node: Node, fact: SourceIndexFact, context: RustPlanContext): boolean {
   const property = context.input.program.source.ast.is.IsPropertyAccessExpression(node);
@@ -41,8 +41,7 @@ export function planRustSourceIndexKey(
   }
   const keyNode = ElementAccessExpression_ArgumentExpression(ast, node);
   if (keyNode === undefined || !rustTargetTypeRefEquals(expressionCarrier(keyNode, context), fact.keyCarrier)) return undefined;
-  const key = planExpression(keyNode, context);
-  return key === undefined ? undefined : borrowed ? applyRustArgumentMode(context, key, "ref", keyNode) : key;
+  return planExpression(keyNode, context, "value", borrowed ? "shared-reference" : "value");
 }
 
 export function planRustSourceIndexRead(

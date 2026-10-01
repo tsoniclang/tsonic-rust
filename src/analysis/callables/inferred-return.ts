@@ -1,6 +1,6 @@
 import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_Initializer, Node_Operand, Node_Type } from "@tsonic/target-api/source";
 import type { Node } from "@tsonic/tsts";
-import { createRustPlanBuilder } from "../facts/plan-store.js";
+import { createRustCarrierProbe } from "../expressions/carrier-probe.js";
 import { rustSourceCallableReturnFactKey } from "../facts/keys.js";
 import { rustOperationContext, rustResolutionContext } from "../program/walk.js";
 import type { RustFactWalk } from "../program/walk.js";
@@ -14,7 +14,7 @@ import { checkedPropertySelectionInput, selectRustCheckedPropertyAccess } from "
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { selectRustConditionalNumericCarrier } from "../../policy/types/conditional-numeric-carrier.js";
 
-export function selectRustInferredNumericReturn(
+export function selectRustInferredReturn(
   walk: RustFactWalk,
   declaration: Node,
   baseline: TargetTypeRef | undefined,
@@ -24,40 +24,31 @@ export function selectRustInferredNumericReturn(
   if (baseline === undefined || scalar === undefined ||
     Node_Type(ast, declaration) !== undefined || ast.body(declaration) === undefined ||
     walk.context.semanticsFor(declaration).operations.generator(declaration) !== undefined) return baseline;
-  if (!isRustNumericCarrier(scalar) && !isRustBigIntCarrier(scalar)) {
-    return authoredForwardedReturn(walk, declaration) ?? baseline;
-  }
-  if (walk.inferredNumericReturns.has(declaration)) return walk.inferredNumericReturns.get(declaration);
-  if (walk.resolvingNumericReturns.has(declaration)) return baseline;
-  walk.resolvingNumericReturns.add(declaration);
+  const numericResult = isRustNumericCarrier(scalar) || isRustBigIntCarrier(scalar);
+  if (walk.inferredReturns.has(declaration)) return walk.inferredReturns.get(declaration);
+  if (walk.resolvingReturns.has(declaration)) return baseline;
+  walk.resolvingReturns.add(declaration);
   try {
-    const facts = createRustPlanBuilder(walk.context.source.sourceFacts, walk.context.typeDefinitions, walk.context.facts);
-    const probe: RustFactWalk = {
-      ...walk,
-      context: { ...walk.context, facts, diagnostics: [] },
-      operationAttempts: new WeakSet(),
-      postCheckOperations: new WeakMap(),
-      rejectedExpressions: new WeakSet(),
-      resolving: new Set(),
-    };
+    const probe = createRustCarrierProbe(walk);
+    const facts = probe.context.facts;
     const expressions = directReturns(walk, declaration);
     const active = new Set<Node>();
     const carriers = expressions.map(expression => expressionCarrier(expression));
     let selected: TargetTypeRef | undefined;
     for (const carrier of carriers) {
       if (carrier !== undefined && isRustAbsenceCarrier(carrier) && rustOptionElementCarrier(baseline) !== undefined) continue;
-      const numeric = rustOptionElementCarrier(baseline) === undefined ? carrier : rustOptionElementCarrier(carrier) ?? carrier;
-      if (numeric === undefined || (!isRustNumericCarrier(numeric) && !isRustBigIntCarrier(numeric))) {
+      const value = rustOptionElementCarrier(baseline) === undefined ? carrier : rustOptionElementCarrier(carrier) ?? carrier;
+      if (value === undefined || numericResult && !isRustNumericCarrier(value) && !isRustBigIntCarrier(value)) {
         selected = undefined;
         break;
       }
-      selected = selected === undefined ? numeric : rustTargetTypeRefEquals(selected, numeric)
-        ? selected : selectRustNumericBinaryPromotion(selected, numeric)?.carrier;
+      selected = selected === undefined ? value : rustTargetTypeRefEquals(selected, value)
+        ? selected : numericResult ? selectRustNumericBinaryPromotion(selected, value)?.carrier : undefined;
       if (selected === undefined) break;
     }
-    const result = expressions.length === 0 ? baseline : selected === undefined ? undefined
+    const result = expressions.length === 0 ? baseline : selected === undefined ? numericResult ? undefined : baseline
       : rustOptionElementCarrier(baseline) === undefined ? selected : rustOptionTargetType(selected);
-    walk.inferredNumericReturns.set(declaration, result);
+    walk.inferredReturns.set(declaration, result);
     return result;
 
     function expressionCarrier(expression: Node): TargetTypeRef | undefined {
@@ -98,7 +89,7 @@ export function selectRustInferredNumericReturn(
             const sourceResult = call === undefined ? undefined : semantics.operations.callResult(call);
             const carrier = facts.get(target, rustSourceCallableReturnFactKey)?.returnCarrier ??
               resolveRustTargetTypeRef(Node_Type(ast, target) ?? sourceResult?.selectedReturnType, context, walk.operationOptions);
-            const selected = selectRustInferredNumericReturn(walk, target, carrier);
+            const selected = selectRustInferredReturn(walk, target, carrier);
             if (selected === undefined) return undefined;
             if (facts.get(target, rustSourceCallableReturnFactKey) === undefined) {
               const completion = walk.context.semanticsFor(target).operations.callableCompletion(target);
@@ -143,29 +134,8 @@ export function selectRustInferredNumericReturn(
       }
     }
   } finally {
-    walk.resolvingNumericReturns.delete(declaration);
+    walk.resolvingReturns.delete(declaration);
   }
-}
-
-function authoredForwardedReturn(walk: RustFactWalk, declaration: Node): TargetTypeRef | undefined {
-  const { ast } = walk.context;
-  const expressions = directReturns(walk, declaration);
-  let selected: TargetTypeRef | undefined;
-  for (let expression of expressions) {
-    while (ast.is.IsParenthesizedExpression(expression)) {
-      const inner = Node_Expression(ast, expression);
-      if (inner === undefined) return undefined;
-      expression = inner;
-    }
-    if (!ast.is.IsIdentifier(expression)) return undefined;
-    const reference = walk.context.source.navigation.sourceReferenceFor(expression)?.declaration;
-    const type = reference === undefined ? undefined : Node_Type(ast, reference);
-    if (type === undefined) return undefined;
-    const carrier = resolveRustTargetTypeRef(type, rustResolutionContext(walk, expression), walk.operationOptions);
-    if (carrier === undefined || selected !== undefined && !rustTargetTypeRefEquals(selected, carrier)) return undefined;
-    selected = carrier;
-  }
-  return selected;
 }
 
 function directReturns(walk: RustFactWalk, declaration: Node): readonly Node[] {

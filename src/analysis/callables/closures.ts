@@ -46,7 +46,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustGenericCallableProtocol, rustGenericCallableTargetType, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { recordCallableReturnFact, recordCallableSuspensionFacts, selectedSourceCallableReturn } from "./signatures.js";
 import { rustCapturedBindingStorage } from "./capture-storage.js";
-import { selectRustInferredNumericReturn } from "./inferred-numeric-return.js";
+import { selectRustInferredReturn } from "./inferred-return.js";
 import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
 import { finalizeValueConversion } from "../facts/finalized-operation/conversions.js";
 import { rustCompileTimeSourceKey } from "../../target-model/facts/source-declarations.js";
@@ -68,7 +68,7 @@ export function resolveFunctionExpressionSignature(
     : rustGenericCallableProtocol(sourceSelected, genericParameters) ?? rustClosureProtocol(sourceSelected) ?? rustCallableProtocol(sourceSelected);
   const sourceResult = sourceProtocol === undefined ? undefined
     : ast.hasModifierKind(expression, "async") ? sourceProtocol.result
-    : selectRustInferredNumericReturn(walk, expression, sourceProtocol.result);
+    : selectRustInferredReturn(walk, expression, sourceProtocol.result);
   if (sourceSelected === undefined || sourceProtocol === undefined || sourceResult === undefined) return undefined;
   const parameterCarriers = sourceProtocol.parameters.map((carrier, index) =>
     Node_Initializer(ast, parameters[index]) === undefined ? carrier : rustSourceOptionalTargetType(carrier));
@@ -232,7 +232,7 @@ export function resolveFunctionExpressionCarrier(
   const finalizedReturn = walk.context.facts.get(expression, rustSourceCallableReturnFactKey)?.returnCarrier ??
     walk.context.facts.resolve(expression, rustSourceCallableReturnFactKey)?.returnCarrier;
   const selectedResultExpectation = selectedResult.kind === "opaque" && selectedResult.id === "tsonic.rust.infer"
-    ? selectRustInferredNumericReturn(walk, expression, resolveRustTargetTypeRef(Node_Type(ast, expression) ??
+    ? selectRustInferredReturn(walk, expression, resolveRustTargetTypeRef(Node_Type(ast, expression) ??
         (ast.kindName(body) === KindBlock ? selectedSourceCallableReturn(walk, expression) : undefined),
       rustResolutionContext(walk, expression), walk.operationOptions))
     : selectedResult;

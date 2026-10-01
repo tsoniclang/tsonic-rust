@@ -25,7 +25,8 @@ function planRuntimeCategory(
   borrowed: boolean,
 ): RustExpr | undefined {
   if (result.kind === "runtime-method") {
-    return { kind: "method-call", receiver: value, method: result.method, args: [] };
+    return { kind: "method-call", receiver: borrowed && value.kind === "reference" ? value.expr : value,
+      method: result.method, args: [] };
   }
   if (result.kind === "optional") {
     if (context.syntheticNames === undefined) return undefined;

@@ -25,13 +25,15 @@ import {
 } from "@tsonic/target-api/source";
 import {
   isRustJsArrayCarrier,
+  isRustJsValueCarrier,
+  isRustNumericCarrier,
   rustJsArrayLikeElementTargetType,
   rustOptionElementCarrier,
   rustOptionTargetType,
   isRustVecCarrier,
   rustJsArrayTargetType,
+  rustJsValueTargetType,
   rustFixedArrayCarrierValue,
-  rustSourcePrimitiveTargetType,
   rustTargetConstInteger,
   rustVecTargetType,
 } from "../../target-model/types/index.js";
@@ -41,13 +43,16 @@ import { recordBindingPatternFacts, recordBindingWrite, validateFlowMarkerAgains
 import { recordProjectSourceBinding } from "../expressions/references.js";
 import { recordStatementFacts } from "../control-flow/statements.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
+import { createRustCarrierProbe } from "../expressions/carrier-probe.js";
 import { resolveRustTargetTypeRef, resolveRustTupleElementTargetType } from "../../policy/types/resolution.js";
+import { resolveRustInferredUnion } from "../../policy/types/resolution/inferred-unions.js";
+import { resolveRustSourceUnionCarrier, resolveRustUnionValueCarrier } from "../../policy/types/resolution/source-unions.js";
 import { rustMutatedBindingFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
 import { rustSelectedAssignmentValueCarrier } from "./operators.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectRustCheckedIteration } from "./provider/index.js";
 import { setCarrierFact, setRustOperationFact } from "./project-calls.js";
-import type { Node, SourceFile } from "@tsonic/tsts";
+import type { Node, SourceFile, Type } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustTargetOperationFact } from "../facts/keys.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -309,6 +314,8 @@ export function resolveArrayLiteralCarrier(
     expectedElement = expected.element;
   } else if (expected?.kind === "target-named" && isRustJsArrayCarrier(expected)) {
     expectedElement = rustJsArrayLikeElementTargetType(expected);
+  } else if (lane === "js" && isRustJsValueCarrier(expected)) {
+    expectedElement = rustJsValueTargetType();
   }
   const fixedArray = rustFixedArrayCarrierValue(expected);
   if (expected !== undefined && fixedArray !== undefined) {
@@ -328,21 +335,7 @@ export function resolveArrayLiteralCarrier(
     return setCarrierFact(walk, expression, expected);
   }
   if (expectedElement === undefined) {
-    for (const element of presentElements) {
-      const spread = ast.is.IsSpreadElement(element);
-      const operand = spread ? Node_Expression(ast, element) : element;
-      const source = operand === undefined ? undefined : resolveExpressionCarrier(walk, operand, sourceFile, undefined);
-      const sequence = source === undefined || !spread ? undefined : rustRestSequenceElements(source);
-      const carrier = spread ? sequence?.elements[0] : source;
-      if (carrier !== undefined) {
-        expectedElement = carrier;
-        break;
-      }
-    }
-  }
-  if (expectedElement === undefined && presentElements.length > 0 &&
-    presentElements.every((element) => ast.kindName(element) === KindNumericLiteral)) {
-    expectedElement = rustSourcePrimitiveTargetType("float64");
+    expectedElement = inferArrayLiteralElement(walk, expression, sourceFile, presentElements, selected);
   }
   if (expectedElement === undefined) {
     return undefined;
@@ -384,6 +377,58 @@ export function resolveArrayLiteralCarrier(
     contributions: Object.freeze(contributions),
   });
   return setCarrierFact(walk, expression, resultCarrier);
+}
+
+function inferArrayLiteralElement(
+  walk: RustFactWalk,
+  expression: Node,
+  sourceFile: SourceFile,
+  elements: readonly Node[],
+  selected: TargetTypeRef | undefined,
+): TargetTypeRef | undefined {
+  const { ast } = walk.context;
+  const types = walk.context.semanticsFor(expression).types;
+  const sourceArray = types.expressionType(expression);
+  const sourceElement = sourceArray === undefined ? undefined : types.typeArguments(sourceArray)[0];
+  const selectedElement = selected !== undefined && isRustVecCarrier(selected)
+    ? selected.element : rustJsArrayLikeElementTargetType(selected);
+  if (elements.length === 0 || sourceElement !== undefined && (types.isAny(sourceElement) || types.isUnknown(sourceElement))) {
+    return selectedElement;
+  }
+  const probe = createRustCarrierProbe(walk);
+  const rows: { readonly type: Type; readonly carrier: TargetTypeRef }[] = [];
+  let first: TargetTypeRef | undefined;
+  for (const element of elements) {
+    const spread = ast.is.IsSpreadElement(element);
+    const operand = spread ? Node_Expression(ast, element) : element;
+    if (operand === undefined) return undefined;
+    const literalContext = first !== undefined && isRustNumericCarrier(first) &&
+      (ast.kindName(operand) === KindNumericLiteral || ast.is.IsBigIntLiteral(operand)) ? first : undefined;
+    const value = resolveExpressionCarrier(probe, operand, sourceFile, literalContext);
+    const carrier = value === undefined ? undefined : spread ? rustRestSequenceElements(value)?.elements[0] : value;
+    const source = types.expressionType(operand);
+    const elementType = source === undefined ? undefined : spread ? types.typeArguments(source)[0] : source;
+    const type = elementType === undefined ? undefined : types.literalBaseType(elementType);
+    if (carrier === undefined || type === undefined) return undefined;
+    first ??= carrier;
+    rows.push({ type, carrier });
+  }
+  if (rows.every(row => rustTargetTypeRefEquals(first, row.carrier))) return first;
+  if (sourceElement === undefined) return undefined;
+  const members = types.isUnion(sourceElement) ? types.unionOrIntersectionTypes(sourceElement) : [sourceElement];
+  const carriers: TargetTypeRef[] = [];
+  for (const member of members) {
+    const base = types.literalBaseType(member);
+    const matches = base === undefined ? [] : rows.filter(row => types.isIdentical(row.type, base));
+    const carrier = matches[0]?.carrier;
+    if (carrier === undefined || matches.some(row => !rustTargetTypeRefEquals(row.carrier, carrier))) return undefined;
+    carriers.push(carrier);
+  }
+  return resolveRustSourceUnionCarrier(carriers, values => resolveRustUnionValueCarrier(
+    values, walk.operationOptions, () => resolveRustInferredUnion(
+      sourceElement, members, carriers, rustResolutionContext(walk, expression), walk.operationOptions,
+    ),
+  ));
 }
 
 function resolveArrayElementCarrier(

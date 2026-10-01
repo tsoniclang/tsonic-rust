@@ -58,7 +58,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustGenericCallableProtocol, rustGenericCallableTargetType, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustGenericCallableValueOwner } from "../../policy/types/generic-callable-origin.js";
 import { closeRustSuspendedStorage } from "../../policy/types/suspended-storage.js";
-import { selectRustInferredNumericReturn } from "./inferred-numeric-return.js";
+import { selectRustInferredReturn } from "./inferred-return.js";
 
 export function recordFunctionSignatureFacts(walk: RustFactWalk, declaration: Node): void {
   recordCallableParameterSignatureFacts(walk, declaration);
@@ -337,7 +337,7 @@ function recordCallableValueSignatureFacts(
     ? selectedCarrier.result
     : closure?.result ?? callable?.result;
   const returnCarrier = Node_Type(ast, declaration) === undefined
-    ? selectRustInferredNumericReturn(walk, expression, selectedReturnCarrier)
+    ? selectRustInferredReturn(walk, expression, selectedReturnCarrier)
     : selectedReturnCarrier;
   const parameters = ast.parameters(expression);
   if (selectedCarrier === undefined || parameterCarriers === undefined ||
@@ -418,7 +418,7 @@ function resolveAuthoredCallableValueSignature(
     expression,
     rustResolutionContext(walk, expression),
     walk.operationOptions,
-  )?.returnCarrier ?? selectRustInferredNumericReturn(walk, expression, resolveRustTargetTypeRef(
+  )?.returnCarrier ?? selectRustInferredReturn(walk, expression, resolveRustTargetTypeRef(
     Node_Type(ast, expression) ?? sourceReturn,
     rustResolutionContext(walk, expression),
     walk.operationOptions,
@@ -524,7 +524,7 @@ export function recordCallableSuspensionFacts(walk: RustFactWalk, declaration: N
       rustResolutionContext(walk, declaration),
       walk.operationOptions,
     );
-    const inferred = selectRustInferredNumericReturn(walk, declaration, rustFutureOutputCarrier(futureCarrier));
+    const inferred = selectRustInferredReturn(walk, declaration, rustFutureOutputCarrier(futureCarrier));
     const contextualType = isRustNeverCarrier(inferred) && Node_Type(ast, declaration) === undefined &&
       (ast.is.IsArrowFunction(declaration) || ast.is.IsFunctionExpression(declaration))
       ? walk.context.semanticsFor(declaration).types.contextualType(declaration) : undefined;
@@ -613,7 +613,7 @@ export function recordCallableReturnFact(
       walk.operationOptions,
     );
   const selected = selectedCarrier !== undefined || generator !== undefined || asynchronous !== undefined
-    ? baseline : selectRustInferredNumericReturn(walk, declaration, baseline);
+    ? baseline : selectRustInferredReturn(walk, declaration, baseline);
   const pointer = selectRustPointerReturnContract(declaration, rustResolutionContext(walk, declaration), walk.operationOptions);
   if (selectedCarrier !== undefined && pointer !== undefined &&
     !rustTargetTypeRefEquals(selectedCarrier, pointer.returnCarrier)) {
