@@ -47,22 +47,34 @@ export function rustUnionAlternatives(carrier: TargetTypeRef, definitions: RustT
 
 export function rustUnionInjectionVariant(source: TargetTypeRef, target: TargetTypeRef, definitions: RustTypeDefinitions):
   Extract<RustRuntimeUnionVariant, { readonly kind: "payload" }> | undefined {
-  const payload = rustClosedValuePayloadProjection(target, source);
-  if (payload?.kind === "payload") return payload;
-  const variants = rustUnionAlternatives(target, definitions)?.filter(alternative =>
-    alternative.variant.kind === "payload" && rustTargetTypeRefEquals(alternative.carrier, source));
-  return variants?.length === 1 && variants[0]!.variant.kind === "payload" ? variants[0]!.variant : undefined;
+  const variant = rustUnionInjectionPath(source, target, definitions)?.[0]?.variant;
+  return variant?.kind === "payload" ? variant : undefined;
+}
+
+export function rustUnionInjectionPath(source: TargetTypeRef, target: TargetTypeRef, definitions: RustTypeDefinitions):
+  readonly RustUnionPathStep[] | undefined {
+  const paths = collectRustUnionPaths(target, definitions, source);
+  return paths?.length === 1 && paths[0]!.path.every(step => step.variant.kind === "payload") ? paths[0]!.path : undefined;
 }
 
 export function rustUnionLeaves(carrier: TargetTypeRef, definitions: RustTypeDefinitions):
   readonly { readonly carrier: TargetTypeRef; readonly path: readonly RustUnionPathStep[] }[] | undefined {
+  return collectRustUnionPaths(carrier, definitions);
+}
+
+function collectRustUnionPaths(carrier: TargetTypeRef, definitions: RustTypeDefinitions, target?: TargetTypeRef):
+  readonly { readonly carrier: TargetTypeRef; readonly path: readonly RustUnionPathStep[] }[] | undefined {
   const leaves: { readonly carrier: TargetTypeRef; readonly path: readonly RustUnionPathStep[] }[] = [];
   const visit = (current: TargetTypeRef, path: readonly RustUnionPathStep[]): boolean => {
     if (path.some(step => rustTargetTypeRefEquals(step.union, current))) return false;
+    if (path.length > 0 && target !== undefined && rustTargetTypeRefEquals(current, target)) {
+      leaves.push(Object.freeze({ carrier: current, path }));
+      return true;
+    }
     const alternatives = rustUnionAlternatives(current, definitions);
     if (alternatives === undefined) {
       if (path.length === 0) return false;
-      leaves.push(Object.freeze({ carrier: current, path }));
+      if (target === undefined) leaves.push(Object.freeze({ carrier: current, path }));
       return true;
     }
     return alternatives.length > 0 && alternatives.every(arm =>
@@ -78,14 +90,15 @@ export function rustUnionProjectionContract(source: TargetTypeRef, target: Targe
   const dispatchCarrier = sourceElement ?? source;
   const carrier = targetElement ?? target;
   const allAlternatives = rustUnionAlternatives(dispatchCarrier, definitions);
-  const alternatives = allAlternatives?.filter(arm =>
-    rustTargetTypeRefEquals(arm.carrier, carrier));
-  const variant = alternatives === undefined ? rustClosedValuePayloadProjection(dispatchCarrier, carrier)
-    : alternatives.length === 1 ? alternatives[0]!.variant : undefined;
-  return variant === undefined ? undefined : {
-    dispatchCarrier, carrier, variant,
+  const paths = collectRustUnionPaths(dispatchCarrier, definitions, carrier);
+  const variant = allAlternatives === undefined ? rustClosedValuePayloadProjection(dispatchCarrier, carrier) : undefined;
+  const path = variant === undefined ? paths?.length === 1 ? paths[0]!.path : undefined
+    : Object.freeze([Object.freeze({ union: dispatchCarrier, variant })]);
+  return path === undefined ? undefined : {
+    dispatchCarrier, carrier, path, variant: path[path.length - 1]!.variant,
     sourceOptional: sourceElement !== undefined, targetOptional: targetElement !== undefined,
-    exhaustive: allAlternatives?.length === 1 && (sourceElement === undefined || targetElement !== undefined),
+    exhaustive: path.every(step => rustUnionAlternatives(step.union, definitions)?.length === 1) &&
+      (sourceElement === undefined || targetElement !== undefined),
   };
 }
 

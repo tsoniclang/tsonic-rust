@@ -59,12 +59,13 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustNativeFutureCallableResult } from "../../../target-model/types/carriers/generic-callables.js";
 
 export type RustExpressionResultUse = "value" | "discarded";
+type RustExpressionAccess = "value" | "shared-reference" | "shared-place";
 
 export function planExpression(
   node: Node,
   context: RustPlanContext,
   resultUse: RustExpressionResultUse = "value",
-  access: "value" | "shared-reference" = "value",
+  access: RustExpressionAccess = "value",
 ): RustExpr | undefined {
   return planProjectedExpression(node, context, resultUse, "option", access);
 }
@@ -88,7 +89,7 @@ function planProjectedExpression(
   context: RustPlanContext,
   resultUse: RustExpressionResultUse,
   finalStage: "source" | "contextual" | "option",
-  access: "value" | "shared-reference" = "value",
+  access: RustExpressionAccess = "value",
 ): RustExpr | undefined {
   const override = context.expressionOverrides?.get(node);
   const key = context.input.program.facts.getFact(node, rustIndexedFieldKeyArgument);
@@ -120,14 +121,14 @@ function planProjectedExpression(
   );
   const projection = context.input.program.facts.getFact(node, rustOptionProjectionFactKey);
   const objectView = context.input.program.facts.getFact(node, rustObjectReferenceViewKey);
-  const borrowFlow = access === "shared-reference" && (override === undefined || override.valueForm === "shared-reference") &&
+  const borrowFlow = access !== "value" && (override === undefined || override.valueForm === "shared-reference") &&
     context.flowReadOverrides?.has(node) !== true &&
     ((flowRead?.kind === "source-union" || flowRead?.kind === "runtime-union") && flowRead.project === undefined ||
       flowRead?.kind === "option-value" && rustOptionalStorageValue(flowRead.sourceCarrier) === undefined) &&
     rustOptionElementCarrier(flowRead.selectedCarrier) === undefined &&
     upcast === undefined && downcast === undefined && lifetimeReconciliation === undefined &&
     contextualConversion === undefined && projection === undefined && objectView === undefined;
-  const finish = (value: RustExpr): RustExpr => access === "value" || borrowFlow ? value
+  const finish = (value: RustExpr): RustExpr => access !== "shared-reference" || borrowFlow ? value
     : createRustSharedReferenceArgument(context, planRustNonConsumingValue(node, value, context), node);
   let currentCarrier = override?.carrier ??
     flowRead?.sourceCarrier ??

@@ -1,5 +1,5 @@
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { selectRustUnionArmMapping, rustUnionProjectionContract, rustUnionAlternatives } from "../../target-model/types/union-relations.js";
+import { selectRustUnionArmMapping, rustUnionProjectionContract, rustUnionAlternatives, rustUnionLeaves } from "../../target-model/types/union-relations.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type {
   RustCallScopedLifetimeReconciliationFact,
@@ -72,16 +72,16 @@ export function selectRustFlowReadProjection(
       sourceCarrier, dispatchCarrier, selectedCarrier, variant: unionProjection.variant.name } };
   }
   if (selectedPayload === undefined) {
-    const candidates = rustUnionAlternatives(dispatchCarrier, definitions)?.flatMap(arm => {
-      const projection = selectRustProjectProjection(arm.carrier, selectedCarrier, projectTypes);
-      return projection === undefined ? [] : [{ arm, projection }];
+    const candidates = rustUnionLeaves(dispatchCarrier, definitions)?.flatMap(leaf => {
+      const projection = selectRustProjectProjection(leaf.carrier, selectedCarrier, projectTypes);
+      return projection === undefined ? [] : [{ leaf, projection }];
     });
     if (candidates?.length === 1) {
-      const { arm, projection } = candidates[0]!;
+      const { leaf, projection } = candidates[0]!;
       return { kind: "projection", fact: {
         kind: union === undefined ? "runtime-union" : "source-union",
-        sourceCarrier, dispatchCarrier, selectedCarrier, variant: arm.variant.name,
-        project: { sourceCarrier: arm.carrier, dispatchCarrier: arm.carrier,
+        sourceCarrier, dispatchCarrier, selectedCarrier, variant: leaf.path[leaf.path.length - 1]!.variant.name,
+        project: { sourceCarrier: leaf.carrier, dispatchCarrier: leaf.carrier,
           targetCarrier: selectedCarrier, projection },
       } };
     }

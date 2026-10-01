@@ -51,7 +51,7 @@ import { rustRestSequenceElements } from "../operations/rest-assembly.js";
 import { closedMetadataEquals, isDenseDataArray, hasExactObjectKeys } from "../metadata/closed-data.js";
 import { rustNamedTypeCarrierValue } from "../types/carriers/native.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../types/source-union-definitions.js";
-import { rustUnionInjectionVariant, selectRustUnionArmMapping, rustUnionProjectionContract, type RustUnionArmMapping } from "../types/union-relations.js";
+import { rustUnionInjectionPath, selectRustUnionArmMapping, rustUnionProjectionContract, type RustUnionArmMapping, type RustUnionPathStep } from "../types/union-relations.js";
 
 const boolCarrier = rustSourcePrimitiveTargetType("bool");
 const int32Carrier = rustSourcePrimitiveTargetType("int32");
@@ -100,6 +100,7 @@ export type RustValueConversionContract = RustValueConversionContractBase & (
   | {
       readonly lowering: "source-union-variant";
       readonly variantName: string;
+      readonly path: readonly RustUnionPathStep[];
     }
   | {
       readonly lowering: "option-map";
@@ -481,9 +482,11 @@ export function rustValueConversionContract(
       : undefined;
   }
   if (value.kind === "source-union-variant") {
+    const path = isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target)
+      ? rustUnionInjectionPath(value.source, value.target, definitions) : undefined;
     return hasExactObjectKeys(value, ["kind", "source", "target", "variantName"]) &&
         isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) &&
-        rustUnionInjectionVariant(value.source, value.target, definitions)?.name === value.variantName
+        path !== undefined && path[0]!.variant.name === value.variantName
       ? {
           category: "exact",
           lowering: "source-union-variant",
@@ -491,6 +494,7 @@ export function rustValueConversionContract(
           source: value.source,
           target: value.target,
           variantName: value.variantName,
+          path,
           fallible: false,
         }
       : undefined;

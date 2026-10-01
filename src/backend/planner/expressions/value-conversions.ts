@@ -29,7 +29,7 @@ import type { RustFinalizedValueConversion } from "../../../analysis/facts/final
 import { rustUnionTypePathInContext, rustTypeFromCarrierInContext } from "../types/render.js";
 import { lowerRustExactIntegerConversion } from "./exact-integer.js";
 import { planRustUnionMapping, planRustUnionProjection } from "./union-mappings.js";
-import { rustUnionInjectionVariant } from "../../../target-model/types/union-relations.js";
+import { planRustUnionConstruction } from "./union-patterns.js";
 import { planRustCheckedSourceOptional } from "./optional-storage.js";
 
 export function applyRustValueConversion(
@@ -369,9 +369,8 @@ export function lowerRustValueConversion(
     case "union-project":
       return planRustUnionProjection(node ?? context.sourceFile, source, contract.source, contract.target, "move", context);
     case "source-union-variant": {
-      const type = rustTypeFromCarrierInContext(contract.target, context);
-      if (type?.kind !== "named" || rustUnionInjectionVariant(contract.source, contract.target,
-        context.input.program.typeDefinitions)?.name !== contract.variantName) {
+      const expression = planRustUnionConstruction(contract.path, source, context);
+      if (expression === undefined) {
         context.diagnostics.push(missingFactDiagnostic(
           diagnosticInput(context, node ?? context.sourceFile),
           "rust.backend.source-union-conversion",
@@ -379,11 +378,7 @@ export function lowerRustValueConversion(
         ));
         return undefined;
       }
-      return {
-        kind: "call",
-        path: `${type.path}::${contract.variantName}`,
-        args: [source],
-      };
+      return expression;
     }
     case "source-optional":
       return planRustCheckedSourceOptional(source, contract.element, context);

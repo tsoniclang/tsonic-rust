@@ -7,7 +7,7 @@ import { allocateRustSyntheticName, createRustSyntheticNameState } from "../name
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { planRustUnionPattern } from "./union-patterns.js";
+import { planRustUnionPattern, planRustUnionConstruction } from "./union-patterns.js";
 
 export function planRustUnionProjection(
   node: Node,
@@ -26,7 +26,7 @@ export function planRustUnionProjection(
     !requireRustCarrierRequirements(selected.carrier, ["clone"], node, context)) return undefined;
   const name = allocateRustSyntheticName(context.syntheticNames ??
     createRustSyntheticNameState(context.input.program.source.ast, node, []), "flow_value");
-  const payloadPattern = planRustUnionPattern([{ union: selected.dispatchCarrier, variant: selected.variant }],
+  const payloadPattern = planRustUnionPattern(selected.path,
     { kind: "binding", name }, context);
   if (payloadPattern === undefined) return undefined;
   const pattern: RustPattern = selected.sourceOptional
@@ -70,19 +70,15 @@ export function planRustUnionMapping(
       !requireRustCarrierRequirements(mapping.carrier, ["clone"], node, context)) return undefined;
     const name = allocateRustSyntheticName(names, "union_value");
     const bound: RustExpr = { kind: "path", path: name };
-    let value: RustExpr = sourceVariant.kind === "constant" ? { kind: "bool-literal", value: sourceVariant.value }
+    const value: RustExpr = sourceVariant.kind === "constant" ? { kind: "bool-literal", value: sourceVariant.value }
       : owned ? bound : isRustCopyCarrier(mapping.carrier) ? { kind: "dereference", pointer: bound }
         : { kind: "method-call", receiver: bound, method: "clone", args: [] };
-    for (const step of [...mapping.target].reverse()) {
-      const type = rustTypeFromCarrierInContext(step.union, context);
-      if (type?.kind !== "named") return undefined;
-      value = step.variant.kind === "constant" ? { kind: "path", path: `${type.path}::${step.variant.name}` }
-        : { kind: "call", path: `${type.path}::${step.variant.name}`, args: [value] };
-    }
+    const constructed = planRustUnionConstruction(mapping.target, value, context);
+    if (constructed === undefined) return undefined;
     const pattern = planRustUnionPattern(mapping.source, { kind: "binding", name }, context);
     if (pattern === undefined) return undefined;
     arms.push({ pattern: sourceOptional ? { kind: "tuple-variant", path: "Some", elements: [pattern] } : pattern,
-      expression: targetOptional ? { kind: "call", path: "Some", args: [value] } : value });
+      expression: targetOptional ? { kind: "call", path: "Some", args: [constructed] } : constructed });
   }
   if (targetOptional) arms.push({ pattern: { kind: "path", path: "None" }, expression: { kind: "path", path: "None" } });
   if (coverage === "target" && mappings.length < (rustUnionLeaves(source, definitions)?.length ?? 0) ||

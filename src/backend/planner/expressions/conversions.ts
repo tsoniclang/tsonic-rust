@@ -726,9 +726,10 @@ export function planFinalizedSourceInput(
   const sourceValueOverride = overrides?.sourceValues.get(sourceNode);
   const sharedInput = sourceValueOverride === undefined &&
     (expressionOverride === undefined || expressionOverride.valueForm === "shared-reference") &&
-    input.conversion.kind === "identity" && input.mode === "ref" && position === "target-argument";
+    input.conversion.kind === "identity" && input.mode === "ref";
   const plannedExpression = sourceValueOverride ??
-    planExpression(sourceNode, context, "value", sharedInput ? "shared-reference" : "value");
+    planExpression(sourceNode, context, "value", sharedInput
+      ? position === "target-receiver" ? "shared-place" : "shared-reference" : "value");
   if (plannedExpression === undefined) {
     return undefined;
   }

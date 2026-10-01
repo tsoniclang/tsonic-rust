@@ -24,8 +24,8 @@ export function selectRustUnionProperty(
   if (identities === undefined || identities.length === 0 || identities.some(identity => identity.profile !== "js")) return undefined;
   const guarded = selectRustGuardedValueMembers(request.receiver, union.carrier, context, options);
   const indexes = union.variants.flatMap((variant, index) => guarded === undefined || guarded.some(member =>
-    member.variant.kind === "payload" && member.variant.name === variant.name &&
-    rustTargetTypeRefEquals(member.carrier, variant.carrier)) ? [index] : []);
+    member.path[0]?.variant.kind === "payload" && member.path[0].variant.name === variant.name &&
+    rustTargetTypeRefEquals(member.path[0].union, union.carrier)) ? [index] : []);
   if (indexes.length === 0) return undefined;
   const operations = new Map<number, Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>>();
   for (const index of indexes) {
