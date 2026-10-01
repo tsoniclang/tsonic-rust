@@ -22,6 +22,8 @@ import { rustClassConstructorTargetType } from "../../../target-model/types/carr
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { sourceCallableInterface } from "@tsonic/target-api/source";
 import { resolveCallableType } from "./callables.js";
+import { bindRustSourceDeclarationArguments, resolveRustSourceDeclarationArguments } from "./generic-arguments.js";
+import { rustGenericCallableSignaturesMatch } from "../../../target-model/conversions/generic-callable.js";
 
 export interface RustResolvedProjectGenericArguments {
   readonly values: readonly RustTargetGenericArgument[];
@@ -60,7 +62,11 @@ export function resolveProjectSourceCarrier(
   for (const declaration of declarations) {
     if (context.ast.is.IsInterfaceDeclaration(declaration) && selectedType !== undefined &&
       sourceCallableInterface(selectedType, context.currentSemantics, context.ast) !== undefined) {
-      return resolveCallableType(selectedType, context, options, resolving);
+      const selectedContext = bindRustSourceDeclarationArguments(
+        declaration, selectedType, genericArguments.values, context,
+      );
+      return selectedContext === undefined ? undefined
+        : resolveProjectCallableInterface(declaration, selectedType, selectedContext, options, resolving);
     }
     const carrier = options.sourceTypes.carrierForDeclaration(declaration, context.ast);
     if (selectedType !== undefined && (context.ast.is.IsClassDeclaration(declaration) || context.ast.is.IsClassExpression(declaration))) {
@@ -176,6 +182,45 @@ export function resolveProjectSourceCarrier(
     }
   }
   return undefined;
+}
+
+function resolveProjectCallableInterface(
+  declaration: Node,
+  selectedType: Type,
+  context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
+  resolving: Set<object>,
+): TargetTypeRef | undefined {
+  const symbol = context.currentSemantics.declarations.typeSymbol(selectedType);
+  const declarations = symbol === undefined ? [declaration]
+    : denseDefined(context.currentSemantics.declarations.symbolDeclarations(symbol));
+  if (declarations === undefined || declarations.length === 0 ||
+    declarations.some(candidate => !context.ast.is.IsInterfaceDeclaration(candidate))) return undefined;
+  const inherited: TargetTypeRef[] = [];
+  for (const candidate of declarations) {
+    const heritage = context.source.navigation.declaredHeritage(candidate);
+    if (heritage.kind !== "resolved") return undefined;
+    for (const edge of heritage.edges) {
+      const contract = context.sourceLifetimes.contractFor(edge.target.declaration);
+      if (edge.kind !== "extends" || contract === undefined) return undefined;
+      const arguments_ = resolveRustSourceDeclarationArguments(edge.typeArguments, contract, context,
+        options, resolving, edge.selectedType);
+      const semantics = context.semanticsFor(edge.target.declaration);
+      const base = arguments_ === undefined ? undefined : resolveProjectSourceCarrier(
+        semantics.declarations.typeSymbol(edge.selectedType), arguments_,
+        { ...context, currentSemantics: semantics }, options, edge.target.declaration, edge.selectedType, resolving,
+      );
+      if (base === undefined) return undefined;
+      inherited.push(base);
+    }
+  }
+  const ownSignature = declarations.some(candidate => context.ast.members(candidate).some(member =>
+    member !== undefined && context.ast.is.IsCallSignatureDeclaration(member)));
+  const selected = ownSignature || inherited.length === 0
+    ? resolveCallableType(selectedType, context, options, resolving) : inherited[0];
+  return selected === undefined || inherited.some(base =>
+    !rustTargetTypeRefEquals(base, selected) && !rustGenericCallableSignaturesMatch(base, selected))
+    ? undefined : selected;
 }
 
 export function denseDefined<T>(values: readonly (T | undefined)[]): readonly T[] | undefined {

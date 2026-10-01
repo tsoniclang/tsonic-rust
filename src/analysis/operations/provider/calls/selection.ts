@@ -475,9 +475,11 @@ export function selectRustCheckedCall(
     const reference = context.source.navigation.sourceReferenceFor(request.source.sourceCallee.expression);
     const binding = context.facts.get(reference?.declaration, rustModuleBindingFactKey);
     const nativeCallable = binding?.storage === "native-callable" &&
-      binding.callableDeclaration === sourceDeclaration;
-    const callableType = declarationKind === "KindFunctionType" || declarationKind === "KindCallSignature" ||
-      !nativeCallable && (declarationKind === "KindArrowFunction" || declarationKind === "KindFunctionExpression");
+      (binding.callableDeclaration === sourceDeclaration ||
+        declarationKind === "KindFunctionType" || declarationKind === "KindCallSignature");
+    const callableType = !nativeCallable && (declarationKind === "KindFunctionType" ||
+      declarationKind === "KindCallSignature" || declarationKind === "KindArrowFunction" ||
+      declarationKind === "KindFunctionExpression");
     const structuralMethod = callableType ? undefined : acceptStructuralRuntimeMethodCall(
       request,
       sourceDeclaration,
@@ -493,7 +495,7 @@ export function selectRustCheckedCall(
         "The exact selected callable value requires a closed native invocation carrier.",
       );
     }
-    return acceptProjectSourceCall(request, sourceDeclaration, context, options);
+    return acceptProjectSourceCall(request, nativeCallable ? binding.callableDeclaration : sourceDeclaration, context, options);
   }
 
   return rejectSelectedOperation(

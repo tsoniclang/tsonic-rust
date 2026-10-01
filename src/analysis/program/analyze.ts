@@ -3,7 +3,7 @@ import { appendRustDiagnostic, rustResolutionContext } from "./walk.js";
 import { createRustModuleBindingPolicy } from "./module-bindings.js";
 import { recordRustModuleValueDeclarations } from "./module-declarations.js";
 import { selectRustClassEnvironment, recordRustClassEnvironmentDemands } from "../objects/class-environments.js";
-import { rustClosureCaptureFactKey } from "../facts/keys.js";
+import { rustClosureCaptureFactKey, rustSourceParameterAbiFactKey } from "../facts/keys.js";
 import { createRustSourceCallableAbiResolver } from "../../policy/ownership/source-callable-abi.js";
 import { createRustSourceProfileRegistry } from "../facts/source-profile-registry.js";
 import { createRustSourceTypeRegistry } from "../project-types/source-type-registry.js";
@@ -83,6 +83,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   const moduleBindings = createRustModuleBindingPolicy(context, promotedStorageDeclarations);
   const sourceCallableAbi = createRustSourceCallableAbiResolver({
     isNativeCallableExpression: moduleBindings.isNativeCallableExpression,
+    parameterAbiFor: parameter => context.facts.get(parameter, rustSourceParameterAbiFactKey),
   });
   let finalizedProjectTypes: RustProjectTypePolicy | undefined;
   const operationOptions: RustOperationsProviderOptions = {

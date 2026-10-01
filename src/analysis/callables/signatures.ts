@@ -42,7 +42,7 @@ import {
 import { rustPlaceholderLifetime, rustStaticLifetime } from "../../target-model/lifetimes/index.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
-import { recordBindingPatternFacts, recordDefaultParameterInitializerFacts, recordParameterAbiFacts, resolveParameterAbi, setParameterAbiFact } from "../declarations/types-and-bindings.js";
+import { recordBindingPatternFacts, recordDefaultParameterInitializerFacts, recordParameterAbiFacts, setParameterAbiFact } from "../declarations/types-and-bindings.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
 import { resolveRustContextualParameterAbi } from "../../policy/ownership/source-callable-abi.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
@@ -309,16 +309,9 @@ function recordCallableValueSignatureFacts(
 ): void {
   const { ast } = walk.context;
   const nativeCallable = walk.moduleBindings.nativeCallable(declaration);
-  if (nativeCallable?.callableDeclaration === expression) {
-    const nativeSignature = resolveAuthoredCallableValueSignature(walk, expression);
-    if (nativeSignature !== undefined) {
-      recordCallableValueSignaturePlan(walk, expression, nativeSignature);
-      setCarrierFact(walk, declaration, rustCallableTargetType(
-        nativeSignature.parameters.map(({ abi }) => abi.parameterCarrier),
-        selectedCallableValueReturn(walk, expression, nativeSignature.returnCarrier),
-      ));
-      return;
-    }
+  if (nativeCallable?.callableDeclaration === expression && Node_Type(ast, declaration) === undefined) {
+    recordFunctionSignatureFacts(walk, expression);
+    return;
   }
   const selectedCarrier = rustGenericCallableValueOwner(ast, declaration, walk.context.facts.get(declaration, rustRuntimeCarrierKey)?.carrier ??
     walk.context.facts.resolve(declaration, rustRuntimeCarrierKey)?.carrier ??
@@ -354,12 +347,19 @@ function recordCallableValueSignatureFacts(
     const parameterCarrier = Node_Initializer(ast, parameter) === undefined
       ? sourceParameterCarrier
       : rustSourceOptionalTargetType(sourceParameterCarrier);
-    const parameterAbi = resolveRustContextualParameterAbi(
+    const contextualAbi = resolveRustContextualParameterAbi(
       parameter,
       parameterCarrier,
       rustResolutionContext(walk, parameter),
       walk.operationOptions,
     );
+    const parameterAbi = contextualAbi === undefined ? undefined
+      : nativeCallable?.callableDeclaration === expression
+        ? walk.sourceCallableAbi.resolveParameterAbi(
+            parameter, rustResolutionContext(walk, parameter), walk.operationOptions,
+            contextualAbi.valueCarrier,
+          )
+        : contextualAbi;
     if (parameterAbi === undefined) {
       return;
     }
@@ -382,6 +382,7 @@ function recordCallableValueSignatureFacts(
       walk.context.facts.get(expression, rustGeneratorFactKey)?.resultCarrier ?? returnCarrier)) {
     return;
   }
+  if (nativeCallable?.callableDeclaration === expression) return;
   const runtimeParameterCarriers = [
     ...parameterAbis.map((abi) => abi.parameterCarrier),
     ...parameterCarriers.slice(parameters.length),
@@ -393,65 +394,6 @@ function recordCallableValueSignatureFacts(
       ? rustGenericCallableTargetType(ownParameters ?? [], runtimeParameterCarriers, valueReturnCarrier, rustGenericCallableValue(selectedCarrier)!.origin)
     : rustCallableTargetType(runtimeParameterCarriers, valueReturnCarrier);
   if (runtimeCarrier !== undefined) setCarrierFact(walk, declaration, runtimeCarrier);
-}
-
-interface RustCallableValueSignaturePlan {
-  readonly parameters: readonly {
-    readonly declaration: Node;
-    readonly abi: import("../../policy/ownership/source-callable-abi.js").RustSourceParameterAbi;
-  }[];
-  readonly returnCarrier: TargetTypeRef;
-}
-
-function resolveAuthoredCallableValueSignature(
-  walk: RustFactWalk,
-  expression: Node,
-): RustCallableValueSignaturePlan | undefined {
-  const { ast } = walk.context;
-  const parameters = ast.parameters(expression);
-  if (!isDenseDataArray(parameters) || parameters.some((parameter) => parameter === undefined)) {
-    return undefined;
-  }
-  const parameterAbis = (parameters as readonly Node[]).map((parameter) =>
-    resolveParameterAbi(walk, parameter));
-  const sourceReturn = selectedSourceCallableReturn(walk, expression);
-  const returnCarrier = selectRustPointerReturnContract(
-    expression,
-    rustResolutionContext(walk, expression),
-    walk.operationOptions,
-  )?.returnCarrier ?? selectRustInferredReturn(walk, expression, resolveRustTargetTypeRef(
-    Node_Type(ast, expression) ?? sourceReturn,
-    rustResolutionContext(walk, expression),
-    walk.operationOptions,
-  ));
-  if (returnCarrier === undefined || parameterAbis.some((abi) => abi === undefined)) {
-    return undefined;
-  }
-  return {
-    parameters: (parameters as readonly Node[]).map((declaration, index) => ({
-      declaration,
-      abi: parameterAbis[index]!,
-    })),
-    returnCarrier,
-  };
-}
-
-function recordCallableValueSignaturePlan(
-  walk: RustFactWalk,
-  expression: Node,
-  signature: RustCallableValueSignaturePlan,
-): void {
-  for (const { declaration: parameter, abi } of signature.parameters) {
-    setCarrierFact(walk, parameter, abi.valueCarrier);
-    setParameterAbiFact(walk, parameter, abi);
-    if (!recordDefaultParameterInitializerFacts(walk, parameter, abi)) {
-      return;
-    }
-  }
-  recordCallableSuspensionFacts(walk, expression);
-  recordCallableReturnFact(walk, expression,
-    walk.context.facts.get(expression, rustAsyncFunctionFactKey)?.outputCarrier ??
-      walk.context.facts.get(expression, rustGeneratorFactKey)?.resultCarrier ?? signature.returnCarrier);
 }
 
 function selectedCallableValueReturn(

@@ -56,6 +56,7 @@ export interface RustSourceCallableAbiResolver {
     parameter: Node,
     context: RustTargetTypeResolutionContext,
     options: RustTargetTypeResolutionOptions,
+    contextualValueCarrier?: TargetTypeRef,
   ): RustSourceParameterAbi | undefined;
 }
 
@@ -112,6 +113,7 @@ export function instantiateRustSourceParameterValueCarrier(
 
 export function createRustSourceCallableAbiResolver(input: {
   readonly isNativeCallableExpression: (expression: Node) => boolean;
+  readonly parameterAbiFor: (parameter: Node) => RustSourceParameterAbi | undefined;
 }): RustSourceCallableAbiResolver {
   const cache = new WeakMap<object, RustSourceParameterAbi | null>();
 
@@ -119,15 +121,18 @@ export function createRustSourceCallableAbiResolver(input: {
     canUseSharedBorrow(parameter, context, options) {
       return parameterCanUseSharedBorrow(parameter, context, options, input.isNativeCallableExpression);
     },
-    resolveParameterAbi(parameter, context, options) {
-      const cached = cache.get(parameter);
+    resolveParameterAbi(parameter, context, options, contextualValueCarrier) {
+      const finalized = input.parameterAbiFor(parameter);
+      if (finalized !== undefined) return contextualValueCarrier === undefined ||
+        rustTargetTypeRefEquals(finalized.valueCarrier, contextualValueCarrier) ? finalized : undefined;
+      const cached = contextualValueCarrier === undefined ? cache.get(parameter) : undefined;
       if (cached !== undefined) {
         return cached ?? undefined;
       }
       const typeNode = Node_Type(context.ast, parameter);
-      let base = typeNode === undefined
+      let base = contextualValueCarrier ?? (typeNode === undefined
         ? resolveRustTargetTypeRef(parameter, context, options)
-        : resolveRustTargetTypeRef(typeNode, context, options);
+        : resolveRustTargetTypeRef(typeNode, context, options));
       if (base === undefined) {
         cache.set(parameter, null);
         return undefined;
@@ -156,8 +161,8 @@ export function createRustSourceCallableAbiResolver(input: {
         "moved",
         context,
       ) || (isRustVecCarrier(base) || isRustStringCarrier(base)) && parameterRetainsWholeValue(parameter, context);
-      const parameterLaneCarrier = form === "required" && typeNode !== undefined
-        ? requiresOwnedValue
+      const parameterLaneCarrier = form === "required"
+        ? requiresOwnedValue || typeNode === undefined
           ? base
           : rustParameterLaneTargetType(base, typeNode, context, options)
         : undefined;

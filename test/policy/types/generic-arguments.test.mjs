@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bindRustSourceAliasArguments } from "../../../dist/policy/types/resolution/generic-arguments.js";
+import { bindRustSourceAliasArguments, bindRustSourceDeclarationArguments } from "../../../dist/policy/types/resolution/generic-arguments.js";
 
 function fixture() {
   const declaration = {};
@@ -46,4 +46,30 @@ test("alias binding rejects conflicting authored and selected alias owners", () 
   context.currentSemantics.types.aliasApplication = selected => selected === type ? application
     : selected === authoredType ? { ...application, declaration: {} } : undefined;
   assert.equal(bindRustSourceAliasArguments(type, context, {}, new Set(), authoredTypeNode), undefined);
+});
+
+test("named source application retains exact native arguments through checked parameter identities", () => {
+  const { declaration, parameter, sourceType, carrier, type, context } = fixture();
+  context.currentSemantics.types.typeArgumentBindings = () => [{ declaration: parameter, argumentType: sourceType }];
+  const selected = bindRustSourceDeclarationArguments(declaration, type, [{ kind: "type", type: carrier }], context);
+  assert.deepEqual(selected?.sourceTypeParameterSubstitutions.get(parameter), { sourceType, carrier });
+  assert.notEqual(selected?.sourceTypeParameterSubstitutions, context.sourceTypeParameterSubstitutions);
+  assert.equal(context.sourceTypeParameterSubstitutions.size, 1);
+});
+
+test("named source application rejects missing, duplicate, foreign, inconsistent and wrong-kind bindings", () => {
+  const { declaration, parameter, sourceType, carrier, type, context } = fixture();
+  const argument = { kind: "type", type: carrier };
+  context.currentSemantics.types.aliasApplication = () => undefined;
+  for (const bindings of [undefined, [], [{ declaration: {}, argumentType: sourceType }],
+    [{ declaration: parameter, argumentType: sourceType }, { declaration: parameter, argumentType: {} }]]) {
+    context.currentSemantics.types.typeArgumentBindings = () => bindings;
+    assert.equal(bindRustSourceDeclarationArguments(declaration, type, [argument], context), undefined);
+  }
+  context.currentSemantics.types.typeArgumentBindings = () => [{ declaration: parameter, argumentType: sourceType }];
+  assert.equal(bindRustSourceDeclarationArguments(declaration, type, [], context), undefined);
+  assert.equal(bindRustSourceDeclarationArguments(declaration, type, [argument, argument], context), undefined);
+  assert.equal(bindRustSourceDeclarationArguments(declaration, type, [{ kind: "lifetime", lifetime: { kind: "static" } }], context), undefined);
+  context.currentSemantics.types.aliasApplication = () => ({ declaration, bindings: [{ declaration: parameter, argument: {} }] });
+  assert.equal(bindRustSourceDeclarationArguments(declaration, type, [argument], context), undefined);
 });

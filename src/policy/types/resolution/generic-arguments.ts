@@ -78,6 +78,74 @@ export function bindRustSourceAliasArguments(
   return { ...context, sourceTypeParameterSubstitutions: substitutions };
 }
 
+export function bindRustSourceDeclarationArguments(
+  declaration: Node,
+  selectedType: Type,
+  arguments_: readonly RustTargetGenericArgument[],
+  context: RustTargetTypeResolutionContext,
+): RustTargetTypeResolutionContext | undefined {
+  const parameters = context.sourceLifetimes.contractFor(declaration)?.parameters ?? [];
+  if (parameters.length !== arguments_.length ||
+    parameters.some((parameter, index) => parameter.kind !== arguments_[index]?.kind)) return undefined;
+  if (parameters.length === 0) return context;
+  const substitutions = new Map(context.sourceTypeParameterSubstitutions);
+  for (const [index, parameter] of parameters.entries()) {
+    const argument = arguments_[index]!;
+    if (parameter.kind !== "type" || argument.kind !== "type") continue;
+    const sourceType = selectedRustSourceDeclarationArgument(selectedType, parameter.declaration, context);
+    if (sourceType === undefined) return undefined;
+    substitutions.set(parameter.declaration, { sourceType, carrier: argument.type });
+  }
+  return { ...context, sourceTypeParameterSubstitutions: substitutions };
+}
+
+export function selectedRustSourceDeclarationArgument(
+  type: Type,
+  parameter: Node,
+  context: RustTargetTypeResolutionContext,
+): Type | undefined {
+  const alias = context.currentSemantics.types.aliasApplication(type)?.bindings
+    .filter(binding => binding.declaration === parameter).map(binding => binding.argument) ?? [];
+  const referenced = context.currentSemantics.types.typeArgumentBindings(type)
+    ?.filter(binding => binding.declaration === parameter).map(binding => binding.argumentType) ?? [];
+  if (alias.length > 1 || referenced.length > 1) return undefined;
+  const arguments_ = [...new Set([...alias, ...referenced])];
+  return arguments_.length === 1 ? arguments_[0] : undefined;
+}
+
+export function resolveRustSourceDeclarationArguments(
+  argumentNodes: readonly Node[],
+  contract: import("../../../target-model/lifetimes/index.js").RustSourceGenericContract,
+  context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
+  resolving: Set<object>,
+  selectedType: Type | undefined,
+): import("./project.js").RustResolvedProjectGenericArguments | undefined {
+  if (argumentNodes.length > contract.parameters.length) return undefined;
+  const values: import("../../../target-model/types/model.js").RustTargetGenericArgument[] = [];
+  for (const [index, parameter] of contract.parameters.entries()) {
+    const argument = argumentNodes[index] ?? context.ast.as.AsTypeParameterDeclaration(parameter.declaration)?.DefaultType;
+    if (argument === undefined) return undefined;
+    if (parameter.kind === "lifetime") {
+      const lifetime = context.sourceLifetimes.resolve(argument);
+      if (lifetime === undefined) return undefined;
+      values.push(Object.freeze({ kind: "lifetime", lifetime }));
+    } else {
+      const type = resolveRustAuthoredTargetType(argument, context, options, resolving);
+      if (type === undefined) return undefined;
+      values.push(Object.freeze({ kind: "type", type }));
+      const sourceType = selectedType === undefined ? undefined
+        : selectedRustSourceDeclarationArgument(selectedType, parameter.declaration, context);
+      if (sourceType !== undefined) {
+        const substitutions = new Map(context.sourceTypeParameterSubstitutions);
+        substitutions.set(parameter.declaration, { sourceType, carrier: type });
+        context = { ...context, sourceTypeParameterSubstitutions: substitutions };
+      } else if (argumentNodes[index] === undefined) return undefined;
+    }
+  }
+  return Object.freeze({ values: Object.freeze(values) });
+}
+
 export function selectedRustSourceTypeArgument(type: Type, context: RustTargetTypeResolutionContext): Type {
   const declaration = sourceTypeParameterDeclaration(type, context);
   return declaration === undefined

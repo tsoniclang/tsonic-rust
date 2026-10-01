@@ -275,7 +275,8 @@ export function applySelectedProjectSourceCall(
   const directCallableDeclaration = calleeReferenceDeclaration === selectedDeclaration ||
     (calleeImplementation?.kind === "resolved" &&
       calleeImplementation.implementation.declaration === selectedDeclaration);
-  const callableCalleeCarrier = expressionKind === KindNewExpression
+  const callableCalleeCarrier = expressionKind === KindNewExpression || directModuleFunction ||
+    declarationKind === KindFunctionDeclaration && calleeReferenceDeclaration === selectedDeclaration
     ? undefined
     : resolveExpressionCarrier(walk, callee, sourceFile, undefined);
   const optionalCall = walk.context.facts.get(expression, rustOptionalChainFactKey) ??

@@ -64,6 +64,7 @@ import { resolveRustConditionalAlias } from "./type-families.js";
 import { tsonicMemoryFieldBindingFactKey, selectTsonicMemoryFieldBinding } from "@tsonic/source-core/facts";
 import { selectRustConditionalNumericCarrier } from "../conditional-numeric-carrier.js";
 import { resolveRustProviderIndexedAccess } from "./indexed-access.js";
+import { resolveRustSourceDeclarationArguments } from "./generic-arguments.js";
 
 export function resolveRustTargetTypeRef(
   subject: ExtensionFactSubject | undefined,
@@ -470,12 +471,13 @@ export function resolveRustTargetTypeSyntax(
   const sourceGenericContract = context.sourceLifetimes.contractFor(referencedDeclaration);
   const sourceGenericArguments = sourceGenericContract === undefined
     ? undefined
-    : resolveProjectGenericArguments(
+    : resolveRustSourceDeclarationArguments(
         typeArgumentNodes,
         sourceGenericContract,
         context,
         options,
         resolving,
+        selectedType,
       );
   const typeArguments = sourceGenericArguments === undefined
     ? typeArgumentNodes.map((argument) =>
@@ -656,33 +658,6 @@ function constIntegerText(
     : operator === "KindPlusToken"
       ? value.toString(10)
       : undefined;
-}
-
-function resolveProjectGenericArguments(
-  argumentNodes: readonly Node[],
-  contract: import("../../../target-model/lifetimes/index.js").RustSourceGenericContract,
-  context: RustTargetTypeResolutionContext,
-  options: RustTargetTypeResolutionOptions,
-  resolving: Set<object>,
-): import("./project.js").RustResolvedProjectGenericArguments | undefined {
-  if (argumentNodes.length !== contract.parameters.length) return undefined;
-  const values: import("../../../target-model/types/model.js").RustTargetGenericArgument[] = [];
-  for (const [index, parameter] of contract.parameters.entries()) {
-    const argument = argumentNodes[index];
-    if (argument === undefined) return undefined;
-    if (parameter.kind === "lifetime") {
-      const lifetime = context.sourceLifetimes.resolve(argument);
-      if (lifetime === undefined) return undefined;
-      values.push(Object.freeze({ kind: "lifetime", lifetime }));
-    } else {
-      const type = resolveRustAuthoredTargetType(argument, context, options, resolving);
-      if (type === undefined) return undefined;
-      values.push(Object.freeze({ kind: "type", type }));
-    }
-  }
-  return Object.freeze({
-    values: Object.freeze(values),
-  });
 }
 
 function resolveRustCheckerTransformedType(
