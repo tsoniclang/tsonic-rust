@@ -1,4 +1,4 @@
-import type { Node, Signature, Type } from "@tsonic/tsts";
+import type { Node, TypeSignatureInfo, Type } from "@tsonic/tsts";
 import { ArrayTypeNode_ElementType } from "@tsonic/target-api/source";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
@@ -25,7 +25,7 @@ export function retainRustStructuralInstantiation(
 ): boolean {
   if (!containsStructuralStorage(templateCarrier)) return true;
   if (rustGenericCallableProtocol(templateCarrier) !== undefined || rustCallableProtocol(templateCarrier) !== undefined) {
-    const signatures = context.currentSemantics.types.callSignatures(sourceType);
+    const signatures = context.currentSemantics.types.signatureInfos(sourceType, "call");
     return signatures.length === 1 && retainSignature(signatures[0]!, templateCarrier, carrier, context, options, resolving);
   }
   const templateElement = templateCarrier.kind === "array" ? templateCarrier.element :
@@ -62,7 +62,7 @@ export function retainRustStructuralInstantiation(
   if (template.construction !== undefined && (construction === undefined ||
     !rustTargetTypeRefEquals(construction.carrier, structural.construction))) return false;
   if (template.construction !== undefined && construction !== undefined &&
-    !retainSignature(construction.signature, template.construction.carrier, construction.carrier, context, options, resolving)) return false;
+    !retainSignature(construction.signatureInfo, template.construction.carrier, construction.carrier, context, options, resolving)) return false;
   const fields = template.fields.map(field => {
     const matches = correspondence.members.filter(pair => field.symbols.includes(pair.destination.property.symbol));
     if (matches.length !== 1) return undefined;
@@ -118,13 +118,13 @@ function containsStructuralStorage(carrier: TargetTypeRef): boolean {
 }
 
 function retainSignature(
-  signature: Signature, templateCarrier: TargetTypeRef, carrier: TargetTypeRef,
+  signature: TypeSignatureInfo, templateCarrier: TargetTypeRef, carrier: TargetTypeRef,
   context: RustTargetTypeResolutionContext, options: RustTargetTypeResolutionOptions, resolving: Set<object>,
 ): boolean {
   const template = rustGenericCallableProtocol(templateCarrier) ?? rustCallableProtocol(templateCarrier);
   const selected = rustGenericCallableProtocol(carrier) ?? rustCallableProtocol(carrier);
-  const result = context.currentSemantics.types.returnType(signature);
-  const parameters = context.currentSemantics.types.signatureParameterInfos(signature);
+  const result = signature.returnType;
+  const parameters = signature.parameters;
   if (template === undefined || selected === undefined || result === undefined ||
     template.parameters.length !== selected.parameters.length || parameters.length !== selected.parameters.length ||
     !retainRustStructuralInstantiation(result, template.result, selected.result, context, options, resolving)) return false;

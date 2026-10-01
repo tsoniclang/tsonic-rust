@@ -45,8 +45,8 @@ export function selectRustProjectStructuralView(
     const member = pair.source.getters[0] ?? pair.source.declarations[0];
     if (member === undefined) return false;
     if (field.method) {
-      const sourceSignatures = semantics.types.callSignatures(pair.source.property.type);
-      const destinationSignatures = semantics.types.callSignatures(pair.destination.property.type);
+      const sourceSignatures = semantics.types.signatureInfos(pair.source.property.type, "call");
+      const destinationSignatures = semantics.types.signatureInfos(pair.destination.property.type, "call");
       const callable = sourceSignatures.length === 1 && destinationSignatures.length === 1
         ? selectRustClassValueCallable(walk, declaration, sourceSignatures[0]!, destinationSignatures[0]!, field.resultCarrier, false, semantics, true, sourceCarrier)
         : undefined;

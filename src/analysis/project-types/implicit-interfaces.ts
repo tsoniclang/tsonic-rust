@@ -7,6 +7,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustSourceTypeCarrierValue, substituteRustTargetTypeParameters } from "../../target-model/types/index.js";
 import { inferRustTargetTypeParameterBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
 import type { RustImplicitInterfaceContract } from "../../target-model/types/project-interfaces.js";
 
 export function collectRustImplicitInterfaceContracts(walk: RustFactWalk): readonly RustImplicitInterfaceContract[] {
@@ -18,11 +19,11 @@ export function collectRustImplicitInterfaceContracts(walk: RustFactWalk): reado
     if (targetsSeen.has(target)) return;
     targetsSeen.add(target);
     visited.set(source, targetsSeen);
-    const sourceConstructs = semantics.types.constructSignatures(source);
-    const targetConstructs = semantics.types.constructSignatures(target);
+    const sourceConstructs = semantics.types.signatureInfos(source, "construct");
+    const targetConstructs = semantics.types.signatureInfos(target, "construct");
     if (sourceConstructs.length === 1 && targetConstructs.length === 1) {
-      const sourceResult = semantics.types.returnType(sourceConstructs[0]!);
-      const targetResult = semantics.types.returnType(targetConstructs[0]!);
+      const sourceResult = sourceConstructs[0]!.returnType;
+      const targetResult = targetConstructs[0]!.returnType;
       if (sourceResult !== undefined && targetResult !== undefined) collect(sourceResult, targetResult, subject, semantics);
       return;
     }
@@ -45,12 +46,10 @@ export function collectRustImplicitInterfaceContracts(walk: RustFactWalk): reado
     const context = rustResolutionContext(walk, subject);
     const resolve = (type: Type) => resolveRustTargetTypeRef(type, context, walk.operationOptions);
     const openSource = resolve(sourceTemplate);
-    const selectedSource = resolve(source);
     const openTarget = resolve(targetTemplate);
-    const selectedTarget = resolve(target);
     const sourceValue = rustSourceTypeCarrierValue(openSource);
     const targetValue = rustSourceTypeCarrierValue(openTarget);
-    if (openSource === undefined || selectedSource === undefined || openTarget === undefined || selectedTarget === undefined ||
+    if (openSource === undefined || openTarget === undefined ||
       sourceValue === undefined || targetValue === undefined) return;
     const names = (value: NonNullable<typeof sourceValue>) => new Set(value.genericArguments.flatMap(argument =>
       argument.kind === "type" && argument.type.kind === "type-parameter" ? [argument.type.identity] : []));
@@ -77,8 +76,8 @@ export function collectRustImplicitInterfaceContracts(walk: RustFactWalk): reado
     }
     if ([...targetNames].some(name => !substitutions.has(name))) return;
     const carrier = substituteRustTargetTypeParameters(openTarget, substitutions);
-    const instantiated = inferRustTargetTypeParameterBindings(openSource, selectedSource, names(sourceValue));
-    if (instantiated === undefined || !rustTargetTypeRefEquals(substituteRustTargetTypeParameters(carrier, instantiated), selectedTarget)) return;
+    const sourceNames = names(sourceValue);
+    if (rustTargetTypeParameterIdentities(carrier).some(identity => !sourceNames.has(identity))) return;
     if (!contracts.some(contract => contract.source === sourceDeclaration && contract.target === targetDeclaration &&
       rustTargetTypeRefEquals(contract.carrier, carrier))) contracts.push(Object.freeze({ source: sourceDeclaration, target: targetDeclaration,
         subject, carrier, members: Object.freeze(members) }));

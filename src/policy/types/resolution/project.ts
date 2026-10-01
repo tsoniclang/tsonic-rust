@@ -70,10 +70,10 @@ export function resolveProjectSourceCarrier(
     }
     const carrier = options.sourceTypes.carrierForDeclaration(declaration, context.ast);
     if (selectedType !== undefined && (context.ast.is.IsClassDeclaration(declaration) || context.ast.is.IsClassExpression(declaration))) {
-      const signatures = context.currentSemantics.types.constructSignatures(selectedType);
+      const signatures = context.currentSemantics.types.signatureInfos(selectedType, "construct");
       if (signatures.length > 0) {
         const instances = signatures.map(signature => {
-          const result = context.currentSemantics.types.returnType(signature);
+          const result = signature.returnType;
           return result === undefined ? undefined : resolveRustTargetType(result, context, options, resolving);
         });
         const instance = instances[0];

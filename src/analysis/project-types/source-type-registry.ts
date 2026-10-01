@@ -287,7 +287,7 @@ export function createRustSourceTypeRegistry(
       if (sameCarrier.some((existing) =>
         !sourceObjectTargetContractEquals(existing, normalized) ||
         existing.construction?.declaration !== normalized.construction?.declaration ||
-        existing.construction?.signature !== normalized.construction?.signature
+        existing.construction?.signatureInfo.signature !== normalized.construction?.signatureInfo.signature
       )) {
         return false;
       }
@@ -743,7 +743,7 @@ function sourceObjectShapeEquals(
   return left.sourceType === right.sourceType &&
     left.sourceAlias === right.sourceAlias &&
     left.construction?.declaration === right.construction?.declaration &&
-    left.construction?.signature === right.construction?.signature &&
+    left.construction?.signatureInfo.signature === right.construction?.signatureInfo.signature &&
     rustTargetTypeRefEquals(left.construction?.carrier, right.construction?.carrier) &&
     left.storage === right.storage &&
     rustTargetTypeRefEquals(left.carrier, right.carrier) &&

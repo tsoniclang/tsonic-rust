@@ -1,4 +1,4 @@
-import type { Node, Signature } from "@tsonic/tsts";
+import type { Node, TypeSignatureInfo } from "@tsonic/tsts";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustFactWalk } from "../program/walk.js";
@@ -25,8 +25,8 @@ export interface RustClassValueCallable {
 export function selectRustClassValueCallable(
   walk: RustFactWalk,
   classDeclaration: Node,
-  sourceSignature: Signature,
-  targetSignature: Signature,
+  source: TypeSignatureInfo,
+  destination: TypeSignatureInfo,
   targetCarrier: TargetTypeRef,
   construction: boolean,
   semantics: SourceFileSemantics,
@@ -34,6 +34,7 @@ export function selectRustClassValueCallable(
   selectedOwnerCarrier?: TargetTypeRef,
 ): RustClassValueCallable | undefined {
   const { ast, projectTypes } = walk.context;
+  const sourceSignature = source.signature;
   const owner = projectTypes.definitionForDeclaration(classDeclaration);
   const sourceDeclaration = semantics.declarations.signatureDeclaration(sourceSignature);
   const target = rustCallableProtocol(targetCarrier);
@@ -55,7 +56,7 @@ export function selectRustClassValueCallable(
     const abi = parameter === undefined ? undefined : resolveParameterAbi(walk, parameter);
     return abi === undefined ? undefined : substituteRustCallableParameterAbi(abi, substitutions);
   });
-  const selectedParameters = semantics.types.signatureParameterInfos(targetSignature);
+  const selectedParameters = destination.parameters;
   if (implementationParameters.some(parameter => parameter === undefined) || selectedParameters.length !== target.parameters.length) return undefined;
   const parameters = selectedParameters.map((parameter, index): RustCallableParameterAbi => ({
     form: parameter.parameterKind,
@@ -66,13 +67,13 @@ export function selectRustClassValueCallable(
   }));
   const parameterAdapters = selectRustCallableParameterAdapters(parameters,
     implementationParameters as RustCallableParameterAbi[], projectTypes, walk.context.typeDefinitions);
-  const resultSubject = ast.typeNode(declaration) ?? semantics.types.returnType(sourceSignature);
+  const resultSubject = ast.typeNode(declaration) ?? source.returnType;
   const declaredResult = construction ? ownerCarrier : resultSubject === undefined ? undefined :
     resolveRustTargetTypeRef(resultSubject, rustResolutionContext(walk, declaration), walk.operationOptions);
   const sourceResult = declaredResult === undefined ? undefined : substituteRustTargetTypeParameters(declaredResult, substitutions);
   const selectedResultAdapter = sourceResult === undefined ? undefined : selectRustCallableValueAdapter(sourceResult, target.result,
     projectTypes, walk.context.typeDefinitions);
-  const sourceInstanceType = semantics.types.returnType(sourceSignature);
+  const sourceInstanceType = source.returnType;
   const resultAdapter: RustCallableValueAdapter | undefined = selectedResultAdapter ??
     (construction && sourceResult !== undefined && sourceInstanceType !== undefined &&
       selectRustProjectStructuralView(walk, classDeclaration, sourceResult, target.result, semantics, sourceInstanceType)

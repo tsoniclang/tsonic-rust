@@ -15,11 +15,11 @@ export function createRustStructuralStorageCollector(
       .map(declaration => projectTypes.definitionForDeclaration(declaration))
       .filter(definition => definition?.kind === "class");
     if (definitions.length !== 1) return;
-    const sourceConstructs = semantics.types.constructSignatures(source);
-    const targetConstructs = semantics.types.constructSignatures(target);
+    const sourceConstructs = semantics.types.signatureInfos(source, "construct");
+    const targetConstructs = semantics.types.signatureInfos(target, "construct");
     if (sourceConstructs.length === 1 && targetConstructs.length === 1) {
-      const sourceInstance = semantics.types.returnType(sourceConstructs[0]!);
-      const targetInstance = semantics.types.returnType(targetConstructs[0]!);
+      const sourceInstance = sourceConstructs[0]!.returnType;
+      const targetInstance = targetConstructs[0]!.returnType;
       if (sourceInstance !== undefined && targetInstance !== undefined) collectPair(sourceInstance, targetInstance, semantics);
       return;
     }

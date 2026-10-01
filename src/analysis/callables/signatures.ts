@@ -534,10 +534,10 @@ export function selectedSourceCallableReturn(walk: RustFactWalk, declaration: No
   if (callableType === undefined) {
     return undefined;
   }
-  const signatures = semantics.types.callSignatures(callableType).filter((signature) =>
-    semantics.declarations.signatureDeclaration(signature) === declaration);
+  const signatures = semantics.types.signatureInfos(callableType, "call").filter((signature) =>
+    semantics.declarations.signatureDeclaration(signature.signature) === declaration);
   return signatures.length === 1
-    ? semantics.types.returnType(signatures[0]!)
+    ? signatures[0]!.returnType
     : undefined;
 }
 

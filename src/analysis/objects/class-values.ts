@@ -315,9 +315,14 @@ export function selectRustClassValueView(
   if (correspondence.kind !== "available" || correspondence.destination.calls.length !== 0 ||
     correspondence.destination.constructs.length !== (shape.construction === undefined ? 0 : 1) || correspondence.destination.indexes.length !== 0 ||
     correspondence.members.length !== shape.fields.length) { reject(); return false; }
-  const construction = shape.construction === undefined || correspondence.source.constructs.length !== 1
-    ? undefined : selectRustClassValueCallable(walk, declaration, correspondence.source.constructs[0]!,
-      correspondence.destination.constructs[0]!, shape.construction.carrier, true, semantics, false, sourceCarrier);
+  const sourceConstructs = semantics.types.signatureInfos(sourceType, "construct");
+  const targetConstructs = semantics.types.signatureInfos(destinationType, "construct");
+  const construction = shape.construction === undefined || correspondence.source.constructs.length !== 1 ||
+    sourceConstructs.length !== 1 || targetConstructs.length !== 1 ||
+    sourceConstructs[0]!.signature !== correspondence.source.constructs[0] ||
+    targetConstructs[0]!.signature !== correspondence.destination.constructs[0]
+    ? undefined : selectRustClassValueCallable(walk, declaration, sourceConstructs[0]!,
+      targetConstructs[0]!, shape.construction.carrier, true, semantics, false, sourceCarrier);
   if (shape.construction !== undefined && construction === undefined) { reject(); return false; }
   const fields: RustClassValueView["fields"][number][] = [];
   for (const field of shape.fields) {
@@ -327,8 +332,8 @@ export function selectRustClassValueView(
     const sourceDeclaration = pair.source.declarations[0]!;
     if (ast.parent(sourceDeclaration) !== declaration) { reject(); return false; }
     if (field.method === true && pair.source.read === "method") {
-      const sourceSignatures = semantics.types.callSignatures(pair.source.property.type);
-      const targetSignatures = semantics.types.callSignatures(pair.destination.property.type);
+      const sourceSignatures = semantics.types.signatureInfos(pair.source.property.type, "call");
+      const targetSignatures = semantics.types.signatureInfos(pair.destination.property.type, "call");
       const callable = sourceSignatures.length === 1 && targetSignatures.length === 1
         ? selectRustClassValueCallable(walk, declaration, sourceSignatures[0]!, targetSignatures[0]!, field.resultCarrier, false, semantics, false, sourceCarrier) : undefined;
       if (callable === undefined) { reject(); return false; }
