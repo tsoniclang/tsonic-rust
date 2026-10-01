@@ -12,9 +12,8 @@ import {
 } from "@tsonic/target-api/source";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planExpression } from "./entry.js";
-import { planRustNonConsumingValue, planRustSharedReceiver, planRustValueRead } from "./typed-locations.js";
-import { planRustIndexedRecordStorage } from "../objects/indexed-records.js";
-import { applyRustArgumentMode } from "./input-shaping.js";
+import { planRustNonConsumingValue, planRustValueRead } from "./typed-locations.js";
+import { planRustSourceIndexRead } from "../objects/indexed-records.js";
 import { requireProviderArgumentPassingFacts } from "./calls/arguments.js";
 import { rustOptionalChainFactKey } from "../../../analysis/facts/keys.js";
 import { rustComputedMemberFactKey } from "../../../analysis/facts/operations/keys.js";
@@ -44,52 +43,7 @@ function planElementAccessInner(node: Node, context: RustPlanContext): RustExpr 
   const fact = rustOperationFact(node, context);
   if (fact?.kind === "source-indexed-field") return planRustIndexedFieldRead(node, fact, context);
   if (fact !== undefined && fact.kind === "source-index-signature") {
-    const resultCarrier = effectiveMemberResultCarrier(node, fact.resultCarrier, context);
-    if (resultCarrier === undefined || !requireExpressionCarrier(
-      node,
-      resultCarrier,
-      context,
-      "rust.backend.project-index-carrier",
-    ) || !selectedOperationMatches(
-      context.input.program.facts.getSelectedTargetElementAccess(node),
-      fact.operationId,
-      "indexer",
-      resultCarrier,
-    )) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, node),
-        "rust.backend.project-index-selected-evidence",
-        "Project index access conflicts with the TSTS-selected index-signature fact.",
-      ));
-      return undefined;
-    }
-    const receiverNode = Node_Expression(context.input.program.source.ast, node);
-    const keyNode = ElementAccessExpression_ArgumentExpression(context.input.program.source.ast, node);
-    const plannedReceiver = receiverNode === undefined
-      ? undefined
-      : planExpression(receiverNode, context);
-    const key = keyNode === undefined ? undefined : planExpression(keyNode, context);
-    const storage = planRustIndexedRecordStorage(fact.receiverCarrier, fact.keyCarrier, fact.resultCarrier, fact.storage, context);
-    if (receiverNode === undefined || plannedReceiver === undefined || key === undefined ||
-      storage === undefined || context.syntheticNames === undefined) {
-      return undefined;
-    }
-    const receiverName = allocateRustSyntheticName(context.syntheticNames, "index_receiver");
-    const keyName = allocateRustSyntheticName(context.syntheticNames, "index_key");
-    return {
-      kind: "block",
-      bindings: [{
-        name: receiverName,
-        value: planRustSharedReceiver(receiverNode, plannedReceiver, context),
-      }, {
-        name: keyName,
-        value: applyRustArgumentMode(context, key, "ref", keyNode),
-      }],
-      value: storage.read(
-        { kind: "path", path: receiverName },
-        { kind: "path", path: keyName },
-      ),
-    };
+    return planRustSourceIndexRead(node, fact, context, planExpression);
   }
   if (fact !== undefined && fact.kind === "fixed-index") {
     const optional = context.input.program.facts.getFact(node, rustOptionalChainFactKey);

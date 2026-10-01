@@ -1,4 +1,4 @@
-import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustCheckedDeleteSelectionInput, RustCheckedElementSelectionInput, RustCheckedOperationSelectionResult, RustOperationPolicyContext, RustPolicySelection } from "../../../policy/operations/contracts.js";
+import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustCheckedDeleteSelectionInput, RustCheckedElementSelectionInput, RustCheckedPropertySelectionInput, RustCheckedOperationSelectionResult, RustOperationPolicyContext, RustPolicySelection } from "../../../policy/operations/contracts.js";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustRecordCarrierValue } from "../../../target-model/types/carriers/records.js";
@@ -35,6 +35,32 @@ export function selectRustRecordElement(
     accessMode: request.accessMode,
     keyCarrier: record.key, resultCarrier: record.value, writable: !member.index.readonly, storage: { kind: "record" },
   }, context, options, elementProvenance(request));
+}
+
+export function selectRustRecordProperty(
+  request: RustCheckedPropertySelectionInput,
+  receiver: TargetTypeRef | undefined,
+  context: RustOperationPolicyContext,
+  options: RustOperationsProviderOptions,
+): RustPolicySelection<RustCheckedOperationSelectionResult> | undefined {
+  const index = request.sourceSelectedIndex;
+  const record = rustRecordCarrierValue(receiver);
+  if (index === undefined || record === undefined || receiver === undefined) return undefined;
+  const key = index.keyType === undefined ? undefined : resolveRustTargetTypeRef(index.keyType, context, options);
+  if (index.valueType === undefined ||
+    context.semanticsFor(request.expression).operations.propertyAccess(request.expression)?.selectedIndex !== index ||
+    !isRustStringCarrier(record.key) || !rustTargetTypeRefEquals(key, record.key) ||
+    request.accessMode !== "read" && index.readonly) {
+    return rejectSelectedOperation(request.expression, context, "RUST_RECORD_INDEX_NOT_CLOSED",
+      "Named records require their exact checked string index, native value carrier and writable storage when mutated.");
+  }
+  return acceptRustMemberOperation(request, "property", {
+    kind: "source-index-signature", operationId: "tsonic.rust.record.index", receiverCarrier: receiver,
+    accessMode: request.accessMode, keyCarrier: record.key, resultCarrier: record.value,
+    writable: !index.readonly, storage: { kind: "record" },
+  }, context, options, { sourceExpression: request.expression, sourceReceiver: request.receiver,
+    sourceSelectedDeclaration: request.sourceSelectedDeclaration, sourceSelectedSymbol: request.sourceSelectedSymbol,
+    sourceResultType: request.sourceResultType });
 }
 
 export function selectRustRecordObjectCall(

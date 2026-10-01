@@ -1,4 +1,5 @@
 import { allocateRustSyntheticName } from "../names/synthetic.js";
+import { planRustSourceIndexRead } from "../objects/indexed-records.js";
 import {
   diagnosticInput,
   isValidRustIdentifier,
@@ -47,6 +48,7 @@ export function planPropertyAccess(node: Node, context: RustPlanContext): RustEx
 }
 function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
+  if (fact?.kind === "source-index-signature") return planRustSourceIndexRead(node, fact, context, planExpression);
   if (fact?.kind === "builtin-error-property") {
     return planRustBuiltinErrorProperty(node, fact, context);
   }
@@ -655,19 +657,6 @@ export function sourceUnionFieldSelectedOperationMatches(
     context.input.program.facts.getSelectedTargetProperty(node),
     fact.operationId,
     "property",
-    fact.resultCarrier,
-  );
-}
-
-export function sourceIndexSelectedOperationMatches(
-  node: Node,
-  fact: Extract<RustTargetOperationFact, { readonly kind: "source-index-signature" }>,
-  context: RustPlanContext,
-): boolean {
-  return selectedOperationMatches(
-    context.input.program.facts.getSelectedTargetElementAccess(node),
-    fact.operationId,
-    "indexer",
     fact.resultCarrier,
   );
 }

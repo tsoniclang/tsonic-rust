@@ -1,11 +1,9 @@
 import {
-  expressionCarrier,
   planExpression,
   planRustOperatorCallExpression,
   finishRustSourceAccessorCall,
   planRustSourceAccessorCall,
   sourceAccessorSelectedOperationMatches,
-  sourceIndexSelectedOperationMatches,
   sourceMethodPropertySelectedOperationMatches,
   sourceStaticFieldSelectedOperationMatches,
 } from "../expressions/index.js";
@@ -17,7 +15,6 @@ import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { diagnosticInput, rustActiveErrorType } from "../program/plan-context.js";
 import { checkRustDataWrite } from "../objects/data-writes.js";
 import {
-  ElementAccessExpression_ArgumentExpression,
   KindIdentifier,
   Node_Expression,
 } from "@tsonic/target-api/source";
@@ -27,9 +24,8 @@ import { missingFactDiagnostic } from "../diagnostics.js";
 import { planRustMutableProjectReceiver, planRustPromotedStorageLocation } from "../expressions/typed-locations.js";
 import { rustSelectedAccessorRequiresUnsafe } from "../safety/explicit-safety.js";
 import { planRustSourceStaticFieldStorage } from "../declarations/classes/static-field-storage.js";
-import { planRustIndexedRecordStorage } from "../objects/indexed-records.js";
+import { planRustIndexedRecordStorage, planRustSourceIndexKey, sourceIndexSelectedOperationMatches } from "../objects/indexed-records.js";
 import { rustStringConcat } from "../../target-ast/expressions.js";
-import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustAssignmentOperationPlan } from "./core.js";
 import type { RustAssignmentOperator, RustBinaryOperator } from "../../../target-model/syntax/tokens.js";
@@ -528,16 +524,13 @@ export function planRustSourceIndexAssignment(
     return undefined;
   }
   const receiverNode = Node_Expression(context.input.program.source.ast, target);
-  const keyNode = ElementAccessExpression_ArgumentExpression(context.input.program.source.ast, target);
   const plannedReceiver = receiverNode === undefined
     ? undefined
     : planExpression(receiverNode, context);
-  const key = keyNode === undefined ? undefined : planExpression(keyNode, context);
+  const key = planRustSourceIndexKey(target, index, context, planExpression, false);
   const value = planExpression(valueNode, context);
   const storage = planRustIndexedRecordStorage(index.receiverCarrier, index.keyCarrier, index.resultCarrier, index.storage, context);
-  if (receiverNode === undefined || plannedReceiver === undefined || keyNode === undefined ||
-    key === undefined || value === undefined || storage === undefined ||
-    !rustTargetTypeRefEquals(expressionCarrier(keyNode, context), index.keyCarrier)) {
+  if (receiverNode === undefined || plannedReceiver === undefined || key === undefined || value === undefined || storage === undefined) {
     return undefined;
   }
   const receiverName = allocateRustSyntheticName(context.syntheticNames, "index_receiver");

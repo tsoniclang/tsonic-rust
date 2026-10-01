@@ -34,6 +34,7 @@ import type { RustOperationsProviderOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { selectRustNumberArrayUnionMember } from "./number-array-unions.js";
 import { rustClassConstructorInstance } from "../../../target-model/types/carriers/class-constructors.js";
+import { selectRustRecordProperty } from "./records.js";
 
 export function checkedPropertySelectionInput(
   context: RustOperationPolicyContext,
@@ -54,6 +55,7 @@ export function checkedPropertySelectionInput(
     ...(source.selectedDeclaration === undefined ? {} : { sourceSelectedDeclaration: source.selectedDeclaration }),
     ...(source.selectedReadDeclaration === undefined ? {} : { sourceSelectedReadDeclaration: source.selectedReadDeclaration }),
     ...(source.selectedWriteDeclaration === undefined ? {} : { sourceSelectedWriteDeclaration: source.selectedWriteDeclaration }),
+    ...(source.selectedIndex === undefined ? {} : { sourceSelectedIndex: source.selectedIndex }),
     ...(source.sourceReadType === undefined ? {} : { sourceReadType: source.sourceReadType }),
     ...(source.sourceWriteType === undefined ? {} : { sourceWriteType: source.sourceWriteType }),
     sourceResultType: source.sourceReadType ?? source.sourceWriteType,
@@ -216,6 +218,8 @@ export function selectRustCheckedPropertyAccess(
   }
   const numericArrayMember = selectRustNumberArrayUnionMember(request, selectedReceiverCarrier, context, options);
   if (numericArrayMember !== undefined) return numericArrayMember;
+  const record = selectRustRecordProperty(request, selectedReceiverCarrier, context, options);
+  if (record !== undefined) return record;
   const structuralProperty = selectStructuralSourceProperty(
     request,
     selectedReceiverCarrier,

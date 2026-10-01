@@ -3,20 +3,19 @@ import {
   KindNumericLiteral,
   KindParenthesizedExpression,
   KindPostfixUnaryExpression,
-  ElementAccessExpression_ArgumentExpression,
   Node_Expression,
   Node_Operand,
 } from "@tsonic/target-api/source";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { diagnosticInput } from "../../program/plan-context.js";
-import { expressionCarrier, negateRustPlannedBooleanExpression, planNumericLiteralWithCarrier, requireExpressionCarrier, rustOperationFact, selectedOperationMatches } from "../fundamentals.js";
+import { negateRustPlannedBooleanExpression, planNumericLiteralWithCarrier, requireExpressionCarrier, rustOperationFact, selectedOperationMatches } from "../fundamentals.js";
 import { findRustUpdateProjectField, planRustBorrowedUpdateLocation, planRustDirectStorage, planRustOwnedUpdateLocation, planRustSourceFieldUpdate, planRustUpdateProjectionArguments, planRustUpdateValue } from "./target.js";
 import { planRustValueFieldLocation, rustSourceFieldHasValueReceiver } from "../../objects/value-fields.js";
-import { finishRustSourceAccessorCall, planRustSourceAccessorCall, sourceAccessorSelectedOperationMatches, sourceIndexSelectedOperationMatches, sourceStaticFieldSelectedOperationMatches, sourceUnionFieldSelectedOperationMatches } from "../properties.js";
+import { finishRustSourceAccessorCall, planRustSourceAccessorCall, sourceAccessorSelectedOperationMatches, sourceStaticFieldSelectedOperationMatches, sourceUnionFieldSelectedOperationMatches } from "../properties.js";
 import { isRustBigIntCarrier, isRustBoolCarrier } from "../../../../target-model/types/index.js";
 import { applyRustValueConversion } from "../value-conversions.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
-import { planRustIndexedRecordStorage } from "../../objects/indexed-records.js";
+import { planRustIndexedRecordStorage, planRustSourceIndexKey, sourceIndexSelectedOperationMatches } from "../../objects/indexed-records.js";
 import { planExpression } from "../entry.js";
 import { planRustMutableProjectReceiver, planRustPromotedStorageLocation } from "../typed-locations.js";
 import { planRustSourceUnionFieldProjection, mutateRustUnionField } from "../unions.js";
@@ -306,15 +305,12 @@ function planRustSourceIndexUpdate(
     return undefined;
   }
   const receiverNode = Node_Expression(context.input.program.source.ast, expression);
-  const keyNode = ElementAccessExpression_ArgumentExpression(context.input.program.source.ast, expression);
   const plannedReceiver = receiverNode === undefined
     ? undefined
     : planExpression(receiverNode, context);
-  const key = keyNode === undefined ? undefined : planExpression(keyNode, context);
+  const key = planRustSourceIndexKey(expression, index, context, planExpression, false);
   const storage = planRustIndexedRecordStorage(index.receiverCarrier, index.keyCarrier, index.resultCarrier, index.storage, context);
-  if (receiverNode === undefined || plannedReceiver === undefined || keyNode === undefined ||
-    key === undefined || storage === undefined ||
-    !rustTargetTypeRefEquals(expressionCarrier(keyNode, context), index.keyCarrier)) {
+  if (receiverNode === undefined || plannedReceiver === undefined || key === undefined || storage === undefined) {
     return undefined;
   }
   const receiverName = allocateRustSyntheticName(context.syntheticNames, "index_update_receiver");

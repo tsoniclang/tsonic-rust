@@ -6,6 +6,7 @@ import type {
   SourceFile,
   Symbol,
   Type,
+  TypeIndexInfo,
 } from "@tsonic/tsts";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
@@ -134,6 +135,7 @@ export interface RustCheckedPropertySelectionInput {
   readonly sourceSelectedDeclaration?: Node;
   readonly sourceSelectedReadDeclaration?: Node;
   readonly sourceSelectedWriteDeclaration?: Node;
+  readonly sourceSelectedIndex?: TypeIndexInfo;
   readonly sourceReadType?: Type;
   readonly sourceWriteType?: Type;
   readonly sourceResultType?: Type;
