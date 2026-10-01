@@ -60,6 +60,7 @@ export function resolveProjectSourceCarrier(
         ...symbolDeclarations.filter((declaration) => declaration !== selectedDeclaration),
       ];
   for (const declaration of declarations) {
+    if (!context.source.navigation.isProjectDeclaration(declaration)) continue;
     if (context.ast.is.IsInterfaceDeclaration(declaration) && selectedType !== undefined &&
       sourceCallableInterface(selectedType, context.currentSemantics, context.ast) !== undefined) {
       const selectedContext = bindRustSourceDeclarationArguments(
