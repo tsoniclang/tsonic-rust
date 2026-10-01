@@ -12,13 +12,14 @@ import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../helpers/fake
 test("runtime union projections retain exact variants, absence and ownership", () => {
   const node = fakeStatement({ kindName: "Identifier", pos: 0, end: 8 });
   const sourceFile = fakeSourceFile({ fileName: "/src/index.ts", text: "selected", statements: [node] });
+  const projectTypes = { definitionForCarrier: () => undefined };
   for (const id of [rustJsIntlGroupingTargetId, rustJsNumericTargetId, rustJsStringNumberTargetId]) {
     const dispatchCarrier = { kind: "target-named", id };
     for (const alternative of rustRuntimeUnionContract(dispatchCarrier).alternatives) {
       for (const [optional, retainsAbsence] of [[false, false], [true, false], [true, true]]) {
         const sourceCarrier = optional ? rustOptionTargetType(dispatchCarrier) : dispatchCarrier;
         const selectedCarrier = retainsAbsence ? rustOptionTargetType(alternative.carrier) : alternative.carrier;
-        const selected = selectRustFlowReadProjection(sourceCarrier, selectedCarrier, {});
+        const selected = selectRustFlowReadProjection(sourceCarrier, selectedCarrier, projectTypes);
         assert.deepEqual(selected, { kind: "projection", fact: { kind: "runtime-union", sourceCarrier,
           dispatchCarrier, selectedCarrier, variant: alternative.variant.name } });
         for (const owns of [false, true]) {
@@ -26,6 +27,7 @@ test("runtime union projections retain exact variants, absence and ownership", (
             source: { ast: fakeAstReader([sourceFile]) },
             facts: { getRuntimeCarrierFact: () => ({ carrier: sourceCarrier }) },
             valueLifetimes: { canMove: () => owns },
+            projectTypes,
             typeDefinitions: emptyRustTypeDefinitions, configuration: { edition: "2024" },
           } }, sourceFile, diagnostics: [] };
           const input = { kind: "path", path: "selected" };
@@ -60,7 +62,7 @@ test("runtime union projections retain exact variants, absence and ownership", (
           }
         }
       }
-      assert.equal(selectRustFlowReadProjection(dispatchCarrier, rustOptionTargetType(alternative.carrier), {}).kind, "incompatible");
+      assert.equal(selectRustFlowReadProjection(dispatchCarrier, rustOptionTargetType(alternative.carrier), projectTypes).kind, "incompatible");
     }
   }
 });

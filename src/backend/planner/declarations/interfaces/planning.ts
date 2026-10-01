@@ -252,16 +252,6 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
       type: stateCarrier!,
       visibility: storageVisibility,
       ...(publiclyReachable ? { attrs: [rustHiddenAttribute] } : {}),
-      ...(explicitWrapperTraits ? {} : (() => {
-        const deadCode = rustGeneratedProjectInterfaceFieldDeadCodeDisposition(
-          context,
-          node,
-          "wrapper-state",
-          interfaceVisibility === "public",
-          storageVisibility === "public",
-        );
-        return deadCode === undefined ? {} : { deadCode };
-      })()),
     }],
   }, ...(explicitWrapperTraits ? rustProjectWrapperTraits(interfaceType, interfaceName, generics) : [])];
 }

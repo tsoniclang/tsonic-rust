@@ -13,6 +13,7 @@ import {
   rustOptionElementCarrier,
   rustSourceOptionalTargetType,
   rustAbsenceTargetType,
+  isRustAbsenceCarrier,
   rustStructuralObjectCarrierValue,
 } from "../../target-model/types/index.js";
 import {
@@ -355,15 +356,17 @@ function combineSelectedFlowReadCarriers(
   includesNullish: boolean,
   walk: RustFactWalk,
 ): TargetTypeRef | undefined {
-  const distinct = members.filter((member, index) =>
-    members.findIndex((candidate) => rustTargetTypeRefEquals(candidate, member)) === index);
+  const includesAbsence = includesNullish || members.some(isRustAbsenceCarrier);
+  const present = members.filter(member => !isRustAbsenceCarrier(member));
+  const distinct = present.filter((member, index) =>
+    present.findIndex((candidate) => rustTargetTypeRefEquals(candidate, member)) === index);
   const valueCarrier = distinct.length === 1
     ? distinct[0]
     : walk.context.projectTypes.commonSupertype(distinct);
   if (valueCarrier === undefined) {
-    return includesNullish && distinct.length === 0
+    return includesAbsence && distinct.length === 0
       ? rustAbsenceTargetType()
       : undefined;
   }
-  return includesNullish ? rustSourceOptionalTargetType(valueCarrier) : valueCarrier;
+  return includesAbsence ? rustSourceOptionalTargetType(valueCarrier) : valueCarrier;
 }
