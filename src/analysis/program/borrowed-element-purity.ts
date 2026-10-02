@@ -5,6 +5,7 @@ import { isRustStringCarrier } from "../../target-model/types/index.js";
 import type { RustTargetProgram } from "./model.js";
 import type { RustBorrowedElementRead } from "./borrowed-element-reads.js";
 import { rustEffectiveValueCarrier } from "../facts/value-carrier-queries.js";
+import { hasExactObjectKeys } from "../../target-model/metadata/closed-data.js";
 
 type ProviderOperation = Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>;
 
@@ -19,13 +20,15 @@ export function rustBorrowedElementRead(
   const array = element === undefined ? undefined : Node_Expression(ast, element);
   const index = element === undefined ? undefined : ElementAccessExpression_ArgumentExpression(ast, element);
   return element !== undefined && ast.is.IsElementAccessExpression(element) &&
-    indexed?.kind === "provider-operation" && indexed.borrowedIndexMethod !== undefined &&
-    /^[A-Za-z_][A-Za-z0-9_]*$/u.test(indexed.borrowedIndexMethod) &&
+    indexed?.kind === "provider-operation" && indexed.borrowedIndexOperation?.evaluation === "pure" &&
+    hasExactObjectKeys(indexed.borrowedIndexOperation, ["method", "evaluation"]) &&
+    typeof indexed.borrowedIndexOperation.method === "string" &&
+    /^[A-Za-z_][A-Za-z0-9_]*$/u.test(indexed.borrowedIndexOperation.method) &&
     indexed.abi.operationKind === "indexer" && indexed.abi.sourceArguments.length === 1 &&
-    indexed.abi.effects.evaluation === "pure" && indexed.abi.result.kind === "sync" &&
+    indexed.abi.result.kind === "sync" &&
     indexed.abi.effects.invocation === "infallible" && indexed.abi.effects.safety === "safe" &&
     isRustStringCarrier(indexed.sourceResultCarrier) && array !== undefined && index !== undefined
-    ? Object.freeze({ receiver, array, index, method: indexed.borrowedIndexMethod }) : undefined;
+    ? Object.freeze({ receiver, array, index, method: indexed.borrowedIndexOperation.method }) : undefined;
 }
 
 export function rustBorrowPureOperation(node: Node, facts: RustTargetProgram["facts"]): ProviderOperation | undefined {

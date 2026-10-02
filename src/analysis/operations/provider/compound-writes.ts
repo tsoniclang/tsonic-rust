@@ -49,7 +49,8 @@ export function selectRustCompoundWrite(
     sourceReceiverCarrier: receiverCarrier,
     sourceArgumentCarriers: [indexCarrier, resultCarrier],
     declaredSourceArgumentCarriers: selection.parameterCarriers,
-    resultCarrier: rustUnitTargetType(), isAsync: false, isFallible: false,
+    resultCarrier: rustUnitTargetType(), isAsync: false, isFallible: selection.fact.fallible === true,
+    ...(selection.fact.fallible === true ? { errorBoundary: "source-program" as const } : {}),
   }, context.typeDefinitions);
   return abi === undefined ? undefined : {
     kind: "runtime-set", operationId: selection.fact.operationId, abi,

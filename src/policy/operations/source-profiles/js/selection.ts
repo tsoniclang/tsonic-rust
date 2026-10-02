@@ -22,6 +22,7 @@ import {
   isRustBoolCarrier,
   isRustIntegerCarrier,
   rustJsArrayLikeElementTargetType,
+  isRustJsArrayValueCarrier,
   isRustSourceStringConvertibleCarrier,
   rustJsErrorTargetType,
   rustJsStringTargetId,
@@ -72,6 +73,9 @@ import { resolveCarrierRef, type JsLaneBindings } from "./carrier-references.js"
 
 
 function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readonly lane: JsLane; readonly bindings: JsLaneBindings } | undefined {
+  if (isRustJsArrayValueCarrier(carrier)) {
+    return { lane: "array-value", bindings: { receiver: carrier } };
+  }
   if (carrier?.kind === "reference" && carrier.referent.kind === "target-named" && carrier.referent.id === rustStringTargetId) {
     // Borrowed string parameters (&str) share the string lane.
     return { lane: "string", bindings: { receiver: carrier.referent } };
@@ -428,6 +432,7 @@ export function selectJsSurfaceOperation(request: JsOperationRequest, definition
         kind: "runtime-set",
         operationId,
         target,
+        ...(row.fallible === true ? { fallible: true } : {}),
         parameterCarriers: parameterCarriers as readonly TargetTypeRef[],
       },
       ...(selectedParameterCarriers === undefined ? {} : { parameterCarriers: selectedParameterCarriers }),
@@ -483,7 +488,9 @@ export function selectJsSurfaceOperation(request: JsOperationRequest, definition
         targetGenericArguments: [{ kind: "type" as const, type: numericRestCarrier }],
       }),
       ...(row.shape.indexedLocationMethod === undefined ? {} : { indexedLocationMethod: row.shape.indexedLocationMethod }),
-      ...(row.shape.borrowedIndexMethod === undefined ? {} : { borrowedIndexMethod: row.shape.borrowedIndexMethod }),
+      ...(row.shape.borrowedIndexOperation === undefined ? {} : {
+        borrowedIndexOperation: Object.freeze({ ...row.shape.borrowedIndexOperation }),
+      }),
       resultCarrier,
       ...(sourceResultCarrier === undefined ? {} : { sourceResultCarrier }),
       ...(row.shape.sourceAbsence === undefined

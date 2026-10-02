@@ -2,6 +2,7 @@ import { rustBigIntTargetId, rustJsArrayBufferTargetId, rustJsArrayConcatItemTar
 import { rustSourceOptionalTargetType } from "../projections.js";
 import { isRustAbsenceCarrier } from "./native.js";
 import type { TargetTypeRef } from "../model.js";
+import { isRustJsArrayValueCarrier } from "./array-values.js";
 import type { RustLifetimeRef } from "../../lifetimes/index.js";
 import {
   rustLifetimeGenericArgument,
@@ -288,6 +289,7 @@ export function isRustJsArrayCarrier(
 export function rustJsArrayLikeElementTargetType(
   carrier: TargetTypeRef | undefined,
 ): TargetTypeRef | undefined {
+  if (isRustJsArrayValueCarrier(carrier)) return rustJsValueTargetType();
   if (carrier?.kind !== "target-named") {
     return undefined;
   }

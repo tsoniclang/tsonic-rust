@@ -5,6 +5,7 @@ import {
 } from "../../../target-model/types/index.js";
 import type { RustExpr } from "../../target-ast/nodes.js";
 import { negateRustBooleanExpression } from "../../target-ast/expressions.js";
+import { rustIntegerLiteralValue } from "../../target-ast/integer-comparisons.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { effectivePlannedExpressionCarrier, rustOperationFact } from "./fundamentals.js";
 
@@ -20,9 +21,10 @@ export function planRustNativeZeroComparison(
   rightNode: Node,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  const boundary = (expression: RustExpr): string | undefined => expression.kind === "int-literal"
-    ? /^([01])(?:[iu](?:8|16|32|64|128|size))?$/u.exec(expression.text)?.[1]
-    : undefined;
+  const boundary = (expression: RustExpr): string | undefined => {
+    const value = rustIntegerLiteralValue(expression);
+    return value === 0n || value === 1n ? String(value) : undefined;
+  };
   const rightBoundary = boundary(right);
   const leftBoundary = boundary(left);
   const selected = rightBoundary !== undefined ? { expression: left, node: leftNode, operator, boundary: rightBoundary }

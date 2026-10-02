@@ -45,7 +45,7 @@ import { rustSelectedAccessorRequiresUnsafe, rustSelectedCallRequiresUnsafe, try
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext, rustUnionTypePathInContext } from "../types/render.js";
 import { rustValueCarrierBeforeContextualConversion, rustProjectUpcastSourceMatches } from "../../../analysis/facts/value-carrier-queries.js";
-import { rustCompilerOwnedContextualConversionMatches } from "../../../target-model/conversions/contextual.js";
+import { rustCompilerOwnedContextualConversionMatches, rustContextualRuntimeConversionContract } from "../../../target-model/conversions/contextual.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import { tryPlanRustNativePointerOperation } from "./native-pointers.js";
 import type { Node } from "@tsonic/tsts";
@@ -121,13 +121,18 @@ function planProjectedExpression(
   );
   const projection = context.input.program.facts.getFact(node, rustOptionProjectionFactKey);
   const objectView = context.input.program.facts.getFact(node, rustObjectReferenceViewKey);
-  const borrowFlow = access !== "value" && (override === undefined || override.valueForm === "shared-reference") &&
+  const borrowableFlow = (override === undefined || override.valueForm === "shared-reference") &&
     context.flowReadOverrides?.has(node) !== true &&
     ((flowRead?.kind === "source-union" || flowRead?.kind === "runtime-union") && flowRead.project === undefined ||
       flowRead?.kind === "option-value" && rustOptionalStorageValue(flowRead.sourceCarrier) === undefined) &&
     rustOptionElementCarrier(flowRead.selectedCarrier) === undefined &&
     upcast === undefined && downcast === undefined && lifetimeReconciliation === undefined &&
-    contextualConversion === undefined && projection === undefined && objectView === undefined;
+    projection === undefined && objectView === undefined;
+  const borrowFlow = borrowableFlow && access !== "value" && contextualConversion === undefined;
+  const borrowConversionInput = borrowableFlow && finalStage !== "source" && contextualConversion !== undefined &&
+    rustTargetTypeRefEquals(flowRead?.selectedCarrier, contextualConversion.sourceCarrier) &&
+    rustContextualRuntimeConversionContract(contextualConversion.conversion,
+      context.input.program.typeDefinitions)?.sourceMode === "ref";
   const finish = (value: RustExpr): RustExpr => access !== "shared-reference" || borrowFlow ? value
     : createRustSharedReferenceArgument(context, planRustNonConsumingValue(node, value, context), node);
   let currentCarrier = override?.carrier ??
@@ -147,7 +152,7 @@ function planProjectedExpression(
         planRustNonConsumingValue(node, flowSelected, context),
         flowRead,
         context,
-        borrowFlow,
+        borrowFlow || borrowConversionInput,
       );
       if (selected === undefined) {
         return undefined;
@@ -230,6 +235,7 @@ function planProjectedExpression(
         contextuallyConverted,
         contextualConversion,
         context,
+        borrowConversionInput,
       );
       if (selected === undefined) {
         return undefined;
@@ -370,6 +376,7 @@ function applyRustContextualValueConversion(
   expression: RustExpr,
   fact: import("../../../analysis/facts/keys.js").RustContextualValueConversionFact,
   context: RustPlanContext,
+  sourceIsSharedReference = false,
 ): RustExpr | undefined {
   const sourceCarrier = rustValueCarrierBeforeContextualConversion(
     context.input.program.facts,
@@ -452,7 +459,7 @@ function applyRustContextualValueConversion(
     ));
     return undefined;
   }
-  return applyRustValueConversion(context, expression, fact.conversion, node, false);
+  return applyRustValueConversion(context, expression, fact.conversion, node, false, sourceIsSharedReference);
 }
 
 function rustExpressionUnsafeRequirement(

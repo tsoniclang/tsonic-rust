@@ -1,6 +1,7 @@
 import type { RustValueConversion } from "../operations/model.js";
 import type { TargetTypeRef } from "../types/model.js";
 import { rustValueConversionContract, rustValueConversionIsFallible } from "./contracts.js";
+import type { RustValueConversionContract } from "./contracts.js";
 import { rustTargetTypeRefEquals } from "../types/equality.js";
 import { rustCarrierSupportsTrait } from "../types/carriers/traits.js";
 import { rustProviderRecordCopyMatches, type RustProviderRecordCopy } from "./provider-record.js";
@@ -30,6 +31,25 @@ export type RustContextualValueConversion =
       readonly source: Extract<TargetTypeRef, { readonly kind: "reference" }>;
       readonly target: TargetTypeRef;
     };
+
+export function rustContextualRuntimeConversionContract(
+  conversion: RustContextualValueConversion,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
+): RustValueConversionContract | undefined {
+  switch (conversion.kind) {
+    case "native-trait-object-upcast":
+    case "reference-reborrow":
+    case "provider-record-copy":
+    case "empty-record":
+    case "generic-callable-flow":
+    case "integer-truncation":
+    case "callable-adapter":
+    case "program-error":
+      return undefined;
+    default:
+      return rustValueConversionContract(conversion, definitions);
+  }
+}
 
 export function rustCompilerOwnedContextualConversionMatches(
   sourceCarrier: TargetTypeRef,

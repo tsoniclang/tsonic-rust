@@ -133,6 +133,8 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
       return rustSourcePrimitiveTargetType(reference.ref);
     case "jsvalue":
       return rustJsValueTargetType();
+    case "option-of-jsvalue":
+      return rustOptionTargetType(rustJsValueTargetType());
     case "string-array":
       return rustJsArrayTargetType(rustStringTargetType());
     case "optional-string-array":

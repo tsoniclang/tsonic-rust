@@ -538,6 +538,11 @@ function materializeProviderValueConversion(
         source: materializeProviderCarrier(conversion.source, carrierPaths, carrierTraits),
         target: materializeProviderCarrier(conversion.target, carrierPaths, carrierTraits),
       };
+    case "js-array-backing":
+      return { ...conversion,
+        source: materializeProviderCarrier(conversion.source, carrierPaths, carrierTraits),
+        element: materializeProviderCarrier(conversion.element, carrierPaths, carrierTraits),
+      };
     case "closed-value-from-option":
     case "js-value-from-array":
       return {

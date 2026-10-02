@@ -72,6 +72,11 @@ export function substituteRustValueConversion(
           constSubstitutions,
         ),
       });
+    case "js-array-backing":
+      return Object.freeze({ ...value,
+        source: substituteRustTargetGenerics(value.source, substitutions, lifetimeSubstitutions, constSubstitutions),
+        element: substituteRustTargetGenerics(value.element, substitutions, lifetimeSubstitutions, constSubstitutions),
+      });
     case "closed-value-from-option":
     case "js-value-from-array":
       return Object.freeze({

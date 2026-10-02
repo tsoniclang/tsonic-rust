@@ -36,6 +36,11 @@ export type RustArgumentMode = "value" | "ref" | "mut-ref";
 
 export type RustOperationEvaluationEffect = "observable" | "pure";
 
+export interface RustBorrowedIndexOperation {
+  readonly method: string;
+  readonly evaluation: RustOperationEvaluationEffect;
+}
+
 export type RustProviderTypeRequirement =
   | "clone"
   | "copy"
@@ -205,6 +210,11 @@ export type RustNonOptionValueConversion =
   | {
       readonly kind: "js-value-from-closed-carrier";
       readonly source: TargetTypeRef;
+    }
+  | {
+      readonly kind: "js-array-backing";
+      readonly source: TargetTypeRef;
+      readonly element: TargetTypeRef;
     }
   | {
       readonly kind: "ts-value-from-closed-carrier";
@@ -450,7 +460,7 @@ export interface RustProviderOperationTemplate<
   readonly sourceResultCarrier?: TargetTypeRef;
   readonly sourceAbsenceCarrier?: TargetTypeRef;
   readonly indexedLocationMethod?: string;
-  readonly borrowedIndexMethod?: string;
+  readonly borrowedIndexOperation?: RustBorrowedIndexOperation;
   readonly parameterCarriers?: readonly (TargetTypeRef | undefined)[];
   readonly receiverCarrier?: TargetTypeRef;
   readonly genericParameters?: readonly RustProviderGenericParameter[];
@@ -497,6 +507,7 @@ export interface RustRuntimeSetTemplate {
   readonly kind: "runtime-set";
   readonly operationId: string;
   readonly target: RustProviderOperationForm;
+  readonly fallible?: boolean;
   readonly parameterCarriers: readonly TargetTypeRef[];
 }
 

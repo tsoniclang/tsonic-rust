@@ -6,6 +6,8 @@ import { selectRustExactIntegerConversion } from "../../target-model/conversions
 import { rustNumberBoxingConversionId } from "../../target-model/conversions/number-boxing.js";
 import {
   isRustJsArrayCarrier,
+  isRustJsArrayValueCarrier,
+  isRustJsValueCarrier,
   isRustBigIntCarrier,
   isRustIntegerCarrier,
   rustJsNumericTargetType,
@@ -13,6 +15,7 @@ import {
   isRustNeverCarrier,
   isRustAbsenceCarrier,
   rustCarrierSupportsClone,
+  rustCarrierCanEnterTsValue,
   rustTsValueAdmission,
   rustCarrierSupportsTrait,
   rustJsClosedValueCarrierTraitPath,
@@ -67,6 +70,11 @@ export function selectRustSourceValueConversion(
   if (ancestors.some(ancestor => rustTargetTypeRefEquals(ancestor.source, source) &&
     rustTargetTypeRefEquals(ancestor.target, target))) return undefined;
   const nextAncestors = [...ancestors, {source, target}];
+  const nativeArrayElement = isRustJsArrayCarrier(target) ? rustJsArrayLikeElementTargetType(target) : undefined;
+  if (nativeArrayElement !== undefined && rustCarrierCanEnterTsValue(nativeArrayElement, definitions) &&
+    (isRustJsValueCarrier(source) || isRustJsArrayValueCarrier(source))) {
+    return { kind: "js-array-backing", source, element: nativeArrayElement };
+  }
   if (!rustTargetTypeRefEquals(source, target) && rustNativeRepresentationMatches(source, target)) {
     return { kind: "native-representation", source, target };
   }
@@ -200,7 +208,7 @@ export function selectRustSourceValueConversion(
     const arrayElement = isRustJsArrayCarrier(source)
       ? rustJsArrayLikeElementTargetType(source)
       : undefined;
-    if (arrayElement !== undefined && rustCarrierSupportsClone(arrayElement, definitions)) {
+    if (arrayElement !== undefined && rustCarrierCanEnterTsValue(arrayElement, definitions)) {
       const elementConversion = selectRustSourceValueConversion(
         arrayElement,
         jsValueCarrier,

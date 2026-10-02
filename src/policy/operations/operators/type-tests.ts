@@ -1,4 +1,5 @@
 import type { RustProjectTypePolicy } from "../../types/project-types.js";
+import { isRustJsArrayValueCarrier } from "../../../target-model/types/carriers/array-values.js";
 import type { RustClosedTypePredicate, RustClosedTypeTestPlan, RustProjectTypeTestPlan } from "../../../target-model/operations/type-tests.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
@@ -63,7 +64,7 @@ export function selectRustClosedTypeTestPlan(
   }
   if (predicate.kind === "array") {
     if (isRustJsValueCarrier(source)) return Object.freeze({ kind: "runtime-array" });
-    if (source.kind === "array" || source.kind === "tuple" || isRustJsArrayCarrier(source) || isRustVecCarrier(source)) {
+    if (source.kind === "array" || source.kind === "tuple" || isRustJsArrayCarrier(source) || isRustJsArrayValueCarrier(source) || isRustVecCarrier(source)) {
       return Object.freeze({ kind: "constant", value: true });
     }
     return isRustAbsenceCarrier(source) || getRustTypeofRuntimeKind(source, definitions) !== undefined ||

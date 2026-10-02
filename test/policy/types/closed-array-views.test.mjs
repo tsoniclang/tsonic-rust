@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { selectRustClosedArrayView } from "../../../dist/policy/types/closed-array-views.js";
-import { rustJsArrayTargetType, rustJsValueTargetType } from "../../../dist/target-model/types/index.js";
+import { rustJsArrayValueTargetType } from "../../../dist/target-model/types/index.js";
 
 test("broad array flow requires the exact checked source-profile declaration and element", () => {
   const declaration = {};
@@ -24,7 +24,9 @@ test("broad array flow requires the exact checked source-profile declaration and
     sourceProfiles: { profileForNode: () => context_.owned ? {} : undefined } });
   for (const name of ["Array", "ReadonlyArray"]) {
     const exact = context(name);
-    assert.deepEqual(selectRustClosedArrayView(type, exact, options(exact)), rustJsArrayTargetType(rustJsValueTargetType()));
+    const carrier = selectRustClosedArrayView(type, exact, options(exact));
+    assert.deepEqual(carrier, rustJsArrayValueTargetType());
+    assert.equal(carrier.genericArguments, undefined);
     for (const invalid of [context(name, false), context(name, true, []), context(name, true, [undefined]),
       context(name, true, [{}]), context(name, true, [any, any]), context(name, true, [any], false), context("UserArray")]) {
       assert.equal(selectRustClosedArrayView(type, invalid, options(invalid)), undefined);

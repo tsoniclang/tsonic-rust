@@ -1,4 +1,5 @@
 import {
+  sourceBoundTypeRelationship,
   ElementAccessExpression_ArgumentExpression,
   BinaryExpression_Left,
   BinaryExpression_Right,
@@ -25,14 +26,12 @@ import {
 } from "@tsonic/target-api/source";
 import {
   isRustJsArrayCarrier,
-  isRustJsValueCarrier,
   isRustNumericCarrier,
   rustJsArrayLikeElementTargetType,
   rustOptionElementCarrier,
   rustOptionTargetType,
   isRustVecCarrier,
   rustJsArrayTargetType,
-  rustJsValueTargetType,
   rustFixedArrayCarrierValue,
   rustTargetConstInteger,
   rustVecTargetType,
@@ -279,7 +278,9 @@ export function resolveArrayLiteralCarrier(
   const hasHoles = elements.some((element) => ast.kindName(element) === KindOmittedExpression);
   const presentElements = elements.filter((element) => ast.kindName(element) !== KindOmittedExpression);
 
-  const selected = expected ?? resolveRustTargetTypeRef(
+  const selected = expected !== undefined && (expected.kind === "tuple" ||
+    isRustVecCarrier(expected) || isRustJsArrayCarrier(expected) || rustFixedArrayCarrierValue(expected) !== undefined)
+    ? expected : resolveRustTargetTypeRef(
     expression, rustResolutionContext(walk, expression), walk.operationOptions,
   );
   if (selected?.kind === "tuple" && !hasHoles) {
@@ -314,8 +315,6 @@ export function resolveArrayLiteralCarrier(
     expectedElement = expected.element;
   } else if (expected?.kind === "target-named" && isRustJsArrayCarrier(expected)) {
     expectedElement = rustJsArrayLikeElementTargetType(expected);
-  } else if (lane === "js" && isRustJsValueCarrier(expected)) {
-    expectedElement = rustJsValueTargetType();
   }
   const fixedArray = rustFixedArrayCarrierValue(expected);
   if (expected !== undefined && fixedArray !== undefined) {
@@ -419,7 +418,9 @@ function inferArrayLiteralElement(
   const carriers: TargetTypeRef[] = [];
   for (const member of members) {
     const base = types.literalBaseType(member);
-    const matches = base === undefined ? [] : rows.filter(row => types.isIdentical(row.type, base));
+    const matches = base === undefined ? [] : rows.filter(row => sourceBoundTypeRelationship(
+      row.type, base, walk.context.semanticsFor(expression), () => undefined,
+    ) === "identity");
     const carrier = matches[0]?.carrier;
     if (carrier === undefined || matches.some(row => !rustTargetTypeRefEquals(row.carrier, carrier))) return undefined;
     carriers.push(carrier);

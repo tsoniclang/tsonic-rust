@@ -10,7 +10,9 @@ test("guarded broad record reads preserve raw storage and array backing", { time
   assert.deepEqual(result.diagnostics, []);
   const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
   assert.match(output, /current: .*JsValue/u);
-  assert.doesNotMatch(output, /js_value_from_array|\.collect\(/u);
+  assert.doesNotMatch(output, /\.collect\(|\.values\(\)\.into_iter\(\)\.map\(/u);
+  assert.match(output, /js_value_from_array\(/u);
+  assert.match(output, /with_native_element::<js_abi::JsValue, _>/u);
   const read = output.slice(output.indexOf("let current"), output.indexOf("if current"));
   assert.match(read, /get_or_default\(/u);
   assert.doesNotMatch(read, /key\.clone\(/u);
@@ -23,7 +25,8 @@ test("fresh nested broad arrays retain empty, primitive and exact integer carrie
   assert.deepEqual(result.diagnostics, []);
   const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
   assert.match(output, /9007199254740993/u);
-  assert.doesNotMatch(output, /js_value_from_array|\.collect\(/u);
+  assert.doesNotMatch(output, /\.collect\(|\.values\(\)\.into_iter\(\)\.map\(/u);
+  assert.match(output, /js_value_from_array\(/u);
   validateGeneratedProject("fresh-broad-arrays", result.artifacts, { run: true });
 });
 

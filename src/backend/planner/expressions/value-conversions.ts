@@ -32,6 +32,7 @@ import { planRustUnionMapping, planRustUnionProjection } from "./union-mappings.
 import { planRustUnionConstruction, planRustUnionPattern } from "./union-patterns.js";
 import { planRustAbsentValue, planRustCheckedSourceOptional } from "./optional-storage.js";
 import { planRustProjectClosedValue } from "../objects/project-closed-values.js";
+import { planRustArrayValueConversion } from "./array-value-conversions.js";
 
 export function applyRustValueConversion(
   context: RustPlanContext,
@@ -39,6 +40,7 @@ export function applyRustValueConversion(
   conversion: RustValueConversion | undefined,
   node: Node | undefined,
   validateSourceCarrier = true,
+  sourceIsSharedReference = false,
 ): RustExpr | undefined {
   if (conversion === undefined) {
     return expression;
@@ -73,10 +75,10 @@ export function applyRustValueConversion(
       return undefined;
     }
   }
-  const nonConsumingSource = contract.sourceMode === "ref" && node !== undefined
+  const nonConsumingSource = !sourceIsSharedReference && contract.sourceMode === "ref" && node !== undefined
     ? planRustNonConsumingValue(node, expression, context)
     : expression;
-  const source = contract.sourceMode === "ref"
+  const source = contract.sourceMode === "ref" && !sourceIsSharedReference
     ? applyRustArgumentMode(context, nonConsumingSource, "ref", node)
     : nonConsumingSource;
   const converted = lowerRustValueConversion(contract, source, context, node);
@@ -198,26 +200,13 @@ export function lowerRustValueConversion(
             args: [planRustAbsentValue(contract.target, context)],
           };
     }
-    case "js-value-from-array": {
-      registerAliasFromPath(context, "js_abi::js_value_from_array");
-      const valueName = allocateConversionName(context, node, "array_value");
-      const converted = lowerNestedRustValueConversion(
-        contract.elementConversion,
-        { kind: "path", path: valueName },
-        context,
-        node,
-      );
-      return converted === undefined
-        ? undefined
-        : {
-            kind: "call",
-            path: "js_abi::js_value_from_array",
-            args: [source, {
-              kind: "closure",
-              params: [{ name: valueName, byRefCopy: false }],
-              body: converted,
-          }],
-        };
+    case "js-value-from-array":
+      return planRustArrayValueConversion(contract, source, context, node,
+        (conversion, value) => lowerNestedRustValueConversion(conversion, value, context, node));
+    case "js-array-backing": {
+      const element = rustTypeFromCarrierInContext(contract.element, context);
+      return element === undefined ? undefined : { kind: "method-call", receiver: source.kind === "reference" ? source.expr : source,
+        method: contract.method, genericArguments: [{ kind: "type", type: element }], args: [] };
     }
     case "union-fold": {
       const names = context.syntheticNames ?? createRustSyntheticNameState(

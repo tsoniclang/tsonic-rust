@@ -385,7 +385,8 @@ function mapSelectedAssignment(
     declaredSourceArgumentCarriers: selection.parameterCarriers,
     resultCarrier: rustUnitTargetType(),
     isAsync: false,
-    isFallible: false,
+    isFallible: selection.fact.fallible === true,
+    ...(selection.fact.fallible === true ? { errorBoundary: "source-program" as const } : {}),
   }, context.typeDefinitions);
   if (abi === undefined) {
     return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_ASSIGNMENT_ABI_INCOMPLETE", "The selected JavaScript setter cannot finalize one total Rust operation ABI.");

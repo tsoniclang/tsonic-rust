@@ -430,6 +430,10 @@ function isValueProjectionConversion(value: Record<string, unknown>): boolean {
     ]) && isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.element) &&
       isNonOptionValueConversion(value.elementConversion);
   }
+  if (value.kind === "js-array-backing") {
+    return hasExactKeys(value, ["kind", "source", "element"]) &&
+      isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.element);
+  }
   if (value.kind === "union-fold") {
     return hasExactKeys(value, ["kind", "source", "target", "arms"]) &&
       isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) && Array.isArray(value.arms) &&

@@ -4,7 +4,7 @@ import type { RustUnionEqualityArm } from "../../../target-model/operations/bina
 import type { RustSwitchComparison } from "../../../target-model/operations/switch.js";
 import type { RustClosedTypePredicate, RustClosedTypeTestPlan, RustProjectTypeTestPlan } from "../../../target-model/operations/type-tests.js";
 import type { RustFlowReadProjectionFact } from "../../../target-model/types/value-projections.js";
-import type { RustArgumentMode, RustOperationCarrierRequirement, RustProviderFactOperationKind, RustRuntimeSetOperationKind, RustSourceCallParameterPlan, RustValueConversion } from "../../../target-model/operations/model.js";
+import type { RustArgumentMode, RustBorrowedIndexOperation, RustOperationCarrierRequirement, RustProviderFactOperationKind, RustRuntimeSetOperationKind, RustSourceCallParameterPlan, RustValueConversion } from "../../../target-model/operations/model.js";
 import type { RustFinalizedOperationAbiFor, RustFinalizedValueConversion } from "../finalized-operation-abi.js";
 import type { RustAssignmentOperator, RustOperationSymbol, RustOperatorToken } from "../../../target-model/syntax/tokens.js";
 import type {
@@ -133,7 +133,7 @@ export type RustTargetOperationFact =
       readonly sourceResultCarrier?: TargetTypeRef;
       readonly sourceAbsenceCarrier?: TargetTypeRef;
       readonly indexedLocationMethod?: string;
-      readonly borrowedIndexMethod?: string;
+      readonly borrowedIndexOperation?: RustBorrowedIndexOperation;
       readonly abi: RustFinalizedOperationAbiFor<RustProviderFactOperationKind>;
     }
   | {

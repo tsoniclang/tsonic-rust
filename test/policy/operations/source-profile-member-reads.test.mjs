@@ -18,12 +18,15 @@ test("synthesized index contributors retain one native read ABI and checker-sele
       const selected = selectJsSurfaceMemberRead(owners.map(member), request, readonly, emptyRustTypeDefinitions);
       assert.ok(selected?.fact.kind === "provider-operation");
       assert.equal(selected.fact.target.name, "get_number");
-      assert.equal(selected.fact.borrowedIndexMethod, "borrow_number_element");
+      assert.deepEqual(selected.fact.borrowedIndexOperation, { method: "borrow_number_element", evaluation: "pure" });
+      assert.notEqual(selected.fact.evaluation, "pure");
       assert.deepEqual(selected.fact.sourceResultCarrier, element);
       const location = !readonly && owners.includes("Array");
       assert.equal(selected.fact.indexedLocationMethod, location ? "element_location" : undefined);
       const fact = finalizeProviderOperationFact(selected.fact, [integer], receiver);
       assert.ok(fact);
+      assert.ok(Object.isFrozen(fact.borrowedIndexOperation));
+      assert.equal(fact.abi.effects.evaluation, "observable");
       assert.equal(rustIndexedLocationContract(fact)?.method, location ? "element_location" : undefined);
       assert.deepEqual(fact.abi.sourceReceiver.carrier, receiver);
     }

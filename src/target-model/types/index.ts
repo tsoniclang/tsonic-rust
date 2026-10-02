@@ -1,3 +1,4 @@
+export { rustJsArrayValueTargetId, rustJsArrayValueTargetType, isRustJsArrayValueCarrier } from "./carriers/array-values.js";
 export type {
   RustTargetAssociatedConstraint,
   RustTargetConstArgument,

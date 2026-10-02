@@ -4,7 +4,8 @@ import { rustTargetTypeRefEquals } from "../equality.js";
 import { getRustTypeofRuntimeKind } from "../runtime-kind.js";
 import { emptyRustTypeDefinitions } from "../source-union-definitions.js";
 import { rustSourcePrimitiveTargetType, rustStringTargetType } from "./native.js";
-import { isRustJsValueCarrier, rustJsStringTargetType, rustJsSymbolTargetType, rustJsArrayTargetType, rustJsValueTargetType } from "./js.js";
+import { isRustJsValueCarrier, rustJsStringTargetType, rustJsSymbolTargetType } from "./js.js";
+import { rustJsArrayValueTargetType } from "./array-values.js";
 
 const payloads: readonly { readonly carrier: TargetTypeRef; readonly variant: RustRuntimeUnionVariant }[] = Object.freeze([
   { carrier: rustSourcePrimitiveTargetType("bool"), variant: { kind: "payload", name: "Bool" } },
@@ -23,7 +24,7 @@ const payloads: readonly { readonly carrier: TargetTypeRef; readonly variant: Ru
   { carrier: rustStringTargetType(), variant: { kind: "payload", name: "String" } },
   { carrier: rustJsStringTargetType(), variant: { kind: "payload", name: "Utf16String" } },
   { carrier: rustJsSymbolTargetType(), variant: { kind: "payload", name: "Symbol" } },
-  { carrier: rustJsArrayTargetType(rustJsValueTargetType()), variant: { kind: "payload", name: "Array" } },
+  { carrier: rustJsArrayValueTargetType(), variant: { kind: "payload", name: "Array" } },
 ]);
 
 export function rustClosedValuePayloadProjection(source: TargetTypeRef, selected: TargetTypeRef): RustRuntimeUnionVariant | undefined {

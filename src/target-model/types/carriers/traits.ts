@@ -1,5 +1,6 @@
 import { isRustBigIntCarrier, isRustJsStringCarrier, isRustStringCarrier, isRustUnitCarrier } from "./js.js";
 import { isRustAbsenceCarrier } from "./native.js";
+import { rustJsArrayValueTargetId } from "./array-values.js";
 import { isRustIntegerCarrier, isRustNumericCarrier, rustFutureTargetId, rustPrimitiveTypeName } from "./primitives.js";
 import { rustRawPointerTargetId } from "./source-types.js";
 import { rustGenericCallableValue } from "./generic-callables.js";
@@ -436,6 +437,7 @@ export function rustCarrierSupportsObjectIdentity(carrier: TargetTypeRef | undef
 }
 
 const rustObjectIdentityTargetIds: ReadonlySet<string> = new Set([
+  rustJsArrayValueTargetId,
   rustEmptyObjectTargetId,
   rustObjectIdentityTargetId,
   rustJsArrayTargetId,
@@ -464,6 +466,7 @@ const rustObjectIdentityTargetIds: ReadonlySet<string> = new Set([
 ]);
 
 const rustJsStrictEqualityTargetIds: ReadonlySet<string> = new Set([
+  rustJsArrayValueTargetId,
   rustEmptyObjectTargetId,
   rustObjectIdentityTargetId,
   rustAbsenceTargetId,
@@ -495,6 +498,7 @@ const rustJsStrictEqualityTargetIds: ReadonlySet<string> = new Set([
 ]);
 
 const rustUnconditionallyCloneTargetIds: ReadonlySet<string> = new Set([
+  rustJsArrayValueTargetId,
   rustJsArrayEntriesTargetId,
   rustJsStringNumberTargetId,
   rustJsNumericTargetId,
@@ -551,6 +555,7 @@ const rustUnconditionallyCloneTargetIds: ReadonlySet<string> = new Set([
 ]);
 
 const rustUnconditionallyDefaultTargetIds: ReadonlySet<string> = new Set([
+  rustJsArrayValueTargetId,
   rustStringTargetId,
   rustJsStringTargetId,
   rustAbsenceTargetId,

@@ -444,7 +444,7 @@ export function probe(name: string): boolean {
   assert.match(text, /js_string::to_upper_case\(name\)/u);
   assert.match(text, /js_string::starts_with_from_start\(&upper, "A"\)/u);
   assert.match(text, /js_string::includes_from_start\(&upper, "B"\)/u);
-  assert.match(text, /js_string::js_len\(name\) > 0_usize/u);
+  assert.match(text, /js_string::js_len\(name\) != 0/u);
   assert.doesNotMatch(text, /usize_to_(?:i32|f64)/u);
 });
 

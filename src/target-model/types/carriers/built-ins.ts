@@ -1,4 +1,5 @@
 import { rustJsArrayEntriesTargetId } from "./array-entries.js";
+import { rustJsArrayValueTargetId } from "./array-values.js";
 import {
   rustAsyncGeneratorTargetId,
   rustBigIntTargetId,
@@ -90,6 +91,7 @@ export const rustBuiltInCarrierRenderPaths: Readonly<Record<string, string>> = O
   [rustTsValueTargetId]: "rt::TsValue",
   [rustJsValueTargetId]: "js_abi::JsValue",
   [rustJsArrayTargetId]: "js_abi::JsArray",
+  [rustJsArrayValueTargetId]: "js_abi::JsArrayValue",
   [rustJsArrayEntriesTargetId]: "js_abi::JsArrayEntries",
   [rustJsArrayConcatItemTargetId]: "js_abi::JsArrayConcatItem",
   [rustJsMapTargetId]: "js_abi::JsMap",

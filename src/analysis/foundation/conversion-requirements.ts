@@ -107,6 +107,9 @@ function rustFoundationForConversionContract(
     case "option-map":
       require(rustFoundationForConversionContract(contract.element));
       break;
+    case "js-array-backing":
+      require(rustFoundationForCarrier(contract.element));
+      break;
     case "closed-value-from-option":
     case "js-value-from-array":
       require(rustFoundationForCarrier(contract.element));

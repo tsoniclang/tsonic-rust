@@ -1,4 +1,5 @@
 import type {
+  RustBorrowedIndexOperation,
   RustCallbackOperationTemplate,
   RustProviderOperationForm,
   RustProviderOperationTemplate,
@@ -47,6 +48,7 @@ export interface JsOperationSelection {
 
 export type JsLane =
   | "js-array"
+  | "array-value"
   | "array-entries"
   | "string"
   | "js-string"
@@ -91,6 +93,7 @@ export type JsCarrierRef =
   | { readonly ref: "cb-set-for-each"; readonly arity: 0 | 1 | 2 | 3 }
   | { readonly ref: "int8" | "uint8" | "int16" | "uint16" | "int32" | "uint32" | "int64" | "uint64" | "int128" | "uint128" | "native-int" | "native-uint" | "float32" }
   | { readonly ref: "jsvalue" }
+  | { readonly ref: "option-of-jsvalue" }
   | { readonly ref: "float64" }
   | { readonly ref: "infer" }
   | { readonly ref: "inferred-array" }
@@ -223,7 +226,7 @@ export interface JsOperationRowData {
         readonly target: JsOperationTarget;
         readonly discardedTarget?: RustProviderOperationForm;
         readonly indexedLocationMethod?: string;
-        readonly borrowedIndexMethod?: string;
+        readonly borrowedIndexOperation?: RustBorrowedIndexOperation;
         readonly resultConversion?: RustValueConversion;
         readonly evaluation?: "pure";
         readonly result: JsCarrierRef;

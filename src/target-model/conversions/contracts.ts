@@ -35,9 +35,12 @@ import {
   rustStructuralObjectCarrierValue,
   rustJsArrayLikeElementTargetType,
   isRustJsArrayCarrier,
+  isRustJsArrayValueCarrier,
+  isRustJsValueCarrier,
   rustAbsenceTargetType,
   rustTargetGenericReferences,
   rustCarrierSupportsClone,
+  rustCarrierCanEnterTsValue,
   rustTsValueAdmission,
   rustCarrierSupportsTrait,
   rustJsClosedValueCarrierTraitPath,
@@ -79,6 +82,7 @@ interface RustValueConversionContractBase {
 
 export type RustValueConversionContract = RustValueConversionContractBase & (
   | { readonly lowering: "project-closed-value"; readonly ownerPath: "rt::TsValue" | "js_abi::JsValue" }
+  | { readonly lowering: "js-array-backing"; readonly element: TargetTypeRef; readonly method: "cast" | "cast_array" }
   | { readonly lowering: "source-optional"; readonly element: TargetTypeRef }
   | { readonly lowering: "union-project" }
   | { readonly lowering: "union-map"; readonly coverage: "source" | "target"; readonly arms: readonly RustUnionArmMapping[] }
@@ -140,6 +144,7 @@ export type RustValueConversionContract = RustValueConversionContractBase & (
       readonly lowering: "js-value-from-array";
       readonly element: TargetTypeRef;
       readonly elementConversion: RustValueConversionContract;
+      readonly projection: "string" | "value" | "owned";
     }
   | {
       readonly lowering: "union-fold";
@@ -270,9 +275,18 @@ export function rustValueConversionContract(
           fallible: false,
         };
   }
+  if (value.kind === "js-array-backing") {
+    return !isRustTargetTypeRef(value.element) || !hasExactObjectKeys(value, ["kind", "source", "element"]) ||
+      !rustCarrierCanEnterTsValue(value.element, definitions) ||
+      (!rustTargetTypeRefEquals(value.source, jsValueCarrier) && !isRustJsArrayValueCarrier(value.source))
+      ? undefined : { category: "projection", lowering: "js-array-backing", sourceMode: "ref",
+        source: value.source, target: rustJsArrayTargetType(value.element), fallible: true,
+        element: value.element, method: isRustJsValueCarrier(value.source) ? "cast_array" : "cast" };
+  }
   if (value.kind === "js-value-from-array") {
     const elementConversion = rustValueConversionContract(value.elementConversion, definitions);
-    return !isRustJsArrayCarrier(value.source) ||
+    return !hasExactObjectKeys(value, ["kind", "source", "element", "elementConversion"]) ||
+        !isRustJsArrayCarrier(value.source) || !rustCarrierCanEnterTsValue(value.element, definitions) ||
         !rustTargetTypeRefEquals(
           rustJsArrayLikeElementTargetType(value.source),
           value.element,
@@ -288,6 +302,11 @@ export function rustValueConversionContract(
           target: jsValueCarrier,
           element: value.element,
           elementConversion,
+          projection: rustTargetTypeRefEquals(value.element, stringCarrier) &&
+            elementConversion.lowering === "call" && elementConversion.path === "js_abi::JsValue::from"
+            ? "string" : rustTargetTypeRefEquals(value.element, jsValueCarrier) &&
+              elementConversion.lowering === "call" && elementConversion.path === "js_abi::clone_js_value"
+              ? "value" : "owned",
           fallible: false,
         };
   }
@@ -705,6 +724,8 @@ export function rustValueConversionIdentity(value: RustValueConversion): string 
               ? `closed-value-from-option.${JSON.stringify(value.source)}.${rustValueConversionIdentity(value.elementConversion)}`
             : value.kind === "js-value-from-array"
               ? `js-value-from-array.${JSON.stringify(value.source)}.${rustValueConversionIdentity(value.elementConversion)}`
+            : value.kind === "js-array-backing"
+              ? `js-array-backing.${JSON.stringify(value.source)}.${JSON.stringify(value.element)}`
             : value.kind === "js-value-from-closed-carrier"
               ? `js-value-from-closed-carrier.${JSON.stringify(value.source)}`
             : value.kind === "ts-value-from-closed-carrier"

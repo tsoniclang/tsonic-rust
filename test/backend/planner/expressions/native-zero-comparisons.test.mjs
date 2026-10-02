@@ -62,7 +62,7 @@ test("unsigned zero-bound folding preserves evaluation and never folds signed or
 });
 
 test("native one-boundary comparisons reuse exact emptiness and retain adverse controls", () => {
-  for (const text of ["1", "1u64", "1usize"]) {
+  for (const text of ["1", "1u64", "1usize", "1_u64", "1_usize"]) {
     const one = { kind: "int-literal", text };
     for (const [operator, reversed, empty] of [["<", ">", true], [">=", "<=", false]]) {
       const selected = context(nativeUint, lengthFact);
@@ -92,6 +92,17 @@ test("native one-boundary comparisons reuse exact emptiness and retain adverse c
     context(nativeUint, lengthFact)), undefined);
   assert.equal(planRustNativeZeroComparison("<", length, { kind: "float-literal", value: 1 }, subject, literal,
     context(nativeUint, lengthFact)), undefined);
+});
+
+test("native typed-literal suffix separators retain exact empty-length selection", () => {
+  for (const text of ["0", "0usize", "0_usize", "0_u64"]) {
+    assert.deepEqual(planRustNativeZeroComparison("==", length, { kind: "int-literal", text }, subject, literal,
+      context(nativeUint, lengthFact)), { ...length, method: "is_empty" });
+  }
+  for (const text of ["0.0_usize", "0_usiz", "0_", "0usize()", "-1_usize"]) {
+    assert.equal(planRustNativeZeroComparison("==", length, { kind: "int-literal", text }, subject, literal,
+      context(nativeUint, lengthFact)), undefined);
+  }
 });
 
 test("unsigned zero comparisons canonicalize native fields and effectful calls without a collection contract", () => {

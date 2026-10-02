@@ -23,6 +23,7 @@ import {
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { finishProviderOperationExpression, planProviderOperationExpression } from "./conversions.js";
 import { applyRustValueConversion } from "./value-conversions.js";
+import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import { diagnosticInput, rustActiveErrorType } from "../program/plan-context.js";
 import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
 import { isFloatCarrier, rustTypeFromCarrierInContext } from "../types/render.js";
@@ -422,11 +423,14 @@ export function planSourceConversion(node: Node, context: RustPlanContext): Rust
     return undefined;
   }
   const operand = Node_Expression(context.input.program.source.ast, node);
-  const planned = operand === undefined ? undefined : planExpression(operand, context);
+  const borrowed = fact.conversion !== undefined &&
+    rustValueConversionContract(fact.conversion, context.input.program.typeDefinitions)?.sourceMode === "ref";
+  const planned = operand === undefined ? undefined : planExpression(operand, context, "value",
+    borrowed ? "shared-reference" : "value");
   if (planned === undefined || fact.conversion === undefined) {
     return planned;
   }
-  return applyRustValueConversion(context, planned, fact.conversion, operand);
+  return applyRustValueConversion(context, planned, fact.conversion, operand, true, borrowed);
 }
 
 export function planNumericLiteral(node: Node, context: RustPlanContext): RustExpr | undefined {
