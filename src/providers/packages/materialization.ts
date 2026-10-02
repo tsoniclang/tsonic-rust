@@ -556,22 +556,26 @@ function materializeProviderValueConversion(
         ...conversion,
         source: materializeProviderCarrier(conversion.source, carrierPaths, carrierTraits),
       };
-    case "js-value-from-source-union":
+    case "union-fold":
       return {
         ...conversion,
         source: materializeProviderCarrier(conversion.source, carrierPaths, carrierTraits),
-        variants: conversion.variants.map((variant) => ({
-          ...variant,
+        target: materializeProviderCarrier(conversion.target, carrierPaths, carrierTraits),
+        arms: conversion.arms.map((arm) => ({
+          ...arm,
           carrier: materializeProviderCarrier(
-            variant.carrier,
+            arm.carrier,
             carrierPaths,
             carrierTraits,
           ),
+          path: arm.path.map(step => ({ ...step,
+            union: materializeProviderCarrier(step.union, carrierPaths, carrierTraits),
+          })),
           conversion: materializeProviderValueConversion(
-            variant.conversion,
+            arm.conversion,
             carrierPaths,
             carrierTraits,
-          ) as typeof variant.conversion,
+          ) as typeof arm.conversion,
         })),
       };
     case "js-value-from-structural-to-json":

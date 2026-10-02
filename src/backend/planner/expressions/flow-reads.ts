@@ -16,7 +16,7 @@ import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.j
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { planRustProjectDowncast, planRustProjectProjection } from "../objects/project-downcasts.js";
+import { planRustProjectProjection } from "../objects/project-downcasts.js";
 import { planRustProgramErrorFlowRead } from "./error-operations.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
@@ -59,6 +59,25 @@ export function planRustFlowReadProjection(
     }
     return override.expression;
   }
+  return planRustValueProjection(node, expression, fact, context,
+    borrowedResult ? "borrow" : context.input.program.valueLifetimes.canMove(node) ? "move" : "clone");
+}
+
+export function planRustValueProjection(
+  node: Node,
+  expression: RustExpr,
+  fact: RustFlowReadProjectionFact,
+  context: RustPlanContext,
+  ownership: "move" | "clone" | "borrow",
+): RustExpr | undefined {
+  if (!rustFlowReadProjectionMatches(fact, context.input.program.projectTypes,
+    context.input.program.typeDefinitions)) {
+    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+      "rust.backend.value-projection", "Value projection conflicts with its exact sealed native carrier relation."));
+    return undefined;
+  }
+  const ownsValue = ownership === "move";
+  const borrowedResult = ownership === "borrow";
   if (fact.kind === "builtin-error") {
     if ((!isRustJsValueCarrier(fact.sourceCarrier) && !(isRustProgramErrorCarrier(fact.sourceCarrier) &&
       context.input.program.projectTypes.builtinErrorProjectionAvailable === true)) ||
@@ -67,9 +86,8 @@ export function planRustFlowReadProjection(
         "The selected builtin Error projection has contradictory native carriers."));
       return undefined;
     }
-    return { kind: "method-call", receiver: planRustNonConsumingValue(node, expression, context), method: "error_value", args: [] };
+    return { kind: "method-call", receiver: ownsValue ? expression : planRustNonConsumingValue(node, expression, context), method: "error_value", args: [] };
   }
-  const ownsValue = !borrowedResult && context.input.program.valueLifetimes.canMove(node);
   if (fact.kind === "union-map") {
     const sourceElement = rustOptionElementCarrier(fact.sourceCarrier);
     const targetElement = rustOptionElementCarrier(fact.selectedCarrier);
@@ -83,18 +101,13 @@ export function planRustFlowReadProjection(
   }
   if (fact.kind === "source-union" || fact.kind === "runtime-union") {
     const definitions = context.input.program.typeDefinitions;
-    if (!rustFlowReadProjectionMatches(fact, context.input.program.projectTypes, definitions)) {
-      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
-        "rust.backend.source-union-projection", "Union flow projection conflicts with its sealed native payload relation."));
-      return undefined;
-    }
     const payloadCarrier = fact.project?.sourceCarrier ?? fact.selectedCarrier;
     const selected = rustUnionProjectionContract(fact.sourceCarrier, payloadCarrier, definitions);
     const kindMatches = (definitions.sourceUnionVariants(fact.dispatchCarrier) !== undefined) === (fact.kind === "source-union");
     const result = selected === undefined || !kindMatches || selected.variant.name !== fact.variant ||
       !rustTargetTypeRefEquals(selected.dispatchCarrier, fact.dispatchCarrier) ? undefined
         : planRustUnionProjection(node, expression, fact.sourceCarrier, payloadCarrier,
-          fact.project !== undefined || borrowedResult ? "shared-reference" : ownsValue ? "move" : "clone", context);
+          ownsValue ? "move" : fact.project !== undefined || borrowedResult ? "shared-reference" : "clone", context);
     if (result === undefined) {
       context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
         "rust.backend.source-union-projection", "The selected union payload has no exact non-consuming projection."));
@@ -107,7 +120,8 @@ export function planRustFlowReadProjection(
           "rust.backend.source-union-projection", "Union payload refinement conflicts with its exact selected carrier."));
         return undefined;
       }
-      const projected = planRustProjectProjection(node, result.arms[0]!.expression, fact.project, context, "borrowed");
+      const projected = planRustProjectProjection(node, result.arms[0]!.expression, fact.project, context,
+        ownsValue ? "owned" : "borrowed");
       if (projected === undefined) return undefined;
       return bindRustFlowMatchSubject({ ...result, arms: [{ ...result.arms[0]!, expression: projected }, ...result.arms.slice(1)] }, node, context);
     }
@@ -178,14 +192,15 @@ export function planRustFlowReadProjection(
     }, node, context);
   }
   if (fact.kind === "program-error-variant") {
-    return planRustProgramErrorFlowRead(node, expression, fact, context);
+    return planRustProgramErrorFlowRead(node, expression, fact, context, ownsValue);
   }
-  return planRustProjectDowncast(
+  return planRustProjectProjection(
     node,
     expression,
     { sourceCarrier: fact.sourceCarrier, dispatchCarrier: fact.dispatchCarrier,
       targetCarrier: fact.selectedCarrier, projection: fact.projection },
     context,
+    ownsValue ? "owned" : "borrowed",
   );
 }
 

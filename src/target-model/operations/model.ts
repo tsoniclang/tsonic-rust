@@ -9,7 +9,7 @@ import type {
 import type { RustLifetimeBinder } from "../lifetimes/index.js";
 import type { RustExactIntegerConversion } from "../conversions/exact-integer.js";
 import type { RustIntegerRefinementConversion } from "../conversions/integer-refinement.js";
-import type { RustUnionArmMapping } from "../types/union-relations.js";
+import type { RustUnionArmMapping, RustUnionLeaf } from "../types/union-relations.js";
 
 export const rustExtensionId = "tsonic.rust";
 
@@ -211,13 +211,12 @@ export type RustNonOptionValueConversion =
       readonly source: TargetTypeRef;
     }
   | {
-      readonly kind: "js-value-from-source-union";
+      readonly kind: "union-fold";
       readonly source: TargetTypeRef;
-      readonly variants: readonly {
-        readonly name: string;
-        readonly carrier: TargetTypeRef;
+      readonly target: TargetTypeRef;
+      readonly arms: readonly (RustUnionLeaf & {
         readonly conversion: RustNonOptionValueConversion;
-      }[];
+      })[];
     }
   | {
       readonly kind: "js-value-from-structural-to-json";

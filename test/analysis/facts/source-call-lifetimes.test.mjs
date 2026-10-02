@@ -55,7 +55,7 @@ test("the backend independently rejects stale, missing and widened generic lifet
     parameters: [{ form: "required", valueCarrier: carrier, parameterCarrier: carrier, mode: "value", inputs: [binding] }],
     resultCarrier: carrier, targetGenericArguments: [argument(actual)] };
   const matches = (candidate, input = carrier, signature = selected) =>
-    sourceCallSelectedMemberMatches(candidate, signature, member.returnType, type => type, [input]);
+    sourceCallSelectedMemberMatches(candidate, signature, member.returnType, type => type, undefined, [input]);
   assert.equal(matches(fact), true);
   assert.equal(matches(fact, reference({ ...actual, identity: "other" })), false);
   assert.equal(matches(fact, reference(undefined)), false);

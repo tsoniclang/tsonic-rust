@@ -11,6 +11,11 @@ export interface RustUnionPathStep {
   readonly variant: RustRuntimeUnionVariant;
 }
 
+export interface RustUnionLeaf {
+  readonly carrier: TargetTypeRef;
+  readonly path: readonly RustUnionPathStep[];
+}
+
 export interface RustUnionArmMapping {
   readonly carrier: TargetTypeRef;
   readonly source: readonly RustUnionPathStep[];
@@ -22,10 +27,10 @@ export function isRustUnionArmMappings(value: unknown): value is readonly RustUn
   return value.every(arm => arm !== null && typeof arm === "object" &&
     hasExactObjectKeys(arm, ["carrier", "source", "target"]) &&
     isRustTargetTypeRef((arm as RustUnionArmMapping).carrier) &&
-    isPath((arm as RustUnionArmMapping).source) && isPath((arm as RustUnionArmMapping).target));
+    isRustUnionPath((arm as RustUnionArmMapping).source) && isRustUnionPath((arm as RustUnionArmMapping).target));
 }
 
-function isPath(value: unknown): value is readonly RustUnionPathStep[] {
+export function isRustUnionPath(value: unknown): value is readonly RustUnionPathStep[] {
   return isDenseDataArray(value) && value.length > 0 && value.every(step =>
     step !== null && typeof step === "object" && hasExactObjectKeys(step, ["union", "variant"]) &&
     isRustTargetTypeRef((step as RustUnionPathStep).union) && isVariant((step as RustUnionPathStep).variant));
@@ -58,13 +63,13 @@ export function rustUnionInjectionPath(source: TargetTypeRef, target: TargetType
 }
 
 export function rustUnionLeaves(carrier: TargetTypeRef, definitions: RustTypeDefinitions):
-  readonly { readonly carrier: TargetTypeRef; readonly path: readonly RustUnionPathStep[] }[] | undefined {
+  readonly RustUnionLeaf[] | undefined {
   return collectRustUnionPaths(carrier, definitions);
 }
 
 function collectRustUnionPaths(carrier: TargetTypeRef, definitions: RustTypeDefinitions, target?: TargetTypeRef):
-  readonly { readonly carrier: TargetTypeRef; readonly path: readonly RustUnionPathStep[] }[] | undefined {
-  const leaves: { readonly carrier: TargetTypeRef; readonly path: readonly RustUnionPathStep[] }[] = [];
+  readonly RustUnionLeaf[] | undefined {
+  const leaves: RustUnionLeaf[] = [];
   const visit = (current: TargetTypeRef, path: readonly RustUnionPathStep[]): boolean => {
     if (path.some(step => rustTargetTypeRefEquals(step.union, current))) return false;
     if (path.length > 0 && target !== undefined && rustTargetTypeRefEquals(current, target)) {

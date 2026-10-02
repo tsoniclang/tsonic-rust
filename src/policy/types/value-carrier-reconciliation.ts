@@ -6,7 +6,7 @@ import type {
   RustContextualValueConversionFact,
   RustFlowReadProjectionFact,
   RustProjectUpcastFact,
-} from "./value-projections.js";
+} from "../../target-model/types/value-projections.js";
 import {
   isRustProgramErrorCarrier,
   isRustJsValueCarrier,

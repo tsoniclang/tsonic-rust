@@ -13,6 +13,7 @@ import {
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
   rustAbsenceTargetType,
+  rustSourceOptionalTargetType,
   rustVecTargetType,
 } from "../../../dist/target-model/types/index.js";
 
@@ -102,11 +103,7 @@ test("array index rows distinguish checked source and runtime result carriers", 
   assert.equal(selected?.fact.kind, "provider-operation");
   assert.deepEqual(selected?.fact.sourceResultCarrier, elementCarrier);
   assert.deepEqual(selected?.fact.sourceAbsenceCarrier, rustAbsenceTargetType());
-  assert.deepEqual(selected?.fact.resultCarrier, {
-    kind: "target-named",
-    id: "rust.std.Option",
-    genericArguments: [{ kind: "type", type: elementCarrier }],
-  });
+  assert.deepEqual(selected?.fact.resultCarrier, rustSourceOptionalTargetType(elementCarrier));
 });
 
 test("unavailable argument carriers defer only when one operation row remains", () => {
@@ -171,7 +168,7 @@ export function same(): boolean {
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /js_abi::object_is\(\[[\s\S]*?JsValue::from\(js_abi::NUMBER_NAN\),[\s\S]*?JsValue::from\(js_abi::NUMBER_NAN\),[\s\S]*?\]\)/u);
   assert.match(text, /!js_abi::object_is\(\[[\s\S]*?JsValue::from\(0\.0\),[\s\S]*?JsValue::from\(-0\.0\),?[\s\S]*?\]\)/u);
-  assert.match(text, /js_abi::object_is\(\[[\s\S]*?js_value_from_string\("same"\),[\s\S]*?js_value_from_string\("same"\),[\s\S]*?\]\)/u);
+  assert.match(text, /js_abi::object_is\(\[[\s\S]*?JsValue::from\(String::from\("same"\)\),[\s\S]*?JsValue::from\(String::from\("same"\)\),[\s\S]*?\]\)/u);
 });
 
 test("console calls lower closed primitive and object values", () => {
@@ -191,7 +188,8 @@ export function write(label: string, count: int32, ok: boolean): void {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /js_abi::console_log\(&\[\n        js_abi::js_value_from_string\(&label\),\n        js_abi::JsValue::from\(count\),\n        js_abi::JsValue::from\(ok\),\n    \]\);/u);
+  assert.match(text, /js_abi::console_log\(&\[\n        js_abi::JsValue::from\(label\),\n        js_abi::JsValue::from\(count\),\n        js_abi::JsValue::from\(ok\),\n    \]\);/u);
+  assert.doesNotMatch(text, /label\.clone\(\)|js_value_from_string/u);
   assert.match(text, /js_abi::console_info\(&\[\]\);/u);
 
   const object = compileRust({
@@ -446,7 +444,7 @@ export function probe(name: string): boolean {
   assert.match(text, /js_string::to_upper_case\(name\)/u);
   assert.match(text, /js_string::starts_with_from_start\(&upper, "A"\)/u);
   assert.match(text, /js_string::includes_from_start\(&upper, "B"\)/u);
-  assert.match(text, /js_string::js_len\(name\) != 0/u);
+  assert.match(text, /js_string::js_len\(name\) > 0_usize/u);
   assert.doesNotMatch(text, /usize_to_(?:i32|f64)/u);
 });
 
@@ -504,7 +502,7 @@ export function probe(text: string, values: readonly int32[]): boolean {
   assert.match(text, /js_string::repeat\(text, 2\.0\)\?/u);
   assert.match(
     text,
-    /let point: u32 = rt::option_coalesce\(\n {8}js_string::code_point_at\(text, 0\.0\),\n {8}core::convert::identity,\n {8}\|\| 0,\n {4}\);/u,
+    /let point: u32 = rt::option_coalesce\(\n {8}js_string::code_point_at\(text, 0\.0\),\n {8}core::convert::identity,\n {8}\|\| 0_u32,\n {4}\);/u,
   );
 });
 

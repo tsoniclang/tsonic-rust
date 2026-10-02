@@ -106,7 +106,7 @@ export function substituteRustValueConversion(
           constSubstitutions,
         ),
       });
-    case "js-value-from-source-union":
+    case "union-fold":
       return Object.freeze({
         ...value,
         source: substituteRustTargetGenerics(
@@ -115,20 +115,24 @@ export function substituteRustValueConversion(
           lifetimeSubstitutions,
           constSubstitutions,
         ),
-        variants: Object.freeze(value.variants.map((variant) => Object.freeze({
-          ...variant,
+        target: substituteRustTargetGenerics(value.target, substitutions, lifetimeSubstitutions, constSubstitutions),
+        arms: Object.freeze(value.arms.map((arm) => Object.freeze({
+          ...arm,
           carrier: substituteRustTargetGenerics(
-            variant.carrier,
+            arm.carrier,
             substitutions,
             lifetimeSubstitutions,
             constSubstitutions,
           ),
+          path: Object.freeze(arm.path.map(step => Object.freeze({ ...step,
+            union: substituteRustTargetGenerics(step.union, substitutions, lifetimeSubstitutions, constSubstitutions),
+          }))),
           conversion: substituteRustValueConversion(
-            variant.conversion,
+            arm.conversion,
             substitutions,
             lifetimeSubstitutions,
             constSubstitutions,
-          ) as typeof variant.conversion,
+          ) as typeof arm.conversion,
         }))),
       });
     case "js-value-from-structural-to-json":

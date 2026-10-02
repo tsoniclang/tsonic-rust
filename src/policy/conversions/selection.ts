@@ -1,5 +1,5 @@
 import type { RustValueConversion } from "../../target-model/operations/model.js";
-import { rustUnionInjectionVariant, selectRustUnionArmMapping, rustUnionProjectionContract } from "../../target-model/types/union-relations.js";
+import { rustUnionInjectionVariant, selectRustUnionArmMapping, rustUnionProjectionContract, rustUnionLeaves, type RustUnionLeaf } from "../../target-model/types/union-relations.js";
 import { rustNativeRepresentationMatches } from "../../target-model/conversions/native-representation.js";
 import { rustNumericValueConversionIsSupported } from "../../target-model/conversions/numeric-promotion.js";
 import { selectRustExactIntegerConversion } from "../../target-model/conversions/exact-integer.js";
@@ -206,36 +206,10 @@ export function selectRustSourceValueConversion(
           elementConversion,
         });
     }
-    const sourceUnion = definitions.sourceUnionVariants(source);
-    if (sourceUnion !== undefined) {
-      const variants = sourceUnion.map((variant) => {
-        if (rustTargetTypeRefEquals(variant.carrier, source)) {
-          return undefined;
-        }
-        const conversion = selectRustSourceValueConversion(
-          variant.carrier,
-          jsValueCarrier,
-          definitions, nextAncestors,
-        );
-        return conversion === undefined ||
-            conversion.kind === "option-map" ||
-            conversion.kind === "option-some"
-          ? undefined
-          : Object.freeze({
-              name: variant.name,
-              carrier: variant.carrier,
-              conversion,
-            });
-      });
-      return variants.length === 0 || variants.some((variant) => variant === undefined)
-        ? undefined
-        : Object.freeze({
-            kind: "js-value-from-source-union" as const,
-            source,
-            variants: Object.freeze(
-              variants as NonNullable<typeof variants[number]>[],
-            ),
-          });
+    const unionLeaves = rustUnionLeaves(source, definitions);
+    if (unionLeaves !== undefined) {
+      return selectUnionFold(source, jsValueCarrier, unionLeaves, carrier =>
+        selectRustSourceValueConversion(carrier, jsValueCarrier, definitions, nextAncestors));
     }
     const structural = rustStructuralObjectCarrierValue(source);
     if (structural !== undefined) {
@@ -389,34 +363,10 @@ function selectJsonValueConversion(
           elementConversion,
         });
   }
-  const sourceUnion = definitions.sourceUnionVariants(source);
-  if (sourceUnion !== undefined) {
-    const variants = sourceUnion.map((variant) => {
-      const conversion = selectJsonValueConversion(
-        variant.carrier,
-        applySelectedToJson,
-        nextAncestors,
-        definitions,
-      );
-      return conversion === undefined ||
-          conversion.kind === "option-map" ||
-          conversion.kind === "option-some"
-        ? undefined
-        : Object.freeze({
-            name: variant.name,
-            carrier: variant.carrier,
-            conversion,
-          });
-    });
-    return variants.length === 0 || variants.some((variant) => variant === undefined)
-      ? undefined
-      : Object.freeze({
-          kind: "js-value-from-source-union" as const,
-          source,
-          variants: Object.freeze(
-            variants as NonNullable<typeof variants[number]>[],
-          ),
-        });
+  const unionLeaves = rustUnionLeaves(source, definitions);
+  if (unionLeaves !== undefined) {
+    return selectUnionFold(source, jsValueCarrier, unionLeaves, carrier =>
+      selectJsonValueConversion(carrier, applySelectedToJson, nextAncestors, definitions));
   }
   if (structural !== undefined) {
     const fields = selectStructuralObjectConversionFields(
@@ -430,6 +380,21 @@ function selectJsonValueConversion(
     });
   }
   return selectRustSourceValueConversion(source, jsValueCarrier, definitions);
+}
+
+function selectUnionFold(
+  source: TargetTypeRef,
+  target: TargetTypeRef,
+  leaves: readonly RustUnionLeaf[],
+  select: (carrier: TargetTypeRef) => RustValueConversion | undefined,
+): Extract<RustValueConversion, { readonly kind: "union-fold" }> | undefined {
+  const arms: Extract<RustValueConversion, { readonly kind: "union-fold" }>["arms"][number][] = [];
+  for (const leaf of leaves) {
+    const conversion = select(leaf.carrier);
+    if (conversion === undefined || conversion.kind === "option-map" || conversion.kind === "option-some") return undefined;
+    arms.push(Object.freeze({ ...leaf, conversion }));
+  }
+  return Object.freeze({ kind: "union-fold", source, target, arms: Object.freeze(arms) });
 }
 
 type StructuralObjectConversion = Extract<

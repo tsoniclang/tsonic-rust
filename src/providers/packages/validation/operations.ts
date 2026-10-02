@@ -404,12 +404,14 @@ function valueConversionCarriers(
       ...valueConversionCarriers(conversion.elementConversion),
     ];
   }
-  if (conversion.kind === "js-value-from-source-union") {
+  if (conversion.kind === "union-fold") {
     return [
       conversion.source,
-      ...conversion.variants.flatMap((variant) => [
-        variant.carrier,
-        ...valueConversionCarriers(variant.conversion),
+      conversion.target,
+      ...conversion.arms.flatMap((arm) => [
+        arm.carrier,
+        ...arm.path.map(step => step.union),
+        ...valueConversionCarriers(arm.conversion),
       ]),
     ];
   }

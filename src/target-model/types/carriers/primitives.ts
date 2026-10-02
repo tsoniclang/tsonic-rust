@@ -122,6 +122,11 @@ export function rustFutureTargetType(output: TargetTypeRef): TargetTypeRef {
   };
 }
 
+export function isRustNativeFutureCarrier(carrier: TargetTypeRef | undefined): boolean {
+  return carrier?.kind === "target-named" && carrier.id === rustFutureTargetId &&
+    rustOnlyTypeGenericArguments(carrier.genericArguments)?.length === 1;
+}
+
 export function rustFutureOutputCarrier(carrier: TargetTypeRef | undefined): TargetTypeRef | undefined {
   if (carrier?.kind !== "target-named") return undefined;
   if (carrier.id === rustFutureTargetId) {

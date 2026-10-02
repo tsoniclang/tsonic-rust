@@ -18,7 +18,8 @@ import type {
   TargetTypeRef,
 } from "../../../target-model/types/model.js";
 import { isRustLifetimeRef } from "../../../target-model/lifetimes/index.js";
-import { isRustUnionArmMappings } from "../../../target-model/types/union-relations.js";
+import { isRustUnionArmMappings, isRustUnionPath } from "../../../target-model/types/union-relations.js";
+import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
 
 const carrierFieldsByKind: Readonly<Record<RustTargetTypeRef["kind"], readonly string[]>> =
   Object.freeze({
@@ -377,6 +378,19 @@ export function validateValueConversion(
     validateCarrier(conversion.source, definition, `${where}.source`, fail);
     validateCarrier(conversion.target, definition, `${where}.target`, fail);
     if (!isRustUnionArmMappings(conversion.arms)) fail(`${where}.arms is not a closed union mapping`);
+  } else if (conversion.kind === "union-fold") {
+    requireExactKeys(asRecord(conversion), ["kind", "source", "target", "arms"], where, fail);
+    validateCarrier(conversion.source, definition, `${where}.source`, fail);
+    validateCarrier(conversion.target, definition, `${where}.target`, fail);
+    if (!isDenseDataArray(conversion.arms) || conversion.arms.length === 0) fail(`${where}.arms is not a closed union fold`);
+    for (const [index, arm] of conversion.arms.entries()) {
+      const armWhere = `${where}.arms[${index}]`;
+      requireExactKeys(asRecord(arm), ["carrier", "path", "conversion"], armWhere, fail);
+      validateCarrier(arm.carrier, definition, `${armWhere}.carrier`, fail);
+      if (!isRustUnionPath(arm.path)) fail(`${armWhere}.path is not a closed native union path`);
+      for (const step of arm.path) validateCarrier(step.union, definition, `${armWhere}.path.union`, fail);
+      validateValueConversion(arm.conversion, definition, `${armWhere}.conversion`, arm.carrier, conversion.target, fail);
+    }
   } else if (conversion.kind === "union-project") {
     requireExactKeys(asRecord(conversion), ["kind", "source", "target"], where, fail);
     validateCarrier(conversion.source, definition, `${where}.source`, fail);

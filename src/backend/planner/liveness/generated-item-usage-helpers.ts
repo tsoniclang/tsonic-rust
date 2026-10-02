@@ -121,10 +121,10 @@ export function visitConversionContract(
         markVariantConstructed,
       );
       return;
-    case "js-value-from-source-union":
-      for (const variant of contract.variants) {
+    case "union-fold":
+      for (const arm of contract.arms) {
         visitConversionContract(
-          variant.conversion,
+          arm.conversion,
           markStructuralFieldRead,
           markVariantConstructed,
         );

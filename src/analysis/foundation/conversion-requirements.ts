@@ -109,10 +109,11 @@ function rustFoundationForConversionContract(
       require(rustFoundationForCarrier(contract.element));
       require(rustFoundationForConversionContract(contract.elementConversion));
       break;
-    case "js-value-from-source-union":
-      for (const variant of contract.variants) {
-        require(rustFoundationForCarrier(variant.carrier));
-        require(rustFoundationForConversionContract(variant.conversion));
+    case "union-fold":
+      for (const arm of contract.arms) {
+        for (const step of arm.path) require(rustFoundationForCarrier(step.union));
+        require(rustFoundationForCarrier(arm.carrier));
+        require(rustFoundationForConversionContract(arm.conversion));
       }
       break;
     case "js-value-from-structural-to-json":

@@ -272,7 +272,7 @@ export function render(label: string, count: number, ok: boolean): string {
   const text = artifactText(result, "src/index.rs");
   assert.match(
     text,
-    /tsonic_rust_node::util::format\(\s*"%s:%d:%s",\s*&\[\s*js_abi::js_value_from_string\(&label\),\s*js_abi::JsValue::from\(count\),\s*js_abi::JsValue::from\(ok\),\s*\]\s*,?\s*\)/su,
+    /tsonic_rust_node::util::format\(\s*"%s:%d:%s",\s*&\[\s*js_abi::JsValue::from\(label\.clone\(\)\),\s*js_abi::JsValue::from\(count\),\s*js_abi::JsValue::from\(ok\),\s*\]\s*,?\s*\)/su,
   );
   assert.match(text, /tsonic_rust_node::util::format\("%s", &\[\]\)/u);
   assert.match(
@@ -351,7 +351,7 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /js_value_from_string\(&label\)/u);
+  assert.match(text, /JsValue::from\(label\.clone\(\)\)/u);
   assert.match(text, /clone_js_value\(&parsed\)/u);
   const run = validateGeneratedProject("node-provider-bin", result.artifacts, { run: true });
   assert.equal(run.status, 0);
@@ -396,12 +396,12 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /tsonic_rust_node::http::create_server_callable/u);
+  assert.match(source, /tsonic_rust_node::http::create_server_optional\(Some\(aliasedHandle\)\)/u);
   assert.match(source, /fn handle\([^)]*\) -> Result<\(\), rt::TsonicError>/u);
   assert.match(source, /response\.set_status_code\(/u);
   assert.match(source, /response\.set_header\(/u);
   assert.match(source, /response\.end_buffer\(/u);
-  assert.match(source, /server\s*\.listen\(/u);
+  assert.match(source, /server\s*\.listen_optional\(/u);
   assert.match(source, /tsonic_rust_node::timers::set_interval_callable/u);
   assert.match(source, /rt::Callable::<[^;]+rt::TsonicResult<\(\)>>/u);
   const main = artifactText(result, "src/main.rs");
@@ -429,7 +429,7 @@ export function register(
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /handler: rt::Callable<[\s\S]*?rt::TsonicResult<\(\)>,?\s*>/u);
-  assert.match(source, /tsonic_rust_node::http::create_server_callable\(handler\)/u);
+  assert.match(source, /tsonic_rust_node::http::create_server_optional\(Some\(handler\)\)/u);
   assert.doesNotMatch(source, /handler\.clone\(\)/u);
   validateGeneratedProject("node-retained-callback", result.artifacts);
 });
@@ -484,7 +484,7 @@ export function exerciseNodeFamilies(
   lines.pause().resume();
   lines.prompt();
   lines.close();
-  return emitted && isIP(host) >= 0;
+  return emitted && isIP(host) !== 0;
 }
 `,
     },

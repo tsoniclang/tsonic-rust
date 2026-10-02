@@ -16,6 +16,7 @@ import {
   KindPrefixUnaryExpression,
   KindVoidExpression,
   Node_Expression,
+  sourceExpressionSequence,
 } from "@tsonic/target-api/source";
 import {
   planRustMutableProjectReceiver,
@@ -55,6 +56,7 @@ import { planRustFieldProjectionAssignment } from "./field-projection-assignment
 import { planRustCompoundRuntimeWrite } from "./compound-runtime-write.js";
 import { rustCompoundWriteFactKey } from "../../../analysis/facts/operations/keys.js";
 import { prepareRustComputedMemberEvaluation } from "../expressions/computed-members.js";
+import { planRustDiscardedValue } from "../expressions/discarded-values.js";
 
 export function planExpressionStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const expression = Node_Expression(context.input.program.source.ast, node);
@@ -73,6 +75,16 @@ export function planExpressionAsStatement(
     return planned === undefined ? undefined : [{ kind: "expr", expr: planned }];
   }
   const { ast } = context.input.program.source;
+  const sequence = sourceExpressionSequence(ast, expression);
+  if (sequence.length > 1) {
+    const statements: RustStmt[] = [];
+    for (const item of sequence) {
+      const planned = planExpressionAsStatement(item, context);
+      if (planned === undefined) return undefined;
+      statements.push(...planned);
+    }
+    return statements;
+  }
   const expressionKind = ast.kindName(expression);
   if (expressionKind === KindBinaryExpression) {
     const operatorToken = BinaryExpression_OperatorToken(context.input.program.source.ast, expression);
@@ -169,18 +181,24 @@ export function planExpressionAsStatement(
   if (expressionKind === KindCallExpression || expressionKind === "KindAwaitExpression" ||
     expressionKind === "KindYieldExpression" || expressionKind === KindDeleteExpression ||
     expressionKind === KindVoidExpression) {
-    const planned = planExpression(expression, context, "discarded");
+    const discarded = planRustDiscardedValue(expression, context);
+    const planned = discarded?.expression;
     const fact = context.input.program.facts.getFact(expression, rustTargetOperationFactKey);
     if (planned !== undefined && fact?.kind === "provider-operation" &&
       fact.abi.target.form === "numeric-cast") {
       return [{ kind: "let", name: "_", mutable: false, init: planned }];
     }
-    return planned === undefined ? undefined : [{ kind: "expr", expr: planned }];
+    return planned === undefined ? undefined : discarded?.discard === "value" &&
+      (planned.kind === "reference" || planned.kind === "path")
+      ? [{ kind: "let", name: "_", mutable: false, init: planned }]
+      : [{ kind: "expr", expr: planned }];
   }
-  const planned = planExpression(expression, context);
-  return planned === undefined
+  const discarded = planRustDiscardedValue(expression, context);
+  return discarded === undefined
     ? undefined
-    : [{ kind: "let", name: "_", mutable: false, init: planned }];
+    : discarded.discard === "unit"
+      ? [{ kind: "expr", expr: discarded.expression }]
+      : [{ kind: "let", name: "_", mutable: false, init: discarded.expression }];
 }
 
 export function planRustAssignmentWrite(

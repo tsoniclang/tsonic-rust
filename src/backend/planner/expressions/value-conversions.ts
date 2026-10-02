@@ -26,10 +26,10 @@ import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustValueConversion } from "../../../analysis/facts/keys.js";
 import type { RustFinalizedValueConversion } from "../../../analysis/facts/finalized-operation-abi.js";
-import { rustUnionTypePathInContext, rustTypeFromCarrierInContext } from "../types/render.js";
+import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { lowerRustExactIntegerConversion } from "./exact-integer.js";
 import { planRustUnionMapping, planRustUnionProjection } from "./union-mappings.js";
-import { planRustUnionConstruction } from "./union-patterns.js";
+import { planRustUnionConstruction, planRustUnionPattern } from "./union-patterns.js";
 import { planRustCheckedSourceOptional } from "./optional-storage.js";
 
 export function applyRustValueConversion(
@@ -216,54 +216,30 @@ export function lowerRustValueConversion(
           }],
         };
     }
-    case "js-value-from-source-union": {
-      const variants = context.input.program.typeDefinitions.sourceUnionVariants(contract.source);
-      const typePath = rustUnionTypePathInContext(contract.source, context);
-      if (variants === undefined || typePath === undefined ||
-        variants.length !== contract.variants.length) {
-        context.diagnostics.push(missingFactDiagnostic(
-          diagnosticInput(context, node ?? context.sourceFile),
-          "rust.backend.js-value-source-union",
-          "Closed JavaScript-value projection has no exact emitted source-union contract.",
-        ));
-        return undefined;
-      }
+    case "union-fold": {
       const names = context.syntheticNames ?? createRustSyntheticNameState(
         context.input.program.source.ast,
         node ?? context.sourceFile,
         [],
       );
       const arms: { readonly pattern: RustPattern; readonly expression: RustExpr }[] = [];
-      for (const [index, variant] of contract.variants.entries()) {
-        const sourceVariant = variants[index];
-        if (sourceVariant === undefined || sourceVariant.name !== variant.name ||
-          !rustTargetTypeRefEquals(sourceVariant.carrier, variant.carrier)) {
-          context.diagnostics.push(missingFactDiagnostic(
-            diagnosticInput(context, node ?? context.sourceFile),
-            "rust.backend.js-value-source-union",
-            "Closed JavaScript-value projection conflicts with its finalized source-union variant order.",
-          ));
-          return undefined;
-        }
-        const valueName = allocateRustSyntheticName(
-          names,
-          `json_${variant.name}_value`,
-        );
+      for (const arm of contract.arms) {
+        const variant = arm.path[arm.path.length - 1]!.variant;
+        const valueName = allocateRustSyntheticName(names, "union_value");
+        const payload: RustExpr = variant.kind === "constant" ? { kind: "bool-literal", value: variant.value }
+          : { kind: "path", path: valueName };
+        const pattern = planRustUnionPattern(arm.path, { kind: "binding", name: valueName }, context);
         const converted = lowerNestedRustValueConversion(
-          variant.conversion,
-          { kind: "path", path: valueName },
+          arm.conversion,
+          payload,
           context,
           node,
         );
-        if (converted === undefined) {
+        if (pattern === undefined || converted === undefined) {
           return undefined;
         }
         arms.push({
-          pattern: {
-            kind: "tuple-variant",
-            path: `${typePath}::${variant.name}`,
-            elements: [{ kind: "binding", name: valueName }],
-          },
+          pattern,
           expression: converted,
         });
       }

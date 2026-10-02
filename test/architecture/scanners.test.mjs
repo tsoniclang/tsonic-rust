@@ -878,7 +878,8 @@ test("project-source backend calls require the exact finalized selected member A
   assert.match(selectedGate, /if \(factParameter === undefined\) return false;/u);
   assert.match(selectedGate, /mapRustTargetTypes\(factParameter\.parameterCarrier, normalize\)/u);
   assert.match(selectedGate, /mapRustTargetTypes\(resultProjection\?\.sourceCarrier \?\? fact\.resultCarrier, normalize\)/u);
-  assert.match(selectedGate, /rustTargetTypeRefEquals\(resultProjection\.targetCarrier, fact\.resultCarrier\)/u);
+  assert.match(selectedGate, /rustTargetTypeRefEquals\(resultProjection\.selectedCarrier, fact\.resultCarrier\)/u);
+  assert.match(selectedGate, /rustSourceCallResultProjectionMatches\(sourceProjection, resultProjection, instantiateResult/u);
   assert.match(selectedGate, /\(sourceProjection === undefined\) !== \(resultProjection === undefined\)/u);
   assert.match(selectedGate, /mode === factParameter\.mode/u);
   assert.doesNotMatch(selectedGate, /sourceName ===|memberName|includes\(|toLowerCase/u);

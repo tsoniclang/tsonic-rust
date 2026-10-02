@@ -46,6 +46,9 @@ import type { RustExpr } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustSelectedTargetSignature as SelectedTargetSignatureFact, TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
+import type { RustProjectTypePolicy } from "../../../../policy/types/project-types.js";
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../../target-model/types/source-union-definitions.js";
+import { rustSourceCallResultProjectionMatches } from "../../../../analysis/facts/source-call-results.js";
 
 export function shapeRustSourceCallParameters(
   argumentNodes: readonly Node[],
@@ -233,7 +236,9 @@ export function planRustSelectedSourceCallArguments(
       selected,
       selected.member.returnType,
       context.input.program.typeFamilies.normalize,
+      context.input.program.projectTypes,
       rustSourceCallArgumentCarriers(call, context.input.program.source.ast, context.input.program.facts),
+      context.input.program.typeDefinitions,
     )) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, call),
@@ -433,7 +438,9 @@ export function sourceCallSelectedMemberMatches(
   selected: SelectedTargetSignatureFact,
   declaredResultCarrier: TargetTypeRef | undefined,
   normalize: (carrier: TargetTypeRef) => TargetTypeRef,
+  projectTypes: RustProjectTypePolicy | undefined,
   argumentCarriers: readonly (TargetTypeRef | undefined)[] = [],
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): boolean {
   const member = selected.member;
   const sourceArguments = selected.sourceSelectedMethodTypeArguments ?? [];
@@ -483,15 +490,9 @@ export function sourceCallSelectedMemberMatches(
   const resultProjection = fact.resultProjection;
   if ((sourceProjection === undefined) !== (resultProjection === undefined)) return false;
   if (sourceProjection !== undefined && resultProjection !== undefined) {
-    const instantiate = instantiateResult;
-    if (!rustTargetTypeRefEquals(instantiate(sourceProjection.sourceCarrier), resultProjection.sourceCarrier) ||
-      !rustTargetTypeRefEquals(instantiate(sourceProjection.dispatchCarrier), resultProjection.dispatchCarrier) ||
-      !rustTargetTypeRefEquals(instantiate(sourceProjection.targetCarrier), resultProjection.targetCarrier) ||
-      !rustTargetTypeRefEquals(resultProjection.sourceCarrier, resultProjection.dispatchCarrier) ||
-      !rustTargetTypeRefEquals(resultProjection.targetCarrier, fact.resultCarrier) ||
-      sourceProjection.projection.kind !== "generic" &&
-        (sourceProjection.projection.kind !== resultProjection.projection.kind ||
-          sourceProjection.projection.slot !== resultProjection.projection.slot)) return false;
+    if (projectTypes === undefined || !rustTargetTypeRefEquals(resultProjection.selectedCarrier, fact.resultCarrier) ||
+      !rustSourceCallResultProjectionMatches(sourceProjection, resultProjection, instantiateResult,
+        projectTypes, definitions)) return false;
   }
   const identityMatches = member.id === fact.operationId &&
     member.kind === expectedKind &&

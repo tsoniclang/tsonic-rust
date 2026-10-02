@@ -13,7 +13,7 @@ import type {
   RustProjectDowncastFact,
   RustProjectUpcastFact,
   RustSourceBindingFact,
-} from "../../policy/types/value-projections.js";
+} from "../../target-model/types/value-projections.js";
 
 export const rustOptionProjectionFactKey: RustPlanKey<RustOptionProjectionFact> =
   defineRustPlanKey("optionProjection", closedMetadataEquals);

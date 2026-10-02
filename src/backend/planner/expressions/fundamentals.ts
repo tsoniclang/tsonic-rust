@@ -26,7 +26,7 @@ import { applyRustValueConversion } from "./value-conversions.js";
 import { diagnosticInput, rustActiveErrorType } from "../program/plan-context.js";
 import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
 import { isFloatCarrier, rustTypeFromCarrierInContext } from "../types/render.js";
-import { isRustBigIntCarrier, isRustIntegerCarrier, isRustStringCarrier } from "../../../target-model/types/index.js";
+import { isRustBigIntCarrier, isRustIntegerCarrier, isRustStringCarrier, rustPrimitiveTypeName } from "../../../target-model/types/index.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { negateRustBooleanExpression, rustStringConcat } from "../../target-ast/expressions.js";
 import { parseSourceBigIntLiteral } from "../../../target-model/syntax/literals.js";
@@ -445,8 +445,8 @@ export function planNumericLiteral(node: Node, context: RustPlanContext): RustEx
 export function planBigIntLiteral(node: Node, context: RustPlanContext): RustExpr | undefined {
   const carrier = rustValueCarrierBeforeContextualConversion(context.input.program.facts, node);
   const value = parseSourceBigIntLiteral(context.input.program.source.ast.text(node));
-  if (value !== undefined && isRustIntegerCarrier(carrier)) {
-    return { kind: "int-literal", text: value.toString(10) };
+  if (value !== undefined && carrier !== undefined && isRustIntegerCarrier(carrier)) {
+    return nativeIntegerLiteral(value, carrier);
   }
   if (!isRustBigIntCarrier(carrier) || value === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -472,7 +472,7 @@ export function planNumericLiteralWithCarrier(
   const text = context.input.program.source.ast.text(node);
   if (isFloatCarrier(carrier)) {
     const floatText = text.includes(".") || text.includes("e") || text.includes("E") ? text : `${text}.0`;
-    return { kind: "float-literal", text: floatText };
+    return { kind: "float-literal", text: carrier.kind === "source-primitive" && rustPrimitiveTypeName(carrier.name) === "f32" ? `${floatText}_f32` : floatText };
   }
   if (isRustIntegerCarrier(carrier)) {
     const value = sourceIntegerLiteralValue(context.input.program.source.ast, node);
@@ -484,7 +484,7 @@ export function planNumericLiteralWithCarrier(
       ));
       return undefined;
     }
-    return { kind: "int-literal", text: value.toString(10) };
+    return nativeIntegerLiteral(value, carrier);
   }
   context.diagnostics.push(missingFactDiagnostic(
     diagnosticInput(context, node),
@@ -492,4 +492,10 @@ export function planNumericLiteralWithCarrier(
     "Numeric literal carrier is not a supported Rust numeric carrier.",
   ));
   return undefined;
+}
+
+function nativeIntegerLiteral(value: bigint, carrier: TargetTypeRef): RustExpr | undefined {
+  const type = carrier.kind === "source-primitive" ? rustPrimitiveTypeName(carrier.name) : undefined;
+  return type === undefined ? undefined : { kind: "int-literal",
+    text: type === "i32" ? value.toString(10) : `${value.toString(10)}_${type}` };
 }

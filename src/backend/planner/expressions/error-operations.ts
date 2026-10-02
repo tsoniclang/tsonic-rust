@@ -120,6 +120,7 @@ export function planRustProgramErrorFlowRead(
   expression: RustExpr,
   fact: RustProgramErrorFlowReadFact,
   context: RustPlanContext,
+  ownsValue: boolean,
 ): RustExpr | undefined {
   const route = resolveProgramErrorFactRoute(
     fact.sourceCarrier,
@@ -142,11 +143,11 @@ export function planRustProgramErrorFlowRead(
   );
   return {
     kind: "match",
-    expression: { kind: "reference", expr: expression },
+    expression: ownsValue ? expression : { kind: "reference", expr: expression },
     arms: [
       {
         pattern: programErrorPattern(route, { kind: "binding", name: valueName }),
-        expression: {
+        expression: ownsValue ? { kind: "path", path: valueName } : {
           kind: "method-call",
           receiver: { kind: "path", path: valueName },
           method: "clone",

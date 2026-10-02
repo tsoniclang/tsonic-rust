@@ -31,7 +31,7 @@ import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js
 import { planRustReferenceOperationCall } from "../reference-operations.js";
 import { planRustBorrowedElementRead } from "../borrowed-element-reads.js";
 import { planRustNativeControl } from "../native-controls.js";
-import { planRustProjectProjection } from "../../objects/project-downcasts.js";
+import { planRustValueProjection } from "../flow-reads.js";
 import { planRustClosedTypeTest } from "../type-tests.js";
 
 export function planCallExpression(node: Node, context: RustPlanContext, resultUse: RustExpressionResultUse = "value"): RustExpr | undefined {
@@ -138,7 +138,7 @@ function planCallExpressionInner(node: Node, context: RustPlanContext, resultUse
       context,
     );
     const planned = native === undefined || fact.resultProjection === undefined ? native
-      : planRustProjectProjection(node, native, fact.resultProjection, context, "owned");
+      : planRustValueProjection(node, native, fact.resultProjection, context, "move");
     return planned === undefined || argumentPlan.bindings.length === 0
       ? planned
       : {

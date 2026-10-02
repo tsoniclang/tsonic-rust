@@ -105,7 +105,9 @@ export function planSelectedSourceCall(
     selected,
     selected.member.returnType,
     context.input.program.typeFamilies.normalize,
+    context.input.program.projectTypes,
     rustSourceCallArgumentCarriers(node, context.input.program.source.ast, context.input.program.facts),
+    context.input.program.typeDefinitions,
   );
   if (!selectedMatches) {
     context.diagnostics.push(missingFactDiagnostic(

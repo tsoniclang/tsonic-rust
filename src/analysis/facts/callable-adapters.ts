@@ -20,7 +20,7 @@ export type RustCallableValueAdapter =
       readonly sourceCarrier: TargetTypeRef;
       readonly targetCarrier: TargetTypeRef;
       readonly conversion: RustContextualValueConversion;
-      readonly upcast?: import("../../policy/types/value-projections.js").RustProjectUpcastFact;
+      readonly upcast?: import("../../target-model/types/value-projections.js").RustProjectUpcastFact;
     }
   | {
       readonly kind: "project-upcast";

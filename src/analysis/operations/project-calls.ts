@@ -590,13 +590,13 @@ export function applySelectedProjectSourceCall(
     carrier, parameters.map(parameter => parameter.parameterCarrier), bindings, argumentCarriers);
   const nativeResultCarrier = instantiateResult(genericResultCarrier);
   const sourceResult = selectRustSourceCallResult(walk.operationOptions.projectTypes, nativeResultCarrier, () => {
-    const selected = selectedSignature.sourceResultProjection?.targetCarrier;
-    return selected === undefined ? undefined : instantiateResult(substituteRustTargetGenerics(selected,
+    const selected = selectedSignature.sourceResultProjection?.selectedCarrier;
+    return selected === undefined ? nativeResultCarrier : instantiateResult(substituteRustTargetGenerics(selected,
       substitutions.types, substitutions.lifetimes, substitutions.consts, normalizeTypeFamily));
-  });
+  }, walk.context.typeDefinitions);
   if (sourceResult === undefined) {
     appendRustDiagnostic(walk, "RUST_SOURCE_CALL_RESULT_PROJECTION_MISSING",
-      "The finalized project-source result has no exact native inheritance projection.", expression,
+      "The finalized project-source result has no exact native carrier projection.", expression,
       ["target.capability=rust.source-call.result-projection"]);
     return undefined;
   }

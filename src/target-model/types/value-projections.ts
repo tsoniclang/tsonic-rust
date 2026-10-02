@@ -1,12 +1,12 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustBindingNormalization } from "../../target-model/types/binding-normalization.js";
-export type { RustBindingNormalization } from "../../target-model/types/binding-normalization.js";
-import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustContextualValueConversion } from "../../target-model/conversions/contextual.js";
-import type { RustProjectProjectionSelection } from "../../target-model/types/project-projections.js";
-import type { RustProjectDowncastFact } from "../../target-model/types/project-projections.js";
-import type { RustUnionArmMapping } from "../../target-model/types/union-relations.js";
-export type { RustProjectDowncastFact } from "../../target-model/types/project-projections.js";
+import type { RustBindingNormalization } from "./binding-normalization.js";
+export type { RustBindingNormalization } from "./binding-normalization.js";
+import type { TargetTypeRef } from "./model.js";
+import type { RustContextualValueConversion } from "../conversions/contextual.js";
+import type { RustProjectProjectionSelection } from "./project-projections.js";
+import type { RustProjectDowncastFact } from "./project-projections.js";
+import type { RustUnionArmMapping } from "./union-relations.js";
+export type { RustProjectDowncastFact } from "./project-projections.js";
 
 export type RustOptionProjectionFact =
   | {

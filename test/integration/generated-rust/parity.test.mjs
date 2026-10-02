@@ -113,7 +113,7 @@ export function empty(): string {
   assert.deepEqual(good.result.diagnostics, []);
   const text = artifactText(good.result, "src/index.rs");
   assert.match(text, /tsonic_rust_node::util::inspect\(&value\)/u);
-  assert.match(text, /tsonic_rust_node::util::inspect\(&js_abi::js_value_from_string\(&name\)\)/u);
+  assert.match(text, /tsonic_rust_node::util::inspect\(&js_abi::JsValue::from\(name\)\)/u);
   assert.match(text, /tsonic_rust_node::util::inspect\(&js_abi::js_value_from_closed\(&token\)\)/u);
 
   for (const sourceType of ["object", "object[]", "{ token: object }"]) {

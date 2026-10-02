@@ -13,7 +13,6 @@ import {
   getRustGeneratorProtocol,
   isRustNeverCarrier,
   isRustAbsenceCarrier,
-  isRustUnitCarrier,
   rustOptionElementCarrier,
   rustSourceTypeCarrierValue,
 } from "../../../target-model/types/index.js";
@@ -84,6 +83,7 @@ import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustExpressionResultUse } from "./entry.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { planRustSourceCallableValue } from "./source-callable-value.js";
+import { planRustDiscardedValue } from "./discarded-values.js";
 
 export function planExpressionInner(
   node: Node,
@@ -352,8 +352,8 @@ export function planExpressionInner(
         ));
         return undefined;
       }
-      const operand = planExpression(operandNode, context, "value", typeof fact.result === "string" ? "value" : "shared-reference");
       if (typeof fact.result !== "string") {
+        const operand = planExpression(operandNode, context, "value", "shared-reference");
         const carrier = rustEffectiveValueCarrier(context.input.program.facts, operandNode);
         const planned = operand === undefined ? undefined
           : planRustRuntimeCategory(operand, fact.result, context, true);
@@ -366,15 +366,15 @@ export function planExpressionInner(
         }
         return planned;
       }
-      const discard = isRustUnitCarrier(expressionCarrier(operandNode, context)) ? "unit" : "value";
-      return operand === undefined
+      const discarded = planRustDiscardedValue(operandNode, context);
+      return discarded === undefined
         ? undefined
         : {
             kind: "evaluate-then",
-            effect: discard === "value"
-              ? planRustNonConsumingValue(operandNode, operand, context)
-              : operand,
-            discard,
+            effect: discarded.discard === "value"
+              ? planRustNonConsumingValue(operandNode, discarded.expression, context)
+              : discarded.expression,
+            discard: discarded.discard,
             value: { kind: "string-literal", value: fact.result },
           };
     }
@@ -397,7 +397,8 @@ export function planExpressionInner(
         ));
         return undefined;
       }
-      const operand = planExpression(operandNode, context);
+      const discarded = planRustDiscardedValue(operandNode, context);
+      const operand = discarded?.expression;
       if (operand !== undefined && isRustNeverCarrier(expressionCarrier(operandNode, context))) {
         return { kind: "bottom", expression: operand };
       }
@@ -407,7 +408,7 @@ export function planExpressionInner(
         : {
             kind: "evaluate-then",
             effect: operand,
-            discard: isRustUnitCarrier(expressionCarrier(operandNode, context)) ? "unit" : "value",
+            discard: discarded!.discard,
             value: { kind: "tuple-literal", elements: [] },
           };
     }

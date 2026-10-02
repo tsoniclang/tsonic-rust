@@ -48,10 +48,10 @@ import { rustExactIntegerConversionMatches } from "./exact-integer.js";
 import { rustUnsignedIntegerCounterpart } from "./integer-refinement.js";
 import { rustNumberBoxingSourceKind } from "./number-boxing.js";
 import { rustRestSequenceElements } from "../operations/rest-assembly.js";
-import { closedMetadataEquals, isDenseDataArray, hasExactObjectKeys } from "../metadata/closed-data.js";
+import { closedMetadataEquals, isClosedMetadata, isDenseDataArray, hasExactObjectKeys } from "../metadata/closed-data.js";
 import { rustNamedTypeCarrierValue } from "../types/carriers/native.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../types/source-union-definitions.js";
-import { rustUnionInjectionPath, selectRustUnionArmMapping, rustUnionProjectionContract, type RustUnionArmMapping, type RustUnionPathStep } from "../types/union-relations.js";
+import { rustUnionInjectionPath, selectRustUnionArmMapping, rustUnionProjectionContract, rustUnionLeaves, type RustUnionLeaf, type RustUnionArmMapping, type RustUnionPathStep } from "../types/union-relations.js";
 
 const boolCarrier = rustSourcePrimitiveTargetType("bool");
 const int32Carrier = rustSourcePrimitiveTargetType("int32");
@@ -140,12 +140,10 @@ export type RustValueConversionContract = RustValueConversionContractBase & (
       readonly elementConversion: RustValueConversionContract;
     }
   | {
-      readonly lowering: "js-value-from-source-union";
-      readonly variants: readonly {
-        readonly name: string;
-        readonly carrier: TargetTypeRef;
+      readonly lowering: "union-fold";
+      readonly arms: readonly (RustUnionLeaf & {
         readonly conversion: RustValueConversionContract;
-      }[];
+      })[];
     }
   | {
       readonly lowering: "js-value-from-structural-to-json";
@@ -281,35 +279,35 @@ export function rustValueConversionContract(
           fallible: false,
         };
   }
-  if (value.kind === "js-value-from-source-union") {
-    const union = definitions.sourceUnionVariants(value.source);
-    if (union === undefined || !isDenseDataArray(value.variants) || union.length !== value.variants.length) {
+  if (value.kind === "union-fold") {
+    if (!isClosedMetadata(value) || !hasExactObjectKeys(value, ["kind", "source", "target", "arms"])) return undefined;
+    const leaves = rustUnionLeaves(value.source, definitions);
+    if (leaves === undefined || !isRustTargetTypeRef(value.target) ||
+        !isDenseDataArray(value.arms) || leaves.length !== value.arms.length) {
       return undefined;
     }
-    const variants = value.variants.map((variant, index) => {
-      const sourceVariant = union[index];
-      const conversion = rustValueConversionContract(variant.conversion, definitions);
-      return sourceVariant === undefined || sourceVariant.name !== variant.name ||
-          !rustTargetTypeRefEquals(sourceVariant.carrier, variant.carrier) ||
+    const arms = value.arms.map((arm, index) => {
+      const leaf = leaves[index];
+      if (!hasExactObjectKeys(arm, ["carrier", "path", "conversion"]) || leaf === undefined ||
+          !closedMetadataEquals(leaf, { carrier: arm.carrier, path: arm.path }) ||
+          arm.conversion === null || typeof arm.conversion !== "object") return undefined;
+      const conversion = rustValueConversionContract(arm.conversion, definitions);
+      return !isRustTargetTypeRef(arm.carrier) ||
           conversion === undefined || conversion.fallible ||
-          !rustTargetTypeRefEquals(conversion.source, variant.carrier) ||
-          !rustTargetTypeRefEquals(conversion.target, jsValueCarrier)
+          !rustTargetTypeRefEquals(conversion.source, arm.carrier) ||
+          !rustTargetTypeRefEquals(conversion.target, value.target)
         ? undefined
-        : {
-            name: variant.name,
-            carrier: variant.carrier,
-            conversion,
-          };
+        : { ...leaf, conversion };
     });
-    return variants.some((variant) => variant === undefined)
+    return arms.some((arm) => arm === undefined)
       ? undefined
       : {
           category: "projection",
-          lowering: "js-value-from-source-union",
+          lowering: "union-fold",
           sourceMode: "value",
           source: value.source,
-          target: jsValueCarrier,
-          variants: variants as NonNullable<typeof variants[number]>[],
+          target: value.target,
+          arms: arms as NonNullable<typeof arms[number]>[],
           fallible: false,
         };
   }
@@ -616,7 +614,7 @@ export function rustValueConversionContract(
     case "js-value-from-absence":
       return contract(value.id, "exact", "js_abi::JsValue::from", "value", absenceCarrier, jsValueCarrier, false);
     case "js-value-from-string":
-      return contract(value.id, "exact", "js_abi::js_value_from_string", "ref", stringCarrier, jsValueCarrier, false);
+      return contract(value.id, "exact", "js_abi::JsValue::from", "value", stringCarrier, jsValueCarrier, false);
     case "js-value-from-symbol":
       return contract(value.id, "exact", "js_abi::JsValue::from", "value", symbolCarrier, jsValueCarrier, false);
     case "js-value-from-error":
@@ -699,8 +697,8 @@ export function rustValueConversionIdentity(value: RustValueConversion): string 
               ? `js-value-from-closed-carrier.${JSON.stringify(value.source)}`
             : value.kind === "ts-value-from-closed-carrier"
               ? `ts-value-from-closed-carrier.${JSON.stringify(value.source)}`
-            : value.kind === "js-value-from-source-union"
-              ? `js-value-from-source-union.${JSON.stringify(value.source)}.${value.variants.map((variant) => `${variant.name}:${rustValueConversionIdentity(variant.conversion)}`).join("|")}`
+            : value.kind === "union-fold"
+              ? `union-fold.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}.${value.arms.map(arm => `${JSON.stringify({ carrier: arm.carrier, path: arm.path })}:${rustValueConversionIdentity(arm.conversion)}`).join("|")}`
             : value.kind === "js-value-from-structural-to-json"
               ? `js-value-from-structural-to-json.${JSON.stringify(value.source)}.${value.storageIndex}.${value.passesPropertyKey}.${rustValueConversionIdentity(value.resultConversion)}`
             : value.kind === "js-value-from-structural-object"

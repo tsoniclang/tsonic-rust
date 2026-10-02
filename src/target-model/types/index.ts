@@ -153,6 +153,7 @@ export type {
 export {
   isRustIntegerCarrier,
   isRustNumericCarrier,
+  isRustNativeFutureCarrier,
   isRustSignedNumericCarrier,
   isRustSliceMutRefCarrier,
   isRustSliceRefCarrier,

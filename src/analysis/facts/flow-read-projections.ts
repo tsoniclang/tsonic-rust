@@ -1,4 +1,4 @@
-import type { RustFlowReadProjectionFact } from "../../policy/types/value-projections.js";
+import type { RustFlowReadProjectionFact } from "../../target-model/types/value-projections.js";
 import type { RustProjectTypePolicy } from "../../policy/types/project-types.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { isRustTargetTypeRef } from "../../target-model/types/equality.js";

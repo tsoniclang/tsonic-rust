@@ -249,10 +249,10 @@ test("project-source call consumption requires exact selected member kind, targe
   };
   const selected = { member };
   const normalize = carrier => carrier;
-  assert.equal(sourceCallSelectedMemberMatches(fact, selected, member.returnType, normalize), true);
-  assert.equal(sourceCallSelectedMemberMatches(fact, { member: { ...member, kind: "property" } }, member.returnType, normalize), false);
-  assert.equal(sourceCallSelectedMemberMatches(fact, { member: { ...member, targetName: "other" } }, member.returnType, normalize), false);
-  assert.equal(sourceCallSelectedMemberMatches(fact, { member: { ...member, parameters: [,] } }, member.returnType, normalize), false);
+  assert.equal(sourceCallSelectedMemberMatches(fact, selected, member.returnType, normalize, undefined), true);
+  assert.equal(sourceCallSelectedMemberMatches(fact, { member: { ...member, kind: "property" } }, member.returnType, normalize, undefined), false);
+  assert.equal(sourceCallSelectedMemberMatches(fact, { member: { ...member, targetName: "other" } }, member.returnType, normalize, undefined), false);
+  assert.equal(sourceCallSelectedMemberMatches(fact, { member: { ...member, parameters: [,] } }, member.returnType, normalize, undefined), false);
 });
 
 test("project-source call consumption accepts only proven target-finalized inferred type arguments", () => {
@@ -306,21 +306,21 @@ test("project-source call consumption accepts only proven target-finalized infer
   };
 
   const normalize = carrier => carrier;
-  assert.equal(sourceCallSelectedMemberMatches(fact, selected, member.returnType, normalize), true);
+  assert.equal(sourceCallSelectedMemberMatches(fact, selected, member.returnType, normalize, undefined), true);
   assert.equal(sourceCallSelectedMemberMatches(fact, {
     ...selected,
     sourceSelectedMethodTypeArguments: [{
       ...inferredSourceArgument,
       explicitTypeNode: {},
     }],
-  }, member.returnType, normalize), false);
+  }, member.returnType, normalize, undefined), false);
   assert.equal(sourceCallSelectedMemberMatches(fact, {
     ...selected,
     member: {
       ...member,
       genericParameters: [{ kind: "lifetime", sourceName: "T", targetIdentity: "life:T" }],
     },
-  }, member.returnType, normalize), false);
+  }, member.returnType, normalize, undefined), false);
 });
 
 test("evaluation-only provider arguments do not require native parameter-passing facts", () => {

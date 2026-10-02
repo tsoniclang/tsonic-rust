@@ -86,7 +86,7 @@ test("sealed source-call validation independently rechecks actual argument lifet
     parameters: [{ form: "required", valueCarrier: input, parameterCarrier: input, mode: "value", inputs: [binding] }],
     resultCarrier: promise(owned) };
   const matches = (candidate, carrier, signature = selected) =>
-    sourceCallSelectedMemberMatches(candidate, signature, member.returnType, type => type, [carrier]);
+    sourceCallSelectedMemberMatches(candidate, signature, member.returnType, type => type, undefined, [carrier]);
   assert.equal(matches(fact, promise(owned)), true);
   assert.equal(matches(fact, promise(borrowed)), false);
   assert.equal(matches(fact, undefined), false);

@@ -9,7 +9,7 @@ import {
   selectRustOptionalCallResult,
 } from "./calls/instantiation.js";
 import { asNode } from "../../../policy/evidence/selected-source.js";
-import { rustOptionElementCarrier, rustOptionValueCarrier } from "../../../target-model/types/index.js";
+import { rustOptionElementCarrier } from "../../../target-model/types/index.js";
 import { Node_Type } from "@tsonic/target-api/source";
 import { rejectSelectedOperation } from "./result.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
@@ -46,6 +46,8 @@ import { rustSourceUnionCarrierValue } from "../../../target-model/types/carrier
 import { rustGenericCallableValueOwner } from "../../../policy/types/generic-callable-origin.js";
 import { selectRustRecordObjectCall } from "./records.js";
 import { selectRustSourceCallResult } from "../../../policy/types/resolution/call-results.js";
+import { resolveRustTypeComponentEvidence } from "../../../policy/types/resolution/source-evidence.js";
+import { bindRustSelectedCallTypeArguments } from "../../../policy/types/resolution/generic-arguments.js";
 
 export function mapSelectedJsSpecialCall(
   request: RustCheckedCallSelectionInput,
@@ -660,13 +662,18 @@ export function acceptProjectSourceCall(
   }
   returnType = unionContract?.result ?? returnType;
   const sourceResult = selectRustSourceCallResult(options.projectTypes, returnType, () => {
-    const type = context.currentSemantics.operations.callResult(request.source)?.selectedReturnType;
-    const carrier = type === undefined ? undefined : resolveRustTargetTypeRef(type, context, options);
-    return request.source.optionalChain ? rustOptionValueCarrier(carrier) : carrier;
-  });
+    const result = context.currentSemantics.operations.callResult(request.source);
+    const bound = bindRustSelectedCallTypeArguments(selectedTypeArguments, targetGenericArguments, context);
+    const carrier = result === undefined || bound === undefined ? undefined
+      : resolveRustTypeComponentEvidence({ selectedType: result.selectedReturnType,
+          declaration: selectedCallableDeclaration, ...(result.authoredTypeNode === undefined ? {} : { authoredTypeNode: result.authoredTypeNode }) },
+        bound, options, new Set());
+    return carrier === undefined || ownerCarrier === undefined ? carrier
+      : options.projectTypes.instantiateMemberCarrier(selectedCallableDeclaration, ownerCarrier, carrier);
+  }, context.typeDefinitions);
   if (sourceResult === undefined) {
     return rejectSelectedOperation(request.source.call, context, "RUST_SOURCE_CALL_RESULT_PROJECTION_MISSING",
-      "The checker-selected project result requires an exact native inheritance projection.");
+      "The checker-selected project result requires an exact native carrier projection.");
   }
   const optionalResult = selectRustOptionalCallResult(
     request,
