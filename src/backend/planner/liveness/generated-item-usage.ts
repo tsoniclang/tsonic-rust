@@ -402,7 +402,14 @@ export function analyzeRustGeneratedItemUsage(input: {
     if (contract === undefined) {
       throw new Error("A finalized Rust value conversion has no valid dead-code usage contract.");
     }
-    visitConversionContract(contract, markStructuralFieldRead, markVariantConstructed);
+    visitConversionContract(contract, markStructuralFieldRead, markVariantConstructed, carrier => {
+      const representation = input.objectRepresentations.representationFor(input.projectTypes.definitionForCarrier(carrier));
+      if (representation?.kind === "open-hierarchy" || representation?.kind === "closed-hierarchy") {
+        markProjectCarrierFieldUsed(carrier, "wrapper-dispatch");
+      } else if (representation !== undefined && representation.kind !== "value") {
+        markProjectCarrierFieldUsed(carrier, "wrapper-state");
+      }
+    });
   };
   const visitFinalizedConversion = (conversion: RustFinalizedValueConversion): void => {
     if (conversion.kind === "semantic") visitConversion(conversion.conversion);

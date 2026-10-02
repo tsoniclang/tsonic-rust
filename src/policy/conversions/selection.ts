@@ -13,7 +13,7 @@ import {
   isRustNeverCarrier,
   isRustAbsenceCarrier,
   rustCarrierSupportsClone,
-  rustCarrierCanEnterTsValue,
+  rustTsValueAdmission,
   rustCarrierSupportsTrait,
   rustJsClosedValueCarrierTraitPath,
   rustJsArrayLikeElementTargetType,
@@ -129,7 +129,17 @@ export function selectRustSourceValueConversion(
     if (rustTargetTypeRefEquals(source, tsValueCarrier)) {
       return rustTsValueCloneConversion;
     }
-    return rustCarrierCanEnterTsValue(source, definitions)
+    if (sourceOptionElement !== undefined) {
+      const elementConversion = selectRustSourceValueConversion(sourceOptionElement, target, definitions, nextAncestors);
+      return elementConversion === undefined || elementConversion.kind === "option-map" ||
+        elementConversion.kind === "option-some" ? undefined : {
+          kind: "closed-value-from-option", source, element: sourceOptionElement, elementConversion,
+        };
+    }
+    const leaves = rustUnionLeaves(source, definitions);
+    if (leaves !== undefined) return selectUnionFold(source, target, leaves, carrier =>
+      selectRustSourceValueConversion(carrier, target, definitions, nextAncestors));
+    return rustTsValueAdmission(source, definitions) !== undefined
       ? Object.freeze({
           kind: "ts-value-from-closed-carrier" as const,
           source,
@@ -161,7 +171,8 @@ export function selectRustSourceValueConversion(
     if (rustTargetTypeRefEquals(source, symbolCarrier)) {
       return rustSymbolToJsValueConversion;
     }
-    if (rustCarrierSupportsClone(source, definitions) &&
+    if (rustTsValueAdmission(source, definitions)?.kind === "project-object" ||
+      rustCarrierSupportsClone(source, definitions) &&
       rustCarrierSupportsTrait(source, rustJsClosedValueCarrierTraitPath, undefined, undefined, definitions)) {
       return Object.freeze({
         kind: "js-value-from-closed-carrier" as const,
@@ -180,7 +191,7 @@ export function selectRustSourceValueConversion(
           elementConversion.kind === "option-some"
         ? undefined
         : Object.freeze({
-            kind: "js-value-from-option" as const,
+            kind: "closed-value-from-option" as const,
             source,
             element: optionElement,
             elementConversion,
@@ -336,7 +347,7 @@ function selectJsonValueConversion(
         elementConversion.kind === "option-some"
       ? undefined
       : Object.freeze({
-          kind: "js-value-from-option" as const,
+          kind: "closed-value-from-option" as const,
           source,
           element: optionElement,
           elementConversion,

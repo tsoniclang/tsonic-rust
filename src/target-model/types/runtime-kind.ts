@@ -6,6 +6,7 @@ import {
   isRustAbsenceCarrier, isRustBigIntCarrier, isRustCallableCarrier,
   isRustNumericCarrier, isRustStringCarrier, isRustUnitCarrier, isRustJsValueCarrier, rustJsSymbolTargetId,
   rustOptionElementCarrier, rustSourceTypeCarrierValue,
+  rustTsValueTargetId,
 } from "./index.js";
 
 export type RustTypeofResult =
@@ -28,7 +29,8 @@ export function getRustTypeofRuntimeKind(
     return value === undefined ? undefined : { kind: "optional", sourceCarrier: carrier, value };
   }
   const runtimeUnion = rustRuntimeUnionContract(carrier);
-  const method = isRustJsValueCarrier(carrier) ? "type_of" : runtimeUnion?.typeofMethod;
+  const method = isRustJsValueCarrier(carrier) || carrier.kind === "target-named" && carrier.id === rustTsValueTargetId
+    ? "type_of" : runtimeUnion?.typeofMethod;
   if (method !== undefined) {
     return { kind: "runtime-method", method, sourceCarrier: carrier };
   }

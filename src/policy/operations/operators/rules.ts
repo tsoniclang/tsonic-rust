@@ -1,4 +1,6 @@
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { rustCarrierHasNativeValueView } from "../../../target-model/types/carriers/traits.js";
+import { rustTsValueTargetId } from "../../../target-model/types/carriers/source-types.js";
 import type { RustBinaryOperatorSelection } from "../../../target-model/operations/binary.js";
 import { selectRustNumericConstraintComparison, selectRustNumericUnionComparison } from "../numeric/union.js";
 import { rustCarrierSupportsSourceNumeric } from "../../../target-model/types/carriers/source-numeric.js";
@@ -49,7 +51,6 @@ import {
   isRustStringCarrier,
   rustJsErrorTargetType,
   rustCallableProtocol,
-  rustNamedTypeCarrierValue,
   rustCarrierSupportsTrait,
   rustSourcePrimitiveTargetType,
   rustStructuralObjectCarrierValue,
@@ -380,6 +381,13 @@ export function selectRustBinaryOperator(
   }
   const equality = equalityTokens[operatorKindName];
   if (equality !== undefined) {
+    if ((left.kind === "target-named" && left.id === rustTsValueTargetId ||
+      right.kind === "target-named" && right.id === rustTsValueTargetId) &&
+      rustCarrierHasNativeValueView(left) && rustCarrierHasNativeValueView(right)) {
+      return { kind: "operator-call", rustOperator: equality, resultCarrier: boolCarrier,
+        path: equality === "==" ? "rt::ts_value::native_values_equal" : "rt::ts_value::native_values_not_equal",
+        fallible: false, operandModes: ["ref", "ref"] };
+    }
     if (rustClassConstructorInstance(left) !== undefined && rustTargetTypeRefEquals(left, right)) {
       return { kind: "operator-token", rustOperator: equality, resultCarrier: boolCarrier };
     }
@@ -431,7 +439,7 @@ export function selectRustBinaryOperator(
       (isRustBoolCarrier(left) && isRustBoolCarrier(right)) ||
       (isRustStringCarrier(left) && isRustStringCarrier(right)) ||
       (isRustJsStrictEqualityCarrier(left) && rustTargetTypeRefEquals(left, right)) ||
-      (rustNamedTypeCarrierValue(left) !== undefined && rustTargetTypeRefEquals(left, right) &&
+      (rustTargetTypeRefEquals(left, right) &&
         rustCarrierSupportsTrait(left, "core::cmp::PartialEq")) ||
       sameEnum || sameObject || sameStructuralObject;
     return comparable

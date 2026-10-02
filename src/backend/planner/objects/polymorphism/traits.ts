@@ -358,8 +358,9 @@ export function planProjectDispatchTrait(
       params: [{ name: "value", type: property.callableType }],
     });
   }
-  const superTraits = context.input.program.projectTypes.heritageForDefinition(definition).map((edge) =>
-    rustProjectDispatchTraitType(edge.targetType, context));
+  const superTraits = [{ kind: "named" as const, path: "rt::ObjectIdentityCarrier" },
+    ...context.input.program.projectTypes.heritageForDefinition(definition).map((edge) =>
+      rustProjectDispatchTraitType(edge.targetType, context))];
   for (const view of context.input.program.classValues.instanceViews) {
     if (view.declaration === definition.declaration) superTraits.push(rustStructuralDispatchType(view.targetCarrier, context));
   }

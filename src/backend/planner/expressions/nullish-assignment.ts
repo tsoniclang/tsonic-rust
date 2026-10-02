@@ -21,9 +21,12 @@ import { planRustAssignmentWrite } from "../statements/expression-statements.js"
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { planExpression, planExpressionBeforeContextualConversion, planExpressionBeforeValueProjections } from "./entry.js";
 import type { RustExpressionResultUse } from "./entry.js";
-import { expressionCarrier, requireExpressionCarrier, selectedOperationMatches } from "./fundamentals.js";
+import { effectivePlannedExpressionCarrier, expressionCarrier, requireExpressionCarrier, selectedOperationMatches } from "./fundamentals.js";
 import { prepareRustComputedMemberEvaluation } from "./computed-members.js";
 import { rustComputedMemberFactKey } from "../../../analysis/facts/operations/keys.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { planRustOptionBranch } from "./option-branch.js";
+import { planRustPresentValue } from "./optional-storage.js";
 
 export function planNullishAssignment(
   node: Node,
@@ -86,7 +89,8 @@ export function planNullishAssignment(
     { kind: "evaluate-then", effect: read, discard: "value", value: unit } };
   const currentName = allocateRustSyntheticName(names, "assignment_current");
   bindings.push({ name: currentName, value: read });
-  const value = planExpressionBeforeContextualConversion(right, context);
+  const value = rustTargetTypeRefEquals(fact.rightCarrier, effectivePlannedExpressionCarrier(right, context))
+    ? planExpression(right, context) : planExpressionBeforeContextualConversion(right, context);
   if (value === undefined || resultUse === "value" && !isRustCopyCarrier(fact.rightCarrier) &&
     !requireRustCarrierRequirements(fact.rightCarrier, ["clone"], node, context)) return undefined;
   const valueName = allocateRustSyntheticName(names, "assignment_value");
@@ -119,14 +123,10 @@ export function planNullishAssignment(
   }
   const presentName = allocateRustSyntheticName(names, "present_value");
   const present: RustExpr = { kind: "path", path: presentName };
-  return { kind: "block", bindings, value: {
-    kind: "match", expression: { kind: "path", path: currentName }, arms: [
-      { pattern: { kind: "tuple-variant", path: "Some", elements: [resultUse === "value" ?
-        { kind: "binding", name: presentName } : { kind: "wildcard" }] },
-        expression: resultUse === "discarded" ? unit : fact.presentResult === "option" ?
-          { kind: "call", path: "Some", args: [present] } : present },
-      { pattern: { kind: "path", path: "None" },
-        expression: { kind: "block", bindings: [{ name: valueName, value }], value: assigned } },
-    ],
-  } };
+  return { kind: "block", bindings, value: planRustOptionBranch(
+    { kind: "path", path: currentName }, fact.readCarrier, resultUse === "discarded" ? "_" : presentName,
+    resultUse === "discarded" ? unit : fact.presentResult === "option"
+      ? planRustPresentValue(fact.resultCarrier, present, context) : present,
+    { kind: "block", bindings: [{ name: valueName, value }], value: assigned }, context,
+  ) };
 }

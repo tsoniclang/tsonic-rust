@@ -396,7 +396,7 @@ function valueConversionCarriers(
     conversion.kind === "ts-value-from-closed-carrier") {
     return [conversion.source];
   }
-  if (conversion.kind === "js-value-from-option" ||
+  if (conversion.kind === "closed-value-from-option" ||
     conversion.kind === "js-value-from-array") {
     return [
       conversion.source,

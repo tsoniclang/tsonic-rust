@@ -10,7 +10,7 @@ import type {
   RustType,
 } from "../nodes.js";
 import { finalizeRustBlockLiveness } from "../inspection/source-liveness.js";
-import { firstAccessesInStatements } from "../inspection/source-dataflow.js";
+import { firstAccessesInStatements, hasUnobservedFinalPathWrite } from "../inspection/source-dataflow.js";
 import { rustLintAttributes } from "./lint-policy.js";
 import { rustBlockReferencesPath, rustExpressionReferencesPath } from "../inspection/source-usage.js";
 import { collapseRustForwardingClosure } from "./forwarding-closures.js";
@@ -144,7 +144,7 @@ function hasOverwrittenParameter(fn: Pick<RustImplFunction, "params" | "body">):
   return fn.params.some(parameter => {
     if (!parameter.mutable || parameter.name.startsWith("_")) return false;
     const accesses = firstAccessesInStatements(fn.body.statements, parameter.name);
-    return accesses.has("write") && !accesses.has("read");
+    return accesses.has("write") && !accesses.has("read") || hasUnobservedFinalPathWrite(fn.body.statements, parameter.name);
   });
 }
 

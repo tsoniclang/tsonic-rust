@@ -20,8 +20,8 @@ export function selectedOptionNullishRelationship(
   rightCarrier: TargetTypeRef | undefined,
 ): { readonly depths: readonly number[]; readonly negated: boolean } | undefined {
   const selected = (depths: readonly number[], negated = false) => Object.freeze({ depths: Object.freeze(depths), negated });
-  const leftIsOption = isRustOptionCarrier(leftCarrier);
-  const rightIsOption = isRustOptionCarrier(rightCarrier);
+  const leftIsOption = isRustOptionCarrier(leftCarrier) || rustOptionalStorageValue(leftCarrier) !== undefined;
+  const rightIsOption = isRustOptionCarrier(rightCarrier) || rustOptionalStorageValue(rightCarrier) !== undefined;
   const optionNode = leftIsOption && isRustAbsenceCarrier(rightCarrier)
     ? leftNode
     : rightIsOption && isRustAbsenceCarrier(leftCarrier)

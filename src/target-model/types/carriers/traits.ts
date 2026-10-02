@@ -190,6 +190,30 @@ export function rustCarrierCanEnterTsValue(carrier: TargetTypeRef | undefined, d
     references.callScopedElisions.length === 0 && !references.hasUnnameableLifetime;
 }
 
+export type RustTsValueAdmission =
+  | { readonly kind: "call"; readonly path: string }
+  | { readonly kind: "project-object" };
+
+export function rustTsValueAdmission(carrier: TargetTypeRef, definitions: RustTypeDefinitions): RustTsValueAdmission | undefined {
+  if (!rustCarrierCanEnterTsValue(carrier, definitions) || rustOptionElementCarrier(carrier) !== undefined ||
+    rustSourceUnionCarrierValue(carrier) !== undefined) return undefined;
+  if (carrier.kind === "source-primitive" || isRustStringCarrier(carrier) || isRustBigIntCarrier(carrier) ||
+    isRustUnitCarrier(carrier) || isRustAbsenceCarrier(carrier) ||
+    carrier.kind === "target-named" && (carrier.id === rustEmptyObjectTargetId || carrier.id === rustObjectIdentityTargetId) ||
+    rustStructuralObjectCarrierValue(carrier)?.representation === "reference") {
+    return { kind: "call", path: "rt::TsValue::from" };
+  }
+  if (rustSourceTypeCarrierValue(carrier)?.shape === "object") return { kind: "project-object" };
+  return { kind: "call", path: rustCarrierSupportsObjectIdentity(carrier)
+    ? "rt::TsValue::from_identity" : "rt::TsValue::from_closed" };
+}
+
+export function rustCarrierHasNativeValueView(carrier: TargetTypeRef | undefined): boolean {
+  return carrier?.kind === "source-primitive" || isRustStringCarrier(carrier) || isRustBigIntCarrier(carrier) ||
+    isRustUnitCarrier(carrier) || isRustAbsenceCarrier(carrier) ||
+    carrier?.kind === "target-named" && carrier.id === rustTsValueTargetId;
+}
+
 export function rustCarrierReferentMutationRequiresMutableBinding(
   carrier: TargetTypeRef | undefined,
   isSharedObject: (carrier: TargetTypeRef) => boolean = () => false,
@@ -240,6 +264,9 @@ export function rustCarrierSupportsTrait(
   }
   if (traitPath === "core::clone::Clone") {
     return supportsCloneWithContracts(carrier, typeParameterSupports, associatedTypeSupports, definitions, active);
+  }
+  if (carrier.kind === "target-named" && carrier.id === rustTsValueTargetId) {
+    return traitPath === "core::cmp::PartialEq";
   }
   if (traitPath === rustJsClosedValueCarrierTraitPath && carrier.kind === "target-named" &&
     carrier.id === rustEmptyObjectTargetId && (carrier.genericArguments?.length ?? 0) === 0) {

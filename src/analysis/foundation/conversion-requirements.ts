@@ -90,6 +90,9 @@ function rustFoundationForConversionContract(
     foundation = maximumRustFoundation(foundation, candidate);
   };
   switch (contract.lowering) {
+    case "project-closed-value":
+      require(rustFoundationForPath(contract.ownerPath));
+      break;
     case "exact-integer":
       require(rustFoundationForPath("rt::conversions::checked_integer"));
       break;
@@ -104,7 +107,7 @@ function rustFoundationForConversionContract(
     case "option-map":
       require(rustFoundationForConversionContract(contract.element));
       break;
-    case "js-value-from-option":
+    case "closed-value-from-option":
     case "js-value-from-array":
       require(rustFoundationForCarrier(contract.element));
       require(rustFoundationForConversionContract(contract.elementConversion));

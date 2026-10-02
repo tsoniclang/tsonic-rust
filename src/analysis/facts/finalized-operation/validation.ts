@@ -424,7 +424,7 @@ function isValueProjectionConversion(value: Record<string, unknown>): boolean {
     return hasExactKeys(value, ["kind", "source"]) &&
       isRustTargetTypeRef(value.source);
   }
-  if (value.kind === "js-value-from-option" || value.kind === "js-value-from-array") {
+  if (value.kind === "closed-value-from-option" || value.kind === "js-value-from-array") {
     return hasExactKeys(value, [
       "kind", "source", "element", "elementConversion",
     ]) && isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.element) &&

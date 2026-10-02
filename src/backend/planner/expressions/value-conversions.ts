@@ -30,7 +30,8 @@ import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { lowerRustExactIntegerConversion } from "./exact-integer.js";
 import { planRustUnionMapping, planRustUnionProjection } from "./union-mappings.js";
 import { planRustUnionConstruction, planRustUnionPattern } from "./union-patterns.js";
-import { planRustCheckedSourceOptional } from "./optional-storage.js";
+import { planRustAbsentValue, planRustCheckedSourceOptional } from "./optional-storage.js";
+import { planRustProjectClosedValue } from "../objects/project-closed-values.js";
 
 export function applyRustValueConversion(
   context: RustPlanContext,
@@ -109,6 +110,9 @@ export function lowerRustValueConversion(
   node: Node | undefined,
 ): RustExpr | undefined {
   switch (contract.lowering) {
+    case "project-closed-value":
+      registerAliasFromPath(context, contract.ownerPath);
+      return planRustProjectClosedValue(source, contract.ownerPath, contract.source, node, context);
     case "exact-integer":
       return lowerRustExactIntegerConversion({ kind: "exact-integer", source: contract.source, target: contract.target }, source, context);
     case "rest-sequence": {
@@ -168,9 +172,8 @@ export function lowerRustValueConversion(
         : source;
     case "copy-from-reference":
       return { kind: "dereference", pointer: source };
-    case "js-value-from-option": {
-      registerAliasFromPath(context, "js_abi::JsValue");
-      const valueName = allocateConversionName(context, node, "js_value");
+    case "closed-value-from-option": {
+      const valueName = allocateConversionName(context, node, "present_value");
       const converted = lowerNestedRustValueConversion(
         contract.elementConversion,
         { kind: "path", path: valueName },
@@ -192,7 +195,7 @@ export function lowerRustValueConversion(
               }],
             },
             method: "unwrap_or",
-            args: [{ kind: "path", path: "js_abi::JsValue::Null" }],
+            args: [planRustAbsentValue(contract.target, context)],
           };
     }
     case "js-value-from-array": {

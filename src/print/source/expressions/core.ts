@@ -205,6 +205,7 @@ function printRustMatchExpression(
 }
 
 function printConditionalArm(expression: RustExpr, allowInnerAttributes = true): string {
+  if (expression.kind === "tuple-literal" && expression.elements.length === 0) return "";
   if (expression.kind === "block" &&
     (allowInnerAttributes || (expression.innerAttrs?.length ?? 0) === 0)) {
     return printRustBlockExpressionContents(expression, (value) => printConditionalArm(value, false));
@@ -236,7 +237,8 @@ function printRustBlockExpressionContents(
     ...(expression.innerAttrs ?? []).map(attribute => printRustAttribute(attribute, true)),
     ...bindings,
     ...(expression.valueAttrs ?? []).map(attribute => printRustAttribute(attribute)),
-    printValue(expression.value),
+    expression.value.kind === "tuple-literal" && expression.value.elements.length === 0 &&
+      (expression.valueAttrs?.length ?? 0) === 0 ? "" : printValue(expression.value),
   ].join(" ");
 }
 

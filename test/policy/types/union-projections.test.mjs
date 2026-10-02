@@ -42,7 +42,7 @@ test("nested union payload paths are exact, immutable and independently checked"
   ]) assert.equal(rustValueConversionContract(invalid, definitions), undefined);
   const constructed = [];
   visitConversionContract(contract, () => assert.fail("Union injection must not read structural storage"),
-    (carrier, variant) => constructed.push([carrier, variant]));
+    (carrier, variant) => constructed.push([carrier, variant]), () => assert.fail("no closed object"));
   assert.deepEqual(constructed, [[nested, "Variant1"], [inner, "Variant0"]]);
   const node = fakeStatement({ kindName: "KindIdentifier" });
   const sourceFile = fakeSourceFile({ fileName: "/src/index.ts", statements: [node] });

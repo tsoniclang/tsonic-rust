@@ -538,7 +538,7 @@ function materializeProviderValueConversion(
         source: materializeProviderCarrier(conversion.source, carrierPaths, carrierTraits),
         target: materializeProviderCarrier(conversion.target, carrierPaths, carrierTraits),
       };
-    case "js-value-from-option":
+    case "closed-value-from-option":
     case "js-value-from-array":
       return {
         ...conversion,

@@ -48,7 +48,9 @@ import {
   rustOptionValueCarrier,
   rustBigIntTargetType,
   rustSourcePrimitiveTargetType,
+  rustTsValueTargetType,
 } from "../../target-model/types/index.js";
+import { rustOptionalStorageValue, rustOptionalStorageNestingDepth } from "../../target-model/types/projections.js";
 import {
   rustModuleBindingFactKey,
   rustMutatedBindingFactKey,
@@ -284,7 +286,8 @@ function contextualLiteralOperandCarrier(
   expression: Node,
   counterpart: TargetTypeRef | undefined,
 ): TargetTypeRef | undefined {
-  if (isRustAbsenceCarrier(counterpart) || counterpart?.kind === "type-parameter") return undefined;
+  if (isRustAbsenceCarrier(counterpart) || counterpart?.kind === "type-parameter" ||
+    rustTargetTypeRefEquals(counterpart, rustTsValueTargetType())) return undefined;
   const integerJoin = selectedIntegerLiteralJoin(expression, counterpart, ast);
   if (integerJoin !== undefined) return integerJoin;
   const kind = ast.kindName(expression);
@@ -359,9 +362,9 @@ export function resolvePostCheckBinaryCarrier(
     leftComparisonCarrier,
     rightComparisonCarrier,
   );
-  const optionNullishOperand = isRustOptionCarrier(leftComparisonCarrier)
+  const optionNullishOperand = isRustOptionCarrier(leftComparisonCarrier) || rustOptionalStorageValue(leftComparisonCarrier) !== undefined
     ? "left" as const
-    : isRustOptionCarrier(rightComparisonCarrier)
+    : isRustOptionCarrier(rightComparisonCarrier) || rustOptionalStorageValue(rightComparisonCarrier) !== undefined
       ? "right" as const
       : undefined;
   const optionNullishCarrier = optionNullishOperand === "left"
@@ -400,8 +403,10 @@ export function resolvePostCheckBinaryCarrier(
       selectedLeftFact?.kind === "source-field" || selectedLeftFact?.kind === "source-accessor" ||
       selectedLeftFact?.kind === "source-static-field") &&
     (selectedLeftOperation === undefined || rustTargetOperationSupportsAssignment(selectedLeftFact))) {
-    const rightValue = rustValueCarrierBeforeContextualConversion(walk.context.facts, rightNode);
-    const inner = rustOptionElementCarrier(left);
+    const projected = rustOptionalStorageValue(left);
+    const rightValue = projected === undefined
+      ? rustValueCarrierBeforeContextualConversion(walk.context.facts, rightNode) : right;
+    const inner = projected ?? rustOptionElementCarrier(left);
     const storage = selectedLeftFact?.kind === "source-accessor" ? selectedLeftFact.write?.valueCarrier : left;
     const presentResult = inner !== undefined && rustTargetTypeRefEquals(inner, rightValue)
       ? "value"
@@ -428,8 +433,8 @@ export function resolvePostCheckBinaryCarrier(
       };
     }
   } else if (operatorKind === KindQuestionQuestionToken) {
-    const inner = isRustOptionCarrier(left) ? rustOptionValueCarrier(left) : undefined;
-    const leftOptionDepth = rustOptionNestingDepth(left, inner);
+    const inner = rustOptionalStorageValue(left) ?? (isRustOptionCarrier(left) ? rustOptionValueCarrier(left) : undefined);
+    const leftOptionDepth = rustOptionalStorageNestingDepth(left, inner);
     const integerJoin = selectedIntegerLiteralJoin(rightNode, inner, walk.context.ast);
     const leftConversion = inner?.kind === "source-primitive" && integerJoin?.kind === "source-primitive"
       ? rustNumericPromotionConversion(inner.name, integerJoin.name) : undefined;
@@ -475,7 +480,7 @@ export function resolvePostCheckBinaryCarrier(
       }
     } else if (left !== undefined && right !== undefined &&
       (rustTargetTypeRefEquals(left, right) || isRustNeverCarrier(right)) &&
-      !isRustOptionCarrier(left) && !isRustAbsenceCarrier(left) &&
+      !isRustOptionCarrier(left) && rustOptionalStorageValue(left) === undefined && !isRustAbsenceCarrier(left) &&
       rustRuntimeUnionContract(left)?.alternatives.some(alternative =>
         isRustAbsenceCarrier(alternative.carrier)) !== true) {
       fact = {
@@ -529,10 +534,10 @@ export function resolvePostCheckBinaryCarrier(
   } else if ((operatorKind === KindEqualsEqualsEqualsToken ||
       operatorKind === KindExclamationEqualsEqualsToken) &&
     ((isRustAbsenceCarrier(left) && right !== undefined &&
-        !isRustAbsenceCarrier(right) && !isRustOptionCarrier(right) &&
+        !isRustAbsenceCarrier(right) && !isRustOptionCarrier(right) && rustOptionalStorageValue(right) === undefined &&
         left !== undefined && rustRuntimeUnionProjection(right, left) === undefined) ||
       (isRustAbsenceCarrier(right) && left !== undefined &&
-        !isRustAbsenceCarrier(left) && !isRustOptionCarrier(left) &&
+        !isRustAbsenceCarrier(left) && !isRustOptionCarrier(left) && rustOptionalStorageValue(left) === undefined &&
         right !== undefined && rustRuntimeUnionProjection(left, right) === undefined))) {
     fact = {
       kind: "constant-equality",

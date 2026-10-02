@@ -72,7 +72,7 @@ export function substituteRustValueConversion(
           constSubstitutions,
         ),
       });
-    case "js-value-from-option":
+    case "closed-value-from-option":
     case "js-value-from-array":
       return Object.freeze({
         ...value,

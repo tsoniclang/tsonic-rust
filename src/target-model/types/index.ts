@@ -282,6 +282,8 @@ export {
   isRustJsStrictEqualityCarrier,
   isRustSourceStringConvertibleCarrier,
   rustCarrierCanEnterTsValue,
+  rustTsValueAdmission,
+  rustCarrierHasNativeValueView,
   rustCarrierSupportsClone,
   rustCarrierSatisfiesTraitRef,
   rustCarrierReferentMutationRequiresMutableBinding,

@@ -191,7 +191,7 @@ export type RustNonOptionValueConversion =
       readonly sourceFallible: boolean;
     }
   | {
-      readonly kind: "js-value-from-option";
+      readonly kind: "closed-value-from-option";
       readonly source: TargetTypeRef;
       readonly element: TargetTypeRef;
       readonly elementConversion: RustNonOptionValueConversion;

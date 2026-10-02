@@ -17,7 +17,7 @@ import { effectivePlannedExpressionCarrier, requireExpressionCarrier, selectedOp
 import { applyRustValueConversion } from "./value-conversions.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
+import { rustOptionalStorageValue, rustOptionalStorageNestingDepth } from "../../../target-model/types/projections.js";
 import { rustExpressionExitsCallable } from "../../target-ast/inspection/callable-exits.js";
 import { planRustOptionBranch } from "./option-branch.js";
 
@@ -66,7 +66,7 @@ export function planNullishCoalescing(
     !Number.isSafeInteger(fact.rightOptionDepth) || fact.rightOptionDepth < 0 ||
     !exactPresentValue || fact.rightValueForm !== "value" && fact.rightValueForm !== "raw" ||
     fact.rightValueForm === "raw" && fact.rightOptionDepth === 0 ||
-    rustOptionNestingDepth(
+    rustOptionalStorageNestingDepth(
       context.input.program.facts.getRuntimeCarrierFact(leftNode)?.carrier,
       fact.leftValueCarrier,
     ) !== fact.leftOptionDepth ||

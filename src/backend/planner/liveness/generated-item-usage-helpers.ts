@@ -95,11 +95,15 @@ export function visitConversionContract(
   contract: RustValueConversionContract,
   markStructuralFieldRead: (carrier: TargetTypeRef, storageIndex: number) => void,
   markVariantConstructed: (carrier: TargetTypeRef, variantName: string) => void,
+  markClosedObjectUsed: (carrier: TargetTypeRef) => void,
 ): void {
   switch (contract.lowering) {
+    case "project-closed-value":
+      markClosedObjectUsed(contract.source);
+      return;
     case "rest-sequence":
       for (const conversion of contract.elementConversions) {
-        if (conversion !== null) visitConversionContract(conversion, markStructuralFieldRead, markVariantConstructed);
+        if (conversion !== null) visitConversionContract(conversion, markStructuralFieldRead, markVariantConstructed, markClosedObjectUsed);
       }
       return;
     case "source-union-variant":
@@ -111,14 +115,15 @@ export function visitConversionContract(
       }
       return;
     case "option-map":
-      visitConversionContract(contract.element, markStructuralFieldRead, markVariantConstructed);
+      visitConversionContract(contract.element, markStructuralFieldRead, markVariantConstructed, markClosedObjectUsed);
       return;
-    case "js-value-from-option":
+    case "closed-value-from-option":
     case "js-value-from-array":
       visitConversionContract(
         contract.elementConversion,
         markStructuralFieldRead,
         markVariantConstructed,
+        markClosedObjectUsed,
       );
       return;
     case "union-fold":
@@ -127,6 +132,7 @@ export function visitConversionContract(
           arm.conversion,
           markStructuralFieldRead,
           markVariantConstructed,
+          markClosedObjectUsed,
         );
       }
       return;
@@ -136,6 +142,7 @@ export function visitConversionContract(
         contract.resultConversion,
         markStructuralFieldRead,
         markVariantConstructed,
+        markClosedObjectUsed,
       );
       return;
     case "js-value-from-structural-object":
@@ -145,6 +152,7 @@ export function visitConversionContract(
           field.conversion,
           markStructuralFieldRead,
           markVariantConstructed,
+          markClosedObjectUsed,
         );
       }
       return;

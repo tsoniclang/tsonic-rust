@@ -25,6 +25,7 @@ import {
   rustSourceOptionalTargetType,
   rustJsValueTargetType,
   rustJsErrorTargetType,
+  rustEmptyObjectTargetType,
   rustOptionElementCarrier,
   rustPrimitiveTypeName,
   rustSourcePrimitiveTargetType,
@@ -37,7 +38,7 @@ import {
   rustAbsenceTargetType,
   rustTargetGenericReferences,
   rustCarrierSupportsClone,
-  rustCarrierCanEnterTsValue,
+  rustTsValueAdmission,
   rustCarrierSupportsTrait,
   rustJsClosedValueCarrierTraitPath,
   rustTsValueTargetType,
@@ -77,6 +78,7 @@ interface RustValueConversionContractBase {
 }
 
 export type RustValueConversionContract = RustValueConversionContractBase & (
+  | { readonly lowering: "project-closed-value"; readonly ownerPath: "rt::TsValue" | "js_abi::JsValue" }
   | { readonly lowering: "source-optional"; readonly element: TargetTypeRef }
   | { readonly lowering: "union-project" }
   | { readonly lowering: "union-map"; readonly coverage: "source" | "target"; readonly arms: readonly RustUnionArmMapping[] }
@@ -130,7 +132,7 @@ export type RustValueConversionContract = RustValueConversionContractBase & (
       readonly lowering: "copy-from-reference";
     }
   | {
-      readonly lowering: "js-value-from-option";
+      readonly lowering: "closed-value-from-option";
       readonly element: TargetTypeRef;
       readonly elementConversion: RustValueConversionContract;
     }
@@ -214,19 +216,28 @@ export function rustValueConversionContract(
     };
   }
   if (value.kind === "ts-value-from-closed-carrier") {
-    return !rustCarrierCanEnterTsValue(value.source, definitions)
+    const admission = rustTsValueAdmission(value.source, definitions);
+    return admission === undefined
       ? undefined
       : {
           category: "projection",
-          lowering: "call",
-          path: "rt::TsValue::from_closed",
-          sourceMode: "ref",
+          ...(admission.kind === "call" ? { lowering: "call" as const, path: admission.path }
+            : { lowering: "project-closed-value" as const, ownerPath: "rt::TsValue" }),
+          sourceMode: "value",
           source: value.source,
           target: tsValueCarrier,
           fallible: false,
         };
   }
   if (value.kind === "js-value-from-closed-carrier") {
+    if (rustTargetTypeRefEquals(value.source, rustEmptyObjectTargetType())) {
+      return { category: "projection", lowering: "call", path: "js_abi::JsValue::from",
+        sourceMode: "value", source: value.source, target: jsValueCarrier, fallible: false };
+    }
+    if (rustTsValueAdmission(value.source, definitions)?.kind === "project-object") {
+      return { category: "projection", lowering: "project-closed-value", ownerPath: "js_abi::JsValue",
+        sourceMode: "value", source: value.source, target: jsValueCarrier, fallible: false };
+    }
     return !rustCarrierSupportsClone(value.source, definitions) ||
         !rustCarrierSupportsTrait(value.source, rustJsClosedValueCarrierTraitPath, undefined, undefined, definitions)
       ? undefined
@@ -240,19 +251,20 @@ export function rustValueConversionContract(
           fallible: false,
         };
   }
-  if (value.kind === "js-value-from-option") {
+  if (value.kind === "closed-value-from-option") {
     const elementConversion = rustValueConversionContract(value.elementConversion, definitions);
-    return !rustTargetTypeRefEquals(value.source, rustOptionTargetType(value.element)) ||
+    return !rustTargetTypeRefEquals(rustOptionElementCarrier(value.source), value.element) ||
         elementConversion === undefined || elementConversion.fallible ||
         !rustTargetTypeRefEquals(elementConversion.source, value.element) ||
-        !rustTargetTypeRefEquals(elementConversion.target, jsValueCarrier)
+        (!rustTargetTypeRefEquals(elementConversion.target, jsValueCarrier) &&
+          !rustTargetTypeRefEquals(elementConversion.target, tsValueCarrier))
       ? undefined
       : {
           category: "projection",
-          lowering: "js-value-from-option",
+          lowering: "closed-value-from-option",
           sourceMode: "value",
           source: value.source,
-          target: jsValueCarrier,
+          target: elementConversion.target,
           element: value.element,
           elementConversion,
           fallible: false,
@@ -689,8 +701,8 @@ export function rustValueConversionIdentity(value: RustValueConversion): string 
             ? `bottom-coercion.${JSON.stringify(value.target)}`
             : value.kind === "js-argument-vector-callback"
               ? `js-argument-vector-callback.${value.lane}.${value.sourceFallible}.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}.${value.projections.join(".")}`
-            : value.kind === "js-value-from-option"
-              ? `js-value-from-option.${JSON.stringify(value.source)}.${rustValueConversionIdentity(value.elementConversion)}`
+            : value.kind === "closed-value-from-option"
+              ? `closed-value-from-option.${JSON.stringify(value.source)}.${rustValueConversionIdentity(value.elementConversion)}`
             : value.kind === "js-value-from-array"
               ? `js-value-from-array.${JSON.stringify(value.source)}.${rustValueConversionIdentity(value.elementConversion)}`
             : value.kind === "js-value-from-closed-carrier"

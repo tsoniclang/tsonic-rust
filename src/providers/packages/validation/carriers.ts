@@ -409,6 +409,15 @@ export function validateValueConversion(
   } else if (conversion.kind === "source-optional") {
     requireExactKeys(asRecord(conversion), ["kind", "element"], where, fail);
     validateCarrier(conversion.element, definition, `${where}.element`, fail);
+  } else if (conversion.kind === "ts-value-from-closed-carrier" || conversion.kind === "js-value-from-closed-carrier") {
+    requireExactKeys(asRecord(conversion), ["kind", "source"], where, fail);
+    validateCarrier(conversion.source, definition, `${where}.source`, fail);
+  } else if (conversion.kind === "closed-value-from-option") {
+    requireExactKeys(asRecord(conversion), ["kind", "source", "element", "elementConversion"], where, fail);
+    validateCarrier(conversion.source, definition, `${where}.source`, fail);
+    validateCarrier(conversion.element, definition, `${where}.element`, fail);
+    validateValueConversion(conversion.elementConversion, definition, `${where}.elementConversion`,
+      conversion.element, expectedTarget, fail);
   } else if (conversion.kind === "option-map") {
     requireExactKeys(asRecord(conversion), ["kind", "elementConversion"], where, fail);
     validateValueConversion(

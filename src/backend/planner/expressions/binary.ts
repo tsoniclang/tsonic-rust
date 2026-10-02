@@ -232,7 +232,8 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
         carrier = element;
         pattern = { kind: "tuple-variant", path: "Some", elements: [pattern] };
       }
-      if (rustOptionElementCarrier(carrier) === undefined) return rejectDepths();
+      if (rustOptionElementCarrier(carrier) === undefined &&
+        (depth !== 0 || rustOptionalStorageValue(carrier) === undefined)) return rejectDepths();
       patterns.push(pattern);
     }
     const check = (receiver: RustExpr): RustExpr => {

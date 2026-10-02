@@ -22,11 +22,13 @@ export function planRustOptionBranch(
   const names = context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, context.sourceFile, []);
   const storedName = allocateRustSyntheticName(names, "optional_storage");
   const stored: RustExpr = { kind: "path", path: storedName };
+  const extracted = planRustOptionalStorageOperation(carrier, "into_present", [stored], context);
+  const presentResult: RustExpr = present.kind === "path" && present.path === presentName
+    ? extracted : { kind: "block", bindings: [{ name: presentName, value: extracted }], value: present };
   return { kind: "block", bindings: [{ name: storedName, value: option }], value: {
     kind: "conditional",
     condition: planRustOptionalStorageOperation(carrier, "is_absent", [{ kind: "reference", expr: stored }], context),
     whenTrue: absent,
-    whenFalse: { kind: "block", bindings: [{ name: presentName,
-      value: planRustOptionalStorageOperation(carrier, "into_present", [stored], context) }], value: present },
+    whenFalse: presentResult,
   } };
 }

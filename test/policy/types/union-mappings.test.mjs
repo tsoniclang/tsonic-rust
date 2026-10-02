@@ -40,7 +40,7 @@ test("union mappings require complete exact coverage and reject forged or numeri
   assert.equal(rustValueConversionContract(conversion, definitions).lowering, "union-map");
   const constructed = [];
   visitConversionContract(rustValueConversionContract(conversion, definitions), () => assert.fail("no field read"),
-    (carrier, variant) => constructed.push([carrier, variant]));
+    (carrier, variant) => constructed.push([carrier, variant]), () => assert.fail("no closed object"));
   assert.deepEqual(constructed, [[wide, "Variant2"], [wide, "Variant0"]]);
   assert.deepEqual(substituteRustValueConversion(conversion, new Map()), conversion);
   const explicit = selectRustSourceAssertionConversion(wide, narrow, definitions);
@@ -172,7 +172,7 @@ test("nested union paths retain exact coverage, terminal array payloads and all 
   const conversion = { kind: "union-map", source: flat, target: nested, coverage: "source", arms };
   const constructed = [];
   visitConversionContract(rustValueConversionContract(conversion, definitions), () => assert.fail("no structural read"),
-    (carrier, name) => constructed.push([carrier, name]));
+    (carrier, name) => constructed.push([carrier, name]), () => assert.fail("no closed object"));
   assert.deepEqual(constructed.slice(0, 2), [[nested, "Variant1"], [inner, "Variant2"]]);
   for (const target of [arms[0].target.slice(1), arms[0].target.toReversed(),
     arms[0].target.map(step => ({ ...step, union: flat })),

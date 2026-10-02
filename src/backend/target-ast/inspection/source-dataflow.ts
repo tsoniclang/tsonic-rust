@@ -69,6 +69,64 @@ export function firstAccessesInStatements(
   return outcomes;
 }
 
+export function hasUnobservedFinalPathWrite(
+  statements: readonly RustStmt[], path: string, referencedAfter = false,
+): boolean {
+  const shadowIndex = statements.findIndex(statement => statement.kind === "let" && statement.name === path);
+  if (shadowIndex !== -1) {
+    const shadow = statements[shadowIndex]!;
+    const initializer = shadow.kind === "let" ? shadow.init : undefined;
+    return initializer !== undefined && expressionHasUnobservedWrite(initializer, path, referencedAfter) ||
+      hasUnobservedFinalPathWrite(statements.slice(0, shadowIndex), path,
+        referencedAfter || initializer !== undefined && rustExpressionReferencesPath(initializer, path));
+  }
+  for (let index = statements.length - 1; index >= 0; index--) {
+    const statement = statements[index]!;
+    if (statement.kind === "assign" && statement.operator === "=" &&
+      statement.target.kind === "path" && statement.target.path === path && !referencedAfter) return true;
+    if ((statement.kind === "expr" || statement.kind === "tail" || statement.kind === "return") &&
+      statement.expr !== undefined && expressionHasUnobservedWrite(statement.expr, path, referencedAfter)) return true;
+    if (statement.kind === "let" && statement.init !== undefined &&
+      expressionHasUnobservedWrite(statement.init, path, referencedAfter)) return true;
+    if (statement.kind === "if" && (hasUnobservedFinalPathWrite(statement.then.statements, path, referencedAfter) ||
+      statement.else !== undefined && hasUnobservedFinalPathWrite(statement.else.statements, path, referencedAfter))) return true;
+    if ((statement.kind === "scope" || statement.kind === "unsafe-scope") &&
+      hasUnobservedFinalPathWrite(statement.body.statements, path, referencedAfter)) return true;
+    referencedAfter ||= rustStatementReferencesPath(statement, path);
+  }
+  return false;
+}
+
+function expressionHasUnobservedWrite(expression: RustExpr, path: string, referencedAfter: boolean): boolean {
+  if (expression.kind === "assignment" && expression.operator === "=" &&
+    expression.target.kind === "path" && expression.target.path === path && !referencedAfter) return true;
+  if (expression.kind === "closure" || expression.kind === "closure-block" || expression.kind === "async-block") return false;
+  if (expression.kind === "block") {
+    return hasUnobservedFinalPathWrite([
+      ...expression.bindings.map((binding): RustStmt => ({ kind: "let", name: binding.name, mutable: binding.mutable ?? false, init: binding.value })),
+      { kind: "tail", expr: expression.value },
+    ], path, referencedAfter);
+  }
+  if (expression.kind === "conditional") {
+    return expressionHasUnobservedWrite(expression.whenTrue, path, referencedAfter) ||
+      expressionHasUnobservedWrite(expression.whenFalse, path, referencedAfter) ||
+      expressionHasUnobservedWrite(expression.condition, path, referencedAfter ||
+        rustExpressionReferencesPath(expression.whenTrue, path) || rustExpressionReferencesPath(expression.whenFalse, path));
+  }
+  if (expression.kind === "match") {
+    return expression.arms.some(arm => expressionHasUnobservedWrite(arm.expression, path, referencedAfter)) ||
+      expressionHasUnobservedWrite(expression.expression, path,
+        referencedAfter || expression.arms.some(arm => rustExpressionReferencesPath(arm.expression, path)));
+  }
+  const children = rustExpressionChildren(expression);
+  for (let index = children.length - 1; index >= 0; index--) {
+    const child = children[index]!;
+    if (expressionHasUnobservedWrite(child, path, referencedAfter)) return true;
+    referencedAfter ||= rustExpressionReferencesPath(child, path);
+  }
+  return false;
+}
+
 function maxWritesInStatement(statement: RustStmt, path: string): number {
   switch (statement.kind) {
     case "item":

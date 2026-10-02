@@ -3,6 +3,8 @@ import test from "node:test";
 
 import {
   rustJsValueTargetType,
+  rustOptionTargetType,
+  rustSourcePrimitiveTargetType,
   rustStringTargetType,
   rustTsValueTargetType,
 } from "../../../dist/target-model/types/index.js";
@@ -18,6 +20,7 @@ import {
   compileRust,
 } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
+import { validateValueConversion } from "../../../dist/providers/packages/validation/carriers.js";
 
 test("native broad values select one closed passive carrier contract", () => {
   const source = rustStringTargetType();
@@ -31,8 +34,8 @@ test("native broad values select one closed passive carrier contract", () => {
   assert.deepEqual(rustValueConversionContract(conversion), {
     category: "projection",
     lowering: "call",
-    path: "rt::TsValue::from_closed",
-    sourceMode: "ref",
+    path: "rt::TsValue::from",
+    sourceMode: "value",
     source,
     target,
     fallible: false,
@@ -62,6 +65,34 @@ test("passive broad values reject carriers whose lifetime cannot be closed", () 
     ),
     undefined,
   );
+});
+
+test("native and JS optional admission retain exact payload and destination evidence", () => {
+  const element = rustStringTargetType();
+  const source = rustOptionTargetType(element);
+  const fail = message => { throw new Error(message); };
+  for (const target of [rustTsValueTargetType(), rustJsValueTargetType()]) {
+    const conversion = selectRustSourceValueConversion(source, target);
+    assert.equal(conversion.kind, "closed-value-from-option");
+    const contract = rustValueConversionContract(conversion);
+    assert.deepEqual(contract.source, source);
+    assert.deepEqual(contract.target, target);
+    assert.deepEqual(contract.elementConversion.source, element);
+    assert.equal(contract.sourceMode, "value");
+    assert.doesNotThrow(() => validateValueConversion(conversion, {}, "optional", source, target, fail));
+    for (const changed of [
+      { ...conversion, kind: "js-value-from-option" },
+      { ...conversion, source: element },
+      { ...conversion, element: rustSourcePrimitiveTargetType("uint64") },
+      { ...conversion, elementConversion: { kind: "semantic-conversion", id: "js-value-from-u64" } },
+      { ...conversion, elementConversion: { kind: "ts-value-from-closed-carrier", source: {
+        kind: "reference", referent: element, mutable: false,
+      } } },
+    ]) {
+      assert.equal(rustValueConversionContract(changed), undefined);
+      assert.throws(() => validateValueConversion(changed, {}, "optional", source, target, fail));
+    }
+  }
 });
 
 test("the JS broad-value carrier remains independent of the native carrier", () => {
@@ -126,6 +157,7 @@ export function main(): void {
   assert.match(source, /rt::TsValue/u);
   assert.match(source, /TsValue::from_closed/u);
   assert.match(source, /retained\.clone\(\)/u);
+  assert.match(source, /TsValue::from_shared_identity/u);
   assert.doesNotMatch(source, /js_abi::JsValue|tsonic_rust_js/u);
   assert.equal(
     validateGeneratedProject("native-broad-values", result.artifacts, { run: true }).status,
@@ -173,7 +205,7 @@ export function main(): void {
   );
 });
 
-test("native empty values retain passive unknown transport without activating Rust-JS", { timeout: 300_000 }, () => {
+test("native empty values retain exact identity transport without activating Rust-JS", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     target: { id: "rust", options: { outputType: "bin", crateName: "passive_empty_values" } },
     files: { "index.ts": `
@@ -188,8 +220,8 @@ export function main(): void {
   });
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /TsValue::from_closed/u);
   assert.doesNotMatch(source, /js_abi|tsonic_rust_js/u);
+  assert.match(source, /TsValue::from\(/u);
   assert.equal(validateGeneratedProject("passive-empty-values", result.artifacts, { run: true }).status, 0);
 });
 
