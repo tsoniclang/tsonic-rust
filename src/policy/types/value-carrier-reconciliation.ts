@@ -25,7 +25,7 @@ import { rustEmptyRecordCarrier } from "../../target-model/conversions/empty-rec
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { selectRustProjectProjection } from "./project-projections.js";
 import { rustGenericCallableSignaturesMatch } from "../../target-model/conversions/generic-callable.js";
-import { rustCallableAbsenceCompletionMatches } from "../../target-model/conversions/callable-completion.js";
+import { selectRustCallableConversion } from "../../target-model/conversions/callable.js";
 
 export type RustValueCarrierReconciliation =
   | { readonly kind: "identity" }
@@ -165,9 +165,11 @@ export function selectRustValueCarrierReconciliation(
       conversion: { kind: "generic-callable-flow", source: sourceCarrier, target: targetCarrier },
     } };
   }
-  if (rustCallableAbsenceCompletionMatches(sourceCarrier, targetCarrier)) {
+  const callable = selectRustCallableConversion(sourceCarrier, targetCarrier,
+    (source, target) => selectRustSourceValueConversion(source, target, definitions), definitions);
+  if (callable !== undefined) {
     return { kind: "conversion", fact: { sourceCarrier, targetCarrier,
-      conversion: { kind: "callable-absence-completion", source: sourceCarrier, target: targetCarrier },
+      conversion: callable,
     } };
   }
   if (rustEmptyRecordCarrier(sourceCarrier) && rustEmptyRecordCarrier(targetCarrier)) {

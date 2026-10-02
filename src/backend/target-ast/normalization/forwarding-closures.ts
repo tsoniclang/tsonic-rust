@@ -2,7 +2,7 @@ import type { RustExpr } from "../nodes.js";
 
 export function collapseRustForwardingClosure(expression: RustExpr): RustExpr {
   if (expression.kind !== "closure" || expression.body.kind !== "call" ||
-    expression.params.some(parameter => parameter.byRefCopy) ||
+    expression.params.some(parameter => parameter.byRefCopy || parameter.type !== undefined) ||
     expression.params.length !== expression.body.args.length) return expression;
   const call = expression.body;
   if (expression.params.some(parameter => parameter.name === call.path) ||

@@ -96,9 +96,8 @@ export interface RustSourceCallableValueFact {
   readonly resultCarrier: TargetTypeRef;
 }
 
-export const rustSourceCallableValueFactKey: RustPlanKey<RustSourceCallableValueFact> = defineRustPlanKey(
-  "sourceCallableValue",
-  (left, right) => left.form === right.form &&
+function sourceCallableValuesEqual(left: RustSourceCallableValueFact, right: RustSourceCallableValueFact): boolean {
+  return left.form === right.form &&
     left.sourceDeclaration === right.sourceDeclaration &&
     left.fileName === right.fileName &&
     left.name === right.name &&
@@ -108,7 +107,15 @@ export const rustSourceCallableValueFactKey: RustPlanKey<RustSourceCallableValue
       rustTargetTypeRefEquals(carrier, right.parameterCarriers[index])) &&
     left.argumentModes.length === right.argumentModes.length &&
     left.argumentModes.every((mode, index) => mode === right.argumentModes[index]) &&
-    rustTargetTypeRefEquals(left.resultCarrier, right.resultCarrier),
+    rustTargetTypeRefEquals(left.resultCarrier, right.resultCarrier);
+}
+
+export const rustSourceCallableValueFactKey: RustPlanKey<RustSourceCallableValueFact> = defineRustPlanKey(
+  "sourceCallableValue", sourceCallableValuesEqual,
+);
+
+export const rustDirectCallableReferenceFactKey: RustPlanKey<RustSourceCallableValueFact> = defineRustPlanKey(
+  "directCallableReference", sourceCallableValuesEqual,
 );
 
 export type RustModuleBindingFact =

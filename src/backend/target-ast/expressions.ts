@@ -92,13 +92,16 @@ export function tupleRustClosureArguments(
   if (expression.kind !== "closure" && expression.kind !== "closure-block") {
     return undefined;
   }
-  if (expression.params.length !== arity) {
+  if (expression.params.length !== arity || expression.params.some(parameter =>
+    parameter.byRefCopy === true && parameter.type !== undefined && parameter.type.kind !== "reference")) {
     return undefined;
   }
   const bindings = expression.params.map((parameter, index) => ({
     kind: "let" as const,
     name: parameter.name,
-    mutable: "mutable" in parameter && parameter.mutable,
+    mutable: parameter.mutable === true,
+    ...(parameter.type === undefined ? {} : { type: parameter.byRefCopy === true && parameter.type.kind === "reference"
+      ? parameter.type.referent : parameter.type }),
     init: parameter.byRefCopy === true
       ? {
           kind: "dereference" as const,

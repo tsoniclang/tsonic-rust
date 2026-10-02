@@ -4,7 +4,7 @@ import { rustAwaitCarrier, rustCallableTargetType, rustJsPromiseTargetType, rust
   rustSourcePrimitiveTargetType, rustUnitTargetType } from "../../dist/target-model/types/index.js";
 import { rustFutureValueMatchesCarrier } from "../../dist/analysis/facts/future-values.js";
 import { rustCompilerOwnedContextualConversionMatches } from "../../dist/target-model/conversions/contextual.js";
-import { rustCallableAbsenceCompletionMatches } from "../../dist/target-model/conversions/callable-completion.js";
+import { selectRustCallableConversion } from "../../dist/target-model/conversions/callable.js";
 
 const integer = rustSourcePrimitiveTargetType("int32");
 const boolean = rustSourcePrimitiveTargetType("bool");
@@ -42,15 +42,15 @@ test("optional futures retain exact independent effect and error-boundary checks
 test("callable absence completion never coerces values or incompatible parameters", () => {
   const source = rustCallableTargetType([integer], unit);
   const target = rustCallableTargetType([integer, boolean], rustSourceOptionalTargetType(integer));
-  const conversion = { kind: "callable-absence-completion", source, target };
-  assert.equal(rustCallableAbsenceCompletionMatches(source, target), true);
+  const conversion = selectRustCallableConversion(source, target, () => undefined);
+  assert.ok(conversion);
   assert.equal(rustCompilerOwnedContextualConversionMatches(source, target, conversion), true);
   for (const invalid of [
     rustCallableTargetType([boolean], rustSourceOptionalTargetType(integer)),
     rustCallableTargetType([], rustSourceOptionalTargetType(integer)),
     rustCallableTargetType([integer], integer), integer,
-  ]) assert.equal(rustCallableAbsenceCompletionMatches(source, invalid), false);
-  assert.equal(rustCallableAbsenceCompletionMatches(rustCallableTargetType([integer], boolean), target), false);
+  ]) assert.equal(selectRustCallableConversion(source, invalid, () => undefined), undefined);
+  assert.equal(selectRustCallableConversion(rustCallableTargetType([integer], boolean), target, () => undefined), undefined);
   assert.equal(rustCompilerOwnedContextualConversionMatches(source, target, { ...conversion, source: target }), false);
   assert.equal(rustCompilerOwnedContextualConversionMatches(source, target, { ...conversion, target: source }), false);
 });

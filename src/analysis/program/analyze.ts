@@ -1,6 +1,7 @@
 import { appendMalformedSourceAstDiagnostic, recordClassBodyFacts, recordClassSignatureFacts, recordInterfaceFacts, recordMethodSelfModeFacts } from "../declarations/project-types.js";
 import { appendRustDiagnostic, rustResolutionContext } from "./walk.js";
 import { createRustModuleBindingPolicy } from "./module-bindings.js";
+import { recordRustModuleCallableStorage } from "../callables/module-values.js";
 import { recordRustModuleValueDeclarations } from "./module-declarations.js";
 import { selectRustClassEnvironment, recordRustClassEnvironmentDemands } from "../objects/class-environments.js";
 import { rustClosureCaptureFactKey, rustSourceParameterAbiFactKey } from "../facts/keys.js";
@@ -445,6 +446,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   // Fallibility depends on finalized operation facts and the one whole-program
   // structural storage plan produced while walking bodies.
   recordRustProjectCallableAdapterFacts(walk);
+  recordRustModuleCallableStorage(walk);
   const callableValues = context.callableValues.initialize({ ast, sourceFiles: context.sourceFiles, facts: context.facts,
     names: context.names, navigation: context.source.navigation, lifetimes: context.sourceLifetimes,
     classValueAdapters: context.classValues.valueAdapters(), closedSourceFiles });

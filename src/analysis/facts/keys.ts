@@ -46,6 +46,7 @@ export {
   rustOptionalChainFactKey,
   rustPreparedOperationResultFactKey,
   rustSourceCallableValueFactKey,
+  rustDirectCallableReferenceFactKey,
   rustTargetOperationFactKey,
   rustTypedLocationPlanKey,
 } from "./operations/keys.js";

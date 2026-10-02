@@ -9,6 +9,7 @@ import {
   Node_Expression,
 } from "@tsonic/target-api/source";
 import { rustModuleBindingFactKey } from "../facts/keys.js";
+import { rustModuleCallableStorageFactKey } from "../callables/module-values.js";
 import { rustCompileTimeSourceKey } from "../../target-model/facts/source-declarations.js";
 import { rustProjectStaticFieldStorage } from "../project-types/object-layout.js";
 import type { RustAnalysisContext } from "../program/context.js";
@@ -101,8 +102,13 @@ function classifyModuleInitialization(
             "Top-level variable declaration has no finalized Rust module-binding fact.",
           );
         }
-        if (binding.storage === "module-cell" ||
-          (binding.storage === "native-callable" && binding.value !== undefined)) {
+        if (binding.storage === "native-callable" && binding.value !== undefined) {
+          const storage = input.facts.getFact(declaration, rustModuleCallableStorageFactKey);
+          if (storage === undefined) return unresolved(declaration,
+            "Module callable values require their finalized native storage selection.");
+          if (storage.kind === "stored") return { kind: "required" };
+        }
+        if (binding.storage === "module-cell") {
           return { kind: "required" };
         }
       }

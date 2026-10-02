@@ -5,6 +5,19 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { conflictingNativeCallableSource, nativeModuleCallableFiles } from "../../../../tsonic/test/fixtures/native-module-callables.mjs";
 
 for (const surfaces of [[], ["js"]]) {
+  test(`private native callable adapters do not retain module initialization on ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: {
+      "index.ts": `const original = (): number => 9;
+export function main(): void {
+  const selected: (value?: number) => number = original;
+  if (selected() !== 9 || selected(2) !== 9) throw new Error("native direct adapter");
+}`,
+    } });
+    assert.deepEqual(result.diagnostics, []);
+    const output = artifactText(result, "src/index.rs");
+    assert.doesNotMatch(output, /ModuleCell|OnceLock|OnceCell|INITIALIZED/u);
+    validateGeneratedProject("private-native-callable-adapters", result.artifacts, { run: true });
+  });
   test(`typed native module callables retain checked body ABIs on ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: {
       ...nativeModuleCallableFiles,

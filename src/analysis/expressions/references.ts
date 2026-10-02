@@ -17,6 +17,8 @@ import {
   rustOptionalChainFactKey,
   rustPreparedOperationResultFactKey,
   rustSourceBindingFactKey,
+  rustModuleBindingFactKey,
+  rustDirectCallableReferenceFactKey,
   rustSourceCallableReturnFactKey,
   rustSourceCallableValueFactKey,
   rustSourceParameterAbiFactKey,
@@ -203,6 +205,17 @@ export function recordProjectSourceBinding(
   walk.context.facts.set(identifier, rustSourceBindingFactKey, binding, [
     { message: `rust project-source ${binding.scope} binding` },
   ]);
+  const module = walk.context.facts.get(declaration, rustModuleBindingFactKey) ??
+    walk.context.facts.resolve(declaration, rustModuleBindingFactKey);
+  if (binding.scope === "module" && module?.storage === "native-callable" && module.value !== undefined &&
+    !walk.context.source.navigation.declarationUseSummary(declaration).bindingWritten) {
+    walk.context.facts.set(identifier, rustDirectCallableReferenceFactKey, {
+      form: "function", sourceDeclaration: module.callableDeclaration,
+      fileName: binding.fileName, name: module.name, carrier: module.value.carrier,
+      parameterCarriers: module.value.parameterCarriers, argumentModes: module.value.argumentModes,
+      resultCarrier: module.value.resultCarrier,
+    }, [{ message: "rust immutable finalized native callable reference" }]);
+  }
   return binding;
 }
 

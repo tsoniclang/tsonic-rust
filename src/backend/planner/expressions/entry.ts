@@ -50,7 +50,7 @@ import { rustValueConversionContract } from "../../../target-model/conversions/c
 import { tryPlanRustNativePointerOperation } from "./native-pointers.js";
 import type { Node } from "@tsonic/tsts";
 import { planRustGenericCallableFlow } from "./generic-callable-flow.js";
-import { planRustCallableAbsenceCompletion } from "./callable-completion.js";
+import { planRustCallableConversion } from "./callable-conversions.js";
 import { planRustProgramErrorConstruction } from "./program-errors.js";
 import { planRustIntegerTruncation } from "./integer-truncation.js";
 import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
@@ -424,9 +424,9 @@ function applyRustContextualValueConversion(
     return rustCompilerOwnedContextualConversionMatches(fact.sourceCarrier, fact.targetCarrier, fact.conversion)
       ? planRustProgramErrorConstruction(fact.conversion, expression, node, context) : undefined;
   }
-  if (fact.conversion.kind === "callable-absence-completion") {
-    return rustCompilerOwnedContextualConversionMatches(fact.sourceCarrier, fact.targetCarrier, fact.conversion)
-      ? planRustCallableAbsenceCompletion(fact.conversion, expression, node, context) : undefined;
+  if (fact.conversion.kind === "callable-adapter") {
+    return rustCompilerOwnedContextualConversionMatches(fact.sourceCarrier, fact.targetCarrier, fact.conversion, context.input.program.typeDefinitions)
+      ? planRustCallableConversion(fact.conversion, expression, node, context) : undefined;
   }
   if (fact.conversion.kind === "integer-truncation") {
     const selected = planRustIntegerTruncation(expression, fact, context);

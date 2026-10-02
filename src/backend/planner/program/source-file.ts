@@ -1,4 +1,5 @@
 import { rustHiddenAttribute } from "../../target-ast/attributes.js";
+import { rustModuleCallableStorageFactKey } from "../../../analysis/callables/module-values.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { planRustClassEnvironmentItems } from "../objects/class-environments.js";
 import { planRustClassValueImplementations } from "../objects/constructor-values.js";
@@ -310,7 +311,13 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
       if (plannedFunctions !== undefined) {
         items.push(...plannedFunctions);
         const binding = context.input.program.facts.getFact(statement, rustModuleBindingFactKey);
-        if (binding?.storage === "native-callable" && binding.value !== undefined) {
+        const storage = context.input.program.facts.getFact(statement, rustModuleCallableStorageFactKey);
+        if (binding?.storage === "native-callable" && binding.value !== undefined && storage === undefined) {
+          context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, statement),
+            "rust.backend.module-callable-storage", "Module callable values require their finalized native storage selection."));
+        }
+        if (binding?.storage === "native-callable" && binding.value !== undefined &&
+          storage?.kind === "stored") {
           const value = planRustSourceCallableValue({
             form: "function",
             sourceDeclaration: statement,
@@ -650,7 +657,13 @@ function planTopLevelVariableStatement(
         return undefined;
       }
       items.push(item);
-      if (binding.value === undefined) {
+      const storage = context.input.program.facts.getFact(declaration, rustModuleCallableStorageFactKey);
+      if (binding.value !== undefined && storage === undefined) {
+        context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, declaration),
+          "rust.backend.module-callable-storage", "Module callable values require their finalized native storage selection."));
+        return undefined;
+      }
+      if (binding.value === undefined || storage?.kind === "inline") {
         continue;
       }
       const value = planRustSourceCallableValue({

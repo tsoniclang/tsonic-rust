@@ -419,8 +419,11 @@ function rustExpressionReferencesModuleAlias(expression: RustExpr, alias: string
         expression.length.kind === "path" &&
           rustExpressionReferencesModuleAlias({ kind: "path", path: expression.length.path }, alias);
     case "closure":
-      return rustExpressionReferencesModuleAlias(expression.body, alias);
+      return expression.params.some(parameter => parameter.type !== undefined && rustTypeReferencesModuleAlias(parameter.type, alias)) ||
+        rustExpressionReferencesModuleAlias(expression.body, alias);
     case "closure-block":
+      return expression.params.some(parameter => parameter.type !== undefined && rustTypeReferencesModuleAlias(parameter.type, alias)) ||
+        rustBlockReferencesModuleAlias(expression.body, alias);
     case "async-block":
       return rustBlockReferencesModuleAlias(expression.body, alias);
     case "await":

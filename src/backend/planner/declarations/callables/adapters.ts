@@ -3,7 +3,7 @@ import { planRustAbsentValue, planRustPresentValue } from "../../expressions/opt
 import { planRustOptionBranch } from "../../expressions/option-branch.js";
 import { rustOptionalStorageValue } from "../../../../target-model/types/projections.js";
 import { planRustGenericCallableFlow } from "../../expressions/generic-callable-flow.js";
-import { planRustCallableAbsenceCompletion } from "../../expressions/callable-completion.js";
+import { planRustCallableConversion } from "../../expressions/callable-conversions.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import type {
   RustCallableValueAdapter,
@@ -85,9 +85,9 @@ export function applyRustCallableValueAdapterRaw(
         const converted = planRustProgramErrorConstruction(adapter.conversion, expression, node, context);
         return converted === undefined ? undefined : { expression: converted, fallible: false };
       }
-      if (adapter.conversion.kind === "callable-absence-completion") {
-        if (!rustCompilerOwnedContextualConversionMatches(adapter.sourceCarrier, adapter.targetCarrier, adapter.conversion)) return undefined;
-        const converted = planRustCallableAbsenceCompletion(adapter.conversion, expression, node, context);
+      if (adapter.conversion.kind === "callable-adapter") {
+        if (!rustCompilerOwnedContextualConversionMatches(adapter.sourceCarrier, adapter.targetCarrier, adapter.conversion, context.input.program.typeDefinitions)) return undefined;
+        const converted = planRustCallableConversion(adapter.conversion, expression, node, context);
         return converted === undefined ? undefined : { expression: converted, fallible: false };
       }
       if (adapter.conversion.kind === "generic-callable-flow") {
