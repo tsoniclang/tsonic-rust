@@ -78,6 +78,11 @@ function mutate(values: string[]): number { values[0] = "70"; return 10; }
 function retain(values: string[]): string { const saved = values[0]; mutate(values); return saved; }
 function effect(values: string[]): number { return parseInt(values[0], mutate(values)); }
 function advance(values: string[], index: int32): int32 { values[0] = "after"; return index + 1; }
+function effectfulPair(values: string[]): number {
+  const first = values[0];
+  const second = values[advance(values, 0)];
+  return first.length + second.length;
+}
 function stepLoop(values: string[]): void {
   for (let index: int32 = 0; index < 1; index = advance(values, index)) {
     const field = values[0];
@@ -94,6 +99,7 @@ export function main(): void {
   if (effect(values) !== 31) throw new Error("argument order");
   stepLoop(values);
   if (values[0] !== "after") throw new Error("continue increment");
+  if (effectfulPair(["before", "other"]) !== 11) throw new Error("borrow index mutation");
 }
 `);
   const sum = functionSection(output, "sum", "release");
@@ -106,6 +112,9 @@ export function main(): void {
   assert.doesNotMatch(effect, /borrow_number_element/u);
   const loop = functionSection(output, "stepLoop", "main");
   assert.doesNotMatch(loop, /borrow_number_element/u);
+  const pair = functionSection(output, "effectfulPair", "stepLoop");
+  assert.match(pair, /get_number\(/u);
+  assert.match(pair, /borrow_number_element/u);
   validateGeneratedProject("scoped-element-ownership", result.artifacts, { run: true });
 });
 
@@ -165,6 +174,20 @@ test("generated terminal captures and readonly array reads match native allocati
   const { result } = compile(`
 export function retainLength(value: string): () => number { return () => value.length; }
 export function fieldValue(values: string[]): number { const field = values[0]; return parseInt(field, 10); }
+export function pairLengths(values: readonly string[]): number {
+  const first = values[0];
+  const second = values[1];
+  return first.length + second.length;
+}
+export function nestedLengths(values: readonly string[]): number {
+  const first = values[0];
+  let result = 0;
+  {
+    const second = values[1];
+    result = first.length + second.length;
+  }
+  return result;
+}
 export class Counter { count: number = 7; }
 export function counter(): Counter { return new Counter(); }
 export function counterView(value: Counter): { count: number } { return value; }
@@ -239,6 +262,14 @@ fn allocation_parity() {
     let values = JsArray::from_dense(vec![String::from("123456")]);
     let reads = measure(|| { for _iteration in 0..10000 { let _value = std::hint::black_box(index::fieldValue(values.clone())); } });
     assert_eq!(reads, (0, 0));
+    let pair = JsArray::from_dense(vec!["x".repeat(65536), "y".repeat(65536)]);
+    let paired_reads = measure(|| {
+        for _iteration in 0..10000 {
+            assert_eq!(std::hint::black_box(index::pairLengths(pair.clone())), 131072.0);
+            assert_eq!(std::hint::black_box(index::nestedLengths(pair.clone())), 131072.0);
+        }
+    });
+    assert_eq!(paired_reads, (0, 0));
     let counter = index::counter();
     let views = measure(|| {
         for _iteration in 0..10000 {

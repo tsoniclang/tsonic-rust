@@ -127,46 +127,58 @@ export function analyzeRustBorrowedElementLocals(
     const binary = facts.getFact(parent, rustTargetOperationFactKey);
     return binary?.kind === "operator-token" && ["==", "!=", "<", ">", "<=", ">="].includes(binary.operator);
   };
+  const selectLocal = (
+    block: Node,
+    statement: Node,
+    start: number,
+    statements: readonly (Node | undefined)[],
+    statementIndexes: ReadonlyMap<Node | undefined, number>,
+    nextImpure: number,
+  ): RustBorrowedElementLocal | undefined => {
+    if (!ast.is.IsVariableStatement(statement)) return undefined;
+    const list = VariableStatement_DeclarationList(ast, statement);
+    const declarations = list === undefined ? [] : VariableDeclarationList_Declarations(ast, list) ?? [];
+    const declaration = declarations.length === 1 ? declarations[0] : undefined;
+    if (declaration === undefined || !isRustStringCarrier(facts.getRuntimeCarrierFact(declaration)?.carrier) ||
+      ast.variableDeclarationKind(declaration) === "using" || ast.variableDeclarationKind(declaration) === "await using") return undefined;
+    const initializer = Node_Initializer(ast, declaration);
+    const read = initializer === undefined ? undefined : rustBorrowedElementRead(initializer, ast, facts);
+    if (read === undefined || !ast.is.IsIdentifier(read.array)) return undefined;
+    const arrayBinding = facts.getFact(read.array, rustSourceBindingFactKey)?.sourceDeclaration;
+    if (arrayBinding === undefined || !isLocal(arrayBinding, ast)) return undefined;
+    const summary = navigation.declarationUseSummary(declaration);
+    if (summary.bindingWritten || summary.captured || summary.exported) return undefined;
+    const uses = summary.uses.filter(use => use.kind !== "source-linkage" && use.kind !== "type-only");
+    if (uses.length === 0 || !uses.every(use => readonlyUse(use.reference))) return undefined;
+    let end = start;
+    for (const use of uses) {
+      let enclosing: Node | undefined = use.reference;
+      while (enclosing !== undefined && ast.parent(enclosing) !== block) enclosing = ast.parent(enclosing);
+      const index = statementIndexes.get(enclosing);
+      if (index === undefined || index <= start || index >= nextImpure) return undefined;
+      end = Math.max(end, index);
+    }
+    return Object.freeze({ ...read, declaration, lastStatement: statements[end]!,
+      references: Object.freeze(uses.map(use => use.reference)) });
+  };
   const visit = (node: Node): void => {
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
     if (ast.is.IsBlock(node)) {
       const statements = ast.statements(node);
       const statementIndexes = new Map(statements.map((statement, index) => [statement, index]));
-      const impurityPrefix = [0];
-      for (const statement of statements) impurityPrefix.push(impurityPrefix[impurityPrefix.length - 1]! + (pureStatement(statement) ? 0 : 1));
-      for (let start = 0; start < statements.length; start++) {
+      let nextImpure = statements.length;
+      for (let start = statements.length - 1; start >= 0; start--) {
         const statement = statements[start];
-        if (statement === undefined || !ast.is.IsVariableStatement(statement)) continue;
-        const list = VariableStatement_DeclarationList(ast, statement);
-        const declarations = list === undefined ? [] : VariableDeclarationList_Declarations(ast, list) ?? [];
-        const declaration = declarations.length === 1 ? declarations[0] : undefined;
-        if (declaration === undefined || !isRustStringCarrier(facts.getRuntimeCarrierFact(declaration)?.carrier)) continue;
-        const initializer = Node_Initializer(ast, declaration);
-        const read = initializer === undefined ? undefined : rustBorrowedElementRead(initializer, ast, facts);
-        if (read === undefined || !ast.is.IsIdentifier(read.array)) continue;
-        const arrayBinding = facts.getFact(read.array, rustSourceBindingFactKey)?.sourceDeclaration;
-        if (arrayBinding === undefined || !isLocal(arrayBinding, ast)) continue;
-        const summary = navigation.declarationUseSummary(declaration);
-        if (summary.bindingWritten || summary.captured || summary.exported) continue;
-        const uses = summary.uses.filter(use => use.kind !== "source-linkage" && use.kind !== "type-only");
-        if (uses.length === 0 || !uses.every(use => readonlyUse(use.reference))) continue;
-        let end = start;
-        let valid = true;
-        for (const use of uses) {
-          let enclosing: Node | undefined = use.reference;
-          while (enclosing !== undefined && ast.parent(enclosing) !== node) enclosing = ast.parent(enclosing);
-          const index = statementIndexes.get(enclosing);
-          if (index === undefined || index <= start) { valid = false; break; }
-          end = Math.max(end, index);
+        if (statement === undefined) { nextImpure = start; continue; }
+        const local = selectLocal(node, statement, start, statements, statementIndexes, nextImpure);
+        if (local !== undefined) {
+          starts.set(statement, local);
+          endings.set(local.lastStatement, Object.freeze([local, ...(endings.get(local.lastStatement) ?? [])]));
+          pureStatements.set(statement, pureExpression(local.array) && pureExpression(local.index));
         }
-        if (!valid || impurityPrefix[end + 1] !== impurityPrefix[start + 1]) continue;
-        const lastStatement = statements[end]!;
-        const local = Object.freeze({ ...read, declaration, lastStatement,
-          references: Object.freeze(uses.map(use => use.reference)) });
-        starts.set(statement, local);
-        endings.set(lastStatement, Object.freeze([...(endings.get(lastStatement) ?? []), local]));
+        if (!pureStatement(statement)) nextImpure = start;
       }
     }
-    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   files.forEach(visit);
   return Object.freeze({
