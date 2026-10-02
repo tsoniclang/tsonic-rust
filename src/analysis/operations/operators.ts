@@ -175,7 +175,7 @@ export function resolveBinaryOperandCarriers(
     return { left, right, leftNode, rightNode, operatorKind };
   }
   const resolveLeft = (expectation: TargetTypeRef | undefined): TargetTypeRef | undefined =>
-    operatorKind === KindQuestionQuestionToken
+    operatorKind === KindQuestionQuestionToken || operatorKind === KindEqualsToken
       ? resolveExpressionCarrierBeforeFlowReadProjection(
           walk,
           leftNode,

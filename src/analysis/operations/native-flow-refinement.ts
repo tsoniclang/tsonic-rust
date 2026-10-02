@@ -25,7 +25,6 @@ export function selectRustGuardedValueCarrier(
   if (existing !== undefined) return rustTargetTypeRefEquals(existing.sourceCarrier, sourceCarrier) &&
     rustFlowReadProjectionMatches(existing, options.projectTypes, context.typeDefinitions) ? existing.selectedCarrier : undefined;
   const members = selectRustGuardedValueMembers(reference, sourceCarrier, context, options);
-  if (members !== undefined && members.length > 1) return sourceCarrier;
   const selected = members?.length === 1 ? members[0]?.carrier : undefined;
   if (selected === undefined) return undefined;
   const projection = selectRustFlowReadProjection(sourceCarrier, selected, options.projectTypes, context.typeDefinitions);
