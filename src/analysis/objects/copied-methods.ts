@@ -48,9 +48,10 @@ export function finalizeRustCopiedMethods(
       demands.set(key(operation.receiverCarrier, operation.storageIndex), node);
     }
     if (operation?.kind === "record-literal" && operation.storage === "structural-object") {
+      const fields = new Map(operation.fields.map(field => [field.storageIndex, field]));
       for (const contribution of operation.contributions) {
         if (contribution.kind === "structural-method") {
-          const field = operation.fields.find(field => field.storageIndex === contribution.targetStorageIndex);
+          const field = fields.get(contribution.targetStorageIndex);
           if (field === undefined) continue;
           const identity = key(operation.resultCarrier, contribution.targetStorageIndex);
           const selected = implementations.get(identity) ?? [];
@@ -59,6 +60,7 @@ export function finalizeRustCopiedMethods(
         } else if (contribution.kind === "spread" && contribution.sourceStorage === "structural-object") {
           for (const field of contribution.fields) {
             const identity = key(operation.resultCarrier, field.targetStorageIndex);
+            if (field.method === true) demands.set(identity, contribution.property);
             const sources = incoming.get(identity) ?? new Set<string>();
             sources.add(key(contribution.sourceCarrier, field.sourceStorageIndex));
             incoming.set(identity, sources);
@@ -79,48 +81,26 @@ export function finalizeRustCopiedMethods(
       }
     }
   }
-  const proven = new Set<string>();
-  const dependents = new Map<string, string[]>();
-  const remainingSources = new Map<string, number>();
   const receiverUsage = new Map<Node, boolean>();
-  const ready: string[] = [];
+  const independent = new Map<string, boolean>();
   for (const identity of demands.keys()) {
     const methods = implementations.get(identity) ?? [];
-    const sources = incoming.get(identity);
-    if (!methods.every(method => {
+    if (methods.length === 0) continue;
+    independent.set(identity, methods.every(method => {
       let used = receiverUsage.get(method.node);
       if (used === undefined) {
         used = usesReceiver(method.node);
         receiverUsage.set(method.node, used);
       }
       return !used;
-    })) continue;
-    const count = sources?.size ?? 0;
-    if (count === 0) {
-      if (methods.length > 0) ready.push(identity);
-      continue;
-    }
-    remainingSources.set(identity, count);
-    for (const source of sources!) {
-      const targets = dependents.get(source) ?? [];
-      targets.push(identity);
-      dependents.set(source, targets);
-    }
+    }));
   }
-  for (let index = 0; index < ready.length; index++) {
-    const identity = ready[index]!;
-    proven.add(identity);
-    for (const target of dependents.get(identity) ?? []) {
-      const remaining = remainingSources.get(target)! - 1;
-      remainingSources.set(target, remaining);
-      if (remaining === 0) ready.push(target);
-    }
-  }
+  const proven = proveRustCopiedMethodFlow([...demands.keys()], incoming, independent);
   for (const [identity, subject] of demands) {
     const methods = implementations.get(identity) ?? [];
     if (!proven.has(identity)) {
       appendRustDiagnostic(walk, "RUST_COPIED_METHOD_RECEIVER_NOT_PROVEN",
-        "Object rest requires a closed own method value whose implementations do not use the original receiver.", subject,
+        "A retained own method requires a closed callable value whose implementations do not use the original receiver.", subject,
         ["target.capability=rust.object-rest.method-value"]);
       continue;
     }
@@ -145,5 +125,39 @@ export function finalizeRustCopiedMethods(
     };
     scan(root);
     return used;
+  }
+}
+
+export function proveRustCopiedMethodFlow(
+  identities: readonly string[],
+  incoming: ReadonlyMap<string, ReadonlySet<string>>,
+  implementations: ReadonlyMap<string, boolean>,
+): ReadonlySet<string> {
+  const selected = new Set(identities);
+  const dependents = new Map<string, string[]>();
+  for (const identity of identities) {
+    for (const source of incoming.get(identity) ?? []) {
+      const targets = dependents.get(source) ?? [];
+      targets.push(identity);
+      dependents.set(source, targets);
+    }
+  }
+  const grounded = new Set(identities.filter(identity => implementations.has(identity)));
+  propagate(grounded);
+  const rejected = new Set(identities.filter(identity => !grounded.has(identity) ||
+    implementations.get(identity) === false || [...(incoming.get(identity) ?? [])].some(source => !selected.has(source))));
+  propagate(rejected);
+  return new Set(identities.filter(identity => grounded.has(identity) && !rejected.has(identity)));
+
+  function propagate(seeds: Set<string>): void {
+    const pending = [...seeds];
+    for (let index = 0; index < pending.length; index++) {
+      for (const target of dependents.get(pending[index]!) ?? []) {
+        if (!seeds.has(target)) {
+          seeds.add(target);
+          pending.push(target);
+        }
+      }
+    }
   }
 }

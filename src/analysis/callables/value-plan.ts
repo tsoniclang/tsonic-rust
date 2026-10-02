@@ -11,6 +11,12 @@ import { createRustGenericCallablePlan, type RustGenericCallablePlan } from "./g
 import { createRustSuspendedCallablePlan, type RustSuspendedCallablePlan } from "./suspended-values.js";
 import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
 import { rustCallableAdapterValues } from "./adapter-values.js";
+import { rustTargetOperationFactKey, rustBindingProjectionFactKey } from "../facts/keys.js";
+import { rustObjectReferenceViewKey } from "../facts/object-reference-views.js";
+import { rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
+import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
+import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export interface RustCallableValuePlan {
   readonly generic: RustGenericCallablePlan;
@@ -55,6 +61,14 @@ export function createRustCallableValuePlanRegistry(): RustCallableValuePlanRegi
 
 function createRustCallableValuePlan(input: RustCallableValuePlanInput): RustCallableValuePlan {
   const flows: { subject: Node; conversion: RustGenericCallableConversion }[] = [];
+  const recordField = (subject: Node, source: TargetTypeRef | undefined, target: TargetTypeRef | undefined): void => {
+    if (source === undefined || target === undefined) return;
+    const sourceCarrier = rustOptionElementCarrier(source) ?? source;
+    const targetCarrier = rustOptionElementCarrier(target) ?? target;
+    if (rustGenericCallableValue(sourceCarrier) !== undefined && rustGenericCallableValue(targetCarrier) !== undefined) flows.push({ subject,
+      conversion: { kind: "generic-callable-flow", source: sourceCarrier, target: targetCarrier },
+    });
+  };
   const record = (subject: Node, adapter: RustCallableValueAdapter): void => {
     switch (adapter.kind) {
       case "conversion":
@@ -70,6 +84,29 @@ function createRustCallableValuePlan(input: RustCallableValuePlanInput): RustCal
   };
   for (const { subject, adapter } of input.classValueAdapters) record(subject, adapter);
   const visit = (node: Node): void => {
+    const operation = input.facts.getFact(node, rustTargetOperationFactKey);
+    if (operation?.kind === "record-literal") {
+      const targets = new Map(operation.fields.map(field => [field.storageIndex, field.carrier]));
+      for (const contribution of operation.contributions) {
+        if (contribution.kind !== "spread") continue;
+        const source = rustStructuralObjectCarrierValue(contribution.sourceCarrier);
+        for (const field of contribution.fields) recordField(node, source?.fields[field.sourceStorageIndex]?.type,
+          targets.get(field.targetStorageIndex));
+      }
+    }
+    const view = input.facts.getFact(node, rustObjectReferenceViewKey);
+    if (view?.kind === "structural") {
+      const target = rustStructuralObjectCarrierValue(view.targetCarrier);
+      for (const field of view.fields) recordField(node, field.source.resultCarrier,
+        target?.fields[field.destinationIndex]?.type);
+    }
+    const binding = input.facts.getFact(node, rustBindingProjectionFactKey);
+    if (binding?.projection.kind === "object-rest") {
+      const source = rustStructuralObjectCarrierValue(binding.sourceCarrier);
+      const target = rustStructuralObjectCarrierValue(binding.bindingCarrier);
+      for (const field of binding.projection.fields) recordField(node,
+        source?.fields[field.sourceStorageIndex]?.type, target?.fields[field.targetStorageIndex]?.type);
+    }
     for (const dispatch of input.facts.getFact(node, rustObjectLiteralMethodAdapterFactKey)?.dispatches ?? []) {
       for (const adapter of rustCallableAdapterValues(dispatch)) record(node, adapter);
     }

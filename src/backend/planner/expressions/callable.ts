@@ -90,8 +90,10 @@ export function planRustCallableExpressionBody(
   if (!requireExpressionCarrier(node, closureFact.resultCarrier, context, "rust.backend.closure-carrier")) {
     return undefined;
   }
-  if (rustGenericCallableValue(closureFact.resultCarrier) !== undefined) {
-    return planRustGenericCallableValue(node, closureFact.resultCarrier, context);
+  const independent = context.input.program.facts.getFact(node, rustReceiverIndependentMethodFactKey);
+  const constructionCarrier = independent?.carrier ?? closureFact.resultCarrier;
+  if (rustGenericCallableValue(constructionCarrier) !== undefined) {
+    return planRustGenericCallableValue(node, constructionCarrier, context);
   }
   const callableProtocol = rustCallableProtocol(closureFact.resultCarrier);
   const nativeClosureProtocol = rustClosureProtocol(closureFact.resultCarrier);
@@ -129,8 +131,6 @@ export function planRustCallableExpressionBody(
   }
   const sourceParams = context.input.program.source.ast.parameters(node);
   const leadingParameters = closureFact.leadingParameters ?? [];
-  const independent = context.input.program.facts.getFact(node, rustReceiverIndependentMethodFactKey);
-  const constructionCarrier = independent?.carrier ?? closureFact.resultCarrier;
   if (allParameterCarriers === undefined || resultCarrier === undefined ||
     leadingParameters.length > allParameterCarriers.length ||
     !leadingParameters.every((parameter, index) =>
@@ -290,7 +290,7 @@ export function planRustCallableExpressionBody(
       "rust.backend.closure-invocation-owner", "A suspended callable's retained owner conflicts with its finalized callable contract."));
     return undefined;
   }
-  const leadingPlan = planRustCallableLeadingParameters(node, independent === undefined ? leadingParameters : [], context);
+  const leadingPlan = planRustCallableLeadingParameters(node, leadingParameters, context);
   if (leadingPlan === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),

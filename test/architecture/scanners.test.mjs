@@ -448,7 +448,10 @@ test("project-source calls trust the exact TSTS-selected declaration rather than
     "utf8",
   );
   assert.match(semantics, /if \(sourceDeclaration === undefined && calleeDeclaration !== undefined\)/u);
-  assert.match(semantics, /acceptProjectSourceCall\(request, sourceDeclaration/u);
+  assert.match(semantics, /binding\.callableDeclaration === sourceDeclaration/u);
+  assert.match(semantics, /acceptProjectSourceCall\(request, nativeCallable \? binding\.callableDeclaration : sourceDeclaration/u);
+  assert.match(semantics, /const calleeKind = calleeDeclaration === undefined \? undefined : context\.ast\.kindName\(calleeDeclaration\)/u);
+  assert.match(semantics, /const callableType = !nativeCallable && \(storedCallable/u);
   assert.doesNotMatch(semantics, /projectCallDeclarationsCorroborate|RUST_SELECTED_PROJECT_EVIDENCE_CONFLICT/u);
 });
 

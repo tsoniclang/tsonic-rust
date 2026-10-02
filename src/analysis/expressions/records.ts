@@ -474,7 +474,7 @@ export function resolveRecordLiteralCarrier(
           sourceField.method !== targetField.method ||
           sourceField.method === true && (
             sourceShape.storage !== "structural-object" ||
-            !rustTargetTypeRefEquals(sourceCarrier, resultCarrier)
+            storage !== "structural-object"
           )) {
           return undefined;
         }

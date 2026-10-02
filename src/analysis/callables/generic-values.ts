@@ -19,6 +19,7 @@ import { createRustGenericCallableFlowIndex } from "./generic-callable-flow.js";
 import type { RustGenericCallableConversion } from "../../target-model/conversions/generic-callable.js";
 import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
+import { rustReceiverIndependentMethodFactKey } from "../facts/operations/keys.js";
 
 export interface RustGenericCallableImplementation {
   readonly declaration: Node;
@@ -64,6 +65,12 @@ export function createRustGenericCallablePlan(
   const closures: Node[] = [];
   const flows: { subject: Node; conversion: RustGenericCallableConversion }[] = [...adapterFlows];
   const identityCarriers: TargetTypeRef[] = [];
+  const closureCarrier = (node: Node): TargetTypeRef | undefined => {
+    const operation = facts.getFact(node, rustTargetOperationFactKey);
+    return operation?.kind === "closure"
+      ? facts.getFact(node, rustReceiverIndependentMethodFactKey)?.carrier ?? operation.resultCarrier
+      : undefined;
+  };
   const visit = (node: Node): void => {
     for (const name of [names.nameForDeclaration(node), names.functionNameForDeclaration(node), names.callableValueNameForDeclaration(node)]) {
       if (name !== undefined) usedNames.add(name);
@@ -102,14 +109,13 @@ export function createRustGenericCallablePlan(
     const selected = navigation.expressionValueFlow(declaration);
     if ((!selected.escapes || closedSourceFiles.has(ast.getSourceFile(declaration)!)) &&
       !selected.identityCompared && !selected.hasUnclassifiedUse) continue;
-    const operation = facts.getFact(declaration, rustTargetOperationFactKey);
-    if (operation?.kind === "closure") retainIdentity(operation.resultCarrier);
+    const carrier = closureCarrier(declaration);
+    if (carrier !== undefined) retainIdentity(carrier);
   }
   issues.push(...flow.issues);
   closures.sort((left, right) => ast.getFileName(ast.getSourceFile(left)).localeCompare(ast.getFileName(ast.getSourceFile(right)), "en") || ast.pos(left) - ast.pos(right));
   for (const node of closures) {
-    const operation = facts.getFact(node, rustTargetOperationFactKey);
-    const carrier = operation?.kind === "closure" ? operation.resultCarrier : undefined;
+    const carrier = closureCarrier(node);
     const value = rustGenericCallableValue(carrier);
     if (carrier !== undefined && value !== undefined) {
       const capture = facts.getFact(node, rustClosureCaptureFactKey);

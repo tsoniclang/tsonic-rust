@@ -477,7 +477,10 @@ export function selectRustCheckedCall(
     const nativeCallable = binding?.storage === "native-callable" &&
       (binding.callableDeclaration === sourceDeclaration ||
         declarationKind === "KindFunctionType" || declarationKind === "KindCallSignature");
-    const callableType = !nativeCallable && (declarationKind === "KindFunctionType" ||
+    const calleeKind = calleeDeclaration === undefined ? undefined : context.ast.kindName(calleeDeclaration);
+    const storedCallable = calleeKind !== undefined && ["KindVariableDeclaration", "KindParameter",
+      "KindPropertyDeclaration", "KindPropertySignature", "KindPropertyAssignment", "KindShorthandPropertyAssignment"].includes(calleeKind);
+    const callableType = !nativeCallable && (storedCallable || declarationKind === "KindFunctionType" ||
       declarationKind === "KindCallSignature" || declarationKind === "KindArrowFunction" ||
       declarationKind === "KindFunctionExpression");
     const structuralMethod = callableType ? undefined : acceptStructuralRuntimeMethodCall(

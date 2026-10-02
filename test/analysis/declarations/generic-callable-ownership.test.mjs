@@ -9,6 +9,10 @@ import { createRustCallableValuePlanRegistry } from "../../../dist/analysis/call
 import { rustObjectLiteralMethodAdapterFactKey } from "../../../dist/analysis/facts/object-methods.js";
 import { rustProjectCallableAdaptersKey } from "../../../dist/analysis/facts/project-callable-adapters.js";
 import { rustRuntimeCarrierKey } from "../../../dist/target-model/facts/selections.js";
+import { rustReceiverIndependentMethodFactKey } from "../../../dist/analysis/facts/operations/keys.js";
+import { rustStructuralObjectTargetType } from "../../../dist/target-model/types/carriers/source-types.js";
+import { rustObjectReferenceViewKey } from "../../../dist/analysis/facts/object-reference-views.js";
+import { rustBindingProjectionFactKey } from "../../../dist/analysis/facts/keys.js";
 
 const parameter = { kind: "type-parameter", identity: "Value", name: "Value" };
 function input() {
@@ -34,6 +38,9 @@ function input() {
     if (key === rustTargetOperationFactKey && node.operation !== undefined) return node.operation;
     if (key === rustObjectLiteralMethodAdapterFactKey) return node.objectAdapters;
     if (key === rustProjectCallableAdaptersKey) return node.projectAdapters;
+    if (key === rustReceiverIndependentMethodFactKey) return node.independent;
+    if (key === rustObjectReferenceViewKey) return node.referenceView;
+    if (key === rustBindingProjectionFactKey) return node.binding;
     if (key === rustContextualValueConversionFactKey && node.conversion !== undefined) return { conversion: node.conversion };
     if (!closures.includes(node)) return undefined;
     if (key === rustTargetOperationFactKey) return { kind: "closure", resultCarrier: node.carrier };
@@ -196,3 +203,59 @@ test("contradictory signatures under one origin fail closed instead of selecting
   assert.match(plan.issues[0].message, /conflicting native signatures/u);
   assert.equal(plan.definitionFor(closures[1].carrier), undefined);
 });
+
+test("receiver-independent methods retain their proven physical ABI without mutating source evidence", () => {
+  const { closures, create } = input();
+  const physical = closures[0].carrier;
+  closures[0].carrier = rustGenericCallableTargetType([parameter], [{ kind: "source-primitive", name: "float64" }, parameter], parameter, physical.value.origin);
+  closures[0].independent = { carrier: physical };
+  const plan = create();
+  assert.deepEqual(plan.issues, []);
+  assert.equal(plan.implementationFor(closures[0]).carrier, physical);
+  assert.equal(plan.definitionFor(physical).signature.parameters.length, 1);
+  assert.equal(plan.definitionFor(closures[0].carrier), undefined);
+  assert.equal(closures[0].carrier.value.signature.parameters.length, 2);
+});
+
+test("an escaping receiver-independent method retains its own native identity family", () => {
+  const { closures, create } = input();
+  const physical = closures[1].carrier;
+  closures[1].carrier = rustGenericCallableTargetType([parameter], [{ kind: "source-primitive", name: "float64" }, parameter], parameter, physical.value.origin);
+  closures[1].independent = { carrier: physical };
+  const plan = create();
+  assert.deepEqual(plan.issues, []);
+  const definition = plan.definitionFor(physical);
+  assert.equal(definition.identityObserved, true);
+  assert.equal(definition.copy, false);
+  assert.equal(definition.implementations[0].storage, "shared");
+});
+
+for (const transport of ["spread", "reference", "rest"]) {
+  for (const incompatible of [false, true]) {
+    test(`generic field ${transport} transport ${incompatible ? "rejects contradictory contracts" : "retains exact implementation families"}`, () => {
+      const { closures, planInput } = input();
+      const source = closures[0].carrier;
+      const target = incompatible ? rustGenericCallableTargetType([parameter], [parameter], { kind: "source-primitive", name: "float64" }, closures[1].carrier.value.origin) : closures[1].carrier;
+      const shape = carrier => rustStructuralObjectTargetType("/first.ts", [{
+        sourceName: "identity", type: carrier, presence: "required", readonly: false, method: true,
+      }]);
+      const node = {};
+      if (transport === "spread") node.operation = { kind: "record-literal",
+        contributions: [{ kind: "spread", sourceCarrier: shape(source), fields: [{ sourceStorageIndex: 0, targetStorageIndex: 0 }] }],
+        fields: [{ storageIndex: 0, carrier: target }],
+      };
+      if (transport === "reference") node.referenceView = { kind: "structural", sourceCarrier: shape(source), targetCarrier: shape(target),
+        fields: [{ destinationIndex: 0, source: { storageIndex: 0, resultCarrier: source } }],
+      };
+      if (transport === "rest") node.binding = { sourceCarrier: shape(source), bindingCarrier: shape(target),
+        projection: { kind: "object-rest", fields: [{ sourceStorageIndex: 0, targetStorageIndex: 0 }] },
+      };
+      planInput.sourceFiles[0].nodes.push(node);
+      const plan = createRustCallableValuePlanRegistry().initialize(planInput);
+      assert.equal(plan.issues.length, incompatible ? 1 : 0);
+      assert.equal(plan.generic.definitions.length, incompatible ? 2 : 1);
+      if (incompatible) assert.match(plan.issues[0].message, /contradictory selected native signatures/u);
+      else assert.equal(plan.generic.definitionFor(source), plan.generic.definitionFor(target));
+    });
+  }
+}
