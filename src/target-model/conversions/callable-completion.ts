@@ -1,6 +1,7 @@
 import type { TargetTypeRef } from "../types/model.js";
-import { rustCallableProtocol, rustOptionElementCarrier, rustUnitTargetType } from "../types/index.js";
+import { isRustAbsenceCarrier, isRustUnitCarrier, rustCallableProtocol, rustOptionElementCarrier } from "../types/index.js";
 import { rustTargetTypeRefEquals } from "../types/equality.js";
+import { rustOptionalStorageValue } from "../types/projections.js";
 
 export interface RustCallableAbsenceCompletion {
   readonly kind: "callable-absence-completion";
@@ -12,8 +13,9 @@ export function rustCallableAbsenceCompletionMatches(source: TargetTypeRef, targ
   const sourceCallable = rustCallableProtocol(source);
   const targetCallable = rustCallableProtocol(target);
   return sourceCallable !== undefined && targetCallable !== undefined &&
-    rustTargetTypeRefEquals(sourceCallable.result, rustUnitTargetType()) &&
-    rustOptionElementCarrier(targetCallable.result) !== undefined &&
+    (isRustUnitCarrier(sourceCallable.result) || isRustAbsenceCarrier(sourceCallable.result)) &&
+    (rustOptionElementCarrier(targetCallable.result) !== undefined ||
+      rustOptionalStorageValue(targetCallable.result) !== undefined) &&
     sourceCallable.parameters.length <= targetCallable.parameters.length &&
     sourceCallable.parameters.every((parameter, index) =>
       rustTargetTypeRefEquals(parameter, targetCallable.parameters[index]));
