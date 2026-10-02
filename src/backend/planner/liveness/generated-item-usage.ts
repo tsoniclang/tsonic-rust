@@ -648,6 +648,11 @@ export function analyzeRustGeneratedItemUsage(input: {
           visitConversion(clause.comparison.operation.rightConversion);
         }
         return;
+      case "array-literal":
+        for (const contribution of fact.contributions) {
+          if (contribution.kind === "spread") visitConversion(contribution.conversion);
+        }
+        return;
       case "string-concat":
       case "conditional":
       case "template-string":
@@ -655,7 +660,6 @@ export function analyzeRustGeneratedItemUsage(input: {
       case "void-expression":
       case "identity-expression":
       case "non-null-expression":
-      case "array-literal":
       case "option-check":
       case "option-equality":
       case "option-value-equality":

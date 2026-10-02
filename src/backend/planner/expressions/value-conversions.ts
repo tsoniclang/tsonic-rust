@@ -2,7 +2,6 @@ import {
   rustOptionTargetType,
   rustCallableProtocol,
   rustStructuralObjectCarrierValue,
-  isRustCopyCarrier,
 } from "../../../target-model/types/index.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { rustTargetRuntimeErrorType } from "../types/error-boundary.js";
@@ -33,6 +32,7 @@ import { planRustUnionConstruction, planRustUnionPattern } from "./union-pattern
 import { planRustAbsentValue, planRustCheckedSourceOptional } from "./optional-storage.js";
 import { planRustProjectClosedValue } from "../objects/project-closed-values.js";
 import { planRustArrayValueConversion } from "./array-value-conversions.js";
+import { planRustSequenceValue } from "./sequence-conversions.js";
 
 export function applyRustValueConversion(
   context: RustPlanContext,
@@ -117,48 +117,9 @@ export function lowerRustValueConversion(
       return planRustProjectClosedValue(source, contract.ownerPath, contract.source, node, context);
     case "exact-integer":
       return lowerRustExactIntegerConversion({ kind: "exact-integer", source: contract.source, target: contract.target }, source, context);
-    case "rest-sequence": {
-      const collectionType = rustTypeFromCarrierInContext(contract.target, context);
-      if (collectionType === undefined) return undefined;
-      const itemName = allocateConversionName(context, node, "spread_value");
-      if (contract.collection === "tuple") {
-        if (contract.source.kind !== "tuple") return undefined;
-        const sourceElements = contract.source.elements;
-        const tupleName = allocateConversionName(context, node, "spread_tuple");
-        const elements = contract.elementConversions.map((conversion, index) => {
-          const field: RustExpr = { kind: "field", receiver: { kind: "path", path: tupleName }, name: String(index) };
-          const value: RustExpr = isRustCopyCarrier(sourceElements[index]!)
-            ? field : { kind: "method-call", receiver: field, method: "clone", args: [] };
-          return conversion === null ? value : lowerNestedRustValueConversion(conversion, value, context, node);
-        });
-        if (elements.some(value => value === undefined)) return undefined;
-        const value: RustExpr = { kind: "associated-call", owner: collectionType, method: "from",
-          args: [{ kind: "slice-literal", elements: elements as RustExpr[] }] };
-        if (elements.length === 0) return { kind: "evaluate-then", effect: source, discard: "value", value };
-        return {
-          kind: "block", bindings: [{ name: tupleName, value: source }],
-          value,
-        };
-      }
-      const item: RustExpr = { kind: "path", path: itemName };
-      const elementConversion = contract.elementConversions[0];
-      if (elementConversion === undefined) return undefined;
-      const converted = elementConversion === null ? item
-        : lowerNestedRustValueConversion(elementConversion, item, context, node);
-      if (converted === undefined) return undefined;
-      const snapshot: RustExpr = {
-        kind: "method-call", receiver: source.kind === "reference" ? source.expr : source,
-        method: contract.collection === "js-array" ? "values" : "to_vec", args: [],
-      };
-      if (elementConversion === null) return snapshot;
-      const iterator: RustExpr = { kind: "method-call", receiver: snapshot, method: "into_iter", args: [] };
-      return {
-        kind: "method-call", receiver: {
-          kind: "method-call", receiver: iterator, method: "map",
-          args: [{ kind: "closure", params: [{ name: itemName, byRefCopy: false }], body: converted }],
-        }, method: "collect", genericArguments: [{ kind: "type", type: collectionType }], args: [],
-      };
-    }
+    case "rest-sequence":
+      return planRustSequenceValue(contract, source, context, node,
+        (conversion, value) => lowerNestedRustValueConversion(conversion, value, context, node));
     case "identity":
       return source;
     case "call":
@@ -486,7 +447,7 @@ function lowerStructuralToJsonValueConversion(
   };
 }
 
-function lowerNestedRustValueConversion(
+export function lowerNestedRustValueConversion(
   contract: import("../../../target-model/conversions/contracts.js").RustValueConversionContract,
   source: RustExpr,
   context: RustPlanContext,

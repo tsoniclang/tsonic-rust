@@ -39,6 +39,9 @@ export function copy(values: int32[]): int32[] { return [...values]; }
     { ...fact, contributions: new Array(1) },
     { ...fact, contributions: [{ ...fact.contributions[0], kind: "value" }] },
     { ...fact, contributions: [{ ...fact.contributions[0], carrier: rustSourcePrimitiveTargetType("int64") }] },
+    { ...fact, contributions: [{ ...fact.contributions[0], conversion: undefined }] },
+    { ...fact, contributions: [{ ...fact.contributions[0], conversion: { ...fact.contributions[0].conversion,
+      elementTarget: rustSourcePrimitiveTargetType("int64") } }] },
     { ...fact, elementCarrier: rustSourcePrimitiveTargetType("int64") },
     { ...fact, lane: "native" }, { ...fact, length: 2 },
   ];

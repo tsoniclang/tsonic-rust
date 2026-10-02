@@ -130,7 +130,10 @@ export function rustFoundationForTargetOperationFact(
     case "array-literal":
       requireCarrier(fact.elementCarrier);
       requireCarrier(fact.resultCarrier);
-      fact.contributions.forEach(contribution => requireCarrier(contribution.carrier));
+      fact.contributions.forEach(contribution => {
+        requireCarrier(contribution.carrier);
+        if (contribution.kind === "spread") requireConversion(contribution.conversion);
+      });
       if (fact.lane === "js") require("std");
       break;
     case "iteration":

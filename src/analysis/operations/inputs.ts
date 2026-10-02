@@ -60,7 +60,7 @@ import { rustMemoryLayoutObservationKey } from "../../target-model/operations/me
 import { rustRawLocationPlanKey } from "../../target-model/operations/native-memory.js";
 import { rustMemoryBindingPlanKey } from "../../target-model/operations/memory-bindings.js";
 import { rustRestSequenceElements } from "../../target-model/operations/rest-assembly.js";
-import { rustArrayLiteralSpreadContract } from "../../target-model/types/array-literal.js";
+import { selectRustRestSequenceConversion } from "../../policy/conversions/rest-sequence.js";
 
 export function recordSelectedOperationInputs(
   walk: RustFactWalk,
@@ -349,19 +349,21 @@ export function resolveArrayLiteralCarrier(
     );
     return undefined;
   }
-  const contributions: { readonly kind: "value" | "spread"; readonly carrier: TargetTypeRef }[] = [];
+  const contributions: Extract<RustTargetOperationFact, { readonly kind: "array-literal" }>["contributions"][number][] = [];
   for (const element of presentElements) {
     const spread = ast.is.IsSpreadElement(element);
     const operand = spread ? Node_Expression(ast, element) : element;
     const carrier = operand === undefined ? undefined : resolveArrayElementCarrier(
       walk, operand, sourceFile, spread ? undefined : expectedElement);
     if (carrier === undefined) return undefined;
-    if (spread && rustArrayLiteralSpreadContract(carrier, expectedElement) === undefined) {
+    const spreadConversion = spread ? selectRustRestSequenceConversion(carrier, expectedElement, walk.context.typeDefinitions) : undefined;
+    if (spread && spreadConversion === undefined) {
       appendRustDiagnostic(walk, "RUST_ARRAY_SPREAD_CARRIER_MISMATCH",
-        "Array spread requires a finalized dense sequence with the exact destination element carrier.", element, []);
+        "Array spread requires a finalized dense sequence with an exact native conversion for every destination element.", element, []);
       return undefined;
     }
-    contributions.push(Object.freeze({ kind: spread ? "spread" : "value", carrier }));
+    contributions.push(Object.freeze(spreadConversion === undefined ? { kind: "value", carrier }
+      : { kind: "spread", carrier, conversion: spreadConversion }));
   }
   const resultCarrier = lane === "js"
     ? rustJsArrayTargetType(expectedElement)

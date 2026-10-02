@@ -27,6 +27,8 @@ import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
+import { isRustFinalizedArrayInput, isRustFinalizedSliceInput } from "../facts/finalized-operation-abi.js";
 import {
   getRustGeneratorProtocol,
   rustAwaitCarrier,
@@ -414,9 +416,16 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       }
     }
     const operation = facts.getFact(node, rustTargetOperationFactKey);
-    if (operation?.kind === "array-literal" && operation.contributions.some(contribution => contribution.kind === "spread")) {
-      const error = addUse(node, operation.elementCarrier, ["clone"]);
-      if (error !== undefined) return error;
+    if (operation?.kind === "array-literal") {
+      for (const contribution of operation.contributions) {
+        if (contribution.kind !== "spread") continue;
+        const conversion = rustValueConversionContract(contribution.conversion, input.typeDefinitions);
+        if (conversion?.lowering !== "rest-sequence") return "An array spread has no exact sequence conversion contract.";
+        for (const element of conversion.cloneSources) {
+          const error = addUse(node, element, ["clone"]);
+          if (error !== undefined) return error;
+        }
+      }
     }
     if (operation?.kind === "source-index-signature" &&
       (operation.accessMode === "read" || operation.accessMode === "read-write")) {
@@ -483,6 +492,18 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
     const providerOperations = operation?.kind === "provider-operation" ? [operation]
       : operation?.kind === "union-property" ? operation.variants.flatMap(variant => variant.operation === undefined ? [] : [variant.operation]) : [];
     for (const providerOperation of providerOperations) {
+      for (const argument of providerOperation.abi.targetArguments) {
+        if (!isRustFinalizedArrayInput(argument) && !isRustFinalizedSliceInput(argument)) continue;
+        for (const element of argument.elements) {
+          if (element.conversion.kind !== "semantic") continue;
+          const conversion = rustValueConversionContract(element.conversion.conversion, input.typeDefinitions);
+          if (conversion?.lowering !== "rest-sequence") continue;
+          for (const carrier of conversion.cloneSources) {
+            const error = addUse(node, carrier, ["clone"]);
+            if (error !== undefined) return error;
+          }
+        }
+      }
       for (const argument of providerOperation.abi.sourceArguments) {
         if (argument.disposition !== "runtime" || argument.mode !== "value" ||
           argument.form !== "value" || isRustCopyCarrier(argument.carrier)) continue;

@@ -91,6 +91,7 @@ export type RustValueConversionContract = RustValueConversionContractBase & (
       readonly lowering: "rest-sequence";
       readonly collection: "vec" | "js-array" | "fixed-array" | "tuple";
       readonly elementConversions: readonly (RustValueConversionContract | null)[];
+      readonly cloneSources: readonly TargetTypeRef[];
     }
   | {
       readonly lowering: "call";
@@ -201,7 +202,7 @@ export function rustValueConversionContract(
     if (sequence === undefined || !isDenseDataArray(value.elementConversions) ||
       value.elementConversions.length !== sequence.elements.length) return undefined;
     const conversions = value.elementConversions.map(conversion => conversion === null ? null : rustValueConversionContract(conversion, definitions));
-    if (!isRustTargetTypeRef(value.elementTarget) || sequence.elements.some(element => !rustCarrierSupportsClone(element, definitions)) ||
+    if (!isRustTargetTypeRef(value.elementTarget) ||
       sequence.elements.some((element, index) => {
         const conversion = conversions[index];
         return conversion === null ? !rustTargetTypeRefEquals(element, value.elementTarget)
@@ -218,6 +219,7 @@ export function rustValueConversionContract(
       sourceMode: "ref", source: value.source,
       target: { kind: "array", element: value.elementTarget }, fallible: false,
       elementConversions: conversions as readonly (RustValueConversionContract | null)[],
+      cloneSources: sequence.elements,
     };
   }
   if (value.kind === "ts-value-from-closed-carrier") {
