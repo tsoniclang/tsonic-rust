@@ -3,7 +3,7 @@ import test from "node:test";
 import { createCompilerSessionFromFiles } from "@tsonic/tsts";
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { selectRustNativeFlowMembers } from "../../../dist/policy/types/resolution/native-flow-refinement.js";
-import { rustJsArrayTargetType, rustJsRegExpTargetType, rustSourceUnionTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
+import { rustJsArrayTargetType, rustJsRegExpTargetType, rustJsValueTargetType, rustSourceUnionTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
 import { resolveRustInstanceType } from "../../../dist/policy/types/resolution/instance-tests.js";
 
 test("native nominal guard selection completes partial typeof evidence through the exact constructor owner", () => {
@@ -63,4 +63,35 @@ test("nominal constructor policy rejects unclassified native declarations and op
   const generic = { kind: "class", genericParameters: [{}] };
   assert.equal(resolveRustInstanceType(declaration, constructor, context, { ...options,
     projectTypes: { definitionForDeclaration: () => generic } }), undefined);
+});
+
+test("literal guards retain exact native integer widths and broad unknown payloads", () => {
+  const checked = createCompilerSessionFromFiles({ currentDirectory: "/src", files: { "/src/index.ts": `
+    declare function observe(value: unknown): void;
+    function run(value: unknown): void {
+      if (value === 1) observe(value);
+      if (value === 1n) observe(value);
+      if (value === "route") observe(value);
+    }
+  ` }, compilerOptions: { strict: true, target: "es2022", module: "esnext" } }).checkSource();
+  assert.deepEqual(checked.diagnostics, []);
+  const source = createTargetSourceProgram(checked);
+  const reads = [];
+  const visit = node => {
+    const call = source.semantics.forNode(node).operations.call(node);
+    if (source.ast.text(call?.sourceCallee.expression) === "observe") reads.push(call.sourceArguments[0].expression);
+    source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  visit(checked.getSourceFile("/src/index.ts"));
+  assert.equal(reads.length, 3);
+  const context = { ast: source.ast, navigation: source.navigation, sourceFacts: source.sourceFacts,
+    semanticsFor: node => source.semantics.forNode(node) };
+  const carriers = [{ kind: "source-primitive", name: "int32" }, { kind: "source-primitive", name: "int64" },
+    rustJsValueTargetType(), rustStringTargetType()];
+  const carrier = rustSourceUnionTargetType("/src/index.ts", "Value");
+  const definitions = { sourceUnionVariants: selected => selected === carrier
+    ? carriers.map((value, index) => ({ name: `Variant${index}`, carrier: value })) : undefined };
+  const selected = reads.map(reference => selectRustNativeFlowMembers(context, reference, carrier,
+    { definitionForCarrier: () => undefined }, definitions, () => undefined, () => undefined)?.map(member => member.carrier));
+  assert.deepEqual(selected, [carriers.slice(0, 3), carriers.slice(0, 3), carriers.slice(2)]);
 });

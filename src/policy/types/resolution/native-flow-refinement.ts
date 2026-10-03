@@ -26,6 +26,7 @@ export function selectRustNativeFlowMembers(
 }
 
 type Predicate = RustClosedTypePredicate | { readonly kind: "typeof"; readonly value: string; readonly negated: boolean }
+  | Extract<SourceNativeValueGuard, { readonly kind: "literal" }>
   | { readonly kind: "absence"; readonly negated: boolean };
 
 export function selectRustNativeGuardResult(
@@ -76,6 +77,7 @@ function selectNativeGuard(
   const native = selectSourceNativeValueGuard(context, expression);
   if (native?.kind === "absence") return { sourceOperand: native.sourceOperand, predicate: native };
   if (native?.kind === "typeof") return { sourceOperand: native.sourceOperand, predicate: native };
+  if (native?.kind === "literal") return { sourceOperand: native.sourceOperand, predicate: native };
   if (native?.kind === "nominal") {
     const targetCarrier = resolveNominal(native);
     if (targetCarrier !== undefined) return { sourceOperand: native.sourceOperand, predicate: { kind: "nominal", targetCarrier } };
@@ -96,6 +98,13 @@ function testNativeCarrier(
   if (predicate.kind === "typeof") {
     const category = getRustTypeofRuntimeKind(carrier, definitions);
     return typeof category === "string" ? (category === predicate.value) !== predicate.negated : undefined;
+  }
+  if (predicate.kind === "literal") {
+    if (isRustAbsenceCarrier(carrier)) return predicate.negated;
+    const category = getRustTypeofRuntimeKind(carrier, definitions);
+    const numeric = (category === "number" || category === "bigint") &&
+      (predicate.category === "number" || predicate.category === "bigint");
+    return typeof category !== "string" || category === predicate.category || numeric ? undefined : predicate.negated;
   }
   const test = selectRustClosedTypeTestPlan(carrier, predicate, projectTypes, definitions);
   return test?.kind === "constant" ? test.value
