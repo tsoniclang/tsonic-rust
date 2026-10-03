@@ -601,14 +601,16 @@ export function main(): void {
   assert.match(selfAppendOutput, /format!\("\{\}\{\}"/u);
   assert.doesNotMatch(appendOutput, /output\.clone\(\)\s*\}/u);
   assert.doesNotMatch(combineOutput, /Ok\(output\.clone\(\)\)/u);
+  assert.match(combineOutput, /\.borrow_number_element\(/u);
+  assert.doesNotMatch(combineOutput, /get_number|\.clone\(\)|iter_cloned/u);
   assert.doesNotMatch(selfAppendOutput, /value\.clone\(\)\s*\}/u);
   assert.match(
     combineOutput,
-    /for index in 0\.\.values\.len\(\)/u,
+    /for index in 0(?:_usize)?\.\.values\.len\(\)/u,
   );
   assert.match(
     mapOutput,
-    /for index in 0\.\.values\.len\(\)/u,
+    /for index in 0(?:_usize)?\.\.values\.len\(\)/u,
   );
   assert.match(
     scalarOutput,
