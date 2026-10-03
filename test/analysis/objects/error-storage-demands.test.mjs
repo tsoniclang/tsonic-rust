@@ -203,6 +203,42 @@ for (const jsEnabled of [false, true]) {
     assert.equal(demand.invalidationFor(owner, calls.get("invoke"), new Set()).kind, "invalidated");
     assert.equal(demand.invalidationFor(owner, calls.get("opaque"), new Set([calls.get("opaque")])).kind, "preserved");
   });
+  test(`Error invalidation retains eager class regions and skips deferred work in ${profile}`, () => {
+    const { source, projectFiles, demand } = analyzed({ "index.ts": `
+      export function run(): void {
+        const original = new Error("original");
+        function write(): "value" { original.message = "changed"; return "value"; }
+        class DeferredField { value = write(); }
+        class DeferredMethod { value(): string { return write(); } }
+        class DeferredConstructor { constructor(value = write()) {} }
+        class ComputedMethod { [write()](): void {} }
+        class ComputedGetter { get [write()](): string { return "unused"; } }
+        class ComputedSetter { set [write()](value: string) {} }
+        class StaticField { static value = write(); }
+        class StaticBlock { static { write(); } }
+        class Base {}
+        function base(): typeof Base { write(); return Base; }
+        class Derived extends base() {}
+        const expression = class { [write()](): void {} };
+      }` }, jsEnabled);
+    const owner = declarations(source, projectFiles).find(node => source.ast.text(source.ast.name(node)) === "original");
+    assert.equal(owner !== undefined, true, "exact original Error owner exists");
+    const selected = new Map();
+    const visit = node => {
+      if (source.ast.is.IsClassDeclaration(node)) selected.set(source.ast.text(source.ast.name(node)), node);
+      if (source.ast.is.IsClassExpression(node)) selected.set("expression", node);
+      source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    projectFiles.forEach(visit);
+    for (const name of ["DeferredField", "DeferredMethod", "DeferredConstructor", "Base"]) {
+      assert.equal(selected.has(name), true, name);
+      assert.equal(demand.invalidationFor(owner, selected.get(name), new Set()).kind, "preserved", name);
+    }
+    for (const name of ["ComputedMethod", "ComputedGetter", "ComputedSetter", "StaticField", "StaticBlock", "Derived", "expression"]) {
+      assert.equal(selected.has(name), true, name);
+      assert.equal(demand.invalidationFor(owner, selected.get(name), new Set()).kind, "invalidated", name);
+    }
+  });
 }
 
 test("captured stack invalidation tracks only the exact receiver and never closure construction", () => {

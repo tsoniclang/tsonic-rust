@@ -1,5 +1,5 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
-import { IsTypeSyntaxNode, Node_Expression, Node_Initializer, VariableDeclarationList_Declarations,
+import { forEachSourceImmediateEvaluationChild, IsTypeSyntaxNode, Node_Expression, Node_Initializer, VariableDeclarationList_Declarations,
   VariableStatement_DeclarationList, type TargetSourceProgram } from "@tsonic/target-api/source";
 import { resolveRustSourceErrorDeclaration } from "../../policy/types/external-project-types.js";
 import type { RustSourceProfileRegistry } from "../../policy/types/source-profile.js";
@@ -378,9 +378,6 @@ export function createRustErrorStorageDemandQuery(
         if (affected === undefined) return Object.freeze({ kind: "unresolved", reason: "An Error borrow invalidation has no exact original storage." });
         if ([...affected].some(subject => sourceOwners.has(subject))) return Object.freeze({ kind: "invalidated" });
       }
-      if (ast.is.IsArrowFunction(node) || ast.is.IsFunctionExpression(node) || ast.is.IsFunctionDeclaration(node) ||
-        ast.is.IsClassDeclaration(node) || ast.is.IsClassExpression(node) || ast.is.IsMethodDeclaration(node) ||
-        ast.is.IsConstructorDeclaration(node) || ast.is.IsGetAccessorDeclaration(node) || ast.is.IsSetAccessorDeclaration(node)) continue;
       if ((ast.is.IsCallExpression(node) || ast.is.IsNewExpression(node)) && !pureInvocations.has(node) &&
         !nativeSubjects.has(node) && !capturedStackTargets.has(node)) {
         const target = invocationTargets.get(node);
@@ -404,7 +401,7 @@ export function createRustErrorStorageDemandQuery(
           }
         }
       }
-      ast.forEachChild(node, child => { if (child !== undefined && !IsTypeSyntaxNode(ast, child)) pending.push(child); });
+      forEachSourceImmediateEvaluationChild(ast, node, child => pending.push(child));
     }
     return unresolved === undefined ? Object.freeze({ kind: "preserved" }) : Object.freeze({ kind: "unresolved", reason: unresolved });
   };

@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import { Node_Expression } from "@tsonic/target-api/source";
+import { forEachSourceImmediateEvaluationChild, Node_Expression } from "@tsonic/target-api/source";
 import { rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
 import { rustBorrowPureOperation } from "../../../analysis/program/borrowed-element-purity.js";
 import { rustJsErrorTargetType } from "../../../target-model/types/index.js";
@@ -42,7 +42,7 @@ export function rustErrorFieldBorrowNeedsSnapshot(
     while (pending.length !== 0) {
       const selected = pending.pop()!;
       if (rustBorrowPureOperation(selected, context.input.program.facts) !== undefined) pureInvocations.add(selected);
-      context.input.program.source.ast.forEachChild(selected, child => { if (child !== undefined) pending.push(child); });
+      forEachSourceImmediateEvaluationChild(context.input.program.source.ast, selected, child => pending.push(child));
     }
     const result = context.input.program.errorStorageDemands.invalidationFor(owner, expression, pureInvocations);
     if (result.kind === "unresolved") context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, expression),
