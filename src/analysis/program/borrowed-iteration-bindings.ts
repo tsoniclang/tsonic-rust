@@ -9,7 +9,7 @@ import { rustEffectiveValueCarrier } from "../facts/value-carrier-queries.js";
 import { isRustStringCarrier } from "../../target-model/types/index.js";
 import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 import type { RustTargetProgram } from "./model.js";
-import { rustBorrowedStringInputs, rustBorrowPureOperation } from "./borrowed-element-purity.js";
+import { rustBorrowedStringAppend, rustBorrowedStringInputs, rustBorrowPureOperation } from "./borrowed-element-purity.js";
 
 export interface RustBorrowedIterationBinding {
   readonly declaration: Node;
@@ -49,7 +49,7 @@ export function selectRustBorrowedIterationBinding(
       parent = ast.parent(current);
     }
     if (parent === undefined) return false;
-    if (isStringAppend(parent)) return BinaryExpression_Right(ast, parent) === current;
+    if (rustBorrowedStringAppend(parent, ast, facts)) return BinaryExpression_Right(ast, parent) === current;
     const call = ast.parent(parent);
     if (ast.is.IsPropertyAccessExpression(parent) && call !== undefined && ast.is.IsCallExpression(call) &&
       Node_Expression(ast, call) === parent) parent = call;
@@ -60,16 +60,6 @@ export function selectRustBorrowedIterationBinding(
   function transparent(expression: Node): boolean {
     return ast.is.IsParenthesizedExpression(expression) || ast.is.IsAsExpression(expression) ||
       ast.is.IsTypeAssertion(expression) || ast.is.IsSatisfiesExpression(expression);
-  }
-
-  function isStringAppend(expression: Node): boolean {
-    const operation = facts.getFact(expression, rustTargetOperationFactKey);
-    const left = BinaryExpression_Left(ast, expression);
-    return operation?.kind === "operator-token" && operation.operator === "+=" &&
-      isRustStringCarrier(operation.resultCarrier) &&
-      (operation.writeStrategy === "in-place-string-append-parts" || operation.writeStrategy === "in-place-string-append-value") &&
-      left !== undefined && ast.is.IsIdentifier(left) &&
-      isRustStringCarrier(rustEffectiveValueCarrier(facts, left));
   }
 
   function pureExpression(expression: Node | undefined): boolean {
@@ -101,7 +91,7 @@ export function selectRustBorrowedIterationBinding(
       case "KindBlock": return ast.statements(statement).every(child => child !== undefined && safeStatement(child));
       case "KindExpressionStatement": {
         const expression = Node_Expression(ast, statement);
-        return expression !== undefined && (isStringAppend(expression)
+        return expression !== undefined && (rustBorrowedStringAppend(expression, ast, facts)
           ? pureExpression(BinaryExpression_Right(ast, expression)) : pureExpression(expression));
       }
       case "KindIfStatement": {

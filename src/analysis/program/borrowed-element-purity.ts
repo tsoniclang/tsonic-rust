@@ -1,5 +1,5 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import { ElementAccessExpression_ArgumentExpression, Node_Expression } from "@tsonic/target-api/source";
+import { BinaryExpression_Left, ElementAccessExpression_ArgumentExpression, Node_Expression } from "@tsonic/target-api/source";
 import { rustTargetOperationFactKey, type RustTargetOperationFact } from "../facts/keys.js";
 import { isRustStringCarrier } from "../../target-model/types/index.js";
 import type { RustTargetProgram } from "./model.js";
@@ -28,7 +28,21 @@ export function rustBorrowedElementRead(
     indexed.abi.result.kind === "sync" &&
     indexed.abi.effects.invocation === "infallible" && indexed.abi.effects.safety === "safe" &&
     isRustStringCarrier(indexed.sourceResultCarrier) && array !== undefined && index !== undefined
-    ? Object.freeze({ receiver, array, index, method: indexed.borrowedIndexOperation.method }) : undefined;
+    ? Object.freeze({ receiver, element, array, index, method: indexed.borrowedIndexOperation.method }) : undefined;
+}
+
+export function rustBorrowedStringAppend(
+  expression: Node,
+  ast: AstReader,
+  facts: RustTargetProgram["facts"],
+): boolean {
+  const operation = facts.getFact(expression, rustTargetOperationFactKey);
+  const left = BinaryExpression_Left(ast, expression);
+  return operation?.kind === "operator-token" && operation.operator === "+=" &&
+    isRustStringCarrier(operation.resultCarrier) &&
+    (operation.writeStrategy === "in-place-string-append-parts" || operation.writeStrategy === "in-place-string-append-value") &&
+    left !== undefined && ast.is.IsIdentifier(left) &&
+    isRustStringCarrier(rustEffectiveValueCarrier(facts, left));
 }
 
 export function rustBorrowPureOperation(node: Node, facts: RustTargetProgram["facts"]): ProviderOperation | undefined {

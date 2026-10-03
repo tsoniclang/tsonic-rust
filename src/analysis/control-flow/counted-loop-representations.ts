@@ -28,6 +28,7 @@ import { rustIntegerKindIsExactlyRepresentableAsFloat64 } from "../../target-mod
 import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustBorrowedElementReads } from "../program/borrowed-element-reads.js";
 
 export type RustCountedLoopRepresentation =
   | {
@@ -56,6 +57,7 @@ interface RustCountedLoopAnalysisContext {
   readonly ast: AstReader;
   readonly navigation: SourceProgramNavigation;
   readonly facts: RustPlanQueries;
+  readonly borrowedElementReads: RustBorrowedElementReads;
   readonly expressionStability: WeakMap<Node, boolean>;
   readonly bodyStability: WeakMap<Node, boolean>;
 }
@@ -65,12 +67,14 @@ export function analyzeRustCountedLoopRepresentations(input: {
   readonly sourceFiles: readonly SourceFile[];
   readonly navigation: SourceProgramNavigation;
   readonly facts: RustPlanQueries;
+  readonly borrowedElementReads: RustBorrowedElementReads;
 }): RustCountedLoopRepresentationPlan {
   const byStatement = new WeakMap<Node, RustCountedLoopRepresentation>();
   const context: RustCountedLoopAnalysisContext = {
     ast: input.ast,
     navigation: input.navigation,
     facts: input.facts,
+    borrowedElementReads: input.borrowedElementReads,
     expressionStability: new WeakMap(),
     bodyStability: new WeakMap(),
   };
@@ -301,11 +305,7 @@ function isIndependentBindingWrite(
 
 function directEvaluationMayChangeBound(
   node: Node,
-  input: {
-    readonly ast: AstReader;
-    readonly navigation: SourceProgramNavigation;
-    readonly facts: RustPlanQueries;
-  },
+  input: RustCountedLoopAnalysisContext,
 ): boolean {
   const kind = input.ast.kindName(node);
   if (input.ast.is.IsAwaitExpression(node) || input.ast.is.IsYieldExpression(node) ||
@@ -317,7 +317,7 @@ function directEvaluationMayChangeBound(
   if (input.ast.is.IsCallExpression(node) || input.ast.is.IsNewExpression(node) ||
     input.ast.is.IsPropertyAccessExpression(node) ||
     input.ast.is.IsElementAccessExpression(node)) {
-    return !operationEvaluationIsPure(node, input.facts);
+    return !operationEvaluationIsPure(node, input);
   }
   const effects = input.navigation.expressionEffects(node);
   if (!effects.invokes) {
@@ -328,7 +328,7 @@ function directEvaluationMayChangeBound(
     input.ast.is.IsPostfixUnaryExpression(node)) {
     const fact = input.facts.getFact(node, rustTargetOperationFactKey);
     return fact?.kind !== "operator-token" && fact?.kind !== "string-concat" &&
-      !operationEvaluationIsPure(node, input.facts);
+      !operationEvaluationIsPure(node, input);
   }
   return false;
 }
@@ -353,11 +353,7 @@ function referencedRuntimeBindingDeclaration(
 
 function expressionEvaluationIsStable(
   expression: Node,
-  input: {
-    readonly ast: AstReader;
-    readonly navigation: SourceProgramNavigation;
-    readonly facts: RustPlanQueries;
-  },
+  input: RustCountedLoopAnalysisContext,
   cache: WeakMap<Node, boolean>,
 ): boolean {
   const cached = cache.get(expression);
@@ -373,7 +369,7 @@ function expressionEvaluationIsStable(
     cache.set(expression, true);
     return true;
   }
-  if (!operationEvaluationIsPure(expression, input.facts)) {
+  if (!operationEvaluationIsPure(expression, input)) {
     cache.set(expression, false);
     return false;
   }
@@ -390,10 +386,7 @@ function expressionEvaluationIsStable(
 
 function bodyUseMayChangeState(
   use: SourceDeclarationUse,
-  input: {
-    readonly ast: AstReader;
-    readonly facts: RustPlanQueries;
-  },
+  input: RustCountedLoopAnalysisContext,
 ): boolean {
   if (use.captured) {
     return true;
@@ -401,7 +394,7 @@ function bodyUseMayChangeState(
   if (use.throughMember) {
     const operation = receiverOperationForReference(use.reference, input.ast);
     return operation === undefined ||
-      !operationEvaluationIsPure(operation, input.facts);
+      !operationEvaluationIsPure(operation, input);
   }
   switch (use.role) {
     case "argument":
@@ -431,9 +424,10 @@ function declarationIdentityMayBeAliased(
 
 function operationEvaluationIsPure(
   operation: Node,
-  facts: RustPlanQueries,
+  input: RustCountedLoopAnalysisContext,
 ): boolean {
-  const fact = facts.getFact(operation, rustTargetOperationFactKey);
+  if (input.borrowedElementReads.forRead(operation) !== undefined) return true;
+  const fact = input.facts.getFact(operation, rustTargetOperationFactKey);
   return fact?.kind === "provider-operation" &&
     fact.abi.effects.evaluation === "pure";
 }
