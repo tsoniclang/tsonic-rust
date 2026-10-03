@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createCompilerSessionFromFiles } from "@tsonic/tsts";
+import { createCompilerSessionFromFiles, formatDiagnostics } from "@tsonic/tsts";
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { collectTargetSourceProfileContributions } from "../../../../tsonic/packages/host/dist/target/source-profile.js";
 import { createRustErrorStorageDemandQuery } from "../../../dist/analysis/objects/error-storage-demands.js";
@@ -17,7 +17,8 @@ function analyzed(files, jsEnabled) {
   const checked = createCompilerSessionFromFiles({ currentDirectory: "/src",
     files: new Map([...Object.entries(files).map(([name, text]) => [`/src/${name}`, text]), ...profile.files.map(file => [file.path, file.text])]),
     compilerOptions: { noLib: true, strict: true, skipLibCheck: true, module: "esnext", moduleResolution: "bundler", target: "es2022" } }).checkSource();
-  assert.deepEqual(checked.diagnostics, []);
+  assert.equal(checked.diagnostics.length, 0,
+    formatDiagnostics(checked.diagnostics.filter(diagnostic => diagnostic !== undefined), "/src"));
   const source = createTargetSourceProgram(checked);
   const projectFiles = source.sourceFiles.filter(file => Object.keys(files).some(name => source.ast.getFileName(file) === `/src/${name}`));
   const profiles = createRustSourceProfileRegistry(source.sourceFiles, source.ast, jsEnabled);
@@ -55,7 +56,11 @@ for (const jsEnabled of [false, true]) {
     assert.equal(demand.fieldWrites.length, 3);
     const selected = demand.storageFor(demand.nativeConstructors[0]);
     assert.equal(selected.kind, "writable");
-    assert.deepEqual(new Set(selected.writes), new Set(demand.fieldWrites));
+    const selectedWrites = new Set(selected.writes);
+    const expectedWrites = new Set(demand.fieldWrites);
+    assert.equal(selectedWrites.size, expectedWrites.size);
+    assert.equal([...selectedWrites].every(write => expectedWrites.has(write)), true,
+      "selected writes retain every exact source node identity");
   });
 
   test(`native Error write demand is instance-specific rather than a blanket constructor switch in ${profile}`, () => {
@@ -76,7 +81,7 @@ for (const jsEnabled of [false, true]) {
     assert.equal(source.navigation.expressionValueFlow(origin).passedAsArgument, true);
     const parameter = declarations(source, projectFiles).find(node => source.ast.is.IsParameterDeclaration(node)
       && source.ast.text(source.ast.name(node)) === "error");
-    assert.ok(parameter);
+    assert.equal(parameter !== undefined, true, "selected Error parameter exists");
     assert.equal(source.navigation.declarationUseSummary(parameter).memberWritten, true);
     assert.equal(demand.storageFor(parameter).kind, "writable");
     assert.equal(demand.storageFor(origin).kind, "writable");
@@ -96,7 +101,7 @@ for (const jsEnabled of [false, true]) {
     assert.equal(demand.storageFor(demand.nativeConstructors[0]).kind, "writable");
     const parameter = declarations(source, projectFiles).find(node => source.ast.is.IsParameterDeclaration(node)
       && source.ast.text(source.ast.name(node)) === "error");
-    assert.ok(parameter);
+    assert.equal(parameter !== undefined, true, "selected Error field parameter exists");
     assert.equal(demand.storageFor(parameter).kind, "writable");
   });
 
@@ -188,7 +193,7 @@ for (const jsEnabled of [false, true]) {
       source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
     };
     projectFiles.forEach(visit);
-    assert.ok(owner);
+    assert.equal(owner !== undefined, true, "exact original Error owner exists");
     assert.equal(demand.invalidationFor(owner, calls.get("same"), new Set()).kind, "invalidated");
     assert.equal(demand.invalidationFor(owner, calls.get("other"), new Set()).kind, "preserved");
     assert.equal(demand.invalidationFor(owner, calls.get("read"), new Set()).kind, "preserved");

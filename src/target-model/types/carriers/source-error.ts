@@ -9,8 +9,8 @@ export function rustSourceErrorTargetType(): TargetTypeRef {
 }
 
 export function isRustSourceErrorCarrier(carrier: TargetTypeRef | undefined): boolean {
-  return carrier?.kind === "target-named" &&
-    (carrier.id === rustSourceErrorTargetId || carrier.id === rustWritableSourceErrorTargetId);
+  const identity = nativeErrorIdentity(carrier);
+  return identity === rustSourceErrorTargetId || identity === rustWritableSourceErrorTargetId;
 }
 
 export function rustWritableSourceErrorTargetType(): TargetTypeRef {
@@ -18,7 +18,7 @@ export function rustWritableSourceErrorTargetType(): TargetTypeRef {
 }
 
 export function isRustWritableSourceErrorCarrier(carrier: TargetTypeRef | undefined): boolean {
-  return carrier?.kind === "target-named" && carrier.id === rustWritableSourceErrorTargetId;
+  return nativeErrorIdentity(carrier) === rustWritableSourceErrorTargetId;
 }
 
 export function rustMutableJsErrorTargetType(): TargetTypeRef {
@@ -26,5 +26,9 @@ export function rustMutableJsErrorTargetType(): TargetTypeRef {
 }
 
 export function isRustMutableJsErrorCarrier(carrier: TargetTypeRef | undefined): boolean {
-  return carrier?.kind === "target-named" && carrier.id === rustMutableJsErrorTargetId;
+  return nativeErrorIdentity(carrier) === rustMutableJsErrorTargetId;
+}
+
+function nativeErrorIdentity(carrier: TargetTypeRef | undefined): string | undefined {
+  return carrier?.kind === "target-named" && (carrier.genericArguments?.length ?? 0) === 0 ? carrier.id : undefined;
 }

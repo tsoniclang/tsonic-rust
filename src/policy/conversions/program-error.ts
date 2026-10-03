@@ -5,7 +5,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectRustRuntimeErrorBoundary, type RustProgramErrorConversion, type RustProgramErrorRoute } from "../../target-model/conversions/program-error.js";
 import { rustUnionLeaves } from "../../target-model/types/union-relations.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
-import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustWritableSourceErrorCarrier } from "../../target-model/types/carriers/source-error.js";
+import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustWritableSourceErrorCarrier, rustWritableSourceErrorTargetType } from "../../target-model/types/carriers/source-error.js";
 
 export function selectRustProgramErrorConversion(
   source: TargetTypeRef,
@@ -39,4 +39,22 @@ export function selectRustProgramErrorConversion(
   };
   const route = selectRoute(source);
   return route === undefined ? undefined : Object.freeze({ kind: "program-error", source, target, route });
+}
+
+export function rustWritableErrorRecoveryOriginMatches(
+  source: TargetTypeRef,
+  projectTypes: RustProjectTypePolicy,
+  providerErrorCarriers: readonly TargetTypeRef[] = [],
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
+): boolean {
+  const writable = rustWritableSourceErrorTargetType();
+  if (rustTargetTypeRefEquals(source, writable) ||
+    selectRustProgramErrorConversion(source, projectTypes, providerErrorCarriers, definitions, writable) !== undefined) return true;
+  const transport = selectRustProgramErrorConversion(source, projectTypes, providerErrorCarriers, definitions);
+  if (transport?.route.kind === "project") {
+    const definition = projectTypes.definitionForCarrier(source);
+    return definition !== undefined && !projectTypes.sourceErrorDefinitions.includes(definition);
+  }
+  return transport?.route.kind === "union" && transport.route.arms.every(arm =>
+    rustWritableErrorRecoveryOriginMatches(arm.carrier, projectTypes, providerErrorCarriers, definitions));
 }

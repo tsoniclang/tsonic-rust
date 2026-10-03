@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
-import { liveErrorBaseWriteSource, liveErrorStorageFiles } from "../../../../tsonic/test/fixtures/live-error-storage.mjs";
+import { liveErrorBaseWriteSource, liveErrorMixedRecoverySource, liveErrorStorageFiles } from "../../../../tsonic/test/fixtures/live-error-storage.mjs";
 import { errorBorrowEffectsSource, errorStackRecaptureSource } from "../../fixtures/error-effect-captures.mjs";
 
 for (const surfaces of [[], ["js"]]) {
@@ -37,10 +37,20 @@ for (const surfaces of [[], ["js"]]) {
           if (caught instanceof Error) caught.message = "changed";
         }
       }` } });
-    assert.ok(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_ERROR_WRITABLE_ORIGIN_MISSING"),
-      JSON.stringify(result.diagnostics));
+    assert.equal(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_ERROR_WRITABLE_ORIGIN_MISSING"), true,
+      result.diagnostics.map(diagnostic => diagnostic.code).join(", "));
     assert.deepEqual(result.artifacts, []);
   });
+
+  for (const projectError of [false, true]) {
+    test(`sealed non-Error thrown variants do not poison writable ${projectError ? "project" : "native"} Error recovery in ${profile}`, () => {
+      const { result } = compileRust({ surfaces, files: { "index.ts": liveErrorMixedRecoverySource(projectError) } });
+      assert.deepEqual(result.diagnostics, []);
+      const source = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
+      assert.match(source, /WritableErrorObject::set_error_message/);
+      assert.match(source, /ErrorTransport::Unrelated\(_\) => None/);
+    });
+  }
 
   test(`sealed Error base values retain exact admitted subclass tests in ${profile}`, () => {
     const { result } = compileRust({ surfaces, files: { "index.ts": `

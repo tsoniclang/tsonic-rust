@@ -143,13 +143,14 @@ export function fail(error: Error): void { throw error; }
   const { ast } = program.source;
   const declarations = program.source.sourceFiles.flatMap(file => ast.statements(file));
   const declaration = declarations.find(node => ast.text(ast.name(node)) === "fail");
-  assert.ok(declaration);
+  assert.equal(declaration !== undefined, true, "selected source function declaration exists");
   const statement = ast.statements(ast.body(declaration))[0];
   const fact = program.facts.getFact(statement, rustTargetOperationFactKey);
   assert.equal(fact.kind, "throw-op");
   assert.equal(fact.error.kind, "conversion");
   assert.deepEqual(fact.error.conversion.route, { kind: "runtime", boundary: "target-runtime" });
-  assert.equal(fact.error.expression, Node_Expression(ast, statement));
+  assert.equal(fact.error.expression === Node_Expression(ast, statement), true,
+    "throw facts retain the exact original source expression");
   assert.deepEqual(fact.error.conversion.source, rustJsErrorTargetType());
   assert.ok(Object.isFrozen(fact));
   for (const [error, message] of [
