@@ -165,12 +165,15 @@ test("canonical nominal union emission moves owned fields and borrows views with
     assert.equal(planned.arms.length, 2);
     const upcast = planned.arms[1].expression.args[0];
     assert.equal(upcast.kind, "block");
-    assert.equal(upcast.bindings.length, 1);
-    assert.equal(upcast.bindings[0].value.kind, "path");
-    assert.equal(upcast.value.kind, "struct-literal");
-    assert.equal(upcast.value.path, "Base");
-    assert.deepEqual(upcast.value.fields.map(field => field.name), ["identity", "dispatch"]);
-    for (const field of upcast.value.fields) {
+    assert.equal(upcast.body.statements.length, 2);
+    assert.equal(upcast.body.statements[0].kind, "let");
+    assert.equal(upcast.body.statements[0].init.kind, "path");
+    assert.equal(upcast.body.statements[1].kind, "tail");
+    const constructed = upcast.body.statements[1].expr;
+    assert.equal(constructed.kind, "struct-literal");
+    assert.equal(constructed.path, "Base");
+    assert.deepEqual(constructed.fields.map(field => field.name), ["identity", "dispatch"]);
+    for (const field of constructed.fields) {
       assert.equal(field.value.kind, owned ? "field" : "method-call");
       if (!owned) assert.equal(field.value.method, "clone");
     }
