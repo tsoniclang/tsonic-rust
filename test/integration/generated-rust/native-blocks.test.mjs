@@ -22,6 +22,13 @@ test("canonical native blocks retain early result returns and direct branch loop
     { kind: "function", name: "choose", visibility: "public", generics: emptyRustGenerics,
       params: [{ name: "input", type: optionType }], returnType: { kind: "named", path: "Result",
         genericArguments: [{ kind: "type", type: intType }, { kind: "type", type: intType }] }, body },
+    { kind: "function", name: "discard", visibility: "public", generics: emptyRustGenerics,
+      params: [{ name: "input", type: optionType }], body: { statements: [
+        { kind: "expr", expr: { ...branch,
+          whenTrue: { kind: "call", path: "identity", args: [path("present")] },
+          whenFalse: { kind: "call", path: "identity", args: [integer(0)] } } },
+        { kind: "tail", expr: { kind: "tuple-literal", elements: [] } },
+      ] } },
     { kind: "function", name: "sum", visibility: "public", generics: emptyRustGenerics, params: [], returnType: intType,
       body: { statements: [
         { kind: "let", name: "result", mutable: true, init: integer(0) },
@@ -38,7 +45,7 @@ test("canonical native blocks retain early result returns and direct branch loop
   assert.doesNotMatch(source, /\|\||if-let-some|allow\(/u);
   const project = writeGeneratedProject("canonical-native-blocks", [
     { path: "Cargo.toml", text: '[package]\nname = "canonical_native_blocks"\nversion = "0.0.0"\nedition = "2024"\n[workspace]\n' },
-    { path: "src/lib.rs", text: `${source}\nfn identity(value: i32) -> i32 { value }\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn direct_flow() {\n        assert_eq!(super::choose(Some(7)), Ok(7));\n        assert_eq!(super::choose(None), Ok(99));\n        assert_eq!(super::sum(), 3);\n    }\n}\n` },
+    { path: "src/lib.rs", text: `${source}\nfn identity(value: i32) -> i32 { value }\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn direct_flow() {\n        assert_eq!(super::choose(Some(7)), Ok(7));\n        assert_eq!(super::choose(None), Ok(99));\n        assert_eq!(super::sum(), 3);\n        super::discard(Some(7));\n        super::discard(None);\n    }\n}\n` },
   ]);
   runCargo(project, ["generate-lockfile", "--offline"]);
   runCargo(project, ["fmt", "--all"]);
