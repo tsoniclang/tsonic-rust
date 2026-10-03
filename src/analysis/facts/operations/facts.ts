@@ -17,6 +17,13 @@ import type {
 
 export type RustTargetOperationFact =
   | {
+      readonly kind: "sequence";
+      readonly operationId: string;
+      readonly leftCarrier: TargetTypeRef;
+      readonly rightCarrier: TargetTypeRef;
+      readonly resultCarrier: TargetTypeRef;
+    }
+  | {
       readonly kind: "union-property";
       readonly operationId: string;
       readonly unionCarrier: TargetTypeRef;
@@ -799,6 +806,7 @@ export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact):
     case "operator-token":
     case "union-equality":
     case "operator-call":
+    case "sequence":
     case "string-concat":
     case "template-string":
     case "typeof":

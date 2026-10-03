@@ -369,6 +369,7 @@ export function hasSelectedRuntimeCallableUse(walk: RustFactWalk, node: Node): b
 
 function rustOperatorText(kind: string | undefined): string | undefined {
   const operators: Readonly<Record<string, string>> = {
+    KindCommaToken: ",",
     KindEqualsToken: "=",
     KindPlusToken: "+",
     KindMinusToken: "-",

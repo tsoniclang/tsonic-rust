@@ -84,6 +84,11 @@ export function rustFoundationForTargetOperationFact(
     case "nullish-identity":
       requireCarrier(fact.resultCarrier);
       break;
+    case "sequence":
+      requireCarrier(fact.leftCarrier);
+      requireCarrier(fact.rightCarrier);
+      requireCarrier(fact.resultCarrier);
+      break;
     case "template-string":
       requireCarrier(fact.resultCarrier);
       fact.substitutions.forEach((substitution) => requireCarrier(substitution.carrier));

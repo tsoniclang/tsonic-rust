@@ -72,7 +72,7 @@ export function rustTargetOperationText(fact: RustTargetOperationFact): string {
   if (fact.kind === "string-concat") {
     return "+";
   }
-  if (fact.kind === "conditional" || fact.kind === "identity-expression" ||
+  if (fact.kind === "sequence" || fact.kind === "conditional" || fact.kind === "identity-expression" ||
     fact.kind === "non-null-expression" ||
     fact.kind === "template-string" || fact.kind === "typeof" ||
     fact.kind === "void-expression") {

@@ -6,6 +6,7 @@ import {
   isRustBoolCarrier,
   isRustStringCarrier,
   isRustUnitCarrier,
+  isRustNeverCarrier,
   rustOptionElementCarrier,
   rustSourcePrimitiveTargetType,
 } from "../../../target-model/types/index.js";
@@ -27,6 +28,7 @@ import { foldRustIntegerComparison } from "../../target-ast/integer-comparisons.
 import { planRustNativeZeroComparison } from "./native-zero-comparisons.js";
 import { planRustNativeIntegerIdentity } from "./native-integer-identities.js";
 import { planExpression, planExpressionBeforeValueProjections } from "./entry.js";
+import { planRustDiscardedValue } from "./discarded-values.js";
 import type { RustExpressionResultUse } from "./entry.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
 import { planNullishAssignment } from "./nullish-assignment.js";
@@ -104,6 +106,26 @@ export function planSelectedRustProjectTypeTest(
 
 export function planBinaryExpression(node: Node, context: RustPlanContext, resultUse: RustExpressionResultUse = "value"): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
+  if (fact?.kind === "sequence") {
+    const leftNode = BinaryExpression_Left(context.input.program.source.ast, node);
+    const rightNode = BinaryExpression_Right(context.input.program.source.ast, node);
+    if (leftNode === undefined || rightNode === undefined ||
+      !rustTargetTypeRefEquals(effectivePlannedExpressionCarrier(leftNode, context), fact.leftCarrier) ||
+      !rustTargetTypeRefEquals(effectivePlannedExpressionCarrier(rightNode, context), fact.rightCarrier) ||
+      !rustTargetTypeRefEquals(fact.rightCarrier, fact.resultCarrier) ||
+      !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.sequence-carrier") ||
+      !selectedOperationMatches(context.input.program.facts.getSelectedTargetOperator(node),
+        fact.operationId, "operator", fact.resultCarrier, fact.operationId)) {
+      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+        "rust.backend.sequence-evidence", "Sequencing requires exact finalized operand and result carriers."));
+      return undefined;
+    }
+    const left = planRustDiscardedValue(leftNode, context);
+    if (left === undefined || isRustNeverCarrier(fact.leftCarrier)) return left?.expression;
+    const right = planExpression(rightNode, context, resultUse);
+    return right === undefined ? undefined
+      : { kind: "evaluate-then", effect: left.expression, discard: left.discard, value: right };
+  }
   if (fact?.kind === "union-equality") return planRustUnionEquality(node, fact, context);
   if (fact?.kind === "closed-type-test") return planRustClosedTypeTest(node, fact, context);
   if ((fact?.kind === "operator-token" || fact?.kind === "operator-call") &&

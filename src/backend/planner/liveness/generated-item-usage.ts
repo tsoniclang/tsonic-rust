@@ -659,6 +659,7 @@ export function analyzeRustGeneratedItemUsage(input: {
         }
         return;
       case "string-concat":
+      case "sequence":
       case "conditional":
       case "template-string":
       case "typeof":

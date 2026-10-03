@@ -105,6 +105,15 @@ export function resolveBinaryOperandCarriers(
     return undefined;
   }
   let operatorKind = walk.context.ast.kindName(operatorToken);
+  if (operatorKind === "KindCommaToken") {
+    return {
+      left: resolveExpressionCarrier(walk, leftNode, sourceFile, undefined),
+      right: resolveExpressionCarrier(walk, rightNode, sourceFile, expected),
+      leftNode,
+      rightNode,
+      operatorKind,
+    };
+  }
   if (operatorKind === KindQuestionQuestionToken) {
     leftNode = rustUnparenthesizedExpression(walk.context.ast, leftNode);
     rightNode = rustUnparenthesizedExpression(walk.context.ast, rightNode);
@@ -393,7 +402,10 @@ export function resolvePostCheckBinaryCarrier(
   const unionEquality = strictEquality && left !== undefined && right !== undefined
     ? selectRustUnionEquality(left, right, walk.context.typeDefinitions) : undefined;
   let fact: RustTargetOperationFact | undefined;
-  if (errorEquality !== undefined) {
+  if (operatorKind === "KindCommaToken" && left !== undefined && right !== undefined) {
+    fact = { kind: "sequence", operationId: "tsonic.rust.expression.sequence",
+      leftCarrier: left, rightCarrier: right, resultCarrier: right };
+  } else if (errorEquality !== undefined) {
     fact = errorEquality;
   } else if (unionEquality !== undefined && left !== undefined && right !== undefined) {
     fact = { kind: "union-equality", operationId: "tsonic.rust.union.equality",
