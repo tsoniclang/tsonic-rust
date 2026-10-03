@@ -105,6 +105,7 @@ export function expressionIsStatementBlock(expression: RustExpr): boolean {
     expression.kind === "unsafe" ||
     expression.kind === "evaluate-then" ||
     expression.kind === "conditional" ||
+    expression.kind === "if-let" ||
     expression.kind === "match";
 }
 
@@ -113,6 +114,7 @@ function expressionIsRightHandBlock(expression: RustExpr): boolean {
     return expressionIsRightHandBlock(expression.expression);
   }
   return expression.kind === "conditional" ||
+    expression.kind === "if-let" ||
     expression.kind === "match" ||
     expression.kind === "block" ||
     expression.kind === "unsafe" ||

@@ -59,6 +59,13 @@ export function printRustExpr(expression: RustExpr): string {
         : `{ ${printConditionalArm(expression.whenFalse)} }`;
       return `if ${printRustExpr(expression.condition)} { ${printConditionalArm(expression.whenTrue)} } else ${alternative}`;
     }
+    case "if-let": {
+      const consequent = `if let ${printRustPattern(expression.pattern)} = ${printRustExpr(expression.expression)} { ${printConditionalArm(expression.whenTrue)} }`;
+      if (expression.whenFalse === undefined) return consequent;
+      const alternative = expression.whenFalse.kind === "conditional" || expression.whenFalse.kind === "if-let"
+        ? printRustExpr(expression.whenFalse) : `{ ${printConditionalArm(expression.whenFalse)} }`;
+      return `${consequent} else ${alternative}`;
+    }
     case "match":
       return printRustMatchExpression(expression);
     case "matches":

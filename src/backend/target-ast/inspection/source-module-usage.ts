@@ -354,6 +354,11 @@ function rustExpressionReferencesModuleAlias(expression: RustExpr, alias: string
         expression.arms.some((arm) =>
           rustPatternReferencesModuleAlias(arm.pattern, alias) ||
           rustExpressionReferencesModuleAlias(arm.expression, alias));
+    case "if-let":
+      return rustPatternReferencesModuleAlias(expression.pattern, alias) ||
+        rustExpressionReferencesModuleAlias(expression.expression, alias) ||
+        rustExpressionReferencesModuleAlias(expression.whenTrue, alias) ||
+        expression.whenFalse !== undefined && rustExpressionReferencesModuleAlias(expression.whenFalse, alias);
     case "matches":
       return rustExpressionReferencesModuleAlias(expression.expression, alias) ||
         rustPatternReferencesModuleAlias(expression.pattern, alias);

@@ -2,6 +2,7 @@ import type { RustExpr, RustStmt } from "../nodes.js";
 import {
   rustExpressionChildren,
   rustExpressionReferencesPath,
+  rustPatternBindsPath,
   rustStatementReferencesPath,
   rustStatementsReferencePath,
 } from "./source-usage.js";
@@ -112,6 +113,14 @@ function expressionHasUnobservedWrite(expression: RustExpr, path: string, refere
       expressionHasUnobservedWrite(expression.whenFalse, path, referencedAfter) ||
       expressionHasUnobservedWrite(expression.condition, path, referencedAfter ||
         rustExpressionReferencesPath(expression.whenTrue, path) || rustExpressionReferencesPath(expression.whenFalse, path));
+  }
+  if (expression.kind === "if-let") {
+    const shadowed = rustPatternBindsPath(expression.pattern, path);
+    return !shadowed && expressionHasUnobservedWrite(expression.whenTrue, path, referencedAfter) ||
+      expression.whenFalse !== undefined && expressionHasUnobservedWrite(expression.whenFalse, path, referencedAfter) ||
+      expressionHasUnobservedWrite(expression.expression, path, referencedAfter ||
+        !shadowed && rustExpressionReferencesPath(expression.whenTrue, path) ||
+        expression.whenFalse !== undefined && rustExpressionReferencesPath(expression.whenFalse, path));
   }
   if (expression.kind === "match") {
     return expression.arms.some(arm => expressionHasUnobservedWrite(arm.expression, path, referencedAfter)) ||
@@ -261,6 +270,9 @@ function maxWritesInExpression(expression: RustExpr, path: string): number {
         ),
     );
   }
+  if (expression.kind === "if-let") return cappedWriteCount(maxWritesInExpression(expression.expression, path) +
+    Math.max(rustPatternBindsPath(expression.pattern, path) ? 0 : maxWritesInExpression(expression.whenTrue, path),
+      expression.whenFalse === undefined ? 0 : maxWritesInExpression(expression.whenFalse, path)));
   if (expression.kind === "match") {
     return cappedWriteCount(
       maxWritesInExpression(expression.expression, path) +
@@ -490,6 +502,12 @@ function firstAccessesInExpression(
           firstAccessesInExpression(expression.whenFalse, path),
         ),
       );
+    case "if-let":
+      return replaceNone(firstAccessesInExpression(expression.expression, path), unionFirstAccesses(
+        rustPatternBindsPath(expression.pattern, path) ? new Set<FirstAccess>(["none"])
+          : firstAccessesInExpression(expression.whenTrue, path),
+        expression.whenFalse === undefined ? new Set<FirstAccess>(["none"])
+          : firstAccessesInExpression(expression.whenFalse, path)));
     case "match":
       return replaceNone(
         firstAccessesInExpression(expression.expression, path),

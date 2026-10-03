@@ -1,4 +1,4 @@
-import type { RustBlock, RustExpr, RustStmt } from "../nodes.js";
+import type { RustBlock, RustExpr, RustPattern, RustStmt } from "../nodes.js";
 
 export function rustBlockReferencesPath(block: RustBlock, path: string): boolean {
   return rustStatementsReferencePath(block.statements, path);
@@ -98,6 +98,9 @@ export function rustExpressionReferencesPath(expression: RustExpr, path: string)
       rustBlockReferencesPath(expression.body, path);
   }
   if (expression.kind === "async-block") return rustBlockReferencesPath(expression.body, path);
+  if (expression.kind === "if-let") return rustExpressionReferencesPath(expression.expression, path) ||
+    !rustPatternBindsPath(expression.pattern, path) && rustExpressionReferencesPath(expression.whenTrue, path) ||
+    expression.whenFalse !== undefined && rustExpressionReferencesPath(expression.whenFalse, path);
   if (expression.kind === "block") {
     for (const binding of expression.bindings) {
       if (binding.value !== undefined && rustExpressionReferencesPath(binding.value, path)) {
@@ -143,6 +146,8 @@ export function rustExpressionChildren(expression: RustExpr): readonly RustExpr[
       return [expression.start, expression.end];
     case "conditional":
       return [expression.condition, expression.whenTrue, expression.whenFalse];
+    case "if-let":
+      return [expression.expression, expression.whenTrue, ...(expression.whenFalse === undefined ? [] : [expression.whenFalse])];
     case "match":
       return [expression.expression, ...expression.arms.map((arm) => arm.expression)];
     case "matches":
@@ -194,5 +199,16 @@ export function rustExpressionChildren(expression: RustExpr): readonly RustExpr[
         ...expression.fields.map((field) => field.value),
         ...(expression.base === undefined ? [] : [expression.base]),
       ];
+  }
+}
+
+export function rustPatternBindsPath(pattern: RustPattern, path: string): boolean {
+  switch (pattern.kind) {
+    case "binding": return pattern.name === path;
+    case "tuple":
+    case "tuple-variant": return pattern.elements.some(element => rustPatternBindsPath(element, path));
+    case "or": return pattern.alternatives.some(alternative => rustPatternBindsPath(alternative, path));
+    case "path":
+    case "wildcard": return false;
   }
 }
