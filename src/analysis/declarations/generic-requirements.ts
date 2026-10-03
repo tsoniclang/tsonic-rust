@@ -37,7 +37,7 @@ import { normalizeRustGenericRequirements } from "./generic-requirement-contract
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 import { rustTypeFamilyNormalizer } from "../../policy/types/type-family-normalization.js";
 
-export type RustGenericRequirement = "clone" | "default" | "static" | "source-numeric";
+export type RustGenericRequirement = "clone" | "default" | "static" | "source-numeric" | "number-predicate";
 
 export interface RustDeclarationTypeParameterRequirements {
   readonly identity: string;

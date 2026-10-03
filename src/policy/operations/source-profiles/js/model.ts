@@ -33,7 +33,7 @@ export interface JsOperationRequest {
   ) => TargetTypeRef | undefined;
   readonly carrierSupportsProjectIdentity?: (carrier: TargetTypeRef) => boolean;
   readonly canRequireClone?: (carrier: TargetTypeRef) => boolean;
-  readonly numericParameterArgument?: (index: number, carrier: TargetTypeRef) => boolean;
+  readonly numericParameterArgument?: (index: number, carrier: TargetTypeRef, domain: "numeric" | "number") => boolean;
   readonly resultUse?: "consumed" | "discarded";
   readonly authoredPropertyKey?: string;
   readonly argumentMatchesSelectedTypeArgument?: (argumentIndex: number, typeArgumentIndex: number) => boolean;
@@ -186,7 +186,7 @@ export type JsCarrierRef =
   | { readonly ref: "argument"; readonly index: number }
   | { readonly ref: "numeric-argument"; readonly index: number };
 
-type JsCarrierCapability = "numeric" | "integer" | "numeric-parameter" | "optional-number" | "clone" | "stringifiable" | "js-equality" | "project-identity-equality" | "object-identity" | "freezable-object";
+type JsCarrierCapability = "numeric" | "integer" | "numeric-parameter" | "number-parameter" | "optional-number" | "clone" | "stringifiable" | "js-equality" | "project-identity-equality" | "object-identity" | "freezable-object";
 
 export type JsOperationTarget =
   | Exclude<RustProviderOperationForm, { readonly form: "associated-call" }>

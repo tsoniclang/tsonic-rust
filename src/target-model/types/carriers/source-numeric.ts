@@ -6,5 +6,10 @@ import { isRustNumericCarrier } from "./primitives.js";
 
 export function rustCarrierSupportsSourceNumeric(carrier: TargetTypeRef): boolean {
   return isRustBigIntCarrier(carrier) || rustTargetTypeRefEquals(carrier, rustJsNumericTargetType()) ||
-    isRustNumericCarrier(carrier) && carrier.name !== "native-int" && carrier.name !== "native-uint";
+    isRustNumericCarrier(carrier);
+}
+
+export function rustCarrierSupportsNumberPredicate(carrier: TargetTypeRef): boolean {
+  return isRustNumericCarrier(carrier) || isRustBigIntCarrier(carrier) ||
+    rustTargetTypeRefEquals(carrier, rustJsNumericTargetType());
 }

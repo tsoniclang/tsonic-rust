@@ -700,6 +700,7 @@ function rustRequirementDescription(
       : requirement === "default"
         ? "an exact Rust Default implementation"
         : requirement === "source-numeric" ? "an exact source numeric comparison contract"
+        : requirement === "number-predicate" ? "an exact native numeric predicate contract"
         : "an exact Rust 'static lifetime");
   if (descriptions.length <= 1) return descriptions[0] ?? "an exact Rust carrier contract";
   return `${descriptions.slice(0, -1).join(", ")} and ${descriptions[descriptions.length - 1]}`;

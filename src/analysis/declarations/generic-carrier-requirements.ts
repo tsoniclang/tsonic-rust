@@ -1,7 +1,7 @@
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustGenericRequirement } from "./generic-requirements.js";
-import { rustCarrierSupportsSourceNumeric } from "../../target-model/types/carriers/source-numeric.js";
+import { rustCarrierSupportsNumberPredicate, rustCarrierSupportsSourceNumeric } from "../../target-model/types/carriers/source-numeric.js";
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
 import { isRustNeverCarrier, rustCarrierSupportsTrait, rustFixedArrayCarrierValue,
   rustNamedTypeCarrierValue, rustSourceTypeCarrierValue, rustTargetGenericTypeArguments,
@@ -23,11 +23,12 @@ export function classifyCarrierRequirements(
       if (!associatedSupports(carrier, requirement)) return false;
       continue;
     }
-    if (requirement === "source-numeric") {
+    if (requirement === "source-numeric" || requirement === "number-predicate") {
       if (carrier.kind === "type-parameter") {
         if (!declared.has(carrier.identity)) return false;
         byParameter.get(carrier.identity)!.add(requirement);
-      } else if (!rustCarrierSupportsSourceNumeric(carrier)) return false;
+      } else if (!(requirement === "number-predicate" ? rustCarrierSupportsNumberPredicate(carrier)
+        : rustCarrierSupportsSourceNumeric(carrier))) return false;
       continue;
     }
     if (requirement === "static") {

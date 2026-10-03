@@ -32,6 +32,7 @@ import { mapRustTargetTypes } from "../../target-model/types/carriers/substituti
 import { rustOptionalStorageValue, rustSourceOptionalTargetType } from "../../target-model/types/projections.js";
 import { resolveParameterAbi } from "../declarations/types-and-bindings.js";
 import { resolveFunctionExpressionSignature } from "../callables/closures.js";
+import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type {
@@ -132,7 +133,7 @@ export function finalizeProjectSourceGenericArguments(
     }
   }
   const finalizedArguments = rustSourceCallGenericLifetimeArguments(selected, finalized, callArguments.map(argument =>
-    walk.context.facts.getRuntimeCarrierFact(argument)?.carrier ?? resolveProjectSourceInferenceCarrier(walk, argument)));
+    resolveProjectSourceInferenceCarrier(walk, argument)));
   const substitutions = finalizedArguments === undefined ? undefined : rustTargetGenericBindingsForArguments(parameters, finalizedArguments);
   return substitutions === undefined
     ? undefined
@@ -158,7 +159,6 @@ function reconcileProjectSourceArgumentTypeParameters(
     const matches = bindings.filter((binding) =>
       binding.sourceArgumentIndex === argumentIndex);
     const actual = walk.context.facts.getFact(argument, rustIndexedFieldKeyArgument)?.carrier ??
-      walk.context.facts.getRuntimeCarrierFact(argument)?.carrier ??
       resolveProjectSourceInferenceCarrier(walk, argument);
     if (matches.length === 0) continue;
     for (const binding of matches) {
@@ -318,21 +318,16 @@ function resolveProjectSourceInferenceCarrier(
     const inner = Node_Expression(walk.context.ast, argument);
     return inner === undefined
       ? undefined
-      : walk.context.facts.getRuntimeCarrierFact(inner)?.carrier ??
-          resolveRustTargetTypeRef(
-            inner,
-            rustOperationContext(walk, inner),
-            walk.operationOptions,
-          );
+      : resolveProjectSourceInferenceCarrier(walk, inner);
   }
   if (kind === KindArrayLiteralExpression || kind === KindObjectLiteralExpression) {
-    return undefined;
+    return walk.context.facts.getRuntimeCarrierFact(argument)?.carrier;
   }
-  return resolveRustTargetTypeRef(
-    argument,
-    rustOperationContext(walk, argument),
-    walk.operationOptions,
-  );
+  if (isUnannotatedRustNumericLiteral(argument, walk.context.ast)) {
+    return walk.context.facts.getRuntimeCarrierFact(argument)?.carrier;
+  }
+  const file = walk.context.ast.getSourceFile(argument);
+  return file === undefined ? undefined : resolveExpressionCarrier(walk, argument, file, undefined);
 }
 
 function projectSourceTypeArgumentHasLiteralProof(

@@ -16,6 +16,18 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 const float64 = rustSourcePrimitiveTargetType("float64");
 const int32 = rustSourcePrimitiveTargetType("int32");
 
+test("generic predicate selection requires exact domain evidence and seals its native bound", () => {
+  const carrier = { kind: "type-parameter", identity: "number:Value", name: "Value" };
+  const request = { ownerName: "NumberConstructor", memberName: "isInteger",
+    operationKind: "call", argumentCarriers: [carrier] };
+  assert.equal(selectJsSurfaceOperation(request), undefined);
+  assert.equal(selectJsSurfaceOperation({ ...request, numericParameterArgument: () => false }), undefined);
+  const selected = selectJsSurfaceOperation({ ...request, numericParameterArgument: (index, actual, domain) =>
+    index === 0 && actual === carrier && domain === "number" });
+  assert.deepEqual(selected?.fact.carrierRequirements, [{ carrier, requirement: "number-predicate" }]);
+  assert.deepEqual(selected?.fact.target.argModes, ["ref"]);
+});
+
 test("Number rows select only exact source and carrier contracts", () => {
   assert.equal(selectJsSurfaceOperation({
     ownerName: "NumberConstructor",

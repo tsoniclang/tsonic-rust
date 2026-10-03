@@ -33,6 +33,14 @@ function nativeNumberPredicateRows(owner: "NumberConstructor" | "Global", lane: 
   return numberPredicateRows.filter(({ member }) => owner === "NumberConstructor" || member === "isNaN" || member === "isFinite")
     .flatMap(({ member, path }): JsOperationRowData[] => [
       {
+        owner, member, operationKind: "call", lane, variant: "number-parameter",
+        requirements: [{ carrier: { ref: "argument", index: 0 }, capability: "number-parameter" }],
+        shape: {
+          op: "operation", operationKind: "method", target: { form: "call", path, argModes: ["ref"] },
+          result: { ref: "bool" }, params: [{ ref: "argument", index: 0 }],
+        },
+      },
+      {
         owner, member, operationKind: "call", lane, variant: "native",
         requirements: [{ carrier: { ref: "argument", index: 0 }, capability: "numeric" }],
         shape: {

@@ -1,7 +1,22 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { acmeTestingPackage, compileRust } from "../../helpers/rust-session.mjs";
+import { acmeTestingPackage, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
+import { genericNumberPredicatesSource } from "../../../../tsonic/test/fixtures/generic-number-predicates.mjs";
+
+test("generic Number predicates borrow exact native carriers and propagate their selected bounds", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"], packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "generic_number_predicates" } },
+    files: { "index.ts": genericNumberPredicatesSource + `
+import { check } from "@acme/testing";
+export function main(): void { check(run()); }
+` } });
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /NativeNumberPredicate/u);
+  assert.doesNotMatch(source, /number_is_(?:integer|safe_integer|finite|nan)\([^\n]*clone\(\)/u);
+  validateGeneratedProject("generic-number-predicates", result.artifacts, { run: true });
+});
 
 test("numeric generic constraints preserve exact mixed comparisons and caller bounds", { timeout: 300_000 }, () => {
   const { result } = compileRust({
@@ -79,4 +94,11 @@ test("unconstrained numeric constructor arguments do not acquire a native numeri
   });
   assert.ok(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_SELECTED_OPERATION_UNSUPPORTED"));
   assert.deepEqual(result.artifacts, []);
+});
+
+test("unconstrained Number predicate inputs cannot acquire an invented native predicate bound", () => {
+  const { result } = compileRust({ surfaces: ["js"], files: { "index.ts":
+    "export function integer<Value>(value: Value): boolean { return Number.isInteger(value); }" } });
+  assert.equal(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_SELECTED_OPERATION_UNSUPPORTED"), true);
+  assert.equal(result.artifacts.length, 0);
 });

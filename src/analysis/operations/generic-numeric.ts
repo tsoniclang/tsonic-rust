@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustCarrierSupportsSourceNumeric } from "../../target-model/types/carriers/source-numeric.js";
+import { rustCarrierSupportsNumberPredicate, rustCarrierSupportsSourceNumeric } from "../../target-model/types/carriers/source-numeric.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustFactWalk } from "../program/walk.js";
 import { rustResolutionContext } from "../program/walk.js";
@@ -15,8 +15,10 @@ export function rustOperandSupportsSourceNumeric(
   carrier: TargetTypeRef,
   context: RustTargetTypeResolutionContext,
   options: RustOperationsProviderOptions,
+  domain: "numeric" | "number" = "numeric",
 ): boolean {
-  if (carrier.kind !== "type-parameter") return rustCarrierSupportsSourceNumeric(carrier);
+  const supported = domain === "number" ? rustCarrierSupportsNumberPredicate : rustCarrierSupportsSourceNumeric;
+  if (carrier.kind !== "type-parameter") return supported(carrier);
   const semantics = context.currentSemantics;
   const reference = context.source.semantics.selectValueTypeRefinement(operand);
   if (reference.kind === "unresolved") return false;
@@ -35,7 +37,7 @@ export function rustOperandSupportsSourceNumeric(
     currentSourceFile: constraintSemantics.sourceFile,
     currentSemantics: constraintSemantics,
   }, options);
-  return bound !== undefined && rustCarrierSupportsSourceNumeric(bound);
+  return bound !== undefined && supported(bound);
 }
 
 export function selectRustGenericNumericOperation(

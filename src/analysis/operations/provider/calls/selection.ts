@@ -378,10 +378,10 @@ export function selectRustCheckedCall(
       },
       carrierSupportsProjectIdentity: options.projectCarrierSupportsObjectIdentity,
       canRequireClone: carrier => canRequireSourceClone(carrier, request.source.call, context, options.sourceTypes.typeFamilies),
-      numericParameterArgument: (index, carrier) => {
+      numericParameterArgument: (index, carrier, domain) => {
         const argument = selectedCallArgumentNodes(request)[index];
         return argument !== undefined && carrier.kind === "type-parameter" &&
-          rustOperandSupportsSourceNumeric(argument, carrier, context, options);
+          rustOperandSupportsSourceNumeric(argument, carrier, context, options, domain);
       },
       resultUse: context.source.navigation.expressionResultUse(request.source.call),
     }, context.typeDefinitions);

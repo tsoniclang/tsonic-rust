@@ -474,12 +474,15 @@ export function selectJsSurfaceOperation(request: JsOperationRequest, definition
       kind: "provider-operation",
       operationId,
       ...((row.requirements ?? []).some(requirement => requirement.capability === "numeric-parameter" ||
+        requirement.capability === "number-parameter" ||
         requirement.capability === "clone" && !rustCarrierSupportsClone(resolveCarrierRef(requirement.carrier, bindings), definitions))
         ? { carrierRequirements: Object.freeze((row.requirements ?? [])
-            .filter(requirement => requirement.capability === "clone" || requirement.capability === "numeric-parameter")
+            .filter(requirement => requirement.capability === "clone" || requirement.capability === "numeric-parameter" ||
+              requirement.capability === "number-parameter")
             .map(requirement => Object.freeze({
               carrier: resolveCarrierRef(requirement.carrier, bindings)!,
-              requirement: requirement.capability === "clone" ? "clone" as const : "source-numeric" as const,
+              requirement: requirement.capability === "clone" ? "clone" as const
+                : requirement.capability === "number-parameter" ? "number-predicate" as const : "source-numeric" as const,
             }))) }
         : {}),
       operationKind: row.shape.operationKind,
@@ -542,8 +545,10 @@ function carrierRequirementsMatch(
       case "integer":
         return isRustIntegerCarrier(carrier);
       case "numeric-parameter":
+      case "number-parameter":
         return carrier?.kind === "type-parameter" && requirement.carrier.ref === "argument" &&
-          request.numericParameterArgument?.(requirement.carrier.index, carrier) === true;
+          request.numericParameterArgument?.(requirement.carrier.index, carrier,
+            requirement.capability === "number-parameter" ? "number" : "numeric") === true;
       case "clone":
         return rustCarrierSupportsClone(carrier, definitions) ||
           (carrier !== undefined && request.canRequireClone?.(carrier) === true);

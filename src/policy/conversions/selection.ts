@@ -11,7 +11,6 @@ import {
   isRustJsArrayValueCarrier,
   isRustJsValueCarrier,
   isRustBigIntCarrier,
-  isRustIntegerCarrier,
   rustJsNumericTargetType,
   rustJsStringNumberTargetType,
   isRustNeverCarrier,
@@ -304,8 +303,7 @@ export function selectRustSourceAssertionConversion(
     if (source.name === "native-uint") return rustUsizeToInt32ValueConversion;
   }
   const conversion = selectRustSourceValueConversion(source, target, definitions);
-  return conversion ?? (isRustIntegerCarrier(source) && isRustIntegerCarrier(target)
-    ? selectRustExactIntegerConversion(source, target) : undefined);
+  return conversion ?? selectRustExactIntegerConversion(source, target);
 }
 
 export function selectRustJsonValueConversion(

@@ -27,13 +27,18 @@ test("explicit native integer casts reject out-of-range values without floating 
       function unsigned(value: int32): nativeUint { return value as nativeUint; }
       function narrow(value: uint32): uint16 { return value as uint16; }
       function signed(value: uint64): int64 { return value as int64; }
+      function fromNumber(value: number): nativeUint { return value as nativeUint; }
       export function main(): void {
         let caught: int32 = 0;
         try { unsigned(-1); } catch { caught += 1; }
         try { narrow(65536); } catch { caught += 1; }
         try { signed(18446744073709551615n); } catch { caught += 1; }
+        try { fromNumber(-1); } catch { caught += 1; }
+        try { fromNumber(0.5); } catch { caught += 1; }
+        try { fromNumber(Number.NaN); } catch { caught += 1; }
+        try { fromNumber(Number.POSITIVE_INFINITY); } catch { caught += 1; }
         const wide: uint64 = 9007199254740993n;
-        if (caught !== 3 || signed(wide) !== 9007199254740993n || narrow(65535) !== 65535) {
+        if (caught !== 7 || signed(wide) !== 9007199254740993n || narrow(65535) !== 65535 || fromNumber(65535) !== 65535) {
           throw new Error("checked integer range");
         }
       }

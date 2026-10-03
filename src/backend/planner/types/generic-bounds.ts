@@ -27,7 +27,8 @@ export function rustGenericsWithAssociatedBounds(
 export function rustGenericRequirementBounds(requirements: readonly RustGenericRequirement[]): readonly RustTypeBound[] {
   return Object.freeze(requirements.map((requirement): RustTypeBound => requirement === "static"
     ? { kind: "lifetime", lifetime: { kind: "static" } }
-    : { kind: "trait", path: requirement === "clone" ? "Clone" : requirement === "default" ? "Default" : "js_abi::SourceNumeric" }));
+    : { kind: "trait", path: requirement === "clone" ? "Clone" : requirement === "default" ? "Default"
+      : requirement === "number-predicate" ? "js_abi::NativeNumberPredicate" : "js_abi::SourceNumeric" }));
 }
 
 export function rustTypeParameterBounds(
