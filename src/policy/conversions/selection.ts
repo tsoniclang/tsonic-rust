@@ -34,6 +34,7 @@ import {
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustNamedTypeCarrierValue } from "../../target-model/types/carriers/native.js";
+import { rustJsRecordValueAdmission } from "../../target-model/conversions/closed-record.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import {
   rustBoolToJsValueConversion,
@@ -179,7 +180,7 @@ export function selectRustSourceValueConversion(
     if (rustTargetTypeRefEquals(source, symbolCarrier)) {
       return rustSymbolToJsValueConversion;
     }
-    if (rustTsValueAdmission(source, definitions)?.kind === "project-object" ||
+    if (rustJsRecordValueAdmission(source) || rustTsValueAdmission(source, definitions)?.kind === "project-object" ||
       rustCarrierSupportsClone(source, definitions) &&
       rustCarrierSupportsTrait(source, rustJsClosedValueCarrierTraitPath, undefined, undefined, definitions)) {
       return Object.freeze({

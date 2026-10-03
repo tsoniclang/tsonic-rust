@@ -1,5 +1,6 @@
 import type { TargetTypeRef } from "../types/model.js";
 import { rustNativeRepresentationMatches } from "./native-representation.js";
+import { rustJsRecordValueAdmission } from "./closed-record.js";
 import {
   isRustTargetTypeRef,
   rustTargetTypeRefEquals,
@@ -237,7 +238,9 @@ export function rustValueConversionContract(
         };
   }
   if (value.kind === "js-value-from-closed-carrier") {
-    if (rustTargetTypeRefEquals(value.source, rustEmptyObjectTargetType())) {
+    if (!isClosedMetadata(value) || !hasExactObjectKeys(value, ["kind", "source"]) ||
+      !isRustTargetTypeRef(value.source)) return undefined;
+    if (rustTargetTypeRefEquals(value.source, rustEmptyObjectTargetType()) || rustJsRecordValueAdmission(value.source)) {
       return { category: "projection", lowering: "call", path: "js_abi::JsValue::from",
         sourceMode: "value", source: value.source, target: jsValueCarrier, fallible: false };
     }
