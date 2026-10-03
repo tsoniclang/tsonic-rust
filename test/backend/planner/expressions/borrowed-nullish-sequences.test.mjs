@@ -51,7 +51,7 @@ fn handwritten(authored: Option<${authored}>, native: Option<${authored}>) -> ${
 fn native_selection_aliasing_and_cost() {
     let authored = ${values};
     let native = ${nativeValues};
-    let mut result = index::choose(Some(authored.clone()), Some(native.clone()));
+    let ${surfaces.length === 0 ? "mut " : ""}result = index::choose(Some(authored.clone()), Some(native.clone()));
     ${check}
     let result = index::choose(None, Some(native.clone()));
     ${nativeCheck}
@@ -64,7 +64,7 @@ fn native_selection_aliasing_and_cost() {
             assert_eq!(generated_cost, handwritten_cost);
         }
     }
-    let backing = vec!["native".to_owned(), "tail".to_owned()];
+    let backing = ${surfaces.length === 0 ? 'vec!["native".to_owned(), "tail".to_owned()]' : '["native".to_owned(), "tail".to_owned()]'};
     for _ in 0..1000 {
         let (generated, generated_cost) = measure(|| ${snapshotCall});
         let (handwritten, handwritten_cost) = measure(|| ${snapshotHand});
