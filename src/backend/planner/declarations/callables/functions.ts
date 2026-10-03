@@ -168,7 +168,12 @@ function planRustFunctionItem(
     ));
     return undefined;
   }
-  const genericPlan = planRustCallableGenerics(node, context, specialization);
+  if (lexical?.kind === "unresolved") {
+    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+      "rust.backend.lexical-function-contract", lexical.reason));
+    return undefined;
+  }
+  const genericPlan = planRustCallableGenerics(node, context, specialization, lexical?.genericParameters);
   if (genericPlan === undefined) {
     return undefined;
   }

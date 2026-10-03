@@ -67,6 +67,28 @@ test("admission retains exact rejected payloads and invokes no allocating adapte
   assert.equal(calls.some(path => path === "Box::new" || path === "Rc::new" || path === "Arc::new" || path.includes("JsError::new")), false);
 });
 
+test("writable admission preserves rejected native payloads and uninhabited restoration directly", () => {
+  const plan = planRustErrorTransport(rows);
+  const items = planRustSourceErrorTransport(plan, true);
+  const admission = items.find(item => item.trait?.path === "core::convert::TryFrom")
+    .members.find(member => member.name === "try_from").body.statements[0].expr;
+  for (const name of ["Runtime", "Suppressed"]) {
+    const arm = admission.arms.find(value => value.pattern.path === `ErrorTransport::${name}`);
+    assert.equal(arm.expression.path, "Err");
+    assert.equal(arm.expression.args[0].path, `ErrorTransport::${name}`);
+    assert.deepEqual(arm.expression.args[0].args, arm.pattern.elements.map(value => ({ kind: "path", path: value.name })));
+  }
+  const restored = items.find(item => item.target.path === "TsonicError" && item.trait?.path === "core::convert::From")
+    .members[0].body.statements[0].expr;
+  const suppressed = restored.arms.find(value => value.pattern.path === "ErrorTransport::Suppressed");
+  assert.deepEqual(suppressed.pattern.elements.map(value => value.kind), ["wildcard", "wildcard", "binding"]);
+  assert.deepEqual(suppressed.expression, { kind: "match", expression: { kind: "path", path: "source" }, arms: [] });
+  const runtime = restored.arms.find(value => value.pattern.path === "ErrorTransport::Runtime");
+  assert.deepEqual(runtime.expression, { kind: "match", expression: { kind: "path", path: "error" }, arms: [] });
+  const external = admission.arms.find(value => value.pattern.path === "ErrorTransport::DependencyError");
+  assert.equal(external.expression.expression.path, "dependency::program::WritableSourceError::try_from");
+});
+
 test("base observations borrow real project Error storage but never unrelated thrown values", () => {
   const plan = planRustErrorTransport(rows);
   const item = planRustErrorObservations(plan);

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { artifactText, compileRust } from "../../../helpers/rust-session.mjs";
 import { finiteCompletionSequencingSource } from "../../../../../tsonic/test/fixtures/finite-completion-sequencing.mjs";
+import { lexicalGenericFunctionsSource } from "../../../../../tsonic/test/fixtures/lexical-generic-functions.mjs";
 
 function generated(source, surface) {
   const { result } = compileRust({ files: { "index.ts": source }, surfaces: surface === "js" ? ["js"] : [] });
@@ -10,6 +11,17 @@ function generated(source, surface) {
 }
 
 for (const surface of ["native", "js"]) {
+  test(`lexical functions retain exact outer binders and generic shadowing in ${surface}`, () => {
+    const source = generated(lexicalGenericFunctionsSource, surface);
+    assert.match(source, /fn forward<T>\(inner: T\) -> T/u);
+    assert.match(source, /forward::<T>\(outer\)/u);
+    assert.match(source, /fn through<U, T[^>]*>/u);
+    assert.match(source, /fn identity<T[^>]*>\(inner: T\) -> T/u);
+    assert.match(source, /fn captureOuter<T>\(value: T\) -> T/u);
+    assert.match(source, /fn read<T>\([^)]*: T\) -> T/u);
+    assert.doesNotMatch(source.slice(source.indexOf("fn captureOuter"), source.indexOf("fn shadowOuter")), /clone\(/u);
+    assert.doesNotMatch(source, /Any|Box::|Location::allocate|Function::new/u);
+  });
   test(`lexical functions retain hoisting and mutual recursion in ${surface}`, () => {
     const source = generated(`
       import type { int32 } from "@tsonic/core/types.js";
@@ -62,7 +74,7 @@ for (const surface of ["native", "js"]) {
         write();
         return (before + read()) as int32;
       }`, surface);
-    assert.equal(/fn read\([^)]*: &i32\)/u.test(source), true, "the exact reader takes a shared native borrow");
+    assert.equal(/fn read\([^)]*: i32\)/u.test(source), true, "the immutable scalar capture uses its exact native Copy contract");
     assert.equal(/fn write\([^)]*: &mut i32\)/u.test(source), true, "the exact writer takes a mutable native borrow");
     assert.equal(/Rc|RefCell|Location::allocate|Function::new|clone\(/u.test(source), false);
   });

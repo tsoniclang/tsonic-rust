@@ -9,8 +9,9 @@ import { rustClosureCaptureFactKey, rustTargetOperationFactKey } from "../facts/
 import type { RustClosureCaptureFact } from "../facts/operations/keys.js";
 import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
 import type { RustLifetimeIndex, RustSourceGenericParameterContract } from "../../target-model/lifetimes/index.js";
-import { rustStaticLifetime, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
+import { rustLifetimeKey, rustStaticLifetime, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { bindRustElidedCallableInput, substituteElidedLifetime } from "../../target-model/types/carriers/lifetime-elision.js";
+import { resolveRustEnclosingGenericParameters } from "../declarations/generic-environment.js";
 
 export interface RustSuspendedCallableImplementation {
   readonly declaration: Node;
@@ -82,23 +83,16 @@ export function createRustSuspendedCallablePlan(
       issues.push({ subject: declaration, message: "A suspended callable signature has no nameable native lifetime contract." });
       continue;
     }
-    const available = new Map<string, RustSourceGenericParameterContract>();
-    for (let owner: Node | undefined = declaration; owner !== undefined; owner = ast.parent(owner)) {
-      for (const parameter of lifetimes.contractFor(owner)?.parameters ?? []) {
-        const key = parameter.kind === "type" ? parameter.identity : parameter.lifetime.identity;
-        if (!available.has(key)) available.set(key, parameter);
-      }
-    }
     const requested = [...signature.lifetimes.filter(selected => bound === undefined || selected.identity !== lifetime.identity)
-      .map(selected => selected.identity), ...signature.typeIdentities];
-    const parameters = requested.map(key => available.get(key));
-    if (parameters.some(parameter => parameter === undefined) || signature.constIdentities.length > 0) {
+      .map(rustLifetimeKey), ...signature.typeIdentities];
+    const parameters = resolveRustEnclosingGenericParameters(declaration, requested, ast, lifetimes);
+    if (parameters === undefined || signature.constIdentities.length > 0) {
       issues.push({ subject: declaration, message: "A suspended callable state lost its exact enclosing generic parameter declarations." });
       continue;
     }
     implementations.set(declaration, Object.freeze({ declaration, sourceFileName, carrier, captures, storage,
       stateName: allocateRustGeneratedName(usedNames, `CallableState${identity.slice(0, 12)}`), environment, signature,
-      parameters: Object.freeze(parameters as RustSourceGenericParameterContract[]),
+      parameters,
       ...(bound === undefined ? {} : { elision: Object.freeze({ parameterIndex: bound.parameterIndex, lifetime }) }),
     }));
   }

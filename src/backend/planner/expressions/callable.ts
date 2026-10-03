@@ -370,7 +370,7 @@ export function planRustCallableExpressionBody(
       },
       storage: capture.storage,
       valueCarrier: capture.carrier,
-      ...(ownedStateName === undefined ? {} : { borrowed: true }),
+      ...(ownedStateName === undefined ? {} : { borrowed: "shared" }),
     });
   }
   let recursiveName: string | undefined;

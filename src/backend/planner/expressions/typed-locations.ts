@@ -95,7 +95,7 @@ export function planRustIdentifierValue(
       ? rustModuleCellAccess(value, "load", [])
       : rustBindingStorageOperations(storage.storage === "local-location" ? "location" : storage.storage).read(value);
   }
-  if (captured?.borrowed === true) {
+  if (captured?.borrowed !== undefined) {
     const referent = value.kind === "reference" ? value.expr : undefined;
     return rustCarrierHasCopyContract(captured.valueCarrier, context)
       ? referent ?? { kind: "dereference", pointer: value }
@@ -135,7 +135,7 @@ export function planRustCaptureValue(
       args: [],
     };
   }
-  if (move && captured?.borrowed !== true) return capturedValue;
+  if (move && captured?.borrowed === undefined) return capturedValue;
   const value = planRustIdentifierValue(node, path, context);
   const carrier = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
   return rustReadRequiresClone(carrier, context) &&
@@ -329,7 +329,7 @@ export function planRustModuleBindingStore(
   return rustValueBlock([{ name: valueName, value }], rustModuleCellAccess({ kind: "path", path }, "store", [{ kind: "path", path: valueName }]));
 }
 
-function rustCapturedBinding(
+export function rustCapturedBinding(
   node: Node,
   context: RustPlanContext,
 ): import("../program/plan-context.js").RustCapturedBinding | undefined {

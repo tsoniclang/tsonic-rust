@@ -163,7 +163,7 @@ export function rustClassEnvironmentContext(
         } },
         storage: capture.storage,
         valueCarrier: capture.carrier,
-        borrowed: true,
+        borrowed: "shared" as const,
       })),
     ],
   };

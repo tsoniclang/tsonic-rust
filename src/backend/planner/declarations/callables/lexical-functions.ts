@@ -8,6 +8,7 @@ import { missingFactDiagnostic } from "../../diagnostics.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { diagnosticInput, type RustPlanContext } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
+import { rustCarrierHasCopyContract } from "../../types/generic-requirements.js";
 
 export function planRustLexicalFunctionEnvironment(declaration: Node, context: RustPlanContext) {
   const selection = context.input.program.lexicalFunctions.forDeclaration(declaration);
@@ -20,7 +21,6 @@ export function planRustLexicalFunctionEnvironment(declaration: Node, context: R
   }
   const parameters: { name: string; type: RustType }[] = [];
   const capturedBindings = [...(context.capturedBindings ?? [])];
-  const expressionOverrides = new Map(context.expressionOverrides ?? []);
   for (const capture of selection.captures) {
     const carrier = context.input.program.facts.getRuntimeCarrierFact(capture.declaration)?.carrier ??
       context.input.program.facts.getRuntimeCarrierFact(capture.reference)?.carrier;
@@ -31,19 +31,17 @@ export function planRustLexicalFunctionEnvironment(declaration: Node, context: R
       ? { kind: "named", path: "rt::Location", genericArguments: [{ kind: "type", type: valueType }] }
       : storage === undefined ? valueType : rustInlineBindingStorageType(storage.storage, valueType);
     const name = allocateRustSyntheticName(context.syntheticNames, "capture");
-    parameters.push({ name, type: { kind: "reference", referent: physicalType,
+    const owned = storage === undefined && !capture.mutable &&
+      (rustCarrierHasCopyContract(carrier, context) ||
+        context.input.program.valueLifetimes.canMoveCapture(declaration, capture.declaration));
+    parameters.push({ name, type: owned ? physicalType : { kind: "reference", referent: physicalType,
       mutable: storage === undefined && capture.mutable } });
     capturedBindings.push({ declaration: capture.declaration, expression: { kind: "path", path: name },
-      storage: storage?.storage ?? "value", valueCarrier: carrier, borrowed: true });
-    if (storage === undefined) {
-      for (const use of context.input.program.sourceNavigation.declarationUseSummary(capture.declaration).uses) {
-        expressionOverrides.set(use.reference, { expression: { kind: "dereference", pointer: { kind: "path", path: name } },
-          carrier, valueForm: "storage" });
-      }
-    }
+      storage: storage?.storage ?? "value", valueCarrier: carrier,
+      ...(owned ? {} : { borrowed: storage === undefined && capture.mutable ? "mutable" as const : "shared" as const }) });
     if (storage?.storage === "location") context.usedAliases?.add("rt");
   }
-  return { parameters, context: { ...context, capturedBindings, expressionOverrides } };
+  return { parameters, context: { ...context, capturedBindings } };
 }
 
 export function planRustLexicalFunctionArguments(declaration: Node, context: RustPlanContext): readonly RustExpr[] | undefined {
@@ -55,9 +53,26 @@ export function planRustLexicalFunctionArguments(declaration: Node, context: Rus
     const captured = [...(context.capturedBindings ?? [])].reverse().find(value => value.declaration === capture.declaration);
     const storage = context.input.program.facts.getFact(capture.declaration, rustBindingStorageFactKey);
     const mutable = storage === undefined && capture.mutable;
-    if (captured?.borrowed === true) {
+    const carrier = context.input.program.facts.getRuntimeCarrierFact(capture.declaration)?.carrier ??
+      context.input.program.facts.getRuntimeCarrierFact(capture.reference)?.carrier;
+    const owned = storage === undefined && !capture.mutable &&
+      (carrier !== undefined && rustCarrierHasCopyContract(carrier, context) ||
+        context.input.program.valueLifetimes.canMoveCapture(declaration, capture.declaration));
+    if (owned) {
+      const value = planExpression(capture.reference, context);
+      if (value === undefined) return undefined;
+      arguments_.push(value);
+      continue;
+    }
+    if (captured?.borrowed !== undefined) {
+      if (mutable && captured.borrowed !== "mutable") {
+        context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, declaration),
+          "rust.backend.lexical-function-borrow", "A mutable lexical call lost its exact mutable environment borrow."));
+        return undefined;
+      }
       arguments_.push(mutable
         ? { kind: "reference", expr: { kind: "dereference", pointer: captured.expression }, mutable: true }
+        : captured.borrowed === "shared" ? captured.expression
         : { kind: "reference", expr: { kind: "dereference", pointer: captured.expression } });
       continue;
     }

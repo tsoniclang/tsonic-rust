@@ -1,10 +1,14 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
-import { forEachSourceImmediateEvaluationChild, Node_Initializer, sourceDeclarationIsModuleScoped,
+import { createSourceSingleInvocationQuery, forEachSourceImmediateEvaluationChild, Node_Initializer, sourceDeclarationIsModuleScoped,
   sourceLexicalCaptures, type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
-import { rustTargetOperationFactKey } from "../facts/keys.js";
+import { rustTargetOperationFactKey, rustSourceCallableReturnFactKey } from "../facts/keys.js";
 import { rustTypedLocationStorageRootReference } from "../operations/typed-locations.js";
 import { rustFinalizedTargetInputMayMutateSource } from "../facts/finalized-operation/conversions.js";
+import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
+import type { RustLifetimeIndex, RustSourceGenericParameterContract } from "../../target-model/lifetimes/index.js";
+import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
+import { resolveRustEnclosingGenericParameters } from "../declarations/generic-environment.js";
 
 export interface RustLexicalFunctionCapture {
   readonly declaration: Node;
@@ -13,7 +17,9 @@ export interface RustLexicalFunctionCapture {
 }
 
 export type RustLexicalFunctionSelection =
-  | { readonly kind: "resolved"; readonly captures: readonly RustLexicalFunctionCapture[]; readonly valueObserved: boolean }
+  | { readonly kind: "resolved"; readonly captures: readonly RustLexicalFunctionCapture[];
+      readonly genericParameters: readonly RustSourceGenericParameterContract[]; readonly valueObserved: boolean;
+      readonly singleInvocation: boolean; readonly captureRoots: readonly Node[] }
   | { readonly kind: "unresolved"; readonly reason: string };
 
 export interface RustLexicalFunctionQueries {
@@ -28,6 +34,7 @@ export function createRustLexicalFunctionQueries(
   source: TargetSourceProgram,
   sourceFiles: readonly SourceFile[],
   facts: RustPlanQueries,
+  lifetimes: RustLifetimeIndex,
 ): RustLexicalFunctionQueries {
   const { ast, navigation } = source;
   const declarations: Node[] = [];
@@ -45,6 +52,7 @@ export function createRustLexicalFunctionQueries(
   const captures = new Map<Node, Map<Node, RustLexicalFunctionCapture>>();
   const declarationSet = new Set(declarations);
   const callees = new Map<Node, Node[]>();
+  const genericIdentities = new Map<Node, Set<string>>();
   let rows = 0;
   for (const declaration of declarations) {
     const selected = sourceLexicalCaptures(declaration, [declaration], ast, navigation);
@@ -96,6 +104,17 @@ export function createRustLexicalFunctionQueries(
     }
     captures.set(declaration, values);
     callees.set(declaration, calls);
+    const identities = new Set<string>();
+    const nodes = new Set([...evaluated, declaration, ...ast.parameters(declaration),
+      ...[...values.values()].flatMap(capture => [capture.declaration, capture.reference])]);
+    for (const node of nodes) {
+      const carrier = facts.getRuntimeCarrierFact(node)?.carrier ??
+        facts.getFact(node, rustSourceCallableReturnFactKey)?.returnCarrier;
+      if (carrier === undefined) continue;
+      const references = rustTargetGenericReferences(carrier);
+      for (const identity of [...references.typeIdentities, ...references.lifetimeIdentities]) identities.add(identity);
+    }
+    genericIdentities.set(declaration, identities);
 
     function mutate(expression: Node): void {
       const root = rustTypedLocationStorageRootReference(expression, ast, navigation);
@@ -108,6 +127,15 @@ export function createRustLexicalFunctionQueries(
     for (const declaration of declarations) {
       const values = captures.get(declaration)!;
       for (const callee of callees.get(declaration)!) {
+        const bound = new Set((lifetimes.contractFor(callee)?.parameters ?? []).map(parameter =>
+          parameter.kind === "type" ? parameter.identity : rustLifetimeKey(parameter.lifetime)));
+        for (const identity of genericIdentities.get(callee)!) {
+          if (++steps > maximumLexicalCaptureSteps) return exhausted();
+          if (!bound.has(identity) && !genericIdentities.get(declaration)!.has(identity)) {
+            genericIdentities.get(declaration)!.add(identity);
+            changed = true;
+          }
+        }
         for (const capture of captures.get(callee)!.values()) {
           if (++steps > maximumLexicalCaptureSteps) return exhausted();
           const previous = values.get(capture.declaration);
@@ -119,11 +147,29 @@ export function createRustLexicalFunctionQueries(
       }
     }
   }
-  const selections = new Map<Node, RustLexicalFunctionSelection>(declarations.map(declaration => [declaration, Object.freeze({
-    kind: "resolved" as const,
-    captures: Object.freeze([...captures.get(declaration)!.values()]),
-    valueObserved: navigation.declarationUseSummary(declaration).firstClassUseCount > 0,
-  })]));
+  const selections = new Map<Node, RustLexicalFunctionSelection>();
+  const singleInvocation = createSourceSingleInvocationQuery(ast, navigation);
+  for (const declaration of declarations) {
+    const roots = new Set<Node>();
+    const rootPending = [declaration];
+    while (rootPending.length > 0) {
+      if (++steps > maximumLexicalCaptureSteps) return exhausted();
+      const current = rootPending.pop()!;
+      if (roots.has(current)) continue;
+      roots.add(current);
+      rootPending.push(...callees.get(current)!);
+      if (++rows > maximumLexicalCaptureRows) return exhausted();
+    }
+    const own = new Set((lifetimes.contractFor(declaration)?.parameters ?? []).map(parameter =>
+      parameter.kind === "type" ? parameter.identity : rustLifetimeKey(parameter.lifetime)));
+    const parameters = resolveRustEnclosingGenericParameters(declaration,
+      [...genericIdentities.get(declaration)!].filter(identity => !own.has(identity)), ast, lifetimes);
+    selections.set(declaration, Object.freeze(parameters === undefined
+      ? { kind: "unresolved", reason: "A lexical function lost its exact enclosing generic or lifetime declarations." }
+      : { kind: "resolved", captures: Object.freeze([...captures.get(declaration)!.values()]), genericParameters: parameters,
+          valueObserved: navigation.declarationUseSummary(declaration).firstClassUseCount > 0,
+          singleInvocation: singleInvocation(declaration), captureRoots: Object.freeze([...roots]) }));
+  }
   return Object.freeze({ forDeclaration: (declaration: Node) => selections.get(declaration) });
 
   function within(node: Node, owner: Node): boolean {

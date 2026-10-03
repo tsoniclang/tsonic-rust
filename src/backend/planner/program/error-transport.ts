@@ -78,8 +78,9 @@ export function planRustSourceErrorTransport(plan: RustErrorTransportPlan, writa
   const sourceConstructor = (value: RustExpr): RustExpr =>
     ({ kind: "struct-literal", path: "Self", fields: [{ name: payloadField, value }] });
   const projected = (name: string, value: RustExpr): RustExpr => call("Ok", sourceConstructor(call(`ErrorTransport::${name}`, value)));
-  const arms: Extract<RustExpr, { kind: "match" }>["arms"][number][] = [
-    { pattern: variant("ErrorTransport::Runtime", binding("error")), expression: projected("Runtime", own) },
+  const arms: Extract<RustExpr, { kind: "match" }>["arms"] = [
+    { pattern: variant("ErrorTransport::Runtime", binding("error")), expression: writable
+      ? call("Err", call("ErrorTransport::Runtime", own)) : projected("Runtime", own) },
     { pattern: variant("ErrorTransport::SourceCreated", binding("error")), expression: projected("SourceCreated", own) },
     ...plan.variants.map(item => ({ pattern: variant(`ErrorTransport::${item.name}`, binding("error")),
       expression: item.source === "error" ? projected(item.name, own)
@@ -90,27 +91,21 @@ export function planRustSourceErrorTransport(plan: RustErrorTransportPlan, writa
           ] },
     })),
     { pattern: variant("ErrorTransport::Suppressed", binding("error"), binding("suppressed"), binding("source")),
-      expression: call("Ok", sourceConstructor(call("ErrorTransport::Suppressed", own, path("suppressed"), path("source")))) },
+      expression: writable ? call("Err", call("ErrorTransport::Suppressed", own, path("suppressed"), path("source")))
+        : call("Ok", sourceConstructor(call("ErrorTransport::Suppressed", own, path("suppressed"), path("source")))) },
   ];
-  if (writable) {
-    arms[0] = { pattern: variant("ErrorTransport::Runtime", binding("error")), expression: call("Err", call("ErrorTransport::Runtime", own)) };
-    arms[arms.length - 1] = { pattern: variant("ErrorTransport::Suppressed", binding("error"), binding("suppressed"), binding("source")),
-      expression: call("Err", call("ErrorTransport::Suppressed", own, path("suppressed"), path("source"))) };
-  }
-  const restored: Extract<RustExpr, { kind: "match" }>["arms"][number][] = [
-    { pattern: variant("ErrorTransport::Runtime", binding("error")), expression: call("ErrorTransport::Runtime", own) },
+  const restored: Extract<RustExpr, { kind: "match" }>["arms"] = [
+    { pattern: variant("ErrorTransport::Runtime", binding("error")), expression: writable
+      ? { kind: "match", expression: own, arms: [] } : call("ErrorTransport::Runtime", own) },
     { pattern: variant("ErrorTransport::SourceCreated", binding("error")), expression: call("ErrorTransport::SourceCreated", own) },
     ...plan.variants.map(item => ({ pattern: variant(`ErrorTransport::${item.name}`, binding("error")),
       expression: item.source === "thrown" ? { kind: "match" as const, expression: own, arms: [] }
         : call(`ErrorTransport::${item.name}`, item.source === "external" ? method(own, "into_transport") : own) })),
-    { pattern: variant("ErrorTransport::Suppressed", binding("error"), binding("suppressed"), binding("source")),
-      expression: call("ErrorTransport::Suppressed", own, path("suppressed"), path("source")) },
+    { pattern: variant("ErrorTransport::Suppressed", writable ? { kind: "wildcard" } : binding("error"),
+        writable ? { kind: "wildcard" } : binding("suppressed"), binding("source")),
+      expression: writable ? { kind: "match", expression: path("source"), arms: [] }
+        : call("ErrorTransport::Suppressed", own, path("suppressed"), path("source")) },
   ];
-  if (writable) {
-    restored[0] = { pattern: variant("ErrorTransport::Runtime", binding("error")), expression: { kind: "match", expression: own, arms: [] } };
-    restored[restored.length - 1] = { pattern: variant("ErrorTransport::Suppressed", { kind: "wildcard" }, { kind: "wildcard" }, binding("source")),
-      expression: { kind: "match", expression: path("source"), arms: [] } };
-  }
   const fromVariant = (source: RustType, name: string, runtime: boolean): RustItem => ({
     kind: "impl", generics: emptyRustGenerics, target: view, trait: named("core::convert::From", source),
     members: [nativeFunction("from", view, sourceConstructor(call(`ErrorTransport::${name}`,

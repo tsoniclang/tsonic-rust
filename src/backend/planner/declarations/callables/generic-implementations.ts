@@ -81,7 +81,7 @@ function planImplementation(
     declaration: capture.declaration, expression: { kind: "reference", expr: {
       kind: "field", receiver: { kind: "path", path: owner }, name: `capture_${index}`,
     } },
-    storage: capture.storage, valueCarrier: capture.carrier, borrowed: true,
+    storage: capture.storage, valueCarrier: capture.carrier, borrowed: "shared",
   })) };
   const helper = planNativeModuleFunction(implementation.declaration, implementation.declaration,
     implementation.functionName, true, bodyContext);

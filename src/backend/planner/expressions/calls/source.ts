@@ -197,6 +197,15 @@ export function planSelectedSourceCall(
     return undefined;
   }
   if (selectedDeclaration !== undefined && callableSpecialization === undefined && fact.target.form !== "constructor") {
+    const lexical = context.input.program.lexicalFunctions.forDeclaration(selectedDeclaration);
+    if (lexical?.kind === "unresolved") return undefined;
+    for (const parameter of lexical?.genericParameters ?? []) {
+      if (parameter.kind !== "type" || context.typeParameterSubstitutions?.has(parameter.identity) === true) continue;
+      const type = rustTypeFromCarrierInContext({ kind: "type-parameter", identity: parameter.identity,
+        name: parameter.targetName }, context);
+      if (type === undefined) return undefined;
+      targetAstGenericArguments.push({ kind: "type", type });
+    }
     const contract = context.input.program.declarationGenericRequirements.contractFor(selectedDeclaration);
     if (contract !== undefined) {
       const substitutions = new Map(contract.typeParameters.map((parameter, index) =>

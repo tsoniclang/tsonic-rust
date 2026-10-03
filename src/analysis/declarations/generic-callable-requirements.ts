@@ -589,16 +589,19 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
           selected.sourceDeclaration,
         );
         const calleeId = input.idByDeclaration.get(selectedDeclaration);
-        const selectedClass = input.projectTypes.definitionForDeclaration(selectedDeclaration);
+        const selectedClass = operation.target.form === "constructor"
+          ? input.projectTypes.definitionForCarrier(operation.target.typeCarrier)
+          : undefined;
         const targetTypeArguments = rustTargetGenericTypeArguments(
-          selectedClass !== undefined && operation.target.form === "constructor"
-            ? rustSourceTypeCarrierValue(operation.target.typeCarrier)?.genericArguments
+          operation.target.form === "constructor"
+            ? selectedClass?.declaration === selectedDeclaration
+              ? rustSourceTypeCarrierValue(operation.target.typeCarrier)?.genericArguments : []
             : operation.targetGenericArguments,
         );
         if (calleeId !== undefined) {
           dependencies.add(calleeId);
           const callee = input.contractFor(selectedDeclaration);
-          if (callee !== undefined && callee.typeParameters.length > 0) {
+          if (callee !== undefined) {
             if (callee.typeParameters.length !== targetTypeArguments.length) {
               return "A selected Rust source call has inconsistent generic contract arity.";
             }
@@ -610,18 +613,33 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
             }
             const substitutions = new Map(callee.typeParameters.map((parameter, index) =>
               [parameter.identity, targetTypeArguments[index]!] as const));
+            const receiver = operation.target.form === "constructor" ? operation.target.typeCarrier
+              : selected.sourceSelectedOwnerCarrier ?? selected.sourceSelectedReceiverCarrier;
+            const instantiate = (carrier: TargetTypeRef): TargetTypeRef | undefined => {
+              const instantiated = substituteRustTargetTypeParameters(carrier, substitutions);
+              return receiver === undefined || input.projectTypes.definitionContainingDeclaration(selectedDeclaration) === undefined
+                ? instantiated : input.projectTypes.instantiateMemberCarrier(selectedDeclaration, receiver, instantiated);
+            };
+            for (const parameter of callee.capturedTypeParameters) {
+              if (parameter.requirements.length === 0) continue;
+              const carrier = instantiate({ kind: "type-parameter", identity: parameter.identity, name: parameter.name });
+              const error = addUse(node, carrier, parameter.requirements);
+              if (error !== undefined) return error;
+            }
             for (const requirement of callee.optionalStorage) {
-              const error = addUse(node, substituteRustTargetTypeParameters(requirement.carrier, substitutions), requirement.requirements);
+              const error = addUse(node, instantiate(requirement.carrier), requirement.requirements);
               if (error !== undefined) return error;
             }
             for (const requirement of callee.projectProjections) {
-              if (!projections.require({ sourceCarrier: substituteRustTargetTypeParameters(requirement.sourceCarrier, substitutions),
-                targetCarrier: substituteRustTargetTypeParameters(requirement.targetCarrier, substitutions) })) {
+              const sourceCarrier = instantiate(requirement.sourceCarrier);
+              const targetCarrier = instantiate(requirement.targetCarrier);
+              if (sourceCarrier === undefined || targetCarrier === undefined || !projections.require({ sourceCarrier, targetCarrier })) {
                 return "A generic call does not satisfy its exact native projection contract.";
               }
             }
             for (const requirement of callee.associatedTypes) {
-              const carrier = substituteRustTargetTypeParameters(requirement.carrier, substitutions);
+              const carrier = instantiate(requirement.carrier);
+              if (carrier === undefined) return "A generic call lost its exact enclosing member carrier substitution.";
               const collected = collectType(carrier);
               if (collected !== undefined) return collected;
               if (requirement.fieldAccess !== undefined && (carrier.kind !== "associated-type" ||

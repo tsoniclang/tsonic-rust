@@ -140,6 +140,7 @@ export function analyzeRustTargetProgram(
     return rejectedTargetStage(foundation.diagnostics);
   }
   const facts = context.facts.seal();
+  const lexicalFunctions = createRustLexicalFunctionQueries(context.source, context.sourceFiles, facts, context.sourceLifetimes);
   const valueLifetimes = analyzeRustValueLifetimes({
     ast: context.ast,
     sourceFiles: context.sourceFiles,
@@ -149,10 +150,33 @@ export function analyzeRustTargetProgram(
     mayBorrowArgument: (argument) => facts.getArgumentPassingFact(argument)?.mode !== "by-value",
     isOwnedCallArgument: (argument) => rustCallArgumentIsOwned(argument, context.ast, facts),
     isSharedBorrowArgument: (argument) => facts.getArgumentPassingFact(argument)?.mode === "borrow-shared",
-    capturesFor: (closure) => facts.getFact(closure, rustClosureCaptureFactKey),
+    capturesFor: (closure) => {
+      const existing = facts.getFact(closure, rustClosureCaptureFactKey);
+      if (existing !== undefined) return existing;
+      const selection = lexicalFunctions.forDeclaration(closure);
+      if (selection?.kind !== "resolved") return undefined;
+      const captures: import("../facts/operations/keys.js").RustClosureCaptureFact["captures"][number][] = [];
+      for (const capture of selection.captures) {
+        const carrier = facts.getRuntimeCarrierFact(capture.declaration)?.carrier ??
+          facts.getRuntimeCarrierFact(capture.reference)?.carrier;
+        const storage = facts.getFact(capture.declaration, rustBindingStorageFactKey)?.storage ?? "value";
+        if (carrier === undefined) return undefined;
+        captures.push({ declaration: capture.declaration, reference: capture.reference, carrier, storage });
+      }
+      return { captures };
+    },
+    captureRootsFor: (closure) => {
+      const selection = lexicalFunctions.forDeclaration(closure);
+      return selection?.kind === "resolved" ? selection.captureRoots : [closure];
+    },
     isOnceCallable: (closure) => {
       const carrier = facts.getRuntimeCarrierFact(closure)?.carrier;
-      return carrier?.kind === "closure" && carrier.callTrait === "FnOnce";
+      const selection = lexicalFunctions.forDeclaration(closure);
+      return carrier?.kind === "closure" && carrier.callTrait === "FnOnce" ||
+        selection?.kind === "resolved" && selection.captureRoots.every(root => {
+          const captured = lexicalFunctions.forDeclaration(root);
+          return captured?.kind === "resolved" && captured.singleInvocation;
+        });
     },
     isOwnedOperationResult: (expression) => {
       const operation = facts.getFact(expression, rustTargetOperationFactKey);
@@ -208,7 +232,7 @@ export function analyzeRustTargetProgram(
   }
   const borrowedElementReads = analyzeRustBorrowedElementReads(context.ast, context.sourceFiles, facts, context.source.navigation);
   const program: RustTargetProgram = Object.freeze({
-    lexicalFunctions: createRustLexicalFunctionQueries(context.source, context.sourceFiles, facts),
+    lexicalFunctions,
     errorStorageDemands: context.errorStorageDemands,
     localStorageAliases: analyzeRustLocalStorageAliases({ ast: context.ast,
       navigation: context.source.navigation, sourceFiles: context.sourceFiles, facts }),

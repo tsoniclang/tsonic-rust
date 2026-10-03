@@ -6,6 +6,7 @@ import {
   ForInOrOfStatement_Initializer,
   ForInOrOfStatement_Statement,
   sourceNodesEqual,
+  sourceEnclosingCallable as enclosingCallable,
   type SourceProgramNavigation,
 } from "@tsonic/target-api/source";
 
@@ -25,6 +26,7 @@ export function analyzeRustValueLifetimes(input: {
   readonly isOwnedCallArgument: (argument: Node) => boolean;
   readonly isSharedBorrowArgument: (argument: Node) => boolean;
   readonly capturesFor: (closure: Node) => RustClosureCaptureFact | undefined;
+  readonly captureRootsFor?: (closure: Node) => readonly Node[];
   readonly isOnceCallable: (closure: Node) => boolean;
   readonly canMoveStoredField: (field: Node) => boolean;
   readonly isOwnedOperationResult: (expression: Node) => boolean;
@@ -56,6 +58,7 @@ export function analyzeRustValueLifetimes(input: {
       }
     }
     if (kind === "KindArrowFunction" || kind === "KindFunctionExpression" ||
+      kind === "KindFunctionDeclaration" && input.isOnceCallable(node) ||
       kind === "KindClassDeclaration" || kind === "KindClassExpression") {
       const captures = input.capturesFor(node)?.captures.filter(capture =>
         capture.storage === "value" &&
@@ -123,7 +126,8 @@ export function analyzeRustValueLifetimes(input: {
 function isSingleOwnedCapture(
   closure: Node,
   declaration: Node,
-  input: { readonly ast: AstReader; readonly navigation: SourceProgramNavigation },
+  input: { readonly ast: AstReader; readonly navigation: SourceProgramNavigation;
+    readonly captureRootsFor?: (closure: Node) => readonly Node[] },
 ): boolean {
   const { ast, navigation } = input;
   const owner = enclosingCallable(declaration, ast);
@@ -133,12 +137,13 @@ function isSingleOwnedCapture(
   if (declarationKind === "using" || declarationKind === "await using" ||
     isInsideRepeatedRegion(closure, declaration, ast)) return false;
   const summary = navigation.declarationUseSummary(declaration);
-  if (summary.bindingWritten || summary.exported) return false;
+  if (summary.bindingWritten || summary.exported || summary.hasUnclassifiedValueUse) return false;
   const uses = summary.uses.filter(use => use.kind !== "source-linkage" && use.kind !== "type-only");
+  const roots = new Set(input.captureRootsFor?.(closure) ?? [closure]);
   return uses.length > 0 && uses.every(use => {
     let current: Node | undefined = use.reference;
-    while (current !== undefined && current !== closure && current !== owner) current = ast.parent(current);
-    return current === closure;
+    while (current !== undefined && !roots.has(current) && current !== owner) current = ast.parent(current);
+    return current !== undefined && roots.has(current);
   });
 }
 
@@ -407,15 +412,6 @@ function isInsideRepeatedRegion(
     current = ast.parent(current);
   }
   return current !== lifetimeBoundary;
-}
-
-function enclosingCallable(node: Node, ast: AstReader): Node | undefined {
-  let current: Node | undefined = node;
-  while (current !== undefined) {
-    if (isCallableKind(ast.kindName(current))) return current;
-    current = ast.parent(current);
-  }
-  return undefined;
 }
 
 function isCallableKind(kind: string): boolean {
