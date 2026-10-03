@@ -1,5 +1,6 @@
 import { selectedOptionNullishRelationship } from "./nullish-comparisons.js";
 import {
+  sourceIntegerConstantValue,
   BinaryExpression_Left,
   BinaryExpression_OperatorToken,
   BinaryExpression_Right,
@@ -338,6 +339,7 @@ function expressionUsesContextualLiteralCarrier(ast: AstReader, expression: Node
       : Node_Expression(ast, expression);
     return operand !== undefined && expressionUsesContextualLiteralCarrier(ast, operand);
   }
+  if (ast.is.IsBinaryExpression(expression)) return sourceIntegerConstantValue(ast, expression) !== undefined;
   return false;
 }
 
