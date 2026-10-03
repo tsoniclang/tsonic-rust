@@ -95,6 +95,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     jsEnabled,
     sourceProfiles,
     sourceTypes,
+    sourceErrorCarrier: () => context.projectTypes.sourceErrorCarrier(),
     resolveProjectUnionCarrier(memberCarriers) {
       return finalizedProjectTypes?.commonSupertype(memberCarriers);
     },

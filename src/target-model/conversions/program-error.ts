@@ -4,8 +4,10 @@ import { rustTargetTypeRefEquals } from "../types/equality.js";
 import { closedMetadataEquals, hasExactObjectKeys, isClosedMetadata, isDenseDataArray } from "../metadata/closed-data.js";
 import { rustUnionLeaves, type RustUnionLeaf } from "../types/union-relations.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../types/source-union-definitions.js";
+import { isRustSourceErrorCarrier } from "../types/carriers/source-error.js";
 
 export type RustProgramErrorRoute =
+  | { readonly kind: "source-error" }
   | { readonly kind: "runtime"; readonly boundary: "target-runtime" | "provider-native" }
   | { readonly kind: "project"; readonly variant: string }
   | { readonly kind: "union"; readonly arms: readonly (RustUnionLeaf & { readonly route: RustProgramErrorRoute })[] };
@@ -32,7 +34,8 @@ export function rustProgramErrorConversionMatches(
 ): boolean {
   return isClosedMetadata(conversion) && hasExactObjectKeys(conversion, ["kind", "source", "target", "route"]) &&
     conversion.kind === "program-error" && rustTargetTypeRefEquals(source, conversion.source) &&
-    rustTargetTypeRefEquals(target, conversion.target) && isRustProgramErrorCarrier(target) &&
+    rustTargetTypeRefEquals(target, conversion.target) && (isRustProgramErrorCarrier(target) || isRustSourceErrorCarrier(target)) &&
+    (!isRustSourceErrorCarrier(target) || !isRustSourceErrorCarrier(source)) &&
     rustProgramErrorRouteMatches(conversion.route, source, definitions);
 }
 
@@ -40,6 +43,9 @@ function rustProgramErrorRouteMatches(
   route: RustProgramErrorRoute, source: TargetTypeRef, definitions: RustTypeDefinitions,
 ): boolean {
   if (typeof route !== "object" || route === null) return false;
+  if (route.kind === "source-error") {
+    return hasExactObjectKeys(route, ["kind"]) && isRustSourceErrorCarrier(source);
+  }
   if (route.kind === "union") {
     if (!hasExactObjectKeys(route, ["kind", "arms"]) || !isDenseDataArray(route.arms)) return false;
     const leaves = rustUnionLeaves(source, definitions);

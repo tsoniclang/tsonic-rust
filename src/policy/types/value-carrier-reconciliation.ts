@@ -155,8 +155,8 @@ export function selectRustValueCarrierReconciliation(
   if (rustTargetTypeRefEquals(sourceCarrier, targetCarrier)) {
     return { kind: "identity" };
   }
-  if (isRustProgramErrorCarrier(targetCarrier)) {
-    const conversion = selectRustProgramErrorConversion(sourceCarrier, projectTypes, [], definitions);
+  if (isRustProgramErrorCarrier(targetCarrier) || isRustSourceErrorCarrier(targetCarrier)) {
+    const conversion = selectRustProgramErrorConversion(sourceCarrier, projectTypes, [], definitions, targetCarrier);
     if (conversion !== undefined) return { kind: "conversion", fact: { sourceCarrier, targetCarrier, conversion } };
   }
   if (rustGenericCallableSignaturesMatch(sourceCarrier, targetCarrier)) {

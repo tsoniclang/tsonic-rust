@@ -257,8 +257,7 @@ function resolveSelectedFlowReadCarrier(
     const carrier = resolveRustTargetTypeRef(
       selectedType, rustResolutionContext(walk, expression), walk.operationOptions,
     );
-    if (rustTargetTypeRefEquals(carrier, rustJsErrorTargetType()) &&
-      walk.context.projectTypes.builtinErrorProjectionAvailable === true) return carrier;
+    if (rustTargetTypeRefEquals(carrier, walk.context.projectTypes.sourceErrorCarrier())) return carrier;
     const definition = walk.context.projectTypes.definitionForCarrier(carrier);
     return definition !== undefined &&
       walk.context.projectTypes.programErrorVariant(definition) !== undefined

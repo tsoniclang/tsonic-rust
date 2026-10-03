@@ -40,6 +40,7 @@ import { rustProjectInstanceContracts } from "../../../../analysis/project-types
 import { rustArrayFieldMutationName, rustArrayFieldMutationType } from "./array-fields.js";
 import { rustProjectObjectIdentityImplementation } from "../project-identity.js";
 import { instantiateRustProjectMethodDispatchArguments } from "../../../../analysis/project-types/method-dispatch.js";
+import { planRustProjectErrorRoot } from "./project-errors.js";
 
 export function planProjectRootImplementations(
   concrete: RustProjectTypeDefinition,
@@ -53,8 +54,10 @@ export function planProjectRootImplementations(
   if (contracts === undefined || representation === undefined) {
     return undefined;
   }
+  const errorImplementations = planRustProjectErrorRoot(concrete, rootType, layers, context);
+  if (errorImplementations === undefined) return undefined;
   const generics = rustProjectRepresentationGenerics(representation, context);
-  const items: RustItem[] = [rustProjectObjectIdentityImplementation(rootType, generics, {
+  const items: RustItem[] = [...errorImplementations, rustProjectObjectIdentityImplementation(rootType, generics, {
     kind: "reference", expr: { kind: "field", receiver: { kind: "path", path: "self" }, name: "identity" },
   })];
   const methodImplementations = new Map<Node, RustImplFunction[]>();

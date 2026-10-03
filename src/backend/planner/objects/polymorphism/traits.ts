@@ -34,6 +34,7 @@ import { planRustProjectProjectionImplementations } from "../project-projections
 import { rustStructuralDispatchType } from "../project-structural-types.js";
 import { checkedProjectProjectionSignature } from "../checked-project-projections.js";
 import { rustProjectTypeParameterContext } from "../../names/type-parameters.js";
+import { rustProjectErrorSuperTraits } from "./project-errors.js";
 
 export function projectIdentityImplementations(
   definition: RustProjectTypeDefinition,
@@ -359,6 +360,7 @@ export function planProjectDispatchTrait(
     });
   }
   const superTraits = [{ kind: "named" as const, path: "rt::ObjectIdentityCarrier" },
+    ...rustProjectErrorSuperTraits(definition, context),
     ...context.input.program.projectTypes.heritageForDefinition(definition).map((edge) =>
       rustProjectDispatchTraitType(edge.targetType, context))];
   for (const view of context.input.program.classValues.instanceViews) {

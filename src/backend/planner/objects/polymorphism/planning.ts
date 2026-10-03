@@ -52,6 +52,7 @@ import {
 import { planProjectPrivateStateAccessors } from "./private-fields.js";
 import { rustClassEnvironmentHandleType } from "../class-environment-types.js";
 import { rustProjectTypeParameterContext } from "../../names/type-parameters.js";
+import { planRustProjectErrorWrapper } from "./project-errors.js";
 
 export function planPolymorphicClassDeclaration(
   declaration: Node,
@@ -160,7 +161,8 @@ export function planPolymorphicClassDeclaration(
     representation,
     context,
   );
-  if (staticMethods === undefined || externalErrorImplementations === undefined) {
+  const errorObservations = planRustProjectErrorWrapper(definition, implementationType, implementationContext);
+  if (staticMethods === undefined || externalErrorImplementations === undefined || errorObservations === undefined) {
     return undefined;
   }
   const implementationVisibility = rustProjectImplementationVisibility(publiclyReachable);
@@ -326,6 +328,7 @@ export function planPolymorphicClassDeclaration(
     ...(defaultImplementation === undefined ? [] : [defaultImplementation]),
     ...rootImplementations,
     ...externalErrorImplementations,
+    ...errorObservations,
   ];
 }
 

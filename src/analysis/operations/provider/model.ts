@@ -4,12 +4,8 @@ import { jsSourceSemanticsModules } from "@tsonic/js-source-profile";
 import type { RustProjectMethodPropertyPlanRegistry } from "../../project-types/method-properties.js";
 import type { RustProjectMethodDispatchPlanRegistry } from "../../project-types/method-dispatch.js";
 import type { RustProjectTypePolicy } from "../../project-types/type-policy.js";
-import type { RustProviderOperationRow } from "../../../providers/packages/model.js";
 import type { RustSourceCallableAbiResolver } from "../../../policy/ownership/source-callable-abi.js";
-import type { RustSourceProfileRegistry } from "../../../policy/types/source-profile.js";
-import type { RustSourceTypeRegistry } from "../../project-types/source-type-registry.js";
 import type { RustTargetTypeResolutionOptions } from "../../../policy/types/resolution.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export const sourceCallMarkerByIdentity = new Map(
   [
@@ -25,17 +21,10 @@ export const sourceCallMarkerByIdentity = new Map(
       ] as const)),
 );
 
-export interface RustOperationsProviderOptions {
+export interface RustOperationsProviderOptions extends RustTargetTypeResolutionOptions {
   readonly providerExports: readonly import("../../../providers/packages/model.js").RustProviderExportRow[];
-  readonly providerRows: readonly RustProviderOperationRow[];
-  readonly providerTypes: readonly import("../../../providers/packages/model.js").RustProviderTypeRow[];
-  readonly jsEnabled: boolean;
-  readonly sourceProfiles: RustSourceProfileRegistry;
-  readonly sourceTypes: RustSourceTypeRegistry;
-  readonly resolveProjectUnionCarrier: RustTargetTypeResolutionOptions["resolveProjectUnionCarrier"];
   readonly sourceCallableAbi: RustSourceCallableAbiResolver;
   readonly projectTypes: RustProjectTypePolicy;
-  readonly projectCarrierSupportsObjectIdentity: (carrier: TargetTypeRef) => boolean;
   readonly projectMethodDispatch: RustProjectMethodDispatchPlanRegistry;
   readonly projectMethodProperties: RustProjectMethodPropertyPlanRegistry;
 }

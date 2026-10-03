@@ -1,4 +1,5 @@
 import { isRustBigIntCarrier, isRustJsStringCarrier, isRustStringCarrier, isRustUnitCarrier } from "./js.js";
+import { rustSourceErrorTargetId } from "./source-error.js";
 import { isRustAbsenceCarrier } from "./native.js";
 import { rustJsArrayValueTargetId } from "./array-values.js";
 import { isRustIntegerCarrier, isRustNumericCarrier, rustFutureTargetId, rustPrimitiveTypeName } from "./primitives.js";
@@ -552,6 +553,7 @@ const rustUnconditionallyCloneTargetIds: ReadonlySet<string> = new Set([
   rustJsRegExpStringIteratorTargetId,
   rustJsErrorTargetId,
   rustProgramErrorTargetId,
+  rustSourceErrorTargetId,
 ]);
 
 const rustUnconditionallyDefaultTargetIds: ReadonlySet<string> = new Set([
@@ -574,7 +576,7 @@ export function isRustSourceStringConvertibleCarrier(carrier: TargetTypeRef | un
   return isRustStringCarrier(carrier) || isRustUnitCarrier(carrier) ||
     isRustAbsenceCarrier(carrier) ||
     isRustBigIntCarrier(carrier) ||
-    (carrier?.kind === "target-named" && carrier.id === rustProgramErrorTargetId) ||
+    (carrier?.kind === "target-named" && (carrier.id === rustProgramErrorTargetId || carrier.id === rustSourceErrorTargetId)) ||
     (carrier?.kind === "source-primitive" && carrier.name !== "char");
 }
 
