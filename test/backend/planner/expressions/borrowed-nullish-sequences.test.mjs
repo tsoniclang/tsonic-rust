@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { compileRust, artifactText } from "../../../helpers/rust-session.mjs";
 import { runCargo, writeGeneratedProject } from "../../../helpers/cargo-projects.mjs";
 import { nativeOwnershipCostSupport } from "../../../helpers/native-ownership-cost.mjs";
-import { borrowedNullishSequencesSource, incompatibleBorrowedSequenceSource } from "../../../../../tsonic/test/fixtures/borrowed-nullish-sequences.mjs";
+import { borrowedNullishSequencesSource, incompatibleBorrowedSequenceSource, mutableBorrowedHeaderSource } from "../../../../../tsonic/test/fixtures/borrowed-nullish-sequences.mjs";
 import { createTsonicPlugin } from "../../../../../rust-nodejs/dist/index.js";
 
 for (const surfaces of [[], ["js"]]) {
@@ -65,4 +65,9 @@ fn native_selection_aliasing_and_cost() {
 test("native sequence selection cannot admit incompatible element storage", () => {
   assert.throws(() => compileRust({ surfaces: ["js"], capabilities: [createTsonicPlugin()],
     files: { "index.ts": incompatibleBorrowedSequenceSource } }), /TypeScript diagnostics:/u);
+});
+
+test("borrowed native header values cannot promise a mutable source alias", () => {
+  assert.throws(() => compileRust({ surfaces: ["js"], capabilities: [createTsonicPlugin()],
+    files: { "index.ts": mutableBorrowedHeaderSource } }), /TypeScript diagnostics:/u);
 });
