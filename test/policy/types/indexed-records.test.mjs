@@ -2,10 +2,29 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust, acmeTestingPackage } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
-import { rustRecordCarrierValue, rustRecordTargetType } from "../../../dist/target-model/types/carriers/records.js";
-import { rustSourcePrimitiveTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
+import { rustRecordCarrierValue, rustRecordTargetType, rustRecordReadAdmitsAbsence } from "../../../dist/target-model/types/carriers/records.js";
+import { rustAbsenceTargetType, rustJsValueTargetType, rustOptionTargetType, rustSourcePrimitiveTargetType, rustStringTargetType, rustTsValueTargetType } from "../../../dist/target-model/types/index.js";
+import { rustOptionalStorageProjection } from "../../../dist/target-model/types/projections.js";
 import { rustNamedTargetType } from "../../../dist/target-model/types/carriers/native.js";
+import { rustCarrierSupportsTrait } from "../../../dist/target-model/types/carriers/traits.js";
 import { selectRustBinaryOperator } from "../../../dist/policy/operations/operators/rules.js";
+
+test("indexed record absence reads use exact native optional storage", () => {
+  const integer = rustSourcePrimitiveTargetType("uint64");
+  for (const carrier of [rustAbsenceTargetType(), rustJsValueTargetType(), rustTsValueTargetType(),
+    rustOptionTargetType(integer), rustOptionalStorageProjection(integer)]) {
+    assert.equal(rustRecordReadAdmitsAbsence(carrier), true);
+  }
+  for (const carrier of [rustAbsenceTargetType(), rustJsValueTargetType(), rustTsValueTargetType(), rustOptionTargetType(integer)]) {
+    assert.equal(rustCarrierSupportsTrait(carrier, "core::default::Default"), true);
+  }
+  assert.equal(rustCarrierSupportsTrait(rustOptionalStorageProjection(integer), "core::default::Default"), false);
+  for (const carrier of [undefined, integer, rustStringTargetType(),
+    { kind: "target-named", id: "fixture.TsValue" }, { kind: "type-parameter", identity: "T", name: "T" }]) {
+    assert.equal(rustRecordReadAdmitsAbsence(carrier), false);
+  }
+  assert.equal(rustCarrierSupportsTrait({ kind: "target-named", id: "fixture.TsValue" }, "core::default::Default"), false);
+});
 
 test("indexed record carriers retain exact key, value and native contracts", () => {
   const key = rustStringTargetType();

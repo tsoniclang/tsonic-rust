@@ -662,7 +662,7 @@ export function normalizeSelectedArgumentCarrier(
       return providerObjectLiteral.carrier;
     }
   }
-  const literal = normalizeSelectedLiteralCarrier(subject, actual, expected, context, options);
+  const literal = normalizeSelectedOperationInputCarrier(subject, actual, expected, context, options);
   if (literal !== actual || (expected?.kind !== "function-pointer" && expected?.kind !== "closure" &&
     rustCallableProtocol(expected) === undefined)) {
     return literal;

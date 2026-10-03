@@ -19,6 +19,7 @@ import {
   isRustUnitCarrier,
   rustNeverTargetType,
   rustOptionTargetType,
+  rustOptionElementCarrier,
   rustSourceOptionalTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
@@ -65,6 +66,7 @@ import { tsonicMemoryFieldBindingFactKey, selectTsonicMemoryFieldBinding } from 
 import { selectRustConditionalNumericCarrier } from "../conditional-numeric-carrier.js";
 import { resolveRustProviderIndexedAccess } from "./indexed-access.js";
 import { resolveRustSourceDeclarationArguments } from "./generic-arguments.js";
+import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
 
 export function resolveRustTargetTypeRef(
   subject: ExtensionFactSubject | undefined,
@@ -738,6 +740,11 @@ function resolveStandardSourceTypeTransformation(
 ): TargetTypeRef | undefined {
   if (transformation.kind === "unresolved") {
     return undefined;
+  }
+  if (transformation.kind === "non-nullish") {
+    if (context.currentSemantics.types.isNever(selectedType)) return rustNeverTargetType();
+    const input = resolveRustTypeComponentEvidence(transformation.component, context, options, resolving);
+    return rustOptionElementCarrier(input) ?? rustOptionalStorageValue(input) ?? input;
   }
   if (transformation.kind === "component") {
     return resolveRustTypeComponentEvidence(

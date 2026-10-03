@@ -33,13 +33,12 @@ import {
   getRustGeneratorProtocol,
   rustAwaitCarrier,
   isRustCopyCarrier,
-  isRustJsValueCarrier,
-  rustOptionElementCarrier,
   rustClosureProtocol,
   rustJsPromiseTargetId,
   rustSourceTypeCarrierValue,
   rustTargetGenericTypeArguments,
 } from "../../target-model/types/index.js";
+import { rustRecordReadAdmitsAbsence } from "../../target-model/types/carriers/records.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustBindingProjectionCloneCarriers } from "../../policy/types/binding-normalization.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
@@ -430,7 +429,7 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
     if (operation?.kind === "source-index-signature" &&
       (operation.accessMode === "read" || operation.accessMode === "read-write")) {
       const requirements: readonly RustGenericRequirement[] = operation.storage.kind === "record" &&
-        (rustOptionElementCarrier(operation.resultCarrier) !== undefined || isRustJsValueCarrier(operation.resultCarrier))
+        rustRecordReadAdmitsAbsence(operation.resultCarrier)
         ? ["clone", "default"] : ["clone"];
       const error = addUse(node, operation.resultCarrier, requirements);
       if (error !== undefined) return error;

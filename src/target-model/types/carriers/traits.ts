@@ -559,6 +559,7 @@ const rustUnconditionallyDefaultTargetIds: ReadonlySet<string> = new Set([
   rustStringTargetId,
   rustJsStringTargetId,
   rustAbsenceTargetId,
+  rustTsValueTargetId,
   rustJsValueTargetId,
   rustJsArrayTargetId,
   rustJsMapTargetId,

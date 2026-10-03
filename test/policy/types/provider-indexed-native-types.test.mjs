@@ -3,7 +3,7 @@ import test from "node:test";
 import { providerVirtualDeclarationFactKey } from "@tsonic/tsts";
 import { providerIndexedPolicyFixture } from "../../../../tsonic/test/fixtures/provider-indexed-policy.mjs";
 import { resolveRustProviderIndexedAccess } from "../../../dist/policy/types/resolution/indexed-access.js";
-import { rustNamedTargetType, rustOptionTargetType } from "../../../dist/target-model/types/index.js";
+import { rustNamedTargetType, rustOptionTargetType, rustSourceOptionalTargetType } from "../../../dist/target-model/types/index.js";
 
 const integer = { kind: "source-primitive", name: "uint64" };
 
@@ -20,7 +20,9 @@ function fixture(options = {}) {
     if (!options.missingFact || index === 0) for (const subject of member.subjects) facts.set(subject, identity);
     return { ...identity, operationKind: "property", target: { form: "receiver-field", name: `field_${index}` },
       resultCarrier: options.conflicting && index === 1
-        ? { kind: "source-primitive", name: "int64" } : { kind: "type-parameter", identity: "T", name: "T" } };
+        ? { kind: "source-primitive", name: "int64" } : options.nativeOptional
+          ? rustOptionTargetType({ kind: "type-parameter", identity: "T", name: "T" })
+          : { kind: "type-parameter", identity: "T", name: "T" } };
   });
   const get = (subject, key) => key === providerVirtualDeclarationFactKey && !options.unowned ? facts.get(subject) : undefined;
   const context = {
@@ -38,7 +40,9 @@ function fixture(options = {}) {
 test("provider indexed type policy closes native generics and optional properties", () => {
   assert.deepEqual(fixture(), integer);
   assert.deepEqual(fixture({ keys: '"value" | "other"' }), integer);
-  assert.deepEqual(fixture({ keys: '"optional"' }), rustOptionTargetType(integer));
+  assert.deepEqual(fixture({ keys: '"optional"' }), rustSourceOptionalTargetType(integer));
+  assert.deepEqual(fixture({ keys: '"optional"', nativeOptional: true }), rustSourceOptionalTargetType(integer));
+  assert.deepEqual(fixture({ nativeOptional: true }), rustOptionTargetType(integer));
   assert.equal(fixture({ unowned: true }), undefined);
 });
 

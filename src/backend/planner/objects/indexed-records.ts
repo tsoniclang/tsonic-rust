@@ -1,8 +1,8 @@
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustIndexedRecordStorage } from "../../../target-model/types/carriers/records.js";
-import { rustRecordCarrierValue } from "../../../target-model/types/carriers/records.js";
+import { rustRecordCarrierValue, rustRecordReadAdmitsAbsence } from "../../../target-model/types/carriers/records.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { isRustJsValueCarrier, isRustStringCarrier, rustOptionElementCarrier } from "../../../target-model/types/index.js";
+import { isRustStringCarrier } from "../../../target-model/types/index.js";
 import type { Node } from "@tsonic/tsts";
 import { ElementAccessExpression_ArgumentExpression, Node_Expression } from "@tsonic/target-api/source";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
@@ -84,7 +84,7 @@ export function planRustIndexedRecordStorage(
     return {
       read(receiver: RustExpr, index: RustExpr): RustExpr {
         return { kind: "method-call", receiver,
-          method: rustOptionElementCarrier(value) !== undefined || isRustJsValueCarrier(value) ? "get_or_default" : "get",
+          method: rustRecordReadAdmitsAbsence(value) ? "get_or_default" : "get",
           args: [index] };
       },
       write(receiver: RustExpr, index: RustExpr, item: RustExpr): RustExpr {

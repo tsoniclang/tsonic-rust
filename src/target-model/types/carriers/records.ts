@@ -1,6 +1,8 @@
 import type { TargetTypeRef } from "../model.js";
 import { rustOnlyTypeGenericArguments, rustTypeGenericArguments } from "../generic-arguments.js";
-import { rustNamedTargetType, rustNamedTypeCarrierValue } from "./native.js";
+import { isRustAbsenceCarrier, rustNamedTargetType, rustNamedTypeCarrierValue } from "./native.js";
+import { rustOptionElementCarrier } from "./optional.js";
+import { rustOptionalStorageValue } from "../projections.js";
 import { rustTargetTypeRefEquals } from "../equality.js";
 
 export function rustRecordTargetType(key: TargetTypeRef, value: TargetTypeRef): TargetTypeRef {
@@ -24,3 +26,8 @@ export function rustRecordCarrierValue(carrier: TargetTypeRef | undefined): {
 export type RustIndexedRecordStorage =
   | { readonly kind: "project-field"; readonly name: string }
   | { readonly kind: "record" };
+
+export function rustRecordReadAdmitsAbsence(value: TargetTypeRef | undefined): boolean {
+  return isRustAbsenceCarrier(value) || rustOptionElementCarrier(value) !== undefined ||
+    rustOptionalStorageValue(value) !== undefined;
+}

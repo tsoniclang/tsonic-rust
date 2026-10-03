@@ -5,7 +5,7 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { resolveProviderTypeIdentity, providerCarrierFromRelations, instantiateProviderTargetType } from "./providers.js";
 import { resolveRustTargetTypeRef } from "./source.js";
 import { selectRustProviderOperation } from "../../operations/provider-selection.js";
-import { rustNamedTypeCarrierValue, rustTargetGenericBindingsForArguments, substituteRustTargetGenerics, rustOptionTargetType } from "../../../target-model/types/index.js";
+import { rustNamedTypeCarrierValue, rustTargetGenericBindingsForArguments, substituteRustTargetGenerics, rustOptionElementCarrier, rustSourceOptionalTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 
 export function resolveRustProviderIndexedAccess(
@@ -35,7 +35,8 @@ export function resolveRustProviderIndexedAccess(
     if (operation.row.receiverCarrier !== undefined &&
       !rustTargetTypeRefEquals(instantiate(operation.row.receiverCarrier), owner)) return rejected;
     const selected = instantiate(operation.row.resultCarrier);
-    const carrier = evidence.properties[index]!.property.optional ? rustOptionTargetType(selected) : selected;
+    const carrier = evidence.properties[index]!.property.optional
+      ? rustSourceOptionalTargetType(rustOptionElementCarrier(selected) ?? selected) : selected;
     if (result !== undefined && !rustTargetTypeRefEquals(result, carrier)) return rejected;
     result = carrier;
   }
