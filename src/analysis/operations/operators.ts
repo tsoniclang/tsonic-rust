@@ -25,6 +25,7 @@ import { selectRustGuardedIntegerOperation } from "../../policy/operations/numer
 import { selectRustProgramErrorEquality } from "./error-equality.js";
 import { selectRustUnionEquality } from "../../policy/operations/operators/union-equality.js";
 import { rustUnionAlternatives } from "../../target-model/types/union-relations.js";
+import { rustSourceOptionalElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { recordRustCompoundWrite, selectRustCompoundWrite } from "./provider/compound-writes.js";
 import {
   isRustAssignmentOperator,
@@ -146,8 +147,8 @@ export function resolveBinaryOperandCarriers(
     const strictEquality = operatorKind === KindEqualsEqualsEqualsToken ||
       operatorKind === KindExclamationEqualsEqualsToken;
     if (strictEquality && left !== undefined && right !== undefined &&
-      rustUnionAlternatives(left, walk.context.typeDefinitions) === undefined &&
-      rustUnionAlternatives(right, walk.context.typeDefinitions) === undefined &&
+      rustUnionAlternatives(left.kind === "target-named" ? rustSourceOptionalElementCarrier(left) ?? left : left, walk.context.typeDefinitions) === undefined &&
+      rustUnionAlternatives(right.kind === "target-named" ? rustSourceOptionalElementCarrier(right) ?? right : right, walk.context.typeDefinitions) === undefined &&
       left.kind !== "type-parameter" && right.kind !== "type-parameter" &&
       selectRustBinaryOperator(operatorKind, left, right) === undefined) {
       const rightAsLeft = resolveExpressionCarrier(walk, rightNode, sourceFile, left);

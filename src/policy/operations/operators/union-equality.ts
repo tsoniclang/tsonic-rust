@@ -5,20 +5,29 @@ import { rustUnionAlternatives, rustUnionLeaves } from "../../../target-model/ty
 import { getRustTypeofRuntimeKind } from "../../../target-model/types/runtime-kind.js";
 import { snapshotClosedMetadata } from "../../../target-model/metadata/closed-data.js";
 import { selectRustBinaryOperator } from "./rules.js";
+import { isRustAbsenceCarrier, rustAbsenceTargetType, rustSourcePrimitiveTargetType } from "../../../target-model/types/carriers/native.js";
+import { rustSourceOptionalElementCarrier } from "../../../target-model/types/carriers/optional.js";
 
 export function selectRustUnionEquality(
   left: TargetTypeRef,
   right: TargetTypeRef,
   definitions: RustTypeDefinitions,
 ): { readonly arms: readonly RustUnionEqualityArm[]; readonly exhaustive: boolean } | undefined {
-  const leftUnion = rustUnionAlternatives(left, definitions);
-  const rightUnion = rustUnionAlternatives(right, definitions);
+  const leftPresent = sourceOptionElement(left) ?? left;
+  const rightPresent = sourceOptionElement(right) ?? right;
+  const leftUnion = rustUnionAlternatives(leftPresent, definitions);
+  const rightUnion = rustUnionAlternatives(rightPresent, definitions);
   if (leftUnion === undefined && rightUnion === undefined) return undefined;
-  const leftLeaves = leftUnion === undefined ? [{ carrier: left, path: [] }] : rustUnionLeaves(left, definitions);
-  const rightLeaves = rightUnion === undefined ? [{ carrier: right, path: [] }] : rustUnionLeaves(right, definitions);
+  const leftLeaves = equalityLeaves(left, leftPresent, leftUnion !== undefined, definitions);
+  const rightLeaves = equalityLeaves(right, rightPresent, rightUnion !== undefined, definitions);
   if (leftLeaves === undefined || rightLeaves === undefined) return undefined;
   const arms: RustUnionEqualityArm[] = [];
   for (const left of leftLeaves) for (const right of rightLeaves) {
+    if (isRustAbsenceCarrier(left.carrier) !== isRustAbsenceCarrier(right.carrier)) continue;
+    if (isRustAbsenceCarrier(left.carrier)) {
+      arms.push({ left, right, operation: { kind: "operator-token", rustOperator: "==", resultCarrier: rustSourcePrimitiveTargetType("bool") } });
+      continue;
+    }
     const operation = selectRustBinaryOperator("===", left.carrier, right.carrier);
     if (operation !== undefined && operation.kind !== "string-concat" &&
       (operation.kind !== "operator-call" || !operation.fallible)) {
@@ -30,4 +39,19 @@ export function selectRustUnionEquality(
     if (typeof leftKind !== "string" || typeof rightKind !== "string" || leftKind === rightKind) return undefined;
   }
   return snapshotClosedMetadata({ arms, exhaustive: arms.length === leftLeaves.length * rightLeaves.length });
+}
+
+function sourceOptionElement(carrier: TargetTypeRef): TargetTypeRef | undefined {
+  return carrier.kind === "target-named" ? rustSourceOptionalElementCarrier(carrier) : undefined;
+}
+
+function equalityLeaves(
+  storage: TargetTypeRef,
+  present: TargetTypeRef,
+  union: boolean,
+  definitions: RustTypeDefinitions,
+): readonly RustUnionEqualityArm["left"][] | undefined {
+  const leaves = union ? rustUnionLeaves(present, definitions) : [{ carrier: present, path: [] }];
+  return leaves === undefined || sourceOptionElement(storage) === undefined ? leaves
+    : [...leaves, { carrier: rustAbsenceTargetType(), path: [] }];
 }

@@ -1,6 +1,10 @@
 import type { Node } from "@tsonic/tsts";
 import { BinaryExpression_Left, BinaryExpression_Right, BinaryExpression_OperatorToken } from "@tsonic/target-api/source";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustUnionEqualityArm } from "../../../target-model/operations/binary.js";
+import { isRustAbsenceCarrier } from "../../../target-model/types/carriers/native.js";
+import { rustSourceOptionalElementCarrier } from "../../../target-model/types/carriers/optional.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
@@ -41,9 +45,13 @@ export function planRustUnionEquality(
   for (const arm of fact.arms) {
     const leftName = allocateRustSyntheticName(context.syntheticNames, "left");
     const rightName = allocateRustSyntheticName(context.syntheticNames, "right");
-    const leftPattern = planRustUnionPattern(arm.left.path, { kind: "binding", name: leftName }, context);
-    const rightPattern = planRustUnionPattern(arm.right.path, { kind: "binding", name: rightName }, context);
+    const leftPattern = planEqualityPattern(arm.left, fact.leftCarrier, leftName, context);
+    const rightPattern = planEqualityPattern(arm.right, fact.rightCarrier, rightName, context);
     if (leftPattern === undefined || rightPattern === undefined) return undefined;
+    if (isRustAbsenceCarrier(arm.left.carrier) && isRustAbsenceCarrier(arm.right.carrier)) {
+      arms.push({ pattern: { kind: "tuple", elements: [leftPattern, rightPattern] }, expression: { kind: "bool-literal", value: true } });
+      continue;
+    }
     const operand = (side: typeof arm.left, name: string): RustExpr => {
       const variant = side.path[side.path.length - 1]?.variant;
       return variant?.kind === "constant" ? { kind: "bool-literal", value: variant.value }
@@ -70,4 +78,18 @@ export function planRustUnionEquality(
   if (!fact.exhaustive) arms.push({ pattern: { kind: "wildcard" }, expression: { kind: "bool-literal", value: false } });
   const result: RustExpr = { kind: "match", expression: { kind: "tuple-literal", elements: [left, right] }, arms };
   return fact.negated ? negateRustBooleanExpression(result) : result;
+}
+
+function planEqualityPattern(
+  arm: RustUnionEqualityArm["left"],
+  storage: TargetTypeRef,
+  name: string,
+  context: RustPlanContext,
+): RustPattern | undefined {
+  const optional = storage.kind === "target-named" && rustSourceOptionalElementCarrier(storage) !== undefined;
+  if (arm.path.length === 0 && isRustAbsenceCarrier(arm.carrier)) {
+    return optional ? { kind: "path", path: "None" } : { kind: "wildcard" };
+  }
+  const pattern = planRustUnionPattern(arm.path, { kind: "binding", name }, context);
+  return pattern === undefined || !optional ? pattern : { kind: "tuple-variant", path: "Some", elements: [pattern] };
 }
