@@ -58,6 +58,7 @@ import { planRustCompoundRuntimeWrite } from "./compound-runtime-write.js";
 import { rustCompoundWriteFactKey } from "../../../analysis/facts/operations/keys.js";
 import { prepareRustComputedMemberEvaluation } from "../expressions/computed-members.js";
 import { planRustDiscardedValue } from "../expressions/discarded-values.js";
+import { planRustBorrowedElementRead } from "../expressions/borrowed-element-reads.js";
 
 export function planExpressionStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const expression = Node_Expression(context.input.program.source.ast, node);
@@ -209,6 +210,14 @@ export function planRustAssignmentWrite(
   fact: RustAssignmentOperationPlan,
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
+  const borrowed = context.input.program.borrowedElementReads.forExpression(expression);
+  if (borrowed !== undefined && context.expressionOverrides?.has(borrowed.receiver) !== true) {
+    const planned = planRustBorrowedElementRead(expression, borrowed, context, (selectedExpression, selected) => {
+      const statements = planRustAssignmentWrite(selectedExpression, left, valueNode, fact, selected);
+      return statements === undefined ? undefined : { kind: "block", body: { statements } };
+    });
+    return planned === undefined ? undefined : [{ kind: "expr", expr: planned }];
+  }
   const evaluation = prepareRustComputedMemberEvaluation(left, context);
   if (evaluation === undefined) return undefined;
   if (evaluation.bindings.length !== 0) {

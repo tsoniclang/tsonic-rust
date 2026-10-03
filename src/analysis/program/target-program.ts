@@ -205,6 +205,7 @@ export function analyzeRustTargetProgram(
       evidence: ["target.capability=rust.backend.source-module-construction"],
     })));
   }
+  const borrowedElementReads = analyzeRustBorrowedElementReads(context.ast, context.sourceFiles, facts, context.source.navigation);
   const program: RustTargetProgram = Object.freeze({
     localStorageAliases: analyzeRustLocalStorageAliases({ ast: context.ast,
       navigation: context.source.navigation, sourceFiles: context.sourceFiles, facts }),
@@ -232,7 +233,7 @@ export function analyzeRustTargetProgram(
     sourceLifetimes: context.sourceLifetimes,
     declarationGenericRequirements: declarationGenericRequirements.index,
     valueLifetimes,
-    borrowedElementReads: analyzeRustBorrowedElementReads(context.ast, context.sourceFiles, facts, context.source.navigation),
+    borrowedElementReads,
     structuralShapes: context.structuralShapes.seal(),
     frozenDataWrites: context.frozenDataWrites.seal(),
     classValues,
@@ -259,6 +260,7 @@ export function analyzeRustTargetProgram(
       sourceFiles: context.sourceFiles,
       navigation: context.source.navigation,
       facts,
+      borrowedElementReads,
     }),
     projectFlowReadSelections: analyzeRustProjectFlowReadSelections({
       ast: context.ast,
