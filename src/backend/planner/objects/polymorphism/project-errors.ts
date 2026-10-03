@@ -54,9 +54,12 @@ export function planRustProjectErrorRoot(
           ],
         }] };
     functions.push(errorFunction(`error_${name}`, name === "stack" ? stackType : errorField, read));
-    const target = storage.reduce(field, method(field(path("self"), rustProjectObjectStateField), "borrow_mut"));
+    const target = storage.reduce(field, path("state"));
     setters.push({ ...errorFunction(`set_error_${name}`, { kind: "unit" },
-      { kind: "assignment", operator: "=", target, value: path("value") }), params: [{ name: "value", type: name === "stack"
+      method(field(path("self"), rustProjectObjectStateField), "with_mut", {
+        kind: "closure", params: [{ name: "state", byRefCopy: false }],
+        body: { kind: "assignment", operator: "=", target, value: path("value") },
+      })), params: [{ name: "value", type: name === "stack"
         ? { kind: "named", path: "Option", genericArguments: [{ kind: "type", type: { kind: "string" } }] } : { kind: "string" } }] });
   }
   functions.push(errorFunction("error_kind", { kind: "named", path: "rt::JsErrorKind" },

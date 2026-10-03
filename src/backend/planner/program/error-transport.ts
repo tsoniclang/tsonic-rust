@@ -84,7 +84,7 @@ export function planRustSourceErrorTransport(plan: RustErrorTransportPlan, writa
     ...plan.variants.map(item => ({ pattern: variant(`ErrorTransport::${item.name}`, binding("error")),
       expression: item.source === "error" ? projected(item.name, own)
         : item.source === "thrown" ? call("Err", call(`ErrorTransport::${item.name}`, own))
-        : { kind: "match" as const, expression: method(own, writable ? "try_into_writable_source_error" : "try_into_source_error"), arms: [
+        : { kind: "match" as const, expression: call(`${((writable ? item.writableSourceErrorType : item.sourceErrorType) as Extract<RustType, { kind: "named" }>).path}::try_from`, own), arms: [
             { pattern: variant("Ok", binding("source")), expression: projected(item.name, path("source")) },
             { pattern: variant("Err", binding("original")), expression: call("Err", call(`ErrorTransport::${item.name}`, path("original"))) },
           ] },
@@ -146,11 +146,6 @@ export function planRustSourceErrorTransport(plan: RustErrorTransportPlan, writa
     fromVariant(mutableError, "SourceCreated", false),
     ...plan.variants.filter(item => item.source !== "thrown").map(item =>
       fromVariant(item.source === "external" ? writable ? item.writableSourceErrorType! : item.sourceErrorType! : item.type, item.name, false)),
-    { kind: "impl", generics: emptyRustGenerics, target: fullTransport, members: [
-      { ...nativeFunction(writable ? "try_into_writable_source_error" : "try_into_source_error", named("Result", view, fullTransport),
-          call(`${writable ? "WritableSourceError" : "SourceError"}::try_from`, path("self")), []),
-        visibility: "public", selfParam: { kind: "value" } },
-    ] },
     { kind: "impl", generics: emptyRustGenerics, target: view, members: [
       { ...nativeFunction("as_transport", { kind: "reference", mutable: false, referent: writable ? plan.writableSourceErrorType : plan.sourceErrorType },
           { kind: "reference", expr: { kind: "field", receiver: path("self"), name: payloadField } }, []),

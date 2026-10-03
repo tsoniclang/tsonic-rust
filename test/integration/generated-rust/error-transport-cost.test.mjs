@@ -60,13 +60,13 @@ mod tests {
         COUNT.with(|count| count.set(Some(0)));
         let readonly = SourceError::from(immutable);
         let transported = readonly.into_transport();
-        let restored = transported.try_into_source_error().ok().unwrap();
+        let restored = SourceError::try_from(transported).ok().unwrap();
         assert_eq!(COUNT.with(|count| count.replace(None).unwrap()), 0);
         match restored.as_transport() {
             ErrorTransport::Runtime(value) => assert_eq!(value.source_error().error_identity_key(), identity),
             _ => panic!("original native owner was replaced"),
         }
-        let rejected = TsonicError::Huge(Huge([7; 4096])).try_into_source_error();
+        let rejected = SourceError::try_from(TsonicError::Huge(Huge([7; 4096])));
         match rejected { Err(ErrorTransport::Huge(value)) => assert_eq!(value.0, [7; 4096]), _ => panic!("non-Error admitted") }
     }
 
@@ -74,7 +74,7 @@ mod tests {
     fn writable_admission_retains_original_handle_and_rejects_immutable_runtime() {
         let immutable = JsError::error("immutable");
         let identity = immutable.error_identity_key();
-        match TsonicError::from(immutable).try_into_writable_source_error() {
+        match WritableSourceError::try_from(TsonicError::from(immutable)) {
             Err(ErrorTransport::Runtime(value)) => assert_eq!(value.source_error().error_identity_key(), identity),
             _ => panic!("immutable provider received a fabricated setter"),
         }
@@ -85,7 +85,7 @@ mod tests {
         let writable = WritableSourceError::from(original);
         let readonly = SourceError::from(writable);
         let transported = readonly.into_transport();
-        let recovered = transported.try_into_writable_source_error().ok().unwrap();
+        let recovered = WritableSourceError::try_from(transported).ok().unwrap();
         assert_eq!(COUNT.with(|count| count.replace(None).unwrap()), 0);
         match recovered.as_transport() {
             ErrorTransport::SourceCreated(value) => {
@@ -101,7 +101,7 @@ mod tests {
   const formatted = spawnSync("rustfmt", ["--emit", "stdout", "--edition", "2024"], { input: source, encoding: "utf8", timeout: 30_000 });
   assert.equal(formatted.status, 0, formatted.stderr);
   validateGeneratedProject("error-transport-cost", [
-    { path: "Cargo.toml", text: `[package]\nname = "irene_error_transport_cost"\nversion = "0.1.0"\nedition = "2024"\n[dependencies]\ntsonic_rust_runtime = { path = ${JSON.stringify(rustRuntimeCratePath)} }\n` },
+    { path: "Cargo.toml", text: `[package]\nname = "error_transport_cost"\nversion = "0.1.0"\nedition = "2024"\n[dependencies]\ntsonic_rust_runtime = { path = ${JSON.stringify(rustRuntimeCratePath)} }\n` },
     { path: "src/lib.rs", text: formatted.stdout },
   ]);
 });

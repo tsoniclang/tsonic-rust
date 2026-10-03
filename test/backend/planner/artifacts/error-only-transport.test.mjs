@@ -48,7 +48,10 @@ test("admission retains exact rejected payloads and invokes no allocating adapte
     { kind: "call", path: "ErrorTransport::Unrelated", args: [{ kind: "path", path: "error" }] },
   ] });
   const external = body.arms.find(item => item.pattern.path === "ErrorTransport::DependencyError");
-  assert.equal(external.expression.expression.method, "try_into_source_error");
+  assert.deepEqual(external.expression.expression, { kind: "call", path: "dependency::program::SourceError::try_from", args: [
+    { kind: "path", path: "error" },
+  ] });
+  assert.equal(items.some(item => item.trait === undefined && item.target?.path === "TsonicError"), false);
   assert.equal(external.expression.arms[1].expression.args[0].path, "ErrorTransport::DependencyError");
   const constructors = items.filter(item => item.trait?.path === "core::convert::From" && item.target.path === "SourceError");
   assert.ok(constructors.some(item => item.trait.genericArguments[0].type.path === rows[0].type.path));

@@ -120,9 +120,9 @@ export function planRustProgramErrorTypeTest(
   const valueName = allocateRustSyntheticName(context.syntheticNames ?? createRustSyntheticNameState(
     context.input.program.source.ast, node, []), "error_package");
   return { kind: "match", expression: programErrorSubject(expression, fact.sourceCarrier, false), arms: [
-    { pattern: programErrorPattern(route, { kind: "binding", name: valueName }, isRustSourceErrorCarrier(fact.sourceCarrier)),
+    { pattern: programErrorPattern(route, route.kind === "local" ? { kind: "wildcard" } : { kind: "binding", name: valueName }, isRustSourceErrorCarrier(fact.sourceCarrier)),
       expression: projectErrorPayload(route, fact.sourceCarrier, { kind: "path", path: valueName }, false,
-        () => ({ kind: "bool-literal", value: true }), { kind: "bool-literal", value: false }) },
+        { kind: "bool-literal", value: true }, { kind: "bool-literal", value: false }) },
     { pattern: { kind: "wildcard" }, expression: { kind: "bool-literal", value: false } },
   ] };
 }
@@ -231,12 +231,13 @@ function programErrorSubject(expression: RustExpr, carrier: TargetTypeRef, owned
 
 function projectErrorPayload(
   route: RustProgramErrorRoute, carrier: TargetTypeRef, value: RustExpr, owned: boolean,
-  project: (payload: RustExpr) => RustExpr, otherwise: RustExpr,
+  project: RustExpr | ((payload: RustExpr) => RustExpr), otherwise: RustExpr,
 ): RustExpr {
-  if (route.kind === "local" || !isRustSourceErrorCarrier(carrier)) return project(value);
+  if (route.kind === "local" || !isRustSourceErrorCarrier(carrier)) return typeof project === "function" ? project(value) : project;
   return { kind: "match", expression: programErrorSubject(value, carrier, owned), arms: [
     { pattern: { kind: "tuple-variant", path: `${route.ownerTypePath.slice(0, -"TsonicError".length)}ErrorTransport::${route.ownerVariant}`,
-      elements: [{ kind: "binding", name: "error_payload" }] }, expression: project({ kind: "path", path: "error_payload" }) },
+      elements: [typeof project === "function" ? { kind: "binding", name: "error_payload" } : { kind: "wildcard" }] },
+      expression: typeof project === "function" ? project({ kind: "path", path: "error_payload" }) : project },
     { pattern: { kind: "wildcard" }, expression: otherwise },
   ] };
 }

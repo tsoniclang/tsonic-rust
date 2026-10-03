@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { liveErrorBaseWriteSource, liveErrorStorageFiles } from "../../../../tsonic/test/fixtures/live-error-storage.mjs";
+import { errorBorrowEffectsSource, errorStackRecaptureSource } from "../../fixtures/error-effect-captures.mjs";
 
 for (const surfaces of [[], ["js"]]) {
   const profile = surfaces.length === 0 ? "native" : "js";
@@ -50,5 +51,32 @@ for (const surfaces of [[], ["js"]]) {
     const source = result.artifacts.filter(artifact => artifact.path.endsWith("/index.rs")).map(artifact => artifact.text).join("\n");
     assert.match(source, /value\.as_transport\(\)/);
     assert.match(source, /rt::ErrorTransport::Failure/);
+    assert.match(source, /rt::ErrorTransport::Failure\(_\)/);
+  });
+
+  test(`Error field setters keep shared receivers immutable while actual rebinding stays mutable in ${profile}`, () => {
+    const { result } = compileRust({ surfaces, files: { "index.ts": `
+      function mutate(error: Error): void { error.message = "changed"; }
+      export function run(): boolean {
+        let original = new Error("first"); original = new Error("second");
+        mutate(original); return original.message === "changed";
+      }` } });
+    assert.deepEqual(result.diagnostics, []);
+    const source = result.artifacts.filter(artifact => artifact.path.endsWith("/index.rs")).map(artifact => artifact.text).join("\n");
+    assert.match(source, /fn mutate\(error: rt::WritableSourceError\)/);
+    assert.doesNotMatch(source, /fn mutate\(mut error/);
+    assert.match(source, /let mut original/);
+  });
+
+  test(`captured Error writes publish coherent lifetime effects through arrow closures in ${profile}`, () => {
+    const { result } = compileRust({ surfaces, files: { "index.ts": errorBorrowEffectsSource("arrow") } });
+    assert.deepEqual(result.diagnostics, []);
+    assert.ok(result.artifacts.length !== 0);
   });
 }
+
+test("captured immutable Error stack recapture publishes coherent guard effects through an arrow closure", () => {
+  const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": errorStackRecaptureSource("arrow") } });
+  assert.deepEqual(result.diagnostics, []);
+  assert.ok(result.artifacts.length !== 0);
+});

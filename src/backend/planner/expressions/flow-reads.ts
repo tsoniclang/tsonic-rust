@@ -90,7 +90,7 @@ export function planRustValueProjection(
       const transport: RustExpr = ownsValue && isRustSourceErrorCarrier(fact.sourceCarrier)
         ? { kind: "method-call", receiver: exactSource, method: "into_transport", args: [] } : exactSource;
       const selected: RustExpr = ownsValue
-        ? { kind: "method-call", receiver: transport, method: writable ? "try_into_writable_source_error" : "try_into_source_error", args: [] }
+        ? { kind: "call", path: writable ? "rt::WritableSourceError::try_from" : "rt::SourceError::try_from", args: [transport] }
         : { kind: "method-call", receiver: exactSource, method: writable ? "writable_source_error_value" : "source_error_value", args: [] };
       return { kind: "method-call", receiver: selected, method: "expect",
         args: [{ kind: "str-literal", value: "exact checked flow selected an Error outside its sealed admitted variants" }] };
