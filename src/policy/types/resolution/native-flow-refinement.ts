@@ -1,5 +1,5 @@
 import type { Node, Type } from "@tsonic/tsts";
-import { selectSourceGuardedValueMembers, selectSourceGuardedTypeMembers, selectSourceNativeValueGuard, type SourceValueFlowQueryContext, type SourceNativeGuard, type SourceNativeValueGuard } from "@tsonic/target-api/source";
+import { selectSourceGuardedValueMembers, selectSourceGuardedTypeMembers, selectSourceNativeGuardResult, selectSourceNativeValueGuard, type SourceValueFlowQueryContext, type SourceNativeGuard, type SourceNativeValueGuard } from "@tsonic/target-api/source";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import type { RustClosedTypePredicate } from "../../../target-model/operations/type-tests.js";
@@ -7,6 +7,8 @@ import { rustUnionLeaves } from "../../../target-model/types/union-relations.js"
 import { getRustTypeofRuntimeKind } from "../../../target-model/types/runtime-kind.js";
 import { selectRustClosedTypeTestPlan } from "../../operations/operators/type-tests.js";
 import type { RustProjectTypePolicy } from "../project-types.js";
+import { isRustAbsenceCarrier, rustAbsenceTargetType } from "../../../target-model/types/carriers/native.js";
+import { rustOptionElementCarrier } from "../../../target-model/types/carriers/optional.js";
 
 export function selectRustNativeFlowMembers(
   context: SourceValueFlowQueryContext,
@@ -17,14 +19,35 @@ export function selectRustNativeFlowMembers(
   selectGuard: (expression: Node) => SourceNativeGuard<RustClosedTypePredicate> | undefined,
   resolveNominal: (guard: Extract<SourceNativeValueGuard, { readonly kind: "nominal" }>) => TargetTypeRef | undefined,
 ): ReturnType<typeof rustUnionLeaves> {
-  const members = rustUnionLeaves(sourceCarrier, definitions);
-  if (members === undefined) return undefined;
+  const members = rustUnionLeaves(sourceCarrier, definitions) ?? [{ carrier: sourceCarrier, path: [] }];
   return selectSourceGuardedValueMembers(context, reference, members,
     expression => selectNativeGuard(context, expression, selectGuard, resolveNominal),
     (member, predicate) => testNativeCarrier(member.carrier, predicate, projectTypes, definitions));
 }
 
-type Predicate = RustClosedTypePredicate | { readonly kind: "typeof"; readonly value: string; readonly negated: boolean };
+type Predicate = RustClosedTypePredicate | { readonly kind: "typeof"; readonly value: string; readonly negated: boolean }
+  | { readonly kind: "absence"; readonly negated: boolean };
+
+export function selectRustNativeGuardResult(
+  context: SourceValueFlowQueryContext,
+  expression: Node,
+  resolveCarrier: (reference: Node) => TargetTypeRef | undefined,
+  projectTypes: RustProjectTypePolicy,
+  definitions: RustTypeDefinitions,
+): boolean | undefined {
+  return selectSourceNativeGuardResult(context, expression, reference => {
+    const sourceCarrier = resolveCarrier(reference);
+    if (sourceCarrier === undefined) return undefined;
+    const present = rustOptionElementCarrier(sourceCarrier) ?? sourceCarrier;
+    const payloads = rustUnionLeaves(present, definitions)?.map(member => member.carrier) ?? [present];
+    return present === sourceCarrier ? payloads : [...payloads, rustAbsenceTargetType()];
+  }, selected => {
+    const guard = selectSourceNativeValueGuard(context, selected);
+    return guard?.kind === "typeof" || guard?.kind === "absence"
+      ? { sourceOperand: guard.sourceOperand, predicate: guard } : undefined;
+  },
+    (member, predicate) => testNativeCarrier(member, predicate, projectTypes, definitions));
+}
 
 export function selectRustNativeFlowTypeMembers(
   context: SourceValueFlowQueryContext,
@@ -51,6 +74,7 @@ function selectNativeGuard(
   resolveNominal: (guard: Extract<SourceNativeValueGuard, { readonly kind: "nominal" }>) => TargetTypeRef | undefined,
 ): SourceNativeGuard<Predicate> | undefined {
   const native = selectSourceNativeValueGuard(context, expression);
+  if (native?.kind === "absence") return { sourceOperand: native.sourceOperand, predicate: native };
   if (native?.kind === "typeof") return { sourceOperand: native.sourceOperand, predicate: native };
   if (native?.kind === "nominal") {
     const targetCarrier = resolveNominal(native);
@@ -65,6 +89,10 @@ function testNativeCarrier(
   projectTypes: RustProjectTypePolicy,
   definitions: RustTypeDefinitions,
 ): boolean | undefined {
+  if (predicate.kind === "absence") {
+    if (isRustAbsenceCarrier(carrier)) return !predicate.negated;
+    return typeof getRustTypeofRuntimeKind(carrier, definitions) === "string" ? predicate.negated : undefined;
+  }
   if (predicate.kind === "typeof") {
     const category = getRustTypeofRuntimeKind(carrier, definitions);
     return typeof category === "string" ? (category === predicate.value) !== predicate.negated : undefined;
