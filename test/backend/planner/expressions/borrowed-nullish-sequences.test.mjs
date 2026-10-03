@@ -6,7 +6,7 @@ import { compileRust, artifactText } from "../../../helpers/rust-session.mjs";
 import { runCargo, writeGeneratedProject } from "../../../helpers/cargo-projects.mjs";
 import { nativeOwnershipCostSupport } from "../../../helpers/native-ownership-cost.mjs";
 import { borrowedNullishSequencesSource, incompatibleBorrowedSequenceSource } from "../../../../../tsonic/test/fixtures/borrowed-nullish-sequences.mjs";
-import { createTsonicPlugin } from "../../../../../rust-nodejs/nodejs/dist/index.js";
+import { createTsonicPlugin } from "../../../../../rust-nodejs/dist/index.js";
 
 for (const surfaces of [[], ["js"]]) {
   test(`native nullish sequences retain backing until the authored snapshot (${surfaces[0] ?? "native"})`, { timeout: 300_000 }, () => {
@@ -15,7 +15,8 @@ for (const surfaces of [[], ["js"]]) {
       files: { "index.ts": borrowedNullishSequencesSource } });
     assert.deepEqual(result.diagnostics, []);
     const output = artifactText(result, "src/index.rs");
-    assert.doesNotMatch(output, /\.to_vec\(|\.collect\(|Box<dyn|Vec<.*Vec</u);
+    assert.doesNotMatch(output, /\.to_vec\(|\.collect\(|Box<dyn|Vec<.*Vec|option_coalesce/u);
+    assert.match(output, /Option<&\[String\]>/u);
     const root = writeGeneratedProject(`borrowed-nullish-sequences-${surfaces[0] ?? "native"}`, result.artifacts);
     mkdirSync(join(root, "tests"), { recursive: true });
     const authored = surfaces.length === 0 ? "Vec<String>" : "JsArray<String>";
@@ -25,27 +26,27 @@ for (const surfaces of [[], ["js"]]) {
     const nativeCheck = surfaces.length === 0 ? 'assert_eq!(result, ["native", "tail"]);'
       : 'assert_eq!(result.get(0), Some("native".to_owned()));';
     const hand = surfaces.length === 0
-      ? "let mut result = Vec::new(); if let Some(source) = authored { result.extend_from_slice(&source); } else if let Some(source) = native { source.with_values(|values| result.extend_from_slice(values)); } result"
-      : "let selected = authored.or(native).unwrap_or_default(); let mut result = Vec::new(); selected.with_values(|values| result.extend_from_slice(values)); JsArray::from_dense(result)";
+      ? "let mut result = Vec::new(); if let Some(source) = authored.as_ref() { result.extend_from_slice(source); } else if let Some(source) = native { result.extend_from_slice(source); } result"
+      : "let mut result = Vec::new(); if let Some(source) = authored.as_ref() { source.with_values(|values| result.extend_from_slice(values)); } else if let Some(source) = native { result.extend_from_slice(source); } JsArray::from_dense(result)";
     writeFileSync(join(root, "tests/selection.rs"), `${nativeOwnershipCostSupport}
 use borrowed_nullish_sequences::index;
-use tsonic_rust_js::JsArray;
+${surfaces.length === 0 ? "" : "use tsonic_rust_js::JsArray;"}
 
-fn handwritten(authored: Option<${authored}>, native: Option<JsArray<String>>) -> ${authored} { ${hand} }
+fn handwritten(authored: Option<${authored}>, native: Option<&[String]>) -> ${authored} { ${hand} }
 
 #[test]
 fn native_selection_aliasing_and_cost() {
     let authored = ${values};
-    let native = JsArray::from_dense(vec!["native".to_owned(), "tail".to_owned()]);
-    let mut result = index::choose(Some(authored.clone()), Some(native.clone()));
+    let native = vec!["native".to_owned(), "tail".to_owned()];
+    let mut result = index::choose(Some(authored.clone()), Some(&native));
     ${check}
-    let result = index::choose(None, Some(native.clone()));
+    let result = index::choose(None, Some(&native));
     ${nativeCheck}
     assert_eq!(index::choose(None, None).len(), 0);
     for selected in [Some(authored.clone()), None] {
         for _ in 0..1000 {
-            let (generated, generated_cost) = measure(|| index::choose(selected.clone(), Some(native.clone())));
-            let (handwritten, handwritten_cost) = measure(|| handwritten(selected.clone(), Some(native.clone())));
+            let (generated, generated_cost) = measure(|| index::choose(selected.clone(), Some(&native)));
+            let (handwritten, handwritten_cost) = measure(|| handwritten(selected.clone(), Some(&native)));
             assert_eq!(generated.len(), handwritten.len());
             assert_eq!(generated_cost, handwritten_cost);
         }

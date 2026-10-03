@@ -59,8 +59,7 @@ import { rustRawAddressPlanKey } from "../../target-model/operations/raw-address
 import { rustMemoryLayoutObservationKey } from "../../target-model/operations/memory-layout.js";
 import { rustRawLocationPlanKey } from "../../target-model/operations/native-memory.js";
 import { rustMemoryBindingPlanKey } from "../../target-model/operations/memory-bindings.js";
-import { rustRestSequenceElements } from "../../target-model/operations/rest-assembly.js";
-import { selectRustRestSequenceConversion } from "../../policy/conversions/rest-sequence.js";
+import { rustBorrowedSequenceElementCandidates, selectRustBorrowedSequenceInput } from "./borrowed-sequences.js";
 
 export function recordSelectedOperationInputs(
   walk: RustFactWalk,
@@ -353,17 +352,20 @@ export function resolveArrayLiteralCarrier(
   for (const element of presentElements) {
     const spread = ast.is.IsSpreadElement(element);
     const operand = spread ? Node_Expression(ast, element) : element;
-    const carrier = operand === undefined ? undefined : resolveArrayElementCarrier(
-      walk, operand, sourceFile, spread ? undefined : expectedElement);
-    if (carrier === undefined) return undefined;
-    const spreadConversion = spread ? selectRustRestSequenceConversion(carrier, expectedElement, walk.context.typeDefinitions) : undefined;
-    if (spread && spreadConversion === undefined) {
-      appendRustDiagnostic(walk, "RUST_ARRAY_SPREAD_CARRIER_MISMATCH",
-        "Array spread requires a finalized dense sequence with an exact native conversion for every destination element.", element, []);
-      return undefined;
+    if (spread) {
+      const input = operand === undefined ? undefined : selectRustBorrowedSequenceInput(walk, operand, sourceFile, expectedElement);
+      if (input === undefined) {
+        appendRustDiagnostic(walk, "RUST_ARRAY_SPREAD_CARRIER_MISMATCH",
+          "Array spread requires finalized borrowed alternatives with exact native element conversions.", element, []);
+        return undefined;
+      }
+      contributions.push(Object.freeze({ kind: "spread", input }));
+      continue;
     }
-    contributions.push(Object.freeze(spreadConversion === undefined ? { kind: "value", carrier }
-      : { kind: "spread", carrier, conversion: spreadConversion }));
+    const carrier = operand === undefined ? undefined : resolveArrayElementCarrier(
+      walk, operand, sourceFile, expectedElement);
+    if (carrier === undefined) return undefined;
+    contributions.push(Object.freeze({ kind: "value", carrier }));
   }
   const resultCarrier = lane === "js"
     ? rustJsArrayTargetType(expectedElement)
@@ -403,10 +405,21 @@ function inferArrayLiteralElement(
     const spread = ast.is.IsSpreadElement(element);
     const operand = spread ? Node_Expression(ast, element) : element;
     if (operand === undefined) return undefined;
+    if (spread) {
+      const candidates = rustBorrowedSequenceElementCandidates(walk, operand, sourceFile);
+      if (candidates === undefined) return undefined;
+      if (candidates.length === 0) continue;
+      const source = types.expressionType(operand);
+      const type = source === undefined ? undefined : types.typeArguments(source)[0] ?? sourceElement;
+      if (type === undefined) return undefined;
+      first ??= candidates[0];
+      for (const carrier of candidates) rows.push({ type, carrier });
+      continue;
+    }
     const literalContext = first !== undefined && isRustNumericCarrier(first) &&
       (ast.kindName(operand) === KindNumericLiteral || ast.is.IsBigIntLiteral(operand)) ? first : undefined;
     const value = resolveExpressionCarrier(probe, operand, sourceFile, literalContext);
-    const carrier = value === undefined ? undefined : spread ? rustRestSequenceElements(value)?.elements[0] : value;
+    const carrier = value;
     const source = types.expressionType(operand);
     const elementType = source === undefined ? undefined : spread ? types.typeArguments(source)[0] : source;
     const type = elementType === undefined ? undefined : types.literalBaseType(elementType);

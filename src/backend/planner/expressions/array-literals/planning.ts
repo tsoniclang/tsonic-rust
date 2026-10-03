@@ -7,22 +7,18 @@ import { missingFactDiagnostic } from "../../diagnostics.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { requireExpressionCarrier, rustOperationFact } from "../fundamentals.js";
 import { planExpression } from "../entry.js";
-import { planRustNonConsumingValue } from "../typed-locations.js";
 import { planNativeRustArray } from "../native-arrays.js";
 import { rustNativeArrayStorageKey } from "../../../../target-model/operations/native-memory.js";
 import { rustJsArrayTargetType, rustOptionElementCarrier, rustVecTargetType } from "../../../../target-model/types/index.js";
-import { rustValueConversionContract, type RustValueConversionContract } from "../../../../target-model/conversions/contracts.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
-import { rustCarrierHasCloneContract } from "../../types/generic-requirements.js";
-import { rustRestSequenceElements } from "../../../../target-model/operations/rest-assembly.js";
 import { rustEffectiveValueCarrier } from "../../../../analysis/facts/value-carrier-queries.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { isDenseDataArray } from "../../../../target-model/metadata/closed-data.js";
-import { applyRustArgumentMode } from "../input-shaping.js";
-import { planRustSequenceAppend } from "../sequence-conversions.js";
-import { lowerNestedRustValueConversion } from "../value-conversions.js";
+import type { RustBorrowedSequenceInput } from "../../../../analysis/facts/operations/borrowed-sequences.js";
+import { planRustBorrowedSequenceAppend } from "./borrowed-sequences.js";
 
-type SpreadContract = Extract<RustValueConversionContract, { readonly lowering: "rest-sequence" }>;
+type Contribution = { readonly kind: "value"; readonly value: RustExpr }
+  | { readonly kind: "spread"; readonly input: RustBorrowedSequenceInput };
 
 export function planArrayLiteral(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
@@ -57,36 +53,31 @@ export function planArrayLiteral(node: Node, context: RustPlanContext): RustExpr
       fact.lane === "js" ? rustJsArrayTargetType(fact.elementCarrier) : rustVecTargetType(fact.elementCarrier))) {
     return reject(node, context, "Array contributions conflict with the finalized source element count.");
   }
-  const elements: RustExpr[] = [];
-  const spreads: (SpreadContract | undefined)[] = [];
+  const contributions: Contribution[] = [];
   for (const [index, source] of sources.entries()) {
     const contribution = fact.contributions[index]!;
     const spread = source !== undefined && context.input.program.source.ast.is.IsSpreadElement(source);
     const expression = spread ? Node_Expression(context.input.program.source.ast, source!) : source;
-    if (expression === undefined || spread !== (contribution.kind === "spread") ||
-      !spread && !rustTargetTypeRefEquals(contribution.carrier, fact.elementCarrier) ||
-      !rustTargetTypeRefEquals(context.expressionOverrides?.get(expression)?.carrier ??
-        rustEffectiveValueCarrier(context.input.program.facts, expression), contribution.carrier)) {
+    if (expression === undefined || spread !== (contribution.kind === "spread")) {
       return reject(node, context, "Array contribution does not match its exact finalized source expression.");
     }
-    const sequence = contribution.kind === "spread" && contribution.conversion?.kind === "rest-sequence"
-      ? rustValueConversionContract(contribution.conversion, context.input.program.typeDefinitions) : undefined;
-    if (spread && (sequence?.lowering !== "rest-sequence" ||
-      !rustTargetTypeRefEquals(sequence.source, contribution.carrier) ||
-      !rustTargetTypeRefEquals(sequence.target, rustVecTargetType(fact.elementCarrier)) ||
-      rustRestSequenceElements(contribution.carrier)?.elements.some(element => !rustCarrierHasCloneContract(element, context)))) {
-      return reject(node, context, "Array spread requires one checked dense sequence and an exact native Clone contract.");
+    if (contribution.kind === "spread") {
+      if (expression !== contribution.input.expression) return reject(node, context, "Borrowed spread must retain its exact source expression.");
+      contributions.push({ kind: "spread", input: contribution.input });
+      continue;
+    }
+    if (!rustTargetTypeRefEquals(contribution.carrier, fact.elementCarrier) ||
+      !rustTargetTypeRefEquals(context.expressionOverrides?.get(expression)?.carrier ??
+        rustEffectiveValueCarrier(context.input.program.facts, expression), contribution.carrier)) {
+      return reject(node, context, "Array value contribution lost its finalized source and destination carriers.");
     }
     const value = planExpression(expression, context);
     if (value === undefined) return undefined;
-    const input = spread ? planRustNonConsumingValue(expression, value, context) : value;
-    elements.push(spread && sequence?.lowering === "rest-sequence" && sequence.collection !== "js-array"
-      ? applyRustArgumentMode(context, input, "ref", expression) : input);
-    spreads.push(sequence?.lowering === "rest-sequence" ? sequence : undefined);
+    contributions.push({ kind: "value", value });
   }
-  const array = spreads.every(spread => spread === undefined)
-    ? { kind: "vec-literal" as const, elements }
-    : planSpreadArray(node, elements, spreads, fact.elementCarrier, context);
+  const array = contributions.every(contribution => contribution.kind === "value")
+    ? { kind: "vec-literal" as const, elements: contributions.map(contribution => contribution.value) }
+    : planSpreadArray(node, contributions, fact.elementCarrier, context);
   if (array === undefined) return undefined;
   if (fact.length === 0) {
     const owner = rustTypeFromCarrierInContext(fact.resultCarrier, context);
@@ -105,8 +96,7 @@ export function planArrayLiteral(node: Node, context: RustPlanContext): RustExpr
 
 function planSpreadArray(
   node: Node,
-  elements: readonly RustExpr[],
-  spreads: readonly (SpreadContract | undefined)[],
+  contributions: readonly Contribution[],
   elementCarrier: import("../../../../target-model/types/model.js").TargetTypeRef,
   context: RustPlanContext,
 ): RustExpr | undefined {
@@ -116,15 +106,13 @@ function planSpreadArray(
   const name = allocateRustSyntheticName(context.syntheticNames, "array");
   const destination: RustExpr = { kind: "path", path: name };
   let value: RustExpr = destination;
-  for (let index = elements.length - 1; index >= 0; index -= 1) {
-    const source = elements[index]!;
-    const spread = spreads[index];
+  for (let index = contributions.length - 1; index >= 0; index -= 1) {
+    const contribution = contributions[index]!;
     let effect: RustExpr;
-    if (spread === undefined) {
-      effect = { kind: "method-call", receiver: destination, method: "push", args: [source] };
+    if (contribution.kind === "value") {
+      effect = { kind: "method-call", receiver: destination, method: "push", args: [contribution.value] };
     } else {
-      const append = planRustSequenceAppend(spread, source, destination, context, node,
-        (conversion, value) => lowerNestedRustValueConversion(conversion, value, context, node));
+      const append = planRustBorrowedSequenceAppend(node, contribution.input, destination, elementCarrier, context);
       if (append === undefined) return undefined;
       effect = append;
     }
