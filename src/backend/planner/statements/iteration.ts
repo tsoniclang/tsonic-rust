@@ -368,10 +368,23 @@ export function planForOfStatement(
   if (resourceBinding && resourceFact === undefined) {
     return undefined;
   }
+  const borrowedBinding = resourceBinding || bindingPattern !== undefined ? undefined
+    : context.input.program.borrowedElementReads.forIteration(node);
+  const expressionOverrides = borrowedBinding === undefined ? undefined : new Map(context.expressionOverrides);
+  if (borrowedBinding !== undefined && expressionOverrides !== undefined) {
+    for (const reference of borrowedBinding.references) expressionOverrides.set(reference, {
+      carrier: fact.elementCarrier,
+      valueForm: "value",
+      expression: { kind: "owned-string-from-borrowed-str", expression: {
+        kind: "method-call", receiver: { kind: "path", path: binding }, method: "as_str", args: [],
+      } },
+    });
+  }
+  const bodyContext = expressionOverrides === undefined ? context : { ...context, expressionOverrides };
   let body = resourceFact === undefined || bindingDeclaration === undefined
     ? planBlockLike(
         bodyNode,
-        withRustControlTarget(context, target),
+        withRustControlTarget(bodyContext, target),
       )
     : (() => {
         const resourceScope = planResourceManagedBody(
@@ -445,13 +458,15 @@ export function planForOfStatement(
   const nonConsumingIterable = iterableNode === undefined
     ? iterable
     : planRustNonConsumingValue(iterableNode, iterable, context);
-  if (fact.lowering.kind === "borrowed") {
+  if (fact.lowering.kind === "borrowed" && borrowedBinding === undefined) {
     context.usedAliases?.add("rt");
   }
   if (fact.lowering.kind === "owned-call") {
     registerAliasFromPath(context, fact.lowering.path);
   }
-  const targetIterable: RustExpr = fact.lowering.kind === "borrowed"
+  const targetIterable: RustExpr = borrowedBinding !== undefined
+    ? { kind: "method-call", receiver: iterable, method: "iter", args: [] }
+    : fact.lowering.kind === "borrowed"
     ? {
         kind: "call",
         path: `rt::iter_${fact.lowering.style}`,
