@@ -42,13 +42,21 @@ export function resolveRustExternalProjectBase(
   sourceProfiles: RustSourceProfileRegistry,
 ): RustExternalProjectBase | undefined {
   const valueDeclaration = edge.target.declaration;
+  if (edge.kind !== "extends" || edge.target.project ||
+    edge.selectedTypeArguments.length !== 0 || edge.typeArguments.length !== 0) return undefined;
+  return resolveRustSourceErrorDeclaration(valueDeclaration, ast, sourceProfiles);
+}
+
+export function resolveRustSourceErrorDeclaration(
+  valueDeclaration: Node,
+  ast: AstReader,
+  sourceProfiles: RustSourceProfileRegistry,
+): RustExternalProjectBase | undefined {
   const profile = sourceProfiles.profileForNode(valueDeclaration, ast);
   const sourceFile = ast.getSourceFile(valueDeclaration);
-  if (edge.kind !== "extends" || edge.target.project ||
-    profile === undefined || sourceFile === undefined ||
+  if (profile === undefined || sourceFile === undefined ||
     ast.kindName(valueDeclaration) !== "KindVariableDeclaration" ||
     ast.text(ast.name(valueDeclaration)) !== "Error" ||
-    edge.selectedTypeArguments.length !== 0 || edge.typeArguments.length !== 0 ||
     ast.variableDeclarationKind(valueDeclaration) !== "var" ||
     !isNamedTypeReference(ast.typeNode(valueDeclaration), "ErrorConstructor", ast)) {
     return undefined;

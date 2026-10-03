@@ -23,7 +23,7 @@ import { rustTargetRuntimeErrorType } from "../types/error-boundary.js";
 import { effectivePlannedExpressionCarrier, expressionCarrier, requireExpressionCarrier, rustOperationFact, rustPartialOrderingTest, selectedOperationMatches } from "./fundamentals.js";
 import { isRustAssignmentOperator, isRustBinaryOperator } from "../../../target-model/syntax/tokens.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
-import { negateRustBooleanExpression, rustBorrowedStringView, rustStringConcat } from "../../target-ast/expressions.js";
+import { negateRustBooleanExpression, rustStringConcat } from "../../target-ast/expressions.js";
 import { foldRustIntegerComparison } from "../../target-ast/integer-comparisons.js";
 import { planRustNativeZeroComparison } from "./native-zero-comparisons.js";
 import { planRustNativeIntegerIdentity } from "./native-integer-identities.js";
@@ -512,8 +512,8 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
     const comparisonRight = comparison && rightNode !== undefined
       ? planRustNonConsumingValue(rightNode, convertedRight, context)
       : convertedRight;
-    const borrowLiteral = (side: RustExpr): RustExpr => {
-      const borrowed = comparison ? rustBorrowedStringView(side) : side;
+    const borrowLiteral = (side: RustExpr, source: Node | undefined, later: Node | undefined): RustExpr => {
+      const borrowed = comparison ? rustErrorFieldComparisonView(source, side, later, context) : side;
       return comparison && borrowed.kind === "string-literal"
         ? { kind: "str-literal", value: borrowed.value }
         : borrowed;
@@ -566,8 +566,8 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
     return {
       kind: "binary",
       operator: fact.operator,
-      left: borrowLiteral(comparisonLeft),
-      right: borrowLiteral(comparisonRight),
+      left: borrowLiteral(comparisonLeft, leftNode, rightNode),
+      right: borrowLiteral(comparisonRight, rightNode, undefined),
     };
   }
   context.diagnostics.push(unsupportedConstructDiagnostic(
