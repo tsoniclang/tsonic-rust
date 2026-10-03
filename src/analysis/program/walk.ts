@@ -93,6 +93,7 @@ export function rustResolutionContext(
     ...walk.context,
     currentSourceFile: semantics.sourceFile,
     currentSemantics: semantics,
+    sourceErrorSubject: node,
   };
 }
 

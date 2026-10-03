@@ -6,6 +6,7 @@ export interface RustErrorTransportVariant {
   readonly type: RustType;
   readonly source: "error" | "thrown" | "external";
   readonly sourceErrorType?: RustType;
+  readonly writableSourceErrorType?: RustType;
 }
 
 export interface RustErrorTransportPlan {
@@ -13,6 +14,7 @@ export interface RustErrorTransportPlan {
   readonly generics: RustGenerics;
   readonly declarationType: RustType;
   readonly sourceErrorType: RustType;
+  readonly writableSourceErrorType: RustType;
   readonly declaration: RustItem;
   readonly aliases: readonly RustItem[];
 }
@@ -27,30 +29,34 @@ const variant = (name: string, ...elements: readonly RustPattern[]): RustPattern
 const named = (name: string, ...types: readonly RustType[]): RustType => ({ kind: "named", path: name,
   ...(types.length === 0 ? {} : { genericArguments: types.map(type => ({ kind: "type" as const, type })) }) });
 const sourceView = named("SourceError");
+const writableView = named("WritableSourceError");
 const fullTransport = named("TsonicError");
 const jsError = named("tsonic_rust_runtime::JsError");
 const runtimeError = named("tsonic_rust_runtime::TsonicError");
+const mutableError = named("tsonic_rust_runtime::MutableJsError");
 const infallible = named("core::convert::Infallible");
 const payloadField = "value";
 
 export function planRustErrorTransport(variants: readonly RustErrorTransportVariant[]): RustErrorTransportPlan | undefined {
-  if (variants.some(item => item.source === "external" && item.sourceErrorType === undefined) ||
+  if (variants.some(item => item.source === "external" && (item.sourceErrorType === undefined || item.writableSourceErrorType === undefined)) ||
     new Set(variants.map(item => item.name)).size !== variants.length ||
-    variants.some(item => item.name === "Runtime" || item.name === "Suppressed")) return undefined;
+    variants.some(item => item.name === "Runtime" || item.name === "SourceCreated" || item.name === "Suppressed")) return undefined;
   const parameters = variants.filter(item => item.source !== "error");
   const parameterNames = new Map(parameters.map((item, index) => [item, `Payload${index}`]));
-  const generics: RustGenerics = { parameters: parameters.map(item => ({ kind: "type", name: parameterNames.get(item)!, bounds: [] })),
+  const generics: RustGenerics = { parameters: ["RuntimePayload", "SourceCreatedPayload", "SuppressedSource", ...parameters.map(item => parameterNames.get(item)!)].map(name => ({ kind: "type", name, bounds: [] })),
     wherePredicates: [] };
-  const declarationType = named("ErrorTransport", ...parameters.map(item => named(parameterNames.get(item)!)));
-  const fullType = named("ErrorTransport", ...parameters.map(item => item.type));
-  const sourceType = named("ErrorTransport", ...parameters.map(item => item.source === "thrown" ? infallible : item.sourceErrorType!));
+  const declarationType = named("ErrorTransport", named("RuntimePayload"), named("SourceCreatedPayload"), named("SuppressedSource"), ...parameters.map(item => named(parameterNames.get(item)!)));
+  const fullType = named("ErrorTransport", runtimeError, mutableError, jsError, ...parameters.map(item => item.type));
+  const sourceType = named("ErrorTransport", runtimeError, mutableError, jsError, ...parameters.map(item => item.source === "thrown" ? infallible : item.sourceErrorType!));
+  const writableType = named("ErrorTransport", infallible, mutableError, infallible, ...parameters.map(item => item.source === "thrown" ? infallible : item.writableSourceErrorType!));
   return {
-    variants, generics, declarationType, sourceErrorType: sourceType,
+    variants, generics, declarationType, sourceErrorType: sourceType, writableSourceErrorType: writableType,
     declaration: { kind: "enum", name: "ErrorTransport", visibility: "public", attrs: [rustHiddenAttribute, ...rustDeriveAttributes(["Clone"])],
       generics, variants: [
-        { name: "Runtime", fields: [runtimeError] },
+        { name: "Runtime", fields: [named("RuntimePayload")] },
+        { name: "SourceCreated", fields: [named("SourceCreatedPayload")] },
         ...variants.map(item => ({ name: item.name, fields: [item.source === "error" ? item.type : named(parameterNames.get(item)!)] })),
-        { name: "Suppressed", fields: [named("Box", fullTransport), named("Box", fullTransport), jsError] },
+        { name: "Suppressed", fields: [named("Box", fullTransport), named("Box", fullTransport), named("SuppressedSource")] },
       ],
     },
     aliases: [
@@ -58,22 +64,27 @@ export function planRustErrorTransport(variants: readonly RustErrorTransportVari
       { kind: "struct", name: "SourceError", visibility: "public", generics: emptyRustGenerics,
         attrs: [rustHiddenAttribute, rustListAttribute("repr", [rustWordAttribute("transparent")]), ...rustDeriveAttributes(["Clone"])],
         fields: [{ name: payloadField, visibility: "private", type: sourceType }] },
+      { kind: "struct", name: "WritableSourceError", visibility: "public", generics: emptyRustGenerics,
+        attrs: [rustHiddenAttribute, rustListAttribute("repr", [rustWordAttribute("transparent")]), ...rustDeriveAttributes(["Clone"])],
+        fields: [{ name: payloadField, visibility: "private", type: writableType }] },
     ],
   };
 }
 
-export function planRustSourceErrorTransport(plan: RustErrorTransportPlan): readonly RustItem[] {
+export function planRustSourceErrorTransport(plan: RustErrorTransportPlan, writable = false): readonly RustItem[] {
+  const view = writable ? writableView : sourceView;
   const input = path("value");
   const own = path("error");
   const sourceConstructor = (value: RustExpr): RustExpr =>
     ({ kind: "struct-literal", path: "Self", fields: [{ name: payloadField, value }] });
   const projected = (name: string, value: RustExpr): RustExpr => call("Ok", sourceConstructor(call(`ErrorTransport::${name}`, value)));
-  const arms: Extract<RustExpr, { kind: "match" }>["arms"] = [
+  const arms: Extract<RustExpr, { kind: "match" }>["arms"][number][] = [
     { pattern: variant("ErrorTransport::Runtime", binding("error")), expression: projected("Runtime", own) },
+    { pattern: variant("ErrorTransport::SourceCreated", binding("error")), expression: projected("SourceCreated", own) },
     ...plan.variants.map(item => ({ pattern: variant(`ErrorTransport::${item.name}`, binding("error")),
       expression: item.source === "error" ? projected(item.name, own)
         : item.source === "thrown" ? call("Err", call(`ErrorTransport::${item.name}`, own))
-        : { kind: "match" as const, expression: method(own, "try_into_source_error"), arms: [
+        : { kind: "match" as const, expression: method(own, writable ? "try_into_writable_source_error" : "try_into_source_error"), arms: [
             { pattern: variant("Ok", binding("source")), expression: projected(item.name, path("source")) },
             { pattern: variant("Err", binding("original")), expression: call("Err", call(`ErrorTransport::${item.name}`, path("original"))) },
           ] },
@@ -81,40 +92,67 @@ export function planRustSourceErrorTransport(plan: RustErrorTransportPlan): read
     { pattern: variant("ErrorTransport::Suppressed", binding("error"), binding("suppressed"), binding("source")),
       expression: call("Ok", sourceConstructor(call("ErrorTransport::Suppressed", own, path("suppressed"), path("source")))) },
   ];
-  const restored: Extract<RustExpr, { kind: "match" }>["arms"] = [
+  if (writable) {
+    arms[0] = { pattern: variant("ErrorTransport::Runtime", binding("error")), expression: call("Err", call("ErrorTransport::Runtime", own)) };
+    arms[arms.length - 1] = { pattern: variant("ErrorTransport::Suppressed", binding("error"), binding("suppressed"), binding("source")),
+      expression: call("Err", call("ErrorTransport::Suppressed", own, path("suppressed"), path("source"))) };
+  }
+  const restored: Extract<RustExpr, { kind: "match" }>["arms"][number][] = [
     { pattern: variant("ErrorTransport::Runtime", binding("error")), expression: call("ErrorTransport::Runtime", own) },
+    { pattern: variant("ErrorTransport::SourceCreated", binding("error")), expression: call("ErrorTransport::SourceCreated", own) },
     ...plan.variants.map(item => ({ pattern: variant(`ErrorTransport::${item.name}`, binding("error")),
       expression: item.source === "thrown" ? { kind: "match" as const, expression: own, arms: [] }
         : call(`ErrorTransport::${item.name}`, item.source === "external" ? method(own, "into_transport") : own) })),
     { pattern: variant("ErrorTransport::Suppressed", binding("error"), binding("suppressed"), binding("source")),
       expression: call("ErrorTransport::Suppressed", own, path("suppressed"), path("source")) },
   ];
+  if (writable) {
+    restored[0] = { pattern: variant("ErrorTransport::Runtime", binding("error")), expression: { kind: "match", expression: own, arms: [] } };
+    restored[restored.length - 1] = { pattern: variant("ErrorTransport::Suppressed", { kind: "wildcard" }, { kind: "wildcard" }, binding("source")),
+      expression: { kind: "match", expression: path("source"), arms: [] } };
+  }
   const fromVariant = (source: RustType, name: string, runtime: boolean): RustItem => ({
-    kind: "impl", generics: emptyRustGenerics, target: sourceView, trait: named("core::convert::From", source),
-    members: [nativeFunction("from", sourceView, sourceConstructor(call(`ErrorTransport::${name}`,
+    kind: "impl", generics: emptyRustGenerics, target: view, trait: named("core::convert::From", source),
+    members: [nativeFunction("from", view, sourceConstructor(call(`ErrorTransport::${name}`,
       runtime ? call("tsonic_rust_runtime::TsonicError::from", input) : input)), [{ name: "value", type: source }])],
   });
+  const readonlyAdmission: RustItem[] = writable ? [] : [{
+    kind: "impl", generics: emptyRustGenerics, target: sourceView, trait: named("core::convert::From", writableView), members: [
+      nativeFunction("from", sourceView, sourceConstructor({ kind: "match", expression: { kind: "field", receiver: input, name: payloadField }, arms: [
+        { pattern: variant("ErrorTransport::Runtime", binding("error")), expression: { kind: "match", expression: own, arms: [] } },
+        { pattern: variant("ErrorTransport::SourceCreated", binding("error")), expression: call("ErrorTransport::SourceCreated", own) },
+        ...plan.variants.map(item => ({ pattern: variant(`ErrorTransport::${item.name}`, binding("error")), expression: item.source === "thrown"
+          ? { kind: "match" as const, expression: own, arms: [] }
+          : call(`ErrorTransport::${item.name}`, item.source === "external"
+            ? call(`${(item.sourceErrorType as Extract<RustType, { kind: "named" }>).path}::from`, own) : own) })),
+        { pattern: variant("ErrorTransport::Suppressed", { kind: "wildcard" }, { kind: "wildcard" }, binding("source")),
+          expression: { kind: "match", expression: path("source"), arms: [] } },
+      ] }), [{ name: "value", type: writableView }]),
+    ],
+  }];
   return [
-    { kind: "impl", generics: emptyRustGenerics, target: sourceView,
+    ...readonlyAdmission,
+    { kind: "impl", generics: emptyRustGenerics, target: view,
       trait: named("core::convert::TryFrom", fullTransport), members: [
         { kind: "type", name: "Error", type: fullTransport },
-        nativeFunction("try_from", named("Result", sourceView, fullTransport), { kind: "match", expression: input, arms },
+        nativeFunction("try_from", named("Result", view, fullTransport), { kind: "match", expression: input, arms },
           [{ name: "value", type: fullTransport }]),
       ] },
-    { kind: "impl", generics: emptyRustGenerics, target: fullTransport, trait: named("core::convert::From", sourceView), members: [
+    { kind: "impl", generics: emptyRustGenerics, target: fullTransport, trait: named("core::convert::From", view), members: [
       nativeFunction("from", fullTransport, { kind: "match", expression: { kind: "field", receiver: input, name: payloadField }, arms: restored },
-        [{ name: "value", type: sourceView }]),
+        [{ name: "value", type: view }]),
     ] },
-    fromVariant(jsError, "Runtime", true), fromVariant(runtimeError, "Runtime", false),
+    ...writable ? [] : [fromVariant(jsError, "Runtime", true), fromVariant(runtimeError, "Runtime", false)],
+    fromVariant(mutableError, "SourceCreated", false),
     ...plan.variants.filter(item => item.source !== "thrown").map(item =>
-      fromVariant(item.source === "external" ? item.sourceErrorType! : item.type, item.name, false)),
+      fromVariant(item.source === "external" ? writable ? item.writableSourceErrorType! : item.sourceErrorType! : item.type, item.name, false)),
     { kind: "impl", generics: emptyRustGenerics, target: fullTransport, members: [
-      { ...nativeFunction("try_into_source_error", named("Result", sourceView, fullTransport),
-          call("SourceError::try_from", path("self")), []),
+      { ...nativeFunction(writable ? "try_into_writable_source_error" : "try_into_source_error", named("Result", view, fullTransport),
+          call(`${writable ? "WritableSourceError" : "SourceError"}::try_from`, path("self")), []),
         visibility: "public", selfParam: { kind: "value" } },
     ] },
-    { kind: "impl", generics: emptyRustGenerics, target: sourceView, members: [
-      { ...nativeFunction("as_transport", { kind: "reference", mutable: false, referent: plan.sourceErrorType },
+    { kind: "impl", generics: emptyRustGenerics, target: view, members: [
+      { ...nativeFunction("as_transport", { kind: "reference", mutable: false, referent: writable ? plan.writableSourceErrorType : plan.sourceErrorType },
           { kind: "reference", expr: { kind: "field", receiver: path("self"), name: payloadField } }, []),
         visibility: "public", selfParam: { kind: "reference", mutable: false } },
       { ...nativeFunction("into_transport", fullTransport, call("TsonicError::from", path("self")), []),
@@ -126,8 +164,8 @@ export function planRustSourceErrorTransport(plan: RustErrorTransportPlan): read
 export function rustErrorTransportDisplayGenerics(plan: RustErrorTransportPlan): RustGenerics {
   const parameters = plan.variants.filter(variant => variant.source !== "error");
   return { ...plan.generics, parameters: plan.generics.parameters.map((parameter, index) => {
-    const item = parameters[index];
-    return parameter.kind !== "type" || item?.source !== "external" ? parameter
+    const item = parameters[index - 3];
+    return parameter.kind !== "type" || index >= 3 && item?.source !== "external" ? parameter
       : { ...parameter, bounds: [{ kind: "trait", path: "core::fmt::Display" }] };
   }) };
 }

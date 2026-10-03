@@ -22,7 +22,7 @@ export function rustProjectErrorSuperTraits(
   context: RustPlanContext,
 ): readonly RustType[] {
   return context.input.program.projectTypes.externalBaseForDefinition(definition)?.programError === true
-    ? [{ kind: "named", path: "rt::ErrorObject" }] : [];
+    ? [{ kind: "named", path: "rt::WritableErrorObject" }] : [];
 }
 
 export function planRustProjectErrorRoot(
@@ -36,6 +36,7 @@ export function planRustProjectErrorRoot(
   const representation = context.input.program.objectRepresentations.representationFor(definition);
   if (representation === undefined) return undefined;
   const functions: RustImplFunction[] = [];
+  const setters: RustImplFunction[] = [];
   for (const name of ["name", "message", "stack"] as const) {
     const selected = inherited.base.fields.find(candidate => candidate.sourceName === name);
     const storage = selected === undefined ? undefined : projectFieldStoragePath(selected.declaration, layers, context);
@@ -53,13 +54,19 @@ export function planRustProjectErrorRoot(
           ],
         }] };
     functions.push(errorFunction(`error_${name}`, name === "stack" ? stackType : errorField, read));
+    const target = storage.reduce(field, method(field(path("self"), rustProjectObjectStateField), "borrow_mut"));
+    setters.push({ ...errorFunction(`set_error_${name}`, { kind: "unit" },
+      { kind: "assignment", operator: "=", target, value: path("value") }), params: [{ name: "value", type: name === "stack"
+        ? { kind: "named", path: "Option", genericArguments: [{ kind: "type", type: { kind: "string" } }] } : { kind: "string" } }] });
   }
   functions.push(errorFunction("error_kind", { kind: "named", path: "rt::JsErrorKind" },
     path("rt::JsErrorKind::Error")));
   functions.push(errorFunction("error_identity_key", { kind: "primitive", name: "usize" },
     method(field(path("self"), rustProjectObjectIdentityField), "key")));
   return [{ kind: "impl", generics: rustProjectRepresentationGenerics(representation, context),
-    trait: { kind: "named", path: "rt::ErrorObject" }, target: rootType, members: functions }];
+    trait: { kind: "named", path: "rt::ErrorObject" }, target: rootType, members: functions },
+    { kind: "impl", generics: rustProjectRepresentationGenerics(representation, context),
+      trait: { kind: "named", path: "rt::WritableErrorObject" }, target: rootType, members: setters }];
 }
 
 export function planRustProjectErrorWrapper(
@@ -80,7 +87,14 @@ export function planRustProjectErrorWrapper(
       errorFunction("error_kind", { kind: "named", path: "rt::JsErrorKind" }, method(receiver, "error_kind")),
       errorFunction("error_identity_key", { kind: "primitive", name: "usize" }, method(receiver, "error_identity_key")),
     ],
-  }];
+  }, { kind: "impl", generics: rustProjectRepresentationGenerics(representation, context),
+    trait: { kind: "named", path: "rt::WritableErrorObject" }, target: wrapperType,
+    members: ["name", "message", "stack"].map(name => ({
+      ...errorFunction(`set_error_${name}`, { kind: "unit" }, method(receiver, `set_error_${name}`, path("value"))),
+      params: [{ name: "value", type: name === "stack" ? { kind: "named" as const, path: "Option", genericArguments: [
+        { kind: "type" as const, type: { kind: "string" as const } },
+      ] } : { kind: "string" as const } }],
+    })) }];
 }
 
 function errorFunction(name: string, returnType: RustType, value: RustExpr): RustImplFunction {

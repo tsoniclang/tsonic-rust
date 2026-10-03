@@ -50,6 +50,7 @@ import { finalizeRustCopiedMethods } from "../objects/copied-methods.js";
 import { closeRustInheritedStructuralViews } from "../objects/inherited-structural-views.js";
 import { createRustSourceProfileCallableAliasQuery } from "../../policy/operations/source-profiles/callable-aliases.js";
 import { collectRustDeclaredProviderErrorCarriers } from "./provider-errors.js";
+import { rustSourceErrorTargetType, rustWritableSourceErrorTargetType } from "../../target-model/types/carriers/source-error.js";
 
 export function analyzeRustProgram(context: RustAnalysisContext): void {
   const { ast } = context;
@@ -95,7 +96,12 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     jsEnabled,
     sourceProfiles,
     sourceTypes,
-    sourceErrorCarrier: () => context.projectTypes.sourceErrorCarrier(),
+    sourceErrorCarrier(subject) {
+      const demand = subject === undefined ? undefined : context.errorStorageDemands.storageFor(subject);
+      return demand?.kind === "unresolved" ? undefined : demand?.kind === "writable"
+        ? rustWritableSourceErrorTargetType() : subject !== undefined && context.errorStorageDemands.receivesWritableNative(subject)
+          ? rustSourceErrorTargetType() : context.projectTypes.sourceErrorCarrier();
+    },
     resolveProjectUnionCarrier(memberCarriers) {
       return finalizedProjectTypes?.commonSupertype(memberCarriers);
     },

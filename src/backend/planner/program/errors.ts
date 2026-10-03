@@ -86,7 +86,7 @@ export function planRustProgramErrorModule(
   }
   const definitions = domain.definitions;
   const externalPackageErrors = domain.externalErrors;
-  if (definitions.length === 0 && externalPackageErrors.length === 0) {
+  if (domain.errorDomain !== "project") {
     return undefined;
   }
 
@@ -157,6 +157,7 @@ export function planRustProgramErrorModule(
     ...externalVariants.map(({ variant, type, typePath }) => ({
       name: variant, type, source: "external" as const,
       sourceErrorType: namedType(`${typePath.slice(0, -programErrorName.length)}SourceError`),
+      writableSourceErrorType: namedType(`${typePath.slice(0, -programErrorName.length)}WritableSourceError`),
     })),
   ]);
   if (transport === undefined) {
@@ -183,6 +184,7 @@ export function planRustProgramErrorModule(
     },
     fromImplementation(runtimeErrorType, "Runtime", false),
     fromImplementation(runtimeJsErrorType, "Runtime", true),
+    fromImplementation(namedType("tsonic_rust_runtime::MutableJsError"), "SourceCreated", false),
     ...providerErrorTypes.map((type) => fromImplementation(type, "Runtime", true)),
     ...exactProjectVariants.map(({ variant, type }) =>
       fromImplementation(type, variant, false)),
@@ -207,7 +209,9 @@ export function planRustProgramErrorModule(
     planRustSuppressedErrorConstructor(),
     planRustErrorObservations(transport),
     ...planRustSourceErrorTransport(transport),
+    ...planRustSourceErrorTransport(transport, true),
     ...planRustSourceErrorObservations(transport),
+    ...planRustSourceErrorObservations(transport, true),
     finishResourceFunction(),
     finishFinallyFunction(),
   ];
@@ -277,6 +281,7 @@ function displayImplementation(target: RustType, generics: RustGenerics, project
             expression: path("self"),
             arms: [
               displayDelegateArm("Self::Runtime"),
+              displayDelegateArm("Self::SourceCreated"),
               ...projectVariants.map(({ variant, delegate }) => delegate
                 ? displayDelegateArm(`Self::${variant}`)
                 : {

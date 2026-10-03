@@ -113,6 +113,7 @@ export function planRustSourcePackageErrors(
     ]);
     const usedVariantNames = new Set([
       "Runtime",
+      "SourceCreated",
       "Suppressed",
       ...definitions.map((definition) => input.program.projectTypes.programErrorVariant(definition)!),
     ]);
@@ -165,7 +166,9 @@ export function planRustSourcePackageErrors(
     const validDomain = component.errorDomain === "runtime"
       ? owner === undefined && definitions.length === 0 && externalErrors.length === 0
       : owner !== undefined && (owner === component.componentId
-        ? definitions.length > 0 || externalErrors.length > 1
+        ? definitions.length > 0 || externalErrors.length > 1 || input.program.errorStorageDemands.nativeConstructors.some(constructor =>
+          input.program.errorStorageDemands.storageFor(constructor).kind === "writable" &&
+          component.sourceFileNames.has(input.program.source.ast.getFileName(input.program.source.ast.getSourceFile(constructor)!)))
         : forwarding !== undefined && definitions.length === 0 && externalErrors.length === 1);
     if (!validDomain) {
       diagnostics.push(errorPlanDiagnostic("RUST_SOURCE_PACKAGE_ERROR_OWNER_CONFLICT",

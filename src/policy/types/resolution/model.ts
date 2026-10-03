@@ -12,7 +12,7 @@ export interface RustTargetTypeResolutionOptions {
   readonly providerTypes: readonly RustProviderTypeRow[];
   readonly sourceProfiles: RustSourceProfileRegistry;
   readonly sourceTypes: RustSourceTypeRegistry;
-  readonly sourceErrorCarrier: () => TargetTypeRef;
+  readonly sourceErrorCarrier: (subject: Node | undefined) => TargetTypeRef | undefined;
   readonly projectCarrierSupportsObjectIdentity: (carrier: TargetTypeRef) => boolean;
   readonly resolveProjectUnionCarrier: (
     memberCarriers: readonly TargetTypeRef[],
@@ -20,6 +20,7 @@ export interface RustTargetTypeResolutionOptions {
 }
 
 export interface RustTargetTypeResolutionContext extends RustSourcePolicyContext {
+  readonly sourceErrorSubject?: Node;
   readonly currentSourceFile: SourceFile;
   readonly currentSemantics: SourceFileSemantics;
   readonly sourceTypeParameterSubstitutions?: ReadonlyMap<Node, RustSourceTypeArgument>;

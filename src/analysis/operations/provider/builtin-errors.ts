@@ -25,7 +25,7 @@ import type {
 } from "../../../policy/operations/contracts.js";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { isRustSourceErrorCarrier } from "../../../target-model/types/carriers/source-error.js";
+import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustWritableSourceErrorCarrier } from "../../../target-model/types/carriers/source-error.js";
 
 export function selectRustBuiltinErrorTypeTest(
   request: RustCheckedOperatorSelectionInput,
@@ -44,7 +44,7 @@ export function selectRustBuiltinErrorTypeTest(
   if (selected === undefined) return undefined;
   const sourceCarrier = rustEffectiveValueCarrier(context.facts, request.left) ??
     resolveRustTargetTypeRef(request.left, context, options);
-  const lowering = rustTargetTypeRefEquals(sourceCarrier, rustJsErrorTargetType())
+  const lowering = rustTargetTypeRefEquals(sourceCarrier, rustJsErrorTargetType()) || isRustMutableJsErrorCarrier(sourceCarrier)
     ? "native-error"
     : isRustJsValueCarrier(sourceCarrier) ? "closed-value"
     : isRustProgramErrorCarrier(sourceCarrier) || isRustSourceErrorCarrier(sourceCarrier) ? "program-error" : undefined;
@@ -79,13 +79,15 @@ export function selectRustBuiltinErrorProperty(
   const member = sourceMembers?.members[0];
   if (member === undefined || !sourceMembers?.members.every((candidate) =>
     candidate.ownerName === "Error" && candidate.memberName === member.memberName) ||
-    (!rustTargetTypeRefEquals(receiverCarrier, rustJsErrorTargetType()) && !isRustSourceErrorCarrier(receiverCarrier))) {
+    (!rustTargetTypeRefEquals(receiverCarrier, rustJsErrorTargetType()) && !isRustMutableJsErrorCarrier(receiverCarrier) && !isRustSourceErrorCarrier(receiverCarrier))) {
     return undefined;
   }
-  if (request.accessMode !== "read") {
+  if (request.accessMode === "delete") return rejectSelectedOperation(request.expression, context,
+    "RUST_BUILTIN_ERROR_DELETE_UNSUPPORTED", "An admitted native Error field cannot be removed from its physical storage.");
+  if (request.accessMode !== "read" && !isRustMutableJsErrorCarrier(receiverCarrier) && !isRustWritableSourceErrorCarrier(receiverCarrier)) {
     return rejectSelectedOperation(
       request.expression, context, "RUST_BUILTIN_ERROR_MUTATION_UNSUPPORTED",
-      "Builtin Error mutation requires shared writable Error storage; native diagnostic fields cannot preserve that aliasing contract.",
+      "The exact selected native Error storage is immutable; writable Error admission requires an original physical setter owner.",
     );
   }
   if (member.memberName !== "message" && member.memberName !== "name" && member.memberName !== "stack") {
@@ -96,6 +98,7 @@ export function selectRustBuiltinErrorProperty(
   }
   return acceptRustMemberOperation(request, "property", {
     kind: "builtin-error-property",
+    accessMode: request.accessMode,
     operationId: `tsonic.rust.error.property.${member.memberName}`,
     receiverCarrier: receiverCarrier!,
     resultCarrier: member.memberName === "stack"

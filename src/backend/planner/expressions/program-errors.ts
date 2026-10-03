@@ -6,7 +6,7 @@ import { diagnosticInput, registerAliasFromPath, rustCurrentErrorBoundary, type 
 import { resolveRustProgramErrorRoute, type RustSourcePackageErrorBoundary } from "../program/source-package-errors.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { planRustUnionFold } from "./union-folds.js";
-import { isRustSourceErrorCarrier } from "../../../target-model/types/carriers/source-error.js";
+import { isRustSourceErrorCarrier, isRustWritableSourceErrorCarrier } from "../../../target-model/types/carriers/source-error.js";
 
 export function planRustProgramErrorConstruction(
   conversion: RustProgramErrorConversion,
@@ -23,7 +23,7 @@ export function planRustProgramErrorConstruction(
   }
   registerAliasFromPath(context, boundary.errorTypePath);
   const sourceError = isRustSourceErrorCarrier(conversion.target);
-  const targetPath = sourceError ? "rt::SourceError" : boundary.errorTypePath;
+  const targetPath = sourceError ? isRustWritableSourceErrorCarrier(conversion.target) ? "rt::WritableSourceError" : "rt::SourceError" : boundary.errorTypePath;
   if (conversion.route.kind === "union") {
     return planRustUnionFold(value, conversion.route.arms, context, node,
       (arm, payload) => planRustProgramErrorConstruction({ ...conversion, source: arm.carrier, route: arm.route },
@@ -38,7 +38,7 @@ export function planRustProgramErrorConstruction(
     return { kind: "call", path: `${targetPath}::from`, args: [sourceError && conversion.route.boundary === "provider-native"
       ? { kind: "call", path: "tsonic_rust_runtime::TsonicError::from", args: [value] } : value] };
   }
-  if (conversion.route.kind === "source-error") {
+  if (conversion.route.kind === "source-error" || conversion.route.kind === "source-created") {
     return { kind: "call", path: `${targetPath}::from`, args: [value] };
   }
   const variant = conversion.route.variant;
@@ -55,7 +55,7 @@ export function planRustProgramErrorConstruction(
   }
   if (sourceError) {
     const admitted: RustExpr = route.kind === "local" ? value : {
-      kind: "call", path: `${route.ownerTypePath.slice(0, -"TsonicError".length)}SourceError::from`, args: [value],
+      kind: "call", path: `${route.ownerTypePath.slice(0, -"TsonicError".length)}${isRustWritableSourceErrorCarrier(conversion.target) ? "WritableSourceError" : "SourceError"}::from`, args: [value],
     };
     return { kind: "call", path: `${targetPath}::from`, args: [admitted] };
   }

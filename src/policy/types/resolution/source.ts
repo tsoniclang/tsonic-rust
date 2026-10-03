@@ -77,6 +77,7 @@ export function resolveRustTargetTypeRef(
     return undefined;
   }
   const subjectNode = asNode(subject, context);
+  if (subjectNode !== undefined) context = { ...context, sourceErrorSubject: subjectNode };
   const subjectFile = subjectNode === undefined ? undefined : context.ast.getSourceFile(subjectNode);
   if (subjectFile !== undefined && context.source.semantics.includes(subjectFile) &&
     subjectFile !== context.currentSemantics.sourceFile) {
@@ -523,7 +524,8 @@ export function resolveRustTargetTypeSyntax(
     ? resolveOwnedSourceProfileTypeName(selectedTypeSymbol, context, options.sourceProfiles)
     : resolveOwnedSourceProfileTypeNameForDeclaration(referencedDeclaration, context, options.sourceProfiles);
   if (sourceProfileName !== undefined) {
-    return resolveSourceProfileCarrierFromArguments(sourceProfileName, typeArguments as TargetTypeRef[], options);
+    return resolveSourceProfileCarrierFromArguments(sourceProfileName, typeArguments as TargetTypeRef[], options,
+      context.sourceErrorSubject ?? node);
   }
   const sourceType = resolveProjectSourceCarrier(
     selectedTypeSymbol,

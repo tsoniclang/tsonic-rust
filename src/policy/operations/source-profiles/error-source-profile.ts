@@ -5,6 +5,7 @@ import { rustSourceErrorConstructors } from "../../../target-model/identities/so
 import { rustOptionalStringToBorrowedStrValueConversion } from "../../../target-model/conversions/model.js";
 import { isRustAbsenceCarrier, rustJsErrorTargetType, rustSourceOptionalTargetType, rustStringTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustMutableJsErrorTargetType } from "../../../target-model/types/carriers/source-error.js";
 
 type RustSourceErrorConstructor = typeof rustSourceErrorConstructors[number];
 
@@ -21,6 +22,7 @@ export function selectRustSourceErrorConstructor(
 export function rustSourceErrorConstructorOperation(
   constructor: RustSourceErrorConstructor,
   arguments_: readonly (TargetTypeRef | undefined)[],
+  writable = false,
 ): RustProviderOperationTemplate | undefined {
   if (arguments_.length > 1 || !rustSourceErrorConstructors.includes(constructor)) return undefined;
   const carrier = arguments_[0];
@@ -32,12 +34,13 @@ export function rustSourceErrorConstructorOperation(
   return {
     kind: "provider-operation", operationId: constructor.operationId, operationKind: "constructor",
     target: {
-      form: "call", path: constructor.path,
+      form: "call", path: writable ? `rt::MutableJsError::${constructor.sourceName === "Error" ? "error"
+        : constructor.sourceName === "RangeError" ? "range_error" : constructor.sourceName === "TypeError" ? "type_error" : "uri_error"}` : constructor.path,
       argModes: arguments_.length === 0 ? [] : [optionalMessage ? "value" : "ref"],
       ...(optionalMessage ? { argConversions: [rustOptionalStringToBorrowedStrValueConversion] } : {}),
       ...(arguments_.length === 0 ? { trailingArguments: [{ kind: "string", value: "" } as const] } : {}),
     },
-    parameterCarriers, resultCarrier: rustJsErrorTargetType(),
+    parameterCarriers, resultCarrier: writable ? rustMutableJsErrorTargetType() : rustJsErrorTargetType(),
     isAsync: false, isFallible: false, errorBoundary: "none",
   };
 }

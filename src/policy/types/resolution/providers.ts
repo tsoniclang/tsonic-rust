@@ -379,7 +379,7 @@ export function resolveSourceProfileCarrier(
       : undefined;
   }
   const direct = targetArguments.every((argument) => argument !== undefined)
-    ? resolveSourceProfileCarrierFromArguments(name, targetArguments as TargetTypeRef[], options)
+    ? resolveSourceProfileCarrierFromArguments(name, targetArguments as TargetTypeRef[], options, context.sourceErrorSubject)
     : undefined;
   if (direct !== undefined && name !== "Array" && name !== "ReadonlyArray") {
     return direct;
@@ -442,6 +442,7 @@ export function resolveSourceProfileCarrierFromArguments(
   name: string,
   arguments_: readonly TargetTypeRef[],
   options: RustTargetTypeResolutionOptions,
+  subject: Node | undefined,
 ): TargetTypeRef | undefined {
   if (options.jsEnabled && name === "ArrayEntriesIterator" && arguments_.length === 1) {
     return rustJsArrayEntriesTargetType(arguments_[0]!);
@@ -451,7 +452,7 @@ export function resolveSourceProfileCarrierFromArguments(
   }
   if (arguments_.length === 0 && rustSourceErrorConstructors.some((entry) =>
     entry.sourceName === name && (name === "Error" || options.jsEnabled))) {
-    return name === "Error" ? options.sourceErrorCarrier() : rustJsErrorTargetType();
+    return name === "Error" ? options.sourceErrorCarrier(subject) : rustJsErrorTargetType();
   }
   if (name === "Promise" || name === "PromiseLike") {
     const [output] = arguments_;

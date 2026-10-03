@@ -301,6 +301,7 @@ export type RustTargetOperationFact =
     }
   | {
       readonly kind: "builtin-error-property";
+      readonly accessMode: "read" | "write" | "read-write";
       readonly operationId: string;
       readonly receiverCarrier: TargetTypeRef;
       readonly resultCarrier: TargetTypeRef;

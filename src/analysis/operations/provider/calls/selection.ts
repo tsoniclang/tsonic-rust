@@ -51,6 +51,7 @@ import { selectRustPointerViewCall } from "../../pointer-views.js";
 import { selectBorrowedCallbackParameters } from "./borrowed-callbacks.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../../../target-model/types/carriers/generic-callables.js";
 import { rustClassConstructorInstance } from "../../../../target-model/types/carriers/class-constructors.js";
+import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustWritableSourceErrorCarrier } from "../../../../target-model/types/carriers/source-error.js";
 import type {
   RustCheckedCallSelectionInput,
   RustCheckedCallSelectionResult,
@@ -183,7 +184,7 @@ export function selectRustCheckedCall(
     const carrier = carriers[0];
     const definition = carrier === undefined ? undefined : options.projectTypes.definitionForCarrier(carrier);
     if (carriers.length !== 1 || carrier === undefined ||
-      (!rustTargetTypeRefEquals(carrier, rustJsErrorTargetType()) &&
+      (!rustTargetTypeRefEquals(carrier, rustJsErrorTargetType()) && !isRustMutableJsErrorCarrier(carrier) && !isRustSourceErrorCarrier(carrier) &&
         (definition === undefined || options.projectTypes.inheritedExternalBaseForDefinition(definition)?.base.programError !== true))) {
       return rejectSelectedOperation(request.source.call, context, "RUST_ERROR_CAPTURE_CONTRACT",
         "Error.captureStackTrace requires one exact builtin Error or Error-derived project value.");
@@ -197,7 +198,9 @@ export function selectRustCheckedCall(
   }
   const errorConstructor = selectRustSourceErrorConstructor(selectedSourceMember, checkedCallIsConstruction(request, context));
   if (errorConstructor !== undefined) {
-    const operation = rustSourceErrorConstructorOperation(errorConstructor, selectedCallArgumentCarriers(request, context, options));
+    const selectedStorage = options.sourceErrorCarrier(request.source.call);
+    const operation = rustSourceErrorConstructorOperation(errorConstructor, selectedCallArgumentCarriers(request, context, options),
+      isRustWritableSourceErrorCarrier(selectedStorage));
     if (operation === undefined) {
       return rejectSelectedOperation(
         request.source.call,

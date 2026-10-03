@@ -19,7 +19,7 @@ import { rustFlowReadProjectionFactKey } from "../../../analysis/facts/value-pro
 import { rustFlowReadProjectionMatches } from "../../../analysis/facts/flow-read-projections.js";
 import { effectivePlannedExpressionCarrier, requireExpressionCarrier, selectedOperationMatches } from "./fundamentals.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
-import { isRustSourceErrorCarrier } from "../../../target-model/types/carriers/source-error.js";
+import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier } from "../../../target-model/types/carriers/source-error.js";
 
 export function planRustBuiltinErrorTypeTest(
   node: Node,
@@ -29,7 +29,7 @@ export function planRustBuiltinErrorTypeTest(
   const operandNode = BinaryExpression_Left(context.input.program.source.ast, node);
   const operand = operandNode === undefined ? undefined : planExpression(operandNode, context);
   const validSource = fact.lowering === "native-error"
-    ? rustTargetTypeRefEquals(fact.sourceCarrier, rustJsErrorTargetType())
+    ? rustTargetTypeRefEquals(fact.sourceCarrier, rustJsErrorTargetType()) || isRustMutableJsErrorCarrier(fact.sourceCarrier)
     : fact.lowering === "program-error" ? isRustProgramErrorCarrier(fact.sourceCarrier) || isRustSourceErrorCarrier(fact.sourceCarrier)
     : isRustJsValueCarrier(fact.sourceCarrier);
   if (operandNode === undefined || operand === undefined || !validSource ||
@@ -80,7 +80,8 @@ export function planRustBuiltinErrorProperty(
     ? rustOptionTargetType(rustStringTargetType())
     : rustStringTargetType();
   if (receiverNode === undefined || receiver === undefined ||
-    (!rustTargetTypeRefEquals(fact.receiverCarrier, rustJsErrorTargetType()) && !isRustSourceErrorCarrier(fact.receiverCarrier)) ||
+    fact.accessMode === "write" ||
+    (!rustTargetTypeRefEquals(fact.receiverCarrier, rustJsErrorTargetType()) && !isRustMutableJsErrorCarrier(fact.receiverCarrier) && !isRustSourceErrorCarrier(fact.receiverCarrier)) ||
     !rustTargetTypeRefEquals(fact.resultCarrier, resultCarrier) ||
     !rustTargetTypeRefEquals(effectivePlannedExpressionCarrier(receiverNode, context), fact.receiverCarrier) ||
     !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.builtin-error-property-carrier") ||
@@ -99,25 +100,27 @@ export function planRustBuiltinErrorProperty(
       kind: "method-call", receiver: planRustNonConsumingValue(receiverNode, receiver, context), method: "source_error", args: [],
     }, method: "expect", args: [{ kind: "str-literal", value: "exact checked flow selected a non-Error observation" }] };
     const read: RustExpr = { kind: "call", path: `tsonic_rust_runtime::ErrorObject::error_${fact.property}`, args: [borrowed] };
-    return fact.property === "stack" ? read : { kind: "owned-string-from-borrowed-str", expression: read };
+    return fact.property === "stack" ? { kind: "method-call", receiver: read, method: "map", args: [{ kind: "path", path: "String::from" }] }
+      : { kind: "owned-string-from-borrowed-str", expression: read };
   }
   if (fact.property === "stack") {
-    return {
+    const read: RustExpr = {
       kind: "method-call",
       receiver: planRustNonConsumingValue(receiverNode, receiver, context),
-      method: "stack",
+      method: isRustSourceErrorCarrier(fact.receiverCarrier) ? "stack" : "borrowed_stack",
       args: [],
     };
+    return { kind: "method-call", receiver: read, method: "map", args: [{ kind: "path", path: "String::from" }] };
   }
   const read: RustExpr = {
     kind: "method-call",
     receiver: planRustNonConsumingValue(receiverNode, receiver, context),
-    method: fact.property === "message" ? "message" : isRustSourceErrorCarrier(fact.receiverCarrier) ? "name" : "kind",
+    method: fact.property === "message" ? "message" : isRustSourceErrorCarrier(fact.receiverCarrier) || isRustMutableJsErrorCarrier(fact.receiverCarrier) ? "name" : "kind",
     args: [],
   };
   return {
     kind: "owned-string-from-borrowed-str",
-    expression: fact.property === "message" || isRustSourceErrorCarrier(fact.receiverCarrier)
+    expression: fact.property === "message" || isRustSourceErrorCarrier(fact.receiverCarrier) || isRustMutableJsErrorCarrier(fact.receiverCarrier)
       ? read
       : { kind: "method-call", receiver: read, method: "as_str", args: [] },
   };

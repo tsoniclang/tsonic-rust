@@ -5,7 +5,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectRustRuntimeErrorBoundary, type RustProgramErrorConversion, type RustProgramErrorRoute } from "../../target-model/conversions/program-error.js";
 import { rustUnionLeaves } from "../../target-model/types/union-relations.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
-import { isRustSourceErrorCarrier } from "../../target-model/types/carriers/source-error.js";
+import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustWritableSourceErrorCarrier } from "../../target-model/types/carriers/source-error.js";
 
 export function selectRustProgramErrorConversion(
   source: TargetTypeRef,
@@ -16,9 +16,10 @@ export function selectRustProgramErrorConversion(
 ): RustProgramErrorConversion | undefined {
   const sourceError = isRustSourceErrorCarrier(target);
   const selectRoute = (carrier: TargetTypeRef): RustProgramErrorRoute | undefined => {
-    if (!sourceError && isRustSourceErrorCarrier(carrier)) return Object.freeze({ kind: "source-error" });
+    if (isRustSourceErrorCarrier(carrier) && (!sourceError || !isRustWritableSourceErrorCarrier(target) && isRustWritableSourceErrorCarrier(carrier))) return Object.freeze({ kind: "source-error" });
+    if (isRustMutableJsErrorCarrier(carrier)) return Object.freeze({ kind: "source-created" });
     const boundary = selectRustRuntimeErrorBoundary(carrier, providerErrorCarriers);
-    if (boundary !== undefined) return Object.freeze({ kind: "runtime", boundary });
+    if (boundary !== undefined && !isRustWritableSourceErrorCarrier(target)) return Object.freeze({ kind: "runtime", boundary });
     const definition = projectTypes.definitionForCarrier(carrier);
     const variant = definition === undefined ? undefined : projectTypes.programErrorVariant(definition);
     if (definition !== undefined && variant !== undefined &&

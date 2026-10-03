@@ -9,7 +9,6 @@ const variant = (name: string, ...elements: readonly RustPattern[]): RustPattern
   ({ kind: "tuple-variant", path: name, elements });
 const binding = (name: string): RustPattern => ({ kind: "binding", name });
 const named = (name: string): RustType => ({ kind: "named", path: name });
-const source = named("SourceError");
 const boolean: RustType = { kind: "primitive", name: "bool" };
 const errorField: RustType = { kind: "named", path: "tsonic_rust_runtime::ErrorField", genericArguments: [
   { kind: "lifetime", lifetime: { kind: "placeholder" } },
@@ -23,17 +22,22 @@ const getters: readonly { readonly name: string; readonly native: string; readon
   { name: "identity_key", native: "error_identity_key", type: { kind: "primitive", name: "usize" } },
 ];
 
-export function planRustSourceErrorObservations(plan: RustErrorTransportPlan): readonly RustItem[] {
+export function planRustSourceErrorObservations(plan: RustErrorTransportPlan, writable = false): readonly RustItem[] {
+  const source = named(writable ? "WritableSourceError" : "SourceError");
   const functions = getters.map(getter => observation(getter.name, getter.type, {
     kind: "match", expression: method(path("self"), "as_transport"), arms: [
       { pattern: variant("ErrorTransport::Runtime", binding("error")),
-        expression: call(`tsonic_rust_runtime::ErrorObject::${getter.native}`, method(path("error"), "source_error")) },
+        expression: writable ? { kind: "match", expression: { kind: "dereference", pointer: path("error") }, arms: [] }
+          : call(`tsonic_rust_runtime::ErrorObject::${getter.native}`, method(path("error"), "source_error")) },
+      { pattern: variant("ErrorTransport::SourceCreated", binding("error")),
+        expression: call(`tsonic_rust_runtime::ErrorObject::${getter.native}`, path("error")) },
       ...plan.variants.map(item => ({ pattern: variant(`ErrorTransport::${item.name}`, binding("error")),
         expression: item.source === "thrown"
           ? { kind: "match" as const, expression: { kind: "dereference" as const, pointer: path("error") }, arms: [] }
           : call(`tsonic_rust_runtime::ErrorObject::${getter.native}`, path("error")) })),
       { pattern: variant("ErrorTransport::Suppressed", { kind: "wildcard" }, { kind: "wildcard" }, binding("source")),
-        expression: call(`tsonic_rust_runtime::ErrorObject::${getter.native}`, path("source")) },
+        expression: writable ? { kind: "match", expression: { kind: "dereference", pointer: path("source") }, arms: [] }
+          : call(`tsonic_rust_runtime::ErrorObject::${getter.native}`, path("source")) },
     ],
   }));
   functions.push(observation("is_error", boolean, { kind: "bool-literal", value: true }));
@@ -41,6 +45,7 @@ export function planRustSourceErrorObservations(plan: RustErrorTransportPlan): r
   functions.push(observation("native_error_value", { kind: "named", path: "Option", genericArguments: [{ kind: "type", type: jsError }] }, {
     kind: "match", expression: method(path("self"), "as_transport"), arms: [
       { pattern: variant("ErrorTransport::Runtime", binding("error")), expression: call("Some", method(method(path("error"), "source_error"), "clone")) },
+      { pattern: variant("ErrorTransport::SourceCreated", { kind: "wildcard" }), expression: { kind: "none" } },
       ...plan.variants.map(item => ({ pattern: variant(`ErrorTransport::${item.name}`,
           item.source === "error" ? { kind: "wildcard" as const } : binding("error")),
         expression: item.source === "thrown"
@@ -50,6 +55,10 @@ export function planRustSourceErrorObservations(plan: RustErrorTransportPlan): r
         expression: call("Some", method(path("source"), "clone")) },
     ],
   }));
+  if (writable) {
+    const native = functions.find(item => item.name === "native_error_value")!;
+    functions[functions.indexOf(native)] = observation("native_error_value", { kind: "named", path: "Option", genericArguments: [{ kind: "type", type: jsError }] }, { kind: "none" });
+  }
   functions.push(observation("is_error_kind", boolean, { kind: "binary", operator: "==",
     left: method(path("self"), "kind"), right: path("kind") }, [{ name: "kind", type: named("tsonic_rust_runtime::JsErrorKind") }]));
   const other: RustType = { kind: "reference", mutable: false, referent: source };
@@ -63,6 +72,20 @@ export function planRustSourceErrorObservations(plan: RustErrorTransportPlan): r
       members: getters.map(getter => ({ ...observation(getter.native, getter.type,
         method(path("self"), getter.name)), visibility: "private" })) },
   ];
+  if (writable) {
+    items.push({ kind: "impl", generics: emptyRustGenerics, target: source,
+      trait: named("tsonic_rust_runtime::WritableErrorObject"), members: ["name", "message", "stack"].map(name => ({
+        ...observation(`set_error_${name}`, { kind: "unit" }, { kind: "match", expression: method(path("self"), "as_transport"), arms: [
+          { pattern: variant("ErrorTransport::Runtime", binding("error")), expression: { kind: "match", expression: { kind: "dereference", pointer: path("error") }, arms: [] } },
+          { pattern: variant("ErrorTransport::SourceCreated", binding("error")), expression: call(`tsonic_rust_runtime::WritableErrorObject::set_error_${name}`, path("error"), path("value")) },
+          ...plan.variants.map(item => ({ pattern: variant(`ErrorTransport::${item.name}`, binding("error")), expression: item.source === "thrown"
+            ? { kind: "match" as const, expression: { kind: "dereference" as const, pointer: path("error") }, arms: [] }
+            : call(`tsonic_rust_runtime::WritableErrorObject::set_error_${name}`, path("error"), path("value")) })),
+          { pattern: variant("ErrorTransport::Suppressed", { kind: "wildcard" }, { kind: "wildcard" }, binding("source")), expression: { kind: "match", expression: { kind: "dereference", pointer: path("source") }, arms: [] } },
+        ] }, [{ name: "value", type: name === "stack" ? { kind: "named", path: "Option", genericArguments: [{ kind: "type", type: { kind: "string" } }] } : { kind: "string" } }]),
+        visibility: "private" as const,
+      })) });
+  }
   const formatterType: RustType = { kind: "reference", mutable: true, referent: {
     kind: "named", path: "core::fmt::Formatter", genericArguments: [{ kind: "lifetime", lifetime: { kind: "placeholder" } }],
   } };

@@ -35,6 +35,51 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 import { planRustSourceAccessorReceiver } from "../objects/accessor-receivers.js";
 import { applyRustValueConversion } from "../expressions/value-conversions.js";
+import { effectivePlannedExpressionCarrier, selectedOperationMatches } from "../expressions/fundamentals.js";
+import { planRustSharedReceiver } from "../expressions/typed-locations.js";
+import { isRustMutableJsErrorCarrier, isRustWritableSourceErrorCarrier } from "../../../target-model/types/carriers/source-error.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+
+export function planRustBuiltinErrorAssignment(
+  left: Node,
+  valueNode: Node,
+  property: Extract<RustTargetOperationFact, { readonly kind: "builtin-error-property" }>,
+  assignment: RustAssignmentOperationPlan,
+  context: RustPlanContext,
+): readonly RustStmt[] | undefined {
+  const receiverNode = Node_Expression(context.input.program.source.ast, left);
+  if (receiverNode === undefined || property.accessMode === "read" ||
+    !isRustMutableJsErrorCarrier(property.receiverCarrier) && !isRustWritableSourceErrorCarrier(property.receiverCarrier) ||
+    !rustTargetTypeRefEquals(effectivePlannedExpressionCarrier(receiverNode, context), property.receiverCarrier) ||
+    !selectedOperationMatches(context.input.program.facts.getSelectedTargetProperty(left),
+      property.operationId, "property", property.resultCarrier) || context.syntheticNames === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, left),
+      "rust.backend.error-write-storage", "Error mutation requires exact selected physical writable storage and member evidence."));
+    return undefined;
+  }
+  const receiver = planExpression(receiverNode, context);
+  const value = planExpression(valueNode, context);
+  if (receiver === undefined || value === undefined) return undefined;
+  const receiverName = allocateRustSyntheticName(context.syntheticNames, "error_receiver");
+  const valueName = allocateRustSyntheticName(context.syntheticNames, "error_value");
+  const currentName = allocateRustSyntheticName(context.syntheticNames, "error_previous");
+  const selectedReceiver: RustExpr = { kind: "path", path: receiverName };
+  const bindings = [{ name: receiverName, value: planRustSharedReceiver(receiverNode, receiver, context) }];
+  if (assignment.operator !== "=") {
+    if (property.property === "stack") return undefined;
+    bindings.push({ name: currentName, value: { kind: "owned-string-from-borrowed-str", expression: {
+      kind: "call", path: `tsonic_rust_runtime::ErrorObject::error_${property.property}`, args: [selectedReceiver],
+    } } });
+  }
+  bindings.push({ name: valueName, value });
+  const next = assignment.operator === "=" ? { kind: "path" as const, path: valueName }
+    : planRustCompoundAssignmentValue(assignment, { kind: "path", path: currentName }, { kind: "path", path: valueName }, left, context);
+  if (next === undefined) return undefined;
+  return [{ kind: "expr", expr: { kind: "block", bindings, value: {
+    kind: "call", path: `tsonic_rust_runtime::WritableErrorObject::set_error_${property.property}`,
+    args: [selectedReceiver, next],
+  } } }];
+}
 
 export function planRustSourceMethodPropertyAssignment(
   left: Node,

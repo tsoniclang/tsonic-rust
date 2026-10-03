@@ -61,6 +61,7 @@ export interface RustPlanningHost {
 }
 
 export interface RustTargetProgram {
+  readonly errorStorageDemands: import("../objects/error-storage-demands.js").RustErrorStorageDemandQueries;
   readonly localStorageAliases: RustLocalStorageAliasPlan;
   readonly numericRepresentations: RustNumericRepresentations;
   readonly typeDefinitions: import("../../target-model/types/source-union-definitions.js").RustTypeDefinitions;

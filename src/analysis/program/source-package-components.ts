@@ -193,6 +193,15 @@ export function analyzeRustSourcePackageComponents(
   }
 
   const errorComponents = new Set<string>();
+  for (const constructor of context.errorStorageDemands.nativeConstructors) {
+    if (context.errorStorageDemands.storageFor(constructor).kind !== "writable") continue;
+    const file = context.ast.getSourceFile(constructor);
+    const componentId = file === undefined ? undefined : componentIdByFileName.get(normalizePath(context.ast.getFileName(file)));
+    if (componentId === undefined) {
+      diagnostics.push(componentDiagnostic("RUST_NATIVE_ERROR_SOURCE_PACKAGE_MISSING",
+        "Demanded writable Error storage has no exact source-package component identity."));
+    } else errorComponents.add(componentId);
+  }
   for (const definition of context.projectTypes.programErrorDefinitions) {
     const componentId = componentIdByFileName.get(
       normalizePath(definition.fileName),

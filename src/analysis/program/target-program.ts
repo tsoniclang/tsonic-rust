@@ -207,6 +207,7 @@ export function analyzeRustTargetProgram(
   }
   const borrowedElementReads = analyzeRustBorrowedElementReads(context.ast, context.sourceFiles, facts, context.source.navigation);
   const program: RustTargetProgram = Object.freeze({
+    errorStorageDemands: context.errorStorageDemands,
     localStorageAliases: analyzeRustLocalStorageAliases({ ast: context.ast,
       navigation: context.source.navigation, sourceFiles: context.sourceFiles, facts }),
     numericRepresentations: analyzeRustNumericRepresentations({ source: context.source,

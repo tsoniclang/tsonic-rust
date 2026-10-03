@@ -23,6 +23,7 @@ export function planRustErrorObservations(plan: RustErrorTransportPlan): RustIte
     members: [
       observation("source_error", option(borrowedError), { kind: "match", expression: path("self"), arms: [
         { pattern: variant("ErrorTransport::Runtime", binding("error")), expression: call("Some", method(path("error"), "source_error")) },
+        { pattern: variant("ErrorTransport::SourceCreated", binding("error")), expression: call("Some", path("error")) },
         { pattern: variant("ErrorTransport::Suppressed", { kind: "wildcard" }, { kind: "wildcard" }, binding("source")), expression: call("Some", path("source")) },
         ...plan.variants.map(item => ({ pattern: variant(`ErrorTransport::${item.name}`, item.source === "thrown" ? { kind: "wildcard" as const } : binding("error")),
           expression: item.source === "external" ? method(path("error"), "source_error")
@@ -36,6 +37,8 @@ export function planRustErrorObservations(plan: RustErrorTransportPlan): RustIte
       observation("source_error_value", option(sourceError), { kind: "match", expression: path("self"), arms: [
         { pattern: variant("ErrorTransport::Runtime", binding("error")),
           expression: call("Some", call("SourceError::from", method(path("error"), "clone"))) },
+        { pattern: variant("ErrorTransport::SourceCreated", binding("error")),
+          expression: call("Some", call("SourceError::from", method(path("error"), "clone"))) },
         ...plan.variants.map(item => ({ pattern: variant(`ErrorTransport::${item.name}`,
             item.source === "thrown" ? { kind: "wildcard" as const } : binding("error")),
           expression: item.source === "thrown" ? { kind: "none" as const }
@@ -48,6 +51,7 @@ export function planRustErrorObservations(plan: RustErrorTransportPlan): RustIte
       ] }),
       observation("native_error_value", option(jsError), { kind: "match", expression: path("self"), arms: [
         { pattern: variant("ErrorTransport::Runtime", binding("error")), expression: call("Some", method(method(path("error"), "source_error"), "clone")) },
+        { pattern: variant("ErrorTransport::SourceCreated", { kind: "wildcard" }), expression: { kind: "none" } },
         { pattern: variant("ErrorTransport::Suppressed", { kind: "wildcard" }, { kind: "wildcard" }, binding("source")), expression: call("Some", method(path("source"), "clone")) },
         ...plan.variants.map(item => ({ pattern: variant(`ErrorTransport::${item.name}`, item.source === "external" ? binding("error") : { kind: "wildcard" as const }),
           expression: item.source === "external" ? method(path("error"), "native_error_value") : { kind: "none" as const } })),

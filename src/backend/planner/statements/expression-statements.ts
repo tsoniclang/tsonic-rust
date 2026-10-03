@@ -41,6 +41,7 @@ import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagno
 import { planExpression, sourceFieldSelectedOperationMatches, sourceUnionFieldSelectedOperationMatches } from "../expressions/index.js";
 import { planRuntimeSetStatement, selectedOperatorMatches } from "./iteration.js";
 import { planRustCompoundAssignmentValue, planRustDirectOperatorCallAssignment, planRustSourceAccessorAssignment, planRustSourceIndexAssignment, planRustSourceMethodPropertyAssignment, planRustSourceStaticFieldAssignment } from "./assignments.js";
+import { planRustBuiltinErrorAssignment } from "./assignments.js";
 import { planRustSourceUnionFieldProjection, readRustUnionField, writeRustUnionField } from "../expressions/unions.js";
 import { readRustProjectDispatchedField, writeRustProjectDispatchedField } from "../objects/project-objects.js";
 import { planRustProjectFieldDispatchRoles } from "../objects/project-field-dispatch.js";
@@ -241,6 +242,7 @@ export function planRustAssignmentWrite(
     return undefined;
   }
   const sourceField = context.input.program.facts.getFact(left, rustTargetOperationFactKey);
+  if (sourceField?.kind === "builtin-error-property") return planRustBuiltinErrorAssignment(left, valueNode, sourceField, fact, context);
   const compoundWrite = context.input.program.facts.getFact(expression, rustCompoundWriteFactKey);
   if (compoundWrite !== undefined) {
     return operator === "="
