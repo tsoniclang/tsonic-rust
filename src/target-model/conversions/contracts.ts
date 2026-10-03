@@ -1,5 +1,6 @@
 import type { TargetTypeRef } from "../types/model.js";
 import { rustNativeRepresentationMatches } from "./native-representation.js";
+import { rustUnionPayloadAdmission } from "./union-injection.js";
 import { rustJsRecordValueAdmission } from "./closed-record.js";
 import {
   isRustTargetTypeRef,
@@ -56,7 +57,7 @@ import { rustRestSequenceElements } from "../operations/rest-assembly.js";
 import { closedMetadataEquals, isClosedMetadata, isDenseDataArray, hasExactObjectKeys } from "../metadata/closed-data.js";
 import { rustNamedTypeCarrierValue } from "../types/carriers/native.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../types/source-union-definitions.js";
-import { rustUnionInjectionPath, selectRustUnionArmMapping, rustUnionProjectionContract, rustUnionLeaves, type RustUnionLeaf, type RustUnionArmMapping, type RustUnionPathStep } from "../types/union-relations.js";
+import { selectRustUnionArmMapping, rustUnionProjectionContract, rustUnionLeaves, type RustUnionLeaf, type RustUnionArmMapping, type RustUnionPathStep } from "../types/union-relations.js";
 
 const boolCarrier = rustSourcePrimitiveTargetType("bool");
 const int32Carrier = rustSourcePrimitiveTargetType("int32");
@@ -109,6 +110,8 @@ export type RustValueConversionContract = RustValueConversionContractBase & (
       readonly lowering: "source-union-variant";
       readonly variantName: string;
       readonly path: readonly RustUnionPathStep[];
+      readonly payloadCarrier: TargetTypeRef;
+      readonly payloadConversion: RustValueConversionContract | null;
     }
   | {
       readonly lowering: "option-map";
@@ -185,7 +188,8 @@ export function rustValueConversionContract(
       : undefined;
   }
   if (value.kind === "native-representation") {
-    return isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) &&
+    return hasExactObjectKeys(value, ["kind", "source", "target"]) &&
+      isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) &&
       !rustTargetTypeRefEquals(value.source, value.target) && rustNativeRepresentationMatches(value.source, value.target)
       ? { category: "exact", lowering: "identity", sourceMode: "value", source: value.source, target: value.target, fallible: false }
       : undefined;
@@ -516,22 +520,38 @@ export function rustValueConversionContract(
       : undefined;
   }
   if (value.kind === "source-union-variant") {
-    const path = isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target)
-      ? rustUnionInjectionPath(value.source, value.target, definitions) : undefined;
-    return hasExactObjectKeys(value, ["kind", "source", "target", "variantName"]) &&
-        isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) &&
-        path !== undefined && path[0]!.variant.name === value.variantName
-      ? {
-          category: "exact",
-          lowering: "source-union-variant",
-          sourceMode: "value",
-          source: value.source,
-          target: value.target,
-          variantName: value.variantName,
-          path,
-          fallible: false,
-        }
-      : undefined;
+    if (!isClosedMetadata(value) ||
+      !hasExactObjectKeys(value, ["kind", "source", "target", "variantName", "payloadCarrier", "payloadConversion"]) ||
+      !isRustTargetTypeRef(value.source) || !isRustTargetTypeRef(value.target) ||
+      !isRustTargetTypeRef(value.payloadCarrier)) return undefined;
+    const admission = rustUnionPayloadAdmission(value.source, value.target, definitions);
+    if (admission === undefined || admission.path[0]!.variant.name !== value.variantName ||
+      !rustTargetTypeRefEquals(admission.carrier, value.payloadCarrier)) return undefined;
+    const identical = rustTargetTypeRefEquals(value.source, value.payloadCarrier);
+    let payload: RustValueConversionContract | null;
+    if (value.payloadConversion === null) {
+      if (!identical) return undefined;
+      payload = null;
+    } else {
+      if (identical || value.payloadConversion === undefined || typeof value.payloadConversion !== "object") return undefined;
+      const selected = rustValueConversionContract(value.payloadConversion, definitions);
+      if (selected === undefined || selected.category !== "exact" || selected.fallible ||
+        !rustTargetTypeRefEquals(selected.source, value.source) ||
+        !rustTargetTypeRefEquals(selected.target, value.payloadCarrier)) return undefined;
+      payload = selected;
+    }
+    return {
+      category: "exact",
+      lowering: "source-union-variant",
+      sourceMode: "value",
+      source: value.source,
+      target: value.target,
+      variantName: value.variantName,
+      path: admission.path,
+      payloadCarrier: value.payloadCarrier,
+      payloadConversion: payload,
+      fallible: false,
+    };
   }
   if (value.kind === "union-map") {
     const expected = selectRustUnionArmMapping(value.source, value.target, value.coverage, definitions);

@@ -58,7 +58,7 @@ export function rustUnionInjectionVariant(source: TargetTypeRef, target: TargetT
 
 export function rustUnionInjectionPath(source: TargetTypeRef, target: TargetTypeRef, definitions: RustTypeDefinitions):
   readonly RustUnionPathStep[] | undefined {
-  const paths = collectRustUnionPaths(target, definitions, source);
+  const paths = collectRustUnionPaths(target, definitions, current => rustTargetTypeRefEquals(current, source));
   return paths?.length === 1 && paths[0]!.path.every(step => step.variant.kind === "payload") ? paths[0]!.path : undefined;
 }
 
@@ -67,19 +67,27 @@ export function rustUnionLeaves(carrier: TargetTypeRef, definitions: RustTypeDef
   return collectRustUnionPaths(carrier, definitions);
 }
 
-function collectRustUnionPaths(carrier: TargetTypeRef, definitions: RustTypeDefinitions, target?: TargetTypeRef):
+export function rustUnionPathsMatching(
+  carrier: TargetTypeRef,
+  definitions: RustTypeDefinitions,
+  matches: (carrier: TargetTypeRef) => boolean,
+): readonly RustUnionLeaf[] | undefined {
+  return collectRustUnionPaths(carrier, definitions, matches);
+}
+
+function collectRustUnionPaths(carrier: TargetTypeRef, definitions: RustTypeDefinitions, matches?: (carrier: TargetTypeRef) => boolean):
   readonly RustUnionLeaf[] | undefined {
   const leaves: RustUnionLeaf[] = [];
   const visit = (current: TargetTypeRef, path: readonly RustUnionPathStep[]): boolean => {
     if (path.some(step => rustTargetTypeRefEquals(step.union, current))) return false;
-    if (path.length > 0 && target !== undefined && rustTargetTypeRefEquals(current, target)) {
+    if (path.length > 0 && matches?.(current) === true) {
       leaves.push(Object.freeze({ carrier: current, path }));
       return true;
     }
     const alternatives = rustUnionAlternatives(current, definitions);
     if (alternatives === undefined) {
       if (path.length === 0) return false;
-      if (target === undefined) leaves.push(Object.freeze({ carrier: current, path }));
+      if (matches === undefined) leaves.push(Object.freeze({ carrier: current, path }));
       return true;
     }
     return alternatives.length > 0 && alternatives.every(arm =>
@@ -95,7 +103,7 @@ export function rustUnionProjectionContract(source: TargetTypeRef, target: Targe
   const dispatchCarrier = sourceElement ?? source;
   const carrier = targetElement ?? target;
   const allAlternatives = rustUnionAlternatives(dispatchCarrier, definitions);
-  const paths = collectRustUnionPaths(dispatchCarrier, definitions, carrier);
+  const paths = collectRustUnionPaths(dispatchCarrier, definitions, current => rustTargetTypeRefEquals(current, carrier));
   const variant = allAlternatives === undefined ? rustClosedValuePayloadProjection(dispatchCarrier, carrier) : undefined;
   const path = variant === undefined ? paths?.length === 1 ? paths[0]!.path : undefined
     : Object.freeze([Object.freeze({ union: dispatchCarrier, variant })]);

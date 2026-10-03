@@ -29,11 +29,13 @@ test("nested union payload paths are exact, immutable and independently checked"
   assert.ok(Object.isFrozen(selected.path) && selected.path.every(Object.isFrozen));
   assert.deepEqual(rustUnionInjectionPath(integer, nested, definitions), selected.path);
   assert.deepEqual(rustUnionInjectionVariant(integer, nested, definitions), { kind: "payload", name: "Variant1" });
-  const conversion = { kind: "source-union-variant", source: integer, target: nested, variantName: "Variant1" };
+  const conversion = { kind: "source-union-variant", source: integer, target: nested, variantName: "Variant1",
+    payloadCarrier: integer, payloadConversion: null };
   const contract = rustValueConversionContract(conversion, definitions);
   assert.deepEqual(contract.path, selected.path);
   assert.ok(Object.isFrozen(contract.path) && contract.path.every(Object.isFrozen));
   for (const invalid of [
+    { kind: "source-union-variant", source: integer, target: nested, variantName: "Variant1" },
     { ...conversion, source: rustSourcePrimitiveTargetType("int64") },
     { ...conversion, target: duplicate },
     { ...conversion, variantName: "Variant0" },

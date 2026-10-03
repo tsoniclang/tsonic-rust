@@ -277,7 +277,9 @@ export function lowerRustValueConversion(
     case "union-project":
       return planRustUnionProjection(node ?? context.sourceFile, source, contract.source, contract.target, "move", context);
     case "source-union-variant": {
-      const expression = planRustUnionConstruction(contract.path, source, context);
+      const payload = contract.payloadConversion === null ? source :
+        lowerRustValueConversion(contract.payloadConversion, source, context, node);
+      const expression = payload === undefined ? undefined : planRustUnionConstruction(contract.path, payload, context);
       if (expression === undefined) {
         context.diagnostics.push(missingFactDiagnostic(
           diagnosticInput(context, node ?? context.sourceFile),

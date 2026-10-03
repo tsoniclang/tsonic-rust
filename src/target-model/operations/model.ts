@@ -177,6 +177,8 @@ export type RustNonOptionValueConversion =
       readonly source: TargetTypeRef;
       readonly target: TargetTypeRef;
       readonly variantName: string;
+      readonly payloadCarrier: TargetTypeRef;
+      readonly payloadConversion: RustValueConversion | null;
     }
   | {
       readonly kind: "bottom-coercion";

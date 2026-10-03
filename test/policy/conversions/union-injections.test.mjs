@@ -1,0 +1,134 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
+import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
+import { rustValueConversionContract } from "../../../dist/target-model/conversions/contracts.js";
+import { rustUnionPayloadAdmission } from "../../../dist/target-model/conversions/union-injection.js";
+import { rustUnionInjectionPath } from "../../../dist/target-model/types/union-relations.js";
+import {
+  rustAbsenceTargetType, rustJsErrorTargetType, rustJsPromiseTargetTypeWithLifetime,
+  rustSourcePrimitiveTargetType, rustSourceUnionTargetType, rustStringTargetType, rustUnitTargetType,
+} from "../../../dist/target-model/types/index.js";
+import { lowerRustValueConversion } from "../../../dist/backend/planner/expressions/value-conversions.js";
+import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../helpers/fake-compile-input.mjs";
+
+function unionDefinitions(rows) {
+  const registry = createRustTypeDefinitionRegistry();
+  for (const [carrier, variants] of rows) assert.equal(registry.registerSourceUnion({ carrier, variants }, true), true);
+  return registry.seal();
+}
+
+function promiseFixture() {
+  const source = rustJsPromiseTargetTypeWithLifetime(rustAbsenceTargetType(), { kind: "static" });
+  const payloadCarrier = rustJsPromiseTargetTypeWithLifetime(rustUnitTargetType(), { kind: "placeholder" });
+  const target = rustSourceUnionTargetType("/src/index.ts", "Completion");
+  const definitions = unionDefinitions([[target, [
+    { name: "Future", carrier: payloadCarrier }, { name: "Text", carrier: rustStringTargetType() },
+  ]]]);
+  return { source, payloadCarrier, target, definitions };
+}
+
+test("union injection composes one exact native payload admission without changing equality", () => {
+  const { source, payloadCarrier, target, definitions } = promiseFixture();
+  assert.equal(rustUnionInjectionPath(source, target, definitions), undefined);
+  assert.deepEqual(rustUnionPayloadAdmission(source, target, definitions).carrier, payloadCarrier);
+  const conversion = selectRustSourceValueConversion(source, target, definitions);
+  assert.deepEqual(conversion, { kind: "source-union-variant", source, target, variantName: "Future",
+    payloadCarrier, payloadConversion: { kind: "native-representation", source, target: payloadCarrier } });
+  assert.ok(Object.isFrozen(conversion));
+  const contract = rustValueConversionContract(conversion, definitions);
+  assert.equal(contract.lowering, "source-union-variant");
+  assert.equal(contract.payloadConversion.lowering, "identity");
+  assert.equal(contract.payloadConversion.fallible, false);
+  assert.deepEqual(contract.payloadConversion.source, source);
+  assert.deepEqual(contract.payloadConversion.target, payloadCarrier);
+  const identity = selectRustSourceValueConversion(payloadCarrier, target, definitions);
+  assert.equal(identity.payloadConversion, null);
+  assert.deepEqual(identity.payloadCarrier, payloadCarrier);
+  assert.equal(rustValueConversionContract(identity, definitions).payloadConversion, null);
+});
+
+test("exact union payload admission is generic and constructs nested native variants once", () => {
+  const source = rustAbsenceTargetType();
+  const payloadCarrier = rustUnitTargetType();
+  const inner = rustSourceUnionTargetType("/src/index.ts", "Inner");
+  const target = rustSourceUnionTargetType("/src/index.ts", "Outer");
+  const definitions = unionDefinitions([
+    [inner, [{ name: "Complete", carrier: payloadCarrier }, { name: "Flag", carrier: rustSourcePrimitiveTargetType("bool") }]],
+    [target, [{ name: "Nested", carrier: inner }, { name: "Text", carrier: rustStringTargetType() }]],
+  ]);
+  const conversion = selectRustSourceValueConversion(source, target, definitions);
+  const contract = rustValueConversionContract(conversion, definitions);
+  assert.deepEqual(contract.path.map(step => step.variant.name), ["Nested", "Complete"]);
+  const node = fakeStatement({ kindName: "Identifier", pos: 0, end: 5 });
+  const sourceFile = fakeSourceFile({ fileName: "/src/index.ts", text: "value", statements: [node] });
+  const context = { input: { program: { source: { ast: fakeAstReader([sourceFile]) }, typeDefinitions: definitions,
+    names: { nameForSourceType: (_file, name) => name }, configuration: { edition: "2024" } } },
+    sourceFile, diagnostics: [], moduleName: "index", moduleNameByFileName: new Map([["/src/index.ts", "index"]]),
+    externalCrateNameByFileName: new Map() };
+  const expression = { kind: "call", path: "produce", args: [] };
+  const planned = lowerRustValueConversion(contract, expression, context, node);
+  assert.equal(planned.kind, "call");
+  assert.match(planned.path, /Outer::Nested$/u);
+  assert.match(planned.args[0].path, /Inner::Complete$/u);
+  assert.equal(planned.args[0].args[0], expression);
+  assert.deepEqual(context.diagnostics, []);
+  assert.doesNotMatch(JSON.stringify(planned), /clone|map|Box|Rc|RefCell|as_mut|cast|Promise/u);
+});
+
+test("union payload admission rejects ambiguous, width-changing, error-changing and escaping lifetime choices", () => {
+  const { source, payloadCarrier, target, definitions } = promiseFixture();
+  for (const candidate of [
+    rustJsPromiseTargetTypeWithLifetime(rustSourcePrimitiveTargetType("uint64"), { kind: "static" }),
+    rustJsPromiseTargetTypeWithLifetime(rustAbsenceTargetType(), { kind: "static" }, rustJsErrorTargetType()),
+    rustJsPromiseTargetTypeWithLifetime(rustAbsenceTargetType(), { kind: "bound", binderIdentity: "binder", identity: "scope", name: "scope" }),
+    { ...source, id: "unrelated.Promise" },
+  ]) assert.equal(selectRustSourceValueConversion(candidate, target, definitions), undefined);
+  const staticTarget = rustSourceUnionTargetType("/src/index.ts", "StaticOnly");
+  const staticDefinitions = unionDefinitions([[staticTarget, [{ name: "Future", carrier: source }]]]);
+  assert.equal(selectRustSourceValueConversion(payloadCarrier, staticTarget, staticDefinitions), undefined);
+  const ambiguous = rustSourceUnionTargetType("/src/index.ts", "Ambiguous");
+  const ambiguousDefinitions = unionDefinitions([[ambiguous, [
+    { name: "Owned", carrier: source }, { name: "Elided", carrier: payloadCarrier },
+  ]]]);
+  assert.equal(rustUnionPayloadAdmission(source, ambiguous, ambiguousDefinitions), undefined);
+  assert.equal(selectRustSourceValueConversion(source, ambiguous, ambiguousDefinitions), undefined);
+  const wide = rustSourceUnionTargetType("/src/index.ts", "Wide");
+  const wideDefinitions = unionDefinitions([[wide, [{ name: "Value", carrier: rustSourcePrimitiveTargetType("int64") }]]]);
+  assert.equal(selectRustSourceValueConversion(rustSourcePrimitiveTargetType("int32"), wide, wideDefinitions), undefined);
+  const recursive = { sourceUnionVariants: () => [{ name: "Self", carrier: target }] };
+  assert.equal(rustUnionPayloadAdmission(source, target, recursive), undefined);
+});
+
+test("composed union facts reject old shapes, wrong presence, forged payloads, stale paths, getters and cycles", () => {
+  const { source, payloadCarrier, target, definitions } = promiseFixture();
+  const conversion = selectRustSourceValueConversion(source, target, definitions);
+  const old = { kind: "source-union-variant", source, target, variantName: "Future" };
+  const cycle = { ...conversion.payloadConversion };
+  cycle.source = cycle;
+  let getterCalls = 0;
+  const getter = { ...conversion.payloadConversion };
+  Object.defineProperty(getter, "target", { enumerable: true, get() { getterCalls++; throw new Error("must not execute"); } });
+  for (const invalid of [
+    old,
+    { ...conversion, payloadConversion: null },
+    { ...conversion, payloadConversion: undefined },
+    { ...conversion, payloadConversion: 3 },
+    { ...conversion, payloadConversion: {} },
+    { ...conversion, payloadCarrier: source },
+    { ...conversion, variantName: "Text" },
+    { ...conversion, additional: true },
+    { ...conversion, payloadConversion: { ...conversion.payloadConversion, extra: true } },
+    { ...conversion, payloadConversion: { ...conversion.payloadConversion, source: payloadCarrier } },
+    { ...conversion, payloadConversion: { ...conversion.payloadConversion, target: source } },
+    { ...conversion, payloadConversion: { kind: "bottom-coercion", source, target: payloadCarrier } },
+    { ...conversion, payloadConversion: getter },
+    { ...conversion, payloadConversion: cycle },
+  ]) assert.equal(rustValueConversionContract(invalid, definitions), undefined);
+  assert.equal(getterCalls, 0);
+  assert.equal(rustValueConversionContract(conversion), undefined);
+  const stale = unionDefinitions([[target, [{ name: "Other", carrier: payloadCarrier }]]]);
+  assert.equal(rustValueConversionContract(conversion, stale), undefined);
+  const identity = selectRustSourceValueConversion(payloadCarrier, target, definitions);
+  assert.equal(rustValueConversionContract({ ...identity, payloadConversion: conversion.payloadConversion }, definitions), undefined);
+});

@@ -13,12 +13,13 @@ test("closed native array injection retains its exact payload and rejects forged
   const source = rustJsArrayTargetType(rustJsValueTargetType());
   const target = rustJsValueTargetType();
   const conversion = selectRustSourceValueConversion(source, target);
-  assert.deepEqual(conversion, { kind: "source-union-variant", source, target, variantName: "Array" });
+  assert.deepEqual(conversion, { kind: "js-value-from-array", source, element: rustJsValueTargetType(),
+    elementConversion: { kind: "semantic-conversion", id: "js-value-clone" } });
   const finalized = finalizeValueConversion(conversion, source, target);
   assert.equal(finalizedConversionIsValid(finalized), true);
   assert.equal(finalized.fallible, false);
   for (const malformed of [
-    { ...conversion, variantName: "Object" },
+    { ...conversion, element: rustJsErrorTargetType() },
     { ...conversion, source: rustJsArrayTargetType(rustStringTargetType()) },
     { ...conversion, target: rustJsErrorTargetType() },
     { ...conversion, guessed: true },

@@ -1,6 +1,8 @@
 import type { RustValueConversion } from "../../target-model/operations/model.js";
-import { rustUnionInjectionVariant, selectRustUnionArmMapping, rustUnionProjectionContract, rustUnionLeaves, type RustUnionLeaf } from "../../target-model/types/union-relations.js";
+import { selectRustUnionArmMapping, rustUnionProjectionContract, rustUnionLeaves, type RustUnionLeaf } from "../../target-model/types/union-relations.js";
 import { rustNativeRepresentationMatches } from "../../target-model/conversions/native-representation.js";
+import { rustUnionPayloadAdmission } from "../../target-model/conversions/union-injection.js";
+import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
 import { rustNumericValueConversionIsSupported } from "../../target-model/conversions/numeric-promotion.js";
 import { selectRustExactIntegerConversion } from "../../target-model/conversions/exact-integer.js";
 import { rustNumberBoxingConversionId } from "../../target-model/conversions/number-boxing.js";
@@ -117,13 +119,22 @@ export function selectRustSourceValueConversion(
   }
   const unionMapping = selectRustUnionArmMapping(source, target, "source", definitions);
   if (unionMapping !== undefined) return { kind: "union-map", source, target, coverage: "source", arms: unionMapping };
-  const injection = rustUnionInjectionVariant(source, target, definitions);
+  const injection = rustUnionPayloadAdmission(source, target, definitions);
   if (injection !== undefined) {
+    const payloadConversion = rustTargetTypeRefEquals(source, injection.carrier) ? null :
+      selectRustSourceValueConversion(source, injection.carrier, definitions, nextAncestors);
+    const payload = payloadConversion == null ? undefined : rustValueConversionContract(payloadConversion, definitions);
+    if (payloadConversion === undefined || payloadConversion !== null && (payload === undefined ||
+      payload.category !== "exact" || payload.fallible ||
+      !rustTargetTypeRefEquals(payload.source, source) ||
+      !rustTargetTypeRefEquals(payload.target, injection.carrier))) return undefined;
     return Object.freeze({
       kind: "source-union-variant",
       source,
       target,
-      variantName: injection.name,
+      variantName: injection.path[0]!.variant.name,
+      payloadCarrier: injection.carrier,
+      payloadConversion,
     });
   }
   if (source.kind === "pointer" && target.kind === "pointer" &&
