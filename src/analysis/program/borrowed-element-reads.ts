@@ -3,6 +3,7 @@ import { Node_Expression, type SourceProgramNavigation } from "@tsonic/target-ap
 import type { RustTargetProgram } from "./model.js";
 import { analyzeRustBorrowedElementLocals, type RustBorrowedElementLocal } from "./borrowed-element-locals.js";
 import { rustBorrowedElementRead, rustBorrowedStringInputs, rustBorrowPureOperation } from "./borrowed-element-purity.js";
+import { analyzeRustBorrowedIterationBindings, type RustBorrowedIterationBinding } from "./borrowed-iteration-bindings.js";
 
 export interface RustBorrowedElementRead {
   readonly receiver: Node;
@@ -15,6 +16,7 @@ export interface RustBorrowedElementReads {
   forExpression(node: Node): RustBorrowedElementRead | undefined;
   forStatement(node: Node): RustBorrowedElementLocal | undefined;
   endingAt(node: Node): readonly RustBorrowedElementLocal[];
+  forIteration(node: Node): RustBorrowedIterationBinding | undefined;
 }
 
 export function analyzeRustBorrowedElementReads(
@@ -45,7 +47,8 @@ export function analyzeRustBorrowedElementReads(
   };
   files.forEach(visit);
   const locals = analyzeRustBorrowedElementLocals(ast, files, facts, navigation);
-  return Object.freeze({ forExpression: (node: Node) => reads.get(node), ...locals });
+  const forIteration = analyzeRustBorrowedIterationBindings(ast, files, facts, navigation);
+  return Object.freeze({ forExpression: (node: Node) => reads.get(node), ...locals, forIteration });
 }
 
 function isLiteral(node: Node, ast: AstReader): boolean {
