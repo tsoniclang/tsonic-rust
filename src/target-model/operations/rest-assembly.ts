@@ -18,11 +18,14 @@ export const rustVecRestAssembly = Object.freeze({
 });
 
 export function rustRestSequenceElements(source: TargetTypeRef): {
-  readonly collection: "vec" | "js-array" | "fixed-array" | "tuple";
+  readonly collection: "vec" | "js-array" | "fixed-array" | "tuple" | "slice";
   readonly elements: readonly TargetTypeRef[];
 } | undefined {
   if (source.kind === "tuple") return { collection: "tuple", elements: source.elements };
   if (source.kind === "array") return { collection: "vec", elements: [source.element] };
+  if (source.kind === "reference" && !source.mutable && source.referent.kind === "slice") {
+    return { collection: "slice", elements: [source.referent.element] };
+  }
   const fixed = rustFixedArrayCarrierValue(source);
   if (fixed !== undefined) return { collection: "fixed-array", elements: [fixed.element] };
   const element = isRustJsArrayCarrier(source) ? rustJsArrayLikeElementTargetType(source) : undefined;
