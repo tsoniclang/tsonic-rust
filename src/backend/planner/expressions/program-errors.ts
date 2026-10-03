@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/nodes.js";
-import { rustProgramErrorConversionMatches, type RustProgramErrorConversion } from "../../../target-model/conversions/program-error.js";
+import { rustProgramErrorConversionMatches, selectRustRuntimeErrorBoundary, type RustProgramErrorConversion } from "../../../target-model/conversions/program-error.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { diagnosticInput, registerAliasFromPath, rustCurrentErrorBoundary, type RustPlanContext } from "../program/plan-context.js";
 import { resolveRustProgramErrorRoute, type RustSourcePackageErrorBoundary } from "../program/source-package-errors.js";
@@ -19,12 +19,20 @@ export function planRustProgramErrorConstruction(
     return undefined;
   }
   registerAliasFromPath(context, boundary.errorTypePath);
-  if (conversion.variant === undefined) return { kind: "call", path: `${boundary.errorTypePath}::from`, args: [value] };
+  if (conversion.route.kind === "runtime") {
+    if (selectRustRuntimeErrorBoundary(conversion.source, context.input.program.providerErrorCarriers) !== conversion.route.boundary) {
+      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+        "rust.backend.throw-runtime-error-route", "Runtime error construction has no exact registered native error carrier."));
+      return undefined;
+    }
+    return { kind: "call", path: `${boundary.errorTypePath}::from`, args: [value] };
+  }
+  const variant = conversion.route.variant;
   const definition = context.input.program.projectTypes.definitionForCarrier(conversion.source);
   const route = definition === undefined ||
-    context.input.program.projectTypes.programErrorVariant(definition) !== conversion.variant ||
+    context.input.program.projectTypes.programErrorVariant(definition) !== variant ||
     !rustTargetTypeRefEquals(context.input.program.projectTypes.openCarrier(definition), conversion.source)
-    ? undefined : resolveRustProgramErrorRoute(context.sourcePackageErrors, boundary.componentId, definition, conversion.variant);
+    ? undefined : resolveRustProgramErrorRoute(context.sourcePackageErrors, boundary.componentId, definition, variant);
   if (route === undefined) {
     context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
       "rust.backend.throw-project-error-route", "Project error construction has no exact route through the selected source-package error domain."));

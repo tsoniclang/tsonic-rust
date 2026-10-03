@@ -48,6 +48,7 @@ export const rustTargetSemanticsExtensionId = "tsonic.rust.policy";
 export interface RustFactWalk {
   readonly context: RustAnalysisContext;
   readonly providerRows: readonly RustProviderOperationRow[];
+  readonly providerErrorCarriers: readonly TargetTypeRef[];
   readonly resolving: Set<Node>;
   readonly rejectedExpressions: WeakSet<Node>;
   readonly jsEnabled: boolean;

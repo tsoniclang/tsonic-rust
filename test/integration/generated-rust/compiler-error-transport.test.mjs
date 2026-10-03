@@ -8,7 +8,7 @@ import { rustJsErrorTargetType, rustProgramErrorTargetType, rustStringTargetType
 import { planThrowStatement } from "../../../dist/backend/planner/statements/errors.js";
 import { caughtErrorProofFiles } from "../../../../tsonic/test/fixtures/caught-errors.mjs";
 import { selectRustFlowReadProjection } from "../../../dist/policy/types/value-carrier-reconciliation.js";
-import { planRustFlowReadProjection } from "../../../dist/backend/planner/expressions/flow-reads.js";
+import { planRustValueProjection } from "../../../dist/backend/planner/expressions/flow-reads.js";
 
 for (const surfaces of [[], ["js"]]) {
   test(`caught builtin Errors retain identity and stack in the ${surfaces.length === 0 ? "native" : "JS"} profile`, { timeout: 300_000 }, () => {
@@ -124,15 +124,15 @@ test("builtin catch projections require the sealed availability and exact select
       { ...policy, builtinErrorProjectionAvailable: available }).kind, "incompatible");
     const diagnostics = [];
     const node = {};
-    assert.equal(planRustFlowReadProjection(node, { kind: "path", path: "caught" }, selected.fact, {
+    assert.equal(planRustValueProjection(node, { kind: "path", path: "caught" }, selected.fact, {
       input: { program: { facts: { getRuntimeCarrierFact: () => ({ carrier: sourceCarrier }) },
         projectTypes: { ...policy, builtinErrorProjectionAvailable: available },
         source: { ast: { getFileName: () => "", getSourceText: () => "", pos: () => -1,
           end: () => -1, kindName: () => "KindIdentifier" } } } },
       diagnostics,
-    }), undefined);
+    }, "clone"), undefined);
     assert.equal(diagnostics.length, 1);
-    assert.match(diagnostics[0].message, /contradictory native carriers/u);
+    assert.equal(diagnostics[0].message, "Value projection conflicts with its exact sealed native carrier relation. Node kind: KindIdentifier.");
   }
 });
 
@@ -148,12 +148,14 @@ export function fail(error: Error): void { throw error; }
   const fact = program.facts.getFact(statement, rustTargetOperationFactKey);
   assert.equal(fact.kind, "throw-op");
   assert.equal(fact.error.kind, "runtime");
+  assert.equal(fact.error.boundary, "target-runtime");
   assert.equal(fact.error.expression, Node_Expression(ast, statement));
   assert.deepEqual(fact.error.carrier, rustJsErrorTargetType());
   assert.ok(Object.isFrozen(fact));
   for (const error of [
     { ...fact.error, expression: declaration },
     { ...fact.error, carrier: rustStringTargetType() },
+    { ...fact.error, boundary: "provider-native" },
   ]) {
     const diagnostics = [];
     const facts = {

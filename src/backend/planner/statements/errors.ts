@@ -24,7 +24,8 @@ import type { Node } from "@tsonic/tsts";
 import type { RustCompletionBoundary, RustPlanContext } from "../program/plan-context.js";
 import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { rustJsErrorTargetType, rustProgramErrorTargetType } from "../../../target-model/types/index.js";
+import { rustProgramErrorTargetType } from "../../../target-model/types/index.js";
+import { selectRustRuntimeErrorBoundary } from "../../../target-model/conversions/program-error.js";
 import { planRustProgramErrorConstruction } from "../expressions/program-errors.js";
 
 export function planThrowStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
@@ -57,7 +58,7 @@ export function planThrowStatement(node: Node, context: RustPlanContext): readon
   }
   if (fact.error.kind === "runtime") {
     if (fact.error.expression !== expression ||
-      !rustTargetTypeRefEquals(fact.error.carrier, rustJsErrorTargetType()) ||
+      selectRustRuntimeErrorBoundary(fact.error.carrier, context.input.program.providerErrorCarriers) !== fact.error.boundary ||
       !rustTargetTypeRefEquals(effectivePlannedExpressionCarrier(expression, context), fact.error.carrier)) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, expression),
@@ -86,7 +87,8 @@ export function planThrowStatement(node: Node, context: RustPlanContext): readon
     error = value;
   } else {
     const constructed = planRustProgramErrorConstruction({ kind: "program-error", source: fact.error.carrier,
-      target: rustProgramErrorTargetType(), ...(fact.error.kind === "project" ? { variant: fact.error.variant } : {}),
+      target: rustProgramErrorTargetType(), route: fact.error.kind === "project"
+        ? { kind: "project", variant: fact.error.variant } : { kind: "runtime", boundary: fact.error.boundary },
     }, value, expression, context, activeBoundary);
     if (constructed === undefined) return undefined;
     error = constructed;

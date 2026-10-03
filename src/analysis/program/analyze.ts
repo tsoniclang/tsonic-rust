@@ -49,6 +49,7 @@ import { rustTypeOnlyDeclarationFactKey } from "../../target-model/facts/type-on
 import { finalizeRustCopiedMethods } from "../objects/copied-methods.js";
 import { closeRustInheritedStructuralViews } from "../objects/inherited-structural-views.js";
 import { createRustSourceProfileCallableAliasQuery } from "../../policy/operations/source-profiles/callable-aliases.js";
+import { collectRustDeclaredProviderErrorCarriers } from "./provider-errors.js";
 
 export function analyzeRustProgram(context: RustAnalysisContext): void {
   const { ast } = context;
@@ -110,6 +111,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   const walk: RustFactWalk = {
     context,
     providerRows,
+    providerErrorCarriers: collectRustDeclaredProviderErrorCarriers(providerRows, providerSemantics.binaryHooks),
     resolving: new Set(),
     rejectedExpressions: new WeakSet<Node>(),
     jsEnabled,

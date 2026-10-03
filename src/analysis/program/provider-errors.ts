@@ -8,6 +8,28 @@ import {
   rustTargetOperationFactKey,
 } from "../facts/keys.js";
 import type { RustBinaryHookPlan } from "../runtime/index.js";
+import type { RustProviderBinaryHookRow, RustProviderOperationRow } from "../../providers/packages/model.js";
+
+function appendUniqueCarrier(carriers: TargetTypeRef[], carrier: TargetTypeRef | undefined): void {
+  if (carrier !== undefined && !carriers.some(candidate => rustTargetTypeRefEquals(candidate, carrier))) carriers.push(carrier);
+}
+
+export function collectRustDeclaredProviderErrorCarriers(
+  rows: readonly RustProviderOperationRow[],
+  binaryHooks: readonly RustProviderBinaryHookRow[],
+): readonly TargetTypeRef[] {
+  const carriers: TargetTypeRef[] = [];
+  for (const row of rows) {
+    if (row.isFallible === true && row.errorBoundary === "provider-native") appendUniqueCarrier(carriers, row.errorCarrier);
+    if (row.target.form === "source-module-construction" && row.target.bootstrap.errorBoundary === "provider-native") {
+      appendUniqueCarrier(carriers, row.target.bootstrap.errorCarrier);
+    }
+  }
+  for (const hook of binaryHooks) {
+    if (hook.isFallible === true && hook.errorBoundary === "provider-native") appendUniqueCarrier(carriers, hook.errorCarrier);
+  }
+  return Object.freeze(carriers);
+}
 
 export function analyzeRustProviderErrorCarriers(
   ast: AstReader,
@@ -17,13 +39,14 @@ export function analyzeRustProviderErrorCarriers(
 ): readonly TargetTypeRef[] {
   const carriers: TargetTypeRef[] = [];
   const add = (carrier: TargetTypeRef | undefined): void => {
-    if (carrier !== undefined && !carriers.some((candidate) =>
-      rustTargetTypeRefEquals(candidate, carrier))) {
-      carriers.push(carrier);
-    }
+    appendUniqueCarrier(carriers, carrier);
   };
   const visit = (node: Node): void => {
     const operation = facts.getFact(node, rustTargetOperationFactKey);
+    if (operation?.kind === "throw-op" && operation.error.kind === "runtime" &&
+      operation.error.boundary === "provider-native") {
+      add(operation.error.carrier);
+    }
     if (operation?.kind === "provider-operation" &&
       operation.abi.effects.errorBoundary === "provider-native") {
       add(operation.abi.effects.errorCarrier);

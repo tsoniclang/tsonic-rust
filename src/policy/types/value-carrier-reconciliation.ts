@@ -156,7 +156,7 @@ export function selectRustValueCarrierReconciliation(
       variant !== undefined && rustTargetTypeRefEquals(projectTypes.openCarrier(definition), sourceCarrier)) {
       return { kind: "conversion", fact: { sourceCarrier, targetCarrier, conversion: {
         kind: "program-error", source: sourceCarrier, target: targetCarrier,
-        ...(variant === undefined ? {} : { variant }),
+        route: variant === undefined ? { kind: "runtime", boundary: "target-runtime" } : { kind: "project", variant },
       } } };
     }
   }

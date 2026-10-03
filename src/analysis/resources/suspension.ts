@@ -17,8 +17,8 @@ import {
 } from "../facts/keys.js";
 import { appendRustDiagnostic, rustOperationContext } from "../program/walk.js";
 import { collectDescendantsOfKind } from "../operations/inputs.js";
-import { isRustProgramErrorCarrier, rustJsErrorTargetType } from "../../target-model/types/index.js";
-import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { isRustProgramErrorCarrier } from "../../target-model/types/index.js";
+import { selectRustRuntimeErrorBoundary } from "../../target-model/conversions/program-error.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { rustFutureValueForOperation, rustFutureValueForSourceStorage, rustFutureValueMatchesCarrier, transportRustFutureValue } from "../facts/future-values.js";
 import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
@@ -174,11 +174,12 @@ export function recordThrowFacts(walk: RustFactWalk, statement: Node, sourceFile
     return;
   }
   const carrier = resolveExpressionCarrier(walk, expression, sourceFile, undefined);
-  if (carrier !== undefined && rustTargetTypeRefEquals(carrier, rustJsErrorTargetType())) {
+  const boundary = carrier === undefined ? undefined : selectRustRuntimeErrorBoundary(carrier, walk.providerErrorCarriers);
+  if (carrier !== undefined && boundary !== undefined) {
     setRustOperationFact(walk, statement, Object.freeze({
       kind: "throw-op",
       operationId: "tsonic.rust.error.throw.runtime",
-      error: Object.freeze({ kind: "runtime", expression, carrier }),
+      error: Object.freeze({ kind: "runtime", expression, carrier, boundary }),
     }));
     return;
   }

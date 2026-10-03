@@ -68,7 +68,7 @@ const facts = [
     { kind: "property", property: first, expression: second },
     { kind: "spread", property: second, expression: first },
   ] },
-  { kind: "throw-op", error: { kind: "runtime", expression: first, carrier: integer } },
+  { kind: "throw-op", error: { kind: "runtime", expression: first, carrier: integer, boundary: "target-runtime" } },
   ...["shared-reference", "mutable-reference", "load"].map(operation =>
     ({ kind: "reference-operation", operation, operandExpression: first })),
   { kind: "reference-operation", operation: "store", operandExpression: first, valueExpression: second,
@@ -89,6 +89,14 @@ test("every node-bearing operation compares exact opaque identities and closed m
     cycle.self = cycle;
     assert.equal(rustTargetOperationFactKey.equals(fact, { ...equivalent, extra: cycle }), false);
   }
+});
+
+test("runtime throw equality retains the independently selected native error boundary", () => {
+  const fact = facts.find(item => item.kind === "throw-op");
+  assert.equal(rustTargetOperationFactKey.equals(fact,
+    { ...fact, error: { ...fact.error, boundary: "provider-native" } }), false);
+  assert.equal(rustTargetOperationFactKey.equals(fact,
+    { ...fact, error: { ...fact.error, boundary: undefined } }), false);
 });
 
 test("optional chain selection preserves exact opaque source identities", () => {
