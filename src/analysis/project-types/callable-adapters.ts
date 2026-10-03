@@ -4,6 +4,7 @@ import type { RustFactWalk } from "../program/walk.js";
 import { appendRustDiagnostic } from "../program/walk.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import type { RustProjectTypeDefinition } from "./type-policy.js";
+import { instantiateRustProjectMethodDispatchArguments } from "./method-dispatch.js";
 import type { RustProjectMethodDispatchVariant } from "./method-dispatch.js";
 import type { RustProjectCallableAdapter } from "../facts/project-callable-adapters.js";
 import { rustProjectCallableAdaptersKey } from "../facts/project-callable-adapters.js";
@@ -116,9 +117,13 @@ function classifyAdapter(
     const parameters = (declaredParameters as readonly Node[]).filter(parameter =>
       walk.context.sourceLifetimes.parameterFor(parameter)?.kind !== "lifetime");
     if (parameters.length !== (variant?.targetTypeArguments.length ?? 0)) return undefined;
+    const targetTypeArguments = variant === undefined ? [] : instantiateRustProjectMethodDispatchArguments(
+      variant.declaration, variant.targetTypeArguments, receiver, projectTypes,
+    );
+    if (targetTypeArguments === undefined) return undefined;
     for (const [index, parameter] of parameters.entries()) {
       const selected = walk.context.sourceLifetimes.parameterFor(parameter);
-      const argument = variant?.targetTypeArguments[index];
+      const argument = targetTypeArguments[index];
       if (selected?.kind !== "type" || argument === undefined) return undefined;
       result.set(selected.identity, argument);
     }
