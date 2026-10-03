@@ -412,6 +412,9 @@ function acceptTypeOnly(value: { current: () => int32 }): int32 {
 
 export function main(): void {
   const reader: Reader = { read(): int32 { return 42; } };
+  const alias = reader;
+  const other: Reader = { read(): int32 { return 42; } };
+  if (reader !== alias || reader === other) throw new Error("native literal identity mismatch");
   if (reader.read() !== 42) throw new Error("generated storage liveness mismatch");
 }
 `,
@@ -423,6 +426,9 @@ export function main(): void {
   const shapes = artifactText(result, "src/shapes.rs");
   const root = rustBracedItem(source, "struct ReaderObjectLiteralRoot");
   assert.equal(itemHasAttribute(root, "state:", generatedUnusedStorage), true);
+  const identity = rustBracedItem(source, "impl rt::ObjectIdentityCarrier for ReaderObjectLiteralRoot");
+  assert.match(identity, /fn object_identity\(&self\) -> &rt::ObjectIdentity/u);
+  assert.match(identity, /&self\.identity/u);
   assert.equal(
     itemHasAttribute(shapes, "struct CurrentShape", generatedUnconstructedShape) ||
       shapes.includes(generatedUnconstructedShape),

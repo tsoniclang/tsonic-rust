@@ -12,6 +12,7 @@ import { rustCallableProtocol, rustSourceTypeCarrierValue } from "../../../../ta
 import { rustFallibleFactKey, rustObjectLiteralMethodAdapterFactKey } from "../../../../analysis/facts/keys.js";
 import { rustProjectInstanceContracts } from "../../../../analysis/project-types/type-policy.js";
 import { rustProjectObjectIdentityField, rustProjectObjectStateField } from "../project-objects.js";
+import { rustProjectObjectIdentityImplementation } from "../project-identity.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import type {
   RustFunctionParam,
@@ -463,7 +464,9 @@ export function createImplementationPlan(
   if (traitItems.some((item) => item === undefined)) {
     return undefined;
   }
-  const finalizedTraitItems = traitItems as RustItem[];
+  const finalizedTraitItems: RustItem[] = [rustProjectObjectIdentityImplementation(rootType, emptyRustGenerics, {
+    kind: "reference", expr: { kind: "field", receiver: { kind: "path", path: "self" }, name: rustProjectObjectIdentityField },
+  }), ...traitItems as RustItem[]];
   const identityDeadCode = rustGeneratedExactStorageDeadCodeDisposition(
     rustPlannedImplementationsReferenceSelfField(
       finalizedTraitItems,
