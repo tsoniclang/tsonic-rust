@@ -37,6 +37,7 @@ import { planRustBorrowedElementLocal } from "../expressions/borrowed-element-re
 import { rustBlockTerminates } from "./block-flow.js";
 import { planRustClassEnvironmentValue } from "../objects/class-environments.js";
 import { planRustAbsentValue } from "../expressions/optional-storage.js";
+import { rustNativeGuardResultFactKey, rustNativeUnreachableFactKey } from "../../../analysis/facts/native-control-flow.js";
 
 export type RustAssignmentOperationFact = Extract<
   RustTargetOperationFact,
@@ -61,6 +62,7 @@ export function planStatement(node: Node, context: RustPlanContext): readonly Ru
 }
 
 function planStatementInner(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
+  if (context.input.program.facts.getFact(node, rustNativeUnreachableFactKey) === true) return [];
   const { ast } = context.input.program.source;
   const kind = ast.kindName(node);
   switch (kind) {
@@ -110,6 +112,15 @@ function planStatementInner(node: Node, context: RustPlanContext): readonly Rust
       return planExpressionStatement(node, context);
     }
     case KindIfStatement: {
+      const statement = ast.as.AsIfStatement(node);
+      const result = statement?.Expression === undefined ? undefined
+        : context.input.program.facts.getFact(statement.Expression, rustNativeGuardResultFactKey);
+      if (result !== undefined) {
+        const branch = result ? statement?.ThenStatement : statement?.ElseStatement;
+        if (branch === undefined) return [];
+        const body = planBlockLike(branch, context);
+        return body === undefined ? undefined : [{ kind: "scope", body }];
+      }
       return planIfStatement(node, context);
     }
     case KindWhileStatement: {

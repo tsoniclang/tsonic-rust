@@ -66,6 +66,7 @@ import type { RustFactWalk } from "../program/walk.js";
 import type { RustTargetOperationFact } from "../facts/keys.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustCompileTimeSourceKey } from "../../target-model/facts/source-declarations.js";
+import { recordRustNativeGuardResult, recordRustNativeUnreachable } from "./native-control-flow.js";
 
 export function recordFunctionBodyFacts(walk: RustFactWalk, declaration: Node, sourceFile: SourceFile): void {
   const { ast } = walk.context;
@@ -223,6 +224,7 @@ export function recordStatementFacts(
   sourceFile: SourceFile,
   returnCarrier: TargetTypeRef | undefined,
 ): void {
+  if (recordRustNativeUnreachable(walk, statement)) return;
   const { ast } = walk.context;
   const kind = ast.kindName(statement);
   if (kind === "KindClassDeclaration" && walk.context.projectTypes.definitionForDeclaration(statement) !== undefined) return;
@@ -315,6 +317,13 @@ export function recordStatementFacts(
   }
   if (kind === KindIfStatement) {
     const condition = Node_Expression(walk.context.ast, statement);
+    const result = condition === undefined ? undefined : recordRustNativeGuardResult(walk, condition);
+    if (result !== undefined) {
+      const branch = result ? IfStatement_ThenStatement(walk.context.ast, statement)
+        : IfStatement_ElseStatement(walk.context.ast, statement);
+      if (branch !== undefined) recordStatementFacts(walk, branch, sourceFile, returnCarrier);
+      return;
+    }
     if (condition !== undefined) {
       resolveExpressionCarrier(walk, condition, sourceFile, boolCarrier);
     }
