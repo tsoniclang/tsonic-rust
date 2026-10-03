@@ -52,6 +52,8 @@ import type { ExtensionFactSubject, Node, ProviderDeclarationIdentity } from "@t
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { RustOperatorToken, RustRuntimeSetOperationKind, RustTargetOperationFact } from "../../facts/keys.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { rustTargetOperationSupportsAssignment } from "../../facts/target-operation.js";
+import { isRustSourceErrorCarrier } from "../../../target-model/types/carriers/source-error.js";
 
 export function selectedCallProviderDeclaration(request: RustCheckedCallSelectionInput, context: RustOperationPolicyContext) {
   return resolveSelectedProviderDeclaration(context, request.sourceSelectedDeclaration, [
@@ -118,7 +120,8 @@ function selectRustProjectTypeTest(
   const programErrorVariant = targetDefinition === undefined
     ? undefined
     : options.projectTypes.programErrorVariant(targetDefinition);
-  if (sourceCarrier !== undefined && isRustProgramErrorCarrier(sourceCarrier) &&
+  if (sourceCarrier !== undefined && (isRustProgramErrorCarrier(sourceCarrier) ||
+    isRustSourceErrorCarrier(sourceCarrier) && targetDefinition !== undefined && options.projectTypes.sourceErrorDefinitions.includes(targetDefinition)) &&
     targetCarrier !== undefined && programErrorVariant !== undefined) {
     const resultCarrier = rustSourcePrimitiveTargetType("bool");
     const fact: RustTargetOperationFact = {
@@ -254,6 +257,7 @@ function mapSelectedAssignment(
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> | undefined {
   const selectedLeftFact = context.facts.resolve(request.left, rustTargetOperationFactKey);
+  if (selectedLeftFact?.kind === "builtin-error-property" && rustTargetOperationSupportsAssignment(selectedLeftFact)) return undefined;
   if (selectedLeftFact?.kind === "source-field" ||
     selectedLeftFact?.kind === "source-static-field" ||
     selectedLeftFact?.kind === "source-union-field" ||

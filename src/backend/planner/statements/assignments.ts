@@ -75,10 +75,10 @@ export function planRustBuiltinErrorAssignment(
   const next = assignment.operator === "=" ? { kind: "path" as const, path: valueName }
     : planRustCompoundAssignmentValue(assignment, { kind: "path", path: currentName }, { kind: "path", path: valueName }, left, context);
   if (next === undefined) return undefined;
-  return [{ kind: "expr", expr: { kind: "block", bindings, value: {
+  return [{ kind: "expr", expr: rustValueBlock(bindings, {
     kind: "call", path: `tsonic_rust_runtime::WritableErrorObject::set_error_${property.property}`,
     args: [selectedReceiver, next],
-  } } }];
+  }) }];
 }
 
 export function planRustSourceMethodPropertyAssignment(

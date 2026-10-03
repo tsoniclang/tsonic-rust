@@ -114,6 +114,7 @@ export interface RustProjectTypePolicy {
   } | undefined;
   readonly programErrorDefinitions: readonly RustProjectTypeDefinition[];
   readonly sourceErrorDefinitions: readonly RustProjectTypeDefinition[];
+  readonly sourceCreatedErrorOrigins: readonly Node[];
   sourceErrorCarrier(): TargetTypeRef;
   programErrorVariant(definition: RustProjectTypeDefinition): string | undefined;
   directSupertypes(carrier: TargetTypeRef): readonly TargetTypeRef[] | undefined;
@@ -168,6 +169,7 @@ export interface RustProjectTypePolicyHost {
   readonly sourceFiles: readonly SourceFile[];
   readonly sourceLifetimes: RustLifetimeIndex;
   readonly thrownClassDeclarations: ReadonlySet<Node>;
+  readonly sourceCreatedErrorOrigins: readonly Node[];
   normalizeCarrier(carrier: TargetTypeRef): TargetTypeRef;
   genericParametersFor(declaration: Node): readonly RustSourceGenericParameterContract[] | undefined;
   isRepresentationAlias(declaration: Node): boolean;

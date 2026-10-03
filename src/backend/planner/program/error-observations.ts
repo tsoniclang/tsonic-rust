@@ -49,6 +49,28 @@ export function planRustErrorObservations(plan: RustErrorTransportPlan): RustIte
             value: call("ErrorTransport::Suppressed", method(path("error"), "clone"),
               method(path("suppressed"), "clone"), method(path("source"), "clone")) }] }) },
       ] }),
+      observation("writable_source_error_value", option({ kind: "named", path: "WritableSourceError" }), {
+        kind: "match", expression: path("self"), arms: [
+          { pattern: variant("ErrorTransport::Runtime", { kind: "wildcard" }), expression: { kind: "none" } },
+          { pattern: variant("ErrorTransport::SourceCreated", binding("error")),
+            expression: call("Some", call("WritableSourceError::from", method(path("error"), "clone"))) },
+          ...plan.variants.map(item => ({ pattern: variant(`ErrorTransport::${item.name}`,
+            item.source === "thrown" ? { kind: "wildcard" as const } : binding("error")),
+            expression: item.source === "thrown" ? { kind: "none" as const }
+              : item.source === "error" ? call("Some", call("WritableSourceError::from", method(path("error"), "clone")))
+              : method(method(path("error"), "writable_source_error_value"), "map", path("WritableSourceError::from")) })),
+          { pattern: variant("ErrorTransport::Suppressed", { kind: "wildcard" }, { kind: "wildcard" }, { kind: "wildcard" }), expression: { kind: "none" } },
+        ],
+      }),
+      observation("mutable_error_value", option({ kind: "named", path: "tsonic_rust_runtime::MutableJsError" }), {
+        kind: "match", expression: path("self"), arms: [
+          { pattern: variant("ErrorTransport::SourceCreated", binding("error")), expression: call("Some", method(path("error"), "clone")) },
+          ...plan.variants.filter(item => item.source === "external").map(item => ({
+            pattern: variant(`ErrorTransport::${item.name}`, binding("error")), expression: method(path("error"), "mutable_error_value"),
+          })),
+          { pattern: { kind: "wildcard" }, expression: { kind: "none" } },
+        ],
+      }),
       observation("native_error_value", option(jsError), { kind: "match", expression: path("self"), arms: [
         { pattern: variant("ErrorTransport::Runtime", binding("error")), expression: call("Some", method(method(path("error"), "source_error"), "clone")) },
         { pattern: variant("ErrorTransport::SourceCreated", { kind: "wildcard" }), expression: { kind: "none" } },

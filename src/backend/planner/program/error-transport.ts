@@ -38,7 +38,7 @@ const infallible = named("core::convert::Infallible");
 const payloadField = "value";
 
 export function planRustErrorTransport(variants: readonly RustErrorTransportVariant[]): RustErrorTransportPlan | undefined {
-  if (variants.some(item => item.source === "external" && (item.sourceErrorType === undefined || item.writableSourceErrorType === undefined)) ||
+  if (variants.some(item => item.source === "external" && (item.sourceErrorType?.kind !== "named" || item.writableSourceErrorType?.kind !== "named")) ||
     new Set(variants.map(item => item.name)).size !== variants.length ||
     variants.some(item => item.name === "Runtime" || item.name === "SourceCreated" || item.name === "Suppressed")) return undefined;
   const parameters = variants.filter(item => item.source !== "error");
@@ -156,6 +156,9 @@ export function planRustSourceErrorTransport(plan: RustErrorTransportPlan, writa
           { kind: "reference", expr: { kind: "field", receiver: path("self"), name: payloadField } }, []),
         visibility: "public", selfParam: { kind: "reference", mutable: false } },
       { ...nativeFunction("into_transport", fullTransport, call("TsonicError::from", path("self")), []),
+        visibility: "public", selfParam: { kind: "value" } },
+      { ...nativeFunction("into_admitted_transport", writable ? plan.writableSourceErrorType : plan.sourceErrorType,
+          { kind: "field", receiver: path("self"), name: payloadField }, []),
         visibility: "public", selfParam: { kind: "value" } },
     ] },
   ];

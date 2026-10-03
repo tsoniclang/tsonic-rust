@@ -7,6 +7,8 @@ import type {
   RustTargetOperationFact,
 } from "../../../analysis/facts/keys.js";
 import { isRustProgramErrorCarrier, rustJsErrorTargetType } from "../../../target-model/types/index.js";
+import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier } from "../../../target-model/types/carriers/source-error.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { diagnosticInput } from "../program/plan-context.js";
@@ -41,8 +43,9 @@ export function planRustProgramErrorEquality(
   const route = fact.comparison.kind === "project"
     ? resolveProgramErrorFactRoute(fact.sourceCarrier, fact.targetCarrier, fact.comparison.variant, context)
     : undefined;
-  if (builtin ? !isRustProgramErrorCarrier(fact.sourceCarrier) ||
-    !rustTargetTypeRefEquals(fact.targetCarrier, rustJsErrorTargetType()) : route === undefined) {
+  if (builtin ? (!isRustProgramErrorCarrier(fact.sourceCarrier) && !isRustSourceErrorCarrier(fact.sourceCarrier)) ||
+    (!rustTargetTypeRefEquals(fact.targetCarrier, rustJsErrorTargetType()) &&
+      !isRustMutableJsErrorCarrier(fact.targetCarrier) && !isRustSourceErrorCarrier(fact.targetCarrier)) : route === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.program-error-equality",
@@ -56,15 +59,19 @@ export function planRustProgramErrorEquality(
   const otherName = allocateRustSyntheticName(names, "compared_value");
   const errorPattern: RustPattern = builtin
     ? { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: valueName }] }
-    : programErrorPattern(route!, { kind: "binding", name: valueName });
+    : programErrorPattern(route!, { kind: "binding", name: valueName }, isRustSourceErrorCarrier(fact.sourceCarrier));
   const otherPattern: RustPattern = { kind: "binding", name: otherName };
   const operand = (expression: RustExpr, side: "left" | "right"): RustExpr => {
     const source = side === "left" ? BinaryExpression_Left(context.input.program.source.ast, node)
       : BinaryExpression_Right(context.input.program.source.ast, node);
     const value = source === undefined ? expression : planRustNonConsumingValue(source, expression, context);
-    return builtin && fact.errorOperand === side
-      ? { kind: "method-call", receiver: value, method: "source_error", args: [] }
-      : { kind: "reference", expr: value };
+    if (fact.errorOperand === side) {
+      if (builtin) return isRustSourceErrorCarrier(fact.sourceCarrier)
+        ? { kind: "call", path: "Some", args: [{ kind: "reference", expr: value }] }
+        : { kind: "method-call", receiver: value, method: "source_error", args: [] };
+      return programErrorSubject(value, fact.sourceCarrier, false);
+    }
+    return { kind: "reference", expr: value };
   };
   return {
     kind: "match",
@@ -77,10 +84,12 @@ export function planRustProgramErrorEquality(
         pattern: { kind: "tuple", elements: fact.errorOperand === "left"
           ? [errorPattern, otherPattern] : [otherPattern, errorPattern] },
         expression: builtin ? {
-          kind: "call", path: `rt::JsError::${fact.negated ? "has_distinct_identity" : "has_same_identity"}`,
-          args: [{ kind: "path", path: valueName }, { kind: "path", path: otherName }],
-        } : { kind: "binary", left: { kind: "path", path: valueName },
-          operator: fact.negated ? "!=" : "==", right: { kind: "path", path: otherName } },
+          kind: "binary", operator: fact.negated ? "!=" : "==",
+          left: { kind: "call", path: "rt::ErrorObject::error_identity_key", args: [{ kind: "path", path: valueName }] },
+          right: { kind: "call", path: "rt::ErrorObject::error_identity_key", args: [{ kind: "path", path: otherName }] },
+        } : projectErrorPayload(route!, fact.sourceCarrier, { kind: "path", path: valueName }, false, payload =>
+          ({ kind: "binary", left: payload, operator: fact.negated ? "!=" : "==", right: { kind: "path", path: otherName } }),
+          { kind: "bool-literal", value: fact.negated }),
       },
       { pattern: { kind: "wildcard" }, expression: { kind: "bool-literal", value: fact.negated } },
     ],
@@ -108,11 +117,14 @@ export function planRustProgramErrorTypeTest(
     return undefined;
   }
   context.usedAliases?.add("rt");
-  return {
-    kind: "matches",
-    expression,
-    pattern: programErrorPattern(route, { kind: "wildcard" }),
-  };
+  const valueName = allocateRustSyntheticName(context.syntheticNames ?? createRustSyntheticNameState(
+    context.input.program.source.ast, node, []), "error_package");
+  return { kind: "match", expression: programErrorSubject(expression, fact.sourceCarrier, false), arms: [
+    { pattern: programErrorPattern(route, { kind: "binding", name: valueName }, isRustSourceErrorCarrier(fact.sourceCarrier)),
+      expression: projectErrorPayload(route, fact.sourceCarrier, { kind: "path", path: valueName }, false,
+        () => ({ kind: "bool-literal", value: true }), { kind: "bool-literal", value: false }) },
+    { pattern: { kind: "wildcard" }, expression: { kind: "bool-literal", value: false } },
+  ] };
 }
 
 export function planRustProgramErrorFlowRead(
@@ -143,16 +155,17 @@ export function planRustProgramErrorFlowRead(
   );
   return {
     kind: "match",
-    expression: ownsValue ? expression : { kind: "reference", expr: expression },
+    expression: programErrorSubject(expression, fact.sourceCarrier, ownsValue),
     arms: [
       {
-        pattern: programErrorPattern(route, { kind: "binding", name: valueName }),
-        expression: ownsValue ? { kind: "path", path: valueName } : {
+        pattern: programErrorPattern(route, { kind: "binding", name: valueName }, isRustSourceErrorCarrier(fact.sourceCarrier)),
+        expression: projectErrorPayload(route, fact.sourceCarrier, { kind: "path", path: valueName }, ownsValue,
+          payload => ownsValue ? payload : {
           kind: "method-call",
-          receiver: { kind: "path", path: valueName },
+          receiver: payload,
           method: "clone",
           args: [],
-        },
+        }, { kind: "unreachable", message: "checked flow selected a different program-error variant" }),
       },
       {
         pattern: { kind: "wildcard" },
@@ -172,10 +185,11 @@ function resolveProgramErrorFactRoute(
   context: RustPlanContext,
 ): RustProgramErrorRoute | undefined {
   const definition = context.input.program.projectTypes.definitionForCarrier(targetCarrier);
-  if (!isRustProgramErrorCarrier(sourceCarrier) ||
+  if ((!isRustProgramErrorCarrier(sourceCarrier) && !isRustSourceErrorCarrier(sourceCarrier)) ||
     definition === undefined ||
     context.input.program.projectTypes.programErrorVariant(definition) !== variant ||
-    !rustTargetTypeRefEquals(context.input.program.projectTypes.openCarrier(definition), targetCarrier)) {
+    !rustTargetTypeRefEquals(context.input.program.projectTypes.openCarrier(definition), targetCarrier) ||
+    isRustSourceErrorCarrier(sourceCarrier) && !context.input.program.projectTypes.sourceErrorDefinitions.includes(definition)) {
     return undefined;
   }
   return resolveRustProgramErrorRoute(
@@ -189,21 +203,40 @@ function resolveProgramErrorFactRoute(
 function programErrorPattern(
   route: RustProgramErrorRoute,
   payload: RustPattern,
+  admitted: boolean,
 ): RustPattern {
   if (route.kind === "local") {
     return {
       kind: "tuple-variant",
-      path: `rt::TsonicError::${route.variant}`,
+      path: `rt::ErrorTransport::${route.variant}`,
       elements: [payload],
     };
   }
   return {
     kind: "tuple-variant",
-    path: `rt::TsonicError::${route.consumerVariant}`,
-    elements: [{
+    path: `rt::ErrorTransport::${route.consumerVariant}`,
+    elements: admitted ? [payload] : [{
       kind: "tuple-variant",
       path: `${route.ownerTypePath}::${route.ownerVariant}`,
       elements: [payload],
     }],
   };
+}
+
+function programErrorSubject(expression: RustExpr, carrier: TargetTypeRef, owned: boolean): RustExpr {
+  return isRustSourceErrorCarrier(carrier) ? { kind: "method-call", receiver: expression,
+    method: owned ? "into_admitted_transport" : "as_transport", args: [] }
+    : owned ? expression : { kind: "reference", expr: expression };
+}
+
+function projectErrorPayload(
+  route: RustProgramErrorRoute, carrier: TargetTypeRef, value: RustExpr, owned: boolean,
+  project: (payload: RustExpr) => RustExpr, otherwise: RustExpr,
+): RustExpr {
+  if (route.kind === "local" || !isRustSourceErrorCarrier(carrier)) return project(value);
+  return { kind: "match", expression: programErrorSubject(value, carrier, owned), arms: [
+    { pattern: { kind: "tuple-variant", path: `${route.ownerTypePath.slice(0, -"TsonicError".length)}ErrorTransport::${route.ownerVariant}`,
+      elements: [{ kind: "binding", name: "error_payload" }] }, expression: project({ kind: "path", path: "error_payload" }) },
+    { pattern: { kind: "wildcard" }, expression: otherwise },
+  ] };
 }

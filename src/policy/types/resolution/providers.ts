@@ -34,7 +34,6 @@ import {
   rustJsTypedArrayTargetType,
   rustJsWeakMapTargetType,
   rustJsWeakSetTargetType,
-  rustJsErrorTargetType,
   rustRegExpExecArrayTargetType,
   rustRegExpIndicesTargetType,
   rustRegExpMatchArrayTargetType,
@@ -452,7 +451,7 @@ export function resolveSourceProfileCarrierFromArguments(
   }
   if (arguments_.length === 0 && rustSourceErrorConstructors.some((entry) =>
     entry.sourceName === name && (name === "Error" || options.jsEnabled))) {
-    return name === "Error" ? options.sourceErrorCarrier(subject) : rustJsErrorTargetType();
+    return options.sourceErrorCarrier(subject);
   }
   if (name === "Promise" || name === "PromiseLike") {
     const [output] = arguments_;

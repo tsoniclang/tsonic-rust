@@ -53,6 +53,7 @@ import {
 import {
   enterRustProjectObjectMutableState,
 } from "../objects/project-objects.js";
+import { rustErrorFieldBorrowNeedsSnapshot, rustErrorFieldHasGuardedBorrow } from "../expressions/error-field-borrows.js";
 
 export interface RustFinalizedInputPlanOverrides {
   readonly sourceValues: ReadonlyMap<Node, RustExpr>;
@@ -83,6 +84,7 @@ export type RustProviderEvaluationScopeSelection =
 export function planRustProviderEvaluationScope(
   context: RustPlanContext,
   fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>,
+  operationNode: Node,
   receiverNode: Node | undefined,
   argumentNodes: readonly (Node | undefined)[],
   planExpression: RustExpressionPlanner,
@@ -115,6 +117,7 @@ export function planRustProviderEvaluationScope(
   const stabilizationKeys = providerInputStabilizationKeys(
     context,
     fact,
+    operationNode,
     sourceSlots,
     mutableInputs,
     preplannedInputs,
@@ -305,6 +308,7 @@ export function applyRustProviderEvaluationScope(
 function providerInputStabilizationKeys(
   context: RustPlanContext,
   fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>,
+  operationNode: Node,
   sourceSlots: readonly { readonly key: string; readonly node: Node }[],
   mutableInputs: ReadonlyMap<string, MutableProviderInput>,
   preplannedInputs: ReadonlyMap<RustFinalizedSourceInput, RustExpr> | undefined,
@@ -357,12 +361,19 @@ function providerInputStabilizationKeys(
       keys.add(slot.key);
     }
   }
-  for (let index = 0; index < sourceSlots.length - 1; index += 1) {
+  for (let index = 0; index < sourceSlots.length; index += 1) {
     const slot = sourceSlots[index]!;
     if (preplannedKeys.has(slot.key)) {
       continue;
     }
     const inputs = inputsBySlot.get(slot.key) ?? [];
+    if (inputs.length !== 0 && rustErrorFieldBorrowNeedsSnapshot(
+      slot.node,
+      [...sourceSlots.slice(index + 1).map(later => later.node), operationNode],
+      context,
+    )) {
+      keys.add(slot.key);
+    }
     if (!inputs.some((input) => input.mode !== "value")) {
       continue;
     }
@@ -373,6 +384,7 @@ function providerInputStabilizationKeys(
       }
       if (inputs.some((input) =>
         input.mode === "ref" &&
+        !rustErrorFieldHasGuardedBorrow(slot.node, context) &&
         !providerInputUsesExistingBorrow(input, slot.node, context))) {
         keys.add(slot.key);
       }

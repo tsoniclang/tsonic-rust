@@ -35,6 +35,8 @@ import { planNullishAssignment } from "./nullish-assignment.js";
 import { planCompoundAssignmentExpression } from "./compound-assignment.js";
 import { planRustProgramErrorEquality, planRustProgramErrorTypeTest } from "./error-operations.js";
 import { planRustBuiltinErrorTypeTest } from "./builtin-errors.js";
+import { rustErrorFieldComparisonView, rustErrorFieldOptionalView, rustErrorFieldIsOptionalRead,
+  rustErrorFieldOptionalComparisonView, rustErrorFieldStringComparisonView } from "./error-field-borrows.js";
 import { planRustClosedTypeTest } from "./type-tests.js";
 import {
   planRustProjectTypeTest,
@@ -272,7 +274,7 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
       return fact.negated ? { kind: "unary", operator: "!", operand: matched } : matched;
     };
     if (isExplicitRustNullishValue(nullish)) {
-      return check(planRustNonConsumingValue(optionNode, option, context));
+      return check(rustErrorFieldOptionalView(optionNode, planRustNonConsumingValue(optionNode, option, context), context));
     }
     if (fact.optionOperand === "right") {
       return {
@@ -336,11 +338,14 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
       });
       return undefined;
     }
+    const borrowedStack = rustErrorFieldIsOptionalRead(leftNode, context) || rustErrorFieldIsOptionalRead(rightNode, context);
     return {
       kind: "binary",
       operator: fact.negated ? "!=" : "==",
-      left: planRustNonConsumingValue(leftNode, left, context),
-      right: planRustNonConsumingValue(rightNode, right, context),
+      left: borrowedStack ? rustErrorFieldOptionalComparisonView(leftNode, left, rightNode, context)
+        : planRustNonConsumingValue(leftNode, left, context),
+      right: borrowedStack ? rustErrorFieldOptionalComparisonView(rightNode, right, undefined, context)
+        : planRustNonConsumingValue(rightNode, right, context),
     };
   }
   if (fact !== undefined && fact.kind === "option-value-equality") {
@@ -392,6 +397,16 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
       return undefined;
     }
     let comparableValue: RustExpr = value;
+    if (nestingDepth === 1 && remainingDepth === 1 && isRustStringCarrier(fact.valueCarrier) &&
+      rustErrorFieldIsOptionalRead(optionNode, context)) {
+      const borrowedOption = rustErrorFieldOptionalComparisonView(optionNode, option,
+        fact.optionOperand === "left" ? valueNode : undefined, context);
+      const borrowedValue: RustExpr = { kind: "call", path: "Some", args: [rustErrorFieldStringComparisonView(
+        valueNode, value, fact.optionOperand === "right" ? optionNode : undefined, context)] };
+      return { kind: "binary", operator: fact.negated ? "!=" : "==",
+        left: fact.optionOperand === "left" ? borrowedOption : borrowedValue,
+        right: fact.optionOperand === "left" ? borrowedValue : borrowedOption };
+    }
     for (let depth = 0; depth < remainingDepth; depth += 1) {
       comparableValue = { kind: "call", path: "Some", args: [comparableValue] };
     }

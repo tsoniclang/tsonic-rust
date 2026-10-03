@@ -156,6 +156,7 @@ export function resolveBinaryOperandCarriers(
     const strictEquality = operatorKind === KindEqualsEqualsEqualsToken ||
       operatorKind === KindExclamationEqualsEqualsToken;
     if (strictEquality && left !== undefined && right !== undefined &&
+      selectRustProgramErrorEquality(walk, left, right, operatorKind === KindExclamationEqualsEqualsToken) === undefined &&
       rustUnionAlternatives(left.kind === "target-named" ? rustSourceOptionalElementCarrier(left) ?? left : left, walk.context.typeDefinitions) === undefined &&
       rustUnionAlternatives(right.kind === "target-named" ? rustSourceOptionalElementCarrier(right) ?? right : right, walk.context.typeDefinitions) === undefined &&
       left.kind !== "type-parameter" && right.kind !== "type-parameter" &&

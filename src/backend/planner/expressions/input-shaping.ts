@@ -16,6 +16,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import { planExpression } from "./entry.js";
 import { planRustLoadedSharedReference } from "./typed-locations.js";
+import { rustErrorFieldSharedView } from "./error-field-borrows.js";
 
 export function planRustCallArguments(
   node: Node,
@@ -133,6 +134,8 @@ export function createRustSharedReferenceArgument(
 ): RustExpr {
   const loaded = node === undefined ? undefined : planRustLoadedSharedReference(node, argument, context);
   if (loaded !== undefined) return loaded;
+  const errorField = node === undefined ? undefined : rustErrorFieldSharedView(node, argument, context);
+  if (errorField !== undefined) return errorField;
   const borrowedString = rustBorrowedStringView(argument);
   if (borrowedString !== argument) {
     return borrowedString;

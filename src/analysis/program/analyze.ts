@@ -156,6 +156,8 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     normalizeCarrier: rustTypeFamilyNormalizer(context.typeFamilies),
     genericParametersFor: declaration => rustProjectGenericParameters(declaration, context),
     thrownClassDeclarations: collectRustThrownClassDeclarations(context, projectSourceFiles),
+    sourceCreatedErrorOrigins: context.errorStorageDemands.nativeConstructors.filter(origin =>
+      context.errorStorageDemands.storageFor(origin).kind === "writable"),
     externallyExtensible(declaration) {
       return externallyExtensibleDeclarations.has(declaration);
     },

@@ -12,7 +12,7 @@ const named = path => ({ kind: "named", path });
 const rows = [
   { name: "HttpError", type: named("crate::http::HttpError"), source: "error" },
   { name: "Unrelated", type: named("crate::large::Unrelated"), source: "thrown" },
-  { name: "DependencyError", type: named("dependency::program::TsonicError"), sourceErrorType: named("dependency::program::SourceError"), source: "external" },
+  { name: "DependencyError", type: named("dependency::program::TsonicError"), sourceErrorType: named("dependency::program::SourceError"), writableSourceErrorType: named("dependency::program::WritableSourceError"), source: "external" },
 ];
 
 test("one physical enum specializes unrelated payloads to the native uninhabited type", () => {
@@ -20,17 +20,19 @@ test("one physical enum specializes unrelated payloads to the native uninhabited
   assert.ok(plan);
   assert.equal(plan.declaration.kind, "enum");
   assert.equal(plan.declaration.name, "ErrorTransport");
-  assert.equal(plan.generics.parameters.length, 2);
+  assert.equal(plan.generics.parameters.length, 5);
   assert.deepEqual(plan.declaration.variants.find(item => item.name === "HttpError").fields, [rows[0].type]);
   assert.deepEqual(plan.declaration.variants.find(item => item.name === "Unrelated").fields, [named("Payload0")]);
   const full = plan.aliases.find(item => item.name === "TsonicError");
   assert.equal(full.kind, "type-alias");
-  assert.deepEqual(full.target.genericArguments.map(argument => argument.type), [rows[1].type, rows[2].type]);
+  assert.deepEqual(full.target.genericArguments.map(argument => argument.type), [named("tsonic_rust_runtime::TsonicError"),
+    named("tsonic_rust_runtime::MutableJsError"), named("tsonic_rust_runtime::JsError"), rows[1].type, rows[2].type]);
   const source = plan.aliases.find(item => item.name === "SourceError");
   assert.equal(source.kind, "struct");
   assert.equal(source.fields.length, 1);
   assert.equal(source.fields[0].visibility, "private");
-  assert.deepEqual(source.fields[0].type.genericArguments.map(argument => argument.type), [named("core::convert::Infallible"), rows[2].sourceErrorType]);
+  assert.deepEqual(source.fields[0].type.genericArguments.map(argument => argument.type), [named("tsonic_rust_runtime::TsonicError"),
+    named("tsonic_rust_runtime::MutableJsError"), named("tsonic_rust_runtime::JsError"), named("core::convert::Infallible"), rows[2].sourceErrorType]);
   assert.equal(plan.aliases.some(item => item.kind === "enum"), false);
   assert.deepEqual(plan.declaration.variants.find(item => item.name === "Suppressed").fields.slice(0, 2),
     Array.from({ length: 2 }, () => ({ kind: "named", path: "Box", genericArguments: [{ kind: "type", type: named("TsonicError") }] })));
@@ -87,12 +89,17 @@ test("base observations borrow real project Error storage but never unrelated th
 
 test("closed transport rejects missing external specialization and conflicting variant identities", () => {
   assert.equal(planRustErrorTransport([{ ...rows[2], sourceErrorType: undefined }]), undefined);
+  assert.equal(planRustErrorTransport([{ ...rows[2], writableSourceErrorType: undefined }]), undefined);
+  assert.equal(planRustErrorTransport([{ ...rows[2], sourceErrorType: { kind: "unit" } }]), undefined);
   assert.equal(planRustErrorTransport([rows[0], { ...rows[1], name: rows[0].name }]), undefined);
-  for (const name of ["Runtime", "Suppressed"]) assert.equal(planRustErrorTransport([{ ...rows[0], name }]), undefined);
+  for (const name of ["Runtime", "SourceCreated", "Suppressed"]) assert.equal(planRustErrorTransport([{ ...rows[0], name }]), undefined);
   const plan = planRustErrorTransport(rows);
   const generics = rustErrorTransportDisplayGenerics(plan);
-  assert.deepEqual(generics.parameters[0].bounds, []);
+  assert.deepEqual(generics.parameters[0].bounds, [{ kind: "trait", path: "core::fmt::Display" }]);
   assert.deepEqual(generics.parameters[1].bounds, [{ kind: "trait", path: "core::fmt::Display" }]);
+  assert.deepEqual(generics.parameters[2].bounds, [{ kind: "trait", path: "core::fmt::Display" }]);
+  assert.deepEqual(generics.parameters[3].bounds, []);
+  assert.deepEqual(generics.parameters[4].bounds, [{ kind: "trait", path: "core::fmt::Display" }]);
 });
 
 test("flow projection verifies exact Error-only admission instead of a global availability flag", () => {

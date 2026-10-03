@@ -64,6 +64,9 @@ export function createRustProjectTypePolicyRegistry(): RustProjectTypePolicyRegi
     get sourceErrorDefinitions() {
       return requireCurrent().sourceErrorDefinitions;
     },
+    get sourceCreatedErrorOrigins() {
+      return requireCurrent().sourceCreatedErrorOrigins;
+    },
     sourceErrorCarrier() {
       if (sourceErrorCarrier === undefined) throw new Error("Rust source Error carrier was read before declaration-level heritage classification.");
       return sourceErrorCarrier;

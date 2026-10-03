@@ -111,6 +111,7 @@ export function planProviderOperationExpression(
   const evaluationScope = planRustProviderEvaluationScope(
     context,
     fact,
+    operationNode,
     receiverNode,
     argumentNodes,
     planExpression,

@@ -15,6 +15,8 @@ export interface RustErrorStorageDemandQueries {
   readonly fieldWrites: readonly Node[];
   storageFor(subject: Node): RustErrorStorageDemand;
   receivesWritableNative(subject: Node): boolean;
+  storageOriginsFor(subject: Node): { readonly kind: "resolved"; readonly origins: readonly Node[] }
+    | { readonly kind: "unresolved"; readonly reason: string };
   invalidationFor(owner: Node, expression: Node, pureInvocations: ReadonlySet<Node>):
     { readonly kind: "preserved" | "invalidated" } | { readonly kind: "unresolved"; readonly reason: string };
 }
@@ -61,6 +63,8 @@ export function createRustErrorStorageDemandQuery(
   const writes = new Map<Node, Set<Node>>();
   const nativeConstructors: Node[] = [];
   const fieldWrites: Node[] = [];
+  const thrownOrigins = new Map<Node, Set<Node>>();
+  const caughtInvocations = new Map<Node, Set<Node>>();
   const unresolvedSubjects = new Map<Node, string>();
   let visitedNodes = 0;
   let edgeCount = 0;
@@ -91,6 +95,19 @@ export function createRustErrorStorageDemandQuery(
     if (declaration === undefined) return undefined;
     const implementation = navigation.callableImplementation(declaration);
     return implementation?.kind === "resolved" ? implementation.implementation.declaration : declaration;
+  };
+  const catchDestination = (node: Node): Node | undefined => {
+    let child = node;
+    for (let parent = ast.parent(node); parent !== undefined && step(); child = parent, parent = ast.parent(parent)) {
+      if (ast.is.IsFunctionDeclaration(parent) || ast.is.IsFunctionExpression(parent) || ast.is.IsArrowFunction(parent) ||
+        ast.is.IsMethodDeclaration(parent) || ast.is.IsConstructorDeclaration(parent)) return undefined;
+      const selected = ast.as.AsTryStatement(parent);
+      if (selected !== undefined && selected.TryBlock === child) {
+        const caught = selected.CatchClause === undefined ? undefined : ast.as.AsCatchClause(selected.CatchClause)?.VariableDeclaration;
+        if (caught !== undefined) return caught;
+      }
+    }
+    return undefined;
   };
   const subjectFor = (node: Node | undefined): Node | undefined => {
     if (node === undefined) return undefined;
@@ -187,6 +204,19 @@ export function createRustErrorStorageDemandQuery(
     if (ast.is.IsReturnStatement(node)) {
       connect(subjectFor(Node_Expression(ast, node)), enclosingCallable(node));
     }
+    if (ast.is.IsThrowStatement(node)) {
+      const origin = subjectFor(Node_Expression(ast, node));
+      const caught = catchDestination(node);
+      if (caught !== undefined) connect(origin, caught);
+      else {
+        const callable = enclosingCallable(node);
+        if (callable !== undefined && origin !== undefined) {
+          const origins = thrownOrigins.get(callable) ?? new Set<Node>();
+          origins.add(origin);
+          thrownOrigins.set(callable, origins);
+        }
+      }
+    }
     if (ast.is.IsCallExpression(node) || ast.is.IsNewExpression(node)) {
       const selected = semantics.forNode(node).operations.call(node);
       const signature = selected === undefined ? undefined
@@ -199,6 +229,12 @@ export function createRustErrorStorageDemandQuery(
         const target = implementation.kind === "resolved" && ast.body(implementation.implementation.declaration) !== undefined
           ? implementation.implementation.declaration : subjectFor(callee);
         if (target !== undefined) invocationTargets.set(node, target);
+        const caught = catchDestination(node);
+        if (target !== undefined && caught !== undefined) {
+          const destinations = caughtInvocations.get(target) ?? new Set<Node>();
+          destinations.add(caught);
+          caughtInvocations.set(target, destinations);
+        }
         invocationArguments.set(node, Object.freeze(selected.sourceArguments.map(argument => argument.expression)));
         const signatureOwner = ast.parent(signature);
         if (profiles.profileForNode(signature, ast) !== undefined && signatureOwner !== undefined &&
@@ -207,7 +243,7 @@ export function createRustErrorStorageDemandQuery(
           const owner = subjectFor(selected.sourceArguments[0]!.expression);
           if (owner !== undefined) capturedStackTargets.set(node, owner);
         }
-        if (constructors.has(signature)) {
+        if (constructors.has(signature) && ast.kindName(callee) !== "KindSuperKeyword") {
           nativeConstructors.push(node);
           connectValueFlow(node);
         }
@@ -238,6 +274,11 @@ export function createRustErrorStorageDemandQuery(
     nodes.push(...children.reverse());
   }
   if (failure === undefined) {
+    for (const [callable, destinations] of caughtInvocations) {
+      for (const origin of thrownOrigins.get(callable) ?? []) {
+        for (const destination of destinations) connect(origin, destination);
+      }
+    }
     const pending = [...writes.keys()];
     const queued = new Set(pending);
     for (let index = 0; index < pending.length && failure === undefined; index += 1) {
@@ -330,13 +371,16 @@ export function createRustErrorStorageDemandQuery(
       if (visited.has(node)) continue;
       visited.add(node);
       if (!step()) return Object.freeze({ kind: "unresolved", reason: failure! });
+      if (ast.is.IsAwaitExpression(node) || ast.is.IsYieldExpression(node)) return Object.freeze({ kind: "invalidated" });
       const mutation = mutationOwners.get(node) ?? capturedStackTargets.get(node);
       if (mutation !== undefined) {
         const affected = ancestors(mutation);
         if (affected === undefined) return Object.freeze({ kind: "unresolved", reason: "An Error borrow invalidation has no exact original storage." });
         if ([...affected].some(subject => sourceOwners.has(subject))) return Object.freeze({ kind: "invalidated" });
       }
-      if (ast.is.IsArrowFunction(node) || ast.is.IsFunctionExpression(node) || ast.is.IsFunctionDeclaration(node)) continue;
+      if (ast.is.IsArrowFunction(node) || ast.is.IsFunctionExpression(node) || ast.is.IsFunctionDeclaration(node) ||
+        ast.is.IsClassDeclaration(node) || ast.is.IsClassExpression(node) || ast.is.IsMethodDeclaration(node) ||
+        ast.is.IsConstructorDeclaration(node) || ast.is.IsGetAccessorDeclaration(node) || ast.is.IsSetAccessorDeclaration(node)) continue;
       if ((ast.is.IsCallExpression(node) || ast.is.IsNewExpression(node)) && !pureInvocations.has(node) &&
         !nativeSubjects.has(node) && !capturedStackTargets.has(node)) {
         const target = invocationTargets.get(node);
@@ -364,6 +408,14 @@ export function createRustErrorStorageDemandQuery(
     }
     return unresolved === undefined ? Object.freeze({ kind: "preserved" }) : Object.freeze({ kind: "unresolved", reason: unresolved });
   };
+  const storageOriginsFor: RustErrorStorageDemandQueries["storageOriginsFor"] = subject => {
+    const selected = ancestors(subject);
+    if (selected === undefined || failure !== undefined) return Object.freeze({ kind: "unresolved",
+      reason: failure ?? "An Error admission has no exact originating storage subject." });
+    const origins = [...selected].filter(node => (incoming.get(node)?.size ?? 0) === 0);
+    return origins.length === 0 ? Object.freeze({ kind: "unresolved", reason: "An Error storage cycle has no proven original physical owner." })
+      : Object.freeze({ kind: "resolved", origins: Object.freeze(origins) });
+  };
   return Object.freeze({ nativeConstructors: Object.freeze(nativeConstructors),
-    fieldWrites: Object.freeze(fieldWrites), storageFor, receivesWritableNative, invalidationFor });
+    fieldWrites: Object.freeze(fieldWrites), storageFor, receivesWritableNative, storageOriginsFor, invalidationFor });
 }

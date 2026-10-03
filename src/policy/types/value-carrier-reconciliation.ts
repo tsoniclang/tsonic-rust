@@ -27,7 +27,7 @@ import { selectRustProjectProjection } from "./project-projections.js";
 import { rustGenericCallableSignaturesMatch } from "../../target-model/conversions/generic-callable.js";
 import { selectRustCallableConversion } from "../../target-model/conversions/callable.js";
 import { selectRustProgramErrorConversion } from "../conversions/program-error.js";
-import { isRustSourceErrorCarrier } from "../../target-model/types/carriers/source-error.js";
+import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier } from "../../target-model/types/carriers/source-error.js";
 import { selectRustProjectUnionMapping } from "./project-union-mappings.js";
 
 export type RustValueCarrierReconciliation =
@@ -89,10 +89,10 @@ export function selectRustFlowReadProjection(
       } };
     }
   }
-  if ((isRustJsValueCarrier(sourceCarrier) && (rustTargetTypeRefEquals(selectedCarrier, rustJsErrorTargetType()) ||
-      rustTargetTypeRefEquals(selectedCarrier, projectTypes.sourceErrorCarrier())) ||
+  if ((isRustJsValueCarrier(sourceCarrier) && rustTargetTypeRefEquals(selectedCarrier, rustJsErrorTargetType()) ||
     (isRustProgramErrorCarrier(sourceCarrier) || isRustSourceErrorCarrier(sourceCarrier)) &&
-    (rustTargetTypeRefEquals(selectedCarrier, projectTypes.sourceErrorCarrier()) ||
+    (isRustSourceErrorCarrier(selectedCarrier) && (isRustSourceErrorCarrier(projectTypes.sourceErrorCarrier()) ||
+      projectTypes.sourceCreatedErrorOrigins.length !== 0) || isRustMutableJsErrorCarrier(selectedCarrier) ||
       rustTargetTypeRefEquals(selectedCarrier, rustJsErrorTargetType())))) {
     return { kind: "projection", fact: { kind: "builtin-error", sourceCarrier, selectedCarrier } };
   }

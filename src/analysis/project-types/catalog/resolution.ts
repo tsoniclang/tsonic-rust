@@ -775,6 +775,7 @@ export function createRustProjectTypePolicy(
     issues: frozenIssues,
     programErrorDefinitions,
     sourceErrorDefinitions,
+    sourceCreatedErrorOrigins: Object.freeze([...host.sourceCreatedErrorOrigins]),
     sourceErrorCarrier() { return sourceErrorCarrier; },
     definitionForDeclaration(declaration) {
       return declaration === undefined ? undefined : byDeclaration.get(declaration);

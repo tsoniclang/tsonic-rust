@@ -36,6 +36,8 @@ import { rustClosedValueCategoryProjection } from "../../target-model/types/carr
 import { rustSourceOptionalElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { selectRustClosedArrayView } from "../../policy/types/closed-array-views.js";
 import { selectRustGuardedValueMembers } from "../operations/native-flow-refinement.js";
+import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustWritableSourceErrorCarrier } from "../../target-model/types/carriers/source-error.js";
+import { selectRustProgramErrorConversion } from "../../policy/conversions/program-error.js";
 
 export function applyFlowReadLane(
   walk: RustFactWalk,
@@ -108,6 +110,19 @@ export function applyFlowReadLane(
       ["target.capability=rust.flow-read.exact-result"],
     );
     return undefined;
+  }
+  if (isRustProgramErrorCarrier(sourceCarrier) && isRustWritableSourceErrorCarrier(selectedCarrier)) {
+    const origins = walk.context.errorStorageDemands.storageOriginsFor(expression);
+    if (origins.kind !== "resolved" || origins.origins.some(origin => {
+      const carrier = resolveRustTargetTypeRef(origin, rustResolutionContext(walk, origin), walk.operationOptions);
+      return carrier === undefined || selectRustProgramErrorConversion(carrier, walk.context.projectTypes,
+        [], walk.context.typeDefinitions, selectedCarrier) === undefined;
+    })) {
+      appendRustDiagnostic(walk, "RUST_ERROR_WRITABLE_ORIGIN_MISSING",
+        "Writable Error recovery requires every exact originating value to retain a physical setter owner.",
+        expression, ["target.capability=rust.error.writable-origin"]);
+      return undefined;
+    }
   }
   const selection = selectRustFlowReadProjection(
     sourceCarrier,
@@ -213,7 +228,7 @@ function resolveSelectedFlowReadCarrier(
   const resolution = rustResolutionContext(walk, expression);
   const guarded = selectRustGuardedValueMembers(expression, dispatchCarrier, resolution, walk.operationOptions);
   const guardedCarrier = guarded?.length === 1 ? guarded[0]!.carrier : undefined;
-  if (guardedCarrier !== undefined) {
+  if (guardedCarrier !== undefined && !rustTargetTypeRefEquals(guardedCarrier, dispatchCarrier)) {
     const selected = walk.context.projectTypes.definitionForCarrier(guardedCarrier)?.kind === "class"
       ? resolveRustTargetTypeRef(selectedType, resolution, walk.operationOptions) : undefined;
     const carrier = selected !== undefined && walk.context.projectTypes.definitionForCarrier(selected)?.kind === "class" &&
@@ -253,11 +268,12 @@ function resolveSelectedFlowReadCarrier(
     return carrier !== undefined && (rustTargetTypeRefEquals(carrier, rustJsErrorTargetType()) ||
       rustClosedValueCategoryProjection(carrier)) ? carrier : sourceCarrier;
   }
-  if (isRustProgramErrorCarrier(sourceCarrier)) {
+  if (isRustProgramErrorCarrier(sourceCarrier) || isRustSourceErrorCarrier(sourceCarrier)) {
     const carrier = resolveRustTargetTypeRef(
       selectedType, rustResolutionContext(walk, expression), walk.operationOptions,
     );
-    if (rustTargetTypeRefEquals(carrier, walk.context.projectTypes.sourceErrorCarrier())) return carrier;
+    if (isRustSourceErrorCarrier(carrier) || isRustMutableJsErrorCarrier(carrier) ||
+      rustTargetTypeRefEquals(carrier, rustJsErrorTargetType())) return carrier;
     const definition = walk.context.projectTypes.definitionForCarrier(carrier);
     return definition !== undefined &&
       walk.context.projectTypes.programErrorVariant(definition) !== undefined

@@ -22,7 +22,7 @@ import { requireRustCarrierRequirements } from "../types/generic-requirements.js
 import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
 import { planRustOptionalStorageOperation } from "./optional-storage.js";
 import { planRustUnionMapping, planRustUnionProjection } from "./union-mappings.js";
-import { isRustSourceErrorCarrier } from "../../../target-model/types/carriers/source-error.js";
+import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustWritableSourceErrorCarrier } from "../../../target-model/types/carriers/source-error.js";
 import {
   allocateRustSyntheticName,
   createRustSyntheticNameState,
@@ -86,14 +86,17 @@ export function planRustValueProjection(
         ? { kind: "call", path: "rt::SourceError::from", args: [native] } : native;
     }
     if (isRustSourceErrorCarrier(fact.selectedCarrier)) {
+      const writable = isRustWritableSourceErrorCarrier(fact.selectedCarrier);
+      const transport: RustExpr = ownsValue && isRustSourceErrorCarrier(fact.sourceCarrier)
+        ? { kind: "method-call", receiver: exactSource, method: "into_transport", args: [] } : exactSource;
       const selected: RustExpr = ownsValue
-        ? { kind: "method-call", receiver: exactSource, method: "try_into_source_error", args: [] }
-        : { kind: "method-call", receiver: exactSource, method: "source_error_value", args: [] };
+        ? { kind: "method-call", receiver: transport, method: writable ? "try_into_writable_source_error" : "try_into_source_error", args: [] }
+        : { kind: "method-call", receiver: exactSource, method: writable ? "writable_source_error_value" : "source_error_value", args: [] };
       return { kind: "method-call", receiver: selected, method: "expect",
         args: [{ kind: "str-literal", value: "exact checked flow selected an Error outside its sealed admitted variants" }] };
     }
     return { kind: "method-call", receiver: { kind: "method-call", receiver: exactSource,
-      method: "native_error_value", args: [] }, method: "expect",
+      method: isRustMutableJsErrorCarrier(fact.selectedCarrier) ? "mutable_error_value" : "native_error_value", args: [] }, method: "expect",
       args: [{ kind: "str-literal", value: "exact checked flow selected a nonnative Error" }] };
   }
   if (fact.kind === "union-map") {
