@@ -202,6 +202,8 @@ export type RustExpr =
   | { readonly kind: "binary"; readonly operator: RustBinaryOperator; readonly left: RustExpr; readonly right: RustExpr }
   | { readonly kind: "range"; readonly start: RustExpr; readonly end: RustExpr; readonly inclusive?: boolean }
   | { readonly kind: "conditional"; readonly condition: RustExpr; readonly whenTrue: RustExpr; readonly whenFalse: RustExpr }
+  | { readonly kind: "if-let"; readonly pattern: RustPattern; readonly expression: RustExpr;
+      readonly whenTrue: RustExpr; readonly whenFalse?: RustExpr }
   | {
       readonly kind: "match";
       readonly expression: RustExpr;

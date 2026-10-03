@@ -103,6 +103,7 @@ export function rustExpressionDeclaresNonSnakeName(expression: RustExpr): boolea
     case "closure-block": return expression.params.some(parameter => rustNameNeedsStyleAllowance(parameter.name, "snake"));
     case "block": return expression.bindings.some(binding => rustNameNeedsStyleAllowance(binding.name, "snake"));
     case "match": return expression.arms.some(arm => patternDeclaresNonSnakeName(arm.pattern));
+    case "if-let":
     case "matches": return patternDeclaresNonSnakeName(expression.pattern);
     default: return false;
   }

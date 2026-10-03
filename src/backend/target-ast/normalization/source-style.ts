@@ -20,6 +20,7 @@ import { closePublicRustTypeVisibility, publicDeclaredRustTypeNames } from "./si
 import { rustItemsReferenceModuleAlias } from "../inspection/source-module-usage.js";
 import { rustTypeEquals } from "../inspection/type-equality.js";
 import { mergeRustAdjacentConditionalBranches, simplifyRustBooleanConditional } from "./conditional-branches.js";
+import { normalizeRustOptionalUnitMatch } from "./option-conditionals.js";
 import { appendRustNamingAllowance, finalizeRustFunctionNames, finalizeRustItemNames,
   rustExpressionDeclaresNonSnakeName, rustStatementDeclaresNonSnakeName } from "./authored-names.js";
 
@@ -199,16 +200,6 @@ function finalizeRustStatementStyle(statement: RustStmt): RustStmt {
     case "expr":
     case "tail": {
       const expression = finalizeRustExpressionStyle(statement.expr);
-      if (expression.kind === "match" && expression.arms.length === 2) {
-        const [present, absent] = expression.arms;
-        const binding = present!.pattern.kind === "tuple-variant" && present!.pattern.path === "Some" &&
-          present!.pattern.elements.length === 1 ? present!.pattern.elements[0] : undefined;
-        if (binding?.kind === "binding" && absent!.pattern.kind === "path" && absent!.pattern.path === "None" &&
-          absent!.expression.kind === "tuple-literal" && absent!.expression.elements.length === 0) {
-          return { kind: "if-let-some", binding: binding.name, expression: expression.expression,
-            body: { statements: [{ kind: "expr", expr: present!.expression }] } };
-        }
-      }
       return { ...statement, expr: expression };
     }
     case "assign":
@@ -496,15 +487,20 @@ function finalizeRustExpressionStyle(expression: RustExpr): RustExpr {
       };
       break;
     }
+    case "if-let":
+      result = { ...expression, expression: finalizeRustExpressionStyle(expression.expression),
+        whenTrue: finalizeRustExpressionStyle(expression.whenTrue),
+        ...(expression.whenFalse === undefined ? {} : { whenFalse: finalizeRustExpressionStyle(expression.whenFalse) }) };
+      break;
     case "match":
-      result = {
+      result = normalizeRustOptionalUnitMatch({
         ...expression,
         expression: finalizeRustExpressionStyle(expression.expression),
         arms: expression.arms.map((arm) => ({
           ...arm,
           expression: finalizeRustExpressionStyle(arm.expression),
         })),
-      };
+      });
       break;
     case "matches":
       result = { ...expression, expression: finalizeRustExpressionStyle(expression.expression) };

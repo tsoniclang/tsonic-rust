@@ -48,6 +48,10 @@ export function rustExpressionUsesTryInCurrentRegion(expression: RustExpr): bool
       return rustExpressionUsesTryInCurrentRegion(expression.condition) ||
         rustExpressionUsesTryInCurrentRegion(expression.whenTrue) ||
         rustExpressionUsesTryInCurrentRegion(expression.whenFalse);
+    case "if-let":
+      return rustExpressionUsesTryInCurrentRegion(expression.expression) ||
+        rustExpressionUsesTryInCurrentRegion(expression.whenTrue) ||
+        expression.whenFalse !== undefined && rustExpressionUsesTryInCurrentRegion(expression.whenFalse);
     case "match":
       return rustExpressionUsesTryInCurrentRegion(expression.expression) ||
         expression.arms.some((arm) => rustExpressionUsesTryInCurrentRegion(arm.expression));
