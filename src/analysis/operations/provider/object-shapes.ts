@@ -729,7 +729,7 @@ export function acceptProjectSourceCall(
     ...(construction || ownerCarrier === undefined
       ? {}
       : { sourceSelectedReceiverCarrier: receiverCarrier }),
-    sourceDeclaration: callableDeclaration,
+    sourceDeclaration: selectedConstructor?.implicit === true ? selectedDeclaration : callableDeclaration,
     ...(request.source.selectedSignature === undefined ? {} : { sourceSignature: request.source.selectedSignature }),
     ...(selectedCallCalleeSymbol(request) === undefined ? {} : { sourceCalleeSymbol: selectedCallCalleeSymbol(request) }),
     ...(selectedCallCalleeDeclaration(request) === undefined ? {} : { sourceCalleeDeclaration: selectedCallCalleeDeclaration(request) }),

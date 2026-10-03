@@ -1,11 +1,14 @@
 import type { TargetTypeRef } from "../types/model.js";
 import { isRustProgramErrorCarrier, rustJsErrorTargetType, rustSourceTypeCarrierValue } from "../types/index.js";
 import { rustTargetTypeRefEquals } from "../types/equality.js";
-import { hasExactObjectKeys } from "../metadata/closed-data.js";
+import { closedMetadataEquals, hasExactObjectKeys, isClosedMetadata, isDenseDataArray } from "../metadata/closed-data.js";
+import { rustUnionLeaves, type RustUnionLeaf } from "../types/union-relations.js";
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../types/source-union-definitions.js";
 
 export type RustProgramErrorRoute =
   | { readonly kind: "runtime"; readonly boundary: "target-runtime" | "provider-native" }
-  | { readonly kind: "project"; readonly variant: string };
+  | { readonly kind: "project"; readonly variant: string }
+  | { readonly kind: "union"; readonly arms: readonly (RustUnionLeaf & { readonly route: RustProgramErrorRoute })[] };
 
 export interface RustProgramErrorConversion {
   readonly kind: "program-error";
@@ -25,11 +28,28 @@ export function selectRustRuntimeErrorBoundary(
 
 export function rustProgramErrorConversionMatches(
   conversion: RustProgramErrorConversion, source: TargetTypeRef, target: TargetTypeRef,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): boolean {
-  if (!hasExactObjectKeys(conversion, ["kind", "source", "target", "route"]) ||
-    !rustTargetTypeRefEquals(source, conversion.source) || !rustTargetTypeRefEquals(target, conversion.target) ||
-    !isRustProgramErrorCarrier(target) || typeof conversion.route !== "object" || conversion.route === null) return false;
-  const route = conversion.route;
+  return isClosedMetadata(conversion) && hasExactObjectKeys(conversion, ["kind", "source", "target", "route"]) &&
+    conversion.kind === "program-error" && rustTargetTypeRefEquals(source, conversion.source) &&
+    rustTargetTypeRefEquals(target, conversion.target) && isRustProgramErrorCarrier(target) &&
+    rustProgramErrorRouteMatches(conversion.route, source, definitions);
+}
+
+function rustProgramErrorRouteMatches(
+  route: RustProgramErrorRoute, source: TargetTypeRef, definitions: RustTypeDefinitions,
+): boolean {
+  if (typeof route !== "object" || route === null) return false;
+  if (route.kind === "union") {
+    if (!hasExactObjectKeys(route, ["kind", "arms"]) || !isDenseDataArray(route.arms)) return false;
+    const leaves = rustUnionLeaves(source, definitions);
+    return leaves !== undefined && leaves.length === route.arms.length && leaves.every((leaf, index) => {
+      const arm = route.arms[index];
+      return arm !== undefined && hasExactObjectKeys(arm, ["carrier", "path", "route"]) &&
+        closedMetadataEquals(leaf, { carrier: arm.carrier, path: arm.path }) &&
+        rustProgramErrorRouteMatches(arm.route, leaf.carrier, definitions);
+    });
+  }
   if (route.kind === "runtime") {
     return hasExactObjectKeys(route, ["kind", "boundary"]) && (route.boundary === "provider-native" ||
       route.boundary === "target-runtime" && rustTargetTypeRefEquals(source, rustJsErrorTargetType()));

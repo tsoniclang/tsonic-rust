@@ -5,6 +5,7 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { diagnosticInput, registerAliasFromPath, rustCurrentErrorBoundary, type RustPlanContext } from "../program/plan-context.js";
 import { resolveRustProgramErrorRoute, type RustSourcePackageErrorBoundary } from "../program/source-package-errors.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
+import { planRustUnionFold } from "./union-folds.js";
 
 export function planRustProgramErrorConstruction(
   conversion: RustProgramErrorConversion,
@@ -13,12 +14,18 @@ export function planRustProgramErrorConstruction(
   context: RustPlanContext,
   boundary: RustSourcePackageErrorBoundary | undefined = rustCurrentErrorBoundary(context),
 ): RustExpr | undefined {
-  if (boundary === undefined || !rustProgramErrorConversionMatches(conversion, conversion.source, conversion.target)) {
+  if (boundary === undefined || !rustProgramErrorConversionMatches(conversion, conversion.source, conversion.target,
+    context.input.program.typeDefinitions)) {
     context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
       "rust.backend.program-error-construction", "Program error construction requires an exact carrier and error domain."));
     return undefined;
   }
   registerAliasFromPath(context, boundary.errorTypePath);
+  if (conversion.route.kind === "union") {
+    return planRustUnionFold(value, conversion.route.arms, context, node,
+      (arm, payload) => planRustProgramErrorConstruction({ ...conversion, source: arm.carrier, route: arm.route },
+        payload, node, context, boundary));
+  }
   if (conversion.route.kind === "runtime") {
     if (selectRustRuntimeErrorBoundary(conversion.source, context.input.program.providerErrorCarriers) !== conversion.route.boundary) {
       context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),

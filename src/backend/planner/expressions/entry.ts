@@ -428,7 +428,7 @@ function applyRustContextualValueConversion(
     return planRustGenericCallableFlow(fact.conversion, expression, context);
   }
   if (fact.conversion.kind === "program-error") {
-    return rustCompilerOwnedContextualConversionMatches(fact.sourceCarrier, fact.targetCarrier, fact.conversion)
+    return rustCompilerOwnedContextualConversionMatches(fact.sourceCarrier, fact.targetCarrier, fact.conversion, context.input.program.typeDefinitions)
       ? planRustProgramErrorConstruction(fact.conversion, expression, node, context) : undefined;
   }
   if (fact.conversion.kind === "callable-adapter") {

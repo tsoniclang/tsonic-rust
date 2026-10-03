@@ -6,6 +6,7 @@ import type { RustClosedTypePredicate, RustClosedTypeTestPlan, RustProjectTypeTe
 import type { RustFlowReadProjectionFact } from "../../../target-model/types/value-projections.js";
 import type { RustArgumentMode, RustBorrowedIndexOperation, RustOperationCarrierRequirement, RustProviderFactOperationKind, RustRuntimeSetOperationKind, RustSourceCallParameterPlan, RustValueConversion } from "../../../target-model/operations/model.js";
 import type { RustFinalizedOperationAbiFor, RustFinalizedValueConversion } from "../finalized-operation-abi.js";
+import type { RustProgramErrorConversion } from "../../../target-model/conversions/program-error.js";
 import type { RustAssignmentOperator, RustOperationSymbol, RustOperatorToken } from "../../../target-model/syntax/tokens.js";
 import type {
   RustTargetGenericArgument,
@@ -613,10 +614,8 @@ export type RustTargetOperationFact =
       readonly kind: "throw-op";
       readonly operationId: string;
       readonly error:
-        | { readonly kind: "runtime"; readonly expression: Node; readonly carrier: TargetTypeRef;
-            readonly boundary: "target-runtime" | "provider-native" }
-        | { readonly kind: "project"; readonly carrier: TargetTypeRef; readonly variant: string }
-        | { readonly kind: "program" };
+        | { readonly kind: "conversion"; readonly expression: Node; readonly conversion: RustProgramErrorConversion }
+        | { readonly kind: "program"; readonly expression: Node; readonly carrier: TargetTypeRef };
     }
   | {
       // Compile-validated constant RegExp construction (literal or

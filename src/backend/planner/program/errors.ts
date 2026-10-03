@@ -189,7 +189,7 @@ export function planRustProgramErrorModule(
     displayImplementation([
       ...exactProjectVariants.map(({ variant, definition }) => ({
         variant,
-        delegate: input.program.projectTypes.externalBaseForDefinition(definition)?.programError === true,
+        delegate: input.program.projectTypes.inheritedExternalBaseForDefinition(definition)?.base.programError === true,
       })),
       ...externalVariants.map(({ variant }) => ({ variant, delegate: true })),
     ]),

@@ -119,10 +119,12 @@ test("native throw carriers are declared once and transported by the used-error 
   assert.deepEqual(declared, [native, other]);
   assert.ok(Object.isFrozen(declared));
   const statement = {};
-  const error = { kind: "runtime", boundary: "provider-native", expression: {}, carrier: native };
+  const error = { kind: "conversion", expression: {}, conversion: { kind: "program-error", source: native,
+    target, route: { kind: "runtime", boundary: "provider-native" } } };
   const ast = { forEachChild() {} };
   for (const [selected, expected] of [
-    [error, [native]], [{ ...error, boundary: "target-runtime" }, []], [{ kind: "program" }, []],
+    [error, [native]], [{ ...error, conversion: { ...error.conversion, route: { kind: "runtime", boundary: "target-runtime" } } }, []],
+    [{ kind: "program", expression: {}, carrier: target }, []],
   ]) {
     const used = analyzeRustProviderErrorCarriers(ast, [statement], {
       getFact: (node, key) => node === statement && key === rustTargetOperationFactKey

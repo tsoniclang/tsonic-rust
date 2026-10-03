@@ -68,7 +68,10 @@ const facts = [
     { kind: "property", property: first, expression: second },
     { kind: "spread", property: second, expression: first },
   ] },
-  { kind: "throw-op", error: { kind: "runtime", expression: first, carrier: integer, boundary: "target-runtime" } },
+  { kind: "throw-op", error: { kind: "conversion", expression: first, conversion: {
+    kind: "program-error", source: integer, target: text, route: { kind: "runtime", boundary: "target-runtime" },
+  } } },
+  { kind: "throw-op", error: { kind: "program", expression: second, carrier: text } },
   ...["shared-reference", "mutable-reference", "load"].map(operation =>
     ({ kind: "reference-operation", operation, operandExpression: first })),
   { kind: "reference-operation", operation: "store", operandExpression: first, valueExpression: second,
@@ -94,9 +97,9 @@ test("every node-bearing operation compares exact opaque identities and closed m
 test("runtime throw equality retains the independently selected native error boundary", () => {
   const fact = facts.find(item => item.kind === "throw-op");
   assert.equal(rustTargetOperationFactKey.equals(fact,
-    { ...fact, error: { ...fact.error, boundary: "provider-native" } }), false);
+    { ...fact, error: { ...fact.error, conversion: { ...fact.error.conversion, route: { kind: "runtime", boundary: "provider-native" } } } }), false);
   assert.equal(rustTargetOperationFactKey.equals(fact,
-    { ...fact, error: { ...fact.error, boundary: undefined } }), false);
+    { ...fact, error: { ...fact.error, conversion: { ...fact.error.conversion, route: undefined } } }), false);
 });
 
 test("optional chain selection preserves exact opaque source identities", () => {

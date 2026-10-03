@@ -81,7 +81,7 @@ export function applyRustCallableValueAdapterRaw(
           { ...conversion, sourceCarrier: upcast.targetCarrier }, node, context);
       }
       if (adapter.conversion.kind === "program-error") {
-        if (!rustCompilerOwnedContextualConversionMatches(adapter.sourceCarrier, adapter.targetCarrier, adapter.conversion)) return undefined;
+        if (!rustCompilerOwnedContextualConversionMatches(adapter.sourceCarrier, adapter.targetCarrier, adapter.conversion, context.input.program.typeDefinitions)) return undefined;
         const converted = planRustProgramErrorConstruction(adapter.conversion, expression, node, context);
         return converted === undefined ? undefined : { expression: converted, fallible: false };
       }

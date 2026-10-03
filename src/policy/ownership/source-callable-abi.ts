@@ -44,6 +44,7 @@ import { resolveSelectedProviderDeclaration, resolveSelectedSourceProfileMember 
 import { selectRustProviderOperation } from "../operations/provider-selection.js";
 import { selectJsSurfaceOperation } from "../operations/source-profiles/js/index.js";
 import { rustProviderArgumentBorrowsString } from "./provider-argument-borrow.js";
+import { rustSourceErrorConstructorOperation, selectRustSourceErrorConstructor } from "../operations/source-profiles/error-source-profile.js";
 import { rustSourceValueWrapperContains } from "./source-value-wrappers.js";
 
 export interface RustSourceCallableAbiResolver {
@@ -402,7 +403,7 @@ function parameterCanUseSharedBorrow(
         operand = call;
         call = ast.parent(call);
       }
-      if (call === undefined || !ast.is.IsCallExpression(call)) return false;
+      if (call === undefined || !ast.is.IsCallExpression(call) && !ast.is.IsNewExpression(call)) return false;
       const semantics = context.semanticsFor(call);
       const selected = semantics.operations.call(call);
       if (selected === undefined || selected.sourceArguments.some(argument =>
@@ -410,6 +411,16 @@ function parameterCanUseSharedBorrow(
       const argumentIndex = selected.sourceArguments.findIndex(argument => argument.expression === operand);
       const declaration = semantics.declarations.signatureDeclaration(selected.selectedSignature);
       const member = resolveSelectedSourceProfileMember(context, declaration, options.sourceProfiles);
+      const errorConstructor = selectRustSourceErrorConstructor(member, ast.is.IsNewExpression(call));
+      if (argumentIndex >= 0 && errorConstructor !== undefined) {
+        const sourceFile = ast.getSourceFile(call);
+        if (sourceFile === undefined) return false;
+        const callContext = { ...context, currentSourceFile: sourceFile, currentSemantics: semantics };
+        const operation = rustSourceErrorConstructorOperation(errorConstructor, selected.sourceArguments.map(argument =>
+          resolveRustTargetTypeRef(argument.expression, callContext, options)));
+        if (operation === undefined || !rustProviderArgumentBorrowsString(operation, argumentIndex)) return false;
+        continue;
+      }
       if (argumentIndex >= 0 && member?.profile === "js") {
         if (!options.jsEnabled) return false;
         const sourceFile = ast.getSourceFile(call);
@@ -430,7 +441,8 @@ function parameterCanUseSharedBorrow(
         { subject: selected.selectedSignature, precision: "exact" },
       ]);
       if (argumentIndex >= 0 && provider.kind === "selected") {
-        const operation = selectRustProviderOperation(options.providerRows, provider.identity, "method");
+        const operation = selectRustProviderOperation(options.providerRows, provider.identity,
+          ast.is.IsNewExpression(call) ? "constructor" : "method");
         if (operation.kind !== "selected" || !rustProviderArgumentBorrowsString(operation.row, argumentIndex)) return false;
         continue;
       }

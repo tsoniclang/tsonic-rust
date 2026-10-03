@@ -18,7 +18,7 @@ import {
 import { appendRustDiagnostic, rustOperationContext } from "../program/walk.js";
 import { collectDescendantsOfKind } from "../operations/inputs.js";
 import { isRustProgramErrorCarrier } from "../../target-model/types/index.js";
-import { selectRustRuntimeErrorBoundary } from "../../target-model/conversions/program-error.js";
+import { selectRustProgramErrorConversion } from "../../policy/conversions/program-error.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { rustFutureValueForOperation, rustFutureValueForSourceStorage, rustFutureValueMatchesCarrier, transportRustFutureValue } from "../facts/future-values.js";
 import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
@@ -174,32 +174,21 @@ export function recordThrowFacts(walk: RustFactWalk, statement: Node, sourceFile
     return;
   }
   const carrier = resolveExpressionCarrier(walk, expression, sourceFile, undefined);
-  const boundary = carrier === undefined ? undefined : selectRustRuntimeErrorBoundary(carrier, walk.providerErrorCarriers);
-  if (carrier !== undefined && boundary !== undefined) {
+  const conversion = carrier === undefined ? undefined : selectRustProgramErrorConversion(carrier,
+    walk.context.projectTypes, walk.providerErrorCarriers, walk.context.typeDefinitions);
+  if (conversion !== undefined) {
     setRustOperationFact(walk, statement, Object.freeze({
       kind: "throw-op",
-      operationId: "tsonic.rust.error.throw.runtime",
-      error: Object.freeze({ kind: "runtime", expression, carrier, boundary }),
+      operationId: "tsonic.rust.error.throw",
+      error: Object.freeze({ kind: "conversion", expression, conversion }),
     }));
     return;
   }
-  const definition = walk.context.projectTypes.definitionForCarrier(carrier);
-  const variant = definition === undefined
-    ? undefined
-    : walk.context.projectTypes.programErrorVariant(definition);
-  if (carrier !== undefined && definition !== undefined && variant !== undefined) {
-    setRustOperationFact(walk, statement, {
-      kind: "throw-op",
-      operationId: `tsonic.rust.error.throw.${variant}`,
-      error: { kind: "project", carrier, variant },
-    });
-    return;
-  }
-  if (isRustProgramErrorCarrier(carrier)) {
+  if (carrier !== undefined && isRustProgramErrorCarrier(carrier)) {
     setRustOperationFact(walk, statement, {
       kind: "throw-op",
       operationId: "tsonic.rust.error.rethrow",
-      error: { kind: "program" },
+      error: { kind: "program", expression, carrier },
     });
   }
 }

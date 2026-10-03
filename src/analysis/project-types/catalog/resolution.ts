@@ -263,34 +263,27 @@ export function createRustProjectTypePolicy(
     }
   }
 
-  const externalAncestor = (
-    definition: RustProjectTypeDefinition,
-    seen: Set<RustProjectTypeDefinition> = new Set(),
-  ): RustProjectTypeDefinition | undefined => {
-    if (seen.has(definition)) {
-      return undefined;
-    }
-    seen.add(definition);
-    if (externalBaseByDeclaration.get(definition.declaration) !== undefined) {
-      return definition;
-    }
-    const bases = (heritageByDeclaration.get(definition.declaration) ?? []).filter((edge) =>
-      edge.kind === "extends" && edge.target.kind === "class");
-    return bases.length === 1 ? externalAncestor(bases[0]!.target, seen) : undefined;
-  };
+  const inheritedExternalBases = new WeakMap<RustProjectTypeDefinition, {
+    readonly owner: RustProjectTypeDefinition; readonly base: RustExternalProjectBase;
+  }>();
   for (const definition of definitions) {
-    const ancestor = externalAncestor(definition);
-    if (ancestor !== undefined && ancestor !== definition) {
+    const candidates = classLineage(definition)?.flatMap(owner => {
+      const base = externalBaseByDeclaration.get(owner.declaration);
+      return base === undefined ? [] : [Object.freeze({ owner, base })];
+    });
+    const inherited = candidates?.length === 1 ? candidates[0] : undefined;
+    if (inherited !== undefined) inheritedExternalBases.set(definition, inherited);
+    if (inherited !== undefined && inherited.owner !== definition && definition.genericParameters.length !== 0) {
       issues.push({
         node: definition.declaration,
         code: "RUST_PROJECT_EXTERNAL_HERITAGE_TRANSITIVE_UNSUPPORTED",
-        message: `Project class '${definition.sourceName}' transitively extends an external source-profile class; closed Rust program-error variants currently require one direct non-generic project subtype.`,
+        message: `Generic project class '${definition.sourceName}' transitively extends an external source-profile class without one closed program-error carrier.`,
       });
     }
   }
 
   const programErrorDefinitions = Object.freeze(definitions
-    .filter((definition) => externalBaseByDeclaration.get(definition.declaration)?.programError === true ||
+    .filter((definition) => inheritedExternalBases.get(definition)?.base.programError === true && definition.genericParameters.length === 0 ||
       definition.kind === "class" && definition.genericParameters.length === 0 &&
       host.thrownClassDeclarations.has(definition.declaration))
     .sort((left, right) => {
@@ -323,9 +316,9 @@ export function createRustProjectTypePolicy(
     programErrorVariantByDefinition.set(definition, variant);
   }
 
-  const classLineage = (
+  function classLineage(
     definition: RustProjectTypeDefinition,
-  ): readonly RustProjectTypeDefinition[] | undefined => {
+  ): readonly RustProjectTypeDefinition[] | undefined {
     if (definition.kind !== "class") {
       return undefined;
     }
@@ -348,7 +341,7 @@ export function createRustProjectTypePolicy(
       current = bases[0]?.target;
     }
     return Object.freeze(lineage);
-  };
+  }
 
   const contractsForClass = (
     definition: RustProjectTypeDefinition,
@@ -755,6 +748,9 @@ export function createRustProjectTypePolicy(
     externalBaseForDefinition(definition) {
       return externalBaseByDeclaration.get(definition.declaration);
     },
+    inheritedExternalBaseForDefinition(definition) {
+      return inheritedExternalBases.get(definition);
+    },
     externalFieldForReceiver(declaration, receiver) {
       if (declaration === undefined || receiver === undefined) {
         return undefined;
@@ -784,6 +780,17 @@ export function createRustProjectTypePolicy(
     instantiateMemberCarrier(member, receiver, declaredCarrier) {
       const owner = definitionContainingDeclaration(member);
       if (owner === undefined) {
+        const receiverDefinition = definitionForCarrier(receiver);
+        const lineage = receiverDefinition === undefined ? undefined : classLineage(receiverDefinition);
+        const external = lineage?.flatMap(definition => externalBaseByDeclaration.get(definition.declaration) ?? []);
+        const constructor = receiverDefinition === undefined ? undefined
+          : constructorsByDefinition.get(receiverDefinition)?.find(signature => {
+            const declaration = signature.declaration;
+            return signature.implicit && declaration !== undefined &&
+              signature.parameters.some(parameter => parameter.parameterDeclaration === member) &&
+              external?.some(base => base.constructorDeclarations.includes(declaration));
+          });
+        if (constructor !== undefined) return host.normalizeCarrier(declaredCarrier);
         return undefined;
       }
       const selected = relationship(receiver, owner);

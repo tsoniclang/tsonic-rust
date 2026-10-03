@@ -91,9 +91,7 @@ function projectOperationMetadata(fact: RustTargetOperationFact, references: Nod
       return { ...fact, contributions: fact.contributions.map(contribution =>
         ({ ...contribution, property: reference(contribution.property), expression: reference(contribution.expression) })) };
     case "throw-op":
-      return fact.error.kind === "runtime"
-        ? { ...fact, error: { ...fact.error, expression: reference(fact.error.expression) } }
-        : fact;
+      return { ...fact, error: { ...fact.error, expression: reference(fact.error.expression) } };
     case "reference-operation":
       return fact.operation === "store"
         ? { ...fact, operandExpression: reference(fact.operandExpression), valueExpression: reference(fact.valueExpression),

@@ -14,8 +14,8 @@ export interface RustExternalProjectField {
   readonly storageIndex: number;
   readonly carrier: TargetTypeRef;
   readonly initializer:
-    | { readonly kind: "error-kind-string" }
-    | { readonly kind: "error-message-string" }
+    | { readonly kind: "string"; readonly value: string }
+    | { readonly kind: "message"; readonly parameterIndex: number }
     | { readonly kind: "none" };
 }
 
@@ -24,13 +24,15 @@ export interface RustExternalProjectBase {
   readonly declaration: Node;
   readonly targetType: TargetTypeRef;
   readonly constructorOperationId: "tsonic.rust.error.constructor";
+  readonly constructorPath: "rt::JsError::error";
+  readonly constructorDeclarations: readonly Node[];
   readonly fields: readonly RustExternalProjectField[];
   readonly programError: true;
 }
 
 const errorFieldPolicy = Object.freeze([
-  Object.freeze({ sourceName: "name", initializer: Object.freeze({ kind: "error-kind-string" as const }) }),
-  Object.freeze({ sourceName: "message", initializer: Object.freeze({ kind: "error-message-string" as const }) }),
+  Object.freeze({ sourceName: "name", initializer: Object.freeze({ kind: "string" as const, value: "Error" }) }),
+  Object.freeze({ sourceName: "message", initializer: Object.freeze({ kind: "message" as const, parameterIndex: 0 }) }),
   Object.freeze({ sourceName: "stack", initializer: Object.freeze({ kind: "none" as const }) }),
 ]);
 
@@ -64,14 +66,14 @@ export function resolveRustExternalProjectBase(
   }
   const declaration = errorDeclarations[0]!;
   const constructorDeclaration = constructorDeclarations[0]!;
+  const nativeConstructors = ast.members(constructorDeclaration).filter((member): member is Node =>
+    member !== undefined && ast.kindName(member) === "KindConstructSignature" &&
+    isNamedTypeReference(ast.typeNode(member), "Error", ast));
   if (sourceProfiles.profileForNode(declaration, ast) !== profile ||
     sourceProfiles.profileForNode(constructorDeclaration, ast) !== profile ||
     ast.typeParameters(declaration).length !== 0 ||
     ast.typeParameters(constructorDeclaration).length !== 0 ||
-    !ast.members(constructorDeclaration).some((member) =>
-      member !== undefined &&
-      ast.kindName(member) === "KindConstructSignature" &&
-      isNamedTypeReference(ast.typeNode(member), "Error", ast))) {
+    nativeConstructors.length !== 1) {
     return undefined;
   }
   const members = ast.members(declaration);
@@ -101,6 +103,8 @@ export function resolveRustExternalProjectBase(
     declaration,
     targetType: rustJsErrorTargetType(),
     constructorOperationId: "tsonic.rust.error.constructor",
+    constructorPath: "rt::JsError::error",
+    constructorDeclarations: Object.freeze(nativeConstructors),
     fields: Object.freeze(fields),
     programError: true,
   });

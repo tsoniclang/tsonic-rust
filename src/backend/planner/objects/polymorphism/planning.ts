@@ -335,7 +335,7 @@ function planProjectExternalErrorImplementations(
   representation: import("../../../../analysis/project-types/object-representation.js").RustObjectRepresentation,
   context: RustPlanContext,
 ): readonly RustItem[] | undefined {
-  const external = context.input.program.projectTypes.externalBaseForDefinition(definition);
+  const external = context.input.program.projectTypes.inheritedExternalBaseForDefinition(definition)?.base;
   if (external === undefined) {
     return [];
   }

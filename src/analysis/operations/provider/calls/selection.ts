@@ -36,7 +36,7 @@ import { selectedCallArgumentCarriers, selectedCallArgumentNodes, selectedCallCa
 import { selectedValueCarrier } from "../../selected-values.js";
 import { selectJsSurfaceConstructorBySourceOwner, selectJsSurfaceOperation } from "../../../../policy/operations/source-profiles/js/index.js";
 import { selectRustGeneratorSourceCall } from "../../../../policy/types/generator-source-profile.js";
-import { rustSourceErrorConstructors } from "../../../../target-model/identities/source-errors.js";
+import { rustSourceErrorConstructorOperation, selectRustSourceErrorConstructor } from "../../../../policy/operations/source-profiles/error-source-profile.js";
 import { selectRustProviderOperation } from "../../../../policy/operations/provider-selection.js";
 import { selectRustProviderPointerResult } from "../../../../policy/operations/pointers/provider-result.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
@@ -94,6 +94,13 @@ export function selectRustCheckedCall(
     options.sourceProfiles,
   );
   const selectedCalleeDeclaration = selectedCallCalleeDeclaration(request);
+  const projectConstructorOwner = asNode(selectedCalleeDeclaration, context);
+  const projectConstructorDefinition = options.projectTypes.definitionForDeclaration(projectConstructorOwner);
+  if (selectedSourceMember !== undefined && checkedCallIsConstruction(request, context) &&
+    projectConstructorDefinition?.kind === "class" && projectConstructorOwner !== undefined &&
+    options.projectTypes.constructorForSignature(projectConstructorDefinition, request.source.selectedSignature)?.implicit === true) {
+    return acceptProjectSourceCall(request, projectConstructorOwner, context, options);
+  }
   const calleeSourceMember = selectedCalleeDeclaration !== undefined &&
     context.ast.is.IsIndexSignatureDeclaration(selectedCalleeDeclaration) ? undefined : resolveSelectedSourceProfileMember(
     context,
@@ -177,7 +184,7 @@ export function selectRustCheckedCall(
     const definition = carrier === undefined ? undefined : options.projectTypes.definitionForCarrier(carrier);
     if (carriers.length !== 1 || carrier === undefined ||
       (!rustTargetTypeRefEquals(carrier, rustJsErrorTargetType()) &&
-        (definition === undefined || options.projectTypes.externalBaseForDefinition(definition)?.programError !== true))) {
+        (definition === undefined || options.projectTypes.inheritedExternalBaseForDefinition(definition)?.base.programError !== true))) {
       return rejectSelectedOperation(request.source.call, context, "RUST_ERROR_CAPTURE_CONTRACT",
         "Error.captureStackTrace requires one exact builtin Error or Error-derived project value.");
     }
@@ -188,38 +195,18 @@ export function selectRustCheckedCall(
       isAsync: false, isFallible: false, errorBoundary: "none",
     }, [carrier], context, options, { sourceName: "captureStackTrace" });
   }
-  const errorConstructor = selectedSourceMember === undefined ? undefined :
-    rustSourceErrorConstructors.find((entry) => entry.ownerName === selectedSourceMember.ownerName &&
-      (entry.sourceName === "Error" || selectedSourceMember.profile === "js"));
-  if (errorConstructor !== undefined &&
-    (selectedSourceMember?.memberName === "call" ||
-      selectedSourceMember?.memberName === "constructor" && checkedCallIsConstruction(request, context))) {
-    const argumentCount = selectedCallArgumentNodes(request).length;
-    if (argumentCount > 1) {
+  const errorConstructor = selectRustSourceErrorConstructor(selectedSourceMember, checkedCallIsConstruction(request, context));
+  if (errorConstructor !== undefined) {
+    const operation = rustSourceErrorConstructorOperation(errorConstructor, selectedCallArgumentCarriers(request, context, options));
+    if (operation === undefined) {
       return rejectSelectedOperation(
         request.source.call,
         context,
         "RUST_ERROR_MESSAGE_REQUIRED",
-        "Rust error construction requires an empty argument list or one checked string message.",
+        "Rust error construction requires an empty argument list or one checked optional string message.",
       );
     }
-    const resultCarrier = rustJsErrorTargetType();
-    const parameterCarriers = argumentCount === 0 ? [] : [rustStringTargetType()];
-    return acceptSelectedCall(request, {
-      kind: "provider-operation",
-      operationId: errorConstructor.operationId,
-      operationKind: "constructor",
-      target: {
-        form: "call", path: errorConstructor.path,
-        argModes: argumentCount === 0 ? [] : ["ref"],
-        ...(argumentCount === 0 ? { trailingArguments: [{ kind: "string", value: "" } as const] } : {}),
-      },
-      parameterCarriers,
-      resultCarrier,
-      isAsync: false,
-      isFallible: false,
-      errorBoundary: "none",
-    }, parameterCarriers, context, options, {
+    return acceptSelectedCall(request, operation, operation.parameterCarriers, context, options, {
       sourceName: errorConstructor.sourceName,
     });
   }

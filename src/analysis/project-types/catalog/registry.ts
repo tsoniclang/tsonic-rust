@@ -47,6 +47,9 @@ export function createRustProjectTypePolicyRegistry(): RustProjectTypePolicyRegi
     externalBaseForDefinition(definition) {
       return requireCurrent().externalBaseForDefinition(definition);
     },
+    inheritedExternalBaseForDefinition(definition) {
+      return requireCurrent().inheritedExternalBaseForDefinition(definition);
+    },
     externalFieldForReceiver(declaration, receiver) {
       return requireCurrent().externalFieldForReceiver(declaration, receiver);
     },

@@ -24,13 +24,13 @@ import type { Node } from "@tsonic/tsts";
 import type { RustCompletionBoundary, RustPlanContext } from "../program/plan-context.js";
 import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { rustProgramErrorTargetType } from "../../../target-model/types/index.js";
-import { selectRustRuntimeErrorBoundary } from "../../../target-model/conversions/program-error.js";
+import { isRustProgramErrorCarrier } from "../../../target-model/types/index.js";
 import { planRustProgramErrorConstruction } from "../expressions/program-errors.js";
 
 export function planThrowStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const fact = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
-  if (fact === undefined || fact.kind !== "throw-op") {
+  if (fact === undefined || fact.kind !== "throw-op" ||
+    fact.error.kind !== "conversion" && fact.error.kind !== "program") {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
       "rust.error.throw",
@@ -56,17 +56,13 @@ export function planThrowStatement(node: Node, context: RustPlanContext): readon
     ));
     return undefined;
   }
-  if (fact.error.kind === "runtime") {
-    if (fact.error.expression !== expression ||
-      selectRustRuntimeErrorBoundary(fact.error.carrier, context.input.program.providerErrorCarriers) !== fact.error.boundary ||
-      !rustTargetTypeRefEquals(effectivePlannedExpressionCarrier(expression, context), fact.error.carrier)) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, expression),
-        "rust.backend.throw-carrier",
-        "Finalized runtime throw fact conflicts with its exact source operand or native Error carrier.",
-      ));
-      return undefined;
-    }
+  const carrier = fact.error.kind === "conversion" ? fact.error.conversion.source : fact.error.carrier;
+  if (fact.error.expression !== expression ||
+    !rustTargetTypeRefEquals(effectivePlannedExpressionCarrier(expression, context), carrier) ||
+    fact.error.kind === "program" && !isRustProgramErrorCarrier(carrier)) {
+    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, expression),
+      "rust.backend.throw-carrier", "Finalized throw fact conflicts with its exact source operand or native Error carrier."));
+    return undefined;
   }
   const value = planExpression(expression, context);
   if (value === undefined) {
@@ -86,10 +82,7 @@ export function planThrowStatement(node: Node, context: RustPlanContext): readon
     }
     error = value;
   } else {
-    const constructed = planRustProgramErrorConstruction({ kind: "program-error", source: fact.error.carrier,
-      target: rustProgramErrorTargetType(), route: fact.error.kind === "project"
-        ? { kind: "project", variant: fact.error.variant } : { kind: "runtime", boundary: fact.error.boundary },
-    }, value, expression, context, activeBoundary);
+    const constructed = planRustProgramErrorConstruction(fact.error.conversion, value, expression, context, activeBoundary);
     if (constructed === undefined) return undefined;
     error = constructed;
   }

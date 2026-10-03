@@ -99,6 +99,10 @@ export interface RustProjectTypePolicy {
   openCarrier(definition: RustProjectTypeDefinition): TargetTypeRef;
   heritageForDefinition(definition: RustProjectTypeDefinition): readonly RustProjectHeritageEdge[];
   externalBaseForDefinition(definition: RustProjectTypeDefinition): RustExternalProjectBase | undefined;
+  inheritedExternalBaseForDefinition(definition: RustProjectTypeDefinition): {
+    readonly owner: RustProjectTypeDefinition;
+    readonly base: RustExternalProjectBase;
+  } | undefined;
   externalFieldForReceiver(
     declaration: Node | undefined,
     receiver: TargetTypeRef | undefined,

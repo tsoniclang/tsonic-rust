@@ -21,18 +21,19 @@ import {
   readRustStoredObjectField,
 } from "../objects/project-storage.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustValueConversion } from "../../../analysis/facts/keys.js";
 import type { RustFinalizedValueConversion } from "../../../analysis/facts/finalized-operation-abi.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { lowerRustExactIntegerConversion } from "./exact-integer.js";
 import { planRustUnionMapping, planRustUnionProjection } from "./union-mappings.js";
-import { planRustUnionConstruction, planRustUnionPattern } from "./union-patterns.js";
+import { planRustUnionConstruction } from "./union-patterns.js";
 import { planRustAbsentValue, planRustCheckedSourceOptional } from "./optional-storage.js";
 import { planRustProjectClosedValue } from "../objects/project-closed-values.js";
 import { planRustArrayValueConversion } from "./array-value-conversions.js";
 import { planRustSequenceValue } from "./sequence-conversions.js";
+import { planRustUnionFold } from "./union-folds.js";
 
 export function applyRustValueConversion(
   context: RustPlanContext,
@@ -133,6 +134,10 @@ export function lowerRustValueConversion(
       return source.kind === "reference"
         ? { kind: "method-call", receiver: source.expr, method: "as_str", args: [] }
         : source;
+    case "borrowed-str-from-optional-string":
+      return { kind: "method-call", receiver: {
+        kind: "method-call", receiver: source.kind === "reference" ? source.expr : source, method: "as_deref", args: [],
+      }, method: "unwrap_or", args: [{ kind: "str-literal", value: "" }] };
     case "copy-from-reference":
       return { kind: "dereference", pointer: source };
     case "closed-value-from-option": {
@@ -169,35 +174,9 @@ export function lowerRustValueConversion(
       return element === undefined ? undefined : { kind: "method-call", receiver: source.kind === "reference" ? source.expr : source,
         method: contract.method, genericArguments: [{ kind: "type", type: element }], args: [] };
     }
-    case "union-fold": {
-      const names = context.syntheticNames ?? createRustSyntheticNameState(
-        context.input.program.source.ast,
-        node ?? context.sourceFile,
-        [],
-      );
-      const arms: { readonly pattern: RustPattern; readonly expression: RustExpr }[] = [];
-      for (const arm of contract.arms) {
-        const variant = arm.path[arm.path.length - 1]!.variant;
-        const valueName = allocateRustSyntheticName(names, "union_value");
-        const payload: RustExpr = variant.kind === "constant" ? { kind: "bool-literal", value: variant.value }
-          : { kind: "path", path: valueName };
-        const pattern = planRustUnionPattern(arm.path, { kind: "binding", name: valueName }, context);
-        const converted = lowerNestedRustValueConversion(
-          arm.conversion,
-          payload,
-          context,
-          node,
-        );
-        if (pattern === undefined || converted === undefined) {
-          return undefined;
-        }
-        arms.push({
-          pattern,
-          expression: converted,
-        });
-      }
-      return { kind: "match", expression: source, arms };
-    }
+    case "union-fold":
+      return planRustUnionFold(source, contract.arms, context, node,
+        (arm, payload) => lowerNestedRustValueConversion(arm.conversion, payload, context, node));
     case "js-value-from-structural-to-json":
       return lowerStructuralToJsonValueConversion(
         contract,

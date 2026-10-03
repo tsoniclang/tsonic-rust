@@ -57,7 +57,7 @@ export function rustCompilerOwnedContextualConversionMatches(
   conversion: RustContextualValueConversion,
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): boolean {
-  if (conversion.kind === "program-error") return rustProgramErrorConversionMatches(conversion, sourceCarrier, targetCarrier);
+  if (conversion.kind === "program-error") return rustProgramErrorConversionMatches(conversion, sourceCarrier, targetCarrier, definitions);
   if (conversion.kind === "callable-adapter") return rustCallableConversionMatches(conversion, sourceCarrier, targetCarrier, definitions);
   if (conversion.kind === "exact-integer") {
     return rustExactIntegerConversionMatches(sourceCarrier, targetCarrier, conversion);

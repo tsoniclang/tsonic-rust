@@ -26,6 +26,7 @@ import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target
 import { selectRustProjectProjection } from "./project-projections.js";
 import { rustGenericCallableSignaturesMatch } from "../../target-model/conversions/generic-callable.js";
 import { selectRustCallableConversion } from "../../target-model/conversions/callable.js";
+import { selectRustProgramErrorConversion } from "../conversions/program-error.js";
 
 export type RustValueCarrierReconciliation =
   | { readonly kind: "identity" }
@@ -150,15 +151,8 @@ export function selectRustValueCarrierReconciliation(
     return { kind: "identity" };
   }
   if (isRustProgramErrorCarrier(targetCarrier)) {
-    const definition = projectTypes.definitionForCarrier(sourceCarrier);
-    const variant = definition === undefined ? undefined : projectTypes.programErrorVariant(definition);
-    if (rustTargetTypeRefEquals(sourceCarrier, rustJsErrorTargetType()) || definition !== undefined &&
-      variant !== undefined && rustTargetTypeRefEquals(projectTypes.openCarrier(definition), sourceCarrier)) {
-      return { kind: "conversion", fact: { sourceCarrier, targetCarrier, conversion: {
-        kind: "program-error", source: sourceCarrier, target: targetCarrier,
-        route: variant === undefined ? { kind: "runtime", boundary: "target-runtime" } : { kind: "project", variant },
-      } } };
-    }
+    const conversion = selectRustProgramErrorConversion(sourceCarrier, projectTypes, [], definitions);
+    if (conversion !== undefined) return { kind: "conversion", fact: { sourceCarrier, targetCarrier, conversion } };
   }
   if (rustGenericCallableSignaturesMatch(sourceCarrier, targetCarrier)) {
     return { kind: "conversion", fact: { sourceCarrier, targetCarrier,

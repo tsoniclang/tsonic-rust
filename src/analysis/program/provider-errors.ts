@@ -9,6 +9,7 @@ import {
 } from "../facts/keys.js";
 import type { RustBinaryHookPlan } from "../runtime/index.js";
 import type { RustProviderBinaryHookRow, RustProviderOperationRow } from "../../providers/packages/model.js";
+import type { RustProgramErrorRoute } from "../../target-model/conversions/program-error.js";
 
 function appendUniqueCarrier(carriers: TargetTypeRef[], carrier: TargetTypeRef | undefined): void {
   if (carrier !== undefined && !carriers.some(candidate => rustTargetTypeRefEquals(candidate, carrier))) carriers.push(carrier);
@@ -41,11 +42,15 @@ export function analyzeRustProviderErrorCarriers(
   const add = (carrier: TargetTypeRef | undefined): void => {
     appendUniqueCarrier(carriers, carrier);
   };
+  const addRoute = (carrier: TargetTypeRef, route: RustProgramErrorRoute): void => {
+    if (route.kind === "union") {
+      for (const arm of route.arms) addRoute(arm.carrier, arm.route);
+    } else if (route.kind === "runtime" && route.boundary === "provider-native") add(carrier);
+  };
   const visit = (node: Node): void => {
     const operation = facts.getFact(node, rustTargetOperationFactKey);
-    if (operation?.kind === "throw-op" && operation.error.kind === "runtime" &&
-      operation.error.boundary === "provider-native") {
-      add(operation.error.carrier);
+    if (operation?.kind === "throw-op" && operation.error.kind === "conversion") {
+      addRoute(operation.error.conversion.source, operation.error.conversion.route);
     }
     if (operation?.kind === "provider-operation" &&
       operation.abi.effects.errorBoundary === "provider-native") {

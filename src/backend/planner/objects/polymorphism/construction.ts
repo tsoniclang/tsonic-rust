@@ -1,4 +1,6 @@
 import { rustHiddenAttribute } from "../../../target-ast/attributes.js";
+import { rustTargetIdentifier } from "../../../../target-model/names/identifiers.js";
+import { planRustExternalProjectInitialization } from "./external-construction.js";
 import type { Node } from "@tsonic/tsts";
 import { rustClassEnvironmentContext, rustClassEnvironmentParameter } from "../class-environments.js";
 import {
@@ -366,45 +368,19 @@ export function planProjectClassConstructor(
           externalBase.constructorOperationId,
           context,
         );
-    const baseError = externalCall === undefined
-      ? undefined
-      : planExpression(externalCall, initializationContext);
-    if (baseError === undefined) {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        diagnosticInput(context, constructor ?? definition.declaration),
-        "rust.backend.external-project-constructor",
-        "An external source-profile base requires one exact checked super(...) call as the first constructor statement.",
-      ));
-      return undefined;
-    }
-    const baseName = allocateRustSyntheticName(syntheticNames, "external_base");
-    statements.push({ kind: "let", name: baseName, mutable: false, init: baseError });
-    const basePath: RustExpr = { kind: "path", path: baseName };
-    for (const externalField of externalBase.fields) {
+    if (constructor !== undefined && externalCall === undefined) return undefined;
+    const initializers = planRustExternalProjectInitialization(externalBase, constructorSignature, definition.declaration, externalCall, initializationContext);
+    if (initializers === undefined) return undefined;
+    for (const [index, externalField] of externalBase.fields.entries()) {
       const field = ownLayer.fields.find((candidate) =>
         candidate.origin === "external" &&
         candidate.declaration === externalField.declaration);
       if (field === undefined) {
         return undefined;
       }
-      const value: RustExpr = externalField.initializer.kind === "none"
-        ? { kind: "none" }
-        : {
-            kind: "method-call",
-            receiver: {
-              kind: "method-call",
-              receiver: basePath,
-              method: externalField.initializer.kind === "error-kind-string"
-                ? "kind"
-                : "message",
-              args: [],
-            },
-            method: "to_string",
-            args: [],
-          };
-      bindInitializedField(field, value);
+      bindInitializedField(field, initializers[index]!);
     }
-    bodyIndex = 1;
+    bodyIndex = constructor === undefined ? 0 : 1;
   }
   if (base !== undefined) {
     const baseLayers = layers.slice(0, -1);
@@ -696,7 +672,7 @@ function planImplicitProjectConstructorParameters(
           abi.parameterCarrier,
         );
     const type = rustTypeFromCarrierInContext(carrier, context);
-    const name = context.input.program.names.nameForDeclaration(parameter.parameterDeclaration) ?? "";
+    const name = rustTargetIdentifier(parameter.parameterName);
     if (type === undefined || !isValidRustIdentifier(name)) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, parameter.parameterDeclaration),

@@ -147,15 +147,15 @@ export function fail(error: Error): void { throw error; }
   const statement = ast.statements(ast.body(declaration))[0];
   const fact = program.facts.getFact(statement, rustTargetOperationFactKey);
   assert.equal(fact.kind, "throw-op");
-  assert.equal(fact.error.kind, "runtime");
-  assert.equal(fact.error.boundary, "target-runtime");
+  assert.equal(fact.error.kind, "conversion");
+  assert.deepEqual(fact.error.conversion.route, { kind: "runtime", boundary: "target-runtime" });
   assert.equal(fact.error.expression, Node_Expression(ast, statement));
-  assert.deepEqual(fact.error.carrier, rustJsErrorTargetType());
+  assert.deepEqual(fact.error.conversion.source, rustJsErrorTargetType());
   assert.ok(Object.isFrozen(fact));
-  for (const error of [
-    { ...fact.error, expression: declaration },
-    { ...fact.error, carrier: rustStringTargetType() },
-    { ...fact.error, boundary: "provider-native" },
+  for (const [error, message] of [
+    [{ ...fact.error, expression: declaration }, "Finalized throw fact conflicts with its exact source operand or native Error carrier."],
+    [{ ...fact.error, conversion: { ...fact.error.conversion, source: rustStringTargetType() } }, "Finalized throw fact conflicts with its exact source operand or native Error carrier."],
+    [{ ...fact.error, conversion: { ...fact.error.conversion, route: { kind: "runtime", boundary: "provider-native" } } }, "Runtime error construction has no exact registered native error carrier."],
   ]) {
     const diagnostics = [];
     const facts = {
@@ -169,6 +169,6 @@ export function fail(error: Error): void { throw error; }
       fallibleBoundary: { componentId: "source", errorDomain: "runtime", errorTypePath: "rt::TsonicError" },
     }), undefined);
     assert.equal(diagnostics.length, 1);
-    assert.match(diagnostics[0].message, /exact source operand or native Error carrier/u);
+    assert.equal(diagnostics[0].message, `${message} Node kind: KindIdentifier.`);
   }
 });
