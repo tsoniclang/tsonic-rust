@@ -215,7 +215,7 @@ export function rustTargetOperationIsFallible(
       contribution.kind === "spread" &&
       contribution.fields.some((field) => field.accessor !== undefined ||
         contribution.sourceStorage === "structural-object" && rustStructuralFieldIsFallible(structuralStorage.field(
-          contribution.sourceCarrier,
+          contribution.sourceValueCarrier,
           field.sourceStorageIndex,
         ))));
   }

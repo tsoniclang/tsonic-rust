@@ -447,11 +447,12 @@ export function resolveRecordLiteralCarrier(
       const sourceCarrier = spreadExpression === undefined
         ? undefined
         : resolveExpressionCarrier(walk, spreadExpression, sourceFile, undefined);
-      const sourceShape = sourceCarrier === undefined
+      const sourceValueCarrier = rustOptionElementCarrier(sourceCarrier) ?? sourceCarrier;
+      const sourceShape = sourceValueCarrier === undefined
         ? undefined
-        : resolveRustRecordShape(walk, sourceCarrier, false);
+        : resolveRustRecordShape(walk, sourceValueCarrier, false);
       if (spreadExpression === undefined || sourceCarrier === undefined ||
-        sourceShape === undefined) {
+        sourceValueCarrier === undefined || sourceShape === undefined) {
         return undefined;
       }
       const spreadFields: {
@@ -490,7 +491,7 @@ export function resolveRecordLiteralCarrier(
         });
         assignedStorageIndexes.add(targetField.storageIndex);
       }
-      const sourceDefinition = walk.context.projectTypes.definitionForCarrier(sourceCarrier);
+      const sourceDefinition = walk.context.projectTypes.definitionForCarrier(sourceValueCarrier);
       const spreadMethods: {
         readonly contractDeclaration: Node;
         readonly sourceDeclaration: Node;
@@ -506,7 +507,7 @@ export function resolveRecordLiteralCarrier(
           const callableCarrier = resolveProjectMethodPropertyCarrier(
             walk,
             contractDeclaration,
-            sourceCarrier,
+            sourceValueCarrier,
           );
           if (implementation === undefined || callableCarrier === undefined) {
             return undefined;
@@ -525,6 +526,7 @@ export function resolveRecordLiteralCarrier(
         expression: spreadExpression,
         sourceStorage: sourceShape.storage,
         sourceCarrier,
+        sourceValueCarrier,
         fields: spreadFields,
         methods: spreadMethods,
       });

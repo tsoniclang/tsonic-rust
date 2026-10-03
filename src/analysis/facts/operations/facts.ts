@@ -557,6 +557,7 @@ export type RustTargetOperationFact =
             readonly expression: Node;
             readonly sourceStorage: "project-object" | "structural-object";
             readonly sourceCarrier: TargetTypeRef;
+            readonly sourceValueCarrier: TargetTypeRef;
             readonly fields: readonly {
               readonly sourceName: string;
             readonly sourceStorageIndex: number;

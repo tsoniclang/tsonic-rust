@@ -7,8 +7,6 @@ import {
 } from "../objects/project-objects.js";
 import {
   createRustStructuralObjectFromCarrier,
-  readRustStoredObjectField,
-  readRustStructuralObjectMethodStorage,
   rustDirectProjectFieldStoragePath,
 } from "../objects/project-storage.js";
 import {
@@ -31,7 +29,7 @@ import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagno
 import { parseSourceIntegerLiteral } from "../../../target-model/syntax/literals.js";
 import { planExpression } from "./entry.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
-import { planRustBoundProjectMethodCallable } from "./properties.js";
+import { planRustRecordSpread } from "./record-spreads.js";
 import { rustObjectLiteralRequiresDispatchImplementation } from "../objects/object-literal-implementations.js";
 import { constructRustStructuralLiteral } from "../objects/object-literals/structural.js";
 import { rustProjectStateMarker, rustProjectStateType } from "../objects/polymorphism/names.js";
@@ -144,7 +142,9 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
       return;
     }
     for (const field of contribution.fields) {
-      finalContributionByStorageIndex.set(field.targetStorageIndex, contributionIndex);
+      if (rustOptionElementCarrier(contribution.sourceCarrier) === undefined) {
+        finalContributionByStorageIndex.set(field.targetStorageIndex, contributionIndex);
+      }
     }
     for (const method of contribution.methods) {
       finalContributionByMethod.set(method.contractDeclaration, contributionIndex);
@@ -335,95 +335,18 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
       return undefined;
     }
     const retainedFields = contribution.fields.filter((field) =>
-      finalContributionByStorageIndex.get(field.targetStorageIndex) === contributionIndex);
+      rustOptionElementCarrier(contribution.sourceCarrier) === undefined
+        ? finalContributionByStorageIndex.get(field.targetStorageIndex) === contributionIndex
+        : (finalContributionByStorageIndex.get(field.targetStorageIndex) ?? -1) < contributionIndex);
     const retainedMethods = objectLiteralImplementation?.implementations.filter((implementation) =>
       implementation.kind === "spread" &&
         finalContributionByMethod.get(implementation.contractMethod) === contributionIndex) ?? [];
-    const spreadName = allocateRustSyntheticName(
-      context.syntheticNames,
-      retainedFields.length === 0 && retainedMethods.length === 0
-        ? "_record_spread"
-        : "record_spread",
-    );
-    bindings.push({ name: spreadName, value: plannedSpread });
-    for (const field of retainedFields) {
-      const value = field.method === true
-        ? contribution.sourceStorage === "structural-object"
-          ? readRustStructuralObjectMethodStorage(
-              contribution.sourceCarrier,
-              { kind: "path", path: spreadName },
-              field.sourceStorageIndex,
-              context,
-            )
-          : undefined
-        : readRustStoredObjectField(
-            contribution.sourceStorage,
-            contribution.sourceCarrier,
-            { kind: "path", path: spreadName },
-            field.sourceStorageIndex,
-            field.carrier,
-            context,
-          );
-      if (value === undefined) {
-        context.diagnostics.push(unsupportedConstructDiagnostic(
-          diagnosticInput(context, contribution.property),
-          "rust.backend.record-spread-projection",
-          `Object spread field '${field.sourceName}' has no exact Rust storage projection.`,
-        ));
-        return undefined;
-      }
-      const fieldName = allocateRustSyntheticName(
-        context.syntheticNames,
-        `record_${field.sourceName}`,
-      );
-      bindings.push({ name: fieldName, value });
-      valuesByStorageIndex.set(
-        field.targetStorageIndex,
-        { kind: "path", path: fieldName },
-      );
-    }
-    for (const implementation of retainedMethods) {
-      if (implementation.kind !== "spread") {
-        return undefined;
-      }
-      const source = contribution.methods.find((method) =>
-        method.contractDeclaration === implementation.contractMethod);
-      if (source === undefined) {
-        return undefined;
-      }
-      const receiverName = allocateRustSyntheticName(
-        context.syntheticNames,
-        "record_method_receiver",
-      );
-      bindings.push({
-        name: receiverName,
-        value: {
-          kind: "method-call",
-          receiver: { kind: "path", path: spreadName },
-          method: "clone",
-          args: [],
-        },
-      });
-      const callableValue = planRustBoundProjectMethodCallable(
-        implementation.contractMethod,
-        contribution.sourceCarrier,
-        { kind: "path", path: receiverName },
-        source.callableCarrier,
-        context,
-      );
-      if (callableValue === undefined) {
-        return undefined;
-      }
-      const callableName = allocateRustSyntheticName(
-        context.syntheticNames,
-        "record_method",
-      );
-      bindings.push({ name: callableName, value: callableValue });
-      methodValues.set(
-        implementation.fieldName,
-        { kind: "path", path: callableName },
-      );
-    }
+    const spread = planRustRecordSpread(contribution, plannedSpread, retainedFields, retainedMethods,
+      valuesByStorageIndex, context);
+    if (spread === undefined) return undefined;
+    bindings.push(...spread.bindings);
+    for (const [index, value] of spread.fields) valuesByStorageIndex.set(index, value);
+    for (const [name, value] of spread.methods) methodValues.set(name, value);
   }
   const structuralInitializers: import("../objects/project-storage.js")
     .RustStructuralObjectFieldInitializer[] = [];
