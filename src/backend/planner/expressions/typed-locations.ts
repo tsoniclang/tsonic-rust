@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import { rustBindingStorageOperations, type RustBindingStorageOperations } from "./binding-storage.js";
 import type {
@@ -325,11 +326,7 @@ export function planRustModuleBindingStore(
   const path = rustSourceBindingPath(context, binding);
   if (path === undefined || context.syntheticNames === undefined) return undefined;
   const valueName = allocateRustSyntheticName(context.syntheticNames, "module_value");
-  return {
-    kind: "block",
-    bindings: [{ name: valueName, value }],
-    value: rustModuleCellAccess({ kind: "path", path }, "store", [{ kind: "path", path: valueName }]),
-  };
+  return rustValueBlock([{ name: valueName, value }], rustModuleCellAccess({ kind: "path", path }, "store", [{ kind: "path", path: valueName }]));
 }
 
 function rustCapturedBinding(
@@ -424,10 +421,8 @@ export function planRustPromotedStorageWrite(
       left: { kind: "path", path: currentName }, right: value };
     const write = fallibleLocationAccess(expression,
       { kind: "method-call", receiver: pointer, method: "try_store", args: [next] }, context);
-    return { handled: true, ...(write === undefined ? {} : { statement: { kind: "expr", expr: {
-      kind: "block", bindings: [{ name: locationName, value: location },
-        ...(current === undefined ? [] : [{ name: currentName, value: current }])], value: write,
-    } } }) };
+    return { handled: true, ...(write === undefined ? {} : { statement: { kind: "expr", expr: rustValueBlock([{ name: locationName, value: location },
+        ...(current === undefined ? [] : [{ name: currentName, value: current }])], write) } }) };
   }
   const location = planRustLocationStorage(
     expression,
@@ -469,9 +464,7 @@ export function planRustPromotedStorageWrite(
     handled: true,
     statement: {
       kind: "expr",
-      expr: {
-        kind: "block",
-        bindings: [
+      expr: rustValueBlock([
           {
             name: locationName,
             value: { kind: "reference", expr: location },
@@ -481,14 +474,12 @@ export function planRustPromotedStorageWrite(
             value: methods.read(locationPath),
           },
           { name: valueName, value },
-        ],
-        value: methods.write(locationPath, {
+        ], methods.write(locationPath, {
             kind: "binary",
             operator: binaryOperator,
             left: { kind: "path", path: currentName },
             right: { kind: "path", path: valueName },
-          }),
-      },
+          })),
     },
   };
 }

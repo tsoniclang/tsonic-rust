@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import { rustComputedMemberFactKey } from "../../../analysis/facts/operations/keys.js";
 import type { RustExpr } from "../../target-ast/nodes.js";
@@ -77,5 +78,5 @@ export function planRustComputedMemberExpression(
   if (evaluation === undefined) return undefined;
   const value = plan(evaluation.context);
   return value === undefined || evaluation.bindings.length === 0 ? value
-    : { kind: "block", bindings: evaluation.bindings, value };
+    : rustValueBlock(evaluation.bindings, value);
 }

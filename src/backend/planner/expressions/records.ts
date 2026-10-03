@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import {
   createRustProjectObject,
   rustProjectObjectDispatchField,
@@ -617,7 +618,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
     ? undefined
     : bindings.length === 0
       ? constructed
-      : { kind: "block", bindings, value: constructed };
+      : rustValueBlock(bindings, constructed);
 }
 
 function planProviderRecordLiteral(
@@ -761,14 +762,10 @@ function planIndexedRecordLiteral(
     value = { kind: "evaluate-then", effect: effect.expression, discard: effect.discard, value };
   }
   const capacity = fact.contributions.filter((contribution) => contribution.kind === "property").length;
-  return {
-    kind: "block",
-    bindings: [{ name: entriesName, mutable: true, value: {
+  return rustValueBlock([{ name: entriesName, mutable: true, value: {
       kind: "call", path: "std::collections::HashMap::with_capacity",
       args: [{ kind: "int-literal", text: capacity.toString(10) }],
-    } }],
-    value,
-  };
+    } }], value);
 }
 
 function rustProjectIndexLiteralKey(

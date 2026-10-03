@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import {
   BinaryExpression_Left,
   BinaryExpression_Right,
@@ -46,7 +47,7 @@ export function planCompoundAssignmentExpression(
   if (evaluation === undefined) return undefined;
   if (evaluation.bindings.length !== 0) {
     const value = planCompoundAssignmentExpression(node, fact, evaluation.context);
-    return value === undefined ? undefined : { kind: "block", bindings: evaluation.bindings, value };
+    return value === undefined ? undefined : rustValueBlock(evaluation.bindings, value);
   }
   const copy = isRustCopyCarrier(fact.resultCarrier);
   if (!copy && !requireRustCarrierRequirements(fact.resultCarrier, ["clone"], node, context)) return undefined;
@@ -121,5 +122,5 @@ export function planCompoundAssignmentExpression(
     }
     expression = { kind: "evaluate-then", effect, discard: "unit", value: expression };
   }
-  return { kind: "block", bindings, value: expression };
+  return rustValueBlock(bindings, expression);
 }

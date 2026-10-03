@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../../dist/backend/target-ast/value-block.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -647,14 +648,10 @@ test("unary block arguments remain attached to their outer calls", () => {
             args: [{
               kind: "unary",
               operator: "!",
-              operand: {
-                kind: "block",
-                bindings: [{
+              operand: rustValueBlock([{
                   name: "matched",
                   value: { kind: "bool-literal", value: true },
-                }],
-                value: { kind: "path", path: "matched" },
-              },
+                }], { kind: "path", path: "matched" }),
             }],
           },
         }],
@@ -846,21 +843,17 @@ test("conversion wrappers retain rustfmt layout for one block-valued array argum
                 method: "push_many",
                 args: [{
                   kind: "slice-literal",
-                  elements: [{
-                    kind: "block",
-                    bindings: [{
+                  elements: [rustValueBlock([{
                       name: "derived",
                       value: { kind: "call", path: "Derived::new", args: [] },
-                    }],
-                    value: {
+                    }], {
                       kind: "struct-literal",
                       path: "Base",
                       fields: [{
                         name: "identity",
                         value: { kind: "field", receiver: { kind: "path", path: "derived" }, name: "identity" },
                       }],
-                    },
-                  }],
+                    })],
                 }],
               }],
             },
@@ -1056,9 +1049,7 @@ test("expanded call arguments keep fitting optional closure chains attached", ()
 
 test("every fitted call layout preserves exact call-site type arguments", () => {
   const errorType = { kind: "named", path: "rt::TsonicError" };
-  const expandedValue = {
-    kind: "block",
-    bindings: [{
+  const expandedValue = rustValueBlock([{
       name: "selected",
       value: {
         kind: "call",
@@ -1066,9 +1057,7 @@ test("every fitted call layout preserves exact call-site type arguments", () => 
         genericArguments: [{ kind: "type", type: { kind: "string" } }],
         args: [{ kind: "path", path: "input" }],
       },
-    }],
-    value: { kind: "path", path: "selected" },
-  };
+    }], { kind: "path", path: "selected" });
   const source = printRustSourceFile({
     headerComment,
     items: [{

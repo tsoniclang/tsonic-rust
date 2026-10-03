@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import { Node_Expression } from "@tsonic/target-api/source";
 import { rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
@@ -59,11 +60,11 @@ export function planRustReferenceObjectFieldLocation(
   if (read === undefined || write === undefined) return undefined;
   const clone = (value: RustExpr): RustExpr => ({ kind: "method-call", receiver: value, method: "clone", args: [] });
   context.usedAliases?.add("rt");
-  return { kind: "block", bindings: [
+  return rustValueBlock([
     { name: ownerName, value: clone(receiver) },
     { name: readerName, value: clone(owner) },
     { name: writerName, value: clone(owner) },
-  ], value: { kind: "call", path: "rt::Location::try_bind_projected", args: [
+  ], { kind: "call", path: "rt::Location::try_bind_projected", args: [
     owner,
     { kind: "call", path: "rt::location::LocationSegment::Member", args: [
       { kind: "call", path: "String::from", args: [{ kind: "str-literal", value: operation.operationId }] },
@@ -74,5 +75,5 @@ export function planRustReferenceObjectFieldLocation(
         kind: "call", path: "Ok", args: [{ kind: "tuple-literal", elements: [] }],
       },
     } },
-  ] } };
+  ] });
 }

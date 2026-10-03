@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustSyntheticNameState } from "../names/synthetic.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
@@ -8,9 +9,12 @@ export function propagateRustBottomOperand(
 ): RustExpr {
   if (expression.kind === "bottom") return expression;
   if (expression.kind === "block") {
-    const value = propagateRustBottomOperand(expression.value, names);
+    const terminal = expression.body.statements[expression.body.statements.length - 1];
+    if (terminal?.kind !== "tail") return expression;
+    const value = propagateRustBottomOperand(terminal.expr, names);
     return value.kind === "bottom"
-      ? { kind: "bottom", expression: { ...expression, value: value.expression } }
+      ? { kind: "bottom", expression: { ...expression, body: { ...expression.body,
+          statements: [...expression.body.statements.slice(0, -1), { ...terminal, expr: value.expression }] } } }
       : expression;
   }
   const operands = eagerOperands(expression);
@@ -21,11 +25,7 @@ export function propagateRustBottomOperand(
     if (selected.kind === "bottom") {
       return prefix.length === 0 ? selected : {
         kind: "bottom",
-        expression: {
-          kind: "block",
-          bindings: prefix.map(value => ({ name: allocateRustSyntheticName(names, "_evaluated_argument"), value })),
-          value: selected.expression,
-        },
+        expression: rustValueBlock(prefix.map(value => ({ name: allocateRustSyntheticName(names, "_evaluated_argument"), value })), selected.expression),
       };
     }
     prefix.push(operand);

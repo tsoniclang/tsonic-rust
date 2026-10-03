@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustExpr } from "../../target-ast/nodes.js";
@@ -29,10 +30,7 @@ export function planRustVirtualProjectMethodCall(
     context.syntheticNames,
     "dispatch_receiver",
   );
-  return {
-    kind: "block",
-    bindings: [{ name: receiverName, value: receiver }],
-    value: {
+  return rustValueBlock([{ name: receiverName, value: receiver }], {
       kind: "method-call",
       receiver: {
         kind: "method-call",
@@ -46,8 +44,7 @@ export function planRustVirtualProjectMethodCall(
       },
       method: slot,
       args,
-    },
-  };
+    });
 }
 
 export function planRustExactProjectMethodCall(

@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustFlowReadProjectionMatches } from "../../../analysis/facts/flow-read-projections.js";
@@ -213,24 +214,15 @@ function bindRustFlowMatchSubject(
   context: RustPlanContext,
 ): RustExpr {
   if (expression.expression.kind !== "evaluate-then" &&
-    (expression.expression.kind !== "block" || expression.expression.bindings.length === 0)) {
+    (expression.expression.kind !== "block" || expression.expression.body.statements.every(statement => statement.kind === "tail"))) {
     return expression;
   }
   if (context.input.program.configuration.edition === "2021") {
-    return {
-      kind: "block",
-      valueAttrs: [rustLintAttributes.matchTemporaryScope],
-      bindings: [],
-      value: expression,
-    };
+    return rustValueBlock([], expression, { value: [rustLintAttributes.matchTemporaryScope] });
   }
   const name = allocateRustSyntheticName(
     context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []),
     "flow_input",
   );
-  return {
-    kind: "block",
-    bindings: [{ name, value: expression.expression }],
-    value: { ...expression, expression: { kind: "path", path: name } },
-  };
+  return rustValueBlock([{ name, value: expression.expression }], { ...expression, expression: { kind: "path", path: name } });
 }

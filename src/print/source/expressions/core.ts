@@ -1,6 +1,5 @@
-import { printRustBlockStatements } from "../blocks.js";
+import { printRustBlockStatements, printRustElseBranch } from "../blocks.js";
 import { escapeRustChar, escapeRustString, printRustPattern } from "../patterns.js";
-import { printRustAttribute } from "../attributes.js";
 import { printRustConstArgument, printRustType } from "../types.js";
 import {
   printRustAssociatedCallOwner,
@@ -54,16 +53,13 @@ export function printRustExpr(expression: RustExpr): string {
     case "range":
       return `${printOperand(expression.start, RustPrecedence.Or, false)}..${expression.inclusive === true ? "=" : ""}${printOperand(expression.end, RustPrecedence.Or, true)}`;
     case "conditional": {
-      const alternative = expression.whenFalse.kind === "conditional"
-        ? printRustExpr(expression.whenFalse)
-        : `{ ${printConditionalArm(expression.whenFalse)} }`;
+      const alternative = printConditionalAlternative(expression.whenFalse);
       return `if ${printRustExpr(expression.condition)} { ${printConditionalArm(expression.whenTrue)} } else ${alternative}`;
     }
     case "if-let": {
       const consequent = `if let ${printRustPattern(expression.pattern)} = ${printRustExpr(expression.expression)} { ${printConditionalArm(expression.whenTrue)} }`;
       if (expression.whenFalse === undefined) return consequent;
-      const alternative = expression.whenFalse.kind === "conditional" || expression.whenFalse.kind === "if-let"
-        ? printRustExpr(expression.whenFalse) : `{ ${printConditionalArm(expression.whenFalse)} }`;
+      const alternative = printConditionalAlternative(expression.whenFalse);
       return `${consequent} else ${alternative}`;
     }
     case "match":
@@ -214,14 +210,23 @@ function printRustMatchExpression(
 function printConditionalArm(expression: RustExpr, allowInnerAttributes = true): string {
   if (expression.kind === "tuple-literal" && expression.elements.length === 0) return "";
   if (expression.kind === "block" &&
-    (allowInnerAttributes || (expression.innerAttrs?.length ?? 0) === 0)) {
-    return printRustBlockExpressionContents(expression, (value) => printConditionalArm(value, false));
+    (allowInnerAttributes || (expression.body.innerAttrs?.length ?? 0) === 0)) {
+    return printRustBlockExpressionContents(expression);
   }
   if (expression.kind === "evaluate-then") {
     const statement = printRustDiscard(expression);
     return `${statement} ${printConditionalArm(expression.value, false)}`;
   }
   return printRustExpr(expression);
+}
+
+function printConditionalAlternative(expression: RustExpr): string {
+  if (expression.kind === "conditional" || expression.kind === "if-let") return printRustExpr(expression);
+  if (expression.kind === "block") {
+    const chained = printRustElseBranch(expression.body);
+    if (chained !== undefined) return chained;
+  }
+  return `{ ${printConditionalArm(expression)} }`;
 }
 
 function printRustDiscard(expression: Extract<RustExpr, { readonly kind: "evaluate-then" }>): string {
@@ -232,21 +237,8 @@ function printRustDiscard(expression: Extract<RustExpr, { readonly kind: "evalua
 
 function printRustBlockExpressionContents(
   expression: Extract<RustExpr, { readonly kind: "block" }>,
-  printValue: (value: RustExpr) => string = printRustExpr,
 ): string {
-  const bindings = expression.bindings.map((binding) => {
-    const attributes = binding.attrs?.map(attribute => printRustAttribute(attribute)).join(" ") ?? "";
-    const initializer = binding.value === undefined ? "" : ` = ${printRustExpr(binding.value)}`;
-    const declaration = `let ${binding.mutable === true ? "mut " : ""}${binding.name}${binding.type === undefined ? "" : `: ${printRustType(binding.type)}`}${initializer};`;
-    return attributes.length === 0 ? declaration : `${attributes} ${declaration}`;
-  });
-  return [
-    ...(expression.innerAttrs ?? []).map(attribute => printRustAttribute(attribute, true)),
-    ...bindings,
-    ...(expression.valueAttrs ?? []).map(attribute => printRustAttribute(attribute)),
-    expression.value.kind === "tuple-literal" && expression.value.elements.length === 0 &&
-      (expression.valueAttrs?.length ?? 0) === 0 ? "" : printValue(expression.value),
-  ].join(" ");
+  return printRustBlockStatements(expression.body, 0, " ");
 }
 
 function printBlockExpression(

@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
@@ -31,5 +32,5 @@ export function tryPlanRustMemoryBinding(
   }
   const value = createRustStructuralObjectFromCarrier(plan.carrier, fields, context);
   return { handled: true, expression: value === undefined ? undefined :
-    bindings.length === 0 ? value : { kind: "block", bindings, value } };
+    bindings.length === 0 ? value : rustValueBlock(bindings, value) };
 }

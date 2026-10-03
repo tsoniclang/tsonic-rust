@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustIndexedRecordStorage } from "../../../target-model/types/carriers/records.js";
 import { rustRecordCarrierValue, rustRecordReadAdmitsAbsence } from "../../../target-model/types/carriers/records.js";
@@ -62,10 +63,10 @@ export function planRustSourceIndexRead(
     context.syntheticNames === undefined) return undefined;
   const receiverName = allocateRustSyntheticName(context.syntheticNames, "index_receiver");
   const keyName = allocateRustSyntheticName(context.syntheticNames, "index_key");
-  return { kind: "block", bindings: [
+  return rustValueBlock([
     { name: receiverName, value: planRustSharedReceiver(receiverNode, receiver, context) },
     { name: keyName, value: key },
-  ], value: storage.read({ kind: "path", path: receiverName }, { kind: "path", path: keyName }) };
+  ], storage.read({ kind: "path", path: receiverName }, { kind: "path", path: keyName }));
 }
 
 export function planRustIndexedRecordStorage(

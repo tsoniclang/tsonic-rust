@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustProviderRecordCopy } from "../../../target-model/conversions/provider-record.js";
 import { rustProviderRecordCopyMatches } from "../../../target-model/conversions/provider-record.js";
@@ -31,11 +32,11 @@ export function planProviderRecordCopy(
     return value === undefined ? undefined : { name: field.targetName, value };
   });
   if (fields.some(field => field === undefined)) return undefined;
-  return { kind: "block", bindings: [{ name, value: expression }], value: {
+  return rustValueBlock([{ name, value: expression }], {
     kind: "struct-literal", path: target.path,
     fields: fields as { readonly name: string; readonly value: RustExpr }[],
     ...(conversion.completion === "default"
       ? { base: { kind: "call" as const, path: "Default::default", args: [] } }
       : {}),
-  } };
+  });
 }

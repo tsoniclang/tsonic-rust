@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustValueConversionContract } from "../../../target-model/conversions/contracts.js";
-import type { RustExpr, RustType } from "../../target-ast/nodes.js";
+import type { RustExpr, RustStmt, RustType } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { registerAliasFromPath } from "../program/plan-context.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
@@ -39,9 +39,7 @@ export function planRustArrayValueConversion(
   const invocation: RustExpr = { kind: "invoke", callee: { kind: "path", path: visitorName },
     args: [borrowed ? projected : { kind: "call", path: "js_abi::JsArrayElement::Value",
       args: [{ kind: "reference", expr: projected }] }] };
-  const visit = { kind: "if-let-some" as const, binding: selectedName,
-    expression: { kind: "path" as const, path: valueName },
-    body: { statements: [{ kind: "expr" as const, expr: invocation }] } };
+  const visit: RustStmt = { kind: "expr", expr: { kind: "if-let", pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: selectedName }] }, expression: { kind: "path", path: valueName }, whenTrue: { kind: "block", body: { statements: [{ kind: "expr", expr: invocation }] } } } };
   const read: RustExpr = { kind: "method-call", receiver: { kind: "path", path: arrayName },
     method: borrowed ? "with_native_element" : "get_native_element",
     genericArguments: borrowed ? pointerArguments : pointerArguments.slice(0, 1),
@@ -50,7 +48,6 @@ export function planRustArrayValueConversion(
   const projection: RustExpr = borrowed
     ? { kind: "closure", params: [{ name: arrayName }, { name: keyName }, { name: visitorName }], body: read }
     : { kind: "closure-block", move: false, async: false, params: [{ name: arrayName }, { name: keyName }, { name: visitorName }],
-        body: { statements: [{ kind: "if-let-some", binding: selectedName, expression: read,
-          body: { statements: [{ kind: "expr", expr: invocation }] } }] } };
+        body: { statements: [{ kind: "expr", expr: { kind: "if-let", pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: selectedName }] }, expression: read, whenTrue: { kind: "block", body: { statements: [{ kind: "expr", expr: invocation }] } } } }] } };
   return { kind: "call", path: "js_abi::js_value_from_array", args: [source, projection] };
 }

@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import { emptyRustGenerics, type RustImplFunction, type RustItem } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
@@ -72,9 +73,8 @@ export function planRustClassValueImplementations(declaration: Node, context: Ru
         if (target === undefined) return undefined;
         functions.push({ kind: "function", name: storage.property.setterTargetName, visibility: "private", generics: emptyRustGenerics,
           selfParam: rustSelfParameter("ref"), params: [{ name: "value", type }], returnType: { kind: "unit" },
-          errorType: rustErrorType(boundary), body: { statements: [{ kind: "tail", expr: { kind: "block", bindings: target.bindings,
-            value: { kind: "evaluate-then", effect: target.write({ kind: "path", path: "value" }), discard: "unit",
-              value: { kind: "call", path: "Ok", args: [{ kind: "tuple-literal", elements: [] }] } } } }] } });
+          errorType: rustErrorType(boundary), body: { statements: [{ kind: "tail", expr: rustValueBlock(target.bindings, { kind: "evaluate-then", effect: target.write({ kind: "path", path: "value" }), discard: "unit",
+              value: { kind: "call", path: "Ok", args: [{ kind: "tuple-literal", elements: [] }] } }) }] } });
       }
     }
     items.push({ kind: "impl", generics, target,

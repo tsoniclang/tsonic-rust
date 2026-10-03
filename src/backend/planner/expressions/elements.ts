@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planNativeRustArrayAccess } from "./native-arrays.js";
 import { rustNativeArrayStorageKey } from "../../../target-model/operations/native-memory.js";
@@ -203,9 +204,5 @@ function planIndexedProjection(
   }
   if (context.syntheticNames === undefined) return undefined;
   const name = allocateRustSyntheticName(context.syntheticNames, "indexed_receiver");
-  return read({
-    kind: "block",
-    bindings: [{ name, value: selected }],
-    value: { kind: "evaluate-then", effect, discard: "value", value: { kind: "path", path: name } },
-  });
+  return read(rustValueBlock([{ name, value: selected }], { kind: "evaluate-then", effect, discard: "value", value: { kind: "path", path: name } }));
 }

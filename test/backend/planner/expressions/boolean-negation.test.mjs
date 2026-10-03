@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../../../dist/backend/target-ast/value-block.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
@@ -53,18 +54,14 @@ test("only explicit native Option presence nodes invert their predicate", () => 
 });
 
 test("native Option predicates retain receiver regions, dependencies and normalization", () => {
-  const receiver = {
-    kind: "block",
-    bindings: [],
-    value: {
+  const receiver = rustValueBlock([], {
       kind: "try",
       expr: {
         kind: "call",
         path: "values::next",
         args: [{ kind: "path", path: "seed" }],
       },
-    },
-  };
+    });
   const expression = { kind: "option-presence", receiver, present: true };
   assert.deepEqual(rustExpressionChildren(expression), [receiver]);
   assert.equal(rustExpressionContainsStatementBlock(expression), true);

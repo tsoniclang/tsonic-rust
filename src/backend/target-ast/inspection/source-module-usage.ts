@@ -270,11 +270,7 @@ function rustStatementReferencesModuleAlias(statement: RustStmt, alias: string):
     case "while-let-some":
       return rustExpressionReferencesModuleAlias(statement.expression, alias) ||
         rustBlockReferencesModuleAlias(statement.body, alias);
-    case "if-let-some":
-      return rustExpressionReferencesModuleAlias(statement.expression, alias) ||
-        rustBlockReferencesModuleAlias(statement.body, alias) ||
-        (statement.else !== undefined &&
-          rustBlockReferencesModuleAlias(statement.else, alias));
+
     case "for":
       return rustExpressionReferencesModuleAlias(statement.iterable, alias) ||
         rustBlockReferencesModuleAlias(statement.body, alias);
@@ -398,10 +394,7 @@ function rustExpressionReferencesModuleAlias(expression: RustExpr, alias: string
       return rustExpressionReferencesModuleAlias(expression.receiver, alias) ||
         rustExpressionReferencesModuleAlias(expression.index, alias);
     case "block":
-      return expression.bindings.some((binding) =>
-        rustOptionalTypeReferencesModuleAlias(binding.type, alias) ||
-        (binding.value !== undefined && rustExpressionReferencesModuleAlias(binding.value, alias))) ||
-        rustExpressionReferencesModuleAlias(expression.value, alias);
+      return rustBlockReferencesModuleAlias(expression.body, alias);
     case "evaluate-then":
       return rustExpressionReferencesModuleAlias(expression.effect, alias) ||
         rustExpressionReferencesModuleAlias(expression.value, alias);

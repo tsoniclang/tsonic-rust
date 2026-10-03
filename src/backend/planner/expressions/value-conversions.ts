@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import {
   rustOptionTargetType,
   rustCallableProtocol,
@@ -260,16 +261,12 @@ export function lowerRustValueConversion(
             ],
             args: [invocation],
           };
-      return {
-        kind: "block",
-        bindings: [{ name: callbackName, value: source }],
-        value: {
+      return rustValueBlock([{ name: callbackName, value: source }], {
           kind: "closure",
           move: true,
           params: [{ name: argumentsName, byRefCopy: false }],
           body,
-        },
-      };
+        });
     }
     case "union-map":
       return planRustUnionMapping(node ?? context.sourceFile, source, contract.source, contract.target,
@@ -560,15 +557,11 @@ function lowerStructuralObjectJsValueConversion(
     });
   }
   registerAliasFromPath(context, "js_abi::js_value_from_optional_pairs");
-  return {
-    kind: "block",
-    bindings: [{ name: sourceName, value: source }],
-    value: {
+  return rustValueBlock([{ name: sourceName, value: source }], {
       kind: "call",
       path: "js_abi::js_value_from_optional_pairs",
       args: [{ kind: "vec-literal", elements: entries }],
-    },
-  };
+    });
 }
 
 function allocateConversionName(

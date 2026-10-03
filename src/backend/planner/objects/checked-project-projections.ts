@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import type { RustProjectTypeDefinition } from "../../../analysis/project-types/type-policy.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustBlock, RustExpr, RustGenerics, RustImplFunction, RustTraitFunction, RustType } from "../../target-ast/nodes.js";
@@ -50,13 +51,11 @@ export function planCheckedProjectProjectionImplementation(
   for (const [index, carrier] of eligible.entries()) {
     const type = checkedProjectProjectionResultType(carrier, context);
     if (type === undefined) return undefined;
-    statements.push({ kind: "if-let-some", binding: "selected",
-      expression: { kind: "method-call", receiver: { kind: "path", path: "output" },
-        method: "downcast_mut", genericArguments: [{ kind: "type", type }], args: [] },
-      body: { statements: [{ kind: "assign", operator: "=",
+    statements.push({ kind: "expr", expr: { kind: "if-let", pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: "selected" }] }, expression: { kind: "method-call", receiver: { kind: "path", path: "output" },
+        method: "downcast_mut", genericArguments: [{ kind: "type", type }], args: [] }, whenTrue: { kind: "block", body: { statements: [{ kind: "assign", operator: "=",
         target: { kind: "dereference", pointer: { kind: "path", path: "selected" } },
         value: { kind: "call", path: "Some", args: [{ kind: "path", path: "self" }] } },
-      ...(index === eligible.length - 1 ? [] : [{ kind: "return" as const }])] } });
+      ...(index === eligible.length - 1 ? [] : [{ kind: "return" as const }])] } } } });
   }
   return { ...checkedProjectProjectionSignature(slot), visibility: "private",
     body: { statements } };
@@ -65,11 +64,11 @@ export function planCheckedProjectProjectionImplementation(
 export function planCheckedProjectProjectionCall(
   receiver: RustExpr, slot: string, resultType: RustType,
 ): RustExpr {
-  return { kind: "block", bindings: [
+  return rustValueBlock([
     { name: "selected", mutable: true, type: resultType, value: { kind: "none" } },
-  ], value: { kind: "evaluate-then", discard: "unit",
+  ], { kind: "evaluate-then", discard: "unit",
     effect: { kind: "method-call", receiver, method: slot,
       args: [{ kind: "reference", mutable: true, expr: { kind: "path", path: "selected" } }] },
     value: { kind: "path", path: "selected" },
-  } };
+  });
 }

@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import { rustSourceBindingFactKey } from "../../../analysis/facts/keys.js";
 import type { RustExpr } from "../../target-ast/nodes.js";
@@ -32,7 +33,7 @@ export function planRustSuspendedCallableConstruction(node: Node, context: RustP
   }
   const weakName = allocateRustSyntheticName(context.syntheticNames, "callable_owner");
   context.usedAliases?.add("rt");
-  return { kind: "block", bindings, value: {
+  return rustValueBlock(bindings, {
     kind: "associated-call", owner: ownerType, method: "from_shared", args: [{
       kind: "associated-call", owner: { kind: "named", path: "alloc::rc::Rc", genericArguments: [{ kind: "type", type: stateType }] },
       method: "new_cyclic", args: [{
@@ -42,5 +43,5 @@ export function planRustSuspendedCallableConstruction(node: Node, context: RustP
         } }, { name: "owner", value: { kind: "method-call", receiver: { kind: "path", path: weakName }, method: "clone", args: [] } }] },
       }],
     }],
-  } };
+  });
 }

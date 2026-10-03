@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import {
   planExpression,
   planRustOperatorCallExpression,
@@ -113,9 +114,7 @@ export function planRustSourceMethodPropertyAssignment(
   }
   return [{
     kind: "expr",
-    expr: {
-      kind: "block",
-      bindings: [{
+    expr: rustValueBlock([{
         name: receiverName,
         value: planRustMutableProjectReceiver(
           receiverNode,
@@ -126,9 +125,7 @@ export function planRustSourceMethodPropertyAssignment(
       }, {
         name: valueName,
         value,
-      }],
-      value: write,
-    },
+      }], write),
   }];
 }
 
@@ -165,14 +162,10 @@ export function planRustSourceStaticFieldAssignment(
   if (assignment.operator === "=") {
     return [{
       kind: "expr",
-      expr: {
-        kind: "block",
-        bindings: [
+      expr: rustValueBlock([
           ...storage.bindings,
           { name: valueName, value },
-        ],
-        value: storage.write(valuePath),
-      },
+        ], storage.write(valuePath)),
     }];
   }
   const currentName = allocateRustSyntheticName(context.syntheticNames, "static_field_current");
@@ -194,9 +187,7 @@ export function planRustSourceStaticFieldAssignment(
   }
   return [{
     kind: "expr",
-    expr: {
-      kind: "block",
-      bindings: [
+    expr: rustValueBlock([
         ...storage.bindings,
         {
           name: currentName,
@@ -204,9 +195,7 @@ export function planRustSourceStaticFieldAssignment(
         },
         { name: valueName, value },
         { name: nextName, value: nextValue },
-      ],
-      value: storage.write({ kind: "path", path: nextName }),
-    },
+      ], storage.write({ kind: "path", path: nextName })),
   }];
 }
 
@@ -252,9 +241,7 @@ export function planRustDirectOperatorCallAssignment(
     }
     return [{
       kind: "expr",
-      expr: {
-        kind: "block",
-        bindings: [
+      expr: rustValueBlock([
           { name: locationName, value: promoted.expression },
           {
             name: currentName,
@@ -262,9 +249,7 @@ export function planRustDirectOperatorCallAssignment(
           },
           { name: valueName, value },
           { name: nextName, value: next },
-        ],
-        value: promoted.write(locationPath, { kind: "path", path: nextName }),
-      },
+        ], promoted.write(locationPath, { kind: "path", path: nextName })),
     }];
   }
 
@@ -293,9 +278,7 @@ export function planRustDirectOperatorCallAssignment(
   }
   return [{
     kind: "expr",
-    expr: {
-      kind: "block",
-      bindings: [
+    expr: rustValueBlock([
         ...(locationName === undefined
           ? []
           : [{
@@ -305,14 +288,12 @@ export function planRustDirectOperatorCallAssignment(
         { name: currentName, value: current },
         { name: valueName, value },
         { name: nextName, value: next },
-      ],
-      value: {
+      ], {
         kind: "assignment",
         operator: "=",
         target: locationPath,
         value: { kind: "path", path: nextName },
-      },
-    },
+      }),
   }];
 }
 
@@ -473,7 +454,7 @@ export function planRustSourceAccessorAssignment(
     : finishRustSourceAccessorCall(target, write.declaration, "write", plannedWrite, context);
   return finalizedWrite === undefined
     ? undefined
-    : [{ kind: "expr", expr: { kind: "block", bindings, value: finalizedWrite } }];
+    : [{ kind: "expr", expr: rustValueBlock(bindings, finalizedWrite) }];
 }
 
 export function planRustCompoundAssignmentValue(
@@ -593,10 +574,6 @@ export function planRustSourceIndexAssignment(
   }
   return [{
     kind: "expr",
-    expr: {
-      kind: "block",
-      bindings,
-      value: write,
-    },
+    expr: rustValueBlock(bindings, write),
   }];
 }

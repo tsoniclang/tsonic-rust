@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../../target-ast/value-block.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { finishProviderOperationExpression, planProviderOperationExpression } from "../conversions.js";
 import { applyRustValueConversion } from "../value-conversions.js";
@@ -141,11 +142,7 @@ function planCallExpressionInner(node: Node, context: RustPlanContext, resultUse
       : planRustValueProjection(node, native, fact.resultProjection, context, "move");
     return planned === undefined || argumentPlan.bindings.length === 0
       ? planned
-      : {
-          kind: "block",
-          bindings: argumentPlan.bindings,
-          value: planned,
-        };
+      : rustValueBlock(argumentPlan.bindings, planned);
   }
   if (fact !== undefined && fact.kind === "provider-operation") {
     const superConstruction = fact.abi.operationKind === "constructor" &&
@@ -342,7 +339,7 @@ function planObjectShapeProjectionCall(
       ? "object_projection_value"
       : "_object_projection_value",
   );
-  const bindings: Extract<RustExpr, { readonly kind: "block" }>["bindings"][number][] = [{
+  const bindings: Parameters<typeof rustValueBlock>[0][number][] = [{
     name: receiverName,
     value: planRustSharedReceiver(fact.sourceValue, plannedSourceValue, context),
   }];
@@ -541,7 +538,7 @@ function planObjectShapeProjectionCall(
   }
   return value === undefined
     ? undefined
-    : { kind: "block", bindings, value };
+    : rustValueBlock(bindings, value);
 }
 
 function rustObjectProjectionArray(

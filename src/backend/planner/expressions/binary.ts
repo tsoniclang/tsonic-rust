@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
 import { planRustOptionalStorageOperation } from "./optional-storage.js";
 import { planRustUnionEquality } from "./union-equality.js";
@@ -263,16 +264,12 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
       context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []),
       "option_value",
     );
-    return {
-      kind: "block",
-      bindings: [{ name: optionName, value: option }],
-      value: {
+    return rustValueBlock([{ name: optionName, value: option }], {
         kind: "evaluate-then",
         effect: nullish,
         discard: isRustUnitCarrier(expressionCarrier(nullishNode, context)) ? "unit" : "value",
         value: check({ kind: "path", path: optionName }),
-      },
-    };
+      });
   }
   if (fact !== undefined && fact.kind === "option-equality") {
     const leftNode = BinaryExpression_Left(context.input.program.source.ast, node);

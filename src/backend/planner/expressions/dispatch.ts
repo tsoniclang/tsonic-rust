@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import { planRustRuntimeCategory } from "./runtime-category.js";
 import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
 import { planRustOptionalStorageOperation } from "./optional-storage.js";
@@ -328,14 +329,10 @@ export function planExpressionInner(
         context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []),
         "conditional_test",
       );
-      return {
-        kind: "block",
-        bindings: [{ name: conditionName, value: condition }],
-        value: {
+      return rustValueBlock([{ name: conditionName, value: condition }], {
           ...conditional,
           condition: { kind: "path", path: conditionName },
-        },
-      };
+        });
     }
     case KindTemplateExpression: {
       return planTemplateExpression(node, context);

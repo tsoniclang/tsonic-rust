@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -34,9 +35,9 @@ export function planRustProjectStructuralConversion(
   const receiver: RustExpr = { kind: "path", path: name };
   const root = rustStructuralViewIntoRoot(receiver, representation);
   if (root === undefined) return undefined;
-  return { kind: "block", bindings: [{ name, value: expression }], value: { kind: "struct-literal", path: type.path, fields: [
+  return rustValueBlock([{ name, value: expression }], { kind: "struct-literal", path: type.path, fields: [
     { name: "dispatch", value: root },
-  ] } };
+  ] });
 }
 
 export function planRustProjectStructuralImplementations(declaration: Node, context: RustPlanContext): readonly RustItem[] | undefined {

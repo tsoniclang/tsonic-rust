@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import type { RustExpr } from "../../target-ast/nodes.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustPlanContext } from "../program/plan-context.js";
@@ -24,11 +25,11 @@ export function planRustOptionBranch(
   const stored: RustExpr = { kind: "path", path: storedName };
   const extracted = planRustOptionalStorageOperation(carrier, "into_present", [stored], context);
   const presentResult: RustExpr = present.kind === "path" && present.path === presentName
-    ? extracted : { kind: "block", bindings: [{ name: presentName, value: extracted }], value: present };
-  return { kind: "block", bindings: [{ name: storedName, value: option }], value: {
+    ? extracted : rustValueBlock([{ name: presentName, value: extracted }], present);
+  return rustValueBlock([{ name: storedName, value: option }], {
     kind: "conditional",
     condition: planRustOptionalStorageOperation(carrier, "is_absent", [{ kind: "reference", expr: stored }], context),
     whenTrue: absent,
     whenFalse: presentResult,
-  } };
+  });
 }

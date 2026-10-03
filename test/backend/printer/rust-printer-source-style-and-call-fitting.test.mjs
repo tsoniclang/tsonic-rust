@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../../dist/backend/target-ast/value-block.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { emptyRustGenerics } from "../../../dist/backend/target-ast/nodes.js";
@@ -23,9 +24,7 @@ test("terminal parameter stores retain exact source order without weakening late
   }], "value"), false);
   assert.equal(hasUnobservedFinalPathWrite([{ kind: "let", name: "value", init: { kind: "bool-literal", value: false } },
     { kind: "expr", expr: assignment }], "value"), false);
-  assert.equal(hasUnobservedFinalPathWrite([{ kind: "expr", expr: { kind: "block",
-    bindings: [{ name: "value", value: { kind: "bool-literal", value: false } }], value: assignment,
-  } }], "value"), false);
+  assert.equal(hasUnobservedFinalPathWrite([{ kind: "expr", expr: rustValueBlock([{ name: "value", value: { kind: "bool-literal", value: false } }], assignment) }], "value"), false);
   assert.equal(hasUnobservedFinalPathWrite([{ kind: "expr", expr: { kind: "conditional",
     condition: { kind: "bool-literal", value: true }, whenTrue: assignment, whenFalse: path,
   } }], "value"), true);
@@ -44,7 +43,7 @@ test("native unit block and conditional tails print as implicit unit", () => {
   const text = printFinalRustSourceFile({ headerComment, items: [{ kind: "function", name: "run", visibility: "crate",
     generics: emptyRustGenerics, params: [{ name: "ready", type: { kind: "primitive", name: "bool" } }], body: { statements: [{
       kind: "expr", expr: { kind: "conditional", condition: { kind: "path", path: "ready" },
-        whenTrue: { kind: "block", bindings: [{ name: "_", value: { kind: "call", path: "side_effect", args: [] } }], value: unit },
+        whenTrue: rustValueBlock([{ name: "_", value: { kind: "call", path: "side_effect", args: [] } }], unit),
         whenFalse: unit },
     }] } }] });
   assert.match(text, /let _ = side_effect\(\);/u);
@@ -62,8 +61,7 @@ test("effect-only optional matches use native if-let without changing the operan
       ] },
     }] } };
     const model = finalizeRustSourceStyle({ headerComment, items: [source] });
-    assert.deepEqual(model.items[0].body.statements[0], { kind: "if-let-some", binding: "value",
-      expression: operand, body: { statements: [{ kind: "expr", expr: effect }] } });
+    assert.deepEqual(model.items[0].body.statements[0], { kind, expr: { kind: "if-let", pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: "value" }] }, expression: operand, whenTrue: effect } });
     assert.deepEqual(finalizeRustSourceStyle(model), model);
   }
 });
@@ -284,11 +282,7 @@ test("source style keeps intentional control-flow policy statement-local", () =>
         statements: [
           {
             kind: "if",
-            condition: {
-              kind: "block",
-              bindings: [{ name: "condition", value: { kind: "bool-literal", value: true } }],
-              value: { kind: "path", path: "condition" },
-            },
+            condition: rustValueBlock([{ name: "condition", value: { kind: "bool-literal", value: true } }], { kind: "path", path: "condition" }),
             then: {
               statements: [{
                 kind: "if",

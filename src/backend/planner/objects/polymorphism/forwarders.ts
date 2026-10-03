@@ -391,15 +391,11 @@ function applyRootMethodOverride(
     ...callable,
     body: {
       ...callable.body,
-      statements: [{
-        kind: "if-let-some",
-        binding: overrideName,
-        expression: readRustProjectMethodOverride(
+      statements: [{ kind: "expr", expr: { kind: "if-let", pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: overrideName }] }, expression: readRustProjectMethodOverride(
           { kind: "path", path: "self" },
           overrideStoragePath,
           representation,
-        ),
-        body: {
+        ), whenTrue: { kind: "block", body: {
           statements: [{
             kind: "return",
             expr: {
@@ -415,8 +411,7 @@ function applyRootMethodOverride(
               }],
             },
           }],
-        },
-      }, ...callable.body.statements],
+        } } } }, ...callable.body.statements],
     },
   };
 }

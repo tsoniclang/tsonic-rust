@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustSelectedProjectDowncast } from "../../../analysis/facts/value-projections.js";
@@ -124,11 +125,7 @@ export function planRustProjectProjection(
         owner: targetType, method: "try_from",
         args: [{ kind: "method-call", receiver: valuePath, method: "clone", args: [] }],
       }, method: "unwrap", args: [] };
-  return {
-    kind: "block",
-    bindings: [{ name: valueName, value: sourceReference }],
-    value: result,
-  };
+  return rustValueBlock([{ name: valueName, value: sourceReference }], result);
 }
 
 function planRustNonConsumingProjectValue(

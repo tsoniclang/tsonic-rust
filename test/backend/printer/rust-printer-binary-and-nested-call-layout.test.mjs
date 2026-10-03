@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../../dist/backend/target-ast/value-block.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { emptyRustGenerics } from "../../../dist/backend/target-ast/nodes.js";
@@ -282,14 +283,10 @@ test("statement-valued expressions are parenthesized as binary operands", () => 
           expr: {
             kind: "binary",
             operator: "+",
-            left: {
-              kind: "block",
-              bindings: [{
+            left: rustValueBlock([{
                 name: "selected",
                 value: { kind: "int-literal", text: "1" },
-              }],
-              value: { kind: "path", path: "selected" },
-            },
+              }], { kind: "path", path: "selected" }),
             right: { kind: "int-literal", text: "1" },
           },
         }],

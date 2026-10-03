@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../../target-ast/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import { isRustCopyCarrier, rustCallableProtocol, rustCallableTargetType,
   rustProgramErrorTargetType,
@@ -94,16 +95,16 @@ export function createStructuralLiteralImplementation(
         !store(property.getterTargetName, storageIndex, "getter", rustCallableTargetType([shape.carrier], valueCarrier))) return undefined;
       const call: RustExpr = { kind: "method-call", receiver: { kind: "path", path: "callable" }, method: "call",
         args: [{ kind: "tuple-literal", elements: [receiver] }] };
-      getter = { kind: "block", bindings: [{ name: "callable", value: read(property.getterTargetName) }], value: field.presence === "required" ? call : {
+      getter = rustValueBlock([{ name: "callable", value: read(property.getterTargetName) }], field.presence === "required" ? call : {
         kind: "method-call", receiver: call, method: "map", args: [{ kind: "path", path: "Some" }],
-      } };
+      });
       if (property.setterTargetName !== undefined) {
         if (field.presence !== "required" || !store(property.setterTargetName, storageIndex, "setter",
           rustCallableTargetType([shape.carrier, valueCarrier], rustUnitTargetType()))) return undefined;
-        setter = { kind: "block", bindings: [{ name: "callable", value: read(property.setterTargetName) }], value: {
+        setter = rustValueBlock([{ name: "callable", value: read(property.setterTargetName) }], {
           kind: "method-call", receiver: { kind: "path", path: "callable" }, method: "call",
           args: [{ kind: "tuple-literal", elements: [receiver, { kind: "path", path: "value" }] }],
-        } };
+        });
       }
     } else {
       if (!store(field.targetName, storageIndex, "value", field.carrier)) return undefined;

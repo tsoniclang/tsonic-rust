@@ -12,7 +12,7 @@ import type {
 import { finalizeRustBlockLiveness } from "../inspection/source-liveness.js";
 import { firstAccessesInStatements, hasUnobservedFinalPathWrite } from "../inspection/source-dataflow.js";
 import { rustLintAttributes } from "./lint-policy.js";
-import { rustBlockReferencesPath, rustExpressionReferencesPath } from "../inspection/source-usage.js";
+import { rustBlockReferencesPath, rustExpressionReferencesPath, rustExpressionChildren, rustStatementExpressions } from "../inspection/source-usage.js";
 import { collapseRustForwardingClosure } from "./forwarding-closures.js";
 import { nameRustSignatureTypes } from "./signature-aliases.js";
 import type { RustNamedSignatureScope } from "./signature-aliases.js";
@@ -21,6 +21,7 @@ import { rustItemsReferenceModuleAlias } from "../inspection/source-module-usage
 import { rustTypeEquals } from "../inspection/type-equality.js";
 import { mergeRustAdjacentConditionalBranches, simplifyRustBooleanConditional } from "./conditional-branches.js";
 import { normalizeRustOptionalUnitMatch } from "./option-conditionals.js";
+import { mapRustExpressionChildren } from "../expression-children.js";
 import { appendRustNamingAllowance, finalizeRustFunctionNames, finalizeRustItemNames,
   rustExpressionDeclaresNonSnakeName, rustStatementDeclaresNonSnakeName } from "./authored-names.js";
 
@@ -281,15 +282,7 @@ function finalizeRustStatementStyle(statement: RustStmt): RustStmt {
         body,
       };
     }
-    case "if-let-some":
-      return {
-        ...statement,
-        expression: finalizeRustExpressionStyle(statement.expression),
-        body: finalizeRustBlockStyle(statement.body),
-        ...(statement.else === undefined
-          ? {}
-          : { else: finalizeRustBlockStyle(statement.else) }),
-      };
+
     case "break":
     case "continue":
       return statement;
@@ -383,9 +376,7 @@ function rustStatementMayContinueLoop(statement: RustStmt, label: string | undef
     case "if":
       return rustBlockMayContinueLoop(statement.then, label) ||
         (statement.else !== undefined && rustBlockMayContinueLoop(statement.else, label));
-    case "if-let-some":
-      return rustBlockMayContinueLoop(statement.body, label) ||
-        (statement.else !== undefined && rustBlockMayContinueLoop(statement.else, label));
+
     case "scope":
     case "unsafe-scope":
       return rustBlockMayContinueLoop(statement.body, label);
@@ -412,64 +403,27 @@ function rustStatementMayContinueLoop(statement: RustStmt, label: string | undef
     case "completion-exit":
     case "index-assign":
     case "throw":
-      return false;
+      return rustStatementExpressions(statement).some(expression => rustExpressionMayContinueLoop(expression, label));
   }
+}
+
+function rustExpressionMayContinueLoop(expression: RustExpr, label: string | undefined): boolean {
+  if (expression.kind === "closure" || expression.kind === "closure-block" || expression.kind === "async-block") return false;
+  if (expression.kind === "block") return rustBlockMayContinueLoop(expression.body, label);
+  return rustExpressionChildren(expression).some(child => rustExpressionMayContinueLoop(child, label));
 }
 
 function finalizeRustExpressionStyle(expression: RustExpr): RustExpr {
   requiresNamingAllowance ||= rustExpressionDeclaresNonSnakeName(expression);
-  let result: RustExpr;
-  switch (expression.kind) {
-    case "int-literal":
-    case "float-literal":
-    case "bool-literal":
-    case "none":
-    case "char-literal":
-    case "string-literal":
-    case "str-literal":
-    case "path":
-    case "associated-value":
-    case "unreachable":
-      return expression;
-    case "bottom":
-      result = { ...expression, expression: finalizeRustExpressionStyle(expression.expression) };
-      break;
-    case "owned-string-from-borrowed-str":
-      result = { ...expression, expression: finalizeRustExpressionStyle(expression.expression) };
-      break;
-    case "unary":
-      result = { ...expression, operand: finalizeRustExpressionStyle(expression.operand) };
-      break;
-    case "dereference":
-      result = { ...expression, pointer: finalizeRustExpressionStyle(expression.pointer) };
-      break;
-    case "numeric-cast":
-      result = { ...expression, expression: finalizeRustExpressionStyle(expression.expression) };
-      break;
-    case "binary": {
-      const left = finalizeRustExpressionStyle(expression.left);
-      const right = finalizeRustExpressionStyle(expression.right);
-      if (left.kind === "bool-literal" && (expression.operator === "&&" || expression.operator === "||")) {
-        return (expression.operator === "&&" ? left.value : !left.value) ? right : left;
+  const result = mapRustExpressionChildren(expression, finalizeRustExpressionStyle, finalizeRustFunctionBodyStyle);
+  switch (result.kind) {
+    case "binary":
+      if (result.left.kind === "bool-literal" && (result.operator === "&&" || result.operator === "||")) {
+        return (result.operator === "&&" ? result.left.value : !result.left.value) ? result.right : result.left;
       }
-      result = {
-        ...expression,
-        left,
-        right,
-      };
-      break;
-    }
-    case "range":
-      result = {
-        ...expression,
-        start: finalizeRustExpressionStyle(expression.start),
-        end: finalizeRustExpressionStyle(expression.end),
-      };
-      break;
+      return result;
     case "conditional": {
-      const whenTrue = finalizeRustExpressionStyle(expression.whenTrue);
-      const whenFalse = finalizeRustExpressionStyle(expression.whenFalse);
-      const condition = finalizeRustExpressionStyle(expression.condition);
+      const { condition, whenTrue, whenFalse } = result;
       if (whenTrue.kind === "none" && whenFalse.kind === "none" ||
         whenTrue.kind === "associated-value" && whenFalse.kind === "associated-value" &&
         whenTrue.name === whenFalse.name && rustTypeEquals(whenTrue.owner, whenFalse.owner) &&
@@ -478,160 +432,20 @@ function finalizeRustExpressionStyle(expression: RustExpr): RustExpr {
         whenFalse.kind === "tuple-literal" && whenFalse.elements.length === 0) {
         return { kind: "evaluate-then", effect: condition, discard: "value", value: whenTrue };
       }
-      result = simplifyRustBooleanConditional(condition, whenTrue, whenFalse) ??
-        mergeRustAdjacentConditionalBranches(condition, whenTrue, whenFalse) ?? {
-        ...expression,
-        condition,
-        whenTrue,
-        whenFalse,
-      };
-      break;
+      return simplifyRustBooleanConditional(condition, whenTrue, whenFalse) ??
+        mergeRustAdjacentConditionalBranches(condition, whenTrue, whenFalse) ?? result;
     }
-    case "if-let":
-      result = { ...expression, expression: finalizeRustExpressionStyle(expression.expression),
-        whenTrue: finalizeRustExpressionStyle(expression.whenTrue),
-        ...(expression.whenFalse === undefined ? {} : { whenFalse: finalizeRustExpressionStyle(expression.whenFalse) }) };
-      break;
-    case "match":
-      result = normalizeRustOptionalUnitMatch({
-        ...expression,
-        expression: finalizeRustExpressionStyle(expression.expression),
-        arms: expression.arms.map((arm) => ({
-          ...arm,
-          expression: finalizeRustExpressionStyle(arm.expression),
-        })),
-      });
-      break;
-    case "matches":
-      result = { ...expression, expression: finalizeRustExpressionStyle(expression.expression) };
-      break;
-    case "assignment":
-      result = {
-        ...expression,
-        target: finalizeRustExpressionStyle(expression.target),
-        value: finalizeRustExpressionStyle(expression.value),
-      };
-      break;
-    case "call":
-      result = { ...expression, args: expression.args.map(finalizeRustExpressionStyle) };
-      break;
-    case "invoke":
-      result = {
-        ...expression,
-        callee: finalizeRustExpressionStyle(expression.callee),
-        args: expression.args.map(finalizeRustExpressionStyle),
-      };
-      break;
-    case "associated-call":
-      result = { ...expression, args: expression.args.map(finalizeRustExpressionStyle) };
-      break;
-    case "method-call":
-      result = {
-        ...expression,
-        receiver: finalizeRustExpressionStyle(expression.receiver),
-        args: expression.args.map(finalizeRustExpressionStyle),
-      };
-      break;
-    case "option-presence":
-    case "field":
-      result = { ...expression, receiver: finalizeRustExpressionStyle(expression.receiver) };
-      break;
-    case "index":
-      result = {
-        ...expression,
-        receiver: finalizeRustExpressionStyle(expression.receiver),
-        index: finalizeRustExpressionStyle(expression.index),
-      };
-      break;
-    case "block":
-      result = {
-        ...expression,
-        bindings: expression.bindings.map((binding) => ({
-          ...binding,
-          ...(binding.type === undefined || nameType === undefined ? {} : { type: nameType(binding.type, binding.name) }),
-          ...(binding.value === undefined ? {} : { value: finalizeRustExpressionStyle(binding.value) }),
-        })),
-        value: finalizeRustExpressionStyle(expression.value),
-      };
-      break;
-    case "unsafe":
-      result = { ...expression, expression: finalizeRustExpressionStyle(expression.expression) };
-      break;
-    case "evaluate-then":
-      if (expression.effect.kind === "tuple-literal" && expression.effect.elements.length === 0) {
-        return finalizeRustExpressionStyle(expression.value);
-      }
-      result = {
-        ...expression,
-        effect: finalizeRustExpressionStyle(expression.effect),
-        value: finalizeRustExpressionStyle(expression.value),
-      };
-      break;
-    case "string-concat":
-      result = { ...expression, parts: expression.parts.map(finalizeRustExpressionStyle) };
-      break;
-    case "format-write":
-      result = {
-        ...expression,
-        writer: finalizeRustExpressionStyle(expression.writer),
-        args: expression.args.map(finalizeRustExpressionStyle),
-      };
-      break;
-    case "reference":
-      result = { ...expression, expr: finalizeRustExpressionStyle(expression.expr) };
-      break;
-    case "macro-invocation":
-      result = { ...expression, args: expression.args.map(finalizeRustExpressionStyle) };
-      break;
-    case "vec-literal":
-    case "slice-literal":
-      result = { ...expression, elements: expression.elements.map(finalizeRustExpressionStyle) };
-      break;
-    case "array-repeat":
-      result = { ...expression, element: finalizeRustExpressionStyle(expression.element) };
-      break;
-    case "closure":
-      result = collapseRustForwardingClosure({ ...expression,
-        params: expression.params.map(parameter => closureParameter(parameter,
-          rustExpressionReferencesPath(expression.body, parameter.name))),
-        body: finalizeRustExpressionStyle(expression.body) });
-      break;
-    case "closure-block":
-      result = { ...expression,
-        params: expression.params.map(parameter => closureParameter(parameter,
-          rustBlockReferencesPath(expression.body, parameter.name))),
-        body: finalizeRustFunctionBodyStyle(expression.body) };
-      break;
-    case "async-block":
-      result = { ...expression, body: finalizeRustFunctionBodyStyle(expression.body) };
-      break;
-    case "await":
-    case "option-try":
-    case "try":
-      result = { ...expression, expr: finalizeRustExpressionStyle(expression.expr) };
-      break;
-    case "return-expression":
-      result = expression.expr === undefined
-        ? expression
-        : { ...expression, expr: finalizeRustExpressionStyle(expression.expr) };
-      break;
-    case "struct-literal":
-      result = {
-        ...expression,
-        fields: expression.fields.map((field) => ({
-          ...field,
-          value: finalizeRustExpressionStyle(field.value),
-        })),
-        ...(expression.base === undefined
-          ? {}
-          : { base: finalizeRustExpressionStyle(expression.base) }),
-      };
-      break;
-    case "tuple-literal":
-      result = { ...expression, elements: expression.elements.map(finalizeRustExpressionStyle) };
-      break;
+    case "match": return normalizeRustOptionalUnitMatch(result);
+    case "evaluate-then": return result.effect.kind === "tuple-literal" && result.effect.elements.length === 0
+      ? result.value : result;
+    case "closure": return collapseRustForwardingClosure({ ...result,
+      params: result.params.map(parameter => closureParameter(parameter,
+        rustExpressionReferencesPath(result.body, parameter.name))) });
+    case "closure-block": return { ...result,
+      params: result.params.map(parameter => closureParameter(parameter,
+        rustBlockReferencesPath(result.body, parameter.name))) };
+    default: return result;
   }
-  return result;
 }
 
 }

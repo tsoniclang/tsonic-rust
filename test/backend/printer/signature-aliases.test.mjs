@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../../dist/backend/target-ast/value-block.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { nameRustSignatureTypes as nameSignatureScope } from "../../../dist/backend/target-ast/normalization/signature-aliases.js";
@@ -211,8 +212,8 @@ test("body type names reuse signature aliases through nested blocks without chan
   const source = { ...makeFunction("read", "public"), params: [], returnType: undefined,
     body: { statements: [{ kind: "scope", body: { statements: [{
       kind: "let", name: "values", mutable: false, type: nested,
-      init: { kind: "block", bindings: [{ name: "input", type: nested,
-        value: { kind: "path", path: "argument" } }], value: { kind: "path", path: "input" } },
+      init: rustValueBlock([{ name: "input", type: nested,
+        value: { kind: "path", path: "argument" } }], { kind: "path", path: "input" }),
     }] } }] } };
   const model = { items: [source] };
   const result = finalizeRustSourceStyle(model);
@@ -222,9 +223,9 @@ test("body type names reuse signature aliases through nested blocks without chan
   assert.equal(aliases[0].visibility, "private");
   const statement = result.items.find(item => item.kind === "function").body.statements[0].body.statements[0];
   assert.equal(statement.type.path, aliases[0].name);
-  assert.deepEqual(statement.init.bindings[0].type, statement.type);
-  assert.deepEqual(statement.init.bindings[0].value, { kind: "path", path: "argument" });
-  assert.deepEqual(statement.init.value, { kind: "path", path: "input" });
+  assert.deepEqual(statement.init.body.statements[0].type, statement.type);
+  assert.deepEqual(statement.init.body.statements[0].init, { kind: "path", path: "argument" });
+  assert.deepEqual(statement.init.body.statements.at(-1).expr, { kind: "path", path: "input" });
   assert.deepEqual(finalizeRustSourceStyle(result), result);
 });
 

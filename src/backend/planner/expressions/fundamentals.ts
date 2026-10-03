@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import {
   KindBinaryExpression,
   sourceIntegerLiteralValue,
@@ -124,7 +125,7 @@ export function finishRuntimeCallableExpression(
 ): RustExpr {
   return captureBindings.length === 0
     ? callable
-    : { kind: "block", bindings: captureBindings, value: callable };
+    : rustValueBlock(captureBindings, callable);
 }
 
 export function planTemplateExpression(node: Node, context: RustPlanContext): RustExpr | undefined {

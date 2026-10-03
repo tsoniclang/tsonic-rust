@@ -45,10 +45,6 @@ export function rustStatementReferencesPath(statement: RustStmt, path: string): 
     case "while-let-some":
       return rustExpressionReferencesPath(statement.expression, path) ||
         (statement.binding !== path && rustBlockReferencesPath(statement.body, path));
-    case "if-let-some":
-      return rustExpressionReferencesPath(statement.expression, path) ||
-        (statement.binding !== path && rustBlockReferencesPath(statement.body, path)) ||
-        (statement.else !== undefined && rustBlockReferencesPath(statement.else, path));
     case "for":
       return rustExpressionReferencesPath(statement.iterable, path) ||
         (statement.binding !== path && rustBlockReferencesPath(statement.body, path));
@@ -101,17 +97,7 @@ export function rustExpressionReferencesPath(expression: RustExpr, path: string)
   if (expression.kind === "if-let") return rustExpressionReferencesPath(expression.expression, path) ||
     !rustPatternBindsPath(expression.pattern, path) && rustExpressionReferencesPath(expression.whenTrue, path) ||
     expression.whenFalse !== undefined && rustExpressionReferencesPath(expression.whenFalse, path);
-  if (expression.kind === "block") {
-    for (const binding of expression.bindings) {
-      if (binding.value !== undefined && rustExpressionReferencesPath(binding.value, path)) {
-        return true;
-      }
-      if (binding.name === path) {
-        return false;
-      }
-    }
-    return rustExpressionReferencesPath(expression.value, path);
-  }
+  if (expression.kind === "block") return rustBlockReferencesPath(expression.body, path);
   return rustExpressionChildren(expression).some((child) =>
     rustExpressionReferencesPath(child, path));
 }
@@ -169,7 +155,7 @@ export function rustExpressionChildren(expression: RustExpr): readonly RustExpr[
     case "index":
       return [expression.receiver, expression.index];
     case "block":
-      return [...expression.bindings.flatMap((binding) => binding.value === undefined ? [] : [binding.value]), expression.value];
+      return expression.body.statements.flatMap(rustStatementExpressions);
     case "evaluate-then":
       return [expression.effect, expression.value];
     case "string-concat":
@@ -210,5 +196,35 @@ export function rustPatternBindsPath(pattern: RustPattern, path: string): boolea
     case "or": return pattern.alternatives.some(alternative => rustPatternBindsPath(alternative, path));
     case "path":
     case "wildcard": return false;
+  }
+}
+
+export function rustStatementExpressions(statement: RustStmt): readonly RustExpr[] {
+  const block = (body: RustBlock): readonly RustExpr[] => body.statements.flatMap(rustStatementExpressions);
+  switch (statement.kind) {
+    case "item":
+    case "break":
+    case "continue": return [];
+    case "let": return statement.init === undefined ? [] : [statement.init];
+    case "expr":
+    case "tail": return [statement.expr];
+    case "return": return [{ kind: "return-expression", ...(statement.expr === undefined ? {} : { expr: statement.expr }) }];
+    case "assign": return [statement.target, statement.value];
+    case "if": return [statement.condition, ...block(statement.then), ...(statement.else === undefined ? [] : block(statement.else))];
+    case "loop":
+    case "scope":
+    case "unsafe-scope": return block(statement.body);
+    case "while": return [statement.condition, ...block(statement.body)];
+    case "while-let-some": return [statement.expression, ...block(statement.body)];
+    case "for": return [statement.iterable, ...block(statement.body)];
+    case "completion-exit": return statement.expr === undefined ? [] : [statement.expr];
+    case "resource-scope": return [...block(statement.body), ...block(statement.cleanup),
+      ...statement.dispatchTargets.flatMap(target => target.continuePrelude?.flatMap(rustStatementExpressions) ?? [])];
+    case "try-scope": return [...block(statement.body),
+      ...(statement.catchClause === undefined ? [] : block(statement.catchClause.body)),
+      ...(statement.finallyClause === undefined ? [] : block(statement.finallyClause.body)),
+      ...statement.dispatchTargets.flatMap(target => target.continuePrelude?.flatMap(rustStatementExpressions) ?? [])];
+    case "index-assign": return [statement.receiver, statement.index, statement.value];
+    case "throw": return [statement.error];
   }
 }

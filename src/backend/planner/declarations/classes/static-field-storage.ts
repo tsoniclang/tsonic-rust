@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../../target-ast/value-block.js";
 import type { RustExpr } from "../../../target-ast/nodes.js";
 import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
@@ -38,7 +39,7 @@ export function readRustSourceStaticField(
     if (local.bindings.length === 0) return read;
     if (context.syntheticNames === undefined) throw new Error("A static-field read has no native local-name allocator.");
     const name = allocateRustSyntheticName(context.syntheticNames, "static_value");
-    return { kind: "block", bindings: [...local.bindings, { name, value: read }], value: { kind: "path", path: name } };
+    return rustValueBlock([...local.bindings, { name, value: read }], { kind: "path", path: name });
   }
   const cell = rustSourceStaticFieldCell(fact, context);
   if (cell === undefined) {

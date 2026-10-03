@@ -129,11 +129,11 @@ test("bottom arguments retain receiver and earlier temporary owners without exec
   const later = { kind: "call", path: "later", args: [] };
   const result = propagateRustBottomOperand({ kind: "method-call", receiver, method: "apply", args: [first, stop, later] }, names);
   assert.equal(result.kind, "bottom");
-  assert.deepEqual(result.expression.bindings.map(binding => binding.value), [receiver, first]);
-  assert.deepEqual(result.expression.value, stop.expression);
+  assert.deepEqual(result.expression.body.statements.slice(0, -1).map(binding => binding.init), [receiver, first]);
+  assert.deepEqual(result.expression.body.statements.at(-1).expr, stop.expression);
   const nested = propagateRustBottomOperand({ kind: "call", path: "apply", args: [{ kind: "tuple-literal", elements: [first, stop, later] }] }, names);
   assert.equal(nested.kind, "bottom");
-  assert.deepEqual(nested.expression.bindings.map(binding => binding.value), [first]);
+  assert.deepEqual(nested.expression.body.statements.slice(0, -1).map(binding => binding.init), [first]);
   const conditional = { kind: "conditional", condition: { kind: "bool-literal", value: false }, whenTrue: stop, whenFalse: zero };
   assert.equal(propagateRustBottomOperand(conditional, names), conditional);
 });

@@ -14,6 +14,7 @@ import type {
   RustExpr,
   RustImplFunction,
   RustItem,
+  RustStmt,
   RustType,
 } from "../../../target-ast/nodes.js";
 import type { RustObjectLiteralAccessorImplementationPlan, RustObjectLiteralImplementationPlan, RustObjectLiteralMethodDispatchPlan } from "./model.js";
@@ -237,17 +238,13 @@ export function planContractImplementation(
         ]),
         "method_override",
       );
-      const overrideStatements = method.override === undefined
+      const overrideStatements: readonly RustStmt[] = method.override === undefined
         ? []
-        : [{
-            kind: "if-let-some" as const,
-            binding: overrideName,
-            expression: readRustProjectMethodOverride(
+        : [{ kind: "expr", expr: { kind: "if-let", pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: overrideName }] }, expression: readRustProjectMethodOverride(
               { kind: "path", path: "self" },
               method.override.fieldName,
               representation,
-            ),
-            body: {
+            ), whenTrue: { kind: "block", body: {
               statements: [{
                 kind: "return" as const,
                 expr: {
@@ -263,8 +260,7 @@ export function planContractImplementation(
                   }],
                 },
               }],
-            },
-          }];
+            } } } }];
       const methodErrorBoundary = method.errorType === undefined
         ? undefined
         : rustErrorBoundaryForProjectMember(method.contractMethod, context);

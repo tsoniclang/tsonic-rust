@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustAssignmentOperator } from "../../../target-model/syntax/tokens.js";
 import { isRustCopyCarrier } from "../../../target-model/types/index.js";
@@ -680,16 +681,12 @@ export function writeRustProjectDispatchedField(
     method: writeSlot,
     args: [selectedValue],
   };
-  return {
-    kind: "block",
-    bindings: [{ name: receiverBinding, value: receiver }],
-    value: roles.write.fallible
+  return rustValueBlock([{ name: receiverBinding, value: receiver }], roles.write.fallible
       ? {
           kind: "try",
           expr: writeCall,
           resultErrorType: roles.write.resultErrorType,
           operandErrorType: roles.write.operandErrorType,
         }
-      : writeCall,
-  };
+      : writeCall);
 }

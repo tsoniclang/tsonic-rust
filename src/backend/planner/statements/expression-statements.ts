@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import {
   BinaryExpression_Left,
   BinaryExpression_OperatorToken,
@@ -266,12 +267,8 @@ export function planRustAssignmentWrite(
     const next = planRustCompoundAssignmentValue(fact, { kind: "path", path: currentName },
       { kind: "path", path: valueName }, left, context);
     const written = next === undefined ? undefined : location.write(next);
-    return written === undefined ? undefined : [{ kind: "expr", expr: {
-      kind: "block",
-      bindings: [...location.bindings, ...(operator === "=" ? [] : [{ name: currentName, value: location.read }]),
-        { name: valueName, value }],
-      value: written,
-    } }];
+    return written === undefined ? undefined : [{ kind: "expr", expr: rustValueBlock([...location.bindings, ...(operator === "=" ? [] : [{ name: currentName, value: location.read }]),
+        { name: valueName, value }], written) }];
   }
   if (sourceField?.kind === "source-accessor") {
     return planRustSourceAccessorAssignment(
@@ -355,18 +352,14 @@ export function planRustAssignmentWrite(
           );
           return next === undefined || current === undefined || written === undefined
             ? undefined
-            : {
-                kind: "block",
-                bindings: [
+            : rustValueBlock([
                   {
                     name: currentName,
                     value: current,
                   },
                   { name: valueName, value },
                   { name: nextName, value: next },
-                ],
-                value: written,
-              };
+                ], written);
         }
         if (operator !== "=") {
           const currentName = allocateRustSyntheticName(
@@ -400,15 +393,11 @@ export function planRustAssignmentWrite(
           if (written === undefined) {
             return undefined;
           }
-          return {
-            kind: "block",
-            bindings: [{
+          return rustValueBlock([{
               name: currentName,
               mutable: !(operator === "+=" && isRustStringCarrier(fact.resultCarrier)),
               value: current,
-            }, { name: nextName, value: next }],
-            value: written,
-          };
+            }, { name: nextName, value: next }], written);
         }
         const written = writeRustUnionField(
           field,
@@ -418,24 +407,16 @@ export function planRustAssignmentWrite(
           { kind: "path", path: valueName },
           context,
         );
-        return written === undefined ? undefined : {
-          kind: "block",
-          bindings: [{ name: valueName, value }],
-          value: written,
-        };
+        return written === undefined ? undefined : rustValueBlock([{ name: valueName, value }], written);
       },
     );
     return projected === undefined
       ? undefined
       : [{
           kind: "expr",
-          expr: {
-            kind: "block",
-            bindings: [
+          expr: rustValueBlock([
               { name: receiverName, value: receiver },
-            ],
-            value: projected,
-          },
+            ], projected),
         }];
   }
   if (storageOverride?.valueForm !== "storage" &&
@@ -560,16 +541,12 @@ export function planRustAssignmentWrite(
       }
       return [{
         kind: "expr",
-        expr: {
-          kind: "block",
-          bindings: [
+        expr: rustValueBlock([
             { name: receiverName, value: receiver },
             { name: currentName, value: current },
             { name: valueName, value },
             { name: nextName, value: next },
-          ],
-          value: written,
-        },
+          ], written),
       }];
     }
     const value = planExpression(valueNode, context);
@@ -626,14 +603,10 @@ export function planRustAssignmentWrite(
       }
       return [{
         kind: "expr",
-        expr: {
-          kind: "block",
-          bindings: [
+        expr: rustValueBlock([
             { name: receiverName, value: receiver },
             { name: currentName, value: current },
-          ],
-          value: written,
-        },
+          ], written),
       }];
     }
     if (operator !== "=") {
@@ -651,13 +624,13 @@ export function planRustAssignmentWrite(
             allocateRustSyntheticName(context.syntheticNames, "dispatch_receiver"), sourceField.dispatch.read,
             sourceField.dispatch.write, "=", next, { read: dispatchRoles!.read, write: dispatchRoles!.write! });
       if (current === undefined || written === undefined) return undefined;
-      return [{ kind: "expr", expr: { kind: "block", bindings: [
+      return [{ kind: "expr", expr: rustValueBlock([
         { name: receiverName, value: receiver }, { name: currentName, mutable: true, value: current },
         { name: valueName, value },
-      ], value: { kind: "evaluate-then", discard: "unit",
+      ], { kind: "evaluate-then", discard: "unit",
         effect: { kind: "assignment", operator, target: next, value: { kind: "path", path: valueName } },
         value: written,
-      } } }];
+      }) }];
     }
     const written = sourceField.dispatch === undefined
       ? writeRustStoredObjectField(
@@ -689,13 +662,9 @@ export function planRustAssignmentWrite(
       rustProjectObjectRepresentation(sourceField.receiverCarrier, context)?.kind === "value";
     return [{
       kind: "expr",
-      expr: {
-        kind: "block",
-        bindings: deferReceiverBorrow
+      expr: rustValueBlock(deferReceiverBorrow
           ? [{ name: valueName, value }, { name: receiverName, value: receiver }]
-          : [{ name: receiverName, value: receiver }, { name: valueName, value }],
-        value: written,
-      },
+          : [{ name: receiverName, value: receiver }, { name: valueName, value }], written),
     }];
   }
   const value = planExpression(valueNode, context);
@@ -746,17 +715,13 @@ export function planRustAssignmentWrite(
       const location: RustExpr = { kind: "path", path: locationName };
       return [{
         kind: "expr",
-        expr: {
-          kind: "block",
-          bindings: [
+        expr: rustValueBlock([
             { name: locationName, value: promotedLocation.expression },
             {
               name: currentName,
               value: promotedLocation.read(location),
             },
-          ],
-          value: promotedLocation.write(location, concatenated),
-        },
+          ], promotedLocation.write(location, concatenated)),
       }];
     }
     if (ast.kindName(left) !== KindIdentifier) {
@@ -769,16 +734,12 @@ export function planRustAssignmentWrite(
     }
     return [{
       kind: "expr",
-      expr: {
-        kind: "block",
-        bindings: [
+      expr: rustValueBlock([
           {
             name: currentName,
             value: { kind: "method-call", receiver: target, method: "clone", args: [] },
           },
-        ],
-        value: { kind: "assignment", operator: "=", target, value: concatenated },
-      },
+        ], { kind: "assignment", operator: "=", target, value: concatenated }),
     }];
   }
   if (operator === "=") {

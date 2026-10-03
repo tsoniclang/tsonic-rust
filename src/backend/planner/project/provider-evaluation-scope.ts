@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import {
   ElementAccessExpression_ArgumentExpression,
@@ -284,9 +285,9 @@ export function applyRustProviderEvaluationScope(
   }
   let pending: Extract<RustProviderEvaluationStep, { readonly kind: "binding" }>[] = [];
   const flush = (): void => {
-    if (pending.length !== 0) value = { kind: "block", value, bindings: pending.reverse().map(
+    if (pending.length !== 0) value = rustValueBlock(pending.reverse().map(
       ({ name, value, mutable }) => ({ name, value, ...(mutable === undefined ? {} : { mutable }) }),
-    ) };
+    ), value);
     pending = [];
   };
   for (const step of [...scope.steps].reverse()) {

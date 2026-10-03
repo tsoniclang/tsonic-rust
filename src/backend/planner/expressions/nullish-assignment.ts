@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import {
   BinaryExpression_Left,
   BinaryExpression_Right,
@@ -50,7 +51,7 @@ export function planNullishAssignment(
   if (evaluation === undefined) return undefined;
   if (evaluation.bindings.length !== 0) {
     const value = planNullishAssignment(node, fact, evaluation.context, resultUse);
-    return value === undefined ? undefined : { kind: "block", bindings: evaluation.bindings, value };
+    return value === undefined ? undefined : rustValueBlock(evaluation.bindings, value);
   }
   const names = context.syntheticNames;
   const bindings: { readonly name: string; readonly value: RustExpr }[] = [];
@@ -85,8 +86,8 @@ export function planNullishAssignment(
   const read = location?.read ?? planExpressionBeforeValueProjections(left, selectedContext, "value");
   if (read === undefined) return undefined;
   const unit: RustExpr = { kind: "tuple-literal", elements: [] };
-  if (fact.presentResult === "identity") return { kind: "block", bindings, value: resultUse === "value" ? read :
-    { kind: "evaluate-then", effect: read, discard: "value", value: unit } };
+  if (fact.presentResult === "identity") return rustValueBlock(bindings, resultUse === "value" ? read :
+    { kind: "evaluate-then", effect: read, discard: "value", value: unit });
   const currentName = allocateRustSyntheticName(names, "assignment_current");
   bindings.push({ name: currentName, value: read });
   const value = rustTargetTypeRefEquals(fact.rightCarrier, effectivePlannedExpressionCarrier(right, context))
@@ -123,10 +124,10 @@ export function planNullishAssignment(
   }
   const presentName = allocateRustSyntheticName(names, "present_value");
   const present: RustExpr = { kind: "path", path: presentName };
-  return { kind: "block", bindings, value: planRustOptionBranch(
+  return rustValueBlock(bindings, planRustOptionBranch(
     { kind: "path", path: currentName }, fact.readCarrier, resultUse === "discarded" ? "_" : presentName,
     resultUse === "discarded" ? unit : fact.presentResult === "option"
       ? planRustPresentValue(fact.resultCarrier, present, context) : present,
-    { kind: "block", bindings: [{ name: valueName, value }], value: assigned }, context,
-  ) };
+    rustValueBlock([{ name: valueName, value }], assigned), context,
+  ));
 }

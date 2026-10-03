@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../../dist/backend/target-ast/value-block.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { planRustFlowReadProjection } from "../../../dist/backend/planner/expressions/flow-reads.js";
@@ -24,10 +25,7 @@ for (const edition of ["2021", "2024"]) {
     };
     const trace = { kind: "path", path: "trace" };
     const probe = digit => ({ kind: "call", path: "probe", args: [trace, { kind: "int-literal", text: String(digit) }] });
-    const projection = planRustFlowReadProjection(node, {
-      kind: "block", bindings: [{ name: "_guard", value: probe(1) }],
-      value: { kind: "method-call", receiver: probe(2), method: "value", args: [] },
-    }, { kind: "option-value", sourceCarrier, selectedCarrier }, context);
+    const projection = planRustFlowReadProjection(node, rustValueBlock([{ name: "_guard", value: probe(1) }], { kind: "method-call", receiver: probe(2), method: "value", args: [] }), { kind: "option-value", sourceCarrier, selectedCarrier }, context);
     assert.ok(projection);
     assert.deepEqual(context.diagnostics, []);
     const generated = printRustSourceFile({

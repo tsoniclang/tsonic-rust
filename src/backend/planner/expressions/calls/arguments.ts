@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../../target-ast/value-block.js";
 import { rustGenericCallableProtocol } from "../../../../target-model/types/carriers/generic-callables.js";
 import { rustSourceCallArgumentCarriers, rustSourceCallGenericLifetimeArguments, rustSourceCallResultWithInputLifetimes } from "../../../../analysis/facts/source-call-lifetimes.js";
 import {
@@ -426,11 +427,7 @@ export function planPromotedSourceMethodCall(
   };
   return arguments_.length === 0
     ? mutation
-    : {
-        kind: "block",
-        bindings: [{ name: locationName, value: location }, ...argumentBindings],
-        value: mutation,
-      };
+    : rustValueBlock([{ name: locationName, value: location }, ...argumentBindings], mutation);
 }
 
 export function sourceCallSelectedMemberMatches(
