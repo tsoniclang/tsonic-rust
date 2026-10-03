@@ -3,6 +3,7 @@ import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { rustGenericsWithAssociatedBounds } from "../../types/generic-bounds.js";
 import {
   type RustSourceGenericParameterContract,
+  rustLifetimeKey,
 } from "../../../../target-model/lifetimes/index.js";
 import {
   emptyRustGenerics,
@@ -115,11 +116,20 @@ export function planRustCallableGenerics(
   const selectedCaptures = capturedParameters.filter(parameter => parameter.kind !== "type" ||
     context.typeParameterSubstitutions?.has(parameter.identity) !== true);
   const usedNames = new Set(ordinaryParameters.map(parameter => parameter.targetName));
+  const lifetimeSubstitutions = new Map(context.lifetimeSubstitutions);
+  const lifetimeNames = new Set(sourceContract.parameters.flatMap(parameter =>
+    parameter.kind === "lifetime" ? [parameter.lifetime.name] : []));
+  for (const parameter of sourceContract.parameters) {
+    if (parameter.kind === "lifetime") lifetimeSubstitutions.delete(rustLifetimeKey(parameter.lifetime));
+  }
   for (const parameter of selectedCaptures) {
     if (parameter.kind === "type") typeParameterNames.set(parameter.identity,
       allocateRustGeneratedName(usedNames, parameter.targetName));
+    else lifetimeSubstitutions.set(rustLifetimeKey(parameter.lifetime), {
+      ...parameter.lifetime, name: allocateRustGeneratedName(lifetimeNames, parameter.lifetime.name),
+    });
   }
-  context = { ...context, typeParameterNames };
+  context = { ...context, typeParameterNames, lifetimeSubstitutions };
   if (ordinaryParameters.some((parameter) =>
     !isValidRustIdentifier(parameter.targetName))) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -161,7 +171,26 @@ export function planRustCallableGenerics(
     for (const [name, carrier] of specialization) substitutions.set(name, carrier);
   }
 
-  const declarationContract = { ...sourceContract, parameters: [...sourceContract.parameters, ...selectedCaptures] };
+  const declarationParameters: RustSourceGenericParameterContract[] = [];
+  for (const parameter of [...sourceContract.parameters, ...selectedCaptures]) {
+    const outlives = parameter.outlives.map(lifetime =>
+      lifetimeSubstitutions.get(rustLifetimeKey(lifetime)) ?? lifetime);
+    if (parameter.kind === "type") {
+      declarationParameters.push({ ...parameter, outlives });
+      continue;
+    }
+    const lifetime = lifetimeSubstitutions.get(rustLifetimeKey(parameter.lifetime)) ?? parameter.lifetime;
+    if (lifetime.kind !== "parameter" && lifetime.kind !== "bound") {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, declaration),
+        "rust.backend.callable-generic-contract",
+        "Callable lifetime declaration substitution must retain an exact native binder.",
+      ));
+      return undefined;
+    }
+    declarationParameters.push({ ...parameter, lifetime, outlives });
+  }
+  const declarationContract = { ...sourceContract, parameters: declarationParameters };
   const declarationGenerics = rustSourceDeclarationGenerics(declarationContract);
   if (declarationGenerics === undefined) {
     context.diagnostics.push(missingFactDiagnostic(

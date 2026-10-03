@@ -15,6 +15,7 @@ import {
   KindVariableStatement,
   KindWhileStatement,
   Node_Expression,
+  sourceLexicalFunctionIsUnused,
 } from "@tsonic/target-api/source";
 import { diagnosticInput } from "../program/plan-context.js";
 import { directResourceDeclaration, planLoopExitStatement, planResourceDeclarationScope } from "./resources.js";
@@ -69,6 +70,7 @@ function planStatementInner(node: Node, context: RustPlanContext): readonly Rust
   switch (kind) {
     case "KindFunctionDeclaration": {
       if (ast.body(node) === undefined) return [];
+      if (sourceLexicalFunctionIsUnused(node, ast, context.input.program.sourceNavigation)) return [];
       const items = planFunctionDeclarations(node, context);
       return items?.map(item => ({ kind: "item", item }));
     }

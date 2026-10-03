@@ -57,6 +57,7 @@ import {
   sameRustPrimitiveCarrier,
 } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { isRustMutableJsErrorCarrier } from "../../../target-model/types/carriers/source-error.js";
 import { rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
 import { rustClassConstructorInstance } from "../../../target-model/types/carriers/class-constructors.js";
 import { rustSourceTypeCarrierValue } from "../../../target-model/types/index.js";
@@ -391,12 +392,16 @@ export function selectRustBinaryOperator(
     if (rustClassConstructorInstance(left) !== undefined && rustTargetTypeRefEquals(left, right)) {
       return { kind: "operator-token", rustOperator: equality, resultCarrier: boolCarrier };
     }
-    if (rustTargetTypeRefEquals(left, rustJsErrorTargetType()) && rustTargetTypeRefEquals(left, right)) {
+    const nativeErrorOwner = rustTargetTypeRefEquals(left, right)
+      ? rustTargetTypeRefEquals(left, rustJsErrorTargetType()) ? "rt::JsError"
+        : isRustMutableJsErrorCarrier(left) ? "rt::MutableJsError" : undefined
+      : undefined;
+    if (nativeErrorOwner !== undefined) {
       return {
         kind: "operator-call",
         rustOperator: equality,
         resultCarrier: boolCarrier,
-        path: equality === "==" ? "rt::JsError::has_same_identity" : "rt::JsError::has_distinct_identity",
+        path: `${nativeErrorOwner}::${equality === "==" ? "has_same_identity" : "has_distinct_identity"}`,
         fallible: false,
         operandModes: ["ref", "ref"],
       };

@@ -122,6 +122,7 @@ export function createRustProjectTypePolicy(
     admitsSourceError(definition) && definition.genericParameters.length === 0).sort(compareProjectDefinitions));
   const sourceErrorCarrier = sourceErrorDefinitions.length === 0 ? rustJsErrorTargetType() : rustSourceErrorTargetType();
   publishSourceErrorCarrier(sourceErrorCarrier);
+  const implicitInterfaces = host.collectImplicitInterfaces();
   for (const definition of definitions) {
     const selected = declaredHeritage.get(definition.declaration)!;
     if (selected.kind === "unresolved") {
@@ -203,7 +204,7 @@ export function createRustProjectTypePolicy(
         ),
       }));
     }
-    for (const implicit of host.implicitInterfaces.filter(contract => contract.source === definition.declaration)) {
+    for (const implicit of implicitInterfaces.filter(contract => contract.source === definition.declaration)) {
       const target = byDeclaration.get(implicit.target);
       if (target?.kind !== "interface" || edges.some(edge => edge.target === target && rustTargetTypeRefEquals(edge.targetType, implicit.carrier))) continue;
       edges.push(Object.freeze({ kind: "implements", source: definition, target, heritage: implicit.subject, targetType: implicit.carrier }));
@@ -726,7 +727,7 @@ export function createRustProjectTypePolicy(
         memberImplementationBudgetExceeded = true;
         break;
       }
-      const implicit = host.implicitInterfaces.filter(contract => contract.source === definition.declaration)
+      const implicit = implicitInterfaces.filter(contract => contract.source === definition.declaration)
         .flatMap(contract => contract.members).filter(selection => selection.declaration === member);
       implementations.set(member, implicit.length > 0 && implicit.every(selection =>
         selection.implementation.declaration === implicit[0]!.implementation.declaration)

@@ -7,6 +7,7 @@ import { createRustErrorStorageDemandQuery } from "../../../dist/analysis/object
 import { createRustSourceProfileRegistry } from "../../../dist/analysis/facts/source-profile-registry.js";
 import { rustNativeSourceProfileContributions, rustJsSurfaceSourceProfileContributions } from "../../../dist/source/profiles/declarations.js";
 import { liveErrorBaseWriteSource, liveErrorStorageFiles } from "../../../../tsonic/test/fixtures/live-error-storage.mjs";
+import { implicitErrorInterfaceSource } from "../../../../tsonic/test/fixtures/implicit-error-interfaces.mjs";
 
 function analyzed(files, jsEnabled) {
   const profile = collectTargetSourceProfileContributions({ project: {}, projectRoot: "/src",
@@ -38,6 +39,20 @@ function declarations(source, projectFiles) {
 
 for (const jsEnabled of [false, true]) {
   const profile = jsEnabled ? "js" : "native";
+  test(`implicit interface Error properties retain exact writable origins in ${profile}`, () => {
+    const { source, projectFiles, demand } = analyzed({ "index.ts": implicitErrorInterfaceSource(false) }, jsEnabled);
+    let selected;
+    const visit = node => {
+      if (source.ast.is.IsPropertySignatureDeclaration(node) && source.ast.text(source.ast.name(node)) === "error") selected = node;
+      source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    projectFiles.forEach(visit);
+    assert.equal(selected !== undefined, true);
+    assert.equal(demand.receivesWritableNative(selected), true);
+    const origins = demand.storageOriginsFor(selected);
+    assert.equal(origins.kind === "resolved", true);
+    assert.equal(origins.kind === "resolved" && origins.origins.includes(demand.nativeConstructors[0]), true);
+  });
   test(`ordinary native Error remains immutable despite mutable project Errors in ${profile}`, () => {
     const { demand } = analyzed(liveErrorStorageFiles, jsEnabled);
     assert.equal(demand.fieldWrites.length, 4);

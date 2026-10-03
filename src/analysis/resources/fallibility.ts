@@ -1,6 +1,5 @@
 import {
   CatchClause_Block,
-  ClassStaticBlock_Body,
   TryStatement_CatchClause,
   TryStatement_FinallyBlock,
   TryStatement_TryBlock,
@@ -19,7 +18,7 @@ import {
   VariableDeclarationList_Declarations,
   VariableStatement_DeclarationList,
   asSourceNode,
-  sourceClassFieldIsTypeOnly,
+  forEachSourceImmediateEvaluationChild,
 } from "@tsonic/target-api/source";
 import {
   rustAsyncFunctionFactKey,
@@ -170,9 +169,7 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
   for (const sourceFile of projectSourceFiles) {
     for (const statement of ast.statements(sourceFile) as readonly Node[]) {
       const kind = ast.kindName(statement);
-      if (kind === KindFunctionDeclaration) {
-        registerCallableDeclaration(statement);
-      } else if (kind === KindVariableStatement) {
+      if (kind === KindVariableStatement) {
         const declarations = VariableDeclarationList_Declarations(
           ast,
           VariableStatement_DeclarationList(ast, statement),
@@ -196,7 +193,8 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
     }
   }
   for (const sourceFile of projectSourceFiles) {
-    const visitObjectLiteralMethods = (node: Node): void => {
+    const visitCallableDeclarations = (node: Node): void => {
+      if (ast.kindName(node) === KindFunctionDeclaration) registerCallableDeclaration(node);
       const operation = walk.context.facts.get(node, rustTargetOperationFactKey) ??
         walk.context.facts.resolve(node, rustTargetOperationFactKey);
       if (operation?.kind === "record-literal") {
@@ -212,11 +210,11 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
       }
       ast.forEachChild(node, (child) => {
         if (child !== undefined) {
-          visitObjectLiteralMethods(child);
+          visitCallableDeclarations(child);
         }
       });
     };
-    visitObjectLiteralMethods(sourceFile);
+    visitCallableDeclarations(sourceFile);
   }
   for (const definition of walk.context.projectTypes.definitions) {
     const members = requireDenseSourceNodes(
@@ -471,28 +469,6 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
         found = true;
         return;
       }
-      if (kind === "KindArrowFunction" || kind === KindFunctionExpression) {
-        // Closures are fallibility boundaries: errors cannot propagate out.
-        return;
-      }
-      if (kind === "KindClassDeclaration" || kind === "KindClassExpression") {
-        for (const heritage of ast.extendsHeritageElements(node)) {
-          const expression = ast.as.AsExpressionWithTypeArguments(heritage)?.Expression;
-          if (expression !== undefined) visit(expression, insideTry);
-        }
-        for (const member of ast.members(node)) {
-          if (member === undefined || sourceClassFieldIsTypeOnly(ast, member)) continue;
-          const name = ast.name(member);
-          const computed = name !== undefined && ast.kindName(name) === "KindComputedPropertyName"
-            ? Node_Expression(ast, name) : undefined;
-          if (computed !== undefined) visit(computed, insideTry);
-          const initializer = ast.kindName(member) === "KindClassStaticBlockDeclaration"
-            ? ClassStaticBlock_Body(ast, member)
-            : ast.hasModifierKind(member, "static") ? Node_Initializer(ast, member) : undefined;
-          if (initializer !== undefined) visit(initializer, insideTry);
-        }
-        return;
-      }
       if (kind === "KindRegularExpressionLiteral" && !insideTry) {
         // Constant RegExp construction is fallible at runtime.
         found = true;
@@ -579,11 +555,7 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
           return;
         }
       }
-      ast.forEachChild(node, (child) => {
-        if (child !== undefined) {
-          visit(child, insideTry);
-        }
-      });
+      forEachSourceImmediateEvaluationChild(ast, node, child => visit(child, insideTry));
     };
     visit(root, false);
     return found;
@@ -689,15 +661,6 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
   for (const sourceFile of projectSourceFiles) {
     const runtimeStatements = (ast.statements(sourceFile) as readonly Node[]).flatMap((statement): readonly Node[] => {
       const kind = ast.kindName(statement);
-      if (kind === "KindClassDeclaration") {
-        return ast.members(statement).flatMap(member => {
-          if (member === undefined) return [];
-          const initializer = ast.kindName(member) === "KindClassStaticBlockDeclaration"
-            ? ClassStaticBlock_Body(ast, member)
-            : ast.hasModifierKind(member, "static") ? Node_Initializer(ast, member) : undefined;
-          return initializer === undefined ? [] : [initializer];
-        });
-      }
       return kind !== KindFunctionDeclaration &&
         kind !== "KindInterfaceDeclaration" &&
         kind !== "KindTypeAliasDeclaration" &&

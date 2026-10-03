@@ -144,7 +144,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   }
   recordRustInterfaceRepresentationAliases(walk, projectSourceFiles);
   const projectTypes = context.projectTypes.initialize({
-    implicitInterfaces: collectRustImplicitInterfaceContracts(walk),
+    collectImplicitInterfaces: () => collectRustImplicitInterfaceContracts(walk),
     ast,
     names: context.names,
     navigation: context.source.navigation,

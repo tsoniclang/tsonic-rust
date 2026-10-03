@@ -75,4 +75,28 @@ export function main(): void {
     const executed = validateGeneratedProject(`lexical-lifetime-${surfaces[0] ?? "native"}`, result.artifacts, { run: true });
     assert.equal(executed.status, 0, executed.stderr);
   });
+  test(`native lexical lifetime shadowing preserves separate exact binders in ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces,
+      target: { id: "rust", options: { outputType: "bin", crateName: `lexical_lifetime_shadow_${surfaces[0] ?? "native"}` } },
+      files: { "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import type { Life, Ref, ValidFor } from "@tsonic/rust/types.js";
+import { load, ref } from "@tsonic/rust/lang.js";
+function outer<Region extends Life, Value extends ValidFor<Region>>(value: Ref<Value, Region>): Ref<Value, Region> {
+  function read<Region extends Life>(other: Ref<int32, Region>) {
+    if (load(other) !== 3) throw new Error("inner lifetime input");
+    return value;
+  }
+  const other = 3 as int32;
+  return read(ref(other));
+}
+export function main(): void {
+  const value = 23 as int32;
+  if (load(outer(ref(value))) !== 23) throw new Error("outer lifetime result");
+}
+` } });
+    assert.equal(result.diagnostics.length, 0, result.diagnostics.map(value => value.message).join("\n"));
+    const executed = validateGeneratedProject(`lexical-lifetime-shadow-${surfaces[0] ?? "native"}`, result.artifacts, { run: true });
+    assert.equal(executed.status, 0, executed.stderr);
+  });
 }

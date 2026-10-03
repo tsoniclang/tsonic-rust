@@ -11,7 +11,7 @@ import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier } from "../../../
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
-import { diagnosticInput } from "../program/plan-context.js";
+import { diagnosticInput, rustCurrentErrorBoundary } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import {
   allocateRustSyntheticName,
@@ -53,6 +53,12 @@ export function planRustProgramErrorEquality(
     ));
     return undefined;
   }
+  const boundary = isRustProgramErrorCarrier(fact.sourceCarrier) ? rustCurrentErrorBoundary(context) : undefined;
+  if (isRustProgramErrorCarrier(fact.sourceCarrier) && boundary === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+      "rust.backend.program-error-equality", "Program-error equality requires its exact native error domain."));
+    return undefined;
+  }
   context.usedAliases?.add("rt");
   const names = context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []);
   const valueName = allocateRustSyntheticName(names, "error_value");
@@ -66,9 +72,13 @@ export function planRustProgramErrorEquality(
       : BinaryExpression_Right(context.input.program.source.ast, node);
     const value = source === undefined ? expression : planRustNonConsumingValue(source, expression, context);
     if (fact.errorOperand === side) {
-      if (builtin) return isRustSourceErrorCarrier(fact.sourceCarrier)
-        ? { kind: "call", path: "Some", args: [{ kind: "reference", expr: value }] }
-        : { kind: "method-call", receiver: value, method: "source_error", args: [] };
+      if (builtin) {
+        const source: RustExpr = isRustSourceErrorCarrier(fact.sourceCarrier)
+          ? { kind: "reference", expr: value }
+          : { kind: "method-call", receiver: value, method: "source_error", args: [] };
+        return isRustSourceErrorCarrier(fact.sourceCarrier) || boundary?.errorDomain === "runtime"
+          ? { kind: "call", path: "Some", args: [source] } : source;
+      }
       return programErrorSubject(value, fact.sourceCarrier, false);
     }
     return { kind: "reference", expr: value };

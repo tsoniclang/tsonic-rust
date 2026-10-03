@@ -7,6 +7,7 @@ import { rustSourceErrorConstructors } from "../../target-model/identities/sourc
 import { createRustErrorExecutionRegions } from "./error-execution-regions.js";
 import { createRustErrorStorageSubjects, type RustErrorStorageSubject } from "./error-storage-subjects.js";
 import { createRustErrorInvalidationBindings, type RustErrorInvalidationBindings } from "./error-invalidation-bindings.js";
+import { createRustErrorStructuralFlow } from "./error-structural-flow.js";
 
 export type RustErrorStorageDemand =
   | { readonly kind: "immutable" }
@@ -157,7 +158,9 @@ export function createRustErrorStorageDemandQuery(
     }
     origins.add(origin);
     incoming.set(destination, origins);
+    connectStructuralFlow(origin, destination);
   };
+  const connectStructuralFlow = createRustErrorStructuralFlow(source, step, subject, connect);
   const recordWrite = (subject: RustErrorStorageSubject | undefined, write: Node): void => {
     if (subject === undefined) {
       failure = "An admitted Error write has no exact source storage subject.";
