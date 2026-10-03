@@ -1,4 +1,5 @@
-import { rustValueBlock } from "../../target-ast/value-block.js";
+import { rustValueBlock, type RustValueBlockEntry } from "../../target-ast/value-block.js";
+import { rustRecordFinalFieldContributions, rustRecordSpreadRetainsField } from "../objects/record-contributions.js";
 import {
   createRustProjectObject,
   rustProjectObjectDispatchField,
@@ -113,23 +114,16 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
     ));
     return undefined;
   }
-  const bindings: {
-    readonly name: string;
-    readonly value: RustExpr;
-  }[] = [];
+  const bindings: RustValueBlockEntry[] = [];
   const valuesByStorageIndex = new Map<number, RustExpr>();
   const accessorValuesByStorageIndex = new Map<number, {
     getter?: RustExpr;
     setter?: RustExpr;
   }>();
-  const finalContributionByStorageIndex = new Map<number, number>();
+  const finalContributionByStorageIndex = rustRecordFinalFieldContributions(fact);
   const finalContributionByMethod = new Map<Node, number>();
   fact.contributions.forEach((contribution, contributionIndex) => {
     if (contribution.kind === "property" || contribution.kind === "structural-method") {
-      finalContributionByStorageIndex.set(
-        contribution.targetStorageIndex,
-        contributionIndex,
-      );
       return;
     }
     if (contribution.kind === "method") {
@@ -140,11 +134,6 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
     }
     if (contribution.kind === "accessor") {
       return;
-    }
-    for (const field of contribution.fields) {
-      if (rustOptionElementCarrier(contribution.sourceCarrier) === undefined) {
-        finalContributionByStorageIndex.set(field.targetStorageIndex, contributionIndex);
-      }
     }
     for (const method of contribution.methods) {
       finalContributionByMethod.set(method.contractDeclaration, contributionIndex);
@@ -334,10 +323,8 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
     if (plannedSpread === undefined) {
       return undefined;
     }
-    const retainedFields = contribution.fields.filter((field) =>
-      rustOptionElementCarrier(contribution.sourceCarrier) === undefined
-        ? finalContributionByStorageIndex.get(field.targetStorageIndex) === contributionIndex
-        : (finalContributionByStorageIndex.get(field.targetStorageIndex) ?? -1) < contributionIndex);
+    const retainedFields = contribution.fields.filter(field =>
+      rustRecordSpreadRetainsField(contribution, field, contributionIndex, finalContributionByStorageIndex));
     const retainedMethods = objectLiteralImplementation?.implementations.filter((implementation) =>
       implementation.kind === "spread" &&
         finalContributionByMethod.get(implementation.contractMethod) === contributionIndex) ?? [];

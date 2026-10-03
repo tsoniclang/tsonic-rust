@@ -1,4 +1,6 @@
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
+import type { RustStructuralShapePlan } from "../../../analysis/objects/structural-shape-plan.js";
+import { rustRecordFinalFieldContributions, rustRecordSpreadRetainsField, rustRecordSpreadReadIsObservable } from "../objects/record-contributions.js";
 import { rustObjectReferenceViewKey } from "../../../analysis/facts/object-reference-views.js";
 import type { RustClassValuePlan } from "../../../analysis/objects/class-values.js";
 import type { RustSourceCallableSpecializationPlan } from "../../../analysis/callables/specializations.js";
@@ -107,6 +109,7 @@ export function analyzeRustGeneratedItemUsage(input: {
   readonly objectRepresentations: RustObjectRepresentationPlan;
   readonly projectMethodProperties: RustProjectMethodPropertyPlan;
   readonly projectFieldDispatch: RustProjectFieldDispatchQueries;
+  readonly structuralShapes: RustStructuralShapePlan;
   readonly navigation: TargetPlanningSourceNavigation;
 }): RustGeneratedItemUsage {
   const carriersByDeclaration = new Map<Node, string>();
@@ -564,19 +567,23 @@ export function analyzeRustGeneratedItemUsage(input: {
       case "source-enum-member":
         markVariantConstructed(fact.resultCarrier, fact.name);
         return;
-      case "record-literal":
+      case "record-literal": {
         if (fact.storage === "project-object") {
           markProjectTypeConstructed(fact.resultCarrier);
         } else {
           markStructuralShapeConstructed(fact.resultCarrier);
         }
-        for (const contribution of fact.contributions) {
+        const final = rustRecordFinalFieldContributions(fact);
+        for (const [index, contribution] of fact.contributions.entries()) {
           if (contribution.kind !== "spread") continue;
           for (const field of contribution.fields) {
-            markStructuralFieldRead(contribution.sourceCarrier, field.sourceStorageIndex);
+            if (rustRecordSpreadRetainsField(contribution, field, index, final) ||
+              rustRecordSpreadReadIsObservable(contribution, field, input.structuralShapes))
+              markStructuralFieldRead(contribution.sourceValueCarrier, field.sourceStorageIndex);
           }
         }
         return;
+      }
       case "record-index-literal":
         markProjectTypeConstructed(fact.resultCarrier);
         return;

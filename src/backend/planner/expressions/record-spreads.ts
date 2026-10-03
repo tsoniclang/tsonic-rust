@@ -8,6 +8,8 @@ import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustObjectLiteralMethodImplementationPlan } from "../objects/object-literal-implementations.js";
+import { rustValueBlock, type RustValueBlockEntry } from "../../target-ast/value-block.js";
+import { rustRecordSpreadReadIsObservable } from "../objects/record-contributions.js";
 
 type RecordFact = Extract<RustTargetOperationFact, { readonly kind: "record-literal" }>;
 type Spread = Extract<RecordFact["contributions"][number], { readonly kind: "spread" }>;
@@ -20,7 +22,7 @@ export function planRustRecordSpread(
   previous: ReadonlyMap<number, RustExpr>,
   context: RustPlanContext,
 ): {
-  readonly bindings: readonly { readonly name: string; readonly value: RustExpr }[];
+  readonly bindings: readonly RustValueBlockEntry[];
   readonly fields: ReadonlyMap<number, RustExpr>;
   readonly methods: ReadonlyMap<string, RustExpr>;
 } | undefined {
@@ -29,7 +31,7 @@ export function planRustRecordSpread(
   const optional = presentCarrier !== undefined;
   if (!rustTargetTypeRefEquals(presentCarrier ?? contribution.sourceCarrier, contribution.sourceValueCarrier) ||
     optional && methods.length !== 0) return undefined;
-  const bindings: { readonly name: string; readonly value: RustExpr }[] = [];
+  const bindings: RustValueBlockEntry[] = [];
   const values = new Map<number, RustExpr>();
   const methodValues = new Map<string, RustExpr>();
   const spreadName = allocateRustSyntheticName(context.syntheticNames,
@@ -39,7 +41,11 @@ export function planRustRecordSpread(
   const receiver: RustExpr = { kind: "path", path: presentName };
   const selected: RustExpr[] = [];
   const absent: RustExpr[] = [];
-  for (const field of fields) {
+  const presentBindings: { readonly name: string; readonly value: RustExpr }[] = [];
+  const retained = new Set(fields.map(field => field.targetStorageIndex));
+  for (const field of contribution.fields) {
+    const keep = retained.has(field.targetStorageIndex);
+    if (!keep && !rustRecordSpreadReadIsObservable(contribution, field, context.input.program.structuralShapes)) continue;
     const value = field.method === true
       ? contribution.sourceStorage === "structural-object"
         ? readRustStructuralObjectMethodStorage(contribution.sourceValueCarrier, receiver, field.sourceStorageIndex, context)
@@ -47,24 +53,28 @@ export function planRustRecordSpread(
       : readRustStoredObjectField(contribution.sourceStorage, contribution.sourceValueCarrier,
           receiver, field.sourceStorageIndex, field.carrier, context);
     if (value === undefined) return undefined;
+    const fieldName = allocateRustSyntheticName(context.syntheticNames, `${keep ? "record" : "_record"}_${field.sourceName}`);
     if (optional) {
+      presentBindings.push({ name: fieldName, value });
+      if (!keep) continue;
       const fallback = previous.get(field.targetStorageIndex);
       if (fallback === undefined && rustOptionElementCarrier(field.carrier) === undefined) return undefined;
-      selected.push(value);
+      selected.push({ kind: "path", path: fieldName });
       absent.push(fallback ?? { kind: "none" });
     } else {
-      const fieldName = allocateRustSyntheticName(context.syntheticNames, `record_${field.sourceName}`);
       bindings.push({ name: fieldName, value });
-      values.set(field.targetStorageIndex, { kind: "path", path: fieldName });
+      if (keep) values.set(field.targetStorageIndex, { kind: "path", path: fieldName });
     }
   }
-  if (optional && fields.length > 0) {
-    const tupleName = allocateRustSyntheticName(context.syntheticNames, "record_fields");
-    bindings.push({ name: tupleName, value: planRustOptionBranch(
+  if (optional && presentBindings.length > 0) {
+    const tupleName = fields.length === 0 ? undefined : allocateRustSyntheticName(context.syntheticNames, "record_fields");
+    const value = planRustOptionBranch(
       { kind: "path", path: spreadName }, contribution.sourceCarrier, presentName,
-      { kind: "tuple-literal", elements: selected }, { kind: "tuple-literal", elements: absent }, context,
-    ) });
-    fields.forEach((field, index) => values.set(field.targetStorageIndex,
+      rustValueBlock(presentBindings, { kind: "tuple-literal", elements: selected }),
+      { kind: "tuple-literal", elements: absent }, context,
+    );
+    bindings.push(tupleName === undefined ? { value } : { name: tupleName, value });
+    if (tupleName !== undefined) fields.forEach((field, index) => values.set(field.targetStorageIndex,
       { kind: "field", receiver: { kind: "path", path: tupleName }, name: String(index) }));
   }
   for (const implementation of methods) {

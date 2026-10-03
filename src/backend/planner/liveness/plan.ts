@@ -100,6 +100,7 @@ export function createRustPlannerLiveness(program: RustTargetProgram): RustPlann
     objectRepresentations: program.objectRepresentations,
     projectMethodProperties: program.projectMethodProperties,
     projectFieldDispatch: program.projectFieldDispatch,
+    structuralShapes: program.structuralShapes,
     navigation: program.sourceNavigation,
   });
 

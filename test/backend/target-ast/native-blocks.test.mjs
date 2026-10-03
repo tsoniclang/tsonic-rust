@@ -40,6 +40,14 @@ test("native block and generic if-let reject superseded representations", () => 
     /Unsupported Rust statement/u);
 });
 
+test("ordered value blocks discard effects without manufacturing unit bindings", () => {
+  const observe = { kind: "call", path: "observe", args: [] };
+  const expression = rustValueBlock([{ name: "value", value: path("input") }, { value: observe }], path("value"));
+  assert.deepEqual(expression.body.statements.map(statement => statement.kind), ["let", "expr", "tail"]);
+  assert.equal(expression.body.statements[1].expr, observe);
+  assert.equal(printRustExpr(expression), "{ let value = input; observe(); value }");
+});
+
 test("generic if-let keeps arbitrary native statements and direct loop exits", () => {
   const expression = { kind: "if-let", pattern, expression: path("source"), whenTrue: block(
     { kind: "let", name: "copy", mutable: false, init: path("value") },
