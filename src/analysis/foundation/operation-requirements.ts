@@ -131,8 +131,13 @@ export function rustFoundationForTargetOperationFact(
       requireCarrier(fact.elementCarrier);
       requireCarrier(fact.resultCarrier);
       fact.contributions.forEach(contribution => {
-        requireCarrier(contribution.carrier);
-        if (contribution.kind === "spread") requireConversion(contribution.conversion);
+        if (contribution.kind === "value") requireCarrier(contribution.carrier);
+        else for (const input of contribution.input.inputs) {
+          if (input.kind === "empty") continue;
+          requireCarrier(input.carrier);
+          requireCarrier(input.presentCarrier);
+          requireConversion(input.conversion);
+        }
       });
       if (fact.lane === "js") require("std");
       break;

@@ -39,6 +39,7 @@ import { planCheckedProjectProjectionImplementation } from "../checked-project-p
 import { rustProjectInstanceContracts } from "../../../../analysis/project-types/type-policy.js";
 import { rustArrayFieldMutationName, rustArrayFieldMutationType } from "./array-fields.js";
 import { rustProjectObjectIdentityImplementation } from "../project-identity.js";
+import { instantiateRustProjectMethodDispatchArguments } from "../../../../analysis/project-types/method-dispatch.js";
 
 export function planProjectRootImplementations(
   concrete: RustProjectTypeDefinition,
@@ -65,6 +66,7 @@ export function planProjectRootImplementations(
     const variant = context.input.program.projectMethodDispatch.variantForMember(
       implementation,
       targetTypeArguments,
+      concreteCarrier,
     );
     if (variant === undefined) {
       return undefined;
@@ -427,13 +429,17 @@ function planRootContractFunctions(
       continue;
     }
     for (const variant of context.input.program.projectMethodDispatch.variantsForMember(member)) {
+      const targetTypeArguments = instantiateRustProjectMethodDispatchArguments(
+        member, variant.targetTypeArguments, concreteCarrier, context.input.program.projectTypes,
+      );
+      if (targetTypeArguments === undefined) return undefined;
       const virtualImplementation = projectMemberImplementation(concrete, member, context);
       if (virtualImplementation === undefined) {
         return undefined;
       }
       const virtualImplementationMethod = implementationFor(
         virtualImplementation,
-        variant.targetTypeArguments,
+        targetTypeArguments,
       );
       const virtualMethod = virtualImplementationMethod === undefined
         ? undefined
@@ -466,7 +472,7 @@ function planRootContractFunctions(
           : virtualImplementation;
         const exactImplementationMethod = exactImplementation === undefined
           ? undefined
-          : implementationFor(exactImplementation, variant.targetTypeArguments);
+          : implementationFor(exactImplementation, targetTypeArguments);
         const exactMethod = exactImplementation === undefined || exactImplementationMethod === undefined
           ? undefined
           : planRootMethodForwarder(

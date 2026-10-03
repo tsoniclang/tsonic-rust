@@ -6,6 +6,7 @@ import {
   rustSourceTypeCarrierValue,
   rustTargetGenericTypeArguments,
   substituteRustTargetGenericArgument,
+  substituteRustTargetGenerics,
 } from "../../../../target-model/types/index.js";
 import { rustClassStaticCallGenericArguments, rustClassStaticEnvironmentForCall, rustOwnedClassEnvironmentForCall } from "../../objects/class-environments.js";
 import { rustSourceCallArgumentCarriers } from "../../../../analysis/facts/source-call-lifetimes.js";
@@ -264,6 +265,8 @@ export function planSelectedSourceCall(
           : context.input.program.projectMethodDispatch.variantForMember(
               dispatchDeclaration,
               targetTypeArguments,
+              substituteRustTargetGenerics(fact.target.dispatch.ownerCarrier,
+                context.typeParameterSubstitutions ?? new Map(), context.lifetimeSubstitutions ?? new Map()),
             );
         if (dispatchVariant === undefined) {
           context.diagnostics.push(missingFactDiagnostic(

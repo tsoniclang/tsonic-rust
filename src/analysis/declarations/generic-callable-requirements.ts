@@ -418,11 +418,14 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
     if (operation?.kind === "array-literal") {
       for (const contribution of operation.contributions) {
         if (contribution.kind !== "spread") continue;
-        const conversion = rustValueConversionContract(contribution.conversion, input.typeDefinitions);
-        if (conversion?.lowering !== "rest-sequence") return "An array spread has no exact sequence conversion contract.";
-        for (const element of conversion.cloneSources) {
-          const error = addUse(node, element, ["clone"]);
-          if (error !== undefined) return error;
+        for (const selected of contribution.input.inputs) {
+          if (selected.kind === "empty") continue;
+          const conversion = rustValueConversionContract(selected.conversion, input.typeDefinitions);
+          if (conversion?.lowering !== "rest-sequence") return "An array spread has no exact sequence conversion contract.";
+          for (const element of conversion.cloneSources) {
+            const error = addUse(node, element, ["clone"]);
+            if (error !== undefined) return error;
+          }
         }
       }
     }
