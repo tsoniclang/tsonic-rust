@@ -7,6 +7,7 @@ import { structuralStorageKey } from "./structural-shape-plan.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustObjectReferenceViewKey } from "../facts/object-reference-views.js";
+import { rustCopiedMethodReceiverIsPreserved } from "../../policy/ownership/copied-methods.js";
 
 export function finalizeRustCopiedMethods(
   walk: RustFactWalk, files: readonly SourceFile[], componentForFile: (fileName: string) => string,
@@ -60,9 +61,12 @@ export function finalizeRustCopiedMethods(
         } else if (contribution.kind === "spread" && contribution.sourceStorage === "structural-object") {
           for (const field of contribution.fields) {
             const identity = key(operation.resultCarrier, field.targetStorageIndex);
-            if (field.method === true) demands.set(identity, contribution.property);
+            if (field.method === true && !rustCopiedMethodReceiverIsPreserved(contribution.sourceValueCarrier,
+              field.sourceStorageIndex, operation.resultCarrier, field.targetStorageIndex)) {
+              demands.set(identity, contribution.property);
+            }
             const sources = incoming.get(identity) ?? new Set<string>();
-            sources.add(key(contribution.sourceCarrier, field.sourceStorageIndex));
+            sources.add(key(contribution.sourceValueCarrier, field.sourceStorageIndex));
             incoming.set(identity, sources);
           }
         }

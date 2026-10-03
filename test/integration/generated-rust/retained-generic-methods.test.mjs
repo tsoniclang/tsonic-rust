@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject, writeGeneratedProject, runCargo } from "../../helpers/cargo-projects.mjs";
 import { genericObjectMethodStorageSource } from "../../../../tsonic/test/fixtures/generic-object-methods.mjs";
+import { copiedMethodReceiversSource } from "../../../../tsonic/test/fixtures/copied-method-receivers.mjs";
 
 for (const surface of ["native", "js"]) {
   test(`retained generic methods preserve state, body identity and copied values (${surface})`, { timeout: 300_000 }, () => {
@@ -20,10 +21,21 @@ for (const surface of ["native", "js"]) {
   });
 }
 
-test("copied receiver-dependent generic methods remain rejected without target artifacts", () => {
+for (const surfaces of [[], ["js"]]) {
+  test(`copied generic methods use the current exact native receiver (${surfaces[0] ?? "native"})`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: {
+      "index.ts": `${copiedMethodReceiversSource}
+        export function main(): void { if (!run()) throw new Error("copied native receiver"); }`,
+    } });
+    assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\n"));
+    validateGeneratedProject(`copied-native-receiver-${surfaces[0] ?? "native"}`, result.artifacts, { run: true });
+  });
+}
+
+test("copied receiver-dependent generic methods reject an incompatible destination receiver", () => {
   const { result } = compileRust({ files: { "index.ts": `
     const original = { count: 3, identity<T>(value: T): T { this.count++; return value; } };
-    const copied = { ...original };
+    const { count, ...copied } = original;
     export function run(): number { return copied.identity(7); }
   ` } });
   assert.ok(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_COPIED_METHOD_RECEIVER_NOT_PROVEN"));
