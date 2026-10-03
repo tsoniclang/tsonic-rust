@@ -185,6 +185,11 @@ export function planRustSharedReceiver(
   if (override?.valueForm === "shared-reference") {
     return value;
   }
+  const captured = rustCapturedBinding(node, context);
+  if (captured?.storage === "value" && captured.borrowed !== undefined) {
+    return captured.borrowed === "shared" ? value
+      : { kind: "reference", expr: { kind: "dereference", pointer: value } };
+  }
   const loaded = planRustLoadedSharedReference(node, value, context);
   if (loaded !== undefined) return loaded;
   const kind = context.input.program.source.ast.kindName(node);

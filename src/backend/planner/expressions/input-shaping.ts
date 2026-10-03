@@ -15,7 +15,7 @@ import { missingFactDiagnostic } from "../diagnostics.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import { planExpression } from "./entry.js";
-import { planRustLoadedSharedReference } from "./typed-locations.js";
+import { planRustLoadedSharedReference, planRustSharedReceiver } from "./typed-locations.js";
 import { rustErrorFieldSharedView } from "./error-field-borrows.js";
 
 export function planRustCallArguments(
@@ -161,5 +161,5 @@ export function createRustSharedReferenceArgument(
   if (argument.kind === "vec-literal") {
     return { kind: "reference", expr: { kind: "slice-literal", elements: argument.elements } };
   }
-  return { kind: "reference", expr: argument };
+  return node === undefined ? { kind: "reference", expr: argument } : planRustSharedReceiver(node, argument, context);
 }

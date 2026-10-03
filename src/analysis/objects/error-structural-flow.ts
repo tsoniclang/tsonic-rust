@@ -1,5 +1,5 @@
 import type { Node, Type } from "@tsonic/tsts";
-import type { TargetSourceProgram } from "@tsonic/target-api/source";
+import type { SourceFileSemantics, TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustErrorStorageSubject } from "./error-storage-subjects.js";
 
 export function createRustErrorStructuralFlow(
@@ -10,10 +10,16 @@ export function createRustErrorStructuralFlow(
 ): (origin: RustErrorStorageSubject, destination: RustErrorStorageSubject) => void {
   const selectedTypes = new Map<RustErrorStorageSubject, Type | undefined>();
   const visited = new WeakMap<Type, WeakSet<Type>>();
-  const pending: { readonly origin: RustErrorStorageSubject; readonly destination: RustErrorStorageSubject }[] = [];
+  const pending: { readonly origin: RustErrorStorageSubject; readonly destination: RustErrorStorageSubject;
+    readonly selected?: { readonly from: Type; readonly to: Type; readonly semantics: SourceFileSemantics } }[] = [];
   let draining = false;
   const typeFor = (value: RustErrorStorageSubject): Type | undefined => {
     if (selectedTypes.has(value)) return selectedTypes.get(value);
+    const file = source.ast.getSourceFile(value.node);
+    if (file === undefined || !source.semantics.includes(file)) {
+      selectedTypes.set(value, undefined);
+      return undefined;
+    }
     const semantics = source.semantics.forNode(value.node);
     const nodeType = semantics.declarations.declaredValueType(value.node) ?? semantics.types.expressionType(value.node);
     const signatures = value.kind !== "return" || nodeType === undefined ? [] : semantics.types.callSignatures(nodeType)
@@ -29,24 +35,29 @@ export function createRustErrorStructuralFlow(
     draining = true;
     while (pending.length !== 0 && step()) {
       const selected = pending.pop()!;
-      const from = typeFor(selected.origin);
-      const to = typeFor(selected.destination);
+      const from = selected.selected?.from ?? typeFor(selected.origin);
+      const to = selected.selected?.to ?? typeFor(selected.destination);
       if (from === undefined || to === undefined || from === to) continue;
       const targets = visited.get(from) ?? new WeakSet<Type>();
       if (targets.has(to)) continue;
       targets.add(to);
       visited.set(from, targets);
-      const relation = source.semantics.forNode(selected.origin.node).types.structuralMembers(from, to);
+      const semantics = selected.selected?.semantics ?? source.semantics.forNode(selected.origin.node);
+      const relation = semantics.types.structuralMembers(from, to);
       if (relation.kind !== "available") continue;
       for (const member of relation.members) {
         if (!step()) break;
         if (member.kind !== "present" || member.source.read === "method" || member.destination.read === "method") continue;
         for (const original of member.source.declarations) {
           if (!step()) break;
-          const from = subject(original, source.ast.is.IsGetAccessorDeclaration(original) ? "return" : "value");
+          const origin = subject(original, source.ast.is.IsGetAccessorDeclaration(original) ? "return" : "value");
           for (const target of member.destination.declarations) {
             if (!step()) break;
-            connect(from, subject(target, source.ast.is.IsGetAccessorDeclaration(target) ? "return" : "value"));
+            const destination = subject(target, source.ast.is.IsGetAccessorDeclaration(target) ? "return" : "value");
+            connect(origin, destination);
+            if (origin !== undefined && destination !== undefined && member.source.property.type !== undefined &&
+              member.destination.property.type !== undefined) pending.push({ origin, destination,
+                selected: { from: member.source.property.type, to: member.destination.property.type, semantics } });
           }
         }
       }

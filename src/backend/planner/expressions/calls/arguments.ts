@@ -23,6 +23,7 @@ import {
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
 import {
   createRustMutableReferenceArgument,
+  createRustSharedReferenceArgument,
   planRustCallArguments,
 } from "../input-shaping.js";
 import { planExpression } from "../entry.js";
@@ -334,7 +335,7 @@ function shapeRustSourceCallInput(
       ? { kind: "str-literal", value: nonConsumingInput.value }
       : mutable
         ? createRustMutableReferenceArgument(nonConsumingInput)
-        : { kind: "reference", expr: nonConsumingInput };
+        : createRustSharedReferenceArgument(context, nonConsumingInput, argumentNode);
 }
 
 function resolveFinalizedRustSpreadInput(

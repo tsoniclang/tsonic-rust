@@ -127,10 +127,14 @@ export function planRustProgramErrorTypeTest(
     return undefined;
   }
   context.usedAliases?.add("rt");
+  if (route.kind === "local") {
+    return { kind: "matches", expression: programErrorSubject(expression, fact.sourceCarrier, false),
+      pattern: programErrorPattern(route, { kind: "wildcard" }, isRustSourceErrorCarrier(fact.sourceCarrier)) };
+  }
   const valueName = allocateRustSyntheticName(context.syntheticNames ?? createRustSyntheticNameState(
     context.input.program.source.ast, node, []), "error_package");
   return { kind: "match", expression: programErrorSubject(expression, fact.sourceCarrier, false), arms: [
-    { pattern: programErrorPattern(route, route.kind === "local" ? { kind: "wildcard" } : { kind: "binding", name: valueName }, isRustSourceErrorCarrier(fact.sourceCarrier)),
+    { pattern: programErrorPattern(route, { kind: "binding", name: valueName }, isRustSourceErrorCarrier(fact.sourceCarrier)),
       expression: projectErrorPayload(route, fact.sourceCarrier, { kind: "path", path: valueName }, false,
         { kind: "bool-literal", value: true }, { kind: "bool-literal", value: false }) },
     { pattern: { kind: "wildcard" }, expression: { kind: "bool-literal", value: false } },

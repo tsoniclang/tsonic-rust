@@ -1,5 +1,5 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
-import { forEachSourceImmediateEvaluationChild, IsTypeSyntaxNode, Node_Expression, Node_Initializer, VariableDeclarationList_Declarations,
+import { forEachSourceImmediateEvaluationChild, IsTypeSyntaxNode, Node_Expression, Node_Initializer, ObjectLiteralProperty_Value, VariableDeclarationList_Declarations,
   VariableStatement_DeclarationList, type TargetSourceProgram } from "@tsonic/target-api/source";
 import { resolveRustSourceErrorDeclaration } from "../../policy/types/external-project-types.js";
 import type { RustSourceProfileRegistry } from "../../policy/types/source-profile.js";
@@ -208,6 +208,9 @@ export function createRustErrorStorageDemandQuery(
     }
     if (ast.is.IsPropertyDeclaration(node) || ast.is.IsParameterDeclaration(node)) {
       connect(subjectFor(Node_Initializer(ast, node)), subject(node));
+    }
+    if (ast.is.IsPropertyAssignment(node) || ast.is.IsShorthandPropertyAssignment(node)) {
+      connect(subjectFor(ObjectLiteralProperty_Value(ast, node)), subject(node));
     }
     if (ast.is.IsArrowFunction(node)) {
       const body = ast.as.AsArrowFunction(node)?.Body;

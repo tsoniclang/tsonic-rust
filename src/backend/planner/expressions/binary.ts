@@ -225,7 +225,7 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
       ));
       return undefined;
     }
-    return planRustProgramErrorTypeTest(node, left, fact, context);
+    return planRustProgramErrorTypeTest(node, planRustNonConsumingValue(leftNode, left, context), fact, context);
   }
   if (fact?.kind === "project-type-test") {
     return planSelectedRustProjectTypeTest(node, context)?.test;

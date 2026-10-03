@@ -9,6 +9,8 @@ import { rustBorrowedStringView } from "../../target-ast/expressions.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
+import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
+import { rustValueBlock } from "../../target-ast/value-block.js";
 
 export function rustErrorFieldHasGuardedBorrow(node: Node, context: RustPlanContext): boolean {
   node = errorReadNode(node, context);
@@ -85,7 +87,7 @@ export function rustErrorFieldStringComparisonView(
   if (value.kind === "string-literal") return { kind: "str-literal", value: value.value };
   if (value.kind === "str-literal") return value;
   const guarded = rustErrorFieldSharedView(node, expression, context);
-  return guarded !== undefined && value !== expression ? guarded
+  return guarded !== undefined && expression.kind === "owned-string-from-borrowed-str" && value === expression.expression ? guarded
     : { kind: "method-call", receiver: value, method: "as_str", args: [] };
 }
 
@@ -95,7 +97,11 @@ export function rustErrorFieldComparisonView(
   laterExpression: Node | undefined,
   context: RustPlanContext,
 ): RustExpr {
-  return node !== undefined && laterExpression !== undefined &&
-    rustErrorFieldBorrowNeedsSnapshot(node, [laterExpression], context)
-    ? expression : rustBorrowedStringView(expression);
+  if (node !== undefined && laterExpression !== undefined &&
+    rustErrorFieldBorrowNeedsSnapshot(node, [laterExpression], context)) {
+    const names = context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []);
+    const name = allocateRustSyntheticName(names, "error_snapshot");
+    return rustValueBlock([{ name, value: expression }], { kind: "path", path: name });
+  }
+  return rustBorrowedStringView(expression);
 }

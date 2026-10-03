@@ -39,6 +39,33 @@ function declarations(source, projectFiles) {
 
 for (const jsEnabled of [false, true]) {
   const profile = jsEnabled ? "js" : "native";
+  test(`nested generic interface Error properties retain their instantiated writable origins in ${profile}`, () => {
+    const { source, projectFiles, demand } = analyzed({ "index.ts": `
+interface SourceBox<Value> { readonly value: Value; }
+interface SelectedBox<Value> { readonly value: Value; }
+class Stored { readonly nested: SourceBox<Error>; constructor(nested: SourceBox<Error>) { this.nested = nested; } }
+interface Selected { readonly nested: SelectedBox<Error>; }
+export function run(): string {
+  const original = new Error("original");
+  const stored = new Stored({ value: original });
+  const selected: Selected = stored;
+  original.message = "changed";
+  return selected.nested.value.message;
+}
+` }, jsEnabled);
+    let selected;
+    const visit = node => {
+      if (source.ast.is.IsPropertySignatureDeclaration(node) && source.ast.text(source.ast.name(node)) === "value" &&
+        source.ast.text(source.ast.name(source.ast.parent(node))) === "SelectedBox") selected = node;
+      source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    projectFiles.forEach(visit);
+    assert.equal(selected !== undefined, true);
+    assert.equal(demand.receivesWritableNative(selected), true);
+    const origins = demand.storageOriginsFor(selected);
+    assert.equal(origins.kind === "resolved", true);
+    assert.equal(origins.kind === "resolved" && origins.origins.includes(demand.nativeConstructors[0]), true);
+  });
   test(`implicit interface Error properties retain exact writable origins in ${profile}`, () => {
     const { source, projectFiles, demand } = analyzed({ "index.ts": implicitErrorInterfaceSource(false) }, jsEnabled);
     let selected;

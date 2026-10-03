@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { applyFinalizedRustArgumentMode } from "../../../../dist/backend/planner/expressions/input-shaping.js";
 import { rustStringTargetType } from "../../../../dist/target-model/types/index.js";
-import { rustSourceParameterAbiFactKey } from "../../../../dist/analysis/facts/keys.js";
+import { rustSourceParameterAbiFactKey, rustSourceBindingFactKey } from "../../../../dist/analysis/facts/keys.js";
+import { planRustSharedReceiver } from "../../../../dist/backend/planner/expressions/typed-locations.js";
 import { lowerRustValueConversion } from "../../../../dist/backend/planner/expressions/value-conversions.js";
 import { rustValueConversionContract } from "../../../../dist/target-model/conversions/contracts.js";
 import { rustStringToBorrowedStrValueConversion } from "../../../../dist/public/provider.js";
+import { emptyRustTypeDefinitions } from "../../../../dist/target-model/types/source-union-definitions.js";
 
 const stringCarrier = rustStringTargetType();
 const input = {
@@ -17,13 +19,38 @@ const input = {
 };
 const sourceNode = {};
 
-function context(parameter, override) {
+function context(parameter, override, capture) {
+  const declaration = {};
   return {
-    input: { program: { facts: { getFact: (_node, key) =>
-      key === rustSourceParameterAbiFactKey ? parameter : undefined } } },
+    capturedBindings: capture === undefined ? [] : [{ declaration, expression: { kind: "path", path: "capture" },
+      storage: "value", valueCarrier: stringCarrier, borrowed: capture }],
+    input: { program: { typeDefinitions: emptyRustTypeDefinitions,
+      callableValues: { generic: { definitionFor: () => undefined } },
+      facts: { getFact: (_node, key) =>
+      key === rustSourceParameterAbiFactKey ? parameter : key === rustSourceBindingFactKey
+        ? { sourceDeclaration: declaration } : undefined,
+      getRuntimeCarrierFact: () => ({ carrier: stringCarrier }) },
+      source: { ast: { kindName: () => "KindIdentifier", is: {
+        IsIdentifier: () => true, IsElementAccessExpression: () => false,
+        IsParenthesizedExpression: () => false, IsAsExpression: () => false, IsSatisfiesExpression: () => false,
+        IsNonNullExpression: () => false, IsTypeAssertion: () => false,
+      } } } } },
     expressionOverrides: new Map(override === undefined ? [] : [[sourceNode, override]]),
   };
 }
+
+test("exact borrowed lexical captures pass once through the canonical shared-input owner", () => {
+  const expression = { kind: "path", path: "capture" };
+  for (const borrowed of ["shared", "mutable"]) {
+    const selected = context(undefined, undefined, borrowed);
+    const expected = borrowed === "shared" ? expression
+      : { kind: "reference", expr: { kind: "dereference", pointer: expression } };
+    assert.deepEqual(planRustSharedReceiver(sourceNode, expression, selected), expected);
+    assert.deepEqual(applyFinalizedRustArgumentMode(selected, sourceNode, expression, input, false), expected);
+  }
+  const stored = context();
+  assert.deepEqual(planRustSharedReceiver(sourceNode, expression, stored), { kind: "reference", expr: expression });
+});
 
 test("ordinary String reference arguments are not silently changed to native str views", () => {
   for (const expression of [

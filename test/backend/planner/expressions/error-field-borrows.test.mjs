@@ -14,13 +14,24 @@ function scenario(carrier, property = "message") {
   const queries = [];
   const operations = new Map([[read, { kind: "builtin-error-property", accessMode: "read", receiverCarrier: carrier,
     property, resultCarrier: rustStringTargetType() }]]);
-  const context = { diagnostics: [], input: { program: { facts: {
+  const context = { diagnostics: [], syntheticNames: { reserved: new Set(), nextSuffixByBase: new Map() }, input: { program: { facts: {
     getFact: (node, key) => key === rustTargetOperationFactKey ? operations.get(node) : undefined,
   }, errorStorageDemands: { invalidationFor: (subject, expression, pure) => {
     queries.push({ subject, expression, pure });
     return invalidations.get(expression) ?? { kind: "preserved" };
   } }, source: { ast: {
-    is: { IsParenthesizedExpression: node => node.kind === "parentheses", IsAsExpression: () => false,
+    is: { ...Object.fromEntries([
+      "IsTypeQueryNode", "IsKeywordTypeNode", "IsTypeReferenceNode", "IsUnionTypeNode",
+      "IsIntersectionTypeNode", "IsConditionalTypeNode", "IsInferTypeNode", "IsArrayTypeNode",
+      "IsIndexedAccessTypeNode", "IsLiteralTypeNode", "IsThisTypeNode", "IsMappedTypeNode",
+      "IsTupleTypeNode", "IsOptionalTypeNode", "IsRestTypeNode", "IsParenthesizedTypeNode",
+      "IsFunctionTypeNode", "IsConstructorTypeNode", "IsTemplateLiteralTypeNode", "IsImportTypeNode",
+      "IsTypeLiteralNode", "IsInterfaceDeclaration", "IsTypeAliasDeclaration", "IsArrowFunction",
+      "IsFunctionExpression", "IsFunctionDeclaration", "IsClassDeclaration", "IsClassExpression",
+      "IsMethodDeclaration", "IsGetAccessorDeclaration", "IsSetAccessorDeclaration",
+      "IsConstructorDeclaration", "IsPropertyDeclaration",
+    ].map(name => [name, () => false])),
+      IsParenthesizedExpression: node => node.kind === "parentheses", IsAsExpression: () => false,
       IsExpressionStatement: () => false, IsReturnStatement: () => false, IsThrowStatement: () => false,
       IsIfStatement: () => false, IsWhileStatement: () => false, IsDoStatement: () => false,
       IsForOfStatement: () => false, IsForInStatement: () => false, IsElementAccessExpression: () => false,
@@ -55,7 +66,10 @@ test("actual same-owner writes consume guarded fields before mutation", () => {
     const write = {};
     invalidations.set(write, { kind: "invalidated" });
     assert.equal(rustErrorFieldHasGuardedBorrow(read, context), true);
-    assert.equal(rustErrorFieldComparisonView(read, expression, write, context), expression);
+    const snapshot = rustErrorFieldComparisonView(read, expression, write, context);
+    assert.equal(snapshot.kind, "block");
+    assert.equal(snapshot.body.statements[0].init, expression);
+    assert.equal(snapshot.body.statements[1].expr.path, snapshot.body.statements[0].name);
     assert.equal(queries[0].subject, owner);
   }
 });
@@ -87,7 +101,10 @@ test("pure provider evidence exempts its invocation, not independently evaluated
   assert.equal(queries[0].pure.has(later), true);
   assert.equal(queries[0].pure.has(argument), false);
   invalidations.set(later, { kind: "invalidated" });
-  assert.equal(rustErrorFieldComparisonView(read, expression, later, context), expression);
+  const snapshot = rustErrorFieldComparisonView(read, expression, later, context);
+  assert.equal(snapshot.kind, "block");
+  assert.equal(snapshot.body.statements[0].init, expression);
+  assert.equal(snapshot.body.statements[1].expr.path, snapshot.body.statements[0].name);
 });
 
 test("transparent syntax retains the original selected Error owner", () => {
