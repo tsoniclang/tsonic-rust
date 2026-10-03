@@ -89,7 +89,7 @@ export type RustValueConversionContract = RustValueConversionContractBase & (
   | { readonly lowering: "exact-integer" }
   | {
       readonly lowering: "rest-sequence";
-      readonly collection: "vec" | "js-array" | "fixed-array" | "tuple";
+      readonly collection: "vec" | "js-array" | "fixed-array" | "tuple" | "slice";
       readonly elementConversions: readonly (RustValueConversionContract | null)[];
       readonly cloneSources: readonly TargetTypeRef[];
     }
