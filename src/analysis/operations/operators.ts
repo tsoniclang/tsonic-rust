@@ -76,7 +76,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustOptionNestingDepth } from "../../target-model/types/carriers/optional.js";
 import { rustValueCarrierBeforeContextualConversion, rustValueCarrierBeforeOptionProjection } from "../facts/value-carrier-queries.js";
 import { rustRuntimeUnionContract, rustRuntimeUnionProjection } from "../../target-model/types/carriers/runtime-unions.js";
-import { selectedIntegerLiteralJoin, selectedSourceLiteralIsRepresentable } from "../../policy/types/selected-numeric-literal.js";
+import { selectedIntegerLiteralJoin, selectedIntegerLiteralUnionJoin, selectedSourceLiteralIsRepresentable } from "../../policy/types/selected-numeric-literal.js";
 import { rustNumericPromotionConversion } from "../../policy/operations/numeric/promotion.js";
 import { setCarrierFact, setRustOperationFact } from "./project-calls.js";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
@@ -268,7 +268,8 @@ function resolveContextualBinaryOperandCarriers(
         leftNode,
         sourceFile,
         right === undefined || rustUnionAlternatives(right, walk.context.typeDefinitions) === undefined
-          ? contextualLiteralOperandCarrier(walk.context.ast, leftNode, right) : undefined,
+          ? contextualLiteralOperandCarrier(walk.context.ast, leftNode, right)
+          : selectedIntegerLiteralUnionJoin(leftNode, right, walk.context.ast, walk.context.typeDefinitions),
       ),
       right,
     };
@@ -282,7 +283,8 @@ function resolveContextualBinaryOperandCarriers(
         rightNode,
         sourceFile,
         left === undefined || rustUnionAlternatives(left, walk.context.typeDefinitions) === undefined
-          ? contextualLiteralOperandCarrier(walk.context.ast, rightNode, left) : undefined,
+          ? contextualLiteralOperandCarrier(walk.context.ast, rightNode, left)
+          : selectedIntegerLiteralUnionJoin(rightNode, left, walk.context.ast, walk.context.typeDefinitions),
       ),
     };
   }
@@ -400,7 +402,7 @@ export function resolvePostCheckBinaryCarrier(
   const errorEquality = strictEquality
     ? selectRustProgramErrorEquality(walk, left, right, operatorKind === KindExclamationEqualsEqualsToken)
     : undefined;
-  const unionEquality = strictEquality && left !== undefined && right !== undefined
+  const unionEquality = strictEquality && optionNullishRelationship === undefined && left !== undefined && right !== undefined
     ? selectRustUnionEquality(left, right, walk.context.typeDefinitions) : undefined;
   let fact: RustTargetOperationFact | undefined;
   if (operatorKind === "KindCommaToken" && left !== undefined && right !== undefined) {

@@ -11,12 +11,13 @@ import {
   rustSourcePrimitiveTargetType,
 } from "../../../target-model/types/index.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
-import { applyRustValueConversion } from "./value-conversions.js";
+import { applyFinalizedValueConversion, applyRustValueConversion } from "./value-conversions.js";
 import { applyRustArgumentMode } from "./input-shaping.js";
 import { planNullishCoalescing } from "./nullish-coalescing.js";
 import {
   BinaryExpression_Left,
   BinaryExpression_Right,
+  sourceBooleanShortCircuitBranch,
 } from "@tsonic/target-api/source";
 import { diagnosticInput, registerAliasFromPath, rustActiveErrorType } from "../program/plan-context.js";
 import { rustTargetRuntimeErrorType } from "../types/error-boundary.js";
@@ -47,6 +48,8 @@ import { rustTargetOperationText } from "../../../analysis/facts/target-operatio
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustOptionNestingDepth } from "../../../target-model/types/carriers/optional.js";
 import { rustValueCarrierBeforeOptionProjection } from "../../../analysis/facts/value-carrier-queries.js";
+import { finalizedConversionIsValid } from "../../../analysis/facts/finalized-operation/conversions.js";
+import { hasExactObjectKeys, isClosedMetadata } from "../../../target-model/metadata/closed-data.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
@@ -108,6 +111,52 @@ export function planSelectedRustProjectTypeTest(
 
 export function planBinaryExpression(node: Node, context: RustPlanContext, resultUse: RustExpressionResultUse = "value"): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
+  if (fact?.kind === "logical-value") {
+    const ast = context.input.program.source.ast;
+    const left = BinaryExpression_Left(ast, node);
+    const right = BinaryExpression_Right(ast, node);
+    const validConversion = (conversion: typeof fact.leftConversion, carrier: typeof fact.leftCarrier, required: boolean) =>
+      required ? conversion !== null && finalizedConversionIsValid(conversion, context.input.program.typeDefinitions) &&
+        rustTargetTypeRefEquals(conversion.sourceCarrier, carrier) &&
+        rustTargetTypeRefEquals(conversion.targetCarrier, fact.resultCarrier) : conversion === null;
+    if (left === undefined || right === undefined || !isClosedMetadata(fact) ||
+      !hasExactObjectKeys(fact, ["kind", "operationId", "operator", "branch", "leftCarrier", "rightCarrier", "resultCarrier", "leftConversion", "rightConversion"]) ||
+      (fact.branch !== "left" && fact.branch !== "right" && fact.branch !== "conditional") ||
+      fact.branch !== sourceBooleanShortCircuitBranch(ast, left, fact.operator === "and" ? "&&" : "||") ||
+      ast.operatorKindName(node) !== (fact.operator === "and" ? "KindAmpersandAmpersandToken" : "KindBarBarToken") ||
+      (fact.operator !== "and" && fact.operator !== "or") || !isRustBoolCarrier(fact.leftCarrier) ||
+      !validConversion(fact.leftConversion, fact.leftCarrier, fact.branch !== "right") ||
+      !validConversion(fact.rightConversion, fact.rightCarrier, fact.branch !== "left") ||
+      !rustTargetTypeRefEquals(expressionCarrier(left, context), fact.leftCarrier) ||
+      !rustTargetTypeRefEquals(expressionCarrier(right, context), fact.rightCarrier) ||
+      !selectedOperationMatches(context.input.program.facts.getSelectedTargetOperator(node), fact.operationId,
+        "operator", fact.resultCarrier, fact.operationId)) {
+      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+        "rust.backend.logical-value-evidence", "Short-circuit selection requires exact finalized branch and conversion evidence."));
+      return undefined;
+    }
+    if (!requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.logical-value-result")) return undefined;
+    if (fact.branch === "left") {
+      const selected = planExpression(left, context);
+      return selected === undefined ? undefined : applyFinalizedValueConversion(context, selected, fact.leftConversion!, left, "operation-result");
+    }
+    if (fact.branch === "right") {
+      const preceding = planRustDiscardedValue(left, context);
+      const selected = planExpression(right, context);
+      const converted = selected === undefined ? undefined : applyFinalizedValueConversion(context, selected, fact.rightConversion!, right, "operation-result");
+      return preceding === undefined || converted === undefined ? undefined :
+        { kind: "evaluate-then", effect: preceding.expression, discard: preceding.discard, value: converted };
+    }
+    const condition = planExpression(left, context);
+    const selected = planExpression(right, context);
+    const constant = applyFinalizedValueConversion(context, { kind: "bool-literal", value: fact.operator === "or" },
+      fact.leftConversion!, left, "operation-result");
+    const converted = selected === undefined ? undefined : applyFinalizedValueConversion(context, selected,
+      fact.rightConversion!, right, "operation-result");
+    return condition === undefined || constant === undefined || converted === undefined ? undefined
+      : { kind: "conditional", condition, whenTrue: fact.operator === "and" ? converted : constant,
+          whenFalse: fact.operator === "and" ? constant : converted };
+  }
   if (fact?.kind === "sequence") {
     const leftNode = BinaryExpression_Left(context.input.program.source.ast, node);
     const rightNode = BinaryExpression_Right(context.input.program.source.ast, node);

@@ -16,6 +16,7 @@ import {
   Node_Type,
   VariableDeclarationList_Declarations,
   VariableStatement_DeclarationList,
+  sourceDeclarationIsModuleScoped,
 } from "@tsonic/target-api/source";
 import {
   rustAsyncFunctionFactKey,
@@ -94,6 +95,8 @@ export function recordNestedCallableTypeSignatureFacts(walk: RustFactWalk, sourc
     const kind = ast.kindName(node);
     if (kind === "KindFunctionType" || kind === "KindCallSignature") {
       recordCallableTypeSignatureFacts(walk, node);
+    } else if (kind === KindFunctionDeclaration && !sourceDeclarationIsModuleScoped(node, ast)) {
+      recordFunctionSignatureFacts(walk, node);
     }
     ast.forEachChild(node, visit);
   };

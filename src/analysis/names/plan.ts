@@ -135,8 +135,8 @@ export function createRustNamePlan(input: {
     }
   }
   for (const candidate of candidates) {
-    if (input.ast.kindName(candidate.scope) !== "KindSourceFile" ||
-      (input.ast.kindName(candidate.declaration) !== "KindFunctionDeclaration" &&
+    if (input.ast.kindName(candidate.declaration) !== "KindFunctionDeclaration" &&
+      (input.ast.kindName(candidate.scope) !== "KindSourceFile" ||
         input.ast.kindName(candidate.declaration) !== "KindVariableDeclaration")) {
       continue;
     }

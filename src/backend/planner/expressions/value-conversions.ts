@@ -289,8 +289,12 @@ export function lowerRustValueConversion(
     }
     case "source-optional":
       return planRustCheckedSourceOptional(source, contract.element, context);
-    case "option-some":
-      return { kind: "call", path: "Some", args: [source] };
+    case "option-some": {
+      const value = contract.element === null ? source : lowerNestedRustValueConversion(contract.element, source, context, node);
+      return value === undefined ? undefined : contract.element?.fallible === true
+        ? { kind: "method-call", receiver: value, method: "map", args: [{ kind: "path", path: "Some" }] }
+        : { kind: "call", path: "Some", args: [value] };
+    }
     case "option-map": {
       if (contract.element.lowering === "copy-from-reference") {
         return {

@@ -78,7 +78,9 @@ export function rustUnionPathsMatching(
 function collectRustUnionPaths(carrier: TargetTypeRef, definitions: RustTypeDefinitions, matches?: (carrier: TargetTypeRef) => boolean):
   readonly RustUnionLeaf[] | undefined {
   const leaves: RustUnionLeaf[] = [];
+  let rows = 0;
   const visit = (current: TargetTypeRef, path: readonly RustUnionPathStep[]): boolean => {
+    if (++rows > 4096 || path.length > 128) return false;
     if (path.some(step => rustTargetTypeRefEquals(step.union, current))) return false;
     if (path.length > 0 && matches?.(current) === true) {
       leaves.push(Object.freeze({ carrier: current, path }));

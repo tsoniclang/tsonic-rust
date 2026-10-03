@@ -1,4 +1,5 @@
 import type { TargetTypeRef } from "../types/model.js";
+import { isRustValueConversion } from "./shape.js";
 import { rustNativeRepresentationMatches } from "./native-representation.js";
 import { rustUnionPayloadAdmission } from "./union-injection.js";
 import { rustJsRecordValueAdmission } from "./closed-record.js";
@@ -119,6 +120,7 @@ export type RustValueConversionContract = RustValueConversionContractBase & (
     }
   | {
       readonly lowering: "option-some";
+      readonly element: RustValueConversionContract | null;
     }
   | {
       readonly lowering: "js-argument-vector-callback";
@@ -180,6 +182,7 @@ export function rustValueConversionContract(
   value: RustValueConversion,
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): RustValueConversionContract | undefined {
+  if (!isRustValueConversion(value)) return undefined;
   if (value.kind === "exact-integer") {
     return isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) &&
       rustExactIntegerConversionMatches(value.source, value.target, value)
@@ -480,16 +483,19 @@ export function rustValueConversionContract(
     } : undefined;
   }
   if (value.kind === "option-some") {
+    const element = value.elementConversion === null ? null : rustValueConversionContract(value.elementConversion, definitions);
     return isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.element) &&
       (!isRustAbsenceCarrier(value.source) || rustTargetTypeRefEquals(value.source, value.element)) &&
-      rustNativeRepresentationMatches(value.source, value.element)
+      (element === null ? rustNativeRepresentationMatches(value.source, value.element) : element !== undefined &&
+        rustTargetTypeRefEquals(element.source, value.source) && rustTargetTypeRefEquals(element.target, value.element))
       ? {
-          category: "exact",
+          category: element?.category ?? "exact",
           lowering: "option-some",
           sourceMode: "value",
           source: value.source,
           target: rustOptionTargetType(value.element),
-          fallible: false,
+          element: element!,
+          fallible: element?.fallible ?? false,
         }
       : undefined;
   }
@@ -771,7 +777,7 @@ export function rustValueConversionIdentity(value: RustValueConversion): string 
             : value.kind === "js-value-from-structural-object"
               ? `js-value-from-structural-object.${JSON.stringify(value.source)}.${value.fields.map((field) => `${field.sourceName}:${rustValueConversionIdentity(field.conversion)}`).join("|")}`
             : value.kind === "option-some"
-              ? `${value.kind}.${JSON.stringify(value.source)}.${JSON.stringify(value.element)}`
+              ? `${value.kind}.${JSON.stringify(value.source)}.${JSON.stringify(value.element)}.${value.elementConversion === null ? "identity" : rustValueConversionIdentity(value.elementConversion)}`
             : value.kind === "source-optional"
               ? `${value.kind}.${JSON.stringify(value.element)}`
             : `option-map.${rustValueConversionIdentity(value.elementConversion)}`;

@@ -227,6 +227,10 @@ export function recordStatementFacts(
   if (recordRustNativeUnreachable(walk, statement)) return;
   const { ast } = walk.context;
   const kind = ast.kindName(statement);
+  if (kind === "KindFunctionDeclaration") {
+    if (ast.body(statement) !== undefined) recordFunctionBodyFacts(walk, statement, sourceFile);
+    return;
+  }
   if (kind === "KindClassDeclaration" && walk.context.projectTypes.definitionForDeclaration(statement) !== undefined) return;
   if (kind === "KindTypeAliasDeclaration") {
     registerTypeAlias(walk, statement);

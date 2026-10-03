@@ -191,7 +191,7 @@ export function hasExactObjectKeys(
     });
 }
 
-function isMetadataRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+export function isMetadataRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   if (typeof value !== "object" || value === null) {
     return false;
   }

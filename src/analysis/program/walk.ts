@@ -42,6 +42,7 @@ import type { RustSourceTypeRegistry } from "../project-types/source-type-regist
 import type { RustTargetTypeResolutionContext } from "../../policy/types/resolution.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustCaptureStorage } from "../callables/capture-storage.js";
+import { recordRustLogicalValueFact } from "../operations/logical-values.js";
 
 export const rustTargetSemanticsExtensionId = "tsonic.rust.policy";
 
@@ -326,6 +327,7 @@ export function selectExpressionOperation(
   if (kind !== KindBinaryExpression && kind !== KindPrefixUnaryExpression && kind !== KindPostfixUnaryExpression) {
     return;
   }
+  if (kind === KindBinaryExpression && recordRustLogicalValueFact(walk, expression)) return;
   const operator = rustOperatorText(ast.operatorKindName(expression));
   if (operator === undefined) {
     return;

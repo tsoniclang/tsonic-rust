@@ -86,7 +86,7 @@ export function resolveRustUnionMethodContracts(
     (element === undefined || !rustTargetTypeRefEquals(type, element)))) return undefined;
   return Object.freeze({ result: common, methods: Object.freeze(resolved.map(method => Object.freeze({
     ...method!, resultConversion: rustTargetTypeRefEquals(method!.returnType, common)
-      ? undefined : { kind: "option-some" as const, source: method!.returnType, element: element! },
+      ? undefined : { kind: "option-some" as const, source: method!.returnType, element: element!, elementConversion: null },
   }))) });
 }
 

@@ -38,6 +38,7 @@ import { rustBlockTerminates } from "./block-flow.js";
 import { planRustClassEnvironmentValue } from "../objects/class-environments.js";
 import { planRustAbsentValue } from "../expressions/optional-storage.js";
 import { rustNativeGuardResultFactKey, rustNativeUnreachableFactKey } from "../../../analysis/facts/native-control-flow.js";
+import { planFunctionDeclarations } from "../declarations/callables/functions.js";
 
 export type RustAssignmentOperationFact = Extract<
   RustTargetOperationFact,
@@ -66,6 +67,11 @@ function planStatementInner(node: Node, context: RustPlanContext): readonly Rust
   const { ast } = context.input.program.source;
   const kind = ast.kindName(node);
   switch (kind) {
+    case "KindFunctionDeclaration": {
+      if (ast.body(node) === undefined) return [];
+      const items = planFunctionDeclarations(node, context);
+      return items?.map(item => ({ kind: "item", item }));
+    }
     case "KindClassDeclaration": {
       if (context.input.program.projectTypes.definitionForDeclaration(node) === undefined) return undefined;
       const environment = context.input.program.classValues.forDeclaration(node)?.environment;

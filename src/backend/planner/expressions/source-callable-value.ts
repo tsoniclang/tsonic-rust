@@ -30,7 +30,14 @@ export function planRustSourceCallableValue(
     return undefined;
   }
   const callableType = rustCallableConstructionType(value.carrier, context);
-  const path = sourceModuleItemPath(context, value.fileName, value.name);
+  const lexical = context.input.program.lexicalFunctions.forDeclaration(value.sourceDeclaration);
+  if (lexical?.kind === "unresolved" || lexical?.kind === "resolved" && lexical.captures.length > 0) {
+    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, value.sourceDeclaration),
+      "rust.backend.lexical-function-value", lexical.kind === "unresolved" ? lexical.reason :
+        "Capturing lexical function values require their finalized native environment ownership contract."));
+    return undefined;
+  }
+  const path = lexical === undefined ? sourceModuleItemPath(context, value.fileName, value.name) : value.name;
   if (path === undefined || !isValidRustIdentifier(value.name)) {
     return undefined;
   }

@@ -198,6 +198,8 @@ export function substituteRustValueConversion(
       return Object.freeze({ ...value,
         source: substituteRustTargetGenerics(value.source, substitutions, lifetimeSubstitutions, constSubstitutions),
         element: substituteRustTargetGenerics(value.element, substitutions, lifetimeSubstitutions, constSubstitutions),
+        elementConversion: value.elementConversion === null ? null : substituteRustValueConversion(
+          value.elementConversion, substitutions, lifetimeSubstitutions, constSubstitutions) as typeof value.elementConversion,
       });
     case "source-optional":
       return Object.freeze({

@@ -45,6 +45,7 @@ import { planRustReturnExit } from "../../statements/completion-exits.js";
 import { planRustGeneratorBody } from "./generator-body.js";
 import { planRustCallableLeadingParameters } from "./leading-parameters.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
+import { planRustLexicalFunctionEnvironment } from "./lexical-functions.js";
 
 export { applyRustTailShape, rustBlockTerminates } from "../../statements/block-flow.js";
 
@@ -135,7 +136,8 @@ function planRustFunctionItem(
   const isExported = source.exported;
   const name = source.name ??
     outerContext.input.program.names.nameForDeclaration(source.nameDeclaration) ?? "";
-  const visibility = isExported || rustSourceItemIsPubliclyReachable(outerContext, name)
+  const lexical = outerContext.input.program.lexicalFunctions.forDeclaration(node);
+  const visibility = lexical !== undefined ? "private" as const : isExported || rustSourceItemIsPubliclyReachable(outerContext, name)
     ? "public" as const
     : "crate" as const;
   const deadCode = rustAuthoredDeadCodeDisposition(
@@ -175,6 +177,9 @@ function planRustFunctionItem(
     declarationAttributes.push(rustLintAttributes.needlessLifetimes);
   }
   const syntheticNames = createRustSyntheticNameState(ast, node, []);
+  const environment = planRustLexicalFunctionEnvironment(node, { ...context, syntheticNames });
+  if (environment === undefined) return undefined;
+  context = environment.context;
   const parameterPlan = planRustCallableParameters(node, context, syntheticNames, {
     ...((generatorFact !== undefined && generatorFact.storage.kind !== "lifetime") ||
         asyncFact?.kind === "js-promise" && asyncFact.storage.kind === "static"
@@ -197,7 +202,7 @@ function planRustFunctionItem(
   });
   if (leadingParams.some(parameter => parameter === undefined)) return undefined;
   context = leading.context;
-  const params = [...leadingParams as NonNullable<typeof leadingParams[number]>[], ...parameterPlan.params];
+  const params = [...leadingParams as NonNullable<typeof leadingParams[number]>[], ...parameterPlan.params, ...environment.parameters];
   const returnTypeNode = Node_Type(ast, node);
   const sourceReturn = context.input.program.facts.getFact(node, rustSourceCallableReturnFactKey);
   const returnCarrier = generatorFact?.resultCarrier ?? asyncFact?.outputCarrier ??

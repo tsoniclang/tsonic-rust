@@ -12,6 +12,10 @@ import {
   rustPostCheckUnaryPlusOperationId,
 } from "../../target-model/operations/model.js";
 import { rustNumericPromotionKind } from "../../target-model/conversions/numeric-promotion.js";
+import { rustUnionLeaves } from "../../target-model/types/union-relations.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustSourceOptionalElementCarrier } from "../../target-model/types/carriers/optional.js";
+import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 
 type SourcePrimitiveName = Extract<
   TargetTypeRef,
@@ -34,6 +38,27 @@ export function selectedIntegerLiteralJoin(
     }
   }
   return undefined;
+}
+
+export function selectedIntegerLiteralUnionJoin(
+  node: Node,
+  carrier: TargetTypeRef,
+  ast: AstReader,
+  definitions: RustTypeDefinitions,
+): TargetTypeRef | undefined {
+  if (sourceIntegerLiteralValue(ast, node) === undefined) return undefined;
+  const leaves = rustUnionLeaves(rustSourceOptionalElementCarrier(carrier) ?? carrier, definitions);
+  if (leaves === undefined) return undefined;
+  let selected: TargetTypeRef | undefined;
+  for (const leaf of leaves) {
+    if (leaf.carrier.kind === "source-primitive" &&
+      (leaf.carrier.name === "float32" || leaf.carrier.name === "float64")) return undefined;
+    const candidate = selectedIntegerLiteralJoin(node, leaf.carrier, ast);
+    if (candidate === undefined) continue;
+    if (selected !== undefined && !rustTargetTypeRefEquals(selected, candidate)) return undefined;
+    selected = candidate;
+  }
+  return selected;
 }
 
 export function selectedSourceLiteralIsRepresentable(

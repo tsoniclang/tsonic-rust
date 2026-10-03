@@ -288,6 +288,13 @@ export function rustFoundationForTargetOperationFact(
     case "regexp-create":
       require("std");
       break;
+    case "logical-value":
+      requireCarrier(fact.leftCarrier);
+      requireCarrier(fact.rightCarrier);
+      requireCarrier(fact.resultCarrier);
+      if (fact.leftConversion?.kind === "semantic") requireConversion(fact.leftConversion.conversion);
+      if (fact.rightConversion?.kind === "semantic") requireConversion(fact.rightConversion.conversion);
+      break;
     case "source-conversion":
       requireConversion(fact.conversion);
       requireCarrier(fact.resultCarrier);

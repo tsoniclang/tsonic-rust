@@ -257,6 +257,7 @@ export type RustValueConversion =
       readonly kind: "option-some";
       readonly source: TargetTypeRef;
       readonly element: TargetTypeRef;
+      readonly elementConversion: RustNonOptionValueConversion | null;
     }
   | {
       readonly kind: "option-map";

@@ -1,4 +1,5 @@
 import { rustValueBlock } from "../../../target-ast/value-block.js";
+import { planRustLexicalFunctionArguments } from "../../declarations/callables/lexical-functions.js";
 import {
   isRustNeverCarrier,
   isRustUnitCarrier,
@@ -235,7 +236,11 @@ export function planSelectedSourceCall(
     }
     case "function": {
       const targetName = callableSpecialization?.targetName ?? fact.target.name;
-      const path = sourceModuleItemPath(context, fact.target.fileName, targetName);
+      const declaration = selected.sourceDeclaration;
+      const lexical = declaration === undefined ? undefined : context.input.program.lexicalFunctions.forDeclaration(declaration);
+      const path = lexical === undefined ? sourceModuleItemPath(context, fact.target.fileName, targetName) : targetName;
+      const captures = declaration === undefined ? [] : planRustLexicalFunctionArguments(declaration, context);
+      if (captures === undefined) break;
       if (path === undefined || !isValidRustIdentifier(targetName)) {
         break;
       }
@@ -244,7 +249,7 @@ export function planSelectedSourceCall(
       planned = {
         kind: "call",
         path,
-        args: [...(environment === undefined ? [] : [{ kind: "reference" as const, expr: environment }]), ...shaped],
+        args: [...(environment === undefined ? [] : [{ kind: "reference" as const, expr: environment }]), ...shaped, ...captures],
         ...(genericArguments === undefined ? {} : { genericArguments }),
       };
       break;

@@ -163,11 +163,14 @@ export function visitConversionContract(
     case "exact-integer":
     case "numeric-cast":
     case "identity":
-    case "option-some":
     case "js-argument-vector-callback":
     case "owned-string-from-borrowed-str":
     case "copy-from-reference":
     case "union-project":
+      return;
+    case "option-some":
+      if (contract.element !== null) visitConversionContract(contract.element, markStructuralFieldRead,
+        markVariantConstructed, markClosedObjectUsed);
       return;
   }
 }

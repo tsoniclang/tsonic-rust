@@ -100,7 +100,13 @@ export function selectRustSourceValueConversion(
   const targetOptionElement = rustOptionElementCarrier(target);
   if (targetOptionElement !== undefined && (rustTargetTypeRefEquals(source, targetOptionElement) ||
     !isRustAbsenceCarrier(source) && rustNativeRepresentationMatches(source, targetOptionElement))) {
-    return { kind: "option-some", source, element: targetOptionElement };
+    return { kind: "option-some", source, element: targetOptionElement, elementConversion: null };
+  }
+  if (targetOptionElement !== undefined && sourceOptionElement === undefined && !isRustAbsenceCarrier(source)) {
+    const elementConversion = selectRustSourceValueConversion(source, targetOptionElement, definitions, nextAncestors);
+    if (elementConversion !== undefined && elementConversion.kind !== "option-map" && elementConversion.kind !== "option-some") {
+      return { kind: "option-some", source, element: targetOptionElement, elementConversion };
+    }
   }
   if (sourceOptionElement !== undefined && targetOptionElement !== undefined) {
     const elementConversion = selectRustSourceValueConversion(

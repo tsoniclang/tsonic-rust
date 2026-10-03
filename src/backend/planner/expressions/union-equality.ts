@@ -14,7 +14,9 @@ import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustUnionPattern } from "./union-patterns.js";
 import { planExpression } from "./entry.js";
 import { effectivePlannedExpressionCarrier, requireExpressionCarrier, selectedOperationMatches } from "./fundamentals.js";
-import { applyRustValueConversion } from "./value-conversions.js";
+import { lowerNestedRustValueConversion } from "./value-conversions.js";
+import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
+import type { RustValueConversion } from "../../../target-model/operations/model.js";
 import { planRustOperatorCallExpression } from "./binary.js";
 import { negateRustBooleanExpression } from "../../target-ast/expressions.js";
 
@@ -67,8 +69,13 @@ export function planRustUnionEquality(
       comparison = planRustOperatorCallExpression({ ...arm.operation, operator: arm.operation.rustOperator,
         operationId: fact.operationId }, argument(leftValue), argument(rightValue), node, context);
     } else {
-      const convertedLeft = applyRustValueConversion(context, leftValue, arm.operation.leftConversion, undefined);
-      const convertedRight = applyRustValueConversion(context, rightValue, arm.operation.rightConversion, undefined);
+      const convert = (value: RustExpr, conversion: RustValueConversion | undefined): RustExpr | undefined => {
+        if (conversion === undefined) return value;
+        const contract = rustValueConversionContract(conversion, context.input.program.typeDefinitions);
+        return contract === undefined || contract.fallible ? undefined : lowerNestedRustValueConversion(contract, value, context, node);
+      };
+      const convertedLeft = convert(leftValue, arm.operation.leftConversion);
+      const convertedRight = convert(rightValue, arm.operation.rightConversion);
       if (convertedLeft === undefined || convertedRight === undefined) return undefined;
       comparison = { kind: "binary", operator: "==", left: convertedLeft, right: convertedRight };
     }

@@ -61,6 +61,7 @@ export interface RustPlanningHost {
 }
 
 export interface RustTargetProgram {
+  readonly lexicalFunctions: import("../callables/lexical-functions.js").RustLexicalFunctionQueries;
   readonly errorStorageDemands: import("../objects/error-storage-demands.js").RustErrorStorageDemandQueries;
   readonly localStorageAliases: RustLocalStorageAliasPlan;
   readonly numericRepresentations: RustNumericRepresentations;

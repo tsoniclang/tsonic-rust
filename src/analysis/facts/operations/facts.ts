@@ -93,6 +93,17 @@ export type RustTargetOperationFact =
       readonly resultCarrier: TargetTypeRef;
     }
   | {
+      readonly kind: "logical-value";
+      readonly operationId: string;
+      readonly operator: "and" | "or";
+      readonly branch: "left" | "right" | "conditional";
+      readonly leftCarrier: TargetTypeRef;
+      readonly rightCarrier: TargetTypeRef;
+      readonly resultCarrier: TargetTypeRef;
+      readonly leftConversion: RustFinalizedValueConversion | null;
+      readonly rightConversion: RustFinalizedValueConversion | null;
+    }
+  | {
       readonly kind: "template-string";
       readonly operationId: string;
       readonly resultCarrier: TargetTypeRef;

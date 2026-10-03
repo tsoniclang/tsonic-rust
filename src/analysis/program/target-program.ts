@@ -10,6 +10,7 @@ import { Node_Expression } from "@tsonic/target-api/source";
 import { analyzeRustProgram } from "./analyze.js";
 import { analyzeRustNumericRepresentations } from "../numeric/representations.js";
 import { createRustAnalysisContext } from "./context.js";
+import { createRustLexicalFunctionQueries } from "../callables/lexical-functions.js";
 import type {
   AnalyzeRustTargetProgramResult,
   RustTargetAnalysisRequest,
@@ -207,6 +208,7 @@ export function analyzeRustTargetProgram(
   }
   const borrowedElementReads = analyzeRustBorrowedElementReads(context.ast, context.sourceFiles, facts, context.source.navigation);
   const program: RustTargetProgram = Object.freeze({
+    lexicalFunctions: createRustLexicalFunctionQueries(context.source, context.sourceFiles, facts),
     errorStorageDemands: context.errorStorageDemands,
     localStorageAliases: analyzeRustLocalStorageAliases({ ast: context.ast,
       navigation: context.source.navigation, sourceFiles: context.sourceFiles, facts }),
