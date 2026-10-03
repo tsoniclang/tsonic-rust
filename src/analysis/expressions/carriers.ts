@@ -502,7 +502,7 @@ function resolveIndependentValueOperation(
         return;
       }
       resolveIndependentValueOperation(walk, inner, sourceFile);
-      if (kind !== KindSpreadElement && walk.context.facts.getRuntimeCarrierFact(inner) !== undefined) {
+      if (walk.context.facts.getRuntimeCarrierFact(inner) !== undefined) {
         resolveExpressionCarrier(walk, argument, sourceFile, undefined, "operation");
       }
     }
