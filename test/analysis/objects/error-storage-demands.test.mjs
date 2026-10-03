@@ -239,6 +239,183 @@ for (const jsEnabled of [false, true]) {
       assert.equal(demand.invalidationFor(owner, selected.get(name), new Set()).kind, "invalidated", name);
     }
   });
+
+  test(`Error invalidation follows executed defaults, accessors and instance initialization in ${profile}`, () => {
+    const { source, projectFiles, demand } = analyzed({ "index.ts": `
+      export function run(optional: string | undefined): void {
+        const original = new Error("original");
+        function mutate(): string { original.message = "changed"; return "changed"; }
+        function defaultWrite(value: string = mutate()): string { return value; }
+        class Accessors {
+          get value(): string { return mutate(); }
+          set value(input: string) { original.message = input; }
+        }
+        class Initialized { value = mutate(); }
+        class Defaulted { constructor(value: string = mutate()) {} }
+        class Deferred { callback = () => mutate(); }
+        const accessors = new Accessors();
+        const omitted = defaultWrite();
+        const present = defaultWrite("provided");
+        const absent = defaultWrite(undefined);
+        const maybe = defaultWrite(optional);
+        const fetched = accessors.value;
+        const stored = (accessors.value = "provided");
+        const initialized = new Initialized();
+        const constructed = new Defaulted();
+        const provided = new Defaulted("provided");
+        const deferred = new Deferred();
+      }` }, jsEnabled);
+    const selected = declarations(source, projectFiles);
+    const owner = selected.find(node => source.ast.text(source.ast.name(node)) === "original");
+    assert.equal(owner !== undefined, true, "exact original Error owner exists");
+    const expectations = [["omitted", "invalidated"], ["present", "preserved"],
+      ["absent", "invalidated"], ["maybe", "invalidated"], ["fetched", "invalidated"],
+      ["stored", "invalidated"], ["initialized", "invalidated"], ["constructed", "invalidated"],
+      ["provided", "preserved"], ["deferred", "preserved"]];
+    const actual = expectations.map(([name]) => {
+      const declaration = selected.find(node => source.ast.text(source.ast.name(node)) === name);
+      const expression = source.ast.as.AsVariableDeclaration(declaration)?.Initializer;
+      assert.equal(expression !== undefined, true, name);
+      return [name, demand.invalidationFor(owner, expression, new Set()).kind];
+    });
+    assert.deepEqual(actual, expectations);
+  });
+
+  test(`Error invocation footprints distinguish callable values from factory results in ${profile}`, () => {
+    const { source, projectFiles, demand } = analyzed({ "index.ts": `
+      export function run(): void {
+        const original = new Error("original");
+        function create(): () => string {
+          original.message = "created";
+          return () => "read only";
+        }
+        const callback = create();
+        const factoryAlias = create;
+        const readOnly = callback();
+        const creates = factoryAlias();
+        class Base { value(): string { return "read only"; } }
+        class Derived extends Base { override value(): string { original.message = "changed"; return "changed"; } }
+        const receiver: Base = new Derived();
+        const base: Base = new Base();
+        const dispatch = receiver.value();
+        const stable = base.value();
+      }` }, jsEnabled);
+    const selected = declarations(source, projectFiles);
+    const owner = selected.find(node => source.ast.text(source.ast.name(node)) === "original");
+    assert.equal(owner !== undefined, true, "exact original Error owner exists");
+    const expectations = [["readOnly", "preserved"], ["creates", "invalidated"],
+      ["dispatch", "invalidated"], ["stable", "preserved"]];
+    const actual = expectations.map(([name]) => {
+      const declaration = selected.find(node => source.ast.text(source.ast.name(node)) === name);
+      const expression = source.ast.as.AsVariableDeclaration(declaration)?.Initializer;
+      assert.equal(expression !== undefined, true, name);
+      return [name, demand.invalidationFor(owner, expression, new Set()).kind];
+    });
+    assert.deepEqual(actual, expectations);
+  });
+
+  test(`Error transport follows transitive executed regions without entering unused defaults in ${profile}`, () => {
+    const { demand } = analyzed({ "index.ts": `
+      function fail(value: Error): never { while (true) { throw value; } }
+      function forward(value: Error): never { return fail(value); }
+      export function run(): void {
+        const direct = new Error("direct"); const getter = new Error("getter");
+        const setter = new Error("setter"); const constructor = new Error("constructor");
+        const defaulted = new Error("defaulted"); const initialized = new Error("initialized");
+        const untouched = new Error("untouched"); const deferred = new Error("deferred");
+        class Accessors {
+          get value(): string { return forward(getter); }
+          set value(input: Error) { forward(input); }
+        }
+        class Constructed { constructor(value: Error) { forward(value); } }
+        class Initialized { value = forward(initialized); }
+        class Deferred { get value(): string { return forward(deferred); } }
+        function omitted(value: string = forward(defaulted)): string { return value; }
+        function present(value: string = forward(untouched)): string { return value; }
+        const accessors = new Accessors();
+        try { forward(direct); } catch (caught) { if (caught instanceof Error) caught.message = "changed"; }
+        try { accessors.value; } catch (caught) { if (caught instanceof Error) caught.message = "changed"; }
+        try { accessors.value = setter; } catch (caught) { if (caught instanceof Error) caught.message = "changed"; }
+        try { new Constructed(constructor); } catch (caught) { if (caught instanceof Error) caught.message = "changed"; }
+        try { omitted(); } catch (caught) { if (caught instanceof Error) caught.message = "changed"; }
+        try { new Initialized(); } catch (caught) { if (caught instanceof Error) caught.message = "changed"; }
+        try { present("provided"); } catch (caught) { if (caught instanceof Error) caught.message = "changed"; }
+        try { new Deferred(); } catch (caught) { if (caught instanceof Error) caught.message = "changed"; }
+      }` }, jsEnabled);
+    assert.equal(demand.nativeConstructors.length, 8);
+    assert.deepEqual(demand.nativeConstructors.map(origin => demand.storageFor(origin).kind),
+      ["writable", "writable", "writable", "writable", "writable", "writable", "immutable", "immutable"]);
+  });
+
+  test(`Error receiver and returned backing follow exact virtual member contracts in ${profile}`, () => {
+    const { source, projectFiles, demand } = analyzed({ "index.ts": `
+      export function run(): void {
+        class Mutable extends Error {
+          change(): string { while (true) { this.message = "changed"; return "changed"; } }
+          defer(): () => string { return () => { this.name = "Changed"; return "changed"; }; }
+        }
+        const original = new Mutable("original");
+        const changed = original.change();
+        const callback = original.defer();
+        const later = callback();
+        const first = new Error("first"); const second = new Error("second");
+        class Base {
+          get value(): Error { return first; }
+        }
+        class Derived extends Base { override get value(): Error { return second; } }
+        const receiver: Base = new Derived();
+        receiver.value.message = "changed";
+      }` }, jsEnabled);
+    const selected = declarations(source, projectFiles);
+    const owner = selected.find(node => source.ast.text(source.ast.name(node)) === "original");
+    assert.equal(owner !== undefined, true, "exact receiver Error owner exists");
+    for (const name of ["changed", "later"]) {
+      const declaration = selected.find(node => source.ast.text(source.ast.name(node)) === name);
+      const expression = source.ast.as.AsVariableDeclaration(declaration)?.Initializer;
+      assert.equal(expression !== undefined, true, name);
+      assert.equal(demand.invalidationFor(owner, expression, new Set()).kind, "invalidated", name);
+    }
+    assert.equal(demand.nativeConstructors.length, 3);
+    assert.deepEqual(demand.nativeConstructors.map(origin => demand.storageFor(origin).kind), ["writable", "immutable", "writable"]);
+  });
+
+  test(`Error invocation bindings retain actual receiver and argument identity in ${profile}`, () => {
+    const { source, projectFiles, demand } = analyzed({ "index.ts": `
+      export function run(): void {
+        class Mutable extends Error {
+          change(): string { this.message = "changed"; return "changed"; }
+        }
+        const original = new Mutable("original"); const other = new Mutable("other");
+        function update(value: Error): string { value.message = "changed"; return "changed"; }
+        function readonly(value: Error, again: boolean): string {
+          if (again) return readonly(value, false);
+          return value.message;
+        }
+        class Base { value(): string { return "read only"; } }
+        class Derived extends Base { override value(): string { original.message = "changed"; return "changed"; } }
+        function invoke(value: Base): string { return value.value(); }
+        const otherReceiver = other.change();
+        const actualReceiver = original.change();
+        const otherArgument = update(other);
+        const actualArgument = update(original);
+        const recursive = readonly(original, true);
+        const base = invoke(new Base());
+        const derived = invoke(new Derived());
+      }` }, jsEnabled);
+    const selected = declarations(source, projectFiles);
+    const owner = selected.find(node => source.ast.text(source.ast.name(node)) === "original");
+    assert.equal(owner !== undefined, true, "exact original Error owner exists");
+    const expectations = [["otherReceiver", "preserved"], ["actualReceiver", "invalidated"],
+      ["otherArgument", "preserved"], ["actualArgument", "invalidated"], ["recursive", "preserved"],
+      ["base", "preserved"], ["derived", "invalidated"]];
+    const actual = expectations.map(([name]) => {
+      const declaration = selected.find(node => source.ast.text(source.ast.name(node)) === name);
+      const expression = source.ast.as.AsVariableDeclaration(declaration)?.Initializer;
+      assert.equal(expression !== undefined, true, name);
+      return [name, demand.invalidationFor(owner, expression, new Set()).kind];
+    });
+    assert.deepEqual(actual, expectations);
+  });
 }
 
 test("captured stack invalidation tracks only the exact receiver and never closure construction", () => {
