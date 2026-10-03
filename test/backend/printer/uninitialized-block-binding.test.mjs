@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../../dist/backend/target-ast/value-block.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { printRustExpr } from "../../../dist/print/source/expressions/core.js";
@@ -6,10 +7,7 @@ import { firstAccessesInStatements, maxWritesInStatements } from "../../../dist/
 
 test("native block lets preserve definite assignment, lexical shadowing and external writes", () => {
   const path = name => ({ kind: "path", path: name });
-  const expression = {
-    kind: "block",
-    bindings: [{ name: "result", type: { kind: "primitive", name: "i32" } }],
-    value: {
+  const expression = rustValueBlock([{ name: "result", type: { kind: "primitive", name: "i32" } }], {
       kind: "evaluate-then", discard: "unit",
       effect: { kind: "assignment", operator: "=", target: path("result"), value: path("input") },
       value: {
@@ -17,13 +15,12 @@ test("native block lets preserve definite assignment, lexical shadowing and exte
         effect: { kind: "assignment", operator: "=", target: path("output"), value: path("result") },
         value: path("result"),
       },
-    },
-  };
+    });
   assert.match(printRustExpr(expression), /^\{ let result: i32; /);
   assert.equal(rustExpressionReferencesPath(expression, "result"), false);
   assert.equal(rustExpressionReferencesPath(expression, "input"), true);
   assert.equal(rustExpressionReferencesPath(expression, "output"), true);
-  assert.deepEqual(rustExpressionChildren(expression), [expression.value]);
+  assert.deepEqual(rustExpressionChildren(expression), [expression.body.statements.at(-1).expr]);
   const statements = [{ kind: "expr", expr: expression }];
   assert.equal(maxWritesInStatements(statements, "result"), 0);
   assert.equal(maxWritesInStatements(statements, "output"), 1);

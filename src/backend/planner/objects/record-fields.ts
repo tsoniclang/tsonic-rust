@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import type { RustExpr, RustType } from "../../target-ast/nodes.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustStructuralShapeField } from "../../../analysis/objects/structural-shape-plan.js";
@@ -79,10 +80,10 @@ export function mutateRustBoundRecordField(
   const changed = mutation({ kind: "path", path: valueName });
   const stored = writeRustBoundRecordField(receiverCarrier, selected, field, "=", { kind: "path", path: valueName }, context);
   if (loaded === undefined || changed === undefined || stored === undefined) return undefined;
-  return { kind: "block", bindings: [
+  return rustValueBlock([
     { name: ownerName, value: direct ? { kind: "reference", mutable: true, expr: receiver }
       : { kind: "method-call", receiver, method: "clone", args: [] } },
     { name: valueName, mutable: true, value: loaded },
     { name: resultName, value: changed },
-  ], value: { kind: "evaluate-then", effect: stored, discard: "unit", value: { kind: "path", path: resultName } } };
+  ], { kind: "evaluate-then", effect: stored, discard: "unit", value: { kind: "path", path: resultName } });
 }

@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../../../dist/backend/target-ast/value-block.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rustExpressionExitsCallable } from "../../../../dist/backend/target-ast/inspection/callable-exits.js";
@@ -28,7 +29,7 @@ test("callable-exit inspection follows expressions but stops at authored closure
   assert.equal(rustExpressionExitsCallable({ kind: "call", path: "consume", args: [propagation] }), true);
   assert.equal(rustExpressionExitsCallable({ kind: "return-expression", expr: operand }), true);
   assert.equal(rustExpressionExitsCallable({ kind: "closure", params: [], body: propagation }), false);
-  assert.equal(rustExpressionExitsCallable({ kind: "block", bindings: [{ name: "value", value: propagation }], value: operand }), true);
+  assert.equal(rustExpressionExitsCallable(rustValueBlock([{ name: "value", value: propagation }], operand)), true);
 });
 
 test("native async blocks preserve their deferred boundary and exact captured uses", () => {

@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../../target-ast/value-block.js";
 import {
   isRustNeverCarrier,
   isRustUnitCarrier,
@@ -445,10 +446,10 @@ export function planSelectedSourceCall(
     return isRustUnitCarrier(parameter.parameterCarrier) && argument !== undefined &&
       argument.kind !== "path" && !(argument.kind === "tuple-literal" && argument.elements.length === 0);
   })) {
-    planned = { kind: "block", valueAttrs: [rustLintAttributes.unitArguments], bindings: [], value: planned };
+    planned = rustValueBlock([], planned, { value: [rustLintAttributes.unitArguments] });
   }
-  if (classBindings.length > 0) planned = { kind: "block", bindings: classBindings.map(binding =>
-    rustExpressionReferencesPath(planned!, binding.name) ? binding : { ...binding, name: `_${binding.name}` }), value: planned };
+  if (classBindings.length > 0) planned = rustValueBlock(classBindings.map(binding =>
+    rustExpressionReferencesPath(planned!, binding.name) ? binding : { ...binding, name: `_${binding.name}` }), planned);
   const effects = context.input.program.facts.getFact(node, rustSourceCallEffectsFactKey);
   if (effects === undefined) {
     context.diagnostics.push(missingFactDiagnostic(

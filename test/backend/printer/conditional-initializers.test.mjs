@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../../dist/backend/target-ast/value-block.js";
 import { rustListAttribute, rustWordAttribute } from "../../../dist/backend/target-ast/attributes.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -62,12 +63,7 @@ test("conditional initialization leaves unsafe-to-move bindings unchanged", () =
 });
 
 test("conditional printing preserves scoped attributes and discarded-value effects", () => {
-  const scoped = {
-    kind: "block",
-    innerAttrs: [rustListAttribute("allow", [rustWordAttribute("unused_variables")])],
-    bindings: [{ name: "local", value: literal(2) }],
-    value: literal(3),
-  };
+  const scoped = rustValueBlock([{ name: "local", value: literal(2) }], literal(3), { inner: [rustListAttribute("allow", [rustWordAttribute("unused_variables")])] });
   const source = printRustExpr({
     kind: "conditional",
     condition: path("flag"),

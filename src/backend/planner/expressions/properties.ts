@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustSourceIndexRead } from "../objects/indexed-records.js";
 import {
@@ -130,7 +131,7 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
       const location = planRustValueFieldLocation(node, context, "read");
       return location === undefined ? undefined : location.bindings.length === 0
         ? location.read
-        : { kind: "block", bindings: location.bindings, value: location.read };
+        : rustValueBlock(location.bindings, location.read);
     }
     const receiverNode = Node_Expression(context.input.program.source.ast, node);
     const plannedReceiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
@@ -174,18 +175,14 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
       context.syntheticNames,
       "dispatch_receiver",
     );
-    return {
-      kind: "block",
-      bindings: [{
+    return rustValueBlock([{
         name: receiverName,
         value: planRustSharedReceiver(receiverNode, plannedReceiver, context),
-      }],
-      value: readRustProjectDispatchedField(
+      }], readRustProjectDispatchedField(
         { kind: "path", path: receiverName },
         fact.dispatch.read,
         dispatchRead,
-      ),
-    };
+      ));
   }
   if (fact !== undefined && fact.kind === "source-union-field") {
     return planRustSourceUnionFieldRead(node, fact, context);
@@ -332,14 +329,10 @@ function planRustSourceMethodPropertyRead(
   if (callableValue === undefined) {
     return undefined;
   }
-  return {
-    kind: "block",
-    bindings: [{
+  return rustValueBlock([{
       name: receiverName,
       value: plannedReceiver,
-    }],
-    value: callableValue,
-  };
+    }], callableValue);
 }
 
 export function planRustBoundProjectMethodCallable(

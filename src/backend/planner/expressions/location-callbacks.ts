@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import { rustSelectedCallKey } from "../../../target-model/facts/selections.js";
 import { rustCallableProtocol, rustClosureProtocol } from "../../../target-model/types/index.js";
@@ -18,15 +19,12 @@ export function planRustLocationCallback(
   if (callable === undefined || context.syntheticNames === undefined) return undefined;
   const name = allocateRustSyntheticName(context.syntheticNames, "location_callback");
   const parameters = callable.parameters.map(() => allocateRustSyntheticName(context.syntheticNames!, "value"));
-  return {
-    kind: "block", bindings: [{ name, mutable: false, value }],
-    value: {
+  return rustValueBlock([{ name, mutable: false, value }], {
       kind: "closure", move: true,
       params: parameters.map(name => ({ name, byRefCopy: false })),
       body: {
         kind: "method-call", receiver: { kind: "path", path: name }, method: "call",
         args: [{ kind: "tuple-literal", elements: parameters.map(name => ({ kind: "path", path: name })) }],
       },
-    },
-  };
+    });
 }

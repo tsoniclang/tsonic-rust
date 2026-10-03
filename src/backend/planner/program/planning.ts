@@ -692,11 +692,7 @@ function planRustWorkerDispatch(
       name: entryName,
       mutable: false,
       init: bootstrapCall,
-    }, {
-      kind: "if-let-some",
-      binding: entryName,
-      expression: { kind: "path", path: entryName },
-      body: {
+    }, { kind: "expr", expr: { kind: "if-let", pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: entryName }] }, expression: { kind: "path", path: entryName }, whenTrue: { kind: "block", body: {
         statements: [
           ...selectedEntries.map((entry): import("../../target-ast/nodes.js").RustStmt => {
             const call = {
@@ -741,8 +737,7 @@ function planRustWorkerDispatch(
             },
           },
         ],
-      },
-    });
+      } } } });
   }
   return diagnostics.length === 0 ? Object.freeze(statements) : undefined;
 }

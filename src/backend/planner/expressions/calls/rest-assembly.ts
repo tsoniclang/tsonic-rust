@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../../target-ast/value-block.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { rustVecRestAssembly } from "../../../../target-model/operations/rest-assembly.js";
 import type { RustExpr } from "../../../target-ast/nodes.js";
@@ -23,5 +24,5 @@ export function planRustRestAssembly(
       },
     };
   }
-  return { kind: "block", bindings: [{ name, mutable: true, value: { kind: "vec-literal", elements: [] } }], value };
+  return rustValueBlock([{ name, mutable: true, value: { kind: "vec-literal", elements: [] } }], value);
 }

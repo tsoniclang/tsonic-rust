@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import type { RustExpr } from "../../target-ast/nodes.js";
@@ -26,10 +27,7 @@ export function planRustSequenceValue(
   const name = allocateRustSyntheticName(names, "spread_result");
   const destination: RustExpr = { kind: "path", path: name };
   const effect = planRustSequenceAppend(contract, source, destination, context, node, convert);
-  return effect === undefined ? undefined : {
-    kind: "block", bindings: [{ name, type, mutable: true, value: { kind: "vec-literal", elements: [] } }],
-    value: { kind: "evaluate-then", discard: "unit", effect, value: destination },
-  };
+  return effect === undefined ? undefined : rustValueBlock([{ name, type, mutable: true, value: { kind: "vec-literal", elements: [] } }], { kind: "evaluate-then", discard: "unit", effect, value: destination });
 }
 
 export function planRustSequenceAppend(
@@ -60,7 +58,7 @@ export function planRustSequenceAppend(
         kind: "method-call", receiver: destination, method: "push", args: [value],
       }, value: effect };
     }
-    return { kind: "block", bindings: [{ name, value: source }], value: effect };
+    return rustValueBlock([{ name, value: source }], effect);
   }
   const sliceName = allocateRustSyntheticName(names, "spread_slice");
   const slice: RustExpr = contract.collection === "js-array" ? { kind: "path", path: sliceName } : source;

@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
@@ -58,10 +59,7 @@ export function mutateRustUnionField(field: RustSelectedSourceUnionField, carrie
   const read = readRustUnionField(field, carrier, receiver, resultCarrier, context);
   const operation = mutate(current);
   const write = writeRustUnionField(field, carrier, receiver, "=", current, context);
-  return read === undefined || operation === undefined || write === undefined ? undefined : {
-    kind: "block", bindings: [{ name: currentName, mutable: true, value: read }, { name: resultName, value: operation }],
-    value: { kind: "evaluate-then", effect: write, discard: "unit", value: { kind: "path", path: resultName } },
-  };
+  return read === undefined || operation === undefined || write === undefined ? undefined : rustValueBlock([{ name: currentName, mutable: true, value: read }, { name: resultName, value: operation }], { kind: "evaluate-then", effect: write, discard: "unit", value: { kind: "path", path: resultName } });
 }
 
 export function planRustSourceUnionFieldProjection(

@@ -3,12 +3,16 @@ import { printRustItem } from "./items.js";
 import { printRustAttribute, printRustAttributes as printRustStatementAttributes } from "./attributes.js";
 import { indentText, printRustType } from "./types.js";
 import type { RustBlock, RustExpr, RustStmt } from "../../backend/target-ast/nodes.js";
+import { rustExpressionChildren } from "../../backend/target-ast/inspection/source-usage.js";
 
-export function printRustBlockStatements(block: RustBlock, depth: number): string {
+export function printRustBlockStatements(block: RustBlock, depth: number, separator = "\n"): string {
+  if (block === undefined || !Array.isArray(block.statements)) {
+    throw new Error("Rust block requires the canonical native statement body");
+  }
   return [
     ...(block.innerAttrs ?? []).map((attribute) => `${indentText(depth)}${printRustAttribute(attribute, true)}`),
     ...block.statements.map((statement) => printRustStmt(statement, depth)),
-  ].join("\n");
+  ].filter(value => value.length > 0).join(separator);
 }
 
 function printRustBlock(block: RustBlock, depth: number, header: string): string {
@@ -31,7 +35,7 @@ function printRustStmt(statement: RustStmt, depth: number): string {
       return `${attributes}${indent}let ${statement.mutable ? "mut " : ""}${statement.name}${type}${initializer};`;
     }
     case "expr":
-      return `${indent}${printRustExpr(statement.expr)};`;
+      return `${printRustStatementAttributes(statement.attrs, depth)}${indent}${printRustExpr(statement.expr)}${statement.expr.kind === "if-let" ? "" : ";"}`;
     case "assign":
       return `${indent}${printRustExpr(statement.target)} ${statement.operator} ${printRustExpr(statement.value)};`;
     case "return":
@@ -39,7 +43,8 @@ function printRustStmt(statement: RustStmt, depth: number): string {
         ? `${indent}return;`
         : `${indent}return ${printRustExpr(statement.expr)};`;
     case "tail":
-      return `${indent}${printRustExpr(statement.expr)}`;
+      return statement.expr.kind === "tuple-literal" && statement.expr.elements.length === 0 &&
+        (statement.attrs?.length ?? 0) === 0 ? "" : `${printRustStatementAttributes(statement.attrs, depth)}${indent}${printRustExpr(statement.expr)}`;
     case "if": {
       const attributes = printRustStatementAttributes(statement.attrs, depth);
       const rendered = printRustBlock(
@@ -88,24 +93,7 @@ function printRustStmt(statement: RustStmt, depth: number): string {
       );
       return `${printRustStatementAttributes(statement.attrs, depth)}${block}`;
     }
-    case "if-let-some": {
-      const rendered = printRustBlock(
-        statement.body,
-        depth,
-        `if let Some(${statement.binding}) = ${printRustExpr(statement.expression)}`,
-      );
-      if (statement.else === undefined) {
-        return rendered;
-      }
-      const nested = nestedMarkedElseIf(statement.elseIf, statement.else);
-      if (nested !== undefined) {
-        return `${rendered} else ${printRustStmt(nested, depth).slice(indent.length)}`;
-      }
-      const otherwise = printRustBlockStatements(statement.else, depth + 1);
-      return `${rendered} else ${otherwise.length === 0
-        ? "{}"
-        : `{\n${otherwise}\n${indent}}`}`;
-    }
+
     case "break":
       return `${indent}break${statement.label === undefined ? "" : ` '${statement.label}`};`;
     case "continue":
@@ -151,23 +139,30 @@ function printRustStmt(statement: RustStmt, depth: number): string {
     case "try-scope":
       return printRustTryScope(statement, depth);
   }
+  const unsupported: never = statement;
+  throw new Error(`Unsupported Rust statement: ${JSON.stringify(unsupported)}`);
 }
 
 function nestedMarkedElseIf(
   marked: true | undefined,
   block: RustBlock,
-): Extract<RustStmt, { readonly kind: "if" | "if-let-some" }> | undefined {
+): Extract<RustStmt, { readonly kind: "if" | "expr" }> | undefined {
   if (marked !== true || block.statements.length !== 1 ||
     (block.innerAttrs?.length ?? 0) !== 0) {
     return undefined;
   }
   const nested = block.statements[0];
-  if (nested?.kind !== "if" && nested?.kind !== "if-let-some") {
+  if (nested?.kind !== "if" && !(nested?.kind === "expr" && nested.expr.kind === "if-let")) {
     return undefined;
   }
-  return nested.kind === "if" && (nested.attrs?.length ?? 0) !== 0
+  return (nested.attrs?.length ?? 0) !== 0
     ? undefined
     : nested;
+}
+
+export function printRustElseBranch(block: RustBlock): string | undefined {
+  const nested = nestedMarkedElseIf(true, block);
+  return nested === undefined ? undefined : printRustStmt(nested, 0);
 }
 
 function printRustTryScope(
@@ -409,10 +404,7 @@ function rustBlockHasCompletionExit(block: RustBlock): boolean {
       return rustBlockHasCompletionExit(statement.then) ||
         (statement.else !== undefined && rustBlockHasCompletionExit(statement.else));
     }
-    if (statement.kind === "if-let-some") {
-      return rustBlockHasCompletionExit(statement.body) ||
-        (statement.else !== undefined && rustBlockHasCompletionExit(statement.else));
-    }
+    if (statement.kind === "expr" || statement.kind === "tail") return rustExpressionHasCompletionExit(statement.expr);
     if (statement.kind === "loop" || statement.kind === "while" ||
       statement.kind === "while-let-some" || statement.kind === "for" ||
       statement.kind === "scope" || statement.kind === "unsafe-scope") {
@@ -420,6 +412,12 @@ function rustBlockHasCompletionExit(block: RustBlock): boolean {
     }
     return false;
   });
+}
+
+function rustExpressionHasCompletionExit(expression: RustExpr): boolean {
+  if (expression.kind === "closure" || expression.kind === "closure-block" || expression.kind === "async-block") return false;
+  if (expression.kind === "block") return rustBlockHasCompletionExit(expression.body);
+  return rustExpressionChildren(expression).some(rustExpressionHasCompletionExit);
 }
 
 function printDirectResourceBody(body: RustBlock, depth: number): string | undefined {

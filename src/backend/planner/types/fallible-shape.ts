@@ -6,6 +6,8 @@ import type {
 } from "../../target-ast/nodes.js";
 import { rustTypeEquals } from "../../target-ast/inspection/type-equality.js";
 import { rustBlockTerminates } from "../statements/block-flow.js";
+import { rustStatementExpressions } from "../../target-ast/inspection/source-usage.js";
+import { mapRustExpressionChildren } from "../../target-ast/expression-children.js";
 
 export interface RustFallibleBoundary {
   readonly errorType: RustType;
@@ -78,9 +80,7 @@ export function rustExpressionUsesTryInCurrentRegion(expression: RustExpr): bool
       return rustExpressionUsesTryInCurrentRegion(expression.receiver) ||
         rustExpressionUsesTryInCurrentRegion(expression.index);
     case "block":
-      return expression.bindings.some((binding) =>
-        binding.value !== undefined && rustExpressionUsesTryInCurrentRegion(binding.value)) ||
-        rustExpressionUsesTryInCurrentRegion(expression.value);
+      return expression.body.statements.flatMap(rustStatementExpressions).some(rustExpressionUsesTryInCurrentRegion);
     case "unsafe":
       return rustExpressionUsesTryInCurrentRegion(expression.expression);
     case "evaluate-then":
@@ -200,59 +200,53 @@ export function applyFallibleShape(
     }
     return applyRustResultExpression(expression, options, options.inferErrorTypeFromReturnType);
   };
-  const wrap = (statement: RustStmt): RustStmt => {
-    if (statement.kind === "return" && statement.expr !== undefined) {
-      return {
-        kind: "return",
-        expr: result(statement.expr),
-      };
+  const wrap = (statement: RustStmt, wrapTail = true): RustStmt => {
+    switch (statement.kind) {
+      case "return": return { ...statement,
+        expr: result(statement.expr === undefined ? { kind: "path", path: "()" } : wrapReturns(statement.expr)) };
+      case "tail": return { ...statement,
+        expr: wrapTail ? result(wrapReturns(statement.expr)) : wrapReturns(statement.expr) };
+      case "let": return statement.init === undefined ? statement : { ...statement, init: wrapReturns(statement.init) };
+      case "expr": return { ...statement, expr: wrapReturns(statement.expr) };
+      case "assign": return { ...statement, target: wrapReturns(statement.target), value: wrapReturns(statement.value) };
+      case "index-assign": return { ...statement, receiver: wrapReturns(statement.receiver),
+        index: wrapReturns(statement.index), value: wrapReturns(statement.value) };
+      case "if": return { ...statement, condition: wrapReturns(statement.condition),
+        then: wrapBlock(statement.then, wrapTail),
+        ...(statement.else === undefined ? {} : { else: wrapBlock(statement.else, wrapTail) }) };
+      case "scope":
+      case "unsafe-scope": return { ...statement, body: wrapBlock(statement.body, wrapTail) };
+      case "while": return { ...statement, condition: wrapReturns(statement.condition), body: wrapBlock(statement.body, false) };
+      case "while-let-some": return { ...statement, expression: wrapReturns(statement.expression), body: wrapBlock(statement.body, false) };
+      case "for": return { ...statement, iterable: wrapReturns(statement.iterable), body: wrapBlock(statement.body, false) };
+      case "loop": return { ...statement, body: wrapBlock(statement.body, false) };
+      case "completion-exit":
+      case "resource-scope":
+      case "try-scope":
+      case "throw":
+      case "break":
+      case "continue":
+      case "item": return statement;
     }
-    if (statement.kind === "return") {
-      return {
-        kind: "return",
-        expr: result({ kind: "path", path: "()" }),
-      };
-    }
-    if (statement.kind === "tail") {
-      return {
-        kind: "tail",
-        expr: result(statement.expr),
-      };
-    }
-    if (statement.kind === "if") {
-      return {
-        ...statement,
-        then: { statements: statement.then.statements.map(wrap) },
-        ...(statement.else === undefined ? {} : { else: { statements: statement.else.statements.map(wrap) } }),
-      };
-    }
-    if (statement.kind === "if-let-some") {
-      return {
-        ...statement,
-        body: { statements: statement.body.statements.map(wrap) },
-        ...(statement.else === undefined
-          ? {}
-          : { else: { statements: statement.else.statements.map(wrap) } }),
-      };
-    }
-    if (statement.kind === "loop" || statement.kind === "while" || statement.kind === "for" ||
-      statement.kind === "while-let-some") {
-      return { ...statement, body: { statements: statement.body.statements.map(wrap) } };
-    }
-    if (statement.kind === "scope" || statement.kind === "unsafe-scope") {
-      return { ...statement, body: { statements: statement.body.statements.map(wrap) } };
-    }
-    if (statement.kind === "try-scope") {
-      return statement;
-    }
-    return statement;
   };
-  const wrapped = body.statements.map(wrap);
+  const wrapped = body.statements.map(statement => wrap(statement));
   if (!options.hasReturnValue && !rustBlockTerminates({ statements: wrapped })) {
-    wrapped.push({
-      kind: "tail",
-      expr: result({ kind: "path", path: "()" }),
-    });
+    wrapped.push({ kind: "tail", expr: result({ kind: "path", path: "()" }) });
   }
   return { ...body, statements: wrapped };
+
+  function wrapBlock(block: RustBlock, wrapTail: boolean): RustBlock {
+    return { ...block, statements: block.statements.map(statement => wrap(statement, wrapTail)) };
+  }
+
+  function wrapReturns(expression: RustExpr): RustExpr {
+    if (expression.kind === "closure" || expression.kind === "closure-block" || expression.kind === "async-block") {
+      return expression;
+    }
+    if (expression.kind === "return-expression") {
+      return { ...expression,
+        expr: result(expression.expr === undefined ? { kind: "path", path: "()" } : wrapReturns(expression.expr)) };
+    }
+    return mapRustExpressionChildren(expression, wrapReturns, block => wrapBlock(block, false));
+  }
 }

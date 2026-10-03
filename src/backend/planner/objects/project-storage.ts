@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { planRustNativeMemoryCall } from "../expressions/native-memory.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -285,20 +286,16 @@ export function invokeRustStructuralObjectMethod(
   const inputs: readonly RustExpr[] = [...(field.receiverIndependent === true ? [] : [{
     kind: "method-call", receiver: receiverPath, method: "clone", args: [],
   } satisfies RustExpr]), ...arguments_];
-  return {
-    kind: "block",
-    bindings: [{ name: receiverName, value: receiver }, {
+  return rustValueBlock([{ name: receiverName, value: receiver }, {
       name: methodName,
       value: method,
-    }],
-    value: {
+    }], {
       kind: "method-call",
       receiver: { kind: "path", path: methodName },
       method: "call",
       ...(genericArguments.length === 0 ? {} : { genericArguments }),
       args: generic === undefined ? [{ kind: "tuple-literal", elements: inputs }] : inputs,
-    },
-  };
+    });
 }
 
 export function writeRustStoredObjectField(
@@ -326,9 +323,9 @@ export function writeRustStoredObjectField(
   const selected: RustExpr = { kind: "path", path: receiverName };
   const effect = writeRustStoredObjectFieldStorage(storage, receiverCarrier, selected, storageIndex, operator,
     { kind: "path", path: valueName }, context, projection, receiverIsBorrowed);
-  return effect === undefined ? undefined : { kind: "block", bindings: [
+  return effect === undefined ? undefined : rustValueBlock([
     { name: receiverName, value: receiverIsBorrowed ? receiver : cloneExpression(receiver) }, { name: valueName, value },
-  ], value: checkRustDataWrite(check, selected, effect, errorType) };
+  ], checkRustDataWrite(check, selected, effect, errorType));
 }
 
 function writeRustStoredObjectFieldStorage(
@@ -417,8 +414,7 @@ export function mutateRustStoredObjectField(
   const receiverName = allocateRustSyntheticName(context.syntheticNames, "field_owner");
   const selected: RustExpr = { kind: "path", path: receiverName };
   const effect = mutateRustStoredObjectFieldStorage(storage, receiverCarrier, selected, storageIndex, mutation, context);
-  return effect === undefined ? undefined : { kind: "block", bindings: [{ name: receiverName, value: cloneExpression(receiver) }],
-    value: checkRustDataWrite(check, selected, effect, errorType) };
+  return effect === undefined ? undefined : rustValueBlock([{ name: receiverName, value: cloneExpression(receiver) }], checkRustDataWrite(check, selected, effect, errorType));
 }
 
 function mutateRustStoredObjectFieldStorage(
@@ -546,10 +542,7 @@ function readRustStructuralObjectProperty(
           },
         }],
       };
-  return {
-    kind: "block",
-    bindings: [{ name: receiverName, value: cloneExpression(receiver) }],
-    value: {
+  return rustValueBlock([{ name: receiverName, value: cloneExpression(receiver) }], {
       kind: "match",
       expression: readRustStructuralObjectField(
         receiverPath,
@@ -567,8 +560,7 @@ function readRustStructuralObjectProperty(
         pattern: { kind: "path", path: "None" },
         expression: absentGetterValue,
       }],
-    },
-  };
+    });
 }
 
 function writeRustStructuralObjectProperty(
@@ -670,18 +662,14 @@ function writeRustStructuralObjectProperty(
       expression: storedWrite,
     }],
   };
-  return {
-    kind: "block",
-    bindings,
-    value: update === undefined
+  return rustValueBlock(bindings, update === undefined
       ? write
       : {
           kind: "evaluate-then",
           effect: update,
           discard: "unit",
           value: write,
-        },
-  };
+        });
 }
 
 function mutateRustStructuralObjectProperty(
@@ -731,23 +719,19 @@ function mutateRustStructuralObjectProperty(
   if (changed === undefined) {
     return undefined;
   }
-  return {
-    kind: "block",
-    bindings: [{ name: receiverName, value: cloneExpression(receiver) }, {
+  return rustValueBlock([{ name: receiverName, value: cloneExpression(receiver) }, {
       name: valueName,
       mutable: true,
       value: currentValue,
     }, {
       name: resultName,
       value: changed,
-    }],
-    value: {
+    }], {
       kind: "evaluate-then",
       effect: storedValue,
       discard: "unit",
       value: { kind: "path", path: resultName },
-    },
-  };
+    });
 }
 
 function callRustStructuralObjectAccessor(

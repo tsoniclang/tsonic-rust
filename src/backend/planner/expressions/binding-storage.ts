@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import type { RustExpr, RustType } from "../../target-ast/nodes.js";
 
 export type RustInlineBindingStorage = "cell" | "borrow-cell";
@@ -21,8 +22,7 @@ export function rustBindingStorageOperations(storage: "location" | RustInlineBin
     ({ kind: "method-call", receiver: receiver.kind === "reference" ? receiver.expr : receiver, method, args });
   if (storage === "borrow-cell") {
     return {
-      read: receiver => ({ kind: "block", bindings: [{ name: "borrowed", value: call(receiver, "borrow") }],
-        value: call({ kind: "path", path: "borrowed" }, "clone") }),
+      read: receiver => (rustValueBlock([{ name: "borrowed", value: call(receiver, "borrow") }], call({ kind: "path", path: "borrowed" }, "clone"))),
       write: (receiver, value) => ({ kind: "assignment", operator: "=",
         target: { kind: "dereference", pointer: call(receiver, "borrow_mut") }, value }),
     };

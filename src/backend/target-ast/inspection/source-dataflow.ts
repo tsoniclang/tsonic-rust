@@ -39,7 +39,35 @@ export function statementAlwaysExits(statement: RustStmt): boolean {
   return statement.kind === "return" || statement.kind === "tail" ||
     statement.kind === "throw" || statement.kind === "completion-exit" ||
     statement.kind === "break" || statement.kind === "continue" ||
-    statement.kind === "loop" && statement.neverFallsThrough === true;
+    statement.kind === "loop" && statement.neverFallsThrough === true ||
+    statement.kind === "expr" && rustExpressionAlwaysExits(statement.expr);
+}
+
+export function rustExpressionAlwaysExits(expression: RustExpr): boolean {
+  const exits = (statements: readonly RustStmt[]): boolean => statements.some(statement =>
+    statement.kind === "tail" ? rustExpressionAlwaysExits(statement.expr)
+      : statement.kind === "if" ? rustExpressionAlwaysExits(statement.condition) ||
+        statement.else !== undefined && exits(statement.then.statements) && exits(statement.else.statements)
+      : statement.kind === "scope" || statement.kind === "unsafe-scope" ? exits(statement.body.statements)
+      : statementAlwaysExits(statement));
+  switch (expression.kind) {
+    case "return-expression":
+    case "bottom": return true;
+    case "closure":
+    case "closure-block":
+    case "async-block": return false;
+    case "block": return exits(expression.body.statements);
+    case "conditional": return rustExpressionAlwaysExits(expression.condition) ||
+      rustExpressionAlwaysExits(expression.whenTrue) && rustExpressionAlwaysExits(expression.whenFalse);
+    case "if-let": return rustExpressionAlwaysExits(expression.expression) ||
+      expression.whenFalse !== undefined && rustExpressionAlwaysExits(expression.whenTrue) &&
+      rustExpressionAlwaysExits(expression.whenFalse);
+    case "match": return rustExpressionAlwaysExits(expression.expression) || expression.arms.length > 0 &&
+      expression.arms.every(arm => rustExpressionAlwaysExits(arm.expression));
+    case "binary": return rustExpressionAlwaysExits(expression.left) ||
+      expression.operator !== "&&" && expression.operator !== "||" && rustExpressionAlwaysExits(expression.right);
+    default: return rustExpressionChildren(expression).some(rustExpressionAlwaysExits);
+  }
 }
 
 export function maxWritesInStatements(
@@ -103,10 +131,7 @@ function expressionHasUnobservedWrite(expression: RustExpr, path: string, refere
     expression.target.kind === "path" && expression.target.path === path && !referencedAfter) return true;
   if (expression.kind === "closure" || expression.kind === "closure-block" || expression.kind === "async-block") return false;
   if (expression.kind === "block") {
-    return hasUnobservedFinalPathWrite([
-      ...expression.bindings.map((binding): RustStmt => ({ kind: "let", name: binding.name, mutable: binding.mutable ?? false, init: binding.value })),
-      { kind: "tail", expr: expression.value },
-    ], path, referencedAfter);
+    return hasUnobservedFinalPathWrite(expression.body.statements, path, referencedAfter);
   }
   if (expression.kind === "conditional") {
     return expressionHasUnobservedWrite(expression.whenTrue, path, referencedAfter) ||
@@ -182,18 +207,7 @@ function maxWritesInStatement(statement: RustStmt, path: string): number {
             ? 0
             : 2),
       );
-    case "if-let-some":
-      return cappedWriteCount(
-        maxWritesInExpression(statement.expression, path) +
-          Math.max(
-            statement.binding === path
-              ? 0
-              : maxWritesInStatements(statement.body.statements, path),
-            statement.else === undefined
-              ? 0
-              : maxWritesInStatements(statement.else.statements, path),
-          ),
-      );
+
     case "break":
     case "continue":
       return 0;
@@ -294,14 +308,7 @@ function maxWritesInExpression(expression: RustExpr, path: string): number {
   }
   if (expression.kind === "async-block") return maxWritesInStatements(expression.body.statements, path) === 0 ? 0 : 2;
   if (expression.kind === "block") {
-    let writes = 0;
-    for (const binding of expression.bindings) {
-      writes = cappedWriteCount(writes + (binding.value === undefined ? 0 : maxWritesInExpression(binding.value, path)));
-      if (writes === 2 || binding.name === path) {
-        return writes;
-      }
-    }
-    return cappedWriteCount(writes + maxWritesInExpression(expression.value, path));
+    return maxWritesInStatements(expression.body.statements, path);
   }
   if (expression.kind === "reference" && expression.mutable === true &&
     rustPlaceIsRootedAtPath(expression.expr, path)) {
@@ -411,18 +418,7 @@ function firstAccessesInStatement(
         ),
       );
     }
-    case "if-let-some":
-      return replaceNone(
-        firstAccessesInExpression(statement.expression, path),
-        unionFirstAccesses(
-          statement.binding === path
-            ? new Set<FirstAccess>(["none"])
-            : firstAccessesInStatements(statement.body.statements, path),
-          statement.else === undefined
-            ? new Set<FirstAccess>(["none"])
-            : firstAccessesInStatements(statement.else.statements, path),
-        ),
-      );
+
     case "break":
     case "continue":
       return new Set(["exit"]);
@@ -552,15 +548,17 @@ function firstAccessesInBlockExpression(
   path: string,
 ): ReadonlySet<FirstAccess> {
   let outcomes = new Set<FirstAccess>(["none"]);
-  for (const binding of expression.bindings) {
-    if (binding.value !== undefined) {
-      outcomes = replaceNone(outcomes, firstAccessesInExpression(binding.value, path));
+  for (const statement of expression.body.statements) {
+    if (statement.kind === "let" && statement.name === path) {
+      return statement.init === undefined ? outcomes : replaceNone(outcomes, firstAccessesInExpression(statement.init, path));
     }
-    if (!outcomes.has("none") || binding.name === path) {
+    outcomes = replaceNone(outcomes, statement.kind === "tail"
+      ? firstAccessesInExpression(statement.expr, path) : firstAccessesInStatement(statement, path));
+    if (!outcomes.has("none")) {
       return outcomes;
     }
   }
-  return replaceNone(outcomes, firstAccessesInExpression(expression.value, path));
+  return outcomes;
 }
 
 function firstAccessesInSequence(

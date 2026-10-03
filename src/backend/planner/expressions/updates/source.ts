@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../../target-ast/value-block.js";
 import {
   KindIdentifier,
   KindNumericLiteral,
@@ -538,12 +539,8 @@ function planRustSourceUnionFieldUpdate(
   );
   return projected === undefined
     ? undefined
-    : {
-        kind: "block",
-        bindings: [
+    : rustValueBlock([
           { name: receiverName, value: receiver },
           ...projection.bindings,
-        ],
-        value: projected,
-      };
+        ], projected);
 }

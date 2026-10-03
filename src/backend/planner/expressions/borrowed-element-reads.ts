@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
@@ -24,7 +25,7 @@ export function planRustBorrowedElementRead(
     carrier: rustStringTargetType(), valueForm: "storage",
   });
   const body = planRead(node, { ...context, expressionOverrides: overrides });
-  return body === undefined ? undefined : { kind: "block", bindings, value: body };
+  return body === undefined ? undefined : rustValueBlock(bindings, body);
 }
 
 export function planRustBorrowedElementLocal(

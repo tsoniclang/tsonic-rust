@@ -3,7 +3,7 @@ import { rustCallableConversionMatches, type RustCallableConversion, type RustCa
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import { rustCallableProtocol } from "../../../target-model/types/index.js";
 import { rustTypeEquals } from "../../target-ast/inspection/type-equality.js";
-import type { RustExpr, RustType } from "../../target-ast/nodes.js";
+import type { RustExpr, RustStmt, RustType } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
@@ -63,11 +63,13 @@ export function planRustCallableConversion(
       body: fallibleResult ? { kind: "call", path: "Ok", args: [result] } : result,
     }],
   };
-  return { kind: "block", bindings: [...producer.bindings, { name: callable, value: producer.value }], value: {
+  return { kind: "block", body: { statements: [...producer.statements, {
+    kind: "let", mutable: false, name: callable, init: producer.value,
+  }, { kind: "tail", expr: {
     kind: "associated-call", owner: targetType, method: "new", args: [{
       kind: "closure", move: true, params: [{ name: argumentsName, byRefCopy: false }], body,
     }],
-  } };
+  } }] } };
 
   function lowerValue(selected: RustCallableValueConversion, value: RustExpr): RustExpr | undefined {
     if (selected.kind === "identity") return value;
@@ -84,16 +86,19 @@ function inlineCallableProducer(
   expression: RustExpr,
   sourceType: RustType,
   argumentsType: RustType,
-): { readonly bindings: Extract<RustExpr, { readonly kind: "block" }>["bindings"]; readonly value: RustExpr; readonly inline: boolean } {
+): { readonly statements: readonly RustStmt[]; readonly value: RustExpr; readonly inline: boolean } {
   if (expression.kind === "block") {
-    const selected = inlineCallableProducer(expression.value, sourceType, argumentsType);
-    return selected.inline ? { ...selected, bindings: [...expression.bindings, ...selected.bindings] }
-      : { bindings: [], value: expression, inline: false };
+    const terminal = expression.body.statements[expression.body.statements.length - 1];
+    if (terminal?.kind !== "tail" || (terminal.attrs?.length ?? 0) !== 0 ||
+      (expression.body.innerAttrs?.length ?? 0) !== 0) return { statements: [], value: expression, inline: false };
+    const selected = inlineCallableProducer(terminal.expr, sourceType, argumentsType);
+    return selected.inline ? { ...selected, statements: [...expression.body.statements.slice(0, -1), ...selected.statements] }
+      : { statements: [], value: expression, inline: false };
   }
   const body = expression.kind === "associated-call" && expression.method === "new" &&
     expression.trait === undefined && expression.genericArguments === undefined &&
     rustTypeEquals(expression.owner, sourceType) && expression.args.length === 1 ? expression.args[0] : undefined;
   return (body?.kind === "closure" || body?.kind === "closure-block") && body.params.length === 1
-    ? { bindings: [], inline: true, value: { ...body, params: body.params.map(parameter => ({ ...parameter, type: argumentsType })) } }
-    : { bindings: [], value: expression, inline: false };
+    ? { statements: [], inline: true, value: { ...body, params: body.params.map(parameter => ({ ...parameter, type: argumentsType })) } }
+    : { statements: [], value: expression, inline: false };
 }

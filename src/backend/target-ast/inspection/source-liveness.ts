@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../value-block.js";
 import { type RustAttribute } from "../attributes.js";
 import type { RustBlock, RustExpr, RustStmt } from "../nodes.js";
 import { rustLintAttributes } from "../normalization/lint-policy.js";
@@ -66,14 +67,7 @@ function finalizeRustNestedStatementLiveness(
           ? {}
           : { else: finalizeRustBlockLiveness(statement.else, following) }),
       };
-    case "if-let-some":
-      return {
-        ...statement,
-        body: finalizeRustBlockLiveness(statement.body, following),
-        ...(statement.else === undefined
-          ? {}
-          : { else: finalizeRustBlockLiveness(statement.else, following) }),
-      };
+
     case "scope":
     case "unsafe-scope":
       return { ...statement, body: finalizeRustBlockLiveness(statement.body, following) };
@@ -288,15 +282,11 @@ function branchAssignmentValue(
         bindings.unshift(previous);
         index -= 1;
       }
-      value = {
-        kind: "block",
-        bindings: bindings.map((declaration) => ({
+      value = rustValueBlock(bindings.map((declaration) => ({
           name: declaration.name,
           value: declaration.init,
           ...(declaration.type === undefined ? {} : { type: declaration.type }),
-        })),
-        value,
-      };
+        })), value);
     } else if (setup.kind === "assign" || setup.kind === "expr") {
       value = {
         kind: "evaluate-then",

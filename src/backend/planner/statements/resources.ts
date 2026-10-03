@@ -280,18 +280,13 @@ function planResourceCleanup(
     return body;
   }
   return {
-    statements: [{
-      kind: "if-let-some",
-      binding: cleanupResourceName,
-      expression: {
+    statements: [{ kind: "expr", expr: { kind: "if-let", pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: cleanupResourceName }] }, expression: {
         kind: "method-call",
         receiver: { kind: "path", path: resourceName },
         method: receiverMode === "mut-ref" ? "as_mut" : "as_ref",
         args: [],
         receiverMode,
-      },
-      body,
-    }],
+      }, whenTrue: { kind: "block", body: body } } }],
   };
 }
 

@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../../dist/backend/target-ast/value-block.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { emptyRustGenerics } from "../../../dist/backend/target-ast/nodes.js";
@@ -72,13 +73,10 @@ test("a single block argument stays attached to its outer call", () => {
           expr: {
           kind: "call",
           path: "conversion_with_an_intentionally_long_name",
-          args: [{
-            kind: "block",
-            bindings: [{
+          args: [rustValueBlock([{
               name: "location",
               value: { kind: "call", path: "load_location", args: [] },
-            }],
-            value: {
+            }], {
               kind: "method-call",
               receiver: { kind: "path", path: "location" },
               method: "with_mut",
@@ -87,8 +85,7 @@ test("a single block argument stays attached to its outer call", () => {
                 params: [{ name: "value", byRefCopy: false }],
                 body: { kind: "path", path: "value" },
               }],
-            },
-          }],
+            })],
           },
         }],
       },
@@ -117,18 +114,14 @@ test("a trailing block argument stays attached after preceding arguments", () =>
             method: "set",
             args: [
               { kind: "string-literal", value: "selected" },
-              {
-                kind: "block",
-                bindings: [{
+              rustValueBlock([{
                   name: "value",
                   value: {
                     kind: "call",
                     path: "make_value_with_an_intentionally_long_name_that_requires_block_expansion",
                     args: [],
                   },
-                }],
-                value: { kind: "path", path: "value" },
-              },
+                }], { kind: "path", path: "value" }),
             ],
           },
         }],
@@ -272,11 +265,7 @@ test("a fitted condition moves only its overflowing brace", () => {
 });
 
 test("a block-valued comparison chain keeps its body brace at statement indentation", () => {
-  const blockValue = (name, value) => ({
-    kind: "block",
-    bindings: [{ name, value }],
-    value: { kind: "path", path: name },
-  });
+  const blockValue = (name, value) => (rustValueBlock([{ name, value }], { kind: "path", path: name }));
   const condition = {
     kind: "binary",
     operator: "||",

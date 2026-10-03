@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../../dist/backend/target-ast/value-block.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -296,13 +297,10 @@ test("fallible method calls keep short receivers attached to block arguments", (
               kind: "method-call",
               receiver: { kind: "path", path: "values" },
               method: "try_for_each",
-              args: [{
-                kind: "block",
-                bindings: [{
+              args: [rustValueBlock([{
                   name: "captured",
                   value: { kind: "path", path: "source" },
-                }],
-                value: {
+                }], {
                   kind: "closure",
                   params: [{ name: "value", mutable: false }],
                   move: true,
@@ -314,8 +312,7 @@ test("fallible method calls keep short receivers attached to block arguments", (
                       { kind: "path", path: "value" },
                     ],
                   },
-                },
-              }],
+                })],
             },
           },
         }],
@@ -617,13 +614,10 @@ test("string concatenation preserves vertical chains inside trailing blocks", ()
             kind: "string-concat",
             parts: [
               { kind: "path", path: "current" },
-              {
-                kind: "block",
-                bindings: [{
+              rustValueBlock([{
                   name: "receiver_with_a_deliberately_long_name",
                   value: { kind: "path", path: "value" },
-                }],
-                value: {
+                }], {
                   kind: "method-call",
                   receiver: {
                     kind: "method-call",
@@ -637,8 +631,7 @@ test("string concatenation preserves vertical chains inside trailing blocks", ()
                   },
                   method: "clone_the_exact_selected_value",
                   args: [],
-                },
-              },
+                }),
             ],
           },
         }],

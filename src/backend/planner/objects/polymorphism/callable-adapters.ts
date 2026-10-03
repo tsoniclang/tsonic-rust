@@ -75,11 +75,7 @@ export function planRootCallableForwarder(
       args: [{ kind: "tuple-literal", elements: arguments_.adaptedArguments }],
     });
     if (overrideResult === undefined) return reject();
-    statements.push({
-      kind: "if-let-some", binding: overrideName,
-      expression: readRustProjectMethodOverride({ kind: "path", path: "self" }, overrideStoragePath, representation),
-      body: { statements: [{ kind: "return", expr: overrideResult }] },
-    });
+    statements.push({ kind: "expr", expr: { kind: "if-let", pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: overrideName }] }, expression: readRustProjectMethodOverride({ kind: "path", path: "self" }, overrideStoragePath, representation), whenTrue: { kind: "block", body: { statements: [{ kind: "return", expr: overrideResult }] } } } });
   }
   statements.push({ kind: "tail", expr: result });
   return { kind: "function",

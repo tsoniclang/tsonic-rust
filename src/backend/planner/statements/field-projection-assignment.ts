@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import { Node_Expression } from "@tsonic/target-api/source";
 import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
@@ -77,9 +78,7 @@ export function planRustFieldProjectionAssignment(
     mutation = mutateRustStoredObjectField(field.fact.storage, field.fact.receiverCarrier,
       { kind: "path", path: ownerName }, field.fact.storageIndex, mutate, context, "content");
   }
-  return mutation === undefined ? undefined : [{ kind: "expr", expr: {
-    kind: "block", bindings: [{ name: ownerName, value: receiver }, ...projection.bindings,
+  return mutation === undefined ? undefined : [{ kind: "expr", expr: rustValueBlock([{ name: ownerName, value: receiver }, ...projection.bindings,
       { name: valueName, mutable: dispatched,
-        value: dispatched ? { kind: "call", path: "Some", args: [value] } : value }], value: mutation,
-  } }];
+        value: dispatched ? { kind: "call", path: "Some", args: [value] } : value }], mutation) }];
 }

@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import { BinaryExpression_Right } from "@tsonic/target-api/source";
 import type { Node } from "@tsonic/tsts";
 import { rustValueCarrierBeforeContextualConversion } from "../../../analysis/facts/value-carrier-queries.js";
@@ -42,10 +43,7 @@ export function planAssignmentExpression(node: Node, context: RustPlanContext): 
   overrides.set(right, {
     carrier,
     valueForm: "value",
-    expression: {
-      kind: "block",
-      bindings: [{ name: valueName, value }],
-      value: {
+    expression: rustValueBlock([{ name: valueName, value }], {
         kind: "evaluate-then",
         effect: {
           kind: "assignment", operator: "=", target: result,
@@ -53,8 +51,7 @@ export function planAssignmentExpression(node: Node, context: RustPlanContext): 
         },
         discard: "unit",
         value: selected,
-      },
-    },
+      }),
   });
   const statements = planExpressionAsStatement(node, { ...context, expressionOverrides: overrides });
   if (statements === undefined) return undefined;
@@ -73,5 +70,5 @@ export function planAssignmentExpression(node: Node, context: RustPlanContext): 
     }
     expression = { kind: "evaluate-then", effect, discard: "unit", value: expression };
   }
-  return { kind: "block", bindings: [{ name: resultName, type }], value: expression };
+  return rustValueBlock([{ name: resultName, type }], expression);
 }

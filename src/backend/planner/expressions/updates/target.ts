@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../../target-ast/value-block.js";
 import {
   KindElementAccessExpression,
   KindParenthesizedExpression,
@@ -105,14 +106,10 @@ export function planRustSourceFieldUpdate(
     if (mutation === undefined) {
       return undefined;
     }
-    return {
-      kind: "block",
-      bindings: [
+    return rustValueBlock([
         { name: receiverName, value: receiver },
         ...projection.bindings,
-      ],
-      value: mutation,
-    };
+      ], mutation);
   }
   const dispatchPlan = field.declaration === undefined
     ? undefined
@@ -160,9 +157,7 @@ export function planRustSourceFieldUpdate(
     return undefined;
   }
   const resultName = allocateRustSyntheticName(context.syntheticNames, "update_result");
-  return {
-    kind: "block",
-    bindings: [
+  return rustValueBlock([
       { name: receiverName, value: receiver },
       {
         name: fieldName,
@@ -173,8 +168,7 @@ export function planRustSourceFieldUpdate(
       },
       ...projection.bindings,
       { name: resultName, value: updated },
-    ],
-    value: {
+    ], {
       kind: "evaluate-then",
       effect: writeRustProjectDispatchedField(
         receiverPath,
@@ -187,8 +181,7 @@ export function planRustSourceFieldUpdate(
       ),
       discard: "unit",
       value: { kind: "path", path: resultName },
-    },
-  };
+    });
 }
 
 export function findRustUpdateProjectField(
@@ -388,20 +381,16 @@ export function planRustUpdateValue(options: {
   if (write === undefined) {
     return undefined;
   }
-  return {
-    kind: "block",
-    bindings: [
+  return rustValueBlock([
       ...options.locationBindings,
       { name: previousName, value: options.read },
       { name: nextName, value: nextValue },
-    ],
-    value: {
+    ], {
       kind: "evaluate-then",
       effect: write,
       discard: "unit",
       value: options.returnsPrevious ? previous : next,
-    },
-  };
+    });
 }
 
 export function planRustDirectStorage(

@@ -86,8 +86,11 @@ export function tupleRustClosureArguments(
   arity: number,
 ): RustExpr | undefined {
   if (expression.kind === "block") {
-    const value = tupleRustClosureArguments(expression.value, argumentName, arity);
-    return value === undefined ? undefined : { ...expression, value };
+    const terminal = expression.body.statements[expression.body.statements.length - 1];
+    if (terminal?.kind !== "tail") return undefined;
+    const value = tupleRustClosureArguments(terminal.expr, argumentName, arity);
+    return value === undefined ? undefined : { ...expression, body: { ...expression.body,
+      statements: [...expression.body.statements.slice(0, -1), { ...terminal, expr: value }] } };
   }
   if (expression.kind !== "closure" && expression.kind !== "closure-block") {
     return undefined;

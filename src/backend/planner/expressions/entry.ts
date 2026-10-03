@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
 import { planRustOptionalStorageOperation } from "./optional-storage.js";
 import {
@@ -577,10 +578,7 @@ export function planRustProjectUpcast(
     context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []),
     "upcast_value",
   );
-  return {
-    kind: "block",
-    bindings: [{ name: valueName, value: expression }],
-    value: {
+  return rustValueBlock([{ name: valueName, value: expression }], {
       kind: "struct-literal",
       path: targetPath,
       fields: [rustProjectObjectIdentityField, rustProjectObjectDispatchField].map(name => {
@@ -595,6 +593,5 @@ export function planRustProjectUpcast(
           kind: "method-call", receiver: field, method: "clone", args: [],
         } };
       }),
-    },
-  };
+    });
 }

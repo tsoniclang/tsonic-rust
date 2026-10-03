@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../../target-ast/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import { Node_Expression } from "@tsonic/target-api/source";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
@@ -97,5 +98,5 @@ export function planRustUnionMethodCall(
       expression,
     });
   }
-  return { kind: "block", bindings, value: { kind: "match", expression: { kind: "reference", expr: { kind: "path", path: receiverName }, ...(mutable ? { mutable: true } : {}) }, arms } };
+  return rustValueBlock(bindings, { kind: "match", expression: { kind: "reference", expr: { kind: "path", path: receiverName }, ...(mutable ? { mutable: true } : {}) }, arms });
 }

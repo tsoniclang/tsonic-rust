@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import { type RustAttribute } from "../../target-ast/attributes.js";
 import type {
   RustExpr,
@@ -107,16 +108,12 @@ export function planRustModuleCell(
       kind: "expr",
       expr: value === undefined ? rustModuleCellAccess(
         { kind: "path", path: name }, "declare", [], cellName,
-      ) : {
-        kind: "block",
-        bindings: [{ name: valueName, value }],
-        value: rustModuleCellAccess(
+      ) : rustValueBlock([{ name: valueName, value }], rustModuleCellAccess(
           { kind: "path", path: name },
           "initialize",
           [{ kind: "path", path: valueName }],
           cellName,
-        ),
-      },
+        )),
     },
   };
 }

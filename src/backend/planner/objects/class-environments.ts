@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import { rustDeriveAttributes } from "../../target-ast/attributes.js";
 import type { Node } from "@tsonic/tsts";
 import { Node_Initializer } from "@tsonic/target-api/source";
@@ -129,8 +130,8 @@ export function planRustClassEnvironmentValue(declaration: Node, context: RustPl
   const marker = rustProjectStateMarker(definition, context, environment.genericParameterIndexes);
   if (marker !== undefined) fields.push({ name: marker.name, value: marker.value });
   const value: RustExpr = { kind: "struct-literal", path: type.path, fields };
-  return { kind: "block", bindings, value: environment.storage === "value" ? value
-    : { kind: "call", path: "alloc::rc::Rc::new", args: [value] } };
+  return rustValueBlock(bindings, environment.storage === "value" ? value
+    : { kind: "call", path: "alloc::rc::Rc::new", args: [value] });
 }
 
 export function rustClassEnvironmentParameter(

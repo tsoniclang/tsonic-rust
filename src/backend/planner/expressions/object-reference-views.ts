@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import type { RustObjectReferenceView } from "../../../analysis/facts/object-reference-views.js";
 import { rustClassConstructorInstance } from "../../../target-model/types/carriers/class-constructors.js";
 import type { RustExpr } from "../../target-ast/nodes.js";
@@ -80,5 +81,5 @@ export function planRustObjectReferenceView(
   const implementation = context.objectLiteralImplementations?.forReferenceView(node);
   const constructed = shape.dispatchName === undefined ? createRustStructuralObjectFromCarrier(fact.targetCarrier, initializers, context, identity)
     : implementation?.kind === "structural" ? constructRustStructuralLiteral(implementation, initializers, identity) : undefined;
-  return constructed === undefined ? undefined : {kind: "block", bindings, value: constructed};
+  return constructed === undefined ? undefined : rustValueBlock(bindings, constructed);
 }

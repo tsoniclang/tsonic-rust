@@ -235,19 +235,7 @@ export type RustExpr =
   | { readonly kind: "option-presence"; readonly receiver: RustExpr; readonly present: boolean }
   | { readonly kind: "field"; readonly receiver: RustExpr; readonly name: string }
   | { readonly kind: "index"; readonly receiver: RustExpr; readonly index: RustExpr }
-  | {
-      readonly kind: "block";
-      readonly innerAttrs?: readonly RustAttribute[];
-      readonly valueAttrs?: readonly RustAttribute[];
-      readonly bindings: readonly {
-        readonly name: string;
-        readonly value?: RustExpr;
-        readonly type?: RustType;
-        readonly mutable?: boolean;
-        readonly attrs?: readonly RustAttribute[];
-      }[];
-      readonly value: RustExpr;
-    }
+  | { readonly kind: "block"; readonly body: RustBlock }
   | { readonly kind: "unsafe"; readonly expression: RustExpr }
   | { readonly kind: "evaluate-then"; readonly effect: RustExpr; readonly discard: "unit" | "value"; readonly value: RustExpr }
   | { readonly kind: "string-concat"; readonly parts: readonly RustExpr[] }
@@ -296,16 +284,15 @@ export type {
 export type RustStmt =
   | { readonly kind: "item"; readonly item: RustItem }
   | { readonly kind: "let"; readonly name: string; readonly mutable: boolean; readonly type?: RustType; readonly init?: RustExpr; readonly attrs?: readonly RustAttribute[] }
-  | { readonly kind: "expr"; readonly expr: RustExpr }
+  | { readonly kind: "expr"; readonly expr: RustExpr; readonly attrs?: readonly RustAttribute[] }
   | { readonly kind: "assign"; readonly target: RustExpr; readonly operator: RustAssignmentOperator; readonly value: RustExpr }
   | { readonly kind: "return"; readonly expr?: RustExpr }
-  | { readonly kind: "tail"; readonly expr: RustExpr }
+  | { readonly kind: "tail"; readonly expr: RustExpr; readonly attrs?: readonly RustAttribute[] }
   | { readonly kind: "if"; readonly condition: RustExpr; readonly then: RustBlock; readonly else?: RustBlock; readonly elseIf?: true; readonly attrs?: readonly RustAttribute[] }
   | { readonly kind: "loop"; readonly label?: string; readonly body: RustBlock; readonly neverFallsThrough?: boolean }
   | { readonly kind: "while"; readonly label?: string; readonly condition: RustExpr; readonly body: RustBlock; readonly attrs?: readonly RustAttribute[] }
   | { readonly kind: "while-let-some"; readonly label?: string; readonly binding: string; readonly bindingMutable?: boolean; readonly expression: RustExpr; readonly body: RustBlock }
   | { readonly kind: "for"; readonly label?: string; readonly binding: string; readonly bindingMutable?: boolean; readonly iterable: RustExpr; readonly body: RustBlock; readonly attrs?: readonly RustAttribute[] }
-  | { readonly kind: "if-let-some"; readonly binding: string; readonly expression: RustExpr; readonly body: RustBlock; readonly else?: RustBlock; readonly elseIf?: true }
   | { readonly kind: "break"; readonly label?: string }
   | { readonly kind: "continue"; readonly label?: string }
   | {

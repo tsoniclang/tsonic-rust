@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../../dist/backend/target-ast/value-block.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -230,18 +231,14 @@ test("fallible nested calls remain compact when their selected line fits", () =>
 });
 
 test("logical block operands keep the following operator on the closing brace", () => {
-  const upcast = () => ({
-    kind: "block",
-    bindings: [{ name: "value", value: clone({ kind: "path", path: "source" }) }],
-    value: {
+  const upcast = () => (rustValueBlock([{ name: "value", value: clone({ kind: "path", path: "source" }) }], {
       kind: "struct-literal",
       path: "View",
       fields: [
         { name: "identity", value: clone(field({ kind: "path", path: "value" }, "identity")) },
         { name: "dispatch", value: clone(field({ kind: "path", path: "value" }, "dispatch")) },
       ],
-    },
-  });
+    }));
   const condition = {
     kind: "binary",
     operator: "||",
@@ -346,16 +343,12 @@ test("associated values preserve their exact generic owner", () => {
 });
 
 test("detached logical block operands use the continuation indentation", () => {
-  const selectedValue = (receiver) => ({
-    kind: "block",
-    bindings: [{ name: "selected", value: clone({ kind: "path", path: receiver }) }],
-    value: {
+  const selectedValue = (receiver) => (rustValueBlock([{ name: "selected", value: clone({ kind: "path", path: receiver }) }], {
       kind: "method-call",
       receiver: clone(field({ kind: "path", path: "selected" }, "dispatch")),
       method: "read_selected_value",
       args: [],
-    },
-  });
+    }));
   const compared = (receiver, value) => ({
     kind: "binary",
     operator: "!=",
@@ -399,19 +392,15 @@ test("format macro arguments keep borrowed blocks attached to their call", () =>
         path: "rt::source_string",
         args: [{
           kind: "reference",
-          expr: {
-            kind: "block",
-            bindings: [{
+          expr: rustValueBlock([{
               name: "receiver",
               value: clone({ kind: "path", path: "project_this" }),
-            }],
-            value: {
+            }], {
               kind: "method-call",
               receiver: clone(field({ kind: "path", path: "receiver" }, "dispatch")),
               method: "read_selected_project_field_with_a_long_identity",
               args: [],
-            },
-          },
+            }),
         }],
       },
       { kind: "string-literal", value: "" },

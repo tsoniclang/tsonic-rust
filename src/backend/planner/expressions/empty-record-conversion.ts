@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
@@ -20,5 +21,5 @@ export function planRustEmptyRecordConversion(
   if (value === undefined) return undefined;
   const name = allocateRustSyntheticName(context.syntheticNames ??
     createRustSyntheticNameState(context.input.program.source.ast, node, []), "_empty_record_source");
-  return { kind: "block", bindings: [{ name, value: expression }], value };
+  return rustValueBlock([{ name, value: expression }], value);
 }

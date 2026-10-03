@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../../target-ast/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import { Node_Expression } from "@tsonic/target-api/source";
 import type { RustExpr } from "../../../target-ast/nodes.js";
@@ -118,7 +119,7 @@ function planSpreadArray(
     }
     value = { kind: "evaluate-then", effect, discard: "unit", value };
   }
-  return { kind: "block", bindings: [{ name, type, mutable: true, value: { kind: "vec-literal", elements: [] } }], value };
+  return rustValueBlock([{ name, type, mutable: true, value: { kind: "vec-literal", elements: [] } }], value);
 }
 
 function reject(node: Node, context: RustPlanContext, message: string): undefined {

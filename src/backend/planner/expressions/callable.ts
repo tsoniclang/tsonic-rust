@@ -1,3 +1,4 @@
+import { rustValueBlock } from "../../target-ast/value-block.js";
 import {
   applyFallibleShape,
 } from "../types/fallible-shape.js";
@@ -587,7 +588,7 @@ export function planRustCallableExpressionBody(
   if (callableProtocol === undefined) {
     return nativeClosureProtocol === undefined || captureBindings.length === 0
       ? closure
-      : { kind: "block", bindings: captureBindings, value: closure };
+      : rustValueBlock(captureBindings, closure);
   }
   const callableType = rustCallableConstructionType(
     constructionCarrier,

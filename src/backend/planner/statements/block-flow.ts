@@ -1,4 +1,5 @@
 import type { RustBlock, RustStmt } from "../../target-ast/nodes.js";
+import { rustExpressionAlwaysExits } from "../../target-ast/inspection/source-dataflow.js";
 
 export function retainRustCheckedCompletion(body: RustBlock, canFallThrough: boolean | undefined): RustBlock {
   return canFallThrough !== false || rustBlockTerminates(body) ? body : {
@@ -16,7 +17,7 @@ export function rustBlockTerminates(block: RustBlock): boolean {
   if (last.kind === "return" || last.kind === "tail" || last.kind === "throw") {
     return true;
   }
-  if (last.kind === "expr" && last.expr.kind === "bottom") {
+  if (last.kind === "expr" && rustExpressionAlwaysExits(last.expr)) {
     return true;
   }
   if (last.kind === "scope" || last.kind === "unsafe-scope") {

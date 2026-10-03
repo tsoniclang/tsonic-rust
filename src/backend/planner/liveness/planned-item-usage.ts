@@ -54,11 +54,7 @@ function rustStatementReferencesSelfField(
     case "while-let-some":
       return rustExpressionReferencesSelfField(statement.expression, fieldName) ||
         rustBlockReferencesSelfField(statement.body, fieldName);
-    case "if-let-some":
-      return rustExpressionReferencesSelfField(statement.expression, fieldName) ||
-        rustBlockReferencesSelfField(statement.body, fieldName) ||
-        (statement.else !== undefined &&
-          rustBlockReferencesSelfField(statement.else, fieldName));
+
     case "for":
       return rustExpressionReferencesSelfField(statement.iterable, fieldName) ||
         rustBlockReferencesSelfField(statement.body, fieldName);
