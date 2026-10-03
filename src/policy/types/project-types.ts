@@ -113,7 +113,8 @@ export interface RustProjectTypePolicy {
     readonly ownerCarrier: TargetTypeRef;
   } | undefined;
   readonly programErrorDefinitions: readonly RustProjectTypeDefinition[];
-  readonly builtinErrorProjectionAvailable: boolean;
+  readonly sourceErrorDefinitions: readonly RustProjectTypeDefinition[];
+  sourceErrorCarrier(): TargetTypeRef;
   programErrorVariant(definition: RustProjectTypeDefinition): string | undefined;
   directSupertypes(carrier: TargetTypeRef): readonly TargetTypeRef[] | undefined;
   commonSupertype(carriers: readonly TargetTypeRef[]): TargetTypeRef | undefined;

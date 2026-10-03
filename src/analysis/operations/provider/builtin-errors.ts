@@ -25,6 +25,7 @@ import type {
 } from "../../../policy/operations/contracts.js";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { isRustSourceErrorCarrier } from "../../../target-model/types/carriers/source-error.js";
 
 export function selectRustBuiltinErrorTypeTest(
   request: RustCheckedOperatorSelectionInput,
@@ -46,11 +47,7 @@ export function selectRustBuiltinErrorTypeTest(
   const lowering = rustTargetTypeRefEquals(sourceCarrier, rustJsErrorTargetType())
     ? "native-error"
     : isRustJsValueCarrier(sourceCarrier) ? "closed-value"
-    : isRustProgramErrorCarrier(sourceCarrier) ? "program-error" : undefined;
-  if (lowering === "program-error" && options.projectTypes.builtinErrorProjectionAvailable !== true) {
-    return rejectSelectedOperation(request.expression, context, "RUST_BUILTIN_ERROR_INHERITED_STORAGE",
-      "Caught builtin Error projection requires preserved Error identity; inherited mutable Error fields have no exact shared native Error storage yet.");
-  }
+    : isRustProgramErrorCarrier(sourceCarrier) || isRustSourceErrorCarrier(sourceCarrier) ? "program-error" : undefined;
   if (sourceCarrier === undefined || lowering === undefined) {
     return rejectSelectedOperation(
       request.expression, context, "RUST_BUILTIN_ERROR_TYPE_TEST_CARRIER",
@@ -82,7 +79,7 @@ export function selectRustBuiltinErrorProperty(
   const member = sourceMembers?.members[0];
   if (member === undefined || !sourceMembers?.members.every((candidate) =>
     candidate.ownerName === "Error" && candidate.memberName === member.memberName) ||
-    !rustTargetTypeRefEquals(receiverCarrier, rustJsErrorTargetType())) {
+    (!rustTargetTypeRefEquals(receiverCarrier, rustJsErrorTargetType()) && !isRustSourceErrorCarrier(receiverCarrier))) {
     return undefined;
   }
   if (request.accessMode !== "read") {
@@ -100,7 +97,7 @@ export function selectRustBuiltinErrorProperty(
   return acceptRustMemberOperation(request, "property", {
     kind: "builtin-error-property",
     operationId: `tsonic.rust.error.property.${member.memberName}`,
-    receiverCarrier: rustJsErrorTargetType(),
+    receiverCarrier: receiverCarrier!,
     resultCarrier: member.memberName === "stack"
       ? rustOptionTargetType(rustStringTargetType())
       : rustStringTargetType(),

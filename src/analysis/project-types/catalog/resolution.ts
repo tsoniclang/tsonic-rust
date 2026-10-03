@@ -28,9 +28,13 @@ import { rustLocalClassIssue } from "../local-classes.js";
 import { projectGenericSubstitutions } from "../../../policy/types/project/generic-substitutions.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { rustTargetGenericReferences } from "../../../target-model/types/carriers/generic-references.js";
+import { rustJsErrorTargetType } from "../../../target-model/types/carriers/js.js";
+import { rustSourceErrorTargetType } from "../../../target-model/types/carriers/source-error.js";
+import type { SourceDeclaredHeritageResult } from "@tsonic/target-api/source";
 
 export function createRustProjectTypePolicy(
   host: RustProjectTypePolicyHost,
+  publishSourceErrorCarrier: (carrier: TargetTypeRef) => void,
 ): RustProjectTypePolicy {
   const definitions: RustProjectTypeDefinition[] = [];
   const issues: RustProjectTypeIssue[] = [];
@@ -79,8 +83,47 @@ export function createRustProjectTypePolicy(
 
   const heritageByDeclaration = new WeakMap<Node, readonly RustProjectHeritageEdge[]>();
   const externalBaseByDeclaration = new WeakMap<Node, RustExternalProjectBase>();
+  const externalBaseByHeritage = new WeakMap<Node, RustExternalProjectBase>();
+  const declaredHeritage = new WeakMap<Node, SourceDeclaredHeritageResult>();
   for (const definition of definitions) {
     const selected = host.navigation.declaredHeritage(definition.declaration);
+    declaredHeritage.set(definition.declaration, selected);
+    if (selected.kind !== "resolved") continue;
+    for (const edge of selected.edges) {
+      if (byDeclaration.has(edge.target.declaration)) continue;
+      const external = host.resolveExternalHeritage(edge);
+      if (external !== undefined && definition.kind === "class" &&
+        definition.genericParameters.length === 0 &&
+        !externalBaseByDeclaration.has(definition.declaration)) {
+        externalBaseByDeclaration.set(definition.declaration, external);
+        externalBaseByHeritage.set(edge.heritage, external);
+      }
+    }
+  }
+  const sourceErrorDeclarations = new Set<Node>();
+  const visitedErrorAncestors = new Set<Node>();
+  const visitingErrorAncestors = new Set<Node>();
+  const admitsSourceError = (definition: RustProjectTypeDefinition): boolean => {
+    if (visitedErrorAncestors.has(definition.declaration)) return sourceErrorDeclarations.has(definition.declaration);
+    if (visitingErrorAncestors.has(definition.declaration) || definition.kind !== "class") return false;
+    visitingErrorAncestors.add(definition.declaration);
+    const selected = declaredHeritage.get(definition.declaration);
+    const admitted = externalBaseByDeclaration.get(definition.declaration)?.programError === true ||
+      selected?.kind === "resolved" && selected.edges.some(edge => {
+        const target = byDeclaration.get(edge.target.declaration);
+        return edge.kind === "extends" && target !== undefined && admitsSourceError(target);
+      });
+    visitingErrorAncestors.delete(definition.declaration);
+    visitedErrorAncestors.add(definition.declaration);
+    if (admitted) sourceErrorDeclarations.add(definition.declaration);
+    return admitted;
+  };
+  const sourceErrorDefinitions = Object.freeze(definitions.filter(definition =>
+    admitsSourceError(definition) && definition.genericParameters.length === 0).sort(compareProjectDefinitions));
+  const sourceErrorCarrier = sourceErrorDefinitions.length === 0 ? rustJsErrorTargetType() : rustSourceErrorTargetType();
+  publishSourceErrorCarrier(sourceErrorCarrier);
+  for (const definition of definitions) {
+    const selected = declaredHeritage.get(definition.declaration)!;
     if (selected.kind === "unresolved") {
       issues.push({
         node: selected.heritage,
@@ -94,11 +137,8 @@ export function createRustProjectTypePolicy(
     for (const edge of selected.edges) {
       const target = byDeclaration.get(edge.target.declaration);
       if (target === undefined) {
-        const externalBase = host.resolveExternalHeritage(edge);
-        if (externalBase !== undefined && definition.kind === "class" &&
-          definition.genericParameters.length === 0 &&
-          externalBaseByDeclaration.get(definition.declaration) === undefined) {
-          externalBaseByDeclaration.set(definition.declaration, externalBase);
+        const externalBase = externalBaseByDeclaration.get(definition.declaration);
+        if (externalBase !== undefined && externalBaseByHeritage.get(edge.heritage) === externalBase) {
           continue;
         }
         issues.push({
@@ -734,8 +774,8 @@ export function createRustProjectTypePolicy(
     definitions: frozenDefinitions,
     issues: frozenIssues,
     programErrorDefinitions,
-    builtinErrorProjectionAvailable: !programErrorDefinitions.some(definition =>
-      externalBaseByDeclaration.get(definition.declaration)?.programError === true),
+    sourceErrorDefinitions,
+    sourceErrorCarrier() { return sourceErrorCarrier; },
     definitionForDeclaration(declaration) {
       return declaration === undefined ? undefined : byDeclaration.get(declaration);
     },

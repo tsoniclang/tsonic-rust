@@ -1,8 +1,10 @@
 import { createRustProjectTypePolicy } from "./resolution.js";
 import type { RustProjectTypePolicy, RustProjectTypePolicyRegistry } from "../../../policy/types/project-types.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function createRustProjectTypePolicyRegistry(): RustProjectTypePolicyRegistry {
   let current: RustProjectTypePolicy | undefined;
+  let sourceErrorCarrier: TargetTypeRef | undefined;
   const requireCurrent = (): RustProjectTypePolicy => {
     if (current === undefined) {
       throw new Error("Rust project type policy was read before source analysis initialized it.");
@@ -20,7 +22,10 @@ export function createRustProjectTypePolicyRegistry(): RustProjectTypePolicyRegi
       if (current !== undefined) {
         throw new Error("Rust project type policy can be initialized only once.");
       }
-      current = createRustProjectTypePolicy(host);
+      current = createRustProjectTypePolicy(host, carrier => {
+        if (sourceErrorCarrier !== undefined) throw new Error("Rust source Error carrier classification can be published only once.");
+        sourceErrorCarrier = carrier;
+      });
       return current;
     },
     isInitialized() {
@@ -56,8 +61,12 @@ export function createRustProjectTypePolicyRegistry(): RustProjectTypePolicyRegi
     get programErrorDefinitions() {
       return requireCurrent().programErrorDefinitions;
     },
-    get builtinErrorProjectionAvailable() {
-      return requireCurrent().builtinErrorProjectionAvailable;
+    get sourceErrorDefinitions() {
+      return requireCurrent().sourceErrorDefinitions;
+    },
+    sourceErrorCarrier() {
+      if (sourceErrorCarrier === undefined) throw new Error("Rust source Error carrier was read before declaration-level heritage classification.");
+      return sourceErrorCarrier;
     },
     programErrorVariant(definition) {
       return requireCurrent().programErrorVariant(definition);

@@ -1,4 +1,4 @@
-import { rustDeriveAttributes, rustHiddenAttribute } from "../../target-ast/attributes.js";
+import { rustHiddenAttribute } from "../../target-ast/attributes.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustPlanningContext } from "../context.js";
 import { rustRuntimeErrorTypeIdentity } from "./source-package-errors.js";
@@ -12,9 +12,12 @@ import {
   type RustPattern,
   type RustSourceFileModel,
   type RustType,
+  type RustGenerics,
 } from "../../target-ast/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/nodes.js";
 import { planRustErrorObservations, planRustSuppressedErrorConstructor } from "./error-observations.js";
+import { planRustErrorTransport, planRustSourceErrorTransport, rustErrorTransportDisplayGenerics } from "./error-transport.js";
+import { planRustSourceErrorObservations } from "./source-error-observations.js";
 
 const programErrorName = "TsonicError";
 const programResultName = "TsonicResult";
@@ -52,10 +55,6 @@ function resultType(value: RustType): RustType {
 
 function completionType(value: RustType): RustType {
   return namedType("Completion", [value]);
-}
-
-function boxType(value: RustType): RustType {
-  return namedType("Box", [value]);
 }
 
 function binding(name: string): RustPattern {
@@ -150,28 +149,31 @@ export function planRustProgramErrorModule(
     return undefined;
   }
 
+  const transport = planRustErrorTransport([
+    ...exactProjectVariants.map(({ definition, variant, type }) => ({
+      name: variant, type,
+      source: input.program.projectTypes.sourceErrorDefinitions.includes(definition) ? "error" as const : "thrown" as const,
+    })),
+    ...externalVariants.map(({ variant, type, typePath }) => ({
+      name: variant, type, source: "external" as const,
+      sourceErrorType: namedType(`${typePath.slice(0, -programErrorName.length)}SourceError`),
+    })),
+  ]);
+  if (transport === undefined) {
+    diagnostics.push({ code: "RUST_ERROR_TRANSPORT_ADMISSION_NOT_CLOSED", category: "error", source: "tsonic-rust",
+      message: "Program Error transport has no exact unique variant admission and external Error-only specialization." });
+    return undefined;
+  }
+  const displayGenerics = rustErrorTransportDisplayGenerics(transport);
+
   const items: RustItem[] = [
     {
       kind: "use",
       visibility: "public",
       path: "tsonic_rust_runtime::*",
     },
-    {
-      kind: "enum",
-      generics: emptyRustGenerics,
-      name: programErrorName,
-      visibility: "public",
-      attrs: [rustHiddenAttribute, ...rustDeriveAttributes(["Clone"])],
-      variants: [
-        { name: "Runtime", fields: [runtimeErrorType] },
-        ...exactProjectVariants.map(({ variant, type }) => ({ name: variant, fields: [type] })),
-        ...externalVariants.map(({ variant, type }) => ({ name: variant, fields: [type] })),
-        {
-          name: "Suppressed",
-          fields: [boxType(programErrorType), boxType(programErrorType), runtimeJsErrorType],
-        },
-      ],
-    },
+    transport.declaration,
+    ...transport.aliases,
     {
       kind: "type-alias",
       name: programResultName,
@@ -186,26 +188,26 @@ export function planRustProgramErrorModule(
       fromImplementation(type, variant, false)),
     ...externalVariants.map(({ variant, type }) =>
       fromImplementation(type, variant, false)),
-    displayImplementation([
+    displayImplementation(transport.declarationType, displayGenerics, [
       ...exactProjectVariants.map(({ variant, definition }) => ({
         variant,
         delegate: input.program.projectTypes.inheritedExternalBaseForDefinition(definition)?.base.programError === true,
       })),
       ...externalVariants.map(({ variant }) => ({ variant, delegate: true })),
     ]),
-    debugImplementation(),
+    debugImplementation(transport.declarationType, displayGenerics),
     {
       kind: "impl",
-      generics: emptyRustGenerics,
+      generics: displayGenerics,
       trait: namedType("core::error::Error"),
-      target: programErrorType,
+      target: transport.declarationType,
       members: [],
     },
-    sourceStringImplementation(),
+    sourceStringImplementation(transport.declarationType, displayGenerics),
     planRustSuppressedErrorConstructor(),
-    planRustErrorObservations(externalVariants.map(item => item.variant),
-      exactProjectVariants.map(item => item.variant),
-      input.program.projectTypes.builtinErrorProjectionAvailable === true),
+    planRustErrorObservations(transport),
+    ...planRustSourceErrorTransport(transport),
+    ...planRustSourceErrorObservations(transport),
     finishResourceFunction(),
     finishFinallyFunction(),
   ];
@@ -242,7 +244,7 @@ function fromImplementation(
   };
 }
 
-function displayImplementation(projectVariants: readonly {
+function displayImplementation(target: RustType, generics: RustGenerics, projectVariants: readonly {
   readonly variant: string;
   readonly delegate: boolean;
 }[]): RustItem {
@@ -257,9 +259,9 @@ function displayImplementation(projectVariants: readonly {
   };
   return {
     kind: "impl",
-    generics: emptyRustGenerics,
+    generics,
     trait: namedType("core::fmt::Display"),
-    target: programErrorType,
+    target,
     members: [{ kind: "function",
       name: "fmt",
       visibility: "private",
@@ -318,12 +320,12 @@ function displayDelegateArm(variant: string): {
   };
 }
 
-function debugImplementation(): RustItem {
+function debugImplementation(target: RustType, generics: RustGenerics): RustItem {
   return {
     kind: "impl",
-    generics: emptyRustGenerics,
+    generics,
     trait: namedType("core::fmt::Debug"),
-    target: programErrorType,
+    target,
     members: [{ kind: "function",
       name: "fmt",
       visibility: "private",
@@ -352,12 +354,12 @@ function debugImplementation(): RustItem {
   };
 }
 
-function sourceStringImplementation(): RustItem {
+function sourceStringImplementation(target: RustType, generics: RustGenerics): RustItem {
   return {
     kind: "impl",
-    generics: emptyRustGenerics,
+    generics,
     trait: namedType("tsonic_rust_runtime::ToSourceString"),
-    target: programErrorType,
+    target,
     members: [{ kind: "function",
       name: "to_source_string",
       visibility: "private",

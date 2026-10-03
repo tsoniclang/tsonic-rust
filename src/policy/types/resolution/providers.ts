@@ -451,7 +451,7 @@ export function resolveSourceProfileCarrierFromArguments(
   }
   if (arguments_.length === 0 && rustSourceErrorConstructors.some((entry) =>
     entry.sourceName === name && (name === "Error" || options.jsEnabled))) {
-    return rustJsErrorTargetType();
+    return name === "Error" ? options.sourceErrorCarrier() : rustJsErrorTargetType();
   }
   if (name === "Promise" || name === "PromiseLike") {
     const [output] = arguments_;

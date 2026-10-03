@@ -5,8 +5,6 @@ import { rustUnionProjectionContract } from "../../../target-model/types/union-r
 import {
   isRustCopyCarrier,
   isRustJsValueCarrier,
-  isRustProgramErrorCarrier,
-  rustJsErrorTargetType,
   rustCarrierSupportsClone,
   rustOptionElementCarrier,
 } from "../../../target-model/types/index.js";
@@ -23,6 +21,7 @@ import { requireRustCarrierRequirements } from "../types/generic-requirements.js
 import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
 import { planRustOptionalStorageOperation } from "./optional-storage.js";
 import { planRustUnionMapping, planRustUnionProjection } from "./union-mappings.js";
+import { isRustSourceErrorCarrier } from "../../../target-model/types/carriers/source-error.js";
 import {
   allocateRustSyntheticName,
   createRustSyntheticNameState,
@@ -79,14 +78,22 @@ export function planRustValueProjection(
   const ownsValue = ownership === "move";
   const borrowedResult = ownership === "borrow";
   if (fact.kind === "builtin-error") {
-    if ((!isRustJsValueCarrier(fact.sourceCarrier) && !(isRustProgramErrorCarrier(fact.sourceCarrier) &&
-      context.input.program.projectTypes.builtinErrorProjectionAvailable === true)) ||
-      !rustTargetTypeRefEquals(fact.selectedCarrier, rustJsErrorTargetType())) {
-      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node), "rust.backend.builtin-error-projection",
-        "The selected builtin Error projection has contradictory native carriers."));
-      return undefined;
+    const exactSource = ownsValue ? expression : planRustNonConsumingValue(node, expression, context);
+    if (isRustJsValueCarrier(fact.sourceCarrier)) {
+      const native: RustExpr = { kind: "method-call", receiver: exactSource, method: "error_value", args: [] };
+      return isRustSourceErrorCarrier(fact.selectedCarrier)
+        ? { kind: "call", path: "rt::SourceError::from", args: [native] } : native;
     }
-    return { kind: "method-call", receiver: ownsValue ? expression : planRustNonConsumingValue(node, expression, context), method: "error_value", args: [] };
+    if (isRustSourceErrorCarrier(fact.selectedCarrier)) {
+      const selected: RustExpr = ownsValue
+        ? { kind: "method-call", receiver: exactSource, method: "try_into_source_error", args: [] }
+        : { kind: "method-call", receiver: exactSource, method: "source_error_value", args: [] };
+      return { kind: "method-call", receiver: selected, method: "expect",
+        args: [{ kind: "str-literal", value: "exact checked flow selected an Error outside its sealed admitted variants" }] };
+    }
+    return { kind: "method-call", receiver: { kind: "method-call", receiver: exactSource,
+      method: "native_error_value", args: [] }, method: "expect",
+      args: [{ kind: "str-literal", value: "exact checked flow selected a nonnative Error" }] };
   }
   if (fact.kind === "union-map") {
     const sourceElement = rustOptionElementCarrier(fact.sourceCarrier);

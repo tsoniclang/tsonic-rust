@@ -5,6 +5,7 @@ import { acmeTestingPackage, analyzeRust, compileRust } from "../../helpers/rust
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
 import { rustJsErrorTargetType, rustProgramErrorTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
+import { rustSourceErrorTargetType } from "../../../dist/target-model/types/carriers/source-error.js";
 import { planThrowStatement } from "../../../dist/backend/planner/statements/errors.js";
 import { caughtErrorProofFiles } from "../../../../tsonic/test/fixtures/caught-errors.mjs";
 import { selectRustFlowReadProjection } from "../../../dist/policy/types/value-carrier-reconciliation.js";
@@ -96,7 +97,7 @@ export function main(): void {
   assert.equal(validateGeneratedProject("caught-error-variants", result.artifacts, { run: true }).status, 0);
 });
 
-test("inherited mutable Error storage cannot be silently reconstructed during catch narrowing", () => {
+test("inherited mutable Error storage retains its original owner during catch narrowing", { timeout: 300_000 }, () => {
   const { result } = compileRust({ files: { "index.ts": `
 class NamedError extends Error {
   constructor() { super("original"); this.message = "changed"; }
@@ -107,26 +108,25 @@ export function run(): string {
   return "other";
 }
 ` } });
-  assert.ok(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_BUILTIN_ERROR_INHERITED_STORAGE"),
-    JSON.stringify(result.diagnostics));
-  assert.equal(result.artifacts.length, 0);
+  assert.deepEqual(result.diagnostics, []);
+  validateGeneratedProject("inherited-error-storage", result.artifacts);
 });
 
-test("builtin catch projections require the sealed availability and exact selected carrier", () => {
+test("builtin catch projections require the exact sealed selected carrier", () => {
   const sourceCarrier = rustProgramErrorTargetType();
-  const selectedCarrier = rustJsErrorTargetType();
-  const policy = { builtinErrorProjectionAvailable: true, definitionForCarrier: () => undefined };
+  const selectedCarrier = rustSourceErrorTargetType();
+  const policy = { sourceErrorCarrier: () => selectedCarrier, sourceErrorDefinitions: [], definitionForCarrier: () => undefined };
   const selected = selectRustFlowReadProjection(sourceCarrier, selectedCarrier, policy);
   assert.equal(selected.kind, "projection");
   assert.equal(selected.fact.kind, "builtin-error");
-  for (const available of [false, undefined]) {
+  for (const unavailableCarrier of [rustStringTargetType(), undefined]) {
     assert.equal(selectRustFlowReadProjection(sourceCarrier, selectedCarrier,
-      { ...policy, builtinErrorProjectionAvailable: available }).kind, "incompatible");
+      { ...policy, sourceErrorCarrier: () => unavailableCarrier }).kind, "incompatible");
     const diagnostics = [];
     const node = {};
     assert.equal(planRustValueProjection(node, { kind: "path", path: "caught" }, selected.fact, {
       input: { program: { facts: { getRuntimeCarrierFact: () => ({ carrier: sourceCarrier }) },
-        projectTypes: { ...policy, builtinErrorProjectionAvailable: available },
+        projectTypes: { ...policy, sourceErrorCarrier: () => unavailableCarrier },
         source: { ast: { getFileName: () => "", getSourceText: () => "", pos: () => -1,
           end: () => -1, kindName: () => "KindIdentifier" } } } },
       diagnostics,

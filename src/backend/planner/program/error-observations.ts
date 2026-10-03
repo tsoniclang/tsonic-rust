@@ -1,7 +1,9 @@
-import { emptyRustGenerics, type RustExpr, type RustItem, type RustPattern, type RustType } from "../../target-ast/nodes.js";
+import { emptyRustGenerics, type RustExpr, type RustImplFunction, type RustItem, type RustPattern, type RustType } from "../../target-ast/nodes.js";
+import type { RustErrorTransportPlan } from "./error-transport.js";
 
-const sourceError: RustType = { kind: "named", path: "tsonic_rust_runtime::JsError" };
+const jsError: RustType = { kind: "named", path: "tsonic_rust_runtime::JsError" };
 const errorKind: RustType = { kind: "named", path: "tsonic_rust_runtime::JsErrorKind" };
+const sourceError: RustType = { kind: "named", path: "SourceError" };
 const path = (name: string): RustExpr => ({ kind: "path", path: name });
 const call = (name: string, ...args: readonly RustExpr[]): RustExpr => ({ kind: "call", path: name, args });
 const method = (receiver: RustExpr, name: string, ...args: readonly RustExpr[]): RustExpr =>
@@ -9,51 +11,36 @@ const method = (receiver: RustExpr, name: string, ...args: readonly RustExpr[]):
 const binding = (name: string): RustPattern => ({ kind: "binding", name });
 const variant = (name: string, ...elements: readonly RustPattern[]): RustPattern =>
   ({ kind: "tuple-variant", path: name, elements });
+const option = (type: RustType): RustType => ({ kind: "named", path: "Option", genericArguments: [{ kind: "type", type }] });
 
-export function planRustErrorObservations(
-  externalVariants: readonly string[],
-  projectVariants: readonly string[],
-  includeBuiltinProjection: boolean,
-): RustItem {
-  const optionalSource: RustType = { kind: "named", path: "Option", genericArguments: [{ kind: "type",
-    type: { kind: "reference", mutable: false, referent: sourceError } }] };
+export function planRustErrorObservations(plan: RustErrorTransportPlan): RustItem {
+  const borrowedError: RustType = { kind: "reference", mutable: false, referent: {
+    kind: "trait-object", principal: { trait: { kind: "named", path: "tsonic_rust_runtime::ErrorObject" } }, autoTraits: [],
+  } };
   const source = method(path("self"), "source_error");
   return {
     kind: "impl", generics: emptyRustGenerics, target: { kind: "named", path: "TsonicError" },
-    members: [{ kind: "function",
-      name: "source_error", visibility: "public", generics: emptyRustGenerics,
-      selfParam: { kind: "reference", mutable: false }, params: [], returnType: optionalSource,
-      body: { statements: [{ kind: "tail", expr: { kind: "match", expression: path("self"), arms: [
-        { pattern: variant("Self::Runtime", binding("error")),
-          expression: call("Some", method(path("error"), "source_error")) },
-        { pattern: variant("Self::Suppressed", { kind: "wildcard" }, { kind: "wildcard" }, binding("source")),
-          expression: call("Some", path("source")) },
-        ...externalVariants.map(name => ({ pattern: variant(`Self::${name}`, binding("error")),
-          expression: method(path("error"), "source_error") })),
-        ...projectVariants.map(name => ({ pattern: variant(`Self::${name}`, { kind: "wildcard" }),
-          expression: { kind: "none" as const } })),
-      ] } }] },
-    }, ...(includeBuiltinProjection ? [{ kind: "function",
-      name: "is_error", visibility: "public", generics: emptyRustGenerics,
-      selfParam: { kind: "reference", mutable: false }, params: [], returnType: { kind: "primitive", name: "bool" },
-      body: { statements: [{ kind: "tail", expr: method(source, "is_some") }] },
-    }, { kind: "function",
-      name: "is_error_kind", visibility: "public", generics: emptyRustGenerics,
-      selfParam: { kind: "reference", mutable: false }, params: [{ name: "kind", type: errorKind }],
-      returnType: { kind: "primitive", name: "bool" },
-      body: { statements: [{ kind: "tail", expr: method(source, "is_some_and", {
+    members: [
+      observation("source_error", option(borrowedError), { kind: "match", expression: path("self"), arms: [
+        { pattern: variant("ErrorTransport::Runtime", binding("error")), expression: call("Some", method(path("error"), "source_error")) },
+        { pattern: variant("ErrorTransport::Suppressed", { kind: "wildcard" }, { kind: "wildcard" }, binding("source")), expression: call("Some", path("source")) },
+        ...plan.variants.map(item => ({ pattern: variant(`ErrorTransport::${item.name}`, item.source === "thrown" ? { kind: "wildcard" as const } : binding("error")),
+          expression: item.source === "external" ? method(path("error"), "source_error")
+            : item.source === "error" ? call("Some", path("error")) : { kind: "none" as const } })),
+      ] }),
+      observation("is_error", { kind: "primitive", name: "bool" }, method(source, "is_some")),
+      observation("is_error_kind", { kind: "primitive", name: "bool" }, method(source, "is_some_and", {
         kind: "closure", params: [{ name: "error", byRefCopy: false }],
-        body: { kind: "binary", left: method(path("error"), "kind"), operator: "==", right: path("kind") },
-      }) }] },
-    }, { kind: "function",
-      name: "error_value", visibility: "public", generics: emptyRustGenerics,
-      selfParam: { kind: "reference", mutable: false }, params: [], returnType: sourceError,
-      body: { statements: [{ kind: "tail", expr: { kind: "match", expression: source, arms: [
-        { pattern: variant("Some", binding("error")), expression: method(path("error"), "clone") },
-        { pattern: { kind: "path", path: "None" }, expression: { kind: "unreachable",
-          message: "checked flow selected a non-Error thrown value" } },
-      ] } }] },
-    }] satisfies Extract<RustItem, { kind: "impl" }>["members"] : [])],
+        body: { kind: "binary", left: method(path("error"), "error_kind"), operator: "==", right: path("kind") },
+      }), [{ name: "kind", type: errorKind }]),
+      observation("source_error_value", option(sourceError), method(call("SourceError::try_from", method(path("self"), "clone")), "ok")),
+      observation("native_error_value", option(jsError), { kind: "match", expression: path("self"), arms: [
+        { pattern: variant("ErrorTransport::Runtime", binding("error")), expression: call("Some", method(method(path("error"), "source_error"), "clone")) },
+        { pattern: variant("ErrorTransport::Suppressed", { kind: "wildcard" }, { kind: "wildcard" }, binding("source")), expression: call("Some", method(path("source"), "clone")) },
+        ...plan.variants.map(item => ({ pattern: variant(`ErrorTransport::${item.name}`, item.source === "external" ? binding("error") : { kind: "wildcard" as const }),
+          expression: item.source === "external" ? method(path("error"), "native_error_value") : { kind: "none" as const } })),
+      ] }),
+    ],
   };
 }
 
@@ -71,4 +58,13 @@ export function planRustSuppressedErrorConstructor(): RustItem {
       ) }] },
     }],
   };
+}
+
+function observation(
+  name: string, returnType: RustType, value: RustExpr,
+  params: readonly { readonly name: string; readonly type: RustType }[] = [],
+): RustImplFunction {
+  return { kind: "function", name, visibility: "public", generics: emptyRustGenerics,
+    selfParam: { kind: "reference", mutable: false }, params, returnType,
+    body: { statements: [{ kind: "tail", expr: value }] } };
 }

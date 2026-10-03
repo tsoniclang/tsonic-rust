@@ -27,6 +27,7 @@ import { selectRustProjectProjection } from "./project-projections.js";
 import { rustGenericCallableSignaturesMatch } from "../../target-model/conversions/generic-callable.js";
 import { selectRustCallableConversion } from "../../target-model/conversions/callable.js";
 import { selectRustProgramErrorConversion } from "../conversions/program-error.js";
+import { isRustSourceErrorCarrier } from "../../target-model/types/carriers/source-error.js";
 
 export type RustValueCarrierReconciliation =
   | { readonly kind: "identity" }
@@ -87,17 +88,21 @@ export function selectRustFlowReadProjection(
       } };
     }
   }
-  if ((isRustJsValueCarrier(sourceCarrier) || isRustProgramErrorCarrier(sourceCarrier) &&
-    projectTypes.builtinErrorProjectionAvailable === true) &&
-    rustTargetTypeRefEquals(selectedCarrier, rustJsErrorTargetType())) {
+  if ((isRustJsValueCarrier(sourceCarrier) && (rustTargetTypeRefEquals(selectedCarrier, rustJsErrorTargetType()) ||
+      rustTargetTypeRefEquals(selectedCarrier, projectTypes.sourceErrorCarrier())) ||
+    (isRustProgramErrorCarrier(sourceCarrier) || isRustSourceErrorCarrier(sourceCarrier)) &&
+    (rustTargetTypeRefEquals(selectedCarrier, projectTypes.sourceErrorCarrier()) ||
+      rustTargetTypeRefEquals(selectedCarrier, rustJsErrorTargetType())))) {
     return { kind: "projection", fact: { kind: "builtin-error", sourceCarrier, selectedCarrier } };
   }
-  if (isRustProgramErrorCarrier(sourceCarrier)) {
+  if (isRustProgramErrorCarrier(sourceCarrier) || isRustSourceErrorCarrier(sourceCarrier)) {
     const selectedDefinition = projectTypes.definitionForCarrier(selectedCarrier);
     const variant = selectedDefinition === undefined
       ? undefined
       : projectTypes.programErrorVariant(selectedDefinition);
-    return variant !== undefined && rustCarrierSupportsClone(selectedCarrier, definitions)
+    return variant !== undefined && (!isRustSourceErrorCarrier(sourceCarrier) ||
+      selectedDefinition !== undefined && projectTypes.sourceErrorDefinitions.includes(selectedDefinition)) &&
+      rustCarrierSupportsClone(selectedCarrier, definitions)
       ? {
           kind: "projection",
           fact: {
