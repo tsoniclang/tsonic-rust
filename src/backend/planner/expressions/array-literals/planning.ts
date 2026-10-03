@@ -111,7 +111,7 @@ function planSpreadArray(
     const contribution = contributions[index]!;
     let effect: RustExpr;
     if (contribution.kind === "value") {
-      effect = { kind: "method-call", receiver: destination, method: "push", args: [contribution.value] };
+      effect = { kind: "method-call", receiver: destination, receiverMode: "mut-ref", method: "push", args: [contribution.value] };
     } else {
       const append = planRustBorrowedSequenceAppend(node, contribution.input, destination, elementCarrier, context);
       if (append === undefined) return undefined;

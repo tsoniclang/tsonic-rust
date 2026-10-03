@@ -403,6 +403,7 @@ export function writeRustProjectObjectIndex(
     return {
       kind: "method-call",
       receiver: rustProjectObjectDirectPath(receiver, storageName),
+      receiverMode: "mut-ref",
       method: "insert",
       args: [key, value],
     };
@@ -431,6 +432,7 @@ export function writeRustProjectObjectIndex(
           init: {
             kind: "method-call",
             receiver: rustProjectObjectStatePath(storageName),
+            receiverMode: "mut-ref",
             method: "insert",
             args: [key, value],
           },

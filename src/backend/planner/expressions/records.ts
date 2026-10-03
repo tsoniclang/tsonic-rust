@@ -733,7 +733,7 @@ function planIndexedRecordLiteral(
       if (value === undefined || key === undefined) {
         return undefined;
       }
-      effects.push({ expression: { kind: "method-call", receiver: entries, method: "insert", args: [key, value] },
+      effects.push({ expression: { kind: "method-call", receiver: entries, receiverMode: "mut-ref", method: "insert", args: [key, value] },
         discard: "value" });
       continue;
     }

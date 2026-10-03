@@ -55,7 +55,7 @@ export function planRustSequenceAppend(
       const value = conversion === null ? selected : convert(conversion, selected);
       if (value === undefined) return undefined;
       effect = { kind: "evaluate-then", discard: "unit", effect: {
-        kind: "method-call", receiver: destination, method: "push", args: [value],
+        kind: "method-call", receiver: destination, receiverMode: "mut-ref", method: "push", args: [value],
       }, value: effect };
     }
     return rustValueBlock([{ name, value: source }], effect);
@@ -66,7 +66,7 @@ export function planRustSequenceAppend(
   if (conversion === undefined) return undefined;
   let effect: RustExpr;
   if (conversion === null) {
-    effect = { kind: "method-call", receiver: destination, method: "extend_from_slice", args: [slice] };
+    effect = { kind: "method-call", receiver: destination, receiverMode: "mut-ref", method: "extend_from_slice", args: [slice] };
   } else {
     const itemName = allocateRustSyntheticName(names, "spread_value");
     const value = convert(conversion, { kind: "path", path: itemName });
@@ -75,7 +75,7 @@ export function planRustSequenceAppend(
       kind: "method-call", receiver: { kind: "method-call", receiver: slice.kind === "reference" ? slice.expr : slice, method: "iter", args: [] },
       method: "cloned", args: [],
     }, method: "map", args: [{ kind: "closure", params: [{ name: itemName, byRefCopy: false }], body: value }] };
-    effect = { kind: "method-call", receiver: destination, method: "extend", args: [iterator] };
+    effect = { kind: "method-call", receiver: destination, receiverMode: "mut-ref", method: "extend", args: [iterator] };
   }
   return contract.collection === "js-array" ? { kind: "method-call",
     receiver: source.kind === "reference" ? source.expr : source, method: "with_values",
