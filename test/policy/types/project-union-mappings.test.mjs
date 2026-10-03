@@ -76,6 +76,10 @@ test("nominal mappings retain nested destinations, exact payload priority and co
     () => assert.fail("exact payloads do not consult broader project relations"));
   assert.deepEqual(exact.map(arm => arm.target[0].variant.name), ["Variant0", "Variant2"]);
   assert.equal(selectRustProjectUnionMapping(target, source, projectTypes, definitions), undefined);
+  const duplicate = { ...definitions, sourceUnionVariants: carrier => rustTargetTypeRefEquals(carrier, source)
+    ? [definitions.sourceUnionVariants(source)[1], definitions.sourceUnionVariants(source)[2], definitions.sourceUnionVariants(source)[1]]
+    : definitions.sourceUnionVariants(carrier) };
+  assert.equal(selectRustProjectUnionMapping(source, target, projectTypes, duplicate), undefined);
   for (const relationKind of ["unrelated", "ambiguous"]) {
     const changed = fixture({ relationKind });
     assert.equal(selectRustProjectUnionMapping(changed.source, changed.target, changed.projectTypes, changed.definitions), undefined);

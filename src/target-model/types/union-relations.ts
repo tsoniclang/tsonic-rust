@@ -127,7 +127,7 @@ export function selectRustUnionArmMapping(
   const targetArms = rustUnionLeaves(target, definitions);
   if (sourceArms === undefined || targetArms === undefined) return undefined;
   const mappings: RustUnionArmMapping[] = [];
-  const selectedTargets = new Map<readonly RustUnionPathStep[], TargetTypeRef>();
+  const selectedTargets = new Map<readonly RustUnionPathStep[], TargetTypeRef[]>();
   for (const arm of sourceArms) {
     let matches = targetArms.filter(candidate => rustTargetTypeRefEquals(arm.carrier, candidate.carrier));
     if (matches.length === 0 && relates !== undefined) {
@@ -139,10 +139,11 @@ export function selectRustUnionArmMapping(
     const sourceVariant = arm.path[arm.path.length - 1]!.variant;
     const targetVariant = selected.path[selected.path.length - 1]!.variant;
     const previousSource = selectedTargets.get(selected.path);
-    if (previousSource !== undefined && (coverage === "target" || rustTargetTypeRefEquals(previousSource, arm.carrier)) ||
+    if (previousSource !== undefined && (coverage === "target" || previousSource.some(carrier => rustTargetTypeRefEquals(carrier, arm.carrier))) ||
       targetVariant.kind === "constant" &&
       (sourceVariant.kind !== "constant" || sourceVariant.value !== targetVariant.value)) return undefined;
-    selectedTargets.set(selected.path, arm.carrier);
+    if (previousSource === undefined) selectedTargets.set(selected.path, [arm.carrier]);
+    else previousSource.push(arm.carrier);
     mappings.push(Object.freeze({ carrier: arm.carrier, source: arm.path, target: selected.path }));
   }
   return mappings.length === 0 || coverage === "target" && selectedTargets.size !== targetArms.length
