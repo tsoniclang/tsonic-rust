@@ -2,7 +2,7 @@ import type { RustSelectedSourceMemberIdentity } from "../../../evidence/selecte
 import type { RustTypeDefinitions } from "../../../../target-model/types/source-union-definitions.js";
 import { closedMetadataEquals } from "../../../../target-model/metadata/closed-data.js";
 import type { JsOperationRequest, JsOperationSelection } from "./model.js";
-import { selectJsSurfaceOperation } from "./selection.js";
+import { selectJsSurfaceMemberStorageContract, selectJsSurfaceOperation } from "./selection.js";
 
 export function selectJsSurfaceMemberRead(
   members: readonly RustSelectedSourceMemberIdentity[],
@@ -41,11 +41,14 @@ export function selectJsSurfaceMemberWrite(
   definitions: RustTypeDefinitions,
 ): JsOperationSelection | undefined {
   if (readonly) return undefined;
-  const read = selectJsSurfaceMemberRead(members, { ...request,
-    operationKind: request.operationKind === "index-set" ? "indexer" : "property",
-    argumentCarriers: request.argumentCarriers?.slice(0, -1),
-  }, readonly, definitions);
-  if (read === undefined) return undefined;
+  const contracts = members.map(member => member?.profile === "js"
+    ? selectJsSurfaceMemberStorageContract({ ...request, ownerName: member.ownerName, memberName: member.memberName,
+      operationKind: request.operationKind === "index-set" ? "indexer" : "property",
+      argumentCarriers: request.argumentCarriers?.slice(0, -1),
+    }, definitions) : undefined);
+  const firstContract = contracts[0];
+  if (firstContract === undefined || contracts.some(contract => contract === undefined ||
+    !closedMetadataEquals(firstContract, contract))) return undefined;
   const selections = members.flatMap(member => {
     const selected = selectJsSurfaceOperation({ ...request, ownerName: member.ownerName, memberName: member.memberName }, definitions);
     return selected === undefined ? [] : [selected];

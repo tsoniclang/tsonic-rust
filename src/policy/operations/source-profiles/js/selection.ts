@@ -246,6 +246,26 @@ function firstArgumentId(request: JsOperationRequest): string | undefined {
 }
 
 export function selectJsSurfaceOperation(request: JsOperationRequest, definitions: RustTypeDefinitions = emptyRustTypeDefinitions): JsOperationSelection | undefined {
+  const demand = request.accessMode === "write" &&
+    (request.operationKind === "indexer" || request.operationKind === "property") ? "storage" : "operation";
+  return selectJsSurfaceOperationForDemand(request, definitions, demand);
+}
+
+export function selectJsSurfaceMemberStorageContract(
+  request: JsOperationRequest & { readonly operationKind: "property" | "indexer" },
+  definitions: RustTypeDefinitions,
+) {
+  const selected = selectJsSurfaceOperationForDemand(request, definitions, "storage");
+  if (selected?.fact.kind !== "provider-operation" || selected.callback !== undefined) return undefined;
+  const { operationId: _operationId, indexedLocationMethod: _location, carrierRequirements: _requirements, ...contract } = selected.fact;
+  return contract;
+}
+
+function selectJsSurfaceOperationForDemand(
+  request: JsOperationRequest,
+  definitions: RustTypeDefinitions,
+  demand: "operation" | "storage",
+): JsOperationSelection | undefined {
   if (request.ownerName === "Promise" && (request.memberName === "then" || request.memberName === "catch")) {
     return selectRustJsPromiseContinuation(request);
   }
@@ -256,7 +276,7 @@ export function selectJsSurfaceOperation(request: JsOperationRequest, definition
     const selected = upcasts.filter((upcast) => laneOf(upcast.target, request.ownerName) !== undefined);
     if (selected.length !== 1) return undefined;
     const receiverCarrier = selected[0]!.target;
-    const result = selectJsSurfaceOperation({ ...request, receiverCarrier }, definitions);
+    const result = selectJsSurfaceOperationForDemand({ ...request, receiverCarrier }, definitions, demand);
     if (result?.fact.target.form !== "receiver-method" || result.fact.target.receiverConversion !== undefined) return undefined;
     return {
       ...result, fact: { ...result.fact, target: {
@@ -318,7 +338,7 @@ export function selectJsSurfaceOperation(request: JsOperationRequest, definition
           (request.selectedMethodTypeArgumentCarriers?.length ?? 0)) &&
       (candidate.callback === undefined || callbackArgumentCarrier === undefined ||
         isRustCallableCarrier(callbackArgumentCarrier)) &&
-      carrierRequirementsMatch(candidate.requirements, candidateBindings, request, definitions) &&
+      carrierRequirementsMatch(candidate.requirements, candidateBindings, request, definitions, demand) &&
       (candidate.firstArgCarrierId === undefined
         ? firstArgumentId(request) === undefined || !jsOperationRows.some((other) =>
             other.owner === candidate.owner && other.member === candidate.member &&
@@ -475,9 +495,9 @@ export function selectJsSurfaceOperation(request: JsOperationRequest, definition
       operationId,
       ...((row.requirements ?? []).some(requirement => requirement.capability === "numeric-parameter" ||
         requirement.capability === "number-parameter" ||
-        requirement.capability === "clone" && !rustCarrierSupportsClone(resolveCarrierRef(requirement.carrier, bindings), definitions))
+        demand === "operation" && requirement.capability === "clone" && !rustCarrierSupportsClone(resolveCarrierRef(requirement.carrier, bindings), definitions))
         ? { carrierRequirements: Object.freeze((row.requirements ?? [])
-            .filter(requirement => requirement.capability === "clone" || requirement.capability === "numeric-parameter" ||
+            .filter(requirement => demand === "operation" && requirement.capability === "clone" || requirement.capability === "numeric-parameter" ||
               requirement.capability === "number-parameter")
             .map(requirement => Object.freeze({
               carrier: resolveCarrierRef(requirement.carrier, bindings)!,
@@ -536,6 +556,7 @@ function carrierRequirementsMatch(
   bindings: JsLaneBindings,
   request: JsOperationRequest,
   definitions: RustTypeDefinitions,
+  demand: "operation" | "storage",
 ): boolean {
   return requirements?.every((requirement) => {
     const carrier = resolveCarrierRef(requirement.carrier, bindings);
@@ -550,7 +571,7 @@ function carrierRequirementsMatch(
           request.numericParameterArgument?.(requirement.carrier.index, carrier,
             requirement.capability === "number-parameter" ? "number" : "numeric") === true;
       case "clone":
-        return rustCarrierSupportsClone(carrier, definitions) ||
+        return demand === "storage" || rustCarrierSupportsClone(carrier, definitions) ||
           (carrier !== undefined && request.canRequireClone?.(carrier) === true);
       case "stringifiable":
         return isRustSourceStringConvertibleCarrier(carrier);

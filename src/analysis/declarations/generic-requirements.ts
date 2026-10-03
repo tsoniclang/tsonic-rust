@@ -166,6 +166,13 @@ export function analyzeRustDeclarationGenericRequirements(
         objectRepresentations,
         valueLifetimes,
         isStoredValue,
+        readsValue(node) {
+          const access = ast.is.IsElementAccessExpression(node)
+            ? source.semantics.forNode(node).operations.elementAccess(node)
+            : ast.is.IsPropertyAccessExpression(node)
+              ? source.semantics.forNode(node).operations.propertyAccess(node) : undefined;
+          return access?.accessMode !== "write" && access?.accessMode !== "delete";
+        },
         idByDeclaration,
         implementationDeclaration,
         contractFor(candidate) {

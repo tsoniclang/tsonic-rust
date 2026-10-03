@@ -109,6 +109,7 @@ export function selectRustCheckedElementAccess(
     request.argument, request.sourceArgumentType, context, options);
   const selectedIndexOperation = jsMembers === undefined ? undefined : selectJsSurfaceMemberRead(jsMembers, {
     operationKind: "indexer",
+    accessMode: request.accessMode,
     ...(selectedReceiverCarrier === undefined ? {} : { receiverCarrier: selectedReceiverCarrier }),
     argumentCarriers: [selectedArgumentCarrier],
     argumentMatchScore: selectedArgumentMatchScore([request.argument], context, options),

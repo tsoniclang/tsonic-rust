@@ -64,6 +64,7 @@ import { normalizeRustGenericRequirements } from "./generic-requirement-contract
 interface ClassifyCallableInput {
   readonly valueLifetimes: RustValueLifetimePlan;
   readonly isStoredValue: (node: Node) => boolean;
+  readonly readsValue: (node: Node) => boolean;
   readonly typeDefinitions: RustTypeDefinitions;
   readonly ast: AstReader;
   readonly declaration: Node;
@@ -356,7 +357,7 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
         if (error !== undefined) return error;
       }
     }
-    if (carrier !== undefined && !isRustDeclarationPathUse(node, ast, facts)) {
+    if (carrier !== undefined && input.readsValue(node) && !isRustDeclarationPathUse(node, ast, facts)) {
       const error = collectType(carrier);
       if (error !== undefined) return error;
       if (ast.kindName(node) === "KindPropertyDeclaration" && (carrier.kind === "associated-type" ||

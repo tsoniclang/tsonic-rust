@@ -44,7 +44,7 @@ test("synthesized index selection rejects missing, foreign and conflicting profi
     { ...request, argumentCarriers: [element] }, false, emptyRustTypeDefinitions), undefined);
 });
 
-test("synthesized member writes require checker writability and exact native read/write agreement", () => {
+test("synthesized member writes require checker writability and exact native storage/write agreement", () => {
   const write = { ...request, operationKind: "index-set", argumentCarriers: [integer, element] };
   for (const owners of [["Array"], ["Array", "ReadonlyArray"], ["ReadonlyArray", "Array"]]) {
     const members = owners.map(member);
@@ -63,5 +63,30 @@ test("synthesized member writes require checker writability and exact native rea
       { operationKind: "property", receiverCarrier: receiver }, true, emptyRustTypeDefinitions);
     assert.equal(selected?.fact.target.name, "len");
     assert.equal(selected?.fact.indexedLocationMethod, undefined);
+  }
+});
+
+test("generic indexed writes require no owned-read Clone capability", () => {
+  const value = { kind: "type-parameter", identity: "generic-index-element", name: "Element" };
+  const receiverCarrier = rustJsArrayTargetType(value);
+  const write = { operationKind: "index-set", receiverCarrier, argumentCarriers: [integer, value] };
+  for (const owners of [["Array"], ["Array", "ReadonlyArray"], ["ReadonlyArray", "Array"]]) {
+    const selected = selectJsSurfaceMemberWrite(owners.map(member), write, false, emptyRustTypeDefinitions);
+    assert.equal(selected?.fact.kind, "runtime-set");
+    assert.deepEqual(selected.parameterCarriers, [integer, value]);
+  }
+  assert.equal(selectJsSurfaceMemberRead([member("Array")],
+    { operationKind: "indexer", receiverCarrier, argumentCarriers: [integer] }, false, emptyRustTypeDefinitions), undefined);
+  const storage = selectJsSurfaceMemberRead([member("Array")],
+    { operationKind: "indexer", accessMode: "write", receiverCarrier, argumentCarriers: [integer] }, false, emptyRustTypeDefinitions);
+  assert.equal(storage?.fact.kind, "provider-operation");
+  assert.equal(storage.fact.carrierRequirements, undefined);
+  for (const accessMode of ["read", "read-write", "delete"]) {
+    assert.equal(selectJsSurfaceMemberRead([member("Array")],
+      { operationKind: "indexer", accessMode, receiverCarrier, argumentCarriers: [integer] }, false, emptyRustTypeDefinitions), undefined);
+  }
+  for (const members of [[member("Array"), undefined], [member("Array"), member("Unknown")],
+    [member("Array"), member("String")]]) {
+    assert.equal(selectJsSurfaceMemberWrite(members, write, false, emptyRustTypeDefinitions), undefined);
   }
 });

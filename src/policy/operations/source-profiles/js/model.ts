@@ -35,6 +35,7 @@ export interface JsOperationRequest {
   readonly canRequireClone?: (carrier: TargetTypeRef) => boolean;
   readonly numericParameterArgument?: (index: number, carrier: TargetTypeRef, domain: "numeric" | "number") => boolean;
   readonly resultUse?: "consumed" | "discarded";
+  readonly accessMode?: "read" | "write" | "read-write" | "delete";
   readonly authoredPropertyKey?: string;
   readonly argumentMatchesSelectedTypeArgument?: (argumentIndex: number, typeArgumentIndex: number) => boolean;
 }
