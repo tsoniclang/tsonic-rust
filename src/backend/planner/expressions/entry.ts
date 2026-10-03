@@ -52,6 +52,8 @@ import type { Node } from "@tsonic/tsts";
 import { planRustGenericCallableFlow } from "./generic-callable-flow.js";
 import { planRustCallableConversion } from "./callable-conversions.js";
 import { planRustProgramErrorConstruction } from "./program-errors.js";
+import { planRustProjectUnionMapping } from "./project-union-mappings.js";
+import type { RustFlowReadProjectionFact } from "../../../target-model/types/value-projections.js";
 import { planRustIntegerTruncation } from "./integer-truncation.js";
 import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
@@ -121,6 +123,13 @@ function planProjectedExpression(
   );
   const projection = context.input.program.facts.getFact(node, rustOptionProjectionFactKey);
   const objectView = context.input.program.facts.getFact(node, rustObjectReferenceViewKey);
+  const fusedProjectUnion = finalStage !== "source" && flowRead?.kind === "union-map" &&
+    contextualConversion?.conversion.kind === "project-union-map" &&
+    rustTargetTypeRefEquals(flowRead.selectedCarrier, contextualConversion.sourceCarrier) &&
+    context.flowReadOverrides?.has(node) !== true &&
+    (override === undefined || rustTargetTypeRefEquals(override.carrier, flowRead.sourceCarrier)) &&
+    upcast === undefined && downcast === undefined && lifetimeReconciliation === undefined && objectView === undefined
+    ? flowRead : undefined;
   const borrowableFlow = (override === undefined || override.valueForm === "shared-reference") &&
     context.flowReadOverrides?.has(node) !== true &&
     ((flowRead?.kind === "source-union" || flowRead?.kind === "runtime-union") && flowRead.project === undefined ||
@@ -131,8 +140,9 @@ function planProjectedExpression(
   const borrowFlow = borrowableFlow && access !== "value" && contextualConversion === undefined;
   const borrowConversionInput = borrowableFlow && finalStage !== "source" && contextualConversion !== undefined &&
     rustTargetTypeRefEquals(flowRead?.selectedCarrier, contextualConversion.sourceCarrier) &&
-    rustContextualRuntimeConversionContract(contextualConversion.conversion,
-      context.input.program.typeDefinitions)?.sourceMode === "ref";
+    (rustContextualRuntimeConversionContract(contextualConversion.conversion,
+      context.input.program.typeDefinitions)?.sourceMode === "ref" ||
+      contextualConversion.conversion.kind === "project-union-map" && !context.input.program.valueLifetimes.canMove(node));
   const finish = (value: RustExpr): RustExpr => access !== "shared-reference" || borrowFlow ? value
     : createRustSharedReferenceArgument(context, planRustNonConsumingValue(node, value, context), node);
   let currentCarrier = override?.carrier ??
@@ -145,7 +155,14 @@ function planProjectedExpression(
     projection?.sourceCarrier ??
     context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
   let flowSelected = planned;
-  if (flowRead !== undefined) {
+  if (fusedProjectUnion !== undefined) {
+    if (!rustTargetTypeRefEquals(currentCarrier, fusedProjectUnion.sourceCarrier)) {
+      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node), "rust.backend.flow-read-order",
+        "The finalized union composition conflicts with its exact input carrier."));
+      return undefined;
+    }
+    currentCarrier = fusedProjectUnion.selectedCarrier;
+  } else if (flowRead !== undefined) {
     if (rustTargetTypeRefEquals(currentCarrier, flowRead.sourceCarrier)) {
       const selected = planRustFlowReadProjection(
         node,
@@ -236,6 +253,7 @@ function planProjectedExpression(
         contextualConversion,
         context,
         borrowConversionInput,
+        fusedProjectUnion,
       );
       if (selected === undefined) {
         return undefined;
@@ -377,6 +395,7 @@ function applyRustContextualValueConversion(
   fact: import("../../../analysis/facts/keys.js").RustContextualValueConversionFact,
   context: RustPlanContext,
   sourceIsSharedReference = false,
+  upstream?: Extract<RustFlowReadProjectionFact, { readonly kind: "union-map" }>,
 ): RustExpr | undefined {
   const sourceCarrier = rustValueCarrierBeforeContextualConversion(
     context.input.program.facts,
@@ -426,6 +445,15 @@ function applyRustContextualValueConversion(
   }
   if (fact.conversion.kind === "generic-callable-flow") {
     return planRustGenericCallableFlow(fact.conversion, expression, context);
+  }
+  if (fact.conversion.kind === "project-union-map") {
+    const owned = !sourceIsSharedReference && context.expressionOverrides?.get(node)?.valueForm !== "shared-reference" &&
+      context.input.program.valueLifetimes.canMove(node);
+    const source = owned || sourceIsSharedReference ? expression : planRustNonConsumingValue(node, expression, context);
+    return planRustProjectUnionMapping(node, source, fact.conversion, fact.sourceCarrier,
+      fact.targetCarrier, context, owned,
+      (value, upcast, owned) => planRustProjectUpcast(node, value, upcast, upcast.sourceCarrier,
+        context, owned ? "owned" : "borrowed"), upstream);
   }
   if (fact.conversion.kind === "program-error") {
     return rustCompilerOwnedContextualConversionMatches(fact.sourceCarrier, fact.targetCarrier, fact.conversion, context.input.program.typeDefinitions)

@@ -28,6 +28,7 @@ import { rustGenericCallableSignaturesMatch } from "../../target-model/conversio
 import { selectRustCallableConversion } from "../../target-model/conversions/callable.js";
 import { selectRustProgramErrorConversion } from "../conversions/program-error.js";
 import { isRustSourceErrorCarrier } from "../../target-model/types/carriers/source-error.js";
+import { selectRustProjectUnionMapping } from "./project-union-mappings.js";
 
 export type RustValueCarrierReconciliation =
   | { readonly kind: "identity" }
@@ -227,6 +228,8 @@ export function selectRustValueCarrierReconciliation(
   }
   const conversion = selectRustSourceValueConversion(sourceCarrier, targetCarrier, definitions);
   if (conversion !== undefined) return { kind: "conversion", fact: { sourceCarrier, targetCarrier, conversion } };
+  const projectMapping = selectRustProjectUnionMapping(sourceCarrier, targetCarrier, projectTypes, definitions);
+  if (projectMapping !== undefined) return { kind: "conversion", fact: { sourceCarrier, targetCarrier, conversion: projectMapping } };
   const candidates: { readonly upcast: RustProjectUpcastFact; readonly fact: RustContextualValueConversionFact }[] = [];
   for (const arm of rustUnionLeaves(targetCarrier, definitions) ?? []) {
     if (arm.path[arm.path.length - 1]?.variant.kind !== "payload") continue;

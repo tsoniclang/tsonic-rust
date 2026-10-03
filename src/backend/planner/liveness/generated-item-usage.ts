@@ -43,6 +43,7 @@ import type { RustClosedTypeTestPlan } from "../../../target-model/operations/ty
 import type { RustPlanQueries } from "../../../target-model/facts/selections.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustProjectProjectionSelection } from "../../../target-model/types/project-projections.js";
+import type { RustProjectUpcastFact } from "../../../target-model/types/value-projections.js";
 import { rustOptionElementCarrier, rustSourceUnionCarrierValue, rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
 import { rustTargetTypeChildren } from "../../../target-model/types/carriers/children.js";
 import {
@@ -311,19 +312,21 @@ export function analyzeRustGeneratedItemUsage(input: {
     }
   };
 
+  const markProjectUpcastUsed = (upcast: RustProjectUpcastFact): void => {
+    for (const carrier of upcast.sourceVariants?.map(variant => variant.carrier) ?? [upcast.sourceCarrier]) {
+      markProjectTypeUsed(carrier);
+      markProjectCarrierFieldUsed(carrier, "wrapper-identity");
+      markProjectCarrierFieldUsed(carrier, "wrapper-dispatch");
+    }
+    markProjectTypeConstructed(upcast.targetCarrier);
+  };
   const visitProjectProjectionFacts = (node: Node): void => {
     const binding = input.facts.getFact(node, rustBindingProjectionFactKey);
     if (binding?.projection.kind === "object-rest") {
       markStructuralShapeConstructed(binding.bindingCarrier);
     }
     const upcast = input.facts.getFact(node, rustProjectUpcastFactKey);
-    if (upcast !== undefined) {
-      for (const carrier of upcast.sourceVariants?.map(variant => variant.carrier) ?? [upcast.sourceCarrier]) {
-        markProjectCarrierFieldUsed(carrier, "wrapper-identity");
-        markProjectCarrierFieldUsed(carrier, "wrapper-dispatch");
-      }
-      markProjectTypeConstructed(upcast.targetCarrier);
-    }
+    if (upcast !== undefined) markProjectUpcastUsed(upcast);
     const downcast = input.facts.getFact(node, rustProjectDowncastFactKey);
     if (downcast !== undefined) {
       markProjectCarrierFieldUsed(downcast.dispatchCarrier, "wrapper-identity");
@@ -736,6 +739,14 @@ export function analyzeRustGeneratedItemUsage(input: {
       }
       const conversion = input.facts.getFact(node, rustContextualValueConversionFactKey)?.conversion;
       if (conversion?.kind === "empty-record") markStructuralShapeConstructed(conversion.target);
+      if (conversion?.kind === "project-union-map") {
+        for (const arm of conversion.arms) {
+          markProjectTypeUsed(arm.carrier);
+          for (const step of arm.source) markVariantConstructed(step.union, step.variant.name);
+          for (const step of arm.target) markVariantConstructed(step.union, step.variant.name);
+          if (arm.upcast !== null) markProjectUpcastUsed(arm.upcast);
+        }
+      }
       if (conversion?.kind === "provider-record-copy") {
         for (const field of conversion.fields) {
           if (field.conversion !== undefined) visitConversion(field.conversion);
@@ -750,7 +761,7 @@ export function analyzeRustGeneratedItemUsage(input: {
         conversion.kind !== "reference-reborrow" && conversion.kind !== "provider-record-copy" &&
         conversion.kind !== "empty-record" && conversion.kind !== "generic-callable-flow" &&
         conversion.kind !== "integer-truncation" && conversion.kind !== "callable-adapter" &&
-        conversion.kind !== "program-error") {
+        conversion.kind !== "program-error" && conversion.kind !== "project-union-map") {
         visitConversion(conversion);
       }
       if (fact !== undefined) visitFact(node, fact);

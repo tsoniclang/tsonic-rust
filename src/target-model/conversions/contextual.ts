@@ -12,6 +12,7 @@ import { rustIntegerTruncationConversionMatches, type RustIntegerTruncationConve
 import { rustExactIntegerConversionMatches } from "./exact-integer.js";
 import { rustCallableConversionMatches, type RustCallableConversion } from "./callable.js";
 import { rustProgramErrorConversionMatches, type RustProgramErrorConversion } from "./program-error.js";
+import { rustProjectUnionMapConversionMatches, type RustProjectUnionMapConversion, type RustProjectUpcastRelation } from "./project-union.js";
 
 export type RustContextualValueConversion =
   | RustValueConversion
@@ -21,6 +22,7 @@ export type RustContextualValueConversion =
   | RustIntegerTruncationConversion
   | RustCallableConversion
   | RustProgramErrorConversion
+  | RustProjectUnionMapConversion
   | {
       readonly kind: "native-trait-object-upcast";
       readonly source: TargetTypeRef;
@@ -45,6 +47,7 @@ export function rustContextualRuntimeConversionContract(
     case "integer-truncation":
     case "callable-adapter":
     case "program-error":
+    case "project-union-map":
       return undefined;
     default:
       return rustValueConversionContract(conversion, definitions);
@@ -56,7 +59,11 @@ export function rustCompilerOwnedContextualConversionMatches(
   targetCarrier: TargetTypeRef,
   conversion: RustContextualValueConversion,
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
+  projectUpcastRelation?: RustProjectUpcastRelation,
 ): boolean {
+  if (conversion.kind === "project-union-map") {
+    return rustProjectUnionMapConversionMatches(conversion, sourceCarrier, targetCarrier, definitions, projectUpcastRelation);
+  }
   if (conversion.kind === "program-error") return rustProgramErrorConversionMatches(conversion, sourceCarrier, targetCarrier, definitions);
   if (conversion.kind === "callable-adapter") return rustCallableConversionMatches(conversion, sourceCarrier, targetCarrier, definitions);
   if (conversion.kind === "exact-integer") {
@@ -104,6 +111,7 @@ export function rustContextualValueConversionIsFallible(
     return conversion.fields.some(field => rustValueConversionIsFallible(field.conversion, definitions));
   }
   return conversion !== undefined &&
+    conversion.kind !== "project-union-map" &&
     conversion.kind !== "program-error" &&
     conversion.kind !== "native-trait-object-upcast" &&
     conversion.kind !== "reference-reborrow" &&

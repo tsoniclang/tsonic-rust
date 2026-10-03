@@ -28,6 +28,7 @@ import {
 import { rustCompilerOwnedContextualConversionMatches } from "../../../../target-model/conversions/contextual.js";
 import { planRustEmptyRecordConversion } from "../../expressions/empty-record-conversion.js";
 import { planRustProgramErrorConstruction } from "../../expressions/program-errors.js";
+import { planRustProjectUnionMapping } from "../../expressions/project-union-mappings.js";
 import { planRustProjectStructuralConversion } from "../../objects/project-structural-views.js";
 
 export function applyRustCallableValueAdapter(
@@ -79,6 +80,13 @@ export function applyRustCallableValueAdapterRaw(
         const { upcast, ...conversion } = adapter;
         return projected === undefined ? undefined : applyRustCallableValueAdapterRaw(projected,
           { ...conversion, sourceCarrier: upcast.targetCarrier }, node, context);
+      }
+      if (adapter.conversion.kind === "project-union-map") {
+        const converted = planRustProjectUnionMapping(node, expression, adapter.conversion,
+          adapter.sourceCarrier, adapter.targetCarrier, context, true,
+          (value, upcast, owned) => planRustProjectUpcast(node, value, upcast, upcast.sourceCarrier,
+            context, owned ? "owned" : "borrowed"));
+        return converted === undefined ? undefined : { expression: converted, fallible: false };
       }
       if (adapter.conversion.kind === "program-error") {
         if (!rustCompilerOwnedContextualConversionMatches(adapter.sourceCarrier, adapter.targetCarrier, adapter.conversion, context.input.program.typeDefinitions)) return undefined;
