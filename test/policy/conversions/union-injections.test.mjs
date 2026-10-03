@@ -8,6 +8,7 @@ import { rustUnionInjectionPath } from "../../../dist/target-model/types/union-r
 import {
   rustAbsenceTargetType, rustJsErrorTargetType, rustJsPromiseTargetTypeWithLifetime,
   rustSourcePrimitiveTargetType, rustSourceUnionTargetType, rustStringTargetType, rustUnitTargetType,
+  rustJsValueTargetType, rustTsValueTargetType,
 } from "../../../dist/target-model/types/index.js";
 import { lowerRustValueConversion } from "../../../dist/backend/planner/expressions/value-conversions.js";
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../helpers/fake-compile-input.mjs";
@@ -59,6 +60,10 @@ test("exact union payload admission is generic and constructs nested native vari
   ]);
   const conversion = selectRustSourceValueConversion(source, target, definitions);
   const contract = rustValueConversionContract(conversion, definitions);
+  const wholeInner = rustUnionPayloadAdmission(inner, target, definitions);
+  assert.ok(wholeInner);
+  assert.deepEqual(wholeInner.path.map(step => step.variant.name), ["Nested"]);
+  assert.deepEqual(wholeInner.carrier, inner);
   assert.deepEqual(contract.path.map(step => step.variant.name), ["Nested", "Complete"]);
   const node = fakeStatement({ kindName: "Identifier", pos: 0, end: 5 });
   const sourceFile = fakeSourceFile({ fileName: "/src/index.ts", text: "value", statements: [node] });
@@ -131,4 +136,36 @@ test("composed union facts reject old shapes, wrong presence, forged payloads, s
   assert.equal(rustValueConversionContract(conversion, stale), undefined);
   const identity = selectRustSourceValueConversion(payloadCarrier, target, definitions);
   assert.equal(rustValueConversionContract({ ...identity, payloadConversion: conversion.payloadConversion }, definitions), undefined);
+});
+
+test("authored closed unions compose broad payload admission without erasing exact native members", () => {
+  const integer = rustSourcePrimitiveTargetType("uint64");
+  const text = rustStringTargetType();
+  for (const broad of [rustJsValueTargetType(), rustTsValueTargetType()]) {
+    const target = rustSourceUnionTargetType("/src/index.ts", "BroadResult");
+    const definitions = unionDefinitions([[target, [
+      { name: "Broad", carrier: broad }, { name: "Text", carrier: text },
+    ]]]);
+    const boxed = selectRustSourceValueConversion(integer, target, definitions);
+    assert.equal(boxed?.kind, "source-union-variant");
+    assert.equal(boxed.variantName, "Broad");
+    assert.deepEqual(boxed.payloadCarrier, broad);
+    const contract = rustValueConversionContract(boxed, definitions);
+    assert.ok(contract);
+    assert.equal(contract.payloadConversion.fallible, false);
+    assert.deepEqual(contract.payloadConversion.source, integer);
+    assert.deepEqual(contract.payloadConversion.target, broad);
+    const exact = selectRustSourceValueConversion(text, target, definitions);
+    assert.equal(exact.variantName, "Text");
+    assert.equal(exact.payloadConversion, null);
+    assert.equal(rustValueConversionContract({ ...boxed, variantName: "Text" }, definitions), undefined);
+    assert.equal(rustValueConversionContract({ ...boxed, payloadCarrier: text }, definitions), undefined);
+    assert.equal(selectRustSourceValueConversion({ kind: "type-parameter", name: "T", identity: "open" }, target, definitions), undefined);
+  }
+  const ambiguous = rustSourceUnionTargetType("/src/index.ts", "AmbiguousBroad");
+  const definitions = unionDefinitions([[ambiguous, [
+    { name: "Native", carrier: rustTsValueTargetType() }, { name: "JS", carrier: rustJsValueTargetType() },
+  ]]]);
+  assert.equal(rustUnionPayloadAdmission(integer, ambiguous, definitions), undefined);
+  assert.equal(selectRustSourceValueConversion(integer, ambiguous, definitions), undefined);
 });

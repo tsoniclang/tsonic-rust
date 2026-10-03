@@ -423,9 +423,7 @@ export function createRustSourceTypeRegistry(
         ) === undefined) return false;
       }
       const indexes = sourceUnionIndexesByType.get(key) ?? new WeakMap<Type, readonly number[]>();
-      const pendingIndexes = new Map<Type, readonly number[]>([
-        [union.sourceType, Object.freeze(union.variants.map((_, index) => index))],
-      ]);
+      const pendingIndexes = new Map<Type, readonly number[]>();
       for (const [index, variant] of union.variants.entries()) {
         const selected = Object.freeze([index]);
         if (!isDenseDataArray(variant.sourceTypes) || variant.sourceTypes.length === 0 ||
@@ -435,6 +433,9 @@ export function createRustSourceTypeRegistry(
           if (existing !== undefined && (existing.length !== 1 || existing[0] !== index)) return false;
           pendingIndexes.set(sourceType, selected);
         }
+      }
+      if (!pendingIndexes.has(union.sourceType)) {
+        pendingIndexes.set(union.sourceType, Object.freeze(union.variants.map((_, index) => index)));
       }
       for (const [sourceType, selected] of pendingIndexes) {
         const existing = indexes.get(sourceType);

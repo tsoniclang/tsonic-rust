@@ -130,7 +130,7 @@ export function selectRustSourceValueConversion(
       selectRustSourceValueConversion(source, injection.carrier, definitions, nextAncestors);
     const payload = payloadConversion == null ? undefined : rustValueConversionContract(payloadConversion, definitions);
     if (payloadConversion === undefined || payloadConversion !== null && (payload === undefined ||
-      payload.category !== "exact" || payload.fallible ||
+      payload.category !== "exact" && payload.category !== "projection" || payload.fallible ||
       !rustTargetTypeRefEquals(payload.source, source) ||
       !rustTargetTypeRefEquals(payload.target, injection.carrier))) return undefined;
     return Object.freeze({

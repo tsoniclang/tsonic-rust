@@ -357,7 +357,7 @@ export function resolveRustTargetTypeSyntax(
   if (kind === "KindNeverKeyword") {
     return rustNeverTargetType();
   }
-  if (kind === "KindFunctionType") {
+  if (kind === "KindFunctionType" || kind === "KindThisType") {
     return resolveRustTargetType(
       semantics?.types.expressionType(node),
       context,
@@ -400,10 +400,6 @@ export function resolveRustTargetTypeSyntax(
   }
   if (kind === "KindUnionType") {
     const sourceType = semantics?.types.expressionType(node);
-    if (semantics !== undefined && sourceType !== undefined &&
-      (semantics.types.isUnknown(sourceType) || semantics.types.isAny(sourceType))) {
-      return resolveRustAuthoredBroadSourceValueTargetType(node, context, options.jsEnabled);
-    }
     const children = denseDefined(ast.children(node));
     if (children === undefined) {
       return undefined;

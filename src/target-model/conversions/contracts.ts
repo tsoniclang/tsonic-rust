@@ -541,7 +541,7 @@ export function rustValueConversionContract(
     } else {
       if (identical || value.payloadConversion === undefined || typeof value.payloadConversion !== "object") return undefined;
       const selected = rustValueConversionContract(value.payloadConversion, definitions);
-      if (selected === undefined || selected.category !== "exact" || selected.fallible ||
+      if (selected === undefined || selected.category !== "exact" && selected.category !== "projection" || selected.fallible ||
         !rustTargetTypeRefEquals(selected.source, value.source) ||
         !rustTargetTypeRefEquals(selected.target, value.payloadCarrier)) return undefined;
       payload = selected;
