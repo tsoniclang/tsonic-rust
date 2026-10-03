@@ -4,6 +4,9 @@ export type {
   RustOperationSymbol,
   RustOperatorToken,
 } from "../../target-model/syntax/tokens.js";
+export { rustNativeGuardResultFactKey, rustNativeUnreachableFactKey } from "./native-control-flow.js";
+export { rustAwaitValueFactKey } from "./await-values.js";
+export type { RustAwaitValueFact, RustAwaitValueLeafFact } from "./await-values.js";
 export {
   rustAsyncFunctionFactKey,
   rustGeneratorFactKey,
