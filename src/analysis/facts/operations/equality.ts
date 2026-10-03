@@ -23,6 +23,12 @@ function projectOperationMetadata(fact: RustTargetOperationFact, references: Nod
     return references.length - 1;
   };
   switch (fact.kind) {
+    case "array-literal":
+      return { ...fact, contributions: fact.contributions.map(contribution => contribution.kind === "value"
+        ? contribution : { ...contribution, input: { ...contribution.input,
+          expression: reference(contribution.input.expression),
+          controlNodes: contribution.input.controlNodes.map(reference),
+          inputs: contribution.input.inputs.map(input => ({ ...input, expression: reference(input.expression) })) } }) };
     case "native-propagation":
       return { ...fact, callableDeclaration: reference(fact.callableDeclaration), operandExpression: reference(fact.operandExpression) };
     case "native-range":

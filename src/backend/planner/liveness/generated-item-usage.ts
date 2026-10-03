@@ -650,7 +650,9 @@ export function analyzeRustGeneratedItemUsage(input: {
         return;
       case "array-literal":
         for (const contribution of fact.contributions) {
-          if (contribution.kind === "spread") visitConversion(contribution.conversion);
+          if (contribution.kind === "spread") for (const input of contribution.input.inputs) {
+            if (input.kind === "sequence") visitConversion(input.conversion);
+          }
         }
         return;
       case "string-concat":

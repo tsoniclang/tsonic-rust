@@ -29,6 +29,7 @@ import type { RustExpr, RustImplFunction, RustType } from "../../../target-ast/n
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
 import type { RustProjectDowncastRoute } from "../../../../analysis/project-types/type-policy.js";
 import type { RustProjectMethodDispatchVariant } from "../../../../analysis/project-types/method-dispatch.js";
+import { instantiateRustProjectMethodDispatchArguments } from "../../../../analysis/project-types/method-dispatch.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { ProjectCallableShape } from "./model.js";
 
@@ -117,9 +118,13 @@ export function planRootMethodImplementation(
   variant: RustProjectMethodDispatchVariant,
   context: RustPlanContext,
 ): RustImplFunction | undefined {
+  const targetTypeArguments = instantiateRustProjectMethodDispatchArguments(
+    implementation, variant.targetTypeArguments, concreteCarrier, context.input.program.projectTypes,
+  );
+  if (targetTypeArguments === undefined) return undefined;
   const specialization = rustCallableSpecialization(
     variant.sourceTypeParameterIdentities,
-    variant.targetTypeArguments,
+    targetTypeArguments,
   );
   return specialization === undefined
     ? undefined
@@ -284,9 +289,13 @@ export function planRootMethodForwarder(
     return undefined;
   }
   const contractRelation = context.input.program.projectTypes.relationship(concreteCarrier, contractOwner);
+  const targetTypeArguments = instantiateRustProjectMethodDispatchArguments(
+    contractMember, variant.targetTypeArguments, concreteCarrier, context.input.program.projectTypes,
+  );
+  if (targetTypeArguments === undefined) return undefined;
   const specialization = rustCallableSpecialization(
     variant.sourceTypeParameterIdentities,
-    variant.targetTypeArguments,
+    targetTypeArguments,
   );
   const contractShape = contractRelation.kind === "related" && specialization !== undefined
     ? projectCallableShape(contractMember, {

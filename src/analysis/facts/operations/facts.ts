@@ -7,6 +7,7 @@ import type { RustFlowReadProjectionFact } from "../../../target-model/types/val
 import type { RustArgumentMode, RustBorrowedIndexOperation, RustOperationCarrierRequirement, RustProviderFactOperationKind, RustRuntimeSetOperationKind, RustSourceCallParameterPlan, RustValueConversion } from "../../../target-model/operations/model.js";
 import type { RustFinalizedOperationAbiFor, RustFinalizedValueConversion } from "../finalized-operation-abi.js";
 import type { RustProgramErrorConversion } from "../../../target-model/conversions/program-error.js";
+import type { RustBorrowedSequenceInput } from "./borrowed-sequences.js";
 import type { RustAssignmentOperator, RustOperationSymbol, RustOperatorToken } from "../../../target-model/syntax/tokens.js";
 import type {
   RustTargetGenericArgument,
@@ -185,8 +186,7 @@ export type RustTargetOperationFact =
       readonly length: number;
       readonly contributions: readonly (
         | { readonly kind: "value"; readonly carrier: TargetTypeRef }
-        | { readonly kind: "spread"; readonly carrier: TargetTypeRef;
-            readonly conversion: Extract<RustValueConversion, { readonly kind: "rest-sequence" }> }
+        | { readonly kind: "spread"; readonly input: RustBorrowedSequenceInput }
       )[];
     }
   | {

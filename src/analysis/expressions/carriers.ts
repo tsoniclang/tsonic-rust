@@ -20,6 +20,8 @@ import {
   KindQuestionQuestionToken,
   KindSatisfiesExpression,
   KindSpreadElement,
+  sourceSequenceInputChoice,
+  sourceSequenceInputIsEmpty,
   KindVoidExpression,
   Node_Expression,
   Node_Type,
@@ -490,9 +492,13 @@ function resolveIndependentValueOperation(
     kind === KindSpreadElement || unary) {
     const inner = unary ? Node_Operand(ast, argument) : Node_Expression(ast, argument);
     if (inner !== undefined) {
-      if (kind === KindSpreadElement && ast.is.IsArrayLiteralExpression(inner) &&
-        ast.as.AsArrayLiteralExpression(inner)?.Elements?.Nodes.length === 0) {
-        resolveExpressionCarrier(walk, inner, sourceFile, { kind: "tuple", elements: [] });
+      if (kind === KindSpreadElement) {
+        const choice = sourceSequenceInputChoice(ast, inner);
+        if (choice === undefined) return;
+        for (const input of choice.inputs) {
+          if (sourceSequenceInputIsEmpty(ast, input)) continue;
+          resolveIndependentValueOperation(walk, input, sourceFile);
+        }
         return;
       }
       resolveIndependentValueOperation(walk, inner, sourceFile);
