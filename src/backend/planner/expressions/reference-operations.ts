@@ -9,6 +9,7 @@ import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
 import { rustValueCarrierBeforeOptionProjection } from "../../../analysis/facts/value-carrier-queries.js";
+import { isRustStringCarrier } from "../../../target-model/types/index.js";
 
 export function planRustReferenceOperationCall(
   call: Node,
@@ -39,6 +40,13 @@ export function planRustReferenceOperationCall(
       "Rust reference operation operand conflicts with its finalized target carrier.",
     );
   }
+  if (fact.operation === "load" &&
+    (!rustTargetTypeRefEquals(fact.referenceCarrier, fact.operandCarrier) ||
+      !rustTargetTypeRefEquals(fact.resultCarrier, fact.operandCarrier.referent) ||
+      !rustTargetTypeRefEquals(context.input.program.facts.getRuntimeCarrierFact(call)?.carrier, fact.resultCarrier))) {
+    return rejectReferenceOperation(call, context, "RUST_REFERENCE_LOAD_VALUE_CONFLICT",
+      "Rust reference load conflicts with its exact reference and result carrier relationship.");
+  }
   const operand = planExpression(fact.operandExpression, context);
   if (operand === undefined) return undefined;
   switch (fact.operation) {
@@ -47,7 +55,9 @@ export function planRustReferenceOperationCall(
     case "mutable-reference":
       return { kind: "reference", expr: planRustNonConsumingValue(fact.operandExpression, operand, context), mutable: true };
     case "load":
-      return { kind: "dereference", pointer: operand };
+      return !fact.operandCarrier.mutable && isRustStringCarrier(fact.operandCarrier.referent)
+        ? { kind: "owned-string-from-borrowed-str", expression: operand }
+        : { kind: "dereference", pointer: operand };
     case "store": {
       const valueCarrier = context.input.program.facts.getRuntimeCarrierFact(
         fact.valueExpression,

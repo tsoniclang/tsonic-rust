@@ -1,8 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust, artifactText, analyzeRust } from "../../helpers/rust-session.mjs";
-import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
+import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
+import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { rustModuleBindingFactKey } from "../../../dist/analysis/facts/keys.js";
+import { rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
+import { planRustReferenceOperationCall } from "../../../dist/backend/planner/expressions/reference-operations.js";
+import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
 
 test("owned exits, static text, direct helpers and scoped array reads execute without extra owners", { timeout: 300_000 }, () => {
   const { result } = compileRust({
@@ -112,6 +118,116 @@ export function main(): void {
   assert.match(output, /afterLength\(length\(&completed\), completed\)/u);
   assert.match(output, /owned\(copies\.clone\(\), copies\)/u);
   validateGeneratedProject("overlapping-argument-borrows", result.artifacts, { run: true });
+});
+
+test("nested native reference arguments retain their borrowed source through consumption", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } }, files: {
+    "index.ts": `
+import type { Life, Ref } from "@tsonic/rust/types.js";
+import { load, ref } from "@tsonic/rust/lang.js";
+function borrowed<Region extends Life>(value: Ref<string, Region>): Ref<string, Region> { return value; }
+function combined<Region extends Life>(first: Ref<string, Region>, second: string): string { return load(first) + second; }
+function copied<Region extends Life>(value: Ref<string, Region>): string { return load(value); }
+function empty<Region extends Life>(value: Ref<string, Region>): string { return load(value) + ""; }
+function observed<Region extends Life>(value: Ref<string, Region>): boolean { return load(value).length === 8 && load(value) === "borrowed"; }
+export function main(): void {
+  const value = "borrowed";
+  if (copied(ref(value)) !== "borrowed" || empty(ref(value)) !== "borrowed" || !observed(ref(value)) ||
+      combined(borrowed(ref(value)), value) !== "borrowedborrowed") throw new Error("nested native reference");
+}
+` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  const output = artifactText(result, "src/index.rs");
+  assert.match(output, /format!\("\{\}\{\}", first, second\)/u);
+  assert.match(output, /combined\(borrowed\(&value\), value\.clone\(\)\)/u);
+  assert.match(output, /fn copied[\s\S]*?String::from\(value\)/u);
+  assert.match(output, /fn empty[\s\S]*?String::from\(value\)/u);
+  validateGeneratedProject("nested-reference-consumption", result.artifacts, { run: true });
+});
+
+test("shared string load planning requires its exact sealed reference and value carrier", () => {
+  const { program } = analyzeRust({ files: { "index.ts": `
+import type { Ref } from "@tsonic/rust/types.js";
+import { load } from "@tsonic/rust/lang.js";
+export function read(value: Ref<string>): string { return load(value); }
+` } });
+  const { ast } = program.source;
+  let call;
+  let fact;
+  const visit = node => {
+    const selected = program.facts.getFact(node, rustTargetOperationFactKey);
+    if (selected?.kind === "reference-operation" && selected.operation === "load") { call = node; fact = selected; }
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.source.sourceFiles.forEach(visit);
+  assert.ok(call && fact);
+  const operand = { kind: "path", path: "value" };
+  const diagnostics = [];
+  assert.deepEqual(planRustReferenceOperationCall(call, fact, { input: { program }, diagnostics }, () => operand),
+    { kind: "owned-string-from-borrowed-str", expression: operand });
+  assert.deepEqual(diagnostics, []);
+  for (const invalid of [
+    { ...fact, referenceCarrier: { ...fact.referenceCarrier, mutable: true } },
+    { ...fact, resultCarrier: rustSourcePrimitiveTargetType("int32") },
+  ]) {
+    const rejected = [];
+    assert.equal(planRustReferenceOperationCall(call, invalid, { input: { program }, diagnostics: rejected }, () => operand), undefined);
+    assert.equal(rejected.length, 1);
+    assert.match(rejected[0].message, /exact reference and result carrier/u);
+  }
+});
+
+test("shared string load ownership and borrowed observations match native allocations", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: {
+    outputType: "lib", crateName: "shared_string_load_cost",
+  } }, files: { "index.ts": `
+import type { Life, Ref } from "@tsonic/rust/types.js";
+import { load } from "@tsonic/rust/lang.js";
+export function copied<Region extends Life>(value: Ref<string, Region>): string { return load(value); }
+export function empty<Region extends Life>(value: Ref<string, Region>): string { return load(value) + ""; }
+export function joined<Region extends Life>(left: Ref<string, Region>, right: Ref<string, Region>): string { return load(left) + load(right); }
+export function observed<Region extends Life>(value: Ref<string, Region>): boolean { return load(value).length > 0; }
+export function equal<Region extends Life>(left: Ref<string, Region>, right: Ref<string, Region>): boolean { return load(left) === load(right); }
+` } });
+  assert.deepEqual(result.diagnostics, []);
+  const root = writeGeneratedProject("shared-string-load-cost", result.artifacts);
+  mkdirSync(join(root, "tests"), { recursive: true });
+  writeFileSync(join(root, "tests/ownership.rs"), `${nativeOwnershipCostSupport}
+use shared_string_load_cost::index;
+
+#[test]
+fn owned_results_and_borrowed_observations_match_handwritten_costs() {
+    let input = String::from("café😀 native read");
+    let other = String::from("other text");
+    for _ in 0..10_000 {
+        for copied in [index::copied, index::empty] {
+            let (generated, generated_cost) = measure(|| copied(input.as_str()));
+            let (native, native_cost) = measure(|| String::from(input.as_str()));
+            assert_eq!(generated, native);
+            assert_eq!(generated_cost, native_cost);
+        }
+        let (joined, joined_cost) = measure(|| index::joined(input.as_str(), other.as_str()));
+        let (native_joined, native_joined_cost) = measure(|| format!("{}{}", input.as_str(), other.as_str()));
+        assert_eq!(joined, native_joined);
+        assert_eq!(joined_cost, native_joined_cost);
+        let (observations, observation_cost) = measure(|| (
+            index::observed(input.as_str()), index::equal(input.as_str(), input.as_str()),
+            index::equal(input.as_str(), other.as_str()), index::observed(""),
+        ));
+        assert_eq!(observations, (true, true, false, false));
+        assert_eq!(observation_cost, Cost::default());
+    }
+    assert_eq!(input, "café😀 native read");
+    assert_eq!(other, "other text");
+}
+`);
+  runCargo(root, ["generate-lockfile", "--offline"]);
+  runCargo(root, ["fmt", "--all"]);
+  runCargo(root, ["fmt", "--all", "--check"]);
+  runCargo(root, ["check", "--all-targets", "--locked", "--offline"]);
+  runCargo(root, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
+  runCargo(root, ["test", "--release", "--locked", "--offline"]);
 });
 
 test("static string selection preserves exported bindings and deferred default reads", () => {

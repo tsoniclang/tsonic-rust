@@ -199,8 +199,12 @@ export function planRustLoadedSharedReference(
   context: RustPlanContext,
 ): RustExpr | undefined {
   const operation = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
-  return operation?.kind === "reference-operation" && operation.operation === "load" &&
-    !operation.operandCarrier.mutable && value.kind === "dereference" ? value.pointer : undefined;
+  if (operation?.kind !== "reference-operation" || operation.operation !== "load" || operation.operandCarrier.mutable) {
+    return undefined;
+  }
+  return value.kind === "dereference" ? value.pointer
+    : value.kind === "owned-string-from-borrowed-str" && isRustStringCarrier(operation.resultCarrier)
+      ? value.expression : undefined;
 }
 
 export function planRustMutableProjectReceiver(

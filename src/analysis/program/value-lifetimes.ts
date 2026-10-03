@@ -148,6 +148,7 @@ function classifyDeclaration(
     readonly ast: AstReader;
     readonly navigation: SourceProgramNavigation;
     readonly isOwnedString: (declaration: Node) => boolean;
+    readonly isOwnedCallArgument: (argument: Node) => boolean;
     readonly mayBorrowArgument: (argument: Node) => boolean;
   },
   movableReferences: WeakSet<Node>,
@@ -167,7 +168,7 @@ function classifyDeclaration(
     const awaited = parent !== undefined && input.ast.kindName(parent) === "KindAwaitExpression" &&
       Node_Expression(input.ast, parent) === expression;
     if (isExactCallableExitValue(reference, declaration, input) ||
-      (input.isOwnedString(declaration) || storageOnly || awaited) &&
+      (input.isOwnedString(declaration) || input.isOwnedCallArgument(expression) || storageOnly || awaited) &&
         isLastUseOnPath(reference, declaration, { ...input, storageOnly })) {
       movableReferences.add(reference);
     }
@@ -266,6 +267,7 @@ function isLastUseOnPath(
       !(input.isOwnedFieldProjection?.(parent) === true && Node_Expression(input.ast, parent) === current) &&
       kind !== "KindCallExpression" && kind !== "KindNewExpression" &&
       kind !== "KindAwaitExpression" &&
+      kind !== "KindTryStatement" && kind !== "KindCatchClause" &&
       kind !== "KindReturnStatement" && kind !== "KindExpressionStatement" &&
       kind !== "KindVariableDeclaration" && kind !== "KindVariableDeclarationList" &&
       kind !== "KindVariableStatement" && kind !== "KindBlock" &&
@@ -360,11 +362,9 @@ function hasOverlappingArgumentBorrow(
   for (;;) {
     const parent = input.ast.parent(current);
     if (parent === undefined) return false;
-    if (rustSourceValueWrapperContains(parent, current, input.ast)) {
-      current = parent;
-      continue;
-    }
-    return invocations.has(parent) && input.mayBorrowArgument(current);
+    if (invocations.has(parent)) return input.mayBorrowArgument(current);
+    if (isCallableKind(input.ast.kindName(parent))) return false;
+    current = parent;
   }
 }
 
