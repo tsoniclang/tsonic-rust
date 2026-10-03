@@ -3,9 +3,12 @@ import assert from "node:assert/strict";
 import { finalizeRustCallbackOperation } from "../../../dist/analysis/operations/provider/callbacks.js";
 import {
   rustCallableTargetType, rustJsArrayTargetType, rustJsPromiseTargetTypeWithLifetime,
-  rustOptionTargetType, rustProgramErrorTargetType, rustSourcePrimitiveTargetType,
+  rustJsValueTargetType, rustOptionTargetType, rustProgramErrorTargetType, rustSourcePrimitiveTargetType,
+  rustUnitTargetType,
 } from "../../../dist/target-model/types/index.js";
 import { rustStaticLifetime } from "../../../dist/target-model/lifetimes/index.js";
+import { selectRustCallableConversion } from "../../../dist/target-model/conversions/callable.js";
+import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
 
 const inferred = { kind: "opaque", id: "tsonic.rust.infer" };
 const integer = rustSourcePrimitiveTargetType("uint64");
@@ -51,4 +54,40 @@ test("later optional handler signatures receive the inferred result and reject c
   assert.equal(finalizeRustCallbackOperation(selected, [callback,
     rustOptionTargetType(rustCallableTargetType([rustProgramErrorTargetType()], number))]), undefined);
   assert.equal(finalizeRustCallbackOperation(selected, [rustCallableTargetType([number], integer)]), undefined);
+});
+
+test("deferred callback conversion preserves the selected native ABI rather than the authored carrier", () => {
+  const native = rustCallableTargetType([integer], rustUnitTargetType());
+  const authored = rustCallableTargetType([rustJsValueTargetType()], rustUnitTargetType());
+  const accepts = (source, target) => selectRustCallableConversion(source, target,
+    (input, output) => selectRustSourceValueConversion(input, output)) !== undefined;
+  const selected = finalizeRustCallbackOperation(selection(promise(inferred), [
+    rustCallableTargetType([integer], inferred),
+  ]), [authored], accepts);
+  assert.deepEqual(selected.parameterCarriers, [native]);
+  assert.deepEqual(selected.fact.parameterCarriers, [native]);
+  assert.deepEqual(selected.resultCarrier, promise(rustUnitTargetType()));
+  assert.equal(finalizeRustCallbackOperation(selection(promise(inferred), [native]), [authored]), undefined);
+  assert.equal(finalizeRustCallbackOperation(selection(promise(inferred), [native]), [
+    rustCallableTargetType([rustSourcePrimitiveTargetType("bool")], rustUnitTargetType()),
+  ], accepts), undefined);
+  const discarded = finalizeRustCallbackOperation(selection(promise(inferred), [native]), [
+    rustCallableTargetType([rustJsValueTargetType()], number),
+  ], accepts);
+  assert.deepEqual(discarded.parameterCarriers, [native]);
+  assert.deepEqual(discarded.resultCarrier, promise(rustUnitTargetType()));
+});
+
+test("direct callback conversions retain every selected parameter and reject unmatched result shape", () => {
+  const native = rustCallableTargetType([integer], integer);
+  const authored = rustCallableTargetType([rustJsValueTargetType()], integer);
+  const input = { ...selection(promise(integer), [native]),
+    callback: { shape: "direct", sourceArgumentIndex: 0, failure: { kind: "returned-future" } } };
+  const accepts = (source, target) => selectRustCallableConversion(source, target,
+    (input, output) => selectRustSourceValueConversion(input, output)) !== undefined;
+  const selected = finalizeRustCallbackOperation(input, [authored], accepts);
+  assert.deepEqual(selected.parameterCarriers, [native]);
+  assert.deepEqual(selected.fact.parameterCarriers, [native]);
+  assert.equal(finalizeRustCallbackOperation(input, [rustCallableTargetType([integer], rustUnitTargetType())], accepts), undefined);
+  assert.equal(finalizeRustCallbackOperation(input, [], accepts), undefined);
 });

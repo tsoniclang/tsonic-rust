@@ -19,10 +19,11 @@ import {
 } from "../../../target-model/types/equality.js";
 import { rustFutureOutputCarrier, rustFutureTargetType, rustSliceRefTargetType } from "../../../target-model/types/index.js";
 import { rustProviderOperationFormAcceptsTargetGenericArguments, rustProviderOperationFormContractViolation } from "../../../policy/operations/forms.js";
-import type { RustFinalizedOperationAbi, RustFinalizedOperationResult, RustFinalizedSourceArgument, RustFinalizedSourceArgumentRole, RustFinalizedSourceInput, RustFinalizedTargetInput, RustFinalizedValueConversion } from "./model.js";
+import type { RustFinalizedOperationAbi, RustFinalizedOperationResult, RustFinalizedSourceArgument, RustFinalizedSourceArgumentRole, RustFinalizedSourceInput, RustFinalizedTargetInput } from "./model.js";
 import type { RustProviderConstantArgument } from "../keys.js";
 import { rustLengthEmptinessContractIsValid } from "../../../target-model/operations/length-emptiness.js";
-import { isRustUnionArmMappings, isRustUnionPath } from "../../../target-model/types/union-relations.js";
+import { isFinalizedConversion } from "./conversion-shape.js";
+import { hasExactKeys, isRecord } from "./validation-records.js";
 
 export function validateRustFinalizedOperationAbi(candidate: unknown, definitions: RustTypeDefinitions = emptyRustTypeDefinitions): candidate is RustFinalizedOperationAbi {
   if (!isClosedMetadata(candidate) || !isRustFinalizedOperationAbiShape(candidate)) {
@@ -298,174 +299,6 @@ function isSourceInput(value: unknown): value is RustFinalizedSourceInput {
       Number.isSafeInteger(value.source.sourceIndex) && (value.source.sourceIndex as number) >= 0;
 }
 
-function isFinalizedConversion(value: unknown): value is RustFinalizedValueConversion {
-  if (!isRecord(value) || !isRustTargetTypeRef(value.sourceCarrier) || !isRustTargetTypeRef(value.targetCarrier)) {
-    return false;
-  }
-  if (value.kind === "identity") {
-    return hasExactKeys(value, ["kind", "sourceCarrier", "targetCarrier", "fallible"]) && value.fallible === false;
-  }
-  return value.kind === "semantic" && hasExactKeys(value, [
-    "kind", "conversion", "sourceCarrier", "targetCarrier", "fallible",
-  ]) && isRecord(value.conversion) &&
-    ((value.conversion.kind === "semantic-conversion" &&
-      hasExactKeys(value.conversion, ["kind", "id"]) && typeof value.conversion.id === "string") ||
-    (value.conversion.kind === "numeric-promotion" &&
-      hasExactKeys(value.conversion, ["kind", "source", "target"]) &&
-      typeof value.conversion.source === "string" && typeof value.conversion.target === "string") ||
-    (value.conversion.kind === "integer-refinement" &&
-      hasExactKeys(value.conversion, ["kind", "source", "target", "proof"]) && value.conversion.proof === "nonnegative" &&
-      typeof value.conversion.source === "string" && typeof value.conversion.target === "string") ||
-    (value.conversion.kind === "raw-pointer-mut-to-const" &&
-      hasExactKeys(value.conversion, ["kind", "pointee"]) &&
-      isRustTargetTypeRef(value.conversion.pointee)) ||
-    (value.conversion.kind === "copy-from-reference" &&
-      hasExactKeys(value.conversion, ["kind", "target"]) &&
-      isRustTargetTypeRef(value.conversion.target)) ||
-    (value.conversion.kind === "source-union-variant" &&
-      hasExactKeys(value.conversion, ["kind", "source", "target", "variantName"]) &&
-      isRustTargetTypeRef(value.conversion.source) &&
-      isRustTargetTypeRef(value.conversion.target) &&
-      typeof value.conversion.variantName === "string" &&
-      value.conversion.variantName.length > 0) ||
-    (value.conversion.kind === "bottom-coercion" &&
-      hasExactKeys(value.conversion, ["kind", "source", "target"]) &&
-      isRustTargetTypeRef(value.conversion.source) &&
-      isRustTargetTypeRef(value.conversion.target)) ||
-    (value.conversion.kind === "js-argument-vector-callback" &&
-      hasExactKeys(value.conversion, [
-        "kind", "lane", "source", "target", "projections", "sourceFallible",
-      ]) &&
-      (value.conversion.lane === "native" || value.conversion.lane === "exact") &&
-      isRustTargetTypeRef(value.conversion.source) &&
-      isRustTargetTypeRef(value.conversion.target) &&
-      Array.isArray(value.conversion.projections) &&
-      value.conversion.projections.every((projection) =>
-        projection === "native-string" || projection === "exact-string" ||
-        projection === "value" || projection === "rest-values") &&
-      typeof value.conversion.sourceFallible === "boolean") ||
-    isValueProjectionConversion(value.conversion) ||
-    (value.conversion.kind === "option-some" &&
-      hasExactKeys(value.conversion, ["kind", "source", "element"]) &&
-      isRustTargetTypeRef(value.conversion.source) &&
-      isRustTargetTypeRef(value.conversion.element)) ||
-    (value.conversion.kind === "option-map" &&
-      hasExactKeys(value.conversion, ["kind", "elementConversion"]) &&
-      isNonOptionValueConversion(value.conversion.elementConversion))) &&
-    typeof value.fallible === "boolean";
-}
-
-function isNonOptionValueConversion(value: unknown): boolean {
-  if (!isRecord(value)) {
-    return false;
-  }
-  return (value.kind === "semantic-conversion" &&
-      hasExactKeys(value, ["kind", "id"]) && typeof value.id === "string") ||
-    (value.kind === "numeric-promotion" &&
-      hasExactKeys(value, ["kind", "source", "target"]) &&
-      typeof value.source === "string" && typeof value.target === "string") ||
-    (value.kind === "integer-refinement" && hasExactKeys(value, ["kind", "source", "target", "proof"]) &&
-      value.proof === "nonnegative" && typeof value.source === "string" && typeof value.target === "string") ||
-    (value.kind === "raw-pointer-mut-to-const" &&
-      hasExactKeys(value, ["kind", "pointee"]) && isRustTargetTypeRef(value.pointee)) ||
-    (value.kind === "copy-from-reference" &&
-      hasExactKeys(value, ["kind", "target"]) && isRustTargetTypeRef(value.target)) ||
-    (value.kind === "source-union-variant" &&
-      hasExactKeys(value, ["kind", "source", "target", "variantName"]) &&
-      isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) &&
-      typeof value.variantName === "string" && value.variantName.length > 0) ||
-    (value.kind === "bottom-coercion" &&
-      hasExactKeys(value, ["kind", "source", "target"]) &&
-      isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target)) ||
-    (value.kind === "js-argument-vector-callback" &&
-      hasExactKeys(value, [
-        "kind", "lane", "source", "target", "projections", "sourceFallible",
-      ]) &&
-      (value.lane === "native" || value.lane === "exact") &&
-      isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) &&
-      Array.isArray(value.projections) &&
-      value.projections.every((projection) =>
-        projection === "native-string" || projection === "exact-string" ||
-        projection === "value" || projection === "rest-values") &&
-      typeof value.sourceFallible === "boolean") ||
-    isValueProjectionConversion(value);
-}
-
-function isValueProjectionConversion(value: Record<string, unknown>): boolean {
-  if (value.kind === "source-optional") {
-    return hasExactKeys(value, ["kind", "element"]) && isRustTargetTypeRef(value.element);
-  }
-  if (value.kind === "union-project") {
-    return hasExactKeys(value, ["kind", "source", "target"]) &&
-      isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target);
-  }
-  if (value.kind === "union-map") {
-    return hasExactKeys(value, ["kind", "source", "target", "arms", "coverage"]) &&
-      (value.coverage === "source" || value.coverage === "target") &&
-      isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) && isRustUnionArmMappings(value.arms);
-  }
-  if (value.kind === "exact-integer") {
-    return hasExactKeys(value, ["kind", "source", "target"]) &&
-      isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target);
-  }
-  if (value.kind === "native-upcast") {
-    return hasExactKeys(value, ["kind", "source", "target", "path"]) &&
-      isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) &&
-      typeof value.path === "string";
-  }
-  if (value.kind === "rest-sequence") {
-    return hasExactKeys(value, ["kind", "source", "elementTarget", "elementConversions"]) &&
-      isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.elementTarget) &&
-      Array.isArray(value.elementConversions) && value.elementConversions.every(conversion =>
-        conversion === null || isNonOptionValueConversion(conversion));
-  }
-  if (value.kind === "js-value-from-closed-carrier" ||
-    value.kind === "ts-value-from-closed-carrier") {
-    return hasExactKeys(value, ["kind", "source"]) &&
-      isRustTargetTypeRef(value.source);
-  }
-  if (value.kind === "closed-value-from-option" || value.kind === "js-value-from-array") {
-    return hasExactKeys(value, [
-      "kind", "source", "element", "elementConversion",
-    ]) && isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.element) &&
-      isNonOptionValueConversion(value.elementConversion);
-  }
-  if (value.kind === "js-array-backing") {
-    return hasExactKeys(value, ["kind", "source", "element"]) &&
-      isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.element);
-  }
-  if (value.kind === "union-fold") {
-    return hasExactKeys(value, ["kind", "source", "target", "arms"]) &&
-      isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) && Array.isArray(value.arms) &&
-      value.arms.length > 0 && value.arms.every((arm) =>
-        isRecord(arm) && hasExactKeys(arm, [
-          "path", "carrier", "conversion",
-        ]) && isRustUnionPath(arm.path) && isRustTargetTypeRef(arm.carrier) &&
-        isNonOptionValueConversion(arm.conversion));
-  }
-  if (value.kind === "js-value-from-structural-to-json") {
-    return hasExactKeys(value, [
-      "kind", "source", "storageIndex", "resultCarrier", "passesPropertyKey",
-      "resultConversion",
-    ]) && isRustTargetTypeRef(value.source) &&
-      Number.isSafeInteger(value.storageIndex) && (value.storageIndex as number) >= 0 &&
-      isRustTargetTypeRef(value.resultCarrier) &&
-      typeof value.passesPropertyKey === "boolean" &&
-      isNonOptionValueConversion(value.resultConversion);
-  }
-  if (value.kind !== "js-value-from-structural-object") {
-    return false;
-  }
-  return hasExactKeys(value, ["kind", "source", "fields"]) &&
-    isRustTargetTypeRef(value.source) && Array.isArray(value.fields) &&
-    value.fields.every((field) => isRecord(field) && hasExactKeys(field, [
-      "sourceName", "storageIndex", "sourceCarrier", "presence", "conversion",
-    ]) && typeof field.sourceName === "string" && field.sourceName.length > 0 &&
-      Number.isSafeInteger(field.storageIndex) && (field.storageIndex as number) >= 0 &&
-      isRustTargetTypeRef(field.sourceCarrier) &&
-      (field.presence === "required" || field.presence === "optional") &&
-      isNonOptionValueConversion(field.conversion));
-}
 
 function isProviderConstant(value: unknown): value is RustProviderConstantArgument {
   if (!isRecord(value)) {
@@ -517,13 +350,4 @@ function isEffects(value: unknown): value is RustFinalizedOperationAbi["effects"
     isRustErrorBoundary(value.errorBoundary) &&
     (value.errorCarrier === undefined || isRustTargetTypeRef(value.errorCarrier)) &&
     (value.safety === "safe" || value.safety === "requires-unsafe");
-}
-
-function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function hasExactKeys(value: Readonly<Record<string, unknown>>, allowed: readonly string[]): boolean {
-  const keys = Object.keys(value);
-  return keys.length === allowed.length && keys.every((key) => allowed.includes(key));
 }

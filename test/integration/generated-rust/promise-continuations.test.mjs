@@ -52,3 +52,31 @@ test("Promise rejection preserves a source error's identity and native payload",
   assert.deepEqual(result.diagnostics, []);
   validateGeneratedProject("promise-rejection-identity", result.artifacts, { run: true });
 });
+
+test("authored unknown rejection handlers receive the exact native error for then and catch", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } }, files: {
+    "index.ts": `
+      import type { int32 } from "@tsonic/core/types.js";
+      class Counter { count: int32 = 0; }
+      async function fail(): Promise<void> { throw new Error("selected native rejection"); }
+      export async function main(): Promise<void> {
+        const counter = new Counter();
+        const failUnknown = (reason: unknown): void => {
+          if (!(reason instanceof Error) || reason.message !== "selected native rejection") {
+            throw new Error("rejection callback lost the native error");
+          }
+          counter.count += 1;
+        };
+        await fail().then(() => { counter.count += 100; }, failUnknown);
+        await fail().catch(failUnknown);
+        if (counter.count !== 2) throw new Error("native rejection handler did not run");
+      }
+    `,
+  } });
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /\.then\(/u);
+  assert.match(source, /\.catch\(/u);
+  assert.doesNotMatch(source, /dyn Future|Any|Box::pin/u);
+  validateGeneratedProject("promise-unknown-rejection", result.artifacts, { run: true });
+});

@@ -27,6 +27,9 @@ import { setCarrierFact, setRustOperationFact } from "../operations/project-call
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustFutureValueFact } from "../facts/keys.js";
+import { finalizeRustAwaitValueFact, rustAwaitValueFactKey } from "../facts/await-values.js";
+import { rustEffectiveValueCarrier } from "../facts/value-carrier-queries.js";
+import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
 
 export function recordResourceManagementFacts(
   walk: RustFactWalk,
@@ -163,6 +166,24 @@ export function recordFutureValueFacts(walk: RustFactWalk, sourceFiles: readonly
           visit(child);
         }
       });
+      if (walk.context.ast.kindName(node) !== "KindAwaitExpression") return;
+      const operand = Node_Expression(walk.context.ast, node);
+      const operation = walk.context.facts.get(node, rustTargetOperationFactKey);
+      const carrier = rustEffectiveValueCarrier(walk.context.facts, operand);
+      if (operand === undefined || operation?.kind !== "await-op" || carrier === undefined) return;
+      const knownFuture = resolve(operand);
+      const awaiting = finalizeRustAwaitValueFact(carrier, operation.resultCarrier, leaf =>
+        knownFuture !== undefined && rustFutureValueMatchesCarrier(knownFuture, leaf, walk.context.typeDefinitions)
+          ? knownFuture : rustFutureValueForSourceStorage(leaf),
+      (source, target) => selectRustSourceValueConversion(source, target, walk.context.typeDefinitions),
+      walk.context.typeDefinitions);
+      if (awaiting === undefined) {
+        appendRustDiagnostic(walk, "RUST_AWAIT_VALUE_CONTRACT_NOT_PROVEN",
+          "Await requires a closed native branch selection with exact future effects and result conversions.", node,
+          ["target.capability=rust.async.await-value"]);
+        return;
+      }
+      walk.context.facts.set(node, rustAwaitValueFactKey, awaiting, [{ message: "rust finalized native await branches" }]);
     };
     visit(sourceFile);
   }

@@ -20,27 +20,32 @@ export interface RustCallbackOperationSelection {
 export function finalizeRustCallbackOperation(
   selection: RustCallbackOperationSelection,
   argumentCarriers: readonly TargetTypeRef[],
+  acceptsConversion: (source: TargetTypeRef, target: TargetTypeRef) => boolean = () => false,
 ): RustCallbackOperationSelection | undefined {
   const callback = argumentCarriers[selection.callback.sourceArgumentIndex];
   const callbackTemplate = selection.parameterCarriers?.[selection.callback.sourceArgumentIndex];
   const callbackProtocol = rustCallbackProtocol(callback);
-  if (callback === undefined || callbackTemplate === undefined || callbackProtocol === undefined ||
-    !rustCallbackCarrierMatchesTemplate(callbackTemplate, callback)) {
+  if (callback === undefined || callbackTemplate === undefined || callbackProtocol === undefined) {
     return undefined;
   }
   if (selection.callback.shape === "map") {
+    const selectedCallback = replaceRustInferCarrier(callbackTemplate, callbackProtocol.result);
+    const selectedProtocol = rustCallbackProtocol(selectedCallback);
+    if (selectedProtocol === undefined || !rustCallbackCarrierMatchesTemplate(selectedCallback, callback) &&
+      !acceptsConversion(callback, selectedCallback)) return undefined;
     const output = selection.callback.resultProjection === "awaited"
-      ? rustFutureOutputCarrier(callbackProtocol.result)
-      : callbackProtocol.result;
+      ? rustFutureOutputCarrier(selectedProtocol.result)
+      : selectedProtocol.result;
     if (output === undefined) return undefined;
     const resultCarrier = replaceRustInferCarrier(selection.fact.resultCarrier, output);
     const parameterCarriers = [...(selection.parameterCarriers ?? [])];
     for (const [index, template] of parameterCarriers.entries()) {
       if (template === undefined) return undefined;
       const actual = argumentCarriers[index];
-      const expected = replaceRustInferCarrier(template, callbackProtocol.result);
-      if (actual !== undefined && !rustCallbackCarrierMatchesTemplate(expected, actual)) return undefined;
-      parameterCarriers[index] = actual ?? expected;
+      const expected = replaceRustInferCarrier(template, selectedProtocol.result);
+      if (actual !== undefined && !rustCallbackCarrierMatchesTemplate(expected, actual) &&
+        !acceptsConversion(actual, expected)) return undefined;
+      parameterCarriers[index] = expected;
     }
     return {
       ...selection,
@@ -57,20 +62,21 @@ export function finalizeRustCallbackOperation(
     const templates = selection.parameterCarriers ?? [];
     if (templates.length !== argumentCarriers.length || !templates.every((template, index) =>
       template !== undefined && argumentCarriers[index] !== undefined &&
-      rustCallbackCarrierMatchesTemplate(template, argumentCarriers[index]!))) {
+      (rustCallbackCarrierMatchesTemplate(template, argumentCarriers[index]!) ||
+        acceptsConversion(argumentCarriers[index]!, template)))) {
       return undefined;
     }
     return {
       ...selection,
-      fact: { ...selection.fact, parameterCarriers: argumentCarriers },
-      parameterCarriers: argumentCarriers,
+      fact: { ...selection.fact, parameterCarriers: templates as readonly TargetTypeRef[] },
+      parameterCarriers: templates,
     };
   }
   const accumulatorIndex = selection.callback.accumulatorArgumentIndex;
   const accumulator = accumulatorIndex === undefined
     ? undefined
     : argumentCarriers[accumulatorIndex];
-  if (accumulator === undefined ||
+  if (!rustCallbackCarrierMatchesTemplate(callbackTemplate, callback) || accumulator === undefined ||
     (callbackProtocol.parameters[0] !== undefined &&
       !rustTargetTypeRefEquals(callbackProtocol.parameters[0], accumulator)) ||
     !rustTargetTypeRefEquals(callbackProtocol.result, accumulator)) {

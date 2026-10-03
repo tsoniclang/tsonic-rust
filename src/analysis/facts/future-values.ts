@@ -1,10 +1,12 @@
-import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustFutureOutputCarrier, rustAwaitCarrier, rustJsPromiseTargetId, isRustProgramErrorCarrier } from "../../target-model/types/index.js";
 import { validateRustFinalizedOperationAbi } from "./finalized-operation-abi.js";
 import { finalizedConversionIsValid, finalizeValueConversion } from "./finalized-operation/conversions.js";
 import { rustNativeRepresentationMatches } from "../../target-model/conversions/native-representation.js";
+import { hasExactObjectKeys, isClosedMetadata } from "../../target-model/metadata/closed-data.js";
+import { rustAwaitSelection, rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 import type {
   RustFutureValueFact,
   RustSourceCallEffectsFact,
@@ -83,17 +85,31 @@ export function rustFutureValueForSourceStorage(carrier: TargetTypeRef | undefin
   };
 }
 
+export function rustFutureValuesForSourceStorage(
+  carrier: TargetTypeRef | undefined,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
+): readonly RustFutureValueFact[] | undefined {
+  const selection = rustAwaitSelection(carrier, definitions);
+  return selection === undefined ? undefined : rustAwaitSelectionLeaves(selection).flatMap(leaf => {
+    const future = leaf.future === undefined ? undefined : rustFutureValueForSourceStorage(leaf.carrier);
+    return future === undefined ? [] : [future];
+  });
+}
+
 export function rustFutureValueMatchesCarrier(
   fact: RustFutureValueFact,
   carrier: TargetTypeRef | undefined,
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): boolean {
-  return carrier !== undefined &&
+  return carrier !== undefined && fact !== null && typeof fact === "object" && isClosedMetadata(fact) && hasExactObjectKeys(fact,
+    fact.errorCarrier === undefined ? ["outputCarrier", "awaitedConversion", "awaiting", "errorBoundary"]
+      : ["outputCarrier", "awaitedConversion", "awaiting", "errorBoundary", "errorCarrier"]) &&
     finalizedConversionIsValid(fact.awaitedConversion, definitions) &&
     ((fact.awaiting === "infallible" && fact.errorBoundary === "none") ||
-      (fact.awaiting === "fallible" && fact.errorBoundary !== "none")) &&
+      (fact.awaiting === "fallible" && (fact.errorBoundary === "source-program" ||
+        fact.errorBoundary === "target-runtime" || fact.errorBoundary === "provider-native"))) &&
     (fact.errorBoundary === "provider-native"
-      ? fact.errorCarrier !== undefined
+      ? isRustTargetTypeRef(fact.errorCarrier)
       : fact.errorCarrier === undefined) &&
     rustTargetTypeRefEquals(rustAwaitCarrier(carrier)?.outputCarrier, fact.outputCarrier) &&
     rustTargetTypeRefEquals(fact.awaitedConversion.targetCarrier, fact.outputCarrier);
