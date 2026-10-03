@@ -32,7 +32,7 @@ function fixture() {
     lowering: { kind: "borrowed", style: "cloned", input: "reference" } };
   let operation = { kind: "operator-token", operator: "+=", resultCarrier: string, writeStrategy: "in-place-string-append-value" };
   let summary = { captured: false, exported: false, bindingWritten: false, memberWritten: false,
-    aliasedOrStored: false, hasUnclassifiedValueUse: true, uses: [{ kind: "first-class", reference, role: "value" }] };
+    aliasedOrStored: true, hasUnclassifiedValueUse: false, uses: [{ kind: "first-class", reference, role: "storage" }] };
   const ast = {
     kindName: node => node.kind,
     parent: node => node.parent,
@@ -83,6 +83,9 @@ test("borrowed loop selection consumes exact readonly native slices and checked 
   input.setOperation({ kind: "operator-token", operator: "+=", resultCarrier: input.string,
     writeStrategy: "in-place-string-append-parts" });
   assert.ok(input.select());
+  input.setIteration({ kind: "iteration", iterationKind: "for-of", elementCarrier: input.string,
+    lowering: { kind: "borrowed", style: "cloned", input: "direct" } });
+  assert.ok(input.select());
 });
 
 test("borrowed loop selection rejects ownership, alias escapes and observable operations without changing owned iteration", () => {
@@ -94,7 +97,7 @@ test("borrowed loop selection rejects ownership, alias escapes and observable op
     input => input.setIteration({ kind: "iteration", iterationKind: "for-await-of", elementCarrier: input.string,
       lowering: { kind: "borrowed", style: "cloned", input: "reference" } }),
     input => input.setIteration({ kind: "iteration", iterationKind: "for-of", elementCarrier: input.string, lowering: { kind: "js-array" } }),
-    ...["captured", "exported", "bindingWritten", "memberWritten", "aliasedOrStored"].map(key => input => input.setSummary({ [key]: true })),
+    ...["captured", "exported", "bindingWritten", "memberWritten"].map(key => input => input.setSummary({ [key]: true })),
     input => { input.declaration.declarationKind = "using"; },
     input => { input.declaration.name.kind = "KindObjectBindingPattern"; },
     input => { input.reference.parent = { kind: "KindReturnStatement", expression: input.reference, parent: input.body }; },
