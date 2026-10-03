@@ -314,9 +314,9 @@ function maxWritesInExpression(expression: RustExpr, path: string): number {
     rustPlaceIsRootedAtPath(expression.expr, path)) {
     return 1;
   }
-  if (expression.kind === "method-call" && expression.receiverMode === "mut-ref" &&
+  if (expression.kind === "method-call" && (expression.receiverMode === "mut-ref" || expression.receiverMode === undefined) &&
     rustPlaceIsRootedAtPath(expression.receiver, path)) {
-    return cappedWriteCount(1 + rustExpressionChildren(expression).reduce(
+    return cappedWriteCount((expression.receiverMode === undefined ? 2 : 1) + rustExpressionChildren(expression).reduce(
       (writes, child) => cappedWriteCount(writes + maxWritesInExpression(child, path)),
       0,
     ));

@@ -108,3 +108,25 @@ test("native AST child mapping and source normalization use the same canonical b
   assert.deepEqual(finalizeRustSourceStyle(normalized), normalized);
   assert.equal(normalized.items[0].body.statements[0].expr.kind, "block");
 });
+
+test("native receiver evidence retains mutable sequence construction, including immediate callback captures", () => {
+  const source = { items: [{ kind: "function", name: "run", visibility: "public", params: [], generics: emptyRustGenerics,
+    body: { statements: [{ kind: "tail", expr: rustValueBlock([{ name: "values", mutable: true,
+      type: { kind: "named", path: "Vec", genericArguments: [{ kind: "type", type: { kind: "string" } }] },
+      value: { kind: "vec-literal", elements: [] } }], { kind: "evaluate-then", discard: "unit",
+      effect: { kind: "call", path: "with_values", args: [{ kind: "closure", params: [], body: {
+        kind: "method-call", receiver: path("values"), receiverMode: "mut-ref", method: "extend_from_slice", args: [path("source")],
+      } }] }, value: path("values") }) }] } }] };
+  const normalized = finalizeRustSourceStyle(source);
+  assert.equal(normalized.items[0].body.statements[0].expr.body.statements[0].mutable, true);
+  const readOnly = structuredClone(source);
+  readOnly.items[0].body.statements[0].expr.body.statements[1].expr.effect.args[0].body.receiverMode = "ref";
+  assert.equal(finalizeRustSourceStyle(readOnly).items[0].body.statements[0].expr.body.statements[0].mutable, false);
+  const unknown = structuredClone(source);
+  delete unknown.items[0].body.statements[0].expr.body.statements[1].expr.effect.args[0].body.receiverMode;
+  assert.equal(finalizeRustSourceStyle(unknown).items[0].body.statements[0].expr.body.statements[0].mutable, true);
+  const direct = structuredClone(source);
+  direct.items[0].body.statements[0].expr.body.statements[1].expr.effect =
+    direct.items[0].body.statements[0].expr.body.statements[1].expr.effect.args[0].body;
+  assert.equal(finalizeRustSourceStyle(direct).items[0].body.statements[0].expr.body.statements[0].mutable, true);
+});
