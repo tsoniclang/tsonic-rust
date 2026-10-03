@@ -23,7 +23,7 @@ export function missing(values: (number | undefined)[]): boolean {
   for (const sourceFile of program.sourceFiles) visit(sourceFile);
   assert.equal(operations.length, 1);
   const { node, fact } = operations[0];
-  assert.deepEqual(fact.nullishDepths, [0, 1]);
+  assert.deepEqual(fact.nullishDepths, [0]);
   assert.ok(Object.isFrozen(fact.nullishDepths));
   const context = facts => ({
     input: { program: { ...program, facts } }, diagnostics: [],
@@ -64,8 +64,8 @@ export function read(values: (string | undefined)[]): void {
   for (const sourceFile of program.sourceFiles) visit(sourceFile);
   assert.equal(operations.length, 1);
   const { node, fact } = operations[0];
-  assert.equal(fact.guardDepth, 2);
-  for (const guardDepth of [undefined, 0, -1, 1, 3, 0.5, NaN, Infinity]) {
+  assert.equal(fact.guardDepth, 1);
+  for (const guardDepth of [undefined, 0, -1, 2, 3, 0.5, NaN, Infinity]) {
     const facts = { ...program.facts, getFact: (subject, key) =>
       subject === node && key === rustOptionalChainFactKey
         ? { ...fact, guardDepth } : program.facts.getFact(subject, key) };
@@ -97,7 +97,7 @@ export function read(values: (string | undefined)[]): string {
   for (const sourceFile of program.sourceFiles) visit(sourceFile);
   assert.equal(operations.length, 1);
   const { node, fact } = operations[0];
-  assert.equal(fact.leftOptionDepth, 2);
+  assert.equal(fact.leftOptionDepth, 1);
   assert.equal(fact.rightOptionDepth, 0);
   const context = facts => ({
     input: { program: { ...program, facts } }, diagnostics: [],
@@ -111,7 +111,7 @@ export function read(values: (string | undefined)[]): string {
   assert.ok(planBinaryExpression(node, valid));
   assert.deepEqual(valid.diagnostics, []);
   const mutations = [
-    ...[undefined, 0, -1, 1, 3, 0.5, NaN, Infinity].map(leftOptionDepth => ({ leftOptionDepth })),
+    ...[undefined, 0, -1, 2, 3, 0.5, NaN, Infinity].map(leftOptionDepth => ({ leftOptionDepth })),
     ...[undefined, -1, 1, 0.5, NaN, Infinity].map(rightOptionDepth => ({ rightOptionDepth })),
     ...[undefined, "raw", "invalid"].map(rightValueForm => ({ rightValueForm })),
     ...[undefined, { kind: "source-primitive", name: "int32" }].map(leftValueCarrier => ({ leftValueCarrier })),

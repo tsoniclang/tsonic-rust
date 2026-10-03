@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { TargetTypeRef } from "./model.js";
 import { closedMetadataKey } from "../metadata/closed-data.js";
 import { isRustAbsenceCarrier, rustAbsenceTargetType } from "./carriers/native.js";
+import { isRustUnitCarrier } from "./carriers/js.js";
 import { rustOptionTargetType } from "./carriers/optional.js";
 import { rustJsValueTargetId, rustTsValueTargetId } from "./carriers/source-types.js";
 import { rustOptionNestingDepth } from "./carriers/optional.js";
@@ -18,6 +19,7 @@ export function rustOptionalStorageProjection(value: TargetTypeRef): RustOptiona
 
 export function rustSourceOptionalTargetType(value: TargetTypeRef): TargetTypeRef {
   if (isRustAbsenceCarrier(value)) return rustAbsenceTargetType();
+  if (isRustUnitCarrier(value)) return value;
   if (value.kind === "target-named" && (value.sourceAbsence === true ||
     value.id === rustJsValueTargetId || value.id === rustTsValueTargetId)) return value;
   if (value.kind === "type-parameter" && value.optionalStorageValue !== undefined) return value;

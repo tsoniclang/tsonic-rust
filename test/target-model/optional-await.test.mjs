@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { rustAwaitCarrier, rustCallableTargetType, rustJsPromiseTargetType, rustSourceOptionalTargetType,
   rustSourcePrimitiveTargetType, rustUnitTargetType } from "../../dist/target-model/types/index.js";
+import { rustOptionElementCarrier, rustOptionTargetType } from "../../dist/target-model/types/index.js";
+import { rustTargetTypeRefEquals } from "../../dist/target-model/types/equality.js";
 import { rustFutureValueMatchesCarrier } from "../../dist/analysis/facts/future-values.js";
 import { rustCompilerOwnedContextualConversionMatches } from "../../dist/target-model/conversions/contextual.js";
 import { selectRustCallableConversion } from "../../dist/target-model/conversions/callable.js";
@@ -9,6 +11,14 @@ import { selectRustCallableConversion } from "../../dist/target-model/conversion
 const integer = rustSourcePrimitiveTargetType("int32");
 const boolean = rustSourcePrimitiveTargetType("bool");
 const unit = rustUnitTargetType();
+
+test("source absence never wraps native unit completion, while explicit native Option remains exact", () => {
+  assert.equal(rustSourceOptionalTargetType(unit) === unit, true);
+  assert.equal(rustSourceOptionalTargetType(rustSourceOptionalTargetType(unit)) === unit, true);
+  assert.equal(rustOptionElementCarrier(rustSourceOptionalTargetType(unit)) === undefined, true);
+  assert.equal(rustTargetTypeRefEquals(rustOptionElementCarrier(rustOptionTargetType(unit)), unit), true);
+  assert.equal(rustTargetTypeRefEquals(rustOptionElementCarrier(rustSourceOptionalTargetType(integer)), integer), true);
+});
 
 test("optional awaiting preserves one absence, unit completion and exact output", () => {
   for (const output of [integer, unit, rustSourceOptionalTargetType(integer)]) {

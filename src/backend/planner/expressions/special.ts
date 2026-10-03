@@ -21,7 +21,7 @@ import { planRustNonConsumingValue } from "./typed-locations.js";
 import { planSelectedSourceCall } from "./calls/source.js";
 import { readRustStructuralObjectMethodStorage } from "../objects/project-storage.js";
 import { requireProviderArgumentPassingFacts } from "./calls/arguments.js";
-import { rustOptionElementCarrier, rustOptionNestingDepth, rustStructuralMethodCallableCarrier } from "../../../target-model/types/index.js";
+import { isRustUnitCarrier, rustOptionElementCarrier, rustOptionNestingDepth, rustStructuralMethodCallableCarrier } from "../../../target-model/types/index.js";
 import { rustTargetOperationIsFallible } from "../../../analysis/facts/target-operation.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { Node } from "@tsonic/tsts";
@@ -266,6 +266,12 @@ export function planOptionalChainExpression(
     borrowedGuard = {
       kind: "method-call", receiver: borrowedGuard, method: "and_then",
       args: [{ kind: "path", path: "core::option::Option::as_ref" }],
+    };
+  }
+  if (isRustUnitCarrier(fact.innerResultCarrier)) {
+    return { kind: "if-let", expression: borrowedGuard,
+      pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: receiverName }] },
+      whenTrue: body,
     };
   }
   if (rustExpressionExitsCallable(body)) {
