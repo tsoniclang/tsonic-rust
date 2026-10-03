@@ -34,7 +34,7 @@ import {
   rustOptionElementCarrier,
   rustStructuralObjectCarrierValue,
 } from "../../target-model/types/index.js";
-import { rustRuntimeUnionContract } from "../../target-model/types/carriers/runtime-unions.js";
+import { rustUnionAlternatives } from "../../target-model/types/union-relations.js";
 import { recordRustObjectReferenceView } from "./object-reference-views.js";
 import { rustSourceValueWrapperContains } from "../../policy/ownership/source-value-wrappers.js";
 import { selectRustIntegerTruncationConversion } from "../../policy/types/integer-truncation.js";
@@ -124,7 +124,7 @@ export function resolveExpressionCarrier(
     const flowCarrier = selectedOperationOwnsResult &&
         (optionalChain !== undefined || rustTargetTypeRefEquals(carrier, expected) ||
           rustOptionElementCarrier(carrier) === undefined &&
-          (carrier === undefined || rustRuntimeUnionContract(carrier) === undefined))
+          (carrier === undefined || rustUnionAlternatives(carrier, walk.context.typeDefinitions) === undefined))
       ? carrier
       : applyFlowReadLane(walk, expression, carrier);
     return retainParameterAbi(applyOptionLane(walk, expression, flowCarrier, expected, integerConversion));
