@@ -33,7 +33,19 @@ export function planRustErrorObservations(plan: RustErrorTransportPlan): RustIte
         kind: "closure", params: [{ name: "error", byRefCopy: false }],
         body: { kind: "binary", left: method(path("error"), "error_kind"), operator: "==", right: path("kind") },
       }), [{ name: "kind", type: errorKind }]),
-      observation("source_error_value", option(sourceError), method(call("SourceError::try_from", method(path("self"), "clone")), "ok")),
+      observation("source_error_value", option(sourceError), { kind: "match", expression: path("self"), arms: [
+        { pattern: variant("ErrorTransport::Runtime", binding("error")),
+          expression: call("Some", call("SourceError::from", method(path("error"), "clone"))) },
+        ...plan.variants.map(item => ({ pattern: variant(`ErrorTransport::${item.name}`,
+            item.source === "thrown" ? { kind: "wildcard" as const } : binding("error")),
+          expression: item.source === "thrown" ? { kind: "none" as const }
+            : item.source === "error" ? call("Some", call("SourceError::from", method(path("error"), "clone")))
+            : method(method(path("error"), "source_error_value"), "map", path("SourceError::from")) })),
+        { pattern: variant("ErrorTransport::Suppressed", binding("error"), binding("suppressed"), binding("source")),
+          expression: call("Some", { kind: "struct-literal", path: "SourceError", fields: [{ name: "value",
+            value: call("ErrorTransport::Suppressed", method(path("error"), "clone"),
+              method(path("suppressed"), "clone"), method(path("source"), "clone")) }] }) },
+      ] }),
       observation("native_error_value", option(jsError), { kind: "match", expression: path("self"), arms: [
         { pattern: variant("ErrorTransport::Runtime", binding("error")), expression: call("Some", method(method(path("error"), "source_error"), "clone")) },
         { pattern: variant("ErrorTransport::Suppressed", { kind: "wildcard" }, { kind: "wildcard" }, binding("source")), expression: call("Some", method(path("source"), "clone")) },

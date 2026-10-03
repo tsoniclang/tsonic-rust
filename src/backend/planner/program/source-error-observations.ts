@@ -14,7 +14,7 @@ const boolean: RustType = { kind: "primitive", name: "bool" };
 const errorField: RustType = { kind: "named", path: "tsonic_rust_runtime::ErrorField", genericArguments: [
   { kind: "lifetime", lifetime: { kind: "placeholder" } },
 ] };
-const stack: RustType = { kind: "named", path: "Option", genericArguments: [{ kind: "type", type: { kind: "string" } }] };
+const stack: RustType = { kind: "named", path: "Option", genericArguments: [{ kind: "type", type: errorField }] };
 const getters: readonly { readonly name: string; readonly native: string; readonly type: RustType }[] = [
   { name: "name", native: "error_name", type: errorField },
   { name: "message", native: "error_message", type: errorField },

@@ -69,6 +69,13 @@ test("base observations borrow real project Error storage but never unrelated th
   assert.deepEqual(source.arms.find(arm => arm.pattern.path === "ErrorTransport::HttpError").expression,
     { kind: "call", path: "Some", args: [{ kind: "path", path: "error" }] });
   assert.deepEqual(source.arms.find(arm => arm.pattern.path === "ErrorTransport::Unrelated").expression, { kind: "none" });
+  const admitted = item.members.find(member => member.name === "source_error_value").body.statements[0].expr;
+  assert.equal(admitted.kind, "match");
+  assert.equal(admitted.expression.path, "self");
+  assert.deepEqual(admitted.arms.find(arm => arm.pattern.path === "ErrorTransport::Unrelated").expression, { kind: "none" });
+  assert.equal(admitted.arms.find(arm => arm.pattern.path === "ErrorTransport::Unrelated").pattern.elements[0].kind, "wildcard");
+  const admittedClass = admitted.arms.find(arm => arm.pattern.path === "ErrorTransport::HttpError").expression;
+  assert.equal(admittedClass.args[0].args[0].receiver.path, "error");
   const native = item.members.find(member => member.name === "native_error_value").body.statements[0].expr;
   assert.deepEqual(native.arms.find(arm => arm.pattern.path === "ErrorTransport::HttpError").expression, { kind: "none" });
   const sourceItems = planRustSourceErrorObservations(plan);

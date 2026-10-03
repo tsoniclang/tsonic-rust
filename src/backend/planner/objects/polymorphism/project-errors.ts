@@ -14,7 +14,7 @@ const errorField: RustType = { kind: "named", path: "rt::ErrorField", genericArg
   { kind: "lifetime", lifetime: { kind: "placeholder" } },
 ] };
 const stackType: RustType = { kind: "named", path: "Option", genericArguments: [
-  { kind: "type", type: { kind: "string" } },
+  { kind: "type", type: errorField },
 ] };
 
 export function rustProjectErrorSuperTraits(
@@ -42,9 +42,10 @@ export function planRustProjectErrorRoot(
     if (storage === undefined) return undefined;
     const value = storage.reduce(field, path("state"));
     const read: RustExpr = name === "stack"
-      ? method(field(path("self"), rustProjectObjectStateField), "with", {
-          kind: "closure", params: [{ name: "state", byRefCopy: false }], body: method(value, "clone"),
-        })
+      ? method(method({ kind: "call", path: "core::cell::Ref::filter_map", args: [
+          method(field(path("self"), rustProjectObjectStateField), "borrow"),
+          { kind: "closure", params: [{ name: "state", byRefCopy: false }], body: method(value, "as_deref") },
+        ] }, "ok"), "map", path("rt::ErrorField::Project"))
       : { kind: "call", path: "rt::ErrorField::Project", args: [{
           kind: "call", path: "core::cell::Ref::map", args: [
             method(field(path("self"), rustProjectObjectStateField), "borrow"),
