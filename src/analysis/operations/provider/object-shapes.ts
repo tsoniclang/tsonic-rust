@@ -519,6 +519,12 @@ export function acceptProjectSourceCall(
     genericContract.length !== sourceGenericParameters.length) {
     return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_GENERIC_ARGUMENT_NOT_PROVEN", "A TSTS-selected project-source call does not have one exact lifetime/type generic instantiation.");
   }
+  const templateGenericArguments = targetGenericArguments.map((argument, index) => {
+    const parameter = genericContract[index]!;
+    return parameter.kind === "type" && argument.kind === "type"
+      ? { kind: "type" as const, type: { kind: "type-parameter" as const, identity: parameter.identity, name: parameter.targetName } }
+      : argument;
+  });
   const superConstruction = construction &&
     ast.kindName(request.source.sourceCallee.expression) === "KindSuperKeyword";
   const containingDefinition = options.projectTypes.definitionContainingDeclaration(
@@ -549,12 +555,7 @@ export function acceptProjectSourceCall(
       selectedOwnerDefinition !== undefined && selectedOwnerDefinition === callableOwner
     ? instantiateExactSelectedConstructionCarrier(
         selectedOwnerDefinition,
-        targetGenericArguments.map((argument, index) => {
-          const parameter = genericContract[index]!;
-          return parameter.kind === "type" && argument.kind === "type"
-            ? { kind: "type" as const, type: { kind: "type-parameter" as const, identity: parameter.identity, name: parameter.targetName } }
-            : argument;
-        }),
+        templateGenericArguments,
         options,
       )
     : undefined;
@@ -663,7 +664,7 @@ export function acceptProjectSourceCall(
   returnType = unionContract?.result ?? returnType;
   const sourceResult = selectRustSourceCallResult(options.projectTypes, returnType, () => {
     const result = context.currentSemantics.operations.callResult(request.source);
-    const bound = bindRustSelectedCallTypeArguments(selectedTypeArguments, targetGenericArguments, context);
+    const bound = bindRustSelectedCallTypeArguments(selectedTypeArguments, templateGenericArguments, context);
     const carrier = result === undefined || bound === undefined ? undefined
       : resolveRustTypeComponentEvidence({ selectedType: result.selectedReturnType,
           declaration: selectedCallableDeclaration, ...(result.authoredTypeNode === undefined ? {} : { authoredTypeNode: result.authoredTypeNode }) },

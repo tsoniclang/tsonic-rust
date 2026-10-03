@@ -255,20 +255,6 @@ export function planRustAssignmentWrite(
     const projection = planRustFieldProjectionAssignment(left, valueNode, fact, context);
     if (projection !== undefined) return projection;
   }
-  if (target === undefined && sourceField?.kind !== "source-accessor" &&
-    sourceField?.kind !== "source-static-field" &&
-    sourceField?.kind !== "source-field" &&
-    sourceField?.kind !== "source-indexed-field" &&
-    sourceField?.kind !== "source-index-signature" &&
-    sourceField?.kind !== "source-method-property" &&
-    sourceField?.kind !== "source-union-field") {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, expression),
-      "rust.backend.assignment",
-      "Assignments require a plain binding or a finalized direct Rust location.",
-    ));
-    return undefined;
-  }
   if (storageOverride?.valueForm !== "storage" && rustSourceFieldHasValueReceiver(left, context)) {
     const location = planRustValueFieldLocation(left, context, "write");
     const value = planExpression(valueNode, context);
@@ -679,21 +665,15 @@ export function planRustAssignmentWrite(
     }];
   }
   const value = planExpression(valueNode, context);
-  if (value === undefined || target === undefined) {
+  if (value === undefined) {
     return undefined;
   }
   if (fact.kind === "operator-call") {
-    return planRustDirectOperatorCallAssignment(
-      left,
-      target,
-      value,
-      fact,
-      context,
-    );
+    return planRustDirectOperatorCallAssignment(left, target, value, fact, context);
   }
   if (operator === "+=" && isRustStringCarrier(fact.resultCarrier)) {
-    if (fact.writeStrategy === "in-place-string-append-parts" ||
-      fact.writeStrategy === "in-place-string-append-value") {
+    if (target !== undefined && (fact.writeStrategy === "in-place-string-append-parts" ||
+      fact.writeStrategy === "in-place-string-append-value")) {
       return planInPlaceStringAppend(
         target,
         planRustNonConsumingValue(valueNode, value, context),
@@ -735,7 +715,7 @@ export function planRustAssignmentWrite(
           ], promotedLocation.write(location, concatenated)),
       }];
     }
-    if (ast.kindName(left) !== KindIdentifier) {
+    if (target === undefined || ast.kindName(left) !== KindIdentifier) {
       context.diagnostics.push(unsupportedConstructDiagnostic(
         diagnosticInput(context, expression),
         "rust.backend.string-append-location",
@@ -766,6 +746,14 @@ export function planRustAssignmentWrite(
   );
   if (promoted.handled) {
     return promoted.statement === undefined ? undefined : [promoted.statement];
+  }
+  if (target === undefined) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, expression),
+      "rust.backend.assignment",
+      "Assignments require an exact direct, promoted or module storage owner.",
+    ));
+    return undefined;
   }
   return [{ kind: "assign", target, operator, value }];
 }

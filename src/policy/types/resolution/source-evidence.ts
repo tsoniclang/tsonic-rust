@@ -311,7 +311,9 @@ export function resolveRustEvidenceNodesToCommonCarrier(
         authoredType !== undefined && semantics.types.isIdentical(authoredType, selectedType)) {
         return [resolveRustAuthoredTargetType(member, context, options, resolving)];
       }
-      if (authoredType === undefined || semantics.types.refinement(authoredType, selectedType).kind !== "members") return [];
+      if (authoredType === undefined) return [];
+      const refinement = semantics.types.refinement(authoredType, selectedType);
+      if (refinement.kind !== "members" && refinement.kind !== "exact") return [];
       const selectedCarrier = resolveRustTargetType(selectedType, context, options, resolving);
       if (selectedCarrier === undefined) return [];
       const carrier = resolveRustAuthoredTargetType(member, context, options, resolving);

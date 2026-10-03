@@ -246,7 +246,7 @@ export function planRustSourceStaticFieldAssignment(
 
 export function planRustDirectOperatorCallAssignment(
   targetNode: Node,
-  target: RustExpr,
+  target: RustExpr | undefined,
   value: RustExpr,
   assignment: Extract<RustAssignmentOperationPlan, { readonly kind: "operator-call" }>,
   context: RustPlanContext,
@@ -298,6 +298,14 @@ export function planRustDirectOperatorCallAssignment(
     }];
   }
 
+  if (target === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, targetNode),
+      "rust.backend.compound-assignment-storage",
+      "Compound assignment requires its exact direct or promoted storage owner.",
+    ));
+    return undefined;
+  }
   const currentName = allocateRustSyntheticName(context.syntheticNames, "current");
   const valueName = allocateRustSyntheticName(context.syntheticNames, "value");
   const nextName = allocateRustSyntheticName(context.syntheticNames, "next");

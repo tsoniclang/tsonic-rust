@@ -81,16 +81,8 @@ function planVariableDeclaration(
   const initializer = Node_Initializer(context.input.program.source.ast, declaration);
   const nativeArray = context.input.program.facts.getFact(declaration, rustNativeArrayStorageKey);
   const locationStorage = nativeArray === undefined ? rustBindingStorageForDeclaration(declaration, context) : undefined;
-  if (initializer === undefined && locationStorage !== undefined) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, declaration),
-      "rust.backend.typed-location-storage",
-      "Promoted Rust location storage requires an initialized source binding.",
-    ));
-    return undefined;
-  }
-  const planned = initializer === undefined ? undefined : planExpression(initializer, context);
-  if (initializer !== undefined && planned === undefined) {
+  const sourceInitializer = initializer === undefined ? undefined : planExpression(initializer, context);
+  if (initializer !== undefined && sourceInitializer === undefined) {
     return undefined;
   }
   const typeNode = Node_Type(context.input.program.source.ast, declaration);
@@ -118,6 +110,16 @@ function planVariableDeclaration(
       diagnosticInput(context, declaration),
       "rust.backend.variable-carrier",
       "Variable declaration has no finalized Rust carrier fact.",
+    ));
+    return undefined;
+  }
+  const planned: RustExpr | undefined = initializer === undefined && rustOptionElementCarrier(declarationCarrier) !== undefined
+    ? { kind: "none" } : sourceInitializer;
+  if (planned === undefined && locationStorage !== undefined) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, declaration),
+      "rust.backend.typed-location-storage",
+      "Promoted Rust location storage requires a source initializer or a native absence carrier.",
     ));
     return undefined;
   }
@@ -173,10 +175,7 @@ function planVariableDeclaration(
         context.input.program.facts.getFact(declaration, rustMutatedReferentFactKey) !== undefined) ||
       resourceFact !== undefined && resourceDisposalReceiverMode(resourceFact) === "mut-ref");
   let init: RustExpr | undefined;
-  if (initializer !== undefined) {
-    if (planned === undefined) {
-      return undefined;
-    }
+  if (planned !== undefined) {
     if (locationStorage === undefined) {
       init = planned;
     } else if (locationStorage.storage !== "location") {
@@ -194,8 +193,6 @@ function planVariableDeclaration(
         ? { kind: "call", path: "rt::Location::allocate", args: [planned] }
         : planRustNativeAllocation(declaration, planned, context);
     }
-  } else if (rustOptionElementCarrier(declarationCarrier) !== undefined && rustType !== undefined) {
-    init = { kind: "none" };
   }
   if (initializer !== undefined && init === undefined) {
     return undefined;
