@@ -35,7 +35,7 @@ function printRustStmt(statement: RustStmt, depth: number): string {
       return `${attributes}${indent}let ${statement.mutable ? "mut " : ""}${statement.name}${type}${initializer};`;
     }
     case "expr":
-      return `${printRustStatementAttributes(statement.attrs, depth)}${indent}${printRustExpr(statement.expr)}${statement.expr.kind === "if-let" ? "" : ";"}`;
+      return `${printRustStatementAttributes(statement.attrs, depth)}${indent}${printRustExpr(statement.expr)};`;
     case "assign":
       return `${indent}${printRustExpr(statement.target)} ${statement.operator} ${printRustExpr(statement.value)};`;
     case "return":
@@ -146,13 +146,13 @@ function printRustStmt(statement: RustStmt, depth: number): string {
 function nestedMarkedElseIf(
   marked: true | undefined,
   block: RustBlock,
-): Extract<RustStmt, { readonly kind: "if" | "expr" }> | undefined {
+): Extract<RustStmt, { readonly kind: "if" }> | undefined {
   if (marked !== true || block.statements.length !== 1 ||
     (block.innerAttrs?.length ?? 0) !== 0) {
     return undefined;
   }
   const nested = block.statements[0];
-  if (nested?.kind !== "if" && !(nested?.kind === "expr" && nested.expr.kind === "if-let")) {
+  if (nested?.kind !== "if") {
     return undefined;
   }
   return (nested.attrs?.length ?? 0) !== 0
@@ -161,6 +161,13 @@ function nestedMarkedElseIf(
 }
 
 export function printRustElseBranch(block: RustBlock): string | undefined {
+  if (block.statements.length === 1 && (block.innerAttrs?.length ?? 0) === 0) {
+    const only = block.statements[0]!;
+    if (only.kind === "tail" && (only.attrs?.length ?? 0) === 0 &&
+      (only.expr.kind === "if-let" || only.expr.kind === "conditional")) {
+      return printRustExpr(only.expr);
+    }
+  }
   const nested = nestedMarkedElseIf(true, block);
   return nested === undefined ? undefined : printRustStmt(nested, 0);
 }

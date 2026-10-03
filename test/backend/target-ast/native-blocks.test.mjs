@@ -60,6 +60,34 @@ test("generic if-let else chains preserve native structure without lifting attri
     /else \{ #!\[scope_attribute\]/u);
 });
 
+test("generic valued if-let statements discard their result before implicit unit tails", () => {
+  const selected = { kind: "if-let", pattern, expression: path("source"), whenTrue: path("value"),
+    whenFalse: { kind: "int-literal", text: "0" } };
+  const printed = printRustExpr(block({ kind: "expr", expr: selected }, { kind: "tail", expr: unit }));
+  assert.equal(printed, "{ if let Some(value) = source { value } else { 0 }; }");
+  assert.equal(printRustExpr(block({ kind: "tail", expr: selected })),
+    "{ if let Some(value) = source { value } else { 0 } }");
+  const attributed = printRustExpr(block({ kind: "expr", attrs: [{ kind: "word", path: "discard_attribute" }], expr: selected },
+    { kind: "tail", attrs: [{ kind: "word", path: "unit_attribute" }], expr: unit }));
+  assert.match(attributed, /#\[discard_attribute\][\s\S]*else \{ 0 \};/u);
+  assert.match(attributed, /#\[unit_attribute\]\s+\(\) \}/u);
+});
+
+test("native else chaining never promotes a discarded if-let into a value alternative", () => {
+  const selected = { kind: "if-let", pattern, expression: path("source"), whenTrue: path("value"),
+    whenFalse: { kind: "int-literal", text: "0" } };
+  const conditional = { kind: "conditional", condition: path("ready"), whenTrue: unit,
+    whenFalse: block({ kind: "expr", expr: selected }, { kind: "tail", expr: unit }) };
+  assert.equal(printRustExpr(conditional),
+    "if ready {  } else { if let Some(value) = source { value } else { 0 }; }");
+  const chained = { ...conditional, whenTrue: { kind: "int-literal", text: "1" },
+    whenFalse: block({ kind: "tail", expr: selected }) };
+  assert.equal(printRustExpr(chained), "if ready { 1 } else if let Some(value) = source { value } else { 0 }");
+  const statement = printRustBlockStatements({ statements: [{ kind: "if", condition: path("ready"),
+    then: { statements: [] }, elseIf: true, else: { statements: [{ kind: "expr", expr: selected }] } }] }, 0);
+  assert.match(statement, /else \{\n\s+if let Some\(value\) = source \{ value \} else \{ 0 \};\n\}/u);
+});
+
 test("native fallible shaping follows expression operands but never deferred callable regions", () => {
   const early = block({ kind: "return", expr: path("answer") });
   const closure = { kind: "closure-block", params: [], move: false, async: false, body: early.body };
@@ -82,7 +110,7 @@ test("raw value-block tails and each explicit early return have distinct result 
     whenTrue: block({ kind: "return", expr: path("value") }) } }, { kind: "tail", expr: path("fallback") });
   const shaped = applyFallibleShape({ statements: [{ kind: "tail", expr: expression }] }, options);
   const printed = printRustBlockStatements(shaped, 0);
-  assert.match(printed, /^Ok\(\{ if let Some\(value\) = source \{ return Ok\(value\); \} fallback \}\)$/u);
+  assert.match(printed, /^Ok\(\{ if let Some\(value\) = source \{ return Ok\(value\); \}; fallback \}\)$/u);
   assert.doesNotMatch(printed, /Ok\(fallback\)|Ok\(Ok\(/u);
 });
 
