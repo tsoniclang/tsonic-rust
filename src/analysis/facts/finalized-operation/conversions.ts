@@ -2,6 +2,7 @@ import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../tar
 import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
+import { isFinalizedConversion } from "./conversion-shape.js";
 import type { RustArgumentMode, RustProviderOperationForm, RustValueConversion } from "../keys.js";
 import type { RustFinalizedArrayInput, RustFinalizedConstantInput, RustFinalizedSliceInput, RustFinalizedSourceInput, RustFinalizedTaggedArrayInput, RustFinalizedTargetInput, RustFinalizedValueConversion } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
@@ -94,6 +95,7 @@ export function finalizeValueConversion(
 }
 
 export function finalizedConversionIsValid(conversion: RustFinalizedValueConversion, definitions: RustTypeDefinitions = emptyRustTypeDefinitions): boolean {
+  if (!isFinalizedConversion(conversion)) return false;
   if (conversion.kind === "identity") {
     return conversion.fallible === false && rustTargetTypeRefEquals(conversion.sourceCarrier, conversion.targetCarrier);
   }

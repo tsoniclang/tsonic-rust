@@ -34,7 +34,6 @@ import {
 import { rustRuntimeUnionProjection } from "../../target-model/types/carriers/runtime-unions.js";
 import { getRustTypeofRuntimeKind } from "../../target-model/types/runtime-kind.js";
 import {
-  rustAwaitCarrier,
   getRustGeneratorProtocol,
   isRustBigIntCarrier,
   isRustBoolCarrier,
@@ -74,6 +73,8 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustTargetOperationFact } from "../facts/keys.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { rustAwaitSelection, rustAwaitSelectionResultCarrier } from "../../target-model/types/await.js";
+import { rustEffectiveValueCarrier } from "../facts/value-carrier-queries.js";
 
 export function resolveExpressionCarrierUncached(
   walk: RustFactWalk,
@@ -247,7 +248,10 @@ export function resolveExpressionCarrierUncached(
       const operandCarrier = operand === undefined
         ? undefined
         : resolveExpressionCarrier(walk, operand, sourceFile, undefined);
-      const output = rustAwaitCarrier(operandCarrier)?.resultCarrier;
+      const selection = rustAwaitSelection(rustEffectiveValueCarrier(walk.context.facts, operand) ?? operandCarrier,
+        walk.context.typeDefinitions);
+      const output = selection === undefined ? undefined : rustAwaitSelectionResultCarrier(selection) ??
+        resolveRustTargetTypeRef(expression, rustResolutionContext(walk, expression), walk.operationOptions);
       if (output === undefined) {
         return undefined;
       }

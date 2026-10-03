@@ -22,7 +22,7 @@ import type { RustObjectRepresentationPlan } from "../project-types/object-repre
 import { createRustProjectProjectionRequirementCollector } from "./project-projection-requirements.js";
 import type { RustValueLifetimePlan } from "../program/value-lifetimes.js";
 import { KindBinaryExpression, KindExpressionStatement, Node_Expression } from "@tsonic/target-api/source";
-import { rustEffectiveValueCarrier, rustValueCarrierBeforeOptionProjection } from "../facts/value-carrier-queries.js";
+import { rustValueCarrierBeforeOptionProjection } from "../facts/value-carrier-queries.js";
 import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
@@ -31,7 +31,6 @@ import { rustValueConversionContract } from "../../target-model/conversions/cont
 import { isRustFinalizedArrayInput, isRustFinalizedSliceInput } from "../facts/finalized-operation-abi.js";
 import {
   getRustGeneratorProtocol,
-  rustAwaitCarrier,
   isRustCopyCarrier,
   rustClosureProtocol,
   rustJsPromiseTargetId,
@@ -46,7 +45,6 @@ import {
   rustAsyncFunctionFactKey,
   rustClosureCaptureFactKey,
   rustGeneratorFactKey,
-  rustFutureValueFactKey,
   rustFlowReadProjectionFactKey,
   rustProjectDowncastFactKey,
   rustBindingStorageFactKey,
@@ -57,6 +55,8 @@ import {
   rustTypedLocationPlanKey,
   rustYieldFactKey,
 } from "../facts/keys.js";
+import { rustAwaitValueFactKey } from "../facts/await-values.js";
+import { rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 
 import type { RustGenericRequirement } from "./generic-requirements.js";
 import { normalizeRustGenericRequirements } from "./generic-requirement-contract.js";
@@ -518,16 +518,13 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       }
     }
     if (ast.kindName(node) === "KindAwaitExpression") {
-      const operand = Node_Expression(ast, node);
-      const operandCarrier = rustEffectiveValueCarrier(facts, operand);
-      const future = operand === undefined
-        ? undefined
-        : facts.getFact(operand, rustFutureValueFactKey);
-      const futureCarrier = rustAwaitCarrier(operandCarrier)?.futureCarrier;
-      if (futureCarrier?.kind === "target-named" &&
-        futureCarrier.id === rustJsPromiseTargetId && future !== undefined) {
-        const error = addUse(node, future.outputCarrier, ["clone"]);
-        if (error !== undefined) return error;
+      const awaiting = facts.getFact(node, rustAwaitValueFactKey);
+      if (awaiting !== undefined) {
+        for (const leaf of rustAwaitSelectionLeaves(awaiting.selection)) {
+          if (leaf.carrier.kind !== "target-named" || leaf.carrier.id !== rustJsPromiseTargetId || leaf.future === undefined) continue;
+          const error = addUse(node, leaf.future.outputCarrier, ["clone"]);
+          if (error !== undefined) return error;
+        }
       }
     }
     if (operation?.kind === "default-value") {

@@ -58,7 +58,7 @@ import type { RustFactWalk } from "../program/walk.js";
 import type { RustPreparedDeferredCheckedCall } from "../operations/provider/index.js";
 import type { RustTargetOperationFact } from "../facts/keys.js";
 import { rustProjectCallableAdaptersKey } from "../facts/project-callable-adapters.js";
-import { rustFutureValueForSourceStorage } from "../facts/future-values.js";
+import { rustFutureValuesForSourceStorage } from "../facts/future-values.js";
 
 interface RustFutureOperationOrigin {
   readonly expression: Node;
@@ -556,7 +556,8 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
         const selectedAsync = selectedDeclaration !== undefined &&
           walk.context.facts.get(selectedDeclaration, rustAsyncFunctionFactKey) !== undefined;
         if ((origin === undefined && operand !== undefined &&
-            rustFutureValueForSourceStorage(walk.context.facts.getRuntimeCarrierFact(operand)?.carrier) !== undefined) ||
+            rustFutureValuesForSourceStorage(walk.context.facts.getRuntimeCarrierFact(operand)?.carrier,
+              walk.context.typeDefinitions)?.some(future => future.awaiting === "fallible") === true) ||
           (operandFact?.kind === "provider-operation" && rustOperationAbiAwaitIsFallible(operandFact.abi)) ||
           (operandFact?.kind === "source-call" && operandFact.target.form === "union-method" &&
             rustAwaitCarrier(operandFact.resultCarrier) !== undefined &&

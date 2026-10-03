@@ -32,6 +32,7 @@ import type {
 } from "../../../../target-model/types/model.js";
 import type { RustRegExpReplacementCallbackContract } from "../regexp-replacement-callback.js";
 import { rustJsStringTargetType, rustStringTargetType, rustOptionElementCarrier } from "../../../../target-model/types/index.js";
+import { selectRustValueCarrierReconciliation } from "../../../../policy/types/value-carrier-reconciliation.js";
 
 export interface RustPreparedDeferredCheckedCall {
   readonly sourceName: string;
@@ -159,7 +160,8 @@ export function prepareRustDeferredCheckedCall(
     fact: deferred.template,
     parameterCarriers: deferred.parameterCarriers,
     callback: deferred.callback,
-  }, actual as TargetTypeRef[]);
+  }, actual as TargetTypeRef[], (source, target) =>
+    selectRustValueCarrierReconciliation(source, target, options.projectTypes, context.typeDefinitions).kind !== "incompatible");
   if (finalized?.fact.kind !== "provider-operation") {
     return rejectSelectedOperation(
       request.source.call,
