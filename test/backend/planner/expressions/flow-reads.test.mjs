@@ -6,6 +6,26 @@ import { emptyRustTypeDefinitions } from "../../../../dist/target-model/types/so
 import { selectRustSourceCallResult } from "../../../../dist/policy/types/resolution/call-results.js";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
+import { printRustExpr } from "../../../../dist/print/source/expressions/core.js";
+
+test("optional readonly native references preserve one exact borrow without redundant dereferencing or cloning", () => {
+  const selectedCarrier = { kind: "reference", mutable: false,
+    referent: { kind: "slice", element: rustStringTargetType() } };
+  const sourceCarrier = rustOptionTargetType(selectedCarrier);
+  const fact = { kind: "option-value", sourceCarrier, selectedCarrier };
+  const diagnostics = [];
+  const context = { input: { program: { typeDefinitions: emptyRustTypeDefinitions,
+    source: { ast: { getFileName: () => "", getSourceText: () => "", pos: () => -1, end: () => -1, kindName: () => "KindIdentifier" } },
+  } }, diagnostics, syntheticNames: { reserved: new Set(), nextSuffixByBase: new Map() } };
+  for (const ownership of ["move", "clone", "borrow"]) {
+    const result = planRustValueProjection({}, { kind: "path", path: "values" }, fact, context, ownership);
+    assert.deepEqual(diagnostics, []);
+    assert.equal(result.arms[0].expression.kind, "path");
+    if (ownership !== "move") assert.equal(result.expression.method, ownership === "clone" ? "as_deref" : "as_ref");
+    else assert.equal(result.expression.kind, "path");
+    assert.doesNotMatch(printRustExpr(result), /\*flow_value|clone\(|to_vec\(|collect\(/u);
+  }
+});
 
 test("optional native associated values move or borrow without inventing Clone, and reject an unproved owned copy", () => {
   const selectedCarrier = { kind: "associated-type", owner: { kind: "type-parameter", identity: "Owner", name: "Owner" },
