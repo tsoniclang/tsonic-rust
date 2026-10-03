@@ -749,7 +749,7 @@ export function rustValueConversionIdentity(value: RustValueConversion): string 
         : value.kind === "copy-from-reference"
           ? `copy-from-reference.${JSON.stringify(value.target)}`
         : value.kind === "source-union-variant"
-          ? `source-union-variant.${value.variantName}.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}`
+          ? `source-union-variant.${value.variantName}.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}.${JSON.stringify(value.payloadCarrier)}.${value.payloadConversion === null ? "identity" : rustValueConversionIdentity(value.payloadConversion)}`
           : value.kind === "bottom-coercion"
             ? `bottom-coercion.${JSON.stringify(value.target)}`
             : value.kind === "js-argument-vector-callback"

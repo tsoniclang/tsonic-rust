@@ -108,6 +108,9 @@ export function visitConversionContract(
       return;
     case "source-union-variant":
       for (const step of contract.path) markVariantConstructed(step.union, step.variant.name);
+      if (contract.payloadConversion !== null) {
+        visitConversionContract(contract.payloadConversion, markStructuralFieldRead, markVariantConstructed, markClosedObjectUsed);
+      }
       return;
     case "union-map":
       for (const arm of contract.arms) {

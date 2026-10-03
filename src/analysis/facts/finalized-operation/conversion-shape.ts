@@ -37,8 +37,10 @@ function isNonOptionValueConversion(value: unknown): boolean {
     (value.kind === "copy-from-reference" &&
       hasExactKeys(value, ["kind", "target"]) && isRustTargetTypeRef(value.target)) ||
     (value.kind === "source-union-variant" &&
-      hasExactKeys(value, ["kind", "source", "target", "variantName"]) &&
+      hasExactKeys(value, ["kind", "source", "target", "variantName", "payloadCarrier", "payloadConversion"]) &&
       isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) &&
+      isRustTargetTypeRef(value.payloadCarrier) &&
+      (value.payloadConversion === null || isNonOptionValueConversion(value.payloadConversion)) &&
       typeof value.variantName === "string" && value.variantName.length > 0) ||
     (value.kind === "bottom-coercion" &&
       hasExactKeys(value, ["kind", "source", "target"]) &&

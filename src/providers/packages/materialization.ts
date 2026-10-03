@@ -527,6 +527,13 @@ function materializeProviderValueConversion(
         pointee: materializeProviderCarrier(conversion.pointee, carrierPaths, carrierTraits),
       };
     case "source-union-variant":
+      return { ...conversion,
+        source: materializeProviderCarrier(conversion.source, carrierPaths, carrierTraits),
+        target: materializeProviderCarrier(conversion.target, carrierPaths, carrierTraits),
+        payloadCarrier: materializeProviderCarrier(conversion.payloadCarrier, carrierPaths, carrierTraits),
+        payloadConversion: conversion.payloadConversion === null ? null :
+          materializeProviderValueConversion(conversion.payloadConversion, carrierPaths, carrierTraits),
+      };
     case "union-project":
     case "exact-integer":
     case "native-representation":

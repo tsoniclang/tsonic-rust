@@ -32,7 +32,8 @@ test("native upcasts precede exact union injection in expression and callable co
   assert.equal(selected.kind, "conversion");
   assert.deepEqual(selected.upcast, { sourceCarrier: derived, targetCarrier: base });
   assert.deepEqual(selected.fact, { sourceCarrier: base, targetCarrier: union,
-    conversion: { kind: "source-union-variant", source: base, target: union, variantName: "Variant1" } });
+    conversion: { kind: "source-union-variant", source: base, target: union, variantName: "Variant1",
+      payloadCarrier: base, payloadConversion: null } });
   const written = new Map();
   const subject = {};
   const facts = { set: (_, key, value) => written.set(key, value), getFact: (_, key) => written.get(key),
@@ -55,7 +56,8 @@ test("native upcasts retain the complete nested union destination and reject amb
   assert.equal(selected.kind, "conversion");
   assert.deepEqual(selected.upcast, { sourceCarrier: derived, targetCarrier: base });
   assert.deepEqual(selected.fact, { sourceCarrier: base, targetCarrier: nested,
-    conversion: { kind: "source-union-variant", source: base, target: nested, variantName: "Values" } });
+    conversion: { kind: "source-union-variant", source: base, target: nested, variantName: "Values",
+      payloadCarrier: base, payloadConversion: null } });
   for (const changed of [
     { ...projectTypes, relationship: () => ({ kind: "unrelated" }) },
     { ...projectTypes, relationship: () => ({ kind: "ambiguous" }) },

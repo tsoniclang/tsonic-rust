@@ -387,7 +387,11 @@ function valueConversionCarriers(
   if (conversion.kind === "union-map") return [conversion.source, conversion.target,
     ...conversion.arms.flatMap(arm => [arm.carrier, ...arm.source.map(step => step.union), ...arm.target.map(step => step.union)])];
   if (conversion.kind === "copy-from-reference") return [conversion.target];
-  if (conversion.kind === "source-union-variant" || conversion.kind === "union-project" || conversion.kind === "native-representation" || conversion.kind === "bottom-coercion" ||
+  if (conversion.kind === "source-union-variant") {
+    return [conversion.source, conversion.target, conversion.payloadCarrier,
+      ...valueConversionCarriers(conversion.payloadConversion ?? undefined)];
+  }
+  if (conversion.kind === "union-project" || conversion.kind === "native-representation" || conversion.kind === "bottom-coercion" ||
     conversion.kind === "js-argument-vector-callback" || conversion.kind === "native-upcast" ||
     conversion.kind === "exact-integer") {
     return [conversion.source, conversion.target];

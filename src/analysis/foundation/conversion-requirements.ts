@@ -104,6 +104,11 @@ function rustFoundationForConversionContract(
     case "call":
       require(rustFoundationForPath(contract.path));
       break;
+    case "source-union-variant":
+      require(rustFoundationForCarrier(contract.payloadCarrier));
+      for (const step of contract.path) require(rustFoundationForCarrier(step.union));
+      if (contract.payloadConversion !== null) require(rustFoundationForConversionContract(contract.payloadConversion));
+      break;
     case "option-map":
       require(rustFoundationForConversionContract(contract.element));
       break;
@@ -134,7 +139,6 @@ function rustFoundationForConversionContract(
       break;
     case "numeric-cast":
     case "identity":
-    case "source-union-variant":
     case "option-some":
     case "js-argument-vector-callback":
     case "owned-string-from-borrowed-str":

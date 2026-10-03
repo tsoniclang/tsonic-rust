@@ -396,10 +396,17 @@ export function validateValueConversion(
     validateCarrier(conversion.source, definition, `${where}.source`, fail);
     validateCarrier(conversion.target, definition, `${where}.target`, fail);
   } else if (conversion.kind === "source-union-variant") {
-    requireExactKeys(asRecord(conversion), ["kind", "source", "target", "variantName"], where, fail);
+    requireExactKeys(asRecord(conversion), ["kind", "source", "target", "variantName", "payloadCarrier", "payloadConversion"], where, fail);
     if (!isRustTargetTypeRef(conversion.source) || !isRustTargetTypeRef(conversion.target) ||
       typeof conversion.variantName !== "string" || conversion.variantName.length === 0) {
       fail(`${where} is not an exact closed source-union variant conversion`);
+    }
+    validateCarrier(conversion.source, definition, `${where}.source`, fail);
+    validateCarrier(conversion.target, definition, `${where}.target`, fail);
+    validateCarrier(conversion.payloadCarrier, definition, `${where}.payloadCarrier`, fail);
+    if (conversion.payloadConversion !== null) {
+      validateValueConversion(conversion.payloadConversion, definition, `${where}.payloadConversion`,
+        conversion.source, conversion.payloadCarrier, fail);
     }
   } else if (conversion.kind === "bottom-coercion") {
     requireExactKeys(asRecord(conversion), ["kind", "source", "target"], where, fail);

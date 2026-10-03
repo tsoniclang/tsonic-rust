@@ -51,6 +51,13 @@ export function substituteRustValueConversion(
         }))),
       });
     case "source-union-variant":
+      return Object.freeze({ ...value,
+        source: substituteRustTargetGenerics(value.source, substitutions, lifetimeSubstitutions, constSubstitutions),
+        target: substituteRustTargetGenerics(value.target, substitutions, lifetimeSubstitutions, constSubstitutions),
+        payloadCarrier: substituteRustTargetGenerics(value.payloadCarrier, substitutions, lifetimeSubstitutions, constSubstitutions),
+        payloadConversion: value.payloadConversion === null ? null :
+          substituteRustValueConversion(value.payloadConversion, substitutions, lifetimeSubstitutions, constSubstitutions),
+      });
     case "union-project":
     case "exact-integer":
     case "native-representation":
