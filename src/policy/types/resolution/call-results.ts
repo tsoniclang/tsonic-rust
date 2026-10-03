@@ -4,7 +4,8 @@ import type { RustProjectTypePolicy } from "../project-types.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectRustProjectProjection } from "../project-projections.js";
 import { selectRustFlowReadProjection } from "../value-carrier-reconciliation.js";
-import { isRustJsValueCarrier } from "../../../target-model/types/index.js";
+import { isRustJsValueCarrier, rustOptionElementCarrier } from "../../../target-model/types/index.js";
+import { rustUnionAlternatives } from "../../../target-model/types/union-relations.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 
 export interface RustSourceCallResult {
@@ -20,7 +21,10 @@ export function selectRustSourceCallResult(
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): RustSourceCallResult | undefined {
   const direct = Object.freeze({ nativeType, selectedType: nativeType });
-  if (isRustJsValueCarrier(nativeType)) {
+  const optionalPayload = rustOptionElementCarrier(nativeType);
+  const nativePayload = optionalPayload ?? nativeType;
+  if (optionalPayload !== undefined || isRustJsValueCarrier(nativePayload) ||
+    rustUnionAlternatives(nativePayload, definitions) !== undefined) {
     const selectedType = selected();
     if (selectedType === undefined) return undefined;
     if (rustTargetTypeRefEquals(nativeType, selectedType)) return direct;

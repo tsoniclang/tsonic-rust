@@ -8,6 +8,7 @@ import type { RustObjectLiteralMethodAdapterFact, RustTargetOperationFact } from
 import type { RustCallableParameterAbi } from "../facts/callable-adapters.js";
 import { inferRustTargetTypeParameterBindings, rustTargetTypeContainsTypeParameter, substituteRustTargetTypeParameters } from "../../target-model/types/index.js";
 import type { RustProjectMethodDispatchPlan } from "../project-types/method-dispatch.js";
+import { instantiateRustProjectMethodDispatchArguments } from "../project-types/method-dispatch.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
@@ -109,9 +110,15 @@ function createObjectLiteralMethodAdapterFact(
         );
       }
       for (const variant of input.projectMethodDispatch.variantsForMember(contractMethod)) {
+        const targetTypeArguments = instantiateRustProjectMethodDispatchArguments(
+          contractMethod, variant.targetTypeArguments, operation.resultCarrier, input.projectTypes,
+        );
+        if (targetTypeArguments === undefined) return reject(
+          "The selected method specialization has no exact receiver-owned type arguments.", contractMethod,
+        );
         const contractSubstitutions = projectOwnerTypeSubstitutions(owner, relationship.targetType);
         variant.sourceTypeParameterIdentities.forEach((name, index) => {
-          const target = variant.targetTypeArguments[index];
+          const target = targetTypeArguments[index];
           if (target !== undefined) {
             contractSubstitutions.set(name, target);
           }
@@ -139,7 +146,7 @@ function createObjectLiteralMethodAdapterFact(
           contractParameters,
           contractReturnCarrier,
           variant.sourceTypeParameterIdentities,
-          variant.targetTypeArguments,
+          targetTypeArguments,
         );
         if (sourceSubstitutions === undefined) {
           return reject(

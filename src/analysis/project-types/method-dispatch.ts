@@ -28,6 +28,7 @@ export interface RustProjectMethodDispatchPlan {
   variantForMember(
     declaration: Node,
     targetTypeArguments: readonly TargetTypeRef[],
+    receiverCarrier?: TargetTypeRef,
   ): RustProjectMethodDispatchVariant | undefined;
 }
 
@@ -112,8 +113,8 @@ export function createRustProjectMethodDispatchPlanRegistry(): RustProjectMethod
     variantsForMember(declaration) {
       return requireCurrent().variantsForMember(declaration);
     },
-    variantForMember(declaration, targetTypeArguments) {
-      return requireCurrent().variantForMember(declaration, targetTypeArguments);
+    variantForMember(declaration, targetTypeArguments, receiverCarrier) {
+      return requireCurrent().variantForMember(declaration, targetTypeArguments, receiverCarrier);
     },
   };
   return Object.freeze(registry);
@@ -152,10 +153,14 @@ function createRustProjectMethodDispatchPlan(
         names.length !== variant.targetTypeArguments.length) {
         continue;
       }
+      const targetTypeArguments = instantiateRustProjectMethodDispatchArguments(
+        variant.declaration, variant.targetTypeArguments, input.projectTypes.openCarrier(concrete), input.projectTypes,
+      );
+      if (targetTypeArguments === undefined) continue;
       addPending(pending, {
         declaration: implementation,
         sourceTypeParameterIdentities: Object.freeze(names),
-        targetTypeArguments: variant.targetTypeArguments,
+        targetTypeArguments,
       });
     }
   }
@@ -172,6 +177,15 @@ function createRustProjectMethodDispatchPlan(
       if ((kind !== "KindMethodDeclaration" && kind !== "KindMethodSignature") ||
         input.ast.hasModifierKind(member, "static")) {
         continue;
+      }
+      if (kind === "KindMethodDeclaration" && input.ast.body(member) === undefined &&
+        !input.ast.hasModifierKind(member, "abstract")) {
+        const implementation = input.projectTypes.memberImplementation(definition, member);
+        if (implementation.kind === "resolved" && implementation.implementation.declaration !== member &&
+          input.ast.body(implementation.implementation.declaration) !== undefined &&
+          input.projectTypes.definitionContainingDeclaration(implementation.implementation.declaration) === definition) {
+          continue;
+        }
       }
       const sourceParameters = denseNodes(input.ast.typeParameters(member))?.filter((parameter) =>
         input.sourceLifetimes.parameterFor(parameter)?.kind !== "lifetime");
@@ -219,13 +233,35 @@ function createRustProjectMethodDispatchPlan(
     variantsForMember(declaration) {
       return byMember.get(declaration) ?? Object.freeze([]);
     },
-    variantForMember(declaration, targetTypeArguments) {
-      const matches = (byMember.get(declaration) ?? []).filter((variant) =>
-        targetTypeRefListsEqual(variant.targetTypeArguments, targetTypeArguments));
+    variantForMember(declaration, targetTypeArguments, receiverCarrier) {
+      const owner = input.projectTypes.definitionContainingDeclaration(declaration);
+      if (owner === undefined) return undefined;
+      const receiver = receiverCarrier ?? input.projectTypes.openCarrier(owner);
+      const matches = (byMember.get(declaration) ?? []).filter((variant) => {
+        const instantiated = instantiateRustProjectMethodDispatchArguments(
+          declaration, variant.targetTypeArguments, receiver, input.projectTypes,
+        );
+        return instantiated !== undefined && targetTypeRefListsEqual(instantiated, targetTypeArguments);
+      });
       return matches.length === 1 ? matches[0] : undefined;
     },
   };
   return Object.freeze(plan);
+}
+
+export function instantiateRustProjectMethodDispatchArguments(
+  declaration: Node,
+  targetTypeArguments: readonly TargetTypeRef[],
+  receiverCarrier: TargetTypeRef,
+  projectTypes: RustProjectTypePolicy,
+): readonly TargetTypeRef[] | undefined {
+  const owner = projectTypes.definitionContainingDeclaration(declaration);
+  if (owner === undefined || projectTypes.relationship(receiverCarrier, owner).kind !== "related" ||
+    !isDenseDataArray(targetTypeArguments)) return undefined;
+  const arguments_ = targetTypeArguments.map(argument =>
+    projectTypes.instantiateMemberCarrier(declaration, receiverCarrier, argument));
+  return arguments_.some(argument => argument === undefined)
+    ? undefined : Object.freeze(arguments_ as TargetTypeRef[]);
 }
 
 function projectDispatchUsedNames(
