@@ -29,13 +29,13 @@ export function selectRustBorrowedIterationBinding(
   const body = ForInOrOfStatement_Statement(ast, node);
   if (iteration?.kind !== "iteration" || iteration.iterationKind !== "for-of" ||
     iteration.lowering.kind !== "borrowed" || iteration.lowering.style !== "cloned" ||
-    iteration.lowering.input !== "reference" || !isRustStringCarrier(iteration.elementCarrier) ||
+    !isRustStringCarrier(iteration.elementCarrier) ||
     carrier?.kind !== "reference" || carrier.mutable || carrier.referent.kind !== "slice" ||
     !isRustStringCarrier(carrier.referent.element) || declaration === undefined || name === undefined ||
     !ast.is.IsIdentifier(name) || body === undefined ||
     ast.variableDeclarationKind(declaration) === "using" || ast.variableDeclarationKind(declaration) === "await using") return undefined;
   const summary = navigation.declarationUseSummary(declaration);
-  if (summary.captured || summary.exported || summary.bindingWritten || summary.memberWritten || summary.aliasedOrStored) return undefined;
+  if (summary.captured || summary.exported || summary.bindingWritten || summary.memberWritten) return undefined;
   const uses = summary.uses.filter(use => use.kind !== "source-linkage" && use.kind !== "type-only");
   if (uses.length === 0 || !uses.every(use => isWithin(use.reference, body, ast) && readonlyUse(use.reference)) ||
     !safeStatement(body)) return undefined;

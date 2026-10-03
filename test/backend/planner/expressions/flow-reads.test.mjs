@@ -21,9 +21,9 @@ test("optional readonly native references preserve one exact borrow without redu
     const result = planRustValueProjection({}, { kind: "path", path: "values" }, fact, context, ownership);
     assert.deepEqual(diagnostics, []);
     assert.equal(result.arms[0].expression.kind, "path");
-    if (ownership !== "move") assert.equal(result.expression.method, ownership === "clone" ? "as_deref" : "as_ref");
+    if (ownership === "borrow") assert.equal(result.expression.method, "as_ref");
     else assert.equal(result.expression.kind, "path");
-    assert.doesNotMatch(printRustExpr(result), /\*flow_value|clone\(|to_vec\(|collect\(/u);
+    assert.doesNotMatch(printRustExpr(result), /\*flow_value|as_deref\(|clone\(|to_vec\(|collect\(/u);
   }
 });
 

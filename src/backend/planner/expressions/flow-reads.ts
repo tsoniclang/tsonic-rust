@@ -164,10 +164,10 @@ export function planRustValueProjection(
       fact.selectedCarrier.kind === "reference" && !fact.selectedCarrier.mutable;
     return bindRustFlowMatchSubject({
       kind: "match",
-      expression: ownsValue ? expression : {
+      expression: ownsValue || readonlyReference ? expression : {
         kind: "method-call",
         receiver: expression,
-        method: reborrow ? "as_deref_mut" : readonlyReference ? "as_deref" : "as_ref",
+        method: reborrow ? "as_deref_mut" : "as_ref",
         receiverMode: reborrow ? "mut-ref" : "ref",
         args: [],
       },
