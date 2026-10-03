@@ -48,7 +48,7 @@ export function planRustBorrowedSequenceAppend(
       rustRestSequenceElements(selected.presentCarrier)?.elements.some(element => !rustCarrierHasCloneContract(element, context))) {
       return reject("Borrowed sequence selection lost its exact native presence, storage or element conversion.");
     }
-    const planned = planExpression(selected.expression, context);
+    const planned = planExpression(selected.expression, context, "value", "shared-place");
     if (planned === undefined || context.syntheticNames === undefined) return undefined;
     const value = planRustNonConsumingValue(selected.expression, planned, context);
     const consume = (source: RustExpr): RustExpr | undefined => planRustSequenceAppend(contract, source,

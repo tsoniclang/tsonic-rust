@@ -153,12 +153,14 @@ export function planRustValueProjection(
       context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []),
       "flow_value",
     );
+    const readonlyReference = !ownsValue && !reborrow && !borrowedResult &&
+      fact.selectedCarrier.kind === "reference" && !fact.selectedCarrier.mutable;
     return bindRustFlowMatchSubject({
       kind: "match",
       expression: ownsValue ? expression : {
         kind: "method-call",
         receiver: expression,
-        method: reborrow ? "as_deref_mut" : "as_ref",
+        method: reborrow ? "as_deref_mut" : readonlyReference ? "as_deref" : "as_ref",
         receiverMode: reborrow ? "mut-ref" : "ref",
         args: [],
       },
@@ -169,7 +171,8 @@ export function planRustValueProjection(
             path: "Some",
             elements: [{ kind: "binding", name: valueName }],
           },
-          expression: ownsValue || reborrow || borrowedResult ? { kind: "path", path: valueName } : isRustCopyCarrier(fact.selectedCarrier)
+          expression: ownsValue || reborrow || borrowedResult || readonlyReference
+            ? { kind: "path", path: valueName } : isRustCopyCarrier(fact.selectedCarrier)
             ? {
                 kind: "dereference",
                 pointer: { kind: "path", path: valueName },
