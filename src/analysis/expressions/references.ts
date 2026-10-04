@@ -58,6 +58,7 @@ import type { RustFactWalk } from "../program/walk.js";
 import type { RustSelectedTargetSignature, TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustSourceBindingFact, RustTargetOperationFact } from "../facts/keys.js";
 import { rustHigherRankedNativeFunctionCarrier } from "../callables/higher-ranked-function.js";
+import { recordCallableValueSignatureForDeclaration } from "../callables/signatures.js";
 import { readRustSourceRawAddress } from "../../policy/operations/pointers/raw-addresses.js";
 import { readRustRawLocation } from "../../policy/operations/pointers/native-memory.js";
 import { resolveRustRawLocationCarrier } from "../operations/native-memory.js";
@@ -101,6 +102,10 @@ export function resolveIdentifierCarrier(
           { message: "rust project-source parameter ABI use" },
         ]);
       }
+    }
+    if (declarationKind === KindVariableDeclaration &&
+      sourceBindingCapturedBeforeInitialization(declaration, ast, walk.context.source.navigation)) {
+      recordCallableValueSignatureForDeclaration(walk, declaration);
     }
     const declarationCarrier = walk.context.facts.get(declaration, rustRuntimeCarrierKey);
     if (declarationCarrier !== undefined) {

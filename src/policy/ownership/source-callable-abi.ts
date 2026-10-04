@@ -279,14 +279,14 @@ export function resolveRustContextualParameterAbi(
         form === "optional" ? rustSourceOptionalTargetType(authoredCarrier) : authoredCarrier,
         selectedValueCarrier,
       ))) {
-    if (form === "required" && authoredCarrier?.kind === "source-primitive" &&
-      selectedParameterCarrier.kind === "source-primitive") {
+    if (form === "required" && authoredCarrier !== undefined) {
       const conversion = selectRustSourceValueConversion(selectedParameterCarrier, authoredCarrier, context.typeDefinitions);
       const contract = conversion === undefined ? undefined : rustValueConversionContract(conversion, context.typeDefinitions);
-      const exactFloat = authoredCarrier.name === "float64" &&
+      const exactFloat = authoredCarrier.kind === "source-primitive" && selectedParameterCarrier.kind === "source-primitive" &&
+        authoredCarrier.name === "float64" &&
         (selectedParameterCarrier.name === "float32" ||
           rustIntegerKindIsExactlyRepresentableAsFloat64(selectedParameterCarrier.name));
-      if (conversion !== undefined && contract !== undefined && !contract.fallible &&
+      if (conversion !== undefined && contract !== undefined && contract.sourceMode === "value" && !contract.fallible &&
         (contract.category === "exact" || exactFloat)) {
         return { form, valueCarrier: authoredCarrier, parameterCarrier: selectedParameterCarrier,
           mode: "value", entryConversion: conversion };

@@ -8,6 +8,8 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { selectedRustCheckedCallInputCarrier } from "../operations/provider/calls/input-contract.js";
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
+import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
+import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
 
 export function selectRustClosedCallableInputs(
   walk: RustFactWalk,
@@ -25,7 +27,6 @@ export function selectRustClosedCallableInputs(
     const type = syntax === undefined ? types.expressionType(parameter) : types.authoredType(syntax);
     return type !== undefined && (types.isUnknown(type) || types.isAny(type));
   });
-  if (!broad.some(Boolean)) return carrier;
   const arguments_ = sourceClosedCallableArguments(expression, walk.context.source);
   if (arguments_ === undefined) return carrier;
   let inputs: readonly TargetTypeRef[] | undefined;
@@ -46,9 +47,18 @@ export function selectRustClosedCallableInputs(
       inputs !== undefined && !current.every((type, index) => rustTargetTypeRefEquals(type, inputs![index]))) return carrier;
     inputs = current;
   }
-  return inputs === undefined ? carrier : rustCallableTargetType(
-    protocol.parameters.map((type, index) => broad[index] ? inputs![index]! : type), protocol.result,
-  );
+  if (inputs === undefined) return carrier;
+  const selected = protocol.parameters.map((type, index) => {
+    const input = inputs[index];
+    if (input === undefined || rustTargetTypeRefEquals(input, type)) return type;
+    if (broad[index]) return input;
+    const conversion = selectRustSourceValueConversion(input, type, walk.context.typeDefinitions);
+    const contract = conversion === undefined ? undefined
+      : rustValueConversionContract(conversion, walk.context.typeDefinitions);
+    return contract?.category === "exact" && contract.sourceMode === "value" && !contract.fallible ? input : undefined;
+  });
+  return selected.some(type => type === undefined) ? carrier
+    : rustCallableTargetType(selected as readonly TargetTypeRef[], protocol.result);
 }
 
 function concrete(type: TargetTypeRef): boolean {
