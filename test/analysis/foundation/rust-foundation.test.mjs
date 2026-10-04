@@ -6,7 +6,7 @@ import {
   compileRust,
 } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
-import { rustFoundationForSelectedCall } from "../../../dist/analysis/foundation/requirements.js";
+import { rustFoundationForPath, rustFoundationForSelectedCall } from "../../../dist/analysis/foundation/requirements.js";
 import { rustStringTargetType } from "../../../dist/target-model/types/index.js";
 
 test("selected static calls retain their owning carrier's native foundation", () => {
@@ -14,6 +14,25 @@ test("selected static calls retain their owning carrier's native foundation", ()
     returnType: { kind: "source-primitive", name: "int32" } };
   assert.equal(rustFoundationForSelectedCall({ member }), "core");
   assert.equal(rustFoundationForSelectedCall({ member, sourceSelectedOwnerCarrier: rustStringTargetType() }), "alloc");
+});
+
+test("nonfallible completion is core while error and suppression helpers require alloc", () => {
+  for (const root of ["rt", "tsonic_rust_runtime"]) {
+    for (const member of ["Completion", "Completion::Normal", "Completion::Return", "Completion::Break", "Completion::Continue"])
+      assert.equal(rustFoundationForPath(`${root}::${member}`), "core", member);
+    for (const member of ["finish_finally", "finish_resource", "TsonicResult", "TsonicError"])
+      assert.equal(rustFoundationForPath(`${root}::${member}`), "alloc", member);
+  }
+});
+
+test("core cleanup retains initialized native locals without an allocation dependency", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ target: { id: "rust", options: { foundation: "core" } }, files: {
+    "index.ts": `export function choose(): number { let value: number; try {} finally { value = 7; } return value; }`,
+  } });
+  assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 3).map(row => row.message.slice(0, 256)).join("\n"));
+  assert.match(artifactText(result, "src/lib.rs"), /#!\[no_std\]/u);
+  assert.doesNotMatch(artifactText(result, "src/index.rs"), /\b(?:alloc|std)::|completion_region/u);
+  validateGeneratedProject("foundation-core-cleanup", result.artifacts);
 });
 
 test("core foundation emits and builds a no-std primitive library", { timeout: 300_000 }, () => {

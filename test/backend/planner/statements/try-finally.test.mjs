@@ -98,7 +98,7 @@ export async function main(): Promise<void> {
   assert.match(source, /rt::Completion</u);
   assert.match(source, /rt::Completion::Continue/u);
   assert.match(source, /rt::Completion::Break/u);
-  assert.match(source, /\(async \{/u);
+  assert.equal(/async \{/u.test(source), true, "awaited cleanup must retain native async blocks");
   const run = validateGeneratedProject("try-finally-proof", result.artifacts, { run: true });
   assert.equal(run.status, 0);
 });

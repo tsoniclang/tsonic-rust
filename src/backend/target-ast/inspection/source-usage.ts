@@ -81,6 +81,16 @@ export function rustStatementReferencesPath(statement: RustStmt, path: string): 
   }
 }
 
+export function rustBlockBreaksToLabel(block: RustBlock, label: string): boolean {
+  const expression = (value: RustExpr): boolean => {
+    if (value.kind === "closure" || value.kind === "closure-block" || value.kind === "async-block") return false;
+    return value.kind === "break-expression" && value.label === label ||
+      rustExpressionChildren(value).some(expression);
+  };
+  return block.statements.some(statement => statement.kind === "break" && statement.label === label ||
+    rustStatementExpressions(statement).some(expression));
+}
+
 export function rustExpressionReferencesPath(expression: RustExpr, path: string): boolean {
   if (expression.kind === "path") {
     return expression.path === path;
@@ -178,6 +188,7 @@ export function rustExpressionChildren(expression: RustExpr): readonly RustExpr[
     case "option-try":
     case "try":
       return [expression.expr];
+    case "break-expression":
     case "return-expression":
       return expression.expr === undefined ? [] : [expression.expr];
     case "struct-literal":

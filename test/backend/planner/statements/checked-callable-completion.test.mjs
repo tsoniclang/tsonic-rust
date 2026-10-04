@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { applyRustTailShape, retainRustCheckedCompletion, rustBlockDefinitelyExits, rustBlockTerminates } from "../../../../dist/backend/planner/statements/block-flow.js";
+import { applyRustTailShape, retainRustCheckedCompletion, rustBlockDefinitelyExits, rustBlockTerminates } from "../../../../dist/backend/target-ast/normalization/block-flow.js";
 import { acmeTestingPackage, artifactText, compileRust } from "../../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
 

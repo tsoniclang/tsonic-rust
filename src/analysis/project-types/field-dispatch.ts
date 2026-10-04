@@ -11,6 +11,7 @@ import type {
 import { rustProjectObjectLayout } from "./object-layout.js";
 import { rustProjectMemberIsPrivate } from "./member-privacy.js";
 import type { RustFrozenDataWritePlan } from "../objects/frozen-data-writes.js";
+import type { RustReceiverFieldAliasQueries } from "./receiver-field-aliases.js";
 
 export interface RustProjectFieldDispatchRole {
   readonly selfMode: "ref" | "rc";
@@ -27,6 +28,10 @@ export interface RustProjectFieldDispatchPlan {
 }
 
 export type RustProjectFieldImplementation =
+  | {
+      readonly kind: "receiver-alias";
+      readonly declaration: Node;
+    }
   | {
       readonly kind: "stored";
       readonly declaration: Node;
@@ -56,6 +61,7 @@ export interface RustProjectFieldDispatchPlanRegistry
     readonly projectTypes: RustProjectTypePolicy;
     readonly frozenDataWrites: RustFrozenDataWritePlan;
     readonly mutableContentFields: ReadonlySet<Node>;
+    readonly receiverFieldAliases: RustReceiverFieldAliasQueries;
     semanticsFor(node: Node): SourceFileSemantics;
   }): void;
   seal(): RustProjectFieldDispatchQueries;
@@ -129,6 +135,7 @@ export function createRustProjectFieldDispatchPlanRegistry(): RustProjectFieldDi
           const objectLiteralRoles = pending.get(field.declaration);
           let accessorRead = objectLiteralRoles?.read === true;
           let accessorWrite = objectLiteralRoles?.write === true;
+          let receiverAliasRead = false;
           for (const concrete of input.projectTypes.concreteClassesFor(definition)) {
             const implementation = resolveFieldImplementation(
               concrete,
@@ -148,15 +155,17 @@ export function createRustProjectFieldDispatchPlanRegistry(): RustProjectFieldDi
               accessorRead = true;
               accessorWrite ||= implementation.setter !== undefined;
             }
+            receiverAliasRead ||= implementation.kind === "receiver-alias";
           }
           const readonly = input.ast.hasModifierKind(field.declaration, "readonly");
+          const receiverAlias = input.receiverFieldAliases.aliasFor(field.declaration) !== undefined;
           nextPlans.set(field.declaration, Object.freeze({
             declaration: field.declaration,
             readonly,
-            stored: !accessorRead && !accessorWrite,
+            stored: !receiverAlias && !accessorRead && !accessorWrite,
             mutableContent: input.mutableContentFields.has(field.declaration),
             read: Object.freeze({
-              selfMode: accessorRead ? "rc" : "ref",
+              selfMode: accessorRead || receiverAlias || receiverAliasRead ? "rc" : "ref",
               fallible: accessorRead,
             }),
             ...(readonly
@@ -197,6 +206,7 @@ function resolveFieldImplementation(
   input: {
     readonly ast: AstReader;
     readonly projectTypes: RustProjectTypePolicy;
+    readonly receiverFieldAliases: RustReceiverFieldAliasQueries;
     semanticsFor(node: Node): SourceFileSemantics;
   },
 ): RustProjectFieldImplementation | undefined {
@@ -207,7 +217,8 @@ function resolveFieldImplementation(
     }
     const lineage = input.projectTypes.classLineage(concrete);
     return lineage?.includes(owner) === true
-      ? Object.freeze({ kind: "stored", declaration: contractDeclaration })
+      ? Object.freeze({ kind: input.receiverFieldAliases.aliasFor(contractDeclaration) === undefined
+          ? "stored" : "receiver-alias", declaration: contractDeclaration })
       : undefined;
   }
   const selected = input.projectTypes.memberImplementation(concrete, contractDeclaration);
@@ -218,7 +229,8 @@ function resolveFieldImplementation(
   const kind = input.ast.kindName(declaration);
   if (kind === "KindPropertyDeclaration" || kind === "KindPropertySignature" ||
     sourceParameterIsProperty(input.ast, declaration)) {
-    return Object.freeze({ kind: "stored", declaration });
+    return Object.freeze({ kind: input.receiverFieldAliases.aliasFor(declaration) === undefined
+      ? "stored" : "receiver-alias", declaration });
   }
   if (kind !== "KindGetAccessor" && kind !== "KindSetAccessor") {
     return undefined;

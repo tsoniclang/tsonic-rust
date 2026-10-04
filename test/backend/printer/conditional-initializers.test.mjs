@@ -77,3 +77,28 @@ test("conditional printing preserves scoped attributes and discarded-value effec
   });
   assert.equal(source, "if flag { let _ = step(); { #![allow(unused_variables)] let local = 2; 3 } } else { 0 }");
 });
+
+test("native completion blocks preserve exact dead-write expectations without changing effects", () => {
+  const dead = assign("marker", { kind: "call", path: "record", args: [] });
+  const inside = { kind: "block", body: block(dead, { kind: "tail", expr: literal(0) }) };
+  const normalizeBlock = (value, following = []) => finalizeRustBlockLiveness(block(
+    { kind: "let", name: "marker", mutable: true, init: literal(1) },
+    { kind: "let", name: "flow", mutable: false, init: value }, ...following,
+  ));
+  const result = normalizeBlock(inside);
+  const protectedWrite = result.statements[1].init.body.statements[0];
+  assert.equal(protectedWrite.kind, "scope");
+  assert.deepEqual(protectedWrite.body.statements[0], dead);
+  assert.equal(protectedWrite.body.innerAttrs[0].path, "expect");
+  assert.deepEqual(finalizeRustBlockLiveness(result), result);
+  const observed = normalizeBlock(inside, [{ kind: "expr", expr: path("marker") }]);
+  assert.equal(observed.statements[1].init.body.statements[0].kind, "assign");
+  const sibling = normalizeBlock({ kind: "tuple-literal", elements: [inside, path("marker")] });
+  assert.equal(sibling.statements[1].init.elements[0].body.statements[0].kind, "assign");
+  const callback = normalizeBlock({ kind: "closure-block", move: false, async: false, params: [], body: inside.body });
+  assert.equal(callback.statements[1].init.body.statements[0].kind, "assign");
+  const global = finalizeRustBlockLiveness(block({ kind: "expr", expr: inside }));
+  assert.equal(global.statements[0].expr.body.statements[0].kind, "assign");
+  const awaited = normalizeBlock({ kind: "await", expr: { kind: "async-block", move: false, body: inside.body } });
+  assert.equal(awaited.statements[1].init.expr.body.statements[0].kind, "assign");
+});

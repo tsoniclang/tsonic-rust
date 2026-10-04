@@ -1,7 +1,7 @@
 import type { RustGeneratorFact } from "../../../../analysis/facts/keys.js";
 import { isRustUnitCarrier } from "../../../../target-model/types/index.js";
 import type { RustBlock, RustExpr, RustType } from "../../../target-ast/nodes.js";
-import { applyRustTailShape } from "../../statements/block-flow.js";
+import { applyRustTailShape } from "../../../target-ast/normalization/block-flow.js";
 import { applyFallibleShape } from "../../types/fallible-shape.js";
 
 export function planRustGeneratorBody(

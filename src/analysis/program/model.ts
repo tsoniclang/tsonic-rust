@@ -45,6 +45,7 @@ import type { RustProjectFlowReadSelectionIndex } from "../control-flow/project-
 import type { RustGeneratedDeclarationUse } from "./generated-declaration-uses.js";
 import type { RustSourceTypeFamilyPlan } from "../../target-model/types/type-families.js";
 import type { RustLocalStorageAliasPlan } from "../storage/local-aliases.js";
+import type { RustProjectConstructionQueries } from "../project-types/construction-plan.js";
 
 export interface RustTargetAnalysisRequest {
   readonly input: TargetCompileInput;
@@ -76,6 +77,7 @@ export interface RustTargetProgram {
   readonly facts: RustPlanQueries;
   readonly projectTypes: RustProjectTypePolicy;
   readonly objectRepresentations: RustObjectRepresentationPlan;
+  readonly projectConstructions: RustProjectConstructionQueries;
   readonly projectMethodDispatch: RustProjectMethodDispatchPlan;
   readonly projectMethodProperties: RustProjectMethodPropertyPlan;
   readonly projectFieldDispatch: RustProjectFieldDispatchQueries;

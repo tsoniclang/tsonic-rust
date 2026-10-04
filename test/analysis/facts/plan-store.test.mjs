@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createRustPlanBuilder } from "../../../dist/analysis/facts/plan-store.js";
 import { recordRustValueCarrierReconciliation, rustEffectiveValueCarrier } from "../../../dist/analysis/facts/value-carrier-queries.js";
 import { rustContextualValueConversionFactKey, rustOptionProjectionFactKey } from "../../../dist/analysis/facts/keys.js";
+import { rustSourceParameterAbiFactKey, rustFutureValueFactKey, rustAwaitValueFactKey } from "../../../dist/analysis/facts/keys.js";
 import { rustOptionTargetType } from "../../../dist/target-model/types/carriers/optional.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { rustTargetOperationFactKey } from "../../../dist/analysis/facts/operations/keys.js";
@@ -22,6 +23,28 @@ import {
 function createModel() {
   return createRustPlanBuilder({ getFact: () => undefined });
 }
+
+test("every finalized contextual conversion family contributes its actual native foundation", () => {
+  const source = { kind: "source-primitive", name: "float64" };
+  const target = { kind: "source-primitive", name: "int32" };
+  const conversion = { kind: "semantic-conversion", id: "checked-f64-to-i32-trunc" };
+  const finalized = { kind: "semantic", sourceCarrier: source, targetCarrier: target, conversion, fallible: true };
+  const cases = [
+    [rustContextualValueConversionFactKey, { sourceCarrier: source, targetCarrier: target, conversion }],
+    [rustSourceParameterAbiFactKey, { form: "required", valueCarrier: target, parameterCarrier: source,
+      mode: "value", entryConversion: conversion }],
+    [rustFutureValueFactKey, { outputCarrier: target, awaitedConversion: finalized,
+      awaiting: "fallible", errorBoundary: "target-runtime" }],
+    [rustAwaitValueFactKey, { operandCarrier: source, resultCarrier: target,
+      selection: { kind: "leaf", value: { carrier: source, completion: { kind: "value", conversion: finalized } } } }],
+  ];
+  for (const [key, fact] of cases) {
+    const model = createModel();
+    assert.equal(model.minimumFoundation(), "core");
+    model.set({}, key, fact);
+    assert.equal(model.minimumFoundation(), "alloc", key.id);
+  }
+});
 
 test("present contextual conversions retain one scalar conversion followed by presence", () => {
   const model = createModel();

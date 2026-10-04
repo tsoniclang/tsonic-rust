@@ -1,4 +1,5 @@
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
+import { rustContextualRuntimeConversionContract, type RustContextualValueConversion } from "../../target-model/conversions/contextual.js";
 import type {
   RustFinalizedOperationAbi,
   RustFinalizedTargetInput,
@@ -38,6 +39,24 @@ export function rustFoundationForValueConversion(
     throw new Error("A finalized Rust value conversion has no valid lowering contract.");
   }
   return rustFoundationForConversionContract(contract);
+}
+
+export function rustFoundationForContextualConversion(
+  conversion: RustContextualValueConversion,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
+): RustFoundation {
+  const contract = rustContextualRuntimeConversionContract(conversion, definitions);
+  if (contract !== undefined) return rustFoundationForConversionContract(contract);
+  if (conversion.kind === "provider-record-copy") return conversion.fields
+    .map(field => field.conversion === undefined ? "core" as const : rustFoundationForValueConversion(field.conversion, definitions))
+    .reduce(maximumRustFoundation, "core");
+  if (conversion.kind === "callable-adapter") return [...conversion.parameters, conversion.result]
+    .map(value => value.kind === "value" ? rustFoundationForValueConversion(value.conversion, definitions) : "core" as const)
+    .reduce(maximumRustFoundation, "core");
+  if (conversion.kind === "project-union-map" || conversion.kind === "native-trait-object-upcast" ||
+    conversion.kind === "reference-reborrow" || conversion.kind === "empty-record" ||
+    conversion.kind === "generic-callable-flow" || conversion.kind === "integer-truncation") return "core";
+  throw new Error("A finalized Rust contextual conversion has no valid foundation contract.");
 }
 
 export function rustFoundationForFinalizedOperationAbi(
@@ -152,7 +171,7 @@ function rustFoundationForConversionContract(
   return foundation;
 }
 
-function rustFoundationForFinalizedConversion(
+export function rustFoundationForFinalizedConversion(
   conversion: RustFinalizedValueConversion,
   definitions: RustTypeDefinitions,
 ): RustFoundation {

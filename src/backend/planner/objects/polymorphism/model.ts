@@ -42,6 +42,7 @@ import { rustCallableInvocationResult } from "../../../../analysis/facts/callabl
 import { rustProjectStateType as rustProjectNamedStateType } from "./names.js";
 
 export interface ProjectFieldPlan {
+  readonly storage: "stored" | "receiver-alias";
   readonly declaration: Node;
   readonly sourceName: string;
   readonly targetName: string;
@@ -107,7 +108,8 @@ export function projectClassStateLayers(
     layers.push({
       definition: owner,
       carrier: relation.targetType,
-      fields: fields.filter((field) => !context.input.program.source.ast.hasModifierKind(field.declaration, "abstract")),
+      fields: fields.filter((field) => field.storage === "stored" &&
+        !context.input.program.source.ast.hasModifierKind(field.declaration, "abstract")),
       methodProperties,
     });
   }
@@ -132,6 +134,7 @@ export function projectOwnFields(
       return undefined;
     }
     fields.push({
+      storage: "stored",
       declaration: field.declaration,
       sourceName: field.sourceName,
       targetName,
@@ -171,6 +174,8 @@ export function projectOwnFields(
       ? context.input.program.source.ast.name(layoutField.declaration)
       : Node_Initializer(context.input.program.source.ast, layoutField.declaration);
     fields.push({
+      storage: context.input.program.objectRepresentations.aliasFor(layoutField.declaration) === undefined
+        ? "stored" : "receiver-alias",
       declaration: layoutField.declaration,
       sourceName: layoutField.sourceName,
       targetName,

@@ -12,7 +12,7 @@ import type {
 import { finalizeRustBlockLiveness } from "../inspection/source-liveness.js";
 import { firstAccessesInStatements, hasUnobservedFinalPathWrite, maxWritesInStatements } from "../inspection/source-dataflow.js";
 import { rustLintAttributes } from "./lint-policy.js";
-import { rustBlockReferencesPath, rustExpressionReferencesPath, rustExpressionChildren, rustStatementExpressions } from "../inspection/source-usage.js";
+import { rustBlockReferencesPath, rustBlockBreaksToLabel, rustExpressionReferencesPath, rustExpressionChildren, rustStatementExpressions } from "../inspection/source-usage.js";
 import { collapseRustForwardingClosure } from "./forwarding-closures.js";
 import { nameRustSignatureTypes } from "./signature-aliases.js";
 import type { RustNamedSignatureScope } from "./signature-aliases.js";
@@ -22,6 +22,7 @@ import { rustTypeEquals } from "../inspection/type-equality.js";
 import { mergeRustAdjacentConditionalBranches, simplifyRustBooleanConditional } from "./conditional-branches.js";
 import { normalizeRustOptionalUnitMatch } from "./option-conditionals.js";
 import { mapRustExpressionChildren } from "../expression-children.js";
+import { lowerRustCompletionScope } from "./completion-regions.js";
 import { appendRustNamingAllowance, finalizeRustFunctionNames, finalizeRustItemNames,
   rustExpressionDeclaresNonSnakeName, rustStatementDeclaresNonSnakeName } from "./authored-names.js";
 
@@ -300,17 +301,7 @@ function finalizeRustStatementStyle(statement: RustStmt): RustStmt {
         ? statement
         : { ...statement, expr: finalizeRustExpressionStyle(statement.expr) };
     case "resource-scope":
-      return {
-        ...statement,
-        body: finalizeRustBlockStyle(statement.body),
-        cleanup: finalizeRustBlockStyle(statement.cleanup),
-        dispatchTargets: statement.dispatchTargets.map((target) => ({
-          ...target,
-          ...(target.continuePrelude === undefined
-            ? {}
-            : { continuePrelude: target.continuePrelude.map(finalizeRustStatementStyle) }),
-        })),
-      };
+      return finalizeRustStatementStyle(lowerRustCompletionScope(statement));
     case "index-assign":
       return {
         ...statement,
@@ -324,32 +315,7 @@ function finalizeRustStatementStyle(statement: RustStmt): RustStmt {
     case "throw":
       return { ...statement, error: finalizeRustExpressionStyle(statement.error) };
     case "try-scope":
-      return {
-        ...statement,
-        body: finalizeRustBlockStyle(statement.body),
-        ...(statement.catchClause === undefined
-          ? {}
-          : {
-              catchClause: {
-                ...statement.catchClause,
-                body: finalizeRustBlockStyle(statement.catchClause.body),
-              },
-            }),
-        ...(statement.finallyClause === undefined
-          ? {}
-          : {
-              finallyClause: {
-                ...statement.finallyClause,
-                body: finalizeRustBlockStyle(statement.finallyClause.body),
-              },
-            }),
-        dispatchTargets: statement.dispatchTargets.map((target) => ({
-          ...target,
-          ...(target.continuePrelude === undefined
-            ? {}
-            : { continuePrelude: target.continuePrelude.map(finalizeRustStatementStyle) }),
-        })),
-      };
+      return finalizeRustStatementStyle(lowerRustCompletionScope(statement));
   }
 }
 
@@ -426,6 +392,21 @@ function finalizeRustExpressionStyle(expression: RustExpr): RustExpr {
   requiresNamingAllowance ||= rustExpressionDeclaresNonSnakeName(expression);
   const result = mapRustExpressionChildren(expression, finalizeRustExpressionStyle, finalizeRustFunctionBodyStyle);
   switch (result.kind) {
+    case "block":
+      if (result.label !== undefined) {
+        const statements = result.body.statements;
+        const last = statements[statements.length - 1];
+        if ((last?.kind === "tail" || last?.kind === "expr") && last.expr.kind === "break-expression" &&
+          last.expr.label === result.label &&
+          (last.expr.expr === undefined || !rustBlockBreaksToLabel({ statements: [{ kind: "expr", expr: last.expr.expr }] }, result.label)) &&
+          !rustBlockBreaksToLabel({ statements: statements.slice(0, -1) }, result.label)) {
+          const value = last.expr.expr ?? { kind: "tuple-literal" as const, elements: [] };
+          return statements.length === 1 && (result.body.innerAttrs?.length ?? 0) === 0 ? value
+            : { kind: "block", body: { ...result.body, statements: [...statements.slice(0, -1), { kind: "tail", expr: value }] } };
+        }
+      }
+      if (result.label === undefined || rustBlockBreaksToLabel(result.body, result.label)) return result;
+      return { kind: "block", body: result.body };
     case "binary":
       if (result.left.kind === "bool-literal" && (result.operator === "&&" || result.operator === "||")) {
         return (result.operator === "&&" ? result.left.value : !result.left.value) ? result.right : result.left;

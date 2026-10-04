@@ -35,7 +35,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 import { rustTypeAliasDeclarationFactKey } from "../../../analysis/facts/keys.js";
 import { planRustBorrowedElementLocal } from "../expressions/borrowed-element-reads.js";
-import { rustBlockTerminates } from "./block-flow.js";
+import { rustBlockTerminates } from "../../target-ast/normalization/block-flow.js";
 import { planRustClassEnvironmentValue } from "../objects/class-environments.js";
 import { planRustAbsentValue } from "../expressions/optional-storage.js";
 import { rustNativeGuardResultFactKey, rustNativeUnreachableFactKey } from "../../../analysis/facts/native-control-flow.js";
@@ -54,7 +54,12 @@ export type RustAssignmentOperationPlan =
 
 export function planStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const diagnosticCount = context.diagnostics.length;
-  const planned = planStatementInner(node, context);
+  const construction = context.input.program.source.ast.kindName(node) === KindBlock ? undefined
+    : context.construction?.prepare(node, context);
+  if (context.diagnostics.length !== diagnosticCount) return undefined;
+  const inner = planStatementInner(node, construction?.context ?? context);
+  const planned = inner === undefined ? undefined : construction === undefined ? inner
+    : [...construction.before, ...construction.finish(inner)];
   if (planned === undefined && context.diagnostics.length === diagnosticCount) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -91,6 +96,8 @@ function planStatementInner(node: Node, context: RustPlanContext): readonly Rust
       return planVariableStatement(node, context);
     }
     case KindReturnStatement: {
+      const constructionReturn = context.construction?.returnFor(node, context);
+      if (constructionReturn !== undefined) return constructionReturn;
       const expression = Node_Expression(context.input.program.source.ast, node);
       const planned = expression === undefined
         ? context.functionAbsenceReturnCarrier === undefined ? undefined
@@ -172,7 +179,12 @@ function planStatementInner(node: Node, context: RustPlanContext): readonly Rust
 export function planBlockLike(node: Node, context: RustPlanContext): RustBlock | undefined {
   const { ast } = context.input.program.source;
   const children = ast.kindName(node) === KindBlock ? ast.statements(node) : [node];
-  return planStatementSequence(children, node, context);
+  const diagnosticCount = context.diagnostics.length;
+  const construction = ast.kindName(node) === KindBlock ? context.construction?.prepare(node, context) : undefined;
+  if (context.diagnostics.length !== diagnosticCount) return undefined;
+  const planned = planStatementSequence(children, node, construction?.context ?? context);
+  return planned === undefined ? undefined : construction === undefined ? planned
+    : { ...planned, statements: [...construction.before, ...construction.finish(planned.statements)] };
 }
 
 export function planStatementSequence(

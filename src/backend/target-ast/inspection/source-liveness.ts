@@ -1,6 +1,7 @@
 import { rustValueBlock } from "../value-block.js";
 import { type RustAttribute } from "../attributes.js";
 import type { RustBlock, RustExpr, RustStmt } from "../nodes.js";
+import { mapRustExpressionChildren } from "../expression-children.js";
 import { rustLintAttributes } from "../normalization/lint-policy.js";
 import {
   firstAccessesInStatements,
@@ -10,6 +11,7 @@ import {
 } from "./source-dataflow.js";
 import {
   rustExpressionReferencesPath,
+  rustExpressionChildren,
   rustStatementReferencesPath,
   rustStatementsReferencePath,
 } from "./source-usage.js";
@@ -17,18 +19,23 @@ import {
 export function finalizeRustBlockLiveness(
   block: RustBlock,
   continuation: readonly RustStmt[] = [],
+  inheritedLocals: ReadonlySet<string> = new Set(),
 ): RustBlock {
   const statements = foldTrivialTerminalBinding(
     combineDirectLateInitializers(block.statements),
   );
+  const locals = new Set(inheritedLocals);
   return {
     ...block,
     statements: statements.map((statement, index) => {
       const following = [...statements.slice(index + 1), ...continuation];
-      return finalizeRustStatementLiveness(
-        finalizeRustNestedStatementLiveness(statement, following),
+      const result = finalizeRustStatementLiveness(
+        finalizeRustNestedStatementLiveness(statement, following, locals),
         following,
+        locals,
       );
+      if (statement.kind === "let") locals.add(statement.name);
+      return result;
     }),
   };
 }
@@ -57,25 +64,36 @@ function foldTrivialTerminalBinding(
 function finalizeRustNestedStatementLiveness(
   statement: RustStmt,
   following: readonly RustStmt[],
+  locals: ReadonlySet<string>,
 ): RustStmt {
+  const expression = (value: RustExpr, after: readonly RustStmt[] = following): RustExpr => {
+    if (value.kind === "closure" || value.kind === "closure-block" || value.kind === "async-block") return value;
+    if (value.kind === "block") return { ...value, body: finalizeRustBlockLiveness(value.body, after, locals) };
+    const children = rustExpressionChildren(value);
+    return mapRustExpressionChildren(value, child => expression(child, [
+      ...children.filter(sibling => sibling !== child).map((expr): RustStmt => ({ kind: "expr", expr })), ...after,
+    ]), body => finalizeRustBlockLiveness(body, after, locals));
+  };
   switch (statement.kind) {
     case "if":
       return {
         ...statement,
-        then: finalizeRustBlockLiveness(statement.then, following),
+        condition: expression(statement.condition),
+        then: finalizeRustBlockLiveness(statement.then, following, locals),
         ...(statement.else === undefined
           ? {}
-          : { else: finalizeRustBlockLiveness(statement.else, following) }),
+          : { else: finalizeRustBlockLiveness(statement.else, following, locals) }),
       };
 
     case "scope":
     case "unsafe-scope":
-      return { ...statement, body: finalizeRustBlockLiveness(statement.body, following) };
+      if (statement.body.innerAttrs?.includes(rustLintAttributes.unusedAssignmentsInner)) return statement;
+      return { ...statement, body: finalizeRustBlockLiveness(statement.body, following, locals) };
     case "loop":
     case "while":
     case "while-let-some":
     case "for":
-      return { ...statement, body: finalizeRustBlockLiveness(statement.body) };
+      return { ...statement, body: finalizeRustBlockLiveness(statement.body, [...statement.body.statements, ...following], locals) };
     case "resource-scope":
       return {
         ...statement,
@@ -103,11 +121,11 @@ function finalizeRustNestedStatementLiveness(
               },
             }),
       };
-    case "let":
+    case "let": return statement.init === undefined ? statement : { ...statement, init: expression(statement.init) };
     case "expr":
-    case "assign":
-    case "return":
-    case "tail":
+    case "tail": return { ...statement, expr: expression(statement.expr) };
+    case "assign": return { ...statement, target: expression(statement.target), value: expression(statement.value) };
+    case "return": return statement.expr === undefined ? statement : { ...statement, expr: expression(statement.expr) };
     case "break":
     case "continue":
     case "completion-exit":
@@ -121,6 +139,7 @@ function finalizeRustNestedStatementLiveness(
 function finalizeRustStatementLiveness(
   statement: RustStmt,
   following: readonly RustStmt[],
+  locals: ReadonlySet<string>,
 ): RustStmt {
   if (statement.kind === "let") {
     const writes = maxWritesInStatements(following, statement.name);
@@ -145,7 +164,8 @@ function finalizeRustStatementLiveness(
   }
   if (statement.kind === "assign" && statement.operator === "=" &&
     statement.target.kind === "path") {
-    if (firstDirectPathAccessInStatements(following, statement.target.path) !== "write") {
+    if (firstDirectPathAccessInStatements(following, statement.target.path) !== "write" &&
+      !(locals.has(statement.target.path) && !rustStatementsReferencePath(following, statement.target.path))) {
       return statement;
     }
     return {

@@ -6,7 +6,7 @@ import { emptyRustGenerics } from "../../../dist/backend/target-ast/nodes.js";
 import { printRustExpr } from "../../../dist/print/source/expressions/core.js";
 import { printRustBlockStatements } from "../../../dist/print/source/blocks.js";
 import { applyFallibleShape } from "../../../dist/backend/planner/types/fallible-shape.js";
-import { rustBlockTerminates } from "../../../dist/backend/planner/statements/block-flow.js";
+import { rustBlockTerminates } from "../../../dist/backend/target-ast/normalization/block-flow.js";
 import { finalizeRustSourceStyle } from "../../../dist/backend/target-ast/normalization/source-style.js";
 import { rustExpressionExitsCallable } from "../../../dist/backend/target-ast/inspection/callable-exits.js";
 import { rustExpressionAlwaysExits, firstAccessesInStatements } from "../../../dist/backend/target-ast/inspection/source-dataflow.js";

@@ -429,6 +429,7 @@ function rustExpressionReferencesModuleAlias(expression: RustExpr, alias: string
     case "option-try":
     case "try":
       return rustExpressionReferencesModuleAlias(expression.expr, alias);
+    case "break-expression":
     case "return-expression":
       return expression.expr !== undefined &&
         rustExpressionReferencesModuleAlias(expression.expr, alias);

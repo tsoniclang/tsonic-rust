@@ -5,7 +5,7 @@ import type {
   RustType,
 } from "../../target-ast/nodes.js";
 import { rustTypeEquals } from "../../target-ast/inspection/type-equality.js";
-import { rustBlockTerminates } from "../statements/block-flow.js";
+import { rustBlockTerminates } from "../../target-ast/normalization/block-flow.js";
 import { rustStatementExpressions } from "../../target-ast/inspection/source-usage.js";
 import { mapRustExpressionChildren } from "../../target-ast/expression-children.js";
 
@@ -100,6 +100,7 @@ export function rustExpressionUsesTryInCurrentRegion(expression: RustExpr): bool
       return rustExpressionUsesTryInCurrentRegion(expression.element);
     case "await":
       return rustExpressionUsesTryInCurrentRegion(expression.expr);
+    case "break-expression":
     case "return-expression":
       return expression.expr !== undefined && rustExpressionUsesTryInCurrentRegion(expression.expr);
     case "struct-literal":

@@ -95,7 +95,7 @@ export function printRustExpr(expression: RustExpr): string {
     case "index":
       return `${printDelimitedPostfixOperand(expression.receiver)}[${printRustExpr(expression.index)}]`;
     case "block":
-      return `{ ${printRustBlockExpressionContents(expression)} }`;
+      return `${expression.label === undefined ? "" : `'${expression.label}: `}{ ${printRustBlockExpressionContents(expression)} }`;
     case "unsafe":
       return `unsafe { ${printRustExpr(expression.expression)} }`;
     case "evaluate-then": {
@@ -139,6 +139,8 @@ export function printRustExpr(expression: RustExpr): string {
       return `${printOperand(expression.expr, RustPrecedence.Postfix, false)}?`;
     case "return-expression":
       return expression.expr === undefined ? "return" : `return ${printRustExpr(expression.expr)}`;
+    case "break-expression":
+      return `break '${expression.label}${expression.expr === undefined ? "" : ` ${printRustExpr(expression.expr)}`}`;
     case "unreachable":
       return `unreachable!("${escapeRustString(expression.message)}")`;
     case "tuple-literal": {

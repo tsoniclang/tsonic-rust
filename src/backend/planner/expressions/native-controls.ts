@@ -72,6 +72,6 @@ export function planRustNativeControl(
         { kind: "associated-call", owner: resultErrorType,
           trait: { kind: "named", path: "core::convert::From", genericArguments: [{ kind: "type", type: operandErrorType }] },
           method: "from", args: [{ kind: "path", path: failure }] },
-      ] }, context, sourceFallible) },
+      ] }, context) },
   ] };
 }

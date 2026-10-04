@@ -33,7 +33,7 @@ import {
   rustSourceParameterAbiFactKey,
 } from "../../../analysis/facts/keys.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { applyRustTailShape, rustBlockTerminates, retainRustCheckedCompletion } from "../statements/block-flow.js";
+import { applyRustTailShape, rustBlockTerminates, retainRustCheckedCompletion } from "../../target-ast/normalization/block-flow.js";
 import { planRustReturnExit } from "../statements/completion-exits.js";
 import {
   finishRuntimeCallableExpression,

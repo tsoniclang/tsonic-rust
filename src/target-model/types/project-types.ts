@@ -60,7 +60,6 @@ export interface RustProjectConstructorSignature {
   readonly parameters: readonly SourceClassConstructorParameter[];
   readonly implicit: boolean;
   readonly targetName: string;
-  readonly initializeName: string;
 }
 
 export interface RustProjectHeritageEdge {

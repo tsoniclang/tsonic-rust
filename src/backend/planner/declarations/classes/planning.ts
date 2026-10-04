@@ -8,7 +8,6 @@ import {
   isValidRustIdentifier,
   rustErrorBoundaryForDeclaration,
   rustErrorType,
-  rustLocalBindingName,
   rustProjectTypeHasPublicImplementationAbi,
 } from "../../program/plan-context.js";
 import {
@@ -29,8 +28,7 @@ import { planProjectMethod, planProjectMethodVariants } from "./methods.js";
 import { planRustCallableParameterPrelude, planRustCallableParameters } from "../callables/parameters.js";
 import type { RustCallableParameterPlan } from "../callables/parameters.js";
 import { planStatementSequence } from "../../statements/index.js";
-import { prepareRustPreconstructionNode } from "./preconstruction-fields.js";
-import type { RustPreconstructionFieldValue } from "./preconstruction-fields.js";
+import { planRustConstructionBody } from "./construction-body.js";
 import { projectOwnMethodProperties } from "../../objects/polymorphism/model.js";
 import type { ProjectMethodPropertyPlan } from "../../objects/polymorphism/model.js";
 import { rustDeclarationRequiresUnsafe, rustSafetyAttributesForDeclaration } from "../../safety/explicit-safety.js";
@@ -42,7 +40,6 @@ import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { structAttributes } from "../struct-attributes.js";
 import type {
   RustType,
-  RustExpr,
   RustImplFunction,
   RustItem,
   RustStmt,
@@ -185,6 +182,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
       if (ast.hasModifierKind(member, "static")) {
         continue;
       }
+      if (context.input.program.objectRepresentations.aliasFor(member) !== undefined) continue;
       const fieldNameNode = ast.name(member);
       const sourceFieldName = ast.text(fieldNameNode ?? member);
       const fieldName = context.input.program.projectTypes.fieldStorageName(definition, member) ?? "";
@@ -340,9 +338,6 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     implFunctions.push(planned);
   }
 
-  if (fields.length !== layout.fields.length) {
-    return undefined;
-  }
   if (representation.kind !== "value") {
     context.usedAliases?.add("rt");
   }
@@ -540,112 +535,52 @@ function planConstructor(
   if (parameterStatements === undefined) {
     return undefined;
   }
-  const values = new Map<Node, RustExpr>();
-  const fieldSlots: RustPreconstructionFieldValue[] = [];
-  const availableFields: RustPreconstructionFieldValue[] = [];
-  const statements: RustStmt[] = [...parameterStatements];
-  for (const field of fields) {
-    const valueName = allocateRustSyntheticName(
-      syntheticNames,
-      `field_${rustLocalBindingName(field.targetName)}`,
-    );
-    const expression: RustExpr = { kind: "path", path: valueName };
-    const slot = {
-      declaration: field.declaration,
-      storageIndex: field.storageIndex,
-      carrier: field.carrier,
-      expression,
-    };
-    statements.push({
-      kind: "let",
-      name: valueName,
-      mutable: true,
-      type: field.type,
-    });
-    values.set(field.declaration, expression);
-    fieldSlots.push(slot);
+  const definition = context.input.program.projectTypes.definitionForDeclaration(classDeclaration);
+  const constructionPlan = definition === undefined ? undefined
+    : context.input.program.projectConstructions.forDefinition(definition);
+  if (definition === undefined || constructionPlan === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, classDeclaration),
+      "rust.backend.constructor-plan", "Class has no sealed native constructor readiness plan."));
+    return undefined;
   }
-  const evaluateField = (field: PlannedProjectObjectField, expression: Node): boolean => {
-    const expressionContext = prepareRustPreconstructionNode(
-      expression,
-      availableFields,
-      constructorContext,
-    );
-    if (expressionContext === undefined) {
-      return false;
-    }
-    const value = planExpression(expression, expressionContext);
-    if (value === undefined) {
-      return false;
-    }
-    const slot = fieldSlots.find((candidate) => candidate.declaration === field.declaration);
-    if (slot === undefined) {
-      return false;
-    }
-    statements.push({ kind: "assign", target: slot.expression, operator: "=", value });
-    const existing = availableFields.findIndex((candidate) =>
-      candidate.declaration === field.declaration);
-    if (existing < 0) {
-      availableFields.push(slot);
-    } else {
-      availableFields[existing] = slot;
-    }
-    return true;
-  };
-  for (const field of fields) {
-    if (field.initializer !== undefined && !evaluateField(field, field.initializer)) {
-      return undefined;
-    }
-  }
-  const bodyStatements = body === undefined ? [] : ast.statements(body);
-  if (body !== undefined) {
-    const bodyContext = prepareRustPreconstructionNode(
-      body,
-      fieldSlots,
-      constructorContext,
-    );
-    if (bodyContext === undefined) {
-      return undefined;
-    }
-    const bodyPlan = planStatementSequence(bodyStatements, body, bodyContext);
-    if (bodyPlan === undefined) {
-      return undefined;
-    }
-    statements.push(...bodyPlan.statements);
-  }
-  const fieldValues: RustExpr[] = [];
-  for (const field of fields) {
-    const value = values.get(field.declaration);
-    if (value === undefined) {
-      return undefined;
-    }
-    fieldValues.push(value);
-  }
-  statements.push({
-    kind: "tail",
-    expr: createRustProjectObject(
-      className,
-      stateName,
-      fields.map((field, index) => ({
-        name: field.targetName,
-        value: fieldValues[index]!,
-      })).concat(
-        methodProperties.map((property) => ({
-          name: property.targetName,
-          value: { kind: "none" as const },
-        })),
-        stateMarker === undefined
-          ? []
-          : [{ name: stateMarker.name, value: stateMarker.value }],
+  const construction = planRustConstructionBody(constructionPlan, fields,
+    context.input.program.projectTypes.openCarrier(definition), classType,
+    values => createRustProjectObject(className, stateName,
+      fields.map(field => ({ name: field.targetName, value: values.get(field.declaration)! })).concat(
+        methodProperties.map(property => ({ name: property.targetName, value: { kind: "none" as const } })),
+        stateMarker === undefined ? [] : [{ name: stateMarker.name, value: stateMarker.value }],
         representation.kind !== "value" || !environment?.instancesUseEnvironment ? [] : [{
-          name: environment.instanceFieldName,
-          value: { kind: "path" as const, path: environment.parameterName },
-        }],
-      ),
-      representation,
-      !environment?.instancesUseEnvironment || representation.kind === "value" ? undefined : { kind: "path", path: environment.parameterName },
-    ),
-  });
+          name: environment.instanceFieldName, value: { kind: "path" as const, path: environment.parameterName },
+        }]),
+      representation, !environment?.instancesUseEnvironment || representation.kind === "value"
+        ? undefined : { kind: "path", path: environment.parameterName }),
+    constructorContext);
+  if (construction === undefined) return undefined;
+  const returnLabel = !constructionPlan.layerHasEarlyReturn(definition) ? undefined
+    : { id: constructorContext.controlFlow!.nextLoopId++,
+      label: allocateRustSyntheticName(syntheticNames, "constructor_layer") };
+  const layerContext = construction.contextForLayer(constructorContext, returnLabel);
+  const statements: RustStmt[] = [...parameterStatements, ...construction.declarations];
+  for (const field of constructionPlan.fields) {
+    const slot = construction.values.get(field.declaration);
+    if (slot === undefined) return undefined;
+    if (field.initializer !== undefined) {
+      const prepared = construction.prepare(field.initializer, layerContext);
+      if (prepared === undefined) return undefined;
+      const value = planExpression(field.initializer, prepared.context);
+      if (value === undefined) return undefined;
+      statements.push(...prepared.before, ...prepared.finish([{
+        kind: "assign", target: slot, operator: "=", value,
+      }]));
+    }
+  }
+  if (body !== undefined) {
+    const bodyPlan = planStatementSequence(ast.statements(body), body, layerContext);
+    if (bodyPlan === undefined) return undefined;
+    statements.push(...returnLabel === undefined ? bodyPlan.statements
+      : [{ kind: "scope" as const, label: returnLabel.label, body: { statements: bodyPlan.statements } }]);
+  }
+  statements.push(...construction.finish());
   const constructorDeadCode = rustProjectConstructorDeadCodeDisposition(
     context,
     classDeclaration,

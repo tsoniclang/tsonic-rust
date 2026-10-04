@@ -320,6 +320,7 @@ export type RustTargetOperationFact =
       readonly storageIndex: number;
       readonly valueSemantics:
         | { readonly kind: "stored" }
+        | { readonly kind: "receiver-alias" }
         | { readonly kind: "accessor"; readonly writable: boolean }
         | { readonly kind: "method" };
       readonly resultCarrier: TargetTypeRef;
@@ -412,6 +413,7 @@ export type RustTargetOperationFact =
           readonly storageIndex: number;
           readonly valueSemantics:
             | { readonly kind: "stored" }
+            | { readonly kind: "receiver-alias" }
             | { readonly kind: "accessor"; readonly writable: boolean }
             | { readonly kind: "method" };
         };

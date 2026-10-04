@@ -12,7 +12,7 @@ import {
   type RustSourcePackageErrorPlan,
 } from "./source-package-errors.js";
 import { rustSourceItemIdentity } from "./source-package-facades.js";
-import type { RustBlock, RustErrorDomain, RustExpr, RustType } from "../../target-ast/nodes.js";
+import type { RustBlock, RustErrorDomain, RustExpr, RustStmt, RustType } from "../../target-ast/nodes.js";
 import {
   isValidRustIdentifier,
   rustTargetIdentifier,
@@ -70,6 +70,12 @@ export interface RustControlFlowState {
   nextLoopId: number;
 }
 
+export interface RustConstructionPreparation {
+  readonly context: RustPlanContext;
+  readonly before: readonly RustStmt[];
+  finish(statements: readonly RustStmt[]): readonly RustStmt[];
+}
+
 export interface RustPlanContext {
   readonly input: RustPlanningContext;
   readonly sourceFile: SourceFile;
@@ -113,6 +119,10 @@ export interface RustPlanContext {
     readonly protocol: RustGeneratorFact;
   };
   readonly expressionOverrides?: ReadonlyMap<Node, RustEffectiveExpressionOverride>;
+  readonly construction?: {
+    prepare(node: Node, context: RustPlanContext): RustConstructionPreparation | undefined;
+    returnFor(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined;
+  };
   readonly valueFieldLocations?: ReadonlyMap<Node, import("../objects/value-fields.js").RustValueFieldLocation>;
   readonly flowReadOverrides?: ReadonlyMap<Node, RustFlowReadOverride>;
   readonly capturedBindings?: readonly RustCapturedBinding[];

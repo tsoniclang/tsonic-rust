@@ -13,7 +13,7 @@ import { planExpression } from "../expressions/index.js";
 import { effectivePlannedExpressionCarrier } from "../expressions/fundamentals.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { directResourceDeclaration } from "./resources.js";
-import { rustBlockDefinitelyExits } from "./block-flow.js";
+import { rustBlockDefinitelyExits } from "../../target-ast/normalization/block-flow.js";
 import { planStatementSequence } from "./core.js";
 import { createRustBreakTarget, withRustControlTarget } from "./control-flow.js";
 import { planRustSwitchComparison } from "./switch-comparisons.js";

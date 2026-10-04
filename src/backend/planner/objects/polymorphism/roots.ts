@@ -41,6 +41,7 @@ import { rustArrayFieldMutationName, rustArrayFieldMutationType } from "./array-
 import { rustProjectObjectIdentityImplementation } from "../project-identity.js";
 import { instantiateRustProjectMethodDispatchArguments } from "../../../../analysis/project-types/method-dispatch.js";
 import { planRustProjectErrorRoot } from "./project-errors.js";
+import { planRustReceiverAlias } from "./receiver-aliases.js";
 
 export function planProjectRootImplementations(
   concrete: RustProjectTypeDefinition,
@@ -209,7 +210,9 @@ function planRootContractFunctions(
     const implementation = field.origin === "external"
       ? { kind: "stored" as const, declaration: field.declaration }
       : privateField
-        ? { kind: "stored" as const, declaration: field.declaration }
+        ? context.input.program.objectRepresentations.aliasFor(field.declaration) === undefined
+          ? { kind: "stored" as const, declaration: field.declaration }
+          : { kind: "receiver-alias" as const, declaration: field.declaration }
       : context.input.program.projectFieldDispatch.implementationFor(
           concrete,
           field.declaration,
@@ -224,7 +227,13 @@ function planRootContractFunctions(
     const write = dispatch?.write === undefined
       ? undefined
       : context.input.program.projectTypes.memberSlotName(field.declaration, "write");
-    const readValue: { readonly expression: RustExpr; readonly errorType?: RustType } | undefined = implementation?.kind === "stored"
+    const readValue: { readonly expression: RustExpr; readonly errorType?: RustType } | undefined = implementation?.kind === "receiver-alias"
+      ? (() => {
+          const expression = planRustReceiverAlias({ kind: "path", path: "self" }, concreteCarrier,
+            field.carrier, context, true);
+          return expression === undefined ? undefined : { expression };
+        })()
+      : implementation?.kind === "stored"
       ? storagePath === undefined
         ? undefined
         : (() => {
@@ -338,7 +347,7 @@ function planRootContractFunctions(
                 : { expression: check === undefined ? expression : checkRustDataWrite(check,
                     { kind: "path", path: "self" }, expression, fieldErrorType!) };
             })()
-        : implementation.setter === undefined
+        : implementation.kind !== "accessor" || implementation.setter === undefined
           ? undefined
           : (() => {
               const helper = accessorImplementationFor(implementation.setter!, "write");

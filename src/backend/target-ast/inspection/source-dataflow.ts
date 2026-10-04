@@ -52,11 +52,12 @@ export function rustExpressionAlwaysExits(expression: RustExpr): boolean {
       : statementAlwaysExits(statement));
   switch (expression.kind) {
     case "return-expression":
+    case "break-expression":
     case "bottom": return true;
     case "closure":
     case "closure-block":
     case "async-block": return false;
-    case "block": return exits(expression.body.statements);
+    case "block": return expression.label === undefined && exits(expression.body.statements);
     case "conditional": return rustExpressionAlwaysExits(expression.condition) ||
       rustExpressionAlwaysExits(expression.whenTrue) && rustExpressionAlwaysExits(expression.whenFalse);
     case "if-let": return rustExpressionAlwaysExits(expression.expression) ||

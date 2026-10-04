@@ -210,6 +210,7 @@ export function rustExpressionContainsStatementBlock(expression: RustExpr): bool
     case "try":
       return rustExpressionContainsStatementBlock(expression.expr);
     case "return-expression":
+    case "break-expression":
       return expression.expr !== undefined && rustExpressionContainsStatementBlock(expression.expr);
     case "struct-literal":
       return expression.fields.some((field) =>

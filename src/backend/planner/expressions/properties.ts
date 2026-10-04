@@ -35,6 +35,7 @@ import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { planRustComputedMemberExpression } from "./computed-members.js";
 import { planRustUnionProperty } from "./union-properties.js";
+import { planRustReceiverAlias } from "../objects/polymorphism/receiver-aliases.js";
 
 export function planPropertyAccess(node: Node, context: RustPlanContext): RustExpr | undefined {
   const borrowed = context.input.program.borrowedElementReads.forExpression(node);
@@ -137,6 +138,10 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
     const plannedReceiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
     if (receiverNode === undefined || plannedReceiver === undefined) {
       return undefined;
+    }
+    if (fact.valueSemantics.kind === "receiver-alias" && fact.dispatch === undefined) {
+      return fact.accessMode === "read" ? planRustReceiverAlias(plannedReceiver,
+        fact.receiverCarrier, fact.resultCarrier, context) : undefined;
     }
     if (fact.dispatch === undefined) {
       return readRustStoredObjectField(
@@ -465,6 +470,10 @@ function planRustSourceUnionFieldRead(
     fact,
     context,
     (payload, field, variantIndex) => {
+      if (field.valueSemantics.kind === "receiver-alias" && field.dispatch === undefined) {
+        return planRustReceiverAlias({ kind: "method-call", receiver: payload, method: "clone", args: [] },
+          fact.variants[variantIndex]!.carrier, fact.resultCarrier, context);
+      }
       return readRustUnionField(
         field,
         fact.variants[variantIndex]!.carrier,

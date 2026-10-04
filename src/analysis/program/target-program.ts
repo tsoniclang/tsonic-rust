@@ -21,6 +21,7 @@ import { analyzeRustProviderErrorCarriers } from "./provider-errors.js";
 import { analyzeRustDeclarationGenericRequirements } from "../declarations/generic-requirements.js";
 import { analyzeRustValueLifetimes } from "./value-lifetimes.js";
 import { analyzeRustLocalStorageAliases } from "../storage/local-aliases.js";
+import { analyzeRustProjectConstructions } from "../project-types/construction-plan.js";
 import { rustCallArgumentIsOwned } from "../facts/parameter-passing.js";
 import { analyzeRustBorrowedElementReads } from "./borrowed-element-reads.js";
 import {
@@ -47,7 +48,9 @@ import { maximumRustFoundation } from "../../target-model/foundation/model.js";
 import { analyzeRustProjectFlowReadSelections } from "../control-flow/project-flow-read-selections.js";
 import { isRustJsArrayCarrier, isRustStringCarrier } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustClosureCaptureFactKey, rustTargetOperationFactKey, rustBindingStorageFactKey } from "../facts/keys.js";
+import { rustClosureCaptureFactKey, rustTargetOperationFactKey, rustBindingStorageFactKey,
+  rustSourceCallEffectsFactKey, rustSourceAccessorEffectsFactKey } from "../facts/keys.js";
+import { rustTargetOperationIsFallible } from "../facts/target-operation.js";
 
 const rustJsEventLoopEpilogue: RustProviderBinaryHookRow = Object.freeze({
   id: "tsonic.rust.js.event-loop",
@@ -258,6 +261,16 @@ export function analyzeRustTargetProgram(
     projectTypes: context.projectTypes.seal(),
     objectRepresentations,
     projectMethodDispatch: context.projectMethodDispatch.seal(),
+    projectConstructions: analyzeRustProjectConstructions({ ast: context.ast, facts,
+      projectTypes: context.projectTypes, receiverFieldAliases: objectRepresentations,
+      mayThrow(node) {
+        const accessor = facts.getFact(node, rustSourceAccessorEffectsFactKey);
+        return facts.getFact(node, rustSourceCallEffectsFactKey)?.invocation === "fallible" ||
+          accessor?.read === "fallible" || accessor?.write === "fallible" ||
+          rustTargetOperationIsFallible(facts.getFact(node, rustTargetOperationFactKey), context.structuralShapes,
+            context.projectFieldDispatch, context.frozenDataWrites, context.typeDefinitions);
+      },
+    }),
     projectMethodProperties: context.projectMethodProperties.seal(),
     projectFieldDispatch: context.projectFieldDispatch.seal(),
     sourceCallableSpecializations: context.sourceCallableSpecializations.seal(),

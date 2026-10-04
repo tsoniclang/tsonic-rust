@@ -53,6 +53,7 @@ export function expressionPrecedence(expression: RustExpr): RustPrecedence {
       return expressionPrecedence(expression.expression);
     case "assignment":
     case "return-expression":
+    case "break-expression":
     case "closure":
     case "closure-block":
       return RustPrecedence.Assignment;

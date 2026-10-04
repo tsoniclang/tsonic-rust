@@ -21,7 +21,7 @@ import type { RustCompletionBoundary, RustControlTarget, RustPlanContext } from 
 import type { RustResourceManagementFact } from "../../../analysis/facts/keys.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planRustVirtualProjectMethodCall } from "../objects/project-method-dispatch.js";
-import { rustBlockDefinitelyExits } from "./block-flow.js";
+import { rustBlockDefinitelyExits } from "../../target-ast/normalization/block-flow.js";
 
 export function directResourceDeclaration(
   statement: Node,

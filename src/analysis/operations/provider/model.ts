@@ -6,6 +6,7 @@ import type { RustProjectMethodDispatchPlanRegistry } from "../../project-types/
 import type { RustProjectTypePolicy } from "../../project-types/type-policy.js";
 import type { RustSourceCallableAbiResolver } from "../../../policy/ownership/source-callable-abi.js";
 import type { RustTargetTypeResolutionOptions } from "../../../policy/types/resolution.js";
+import type { RustReceiverFieldAliasQueries } from "../../project-types/receiver-field-aliases.js";
 
 export const sourceCallMarkerByIdentity = new Map(
   [
@@ -22,6 +23,7 @@ export const sourceCallMarkerByIdentity = new Map(
 );
 
 export interface RustOperationsProviderOptions extends RustTargetTypeResolutionOptions {
+  readonly receiverFieldAliases: RustReceiverFieldAliasQueries;
   readonly providerExports: readonly import("../../../providers/packages/model.js").RustProviderExportRow[];
   readonly sourceCallableAbi: RustSourceCallableAbiResolver;
   readonly projectTypes: RustProjectTypePolicy;

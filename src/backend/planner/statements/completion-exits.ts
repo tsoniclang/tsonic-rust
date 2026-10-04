@@ -4,24 +4,13 @@ import type { RustPlanContext } from "../program/plan-context.js";
 export function planRustReturnExit(
   expression: RustExpr | undefined,
   context: RustPlanContext,
-  rootResultWrapped = false,
 ): RustStmt {
   if (expression?.kind === "bottom") {
     return { kind: "expr", expr: expression };
   }
   const boundary = context.completionBoundary;
   if (boundary === undefined) {
-    if (!rootResultWrapped) {
-      return { kind: "return", ...(expression === undefined ? {} : { expr: expression }) };
-    }
-    return {
-      kind: "return",
-      expr: {
-        kind: "call",
-        path: "Ok",
-        args: [expression ?? { kind: "path", path: "()" }],
-      },
-    };
+    return { kind: "return", ...(expression === undefined ? {} : { expr: expression }) };
   }
   markOutermostReturnDispatch(boundary);
   context.usedAliases?.add("rt");
@@ -36,7 +25,6 @@ export function planRustReturnExit(
 export function planRustReturnExpression(
   expression: RustExpr,
   context: RustPlanContext,
-  rootResultWrapped: boolean,
 ): RustExpr {
   if (expression.kind === "bottom") {
     return expression;
@@ -45,7 +33,7 @@ export function planRustReturnExpression(
   if (boundary === undefined) {
     return {
       kind: "return-expression",
-      expr: rootResultWrapped ? { kind: "call", path: "Ok", args: [expression] } : expression,
+      expr: expression,
     };
   }
   markOutermostReturnDispatch(boundary);

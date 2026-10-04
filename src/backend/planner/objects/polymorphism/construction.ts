@@ -1,87 +1,24 @@
-import { rustHiddenAttribute } from "../../../target-ast/attributes.js";
-import { rustTargetIdentifier } from "../../../../target-model/names/identifiers.js";
-import { planRustExternalProjectInitialization } from "./external-construction.js";
 import type { Node } from "@tsonic/tsts";
-import { rustClassEnvironmentContext, rustClassEnvironmentParameter } from "../class-environments.js";
-import {
-  KindCallExpression,
-  Node_Expression,
-} from "@tsonic/target-api/source";
-import type {
-  RustProjectConstructorSignature,
-  RustProjectTypeDefinition,
-} from "../../../../analysis/project-types/type-policy.js";
-import { rustInheritedProjectConstructor } from "../../../../analysis/project-types/type-policy.js";
-import {
-  rustFallibleFactKey,
-  rustSourceCallEffectsFactKey,
-  rustSourceParameterAbiFactKey,
-  rustTargetOperationFactKey,
-} from "../../../../analysis/facts/keys.js";
-import type {
-  RustExpr,
-  RustFunctionParam,
-  RustImplFunction,
-  RustStmt,
-  RustType,
-} from "../../../target-ast/nodes.js";
+import type { RustProjectTypeDefinition, RustProjectConstructorSignature } from "../../../../analysis/project-types/type-policy.js";
+import { rustFallibleFactKey, rustSourceParameterAbiFactKey } from "../../../../analysis/facts/keys.js";
+import { rustTargetIdentifier } from "../../../../target-model/names/identifiers.js";
+import type { RustExpr, RustFunctionParam, RustImplFunction, RustType } from "../../../target-ast/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/nodes.js";
-import { rustLintAttributes } from "../../../target-ast/normalization/lint-policy.js";
-import {
-  missingFactDiagnostic,
-  unsupportedConstructDiagnostic,
-} from "../../diagnostics.js";
-import {
-  planExpression,
-  planRustSelectedSourceCallArguments,
-} from "../../expressions/index.js";
-import {
-  diagnosticInput,
-  rustErrorBoundaryForDeclaration,
-  rustErrorType,
-  rustProjectTypeHasPublicImplementationAbi,
-} from "../../program/plan-context.js";
-import {
-  rustProjectConstructorDeadCodeDisposition,
-} from "../../liveness/directives.js";
-import type { RustPlanContext } from "../../program/plan-context.js";
-import {
-  rustProjectObjectDispatchField,
-  rustProjectObjectIdentityField,
-  rustProjectObjectStateField,
-} from "../project-objects.js";
-import {
-  cloneExpression,
-  type ProjectClassStateLayer,
-  type ProjectFieldPlan,
-  projectMembers,
-  projectFieldStoragePath,
-  projectStateType,
-} from "./model.js";
+import { missingFactDiagnostic } from "../../diagnostics.js";
+import { createRustSyntheticNameState } from "../../names/synthetic.js";
+import { planRustConstructionBody } from "../../declarations/classes/construction-body.js";
+import { planRustCallableParameters } from "../../declarations/callables/parameters.js";
+import { rustClassEnvironmentContext, rustClassEnvironmentParameter } from "../class-environments.js";
+import { diagnosticInput, rustErrorBoundaryForDeclaration, rustErrorType,
+  rustProjectTypeHasPublicImplementationAbi, isValidRustIdentifier, type RustPlanContext } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
-import {
-  planRustCallableParameterPrelude,
-  planRustCallableParameters,
-} from "../../declarations/callables/parameters.js";
-import {
-  isValidRustIdentifier,
-} from "../../program/plan-context.js";
-import {
-  allocateRustSyntheticName,
-  createRustSyntheticNameState,
-} from "../../names/synthetic.js";
-import {
-  rustDeclarationRequiresUnsafe,
-  rustSafetyAttributesForDeclaration,
-} from "../../safety/explicit-safety.js";
-import {
-  prepareRustPreconstructionNode,
-  rustNamedFieldPath,
-  type RustPreconstructionFieldValue,
-} from "../../declarations/classes/preconstruction-fields.js";
-import { planStatementSequence } from "../../statements/index.js";
 import { applyFallibleShape } from "../../types/fallible-shape.js";
-import { rustProjectStateMarker } from "./names.js";
+import { rustDeclarationRequiresUnsafe, rustSafetyAttributesForDeclaration } from "../../safety/explicit-safety.js";
+import { rustProjectConstructorDeadCodeDisposition } from "../../liveness/directives.js";
+import { rustProjectObjectDispatchField, rustProjectObjectIdentityField, rustProjectObjectStateField } from "../project-objects.js";
+import { cloneExpression, type ProjectClassStateLayer } from "./model.js";
+import { rustProjectStateType } from "./names.js";
+import { planRustConstructionLayers } from "./construction-layers.js";
 
 export function planProjectClassConstructor(
   definition: RustProjectTypeDefinition,
@@ -89,564 +26,95 @@ export function planProjectClassConstructor(
   rootType: RustType,
   layers: readonly ProjectClassStateLayer[],
   context: RustPlanContext,
-): { readonly initialize: RustImplFunction; readonly construct?: RustImplFunction } | undefined {
-  if (wrapperType.kind !== "named" || rootType.kind !== "named") {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, definition.declaration),
-      "rust.backend.project-constructor-named-types",
-      "Project construction requires exact named wrapper and root carriers.",
-    ));
+): { readonly construct?: RustImplFunction } | undefined {
+  if (context.input.program.source.ast.hasModifierKind(definition.declaration, "abstract")) return {};
+  const plan = context.input.program.projectConstructions.forDefinition(definition);
+  const selected = plan?.layers[plan.layers.length - 1];
+  if (plan === undefined || selected === undefined || wrapperType.kind !== "named" || rootType.kind !== "named") {
+    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, definition.declaration),
+      "rust.backend.constructor-plan", "Polymorphic construction has no sealed readiness and native root plan."));
     return undefined;
   }
-  const members = projectMembers(definition, context);
-  if (members === undefined) {
-    return undefined;
-  }
-  const constructors = members.filter((member) => context.input.program.source.ast.kindName(member) === "KindConstructor");
-  const constructorSignatures = context.input.program.projectTypes.constructorsForDefinition(definition);
-  if (constructorSignatures.length === 0) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, definition.declaration),
-      "rust.backend.project-constructor-overloads",
-      "Project construction requires at least one exact effective constructor signature.",
-    ));
-    return undefined;
-  }
-  const constructorSignature = constructorSignatures[0]!;
-  const implementationConstructors = constructors.filter((candidate) =>
-    context.input.program.source.ast.body(candidate) !== undefined);
-  const constructor = implementationConstructors[0];
-  if (implementationConstructors.length > 1 ||
-    constructorSignature.implicit !== (constructor === undefined)) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, definition.declaration),
-      "rust.backend.project-constructor-implementation",
-      "Effective project constructor evidence conflicts with the exact authored constructor implementation.",
-    ));
-    return undefined;
-  }
+  const constructor = selected.constructor;
   const safetyDeclaration = constructor ?? definition.declaration;
-  const isUnsafe = rustDeclarationRequiresUnsafe(
-    definition.declaration,
-    "constructor",
-    context.input,
-    constructor,
-  );
-  const initializationSafetyAttributes = rustSafetyAttributesForDeclaration(
-    safetyDeclaration,
-    false,
-    context.input,
-  );
-  const syntheticNames = createRustSyntheticNameState(
-    context.input.program.source.ast,
-    constructor ?? definition.declaration,
-    [],
-  );
-  const baseStateName = allocateRustSyntheticName(syntheticNames, "base_state");
-  const stateName = allocateRustSyntheticName(syntheticNames, "state");
-  const identityName = allocateRustSyntheticName(syntheticNames, "identity");
-  const rootName = allocateRustSyntheticName(syntheticNames, "root");
+  const syntheticNames = createRustSyntheticNameState(context.input.program.source.ast, safetyDeclaration, []);
+  for (const layer of plan.layers) {
+    const layerNames = createRustSyntheticNameState(context.input.program.source.ast, layer.definition.declaration, []);
+    for (const name of layerNames.reserved) syntheticNames.reserved.add(name);
+  }
   const parameterPlan = constructor === undefined
-    ? planImplicitProjectConstructorParameters(
-        definition,
-        constructorSignature,
-        context,
-      )
+    ? planImplicitProjectConstructorParameters(definition, selected.signature, context)
     : planRustCallableParameters(constructor, context, syntheticNames);
-  if (parameterPlan === undefined) {
-    return undefined;
-  }
-  const fallible = context.input.program.facts.getFact(
-    constructor ?? definition.declaration,
-    rustFallibleFactKey,
-  ) !== undefined;
-  const constructorErrorBoundary = fallible
-    ? rustErrorBoundaryForDeclaration(constructor ?? definition.declaration, context)
-    : undefined;
-  if (fallible && constructorErrorBoundary === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, constructor ?? definition.declaration),
-      "rust.backend.project-constructor-error-boundary",
-      "A fallible project constructor has no exact source-package error boundary.",
-    ));
-    return undefined;
-  }
-  const constructorErrorType = constructorErrorBoundary === undefined
-    ? undefined
-    : rustErrorType(constructorErrorBoundary);
-  if (fallible) {
-    context.usedAliases?.add("rt");
-  }
-  const stateType = projectStateType(layers, context);
-  if (stateType === undefined) {
-    return undefined;
-  }
-  const selectedEnvironment = context.input.program.classValues.forDeclaration(definition.declaration)?.environment;
-  const environment = selectedEnvironment?.instancesUseEnvironment || selectedEnvironment?.initializationUsesEnvironment ? selectedEnvironment : undefined;
+  if (parameterPlan === undefined) return undefined;
+  const environmentSelection = context.input.program.classValues.forDeclaration(definition.declaration)?.environment;
+  const environment = environmentSelection?.instancesUseEnvironment || environmentSelection?.initializationUsesEnvironment
+    ? environmentSelection : undefined;
   const environmentParameter = environment === undefined ? undefined
     : rustClassEnvironmentParameter(definition.declaration, context, "owned");
-  const environmentBorrow = environment?.initializationUsesEnvironment !== true ? undefined
-    : rustClassEnvironmentParameter(definition.declaration, context, "borrowed");
-  if (environment !== undefined && (environmentParameter === undefined || environment.initializationUsesEnvironment && environmentBorrow === undefined)) return undefined;
-  const initializationContext: RustPlanContext = {
+  if (environment !== undefined && environmentParameter === undefined) return undefined;
+  const fallible = context.input.program.facts.getFact(safetyDeclaration, rustFallibleFactKey) !== undefined;
+  const boundary = fallible ? rustErrorBoundaryForDeclaration(safetyDeclaration, context) : undefined;
+  if (fallible && boundary === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, safetyDeclaration),
+      "rust.backend.constructor-error-boundary", "Native constructor has no exact finalized error boundary."));
+    return undefined;
+  }
+  const constructorContext: RustPlanContext = {
     ...(environment === undefined ? context : rustClassEnvironmentContext(environment,
       { kind: "path", path: environment.parameterName }, context)),
-    ...(environment === undefined ? {} : { classEnvironment: {
-      declaration: environment.declaration, expression: { kind: "path" as const, path: environment.parameterName }, borrowed: true,
-    } }),
-    syntheticNames,
-    controlFlow: { nextLoopId: 0 },
-    functionReturnType: stateType,
+    syntheticNames, controlFlow: { nextLoopId: 0 }, functionReturnType: wrapperType,
     functionAbsenceReturnCarrier: undefined,
-    ...(constructorErrorBoundary === undefined
-      ? {}
-      : { fallibleBoundary: constructorErrorBoundary }),
+    ...(boundary === undefined ? {} : { fallibleBoundary: boundary }),
   };
-  const prelude = planRustCallableParameterPrelude(parameterPlan, initializationContext, planExpression);
-  if (prelude === undefined) {
-    return undefined;
-  }
-  const statements: RustStmt[] = [...prelude];
-  const body = constructor === undefined ? undefined : context.input.program.source.ast.body(constructor);
-  const bodyStatements = body === undefined ? [] : context.input.program.source.ast.statements(body);
-  if (bodyStatements.some((statement) => statement === undefined)) {
-    return undefined;
-  }
-  const base = context.input.program.projectTypes.heritageForDefinition(definition).find((edge) =>
-    edge.kind === "extends" && edge.target.kind === "class");
-  const externalBase = context.input.program.projectTypes.externalBaseForDefinition(definition);
-  const ownLayer = layers[layers.length - 1];
-  if (ownLayer === undefined || ownLayer.definition !== definition ||
-    (base !== undefined && externalBase !== undefined)) {
-    return undefined;
-  }
-  const values = new Map<Node, RustExpr>();
-  const fieldSlots: RustPreconstructionFieldValue[] = [];
-  const availableFields: RustPreconstructionFieldValue[] = [];
-  for (const field of ownLayer.fields) {
-    const name = allocateRustSyntheticName(syntheticNames, `field_${field.sourceName}`);
-    const expression: RustExpr = { kind: "path", path: name };
-    const slot = {
-      declaration: field.declaration,
-      storageIndex: field.storageIndex,
-      carrier: field.carrier,
-      expression,
-    };
-    statements.push({
-      kind: "let",
-      name,
-      mutable: true,
-      type: field.type,
-    });
-    values.set(field.declaration, expression);
-    fieldSlots.push(slot);
-  }
-  const bindInitializedField = (
-    field: ProjectFieldPlan,
-    value: RustExpr,
-  ): void => {
-    const slot = fieldSlots.find((candidate) => candidate.declaration === field.declaration);
-    if (slot === undefined) {
-      return;
+  const carrier = context.input.program.projectTypes.openCarrier(definition);
+  const materialize = (values: ReadonlyMap<Node, RustExpr>): RustExpr => {
+    let state: RustExpr | undefined;
+    for (const layer of layers) {
+      const nativeState = rustProjectStateType(layer.carrier, constructorContext);
+      if (nativeState?.kind !== "named") throw new Error("Sealed construction lost its native state type.");
+      state = { kind: "associated-call", owner: nativeState, method: "new", args: [
+        ...(state === undefined ? [] : [state]),
+        ...layer.fields.map(field => values.get(field.declaration)!),
+      ] };
     }
-    statements.push({ kind: "assign", target: slot.expression, operator: "=", value });
-    const existing = availableFields.findIndex((candidate) =>
-      candidate.declaration === field.declaration);
-    if (existing < 0) {
-      availableFields.push(slot);
-    } else {
-      availableFields[existing] = slot;
-    }
-  };
-  let bodyIndex = 0;
-  if (base !== undefined) {
-    const explicitBase = constructor === undefined
-      ? undefined
-      : selectedExplicitBaseConstructor(
-          constructor,
-          bodyStatements as readonly Node[],
-          base.target,
-          context,
-        );
-    const inheritedBase = constructor === undefined
-      ? rustInheritedProjectConstructor(
-          context.input.program.projectTypes,
-          definition,
-          constructorSignature,
-        )
-      : undefined;
-    const implicitBase = inheritedBase?.base === base.target
-      ? inheritedBase.constructor
-      : undefined;
-    const baseConstructor = explicitBase?.constructor ?? implicitBase;
-    if (baseConstructor === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, constructor ?? definition.declaration),
-        "rust.backend.project-inherited-constructor",
-        "Project construction does not identify one exact inherited base constructor ABI.",
-      ));
-      return undefined;
-    }
-    const baseArgs = explicitBase === undefined
-      ? parameterPlan.params.map((parameter) => ({
-          kind: "path" as const,
-          path: parameter.name,
-        }))
-      : planRustSelectedSourceCallArguments(explicitBase.call, initializationContext);
-    const baseType = rustTypeFromCarrierInContext(base.targetType, context);
-    if (baseArgs === undefined || baseType === undefined) {
-      return undefined;
-    }
-    let baseInitialization: RustExpr = {
-      kind: "associated-call",
-      owner: baseType,
-      method: baseConstructor.initializeName,
-      args: baseArgs,
-    };
-    const explicitBaseEffects = explicitBase === undefined
-      ? undefined
-      : context.input.program.facts.getFact(
-          explicitBase.call,
-          rustSourceCallEffectsFactKey,
-        );
-    if (explicitBase !== undefined &&
-      (explicitBaseEffects === undefined || explicitBaseEffects.awaiting !== "not-applicable")) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, explicitBase.call),
-        "rust.backend.project-base-constructor-effects",
-        "An explicit project base constructor call has no exact finalized synchronous invocation effects.",
-      ));
-      return undefined;
-    }
-    const baseFallible = explicitBase === undefined
-      ? context.input.program.facts.getFact(
-          baseConstructor.declaration ?? base.target.declaration,
-          rustFallibleFactKey,
-        ) !== undefined
-      : explicitBaseEffects!.invocation === "fallible";
-    if (baseFallible && !fallible) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, constructor ?? definition.declaration),
-        "rust.backend.project-constructor-fallibility",
-        "A fallible selected base constructor conflicts with the finalized derived constructor ABI.",
-      ));
-      return undefined;
-    }
-    if (baseFallible) {
-      const baseErrorBoundary = rustErrorBoundaryForDeclaration(
-        baseConstructor.declaration ?? base.target.declaration,
-        context,
-      );
-      if (baseErrorBoundary === undefined) {
-        context.diagnostics.push(missingFactDiagnostic(
-          diagnosticInput(context, constructor ?? definition.declaration),
-          "rust.backend.project-base-constructor-error-boundary",
-          "A fallible selected base constructor has no exact source-package error boundary.",
-        ));
-        return undefined;
-      }
-      baseInitialization = {
-        kind: "try",
-        expr: baseInitialization,
-        resultErrorType: constructorErrorType!,
-        operandErrorType: rustErrorType(baseErrorBoundary),
-      };
-    }
-    statements.push({
-      kind: "let",
-      name: baseStateName,
-      mutable: true,
-      init: baseInitialization,
-    });
-    bodyIndex = constructor === undefined ? 0 : 1;
-  } else if (externalBase !== undefined) {
-    const externalCall = constructor === undefined
-      ? undefined
-      : selectedExplicitExternalBaseConstructor(
-          constructor,
-          bodyStatements as readonly Node[],
-          externalBase.constructorOperationId,
-          context,
-        );
-    if (constructor !== undefined && externalCall === undefined) return undefined;
-    const initializers = planRustExternalProjectInitialization(externalBase, constructorSignature, definition.declaration, externalCall, initializationContext);
-    if (initializers === undefined) return undefined;
-    for (const [index, externalField] of externalBase.fields.entries()) {
-      const field = ownLayer.fields.find((candidate) =>
-        candidate.origin === "external" &&
-        candidate.declaration === externalField.declaration);
-      if (field === undefined) {
-        return undefined;
-      }
-      bindInitializedField(field, initializers[index]!);
-    }
-    bodyIndex = constructor === undefined ? 0 : 1;
-  }
-  if (base !== undefined) {
-    const baseLayers = layers.slice(0, -1);
-    for (const layer of baseLayers) {
-      for (const field of layer.fields) {
-        const storagePath = projectFieldStoragePath(
-          field.declaration,
-          baseLayers,
-          context,
-        );
-        if (storagePath === undefined) {
-          context.diagnostics.push(missingFactDiagnostic(
-            diagnosticInput(context, field.declaration),
-            "rust.backend.preconstruction-base-field",
-            "An initialized base field has no exact preconstruction storage path.",
-          ));
-          return undefined;
-        }
-        availableFields.push({
-          declaration: field.declaration,
-          storageIndex: field.storageIndex,
-          carrier: field.carrier,
-          expression: rustNamedFieldPath(
-            { kind: "path", path: baseStateName },
-            storagePath,
-          ),
-        });
-      }
-    }
-  }
-  const resolveSelectedFieldDeclaration = (selected: Node): Node | undefined => {
-    if (availableFields.some((field) => field.declaration === selected) ||
-      ownLayer.fields.some((field) => field.declaration === selected)) {
-      return selected;
-    }
-    const resolved = context.input.program.projectTypes.memberImplementation(
-      definition,
-      selected,
-    );
-    return resolved.kind === "resolved"
-      ? resolved.implementation.declaration
-      : undefined;
-  };
-  const evaluateField = (field: ProjectFieldPlan, expression: Node): boolean => {
-    const expressionContext = prepareRustPreconstructionNode(
-      expression,
-      availableFields,
-      initializationContext,
-      resolveSelectedFieldDeclaration,
-    );
-    if (expressionContext === undefined) {
-      return false;
-    }
-    const value = planExpression(expression, expressionContext);
-    if (value === undefined) {
-      return false;
-    }
-    bindInitializedField(field, value);
-    return true;
-  };
-  for (const field of ownLayer.fields) {
-    if (field.initializer !== undefined && !evaluateField(field, field.initializer)) {
-      return undefined;
-    }
-  }
-  const constructorStatements = bodyStatements.slice(bodyIndex) as readonly Node[];
-  if (body !== undefined && constructorStatements.length > 0) {
-    const bodyFields = [...availableFields];
-    for (const slot of fieldSlots) {
-      if (!bodyFields.some((candidate) => candidate.declaration === slot.declaration)) {
-        bodyFields.push(slot);
-      }
-    }
-    let bodyContext = initializationContext;
-    for (const statement of constructorStatements) {
-      const prepared = prepareRustPreconstructionNode(
-        statement,
-        bodyFields,
-        bodyContext,
-        resolveSelectedFieldDeclaration,
-      );
-      if (prepared === undefined) {
-        return undefined;
-      }
-      bodyContext = prepared;
-    }
-    const bodyPlan = planStatementSequence(constructorStatements, body, bodyContext);
-    if (bodyPlan === undefined) {
-      return undefined;
-    }
-    statements.push(...bodyPlan.statements);
-  }
-  const state: RustExpr = {
-    kind: "struct-literal",
-    path: definition.stateName,
-    fields: [
-      ...(base === undefined
-        ? []
-        : [{
-            name: context.input.program.projectTypes.baseStateFieldName(definition),
-            value: { kind: "path" as const, path: baseStateName },
-          }]),
-      ...ownLayer.fields.map((field) => ({
-        name: field.targetName,
-        value: values.get(field.declaration)!,
-      })),
-      ...ownLayer.methodProperties.map((property) => ({
-        name: property.targetName,
-        value: { kind: "none" as const },
-      })),
-      ...(() => {
-        const marker = rustProjectStateMarker(definition, context);
-        return marker === undefined ? [] : [{ name: marker.name, value: marker.value }];
-      })(),
-    ],
-  };
-  statements.push({ kind: "tail", expr: state });
-  const publishesImplementationAbi = rustProjectTypeHasPublicImplementationAbi(
-    context,
-    definition.targetPath,
-  );
-  const initialize: RustImplFunction = { kind: "function",
-    name: constructorSignature.initializeName,
-    visibility: publishesImplementationAbi ? "public" : "crate",
-    generics: emptyRustGenerics,
-    ...(!publishesImplementationAbi && initializationSafetyAttributes.length === 0
-      ? {}
-      : {
-          attrs: [
-            ...(publishesImplementationAbi ? [rustHiddenAttribute] : []),
-            ...initializationSafetyAttributes,
+    if (state === undefined) throw new Error("Sealed construction lost its physical state lineage.");
+    return { kind: "block", body: { statements: [
+      { kind: "let", name: "identity", mutable: false,
+        init: { kind: "call", path: "rt::ObjectIdentity::new", args: [] } },
+      { kind: "tail", expr: { kind: "struct-literal", path: wrapperType.path, fields: [
+        { name: rustProjectObjectIdentityField, value: cloneExpression({ kind: "path", path: "identity" }) },
+        { name: rustProjectObjectDispatchField, value: { kind: "call", path: "alloc::rc::Rc::new", args: [{
+          kind: "struct-literal", path: rootType.path, fields: [
+            ...(!environment?.instancesUseEnvironment ? [] : [{
+              name: environment.instanceFieldName, value: { kind: "path" as const, path: environment.parameterName },
+            }]),
+            { name: rustProjectObjectIdentityField, value: { kind: "path", path: "identity" } },
+            { name: rustProjectObjectStateField, value: { kind: "call", path: "rt::ObjectState::new", args: [state] } },
           ],
-        }),
-    params: [...(environmentBorrow === undefined ? [] : [environmentBorrow]), ...parameterPlan.params],
-    ...(constructorErrorType === undefined ? {} : { errorType: constructorErrorType }),
-    returnType: stateType,
-    body: {
-      ...applyFallibleShape(
-        { statements },
-        fallible
-          ? {
-              fallible: true,
-              hasReturnValue: true,
-              errorType: constructorErrorType!,
-              inferErrorTypeFromReturnType: true,
-            }
-          : { fallible: false, hasReturnValue: true },
-      ),
-    },
+        }] } },
+      ] } },
+    ] } };
   };
-  if (context.input.program.source.ast.hasModifierKind(definition.declaration, "abstract")) {
-    return { initialize };
-  }
-  const forwardArgs: RustExpr[] = [
-    ...(environmentBorrow === undefined ? [] : [{ kind: "reference" as const,
-      expr: { kind: "path" as const, path: environmentBorrow.name } }]),
-    ...parameterPlan.params.map((parameter) => ({ kind: "path" as const, path: parameter.name })),
-  ];
-  const construct: RustImplFunction = { kind: "function",
-    name: constructorSignature.targetName,
-    generics: emptyRustGenerics,
-    ...(isUnsafe ? { isUnsafe: true } : {}),
-    visibility: constructor === undefined ||
-        (!context.input.program.source.ast.hasModifierKind(constructor, "private") &&
-          !context.input.program.source.ast.hasModifierKind(constructor, "protected"))
-      ? "public"
-      : "private",
-    ...(isUnsafe ? { attrs: [rustLintAttributes.missingSafetyDoc] } : {}),
-    ...(() => {
-      const deadCode = rustProjectConstructorDeadCodeDisposition(
-        context,
-        definition.declaration,
-        constructor ?? definition.declaration,
-        publishesImplementationAbi,
-      );
-      return deadCode === undefined ? {} : { deadCode };
-    })(),
+  const construction = planRustConstructionBody(plan, layers.flatMap(layer => layer.fields), carrier,
+    wrapperType, materialize, constructorContext);
+  if (construction === undefined) return undefined;
+  const body = planRustConstructionLayers(plan, layers, parameterPlan, construction, constructorContext);
+  if (body === undefined) return undefined;
+  const isUnsafe = rustDeclarationRequiresUnsafe(definition.declaration, "constructor", context.input, constructor);
+  const attrs = rustSafetyAttributesForDeclaration(safetyDeclaration, isUnsafe, context.input);
+  const publiclyReachable = rustProjectTypeHasPublicImplementationAbi(context, definition.targetPath);
+  const deadCode = rustProjectConstructorDeadCodeDisposition(context, definition.declaration, safetyDeclaration, publiclyReachable);
+  return { construct: { kind: "function", name: selected.signature.targetName, generics: emptyRustGenerics,
+    ...(isUnsafe ? { isUnsafe: true } : {}), ...(attrs.length === 0 ? {} : { attrs }),
+    ...(deadCode === undefined ? {} : { deadCode }),
+    visibility: constructor === undefined || !context.input.program.source.ast.hasModifierKind(constructor, "private") &&
+      !context.input.program.source.ast.hasModifierKind(constructor, "protected") ? "public" : "private",
     params: [...(environmentParameter === undefined ? [] : [environmentParameter]), ...parameterPlan.params],
-    ...(constructorErrorType === undefined ? {} : { errorType: constructorErrorType }),
-    returnType: wrapperType,
-    body: applyFallibleShape({
-      statements: [
-        {
-          kind: "let",
-          name: stateName,
-          mutable: false,
-          init: fallible ? {
-            kind: "try",
-            resultErrorType: constructorErrorType!,
-            operandErrorType: constructorErrorType!,
-            expr: {
-              kind: "associated-call",
-              owner: wrapperType,
-              method: constructorSignature.initializeName,
-              args: forwardArgs,
-            },
-          } : {
-            kind: "associated-call",
-            owner: wrapperType,
-            method: constructorSignature.initializeName,
-            args: forwardArgs,
-          },
-        },
-        {
-          kind: "let",
-          name: identityName,
-          mutable: false,
-          init: { kind: "call", path: "rt::ObjectIdentity::new", args: [] },
-        },
-        {
-          kind: "let",
-          name: rootName,
-          mutable: false,
-          init: {
-            kind: "call",
-            path: "alloc::rc::Rc::new",
-            args: [{
-              kind: "struct-literal",
-              path: rootType.path,
-              fields: [
-                ...(!environment?.instancesUseEnvironment ? [] : [{ name: environment.instanceFieldName,
-                  value: { kind: "path" as const, path: environment.parameterName } }]),
-                {
-                  name: rustProjectObjectIdentityField,
-                  value: cloneExpression({ kind: "path", path: identityName }),
-                },
-                {
-                  name: rustProjectObjectStateField,
-                  value: {
-                    kind: "call",
-                    path: "rt::ObjectState::new",
-                    args: [{ kind: "path", path: stateName }],
-                  },
-                },
-              ],
-            }],
-          },
-        },
-        {
-          kind: "tail",
-          expr: {
-            kind: "struct-literal",
-            path: wrapperType.path,
-            fields: [
-              {
-                name: rustProjectObjectIdentityField,
-                value: { kind: "path", path: identityName },
-              },
-              {
-                name: rustProjectObjectDispatchField,
-                value: { kind: "path", path: rootName },
-              },
-            ],
-          },
-        },
-      ],
-    }, fallible
-      ? {
-          fallible: true,
-          hasReturnValue: true,
-          errorType: constructorErrorType!,
-          inferErrorTypeFromReturnType: true,
-        }
-      : { fallible: false, hasReturnValue: true }),
-  };
-  return { initialize, construct };
+    ...(boundary === undefined ? {} : { errorType: rustErrorType(boundary) }), returnType: wrapperType,
+    body: applyFallibleShape({ statements: [...construction.declarations, ...body, ...construction.finish()] },
+      fallible ? { fallible: true, hasReturnValue: true, errorType: rustErrorType(boundary!),
+        inferErrorTypeFromReturnType: true } : { fallible: false, hasReturnValue: true }),
+  } };
 }
 
 function planImplicitProjectConstructorParameters(
@@ -684,58 +152,4 @@ function planImplicitProjectConstructorParameters(
     params.push({ name, type, mutable: false });
   }
   return { params, prelude: [] };
-}
-
-function selectedExplicitExternalBaseConstructor(
-  constructor: Node,
-  statements: readonly Node[],
-  operationId: string,
-  context: RustPlanContext,
-): Node | undefined {
-  const first = statements[0];
-  const call = first === undefined ? undefined : Node_Expression(context.input.program.source.ast, first);
-  const callee = call === undefined ? undefined : Node_Expression(context.input.program.source.ast, call);
-  const fact = call === undefined
-    ? undefined
-    : context.input.program.facts.getFact(call, rustTargetOperationFactKey);
-  if (call === undefined || context.input.program.source.ast.kindName(call) !== KindCallExpression ||
-    callee === undefined || context.input.program.source.ast.kindName(callee) !== "KindSuperKeyword" ||
-    fact?.kind !== "provider-operation" || fact.operationId !== operationId ||
-    fact.abi.operationKind !== "constructor") {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, constructor),
-      "rust.backend.external-project-super-constructor",
-      "External project heritage requires the exact selected source-profile constructor as the first super(...) statement.",
-    ));
-    return undefined;
-  }
-  return call;
-}
-
-function selectedExplicitBaseConstructor(
-  constructor: Node,
-  statements: readonly Node[],
-  base: RustProjectTypeDefinition,
-  context: RustPlanContext,
-): { readonly call: Node; readonly constructor: RustProjectConstructorSignature } | undefined {
-  const first = statements[0];
-  const call = first === undefined ? undefined : Node_Expression(context.input.program.source.ast, first);
-  const callee = call === undefined ? undefined : Node_Expression(context.input.program.source.ast, call);
-  const fact = call === undefined
-    ? undefined
-    : context.input.program.facts.getFact(call, rustTargetOperationFactKey);
-  const selected = fact?.kind === "source-call" && fact.target.form === "constructor"
-    ? context.input.program.projectTypes.constructorForTargetName(base, fact.target.name)
-    : undefined;
-  if (call === undefined || context.input.program.source.ast.kindName(call) !== KindCallExpression ||
-    callee === undefined || context.input.program.source.ast.kindName(callee) !== "KindSuperKeyword" ||
-    selected === undefined) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, constructor),
-      "rust.backend.project-super-constructor",
-      "Derived project construction requires one exact checked super(...) constructor call as its first statement.",
-    ));
-    return undefined;
-  }
-  return { call, constructor: selected };
 }

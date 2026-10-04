@@ -97,7 +97,6 @@ export function planGeneratorResumeExpression(
       expression: planRustReturnExpression(
         { kind: "path", path: returnName },
         context,
-        true,
       ),
     }, {
       pattern: {

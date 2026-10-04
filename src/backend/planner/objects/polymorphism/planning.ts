@@ -53,6 +53,7 @@ import { planProjectPrivateStateAccessors } from "./private-fields.js";
 import { rustClassEnvironmentHandleType } from "../class-environment-types.js";
 import { rustProjectTypeParameterContext } from "../../names/type-parameters.js";
 import { planRustProjectErrorWrapper } from "./project-errors.js";
+import { planRustStateConstruction } from "./state-construction.js";
 
 export function planPolymorphicClassDeclaration(
   declaration: Node,
@@ -188,8 +189,15 @@ export function planPolymorphicClassDeclaration(
       rustProjectObjectStateField,
     ),
   );
+  const stateConstruction = planRustStateConstruction(ownLayer, baseStateType, implementationContext);
+  if (stateConstruction === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, declaration),
+      "rust.backend.state-construction", "Physical native state has no exact aggregate assembly contract."));
+    return undefined;
+  }
   return [
     trait,
+    stateConstruction,
     {
       kind: "struct",
       name: definition.stateName,
@@ -323,7 +331,7 @@ export function planPolymorphicClassDeclaration(
       kind: "impl",
       generics: implementationGenerics,
       target: implementationType,
-      members: [constructor.initialize, ...(constructor.construct === undefined ? [] : [constructor.construct]), ...staticMethods],
+      members: [...(constructor.construct === undefined ? [] : [constructor.construct]), ...staticMethods],
     },
     ...(defaultImplementation === undefined ? [] : [defaultImplementation]),
     ...rootImplementations,

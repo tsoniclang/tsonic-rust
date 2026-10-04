@@ -234,7 +234,8 @@ export async function run(fail: boolean): Promise<void> {
   assert.equal([...source.matchAll(/let resource: (?:Resource|AsyncResource) =/gu)].length, 2);
   assert.match(source, /let dispatch_receiver(?:_\d+)? = resource;[\s\S]*dispatch_resource_dispose\(\)/u);
   assert.match(source, /resource\.dispose_async\(\)\.await/u);
-  assert.match(source, /let resource_flow(?:_\d+)?: rt::TsonicResult<rt::Completion<\(\)>> =\s+Ok\(rt::Completion::Normal\);/u);
+  assert.equal(/let resource_flow(?:_\d+)?: rt::TsonicResult<rt::Completion<\(\)>> =\s+async \{ Ok\(rt::Completion::Normal\) \}\.await;/u.test(source), true,
+    "empty asynchronous body must retain its normal completion before cleanup");
   validateGeneratedProject("resource-management-lexical-scope", result.artifacts);
 });
 
@@ -280,7 +281,9 @@ export function run(): void {
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /rt::TsonicResult<rt::Completion<\(\)>>/u);
   assert.match(source, /rt::finish_resource/u);
-  assert.match(source, /resource\.dispose\(\)\?/u);
+  assert.equal(/match resource\.dispose\(\)/u.test(source), true, "fallible disposal must retain native Result matching");
+  assert.equal(/Err\(error\) => break 'resource_cleanup Err\(error\)/u.test(source), true,
+    "disposal failure must leave the cleanup region, not bypass suppression");
   validateGeneratedProject("resource-management-failures", result.artifacts);
 });
 

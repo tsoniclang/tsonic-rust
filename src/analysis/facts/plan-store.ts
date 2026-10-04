@@ -22,6 +22,12 @@ import {
   rustFoundationForSelectedOperation,
 } from "../foundation/requirements.js";
 import { rustFoundationForTargetOperationFact } from "../foundation/operation-requirements.js";
+import { rustFoundationForContextualConversion, rustFoundationForFinalizedConversion, rustFoundationForValueConversion } from "../foundation/conversion-requirements.js";
+import { rustContextualValueConversionFactKey } from "./value-projections.js";
+import { rustSourceParameterAbiFactKey } from "./callables-and-resources.js";
+import { rustFutureValueFactKey } from "./object-methods.js";
+import { rustAwaitValueFactKey } from "./await-values.js";
+import { rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 import type {
   RustIterationSelection,
   RustPlanQueries,
@@ -120,6 +126,28 @@ export function createRustPlanBuilder(
             value as import("./operations/facts.js").RustTargetOperationFact, definitions,
           ),
         );
+      } else if (key === rustContextualValueConversionFactKey) {
+        const fact = get(subject, rustContextualValueConversionFactKey)!;
+        minimumFoundation = maximumRustFoundation(minimumFoundation,
+          maximumRustFoundation(rustFoundationForContextualConversion(fact.conversion, definitions),
+            maximumRustFoundation(rustFoundationForCarrier(fact.sourceCarrier), rustFoundationForCarrier(fact.targetCarrier))));
+      } else if (key === rustSourceParameterAbiFactKey) {
+        const fact = get(subject, rustSourceParameterAbiFactKey)!;
+        minimumFoundation = maximumRustFoundation(minimumFoundation,
+          maximumRustFoundation(rustFoundationForCarrier(fact.valueCarrier), rustFoundationForCarrier(fact.parameterCarrier)));
+        if (fact.entryConversion !== undefined) minimumFoundation = maximumRustFoundation(minimumFoundation,
+          rustFoundationForValueConversion(fact.entryConversion, definitions));
+      } else if (key === rustFutureValueFactKey) {
+        const fact = get(subject, rustFutureValueFactKey)!;
+        minimumFoundation = maximumRustFoundation(minimumFoundation,
+          rustFoundationForFinalizedConversion(fact.awaitedConversion, definitions));
+        if (fact.errorCarrier !== undefined) minimumFoundation = maximumRustFoundation(minimumFoundation,
+          rustFoundationForCarrier(fact.errorCarrier));
+      } else if (key === rustAwaitValueFactKey) {
+        for (const leaf of rustAwaitSelectionLeaves(get(subject, rustAwaitValueFactKey)!.selection)) {
+          if (leaf.completion.kind === "value") minimumFoundation = maximumRustFoundation(minimumFoundation,
+            rustFoundationForFinalizedConversion(leaf.completion.conversion, definitions));
+        }
       }
     },
     minimumFoundation(): RustFoundation {

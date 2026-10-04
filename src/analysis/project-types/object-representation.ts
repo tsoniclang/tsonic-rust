@@ -16,6 +16,8 @@ import {
   rustStaticLifetime,
 } from "../../target-model/lifetimes/index.js";
 import type { RustLifetimeRef } from "../../target-model/lifetimes/index.js";
+import { analyzeRustReceiverFieldAliases, type RustReceiverFieldAliasQueries } from "./receiver-field-aliases.js";
+import { analyzeRustConstructionMutation } from "./construction-effects.js";
 
 export type RustObjectRepresentationKind =
   | "value"
@@ -34,7 +36,7 @@ export interface RustObjectRepresentation {
   readonly dispatchObjectLifetime: RustLifetimeRef | undefined;
 }
 
-export interface RustObjectRepresentationPlan {
+export interface RustObjectRepresentationPlan extends RustReceiverFieldAliasQueries {
   readonly representations: readonly RustObjectRepresentation[];
   representationFor(
     definition: RustProjectTypeDefinition | undefined,
@@ -82,6 +84,12 @@ export function createRustObjectRepresentationPlanRegistry(): RustObjectRepresen
     get representations() {
       return requireCurrent().representations;
     },
+    get aliases() {
+      return requireCurrent().aliases;
+    },
+    aliasFor(declaration: Node) {
+      return requireCurrent().aliasFor(declaration);
+    },
     representationFor(definition: RustProjectTypeDefinition | undefined) {
       return requireCurrent().representationFor(definition);
     },
@@ -95,12 +103,14 @@ export function createRustObjectRepresentationPlan(
   input: RustObjectRepresentationAnalysisInput,
 ): RustObjectRepresentationPlan {
   const { origins, escapingSuspendedMethods } = collectProjectObjectOrigins(input);
+  const receiverAliases = analyzeRustReceiverFieldAliases(input);
   const mutatingMethods = collectMutatingProjectMethods(input);
   const representations = input.projectTypes.definitions.map((definition) => {
     const creationFlows = origins.get(definition) ?? [];
     const promotedStorage = creationFlows.some((flow) =>
       flow.aliasDeclarations.some(input.hasPromotedStorage));
-    const mutable = promotedStorage || creationFlows.some(flow => flow.memberWritten) || projectDefinitionIsMutable(
+    const mutable = promotedStorage || creationFlows.some(flow => flow.memberWritten) ||
+      analyzeRustConstructionMutation(definition, input, receiverAliases) || projectDefinitionIsMutable(
       definition,
       mutatingMethods,
       input,
@@ -144,6 +154,8 @@ export function createRustObjectRepresentationPlan(
   const byDefinition = new Map(representations.map((representation) =>
     [representation.definition, representation] as const));
   return Object.freeze({
+    aliases: receiverAliases.aliases,
+    aliasFor: receiverAliases.aliasFor,
     representations: Object.freeze(representations),
     representationFor(definition: RustProjectTypeDefinition | undefined) {
       return definition === undefined ? undefined : byDefinition.get(definition);

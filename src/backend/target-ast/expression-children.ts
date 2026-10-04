@@ -56,6 +56,7 @@ export function mapRustExpressionChildren(
     case "tuple-literal": return { ...expression, elements: expression.elements.map(mapExpression) };
     case "array-repeat": return { ...expression, element: mapExpression(expression.element) };
     case "closure": return { ...expression, body: mapExpression(expression.body) };
+    case "break-expression":
     case "return-expression": return expression.expr === undefined
       ? expression : { ...expression, expr: mapExpression(expression.expr) };
     case "struct-literal": return { ...expression,

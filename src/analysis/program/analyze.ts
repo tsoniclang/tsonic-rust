@@ -109,6 +109,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
       return finalizedProjectTypes?.commonSupertype(memberCarriers);
     },
     sourceCallableAbi,
+    receiverFieldAliases: context.objectRepresentations,
     projectTypes: context.projectTypes,
     projectCarrierSupportsObjectIdentity(carrier) {
       const definition = context.projectTypes.definitionForCarrier(carrier);
@@ -468,6 +469,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     semanticsFor: context.semanticsFor,
     frozenDataWrites: context.frozenDataWrites,
     mutableContentFields: mutableStorageDeclarations.declarations,
+    receiverFieldAliases: context.objectRepresentations,
   });
   // Fallibility depends on finalized operation facts and the one whole-program
   // structural storage plan produced while walking bodies.

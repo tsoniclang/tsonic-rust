@@ -20,7 +20,7 @@ import {
 } from "@tsonic/target-api/source";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { collectVariableDeclarations, planResourceManagedBody, resourceFactForPlanning } from "./resources.js";
-import { rustBlockDefinitelyExits } from "./block-flow.js";
+import { rustBlockDefinitelyExits } from "../../target-ast/normalization/block-flow.js";
 import { diagnosticInput, isValidRustIdentifier } from "../program/plan-context.js";
 import {
   expressionCarrier,

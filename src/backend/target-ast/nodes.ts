@@ -237,7 +237,7 @@ export type RustExpr =
   | { readonly kind: "option-presence"; readonly receiver: RustExpr; readonly present: boolean }
   | { readonly kind: "field"; readonly receiver: RustExpr; readonly name: string }
   | { readonly kind: "index"; readonly receiver: RustExpr; readonly index: RustExpr }
-  | { readonly kind: "block"; readonly body: RustBlock }
+  | { readonly kind: "block"; readonly label?: string; readonly body: RustBlock }
   | { readonly kind: "unsafe"; readonly expression: RustExpr }
   | { readonly kind: "evaluate-then"; readonly effect: RustExpr; readonly discard: "unit" | "value"; readonly value: RustExpr }
   | { readonly kind: "string-concat"; readonly parts: readonly RustExpr[] }
@@ -270,6 +270,7 @@ export type RustExpr =
       readonly operandErrorType: RustType;
     }
   | { readonly kind: "return-expression"; readonly expr?: RustExpr }
+  | { readonly kind: "break-expression"; readonly label: string; readonly expr?: RustExpr }
   | { readonly kind: "unreachable"; readonly message: string }
   | {
       readonly kind: "struct-literal";

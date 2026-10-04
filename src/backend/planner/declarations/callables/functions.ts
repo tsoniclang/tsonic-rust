@@ -29,7 +29,7 @@ import {
   allocateRustSyntheticName,
   createRustSyntheticNameState,
 } from "../../names/synthetic.js";
-import { applyRustTailShape, rustBlockTerminates, retainRustCheckedCompletion } from "../../statements/block-flow.js";
+import { applyRustTailShape, rustBlockTerminates, retainRustCheckedCompletion } from "../../../target-ast/normalization/block-flow.js";
 import { planExpression } from "../../expressions/index.js";
 import {
   planRustCallableParameterPrelude,
@@ -47,7 +47,6 @@ import { planRustCallableLeadingParameters } from "./leading-parameters.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { planRustLexicalFunctionEnvironment } from "./lexical-functions.js";
 
-export { applyRustTailShape, rustBlockTerminates } from "../../statements/block-flow.js";
 
 export function planFunctionDeclarations(
   node: Node,

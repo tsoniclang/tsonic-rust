@@ -393,10 +393,6 @@ export function createRustProjectTypePolicy(
       usedNames,
       "new",
     );
-    const initializeName = allocateGeneratedName(
-      usedNames,
-      "initialize_state",
-    );
     const signatures = selected.signatures.map((signature) => {
       const plan: RustProjectConstructorSignature = Object.freeze({
         signature: signature.signature,
@@ -404,7 +400,6 @@ export function createRustProjectTypePolicy(
         parameters: signature.parameters,
         implicit: selected.implicit,
         targetName,
-        initializeName,
       });
       constructorsBySignature.set(signature.signature, plan);
       return plan;
@@ -500,7 +495,6 @@ export function createRustProjectTypePolicy(
     const dispatchUsedNames = projectMemberNames(definition.declaration, host.ast, host.names);
     for (const constructor of constructorsByDefinition.get(definition) ?? []) {
       dispatchUsedNames.add(constructor.targetName);
-      dispatchUsedNames.add(constructor.initializeName);
     }
     dispatchUsedNamesByDefinition.set(definition, dispatchUsedNames);
     const moduleUsedNames = usedModuleNamesBySourceFile.get(definition.sourceFile);
