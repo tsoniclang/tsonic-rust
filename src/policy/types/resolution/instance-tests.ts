@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustProjectTypePolicy } from "../project-types.js";
+import type { RustProjectTypePolicy } from "../../../target-model/types/project-types.js";
 import type { RustTargetTypeResolutionOptions } from "./model.js";
 import type { RustSourcePolicyContext } from "../../model/context.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";

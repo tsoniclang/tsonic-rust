@@ -1,3 +1,4 @@
+import { localFiniteAwaitBranches } from "../../../../tsonic/test/fixtures/local-finite-await-branches.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust, artifactText } from "../../helpers/rust-session.mjs";
@@ -37,23 +38,7 @@ export async function main(): Promise<void> {
 
 test("local finite await branches execute exact native values, futures and absence", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"],
-    target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": `
-import type { uint64 } from "@tsonic/core/types.js";
-async function verify(deferred: boolean, absent: boolean): Promise<void> {
-  const wide: uint64 = 9007199254740993n;
-  const value = deferred ? Promise.resolve(wide) : wide;
-  if (await value !== wide) throw new Error("finite await lost native width");
-  const optional = absent ? null : deferred ? Promise.resolve(wide) : wide;
-  const result = await optional;
-  if (absent ? result !== undefined : result !== wide) throw new Error("finite await lost absence or value");
-}
-export async function main(): Promise<void> {
-  await verify(false, false);
-  await verify(true, false);
-  await verify(false, true);
-  await verify(true, true);
-}
-` } });
+    target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": localFiniteAwaitBranches } });
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /match value/u);

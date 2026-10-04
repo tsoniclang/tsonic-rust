@@ -2,7 +2,7 @@ import { allocateRustGeneratedName as allocateGeneratedName } from "../../../tar
 import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { RustNamePlan } from "../../../target-model/names/model.js";
-import type { RustProjectTypeDefinition } from "../../../policy/types/project-types.js";
+import type { RustProjectTypeDefinition } from "../../../target-model/types/project-types.js";
 import type { RustSourceGenericParameterContract } from "../../../target-model/lifetimes/index.js";
 import { rustSourceDeclarationTypeName } from "../../../policy/types/source-declarations.js";
 

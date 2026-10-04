@@ -1,5 +1,6 @@
 import { createRustProjectTypePolicy } from "./resolution.js";
-import type { RustProjectTypePolicy, RustProjectTypePolicyRegistry } from "../../../policy/types/project-types.js";
+import type { RustProjectTypePolicyRegistry } from "../../../policy/types/project-types.js";
+import type { RustProjectTypePolicy } from "../../../target-model/types/project-types.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function createRustProjectTypePolicyRegistry(): RustProjectTypePolicyRegistry {

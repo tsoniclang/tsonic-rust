@@ -1,5 +1,5 @@
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustProjectDowncastRoute, RustProjectTypePolicy } from "./project-types.js";
+import type { RustProjectDowncastRoute, RustProjectTypePolicy } from "../../target-model/types/project-types.js";
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
 import { inferRustTargetTypeParameterBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -9,7 +9,7 @@ import type { RustProjectProjectionRequirement, RustProjectProjectionSelection }
 export interface RustProjectProjectionImplementation {
   readonly route: RustProjectDowncastRoute;
   readonly sourceCarrier: TargetTypeRef;
-  readonly genericOwner?: import("./project-types.js").RustProjectTypeDefinition;
+  readonly genericOwner?: import("../../target-model/types/project-types.js").RustProjectTypeDefinition;
 }
 
 export function selectRustProjectProjectionImplementation(

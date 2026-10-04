@@ -41,6 +41,7 @@ import { planRustAbsentValue } from "../expressions/optional-storage.js";
 import { rustNativeGuardResultFactKey, rustNativeUnreachableFactKey } from "../../../analysis/facts/native-control-flow.js";
 import { planFunctionDeclarations } from "../declarations/callables/functions.js";
 import { planRustDeferredCaptureStorage } from "../bindings/deferred-captures.js";
+import { planRustLexicalFunctionValues } from "../declarations/callables/lexical-values.js";
 
 export type RustAssignmentOperationFact = Extract<
   RustTargetOperationFact,
@@ -178,8 +179,9 @@ export function planStatementSequence(
   children: readonly (Node | undefined)[],
   diagnosticNode: Node,
   context: RustPlanContext,
+  initializeScope = true,
 ): RustBlock | undefined {
-  const prologue = planRustDeferredCaptureStorage(diagnosticNode, context);
+  const prologue = initializeScope ? planRustDeferredCaptureStorage(diagnosticNode, context) : [];
   if (prologue === undefined) return undefined;
   const statements: RustStmt[] = [...prologue];
   let failed = false;
@@ -195,11 +197,15 @@ export function planStatementSequence(
       failed = true;
       continue;
     }
+    const callableValues = planRustLexicalFunctionValues(child, sequenceContext);
+    if (callableValues === undefined) return undefined;
+    statements.push(...callableValues);
     if (isRustExplicitUnsafeBlockMarker(child, sequenceContext.input)) {
       const body = planStatementSequence(
         children.slice(index + 1),
         diagnosticNode,
         withExplicitUnsafeContext(sequenceContext),
+        false,
       );
       if (body === undefined) {
         return undefined;

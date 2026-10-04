@@ -157,19 +157,22 @@ export function createRustNamePlan(input: {
     }
     moduleValueNames.set(candidate.scope, used);
   }
-  const topLevelCallables = candidates
-    .filter((candidate) => input.ast.kindName(candidate.scope) === "KindSourceFile" &&
-      (input.ast.kindName(candidate.declaration) === "KindFunctionDeclaration" ||
-        input.ast.kindName(candidate.declaration) === "KindVariableDeclaration"))
+  const callableCandidates = candidates
+    .filter((candidate) => input.ast.kindName(candidate.declaration) === "KindFunctionDeclaration" ||
+      input.ast.kindName(candidate.scope) === "KindSourceFile" &&
+        input.ast.kindName(candidate.declaration) === "KindVariableDeclaration")
     .sort((left, right) => left.start - right.start || left.end - right.end);
-  for (const candidate of topLevelCallables) {
+  for (const candidate of callableCandidates) {
     if (!input.runtimeValueUses.hasFirstClassUse(candidate.declaration)) {
       continue;
     }
-    const used = moduleValueNames.get(candidate.scope) ?? new Set<string>();
-    const base = `${rustScreamingSnakeIdentifier(candidate.sourceName)}_CALLABLE`;
+    const moduleScoped = input.ast.kindName(candidate.scope) === "KindSourceFile";
+    const used = moduleScoped ? moduleValueNames.get(candidate.scope) ?? new Set<string>()
+      : reservedNames.get(candidate.scope)!;
+    const base = moduleScoped ? `${rustScreamingSnakeIdentifier(candidate.sourceName)}_CALLABLE`
+      : rustSnakeCaseIdentifier(`${candidate.sourceName}_callable`);
     const valueName = allocateRustGeneratedName(used, base);
-    moduleValueNames.set(candidate.scope, used);
+    if (moduleScoped) moduleValueNames.set(candidate.scope, used);
     callableValueNames.set(candidate.declaration, valueName);
   }
   return Object.freeze({

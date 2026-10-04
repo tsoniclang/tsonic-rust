@@ -1,6 +1,5 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceDeclaredHeritageEdge } from "@tsonic/target-api/source";
-import type { TargetTypeRef } from "../../target-model/types/model.js";
 import {
   rustJsErrorTargetType,
   rustOptionTargetType,
@@ -8,27 +7,7 @@ import {
 } from "../../target-model/types/index.js";
 import type { RustSourceProfileRegistry } from "./source-profile.js";
 
-export interface RustExternalProjectField {
-  readonly declaration: Node;
-  readonly sourceName: string;
-  readonly storageIndex: number;
-  readonly carrier: TargetTypeRef;
-  readonly initializer:
-    | { readonly kind: "string"; readonly value: string }
-    | { readonly kind: "message"; readonly parameterIndex: number }
-    | { readonly kind: "none" };
-}
-
-export interface RustExternalProjectBase {
-  readonly id: "rust.source-profile.Error";
-  readonly declaration: Node;
-  readonly targetType: TargetTypeRef;
-  readonly constructorOperationId: "tsonic.rust.error.constructor";
-  readonly constructorPath: "rt::JsError::error";
-  readonly constructorDeclarations: readonly Node[];
-  readonly fields: readonly RustExternalProjectField[];
-  readonly programError: true;
-}
+import type { RustExternalProjectBase, RustExternalProjectField } from "../../target-model/types/external-project-types.js";
 
 const errorFieldPolicy = Object.freeze([
   Object.freeze({ sourceName: "name", initializer: Object.freeze({ kind: "string" as const, value: "Error" }) }),

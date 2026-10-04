@@ -1,4 +1,4 @@
-import type { RustProjectTypeDefinition } from "../../../../policy/types/project-types.js";
+import type { RustProjectTypeDefinition } from "../../../../target-model/types/project-types.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustExpr, RustImplFunction, RustItem, RustType } from "../../../target-ast/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/nodes.js";

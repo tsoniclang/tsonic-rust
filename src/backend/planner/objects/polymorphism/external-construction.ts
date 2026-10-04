@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustProjectConstructorSignature } from "../../../../policy/types/project-types.js";
-import type { RustExternalProjectBase } from "../../../../policy/types/external-project-types.js";
+import type { RustProjectConstructorSignature } from "../../../../target-model/types/project-types.js";
+import type { RustExternalProjectBase } from "../../../../target-model/types/external-project-types.js";
 import { rustSourceParameterAbiFactKey, rustTargetOperationFactKey } from "../../../../analysis/facts/keys.js";
 import { validateRustFinalizedOperationAbi } from "../../../../analysis/facts/finalized-operation-abi.js";
 import { rustSourceOptionalTargetType, rustStringTargetType } from "../../../../target-model/types/index.js";

@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustProjectUnionMapConversion } from "../../../target-model/conversions/project-union.js";
 import { rustProjectUnionMapConversionMatches } from "../../../target-model/conversions/project-union.js";
-import { rustProjectUnionUpcastRelation } from "../../../policy/types/project-union-mappings.js";
+import { rustProjectUnionUpcastRelation } from "../../../target-model/conversions/project-union-relations.js";
 import type { RustFlowReadProjectionFact, RustProjectUpcastFact } from "../../../target-model/types/value-projections.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";

@@ -48,7 +48,7 @@ import type { RustExpr } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustSelectedTargetSignature as SelectedTargetSignatureFact, TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
-import type { RustProjectTypePolicy } from "../../../../policy/types/project-types.js";
+import type { RustProjectTypePolicy } from "../../../../target-model/types/project-types.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../../target-model/types/source-union-definitions.js";
 import { rustSourceCallResultProjectionMatches } from "../../../../analysis/facts/source-call-results.js";
 

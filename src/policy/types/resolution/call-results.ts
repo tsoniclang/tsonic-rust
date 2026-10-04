@@ -1,6 +1,6 @@
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustFlowReadProjectionFact } from "../../../target-model/types/value-projections.js";
-import type { RustProjectTypePolicy } from "../project-types.js";
+import type { RustProjectTypePolicy } from "../../../target-model/types/project-types.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectRustProjectProjection } from "../project-projections.js";
 import { selectRustFlowReadProjection } from "../value-carrier-reconciliation.js";

@@ -20,6 +20,7 @@ export function rustCapturedBindingStorage(
   carrier: TargetTypeRef | undefined,
   permitSingleOwner: boolean,
   nativeCallTrait?: "Fn" | "FnMut" | "FnOnce",
+  captureRoots: readonly Node[] = [owner],
 ): RustCaptureStorage | undefined {
   const cached = walk.capturedBindingStorage.get(declaration);
   if (cached !== undefined) {
@@ -39,7 +40,7 @@ export function rustCapturedBindingStorage(
   const existing = walk.context.facts.get(declaration, rustBindingStorageFactKey);
   const deferred = sourceBindingCapturedBeforeInitialization(declaration, walk.context.ast, walk.context.source.navigation);
   const unique = mutated && permitSingleOwner && existing === undefined &&
-    singleOwnerDirectBinding(walk, declaration, owner);
+    singleOwnerDirectBinding(walk, declaration, owner, captureRoots);
   const storage: RustCaptureStorage = deferred
     ? { storage: "location", initialization: "deferred" }
     : existing?.storage === "location"
@@ -54,13 +55,14 @@ export function rustCapturedBindingStorage(
   return storage;
 }
 
-function singleOwnerDirectBinding(walk: RustFactWalk, declaration: Node, owner: Node): boolean {
+function singleOwnerDirectBinding(walk: RustFactWalk, declaration: Node, owner: Node, captureRoots: readonly Node[]): boolean {
   const { ast, source } = walk.context;
   if (!["KindVariableDeclaration", "KindParameter"].includes(ast.kindName(declaration))) return false;
-  if (!sourceBindingHasSingleCaptureOwner(declaration, owner, [owner], ast, source.navigation)) return false;
+  if (!sourceBindingHasSingleCaptureOwner(declaration, owner, captureRoots, ast, source.navigation)) return false;
+  const roots = new Set(captureRoots);
   return source.navigation.declarationUseSummary(declaration).uses.every(use => {
     if (use.kind === "type-only") return true;
-    for (let current = ast.parent(use.reference); current !== owner; current = ast.parent(current)) {
+    for (let current = ast.parent(use.reference); current === undefined || !roots.has(current); current = ast.parent(current)) {
       if (current === undefined || ["KindArrowFunction", "KindFunctionExpression", "KindFunctionDeclaration",
         "KindMethodDeclaration", "KindGetAccessor", "KindSetAccessor", "KindConstructor"].includes(ast.kindName(current))) return false;
     }

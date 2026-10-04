@@ -10,18 +10,31 @@ export function retainRustCheckedCompletion(body: RustBlock, canFallThrough: boo
 }
 
 export function rustBlockTerminates(block: RustBlock): boolean {
-  const last = block.statements[block.statements.length - 1];
+  return rustBlockExits(block, false);
+}
+
+export function rustBlockDefinitelyExits(block: RustBlock): boolean {
+  return rustBlockExits(block, true);
+}
+
+function rustBlockExits(block: RustBlock, includeRegionExits: boolean): boolean {
+  let index = block.statements.length - 1;
+  while (index >= 0 && block.statements[index]?.kind === "item") index -= 1;
+  const last = block.statements[index];
   if (last === undefined) {
     return false;
   }
   if (last.kind === "return" || last.kind === "tail" || last.kind === "throw") {
     return true;
   }
+  if (includeRegionExits && (last.kind === "break" || last.kind === "continue" || last.kind === "completion-exit")) {
+    return true;
+  }
   if (last.kind === "expr" && rustExpressionAlwaysExits(last.expr)) {
     return true;
   }
   if (last.kind === "scope" || last.kind === "unsafe-scope") {
-    return rustBlockTerminates(last.body);
+    return rustBlockExits(last.body, includeRegionExits);
   }
   if (last.kind === "resource-scope") {
     return last.terminates;
@@ -33,7 +46,7 @@ export function rustBlockTerminates(block: RustBlock): boolean {
     return true;
   }
   return last.kind === "if" && last.else !== undefined &&
-    rustBlockTerminates(last.then) && rustBlockTerminates(last.else);
+    rustBlockExits(last.then, includeRegionExits) && rustBlockExits(last.else, includeRegionExits);
 }
 
 export function applyRustTailShape(body: RustBlock, hasReturnValue: boolean): RustBlock {

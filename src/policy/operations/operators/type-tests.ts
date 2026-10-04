@@ -1,4 +1,4 @@
-import type { RustProjectTypePolicy } from "../../types/project-types.js";
+import type { RustProjectTypePolicy } from "../../../target-model/types/project-types.js";
 import { isRustJsArrayValueCarrier } from "../../../target-model/types/carriers/array-values.js";
 import type { RustClosedTypePredicate, RustClosedTypeTestPlan, RustProjectTypeTestPlan } from "../../../target-model/operations/type-tests.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";

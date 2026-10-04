@@ -10,7 +10,6 @@ import { Node_Expression } from "@tsonic/target-api/source";
 import { analyzeRustProgram } from "./analyze.js";
 import { analyzeRustNumericRepresentations } from "../numeric/representations.js";
 import { createRustAnalysisContext } from "./context.js";
-import { createRustLexicalFunctionQueries } from "../callables/lexical-functions.js";
 import type {
   AnalyzeRustTargetProgramResult,
   RustTargetAnalysisRequest,
@@ -106,10 +105,11 @@ export function analyzeRustTargetProgram(
     jsEnabled,
     rootPublishesLibrary,
   );
-  analyzeRustProgram(context);
+  const lexicalFunctions = analyzeRustProgram(context);
   if (context.diagnostics.length > 0) {
     return rejectedTargetStage(context.diagnostics);
   }
+  if (lexicalFunctions === undefined) throw new Error("Rust program analysis completed without its sealed lexical callable index.");
 
   const sourcePackageFacades = analyzeRustSourcePackageFacades(context);
   if (sourcePackageFacades.kind === "rejected") {
@@ -141,7 +141,6 @@ export function analyzeRustTargetProgram(
     return rejectedTargetStage(foundation.diagnostics);
   }
   const facts = context.facts.seal();
-  const lexicalFunctions = createRustLexicalFunctionQueries(context.source, context.sourceFiles, facts, context.sourceLifetimes);
   const valueLifetimes = analyzeRustValueLifetimes({
     ast: context.ast,
     sourceFiles: context.sourceFiles,
@@ -169,6 +168,10 @@ export function analyzeRustTargetProgram(
     captureRootsFor: (closure) => {
       const selection = lexicalFunctions.forDeclaration(closure);
       return selection?.kind === "resolved" ? selection.captureRoots : [closure];
+    },
+    ownsCaptureEnvironment: closure => {
+      const selection = lexicalFunctions.forDeclaration(closure);
+      return selection?.kind === "resolved" && selection.valueObserved;
     },
     isOnceCallable: (closure) => {
       const carrier = facts.getRuntimeCarrierFact(closure)?.carrier;

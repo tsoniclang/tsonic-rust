@@ -4,6 +4,7 @@ import { sourceMayReadBeforeInitialization } from "@tsonic/target-api/source";
 import type { RustSafetyApplicationFactIndex } from "../safety/application-index.js";
 
 export interface RustRuntimeValueUsePlan {
+  isRuntimeReference(declaration: Node, reference: Node): boolean;
   hasFirstClassUse(declaration: Node): boolean;
   hasSameFileRuntimeUseBeforeDeclaration(declaration: Node): boolean;
 }
@@ -15,18 +16,17 @@ export function createRustRuntimeValueUsePlan(input: {
 }): RustRuntimeValueUsePlan {
   const firstClassUseByDeclaration = new WeakMap<Node, boolean>();
   const earlyRuntimeUseByDeclaration = new WeakMap<Node, boolean>();
+  const isRuntimeReference = (declaration: Node, reference: Node): boolean =>
+    !input.safetyApplications.isCompileTimeApplicationReference(declaration, reference);
   return Object.freeze({
+    isRuntimeReference,
     hasFirstClassUse(declaration: Node) {
       const existing = firstClassUseByDeclaration.get(declaration);
       if (existing !== undefined) {
         return existing;
       }
       const observed = input.navigation.declarationUses(declaration).some(
-        (use) => use.kind === "first-class" &&
-          !input.safetyApplications.isCompileTimeApplicationReference(
-            declaration,
-            use.reference,
-          ),
+        (use) => use.kind === "first-class" && isRuntimeReference(declaration, use.reference),
       );
       firstClassUseByDeclaration.set(declaration, observed);
       return observed;

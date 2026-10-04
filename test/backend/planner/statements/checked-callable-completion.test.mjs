@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { applyRustTailShape, retainRustCheckedCompletion, rustBlockTerminates } from "../../../../dist/backend/planner/statements/block-flow.js";
+import { applyRustTailShape, retainRustCheckedCompletion, rustBlockDefinitelyExits, rustBlockTerminates } from "../../../../dist/backend/planner/statements/block-flow.js";
 import { acmeTestingPackage, artifactText, compileRust } from "../../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
 
@@ -32,6 +32,20 @@ test("only an exact no-fallthrough proof adds a safe terminal assertion", () => 
   assert.equal(retained.statements[1].expr.expression.kind, "unreachable");
   assert.equal(rustBlockTerminates(retained), true);
   assert.equal(retainRustCheckedCompletion(retained, false), retained);
+});
+
+test("native item declarations do not execute after lexical completion", () => {
+  const item = { kind: "item", item: { kind: "function", name: "read", visibility: "private", parameters: [],
+    body: { statements: [] } } };
+  const returned = { statements: [{ kind: "return", expr: { kind: "number-literal", value: 3 } }, item] };
+  assert.equal(rustBlockTerminates(returned), true);
+  assert.equal(rustBlockDefinitelyExits(returned), true);
+  assert.equal(retainRustCheckedCompletion(returned, false), returned);
+  assert.equal(applyRustTailShape(returned, true), returned);
+  assert.equal(rustBlockTerminates({ statements: [item] }), false);
+  const broken = { statements: [{ kind: "break" }, item] };
+  assert.equal(rustBlockTerminates(broken), false);
+  assert.equal(rustBlockDefinitelyExits(broken), true);
 });
 
 test("exhaustive switches retain function, method and closure return flow", { timeout: 300_000 }, () => {

@@ -1,6 +1,7 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { createSourceSingleInvocationQuery, forEachSourceImmediateEvaluationChild, Node_Initializer, sourceDeclarationIsModuleScoped,
-  sourceLexicalCaptures, type TargetSourceProgram } from "@tsonic/target-api/source";
+  sourceLexicalEnvironment, sourceLexicalFunctionValueCreation, sourceLexicalFunctionValueOrder,
+  type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import { rustTargetOperationFactKey, rustSourceCallableReturnFactKey } from "../facts/keys.js";
 import { rustTypedLocationStorageRootReference } from "../operations/typed-locations.js";
@@ -9,6 +10,8 @@ import { rustTargetGenericReferences } from "../../target-model/types/carriers/g
 import type { RustLifetimeIndex, RustSourceGenericParameterContract } from "../../target-model/lifetimes/index.js";
 import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
 import { resolveRustEnclosingGenericParameters } from "../declarations/generic-environment.js";
+import { rustCompileTimeSourceKey } from "../../target-model/facts/source-declarations.js";
+import type { RustRuntimeValueUsePlan } from "../program/runtime-value-uses.js";
 
 export interface RustLexicalFunctionCapture {
   readonly declaration: Node;
@@ -19,11 +22,13 @@ export interface RustLexicalFunctionCapture {
 export type RustLexicalFunctionSelection =
   | { readonly kind: "resolved"; readonly captures: readonly RustLexicalFunctionCapture[];
       readonly genericParameters: readonly RustSourceGenericParameterContract[]; readonly valueObserved: boolean;
+      readonly inlineValueReference?: Node;
       readonly singleInvocation: boolean; readonly captureRoots: readonly Node[] }
   | { readonly kind: "unresolved"; readonly reason: string };
 
 export interface RustLexicalFunctionQueries {
   forDeclaration(declaration: Node): RustLexicalFunctionSelection | undefined;
+  valueDeclarationsAt(statement: Node): readonly Node[];
 }
 
 const maximumLexicalFunctions = 65_536;
@@ -35,6 +40,7 @@ export function createRustLexicalFunctionQueries(
   sourceFiles: readonly SourceFile[],
   facts: RustPlanQueries,
   lifetimes: RustLifetimeIndex,
+  runtimeValueUses: RustRuntimeValueUsePlan,
 ): RustLexicalFunctionQueries {
   const { ast, navigation } = source;
   const declarations: Node[] = [];
@@ -55,15 +61,19 @@ export function createRustLexicalFunctionQueries(
   const genericIdentities = new Map<Node, Set<string>>();
   let rows = 0;
   for (const declaration of declarations) {
-    const selected = sourceLexicalCaptures(declaration, [declaration], ast, navigation);
+    const selected = sourceLexicalEnvironment(declaration, [declaration], ast, navigation,
+      (use, referencedDeclaration) => facts.getFact(use.reference, rustCompileTimeSourceKey) !== true &&
+        runtimeValueUses.isRuntimeReference(referencedDeclaration, use.reference));
+    if (selected.kind === "unresolved") return exhausted(selected.reason);
     const evaluated = new Set<Node>();
     const mutationRoots = new Set<Node>();
-    const body = ast.body(declaration);
-    const evaluatedPending = body === undefined ? [] : [body];
-    for (const parameter of ast.parameters(declaration)) {
-      const initializer = Node_Initializer(ast, parameter);
-      if (initializer !== undefined) evaluatedPending.push(initializer);
-    }
+    const evaluatedPending = selected.callableRoots.flatMap(owner => {
+      const body = ast.body(owner);
+      return [...(body === undefined ? [] : [body]), ...ast.parameters(owner).flatMap(parameter => {
+        const initializer = Node_Initializer(ast, parameter);
+        return initializer === undefined ? [] : [initializer];
+      })];
+    });
     while (evaluatedPending.length > 0) {
       if (++steps > maximumLexicalCaptureSteps) return exhausted();
       const node = evaluatedPending.pop()!;
@@ -85,12 +95,8 @@ export function createRustLexicalFunctionQueries(
       forEachSourceImmediateEvaluationChild(ast, node, child => evaluatedPending.push(child));
     }
     const values = new Map<Node, RustLexicalFunctionCapture>();
-    const calls: Node[] = [];
+    const calls = selected.callableRoots.filter(owner => owner !== declaration && declarationSet.has(owner));
     for (const capture of selected.captures) {
-      if (ast.is.IsFunctionDeclaration(capture.declaration) && declarationSet.has(capture.declaration)) {
-        calls.push(capture.declaration);
-        continue;
-      }
       const reference = capture.references[capture.references.length - 1];
       if (reference === undefined) continue;
       const symbol = navigation.sourceReferenceFor(reference)?.symbol;
@@ -98,7 +104,8 @@ export function createRustLexicalFunctionQueries(
         declaration: capture.declaration,
         reference,
         mutable: mutationRoots.has(capture.declaration) || symbol !== undefined &&
-          navigation.bindingWritesWithin(symbol, declaration).some(write => evaluated.has(write.operation)),
+          selected.callableRoots.some(owner =>
+            navigation.bindingWritesWithin(symbol, owner).some(write => evaluated.has(write.operation))),
       }));
       if (++rows > maximumLexicalCaptureRows) return exhausted();
     }
@@ -125,7 +132,6 @@ export function createRustLexicalFunctionQueries(
   while (changed) {
     changed = false;
     for (const declaration of declarations) {
-      const values = captures.get(declaration)!;
       for (const callee of callees.get(declaration)!) {
         const bound = new Set((lifetimes.contractFor(callee)?.parameters ?? []).map(parameter =>
           parameter.kind === "type" ? parameter.identity : rustLifetimeKey(parameter.lifetime)));
@@ -136,20 +142,25 @@ export function createRustLexicalFunctionQueries(
             changed = true;
           }
         }
-        for (const capture of captures.get(callee)!.values()) {
-          if (++steps > maximumLexicalCaptureSteps) return exhausted();
-          const previous = values.get(capture.declaration);
-          if (within(capture.declaration, declaration) || previous !== undefined && (!capture.mutable || previous.mutable)) continue;
-          values.set(capture.declaration, previous === undefined ? capture : Object.freeze({ ...previous, mutable: true }));
-          if (++rows > maximumLexicalCaptureRows) return exhausted();
-          changed = true;
-        }
       }
     }
   }
   const selections = new Map<Node, RustLexicalFunctionSelection>();
+  const valueDeclarations = new Map<Node, Node[]>();
   const singleInvocation = createSourceSingleInvocationQuery(ast, navigation);
   for (const declaration of declarations) {
+    const creation = sourceLexicalFunctionValueCreation(declaration, ast, navigation,
+      (use, referencedDeclaration) => facts.getFact(use.reference, rustCompileTimeSourceKey) !== true &&
+        runtimeValueUses.isRuntimeReference(referencedDeclaration, use.reference));
+    if (creation.kind === "unresolved") {
+      selections.set(declaration, Object.freeze({ kind: "unresolved", reason: creation.reason }));
+      continue;
+    }
+    if (creation.kind === "resolved" && creation.inlineReference === undefined) {
+      const scheduled = valueDeclarations.get(creation.statement) ?? [];
+      scheduled.push(declaration);
+      valueDeclarations.set(creation.statement, scheduled);
+    }
     const roots = new Set<Node>();
     const rootPending = [declaration];
     while (rootPending.length > 0) {
@@ -167,23 +178,30 @@ export function createRustLexicalFunctionQueries(
     selections.set(declaration, Object.freeze(parameters === undefined
       ? { kind: "unresolved", reason: "A lexical function lost its exact enclosing generic or lifetime declarations." }
       : { kind: "resolved", captures: Object.freeze([...captures.get(declaration)!.values()]), genericParameters: parameters,
-          valueObserved: navigation.declarationUseSummary(declaration).firstClassUseCount > 0,
+          valueObserved: creation.kind === "resolved",
+          ...(creation.kind === "resolved" && creation.inlineReference !== undefined
+            ? { inlineValueReference: creation.inlineReference } : {}),
           singleInvocation: singleInvocation(declaration), captureRoots: Object.freeze([...roots]) }));
   }
-  return Object.freeze({ forDeclaration: (declaration: Node) => selections.get(declaration) });
-
-  function within(node: Node, owner: Node): boolean {
-    for (let current: Node | undefined = node; current !== undefined; current = ast.parent(current)) {
-      if (current === owner) return true;
-    }
-    return false;
+  const empty: readonly Node[] = Object.freeze([]);
+  const scheduled = new Map<Node, readonly Node[]>();
+  for (const [statement, values] of valueDeclarations) {
+    const ordered = sourceLexicalFunctionValueOrder(values, ast, navigation,
+      (use, referencedDeclaration) => facts.getFact(use.reference, rustCompileTimeSourceKey) !== true &&
+        runtimeValueUses.isRuntimeReference(referencedDeclaration, use.reference));
+    if (ordered.kind === "resolved") scheduled.set(statement, ordered.declarations);
+    else for (const declaration of values) selections.set(declaration, Object.freeze(ordered));
   }
+  return Object.freeze({ forDeclaration: (declaration: Node) => selections.get(declaration),
+    valueDeclarationsAt: (statement: Node) => scheduled.get(statement) ?? empty });
 
-  function exhausted(): RustLexicalFunctionQueries {
+
+  function exhausted(reason = "Lexical function capture analysis exceeded its finite resource budget."): RustLexicalFunctionQueries {
     const selection: RustLexicalFunctionSelection = Object.freeze({
-      kind: "unresolved", reason: "Lexical function capture analysis exceeded its finite resource budget.",
+      kind: "unresolved", reason,
     });
     return Object.freeze({ forDeclaration: (declaration: Node) =>
-      ast.is.IsFunctionDeclaration(declaration) && !sourceDeclarationIsModuleScoped(declaration, ast) ? selection : undefined });
+      ast.is.IsFunctionDeclaration(declaration) && !sourceDeclarationIsModuleScoped(declaration, ast) ? selection : undefined,
+      valueDeclarationsAt: () => Object.freeze([]) });
   }
 }

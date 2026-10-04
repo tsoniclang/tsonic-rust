@@ -1,165 +1,21 @@
-import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
 import type {
   AstReader,
   Node,
-  Signature,
   SourceFile,
   Type,
 } from "@tsonic/tsts";
 import type {
-  SourceClassConstructorParameter,
   SourceDeclaredHeritageEdge,
   SourceProgramNavigation,
-  SourceProjectMemberImplementationResult,
 } from "@tsonic/target-api/source";
-import type { RustExternalProjectBase, RustExternalProjectField } from "./external-project-types.js";
+import type { RustExternalProjectBase } from "../../target-model/types/external-project-types.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type {
   RustLifetimeIndex,
   RustSourceGenericParameterContract,
 } from "../../target-model/lifetimes/index.js";
-
-export interface RustProjectTypeIssue {
-  readonly node: Node;
-  readonly code: string;
-  readonly message: string;
-}
-
-export type RustProjectMemberSlotRole =
-  | "read"
-  | "write"
-  | "virtual"
-  | "exact"
-  | "method-write"
-  | "static";
-
-export interface RustProjectMemberSlotCandidate {
-  readonly declaration: Node;
-  readonly targetName: string;
-  readonly roles: readonly RustProjectMemberSlotRole[];
-}
-
-export interface RustProjectTypeDefinition {
-  readonly declaration: Node;
-  readonly sourceFile: SourceFile;
-  readonly fileName: string;
-  readonly sourceName: string;
-  readonly targetName: string;
-  readonly targetPath: string;
-  readonly kind: "class" | "interface";
-  readonly genericParameters: readonly RustSourceGenericParameterContract[];
-  readonly typeParameterIdentities: readonly string[];
-  readonly stateName: string;
-  readonly dispatchName: string;
-  readonly rootName?: string;
-}
-
-export interface RustProjectInstanceContract {
-  readonly definition: RustProjectTypeDefinition;
-  readonly carrier: TargetTypeRef;
-}
-
-export interface RustProjectConstructorSignature {
-  readonly signature: Signature;
-  readonly declaration?: Node;
-  readonly parameters: readonly SourceClassConstructorParameter[];
-  readonly implicit: boolean;
-  readonly targetName: string;
-  readonly initializeName: string;
-}
-
-export interface RustProjectHeritageEdge {
-  readonly kind: "extends" | "implements";
-  readonly source: RustProjectTypeDefinition;
-  readonly target: RustProjectTypeDefinition;
-  readonly heritage: Node;
-  readonly targetType: TargetTypeRef;
-}
-
-export type RustProjectTypeRelationship =
-  | { readonly kind: "related"; readonly targetType: TargetTypeRef }
-  | { readonly kind: "unrelated" }
-  | { readonly kind: "ambiguous"; readonly targetTypes: readonly TargetTypeRef[] };
-
-export interface RustProjectDowncastRoute {
-  readonly kind: "closed" | "checked";
-  readonly source: RustProjectTypeDefinition;
-  readonly target: RustProjectTypeDefinition;
-  readonly targetCarrier: TargetTypeRef;
-  readonly slot: string;
-}
-
-export interface RustProjectTypePolicy {
-  readonly definitions: readonly RustProjectTypeDefinition[];
-  readonly issues: readonly RustProjectTypeIssue[];
-  definitionForDeclaration(declaration: Node | undefined): RustProjectTypeDefinition | undefined;
-  definitionContainingDeclaration(declaration: Node | undefined): RustProjectTypeDefinition | undefined;
-  definitionForCarrier(carrier: TargetTypeRef | undefined): RustProjectTypeDefinition | undefined;
-  openCarrier(definition: RustProjectTypeDefinition): TargetTypeRef;
-  heritageForDefinition(definition: RustProjectTypeDefinition): readonly RustProjectHeritageEdge[];
-  externalBaseForDefinition(definition: RustProjectTypeDefinition): RustExternalProjectBase | undefined;
-  inheritedExternalBaseForDefinition(definition: RustProjectTypeDefinition): {
-    readonly owner: RustProjectTypeDefinition;
-    readonly base: RustExternalProjectBase;
-  } | undefined;
-  externalFieldForReceiver(
-    declaration: Node | undefined,
-    receiver: TargetTypeRef | undefined,
-  ): {
-    readonly owner: RustProjectTypeDefinition;
-    readonly base: RustExternalProjectBase;
-    readonly field: RustExternalProjectField;
-    readonly ownerCarrier: TargetTypeRef;
-  } | undefined;
-  readonly programErrorDefinitions: readonly RustProjectTypeDefinition[];
-  readonly sourceErrorDefinitions: readonly RustProjectTypeDefinition[];
-  readonly sourceCreatedErrorOrigins: readonly Node[];
-  sourceErrorCarrier(): TargetTypeRef;
-  programErrorVariant(definition: RustProjectTypeDefinition): string | undefined;
-  directSupertypes(carrier: TargetTypeRef): readonly TargetTypeRef[] | undefined;
-  commonSupertype(carriers: readonly TargetTypeRef[]): TargetTypeRef | undefined;
-  relationship(source: TargetTypeRef, target: RustProjectTypeDefinition): RustProjectTypeRelationship;
-  instantiateMemberCarrier(
-    member: Node,
-    receiver: TargetTypeRef,
-    declaredCarrier: TargetTypeRef,
-  ): TargetTypeRef | undefined;
-  isPolymorphic(definition: RustProjectTypeDefinition): boolean;
-  classLineage(definition: RustProjectTypeDefinition): readonly RustProjectTypeDefinition[] | undefined;
-  contractsForClass(definition: RustProjectTypeDefinition): readonly RustProjectTypeDefinition[] | undefined;
-  concreteClassesFor(definition: RustProjectTypeDefinition): readonly RustProjectTypeDefinition[];
-  downcastRoutesFor(definition: RustProjectTypeDefinition): readonly RustProjectDowncastRoute[];
-  checkedProjectionSlot(definition: RustProjectTypeDefinition): string | undefined;
-  downcastRoute(
-    source: RustProjectTypeDefinition,
-    targetCarrier: TargetTypeRef,
-  ): RustProjectDowncastRoute | undefined;
-  constructorsForDefinition(definition: RustProjectTypeDefinition): readonly RustProjectConstructorSignature[];
-  constructorForSignature(
-    definition: RustProjectTypeDefinition,
-    signature: Signature | undefined,
-  ): RustProjectConstructorSignature | undefined;
-  constructorForTargetName(
-    definition: RustProjectTypeDefinition,
-    targetName: string,
-  ): RustProjectConstructorSignature | undefined;
-  fieldStorageName(
-    definition: RustProjectTypeDefinition,
-    declaration: Node,
-  ): string | undefined;
-  baseStateFieldName(definition: RustProjectTypeDefinition): string;
-  stateMarkerFieldName(definition: RustProjectTypeDefinition): string;
-  memberSlotName(
-    declaration: Node,
-    role: RustProjectMemberSlotRole,
-  ): string | undefined;
-  callableTargetName(declaration: Node): string | undefined;
-  memberImplementation(
-    concreteClass: RustProjectTypeDefinition,
-    contractMember: Node,
-  ): SourceProjectMemberImplementationResult;
-}
 
 export interface RustProjectTypePolicyHost {
   collectImplicitInterfaces(): readonly import("../../target-model/types/project-interfaces.js").RustImplicitInterfaceContract[];
@@ -182,72 +38,6 @@ export interface RustProjectTypePolicyHost {
     heritage: Node,
   ): TargetTypeRef | undefined;
   resolveExternalHeritage(edge: SourceDeclaredHeritageEdge): RustExternalProjectBase | undefined;
-}
-
-export function rustProjectInstanceContracts(
-  policy: RustProjectTypePolicy,
-  definition: RustProjectTypeDefinition,
-  carrier: TargetTypeRef,
-): readonly RustProjectInstanceContract[] | undefined {
-  const ordered: RustProjectInstanceContract[] = [];
-  const visiting = new Set<RustProjectTypeDefinition>();
-  const visited = new Map<RustProjectTypeDefinition, TargetTypeRef>();
-  const visit = (current: RustProjectTypeDefinition): boolean => {
-    const relation = policy.relationship(carrier, current);
-    if (relation.kind !== "related") {
-      return false;
-    }
-    const previous = visited.get(current);
-    if (previous !== undefined) {
-      return rustTargetTypeRefEquals(previous, relation.targetType);
-    }
-    if (visiting.has(current)) {
-      return false;
-    }
-    visiting.add(current);
-    for (const edge of policy.heritageForDefinition(current)) {
-      if (!visit(edge.target)) {
-        return false;
-      }
-    }
-    visiting.delete(current);
-    visited.set(current, relation.targetType);
-    ordered.push(Object.freeze({
-      definition: current,
-      carrier: relation.targetType,
-    }));
-    return true;
-  };
-  return visit(definition) ? Object.freeze(ordered) : undefined;
-}
-
-export function rustInheritedProjectConstructor(
-  policy: RustProjectTypePolicy,
-  definition: RustProjectTypeDefinition,
-  signature: RustProjectConstructorSignature,
-): {
-  readonly base: RustProjectTypeDefinition;
-  readonly constructor: RustProjectConstructorSignature;
-} | undefined {
-  if (!signature.implicit) {
-    return undefined;
-  }
-  const baseEdges = policy.heritageForDefinition(definition).filter((edge) =>
-    edge.kind === "extends" && edge.target.kind === "class");
-  if (baseEdges.length !== 1) {
-    return undefined;
-  }
-  const base = baseEdges[0]!.target;
-  const matches = policy.constructorsForDefinition(base).filter((candidate) =>
-    candidate.parameters.length === signature.parameters.length &&
-    candidate.parameters.every((parameter, index) => {
-      const selected = signature.parameters[index];
-      return selected !== undefined &&
-        parameter.parameterDeclaration === selected.parameterDeclaration &&
-        parameter.acceptsOmission === selected.acceptsOmission &&
-        parameter.rest === selected.rest;
-    }));
-  return matches.length === 1 ? { base, constructor: matches[0]! } : undefined;
 }
 
 export interface RustProjectTypePolicyRegistry extends RustProjectTypePolicy {

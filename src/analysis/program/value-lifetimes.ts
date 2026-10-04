@@ -26,6 +26,7 @@ export function analyzeRustValueLifetimes(input: {
   readonly isOwnedCallArgument: (argument: Node) => boolean;
   readonly isSharedBorrowArgument: (argument: Node) => boolean;
   readonly capturesFor: (closure: Node) => RustClosureCaptureFact | undefined;
+  readonly ownsCaptureEnvironment?: (closure: Node) => boolean;
   readonly captureRootsFor?: (closure: Node) => readonly Node[];
   readonly isOnceCallable: (closure: Node) => boolean;
   readonly canMoveStoredField: (field: Node) => boolean;
@@ -58,7 +59,7 @@ export function analyzeRustValueLifetimes(input: {
       }
     }
     if (kind === "KindArrowFunction" || kind === "KindFunctionExpression" ||
-      kind === "KindFunctionDeclaration" && input.isOnceCallable(node) ||
+      kind === "KindFunctionDeclaration" && (input.isOnceCallable(node) || input.ownsCaptureEnvironment?.(node) === true) ||
       kind === "KindClassDeclaration" || kind === "KindClassExpression") {
       const captures = input.capturesFor(node)?.captures.filter(capture =>
         capture.storage === "value" &&

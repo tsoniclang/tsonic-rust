@@ -1,3 +1,4 @@
+import { rustProjectClassLineage, rustProjectClassContracts } from "../../../target-model/types/project-heritage.js";
 import { allocateRustGeneratedName as allocateGeneratedName, rustGeneratedNameComponent } from "../../../target-model/names/generated.js";
 import { compareProjectDefinitions, definitionKey, denseNodes, projectDefinition, projectMemberNames, sourceFileIdentifierNames } from "./helpers.js";
 import {
@@ -20,8 +21,9 @@ import { sourceClassFieldIsTypeOnly, sourceObjectMemberDeclarations, sourceParam
 import type {
   SourceProjectMemberImplementationResult,
 } from "@tsonic/target-api/source";
-import type { RustExternalProjectBase } from "../../../policy/types/external-project-types.js";
-import type { RustProjectConstructorSignature, RustProjectDowncastRoute, RustProjectHeritageEdge, RustProjectMemberSlotCandidate, RustProjectMemberSlotRole, RustProjectTypeDefinition, RustProjectTypeIssue, RustProjectTypePolicy, RustProjectTypePolicyHost, RustProjectTypeRelationship } from "../../../policy/types/project-types.js";
+import type { RustExternalProjectBase } from "../../../target-model/types/external-project-types.js";
+import type { RustProjectTypePolicyHost } from "../../../policy/types/project-types.js";
+import type { RustProjectConstructorSignature, RustProjectDowncastRoute, RustProjectHeritageEdge, RustProjectMemberSlotCandidate, RustProjectMemberSlotRole, RustProjectTypeDefinition, RustProjectTypeIssue, RustProjectTypePolicy, RustProjectTypeRelationship } from "../../../target-model/types/project-types.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustSourceTypeDeclarations } from "../../../policy/types/source-declarations.js";
 import { rustLocalClassIssue } from "../local-classes.js";
@@ -357,51 +359,14 @@ export function createRustProjectTypePolicy(
     programErrorVariantByDefinition.set(definition, variant);
   }
 
-  function classLineage(
-    definition: RustProjectTypeDefinition,
-  ): readonly RustProjectTypeDefinition[] | undefined {
-    if (definition.kind !== "class") {
-      return undefined;
-    }
-    const lineage: RustProjectTypeDefinition[] = [];
-    const seen = new Set<RustProjectTypeDefinition>();
-    let current: RustProjectTypeDefinition | undefined = definition;
-    while (current !== undefined) {
-      if (seen.has(current)) {
-        return undefined;
-      }
-      seen.add(current);
-      lineage.unshift(current);
-      const bases: readonly RustProjectHeritageEdge[] = (
-        heritageByDeclaration.get(current.declaration) ?? []
-      ).filter((edge) =>
-        edge.kind === "extends" && edge.target.kind === "class");
-      if (bases.length > 1) {
-        return undefined;
-      }
-      current = bases[0]?.target;
-    }
-    return Object.freeze(lineage);
+  function heritageForDeclaration(declaration: Node): readonly RustProjectHeritageEdge[] {
+    return heritageByDeclaration.get(declaration) ?? [];
   }
-
-  const contractsForClass = (
-    definition: RustProjectTypeDefinition,
-  ): readonly RustProjectTypeDefinition[] | undefined => {
-    const lineage = classLineage(definition);
-    if (lineage === undefined) {
-      return undefined;
-    }
-    const result: RustProjectTypeDefinition[] = [];
-    const visit = (candidate: RustProjectTypeDefinition): void => {
-      if (result.includes(candidate)) return;
-      result.push(candidate);
-      for (const edge of heritageByDeclaration.get(candidate.declaration) ?? []) {
-        visit(edge.target);
-      }
-    };
-    for (const classDefinition of lineage) visit(classDefinition);
-    return Object.freeze(result);
-  };
+  function classLineage(definition: RustProjectTypeDefinition): readonly RustProjectTypeDefinition[] | undefined {
+    return rustProjectClassLineage(definition, heritageForDeclaration);
+  }
+  const contractsForClass = (definition: RustProjectTypeDefinition): readonly RustProjectTypeDefinition[] | undefined =>
+    rustProjectClassContracts(definition, heritageForDeclaration);
 
   const constructorsByDefinition = new WeakMap<
     RustProjectTypeDefinition,

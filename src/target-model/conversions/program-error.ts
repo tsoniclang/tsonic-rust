@@ -100,6 +100,18 @@ export function selectRustRuntimeErrorBoundary(
     ? "provider-native" : undefined;
 }
 
+export function rustProgramErrorRuntimeRouteMatches(
+  route: Extract<RustProgramErrorRoute, { readonly kind: "runtime" }>,
+  carrier: TargetTypeRef,
+  providerErrorCarriers: readonly TargetTypeRef[],
+): boolean {
+  return route.boundary === "target-runtime"
+    ? rustTargetTypeRefEquals(carrier, rustJsErrorTargetType())
+    : route.boundary === "provider-native" &&
+      !rustTargetTypeRefEquals(carrier, rustJsErrorTargetType()) &&
+      providerErrorCarriers.some(candidate => rustTargetTypeRefEquals(candidate, carrier));
+}
+
 export function rustProgramErrorConversionMatches(
   conversion: RustProgramErrorConversion, source: TargetTypeRef, target: TargetTypeRef,
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,

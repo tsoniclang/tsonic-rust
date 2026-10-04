@@ -16,7 +16,7 @@ import {
   rustOptionElementCarrier,
 } from "../../target-model/types/index.js";
 import type { RustContextualValueConversion } from "../../target-model/conversions/contextual.js";
-import type { RustProjectTypePolicy } from "./project-types.js";
+import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
 import { selectRustSourceValueConversion } from "../conversions/selection.js";
 import { inferRustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";

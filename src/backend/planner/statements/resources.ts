@@ -21,6 +21,7 @@ import type { RustCompletionBoundary, RustControlTarget, RustPlanContext } from 
 import type { RustResourceManagementFact } from "../../../analysis/facts/keys.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planRustVirtualProjectMethodCall } from "../objects/project-method-dispatch.js";
+import { rustBlockDefinitelyExits } from "./block-flow.js";
 
 export function directResourceDeclaration(
   statement: Node,
@@ -79,7 +80,7 @@ export function planResourceDeclarationScope(
     resourceName,
     fact,
     context,
-    (bodyContext) => planStatementSequence(remainder, diagnosticNode, bodyContext),
+    (bodyContext) => planStatementSequence(remainder, diagnosticNode, bodyContext, false),
   );
   return scope === undefined ? undefined : [...declarations, scope];
 }
@@ -421,29 +422,6 @@ export function planLoopExitStatement(
     resultWrapped: context.completionBoundary.fallible,
     loopId: target.id,
   }];
-}
-
-export function rustBlockDefinitelyExits(block: RustBlock): boolean {
-  const last = block.statements[block.statements.length - 1];
-  if (last === undefined) {
-    return false;
-  }
-  if (last.kind === "return" || last.kind === "tail" || last.kind === "throw" ||
-    last.kind === "break" || last.kind === "continue" ||
-    last.kind === "completion-exit") {
-    return true;
-  }
-  if (last.kind === "expr" && last.expr.kind === "bottom") {
-    return true;
-  }
-  if (last.kind === "scope" || last.kind === "unsafe-scope") {
-    return rustBlockDefinitelyExits(last.body);
-  }
-  if (last.kind === "resource-scope" || last.kind === "try-scope") {
-    return last.terminates;
-  }
-  return last.kind === "if" && last.else !== undefined &&
-    rustBlockDefinitelyExits(last.then) && rustBlockDefinitelyExits(last.else);
 }
 
 export function tailCompletionExits(block: RustBlock): RustBlock {

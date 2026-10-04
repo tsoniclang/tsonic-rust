@@ -33,7 +33,7 @@ export function planRustLexicalFunctionEnvironment(declaration: Node, context: R
     const name = allocateRustSyntheticName(context.syntheticNames, "capture");
     const owned = storage === undefined && !capture.mutable &&
       (rustCarrierHasCopyContract(carrier, context) ||
-        context.input.program.valueLifetimes.canMoveCapture(declaration, capture.declaration));
+        !selection.valueObserved && context.input.program.valueLifetimes.canMoveCapture(declaration, capture.declaration));
     parameters.push({ name, type: owned ? physicalType : { kind: "reference", referent: physicalType,
       mutable: storage === undefined && capture.mutable } });
     capturedBindings.push({ declaration: capture.declaration, expression: { kind: "path", path: name },
@@ -57,7 +57,7 @@ export function planRustLexicalFunctionArguments(declaration: Node, context: Rus
       context.input.program.facts.getRuntimeCarrierFact(capture.reference)?.carrier;
     const owned = storage === undefined && !capture.mutable &&
       (carrier !== undefined && rustCarrierHasCopyContract(carrier, context) ||
-        context.input.program.valueLifetimes.canMoveCapture(declaration, capture.declaration));
+        !selection.valueObserved && context.input.program.valueLifetimes.canMoveCapture(declaration, capture.declaration));
     if (owned) {
       const value = planExpression(capture.reference, context);
       if (value === undefined) return undefined;

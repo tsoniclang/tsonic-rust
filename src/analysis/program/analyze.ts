@@ -50,9 +50,11 @@ import { finalizeRustCopiedMethods } from "../objects/copied-methods.js";
 import { closeRustInheritedStructuralViews } from "../objects/inherited-structural-views.js";
 import { createRustSourceProfileCallableAliasQuery } from "../../policy/operations/source-profiles/callable-aliases.js";
 import { collectRustDeclaredProviderErrorCarriers } from "./provider-errors.js";
+import { createRustLexicalFunctionQueries, type RustLexicalFunctionQueries } from "../callables/lexical-functions.js";
+import { recordRustLexicalValueEnvironments } from "../callables/lexical-value-environments.js";
 import { rustSourceErrorTargetType, rustWritableSourceErrorTargetType } from "../../target-model/types/carriers/source-error.js";
 
-export function analyzeRustProgram(context: RustAnalysisContext): void {
+export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFunctionQueries | undefined {
   const { ast } = context;
   const rawSourceFiles: readonly (SourceFile | undefined)[] = context.source.sourceFiles;
   if (!isDenseDataArray(rawSourceFiles) || rawSourceFiles.some((sourceFile) => sourceFile === undefined)) {
@@ -480,6 +482,10 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   recordFallibilityFacts(walk, projectSourceFiles);
   recordResourceManagementFacts(walk, projectSourceFiles);
   recordFutureValueFacts(walk, projectSourceFiles);
+  const lexical = createRustLexicalFunctionQueries(context.source, context.sourceFiles, context.facts,
+    context.sourceLifetimes, context.runtimeValueUses);
+  recordRustLexicalValueEnvironments(walk, lexical);
+  return lexical;
 }
 
 function collectSourcePackageBoundaries(

@@ -8,7 +8,6 @@ import {
   rustActiveErrorType,
   rustCurrentErrorBoundary,
   rustErrorType,
-  rustSourceBindingPath,
 } from "../program/plan-context.js";
 import {
   isRustUnitCarrier,
@@ -21,7 +20,7 @@ import {
   KindObjectBindingPattern,
   Node_Initializer,
 } from "@tsonic/target-api/source";
-import { planRustCaptureValue } from "./typed-locations.js";
+import { planRustCapturedEnvironment } from "./capture-environments.js";
 import { planRustAbsentValue } from "./optional-storage.js";
 import {
   rustAsyncFunctionFactKey,
@@ -30,7 +29,6 @@ import {
   rustGeneratorFactKey,
   rustMutatedBindingFactKey,
   rustMutatedReferentFactKey,
-  rustSourceBindingFactKey,
   rustSourceCallableReturnFactKey,
   rustSourceParameterAbiFactKey,
 } from "../../../analysis/facts/keys.js";
@@ -46,7 +44,6 @@ import {
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planExpression } from "./entry.js";
 import { planRustBindingPattern } from "../bindings/patterns.js";
-import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { rustOptionDefaultValue } from "./option-default.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
@@ -313,66 +310,15 @@ export function planRustCallableExpressionBody(
       declaration: node, controllerName: controllerName!, protocol: generator,
     },
   };
-  const captureBindings: { readonly name: string; readonly value: RustExpr }[] = [];
-  const capturedBindings = [...(context.capturedBindings ?? [])];
-  for (const [index, capture] of captureFact.captures.entries()) {
-    const moveCapture = capture.storage === "cell" || capture.storage === "borrow-cell" ||
-      context.input.program.valueLifetimes.canMoveCapture(node, capture.declaration);
-    if (context.syntheticNames === undefined || !requireRustCarrierRequirements(
-      capture.carrier,
-      [...(moveCapture ? [] : ["clone" as const]), ...(nativeClosureProtocol === undefined ? ["static" as const] : [])],
-      capture.reference,
-      closureContext,
-    )) {
-      return undefined;
-    }
-    const binding = context.input.program.facts.getFact(capture.reference, rustSourceBindingFactKey);
-    if (binding === undefined) {
-      return undefined;
-    }
-    const sourceName = context.input.program.names.nameForDeclaration(binding.sourceDeclaration) ?? "";
-    const sourcePath = rustSourceBindingPath(context, binding);
-    if (!isValidRustIdentifier(sourceName)) {
-      return undefined;
-    }
-    if (sourcePath === undefined) {
-      return undefined;
-    }
-    if (capture.mutable === true) {
-      if (capture.storage !== "value" || closureFact.resultCarrier.kind !== "closure" ||
-        (closureFact.resultCarrier.callTrait !== "FnMut" && closureFact.resultCarrier.callTrait !== "FnOnce")) {
-        context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
-          "rust.backend.native-mutable-capture", "A mutable value capture requires its exact owning native callable contract."));
-        return undefined;
-      }
-      capturedBindings.push({ declaration: capture.declaration, expression: { kind: "path", path: sourcePath },
-        storage: "value", valueCarrier: capture.carrier });
-      continue;
-    }
-    const name = allocateRustSyntheticName(context.syntheticNames, `capture_${sourceName}`);
-    const captureValue = planRustCaptureValue(
-      capture.reference,
-      sourcePath,
-      capture.storage,
-      moveCapture,
-      context,
-    );
-    captureBindings.push({
-      name,
-      value: captureValue,
-    });
-    capturedBindings.push({
-      declaration: capture.declaration,
-      expression: ownedStateName === undefined ? { kind: "path", path: name } : {
-        kind: "reference", expr: { kind: "field", receiver: {
-          kind: "field", receiver: { kind: "path", path: ownedStateName }, name: "state",
-        }, name: String(index) },
-      },
-      storage: capture.storage,
-      valueCarrier: capture.carrier,
-      ...(ownedStateName === undefined ? {} : { borrowed: "shared" }),
-    });
-  }
+  const environment = planRustCapturedEnvironment(node, captureFact.captures, closureContext, {
+    staticStorage: nativeClosureProtocol === undefined,
+    mutableValueCapture: closureFact.resultCarrier.kind === "closure" &&
+      (closureFact.resultCarrier.callTrait === "FnMut" || closureFact.resultCarrier.callTrait === "FnOnce"),
+    ...(ownedStateName === undefined ? {} : { sharedStateName: ownedStateName }),
+  });
+  if (environment === undefined) return undefined;
+  const captureBindings = environment.bindings;
+  const capturedBindings = [...environment.capturedBindings];
   let recursiveName: string | undefined;
   if (captureFact.recursiveDeclaration !== undefined) {
     if (context.syntheticNames === undefined || callableProtocol === undefined) {

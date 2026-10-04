@@ -51,6 +51,7 @@ import {
   rustBindingProjectionFactKey,
   rustSourceParameterAbiFactKey,
   rustSourceCallableReturnFactKey,
+  rustSourceCallableValueFactKey,
   rustTargetOperationFactKey,
   rustTypedLocationPlanKey,
   rustYieldFactKey,
@@ -540,6 +541,15 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
     if (operation?.kind === "default-value") {
       const error = addUse(node, operation.resultCarrier, ["default"]);
       if (error !== undefined) return error;
+    }
+    const sourceValue = facts.getFact(node, rustSourceCallableValueFactKey);
+    if (sourceValue !== undefined) {
+      for (const capture of facts.getFact(sourceValue.sourceDeclaration, rustClosureCaptureFactKey)?.captures ?? []) {
+        const move = capture.storage === "cell" || capture.storage === "borrow-cell" ||
+          input.valueLifetimes.canMoveCapture(sourceValue.sourceDeclaration, capture.declaration);
+        const error = addUse(capture.reference, capture.carrier, [...(move ? [] : ["clone" as const]), "static"], true);
+        if (error !== undefined) return error;
+      }
     }
     if (operation?.kind === "closure") {
       const captures = facts.getFact(node, rustClosureCaptureFactKey);

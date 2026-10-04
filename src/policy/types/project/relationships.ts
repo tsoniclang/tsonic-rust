@@ -1,10 +1,6 @@
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type {
-  RustProjectTypeDefinition,
-  RustProjectTypePolicy,
-  RustProjectTypeRelationship,
-} from "../project-types.js";
+import type { RustProjectTypeDefinition, RustProjectTypePolicy, RustProjectTypeRelationship } from "../../../target-model/types/project-types.js";
 
 export function selectRustProjectRelationship(
   queries: Pick<RustProjectTypePolicy, "definitionForCarrier" | "directSupertypes">,

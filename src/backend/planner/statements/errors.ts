@@ -9,7 +9,8 @@ import {
   Node_Name,
 } from "@tsonic/target-api/source";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { collectRustCompletionDispatch, createRustCompletionBoundary, rustBlockDefinitelyExits, tailCompletionExits } from "./resources.js";
+import { collectRustCompletionDispatch, createRustCompletionBoundary, tailCompletionExits } from "./resources.js";
+import { rustBlockDefinitelyExits } from "./block-flow.js";
 import {
   diagnosticInput,
   registerAliasFromPath,

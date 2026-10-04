@@ -2,7 +2,7 @@ import type { Node, Type } from "@tsonic/tsts";
 import type { RustOperationPolicyContext } from "../../policy/operations/contracts.js";
 import type { RustSourcePolicyContext } from "../../policy/model/context.js";
 import type { RustTargetTypeResolutionOptions } from "../../policy/types/resolution.js";
-import type { RustProjectTypePolicy } from "../../policy/types/project-types.js";
+import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { selectRustNativeFlowMembers, selectRustNativeFlowTypeMembers } from "../../policy/types/resolution/native-flow-refinement.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";

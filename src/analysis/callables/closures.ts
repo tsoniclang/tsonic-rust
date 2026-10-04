@@ -14,7 +14,7 @@ import {
   Node_Initializer,
   Node_Name,
   Node_Type,
-  sourceLexicalCaptures,
+  sourceLexicalEnvironment,
 } from "@tsonic/target-api/source";
 import {
   rustAsyncFunctionFactKey,
@@ -363,7 +363,10 @@ export function collectRustLexicalCaptures(
   }>();
   let recursiveDeclaration: Node | undefined;
   const valueDeclaration = callableExpressionValueDeclaration(expression, ast);
-  const selected = sourceLexicalCaptures(expression, roots, ast, walk.context.source.navigation);
+  const selected = sourceLexicalEnvironment(expression, roots, ast, walk.context.source.navigation,
+    (use, declaration) => walk.context.facts.get(use.reference, rustCompileTimeSourceKey) !== true &&
+      walk.context.runtimeValueUses.isRuntimeReference(declaration, use.reference));
+  if (selected.kind === "unresolved") return undefined;
   if (selected.selfReferences.length > 0 && ast.kindName(expression) !== "KindClassDeclaration" &&
     ast.kindName(expression) !== "KindClassExpression") recursiveDeclaration = expression;
   for (const capture of selected.captures) {
@@ -371,14 +374,16 @@ export function collectRustLexicalCaptures(
     if (walk.context.facts.get(declaration, rustCompileTimeSourceKey) === true) continue;
     if (declaration === valueDeclaration) { recursiveDeclaration = declaration; continue; }
     const kind = ast.kindName(declaration);
-    if (kind !== KindParameter && kind !== KindVariableDeclaration && kind !== KindBindingElement) continue;
+    if (kind !== KindParameter && kind !== KindVariableDeclaration && kind !== KindBindingElement &&
+      kind !== "KindFunctionDeclaration") continue;
     const reference = capture.references[capture.references.length - 1];
     if (reference === undefined) return undefined;
     const carrier = walk.context.facts.get(reference, rustRuntimeCarrierKey)?.carrier ??
       walk.context.facts.resolve(reference, rustRuntimeCarrierKey)?.carrier ??
       walk.context.facts.get(declaration, rustRuntimeCarrierKey)?.carrier ??
       walk.context.facts.resolve(declaration, rustRuntimeCarrierKey)?.carrier;
-    const selectedStorage = rustCapturedBindingStorage(walk, declaration, reference, expression, carrier, permitSingleOwner, nativeCallTrait);
+    const selectedStorage = rustCapturedBindingStorage(walk, declaration, reference, expression, carrier, permitSingleOwner,
+      nativeCallTrait, selected.callableRoots);
     if (carrier === undefined || selectedStorage === undefined) return undefined;
     if (selectedStorage.storage !== "value") walk.context.facts.set(declaration, rustBindingStorageFactKey, {
       storage: selectedStorage.storage,

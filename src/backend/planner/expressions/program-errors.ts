@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/nodes.js";
-import { rustProgramErrorConversionMatches, selectRustRuntimeErrorBoundary, type RustProgramErrorConversion } from "../../../target-model/conversions/program-error.js";
+import { rustProgramErrorConversionMatches, rustProgramErrorRuntimeRouteMatches, type RustProgramErrorConversion } from "../../../target-model/conversions/program-error.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { diagnosticInput, registerAliasFromPath, rustCurrentErrorBoundary, type RustPlanContext } from "../program/plan-context.js";
 import { resolveRustProgramErrorRoute, type RustSourcePackageErrorBoundary } from "../program/source-package-errors.js";
@@ -30,7 +30,7 @@ export function planRustProgramErrorConstruction(
         payload, node, context, boundary));
   }
   if (conversion.route.kind === "runtime") {
-    if (selectRustRuntimeErrorBoundary(conversion.source, context.input.program.providerErrorCarriers) !== conversion.route.boundary) {
+    if (!rustProgramErrorRuntimeRouteMatches(conversion.route, conversion.source, context.input.program.providerErrorCarriers)) {
       context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
         "rust.backend.throw-runtime-error-route", "Runtime error construction has no exact registered native error carrier."));
       return undefined;

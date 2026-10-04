@@ -1,16 +1,20 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { rustCompilerOwnedContextualConversionMatches } from "../../dist/target-model/conversions/contextual.js";
+import { rustProgramErrorConversionMatches } from "../../dist/target-model/conversions/program-error.js";
 import { rustJsErrorTargetType, rustProgramErrorTargetType, rustSourcePrimitiveTargetType,
   rustSourceTypeCarrier } from "../../dist/target-model/types/index.js";
 import { selectRustValueCarrierReconciliation } from "../../dist/policy/types/value-carrier-reconciliation.js";
 import { planRustProgramErrorConstruction } from "../../dist/backend/planner/expressions/program-errors.js";
 import { collectRustDeclaredProviderErrorCarriers, analyzeRustProviderErrorCarriers } from "../../dist/analysis/program/provider-errors.js";
 import { rustTargetOperationFactKey } from "../../dist/analysis/facts/keys.js";
+import { createRustTypeDefinitionRegistry } from "../../dist/analysis/project-types/type-definitions.js";
 
 const source = rustSourceTypeCarrier("/failure.ts", "Failure", "object");
 const target = rustProgramErrorTargetType();
 const definition = {};
+const registry = createRustTypeDefinitionRegistry();
+assert.equal(registry.registerProgramErrorOrigin(source, { kind: "project", variant: "Failure", sourceError: false }), true);
+const definitions = registry.seal();
 const policy = {
   definitionForCarrier: carrier => carrier === source ? definition : undefined,
   programErrorVariant: current => current === definition ? "Failure" : undefined,
@@ -18,25 +22,26 @@ const policy = {
 };
 
 test("program-error construction retains its exact class, variant and native payload", () => {
-  const selected = selectRustValueCarrierReconciliation(source, target, policy);
+  const selected = selectRustValueCarrierReconciliation(source, target, policy, definitions);
   assert.equal(selected.kind, "conversion");
   const conversion = selected.fact.conversion;
-  assert.equal(rustCompilerOwnedContextualConversionMatches(source, target, conversion), true);
+  assert.equal(rustProgramErrorConversionMatches(conversion, source, target, definitions), true);
+  assert.equal(rustProgramErrorConversionMatches(conversion, source, target), false, "unregistered project origin");
   for (const changed of [
     { ...conversion, source: target }, { ...conversion, target: source },
     { ...conversion, route: { kind: "project", variant: "" } },
     { ...conversion, route: { kind: "project", variant: null } },
     { ...conversion, route: undefined }, { ...conversion, variant: "Failure" },
     { kind: "program-error", source, target, variant: "Failure" },
-  ]) assert.equal(rustCompilerOwnedContextualConversionMatches(source, target, changed), false);
+  ]) assert.equal(rustProgramErrorConversionMatches(changed, source, target, definitions), false);
   const builtin = rustJsErrorTargetType();
-  assert.equal(rustCompilerOwnedContextualConversionMatches(builtin, target,
-    { kind: "program-error", source: builtin, target, route: { kind: "runtime", boundary: "target-runtime" } }), true);
-  assert.equal(rustCompilerOwnedContextualConversionMatches(builtin, target,
-    { kind: "program-error", source: builtin, target, route: { kind: "project", variant: "Failure" } }), false);
+  assert.equal(rustProgramErrorConversionMatches(
+    { kind: "program-error", source: builtin, target, route: { kind: "runtime", boundary: "target-runtime" } }, builtin, target), true);
+  assert.equal(rustProgramErrorConversionMatches(
+    { kind: "program-error", source: builtin, target, route: { kind: "project", variant: "Failure" } }, builtin, target), false);
   for (const invalid of [rustSourcePrimitiveTargetType("uint64"), rustSourceTypeCarrier("/failure.ts", "Code", "enum")]) {
-    assert.equal(rustCompilerOwnedContextualConversionMatches(invalid, target,
-      { kind: "program-error", source: invalid, target, route: { kind: "project", variant: "Failure" } }), false);
+    assert.equal(rustProgramErrorConversionMatches(
+      { kind: "program-error", source: invalid, target, route: { kind: "project", variant: "Failure" } }, invalid, target), false);
   }
 });
 
@@ -47,7 +52,7 @@ test("program-error emission rejects stale variants and unrelated source-package
     for (const owner of ["root", "unrelated"]) {
       const context = {
         diagnostics: [], usedAliases: new Set(),
-        input: { program: { projectTypes: policy, source: { ast: {
+        input: { program: { projectTypes: policy, typeDefinitions: definitions, source: { ast: {
           getFileName: () => "/failure.ts", getSourceText: () => "", pos: () => 0, end: () => 0,
           kindName: () => "KindIdentifier",
         } } } },
@@ -85,8 +90,12 @@ test("runtime error emission requires an exact registered carrier and selected b
     [builtin, [], "target-runtime", true],
     [builtin, [builtin], "provider-native", false],
   ]) {
+    const registry = createRustTypeDefinitionRegistry();
+    for (const registeredCarrier of registered) {
+      assert.equal(registry.registerProgramErrorOrigin(registeredCarrier, { kind: "provider" }), true);
+    }
     const context = { diagnostics: [], usedAliases: new Set(), input: { program: {
-      providerErrorCarriers: registered, source: { ast: {
+      providerErrorCarriers: registered, typeDefinitions: registry.seal(), source: { ast: {
         getFileName: () => "/failure.ts", getSourceText: () => "", pos: () => 0, end: () => 0,
         kindName: () => "KindIdentifier",
       } },

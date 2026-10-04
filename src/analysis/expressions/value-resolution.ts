@@ -68,6 +68,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectedSourceLiteralIsRepresentable, selectedSourceLiteralOperandIsRepresentable } from "../../policy/types/selected-numeric-literal.js";
 import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
 import { selectRustConditionalNumericCarrier } from "../../policy/types/conditional-numeric-carrier.js";
+import { resolveRustBranchUnion } from "../../policy/types/resolution/branch-unions.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustTargetOperationFact } from "../facts/keys.js";
@@ -411,6 +412,15 @@ export function resolveExpressionCarrierUncached(
         rustResolutionContext(walk, expression),
         walk.operationOptions,
       );
+      if (expected === undefined && !isRustNumericCarrier(rustOptionElementCarrier(semanticCarrier) ?? semanticCarrier)) {
+        const left = resolveExpressionCarrier(walk, whenTrue, sourceFile, undefined);
+        const right = resolveExpressionCarrier(walk, whenFalse, sourceFile, undefined);
+        if (left !== undefined && right !== undefined) {
+          semanticCarrier = resolveRustBranchUnion(expression, [
+            { expression: whenTrue, carrier: left }, { expression: whenFalse, carrier: right },
+          ], rustResolutionContext(walk, expression), walk.operationOptions) ?? semanticCarrier;
+        }
+      }
       if (expected === undefined && isRustNumericCarrier(rustOptionElementCarrier(semanticCarrier) ?? semanticCarrier)) {
         const left = sourceIntegerLiteralValue(walk.context.ast, whenTrue) === undefined
           ? resolveExpressionCarrier(walk, whenTrue, sourceFile, undefined) : undefined;

@@ -6,7 +6,7 @@ import type { RustClosedTypePredicate } from "../../../target-model/operations/t
 import { rustUnionLeaves } from "../../../target-model/types/union-relations.js";
 import { getRustTypeofRuntimeKind } from "../../../target-model/types/runtime-kind.js";
 import { selectRustClosedTypeTestPlan } from "../../operations/operators/type-tests.js";
-import type { RustProjectTypePolicy } from "../project-types.js";
+import type { RustProjectTypePolicy } from "../../../target-model/types/project-types.js";
 import { isRustAbsenceCarrier, rustAbsenceTargetType } from "../../../target-model/types/carriers/native.js";
 import { rustOptionElementCarrier } from "../../../target-model/types/carriers/optional.js";
 
