@@ -383,6 +383,7 @@ export function collectRustLexicalCaptures(
     if (selectedStorage.storage !== "value") walk.context.facts.set(declaration, rustBindingStorageFactKey, {
       storage: selectedStorage.storage,
       valueCarrier: carrier,
+      ...(selectedStorage.initialization === undefined ? {} : { initialization: selectedStorage.initialization }),
     }, [{ message: "rust captured mutable binding storage" }]);
     captures.set(declaration, { declaration, reference, carrier, ...selectedStorage });
   }

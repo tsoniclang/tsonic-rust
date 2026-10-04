@@ -33,6 +33,7 @@ import { missingFactDiagnostic } from "../diagnostics.js";
 import { planBlockLike } from "./core.js";
 import { planExpressionAsStatement } from "./expression-statements.js";
 import { planVariableStatement } from "./variable-declarations.js";
+import { planRustDeferredCaptureStorage } from "../bindings/deferred-captures.js";
 import { planForInStatement, planForOfStatement } from "./iteration.js";
 import {
   rustMutatedBindingFactKey,
@@ -395,10 +396,12 @@ export function planForStatement(
         context.input.program.source.ast.variableDeclarationKind(declarations[0]) === "await using")
     ? declarations[0]
     : undefined;
-  const initStatements = planVariableStatement(initializer, context);
-  if (initStatements === undefined) {
+  const deferred = planRustDeferredCaptureStorage(node, context);
+  const initialization = planVariableStatement(initializer, context);
+  if (deferred === undefined || initialization === undefined) {
     return undefined;
   }
+  const initStatements = [...deferred, ...initialization];
   if (resourceDeclaration === undefined) {
     const loop = planLoop(context);
     return loop === undefined

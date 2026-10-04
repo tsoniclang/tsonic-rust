@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import { sourceBindingHasSingleCaptureOwner } from "@tsonic/target-api/source";
+import { sourceBindingHasSingleCaptureOwner, sourceBindingCapturedBeforeInitialization } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isRustCopyCarrier, rustCarrierSupportsClone } from "../../target-model/types/index.js";
@@ -8,7 +8,9 @@ import type { RustClosureCaptureFact } from "../facts/keys.js";
 import { rustCallArgumentIsOwned } from "../facts/parameter-passing.js";
 import { rustSourceValueWrapperContains } from "../../policy/ownership/source-value-wrappers.js";
 
-export type RustCaptureStorage = Pick<RustClosureCaptureFact["captures"][number], "storage" | "mutable">;
+export type RustCaptureStorage = Pick<RustClosureCaptureFact["captures"][number], "storage" | "mutable"> & {
+  readonly initialization?: "deferred";
+};
 
 export function rustCapturedBindingStorage(
   walk: RustFactWalk,
@@ -35,9 +37,12 @@ export function rustCapturedBindingStorage(
   const mutated = walk.context.facts.get(declaration, rustMutatedBindingFactKey) !== undefined ||
     walk.context.source.navigation.bindingWritesWithin(selected.symbol, sourceFile).length > 0;
   const existing = walk.context.facts.get(declaration, rustBindingStorageFactKey);
+  const deferred = sourceBindingCapturedBeforeInitialization(declaration, walk.context.ast, walk.context.source.navigation);
   const unique = mutated && permitSingleOwner && existing === undefined &&
     singleOwnerDirectBinding(walk, declaration, owner);
-  const storage: RustCaptureStorage = existing?.storage === "location"
+  const storage: RustCaptureStorage = deferred
+    ? { storage: "location", initialization: "deferred" }
+    : existing?.storage === "location"
     ? { storage: "location" }
     : !mutated ? { storage: "value" }
     : unique && (nativeCallTrait === "FnMut" || nativeCallTrait === "FnOnce")

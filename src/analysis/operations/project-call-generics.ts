@@ -132,8 +132,10 @@ export function finalizeProjectSourceGenericArguments(
       }
     }
   }
-  const finalizedArguments = rustSourceCallGenericLifetimeArguments(selected, finalized, callArguments.map(argument =>
-    resolveProjectSourceInferenceCarrier(walk, argument)));
+  const finalizedArguments = rustSourceCallGenericLifetimeArguments(selected, finalized, index => {
+    const argument = callArguments[index];
+    return argument === undefined ? undefined : resolveProjectSourceInferenceCarrier(walk, argument);
+  });
   const substitutions = finalizedArguments === undefined ? undefined : rustTargetGenericBindingsForArguments(parameters, finalizedArguments);
   return substitutions === undefined
     ? undefined

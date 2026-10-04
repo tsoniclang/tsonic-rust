@@ -149,6 +149,11 @@ function planVariableDeclaration(
     return undefined;
   }
   const ownedBinding = declarationCarrier.kind !== "pointer" && declarationCarrier.kind !== "reference";
+  if (locationStorage?.initialization === "deferred") {
+    if (locationStorage.storage !== "location" || initializer === undefined || planned === undefined) return undefined;
+    return [{ kind: "expr", expr: { kind: "method-call", receiver: { kind: "path", path: name },
+      method: "store", args: [planned] } }];
+  }
   if (locationStorage !== undefined && locationStorage.storage !== "location" && rustType !== undefined) {
     rustType = rustInlineBindingStorageType(locationStorage.storage, rustType);
   }

@@ -64,6 +64,7 @@ export interface RustTargetProgram {
   readonly lexicalFunctions: import("../callables/lexical-functions.js").RustLexicalFunctionQueries;
   readonly errorStorageDemands: import("../objects/error-storage-demands.js").RustErrorStorageDemandQueries;
   readonly localStorageAliases: RustLocalStorageAliasPlan;
+  readonly deferredCaptures: import("../storage/deferred-captures.js").RustDeferredCaptureStorage;
   readonly numericRepresentations: RustNumericRepresentations;
   readonly typeDefinitions: import("../../target-model/types/source-union-definitions.js").RustTypeDefinitions;
   readonly typeFamilies: RustSourceTypeFamilyPlan;

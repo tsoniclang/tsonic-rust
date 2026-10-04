@@ -46,7 +46,6 @@ import {
   rustAbsenceTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
-  rustSourceTypeCarrierValue,
 } from "../../target-model/types/index.js";
 import {
   rustGeneratorFactKey,
@@ -75,6 +74,8 @@ import type { RustTargetOperationFact } from "../facts/keys.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustAwaitSelection, rustAwaitSelectionResultCarrier } from "../../target-model/types/await.js";
 import { rustEffectiveValueCarrier } from "../facts/value-carrier-queries.js";
+import { normalizeSelectedLiteralCarrier } from "./selected-literals.js";
+import { rustOperationContext } from "../program/walk.js";
 
 export function resolveExpressionCarrierUncached(
   walk: RustFactWalk,
@@ -191,22 +192,9 @@ export function resolveExpressionCarrierUncached(
           }
           return setCarrierFact(walk, expression, expected);
         }
-        const value = rustSourceTypeCarrierValue(expected);
-        if (value !== undefined && value.shape === "enum") {
-          const literal = walk.context.ast.text(expression);
-          const variant = walk.sourceTypes.enumVariantForLiteral(expected, literal);
-          if (variant !== undefined) {
-            setRustOperationFact(walk, expression, {
-              kind: "source-enum-member",
-              operationId: `tsonic.rust.union.variant:${variant.name}`,
-              name: variant.name,
-              resultCarrier: expected,
-            });
-            return setCarrierFact(walk, expression, expected);
-          }
-        }
       }
-      return setCarrierFact(walk, expression, rustStringTargetType());
+      return setCarrierFact(walk, expression, normalizeSelectedLiteralCarrier(expression,
+        rustStringTargetType(), expected, rustOperationContext(walk, expression), walk.operationOptions)!);
     }
     case KindTemplateExpression: {
       return resolveTemplateExpressionCarrier(walk, expression, sourceFile);

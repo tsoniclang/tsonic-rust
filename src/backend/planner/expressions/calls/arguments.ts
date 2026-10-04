@@ -445,7 +445,7 @@ export function sourceCallSelectedMemberMatches(
   const parameters = member.genericParameters ?? [];
   const targetArguments = fact.targetGenericArguments ?? [];
   const selectedArguments = selected.targetGenericArguments ?? [];
-  const finalizedLifetimes = rustSourceCallGenericLifetimeArguments(selected, targetArguments, argumentCarriers);
+  const finalizedLifetimes = rustSourceCallGenericLifetimeArguments(selected, targetArguments, index => argumentCarriers[index]);
   if (sourceArguments.length !== parameters.length ||
     parameters.length !== targetArguments.length ||
     finalizedLifetimes === undefined ||

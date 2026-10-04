@@ -49,12 +49,16 @@ export const rustOptionalChainFactKey: RustPlanKey<RustOptionalChainFact> =
 export const rustTypedLocationPlanKey: RustPlanKey<RustTypedLocationPlan> =
   defineRustPlanKey("typedLocationPlan", rustTypedLocationPlanEquals);
 
-export const rustBindingStorageFactKey: RustPlanKey<{
+export interface RustBindingStorageFact {
   readonly storage: "location" | "cell" | "borrow-cell";
   readonly valueCarrier: TargetTypeRef;
-}> = defineRustPlanKey(
+  readonly initialization?: "deferred";
+}
+
+export const rustBindingStorageFactKey: RustPlanKey<RustBindingStorageFact> = defineRustPlanKey(
   "bindingStorage",
-  (left, right) => left.storage === right.storage && rustTargetTypeRefEquals(left.valueCarrier, right.valueCarrier),
+  (left, right) => left.storage === right.storage && left.initialization === right.initialization &&
+    rustTargetTypeRefEquals(left.valueCarrier, right.valueCarrier),
 );
 
 export interface RustClosureCaptureFact {

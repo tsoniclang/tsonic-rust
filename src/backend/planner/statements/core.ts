@@ -40,6 +40,7 @@ import { planRustClassEnvironmentValue } from "../objects/class-environments.js"
 import { planRustAbsentValue } from "../expressions/optional-storage.js";
 import { rustNativeGuardResultFactKey, rustNativeUnreachableFactKey } from "../../../analysis/facts/native-control-flow.js";
 import { planFunctionDeclarations } from "../declarations/callables/functions.js";
+import { planRustDeferredCaptureStorage } from "../bindings/deferred-captures.js";
 
 export type RustAssignmentOperationFact = Extract<
   RustTargetOperationFact,
@@ -178,7 +179,9 @@ export function planStatementSequence(
   diagnosticNode: Node,
   context: RustPlanContext,
 ): RustBlock | undefined {
-  const statements: RustStmt[] = [];
+  const prologue = planRustDeferredCaptureStorage(diagnosticNode, context);
+  if (prologue === undefined) return undefined;
+  const statements: RustStmt[] = [...prologue];
   let failed = false;
   let sequenceContext = context;
   for (let index = 0; index < children.length; index += 1) {

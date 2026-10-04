@@ -17,7 +17,22 @@ const member = { id: "source::read", targetName: "read", kind: "method", returnT
 const selected = { member, sourceArgumentBindings: [binding], targetGenericArguments: [argument(elided)],
   sourceSelectedMethodTypeArguments: [{ typeParameterName: "Region", typeParameter: {}, selectedType: {} }] };
 const finalize = (carriers, signature = selected) =>
-  rustSourceCallGenericLifetimeArguments(signature, signature.targetGenericArguments, carriers);
+  rustSourceCallGenericLifetimeArguments(signature, signature.targetGenericArguments, index => carriers[index]);
+
+test("lifetime finalization resolves inputs only when an omitted native lifetime demands them", () => {
+  let queries = 0;
+  const lookup = () => { queries += 1; return reference(actual); };
+  const ordinary = { member: { parameters: [{ type: integer }] }, sourceArgumentBindings: [binding] };
+  assert.deepEqual(rustSourceCallGenericLifetimeArguments(ordinary, [], lookup), []);
+  assert.equal(queries, 0);
+  const explicit = { ...selected, sourceSelectedMethodTypeArguments: [{
+    ...selected.sourceSelectedMethodTypeArguments[0], explicitTypeNode: {},
+  }] };
+  assert.deepEqual(rustSourceCallGenericLifetimeArguments(explicit, explicit.targetGenericArguments, lookup), [argument(elided)]);
+  assert.equal(queries, 0);
+  assert.deepEqual(rustSourceCallGenericLifetimeArguments(selected, selected.targetGenericArguments, lookup), [argument(actual)]);
+  assert.equal(queries, 1);
+});
 
 test("omitted generic lifetimes bind exact input identity, not spelling or a global lifetime conversion", () => {
   assert.deepEqual(finalize([reference(actual)]), [argument(actual)]);

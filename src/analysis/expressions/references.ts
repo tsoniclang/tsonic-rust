@@ -12,6 +12,7 @@ import {
   Node_Type,
   asSourceNode,
   sourceDeclarationIsModuleScoped,
+  sourceBindingCapturedBeforeInitialization,
 } from "@tsonic/target-api/source";
 import {
   rustOptionalChainFactKey,
@@ -113,6 +114,15 @@ export function resolveIdentifierCarrier(
         return setCarrierFact(walk, identifier, annotated);
       }
       const initializer = Node_Initializer(walk.context.ast, declaration);
+      if (sourceBindingCapturedBeforeInitialization(declaration, ast, walk.context.source.navigation)) {
+        const context = rustResolutionContext(walk, declaration);
+        const selected = resolveRustTargetTypeRef(context.currentSemantics.declarations.declaredValueType(declaration),
+          context, walk.operationOptions);
+        if (selected !== undefined) {
+          setCarrierFact(walk, declaration, selected);
+          return setCarrierFact(walk, identifier, selected);
+        }
+      }
       if (initializer !== undefined) {
         const initializerCarrier = resolveExpressionCarrier(
           walk,

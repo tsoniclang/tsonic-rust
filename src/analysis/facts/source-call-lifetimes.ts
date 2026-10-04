@@ -40,7 +40,7 @@ export function rustSourceCallResultWithInputLifetimes(
 export function rustSourceCallGenericLifetimeArguments(
   selected: RustSelectedTargetSignature,
   finalized: readonly RustTargetGenericArgument[],
-  arguments_: readonly (TargetTypeRef | undefined)[],
+  argumentCarrier: (index: number) => TargetTypeRef | undefined,
 ): readonly RustTargetGenericArgument[] | undefined {
   const parameters = selected.member.genericParameters ?? [];
   const selectedArguments = selected.targetGenericArguments ?? [];
@@ -60,7 +60,7 @@ export function rustSourceCallGenericLifetimeArguments(
   const inferred = new Map<string, RustLifetimeRef>();
   for (const binding of selected.sourceArgumentBindings) {
     const parameter = selected.member.parameters[binding.sourceParameterIndex];
-    const argument = arguments_[binding.sourceArgumentIndex];
+    const argument = argumentCarrier(binding.sourceArgumentIndex);
     if (parameter === undefined || argument === undefined || binding.sourceForm === "spread-sequence") continue;
     const actual = binding.sourceForm === "spread-element"
       ? binding.spreadElementIndex === undefined ? undefined : rustSpreadElementCarrier(argument, binding.spreadElementIndex)

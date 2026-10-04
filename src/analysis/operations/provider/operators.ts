@@ -14,7 +14,8 @@ import {
   rustPostCheckUnaryMinusOperationId,
   rustPostCheckUnaryPlusOperationId,
 } from "../../facts/keys.js";
-import { acceptDeclarationOperation, acceptRustOperation, isDeclarationFileSubject, normalizeSelectedLiteralCarrier, normalizeSelectedOperationInputCarrier, providerIdentityText, providerOperationTemplate, rejectSelectedOperation, selectedArgumentMatchScore } from "./result.js";
+import { acceptDeclarationOperation, acceptRustOperation, isDeclarationFileSubject, normalizeSelectedOperationInputCarrier, providerIdentityText, providerOperationTemplate, rejectSelectedOperation, selectedArgumentMatchScore } from "./result.js";
+import { normalizeSelectedLiteralCarrier } from "../../expressions/selected-literals.js";
 import { acceptRustPolicy } from "../../../policy/operations/contracts.js";
 import { asNode, resolveSelectedJsSourceMember, resolveSelectedProviderDeclaration } from "../../../policy/evidence/selected-source.js";
 import { selectRustSourceProfileIndexMembers } from "./selected-members.js";

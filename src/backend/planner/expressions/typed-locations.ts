@@ -1,4 +1,5 @@
 import { rustValueBlock } from "../../target-ast/value-block.js";
+import type { RustBindingStorageFact } from "../../../analysis/facts/operations/keys.js";
 import type { Node } from "@tsonic/tsts";
 import { rustBindingStorageOperations, type RustBindingStorageOperations } from "./binding-storage.js";
 import type {
@@ -284,7 +285,7 @@ export function rustLocationStorageForReference(
 export function rustBindingStorageForDeclaration(
   declaration: Node,
   context: RustPlanContext,
-): { readonly storage: "location" | "cell" | "borrow-cell"; readonly valueCarrier: TargetTypeRef } | undefined {
+): RustBindingStorageFact | undefined {
   return context.input.program.facts.getFact(declaration, rustBindingStorageFactKey);
 }
 

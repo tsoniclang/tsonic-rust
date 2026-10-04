@@ -16,6 +16,7 @@ import type {
   RustTargetAnalysisRequest,
   RustTargetProgram,
 } from "./model.js";
+import { analyzeRustDeferredCaptureStorage } from "../storage/deferred-captures.js";
 import { createRustModuleInitializationPlan } from "../module-initialization/analyze.js";
 import { analyzeRustProviderErrorCarriers } from "./provider-errors.js";
 import { analyzeRustDeclarationGenericRequirements } from "../declarations/generic-requirements.js";
@@ -232,6 +233,7 @@ export function analyzeRustTargetProgram(
   }
   const borrowedElementReads = analyzeRustBorrowedElementReads(context.ast, context.sourceFiles, facts, context.source.navigation);
   const program: RustTargetProgram = Object.freeze({
+    deferredCaptures: analyzeRustDeferredCaptureStorage({ ast: context.ast, sourceFiles: context.sourceFiles, facts }),
     lexicalFunctions,
     errorStorageDemands: context.errorStorageDemands,
     localStorageAliases: analyzeRustLocalStorageAliases({ ast: context.ast,

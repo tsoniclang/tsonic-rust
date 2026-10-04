@@ -1,4 +1,5 @@
-import { acceptRustMemberOperation, acceptRustOperation, normalizeSelectedOperationInputCarrier, providerIdentityText, providerOperationFact, rejectSelectedOperation, sourceLiteralIsRepresentableAsPrimitive } from "./result.js";
+import { acceptRustMemberOperation, acceptRustOperation, normalizeSelectedOperationInputCarrier, providerIdentityText, providerOperationFact, rejectSelectedOperation } from "./result.js";
+import { sourceLiteralIsRepresentableAsPrimitive } from "../../expressions/selected-literals.js";
 import { acceptRustPolicy } from "../../../policy/operations/contracts.js";
 import { asNode } from "../../../policy/evidence/selected-source.js";
 import { providerFormRequiresSourceReceiver } from "./calls/instantiation.js";

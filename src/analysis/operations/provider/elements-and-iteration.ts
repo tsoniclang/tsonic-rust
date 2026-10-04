@@ -35,7 +35,8 @@ import {
   rustSourcePrimitiveTargetType,
   rustCarrierSupportsClone,
 } from "../../../target-model/types/index.js";
-import { acceptDeclarationOperation, acceptRustMemberOperation, acceptRustOperation, elementProvenance, isDeclarationFileSubject, normalizeSelectedLiteralCarrier, normalizeSelectedOperationInputCarrier, rejectSelectedOperation, selectedArgumentMatchScore, selectedMemberReceiverCarrier, sourceOperationId } from "./result.js";
+import { acceptDeclarationOperation, acceptRustMemberOperation, acceptRustOperation, elementProvenance, isDeclarationFileSubject, normalizeSelectedOperationInputCarrier, rejectSelectedOperation, selectedArgumentMatchScore, selectedMemberReceiverCarrier, sourceOperationId } from "./result.js";
+import { normalizeSelectedLiteralCarrier } from "../../expressions/selected-literals.js";
 import { finalizeProviderOperationFromSubjects, mapProviderCheckedOperation } from "./conversions.js";
 import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
