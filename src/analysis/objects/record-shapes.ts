@@ -6,7 +6,6 @@ import {
 } from "../../target-model/types/index.js";
 import {
   Node_Type,
-  ObjectLiteralProperty_Value,
   sourcePresentCallableType,
 } from "@tsonic/target-api/source";
 import { requireDenseSourceNodes } from "../expressions/records.js";
@@ -17,10 +16,8 @@ import { rustGeneratorFactKey, rustSourceCallableReturnFactKey, rustSourceParame
 import { rustProjectObjectLayout } from "../project-types/object-layout.js";
 import { rustResolutionContext } from "../program/walk.js";
 import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
-import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { Node, Type } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
-import type { RustSourceUnion, RustSourceUnionVariant } from "../project-types/source-type-registry.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export function resolveProjectMethodPropertyCarrier(
@@ -192,66 +189,4 @@ export function resolveRustRecordShape(
           ...(field.method === true ? { method: true as const } : {}),
         })),
       };
-}
-
-export function selectRustRecordLiteralUnionVariant(
-  walk: RustFactWalk,
-  expression: Node,
-  union: RustSourceUnion,
-  propertiesByName: ReadonlyMap<string, Node>,
-): RustSourceUnionVariant | undefined {
-  const propertyNames = [...propertiesByName.keys()].sort();
-  let candidates = union.variants.filter((variant) =>
-    variant.shape !== undefined &&
-    variant.shape.fields.length === propertyNames.length &&
-    variant.shape.fields.every((field, index) =>
-      field.sourceName === propertyNames[index]));
-  if (candidates.length === 0) {
-    return undefined;
-  }
-  const semantics = walk.context.semanticsFor(expression);
-  const selectedSourceType = semantics.types.expressionType(expression);
-  const selectedCarrier = resolveRustTargetTypeRef(
-    selectedSourceType,
-    rustResolutionContext(walk, expression),
-    walk.operationOptions,
-  );
-  const carrierCandidates = candidates.filter((variant) =>
-    rustTargetTypeRefEquals(variant.carrier, selectedCarrier));
-  if (carrierCandidates.length === 1) {
-    return carrierCandidates[0];
-  }
-  for (const [sourceName, property] of propertiesByName) {
-    const initializer = ObjectLiteralProperty_Value(walk.context.ast, property);
-    if (initializer === undefined) {
-      return undefined;
-    }
-    const fieldTypes = candidates.map((candidate) =>
-      candidate.shape?.fields.find((field) => field.sourceName === sourceName)?.sourceType);
-    if (fieldTypes.some((type) => type === undefined)) {
-      return undefined;
-    }
-    const selectedFieldTypes = fieldTypes as readonly Type[];
-    const firstFieldType = selectedFieldTypes[0]!;
-    if (selectedFieldTypes.every((type) =>
-      semantics.types.relationship(firstFieldType, type) !== "unrelated")) {
-      continue;
-    }
-    const selectedValueType = semantics.types.expressionType(initializer);
-    if (selectedValueType === undefined) {
-      return undefined;
-    }
-    candidates = candidates.filter((_, index) => {
-      const fieldType = selectedFieldTypes[index];
-      if (fieldType === undefined) {
-        return false;
-      }
-      const refinement = semantics.types.refinement(fieldType, selectedValueType);
-      return refinement.kind === "exact" || refinement.kind === "members";
-    });
-    if (candidates.length < 2) {
-      break;
-    }
-  }
-  return candidates.length === 1 ? candidates[0] : undefined;
 }

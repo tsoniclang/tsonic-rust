@@ -16,7 +16,7 @@ import {
 } from "../../target-ast/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/nodes.js";
 import { planRustErrorObservations, planRustSuppressedErrorConstructor } from "./error-observations.js";
-import { planRustErrorTransport, planRustSourceErrorTransport, rustErrorTransportDisplayGenerics } from "./error-transport.js";
+import { planRustErrorTransport, planRustSourceErrorTransport, rustSuppressedErrorPattern } from "./error-transport.js";
 import { planRustSourceErrorObservations } from "./source-error-observations.js";
 
 const programErrorName = "TsonicError";
@@ -165,8 +165,6 @@ export function planRustProgramErrorModule(
       message: "Program Error transport has no exact unique variant admission and external Error-only specialization." });
     return undefined;
   }
-  const displayGenerics = rustErrorTransportDisplayGenerics(transport);
-
   const items: RustItem[] = [
     {
       kind: "use",
@@ -190,22 +188,22 @@ export function planRustProgramErrorModule(
       fromImplementation(type, variant, false)),
     ...externalVariants.map(({ variant, type }) =>
       fromImplementation(type, variant, false)),
-    displayImplementation(transport.declarationType, displayGenerics, [
+    displayImplementation(programErrorType, emptyRustGenerics, [
       ...exactProjectVariants.map(({ variant, definition }) => ({
         variant,
         delegate: input.program.projectTypes.inheritedExternalBaseForDefinition(definition)?.base.programError === true,
       })),
       ...externalVariants.map(({ variant }) => ({ variant, delegate: true })),
     ]),
-    debugImplementation(transport.declarationType, displayGenerics),
+    debugImplementation(programErrorType, emptyRustGenerics),
     {
       kind: "impl",
-      generics: displayGenerics,
+      generics: emptyRustGenerics,
       trait: namedType("core::error::Error"),
-      target: transport.declarationType,
+      target: programErrorType,
       members: [],
     },
-    sourceStringImplementation(transport.declarationType, displayGenerics),
+    sourceStringImplementation(programErrorType, emptyRustGenerics),
     planRustSuppressedErrorConstructor(),
     planRustErrorObservations(transport),
     ...planRustSourceErrorTransport(transport),
@@ -294,8 +292,8 @@ function displayImplementation(target: RustType, generics: RustGenerics, project
                     },
                   }),
               {
-                pattern: tupleVariant(
-                  "Self::Suppressed",
+                pattern: rustSuppressedErrorPattern(
+                  false,
                   binding("error"),
                   binding("suppressed"),
                   { kind: "wildcard" },

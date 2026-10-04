@@ -15,7 +15,7 @@ const unit = rustUnitTargetType();
 const promise = rustJsPromiseTargetType(integer);
 const union = rustSourceUnionTargetType("/src/finite.ts", "Completion");
 const variants = [ { name: "Direct", carrier: integer }, { name: "Deferred", carrier: promise } ];
-const definitions = { sourceUnionVariants: carrier => rustTargetTypeRefEquals(carrier, union) ? variants : undefined };
+const definitions = { programErrorOrigin: () => undefined, sourceUnionVariants: carrier => rustTargetTypeRefEquals(carrier, union) ? variants : undefined };
 const select = (source, target) => selectRustSourceValueConversion(source, target, definitions);
 const factFor = (carrier, result, resolve = rustFutureValueForSourceStorage, owner = definitions) =>
   finalizeRustAwaitValueFact(carrier, result, resolve,
@@ -38,7 +38,7 @@ test("finite await selects exact value/future native branches and preserves nati
 
 test("non-future native carriers remain one identity value, including required Option and closed unions", () => {
   const nativeOption = rustOptionTargetType(integer);
-  const syncDefinitions = { sourceUnionVariants: carrier => rustTargetTypeRefEquals(carrier, union)
+  const syncDefinitions = { programErrorOrigin: () => undefined, sourceUnionVariants: carrier => rustTargetTypeRefEquals(carrier, union)
     ? [ { name: "Wide", carrier: integer }, { name: "Flag", carrier: boolean } ] : undefined };
   for (const [carrier, owner] of [ [integer, definitions], [nativeOption, definitions], [union, syncDefinitions] ]) {
     const selection = rustAwaitSelection(carrier, owner);
@@ -61,7 +61,7 @@ test("optional future/value branches emit one native absence and preserve unit e
   assert.equal(fact.selection.present.value.completion.kind, "value");
   assert.equal(fact.selection.present.value.future.awaiting, "fallible");
   assert.deepEqual(rustAwaitSelectionResultCarrier(rustAwaitSelection(unitOptional)), unit);
-  const unitDefinitions = { sourceUnionVariants: carrier => rustTargetTypeRefEquals(carrier, union)
+  const unitDefinitions = { programErrorOrigin: () => undefined, sourceUnionVariants: carrier => rustTargetTypeRefEquals(carrier, union)
     ? [ { name: "Direct", carrier: unit }, { name: "Deferred", carrier: promise } ] : undefined };
   assert.deepEqual(rustAwaitSelectionResultCarrier(rustAwaitSelection(union, unitDefinitions)), output);
   assert.ok(factFor(union, output, rustFutureValueForSourceStorage, unitDefinitions));
@@ -131,7 +131,7 @@ test("native await topology rejects cycles, duplicate variants, and excessive fi
     new Array(1), [ { name: "", carrier: promise } ],
     [ { name: "Repeated", carrier: integer }, { name: "Repeated", carrier: promise } ],
     Array.from({ length: 4097 }, (_, index) => ({ name: `Arm${index}`, carrier: integer })) ]) {
-    assert.equal(rustAwaitSelection(union, { sourceUnionVariants: carrier =>
+    assert.equal(rustAwaitSelection(union, { programErrorOrigin: () => undefined, sourceUnionVariants: carrier =>
       rustTargetTypeRefEquals(carrier, union) ? alternatives : undefined }), undefined);
   }
   let deep = promise;

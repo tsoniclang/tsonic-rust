@@ -6,10 +6,12 @@ import type { RustTypeDefinitions } from "../../../target-model/types/source-uni
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustUnionAlternatives } from "../../../target-model/types/union-relations.js";
 import { isRustAbsenceCarrier, isRustJsArrayCarrier, isRustVecCarrier, isRustJsValueCarrier, isRustProgramErrorCarrier,
-  rustOptionElementCarrier, rustStructuralObjectCarrierValue, rustTsValueTargetType,
+  rustOptionElementCarrier, rustStructuralObjectCarrierValue, rustTsValueTargetType, rustJsErrorTargetType,
 } from "../../../target-model/types/index.js";
 import { rustNamedTypeCarrierValue } from "../../../target-model/types/carriers/native.js";
 import { getRustTypeofRuntimeKind } from "../../../target-model/types/runtime-kind.js";
+import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier } from "../../../target-model/types/carriers/source-error.js";
+import { rustCarrierSupportsTrait } from "../../../target-model/types/carriers/traits.js";
 
 export function selectRustProjectTypeTestPlan(
   sourceCarrier: TargetTypeRef,
@@ -69,6 +71,25 @@ export function selectRustClosedTypeTestPlan(
     }
     return isRustAbsenceCarrier(source) || getRustTypeofRuntimeKind(source, definitions) !== undefined ||
       projectTypes.definitionForCarrier(source) !== undefined || rustStructuralObjectCarrierValue(source) !== undefined
+      ? Object.freeze({ kind: "constant", value: false }) : undefined;
+  }
+  if (predicate.kind === "error") {
+    if (rustTargetTypeRefEquals(source, rustJsErrorTargetType()) || isRustMutableJsErrorCarrier(source) ||
+      rustCarrierSupportsTrait(source, "tsonic_rust_runtime::ErrorObject", undefined, undefined, definitions)) {
+      return Object.freeze({ kind: "error", lowering: "native-error" });
+    }
+    if (isRustJsValueCarrier(source)) return Object.freeze({ kind: "error", lowering: "closed-value" });
+    if (isRustProgramErrorCarrier(source) || isRustSourceErrorCarrier(source)) return Object.freeze({ kind: "error", lowering: "program-error" });
+    if (rustTargetTypeRefEquals(source, rustTsValueTargetType()) || source.kind === "type-parameter" ||
+      source.kind === "associated-type" || source.kind === "trait-object" || source.kind === "reference") return undefined;
+    const definition = projectTypes.definitionForCarrier(source);
+    if (definition?.kind === "class" && projectTypes.inheritedExternalBaseForDefinition(definition)?.base.programError === true) {
+      return Object.freeze({ kind: "error", lowering: "native-error" });
+    }
+    if (definition !== undefined && projectTypes.concreteClassesFor(definition).some(candidate =>
+      projectTypes.inheritedExternalBaseForDefinition(candidate)?.base.programError === true)) return undefined;
+    return isRustAbsenceCarrier(source) || getRustTypeofRuntimeKind(source, definitions) !== undefined ||
+      definition !== undefined || rustStructuralObjectCarrierValue(source) !== undefined
       ? Object.freeze({ kind: "constant", value: false }) : undefined;
   }
   const target = predicate.targetCarrier;

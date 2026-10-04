@@ -35,6 +35,7 @@ import { planRustProjectClosedValue } from "../objects/project-closed-values.js"
 import { planRustArrayValueConversion } from "./array-value-conversions.js";
 import { planRustSequenceValue } from "./sequence-conversions.js";
 import { planRustUnionFold } from "./union-folds.js";
+import { planRustProgramErrorConstruction } from "./program-errors.js";
 
 export function applyRustValueConversion(
   context: RustPlanContext,
@@ -114,6 +115,9 @@ export function lowerRustValueConversion(
   node: Node | undefined,
 ): RustExpr | undefined {
   switch (contract.lowering) {
+    case "program-error":
+      return planRustProgramErrorConstruction({ kind: "program-error", source: contract.source,
+        target: contract.target, route: contract.route }, source, node ?? context.sourceFile, context);
     case "project-closed-value":
       registerAliasFromPath(context, contract.ownerPath);
       return planRustProjectClosedValue(source, contract.ownerPath, contract.source, node, context);

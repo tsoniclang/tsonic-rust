@@ -14,6 +14,9 @@ export function printRustPattern(pattern: RustPattern): string {
     }
     case "tuple-variant":
       return `${pattern.path}(${pattern.elements.map(printRustPattern).join(", ")})`;
+    case "struct":
+      return `${pattern.path} { ${pattern.fields.map(field => field.pattern.kind === "binding" && field.name === field.pattern.name
+        ? field.name : `${field.name}: ${printRustPattern(field.pattern)}`).join(", ")} }`;
     case "or":
       return pattern.alternatives.map(printRustPattern).join(" | ");
   }

@@ -1,5 +1,5 @@
 import { emptyRustGenerics, type RustExpr, type RustImplFunction, type RustItem, type RustPattern, type RustType } from "../../target-ast/nodes.js";
-import type { RustErrorTransportPlan } from "./error-transport.js";
+import { rustSuppressedErrorPattern, rustSuppressedErrorValue, type RustErrorTransportPlan } from "./error-transport.js";
 
 const jsError: RustType = { kind: "named", path: "tsonic_rust_runtime::JsError" };
 const errorKind: RustType = { kind: "named", path: "tsonic_rust_runtime::JsErrorKind" };
@@ -24,7 +24,7 @@ export function planRustErrorObservations(plan: RustErrorTransportPlan): RustIte
       observation("source_error", option(borrowedError), { kind: "match", expression: path("self"), arms: [
         { pattern: variant("ErrorTransport::Runtime", binding("error")), expression: call("Some", method(path("error"), "source_error")) },
         { pattern: variant("ErrorTransport::SourceCreated", binding("error")), expression: call("Some", path("error")) },
-        { pattern: variant("ErrorTransport::Suppressed", { kind: "wildcard" }, { kind: "wildcard" }, binding("source")), expression: call("Some", path("source")) },
+        { pattern: rustSuppressedErrorPattern(false, { kind: "wildcard" }, { kind: "wildcard" }, binding("source")), expression: call("Some", path("source")) },
         ...plan.variants.map(item => ({ pattern: variant(`ErrorTransport::${item.name}`, item.source === "thrown" ? { kind: "wildcard" as const } : binding("error")),
           expression: item.source === "external" ? method(path("error"), "source_error")
             : item.source === "error" ? call("Some", path("error")) : { kind: "none" as const } })),
@@ -44,9 +44,9 @@ export function planRustErrorObservations(plan: RustErrorTransportPlan): RustIte
           expression: item.source === "thrown" ? { kind: "none" as const }
             : item.source === "error" ? call("Some", call("SourceError::from", method(path("error"), "clone")))
             : method(method(path("error"), "source_error_value"), "map", path("SourceError::from")) })),
-        { pattern: variant("ErrorTransport::Suppressed", binding("error"), binding("suppressed"), binding("source")),
+        { pattern: rustSuppressedErrorPattern(false, binding("error"), binding("suppressed"), binding("source")),
           expression: call("Some", { kind: "struct-literal", path: "SourceError", fields: [{ name: "value",
-            value: call("ErrorTransport::Suppressed", method(path("error"), "clone"),
+            value: rustSuppressedErrorValue(method(path("error"), "clone"),
               method(path("suppressed"), "clone"), method(path("source"), "clone")) }] }) },
       ] }),
       observation("writable_source_error_value", option({ kind: "named", path: "WritableSourceError" }), {
@@ -59,7 +59,7 @@ export function planRustErrorObservations(plan: RustErrorTransportPlan): RustIte
             expression: item.source === "thrown" ? { kind: "none" as const }
               : item.source === "error" ? call("Some", call("WritableSourceError::from", method(path("error"), "clone")))
               : method(method(path("error"), "writable_source_error_value"), "map", path("WritableSourceError::from")) })),
-          { pattern: variant("ErrorTransport::Suppressed", { kind: "wildcard" }, { kind: "wildcard" }, { kind: "wildcard" }), expression: { kind: "none" } },
+          { pattern: rustSuppressedErrorPattern(false, { kind: "wildcard" }, { kind: "wildcard" }, { kind: "wildcard" }), expression: { kind: "none" } },
         ],
       }),
       observation("mutable_error_value", option({ kind: "named", path: "tsonic_rust_runtime::MutableJsError" }), {
@@ -74,7 +74,7 @@ export function planRustErrorObservations(plan: RustErrorTransportPlan): RustIte
       observation("native_error_value", option(jsError), { kind: "match", expression: path("self"), arms: [
         { pattern: variant("ErrorTransport::Runtime", binding("error")), expression: call("Some", method(method(path("error"), "source_error"), "clone")) },
         { pattern: variant("ErrorTransport::SourceCreated", { kind: "wildcard" }), expression: { kind: "none" } },
-        { pattern: variant("ErrorTransport::Suppressed", { kind: "wildcard" }, { kind: "wildcard" }, binding("source")), expression: call("Some", method(path("source"), "clone")) },
+        { pattern: rustSuppressedErrorPattern(false, { kind: "wildcard" }, { kind: "wildcard" }, binding("source")), expression: call("Some", method(path("source"), "clone")) },
         ...plan.variants.map(item => ({ pattern: variant(`ErrorTransport::${item.name}`, item.source === "external" ? binding("error") : { kind: "wildcard" as const }),
           expression: item.source === "external" ? method(path("error"), "native_error_value") : { kind: "none" as const } })),
       ] }),
@@ -89,7 +89,7 @@ export function planRustSuppressedErrorConstructor(): RustItem {
     members: [{ kind: "function",
       name: "suppressed", visibility: "public", generics: emptyRustGenerics,
       params: [{ name: "error", type: error }, { name: "suppressed", type: error }], returnType: error,
-      body: { statements: [{ kind: "tail", expr: call("Self::Suppressed",
+      body: { statements: [{ kind: "tail", expr: rustSuppressedErrorValue(
         call("Box::new", path("error")), call("Box::new", path("suppressed")),
         call("tsonic_rust_runtime::JsError::new", path("tsonic_rust_runtime::JsErrorKind::SuppressedError"),
           { kind: "str-literal", value: "An error was suppressed during disposal." }),

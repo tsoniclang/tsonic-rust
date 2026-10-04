@@ -12,10 +12,16 @@ export interface RustSourceUnionDefinition {
 
 export interface RustTypeDefinitions {
   sourceUnionVariants(carrier: TargetTypeRef): readonly RustSourceUnionVariantCarrierValue[] | undefined;
+  programErrorOrigin(carrier: TargetTypeRef): RustProgramErrorOrigin | undefined;
 }
+
+export type RustProgramErrorOrigin =
+  | { readonly kind: "provider" }
+  | { readonly kind: "project"; readonly variant: string; readonly sourceError: boolean };
 
 export const emptyRustTypeDefinitions: RustTypeDefinitions = Object.freeze({
   sourceUnionVariants: () => undefined,
+  programErrorOrigin: () => undefined,
 });
 
 export function rustSourceUnionDefinitionIdentity(carrier: TargetTypeRef): string | undefined {

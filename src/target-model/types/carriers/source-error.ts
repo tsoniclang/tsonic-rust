@@ -13,6 +13,10 @@ export function isRustSourceErrorCarrier(carrier: TargetTypeRef | undefined): bo
   return identity === rustSourceErrorTargetId || identity === rustWritableSourceErrorTargetId;
 }
 
+export function isRustReadonlySourceErrorCarrier(carrier: TargetTypeRef | undefined): boolean {
+  return nativeErrorIdentity(carrier) === rustSourceErrorTargetId;
+}
+
 export function rustWritableSourceErrorTargetType(): TargetTypeRef {
   return Object.freeze({ kind: "target-named", id: rustWritableSourceErrorTargetId });
 }

@@ -35,7 +35,6 @@ import { planRustNonConsumingValue } from "./typed-locations.js";
 import { planNullishAssignment } from "./nullish-assignment.js";
 import { planCompoundAssignmentExpression } from "./compound-assignment.js";
 import { planRustProgramErrorEquality, planRustProgramErrorTypeTest } from "./error-operations.js";
-import { planRustBuiltinErrorTypeTest } from "./builtin-errors.js";
 import { rustErrorFieldComparisonView, rustErrorFieldOptionalView, rustErrorFieldIsOptionalRead,
   rustErrorFieldOptionalComparisonView, rustErrorFieldStringComparisonView } from "./error-field-borrows.js";
 import { planRustClosedTypeTest } from "./type-tests.js";
@@ -201,9 +200,6 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
       return undefined;
     }
     return planRustProgramErrorEquality(node, left, right, fact, context);
-  }
-  if (fact?.kind === "builtin-error-type-test") {
-    return planRustBuiltinErrorTypeTest(node, fact, context);
   }
   if (fact?.kind === "program-error-type-test") {
     const leftNode = BinaryExpression_Left(context.input.program.source.ast, node);

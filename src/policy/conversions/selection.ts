@@ -2,6 +2,7 @@ import type { RustValueConversion } from "../../target-model/operations/model.js
 import { selectRustUnionArmMapping, rustUnionProjectionContract, rustUnionLeaves, type RustUnionLeaf } from "../../target-model/types/union-relations.js";
 import { rustNativeRepresentationMatches } from "../../target-model/conversions/native-representation.js";
 import { rustUnionPayloadAdmission } from "../../target-model/conversions/union-injection.js";
+import { selectRustProgramErrorConversion } from "../../target-model/conversions/program-error.js";
 import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
 import { rustNumericValueConversionIsSupported } from "../../target-model/conversions/numeric-promotion.js";
 import { selectRustExactIntegerConversion } from "../../target-model/conversions/exact-integer.js";
@@ -72,6 +73,10 @@ export function selectRustSourceValueConversion(
   if (ancestors.some(ancestor => rustTargetTypeRefEquals(ancestor.source, source) &&
     rustTargetTypeRefEquals(ancestor.target, target))) return undefined;
   const nextAncestors = [...ancestors, {source, target}];
+  if (!rustTargetTypeRefEquals(source, target)) {
+    const error = selectRustProgramErrorConversion(source, target, definitions);
+    if (error !== undefined) return error;
+  }
   const nativeArrayElement = isRustJsArrayCarrier(target) ? rustJsArrayLikeElementTargetType(target) : undefined;
   if (nativeArrayElement !== undefined && rustCarrierCanEnterTsValue(nativeArrayElement, definitions) &&
     (isRustJsValueCarrier(source) || isRustJsArrayValueCarrier(source))) {

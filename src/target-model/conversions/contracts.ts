@@ -2,6 +2,7 @@ import type { TargetTypeRef } from "../types/model.js";
 import { isRustValueConversion } from "./shape.js";
 import { rustNativeRepresentationMatches } from "./native-representation.js";
 import { rustUnionPayloadAdmission } from "./union-injection.js";
+import { rustProgramErrorConversionMatches, type RustProgramErrorRoute } from "./program-error.js";
 import { rustJsRecordValueAdmission } from "./closed-record.js";
 import {
   isRustTargetTypeRef,
@@ -84,6 +85,7 @@ interface RustValueConversionContractBase {
 }
 
 export type RustValueConversionContract = RustValueConversionContractBase & (
+  | { readonly lowering: "program-error"; readonly route: RustProgramErrorRoute }
   | { readonly lowering: "project-closed-value"; readonly ownerPath: "rt::TsValue" | "js_abi::JsValue" }
   | { readonly lowering: "js-array-backing"; readonly element: TargetTypeRef; readonly method: "cast" | "cast_array" }
   | { readonly lowering: "source-optional"; readonly element: TargetTypeRef }
@@ -183,6 +185,11 @@ export function rustValueConversionContract(
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): RustValueConversionContract | undefined {
   if (!isRustValueConversion(value)) return undefined;
+  if (value.kind === "program-error") {
+    return rustProgramErrorConversionMatches(value, value.source, value.target, definitions)
+      ? { category: "exact", lowering: "program-error", sourceMode: "value", fallible: false,
+          source: value.source, target: value.target, route: value.route } : undefined;
+  }
   if (value.kind === "exact-integer") {
     return isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) &&
       rustExactIntegerConversionMatches(value.source, value.target, value)
@@ -733,6 +740,7 @@ export function rustValueConversionIsFallible(value: RustValueConversion | undef
 }
 
 export function rustValueConversionIdentity(value: RustValueConversion): string {
+  if (value.kind === "program-error") return `program-error.${JSON.stringify(value)}`;
   if (value.kind === "exact-integer") {
     return `exact-integer.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}`;
   }

@@ -19,6 +19,7 @@ function classify(dependencies, errors) {
     sourceFiles: names.map(name => ({ fileName: `/${name}/index.ts` })),
     ast: { getFileName: source => source.fileName, forEachChild() {} },
     callableValues: { generic: { definitions: [], definitionFor: () => undefined } },
+    errorStorageDemands: { nativeConstructors: [], storageFor: () => ({ kind: "readonly" }) },
     facts: { getFact: () => undefined },
     projectTypes: { programErrorDefinitions: definitions, programErrorVariant: definition => definition.sourceName },
   };

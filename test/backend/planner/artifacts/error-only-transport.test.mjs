@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { planRustErrorTransport, planRustSourceErrorTransport, rustErrorTransportDisplayGenerics } from "../../../../dist/backend/planner/program/error-transport.js";
+import { planRustErrorTransport, planRustSourceErrorTransport } from "../../../../dist/backend/planner/program/error-transport.js";
 import { planRustErrorObservations } from "../../../../dist/backend/planner/program/error-observations.js";
 import { planRustSourceErrorObservations } from "../../../../dist/backend/planner/program/source-error-observations.js";
 import { rustSourceErrorTargetType } from "../../../../dist/target-model/types/carriers/source-error.js";
@@ -26,16 +26,16 @@ test("one physical enum specializes unrelated payloads to the native uninhabited
   const full = plan.aliases.find(item => item.name === "TsonicError");
   assert.equal(full.kind, "type-alias");
   assert.deepEqual(full.target.genericArguments.map(argument => argument.type), [named("tsonic_rust_runtime::TsonicError"),
-    named("tsonic_rust_runtime::MutableJsError"), named("tsonic_rust_runtime::JsError"), rows[1].type, rows[2].type]);
+    named("tsonic_rust_runtime::MutableJsError"), named("SuppressedErrorPayload"), rows[1].type, rows[2].type]);
   const source = plan.aliases.find(item => item.name === "SourceError");
   assert.equal(source.kind, "struct");
   assert.equal(source.fields.length, 1);
   assert.equal(source.fields[0].visibility, "private");
   assert.deepEqual(source.fields[0].type.genericArguments.map(argument => argument.type), [named("tsonic_rust_runtime::TsonicError"),
-    named("tsonic_rust_runtime::MutableJsError"), named("tsonic_rust_runtime::JsError"), named("core::convert::Infallible"), rows[2].sourceErrorType]);
+    named("tsonic_rust_runtime::MutableJsError"), named("SuppressedErrorPayload"),
+    named("core::convert::Infallible"), rows[2].sourceErrorType]);
   assert.equal(plan.aliases.some(item => item.kind === "enum"), false);
-  assert.deepEqual(plan.declaration.variants.find(item => item.name === "Suppressed").fields.slice(0, 2),
-    Array.from({ length: 2 }, () => ({ kind: "named", path: "Box", genericArguments: [{ kind: "type", type: named("TsonicError") }] })));
+  assert.deepEqual(plan.declaration.variants.find(item => item.name === "Suppressed").fields, [named("SuppressedPayload")]);
 });
 
 test("admission retains exact rejected payloads and invokes no allocating adapter", () => {
@@ -81,7 +81,7 @@ test("writable admission preserves rejected native payloads and uninhabited rest
   const restored = items.find(item => item.target.path === "TsonicError" && item.trait?.path === "core::convert::From")
     .members[0].body.statements[0].expr;
   const suppressed = restored.arms.find(value => value.pattern.path === "ErrorTransport::Suppressed");
-  assert.deepEqual(suppressed.pattern.elements.map(value => value.kind), ["wildcard", "wildcard", "binding"]);
+  assert.deepEqual(suppressed.pattern.elements.map(value => value.kind), ["binding"]);
   assert.deepEqual(suppressed.expression, { kind: "match", expression: { kind: "path", path: "source" }, arms: [] });
   const runtime = restored.arms.find(value => value.pattern.path === "ErrorTransport::Runtime");
   assert.deepEqual(runtime.expression, { kind: "match", expression: { kind: "path", path: "error" }, arms: [] });
@@ -119,12 +119,8 @@ test("closed transport rejects missing external specialization and conflicting v
   assert.equal(planRustErrorTransport([rows[0], { ...rows[1], name: rows[0].name }]), undefined);
   for (const name of ["Runtime", "SourceCreated", "Suppressed"]) assert.equal(planRustErrorTransport([{ ...rows[0], name }]), undefined);
   const plan = planRustErrorTransport(rows);
-  const generics = rustErrorTransportDisplayGenerics(plan);
-  assert.deepEqual(generics.parameters[0].bounds, [{ kind: "trait", path: "core::fmt::Display" }]);
-  assert.deepEqual(generics.parameters[1].bounds, [{ kind: "trait", path: "core::fmt::Display" }]);
-  assert.deepEqual(generics.parameters[2].bounds, [{ kind: "trait", path: "core::fmt::Display" }]);
-  assert.deepEqual(generics.parameters[3].bounds, []);
-  assert.deepEqual(generics.parameters[4].bounds, [{ kind: "trait", path: "core::fmt::Display" }]);
+  assert.equal(plan.generics.parameters.every(parameter => parameter.bounds.length === 0), true,
+    "internal transport representation requires no unrelated formatting bounds");
 });
 
 test("flow projection verifies exact Error-only admission instead of a global availability flag", () => {

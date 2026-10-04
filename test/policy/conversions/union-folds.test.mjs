@@ -43,9 +43,9 @@ test("union folds share exact generated/runtime paths and retain native integer 
     }
   }
   assert.equal(selectRustSourceValueConversion({ kind: "target-named", id: rustJsNumericTargetId }, rustJsValueTargetType()), undefined);
-  const cycle = { sourceUnionVariants: source => source === outer ? [{ name: "Recursive", carrier: outer }] : undefined };
+  const cycle = { programErrorOrigin: () => undefined, sourceUnionVariants: source => source === outer ? [{ name: "Recursive", carrier: outer }] : undefined };
   assert.equal(selectRustSourceValueConversion(outer, rustJsValueTargetType(), cycle), undefined);
-  const unknown = { sourceUnionVariants: source => source === outer
+  const unknown = { programErrorOrigin: () => undefined, sourceUnionVariants: source => source === outer
     ? [{ name: "Unknown", carrier: rustObjectIdentityTargetType() }] : undefined };
   assert.equal(selectRustSourceValueConversion(outer, rustJsValueTargetType(), unknown), undefined);
 });

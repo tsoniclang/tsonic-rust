@@ -20,6 +20,7 @@ import type { RustProviderPackageDefinition } from "../model.js";
 import type { RustProviderTypeParameterRequirement } from "../../../target-model/operations/model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustLengthEmptinessContractIsValid } from "../../../target-model/operations/length-emptiness.js";
+import { rustProgramErrorRouteCarriers } from "../../../target-model/conversions/program-error.js";
 
 export function validateOperationRows(
   definition: RustProviderPackageDefinition,
@@ -384,6 +385,7 @@ function valueConversionCarriers(
   if (conversion === undefined || conversion.kind === "semantic-conversion" ||
     conversion.kind === "numeric-promotion" || conversion.kind === "integer-refinement") return [];
   if (conversion.kind === "raw-pointer-mut-to-const") return [conversion.pointee];
+  if (conversion.kind === "program-error") return [conversion.source, conversion.target, ...rustProgramErrorRouteCarriers(conversion.route)];
   if (conversion.kind === "union-map") return [conversion.source, conversion.target,
     ...conversion.arms.flatMap(arm => [arm.carrier, ...arm.source.map(step => step.union), ...arm.target.map(step => step.union)])];
   if (conversion.kind === "copy-from-reference") return [conversion.target];

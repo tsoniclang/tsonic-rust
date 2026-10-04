@@ -443,6 +443,8 @@ function rustExpressionReferencesModuleAlias(expression: RustExpr, alias: string
 
 function rustPatternReferencesModuleAlias(pattern: RustPattern, alias: string): boolean {
   switch (pattern.kind) {
+    case "struct": return rustPathReferencesModuleAlias(pattern.path, alias) ||
+      pattern.fields.some(field => rustPatternReferencesModuleAlias(field.pattern, alias));
     case "wildcard":
     case "binding":
       return false;

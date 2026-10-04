@@ -16,7 +16,7 @@ const union = { kind: "target-named", id: "test.Union" };
 
 function policy(carriers, ambiguous = false) {
   return {
-    definitions: { ...emptyRustTypeDefinitions, sourceUnionVariants: carrier => carrier === union
+    definitions: { ...emptyRustTypeDefinitions, programErrorOrigin: () => undefined, sourceUnionVariants: carrier => carrier === union
       ? carriers.map((carrier, index) => ({ name: `Variant${index}`, carrier })) : undefined },
     projectTypes: {
       definitionForCarrier: carrier => carrier === base || carrier === otherBase ? carrier : undefined,
@@ -49,7 +49,7 @@ test("native upcasts precede exact union injection in expression and callable co
 test("native upcasts retain the complete nested union destination and reject ambiguous payloads", () => {
   const nested = { kind: "target-named", id: "test.Nested" };
   const { projectTypes, definitions } = policy([rustStringTargetType(), base]);
-  const nestedDefinitions = { ...definitions, sourceUnionVariants: carrier => carrier === nested
+  const nestedDefinitions = { ...definitions, programErrorOrigin: () => undefined, sourceUnionVariants: carrier => carrier === nested
     ? [{ name: "Flag", carrier: { kind: "source-primitive", name: "bool" } }, { name: "Values", carrier: union }]
     : definitions.sourceUnionVariants(carrier) };
   const selected = selectRustValueCarrierReconciliation(derived, nested, projectTypes, nestedDefinitions);
@@ -63,7 +63,7 @@ test("native upcasts retain the complete nested union destination and reject amb
     { ...projectTypes, relationship: () => ({ kind: "ambiguous" }) },
     { ...projectTypes, relationship: () => ({ kind: "related", targetType: otherBase }) },
   ]) assert.equal(selectRustValueCarrierReconciliation(derived, nested, changed, nestedDefinitions).kind, "incompatible");
-  const duplicate = { ...nestedDefinitions, sourceUnionVariants: carrier => carrier === nested
+  const duplicate = { ...nestedDefinitions, programErrorOrigin: () => undefined, sourceUnionVariants: carrier => carrier === nested
     ? [{ name: "First", carrier: union }, { name: "Second", carrier: union }] : definitions.sourceUnionVariants(carrier) };
   assert.equal(selectRustValueCarrierReconciliation(derived, nested, projectTypes, duplicate).kind, "incompatible");
 });
@@ -93,7 +93,7 @@ test("union flow retains exact nominal payload refinement and rejects forged or 
       assert.equal(rustFlowReadProjectionFactKey.equals(selected.fact, changed), false);
     }
   }
-  const duplicate = { ...definitions, sourceUnionVariants: carrier => carrier === union
+  const duplicate = { ...definitions, programErrorOrigin: () => undefined, sourceUnionVariants: carrier => carrier === union
     ? [{ name: "First", carrier: base }, { name: "Second", carrier: base }] : undefined };
   assert.equal(selectRustFlowReadProjection(union, derived, projectTypes, duplicate).kind, "incompatible");
 });

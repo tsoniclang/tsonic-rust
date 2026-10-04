@@ -7,10 +7,11 @@ import { planRustClosedTypeTest } from "../../../../dist/backend/planner/express
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
 
-for (const kind of ["nominal", "array"]) test(`closed ${kind} tests reject missing, forged and reordered test evidence`, () => {
-  const operation = kind === "array" ? "Array.isArray(value)" : "value instanceof RegExp";
+for (const kind of ["nominal", "array", "error"]) test(`closed ${kind} tests reject missing, forged and reordered test evidence`, () => {
+  const operation = kind === "array" ? "Array.isArray(value)" : kind === "error" ? "value instanceof TypeError" : "value instanceof RegExp";
+  const type = kind === "error" ? "string | Error | readonly string[] | undefined" : "string | RegExp | readonly string[] | undefined";
   const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts":
-    `export function test(value: string | RegExp | readonly string[] | undefined): boolean { return ${operation}; }` } });
+    `export function test(value: ${type}): boolean { return ${operation}; }` } });
   const { ast } = program.source;
   const operations = [];
   const visit = node => {
@@ -39,9 +40,11 @@ for (const kind of ["nominal", "array"]) test(`closed ${kind} tests reject missi
   const cyclic = { kind: "option", element: fact.test.element };
   cyclic.test = cyclic;
   for (const changes of [
+    { kind: "builtin-error-type-test" },
     { operationId: "changed" }, { resultCarrier: rustSourcePrimitiveTargetType("int32") },
     { sourceCarrier: fact.predicate.targetCarrier }, { predicate: { kind: "nominal", targetCarrier: rustSourcePrimitiveTargetType("int32") } },
     { predicate: undefined }, { predicate: null }, { predicate: { kind: "unknown" } },
+    { predicate: { kind: "error", errorKind: "Unknown" } }, { predicate: { kind: "error", errorKind: "RangeError" } },
     { predicate: { ...fact.predicate, unexpected: true } }, { sourceCarrier: null },
     { test: undefined }, { test: null }, { test: cyclic }, { test: { kind: "constant", value: true } },
     ...mutatedArms.map(selected => ({ test: { ...fact.test, test: { ...fact.test.test, arms: selected } } })),

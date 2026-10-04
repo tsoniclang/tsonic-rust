@@ -2,6 +2,7 @@ import type { RustTargetConstArgument, TargetTypeRef } from "../types/model.js";
 import type { RustLifetimeRef } from "../lifetimes/index.js";
 import type { RustValueConversion } from "../operations/model.js";
 import { substituteRustTargetGenerics } from "../types/carriers/substitution.js";
+import { mapRustProgramErrorRoute } from "./program-error.js";
 
 export function substituteRustValueConversion(
   value: RustValueConversion,
@@ -10,6 +11,12 @@ export function substituteRustValueConversion(
   constSubstitutions: ReadonlyMap<string, RustTargetConstArgument> = new Map(),
 ): RustValueConversion {
   switch (value.kind) {
+    case "program-error": {
+      const substitute = (carrier: TargetTypeRef): TargetTypeRef =>
+        substituteRustTargetGenerics(carrier, substitutions, lifetimeSubstitutions, constSubstitutions);
+      return Object.freeze({ ...value, source: substitute(value.source), target: substitute(value.target),
+        route: mapRustProgramErrorRoute(value.route, substitute) });
+    }
     case "rest-sequence":
       return Object.freeze({
         ...value,

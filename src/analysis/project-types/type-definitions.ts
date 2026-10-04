@@ -1,13 +1,14 @@
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustSourceUnionCarrierValue } from "../../target-model/types/carriers/source-types.js";
+import { rustSourceTypeCarrierValue, rustSourceUnionCarrierValue } from "../../target-model/types/carriers/source-types.js";
 import { closedMetadataKey, hasExactObjectKeys, isClosedMetadata, isDenseDataArray, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { instantiateRustSourceUnionVariants, rustSourceUnionDefinitionIdentity,
-  type RustTypeDefinitions, type RustSourceUnionDefinition } from "../../target-model/types/source-union-definitions.js";
+  type RustTypeDefinitions, type RustSourceUnionDefinition, type RustProgramErrorOrigin } from "../../target-model/types/source-union-definitions.js";
 
 export interface RustTypeDefinitionRegistry extends RustTypeDefinitions {
   registerSourceUnion(definition: RustSourceUnionDefinition, template: boolean): boolean;
+  registerProgramErrorOrigin(carrier: TargetTypeRef, origin: RustProgramErrorOrigin): boolean;
   definitionCarriers(): readonly TargetTypeRef[];
   seal(): RustTypeDefinitions;
 }
@@ -15,6 +16,7 @@ export interface RustTypeDefinitionRegistry extends RustTypeDefinitions {
 export function createRustTypeDefinitionRegistry(): RustTypeDefinitionRegistry {
   const definitions = new Map<string, RustSourceUnionDefinition>();
   const templates = new Map<string, RustSourceUnionDefinition>();
+  const errorOrigins = new Map<string, RustProgramErrorOrigin>();
   let sealed = false;
   const sourceUnionVariants: RustTypeDefinitions["sourceUnionVariants"] = carrier => {
     if (!isRustTargetTypeRef(carrier)) return undefined;
@@ -26,6 +28,20 @@ export function createRustTypeDefinitionRegistry(): RustTypeDefinitionRegistry {
   };
   return Object.freeze({
     sourceUnionVariants,
+    programErrorOrigin: (carrier: TargetTypeRef) => isRustTargetTypeRef(carrier) ? errorOrigins.get(closedMetadataKey(carrier)) : undefined,
+    registerProgramErrorOrigin(carrier: TargetTypeRef, origin: RustProgramErrorOrigin) {
+      if (sealed) throw new Error("Rust type definitions are sealed.");
+      if (!isRustTargetTypeRef(carrier) || !isClosedMetadata(origin) || origin === null || typeof origin !== "object" ||
+        !(origin.kind === "provider" && hasExactObjectKeys(origin, ["kind"]) || origin.kind === "project" &&
+          hasExactObjectKeys(origin, ["kind", "variant", "sourceError"]) && typeof origin.variant === "string" &&
+          origin.variant.length > 0 && typeof origin.sourceError === "boolean" &&
+          rustSourceTypeCarrierValue(carrier)?.shape === "object")) return false;
+      const identity = closedMetadataKey(carrier);
+      const previous = errorOrigins.get(identity);
+      if (previous !== undefined && closedMetadataKey(previous) !== closedMetadataKey(origin)) return false;
+      errorOrigins.set(identity, previous ?? snapshotClosedMetadata(origin));
+      return true;
+    },
     definitionCarriers: () => Object.freeze([...definitions.values()].flatMap(definition => definition.variants.map(variant => variant.carrier))),
     registerSourceUnion(definition: RustSourceUnionDefinition, template: boolean) {
       if (sealed) throw new Error("Rust type definitions are sealed.");
@@ -66,7 +82,8 @@ export function createRustTypeDefinitionRegistry(): RustTypeDefinitionRegistry {
       };
       for (const definition of definitions.values()) for (const variant of definition.variants) visit(variant.carrier);
       sealed = true;
-      return Object.freeze({sourceUnionVariants});
+      return Object.freeze({sourceUnionVariants,
+        programErrorOrigin: (carrier: TargetTypeRef) => isRustTargetTypeRef(carrier) ? errorOrigins.get(closedMetadataKey(carrier)) : undefined});
     },
   });
 }

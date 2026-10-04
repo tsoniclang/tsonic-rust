@@ -4,6 +4,7 @@ import {
   Node_Type,
   ObjectLiteralProperty_Value,
   SpreadAssignment_Expression,
+  sourceObjectLiteralDestinationMember,
 } from "@tsonic/target-api/source";
 import {
   rustOptionElementCarrier,
@@ -26,7 +27,7 @@ import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js"
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { resolveExpressionCarrier } from "./carriers.js";
 import { resolveFunctionExpressionCarrier } from "../callables/closures.js";
-import { resolveObjectLiteralMethodCarrier, resolveProjectMethodPropertyCarrier, resolveRustRecordShape, selectRustRecordLiteralUnionVariant } from "../objects/record-shapes.js";
+import { resolveObjectLiteralMethodCarrier, resolveProjectMethodPropertyCarrier, resolveRustRecordShape } from "../objects/record-shapes.js";
 import { resolveRustIndexedRecordContract, resolveRustIndexedRecordLiteral } from "../objects/indexed-records.js";
 import { selectRustUnionVariantByCheckedType } from "./union-context.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
@@ -207,11 +208,9 @@ export function resolveRecordLiteralCarrier(
       explicitPropertiesByName.set(accessor.sourceName, accessor.getter!.element);
     }
   }
-  let containsSpread = false;
   for (const property of properties) {
     const kind = ast.kindName(property);
     if (kind === KindSpreadAssignment) {
-      containsSpread = true;
       continue;
     }
     if (kind === "KindMethodDeclaration") {
@@ -361,18 +360,7 @@ export function resolveRecordLiteralCarrier(
       const sourceUnion = walk.sourceTypes.sourceUnionForCarrier(selectedExpected);
       const selectedVariant = sourceUnion === undefined
         ? undefined
-        : containsSpread
-          ? selectRustUnionVariantByCheckedType(
-              walk,
-              expression,
-              sourceUnion,
-            )
-          : selectRustRecordLiteralUnionVariant(
-              walk,
-              expression,
-              sourceUnion,
-              explicitPropertiesByName,
-            );
+        : selectRustUnionVariantByCheckedType(walk, expression, sourceUnion);
       if (selectedVariant === undefined) {
         return undefined;
       }
@@ -534,6 +522,12 @@ export function resolveRecordLiteralCarrier(
     }
     const propertySemantics = walk.context.semanticsFor(property);
     const selectedElement = propertySemantics.operations.objectLiteralElement(property);
+    const selectedObjectDeclaration = sourceValue?.shape === "object"
+      ? walk.context.projectTypes.definitionForCarrier(selectedExpected)?.declaration : undefined;
+    const selectedObjectType = selectedObjectDeclaration === undefined ? undefined
+      : walk.context.semanticsFor(selectedObjectDeclaration).declarations.declaredType(selectedObjectDeclaration);
+    const destinationMember = selectedElement === undefined || selectedObjectType === undefined ? undefined
+      : sourceObjectLiteralDestinationMember(selectedElement, selectedObjectType, propertySemantics);
     if (kind === "KindGetAccessor" || kind === "KindSetAccessor") {
       const accessor = accessorsByElement.get(property);
       const role = kind === "KindGetAccessor" ? "get" as const : "set" as const;
@@ -789,8 +783,7 @@ export function resolveRecordLiteralCarrier(
     const targetField = storage === "project-object"
       ? selectedFields.find((field) =>
           field.implementationDeclaration !== undefined &&
-          (selectedElement?.sourceSelectedDeclaration === field.implementationDeclaration ||
-            selectedElement?.sourceSelectedDeclarations.includes(field.implementationDeclaration)))
+          destinationMember?.declarations.includes(field.implementationDeclaration) === true)
       : selectedFieldByName.get(sourceName);
     if (targetField === undefined || initializer === undefined ||
       resolveExpressionCarrier(walk, initializer, sourceFile, targetField.carrier) === undefined) {

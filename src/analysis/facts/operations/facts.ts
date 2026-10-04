@@ -303,14 +303,6 @@ export type RustTargetOperationFact =
       readonly resultCarrier: TargetTypeRef;
     }
   | {
-      readonly kind: "builtin-error-type-test";
-      readonly operationId: string;
-      readonly sourceCarrier: TargetTypeRef;
-      readonly resultCarrier: TargetTypeRef;
-      readonly errorKind: "any" | "RangeError" | "TypeError" | "URIError";
-      readonly lowering: "native-error" | "closed-value" | "program-error";
-    }
-  | {
       readonly kind: "builtin-error-property";
       readonly accessMode: "read" | "write" | "read-write";
       readonly operationId: string;
@@ -857,7 +849,6 @@ export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact):
     case "closed-type-test":
     case "program-error-type-test":
     case "program-error-equality":
-    case "builtin-error-type-test":
     case "builtin-error-property":
       return fact.resultCarrier;
     case "iteration":

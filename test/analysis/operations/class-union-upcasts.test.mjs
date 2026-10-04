@@ -7,7 +7,7 @@ const carrier = name => ({ kind: "target-named", id: `proof.${name}` });
 const source = carrier("Union");
 const target = carrier("Base");
 const variants = ["First", "Second", "Third"].map((name, index) => ({ name: `Variant${index}`, carrier: carrier(name) }));
-const definitions = { sourceUnionVariants: value => value === source ? variants : undefined };
+const definitions = { programErrorOrigin: () => undefined, sourceUnionVariants: value => value === source ? variants : undefined };
 const targetDefinition = {};
 const policy = relationship => ({
   definitionForCarrier: value => value === target ? targetDefinition : undefined,

@@ -12,6 +12,40 @@ import {
 } from "../../../dist/target-model/types/index.js";
 import { lowerRustValueConversion } from "../../../dist/backend/planner/expressions/value-conversions.js";
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../helpers/fake-compile-input.mjs";
+import { rustSourceErrorTargetType, rustWritableSourceErrorTargetType, rustMutableJsErrorTargetType } from "../../../dist/target-model/types/carriers/source-error.js";
+import { rustOptionTargetType } from "../../../dist/target-model/types/index.js";
+
+test("native Error payload conversion composes through the one Option and union grammar", () => {
+  const source = rustJsErrorTargetType();
+  const payload = rustSourceErrorTargetType();
+  const target = rustSourceUnionTargetType("/src/index.ts", "Failure");
+  const definitions = unionDefinitions([[target, [{ name: "Error", carrier: payload },
+    { name: "Text", carrier: rustStringTargetType() }]]]);
+  const conversion = selectRustSourceValueConversion(source, target, definitions);
+  assert.equal(conversion?.kind, "source-union-variant");
+  assert.equal(conversion.payloadConversion.kind, "program-error");
+  assert.equal(rustValueConversionContract(conversion, definitions)?.fallible, false);
+  for (const [actual, expected, kind] of [[source, rustOptionTargetType(target), "option-some"],
+    [rustOptionTargetType(source), rustOptionTargetType(target), "option-map"]]) {
+    const selected = selectRustSourceValueConversion(actual, expected, definitions);
+    assert.equal(selected?.kind, kind);
+    const contract = rustValueConversionContract(selected, definitions);
+    assert.deepEqual(contract.source, actual);
+    assert.deepEqual(contract.target, expected);
+    assert.equal(contract.fallible, false);
+  }
+  for (const route of [{ kind: "runtime", boundary: "provider-native", extra: true },
+    { kind: "runtime", boundary: "target-runtime", extra: true }, { kind: "project", variant: "Wrong" },
+    { kind: "source-created" }]) {
+    const changed = { ...conversion, payloadConversion: { ...conversion.payloadConversion, route } };
+    assert.equal(rustValueConversionContract(changed, definitions), undefined);
+  }
+  assert.equal(selectRustSourceValueConversion(source, rustWritableSourceErrorTargetType()), undefined);
+  assert.equal(selectRustSourceValueConversion(payload, rustWritableSourceErrorTargetType()), undefined);
+  assert.equal(selectRustSourceValueConversion(rustMutableJsErrorTargetType(), rustWritableSourceErrorTargetType())?.kind, "program-error");
+  const ambiguous = unionDefinitions([[target, [{ name: "Native", carrier: source }, { name: "View", carrier: payload }]]]);
+  assert.equal(selectRustSourceValueConversion(source, target, ambiguous), undefined);
+});
 
 function unionDefinitions(rows) {
   const registry = createRustTypeDefinitionRegistry();
@@ -101,7 +135,7 @@ test("union payload admission rejects ambiguous, width-changing, error-changing 
   const wide = rustSourceUnionTargetType("/src/index.ts", "Wide");
   const wideDefinitions = unionDefinitions([[wide, [{ name: "Value", carrier: rustSourcePrimitiveTargetType("int64") }]]]);
   assert.equal(selectRustSourceValueConversion(rustSourcePrimitiveTargetType("int32"), wide, wideDefinitions), undefined);
-  const recursive = { sourceUnionVariants: () => [{ name: "Self", carrier: target }] };
+  const recursive = { programErrorOrigin: () => undefined, sourceUnionVariants: () => [{ name: "Self", carrier: target }] };
   assert.equal(rustUnionPayloadAdmission(source, target, recursive), undefined);
 });
 

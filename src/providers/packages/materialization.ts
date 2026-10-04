@@ -22,6 +22,7 @@ import type {
   RustValueConversion,
 } from "../../target-model/operations/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { mapRustProgramErrorRoute } from "../../target-model/conversions/program-error.js";
 
 export function canonicalizeProviderOperationRow(
   row: RustProviderOperationRow,
@@ -497,6 +498,12 @@ function materializeProviderValueConversion(
   carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>>,
 ): RustValueConversion {
   switch (conversion.kind) {
+    case "program-error": {
+      const materialize = (carrier: TargetTypeRef): TargetTypeRef =>
+        materializeProviderCarrier(carrier, carrierPaths, carrierTraits);
+      return { ...conversion, source: materialize(conversion.source), target: materialize(conversion.target),
+        route: mapRustProgramErrorRoute(conversion.route, materialize) };
+    }
     case "union-map":
       return {
         ...conversion,

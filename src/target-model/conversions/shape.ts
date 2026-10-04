@@ -18,7 +18,10 @@ function isNonOptionValueConversion(value: unknown): boolean {
   if (!isRecord(value)) {
     return false;
   }
-  return (value.kind === "semantic-conversion" &&
+  return (value.kind === "program-error" &&
+      hasExactKeys(value, ["kind", "source", "target", "route"]) &&
+      isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) && isRecord(value.route)) ||
+    (value.kind === "semantic-conversion" &&
       hasExactKeys(value, ["kind", "id"]) && typeof value.id === "string") ||
     (value.kind === "numeric-promotion" &&
       hasExactKeys(value, ["kind", "source", "target"]) &&

@@ -74,6 +74,8 @@ function selectNativeGuard(
   selectGuard: (expression: Node) => SourceNativeGuard<RustClosedTypePredicate> | undefined,
   resolveNominal: (guard: Extract<SourceNativeValueGuard, { readonly kind: "nominal" }>) => TargetTypeRef | undefined,
 ): SourceNativeGuard<Predicate> | undefined {
+  const selected = selectGuard(expression);
+  if (selected !== undefined) return selected;
   const native = selectSourceNativeValueGuard(context, expression);
   if (native?.kind === "absence") return { sourceOperand: native.sourceOperand, predicate: native };
   if (native?.kind === "typeof") return { sourceOperand: native.sourceOperand, predicate: native };
@@ -82,7 +84,7 @@ function selectNativeGuard(
     const targetCarrier = resolveNominal(native);
     if (targetCarrier !== undefined) return { sourceOperand: native.sourceOperand, predicate: { kind: "nominal", targetCarrier } };
   }
-  return selectGuard(expression);
+  return undefined;
 }
 
 function testNativeCarrier(
@@ -108,5 +110,7 @@ function testNativeCarrier(
   }
   const test = selectRustClosedTypeTestPlan(carrier, predicate, projectTypes, definitions);
   return test?.kind === "constant" ? test.value
+    : predicate.kind === "error" && predicate.errorKind === "any" && test?.kind === "error" &&
+      test.lowering === "native-error" ? true
     : test?.kind === "project" && test.plan.lowering.kind === "constant" ? test.plan.lowering.value : undefined;
 }

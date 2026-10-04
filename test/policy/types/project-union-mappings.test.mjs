@@ -76,7 +76,7 @@ test("nominal mappings retain nested destinations, exact payload priority and co
     () => assert.fail("exact payloads do not consult broader project relations"));
   assert.deepEqual(exact.map(arm => arm.target[0].variant.name), ["Variant0", "Variant2"]);
   assert.equal(selectRustProjectUnionMapping(target, source, projectTypes, definitions), undefined);
-  const duplicate = { ...definitions, sourceUnionVariants: carrier => rustTargetTypeRefEquals(carrier, source)
+  const duplicate = { ...definitions, programErrorOrigin: () => undefined, sourceUnionVariants: carrier => rustTargetTypeRefEquals(carrier, source)
     ? [definitions.sourceUnionVariants(source)[1], definitions.sourceUnionVariants(source)[2], definitions.sourceUnionVariants(source)[1]]
     : definitions.sourceUnionVariants(carrier) };
   assert.equal(selectRustProjectUnionMapping(source, target, projectTypes, duplicate), undefined);
@@ -85,7 +85,7 @@ test("nominal mappings retain nested destinations, exact payload priority and co
     assert.equal(selectRustProjectUnionMapping(changed.source, changed.target, changed.projectTypes, changed.definitions), undefined);
   }
   const alternate = rustSourceTypeCarrier("/src/index.ts", "Alternate", "object");
-  const ambiguous = { ...definitions, sourceUnionVariants: carrier => rustTargetTypeRefEquals(carrier, target)
+  const ambiguous = { ...definitions, programErrorOrigin: () => undefined, sourceUnionVariants: carrier => rustTargetTypeRefEquals(carrier, target)
     ? [{ name: "String", carrier: rustStringTargetType() },
       { name: "First", carrier: conversion.arms[1].upcast.targetCarrier }, { name: "Second", carrier: alternate }]
     : definitions.sourceUnionVariants(carrier) };
@@ -104,7 +104,7 @@ test("project union admission rejects nonproject source families, widths, borrow
     rustOptionTargetType(derived), rustJsPromiseTargetTypeWithLifetime(derived, { kind: "static" }),
   ];
   for (const candidate of cases) {
-    const changed = { ...definitions, sourceUnionVariants: carrier => rustTargetTypeRefEquals(carrier, source)
+    const changed = { ...definitions, programErrorOrigin: () => undefined, sourceUnionVariants: carrier => rustTargetTypeRefEquals(carrier, source)
       ? [{ name: "Payload", carrier: candidate }] : definitions.sourceUnionVariants(carrier) };
     assert.equal(selectRustProjectUnionMapConversion(source, target, changed, () => "related"), undefined);
   }
@@ -113,9 +113,9 @@ test("project union admission rejects nonproject source families, widths, borrow
   assert.equal(selectRustProjectUnionMapping(source, target,
     { ...projectTypes, definitionForCarrier: carrier => rustTargetTypeRefEquals(carrier, derived)
       ? undefined : projectTypes.definitionForCarrier(carrier) }, definitions), undefined);
-  const cycle = { sourceUnionVariants: () => [{ name: "Loop", carrier: source }] };
+  const cycle = { programErrorOrigin: () => undefined, sourceUnionVariants: () => [{ name: "Loop", carrier: source }] };
   assert.equal(selectRustProjectUnionMapping(source, target, projectTypes, cycle), undefined);
-  const numeric = { ...definitions, sourceUnionVariants: carrier => rustTargetTypeRefEquals(carrier, target)
+  const numeric = { ...definitions, programErrorOrigin: () => undefined, sourceUnionVariants: carrier => rustTargetTypeRefEquals(carrier, target)
     ? [{ name: "Value", carrier: integer }] : [{ name: "Value", carrier: base }] };
   assert.equal(selectRustProjectUnionMapConversion(source, target, numeric, () => "related"), undefined);
 });
@@ -143,7 +143,7 @@ test("project union facts reject omitted proof, forged paths, getters, cycles an
   assert.equal(rustProjectUnionMapConversionMatches(conversion, target, source, definitions, relation), false);
   assert.equal(rustProjectUnionMapConversionMatches(conversion, source, target, definitions, () => "unrelated"), false);
   assert.equal(rustProjectUnionMapConversionMatches(conversion, source, target,
-    { sourceUnionVariants: () => undefined }, relation), false);
+    { programErrorOrigin: () => undefined, sourceUnionVariants: () => undefined }, relation), false);
 });
 
 test("canonical nominal union emission moves owned fields and borrows views without a redundant Derived clone", () => {
@@ -249,7 +249,7 @@ test("nominal union liveness reuses exact upcast fields and retains every nested
 test("dispatcher fuses finalized narrowing and heritage without intermediate enum or identity clones", () => {
   const { source, target, definitions: originalDefinitions, projectTypes, fileName, string, derived } = fixture({ nested: true });
   const root = rustSourceUnionTargetType(fileName, "Root");
-  const definitions = { ...originalDefinitions, sourceUnionVariants: carrier => rustTargetTypeRefEquals(carrier, root)
+  const definitions = { ...originalDefinitions, programErrorOrigin: () => undefined, sourceUnionVariants: carrier => rustTargetTypeRefEquals(carrier, root)
     ? [{ name: "Excluded", carrier: rustSourcePrimitiveTargetType("bool") },
       { name: "Object", carrier: derived }, { name: "Text", carrier: string }]
     : originalDefinitions.sourceUnionVariants(carrier) };

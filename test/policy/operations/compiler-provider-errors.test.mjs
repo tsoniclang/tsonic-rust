@@ -141,21 +141,35 @@ export function main(): void {
     assert.deepEqual(result.diagnostics, []);
     const source = artifactText(result, "src/index.rs");
     assert.match(source, /Option<String>/u);
-    assert.match(source, /\.stack\(\)/u);
+    assert.match(source, /\.borrowed_stack\(\)/u);
     assert.equal(validateGeneratedProject(`error-creation-stack-${surfaces.length}`, result.artifacts, { run: true }).status, 0);
   });
 }
 
-for (const [name, source] of [
-  ["direct", `export function change(error: Error): void { error.message = "changed"; }`],
-  ["alias", `export function change(error: Error): void { const alias = error; alias.name = "changed"; }`],
-  ["narrowed", `export function change(error: unknown): void { if (error instanceof Error) error.message = "changed"; }`],
-  ["stack", `export function change(error: Error): void { error.stack = "changed"; }`],
+for (const [name, source, field] of [
+  ["direct", `export function change(error: Error): void { error.message = "changed"; }`, "message"],
+  ["alias", `export function change(error: Error): void { const alias = error; alias.name = "changed"; }`, "name"],
+  ["stack", `export function change(error: Error): void { error.stack = "changed"; }`, "stack"],
 ]) {
-  test(`builtin Error ${name} mutation rejects rather than mutating a detached diagnostic clone`, () => {
-    const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": source } });
-    assert.equal(result.artifacts.length, 0);
-    assert.ok(result.diagnostics.some(({ code }) => code === "RUST_BUILTIN_ERROR_MUTATION_UNSUPPORTED"),
-      JSON.stringify(result.diagnostics));
+  test(`builtin Error ${name} mutation retains the original native owner`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
+      files: { "index.ts": `${source}
+        export function main(): void {
+          const error = new Error("original");
+          const alias = error;
+          change(alias);
+          if (error !== alias || error.${field} !== "changed") throw new Error("detached native Error mutation");
+        }` },
+    });
+    assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\n"));
+    validateGeneratedProject(`native-error-${name}-mutation`, result.artifacts, { run: true });
   });
 }
+
+test("readonly closed Error narrowing never manufactures writable native storage", () => {
+  const { result } = compileRust({ surfaces: ["js"], files: { "index.ts":
+    `export function change(error: unknown): void { if (error instanceof Error) error.message = "changed"; }` } });
+  assert.equal(result.artifacts.length, 0);
+  assert.ok(result.diagnostics.some(({ code }) => code === "RUST_BUILTIN_ERROR_MUTATION_UNSUPPORTED"),
+    JSON.stringify(result.diagnostics));
+});

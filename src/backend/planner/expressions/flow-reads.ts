@@ -6,6 +6,8 @@ import { rustUnionProjectionContract } from "../../../target-model/types/union-r
 import {
   isRustCopyCarrier,
   isRustJsValueCarrier,
+  isRustProgramErrorCarrier,
+  rustJsErrorTargetType,
   rustCarrierSupportsClone,
   rustOptionElementCarrier,
 } from "../../../target-model/types/index.js";
@@ -13,7 +15,7 @@ import type { RustFlowReadProjectionFact } from "../../../analysis/facts/keys.js
 import type { RustExpr } from "../../target-ast/nodes.js";
 import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
-import { diagnosticInput } from "../program/plan-context.js";
+import { diagnosticInput, rustCurrentErrorBoundary } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { planRustProjectProjection } from "../objects/project-downcasts.js";
 import { planRustProgramErrorFlowRead } from "./error-operations.js";
@@ -84,6 +86,14 @@ export function planRustValueProjection(
       const native: RustExpr = { kind: "method-call", receiver: exactSource, method: "error_value", args: [] };
       return isRustSourceErrorCarrier(fact.selectedCarrier)
         ? { kind: "call", path: "rt::SourceError::from", args: [native] } : native;
+    }
+    if (isRustProgramErrorCarrier(fact.sourceCarrier) && rustCurrentErrorBoundary(context)?.errorDomain === "runtime") {
+      if (!rustTargetTypeRefEquals(fact.selectedCarrier, rustJsErrorTargetType())) {
+        context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+          "rust.backend.runtime-error-projection", "Runtime Error projection requires its exact native readonly Error carrier."));
+        return undefined;
+      }
+      return { kind: "method-call", receiver: exactSource, method: "error_value", args: [] };
     }
     if (isRustSourceErrorCarrier(fact.selectedCarrier)) {
       const writable = isRustWritableSourceErrorCarrier(fact.selectedCarrier);

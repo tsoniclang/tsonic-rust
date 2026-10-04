@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustTypeDefinitionRegistry } from "../../../../dist/analysis/project-types/type-definitions.js";
-import { selectRustProgramErrorConversion } from "../../../../dist/policy/conversions/program-error.js";
+import { selectRustProgramErrorConversion } from "../../../../dist/target-model/conversions/program-error.js";
 import { planRustProgramErrorConstruction } from "../../../../dist/backend/planner/expressions/program-errors.js";
 import { rustJsErrorTargetType, rustSourceTypeCarrier, rustSourceUnionTargetType } from "../../../../dist/target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
@@ -14,6 +14,8 @@ test("native error union planning preserves nested paths, original payloads and 
   const inner = rustSourceUnionTargetType("/src/index.ts", "Inner");
   const outer = rustSourceUnionTargetType("/src/index.ts", "Outer");
   const registry = createRustTypeDefinitionRegistry();
+  assert.equal(registry.registerProgramErrorOrigin(native, { kind: "provider" }), true);
+  assert.equal(registry.registerProgramErrorOrigin(project, { kind: "project", variant: "Failure", sourceError: true }), true);
   assert.equal(registry.registerSourceUnion({ carrier: inner, variants: [
     { name: "Builtin", carrier: builtin }, { name: "Native", carrier: native },
   ] }, true), true);
@@ -26,7 +28,7 @@ test("native error union planning preserves nested paths, original payloads and 
     programErrorVariant: current => current === definition ? "Failure" : undefined,
     openCarrier: () => project,
   };
-  const conversion = selectRustProgramErrorConversion(outer, policy, [native], definitions);
+  const conversion = selectRustProgramErrorConversion(outer, undefined, definitions);
   assert.ok(conversion);
   const boundary = { componentId: "root", errorDomain: "project", errorTypePath: "rt::TsonicError" };
   function context(registered = [native], owner = "root", projectTypes = policy) {

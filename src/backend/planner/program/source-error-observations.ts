@@ -1,5 +1,5 @@
 import { emptyRustGenerics, type RustExpr, type RustImplFunction, type RustItem, type RustPattern, type RustType } from "../../target-ast/nodes.js";
-import type { RustErrorTransportPlan } from "./error-transport.js";
+import { rustSuppressedErrorPattern, type RustErrorTransportPlan } from "./error-transport.js";
 
 const path = (name: string): RustExpr => ({ kind: "path", path: name });
 const call = (name: string, ...args: readonly RustExpr[]): RustExpr => ({ kind: "call", path: name, args });
@@ -35,7 +35,7 @@ export function planRustSourceErrorObservations(plan: RustErrorTransportPlan, wr
         expression: item.source === "thrown"
           ? { kind: "match" as const, expression: { kind: "dereference" as const, pointer: path("error") }, arms: [] }
           : call(`tsonic_rust_runtime::ErrorObject::${getter.native}`, path("error")) })),
-      { pattern: variant("ErrorTransport::Suppressed", { kind: "wildcard" }, { kind: "wildcard" }, binding("source")),
+      { pattern: rustSuppressedErrorPattern(writable, { kind: "wildcard" }, { kind: "wildcard" }, binding("source")),
         expression: writable ? { kind: "match", expression: { kind: "dereference", pointer: path("source") }, arms: [] }
           : call(`tsonic_rust_runtime::ErrorObject::${getter.native}`, path("source")) },
     ],
@@ -52,7 +52,7 @@ export function planRustSourceErrorObservations(plan: RustErrorTransportPlan, wr
         expression: item.source === "error" ? call("Some", call("WritableSourceError::from", method(path("error"), "clone")))
           : item.source === "external" ? method(method(path("error"), "writable_source_error_value"), "map", path("WritableSourceError::from"))
           : { kind: "none" as const } })),
-      { pattern: variant("ErrorTransport::Suppressed", { kind: "wildcard" }, { kind: "wildcard" }, { kind: "wildcard" }), expression: { kind: "none" } },
+      { pattern: rustSuppressedErrorPattern(false, { kind: "wildcard" }, { kind: "wildcard" }, { kind: "wildcard" }), expression: { kind: "none" } },
     ] }));
   functions.push(observation("mutable_error_value", { kind: "named", path: "Option", genericArguments: [{ kind: "type", type: named("tsonic_rust_runtime::MutableJsError") }] }, {
     kind: "match", expression: method(path("self"), "as_transport"), arms: [
@@ -72,7 +72,7 @@ export function planRustSourceErrorObservations(plan: RustErrorTransportPlan, wr
         expression: item.source === "thrown"
           ? { kind: "match" as const, expression: { kind: "dereference" as const, pointer: path("error") }, arms: [] }
           : item.source === "external" ? method(path("error"), "native_error_value") : { kind: "none" as const } })),
-      { pattern: variant("ErrorTransport::Suppressed", { kind: "wildcard" }, { kind: "wildcard" }, binding("source")),
+      { pattern: rustSuppressedErrorPattern(false, { kind: "wildcard" }, { kind: "wildcard" }, binding("source")),
         expression: call("Some", method(path("source"), "clone")) },
     ],
   }));
@@ -103,7 +103,7 @@ export function planRustSourceErrorObservations(plan: RustErrorTransportPlan, wr
         ...plan.variants.map(item => ({ pattern: variant(`ErrorTransport::${item.name}`, binding("error")), expression: item.source === "thrown"
           ? { kind: "match" as const, expression: { kind: "dereference" as const, pointer: path("error") }, arms: [] }
           : call("tsonic_rust_runtime::ErrorStack::set_stack", path("error"), path("value")) })),
-        { pattern: variant("ErrorTransport::Suppressed", { kind: "wildcard" }, { kind: "wildcard" }, binding("source")), expression: writable
+        { pattern: rustSuppressedErrorPattern(writable, { kind: "wildcard" }, { kind: "wildcard" }, binding("source")), expression: writable
           ? { kind: "match", expression: { kind: "dereference", pointer: path("source") }, arms: [] }
           : call("tsonic_rust_runtime::ErrorStack::set_stack", path("source"), path("value")) },
       ] }, [{ name: "value", type: { kind: "named", path: "Option", genericArguments: [{ kind: "type", type: { kind: "string" } }] } }]),
@@ -118,7 +118,7 @@ export function planRustSourceErrorObservations(plan: RustErrorTransportPlan, wr
           ...plan.variants.map(item => ({ pattern: variant(`ErrorTransport::${item.name}`, binding("error")), expression: item.source === "thrown"
             ? { kind: "match" as const, expression: { kind: "dereference" as const, pointer: path("error") }, arms: [] }
             : call(`tsonic_rust_runtime::WritableErrorObject::set_error_${name}`, path("error"), path("value")) })),
-          { pattern: variant("ErrorTransport::Suppressed", { kind: "wildcard" }, { kind: "wildcard" }, binding("source")), expression: { kind: "match", expression: { kind: "dereference", pointer: path("source") }, arms: [] } },
+          { pattern: rustSuppressedErrorPattern(true, { kind: "wildcard" }, { kind: "wildcard" }, binding("source")), expression: { kind: "match", expression: { kind: "dereference", pointer: path("source") }, arms: [] } },
         ] }, [{ name: "value", type: name === "stack" ? { kind: "named", path: "Option", genericArguments: [{ kind: "type", type: { kind: "string" } }] } : { kind: "string" } }]),
         visibility: "private" as const,
       })) });

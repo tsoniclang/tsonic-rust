@@ -18,7 +18,7 @@ import {
 import { appendRustDiagnostic, rustOperationContext } from "../program/walk.js";
 import { collectDescendantsOfKind } from "../operations/inputs.js";
 import { isRustProgramErrorCarrier } from "../../target-model/types/index.js";
-import { selectRustProgramErrorConversion } from "../../policy/conversions/program-error.js";
+import { selectRustProgramErrorConversion } from "../../target-model/conversions/program-error.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { rustFutureValueForOperation, rustFutureValueForSourceStorage, rustFutureValueMatchesCarrier, transportRustFutureValue } from "../facts/future-values.js";
 import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
@@ -196,7 +196,7 @@ export function recordThrowFacts(walk: RustFactWalk, statement: Node, sourceFile
   }
   const carrier = resolveExpressionCarrier(walk, expression, sourceFile, undefined);
   const conversion = carrier === undefined ? undefined : selectRustProgramErrorConversion(carrier,
-    walk.context.projectTypes, walk.providerErrorCarriers, walk.context.typeDefinitions);
+    undefined, walk.context.typeDefinitions);
   if (conversion !== undefined) {
     setRustOperationFact(walk, statement, Object.freeze({
       kind: "throw-op",

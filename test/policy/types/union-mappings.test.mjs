@@ -179,6 +179,6 @@ test("nested union paths retain exact coverage, terminal array payloads and all 
     [arms[0].target[0], arms[0].target[0]]]) {
     assert.equal(rustValueConversionContract({ ...conversion, arms: [{ ...arms[0], target }, ...arms.slice(1)] }, definitions), undefined);
   }
-  const cycle = { sourceUnionVariants: () => [{ name: "Loop", carrier: nested }] };
+  const cycle = { programErrorOrigin: () => undefined, sourceUnionVariants: () => [{ name: "Loop", carrier: nested }] };
   assert.equal(selectRustUnionArmMapping(nested, flat, "source", cycle), undefined);
 });

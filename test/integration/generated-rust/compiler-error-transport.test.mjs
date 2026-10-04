@@ -115,7 +115,7 @@ export function run(): string {
 test("builtin catch projections require the exact sealed selected carrier", () => {
   const sourceCarrier = rustProgramErrorTargetType();
   const selectedCarrier = rustSourceErrorTargetType();
-  const policy = { sourceErrorCarrier: () => selectedCarrier, sourceErrorDefinitions: [], definitionForCarrier: () => undefined };
+  const policy = { sourceErrorCarrier: () => selectedCarrier, sourceErrorDefinitions: [], sourceCreatedErrorOrigins: [], definitionForCarrier: () => undefined };
   const selected = selectRustFlowReadProjection(sourceCarrier, selectedCarrier, policy);
   assert.equal(selected.kind, "projection");
   assert.equal(selected.fact.kind, "builtin-error");
@@ -156,7 +156,7 @@ export function fail(error: Error): void { throw error; }
   for (const [error, message] of [
     [{ ...fact.error, expression: declaration }, "Finalized throw fact conflicts with its exact source operand or native Error carrier."],
     [{ ...fact.error, conversion: { ...fact.error.conversion, source: rustStringTargetType() } }, "Finalized throw fact conflicts with its exact source operand or native Error carrier."],
-    [{ ...fact.error, conversion: { ...fact.error.conversion, route: { kind: "runtime", boundary: "provider-native" } } }, "Runtime error construction has no exact registered native error carrier."],
+    [{ ...fact.error, conversion: { ...fact.error.conversion, route: { kind: "runtime", boundary: "provider-native" } } }, "Program error construction requires an exact carrier and error domain."],
   ]) {
     const diagnostics = [];
     const facts = {

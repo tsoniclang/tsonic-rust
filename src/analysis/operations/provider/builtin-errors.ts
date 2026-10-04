@@ -1,12 +1,8 @@
 import {
-  asNode,
-  resolveSelectedJsSourceExportName,
   type RustSelectedSourceMemberSet,
 } from "../../../policy/evidence/selected-source.js";
-import { rustSourceErrorConstructors } from "../../../target-model/identities/source-errors.js";
+import { selectRustErrorTypePredicate } from "../../../policy/operations/source-profiles/js/type-tests.js";
 import {
-  isRustJsValueCarrier,
-  isRustProgramErrorCarrier,
   rustJsErrorTargetType,
   rustOptionTargetType,
   rustSourcePrimitiveTargetType,
@@ -26,42 +22,33 @@ import type {
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustWritableSourceErrorCarrier } from "../../../target-model/types/carriers/source-error.js";
+import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
+import { selectRustClosedTypeTestPlan } from "../../../policy/operations/operators/type-tests.js";
 
 export function selectRustBuiltinErrorTypeTest(
   request: RustCheckedOperatorSelectionInput,
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> | undefined {
-  const declaration = asNode(request.sourceRightDeclaration, context);
-  const profile = declaration === undefined
-    ? undefined
-    : options.sourceProfiles.profileForNode(declaration, context.ast);
-  const name = resolveSelectedJsSourceExportName(
-    context, request.sourceRightDeclaration, options.sourceProfiles,
-  ) ?? (profile === "native" ? context.ast.text(context.ast.name(declaration)) : undefined);
-  const selected = rustSourceErrorConstructors.find((entry) =>
-    entry.sourceName === name && (entry.sourceName === "Error" || options.jsEnabled));
-  if (selected === undefined) return undefined;
+  const predicate = selectRustErrorTypePredicate(context, request.sourceRightDeclaration, options.sourceProfiles);
+  if (predicate === undefined) return undefined;
   const sourceCarrier = rustEffectiveValueCarrier(context.facts, request.left) ??
     resolveRustTargetTypeRef(request.left, context, options);
-  const lowering = rustTargetTypeRefEquals(sourceCarrier, rustJsErrorTargetType()) || isRustMutableJsErrorCarrier(sourceCarrier)
-    ? "native-error"
-    : isRustJsValueCarrier(sourceCarrier) ? "closed-value"
-    : isRustProgramErrorCarrier(sourceCarrier) || isRustSourceErrorCarrier(sourceCarrier) ? "program-error" : undefined;
-  if (sourceCarrier === undefined || lowering === undefined) {
+  const test = sourceCarrier === undefined ? undefined : selectRustClosedTypeTestPlan(sourceCarrier, predicate, options.projectTypes, context.typeDefinitions);
+  if (sourceCarrier === undefined || test === undefined) {
     return rejectSelectedOperation(
       request.expression, context, "RUST_BUILTIN_ERROR_TYPE_TEST_CARRIER",
-      "A builtin Error test requires an exact native Error, closed program error or closed JavaScript value carrier.",
+      "A builtin Error test requires an exact closed native Error predicate plan.",
     );
   }
   const resultCarrier = rustSourcePrimitiveTargetType("bool");
   return acceptRustOperation(request.expression, {
-    kind: "builtin-error-type-test",
-    operationId: `tsonic.rust.error.instanceof.${selected.sourceName}`,
+    kind: "closed-type-test",
+    operationId: `tsonic.rust.closed-type-test.${closedMetadataKey(predicate)}`,
     sourceCarrier,
     resultCarrier,
-    errorKind: selected.errorKind,
-    lowering,
+    predicate,
+    test,
   }, context, {
     sourceExpression: request.expression,
     sourceReceiver: request.left,

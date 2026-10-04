@@ -3,7 +3,7 @@ import { BinaryExpression_Left, BinaryExpression_OperatorToken } from "@tsonic/t
 import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
-import type { RustClosedTypeTestPlan } from "../../../target-model/operations/type-tests.js";
+import type { RustClosedTypeTestPlan, RustClosedTypePredicate } from "../../../target-model/operations/type-tests.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustClosedTypeTestMatches } from "../../../analysis/facts/operations/type-tests.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -21,7 +21,7 @@ export function planRustClosedTypeTest(
   context: RustPlanContext,
 ): RustExpr | undefined {
   const ast = context.input.program.source.ast;
-  const nominal = fact.predicate?.kind === "nominal";
+  const nominal = fact.predicate?.kind !== "array";
   const arguments_ = ast.is.IsCallExpression(node) ? ast.arguments(node) : [];
   const left = nominal ? BinaryExpression_Left(ast, node) : arguments_[0];
   const token = BinaryExpression_OperatorToken(ast, node);
@@ -39,7 +39,7 @@ export function planRustClosedTypeTest(
     return undefined;
   }
   const expression = planExpression(left, context, "value", "shared-reference");
-  return expression === undefined ? undefined : planTest(node, expression, fact.sourceCarrier, fact.test, context);
+  return expression === undefined ? undefined : planTest(node, expression, fact.sourceCarrier, fact.test, fact.predicate, context);
 }
 
 function planTest(
@@ -47,6 +47,7 @@ function planTest(
   expression: RustExpr,
   carrier: TargetTypeRef,
   test: RustClosedTypeTestPlan,
+  predicate: RustClosedTypePredicate,
   context: RustPlanContext,
 ): RustExpr | undefined {
   if (test.kind === "constant") return { kind: "evaluate-then", effect: expression, discard: "value",
@@ -56,10 +57,24 @@ function planTest(
     return { kind: "call", path: "js_abi::array_is_array_value", args: [expression] };
   }
   if (test.kind === "project") return planRustProjectTypeTest(node, expression, test.plan, context);
+  if (test.kind === "error") {
+    if (predicate.kind !== "error") return undefined;
+    const receiver = expression.kind === "reference" ? expression.expr : expression;
+    if (predicate.errorKind === "any") {
+      return test.lowering === "native-error"
+        ? { kind: "evaluate-then", effect: expression, discard: "value", value: { kind: "bool-literal", value: true } }
+        : { kind: "method-call", receiver, method: "is_error", args: [] };
+    }
+    context.usedAliases?.add("rt");
+    const kind: RustExpr = { kind: "path", path: `rt::JsErrorKind::${predicate.errorKind}` };
+    return test.lowering === "native-error"
+      ? { kind: "binary", left: { kind: "call", path: "rt::ErrorObject::error_kind", args: [expression] }, operator: "==", right: kind }
+      : { kind: "method-call", receiver, method: "is_error_kind", args: [kind] };
+  }
   if (context.syntheticNames === undefined) return undefined;
   if (test.kind === "option") {
     const name = allocateRustSyntheticName(context.syntheticNames, "instance");
-    const body = planTest(node, { kind: "path", path: name }, test.element, test.test, context);
+    const body = planTest(node, { kind: "path", path: name }, test.element, test.test, predicate, context);
     return body === undefined ? undefined : { kind: "method-call",
       receiver: { kind: "method-call", receiver: expression.kind === "reference" ? expression.expr : expression,
         method: "as_ref", args: [] }, method: "is_some_and",
@@ -72,7 +87,7 @@ function planTest(
     const name = allocateRustSyntheticName(context.syntheticNames, "instance");
     const pattern = planRustUnionPattern([{ union: carrier, variant: arm.variant }],
       constant === undefined ? { kind: "binding", name } : { kind: "wildcard" }, context);
-    const value = constant === undefined ? planTest(node, { kind: "path", path: name }, arm.carrier, arm.test, context)
+    const value = constant === undefined ? planTest(node, { kind: "path", path: name }, arm.carrier, arm.test, predicate, context)
       : { kind: "bool-literal" as const, value: constant.value };
     if (pattern === undefined || value === undefined) return undefined;
     arms.push({ pattern, expression: value });

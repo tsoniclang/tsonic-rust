@@ -26,8 +26,7 @@ import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target
 import { selectRustProjectProjection } from "./project-projections.js";
 import { rustGenericCallableSignaturesMatch } from "../../target-model/conversions/generic-callable.js";
 import { selectRustCallableConversion } from "../../target-model/conversions/callable.js";
-import { selectRustProgramErrorConversion } from "../conversions/program-error.js";
-import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier } from "../../target-model/types/carriers/source-error.js";
+import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustReadonlySourceErrorCarrier } from "../../target-model/types/carriers/source-error.js";
 import { selectRustProjectUnionMapping } from "./project-union-mappings.js";
 
 export type RustValueCarrierReconciliation =
@@ -89,7 +88,7 @@ export function selectRustFlowReadProjection(
       } };
     }
   }
-  if ((isRustJsValueCarrier(sourceCarrier) && rustTargetTypeRefEquals(selectedCarrier, rustJsErrorTargetType()) ||
+  if ((isRustJsValueCarrier(sourceCarrier) && (rustTargetTypeRefEquals(selectedCarrier, rustJsErrorTargetType()) || isRustReadonlySourceErrorCarrier(selectedCarrier)) ||
     (isRustProgramErrorCarrier(sourceCarrier) || isRustSourceErrorCarrier(sourceCarrier)) &&
     (isRustSourceErrorCarrier(selectedCarrier) && (isRustSourceErrorCarrier(projectTypes.sourceErrorCarrier()) ||
       projectTypes.sourceCreatedErrorOrigins.length !== 0) || isRustMutableJsErrorCarrier(selectedCarrier) ||
@@ -155,10 +154,6 @@ export function selectRustValueCarrierReconciliation(
 ): RustValueCarrierReconciliation {
   if (rustTargetTypeRefEquals(sourceCarrier, targetCarrier)) {
     return { kind: "identity" };
-  }
-  if (isRustProgramErrorCarrier(targetCarrier) || isRustSourceErrorCarrier(targetCarrier)) {
-    const conversion = selectRustProgramErrorConversion(sourceCarrier, projectTypes, [], definitions, targetCarrier);
-    if (conversion !== undefined) return { kind: "conversion", fact: { sourceCarrier, targetCarrier, conversion } };
   }
   if (rustGenericCallableSignaturesMatch(sourceCarrier, targetCarrier)) {
     return { kind: "conversion", fact: { sourceCarrier, targetCarrier,

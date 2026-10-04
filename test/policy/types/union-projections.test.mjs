@@ -66,7 +66,7 @@ test("nested union payload paths are exact, immutable and independently checked"
   assert.equal(rustUnionProjectionContract(duplicate, integer, definitions), undefined);
   assert.equal(rustUnionInjectionPath(integer, duplicate, definitions), undefined);
   assert.equal(rustUnionInjectionPath(rustOptionTargetType(integer), nested, definitions), undefined);
-  const cycle = { sourceUnionVariants: () => [{ name: "Loop", carrier: nested }] };
+  const cycle = { programErrorOrigin: () => undefined, sourceUnionVariants: () => [{ name: "Loop", carrier: nested }] };
   assert.equal(rustUnionProjectionContract(nested, integer, cycle), undefined);
   assert.equal(rustUnionInjectionPath(integer, nested, cycle), undefined);
 });

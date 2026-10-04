@@ -7,7 +7,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { selectRustNativeFlowMembers, selectRustNativeFlowTypeMembers } from "../../policy/types/resolution/native-flow-refinement.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { rustUnionLeaves } from "../../target-model/types/union-relations.js";
-import { selectRustArrayTypeGuard } from "../../policy/operations/source-profiles/js/type-tests.js";
+import { selectRustSourceTypeGuard } from "../../policy/operations/source-profiles/js/type-tests.js";
 import { selectRustFlowReadProjection } from "../../policy/types/value-carrier-reconciliation.js";
 import { recordRustFlowReadProjection } from "../facts/value-carrier-queries.js";
 import { rustFlowReadProjectionFactKey } from "../facts/keys.js";
@@ -41,7 +41,7 @@ export function selectRustGuardedValueMembers(
 ): ReturnType<typeof rustUnionLeaves> {
   return selectRustNativeFlowMembers({ ...context, navigation: context.source.navigation,
     sourceFacts: context.source.sourceFacts }, reference, sourceCarrier, options.projectTypes, context.typeDefinitions,
-    expression => selectRustArrayTypeGuard(context, context.semanticsFor(expression).operations.call(expression), options.sourceProfiles),
+    expression => selectRustSourceTypeGuard(context, expression, options.sourceProfiles),
     guard => resolveRustInstanceType(guard.declaration, guard.sourceConstructor, context, options));
 }
 
@@ -54,6 +54,6 @@ export function selectRustGuardedSourceValueTypes(
   return selectRustNativeFlowTypeMembers({ ...context, navigation: context.source.navigation,
     sourceFacts: context.source.sourceFacts }, reference, sourceType,
     type => resolveRustTargetTypeRef(type, context, options), options.projectTypes, context.typeDefinitions,
-    expression => selectRustArrayTypeGuard(context, context.semanticsFor(expression).operations.call(expression), options.sourceProfiles),
+    expression => selectRustSourceTypeGuard(context, expression, options.sourceProfiles),
     guard => resolveRustInstanceType(guard.declaration, guard.sourceConstructor, context, options));
 }

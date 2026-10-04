@@ -67,9 +67,9 @@ test("absent semantic evidence rejects while unexpected owner failures remain vi
   const source = rustSourceUnionTargetType("/src/values.ts", "Values");
   const conversion = { kind: "semantic", sourceCarrier: source, targetCarrier: integer, fallible: false,
     conversion: { kind: "union-project", source, target: integer } };
-  assert.equal(finalizedConversionIsValid(conversion, { sourceUnionVariants: () => undefined }), false);
+  assert.equal(finalizedConversionIsValid(conversion, { programErrorOrigin: () => undefined, sourceUnionVariants: () => undefined }), false);
   const failure = new Error("unexpected type-definition owner failure");
   assert.throws(() => finalizedConversionIsValid(conversion, {
-    sourceUnionVariants: () => { throw failure; },
+    programErrorOrigin: () => undefined, sourceUnionVariants: () => { throw failure; },
   }), error => error === failure);
 });

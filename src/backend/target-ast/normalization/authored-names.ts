@@ -110,6 +110,7 @@ export function rustExpressionDeclaresNonSnakeName(expression: RustExpr): boolea
 
 function patternDeclaresNonSnakeName(pattern: RustPattern): boolean {
   switch (pattern.kind) {
+    case "struct": return pattern.fields.some(field => patternDeclaresNonSnakeName(field.pattern));
     case "binding": return rustNameNeedsStyleAllowance(pattern.name, "snake");
     case "tuple":
     case "tuple-variant": return pattern.elements.some(patternDeclaresNonSnakeName);

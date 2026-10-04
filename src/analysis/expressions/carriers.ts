@@ -267,15 +267,18 @@ function rustExpressionResolutionExpectation(
 ): TargetTypeRef | undefined {
   const { ast } = walk.context;
   const kind = ast.kindName(expression);
-  if (kind === KindConditionalExpression || kind === KindParenthesizedExpression ||
+  if (kind === KindParenthesizedExpression ||
     kind === KindSatisfiesExpression || kind === "KindAsExpression" ||
     kind === "KindTypeAssertionExpression") {
     return expected;
   }
   const present = isRustOptionCarrier(expected) ? rustOptionElementCarrier(expected) : expected;
   const union = present === undefined ? undefined : walk.sourceTypes.sourceUnionForCarrier(present);
+  if (union !== undefined && kind === KindConditionalExpression) {
+    return selectRustUnionVariantByCheckedType(walk, expression, union)?.carrier ?? expected;
+  }
   return union !== undefined && (ast.is.IsArrowFunction(expression) || ast.is.IsFunctionExpression(expression) ||
-    ast.is.IsArrayLiteralExpression(expression))
+    ast.is.IsArrayLiteralExpression(expression) || ast.is.IsObjectLiteralExpression(expression))
     ? selectRustUnionVariantByCheckedType(walk, expression, union)?.carrier
     : present;
 }

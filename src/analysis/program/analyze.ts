@@ -192,6 +192,18 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   if (projectTypes.issues.length > 0) {
     return;
   }
+  for (const carrier of walk.providerErrorCarriers) {
+    if (!context.typeDefinitions.registerProgramErrorOrigin(carrier, { kind: "provider" })) {
+      throw new Error("Rust provider Error origin conflicts with its canonical type definition.");
+    }
+  }
+  for (const definition of projectTypes.programErrorDefinitions) {
+    const variant = projectTypes.programErrorVariant(definition);
+    if (variant === undefined || !context.typeDefinitions.registerProgramErrorOrigin(projectTypes.openCarrier(definition),
+      { kind: "project", variant, sourceError: projectTypes.sourceErrorDefinitions.includes(definition) })) {
+      throw new Error("Rust project Error origin conflicts with its canonical type definition.");
+    }
+  }
   const callableAlias = createRustSourceProfileCallableAliasQuery(context, sourceProfiles);
   const collectPromotedStorage = (node: Node): void => {
     if (ast.is.IsVariableDeclaration(node)) {

@@ -41,7 +41,7 @@ function literalSelection(text, rows, carrier) {
   const ast = fakeAstReader([sourceFile]);
   const literalAst = { ...ast, is: { ...ast.is, IsPrefixUnaryExpression: () => false },
     authoredRange: () => ({ kind: "authored", start: 0, end: text.length }) };
-  const definitions = { sourceUnionVariants: value => [...rows].find(([key]) => rustTargetTypeRefEquals(key, value))?.[1] };
+  const definitions = { programErrorOrigin: () => undefined, sourceUnionVariants: value => [...rows].find(([key]) => rustTargetTypeRefEquals(key, value))?.[1] };
   return selectedIntegerLiteralUnionJoin(node, carrier, literalAst, definitions);
 }
 
@@ -81,7 +81,7 @@ test("the canonical union reader rejects excessive depth and breadth without par
   const carriers = Array.from({ length: 130 }, (_unused, index) => rustSourceUnionTargetType("/src/index.ts", `Layer${index}`));
   const rows = new Map(carriers.map((carrier, index) => [carrier,
     [{ name: "Next", carrier: carriers[index + 1] ?? integer }]]));
-  const definitions = { sourceUnionVariants: value => rows.get(value) };
+  const definitions = { programErrorOrigin: () => undefined, sourceUnionVariants: value => rows.get(value) };
   assert.equal(rustUnionLeaves(carriers[0], definitions), undefined);
   assert.equal(literalSelection("7", rows, carriers[0]), undefined);
   rows.set(carriers[0], Array.from({ length: 4096 }, (_unused, index) => ({ name: `Value${index}`, carrier: integer })));

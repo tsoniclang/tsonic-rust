@@ -11,8 +11,10 @@ export function rustClosedTypeTestMatches(
   definitions: RustTypeDefinitions,
 ): boolean {
   const predicate = fact.predicate;
-  if (typeof predicate !== "object" || predicate === null ||
+  if (fact.kind !== "closed-type-test" || typeof predicate !== "object" || predicate === null ||
     !(predicate.kind === "array" ? hasExactObjectKeys(predicate, ["kind"])
+      : predicate.kind === "error" ? hasExactObjectKeys(predicate, ["kind", "errorKind"]) &&
+        ["any", "RangeError", "TypeError", "URIError"].includes(predicate.errorKind)
       : predicate.kind === "nominal" && hasExactObjectKeys(predicate, ["kind", "targetCarrier"]) &&
         isRustTargetTypeRef(predicate.targetCarrier))) return false;
   if (!isRustTargetTypeRef(fact.sourceCarrier) ||

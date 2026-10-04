@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
-import { selectRustProgramErrorConversion } from "../../../dist/policy/conversions/program-error.js";
+import { selectRustProgramErrorConversion } from "../../../dist/target-model/conversions/program-error.js";
 import { rustJsErrorTargetType, rustProgramErrorTargetType, rustOptionTargetType, rustSourcePrimitiveTargetType,
   rustSourceTypeCarrier, rustSourceUnionTargetType } from "../../../dist/target-model/types/index.js";
 import { rustUnionLeaves } from "../../../dist/target-model/types/union-relations.js";
@@ -11,17 +11,13 @@ import { rustProgramErrorConversionMatches } from "../../../dist/target-model/co
 const builtin = rustJsErrorTargetType();
 const native = { kind: "target-named", id: "native.Failure" };
 const project = rustSourceTypeCarrier("/src/failure.ts", "Failure", "object");
-const definition = {};
-const policy = {
-  definitionForCarrier: carrier => rustTargetTypeRefEquals(carrier, project) ? definition : undefined,
-  programErrorVariant: current => current === definition ? "Failure" : undefined,
-  openCarrier: () => project,
-};
 const inner = rustSourceUnionTargetType("/src/index.ts", "Inner");
 const outer = rustSourceUnionTargetType("/src/index.ts", "Outer");
 
 function definitionsFor(reordered = false) {
   const registry = createRustTypeDefinitionRegistry();
+  assert.equal(registry.registerProgramErrorOrigin(native, { kind: "provider" }), true);
+  assert.equal(registry.registerProgramErrorOrigin(project, { kind: "project", variant: "Failure", sourceError: true }), true);
   assert.equal(registry.registerSourceUnion({ carrier: inner, variants: [
     { name: "Builtin", carrier: builtin }, { name: "Native", carrier: native },
   ] }, true), true);
@@ -33,7 +29,7 @@ function definitionsFor(reordered = false) {
 test("closed native error routes retain every exact nested carrier and immutable path", () => {
   for (const reordered of [false, true]) {
     const definitions = definitionsFor(reordered);
-    const conversion = selectRustProgramErrorConversion(outer, policy, [native], definitions);
+    const conversion = selectRustProgramErrorConversion(outer, undefined, definitions);
     assert.ok(conversion);
     assert.equal(conversion.kind, "program-error");
     assert.deepEqual(conversion.target, rustProgramErrorTargetType());
@@ -50,21 +46,23 @@ test("closed native error routes retain every exact nested carrier and immutable
 
 test("closed native error selection rejects missing registration, unknown arms, absence and cycles", () => {
   const definitions = definitionsFor();
-  assert.equal(selectRustProgramErrorConversion(outer, policy, [], definitions), undefined);
-  assert.equal(selectRustProgramErrorConversion(outer, { ...policy, programErrorVariant: () => undefined }, [native], definitions), undefined);
-  assert.equal(selectRustProgramErrorConversion(outer, { ...policy, openCarrier: () => builtin }, [native], definitions), undefined);
-  assert.equal(selectRustProgramErrorConversion(outer, policy, [native]), undefined);
+  for (const rejected of [native, project]) {
+    const missing = { ...definitions, programErrorOrigin: carrier =>
+      rustTargetTypeRefEquals(carrier, rejected) ? undefined : definitions.programErrorOrigin(carrier) };
+    assert.equal(selectRustProgramErrorConversion(outer, undefined, missing), undefined);
+  }
+  assert.equal(selectRustProgramErrorConversion(outer), undefined);
   for (const carrier of [rustSourcePrimitiveTargetType("uint64"), rustOptionTargetType(builtin),
     rustSourceTypeCarrier("/other.ts", "Error", "object"), { ...native, id: "native.Unrelated" }]) {
-    assert.equal(selectRustProgramErrorConversion(carrier, policy, [native], definitions), undefined);
+    assert.equal(selectRustProgramErrorConversion(carrier, undefined, definitions), undefined);
   }
-  const cycle = { sourceUnionVariants: carrier => carrier === outer ? [{ name: "Recursive", carrier: outer }] : undefined };
-  assert.equal(selectRustProgramErrorConversion(outer, policy, [native], cycle), undefined);
+  const cycle = { programErrorOrigin: () => undefined, sourceUnionVariants: carrier => carrier === outer ? [{ name: "Recursive", carrier: outer }] : undefined };
+  assert.equal(selectRustProgramErrorConversion(outer, undefined, cycle), undefined);
 });
 
 test("error-route facts reject incomplete, reordered, stale, malformed and superseded evidence", () => {
   const definitions = definitionsFor();
-  const conversion = selectRustProgramErrorConversion(outer, policy, [native], definitions);
+  const conversion = selectRustProgramErrorConversion(outer, undefined, definitions);
   assert.ok(conversion);
   const arms = conversion.route.arms;
   const changedArms = [[], new Array(arms.length), arms.slice(1), arms.toReversed(),

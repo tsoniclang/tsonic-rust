@@ -133,6 +133,7 @@ export function createRustSourceTypeRegistry(
   return {
     typeFamilies,
     sourceUnionVariants: typeDefinitions.sourceUnionVariants,
+    programErrorOrigin: typeDefinitions.programErrorOrigin,
     reserveSourceUnion(declaration, carrier) {
       const value = rustSourceUnionCarrierValue(rustOptionElementCarrier(carrier) ?? carrier);
       const existing = carriersByDeclaration.get(declaration);

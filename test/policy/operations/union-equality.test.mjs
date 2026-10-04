@@ -28,7 +28,7 @@ test("union equality covers nested leaf pairs without inventing operations for o
   const opaque = { kind: "type-parameter", identity: "opaque", name: "Opaque" };
   assert.equal(selectRustUnionEquality(outer, opaque, definitions), undefined);
   assert.equal(selectRustUnionEquality(integer, text, definitions), undefined);
-  assert.equal(selectRustUnionEquality(outer, integer, { sourceUnionVariants: () => [{ name: "Recursive", carrier: outer }] }), undefined);
+  assert.equal(selectRustUnionEquality(outer, integer, { programErrorOrigin: () => undefined, sourceUnionVariants: () => [{ name: "Recursive", carrier: outer }] }), undefined);
 });
 
 test("source-optional union equality keeps one native absence and exact closed payload operations", () => {
@@ -98,6 +98,6 @@ test("source-optional union equality retains exact numeric range and rejects cyc
     { name: "Integer", carrier: rustSourcePrimitiveTargetType("int128") }, { name: "Text", carrier: text },
   ] }, true), true);
   assert.equal(selectRustUnionEquality(rustSourceOptionalTargetType(wideUnion), rustSourcePrimitiveTargetType("uint128"), wideRegistry.seal()), undefined);
-  assert.equal(selectRustUnionEquality(optional, integer, { sourceUnionVariants: () => [{ name: "Recursive", carrier: union }] }), undefined);
+  assert.equal(selectRustUnionEquality(optional, integer, { programErrorOrigin: () => undefined, sourceUnionVariants: () => [{ name: "Recursive", carrier: union }] }), undefined);
   assert.equal(selectRustUnionEquality(optional, rustOptionTargetType(integer), definitions), undefined);
 });

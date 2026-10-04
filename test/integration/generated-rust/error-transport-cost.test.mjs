@@ -3,6 +3,8 @@ import test from "node:test";
 import { spawnSync } from "node:child_process";
 import { printRustSourceFile } from "../../../dist/print/source/index.js";
 import { planRustErrorTransport, planRustSourceErrorTransport } from "../../../dist/backend/planner/program/error-transport.js";
+import { planRustSourceErrorObservations } from "../../../dist/backend/planner/program/source-error-observations.js";
+import { planRustErrorObservations } from "../../../dist/backend/planner/program/error-observations.js";
 import { rustRuntimeCratePath } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
@@ -11,6 +13,8 @@ test("native Error-only specialization has handwritten physical size and allocat
   assert.ok(plan);
   const generated = printRustSourceFile({ headerComment: "Generated native Error transport cost proof.", items: [
     plan.declaration, ...plan.aliases, ...planRustSourceErrorTransport(plan), ...planRustSourceErrorTransport(plan, true),
+    ...planRustSourceErrorObservations(plan), ...planRustSourceErrorObservations(plan, true),
+    planRustErrorObservations(plan),
   ] });
   const source = `${generated}
 #[derive(Clone)]

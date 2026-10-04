@@ -52,7 +52,6 @@ import { tryPlanRustNativePointerOperation } from "./native-pointers.js";
 import type { Node } from "@tsonic/tsts";
 import { planRustGenericCallableFlow } from "./generic-callable-flow.js";
 import { planRustCallableConversion } from "./callable-conversions.js";
-import { planRustProgramErrorConstruction } from "./program-errors.js";
 import { planRustProjectUnionMapping } from "./project-union-mappings.js";
 import type { RustFlowReadProjectionFact } from "../../../target-model/types/value-projections.js";
 import { planRustIntegerTruncation } from "./integer-truncation.js";
@@ -455,10 +454,6 @@ function applyRustContextualValueConversion(
       fact.targetCarrier, context, owned,
       (value, upcast, owned) => planRustProjectUpcast(node, value, upcast, upcast.sourceCarrier,
         context, owned ? "owned" : "borrowed"), upstream);
-  }
-  if (fact.conversion.kind === "program-error") {
-    return rustCompilerOwnedContextualConversionMatches(fact.sourceCarrier, fact.targetCarrier, fact.conversion, context.input.program.typeDefinitions)
-      ? planRustProgramErrorConstruction(fact.conversion, expression, node, context) : undefined;
   }
   if (fact.conversion.kind === "callable-adapter") {
     return rustCompilerOwnedContextualConversionMatches(fact.sourceCarrier, fact.targetCarrier, fact.conversion, context.input.program.typeDefinitions)

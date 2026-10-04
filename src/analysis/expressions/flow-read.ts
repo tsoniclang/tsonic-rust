@@ -36,8 +36,8 @@ import { rustClosedValueCategoryProjection } from "../../target-model/types/carr
 import { rustSourceOptionalElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { selectRustClosedArrayView } from "../../policy/types/closed-array-views.js";
 import { selectRustGuardedValueMembers } from "../operations/native-flow-refinement.js";
-import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustWritableSourceErrorCarrier } from "../../target-model/types/carriers/source-error.js";
-import { rustWritableErrorRecoveryOriginMatches } from "../../policy/conversions/program-error.js";
+import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustReadonlySourceErrorCarrier, isRustWritableSourceErrorCarrier } from "../../target-model/types/carriers/source-error.js";
+import { rustWritableErrorRecoveryOriginMatches } from "../../target-model/conversions/program-error.js";
 
 export function applyFlowReadLane(
   walk: RustFactWalk,
@@ -115,8 +115,7 @@ export function applyFlowReadLane(
     const origins = walk.context.errorStorageDemands.storageOriginsFor(expression);
     if (origins.kind !== "resolved" || origins.origins.some(origin => {
       const carrier = resolveRustTargetTypeRef(origin, rustResolutionContext(walk, origin), walk.operationOptions);
-      return carrier === undefined || !rustWritableErrorRecoveryOriginMatches(carrier, walk.context.projectTypes,
-        walk.providerErrorCarriers, walk.context.typeDefinitions);
+      return carrier === undefined || !rustWritableErrorRecoveryOriginMatches(carrier, walk.context.typeDefinitions);
     })) {
       appendRustDiagnostic(walk, "RUST_ERROR_WRITABLE_ORIGIN_MISSING",
         "Writable Error recovery requires every admitted Error origin to retain a physical setter owner; unrelated thrown variants must be statically excluded.",
@@ -265,7 +264,7 @@ function resolveSelectedFlowReadCarrier(
     const carrier = resolveRustTargetTypeRef(
       selectedType, resolution, walk.operationOptions,
     );
-    return carrier !== undefined && (rustTargetTypeRefEquals(carrier, rustJsErrorTargetType()) ||
+    return carrier !== undefined && (rustTargetTypeRefEquals(carrier, rustJsErrorTargetType()) || isRustReadonlySourceErrorCarrier(carrier) ||
       rustClosedValueCategoryProjection(carrier)) ? carrier : sourceCarrier;
   }
   if (isRustProgramErrorCarrier(sourceCarrier) || isRustSourceErrorCarrier(sourceCarrier)) {

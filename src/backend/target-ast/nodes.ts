@@ -170,6 +170,8 @@ export type RustPattern =
   | { readonly kind: "binding"; readonly name: string }
   | { readonly kind: "path"; readonly path: string }
   | { readonly kind: "tuple"; readonly elements: readonly RustPattern[] }
+  | { readonly kind: "struct"; readonly path: string;
+      readonly fields: readonly { readonly name: string; readonly pattern: RustPattern }[] }
   | { readonly kind: "or"; readonly alternatives: readonly RustPattern[] }
   | {
       readonly kind: "tuple-variant";

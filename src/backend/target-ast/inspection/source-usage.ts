@@ -190,6 +190,7 @@ export function rustExpressionChildren(expression: RustExpr): readonly RustExpr[
 
 export function rustPatternBindsPath(pattern: RustPattern, path: string): boolean {
   switch (pattern.kind) {
+    case "struct": return pattern.fields.some(field => rustPatternBindsPath(field.pattern, path));
     case "binding": return pattern.name === path;
     case "tuple":
     case "tuple-variant": return pattern.elements.some(element => rustPatternBindsPath(element, path));
