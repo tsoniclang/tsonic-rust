@@ -22,6 +22,13 @@ export function selectRustProjectTypeTestPlan(
   const dispatchCarrier = rustOptionElementCarrier(sourceCarrier) ?? sourceCarrier;
   const sourceDefinition = projectTypes.definitionForCarrier(dispatchCarrier);
   const targetDefinition = projectTypes.definitionForCarrier(targetCarrier);
+  if ((isRustClosedValueCarrier(dispatchCarrier) || isRustProgramErrorCarrier(dispatchCarrier)) &&
+    targetDefinition?.kind === "class" && targetDefinition.genericParameters.length === 0 &&
+    !projectTypes.sourceErrorDefinitions.includes(targetDefinition) &&
+    rustTargetTypeRefEquals(projectTypes.openCarrier(targetDefinition), targetCarrier)) {
+    return Object.freeze({ sourceCarrier, dispatchCarrier, targetCarrier,
+      lowering: Object.freeze({ kind: "closed-native" }) });
+  }
   if (sourceDefinition === undefined || targetDefinition?.kind !== "class") return undefined;
   const sourceToTarget = projectTypes.relationship(dispatchCarrier, targetDefinition);
   const concreteTypes = projectTypes.concreteClassesFor(sourceDefinition);
@@ -93,6 +100,10 @@ export function selectRustClosedTypeTestPlan(
       ? Object.freeze({ kind: "constant", value: false }) : undefined;
   }
   const target = predicate.targetCarrier;
+  const closedProject = selectRustProjectTypeTestPlan(source, target, projectTypes);
+  if (closedProject?.lowering.kind === "closed-native") {
+    return Object.freeze({ kind: "project", plan: closedProject });
+  }
   if (source.kind === "type-parameter" || source.kind === "associated-type" ||
     source.kind === "trait-object" || source.kind === "reference" ||
     isRustJsValueCarrier(source) || rustTargetTypeRefEquals(source, rustTsValueTargetType()) || isRustProgramErrorCarrier(source) ||

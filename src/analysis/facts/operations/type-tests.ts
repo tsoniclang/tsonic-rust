@@ -3,7 +3,22 @@ import type { RustProjectTypePolicy } from "../../../target-model/types/project-
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { isRustTargetTypeRef } from "../../../target-model/types/equality.js";
 import { closedMetadataEquals, closedMetadataKey, hasExactObjectKeys } from "../../../target-model/metadata/closed-data.js";
-import { selectRustClosedTypeTestPlan } from "../../../policy/operations/operators/type-tests.js";
+import { selectRustClosedTypeTestPlan, selectRustProjectTypeTestPlan } from "../../../policy/operations/operators/type-tests.js";
+
+export function rustProjectTypeTestMatches(
+  fact: Extract<RustTargetOperationFact, { readonly kind: "project-type-test" }>,
+  projectTypes: RustProjectTypePolicy,
+): boolean {
+  if (!hasExactObjectKeys(fact, ["kind", "operationId", "sourceCarrier", "dispatchCarrier", "targetCarrier", "lowering", "resultCarrier"]) ||
+    !isRustTargetTypeRef(fact.sourceCarrier) || !isRustTargetTypeRef(fact.dispatchCarrier) ||
+    !isRustTargetTypeRef(fact.targetCarrier) ||
+    fact.resultCarrier?.kind !== "source-primitive" || fact.resultCarrier.name !== "bool") return false;
+  const selected = selectRustProjectTypeTestPlan(fact.sourceCarrier, fact.targetCarrier, projectTypes);
+  return selected !== undefined &&
+    fact.operationId === `tsonic.rust.project-type-test.${selected.lowering.kind}` &&
+    closedMetadataEquals({ sourceCarrier: fact.sourceCarrier, dispatchCarrier: fact.dispatchCarrier,
+      targetCarrier: fact.targetCarrier, lowering: fact.lowering }, selected);
+}
 
 export function rustClosedTypeTestMatches(
   fact: Extract<RustTargetOperationFact, { readonly kind: "closed-type-test" }>,

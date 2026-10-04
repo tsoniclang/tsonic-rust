@@ -51,6 +51,7 @@ import { rustValueCarrierBeforeOptionProjection, rustStrictEqualityOperandCarrie
 import { finalizedConversionIsValid } from "../../../analysis/facts/finalized-operation/conversions.js";
 import { hasExactObjectKeys, isClosedMetadata } from "../../../target-model/metadata/closed-data.js";
 import type { Node } from "@tsonic/tsts";
+import { rustProjectTypeTestMatches } from "../../../analysis/facts/operations/type-tests.js";
 import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
@@ -77,6 +78,7 @@ export function planSelectedRustProjectTypeTest(
     ? undefined
     : planRustNonConsumingValue(leftNode, plannedLeft, context);
   if (leftNode === undefined || left === undefined ||
+    !rustProjectTypeTestMatches(fact, context.input.program.projectTypes) ||
     !rustTargetTypeRefEquals(effectivePlannedExpressionCarrier(leftNode, context), fact.sourceCarrier) ||
     !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.project-type-test-carrier") ||
     !selectedOperationMatches(

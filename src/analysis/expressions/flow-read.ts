@@ -274,7 +274,7 @@ function resolveSelectedFlowReadCarrier(
     const definition = walk.context.projectTypes.definitionForCarrier(carrier);
     return carrier !== undefined && (isRustSourceErrorCarrier(carrier) || isRustRetainedErrorCarrier(carrier) ||
       isRustJsValueCarrier(sourceCarrier) && rustClosedValueCategoryProjection(carrier) ||
-      definition !== undefined && walk.context.projectTypes.sourceErrorDefinitions.includes(definition)) ? carrier : sourceCarrier;
+      definition?.kind === "class") ? carrier : sourceCarrier;
   }
   if (isRustProgramErrorCarrier(sourceCarrier) || isRustSourceErrorCarrier(sourceCarrier)) {
     const carrier = resolveRustTargetTypeRef(
@@ -283,8 +283,8 @@ function resolveSelectedFlowReadCarrier(
     if (isRustSourceErrorCarrier(carrier) || isRustMutableJsErrorCarrier(carrier) ||
       rustTargetTypeRefEquals(carrier, rustJsErrorTargetType())) return carrier;
     const definition = walk.context.projectTypes.definitionForCarrier(carrier);
-    return definition !== undefined &&
-      walk.context.projectTypes.programErrorVariant(definition) !== undefined
+    return definition?.kind === "class" &&
+      (isRustProgramErrorCarrier(sourceCarrier) || walk.context.projectTypes.programErrorVariant(definition) !== undefined)
       ? carrier
       : sourceCarrier;
   }

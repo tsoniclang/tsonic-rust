@@ -199,6 +199,8 @@ export type RustTsValueAdmission =
   | { readonly kind: "project-object" };
 
 export function rustTsValueAdmission(carrier: TargetTypeRef, definitions: RustTypeDefinitions): RustTsValueAdmission | undefined {
+  if (carrier.kind === "target-named" && (carrier.id === rustJsValueTargetId || carrier.id === rustTsValueTargetId) &&
+    !isRustClosedValueCarrier(carrier)) return undefined;
   if (!rustCarrierCanEnterTsValue(carrier, definitions) || rustOptionElementCarrier(carrier) !== undefined ||
     rustSourceUnionCarrierValue(carrier) !== undefined) return undefined;
   if (carrier.kind === "source-primitive" || isRustStringCarrier(carrier) || isRustBigIntCarrier(carrier) ||

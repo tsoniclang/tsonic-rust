@@ -1,6 +1,7 @@
 import { rustBigIntTargetId, rustJsArrayBufferTargetId, rustJsArrayConcatItemTargetId, rustJsArrayTargetId, rustJsDataViewTargetId, rustJsDateTargetId, rustJsErrorTargetId, rustJsFloat32ArrayTargetId, rustJsFloat64ArrayTargetId, rustJsInt16ArrayTargetId, rustJsInt32ArrayTargetId, rustJsInt8ArrayTargetId, rustJsIntlCollatorTargetId, rustJsIntlDateTimeFormatPartTargetId, rustJsIntlDateTimeFormatTargetId, rustJsIntlNumberFormatPartTargetId, rustJsIntlNumberFormatTargetId, rustJsIntlResolvedCollatorOptionsTargetId, rustJsIntlResolvedDateTimeFormatOptionsTargetId, rustJsIntlResolvedNumberFormatOptionsTargetId, rustJsMapTargetId, rustJsPromiseFulfilledResultTargetId, rustJsPromiseRejectedResultTargetId, rustJsPromiseSettledResultTargetId, rustJsPromiseTargetId, rustJsRegExpExecArrayTargetId, rustJsRegExpIndicesTargetId, rustJsRegExpMatchArrayTargetId, rustJsRegExpNamedGroupsTargetId, rustJsRegExpNamedIndicesTargetId, rustJsRegExpStringIteratorTargetId, rustJsRegExpTargetId, rustJsSetTargetId, rustJsStringTargetId, rustJsSymbolTargetId, rustJsUint16ArrayTargetId, rustJsUint32ArrayTargetId, rustJsUint8ArrayTargetId, rustJsUint8ClampedArrayTargetId, rustJsValueTargetId, rustJsWeakMapTargetId, rustJsWeakSetTargetId, rustNeverCarrierName, rustProgramErrorTargetId, rustRegExpExecArrayTargetId, rustRegExpIndicesTargetId, rustRegExpMatchArrayTargetId, rustRegExpNamedGroupsTargetId, rustRegExpNamedIndicesTargetId, rustRegExpStringIteratorTargetId, rustStringTargetId} from "./source-types.js";
 import { rustSourceOptionalTargetType } from "../projections.js";
 import { isRustAbsenceCarrier } from "./native.js";
+import { isRustClosedValueCarrier } from "./closed-value-kind.js";
 import type { TargetTypeRef } from "../model.js";
 import { isRustJsArrayValueCarrier } from "./array-values.js";
 import type { RustLifetimeRef } from "../../lifetimes/index.js";
@@ -319,7 +320,7 @@ export function isRustJsArrayLikeCarrier(carrier: TargetTypeRef | undefined): bo
 }
 
 export function isRustJsValueCarrier(carrier: TargetTypeRef | undefined): boolean {
-  return carrier?.kind === "target-named" && carrier.id === rustJsValueTargetId;
+  return carrier?.kind === "target-named" && carrier.id === rustJsValueTargetId && isRustClosedValueCarrier(carrier);
 }
 
 export function isRustStringCarrier(carrier: TargetTypeRef | undefined): boolean {

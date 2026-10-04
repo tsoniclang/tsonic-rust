@@ -6,6 +6,7 @@ import type { RustTypeDefinitions } from "../../target-model/types/source-union-
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
 import { isRustClosedValueCarrier } from "../../target-model/types/carriers/closed-value-kind.js";
+import { rustTsValueTargetType } from "../../target-model/types/carriers/native.js";
 import { isRustSourceErrorCarrier, isRustRetainedErrorCarrier } from "../../target-model/types/carriers/source-error.js";
 import { rustProgramErrorConversionMatches, type RustProgramErrorRoute } from "../../target-model/conversions/program-error.js";
 import { rustContextualValueConversionFactKey, rustFlowReadProjectionFactKey, rustTargetOperationFactKey } from "./keys.js";
@@ -24,7 +25,9 @@ export function rustClosedErrorTransportDemand(
   const carriers: TargetTypeRef[] = [];
   let retained = false;
   const collect = (carrier: TargetTypeRef, route: RustProgramErrorRoute): void => {
-    if (route.kind === "closed" && !carriers.some(previous => rustTargetTypeRefEquals(previous, carrier))) {
+    if (route.kind === "closed-admission") carrier = rustTsValueTargetType();
+    if ((route.kind === "closed" || route.kind === "closed-admission") &&
+      !carriers.some(previous => rustTargetTypeRefEquals(previous, carrier))) {
       carriers.push(carrier);
       retained = true;
     } else if (route.kind === "retained") {

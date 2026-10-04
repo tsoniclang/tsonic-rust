@@ -7,9 +7,11 @@ import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../types/sou
 import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustWritableSourceErrorCarrier, rustWritableSourceErrorTargetType,
   isRustRetainedErrorCarrier, isRustWritableRetainedErrorCarrier } from "../types/carriers/source-error.js";
 import { isRustClosedValueCarrier } from "../types/carriers/closed-value-kind.js";
+import { rustTsValueAdmission } from "../types/carriers/traits.js";
 
 export type RustProgramErrorRoute =
   | { readonly kind: "closed" }
+  | { readonly kind: "closed-admission" }
   | { readonly kind: "source-error" }
   | { readonly kind: "source-created" }
   | { readonly kind: "retained" }
@@ -75,7 +77,9 @@ export function selectRustProgramErrorConversion(
       return Object.freeze({ kind: "project", variant: origin.variant });
     }
     const leaves = rustUnionLeaves(carrier, definitions);
-    if (leaves === undefined) return undefined;
+    if (leaves === undefined) return isRustProgramErrorCarrier(target) && !isErrorDestination(carrier) &&
+      rustTsValueAdmission(carrier, definitions) !== undefined
+      ? Object.freeze({ kind: "closed-admission" }) : undefined;
     const arms: Extract<RustProgramErrorRoute, { kind: "union" }>["arms"][number][] = [];
     for (const leaf of leaves) {
       const route = selectRoute(leaf.carrier);
@@ -140,6 +144,8 @@ function rustProgramErrorRouteMatches(
 ): boolean {
   if (typeof route !== "object" || route === null) return false;
   if (route.kind === "closed") return hasExactObjectKeys(route, ["kind"]) && isRustClosedValueCarrier(source);
+  if (route.kind === "closed-admission") return hasExactObjectKeys(route, ["kind"]) &&
+    !isErrorDestination(source) && rustTsValueAdmission(source, definitions) !== undefined;
   if (route.kind === "source-created") return hasExactObjectKeys(route, ["kind"]) && isRustMutableJsErrorCarrier(source);
   if (route.kind === "retained") return hasExactObjectKeys(route, ["kind"]) && isRustRetainedErrorCarrier(source);
   if (route.kind === "source-error") {

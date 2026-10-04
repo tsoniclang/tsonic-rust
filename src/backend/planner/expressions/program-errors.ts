@@ -1,5 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/nodes.js";
+import { rustTsValueAdmission } from "../../../target-model/types/carriers/traits.js";
+import { planRustProjectClosedValue } from "../objects/project-closed-values.js";
 import { rustProgramErrorConversionMatches, rustProgramErrorRuntimeRouteMatches, type RustProgramErrorConversion } from "../../../target-model/conversions/program-error.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { diagnosticInput, registerAliasFromPath, rustCurrentErrorBoundary, type RustPlanContext } from "../program/plan-context.js";
@@ -28,13 +30,19 @@ export function planRustProgramErrorConstruction(
   const targetPath = retainedError ? isRustWritableRetainedErrorCarrier(conversion.target)
     ? "tsonic_rust_runtime::WritableRetainedError" : "tsonic_rust_runtime::RetainedError"
     : sourceError ? isRustWritableSourceErrorCarrier(conversion.target) ? "rt::WritableSourceError" : "rt::SourceError" : boundary.errorTypePath;
-  if (conversion.route.kind === "closed") {
+  if (conversion.route.kind === "closed" || conversion.route.kind === "closed-admission") {
     if (boundary.errorDomain !== "project" || boundary.componentId !== context.sourcePackageComponentId) {
       context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
         "rust.backend.closed-throw-domain", "Closed thrown values require their own sealed source-package payload transport."));
       return undefined;
     }
-    return { kind: "call", path: `${targetPath}::from`, args: [value] };
+    const admission = conversion.route.kind === "closed-admission"
+      ? rustTsValueAdmission(conversion.source, context.input.program.typeDefinitions) : undefined;
+    const admitted = conversion.route.kind === "closed" ? value : admission?.kind === "call"
+      ? { kind: "call" as const, path: admission.path, args: [value] }
+      : admission?.kind === "project-object"
+        ? planRustProjectClosedValue(value, "rt::TsValue", conversion.source, node, context) : undefined;
+    return admitted === undefined ? undefined : { kind: "call", path: `${targetPath}::from`, args: [admitted] };
   }
   if (conversion.route.kind === "union") {
     return planRustUnionFold(value, conversion.route.arms, context, node,

@@ -11,6 +11,12 @@ import { rustRetainedErrorTargetType, rustSourceErrorTargetType } from "../../..
 const projectTypes = { sourceErrorDefinitions: [], sourceCreatedErrorOrigins: [],
   definitionForCarrier: () => undefined, sourceErrorCarrier: rustSourceErrorTargetType };
 
+test("native admission seals the existing native closed payload family", () => {
+  const { file, ast, facts } = scenario(rustSourcePrimitiveTargetType("uint64"));
+  assert.deepEqual(rustClosedErrorTransportDemand(file, ast, facts, emptyRustTypeDefinitions, projectTypes),
+    { thrownCarriers: [rustTsValueTargetType()], retained: true });
+});
+
 function scenario(source, mutate = operation => operation) {
   const expression = { kind: "KindIdentifier", children: [] };
   const statement = { kind: "KindThrowStatement", expression, children: [expression] };

@@ -17,6 +17,7 @@ import { missingFactDiagnostic } from "../diagnostics.js";
 import { diagnosticInput, rustCurrentErrorBoundary } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { planRustProjectProjection } from "../objects/project-downcasts.js";
+import { planRustClosedNativeProjection } from "../objects/closed-native-values.js";
 import { planRustProgramErrorFlowRead } from "./error-operations.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
@@ -231,6 +232,17 @@ export function planRustValueProjection(
         },
       ],
     }, node, context);
+  }
+  if (fact.kind === "closed-native") {
+    const selected = planRustClosedNativeProjection(node, expression, fact.sourceCarrier, fact.selectedCarrier, context);
+    if (selected === undefined) return undefined;
+    const name = allocateRustSyntheticName(context.syntheticNames ??
+      createRustSyntheticNameState(context.input.program.source.ast, node, []), "native_owner");
+    const recovered = selected.recover({ kind: "path", path: name });
+    return recovered === undefined ? undefined : rustValueBlock([{ name, value: {
+      kind: "method-call", receiver: selected.expression, method: "expect",
+      args: [{ kind: "str-literal", value: "checked flow selected a different native nominal owner" }],
+    } }], recovered);
   }
   if (fact.kind === "program-error-variant") {
     return planRustProgramErrorFlowRead(node, expression, fact, context, ownsValue);

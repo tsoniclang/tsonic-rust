@@ -62,6 +62,11 @@ export type RustFlowReadProjectionFact =
       readonly selectedCarrier: TargetTypeRef;
     }
   | {
+      readonly kind: "closed-native";
+      readonly sourceCarrier: TargetTypeRef;
+      readonly selectedCarrier: TargetTypeRef;
+    }
+  | {
       readonly kind: "program-error-variant";
       readonly sourceCarrier: TargetTypeRef;
       readonly selectedCarrier: TargetTypeRef;

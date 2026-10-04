@@ -35,7 +35,7 @@ import type { ProjectClassStateLayer } from "./model.js";
 import type { RustObjectRepresentation } from "../../../../analysis/project-types/object-representation.js";
 import { rustProjectMemberIsPrivate } from "../../../../analysis/project-types/member-privacy.js";
 import { checkRustDataWrite } from "../data-writes.js";
-import { planCheckedProjectProjectionImplementation } from "../checked-project-projections.js";
+import { checkedProjectProjectionTypes, planCheckedProjectProjectionImplementation } from "../checked-project-projections.js";
 import { rustProjectInstanceContracts } from "../../../../analysis/project-types/type-policy.js";
 import { rustArrayFieldMutationName, rustArrayFieldMutationType } from "./array-fields.js";
 import { rustProjectObjectIdentityImplementation } from "../project-identity.js";
@@ -58,9 +58,16 @@ export function planProjectRootImplementations(
   const errorImplementations = planRustProjectErrorRoot(concrete, concreteCarrier, rootType, layers, context);
   if (errorImplementations === undefined) return undefined;
   const generics = rustProjectRepresentationGenerics(representation, context);
+  const instanceContracts = rustProjectInstanceContracts(context.input.program.projectTypes, concrete, concreteCarrier);
+  const projectionTypes = instanceContracts === undefined ? undefined
+    : checkedProjectProjectionTypes(instanceContracts,
+      context.input.program.classValues.instanceViewImplementations.filter(view =>
+        view.declaration === concrete.declaration && rustTargetTypeRefEquals(view.sourceCarrier, concreteCarrier))
+        .map(view => view.targetCarrier), context);
+  if (projectionTypes === undefined) return undefined;
   const items: RustItem[] = [...errorImplementations, rustProjectObjectIdentityImplementation(rootType, generics, {
     kind: "reference", expr: { kind: "field", receiver: { kind: "path", path: "self" }, name: "identity" },
-  })];
+  }, undefined, projectionTypes)];
   const methodImplementations = new Map<Node, RustImplFunction[]>();
   const accessorImplementations = new Map<Node, RustImplFunction>();
   const implementationFor = (

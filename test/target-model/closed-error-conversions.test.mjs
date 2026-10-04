@@ -7,7 +7,7 @@ import { selectRustSourceValueConversion } from "../../dist/policy/conversions/s
 import { isRustClosedValueCarrier } from "../../dist/target-model/types/carriers/closed-value-kind.js";
 import { rustClosedValueRetainsError } from "../../dist/target-model/types/carriers/closed-values.js";
 import { rustJsErrorTargetType, rustJsValueTargetType, rustProgramErrorTargetType, rustSourcePrimitiveTargetType,
-  rustSourceTypeCarrier, rustTsValueTargetType } from "../../dist/target-model/types/index.js";
+  rustSourceTypeCarrier, rustTsValueTargetType, rustEmptyObjectTargetType } from "../../dist/target-model/types/index.js";
 import { rustMutableJsErrorTargetType, rustRetainedErrorTargetType, rustSourceErrorTargetType,
   rustWritableRetainedErrorTargetType, rustWritableSourceErrorTargetType } from "../../dist/target-model/types/carriers/source-error.js";
 
@@ -18,6 +18,28 @@ assert.equal(registry.registerProgramErrorOrigin(project, { kind: "project", var
 assert.equal(registry.registerProgramErrorOrigin(unrelated, { kind: "project", variant: "RecordValue", sourceError: false }), true);
 const definitions = registry.seal();
 const closedCarriers = [rustJsValueTargetType(), rustTsValueTargetType()];
+
+test("finite native closed admission preserves direct routes and rejects malformed or escaping carriers", () => {
+  for (const source of [rustEmptyObjectTargetType(), rustSourcePrimitiveTargetType("uint64")]) {
+    const conversion = selectRustProgramErrorConversion(source);
+    assert.deepEqual(conversion.route, { kind: "closed-admission" });
+    assert.equal(rustProgramErrorConversionMatches(conversion, source, conversion.target), true);
+    for (const route of [{ kind: "closed-admission", extra: true }, { kind: "closed" }, { kind: "runtime", boundary: "target-runtime" }]) {
+      assert.equal(rustProgramErrorConversionMatches({ ...conversion, route }, source, conversion.target), false);
+    }
+    for (const target of [rustRetainedErrorTargetType(), rustSourceErrorTargetType(), rustWritableSourceErrorTargetType()]) {
+      assert.equal(selectRustProgramErrorConversion(source, target), undefined);
+      assert.equal(rustProgramErrorConversionMatches({ ...conversion, target }, source, target), false);
+    }
+  }
+  assert.equal(selectRustProgramErrorConversion(rustProgramErrorTargetType()), undefined);
+  for (const source of [{ kind: "type-parameter", identity: "foreign:T", name: "T" },
+    { kind: "reference", referent: rustSourcePrimitiveTargetType("uint64"), mutable: false }]) {
+    assert.equal(selectRustProgramErrorConversion(source), undefined);
+  }
+  assert.equal(selectRustProgramErrorConversion(project, undefined, definitions).route.kind, "project");
+  assert.equal(selectRustProgramErrorConversion(rustJsErrorTargetType()).route.kind, "runtime");
+});
 
 test("only exact canonical closed carriers admit a general thrown payload", () => {
   for (const source of closedCarriers) {

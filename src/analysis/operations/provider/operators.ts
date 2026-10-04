@@ -117,7 +117,8 @@ function selectRustProjectTypeTest(
   if (sourceCarrier !== undefined && (isRustProgramErrorCarrier(dispatchCarrier) ||
     (isRustSourceErrorCarrier(dispatchCarrier) || isRustRetainedErrorCarrier(dispatchCarrier) || isRustClosedValueCarrier(dispatchCarrier)) &&
     targetDefinition !== undefined && options.projectTypes.sourceErrorDefinitions.includes(targetDefinition)) &&
-    targetCarrier !== undefined && programErrorVariant !== undefined) {
+    targetCarrier !== undefined && programErrorVariant !== undefined &&
+    targetDefinition !== undefined && options.projectTypes.sourceErrorDefinitions.includes(targetDefinition)) {
     const resultCarrier = rustSourcePrimitiveTargetType("bool");
     const fact: RustTargetOperationFact = {
       kind: "program-error-type-test",
@@ -133,7 +134,8 @@ function selectRustProjectTypeTest(
       sourceSelectedDeclaration: request.sourceRightDeclaration,
     }, resultCarrier);
   }
-  if (sourceCarrier === undefined || dispatchCarrier === undefined || sourceDefinition === undefined ||
+  if (sourceCarrier === undefined || dispatchCarrier === undefined ||
+    sourceDefinition === undefined && !isRustClosedValueCarrier(dispatchCarrier) && !isRustProgramErrorCarrier(dispatchCarrier) ||
     targetDefinition === undefined || targetCarrier === undefined) {
     const closed = sourceCarrier === undefined ? undefined : selectRustClosedTypeTest(request, sourceCarrier, context, options);
     if (closed !== undefined) return closed;

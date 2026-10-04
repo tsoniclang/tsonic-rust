@@ -28,6 +28,7 @@ import { selectRustCallableConversion } from "../../target-model/conversions/cal
 import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustRetainedErrorCarrier } from "../../target-model/types/carriers/source-error.js";
 import { isRustClosedValueCarrier } from "../../target-model/types/carriers/closed-value-kind.js";
 import { selectRustProjectUnionMapping } from "./project-union-mappings.js";
+import { selectRustProjectTypeTestPlan } from "../operations/operators/type-tests.js";
 
 export type RustValueCarrierReconciliation =
   | { readonly kind: "identity" }
@@ -101,6 +102,10 @@ export function selectRustFlowReadProjection(
       projectTypes.sourceCreatedErrorOrigins.length !== 0) || isRustMutableJsErrorCarrier(selectedCarrier) ||
       rustTargetTypeRefEquals(selectedCarrier, rustJsErrorTargetType())))) {
     return { kind: "projection", fact: { kind: "builtin-error", sourceCarrier, selectedCarrier } };
+  }
+  if (selectRustProjectTypeTestPlan(sourceCarrier, selectedCarrier, projectTypes)?.lowering.kind === "closed-native" &&
+    rustCarrierSupportsClone(selectedCarrier, definitions)) {
+    return { kind: "projection", fact: { kind: "closed-native", sourceCarrier, selectedCarrier } };
   }
   if (isRustProgramErrorCarrier(dispatchCarrier) || isRustSourceErrorCarrier(dispatchCarrier) ||
     isRustRetainedErrorCarrier(dispatchCarrier) || isRustClosedValueCarrier(dispatchCarrier)) {

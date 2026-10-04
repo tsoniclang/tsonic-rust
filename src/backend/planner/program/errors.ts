@@ -21,6 +21,7 @@ import { planRustSourceErrorObservations } from "./source-error-observations.js"
 import { planRustRetainedErrorAdmission } from "./retained-errors.js";
 import { planRustErrorProjectionTransport, planRustSourceErrorProjectionDelegates } from "./error-projections.js";
 import { planRustClosedThrowAdmission } from "./closed-throws.js";
+import { planRustNativeValueProjections } from "./native-value-projections.js";
 
 const programErrorName = "TsonicError";
 const programResultName = "TsonicResult";
@@ -159,6 +160,14 @@ export function planRustProgramErrorModule(
     return undefined;
   }
   const closedCarriers = closedDemand.thrownCarriers;
+  const nativeProjectVariants = exactProjectVariants.map(variant => ({
+    name: variant.variant, representation: input.program.objectRepresentations.representationFor(variant.definition),
+  }));
+  if (nativeProjectVariants.some(variant => variant.representation === undefined)) {
+    diagnostics.push({ code: "RUST_PROGRAM_ERROR_REPRESENTATION_MISSING", category: "error", source: "tsonic-rust",
+      message: "Native thrown-value queries require exact finalized project storage." });
+    return undefined;
+  }
   const closedVariants = [...new Set(closedCarriers.map(carrier => rustTargetTypeRefEquals(carrier, rustTsValueTargetType())
     ? "ClosedNative" : "ClosedJs"))].sort().map(name => ({ name, source: "thrown" as const,
       type: namedType(name === "ClosedNative" ? "tsonic_rust_runtime::TsValue" : "tsonic_rust_js::value::JsValue") }));
@@ -211,6 +220,10 @@ export function planRustProgramErrorModule(
     ...transport.variants.filter(variant => variant.name === "Retained").map(variant =>
       fromImplementation(variant.type, variant.name, false)),
     ...planRustClosedThrowAdmission(closedVariants),
+    planRustNativeValueProjections([...closedVariants.map(variant => variant.name),
+      ...externalVariants.map(variant => variant.variant)], nativeProjectVariants.map(variant => ({
+      name: variant.name, representation: variant.representation!,
+    }))),
     displayImplementation(programErrorType, emptyRustGenerics, [
       ...exactProjectVariants.map(({ variant, definition }) => ({
         variant,

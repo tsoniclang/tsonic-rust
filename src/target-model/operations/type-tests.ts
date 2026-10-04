@@ -12,6 +12,7 @@ export interface RustProjectTypeTestPlan {
   readonly targetCarrier: TargetTypeRef;
   readonly lowering:
     | { readonly kind: "dispatch" }
+    | { readonly kind: "closed-native" }
     | { readonly kind: "constant"; readonly value: boolean }
     | { readonly kind: "option-presence" };
 }

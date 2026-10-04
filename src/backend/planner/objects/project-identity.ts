@@ -1,19 +1,29 @@
 import { rustSelfParameter } from "../declarations/callables/self-parameter.js";
 import type { RustExpr, RustGenerics, RustItem, RustType } from "../../target-ast/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/nodes.js";
+import { planCheckedNativeProjectionImplementation } from "./checked-project-projections.js";
 
 export function rustProjectObjectIdentityImplementation(
   target: RustType,
   generics: RustGenerics,
   identity: RustExpr,
   identityKey?: RustExpr,
+  projectionTypes: readonly RustType[] = [],
 ): RustItem {
   return {
     kind: "impl",
     generics,
     trait: { kind: "named", path: "rt::ObjectIdentityCarrier" },
     target,
-    members: [{ kind: "function",
+    members: [...(projectionTypes.length === 0 ? [] : [
+      planCheckedNativeProjectionImplementation("project_native", [{
+        kind: "named", path: "Option", genericArguments: [{ kind: "type", type: {
+          kind: "named", path: "alloc::rc::Rc", genericArguments: [{
+            kind: "type", type: { kind: "named", path: "Self" },
+          }],
+        } }],
+      }, ...projectionTypes]),
+    ]), { kind: "function",
       name: "object_identity",
       visibility: "private",
       generics: emptyRustGenerics,

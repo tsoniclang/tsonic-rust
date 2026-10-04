@@ -1,4 +1,5 @@
 import { rustValueBlock } from "../../target-ast/value-block.js";
+import { planRustClosedNativeProjection } from "./closed-native-values.js";
 import type { Node } from "@tsonic/tsts";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustSelectedProjectDowncast } from "../../../analysis/facts/value-projections.js";
@@ -147,6 +148,11 @@ export function planRustProjectTypeTest(
   fact: RustProjectTypeTestPlan,
   context: RustPlanContext,
 ): RustExpr | undefined {
+  if (fact.lowering.kind === "closed-native") {
+    const selected = planRustClosedNativeProjection(node, expression, fact.sourceCarrier, fact.targetCarrier, context);
+    return selected === undefined ? undefined
+      : { kind: "option-presence", receiver: selected.expression, present: true };
+  }
   if (fact.lowering.kind === "constant") {
     return {
       kind: "evaluate-then",

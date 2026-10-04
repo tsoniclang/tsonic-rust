@@ -8,7 +8,7 @@ import { rustProjectDispatchObjectType } from "./polymorphism/names.js";
 import { rustStructuralDispatchType } from "./project-structural-types.js";
 import { rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
 
-const projectionGenerics: RustGenerics = {
+export const rustCheckedNativeProjectionGenerics: RustGenerics = {
   parameters: [],
   wherePredicates: [{ kind: "type", type: { kind: "named", path: "Self" },
     bounds: [{ kind: "lifetime", lifetime: { kind: "static" } }] }],
@@ -17,7 +17,7 @@ const projectionGenerics: RustGenerics = {
 export function checkedProjectProjectionSignature(slot: string): RustTraitFunction {
   return { kind: "function",
     name: slot,
-    generics: projectionGenerics,
+    generics: rustCheckedNativeProjectionGenerics,
     selfParam: rustSelfParameter("rc"),
     params: [{ name: "output", type: { kind: "reference", mutable: true,
       referent: { kind: "trait-object", principal: { trait: { kind: "named", path: "core::any::Any" } },
@@ -39,17 +39,26 @@ export function checkedProjectProjectionResultType(
   };
 }
 
+export function checkedProjectProjectionTypes(
+  contracts: readonly { readonly definition: RustProjectTypeDefinition; readonly carrier: TargetTypeRef }[],
+  structuralCarriers: readonly TargetTypeRef[],
+  context: RustPlanContext,
+): readonly RustType[] | undefined {
+  const eligible = [...contracts.filter(contract => !contract.definition.genericParameters.some(parameter => parameter.kind === "lifetime"))
+    .map(contract => contract.carrier), ...structuralCarriers];
+  const types = eligible.map(carrier => checkedProjectProjectionResultType(carrier, context));
+  return types.some(type => type === undefined) ? undefined
+    : types.filter(type => type !== undefined);
+}
+
 export function planCheckedProjectProjectionImplementation(
   slot: string,
   contracts: readonly { readonly definition: RustProjectTypeDefinition; readonly carrier: TargetTypeRef }[],
   structuralCarriers: readonly TargetTypeRef[],
   context: RustPlanContext,
 ): RustImplFunction | undefined {
-  const eligible = [...contracts.filter(contract => !contract.definition.genericParameters.some(parameter => parameter.kind === "lifetime"))
-    .map(contract => contract.carrier), ...structuralCarriers];
-  const types = eligible.map(carrier => checkedProjectProjectionResultType(carrier, context));
-  return types.some(type => type === undefined) ? undefined
-    : planCheckedNativeProjectionImplementation(slot, types.filter(type => type !== undefined));
+  const types = checkedProjectProjectionTypes(contracts, structuralCarriers, context);
+  return types === undefined ? undefined : planCheckedNativeProjectionImplementation(slot, types);
 }
 
 export function planCheckedNativeProjectionImplementation(
