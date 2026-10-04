@@ -38,6 +38,7 @@ import {
 import { appendRustDiagnostic, rustOperationContext } from "../program/walk.js";
 import { rustStructuralFieldIsFallible } from "../objects/structural-shape-plan.js";
 import { finalizeRustPreparedCheckedCall } from "../operations/provider/index.js";
+import { rustCallbackProtocol } from "../operations/provider/callbacks.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { recordSelectedOperationInputs } from "../operations/inputs.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
@@ -405,6 +406,7 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
   };
   interface CallbackValueAnalysis {
     readonly fallible: boolean;
+    readonly implementationFallible: boolean;
     readonly subjects: readonly Node[];
   }
   const callbackExpressionIsFallible = (
@@ -420,10 +422,14 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
     }
     resolving.add(value);
     try {
+      const carrier = walk.context.facts.getRuntimeCarrierFact(value)?.carrier;
+      const invocationFallible = rustCallbackProtocol(carrier)?.fallible === true;
       const body = ast.body(value);
       if (body !== undefined) {
+        const implementationFallible = expressionRegionIsFallible(body);
         return {
-          fallible: expressionRegionIsFallible(body),
+          fallible: invocationFallible || implementationFallible,
+          implementationFallible,
           subjects: [value],
         };
       }
@@ -432,12 +438,14 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
         return undefined;
       }
       if (fallible.has(declaration)) {
-        return { fallible: true, subjects: [value, declaration] };
+        return { fallible: true, implementationFallible: true, subjects: [value, declaration] };
       }
       const declarationBody = ast.body(declaration);
       if (declarationBody !== undefined) {
+        const implementationFallible = expressionRegionIsFallible(declarationBody);
         return {
-          fallible: expressionRegionIsFallible(declarationBody),
+          fallible: invocationFallible || implementationFallible,
+          implementationFallible,
           subjects: [value, declaration],
         };
       }
@@ -445,7 +453,8 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
       return initialized === undefined
         ? undefined
         : {
-            fallible: initialized.fallible,
+            fallible: invocationFallible || initialized.fallible,
+            implementationFallible: initialized.implementationFallible,
             subjects: [value, declaration, ...initialized.subjects],
           };
     } finally {
@@ -645,7 +654,7 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
     const operation = walk.context.facts.get(call, rustTargetOperationFactKey) ??
       walk.context.facts.resolve(call, rustTargetOperationFactKey);
     recordSelectedOperationInputs(walk, call, sourceFile, operation);
-    if (callbackFallible) {
+    if (callbackAnalysis.implementationFallible) {
       for (const subject of callbackAnalysis.subjects) {
         walk.context.facts.set(subject, rustFallibleFactKey, { fallible: true }, [
           { message: "rust fallible callback ABI" },

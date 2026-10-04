@@ -1,4 +1,5 @@
 import { rustSelectedCallTypeParameters } from "../../../../policy/types/resolution/generic-arguments.js";
+import { createRustJsCallRequest, selectedSoleArgumentNumberKind } from "./source-profile-request.js";
 import {
   asNode,
   isProjectSourceDeclaration,
@@ -27,7 +28,7 @@ import { selectedImplicitSuperConstructorClass } from "./implicit-super.js";
 import { substituteProviderOperationForm } from "./template-instantiation.js";
 import { closedMetadataKey } from "../../../../target-model/metadata/closed-data.js";
 import { mapRustSourceMarkerCall } from "./deferred.js";
-import { providerIdentityText, providerOperationFact, rejectSelectedOperation, selectedArgumentMatchScore } from "../result.js";
+import { providerIdentityText, providerOperationFact, rejectSelectedOperation } from "../result.js";
 import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution.js";
 import { rustModuleBindingFactKey, rustOptionalChainFactKey } from "../../../facts/keys.js";
 import { rustOptionElementCarrier } from "../../../../target-model/types/index.js";
@@ -42,11 +43,8 @@ import { selectRustProviderPointerResult } from "../../../../policy/operations/p
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { sourceCallMarkerByIdentity } from "../model.js";
 import { mapSelectedStringRegExpProtocolCall } from "../regexp-protocols.js";
-import { selectedRustRegExpReplacementCallbackEvidence } from "../regexp-replacement-callback.js";
-import { canRequireSourceClone } from "../clone-requirements.js";
 import { selectRustRuntimeCallableGenerics } from "./runtime-callable-generics.js";
 import { rustLifetimeKey } from "../../../../target-model/lifetimes/index.js";
-import { rustOperandSupportsSourceNumeric } from "../../generic-numeric.js";
 import { selectRustPointerViewCall } from "../../pointer-views.js";
 import { selectBorrowedCallbackParameters } from "./borrowed-callbacks.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../../../target-model/types/carriers/generic-callables.js";
@@ -59,7 +57,6 @@ import type {
   RustPolicySelection,
 } from "../../../../policy/operations/contracts.js";
 import type { Node } from "@tsonic/tsts";
-import { rustEnclosingStorageContract } from "../../../../policy/ownership/suspended-storage.js";
 import type { RustOperationsProviderOptions } from "../model.js";
 import type { RustSelectedTargetSignature, RustTargetMember, TargetTypeRef } from "../../../../target-model/types/model.js";
 
@@ -299,24 +296,6 @@ export function selectRustCheckedCall(
         sourceName: selectedSourceMember.ownerName,
       });
     }
-    const receiverCarrier = selectedCallReceiverValueCarrier(
-      request,
-      context,
-      options,
-    );
-    const argumentCarriers = selectedCallArgumentCarriers(request, context, options);
-    const selectedMethodTypeArgumentCarriers =
-      (request.source.sourceSelectedMethodTypeArguments ?? []).map((argument) =>
-        resolveRustTargetTypeRef(
-          argument.explicitTypeNode ?? argument.selectedType,
-          context,
-          options,
-        ));
-    const authoredMethodTypeArgumentCarriers =
-      (request.source.sourceSelectedMethodTypeArguments ?? []).map((argument) =>
-        argument.explicitTypeNode === undefined
-          ? undefined
-          : resolveRustTargetTypeRef(argument.explicitTypeNode, context, options));
     const regexpProtocol = mapSelectedStringRegExpProtocolCall(
       request,
       selectedSourceMember.ownerName,
@@ -337,63 +316,14 @@ export function selectRustCheckedCall(
     if (special !== undefined) {
       return special;
     }
-    const sourceResultCarrier = request.source.sourceResultType === undefined
-      ? undefined
-      : resolveRustTargetTypeRef(request.source.sourceResultType, context, options);
-    const selection = selectJsSurfaceOperation({
-      storageContract: rustEnclosingStorageContract(request.source.call, context.ast, context.sourceLifetimes),
-      ownerName: selectedSourceMember.ownerName,
-      memberName: selectedSourceMember.memberName,
-      operationKind: "call",
-      soleArgumentNumberKind: selectedSoleArgumentNumberKind(request, context),
-      ...(receiverCarrier === undefined ? {} : { receiverCarrier }),
-      ...(sourceResultCarrier === undefined ? {} : { sourceResultCarrier }),
-      ...(argumentCarriers.length === 0 ? {} : { argumentCarriers }),
-      spreadArgumentIndexes: request.source.sourceArguments.flatMap((argument, index) =>
-        context.ast.is.IsSpreadElement(argument.expression) ? [index] : []),
-      selectedMethodTypeArgumentCarriers,
-      authoredMethodTypeArgumentCarriers,
-      argumentMatchesSelectedTypeArgument: (argumentIndex, typeArgumentIndex) => {
-        const argument = request.source.sourceArguments[argumentIndex];
-        const typeArgument = request.source.sourceSelectedMethodTypeArguments?.[typeArgumentIndex];
-        if (argument === undefined || typeArgument === undefined) return false;
-        const types = context.semanticsFor(request.source.call).types;
-        const value = argumentCarriers[argumentIndex];
-        const parameter = selectedMethodTypeArgumentCarriers[typeArgumentIndex];
-        return types.relationship(argument.type, typeArgument.selectedType) === "identical" ||
-          value !== undefined && parameter !== undefined && rustTargetTypeRefEquals(value, parameter);
-      },
-      argumentMatchScore: selectedArgumentMatchScore(selectedCallArgumentNodes(request), context, options),
-      resolveCallbackArgumentCarrier: (callback) => {
-        const adapter = callback.argumentAdapter;
-        return adapter?.kind === "regexp-replacement"
-          ? selectedRustRegExpReplacementCallbackEvidence(
-              request,
-              callback.sourceArgumentIndex,
-              adapter.lane,
-              context,
-              options,
-            )?.sourceCarrier
-          : undefined;
-      },
-      carrierSupportsProjectIdentity: options.projectCarrierSupportsObjectIdentity,
-      canRequireClone: carrier => canRequireSourceClone(carrier, request.source.call, context, options.sourceTypes.typeFamilies),
-      numericParameterArgument: (index, carrier, domain) => {
-        const argument = selectedCallArgumentNodes(request)[index];
-        return argument !== undefined && carrier.kind === "type-parameter" &&
-          rustOperandSupportsSourceNumeric(argument, carrier, context, options, domain);
-      },
-      resultUse: context.source.navigation.expressionResultUse(request.source.call),
-    }, context.typeDefinitions);
+    const nativeRequest = createRustJsCallRequest(request, context, options);
+    const selection = nativeRequest === undefined ? undefined : selectJsSurfaceOperation(nativeRequest, context.typeDefinitions);
     if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {
       return rejectSelectedOperation(
         request.source.call,
         context,
         "RUST_SELECTED_OPERATION_UNSUPPORTED",
         `The selected JavaScript call '${selectedSourceMember.ownerName}.${selectedSourceMember.memberName}' has no closed Rust operation row for the selected receiver and argument carriers.`,
-        [{
-          message: `receiver=${JSON.stringify(receiverCarrier)}; arguments=${JSON.stringify(argumentCarriers)}; selectedTypeArguments=${JSON.stringify(selectedMethodTypeArgumentCarriers)}; authoredTypeArguments=${JSON.stringify(authoredMethodTypeArgumentCarriers)}`,
-        }],
       );
     }
     if (selection.callback !== undefined) {
@@ -499,22 +429,6 @@ export function selectRustCheckedCall(
   );
 }
 
-function selectedSoleArgumentNumberKind(
-  request: RustCheckedCallSelectionInput,
-  context: RustOperationPolicyContext,
-): "number" | "non-number" | undefined {
-  const argument = request.source.sourceArguments[0];
-  if (request.source.sourceArguments.length !== 1 || argument === undefined) return undefined;
-  const types = context.currentSemantics.types;
-  const members = types.isUnion(argument.type)
-    ? types.unionOrIntersectionTypes(argument.type)
-    : [argument.type];
-  if (members.length === 0 || members.some(member => member === undefined || types.isAny(member) || types.isUnknown(member))) {
-    return undefined;
-  }
-  const numeric = members.map(member => types.isNumberLike(member!));
-  return numeric.every(Boolean) ? "number" : numeric.every(value => !value) ? "non-number" : undefined;
-}
 
 function acceptRuntimeCallableCall(
   request: RustCheckedCallSelectionInput,

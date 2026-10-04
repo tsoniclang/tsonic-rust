@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { rustCallableConversionMatches, type RustCallableConversion, type RustCallableValueConversion } from "../../../target-model/conversions/callable.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
-import { rustCallableProtocol } from "../../../target-model/types/index.js";
+import { rustCallableProtocol, rustClosureProtocol } from "../../../target-model/types/index.js";
 import { rustTypeEquals } from "../../target-ast/inspection/type-equality.js";
 import type { RustExpr, RustStmt, RustType } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
@@ -24,14 +24,21 @@ export function planRustCallableConversion(
   const definitions = context.input.program.typeDefinitions;
   if (!rustCallableConversionMatches(conversion, conversion.source, conversion.target, definitions)) return undefined;
   const source = rustCallableProtocol(conversion.source)!;
-  const target = rustCallableProtocol(conversion.target)!;
+  const native = conversion.target.kind === "closure";
+  const target = rustCallableProtocol(conversion.target) ?? rustClosureProtocol(conversion.target);
+  if (target === undefined) return undefined;
   const sourceType = rustCallableConstructionType(conversion.source, context);
   const targetType = rustCallableConstructionType(conversion.target, context);
   const argumentsType = rustTypeFromCarrierInContext({ kind: "tuple", elements: source.parameters }, context);
-  if (sourceType === undefined || targetType === undefined || argumentsType === undefined) return undefined;
+  if (sourceType === undefined || !native && targetType === undefined || argumentsType === undefined) return undefined;
   const names = context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []);
   const callable = allocateRustSyntheticName(names, "callable");
   const argumentsName = allocateRustSyntheticName(names, source.parameters.length === 0 ? "_arguments" : "arguments");
+  const nativeParameters = native ? target.parameters.map((type, index) => ({
+    name: allocateRustSyntheticName(names, `argument${index}`), byRefCopy: false,
+    type: rustTypeFromCarrierInContext(type, context),
+  })) : [];
+  if (nativeParameters.some(parameter => parameter.type === undefined)) return undefined;
   const reference = context.input.program.facts.getFact(node, rustDirectCallableReferenceFactKey);
   if (reference !== undefined && !rustTargetTypeRefEquals(reference.carrier, conversion.source)) return undefined;
   const selected = reference === undefined ? expression : planRustSourceCallableValue(reference, context);
@@ -39,7 +46,7 @@ export function planRustCallableConversion(
   const producer = inlineCallableProducer(selected, sourceType, argumentsType);
   const arguments_: RustExpr[] = [];
   for (const [index, parameter] of conversion.parameters.entries()) {
-    const value = lowerValue(parameter, {
+    const value = lowerValue(parameter, native ? { kind: "path", path: nativeParameters[index]!.name } : {
       kind: "field", receiver: { kind: "path", path: argumentsName }, name: String(index),
     });
     if (value === undefined) return undefined;
@@ -63,12 +70,13 @@ export function planRustCallableConversion(
       body: fallibleResult ? { kind: "call", path: "Ok", args: [result] } : result,
     }],
   };
+  const closure: RustExpr = {
+    kind: "closure", move: true, params: native ? nativeParameters : [{ name: argumentsName, byRefCopy: false }], body,
+  };
   return { kind: "block", body: { statements: [...producer.statements, {
     kind: "let", mutable: false, name: callable, init: producer.value,
-  }, { kind: "tail", expr: {
-    kind: "associated-call", owner: targetType, method: "new", args: [{
-      kind: "closure", move: true, params: [{ name: argumentsName, byRefCopy: false }], body,
-    }],
+  }, { kind: "tail", expr: native ? closure : {
+    kind: "associated-call", owner: targetType!, method: "new", args: [closure],
   } }] } };
 
   function lowerValue(selected: RustCallableValueConversion, value: RustExpr): RustExpr | undefined {

@@ -509,11 +509,14 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       }
       for (const argument of providerOperation.abi.sourceArguments) {
         if (argument.disposition !== "runtime" || argument.mode !== "value" ||
-          argument.form !== "value" || isRustCopyCarrier(argument.carrier)) continue;
+          argument.form !== "value") continue;
         const expression = ast.arguments(node)[argument.sourceIndex];
         if (expression === undefined || !ast.is.IsIdentifier(expression) ||
           input.valueLifetimes.canMove(expression)) continue;
-        const error = addUse(expression, argument.carrier, ["clone"]);
+        const carrier = facts.getRuntimeCarrierFact(expression)?.carrier;
+        if (carrier === undefined) return "A provider argument lost its exact source storage carrier.";
+        if (isRustCopyCarrier(carrier)) continue;
+        const error = addUse(expression, carrier, ["clone"]);
         if (error !== undefined) return error;
       }
       for (const requirement of providerOperation.carrierRequirements ?? []) {

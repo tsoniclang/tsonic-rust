@@ -55,6 +55,8 @@ import {
   rustRegExpNamedIndicesTargetId,
   rustRegExpStringIteratorTargetId,
   isRustCallableCarrier,
+  rustCallableProtocol,
+  rustClosureProtocol,
   rustAbsenceTargetType,
   rustSourceOptionalTargetType,
   rustUnitTargetType,
@@ -251,6 +253,18 @@ export function selectJsSurfaceOperation(request: JsOperationRequest, definition
   return selectJsSurfaceOperationForDemand(request, definitions, demand);
 }
 
+export function selectJsSurfaceCallInputContract(
+  request: JsOperationRequest,
+  argumentIndex: number,
+  definitions: RustTypeDefinitions,
+): JsOperationSelection | undefined {
+  if (request.operationKind !== "call" || !Number.isSafeInteger(argumentIndex) ||
+    argumentIndex < 0 || argumentIndex >= (request.argumentCarriers?.length ?? 0)) return undefined;
+  return selectJsSurfaceOperationForDemand(request, definitions, { kind: "input", argumentIndex });
+}
+
+type JsSelectionDemand = "operation" | "storage" | { readonly kind: "input"; readonly argumentIndex: number };
+
 export function selectJsSurfaceMemberStorageContract(
   request: JsOperationRequest & { readonly operationKind: "property" | "indexer" },
   definitions: RustTypeDefinitions,
@@ -264,7 +278,7 @@ export function selectJsSurfaceMemberStorageContract(
 function selectJsSurfaceOperationForDemand(
   request: JsOperationRequest,
   definitions: RustTypeDefinitions,
-  demand: "operation" | "storage",
+  demand: JsSelectionDemand,
 ): JsOperationSelection | undefined {
   if (request.ownerName === "Promise" && (request.memberName === "then" || request.memberName === "catch")) {
     return selectRustJsPromiseContinuation(request);
@@ -357,6 +371,13 @@ function selectJsSurfaceOperationForDemand(
     }
     const argumentScores = parameterCarriers.map((carrier, index) => {
       const actual = candidateArgumentCarriers[index];
+      if (typeof demand === "object" && index === demand.argumentIndex) {
+        const expectedCallable = rustCallableProtocol(carrier) ?? rustClosureProtocol(carrier);
+        const actualCallable = rustCallableProtocol(actual) ?? rustClosureProtocol(actual);
+        return expectedCallable === undefined || actualCallable === undefined ||
+          expectedCallable.parameters.length !== actualCallable.parameters.length ? undefined
+          : jsArgumentCarrierMatchScore(expectedCallable.result, actualCallable.result, index, request.argumentMatchScore);
+      }
       if (candidate.jsonValueSourceArgumentIndexes?.includes(index) === true) {
         return actual !== undefined && selectRustJsonValueConversion(actual, definitions) !== undefined
           ? 1
@@ -556,7 +577,7 @@ function carrierRequirementsMatch(
   bindings: JsLaneBindings,
   request: JsOperationRequest,
   definitions: RustTypeDefinitions,
-  demand: "operation" | "storage",
+  demand: JsSelectionDemand,
 ): boolean {
   return requirements?.every((requirement) => {
     const carrier = resolveCarrierRef(requirement.carrier, bindings);

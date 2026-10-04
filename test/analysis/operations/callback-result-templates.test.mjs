@@ -91,3 +91,30 @@ test("direct callback conversions retain every selected parameter and reject unm
   assert.equal(finalizeRustCallbackOperation(input, [rustCallableTargetType([integer], rustUnitTargetType())], accepts), undefined);
   assert.equal(finalizeRustCallbackOperation(input, [], accepts), undefined);
 });
+
+test("native closure finalization preserves physical callable effects for direct, map and reduce", () => {
+  const accepts = (source, target) => selectRustCallableConversion(source, target,
+    (input, output) => selectRustSourceValueConversion(input, output)) !== undefined;
+  const closure = result => ({ kind: "closure", args: [integer], result, callTrait: "FnMut" });
+  const actual = rustCallableTargetType([integer], integer);
+  for (const shape of ["direct", "map", "reduce"]) {
+    const parameters = shape === "reduce" ? [closure(integer), integer] : [closure(shape === "map" ? inferred : integer)];
+    const input = { ...selection(shape === "map" ? rustJsArrayTargetType(inferred) : integer, parameters),
+      resultCarrier: shape === "map" ? rustJsArrayTargetType(inferred) : integer,
+      callback: { shape, sourceArgumentIndex: 0,
+        ...(shape === "reduce" ? { accumulatorArgumentIndex: 1 } : {}),
+        failure: { kind: "invocation", fallibleTarget: { form: "receiver-method", name: "try_selected" } } } };
+    const arguments_ = shape === "reduce" ? [actual, integer] : [actual];
+    const selected = finalizeRustCallbackOperation(input, arguments_, accepts);
+    assert.equal(selected !== undefined, true, shape);
+    const expected = { ...closure(integer), fallible: true };
+    assert.deepEqual(selected.parameterCarriers[0], expected);
+    assert.deepEqual(selected.fact.parameterCarriers, selected.parameterCarriers);
+    assert.deepEqual(selected.resultCarrier, shape === "map" ? rustJsArrayTargetType(integer) : integer);
+    assert.equal(finalizeRustCallbackOperation(input, arguments_) === undefined, true,
+      "different callback representations require an exact conversion");
+    assert.equal(finalizeRustCallbackOperation(input, [
+      rustCallableTargetType([rustSourcePrimitiveTargetType("string")], integer), ...arguments_.slice(1),
+    ], accepts) === undefined, true, "incompatible native inputs remain rejected");
+  }
+});

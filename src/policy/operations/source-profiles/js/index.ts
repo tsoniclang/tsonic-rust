@@ -2,4 +2,4 @@ export { selectJsSurfaceConstructor, selectJsSurfaceConstructorBySourceOwner } f
 export type { JsConstructorRequest } from "./constructors.js";
 export type { JsOperationRequest, JsOperationSelection } from "./model.js";
 export { rustInferCarrier } from "./rows.js";
-export { selectJsSurfaceOperation } from "./selection.js";
+export { selectJsSurfaceOperation, selectJsSurfaceCallInputContract } from "./selection.js";

@@ -61,6 +61,7 @@ import { rustGenericCallableValueOwner } from "../../policy/types/generic-callab
 import { closeRustSuspendedStorage } from "../../policy/types/suspended-storage.js";
 import { selectRustInferredReturn } from "./inferred-return.js";
 import { rustOptionalStorageValue } from "../../target-model/types/projections.js";
+import { selectRustClosedCallableInputs } from "./contextual-inputs.js";
 
 export function recordFunctionSignatureFacts(walk: RustFactWalk, declaration: Node): void {
   recordCallableParameterSignatureFacts(walk, declaration);
@@ -316,13 +317,14 @@ function recordCallableValueSignatureFacts(
     recordFunctionSignatureFacts(walk, expression);
     return;
   }
-  const selectedCarrier = rustGenericCallableValueOwner(ast, declaration, walk.context.facts.get(declaration, rustRuntimeCarrierKey)?.carrier ??
+  const valueCarrier = rustGenericCallableValueOwner(ast, declaration, walk.context.facts.get(declaration, rustRuntimeCarrierKey)?.carrier ??
     walk.context.facts.resolve(declaration, rustRuntimeCarrierKey)?.carrier ??
     resolveRustTargetTypeRef(
       Node_Type(ast, declaration) ?? expression,
       rustResolutionContext(walk, declaration),
       walk.operationOptions,
     ));
+  const selectedCarrier = selectRustClosedCallableInputs(walk, expression, valueCarrier);
   const ownParameters = walk.context.sourceLifetimes.contractFor(expression)?.parameters
     .flatMap(parameter => parameter.kind === "type" ? [rustTypeParameterFromSourceContract(parameter)] : []);
   const callable = rustGenericCallableProtocol(selectedCarrier, ownParameters) ?? rustCallableProtocol(selectedCarrier);

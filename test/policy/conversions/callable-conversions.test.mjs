@@ -3,12 +3,28 @@ import test from "node:test";
 import { rustCallableConversionMatches, selectRustCallableConversion } from "../../../dist/target-model/conversions/callable.js";
 import { rustCompilerOwnedContextualConversionMatches } from "../../../dist/target-model/conversions/contextual.js";
 import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
-import { rustAbsenceTargetType, rustCallableTargetType, rustJsValueTargetType, rustOptionTargetType, rustUnitTargetType } from "../../../dist/target-model/types/index.js";
+import { rustAbsenceTargetType, rustCallableTargetType, rustClosureTargetType, rustJsValueTargetType, rustOptionTargetType, rustUnitTargetType } from "../../../dist/target-model/types/index.js";
 
 const number = { kind: "source-primitive", name: "float64" };
 const string = { kind: "source-primitive", name: "string" };
 const optional = rustOptionTargetType(number);
 const select = (source, target) => selectRustCallableConversion(source, target, selectRustSourceValueConversion);
+
+test("native closure adapters retain exact inputs, results and invocation failure", () => {
+  const integer = { kind: "source-primitive", name: "int64" };
+  const source = rustCallableTargetType([integer], number);
+  const target = rustClosureTargetType([integer], number, true);
+  const selected = select(source, target);
+  assert.equal(selected !== undefined, true);
+  assert.equal(rustCallableConversionMatches(selected, source, target), true);
+  assert.equal(rustCallableConversionMatches({ ...selected, target: { ...target, fallible: false } },
+    source, { ...target, fallible: false }), false);
+  assert.equal(select(source, rustClosureTargetType([integer], number)) === undefined, true);
+  assert.equal(select(source, rustClosureTargetType([], number, true)) === undefined, true);
+  assert.equal(select(source, rustClosureTargetType([string], number, true)) === undefined, true);
+  assert.equal(select(source, rustClosureTargetType([integer], string, true)) === undefined, true);
+  assert.equal(rustCallableConversionMatches({ ...selected, parameters: [{ kind: "discard" }] }, source, target), false);
+});
 
 test("stored void and exact absence callbacks complete only into proven native absence storage", () => {
   for (const result of [rustUnitTargetType(), rustAbsenceTargetType()]) {
