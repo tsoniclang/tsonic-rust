@@ -196,6 +196,9 @@ export function resolveRustTypeComponentEvidence(
     );
     return selected;
   }
+  if (context.ast.kindName(component.authoredTypeNode) === "KindThisType") {
+    return resolveRustTargetType(component.selectedType, context, options, resolving);
+  }
   const authoredSourceFile = context.ast.getSourceFile(component.authoredTypeNode);
   const semantics = authoredSourceFile !== undefined &&
       context.source.semantics.includes(authoredSourceFile)

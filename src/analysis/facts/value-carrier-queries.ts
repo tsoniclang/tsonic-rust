@@ -6,7 +6,7 @@ import type {
   RustPlanWriter,
 } from "../../target-model/facts/selections.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { isRustOptionCarrier } from "../../target-model/types/carriers/optional.js";
+import { isRustOptionCarrier, rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type {
   RustAppliedValueCarrierReconciliation,
@@ -52,6 +52,25 @@ export function recordRustValueCarrierReconciliation(
     facts.set(subject, rustProjectUpcastFactKey, reconciliation.upcast, [
       { message: "rust exact project payload upcast before contextual conversion" },
     ]);
+  }
+  const { sourceCarrier, targetCarrier, conversion } = reconciliation.fact;
+  if (conversion.kind === "option-some") {
+    if (!rustTargetTypeRefEquals(sourceCarrier, conversion.source) ||
+      !rustTargetTypeRefEquals(rustOptionElementCarrier(targetCarrier), conversion.element)) {
+      throw new Error("Rust optional admission must retain its exact source and selected payload.");
+    }
+    if (conversion.elementConversion !== null) {
+      facts.set(subject, rustContextualValueConversionFactKey, {
+        sourceCarrier,
+        targetCarrier: conversion.element,
+        conversion: conversion.elementConversion,
+      }, [{ message: "rust exact contextual payload conversion before presence" }]);
+    }
+    facts.set(subject, rustOptionProjectionFactKey, {
+      kind: "some", sourceCarrier: conversion.element,
+      elementCarrier: conversion.element, resultCarrier: targetCarrier,
+    }, [{ message: "rust exact option-some projection" }]);
+    return;
   }
   facts.set(
     subject,

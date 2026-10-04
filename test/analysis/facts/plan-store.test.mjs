@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRustPlanBuilder } from "../../../dist/analysis/facts/plan-store.js";
+import { recordRustValueCarrierReconciliation, rustEffectiveValueCarrier } from "../../../dist/analysis/facts/value-carrier-queries.js";
+import { rustContextualValueConversionFactKey, rustOptionProjectionFactKey } from "../../../dist/analysis/facts/keys.js";
+import { rustOptionTargetType } from "../../../dist/target-model/types/carriers/optional.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { rustTargetOperationFactKey } from "../../../dist/analysis/facts/operations/keys.js";
 import {
@@ -19,6 +22,37 @@ import {
 function createModel() {
   return createRustPlanBuilder({ getFact: () => undefined });
 }
+
+test("present contextual conversions retain one scalar conversion followed by presence", () => {
+  const model = createModel();
+  const subject = {};
+  const source = { kind: "source-primitive", name: "uint8" };
+  const element = { kind: "source-primitive", name: "int32" };
+  const option = rustOptionTargetType(element);
+  const conversion = { kind: "exact-integer", source, target: element };
+  const scalar = { kind: "conversion", fact: { sourceCarrier: source, targetCarrier: element, conversion } };
+  const optional = { kind: "conversion", fact: { sourceCarrier: source, targetCarrier: option,
+    conversion: { kind: "option-some", source, element, elementConversion: conversion } } };
+  recordRustValueCarrierReconciliation(model, subject, optional);
+  assert.doesNotThrow(() => recordRustValueCarrierReconciliation(model, subject, scalar));
+  assert.equal(model.getFact(subject, rustContextualValueConversionFactKey)?.targetCarrier, element);
+  assert.equal(model.getFact(subject, rustOptionProjectionFactKey)?.sourceCarrier, element);
+  assert.equal(rustEffectiveValueCarrier(model, subject), option);
+  assert.throws(() => recordRustValueCarrierReconciliation(model, subject,
+    { ...scalar, fact: { ...scalar.fact, sourceCarrier: element } }), /Conflicting Rust semantic plan/u);
+  for (const mutation of [{ sourceCarrier: element }, { targetCarrier: rustOptionTargetType(source) }]) {
+    assert.throws(() => recordRustValueCarrierReconciliation(model, {},
+      { ...optional, fact: { ...optional.fact, ...mutation } }), /exact source and selected payload/u);
+  }
+  const unchanged = {};
+  recordRustValueCarrierReconciliation(model, unchanged, { kind: "conversion", fact: {
+    sourceCarrier: element, targetCarrier: option,
+    conversion: { kind: "option-some", source: element, element, elementConversion: null },
+  } });
+  assert.equal(model.getFact(unchanged, rustContextualValueConversionFactKey) === undefined, true,
+    "unchanged payload does not manufacture a conversion");
+  assert.equal(rustEffectiveValueCarrier(model, unchanged), option);
+});
 
 test("analysis result probes retain parent facts without mutating the final plan", () => {
   const parent = createModel();

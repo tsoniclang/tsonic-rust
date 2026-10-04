@@ -535,14 +535,12 @@ function applyOptionLane(
       ? selectRustExactIntegerConversion(resolved, scalarTarget) : undefined);
     if (exactInteger !== undefined || retained?.conversion.kind === "exact-integer" &&
       rustTargetTypeRefEquals(retained.sourceCarrier, resolved) &&
-      rustTargetTypeRefEquals(retained.targetCarrier, target)) {
-      walk.context.facts.set(expression, rustContextualValueConversionFactKey, {
-        sourceCarrier: resolved, targetCarrier: target,
-        conversion: exactInteger === undefined ? retained!.conversion : expectedOptionElement === undefined
-          ? exactInteger : { kind: "option-some", source: resolved, element: expectedOptionElement,
-            elementConversion: exactInteger },
-      }, [{ message: "rust exact native integer storage" }]);
-      projected = target;
+      rustTargetTypeRefEquals(retained.targetCarrier, scalarTarget)) {
+      recordRustValueCarrierReconciliation(walk.context.facts, expression, { kind: "conversion", fact: {
+        sourceCarrier: resolved, targetCarrier: scalarTarget,
+        conversion: exactInteger ?? retained!.conversion,
+      } });
+      projected = scalarTarget;
     } else {
       const operation = walk.context.facts.get(expression, rustTargetOperationFactKey);
       const truncation = selectRustIntegerTruncationConversion(walk.context.ast, expression,
@@ -553,9 +551,11 @@ function applyOptionLane(
         }, [{ message: "rust exact bounded integer result" }]);
         projected = scalarTarget;
       }
+      const reconciliationTarget = expectedOptionElement !== undefined && !isRustOptionCarrier(resolved)
+        ? scalarTarget : target;
       let reconciliation = truncation === undefined ? selectRustValueCarrierReconciliation(
         resolved,
-        target,
+        reconciliationTarget,
         walk.context.projectTypes, walk.context.typeDefinitions,
       ) : { kind: "identity" as const };
       if (reconciliation.kind === "incompatible" && rustStructuralObjectCarrierValue(resolved) !== undefined) {
@@ -563,10 +563,10 @@ function applyOptionLane(
         const conversion = selectProviderRecordArgument(
           context.currentSemantics.types.expressionType(expression),
           context.currentSemantics.types.contextualType(expression),
-          resolved, target, context, walk.operationOptions,
+          resolved, reconciliationTarget, context, walk.operationOptions,
         );
         if (conversion !== undefined) reconciliation = { kind: "conversion", fact: {
-          sourceCarrier: resolved, targetCarrier: target, conversion,
+          sourceCarrier: resolved, targetCarrier: reconciliationTarget, conversion,
         } };
       }
       if (reconciliation.kind === "incompatible" && reconciliation.reason === "ambiguous") {
@@ -582,15 +582,15 @@ function applyOptionLane(
       if (reconciliation.kind === "call-scoped-lifetime" ||
         reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {
         recordRustValueCarrierReconciliation(walk.context.facts, expression, reconciliation);
-        projected = target;
+        projected = reconciliationTarget;
         if (reconciliation.kind === "project-upcast" && !isRustOptionCarrier(expected)) {
-          walk.context.facts.set(expression, rustConversionKey, { convertedType: target }, [
+          walk.context.facts.set(expression, rustConversionKey, { convertedType: reconciliationTarget }, [
             { message: "rust project-type upcast conversion" },
           ]);
         }
       }
       if (reconciliation.kind === "incompatible" && reconciliation.reason === "unrelated" &&
-        recordRustObjectReferenceView(walk, expression, resolved, target)) projected = target;
+        recordRustObjectReferenceView(walk, expression, resolved, reconciliationTarget)) projected = reconciliationTarget;
     }
   }
   if (expected === undefined || !isRustOptionCarrier(expected)) {
