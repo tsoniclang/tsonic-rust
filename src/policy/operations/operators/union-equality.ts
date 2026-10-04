@@ -5,7 +5,8 @@ import { rustUnionAlternatives, rustUnionLeaves } from "../../../target-model/ty
 import { getRustTypeofRuntimeKind } from "../../../target-model/types/runtime-kind.js";
 import { snapshotClosedMetadata } from "../../../target-model/metadata/closed-data.js";
 import { selectRustBinaryOperator } from "./rules.js";
-import { isRustAbsenceCarrier, rustAbsenceTargetType, rustSourcePrimitiveTargetType } from "../../../target-model/types/carriers/native.js";
+import { rustAbsenceTargetType, rustSourcePrimitiveTargetType } from "../../../target-model/types/carriers/native.js";
+import { isRustUnitCarrier } from "../../../target-model/types/carriers/js.js";
 import { rustSourceOptionalElementCarrier } from "../../../target-model/types/carriers/optional.js";
 
 export function selectRustUnionEquality(
@@ -23,8 +24,8 @@ export function selectRustUnionEquality(
   if (leftLeaves === undefined || rightLeaves === undefined) return undefined;
   const arms: RustUnionEqualityArm[] = [];
   for (const left of leftLeaves) for (const right of rightLeaves) {
-    if (isRustAbsenceCarrier(left.carrier) !== isRustAbsenceCarrier(right.carrier)) continue;
-    if (isRustAbsenceCarrier(left.carrier)) {
+    if (isRustUnitCarrier(left.carrier) !== isRustUnitCarrier(right.carrier)) continue;
+    if (isRustUnitCarrier(left.carrier)) {
       arms.push({ left, right, operation: { kind: "operator-token", rustOperator: "==", resultCarrier: rustSourcePrimitiveTargetType("bool") } });
       continue;
     }

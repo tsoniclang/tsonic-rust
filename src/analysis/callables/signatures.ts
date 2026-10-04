@@ -1,5 +1,7 @@
 import { rustTypeParameterFromSourceContract } from "../../target-model/names/type-parameters.js";
 import { rustCallableInvocationResult } from "../facts/callable-results.js";
+import { rustUnionPayloadAdmission } from "../../target-model/conversions/union-injection.js";
+import { rustAbsenceTargetType } from "../../target-model/types/carriers/native.js";
 import {
   KindFunctionExpression,
   KindFunctionDeclaration,
@@ -575,7 +577,8 @@ export function recordCallableReturnFact(
       walk.context.sourceLifetimes.contractFor(declaration), "callable-result");
   if (carrier !== undefined) {
     const completion = walk.context.semanticsFor(declaration).operations.callableCompletion(declaration);
-    const absence = rustOptionElementCarrier(carrier) !== undefined || rustOptionalStorageValue(carrier) !== undefined;
+    const absence = rustOptionElementCarrier(carrier) !== undefined || rustOptionalStorageValue(carrier) !== undefined ||
+      rustUnionPayloadAdmission(rustAbsenceTargetType(), carrier, walk.context.typeDefinitions) !== undefined;
     const implementationResult = asynchronous !== undefined || generator !== undefined || sourceReturn === undefined
       ? undefined : resolveRustTargetTypeRef(sourceReturn, rustResolutionContext(walk, declaration), walk.operationOptions);
     walk.context.facts.set(declaration, rustSourceCallableReturnFactKey, {

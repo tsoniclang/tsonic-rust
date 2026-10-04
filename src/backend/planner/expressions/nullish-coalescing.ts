@@ -12,7 +12,8 @@ import { diagnosticInput, rustActiveErrorType } from "../program/plan-context.js
 import type { RustPlanContext } from "../program/plan-context.js";
 import { applyRustFallibleResultExpression, rustExpressionUsesTryInCurrentRegion } from "../types/fallible-shape.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
-import { planExpression, planExpressionBeforeValueProjections } from "./entry.js";
+import { planExpression, planExpressionBeforeOptionProjection, planExpressionBeforeValueProjections } from "./entry.js";
+import { rustValueCarrierBeforeOptionProjection } from "../../../analysis/facts/value-carrier-queries.js";
 import { effectivePlannedExpressionCarrier, requireExpressionCarrier, selectedOperationMatches } from "./fundamentals.js";
 import { applyRustValueConversion } from "./value-conversions.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
@@ -33,7 +34,7 @@ export function planNullishCoalescing(
   const rightNode = rightSyntax === undefined ? undefined : rustUnparenthesizedExpression(ast, rightSyntax);
   let left = leftNode === undefined
     ? undefined
-    : planExpressionBeforeValueProjections(leftNode, context, "value");
+    : planExpressionBeforeOptionProjection(leftNode, context);
   let right = rightNode === undefined ? undefined
     : fact.rightValueForm === "raw"
       ? planExpressionBeforeValueProjections(rightNode, context, "value")
@@ -67,7 +68,7 @@ export function planNullishCoalescing(
     !exactPresentValue || fact.rightValueForm !== "value" && fact.rightValueForm !== "raw" ||
     fact.rightValueForm === "raw" && fact.rightOptionDepth === 0 ||
     rustOptionalStorageNestingDepth(
-      context.input.program.facts.getRuntimeCarrierFact(leftNode)?.carrier,
+      rustValueCarrierBeforeOptionProjection(context.input.program.facts, leftNode),
       fact.leftValueCarrier,
     ) !== fact.leftOptionDepth ||
     rightDepth !== fact.rightOptionDepth) {

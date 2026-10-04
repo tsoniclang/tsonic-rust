@@ -1,7 +1,9 @@
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustOptionalStorageValue, rustSourceOptionalTargetType } from "../../../target-model/types/projections.js";
-import { isRustAbsenceCarrier, isRustOptionCarrier, isRustUnitCarrier } from "../../../target-model/types/index.js";
-import { rustRuntimeUnionContract } from "../../../target-model/types/carriers/runtime-unions.js";
+import { isRustAbsenceCarrier, isRustOptionCarrier } from "../../../target-model/types/index.js";
+import { rustUnionPayloadAdmission } from "../../../target-model/conversions/union-injection.js";
+import { rustAbsenceTargetType } from "../../../target-model/types/carriers/native.js";
+import { planRustUnionConstruction } from "./union-patterns.js";
 import type { RustExpr } from "../../target-ast/nodes.js";
 import { rustTypeFromCarrierInContext, type RustTypeRenderingContext } from "../types/render.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -60,15 +62,10 @@ export function planRustAbsentValue(carrier: TargetTypeRef, context: RustTypeRen
   if (isRustAbsenceCarrier(carrier)) return { kind: "tuple-literal", elements: [] };
   if (rustOptionalStorageValue(carrier) !== undefined) return planRustOptionalStorageOperation(carrier, "absent", [], context);
   if (isRustOptionCarrier(carrier)) return { kind: "none" };
-  const unitArms = rustRuntimeUnionContract(carrier)?.alternatives.filter(alternative =>
-    alternative.variant.kind === "payload" && isRustUnitCarrier(alternative.carrier));
-  if (unitArms?.length === 1) {
-    const owner = rustTypeFromCarrierInContext(carrier, context);
-    if (owner?.kind === "named") return {
-      kind: "call", path: `${owner.path}::${unitArms[0]!.variant.name}`,
-      args: [{ kind: "tuple-literal", elements: [] }],
-    };
-  }
+  const admission = rustUnionPayloadAdmission(rustAbsenceTargetType(), carrier, context.input.program.typeDefinitions);
+  const absent = admission === undefined ? undefined
+    : planRustUnionConstruction(admission.path, { kind: "tuple-literal", elements: [] }, context);
+  if (absent !== undefined) return absent;
   throw new Error("A source absence requires finalized native optional storage.");
 }
 

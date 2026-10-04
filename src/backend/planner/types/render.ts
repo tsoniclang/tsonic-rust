@@ -476,6 +476,7 @@ export interface RustTypeRenderingContext {
     readonly lifetimeSubstitutions?: ReadonlyMap<string, RustLifetimeRef>;
     readonly input: {
       readonly program: {
+        readonly typeDefinitions: import("../../../target-model/types/source-union-definitions.js").RustTypeDefinitions;
         readonly names: import("../../../target-model/names/model.js").RustNamePlan;
         readonly structuralShapes: import("../../../analysis/objects/structural-shape-plan.js").RustStructuralShapePlan;
         readonly sourceCallableSpecializations: import("../../../analysis/callables/specializations.js").RustSourceCallableSpecializationPlan;

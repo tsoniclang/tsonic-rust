@@ -14,6 +14,32 @@ import { lowerRustValueConversion } from "../../../dist/backend/planner/expressi
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../helpers/fake-compile-input.mjs";
 import { rustSourceErrorTargetType, rustWritableSourceErrorTargetType, rustMutableJsErrorTargetType } from "../../../dist/target-model/types/carriers/source-error.js";
 import { rustOptionTargetType } from "../../../dist/target-model/types/index.js";
+import { selectRustUnionEquality } from "../../../dist/policy/operations/operators/union-equality.js";
+
+test("native unit payloads admit one exact absence path and compare through the same closed union", () => {
+  const nested = rustSourceUnionTargetType("/src/index.ts", "Nested");
+  const target = rustSourceUnionTargetType("/src/index.ts", "Completion");
+  const definitions = unionDefinitions([
+    [nested, [{ name: "Empty", carrier: rustUnitTargetType() }, { name: "Text", carrier: rustStringTargetType() }]],
+    [target, [{ name: "Selected", carrier: nested }, { name: "Number", carrier: rustSourcePrimitiveTargetType("int32") }]],
+  ]);
+  const absence = rustAbsenceTargetType();
+  const admission = rustUnionPayloadAdmission(absence, target, definitions);
+  assert.equal(admission?.path.length, 2);
+  assert.equal(admission?.path[0].variant.name, "Selected");
+  assert.equal(admission?.path[1].variant.name, "Empty");
+  for (const [left, right] of [[target, absence], [absence, target], [target, rustUnitTargetType()]]) {
+    const comparison = selectRustUnionEquality(left, right, definitions);
+    assert.equal(comparison?.arms.length, 1);
+    assert.equal(comparison?.exhaustive, false);
+  }
+  const ambiguous = unionDefinitions([[target, [
+    { name: "First", carrier: rustUnitTargetType() }, { name: "Second", carrier: absence },
+  ]]]);
+  assert.equal(rustUnionPayloadAdmission(absence, target, ambiguous) === undefined, true);
+  const missing = unionDefinitions([[target, [{ name: "Text", carrier: rustStringTargetType() }]]]);
+  assert.equal(rustUnionPayloadAdmission(absence, target, missing) === undefined, true);
+});
 
 test("native Error payload conversion composes through the one Option and union grammar", () => {
   const source = rustJsErrorTargetType();

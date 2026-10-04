@@ -1,7 +1,7 @@
 import type { RustUnionPathStep } from "../../../target-model/types/union-relations.js";
 import type { RustPattern, RustExpr } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { rustTypeFromCarrierInContext } from "../types/render.js";
+import { rustTypeFromCarrierInContext, type RustTypeRenderingContext } from "../types/render.js";
 
 export function planRustUnionPattern(
   path: readonly RustUnionPathStep[],
@@ -21,7 +21,7 @@ export function planRustUnionPattern(
 export function planRustUnionConstruction(
   path: readonly RustUnionPathStep[],
   payload: RustExpr,
-  context: RustPlanContext,
+  context: RustTypeRenderingContext,
 ): RustExpr | undefined {
   let expression = payload;
   for (const step of [...path].reverse()) {

@@ -40,6 +40,7 @@ import {
 import {
   isRustBigIntCarrier,
   isRustAbsenceCarrier,
+  isRustUnitCarrier,
   isRustNeverCarrier,
   isRustNumericCarrier,
   isRustIntegerCarrier,
@@ -188,7 +189,7 @@ export function resolveBinaryOperandCarriers(
     return { left, right, leftNode, rightNode, operatorKind };
   }
   const resolveLeft = (expectation: TargetTypeRef | undefined): TargetTypeRef | undefined =>
-    operatorKind === KindQuestionQuestionToken || operatorKind === KindEqualsToken
+    operatorKind === KindEqualsToken
       ? resolveExpressionCarrierBeforeFlowReadProjection(
           walk,
           leftNode,
@@ -543,9 +544,7 @@ export function resolvePostCheckBinaryCarrier(
   } else if ((operatorKind === KindEqualsEqualsEqualsToken ||
       operatorKind === KindExclamationEqualsEqualsToken ||
       operatorKind === "KindEqualsEqualsToken" || operatorKind === "KindExclamationEqualsToken") &&
-    isRustAbsenceCarrier(left) && isRustAbsenceCarrier(right)) {
-    const equal = operatorKind === "KindEqualsEqualsToken" || operatorKind === "KindExclamationEqualsToken" ||
-      rustTargetTypeRefEquals(left, right);
+    isRustUnitCarrier(left) && isRustUnitCarrier(right)) {
     const negated = operatorKind === KindExclamationEqualsEqualsToken || operatorKind === "KindExclamationEqualsToken";
     fact = {
       kind: "constant-equality",
@@ -553,7 +552,7 @@ export function resolvePostCheckBinaryCarrier(
         ? "tsonic.rust.equality.nullish.not-equal"
         : "tsonic.rust.equality.nullish.equal",
       resultCarrier: rustSourcePrimitiveTargetType("bool"),
-      value: negated ? !equal : equal,
+      value: !negated,
     };
   } else if ((operatorKind === KindEqualsEqualsEqualsToken ||
       operatorKind === KindExclamationEqualsEqualsToken) &&
