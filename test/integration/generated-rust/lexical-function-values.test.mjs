@@ -76,6 +76,12 @@ fn exact_native_environment_and_repeated_calls() {
     let (absent, calls, bytes) = measure(|| lexical_values::index::optionalCounter(std::hint::black_box(false)));
     assert!(absent.is_none());
     assert_eq!((calls, bytes), (0, 0));
+    let (absent, calls, bytes) = measure(|| lexical_values::index::branchIdentity(std::hint::black_box(false)));
+    assert!(absent.is_none());
+    assert_eq!((calls, bytes), (0, 0));
+    let (present, calls, bytes) = measure(|| lexical_values::index::branchIdentity(std::hint::black_box(true)));
+    assert_eq!((calls, bytes), (native_calls, native_bytes));
+    assert_eq!(present.unwrap().call(()).unwrap(), 1);
 }
 `);
   runCargo(root, ["generate-lockfile", "--offline"]);
