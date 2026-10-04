@@ -274,8 +274,9 @@ function rustExpressionResolutionExpectation(
   }
   const present = isRustOptionCarrier(expected) ? rustOptionElementCarrier(expected) : expected;
   const union = present === undefined ? undefined : walk.sourceTypes.sourceUnionForCarrier(present);
-  if (union !== undefined && kind === KindConditionalExpression) {
-    return selectRustUnionVariantByCheckedType(walk, expression, union)?.carrier ?? expected;
+  if (kind === KindConditionalExpression) {
+    return union === undefined ? expected
+      : selectRustUnionVariantByCheckedType(walk, expression, union)?.carrier ?? expected;
   }
   return union !== undefined && (ast.is.IsArrowFunction(expression) || ast.is.IsFunctionExpression(expression) ||
     ast.is.IsArrayLiteralExpression(expression) || ast.is.IsObjectLiteralExpression(expression))

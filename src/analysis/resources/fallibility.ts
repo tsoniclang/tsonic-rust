@@ -116,6 +116,7 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
   const declarationSet = new Set<Node>();
   const regionsByDeclaration = new Map<Node, Set<Node>>();
   const relatedDeclarations = new Map<Node, Set<Node>>();
+  const projectImplementations = new Map<Node, Set<Node>>();
   const dependenciesByDeclaration = new Map<Node, Set<Node>>();
   const addDeclaration = (declaration: Node): void => {
     if (!declarationSet.has(declaration)) {
@@ -255,6 +256,11 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
         const implementationDeclaration = implementation.implementation.declaration;
         addRegion(implementationDeclaration, ast.body(implementationDeclaration));
         relateDeclarations(member, implementationDeclaration);
+        if (ast.body(member) === undefined) {
+          const implementations = projectImplementations.get(member) ?? new Set<Node>();
+          implementations.add(implementationDeclaration);
+          projectImplementations.set(member, implementations);
+        }
       }
     }
     if (definition.kind === "class") {
@@ -282,9 +288,12 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
     const carrier = rustSourceCallCallableStorageCarrier(operation, walk.context.structuralShapes);
     return rustGenericCallableValue(carrier) === undefined ? undefined : genericCallables.definitionFor(carrier!)?.implementations;
   };
-  const genericInvocationIsFallible = (declaration: Node): boolean =>
-    fallible.has(declaration) && walk.context.facts.get(declaration, rustAsyncFunctionFactKey) === undefined &&
-      walk.context.facts.get(declaration, rustGeneratorFactKey) === undefined;
+  const genericInvocationIsFallible = (declaration: Node): boolean => {
+    const implementations = projectImplementations.get(declaration) ?? [declaration];
+    return [...implementations].some(implementation => fallible.has(implementation) &&
+      walk.context.facts.get(implementation, rustAsyncFunctionFactKey) === undefined &&
+      walk.context.facts.get(implementation, rustGeneratorFactKey) === undefined);
+  };
   const genericAwaitIsFallible = (declaration: Node): boolean =>
     walk.context.facts.get(declaration, rustSourceCallableReturnFactKey)?.implementationCompletion === undefined &&
       (walk.context.facts.get(declaration, rustAsyncFunctionFactKey) === undefined || fallible.has(declaration));

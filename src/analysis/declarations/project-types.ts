@@ -282,7 +282,6 @@ export function recordInterfaceFacts(walk: RustFactWalk, declaration: Node): voi
       if (memberKind === "KindMethodSignature") walk.context.facts.set(member, rustSelfModeFactKey, { mode: "ref" }, [
         { message: "rust reference-backed project interface method self mode" },
       ]);
-      recordCallableReturnFact(walk, member);
       const parameters = requireDenseSourceNodes(
         walk,
         ast.parameters(member),
@@ -294,6 +293,7 @@ export function recordInterfaceFacts(walk: RustFactWalk, declaration: Node): voi
       for (const parameter of parameters) {
         recordParameterAbiFacts(walk, parameter);
       }
+      recordCallableReturnFact(walk, member);
     }
   }
 }

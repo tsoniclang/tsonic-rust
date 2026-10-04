@@ -21,7 +21,7 @@ import { rustTargetTypeParameterIdentities } from "../../target-model/types/carr
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
 import { createRustProjectProjectionRequirementCollector } from "./project-projection-requirements.js";
 import type { RustValueLifetimePlan } from "../program/value-lifetimes.js";
-import { KindBinaryExpression, KindExpressionStatement, Node_Expression } from "@tsonic/target-api/source";
+import { ElementAccessExpression_ArgumentExpression, KindBinaryExpression, KindExpressionStatement, Node_Expression } from "@tsonic/target-api/source";
 import { rustValueCarrierBeforeOptionProjection } from "../facts/value-carrier-queries.js";
 import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
@@ -510,7 +510,10 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       for (const argument of providerOperation.abi.sourceArguments) {
         if (argument.disposition !== "runtime" || argument.mode !== "value" ||
           argument.form !== "value") continue;
-        const expression = ast.arguments(node)[argument.sourceIndex];
+        const expression = ast.is.IsCallExpression(node) || ast.is.IsNewExpression(node)
+          ? ast.arguments(node)[argument.sourceIndex]
+          : ast.is.IsElementAccessExpression(node) && argument.role === "index" && argument.sourceIndex === 0
+            ? ElementAccessExpression_ArgumentExpression(ast, node) : undefined;
         if (expression === undefined || !ast.is.IsIdentifier(expression) ||
           input.valueLifetimes.canMove(expression)) continue;
         const carrier = facts.getRuntimeCarrierFact(expression)?.carrier;

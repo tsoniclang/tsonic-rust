@@ -7,9 +7,8 @@ import {
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import {
   rustAsyncFunctionFactKey,
-  rustFallibleFactKey,
   rustGeneratorFactKey,
-  rustSourceCallableReturnFactKey,
+  rustSourceCallEffectsFactKey,
 } from "../../../../analysis/facts/keys.js";
 import { rustProjectObjectLayout } from "../../../../analysis/project-types/object-layout.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
@@ -39,6 +38,7 @@ import { rustReturnTypeFromCarrierInContext, rustTypeFromCarrierInContext } from
 import { planRustCallableParameters } from "../../declarations/callables/parameters.js";
 import { createRustSyntheticNameState } from "../../names/synthetic.js";
 import { rustDeclarationRequiresUnsafe } from "../../safety/explicit-safety.js";
+import { rustCallableInvocationResult } from "../../../../analysis/facts/callable-results.js";
 import { rustProjectStateType as rustProjectNamedStateType } from "./names.js";
 
 export interface ProjectFieldPlan {
@@ -328,14 +328,15 @@ export function projectCallableShape(
       methodTypeArgumentSubstitutions.size === methodTypeParameters.length &&
       methodTypeParameterNames.every((name) =>
         name !== undefined && name.length > 0 && methodTypeArgumentSubstitutions.has(name));
+  const asynchronous = context.input.program.facts.getFact(member, rustAsyncFunctionFactKey);
   if (!methodSpecializationValid ||
     context.input.program.facts.getFact(member, rustGeneratorFactKey) !== undefined ||
-    context.input.program.facts.getFact(member, rustAsyncFunctionFactKey) !== undefined ||
-    context.input.program.source.ast.hasModifierKind(member, "async")) {
+    asynchronous?.kind === "native-future" ||
+    context.input.program.source.ast.hasModifierKind(member, "async") && asynchronous?.kind !== "js-promise") {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, member),
       "rust.backend.project-dispatch-object-safety",
-      "Polymorphic project methods must have an object-safe non-generic synchronous Rust ABI.",
+      "Polymorphic project methods require an exact object-safe native invocation ABI.",
     ));
     return undefined;
   }
@@ -348,11 +349,12 @@ export function projectCallableShape(
     : { ...context, typeParameterSubstitutions: substitutions };
   const syntheticNames = createRustSyntheticNameState(selectedContext.input.program.source.ast, member, []);
   const parameterPlan = planRustCallableParameters(member, selectedContext, syntheticNames);
-  const returnCarrier = selectedContext.input.program.facts.getFact(member, rustSourceCallableReturnFactKey)?.returnCarrier;
-  if (parameterPlan === undefined || returnCarrier === undefined) {
+  const returnCarrier = rustCallableInvocationResult(selectedContext.input.program.facts, member);
+  const effects = selectedContext.input.program.facts.getFact(member, rustSourceCallEffectsFactKey);
+  if (parameterPlan === undefined || returnCarrier === undefined || effects === undefined) {
     return undefined;
   }
-  const fallible = context.input.program.facts.getFact(member, rustFallibleFactKey) !== undefined;
+  const fallible = effects.invocation === "fallible";
   const errorBoundary = fallible
     ? rustErrorBoundaryForProjectMember(member, selectedContext)
     : undefined;

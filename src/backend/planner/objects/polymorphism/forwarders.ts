@@ -313,7 +313,7 @@ export function planRootMethodForwarder(
   if (contractShape === undefined) {
     return undefined;
   }
-  if (rustTypeEquals(helper.errorType, contractShape.errorType)) {
+  if (helper.errorType === undefined || rustTypeEquals(helper.errorType, contractShape.errorType)) {
     return planRootCallableForwarder(
         concreteCarrier,
         contractMember,

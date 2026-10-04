@@ -40,7 +40,7 @@ export function planRootCallableForwarder(
       helper.params, helper.returnType, helper.errorType, context) ||
     !matchesAbi(adapter.parameterAdapters.map(parameter => parameter.target), adapter.implementationReturnCarrier,
       helper.params, helper.returnType, helper.errorType, context) ||
-    !rustTypeEquals(helper.errorType, shape.errorType) ||
+    helper.errorType !== undefined && !rustTypeEquals(helper.errorType, shape.errorType) ||
     (helper.isUnsafe === true) !== shape.isUnsafe) {
     return reject();
   }
@@ -64,16 +64,16 @@ export function planRootCallableForwarder(
   const result = adaptResult({
     kind: "associated-call", owner: rootType, method: helper.name,
     args: [{ kind: "path", path: "self" }, ...arguments_.adaptedArguments],
-  });
+  }, helper.errorType);
   if (result === undefined) return reject();
   const statements: RustStmt[] = [...arguments_.statements];
   if (overrideStoragePath !== undefined) {
-    if (helper.errorType === undefined) return reject();
+    if (shape.errorType === undefined) return reject();
     const overrideName = allocateRustSyntheticName(syntheticNames, "method_override");
     const overrideResult = adaptResult({
       kind: "method-call", receiver: { kind: "path", path: overrideName }, method: "call",
       args: [{ kind: "tuple-literal", elements: arguments_.adaptedArguments }],
-    });
+    }, shape.errorType);
     if (overrideResult === undefined) return reject();
     statements.push({ kind: "expr", expr: { kind: "if-let", pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: overrideName }] }, expression: readRustProjectMethodOverride({ kind: "path", path: "self" }, overrideStoragePath, representation), whenTrue: { kind: "block", body: { statements: [{ kind: "return", expr: overrideResult }] } } } });
   }
@@ -87,10 +87,10 @@ export function planRootCallableForwarder(
     body: { statements },
   };
 
-  function adaptResult(invocation: RustExpr): RustExpr | undefined {
+  function adaptResult(invocation: RustExpr, invocationErrorType: RustType | undefined): RustExpr | undefined {
     const call: RustExpr = helper.isUnsafe === true ? { kind: "unsafe", expression: invocation } : invocation;
-    const value: RustExpr = helper.errorType === undefined ? call : {
-      kind: "try", expr: call, operandErrorType: helper.errorType, resultErrorType: shape.errorType!,
+    const value: RustExpr = invocationErrorType === undefined ? call : {
+      kind: "try", expr: call, operandErrorType: invocationErrorType, resultErrorType: shape.errorType!,
     };
     const converted = applyRustCallableValueAdapter(value, adapter!.resultAdapter, contract, selectedContext);
     return converted === undefined || shape.errorType === undefined ? converted
