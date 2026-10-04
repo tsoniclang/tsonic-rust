@@ -4,11 +4,13 @@ import type { RustErrorTransportPlan } from "./error-transport.js";
 
 export function planRustErrorProjectionTransport(plan: RustErrorTransportPlan): readonly RustItem[] {
   const types = [plan.fullTransportType, plan.sourceErrorType, plan.writableSourceErrorType];
+  const projections = plan.variants.filter(item => item.source !== "thrown");
+  const unit: RustExpr = { kind: "tuple-literal", elements: [] };
   return types.filter((type, index) => !types.slice(0, index).some(previous => rustTypeEquals(type, previous)))
     .map(type => ({ kind: "impl", generics: emptyRustGenerics, target: type,
-      members: [false, true].map(owned => projectionFunction(owned, { kind: "match", expression: { kind: "path", path: "self" },
+      members: [false, true].map(owned => projectionFunction(owned, projections.length === 0 ? unit : { kind: "match", expression: { kind: "path", path: "self" },
           arms: [
-            ...plan.variants.filter(item => item.source !== "thrown").map(item => {
+            ...projections.map(item => {
               const error: RustExpr = { kind: "path", path: "error" };
               const dispatch: RustExpr = { kind: "field", receiver: error, name: "dispatch" };
               const receiver = item.source === "external" ? error : owned ? dispatch
@@ -20,7 +22,7 @@ export function planRustErrorProjectionTransport(plan: RustErrorTransportPlan): 
                 args: [{ kind: "path" as const, path: "output" }],
               } };
             }),
-            { pattern: { kind: "wildcard" }, expression: { kind: "tuple-literal", elements: [] } },
+            { pattern: { kind: "wildcard" }, expression: unit },
           ] })),
     }));
 }

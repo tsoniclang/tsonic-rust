@@ -67,6 +67,7 @@ import { selectRustConditionalNumericCarrier } from "../conditional-numeric-carr
 import { resolveRustProviderIndexedAccess } from "./indexed-access.js";
 import { resolveRustSourceDeclarationArguments } from "./generic-arguments.js";
 import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
+import { rustSourceErrorComponentContext } from "./error-storage-projection.js";
 
 export function resolveRustTargetTypeRef(
   subject: ExtensionFactSubject | undefined,
@@ -77,7 +78,7 @@ export function resolveRustTargetTypeRef(
     return undefined;
   }
   const subjectNode = asNode(subject, context);
-  if (subjectNode !== undefined) context = { ...context, sourceErrorSubject: subjectNode };
+  if (subjectNode !== undefined && context.sourceErrorProjection === undefined) context = { ...context, sourceErrorSubject: subjectNode };
   const subjectFile = subjectNode === undefined ? undefined : context.ast.getSourceFile(subjectNode);
   if (subjectFile !== undefined && context.source.semantics.includes(subjectFile) &&
     subjectFile !== context.currentSemantics.sourceFile) {
@@ -375,7 +376,7 @@ export function resolveRustTargetTypeSyntax(
     const elementNode = ArrayTypeNode_ElementType(ast, node);
     const element = elementNode === undefined
       ? undefined
-      : resolveRustAuthoredTargetType(elementNode, context, options, resolving);
+      : resolveRustAuthoredTargetType(elementNode, rustSourceErrorComponentContext(context, { kind: "array-element" }), options, resolving);
     return element === undefined
       ? undefined
       : options.jsEnabled
@@ -393,7 +394,8 @@ export function resolveRustTargetTypeSyntax(
     if (elementNodes === undefined) {
       return undefined;
     }
-    const elements = elementNodes.map((element) => resolveRustAuthoredTargetType(element, context, options, resolving));
+    const elements = elementNodes.map((element, index) => resolveRustAuthoredTargetType(element,
+      rustSourceErrorComponentContext(context, { kind: "tuple-element", index }), options, resolving));
     return elements.length > 0 && elements.every((element) => element !== undefined)
       ? rustTupleTargetType(elements as TargetTypeRef[])
       : undefined;
@@ -480,7 +482,9 @@ export function resolveRustTargetTypeSyntax(
       );
   const typeArguments = sourceGenericArguments === undefined
     ? typeArgumentNodes.map((argument) =>
-        resolveRustAuthoredTargetType(argument, context, options, resolving))
+        resolveRustAuthoredTargetType(argument, selectedType !== undefined &&
+          semantics.types.isArrayLike(selectedType) && !semantics.types.isTuple(selectedType)
+            ? rustSourceErrorComponentContext(context, { kind: "array-element" }) : context, options, resolving))
     : sourceGenericArguments.values.flatMap((argument) =>
         argument.kind === "type" ? [argument.type] : []);
   if (typeArguments === undefined || typeArguments.some((argument) => argument === undefined)) {
@@ -521,7 +525,7 @@ export function resolveRustTargetTypeSyntax(
     : resolveOwnedSourceProfileTypeNameForDeclaration(referencedDeclaration, context, options.sourceProfiles);
   if (sourceProfileName !== undefined) {
     return resolveSourceProfileCarrierFromArguments(sourceProfileName, typeArguments as TargetTypeRef[], options,
-      context.sourceErrorSubject ?? node);
+      context.sourceErrorSubject ?? node, context.sourceErrorProjection);
   }
   const sourceType = resolveProjectSourceCarrier(
     selectedTypeSymbol,

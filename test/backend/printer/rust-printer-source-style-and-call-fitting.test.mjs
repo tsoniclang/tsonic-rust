@@ -38,6 +38,31 @@ test("terminal parameter stores retain exact source order without weakening late
   assert.deepEqual(finalizeRustSourceStyle(model), model);
 });
 
+test("native parameter mutability follows the existing sealed AST write owner across functions and defaults", () => {
+  const path = { kind: "path", path: "value" };
+  const type = { kind: "primitive", name: "i32" };
+  const bodies = [
+    { expected: false, body: [{ kind: "tail", expr: path }] },
+    { expected: false, body: [{ kind: "expr", expr: { kind: "call", path: "observe", args: [{ kind: "reference", expr: path }] } }] },
+    { expected: true, body: [{ kind: "assign", target: path, operator: "=", value: { kind: "int-literal", value: 1 } }] },
+    { expected: true, body: [{ kind: "expr", expr: { kind: "call", path: "change", args: [{ kind: "reference", mutable: true, expr: path }] } }] },
+    { expected: true, body: [{ kind: "expr", expr: { kind: "method-call", receiver: path, method: "unknown", args: [] } }] },
+    { expected: false, body: [{ kind: "expr", expr: { kind: "method-call", receiver: path, receiverMode: "ref", method: "observe", args: [] } }] },
+  ];
+  for (const { body, expected } of bodies) {
+    const fn = { kind: "function", name: "run", visibility: "crate", generics: emptyRustGenerics,
+      params: [{ name: "value", mutable: true, type }], body: { statements: body } };
+    const model = finalizeRustSourceStyle({ headerComment, items: [fn,
+      { kind: "impl", target: { kind: "named", path: "Owner" }, generics: emptyRustGenerics, members: [fn] },
+      { kind: "trait", name: "Contract", visibility: "crate", generics: emptyRustGenerics, members: [fn] }] });
+    for (const item of model.items) {
+      const selected = item.kind === "function" ? item : item.members[0];
+      assert.equal(selected.params[0].mutable, expected, "exact native binding write requirement");
+    }
+    assert.deepEqual(finalizeRustSourceStyle(model), model);
+  }
+});
+
 test("native unit block and conditional tails print as implicit unit", () => {
   const unit = { kind: "tuple-literal", elements: [] };
   const text = printFinalRustSourceFile({ headerComment, items: [{ kind: "function", name: "run", visibility: "crate",

@@ -10,7 +10,7 @@ import type {
   RustType,
 } from "../nodes.js";
 import { finalizeRustBlockLiveness } from "../inspection/source-liveness.js";
-import { firstAccessesInStatements, hasUnobservedFinalPathWrite } from "../inspection/source-dataflow.js";
+import { firstAccessesInStatements, hasUnobservedFinalPathWrite, maxWritesInStatements } from "../inspection/source-dataflow.js";
 import { rustLintAttributes } from "./lint-policy.js";
 import { rustBlockReferencesPath, rustExpressionReferencesPath, rustExpressionChildren, rustStatementExpressions } from "../inspection/source-usage.js";
 import { collapseRustForwardingClosure } from "./forwarding-closures.js";
@@ -53,6 +53,7 @@ function finalizeRustItemStyle(
   item = finalizeRustItemNames(item);
   if (item.kind === "mod-decl" && item.body !== undefined) return { ...item, body: finalizeRustSourceStyle(item.body) };
   if (item.kind === "function") {
+    item = finalizeRustParameterMutability(item);
     let attrs = item.params.length <= 7
       ? item.attrs
       : appendRustAttribute(item.attrs, rustLintAttributes.tooManyArguments);
@@ -92,6 +93,7 @@ function finalizeRustTraitFunctionStyle(fn: RustTraitFunction): RustTraitFunctio
     : appendRustAttribute(fn.attrs, rustLintAttributes.tooManyArguments);
   const styler = createRustBodyStyler();
   const body = fn.body === undefined ? undefined : styler.block(fn.body);
+  if (body !== undefined) fn = finalizeRustParameterMutability({ ...fn, body });
   if (styler.requiresNamingAllowance()) attrs = appendRustNamingAllowance(attrs, "snake");
   if (body !== undefined && hasUnusedParameter({ ...fn, body })) {
     attrs = appendRustAttribute(attrs, rustLintAttributes.unusedVariables);
@@ -112,6 +114,7 @@ function finalizeRustImplFunctionStyle(
   publicOwner: boolean,
 ): RustImplFunction {
   fn = finalizeRustFunctionNames(fn, inherent);
+  fn = finalizeRustParameterMutability(fn);
   let attrs = fn.attrs;
   if (hasUnusedParameter(fn)) attrs = appendRustAttribute(attrs, rustLintAttributes.unusedVariables);
   if (hasOverwrittenParameter(fn)) attrs = appendRustAttribute(attrs, rustLintAttributes.unusedAssignments);
@@ -129,6 +132,12 @@ function finalizeRustImplFunctionStyle(
     attrs = appendRustAttribute(attrs, rustLintAttributes.shouldImplementTrait);
   }
   return { ...fn, attrs };
+}
+
+function finalizeRustParameterMutability<Function extends Pick<RustImplFunction, "params" | "body">>(fn: Function): Function {
+  return { ...fn, params: fn.params.map(parameter => parameter.mutable &&
+    maxWritesInStatements(fn.body.statements, parameter.name) === 0
+      ? { ...parameter, mutable: false } : parameter) };
 }
 
 function hasErasedGenericParameter(fn: RustImplFunction): boolean {

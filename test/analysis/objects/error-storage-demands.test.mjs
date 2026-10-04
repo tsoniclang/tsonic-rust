@@ -181,12 +181,13 @@ export function run(): string {
     assert.equal(demand.storageFor(demand.nativeConstructors[0]).kind, "writable");
   });
 
-  test(`unmodeled indexed Error writes are unresolved rather than false writable-origin proof in ${profile}`, () => {
+  test(`indexed Error writes retain exact component demand without inventing a native origin in ${profile}`, () => {
     const { source, demand } = analyzed({ "index.ts": `
       export function run(values: Error[]): void { values[0].message = "changed"; }` }, jsEnabled);
     assert.equal(demand.fieldWrites.length, 1);
     const receiver = source.ast.as.AsPropertyAccessExpression(demand.fieldWrites[0]).Expression;
-    assert.equal(demand.storageFor(receiver).kind, "unresolved");
+    assert.equal(demand.storageFor(receiver).kind, "writable");
+    assert.equal(demand.receivesWritableNative(receiver), false, "an unbound parameter is not a native physical constructor");
   });
 
   test(`unmodeled destructured Error writes are unresolved rather than guessed origin proof in ${profile}`, () => {

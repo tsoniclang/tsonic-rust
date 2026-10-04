@@ -68,6 +68,8 @@ import { jsRegExpSourceProfileIdentity } from "@tsonic/js-source-profile";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
 import type { RustSourcePolicyContext } from "../../model/context.js";
+import type { SourceErrorStorageProjection } from "@tsonic/target-api/analysis";
+import { rustSourceErrorComponentContext } from "./error-storage-projection.js";
 
 const regExpIdentity = jsRegExpSourceProfileIdentity;
 const regExpResultCarrierByOwner = new Map<string, () => TargetTypeRef>([
@@ -362,7 +364,9 @@ export function resolveSourceProfileCarrier(
   if (arguments_ === undefined) {
     return undefined;
   }
-  const targetArguments = arguments_.map((argument) => resolveRustTargetType(argument, context, options, resolving));
+  const argumentContext = name === "Array" || name === "ReadonlyArray"
+    ? rustSourceErrorComponentContext(context, { kind: "array-element" }) : context;
+  const targetArguments = arguments_.map((argument) => resolveRustTargetType(argument, argumentContext, options, resolving));
   if (options.jsEnabled && name === regExpIdentity.owners.regExpStringIterator) {
     const [element] = targetArguments;
     return targetArguments.length === 1 && element !== undefined &&
@@ -378,7 +382,8 @@ export function resolveSourceProfileCarrier(
       : undefined;
   }
   const direct = targetArguments.every((argument) => argument !== undefined)
-    ? resolveSourceProfileCarrierFromArguments(name, targetArguments as TargetTypeRef[], options, context.sourceErrorSubject)
+    ? resolveSourceProfileCarrierFromArguments(name, targetArguments as TargetTypeRef[], options,
+      context.sourceErrorSubject, context.sourceErrorProjection)
     : undefined;
   if (direct !== undefined && name !== "Array" && name !== "ReadonlyArray") {
     return direct;
@@ -410,7 +415,7 @@ export function resolveSourceProfileCarrier(
   }
   if (name === "Array" || name === "ReadonlyArray") {
     const elementType = arguments_[0];
-    const element = resolveRustTargetType(elementType, context, options, resolving);
+    const element = resolveRustTargetType(elementType, argumentContext, options, resolving);
     return element === undefined
       ? undefined
       : options.jsEnabled
@@ -442,6 +447,7 @@ export function resolveSourceProfileCarrierFromArguments(
   arguments_: readonly TargetTypeRef[],
   options: RustTargetTypeResolutionOptions,
   subject: Node | undefined,
+  projection?: readonly SourceErrorStorageProjection[],
 ): TargetTypeRef | undefined {
   if (options.jsEnabled && name === "ArrayEntriesIterator" && arguments_.length === 1) {
     return rustJsArrayEntriesTargetType(arguments_[0]!);
@@ -451,7 +457,7 @@ export function resolveSourceProfileCarrierFromArguments(
   }
   if (arguments_.length === 0 && rustSourceErrorConstructors.some((entry) =>
     entry.sourceName === name && (name === "Error" || options.jsEnabled))) {
-    return options.sourceErrorCarrier(subject);
+    return options.sourceErrorCarrier(subject, projection);
   }
   if (name === "Promise" || name === "PromiseLike") {
     const [output] = arguments_;

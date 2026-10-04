@@ -98,10 +98,10 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     jsEnabled,
     sourceProfiles,
     sourceTypes,
-    sourceErrorCarrier(subject) {
-      const demand = subject === undefined ? undefined : context.errorStorageDemands.storageFor(subject);
+    sourceErrorCarrier(subject, projection) {
+      const demand = subject === undefined ? undefined : context.errorStorageDemands.storageFor(subject, projection);
       return demand?.kind === "unresolved" ? undefined : demand?.kind === "writable"
-        ? rustWritableSourceErrorTargetType() : subject !== undefined && context.errorStorageDemands.receivesWritableNative(subject)
+        ? rustWritableSourceErrorTargetType() : subject !== undefined && context.errorStorageDemands.receivesWritableNative(subject, projection)
           ? rustSourceErrorTargetType() : context.errorStorageDemands.retainedBoundaries.length !== 0
             ? rustSourceErrorTargetType() : context.projectTypes.sourceErrorCarrier();
     },
