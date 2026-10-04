@@ -50,7 +50,17 @@ export function resolveProjectSourceCarrier(
       context.ast.is.IsClassDeclaration(declaration) || context.ast.is.IsClassExpression(declaration) || context.ast.is.IsInterfaceDeclaration(declaration))) {
     const apparent = context.currentSemantics.types.apparentType(selectedType);
     if (apparent !== undefined && apparent !== selectedType && context.currentSemantics.declarations.typeSymbol(apparent) === symbol) {
-      return resolveRustTargetType(apparent, context, options, resolving);
+      const sourceArguments = context.currentSemantics.types.effectiveTypeArguments(apparent);
+      if (sourceArguments === undefined) return undefined;
+      const arguments_ = sourceArguments.map(argument =>
+        resolveRustTargetType(argument, context, options, resolving));
+      if (arguments_.some(argument => argument === undefined)) return undefined;
+      return resolveProjectSourceCarrier(
+        symbol,
+        { values: Object.freeze((arguments_ as readonly TargetTypeRef[]).map(type =>
+          Object.freeze({ kind: "type" as const, type }))) },
+        context, options, selectedDeclaration, apparent, resolving, true,
+      );
     }
   }
   const declarations = selectedDeclaration === undefined
@@ -92,7 +102,7 @@ export function resolveProjectSourceCarrier(
         return rustClassConstructorTargetType(instance, bound);
       }
     }
-    if (context.ast.kindName(declaration) === "KindInterfaceDeclaration" && selectedType !== undefined &&
+    if (!referenceOnly && context.ast.kindName(declaration) === "KindInterfaceDeclaration" && selectedType !== undefined &&
       rustSourceTypeCarrierValue(carrier) !== undefined &&
       (context.currentSemantics.types.constructSignatures(selectedType).length !== 0 ||
         context.currentSemantics.types.propertyInfos(selectedType).some(property => property.optional &&

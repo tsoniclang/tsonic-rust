@@ -61,6 +61,7 @@ import { recordTargetOperation, setCarrierFact, setRustOperationFact } from "../
 import { resolveArrayLiteralCarrier } from "../operations/inputs.js";
 import { resolveCallLikeCarrier, resolveIdentifierCarrier } from "./references.js";
 import { resolveExpressionCarrier } from "./carriers.js";
+import { createRustCarrierProbe } from "./carrier-probe.js";
 import { resolveFunctionExpressionCarrier } from "../callables/closures.js";
 import { resolveRecordLiteralCarrier } from "./records.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
@@ -413,8 +414,9 @@ export function resolveExpressionCarrierUncached(
         walk.operationOptions,
       );
       if (expected === undefined && !isRustNumericCarrier(rustOptionElementCarrier(semanticCarrier) ?? semanticCarrier)) {
-        const left = resolveExpressionCarrier(walk, whenTrue, sourceFile, undefined);
-        const right = resolveExpressionCarrier(walk, whenFalse, sourceFile, undefined);
+        const probe = createRustCarrierProbe(walk);
+        const left = resolveExpressionCarrier(probe, whenTrue, sourceFile, undefined);
+        const right = resolveExpressionCarrier(probe, whenFalse, sourceFile, undefined);
         if (left !== undefined && right !== undefined) {
           semanticCarrier = resolveRustBranchUnion(expression, [
             { expression: whenTrue, carrier: left }, { expression: whenFalse, carrier: right },
@@ -422,10 +424,11 @@ export function resolveExpressionCarrierUncached(
         }
       }
       if (expected === undefined && isRustNumericCarrier(rustOptionElementCarrier(semanticCarrier) ?? semanticCarrier)) {
+        const probe = createRustCarrierProbe(walk);
         const left = sourceIntegerLiteralValue(walk.context.ast, whenTrue) === undefined
-          ? resolveExpressionCarrier(walk, whenTrue, sourceFile, undefined) : undefined;
+          ? resolveExpressionCarrier(probe, whenTrue, sourceFile, undefined) : undefined;
         const right = sourceIntegerLiteralValue(walk.context.ast, whenFalse) === undefined
-          ? resolveExpressionCarrier(walk, whenFalse, sourceFile, undefined) : undefined;
+          ? resolveExpressionCarrier(probe, whenFalse, sourceFile, undefined) : undefined;
         semanticCarrier = selectRustConditionalNumericCarrier(whenTrue, whenFalse, left, right, walk.context.ast) ?? semanticCarrier;
       }
       const trueCarrier = resolveExpressionCarrier(walk, whenTrue, sourceFile, semanticCarrier);

@@ -15,6 +15,7 @@ import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
 import { checkedPropertySelectionInput, selectRustCheckedPropertyAccess } from "../operations/provider/properties.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { selectRustConditionalNumericCarrier } from "../../policy/types/conditional-numeric-carrier.js";
+import { resolveRustBranchUnion } from "../../policy/types/resolution/branch-unions.js";
 
 export function selectRustInferredReturn(
   walk: RustFactWalk,
@@ -83,6 +84,10 @@ export function selectRustInferredReturn(
           const left = expressionCarrier(conditional.WhenTrue);
           const right = expressionCarrier(conditional.WhenFalse);
           return selectRustConditionalNumericCarrier(conditional.WhenTrue, conditional.WhenFalse, left, right, ast) ??
+            (left === undefined || right === undefined ? undefined : resolveRustBranchUnion(expression, [
+              { expression: conditional.WhenTrue, carrier: left },
+              { expression: conditional.WhenFalse, carrier: right },
+            ], context, walk.operationOptions)) ??
             resolveRustTargetTypeRef(expression, context, walk.operationOptions);
         }
         if (kind === "KindCallExpression") {

@@ -10,7 +10,7 @@ test("branch unions consume exact checker-owned variant indexes without comparin
   const type = {};
   const carrier = rustSourceUnionTargetType("/foreign.ts", "Value");
   const string = rustStringTargetType();
-  const context = { currentSemantics: { types: {
+  const context = { ast: { is: { IsArrayLiteralExpression: () => false } }, currentSemantics: { types: {
     expressionType: node => node === expression ? type : foreignType,
     isUnion: () => false, isNullish: () => false, isVoidLike: () => false,
     isIdenticalTo: () => { throw new Error("foreign checker comparison"); },

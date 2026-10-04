@@ -5,6 +5,8 @@ import { rustSourceOptionalElementCarrier } from "../../../target-model/types/ca
 import { resolveRustInferredUnion } from "./inferred-unions.js";
 import { resolveRustSourceUnionCarrier, resolveRustUnionValueCarrier } from "./source-unions.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
+import { resolveRustContextualLiteralCarrier } from "./contextual-literals.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 
 export function resolveRustBranchUnion(
   expression: Node,
@@ -19,6 +21,14 @@ export function resolveRustBranchUnion(
   const carriers: TargetTypeRef[] = [];
   let absent = false;
   for (const branch of branches) {
+    let contextual: TargetTypeRef | undefined;
+    for (const sibling of branches) {
+      if (sibling === branch) continue;
+      const selected = resolveRustContextualLiteralCarrier(context, branch.expression, sibling.carrier);
+      if (selected === undefined) continue;
+      if (contextual !== undefined && !rustTargetTypeRefEquals(contextual, selected)) return undefined;
+      contextual = selected;
+    }
     if (isRustNeverCarrier(branch.carrier)) continue;
     if (isRustAbsenceCarrier(branch.carrier) || isRustUnitCarrier(branch.carrier)) {
       absent = true;
@@ -26,7 +36,7 @@ export function resolveRustBranchUnion(
     }
     const optional = rustSourceOptionalElementCarrier(branch.carrier);
     absent ||= optional !== undefined;
-    const carrier = optional ?? branch.carrier;
+    const carrier = contextual ?? optional ?? branch.carrier;
     const type = semantics.types.expressionType(branch.expression);
     if (type === undefined) return undefined;
     const types = (semantics.types.isUnion(type) ? semantics.types.unionOrIntersectionTypes(type) : [type])
