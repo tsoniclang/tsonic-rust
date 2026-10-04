@@ -264,9 +264,6 @@ export function resolveRustContextualParameterAbi(
   if (selectedValueCarrier === undefined) {
     return undefined;
   }
-  const authoredExpectation = form === "optional"
-    ? rustOptionElementCarrier(selectedParameterCarrier)
-    : selectedValueCarrier;
   const carriersEqual = lifetimeBinders === undefined
     ? rustTargetTypeRefEquals
     : (left: TargetTypeRef | undefined, right: TargetTypeRef | undefined): boolean =>
@@ -277,8 +274,11 @@ export function resolveRustContextualParameterAbi(
           lifetimeBinders.selected,
         );
   if (authoredType !== undefined && !authoredTypeAcceptsContextualCarrier &&
-    (authoredCarrier === undefined || authoredExpectation === undefined ||
-      !carriersEqual(authoredCarrier, authoredExpectation))) {
+    (authoredCarrier === undefined ||
+      !carriersEqual(
+        form === "optional" ? rustSourceOptionalTargetType(authoredCarrier) : authoredCarrier,
+        selectedValueCarrier,
+      ))) {
     if (form === "required" && authoredCarrier?.kind === "source-primitive" &&
       selectedParameterCarrier.kind === "source-primitive") {
       const conversion = selectRustSourceValueConversion(selectedParameterCarrier, authoredCarrier, context.typeDefinitions);
