@@ -64,7 +64,7 @@ export function run(): string {
     assert.equal(demand.receivesWritableNative(selected), true);
     const origins = demand.storageOriginsFor(selected);
     assert.equal(origins.kind === "resolved", true);
-    assert.equal(origins.kind === "resolved" && origins.origins.includes(demand.nativeConstructors[0]), true);
+    assert.equal(origins.kind === "resolved" && origins.origins.some(origin => origin.node === demand.nativeConstructors[0]), true);
   });
   test(`implicit interface Error properties retain exact writable origins in ${profile}`, () => {
     const { source, projectFiles, demand } = analyzed({ "index.ts": implicitErrorInterfaceSource(false) }, jsEnabled);
@@ -78,7 +78,7 @@ export function run(): string {
     assert.equal(demand.receivesWritableNative(selected), true);
     const origins = demand.storageOriginsFor(selected);
     assert.equal(origins.kind === "resolved", true);
-    assert.equal(origins.kind === "resolved" && origins.origins.includes(demand.nativeConstructors[0]), true);
+    assert.equal(origins.kind === "resolved" && origins.origins.some(origin => origin.node === demand.nativeConstructors[0]), true);
   });
   test(`ordinary native Error remains immutable despite mutable project Errors in ${profile}`, () => {
     const { demand } = analyzed(liveErrorStorageFiles, jsEnabled);

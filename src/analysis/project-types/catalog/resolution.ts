@@ -16,7 +16,7 @@ import {
   substituteRustTargetGenerics,
 } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import type { Node, Signature, SourceFile } from "@tsonic/tsts";
+import type { Node, SourceFile } from "@tsonic/tsts";
 import { sourceClassFieldIsTypeOnly, sourceObjectMemberDeclarations, sourceParameterIsProperty } from "@tsonic/target-api/source";
 import type {
   SourceProjectMemberImplementationResult,
@@ -346,7 +346,7 @@ export function createRustProjectTypePolicy(
       continue;
     }
     const usedProgramErrorVariants = usedProgramErrorVariantsByComponent.get(componentId) ??
-      new Set(["Runtime", "SourceCreated", "Retained", "Suppressed"]);
+      new Set(["Runtime", "SourceCreated", "Retained", "ClosedNative", "ClosedJs", "Suppressed"]);
     usedProgramErrorVariantsByComponent.set(componentId, usedProgramErrorVariants);
     const base = rustPascalCaseIdentifier(definition.sourceName);
     let variant = base;
@@ -372,7 +372,6 @@ export function createRustProjectTypePolicy(
     RustProjectTypeDefinition,
     readonly RustProjectConstructorSignature[]
   >();
-  const constructorsBySignature = new WeakMap<Signature, RustProjectConstructorSignature>();
   for (const definition of definitions) {
     if (definition.kind !== "class") {
       constructorsByDefinition.set(definition, Object.freeze([]));
@@ -401,7 +400,6 @@ export function createRustProjectTypePolicy(
         implicit: selected.implicit,
         targetName,
       });
-      constructorsBySignature.set(signature.signature, plan);
       return plan;
     });
     constructorsByDefinition.set(definition, Object.freeze(signatures));
@@ -845,11 +843,7 @@ export function createRustProjectTypePolicy(
       if (signature === undefined) {
         return undefined;
       }
-      const selected = constructorsBySignature.get(signature);
-      return selected !== undefined &&
-          (constructorsByDefinition.get(definition) ?? []).includes(selected)
-        ? selected
-        : undefined;
+      return constructorsByDefinition.get(definition)?.find(candidate => candidate.signature === signature);
     },
     constructorForTargetName(definition, targetName) {
       return (constructorsByDefinition.get(definition) ?? []).find((signature) =>

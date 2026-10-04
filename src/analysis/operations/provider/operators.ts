@@ -39,6 +39,7 @@ import { selectRustExactIntegerConversion } from "../../../target-model/conversi
 import { rustContextualValueConversionFactKey } from "../../facts/value-projections.js";
 import { selectRustProviderOperation } from "../../../policy/operations/provider-selection.js";
 import { selectRustBuiltinErrorTypeTest } from "./builtin-errors.js";
+import { isRustClosedValueCarrier } from "../../../target-model/types/carriers/closed-value-kind.js";
 import { selectRustClosedTypeTest } from "./type-tests.js";
 import { selectRustProjectTypeTestPlan } from "../../../policy/operations/operators/type-tests.js";
 import type {
@@ -114,7 +115,8 @@ function selectRustProjectTypeTest(
     ? undefined
     : options.projectTypes.programErrorVariant(targetDefinition);
   if (sourceCarrier !== undefined && (isRustProgramErrorCarrier(dispatchCarrier) ||
-    (isRustSourceErrorCarrier(dispatchCarrier) || isRustRetainedErrorCarrier(dispatchCarrier)) && targetDefinition !== undefined && options.projectTypes.sourceErrorDefinitions.includes(targetDefinition)) &&
+    (isRustSourceErrorCarrier(dispatchCarrier) || isRustRetainedErrorCarrier(dispatchCarrier) || isRustClosedValueCarrier(dispatchCarrier)) &&
+    targetDefinition !== undefined && options.projectTypes.sourceErrorDefinitions.includes(targetDefinition)) &&
     targetCarrier !== undefined && programErrorVariant !== undefined) {
     const resultCarrier = rustSourcePrimitiveTargetType("bool");
     const fact: RustTargetOperationFact = {

@@ -46,6 +46,8 @@ for (const [name, statements] of [
   ["do-initialization", "do { this.value = 4; } while (false);"],
   ["labeled-cleanup", "outside: while (true) { try { break outside; } finally { this.value = 7; } }"],
   ["catch-after-write", "try { this.value = 3; fail(); } catch { this.read(); }"],
+  ["case-expression-write", "switch (flag) { case (this.value = 7) === 7: break; default: break; }"],
+  ["default-after-case-search", "switch (flag) { default: this.read(); break; case (this.value = 7) === 7: break; }"],
 ]) test(`construction readiness proves exact completion: ${name}`, async () => {
   const result = await readiness(`construction-${name}`, statements);
   assert.equal(result.issues.length, 0, result.issues.map(row => row.reason).join("\n"));
@@ -57,6 +59,8 @@ for (const [name, statements] of [
   ["zero-iteration", "while (false) { this.value = 5; }"],
   ["catch-before-write", "try { fail(); this.value = 3; } catch { this.read(); }"],
   ["early-incomplete-return", "if (flag) return; this.value = 3;"],
+  ["matched-before-case-write", "switch (flag) { case true: break; case (this.value = 7) === 7: break; default: break; }"],
+  ["fallthrough-skips-case-write", "switch (flag) { case true: default: this.read(); break; case (this.value = 7) === 7: break; }"],
 ]) test(`construction readiness rejects missing dominating storage: ${name}`, async () => {
   const result = await readiness(`construction-${name}`, statements);
   assert.equal(result.issues.length !== 0, true, "required storage or receiver readiness must be proven");

@@ -11,6 +11,8 @@ import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
 import { rustSourceCallableReturnFactKey, rustSourceParameterAbiFactKey, rustTypeAliasDeclarationFactKey } from "../facts/keys.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustClosedErrorTransportDemand, type RustClosedErrorTransportDemand } from "../facts/closed-errors.js";
 
 export interface RustSourcePackageComponentSemantics {
   readonly componentId: string;
@@ -19,6 +21,7 @@ export interface RustSourcePackageComponentSemantics {
   readonly publishesImplementationAbi: boolean;
   readonly errorDomain: RustErrorDomain;
   readonly errorOwnerComponentId: string | undefined;
+  readonly closedErrorDemand: RustClosedErrorTransportDemand;
   readonly root: boolean;
 }
 
@@ -193,6 +196,22 @@ export function analyzeRustSourcePackageComponents(
   }
 
   const errorComponents = new Set<string>();
+  const closedErrorsByComponent = new Map<string, { thrownCarriers: TargetTypeRef[]; retained: boolean }>();
+  for (const sourceFile of context.sourceFiles) {
+    const demand = rustClosedErrorTransportDemand(sourceFile, context.ast, context.facts, context.typeDefinitions, context.projectTypes);
+    const componentId = componentIdByFileName.get(normalizePath(context.ast.getFileName(sourceFile)));
+    if (demand === undefined) return rejected("RUST_CLOSED_ERROR_DEMAND_UNRESOLVED",
+      "Closed Error demand exceeds its bounded exact source-tree contract.");
+    if (componentId === undefined) return rejected("RUST_CLOSED_ERROR_SOURCE_PACKAGE_MISSING",
+      "Closed Error demand has no exact source-package component identity.");
+    const previous = closedErrorsByComponent.get(componentId) ?? { thrownCarriers: [], retained: false };
+    previous.retained ||= demand.retained;
+    for (const carrier of demand.thrownCarriers) {
+      if (!previous.thrownCarriers.some(candidate => rustTargetTypeRefEquals(candidate, carrier))) previous.thrownCarriers.push(carrier);
+    }
+    closedErrorsByComponent.set(componentId, previous);
+    if (demand.retained) errorComponents.add(componentId);
+  }
   for (const boundary of context.errorStorageDemands.retainedBoundaries) {
     const file = context.ast.getSourceFile(boundary);
     const componentId = file === undefined ? undefined : componentIdByFileName.get(normalizePath(context.ast.getFileName(file)));
@@ -253,6 +272,8 @@ export function analyzeRustSourcePackageComponents(
           ? "project"
           : "runtime",
         errorOwnerComponentId: errorOwners.get(componentId),
+        closedErrorDemand: Object.freeze({ retained: closedErrorsByComponent.get(componentId)?.retained ?? false,
+          thrownCarriers: Object.freeze(closedErrorsByComponent.get(componentId)?.thrownCarriers ?? []) }),
         root,
       });
     },

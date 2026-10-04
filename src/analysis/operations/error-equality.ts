@@ -6,8 +6,8 @@ import {
   rustSourcePrimitiveTargetType,
 } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { isRustSourceErrorCarrier, isRustRetainedErrorCarrier } from "../../target-model/types/carriers/source-error.js";
 import { rustCarrierProvidesErrorObservation } from "../../target-model/types/carriers/error-protocols.js";
+import { isRustClosedValueCarrier } from "../../target-model/types/carriers/closed-value-kind.js";
 
 export function selectRustProgramErrorEquality(
   walk: RustFactWalk,
@@ -15,8 +15,10 @@ export function selectRustProgramErrorEquality(
   right: TargetTypeRef | undefined,
   negated: boolean,
 ): Extract<RustTargetOperationFact, { readonly kind: "program-error-equality" }> | undefined {
-  const errorOperand = isRustProgramErrorCarrier(left) || isRustSourceErrorCarrier(left) || isRustRetainedErrorCarrier(left) ? "left"
-    : isRustProgramErrorCarrier(right) || isRustSourceErrorCarrier(right) || isRustRetainedErrorCarrier(right) ? "right" : undefined;
+  const errorOperand = isRustProgramErrorCarrier(left) || rustCarrierProvidesErrorObservation(left, walk.context.typeDefinitions) ||
+    isRustClosedValueCarrier(left) && rustCarrierProvidesErrorObservation(right, walk.context.typeDefinitions) ? "left"
+    : isRustProgramErrorCarrier(right) || rustCarrierProvidesErrorObservation(right, walk.context.typeDefinitions) ||
+      isRustClosedValueCarrier(right) && rustCarrierProvidesErrorObservation(left, walk.context.typeDefinitions) ? "right" : undefined;
   const sourceCarrier = errorOperand === "left" ? left : right;
   const targetCarrier = errorOperand === "left" ? right : left;
   if (errorOperand === undefined || sourceCarrier === undefined || targetCarrier === undefined) return undefined;

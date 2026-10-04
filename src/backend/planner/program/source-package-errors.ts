@@ -115,6 +115,8 @@ export function planRustSourcePackageErrors(
       "Runtime",
       "SourceCreated",
       "Retained",
+      "ClosedNative",
+      "ClosedJs",
       "Suppressed",
       ...definitions.map((definition) => input.program.projectTypes.programErrorVariant(definition)!),
     ]);
@@ -167,7 +169,9 @@ export function planRustSourcePackageErrors(
     const validDomain = component.errorDomain === "runtime"
       ? owner === undefined && definitions.length === 0 && externalErrors.length === 0
       : owner !== undefined && (owner === component.componentId
-        ? definitions.length > 0 || externalErrors.length > 1 || input.program.errorStorageDemands.retainedBoundaries.some(boundary =>
+        ? definitions.length > 0 || externalErrors.length > 1 ||
+          input.program.sourcePackageComponents.forComponent(component.componentId)?.closedErrorDemand.retained ||
+          input.program.errorStorageDemands.retainedBoundaries.some(boundary =>
           component.sourceFileNames.has(input.program.source.ast.getFileName(input.program.source.ast.getSourceFile(boundary)!))) ||
           input.program.errorStorageDemands.nativeConstructors.some(constructor =>
           input.program.errorStorageDemands.storageFor(constructor).kind === "writable" &&

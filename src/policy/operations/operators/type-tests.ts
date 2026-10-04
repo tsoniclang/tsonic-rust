@@ -12,6 +12,7 @@ import { rustNamedTypeCarrierValue } from "../../../target-model/types/carriers/
 import { getRustTypeofRuntimeKind } from "../../../target-model/types/runtime-kind.js";
 import { isRustSourceErrorCarrier } from "../../../target-model/types/carriers/source-error.js";
 import { rustCarrierProvidesErrorObservation } from "../../../target-model/types/carriers/error-protocols.js";
+import { isRustClosedValueCarrier } from "../../../target-model/types/carriers/closed-value-kind.js";
 
 export function selectRustProjectTypeTestPlan(
   sourceCarrier: TargetTypeRef,
@@ -77,7 +78,7 @@ export function selectRustClosedTypeTestPlan(
     if (!isRustSourceErrorCarrier(source) && rustCarrierProvidesErrorObservation(source, definitions)) {
       return Object.freeze({ kind: "error", lowering: "native-error" });
     }
-    if (isRustJsValueCarrier(source)) return Object.freeze({ kind: "error", lowering: "closed-value" });
+    if (isRustClosedValueCarrier(source)) return Object.freeze({ kind: "error", lowering: "closed-value" });
     if (isRustProgramErrorCarrier(source) || isRustSourceErrorCarrier(source)) return Object.freeze({ kind: "error", lowering: "program-error" });
     if (rustTargetTypeRefEquals(source, rustTsValueTargetType()) || source.kind === "type-parameter" ||
       source.kind === "associated-type" || source.kind === "trait-object" || source.kind === "reference") return undefined;

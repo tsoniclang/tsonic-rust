@@ -25,6 +25,7 @@ import {
   rustJsSymbolTargetType,
   rustJsValueTargetType,
   rustJsErrorTargetType,
+  rustEmptyObjectTargetType,
   rustOptionElementCarrier,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
@@ -37,6 +38,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustNamedTypeCarrierValue } from "../../target-model/types/carriers/native.js";
 import { rustJsRecordValueAdmission } from "../../target-model/conversions/closed-record.js";
+import { rustClosedValueRetainsError } from "../../target-model/types/carriers/closed-values.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import {
   rustBoolToJsValueConversion,
@@ -169,7 +171,7 @@ export function selectRustSourceValueConversion(
     const leaves = rustUnionLeaves(source, definitions);
     if (leaves !== undefined) return selectUnionFold(source, target, leaves, carrier =>
       selectRustSourceValueConversion(carrier, target, definitions, nextAncestors));
-    return rustTsValueAdmission(source, definitions) !== undefined
+    return rustClosedValueRetainsError(source, definitions) || rustTsValueAdmission(source, definitions) !== undefined
       ? Object.freeze({
           kind: "ts-value-from-closed-carrier" as const,
           source,
@@ -201,7 +203,8 @@ export function selectRustSourceValueConversion(
     if (rustTargetTypeRefEquals(source, symbolCarrier)) {
       return rustSymbolToJsValueConversion;
     }
-    if (rustJsRecordValueAdmission(source) || rustTsValueAdmission(source, definitions)?.kind === "project-object" ||
+    if (rustClosedValueRetainsError(source, definitions) || rustTargetTypeRefEquals(source, rustEmptyObjectTargetType()) ||
+      rustJsRecordValueAdmission(source) || rustTsValueAdmission(source, definitions)?.kind === "project-object" ||
       rustCarrierSupportsClone(source, definitions) &&
       rustCarrierSupportsTrait(source, rustJsClosedValueCarrierTraitPath, undefined, undefined, definitions)) {
       return Object.freeze({

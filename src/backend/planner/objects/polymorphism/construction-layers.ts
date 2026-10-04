@@ -25,12 +25,7 @@ export function planRustConstructionLayers(
     const layer = plan.layers[index];
     const storage = layers[index];
     if (layer === undefined || storage?.definition !== layer.definition) return undefined;
-    const fileName = context.input.program.source.ast.getFileName(layer.definition.sourceFile);
-    const moduleName = context.moduleNameByFileName.get(fileName);
-    const componentId = context.sourcePackageErrors.componentIdByFileName.get(fileName);
-    if (moduleName === undefined || componentId === undefined) return undefined;
     const selectedContext: RustPlanContext = { ...context, sourceFile: layer.definition.sourceFile,
-      moduleName, sourcePackageComponentId: componentId,
       typeParameterSubstitutions: new Map([...context.typeParameterSubstitutions ?? [],
         ...projectTypeSubstitutions(layer.definition, storage.carrier)]),
       lifetimeSubstitutions: new Map([...context.lifetimeSubstitutions ?? [],

@@ -75,6 +75,27 @@ test("resource cleanup retains suppression, loop targets and ordered continue pr
   assert.match(text, /rt::Completion::Continue\(3\)[\s\S]*increment\(\);[\s\S]*continue 'outer/u);
 });
 
+test("completion operands exit only after their fallible native value is evaluated", () => {
+  const value = { kind: "try", expr: { kind: "call", path: "construct", args: [] },
+    resultErrorType: error, operandErrorType: error };
+  for (const terminal of [{ kind: "throw", error: value }, { ...completion, expr: value }]) {
+    const lowered = lowerRustCompletionScope(region({ body: { statements: [terminal] } }));
+    const capture = lowered.body.statements[0].init;
+    const exit = capture.body.statements[0].expr;
+    assert.equal(exit.kind, "block");
+    assert.equal(exit.body.statements[0].kind, "let");
+    assert.equal(exit.body.statements[0].name, "body_flow");
+    assert.equal(exit.body.statements[1].expr.kind, "break-expression");
+    assert.equal(exit.body.statements[1].expr.expr.kind, "path");
+    const normalized = styled(region({ body: { statements: [terminal] } }));
+    assert.equal(JSON.stringify(finalizeRustSourceStyle(normalized)) === JSON.stringify(normalized), true);
+    const text = printRustBlockStatements(normalized.items[0].body, 0);
+    assert.match(text, /let body_flow = [\s\S]*match construct\(\)/u);
+    assert.match(text, /break 'body_flow body_flow/u);
+    assert.doesNotMatch(text, /completion_region|\|\||MaybeUninit|assume_init/u);
+  }
+});
+
 test("normalization is idempotent and cannot discard a label still used inside its terminal value", () => {
   const statement = region({ body: { statements: [{ kind: "completion-exit", completion: "return", resultWrapped: true,
     expr: { kind: "try", expr: { kind: "call", path: "produce", args: [] }, resultErrorType: error, operandErrorType: error } }] } });

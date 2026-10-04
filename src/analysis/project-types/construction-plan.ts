@@ -23,7 +23,7 @@ export interface RustConstructionField {
 export interface RustConstructionLayer {
   readonly definition: RustProjectTypeDefinition;
   readonly signature: RustProjectConstructorSignature;
-  readonly constructor?: Node;
+  readonly constructor: Node | undefined;
   readonly baseCall?: Node;
   readonly fields: readonly RustConstructionField[];
   readonly statements: readonly Node[];
@@ -106,8 +106,8 @@ export function analyzeRustProjectConstructions(input: RustConstructionAnalysisI
             absenceDefault: initializer === undefined && (isRustOptionCarrier(carrier) || isRustAbsenceCarrier(carrier)),
             ...(initializer === undefined ? {} : { initializer }) }));
         }
-        layers.unshift(Object.freeze({ definition: owner, signature: selected,
-          ...(constructor === undefined ? {} : { constructor }), ...(baseCall === undefined ? {} : { baseCall }),
+        layers.unshift(Object.freeze({ definition: owner, signature: selected, constructor,
+          ...(baseCall === undefined ? {} : { baseCall }),
           fields: Object.freeze(fields), statements: Object.freeze(rawStatements.slice(baseCall === undefined ? 0 : 1) as Node[]) }));
         if (constructor !== undefined && (base !== undefined || external !== undefined) && baseCall === undefined)
           issues.push(Object.freeze({ node: constructor,

@@ -9,7 +9,6 @@ import type {
 } from "../../target-model/types/value-projections.js";
 import {
   isRustProgramErrorCarrier,
-  isRustJsValueCarrier,
   rustJsErrorTargetType,
   rustCarrierSupportsClone,
   rustCarrierSupportsTrait,
@@ -26,7 +25,8 @@ import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target
 import { selectRustProjectProjection } from "./project-projections.js";
 import { rustGenericCallableSignaturesMatch } from "../../target-model/conversions/generic-callable.js";
 import { selectRustCallableConversion } from "../../target-model/conversions/callable.js";
-import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustReadonlySourceErrorCarrier, isRustRetainedErrorCarrier } from "../../target-model/types/carriers/source-error.js";
+import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustRetainedErrorCarrier } from "../../target-model/types/carriers/source-error.js";
+import { isRustClosedValueCarrier } from "../../target-model/types/carriers/closed-value-kind.js";
 import { selectRustProjectUnionMapping } from "./project-union-mappings.js";
 
 export type RustValueCarrierReconciliation =
@@ -95,19 +95,21 @@ export function selectRustFlowReadProjection(
       } };
     }
   }
-  if ((isRustJsValueCarrier(sourceCarrier) && (rustTargetTypeRefEquals(selectedCarrier, rustJsErrorTargetType()) || isRustReadonlySourceErrorCarrier(selectedCarrier)) ||
+  if ((isRustClosedValueCarrier(sourceCarrier) && (isRustSourceErrorCarrier(selectedCarrier) || isRustRetainedErrorCarrier(selectedCarrier)) ||
     (isRustProgramErrorCarrier(sourceCarrier) || isRustSourceErrorCarrier(sourceCarrier) || isRustRetainedErrorCarrier(sourceCarrier)) &&
     (isRustSourceErrorCarrier(selectedCarrier) && (isRustSourceErrorCarrier(projectTypes.sourceErrorCarrier()) ||
       projectTypes.sourceCreatedErrorOrigins.length !== 0) || isRustMutableJsErrorCarrier(selectedCarrier) ||
       rustTargetTypeRefEquals(selectedCarrier, rustJsErrorTargetType())))) {
     return { kind: "projection", fact: { kind: "builtin-error", sourceCarrier, selectedCarrier } };
   }
-  if (isRustProgramErrorCarrier(dispatchCarrier) || isRustSourceErrorCarrier(dispatchCarrier) || isRustRetainedErrorCarrier(dispatchCarrier)) {
+  if (isRustProgramErrorCarrier(dispatchCarrier) || isRustSourceErrorCarrier(dispatchCarrier) ||
+    isRustRetainedErrorCarrier(dispatchCarrier) || isRustClosedValueCarrier(dispatchCarrier)) {
     const selectedDefinition = projectTypes.definitionForCarrier(selectedCarrier);
     const variant = selectedDefinition === undefined
       ? undefined
       : projectTypes.programErrorVariant(selectedDefinition);
-    return variant !== undefined && (!(isRustSourceErrorCarrier(dispatchCarrier) || isRustRetainedErrorCarrier(dispatchCarrier)) ||
+    return variant !== undefined && (!(isRustSourceErrorCarrier(dispatchCarrier) || isRustRetainedErrorCarrier(dispatchCarrier) ||
+      isRustClosedValueCarrier(dispatchCarrier)) ||
       selectedDefinition !== undefined && projectTypes.sourceErrorDefinitions.includes(selectedDefinition)) &&
       rustCarrierSupportsClone(selectedCarrier, definitions)
       ? {

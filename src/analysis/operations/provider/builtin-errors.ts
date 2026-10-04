@@ -3,7 +3,7 @@ import {
 } from "../../../policy/evidence/selected-source.js";
 import { selectRustErrorTypePredicate } from "../../../policy/operations/source-profiles/js/type-tests.js";
 import {
-  rustOptionTargetType,
+  rustSourceOptionalTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
 } from "../../../target-model/types/index.js";
@@ -87,7 +87,7 @@ export function selectRustBuiltinErrorProperty(
     operationId: `tsonic.rust.error.property.${member.memberName}`,
     receiverCarrier: receiverCarrier!,
     resultCarrier: member.memberName === "stack"
-      ? rustOptionTargetType(rustStringTargetType())
+      ? rustSourceOptionalTargetType(rustStringTargetType())
       : rustStringTargetType(),
     property: member.memberName,
   }, context, options, {

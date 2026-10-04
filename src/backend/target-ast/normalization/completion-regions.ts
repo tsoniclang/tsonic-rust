@@ -2,6 +2,7 @@ import type { RustBlock, RustExpr, RustPattern, RustStmt, RustType } from "../no
 import { mapRustExpressionChildren } from "../expression-children.js";
 import { rustTypeEquals } from "../inspection/type-equality.js";
 import { applyRustTailShape } from "./block-flow.js";
+import { rustBlockBreaksToLabel } from "../inspection/source-usage.js";
 
 type CompletionScope = Extract<RustStmt, { readonly kind: "try-scope" | "resource-scope" }>;
 const path = (name: string): RustExpr => ({ kind: "path", path: name });
@@ -111,9 +112,16 @@ function dispatch(scope: CompletionScope): RustStmt {
 }
 
 function lowerRegion(body: RustBlock, label: string | undefined): RustBlock {
-  const exit = (expr: RustExpr | undefined): RustExpr =>
-    label === undefined ? { kind: "return-expression", ...(expr === undefined ? {} : { expr }) }
-      : { kind: "break-expression", label, ...(expr === undefined ? {} : { expr }) };
+  const exit = (expr: RustExpr | undefined): RustExpr => {
+    if (label === undefined) return { kind: "return-expression", ...(expr === undefined ? {} : { expr }) };
+    if (expr !== undefined && rustBlockBreaksToLabel({ statements: [{ kind: "tail", expr }] }, label)) {
+      return { kind: "block", body: { statements: [
+        { kind: "let", name: label, mutable: false, init: expr },
+        { kind: "tail", expr: { kind: "break-expression", label, expr: path(label) } },
+      ] } };
+    }
+    return { kind: "break-expression", label, ...(expr === undefined ? {} : { expr }) };
+  };
   const expression = (value: RustExpr): RustExpr => {
     if (value.kind === "closure" || value.kind === "closure-block" || value.kind === "async-block") return value;
     const mapped = mapRustExpressionChildren(value, expression, block);

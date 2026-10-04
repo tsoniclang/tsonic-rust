@@ -5,7 +5,6 @@ import { rustFlowReadProjectionMatches } from "../../../analysis/facts/flow-read
 import { rustUnionProjectionContract } from "../../../target-model/types/union-relations.js";
 import {
   isRustCopyCarrier,
-  isRustJsValueCarrier,
   isRustProgramErrorCarrier,
   rustJsErrorTargetType,
   rustCarrierSupportsClone,
@@ -24,7 +23,9 @@ import { requireRustCarrierRequirements } from "../types/generic-requirements.js
 import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
 import { planRustOptionalStorageOperation } from "./optional-storage.js";
 import { planRustUnionMapping, planRustUnionProjection } from "./union-mappings.js";
-import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustWritableSourceErrorCarrier, isRustRetainedErrorCarrier } from "../../../target-model/types/carriers/source-error.js";
+import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustWritableSourceErrorCarrier,
+  isRustRetainedErrorCarrier, isRustWritableRetainedErrorCarrier } from "../../../target-model/types/carriers/source-error.js";
+import { isRustClosedValueCarrier } from "../../../target-model/types/carriers/closed-value-kind.js";
 import {
   allocateRustSyntheticName,
   createRustSyntheticNameState,
@@ -82,10 +83,20 @@ export function planRustValueProjection(
   const borrowedResult = ownership === "borrow";
   if (fact.kind === "builtin-error") {
     const exactSource = ownsValue ? expression : planRustNonConsumingValue(node, expression, context);
-    if (isRustJsValueCarrier(fact.sourceCarrier)) {
-      const native: RustExpr = { kind: "method-call", receiver: exactSource, method: "error_value", args: [] };
-      return isRustSourceErrorCarrier(fact.selectedCarrier)
-        ? { kind: "call", path: "rt::SourceError::from", args: [native] } : native;
+    if (isRustClosedValueCarrier(fact.sourceCarrier)) {
+      const native: RustExpr = ownsValue ? { kind: "method-call", receiver: {
+        kind: "method-call", receiver: exactSource, method: "into_error", args: [],
+      }, method: "expect", args: [{ kind: "str-literal", value: "exact checked flow selected a non-Error payload" }] }
+        : { kind: "method-call", receiver: exactSource, method: "error_value", args: [] };
+      const writable = isRustWritableSourceErrorCarrier(fact.selectedCarrier) || isRustWritableRetainedErrorCarrier(fact.selectedCarrier);
+      const admitted: RustExpr = writable ? { kind: "method-call", receiver: {
+        kind: "call", path: "rt::WritableRetainedError::try_from", args: [native],
+      }, method: "expect", args: [{ kind: "str-literal", value: "exact writable Error origin has no retained setter owner" }] } : native;
+      if (isRustSourceErrorCarrier(fact.selectedCarrier)) {
+        return { kind: "call", path: writable ? "rt::WritableSourceError::from" : "rt::SourceError::from", args: [admitted] };
+      }
+      if (isRustRetainedErrorCarrier(fact.selectedCarrier)) return admitted;
+      return undefined;
     }
     if (isRustProgramErrorCarrier(fact.sourceCarrier) && rustCurrentErrorBoundary(context)?.errorDomain === "runtime") {
       if (!rustTargetTypeRefEquals(fact.selectedCarrier, rustJsErrorTargetType())) {

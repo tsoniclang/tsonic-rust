@@ -100,8 +100,14 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     sourceTypes,
     sourceErrorCarrier(subject, projection) {
       const demand = subject === undefined ? undefined : context.errorStorageDemands.storageFor(subject, projection);
-      return demand?.kind === "unresolved" ? undefined : demand?.kind === "writable"
-        ? rustWritableSourceErrorTargetType() : subject !== undefined && context.errorStorageDemands.receivesWritableNative(subject, projection)
+      if (demand?.kind === "unresolved") return undefined;
+      if (demand?.kind === "writable") return rustWritableSourceErrorTargetType();
+      const origins = subject === undefined ? undefined : context.errorStorageDemands.storageOriginsFor(subject, projection);
+      if (origins?.kind === "resolved" && origins.origins.some(origin => {
+        const types = context.source.semantics.forNode(origin.node).types;
+        return types.isUnknown(origin.type) || types.isAny(origin.type);
+      })) return rustSourceErrorTargetType();
+      return subject !== undefined && context.errorStorageDemands.receivesWritableNative(subject, projection)
           ? rustSourceErrorTargetType() : context.errorStorageDemands.retainedBoundaries.length !== 0
             ? rustSourceErrorTargetType() : context.projectTypes.sourceErrorCarrier();
     },

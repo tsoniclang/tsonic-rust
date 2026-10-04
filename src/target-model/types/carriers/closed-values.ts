@@ -4,8 +4,19 @@ import { rustTargetTypeRefEquals } from "../equality.js";
 import { getRustTypeofRuntimeKind } from "../runtime-kind.js";
 import { emptyRustTypeDefinitions } from "../source-union-definitions.js";
 import { rustSourcePrimitiveTargetType, rustStringTargetType } from "./native.js";
-import { isRustJsValueCarrier, rustJsStringTargetType, rustJsSymbolTargetType } from "./js.js";
+import { isRustJsValueCarrier, rustJsErrorTargetType, rustJsStringTargetType, rustJsSymbolTargetType } from "./js.js";
 import { rustJsArrayValueTargetType } from "./array-values.js";
+import { isRustMutableJsErrorCarrier, isRustRetainedErrorCarrier, isRustSourceErrorCarrier } from "./source-error.js";
+import type { RustTypeDefinitions } from "../source-union-definitions.js";
+
+export function rustClosedValueRetainsError(
+  carrier: TargetTypeRef, definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
+): boolean {
+  const origin = definitions.programErrorOrigin(carrier);
+  return rustTargetTypeRefEquals(carrier, rustJsErrorTargetType()) || isRustMutableJsErrorCarrier(carrier) ||
+    isRustRetainedErrorCarrier(carrier) || isRustSourceErrorCarrier(carrier) ||
+    origin?.kind === "project" && origin.sourceError;
+}
 
 const payloads: readonly { readonly carrier: TargetTypeRef; readonly variant: RustRuntimeUnionVariant }[] = Object.freeze([
   { carrier: rustSourcePrimitiveTargetType("bool"), variant: { kind: "payload", name: "Bool" } },

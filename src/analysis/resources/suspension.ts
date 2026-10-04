@@ -19,7 +19,8 @@ import { appendRustDiagnostic, rustOperationContext } from "../program/walk.js";
 import { collectDescendantsOfKind } from "../operations/inputs.js";
 import { isRustProgramErrorCarrier } from "../../target-model/types/index.js";
 import { selectRustProgramErrorConversion } from "../../target-model/conversions/program-error.js";
-import { resolveExpressionCarrier } from "../expressions/carriers.js";
+import { reconcileRequiredCarrier, resolveExpressionCarrier } from "../expressions/carriers.js";
+import { rustBroadSourceValueTargetType } from "../../policy/types/resolution/broad-values.js";
 import { rustFutureValueForOperation, rustFutureValueForSourceStorage, rustFutureValueMatchesCarrier, transportRustFutureValue } from "../facts/future-values.js";
 import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
 import { selectRustResourceManagement } from "./management.js";
@@ -194,9 +195,17 @@ export function recordThrowFacts(walk: RustFactWalk, statement: Node, sourceFile
   if (expression === undefined) {
     return;
   }
-  const carrier = resolveExpressionCarrier(walk, expression, sourceFile, undefined);
-  const conversion = carrier === undefined ? undefined : selectRustProgramErrorConversion(carrier,
+  let carrier = resolveExpressionCarrier(walk, expression, sourceFile, undefined);
+  let conversion = carrier === undefined ? undefined : selectRustProgramErrorConversion(carrier,
     undefined, walk.context.typeDefinitions);
+  if (carrier !== undefined && conversion === undefined && !isRustProgramErrorCarrier(carrier)) {
+    const closed = rustBroadSourceValueTargetType(walk.operationOptions.jsEnabled);
+    if (selectRustSourceValueConversion(carrier, closed, walk.context.typeDefinitions) !== undefined &&
+      reconcileRequiredCarrier(walk, expression, carrier, closed)) {
+      carrier = closed;
+      conversion = selectRustProgramErrorConversion(carrier, undefined, walk.context.typeDefinitions);
+    }
+  }
   if (conversion !== undefined) {
     setRustOperationFact(walk, statement, Object.freeze({
       kind: "throw-op",

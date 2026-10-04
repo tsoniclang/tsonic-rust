@@ -227,9 +227,9 @@ function isExactCallableExitValue(
         continue;
       }
     }
-    if (input.ast.is.IsReturnStatement(parent) &&
+    if ((input.ast.is.IsReturnStatement(parent) || input.ast.is.IsThrowStatement(parent)) &&
       sourceNodesEqual(input.ast, Node_Expression(input.ast, parent), current) &&
-      !returnCrossesRetainedControlRegion(parent, declarationCallable, input.ast)) {
+      !exitCrossesRetainedControlRegion(parent, declarationCallable, input.ast)) {
       return true;
     }
     return false;
@@ -374,7 +374,7 @@ function hasOverlappingArgumentBorrow(
   }
 }
 
-function returnCrossesRetainedControlRegion(
+function exitCrossesRetainedControlRegion(
   statement: Node,
   callable: Node,
   ast: AstReader,

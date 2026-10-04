@@ -6,8 +6,10 @@ import { rustUnionLeaves, type RustUnionLeaf } from "../types/union-relations.js
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../types/source-union-definitions.js";
 import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustWritableSourceErrorCarrier, rustWritableSourceErrorTargetType,
   isRustRetainedErrorCarrier, isRustWritableRetainedErrorCarrier } from "../types/carriers/source-error.js";
+import { isRustClosedValueCarrier } from "../types/carriers/closed-value-kind.js";
 
 export type RustProgramErrorRoute =
+  | { readonly kind: "closed" }
   | { readonly kind: "source-error" }
   | { readonly kind: "source-created" }
   | { readonly kind: "retained" }
@@ -41,6 +43,7 @@ function selectRustIntrinsicErrorRoute(
   target: TargetTypeRef,
 ): RustProgramErrorRoute | undefined {
   if (!isErrorDestination(target)) return undefined;
+  if (isRustProgramErrorCarrier(target) && isRustClosedValueCarrier(source)) return Object.freeze({ kind: "closed" });
   if (isRustRetainedErrorCarrier(source) && (!isWritableDestination(target) || isRustWritableRetainedErrorCarrier(source))) {
     return Object.freeze({ kind: "retained" });
   }
@@ -136,6 +139,7 @@ function rustProgramErrorRouteMatches(
   route: RustProgramErrorRoute, source: TargetTypeRef, definitions: RustTypeDefinitions,
 ): boolean {
   if (typeof route !== "object" || route === null) return false;
+  if (route.kind === "closed") return hasExactObjectKeys(route, ["kind"]) && isRustClosedValueCarrier(source);
   if (route.kind === "source-created") return hasExactObjectKeys(route, ["kind"]) && isRustMutableJsErrorCarrier(source);
   if (route.kind === "retained") return hasExactObjectKeys(route, ["kind"]) && isRustRetainedErrorCarrier(source);
   if (route.kind === "source-error") {

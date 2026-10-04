@@ -28,6 +28,14 @@ export function planRustProgramErrorConstruction(
   const targetPath = retainedError ? isRustWritableRetainedErrorCarrier(conversion.target)
     ? "tsonic_rust_runtime::WritableRetainedError" : "tsonic_rust_runtime::RetainedError"
     : sourceError ? isRustWritableSourceErrorCarrier(conversion.target) ? "rt::WritableSourceError" : "rt::SourceError" : boundary.errorTypePath;
+  if (conversion.route.kind === "closed") {
+    if (boundary.errorDomain !== "project" || boundary.componentId !== context.sourcePackageComponentId) {
+      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+        "rust.backend.closed-throw-domain", "Closed thrown values require their own sealed source-package payload transport."));
+      return undefined;
+    }
+    return { kind: "call", path: `${targetPath}::from`, args: [value] };
+  }
   if (conversion.route.kind === "union") {
     return planRustUnionFold(value, conversion.route.arms, context, node,
       (arm, payload) => planRustProgramErrorConstruction({ ...conversion, source: arm.carrier, route: arm.route },

@@ -3,7 +3,7 @@ import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustPlanningContext } from "../context.js";
 import { rustRuntimeErrorTypeIdentity } from "./source-package-errors.js";
 import { rustTypeFromCarrier } from "../types/render.js";
-import { rustJsErrorTargetType, rustProgramErrorTargetType } from "../../../target-model/types/index.js";
+import { rustJsErrorTargetType, rustProgramErrorTargetType, rustTsValueTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import {
   createRustSourceFile,
@@ -20,6 +20,7 @@ import { planRustErrorTransport, planRustSourceErrorTransport, rustSuppressedErr
 import { planRustSourceErrorObservations } from "./source-error-observations.js";
 import { planRustRetainedErrorAdmission } from "./retained-errors.js";
 import { planRustErrorProjectionTransport, planRustSourceErrorProjectionDelegates } from "./error-projections.js";
+import { planRustClosedThrowAdmission } from "./closed-throws.js";
 
 const programErrorName = "TsonicError";
 const programResultName = "TsonicResult";
@@ -151,6 +152,16 @@ export function planRustProgramErrorModule(
     return undefined;
   }
 
+  const closedDemand = input.program.sourcePackageComponents.forComponent(domain.componentId)?.closedErrorDemand;
+  if (closedDemand === undefined) {
+    diagnostics.push({ code: "RUST_CLOSED_ERROR_DEMAND_MISSING", category: "error", source: "tsonic-rust",
+      message: "Program Error transport requires its sealed component demand." });
+    return undefined;
+  }
+  const closedCarriers = closedDemand.thrownCarriers;
+  const closedVariants = [...new Set(closedCarriers.map(carrier => rustTargetTypeRefEquals(carrier, rustTsValueTargetType())
+    ? "ClosedNative" : "ClosedJs"))].sort().map(name => ({ name, source: "thrown" as const,
+      type: namedType(name === "ClosedNative" ? "tsonic_rust_runtime::TsValue" : "tsonic_rust_js::value::JsValue") }));
   const transport = planRustErrorTransport([
     ...exactProjectVariants.map(({ definition, variant, type }) => ({
       name: variant, type,
@@ -161,9 +172,10 @@ export function planRustProgramErrorModule(
       sourceErrorType: namedType(`${typePath.slice(0, -programErrorName.length)}SourceError`),
       writableSourceErrorType: namedType(`${typePath.slice(0, -programErrorName.length)}WritableSourceError`),
     })),
-    ...input.program.errorStorageDemands.retainedBoundaries.some(boundary =>
+    ...closedVariants,
+    ...(closedDemand.retained || input.program.errorStorageDemands.retainedBoundaries.some(boundary =>
       domain.componentId === input.program.sourcePackageComponents.componentForFile(
-        input.program.source.ast.getFileName(input.program.source.ast.getSourceFile(boundary)!))?.componentId)
+        input.program.source.ast.getFileName(input.program.source.ast.getSourceFile(boundary)!))?.componentId))
       ? [{ name: "Retained", type: namedType("tsonic_rust_runtime::RetainedError"), source: "external" as const,
         sourceErrorType: namedType("tsonic_rust_runtime::RetainedError"),
         writableSourceErrorType: namedType("tsonic_rust_runtime::WritableRetainedError") }] : [],
@@ -198,6 +210,7 @@ export function planRustProgramErrorModule(
       fromImplementation(type, variant, false)),
     ...transport.variants.filter(variant => variant.name === "Retained").map(variant =>
       fromImplementation(variant.type, variant.name, false)),
+    ...planRustClosedThrowAdmission(closedVariants),
     displayImplementation(programErrorType, emptyRustGenerics, [
       ...exactProjectVariants.map(({ variant, definition }) => ({
         variant,
@@ -205,6 +218,7 @@ export function planRustProgramErrorModule(
       })),
       ...externalVariants.map(({ variant }) => ({ variant, delegate: true })),
       ...transport.variants.filter(variant => variant.name === "Retained").map(({ name }) => ({ variant: name, delegate: true })),
+      ...closedVariants.map(({ name }) => ({ variant: name, delegate: false })),
     ]),
     debugImplementation(programErrorType, emptyRustGenerics),
     {

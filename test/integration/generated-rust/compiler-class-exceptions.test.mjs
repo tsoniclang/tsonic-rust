@@ -36,20 +36,72 @@ export function main(): void {
   validateGeneratedProject("compiler-class-exceptions", result.artifacts, { run: true });
 });
 
-test("throw-only parameter selection does not erase other broad value uses", () => {
-  const ordinary = compileRust({ surfaces: ["js"], files: { "index.ts": `
+for (const surfaces of [[], ["js"]]) {
+  const profile = surfaces.length === 0 ? "native" : "js";
+test(`throw-only parameter selection does not erase other broad value uses in ${profile}`, { timeout: 300_000 }, () => {
+  const ordinary = compileRust({ surfaces, files: { "index.ts": `
 export function identical(value: object): boolean { return value === value; }
 ` } }).result;
   assert.deepEqual(ordinary.diagnostics, []);
   assert.doesNotMatch(artifactText(ordinary, "src/index.rs"), /identical\(value: rt::TsonicError/u);
-  for (const source of [
+  for (const [index, source] of [
     "export function rejected(value: object): never { value = {}; throw value; }",
     "export function rejected(value: object): never { const alias = value; throw alias; }",
     "export function rejected(value: unknown): never { return (() => { throw value; })(); }",
-    "function rethrow(value: object): never { throw value; } export function rejected(): never { return rethrow({}); }",
-  ]) {
-    const rejected = compileRust({ surfaces: ["js"], files: { "index.ts": source } }).result;
-    assert.equal(rejected.artifacts.length, 0);
-    assert.ok(rejected.diagnostics.some(diagnostic => diagnostic.category === "error"));
+  ].entries()) {
+    const accepted = compileRust({ surfaces, packages: [acmeTestingPackage()],
+      target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": `
+import { check } from "@acme/testing";
+${source}
+export function main(): void {
+  let caughtCount: number = 0;
+  try { rejected({}); } catch { caughtCount++; }
+  check(caughtCount === 1);
+}
+` } }).result;
+    assert.equal(accepted.diagnostics.length, 0, accepted.diagnostics.slice(0, 5)
+      .map(diagnostic => diagnostic.message.slice(0, 256)).join("\n"));
+    validateGeneratedProject(`closed-throw-storage-${profile}-${index}`, accepted.artifacts, { run: true });
   }
+  const direct = compileRust({ surfaces, packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": `
+import { check } from "@acme/testing";
+function rethrow(value: object): never { throw value; }
+export function main(): void {
+  let caughtCount: number = 0;
+  try { rethrow({}); } catch { caughtCount++; }
+  check(caughtCount === 1);
+}
+` } }).result;
+  assert.equal(direct.diagnostics.length, 0, direct.diagnostics.slice(0, 5)
+    .map(diagnostic => diagnostic.message.slice(0, 256)).join("\n"));
+  validateGeneratedProject(`closed-throw-empty-object-${profile}`, direct.artifacts, { run: true });
 });
+
+test(`authored object aliases preserve nominal payloads through fields and returns in ${profile}`, { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces, packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": `
+import { check } from "@acme/testing";
+type Payload = object;
+class Failure { constructor(public readonly value: number) {} }
+class Envelope { constructor(public value: Payload) {} }
+function pass(value: Payload): Payload { return value; }
+function raise(value: Payload): never { throw value; }
+export function main(): void {
+  const original = new Failure(9);
+  const envelope = new Envelope(pass(original));
+  let caughtCount = 0;
+  try { raise(envelope.value); } catch (caught) {
+    check(caught instanceof Failure);
+    if (!(caught instanceof Failure)) throw caught;
+    check(caught === original && caught.value === 9);
+    caughtCount++;
+  }
+  check(caughtCount === 1);
+}
+` } });
+  assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 5)
+    .map(diagnostic => diagnostic.message.slice(0, 256)).join("\n"));
+  validateGeneratedProject(`closed-throw-object-alias-${profile}`, result.artifacts, { run: true });
+});
+}

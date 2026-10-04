@@ -19,6 +19,7 @@ import {
   KindCallExpression,
   KindNewExpression,
   sourceNodeIdentity,
+  sourceConstructorParametersMatch,
 } from "@tsonic/target-api/source";
 import { normalizeSelectedArgumentCarrier, rejectSelectedOperation } from "../result.js";
 import { selectRustValueCarrierReconciliation } from "../../../../policy/types/value-carrier-reconciliation.js";
@@ -150,15 +151,8 @@ export function selectedProjectConstructor(
   if (exact !== undefined) {
     return exact;
   }
-  const candidates = options.projectTypes.constructorsForDefinition(definition).filter((candidate) =>
-    candidate.parameters.length === request.source.sourceSelectedSignatureParameters.length &&
-    candidate.parameters.every((parameter, index) => {
-      const selected = request.source.sourceSelectedSignatureParameters[index];
-      return selected !== undefined &&
-        parameter.parameterDeclaration === selected.parameterDeclaration &&
-        parameter.acceptsOmission === selected.acceptsOmission &&
-        parameter.rest === selected.rest;
-    }));
+  const candidates = options.projectTypes.constructorsForDefinition(definition).filter(candidate =>
+    sourceConstructorParametersMatch(candidate.parameters, request.source.sourceSelectedSignatureParameters));
   return candidates.length === 1 ? candidates[0] : undefined;
 }
 

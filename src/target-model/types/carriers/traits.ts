@@ -7,6 +7,7 @@ import { isRustIntegerCarrier, isRustNumericCarrier, rustFutureTargetId, rustPri
 import { rustRawPointerTargetId } from "./source-types.js";
 import { rustGenericCallableValue } from "./generic-callables.js";
 import { rustClassConstructorInstance } from "./class-constructors.js";
+import { isRustClosedValueCarrier } from "./closed-value-kind.js";
 import { emptyRustTypeDefinitions, rustSourceUnionDefinitionIdentity, type RustTypeDefinitions } from "../source-union-definitions.js";
 import { closedMetadataKey } from "../../metadata/closed-data.js";
 import { rustBigIntTargetId, rustCallableTargetId, rustJsArrayTargetId, rustJsDateTargetId, rustJsErrorTargetId, rustJsMapTargetId, rustJsRegExpExecArrayTargetId, rustJsRegExpIndicesTargetId, rustJsRegExpMatchArrayTargetId, rustJsRegExpNamedGroupsTargetId, rustJsRegExpNamedIndicesTargetId, rustJsRegExpStringIteratorTargetId, rustJsRegExpTargetId, rustJsSetTargetId, rustJsStringTargetId, rustJsValueTargetId, rustLocationTargetId, rustAbsenceTargetId, rustOptionTargetId, rustProgramErrorTargetId, rustRegExpExecArrayTargetId, rustRegExpIndicesTargetId, rustRegExpMatchArrayTargetId, rustRegExpNamedGroupsTargetId, rustRegExpNamedIndicesTargetId, rustRegExpStringIteratorTargetId, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustStringTargetId, rustStrTargetId, rustStructuralObjectCarrierValue, rustTsValueTargetId} from "./source-types.js";
@@ -223,6 +224,7 @@ export function rustCarrierReferentMutationRequiresMutableBinding(
 ): boolean {
   const element = rustOptionElementCarrier(carrier);
   if (element !== undefined) return rustCarrierReferentMutationRequiresMutableBinding(element, isSharedObject);
+  if (isRustClosedValueCarrier(carrier)) return false;
   if (isRustMutableJsErrorCarrier(carrier) || isRustSourceErrorCarrier(carrier) || isRustRetainedErrorCarrier(carrier)) return false;
   if (carrier !== undefined && isSharedObject(carrier)) return false;
   const structural = rustStructuralObjectCarrierValue(carrier);

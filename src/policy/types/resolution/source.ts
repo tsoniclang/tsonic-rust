@@ -333,7 +333,7 @@ export function resolveRustTargetTypeSyntax(
       return rustAbsenceTargetType();
     }
   }
-  if (kind === "KindAnyKeyword" || kind === "KindUnknownKeyword") {
+  if (kind === "KindAnyKeyword" || kind === "KindUnknownKeyword" || kind === "KindObjectKeyword") {
     return resolveRustAuthoredBroadSourceValueTargetType(
       node,
       context,

@@ -4,6 +4,7 @@ import { rustNativeRepresentationMatches } from "./native-representation.js";
 import { rustUnionPayloadAdmission } from "./union-injection.js";
 import { rustProgramErrorConversionMatches, type RustProgramErrorRoute } from "./program-error.js";
 import { rustJsRecordValueAdmission } from "./closed-record.js";
+import { rustClosedValueRetainsError } from "../types/carriers/closed-values.js";
 import {
   isRustTargetTypeRef,
   rustTargetTypeRefEquals,
@@ -238,6 +239,10 @@ export function rustValueConversionContract(
     };
   }
   if (value.kind === "ts-value-from-closed-carrier") {
+    if (rustClosedValueRetainsError(value.source, definitions)) {
+      return { category: "projection", lowering: "call", path: "rt::TsValue::from_error",
+        sourceMode: "value", source: value.source, target: tsValueCarrier, fallible: false };
+    }
     const admission = rustTsValueAdmission(value.source, definitions);
     return admission === undefined
       ? undefined
@@ -254,6 +259,10 @@ export function rustValueConversionContract(
   if (value.kind === "js-value-from-closed-carrier") {
     if (!isClosedMetadata(value) || !hasExactObjectKeys(value, ["kind", "source"]) ||
       !isRustTargetTypeRef(value.source)) return undefined;
+    if (rustClosedValueRetainsError(value.source, definitions)) {
+      return { category: "projection", lowering: "call", path: "js_abi::JsValue::from_error",
+        sourceMode: "value", source: value.source, target: jsValueCarrier, fallible: false };
+    }
     if (rustTargetTypeRefEquals(value.source, rustEmptyObjectTargetType()) || rustJsRecordValueAdmission(value.source)) {
       return { category: "projection", lowering: "call", path: "js_abi::JsValue::from",
         sourceMode: "value", source: value.source, target: jsValueCarrier, fallible: false };
@@ -687,7 +696,7 @@ export function rustValueConversionContract(
     case "js-value-from-symbol":
       return contract(value.id, "exact", "js_abi::JsValue::from", "value", symbolCarrier, jsValueCarrier, false);
     case "js-value-from-error":
-      return contract(value.id, "exact", "js_abi::JsValue::from_error", "ref", rustJsErrorTargetType(), jsValueCarrier, false);
+      return contract(value.id, "exact", "js_abi::JsValue::from_error", "value", rustJsErrorTargetType(), jsValueCarrier, false);
     case "js-value-clone":
       return contract(value.id, "exact", "js_abi::clone_js_value", "ref", jsValueCarrier, jsValueCarrier, false);
     case "ts-value-clone":

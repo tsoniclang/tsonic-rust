@@ -32,12 +32,15 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustGuardedArrayEntryCarrier } from "../control-flow/array-entry-values.js";
 import { recordBindingWrite } from "../declarations/types-and-bindings.js";
 import { selectRustUnionArmMapping } from "../../target-model/types/union-relations.js";
+import { isRustClosedValueCarrier } from "../../target-model/types/carriers/closed-value-kind.js";
 import { rustClosedValueCategoryProjection } from "../../target-model/types/carriers/closed-values.js";
 import { rustSourceOptionalElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { selectRustClosedArrayView } from "../../policy/types/closed-array-views.js";
 import { selectRustGuardedValueMembers } from "../operations/native-flow-refinement.js";
-import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustReadonlySourceErrorCarrier, isRustWritableSourceErrorCarrier } from "../../target-model/types/carriers/source-error.js";
+import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustRetainedErrorCarrier,
+  isRustWritableSourceErrorCarrier, isRustWritableRetainedErrorCarrier, rustRetainedErrorTargetType } from "../../target-model/types/carriers/source-error.js";
 import { rustWritableErrorRecoveryOriginMatches } from "../../target-model/conversions/program-error.js";
+import { rustSourceUsePreservesAbsence } from "./absence-use.js";
 
 export function applyFlowReadLane(
   walk: RustFactWalk,
@@ -57,6 +60,8 @@ export function applyFlowReadLane(
     parent = walk.context.ast.parent(receiver);
   }
   const parentKind = parent === undefined ? undefined : walk.context.ast.kindName(parent);
+  if (rustSourceOptionalElementCarrier(sourceCarrier) !== undefined &&
+    rustSourceUsePreservesAbsence(expression, walk.context)) return sourceCarrier;
   if (parent !== undefined && walk.context.ast.as.AsCallExpression(parent)?.QuestionDotToken !== undefined &&
     Node_Expression(walk.context.ast, parent) === receiver) return sourceCarrier;
   const access = parent === undefined ? undefined
@@ -111,10 +116,11 @@ export function applyFlowReadLane(
     );
     return undefined;
   }
-  if (isRustProgramErrorCarrier(sourceCarrier) && isRustWritableSourceErrorCarrier(selectedCarrier)) {
+  if ((isRustProgramErrorCarrier(sourceCarrier) || isRustClosedValueCarrier(sourceCarrier)) &&
+    (isRustWritableSourceErrorCarrier(selectedCarrier) || isRustWritableRetainedErrorCarrier(selectedCarrier))) {
     const origins = walk.context.errorStorageDemands.storageOriginsFor(expression);
     if (origins.kind !== "resolved" || origins.origins.some(origin => {
-      const carrier = resolveRustTargetTypeRef(origin, rustResolutionContext(walk, origin), walk.operationOptions);
+      const carrier = resolveRustTargetTypeRef(origin.type, rustResolutionContext(walk, origin.node), walk.operationOptions);
       return carrier === undefined || !rustWritableErrorRecoveryOriginMatches(carrier, walk.context.typeDefinitions);
     })) {
       appendRustDiagnostic(walk, "RUST_ERROR_WRITABLE_ORIGIN_MISSING",
@@ -165,7 +171,7 @@ function selectedFlowReadSource(
     return undefined;
   }
   const semantics = walk.context.source.semantics.forNode(expression);
-  if (isRustProgramErrorCarrier(sourceCarrier) || isRustJsValueCarrier(sourceCarrier)) {
+  if (isRustProgramErrorCarrier(sourceCarrier) || isRustClosedValueCarrier(sourceCarrier)) {
     const type = semantics.types.expressionType(expression);
     return type === undefined ? undefined : { type };
   }
@@ -257,15 +263,18 @@ function resolveSelectedFlowReadCarrier(
       }
     }
   }
-  if (isRustJsValueCarrier(sourceCarrier)) {
+  if (isRustClosedValueCarrier(sourceCarrier)) {
     const resolution = rustResolutionContext(walk, expression);
     const array = selectRustClosedArrayView(selectedType, resolution, walk.operationOptions);
     if (array !== undefined) return array;
     const carrier = resolveRustTargetTypeRef(
       selectedType, resolution, walk.operationOptions,
     );
-    return carrier !== undefined && (rustTargetTypeRefEquals(carrier, rustJsErrorTargetType()) || isRustReadonlySourceErrorCarrier(carrier) ||
-      rustClosedValueCategoryProjection(carrier)) ? carrier : sourceCarrier;
+    if (rustTargetTypeRefEquals(carrier, rustJsErrorTargetType())) return rustRetainedErrorTargetType();
+    const definition = walk.context.projectTypes.definitionForCarrier(carrier);
+    return carrier !== undefined && (isRustSourceErrorCarrier(carrier) || isRustRetainedErrorCarrier(carrier) ||
+      isRustJsValueCarrier(sourceCarrier) && rustClosedValueCategoryProjection(carrier) ||
+      definition !== undefined && walk.context.projectTypes.sourceErrorDefinitions.includes(definition)) ? carrier : sourceCarrier;
   }
   if (isRustProgramErrorCarrier(sourceCarrier) || isRustSourceErrorCarrier(sourceCarrier)) {
     const carrier = resolveRustTargetTypeRef(

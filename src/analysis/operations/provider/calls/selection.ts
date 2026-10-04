@@ -23,7 +23,7 @@ import { selectRustArrayTypeTest } from "../type-tests.js";
 import { isRustArrayTypeTestMember } from "../../../../policy/operations/source-profiles/js/type-tests.js";
 import { checkedPropertySelectionInput, selectRustCheckedPropertyAccess } from "../properties.js";
 import { acceptRustPolicy } from "../../../../policy/operations/contracts.js";
-import { acceptSelectedCall, checkedCallIsConstruction, instantiateSelectedCallTemplate, selectedCallReceiverValueCarrier, selectRustOptionalCallResult } from "./instantiation.js";
+import { acceptSelectedCall, checkedCallIsConstruction, instantiateSelectedCallTemplate, selectedCallReceiverValueCarrier, selectedProjectConstructor, selectRustOptionalCallResult } from "./instantiation.js";
 import { selectedImplicitSuperConstructorClass } from "./implicit-super.js";
 import { substituteProviderOperationForm } from "./template-instantiation.js";
 import { closedMetadataKey } from "../../../../target-model/metadata/closed-data.js";
@@ -97,7 +97,7 @@ export function selectRustCheckedCall(
   const projectConstructorDefinition = options.projectTypes.definitionForDeclaration(projectConstructorOwner);
   if (selectedSourceMember !== undefined && checkedCallIsConstruction(request, context) &&
     projectConstructorDefinition?.kind === "class" && projectConstructorOwner !== undefined &&
-    options.projectTypes.constructorForSignature(projectConstructorDefinition, request.source.selectedSignature)?.implicit === true) {
+    selectedProjectConstructor(projectConstructorDefinition, request, options)?.implicit === true) {
     return acceptProjectSourceCall(request, projectConstructorOwner, context, options);
   }
   const calleeSourceMember = selectedCalleeDeclaration !== undefined &&

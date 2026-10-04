@@ -4,6 +4,7 @@ import type { RustExpr } from "../../target-ast/nodes.js";
 import { diagnosticInput, type RustPlanContext } from "../program/plan-context.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { rustStructuralViewIntoRoot } from "./project-structural-roots.js";
+import { rustClosedValueRetainsError } from "../../../target-model/types/carriers/closed-values.js";
 
 export function planRustProjectClosedValue(
   source: RustExpr,
@@ -13,6 +14,10 @@ export function planRustProjectClosedValue(
   context: RustPlanContext,
 ): RustExpr | undefined {
   const definition = context.input.program.projectTypes.definitionForCarrier(carrier);
+  if (definition !== undefined && context.input.program.projectTypes.sourceErrorDefinitions.includes(definition) &&
+    rustClosedValueRetainsError(carrier, context.input.program.typeDefinitions)) {
+    return { kind: "call", path: `${ownerPath}::from_error`, args: [source] };
+  }
   const representation = context.input.program.objectRepresentations.representationFor(definition);
   if (representation === undefined) {
     context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node ?? context.sourceFile),

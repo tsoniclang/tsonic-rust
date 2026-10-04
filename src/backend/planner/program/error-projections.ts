@@ -8,9 +8,8 @@ export function planRustErrorProjectionTransport(plan: RustErrorTransportPlan): 
   const unit: RustExpr = { kind: "tuple-literal", elements: [] };
   return types.filter((type, index) => !types.slice(0, index).some(previous => rustTypeEquals(type, previous)))
     .map(type => ({ kind: "impl", generics: emptyRustGenerics, target: type,
-      members: [false, true].map(owned => projectionFunction(owned, projections.length === 0 ? unit : { kind: "match", expression: { kind: "path", path: "self" },
-          arms: [
-            ...projections.map(item => {
+      members: [false, true].map(owned => {
+        const arms = projections.map(item => {
               const error: RustExpr = { kind: "path", path: "error" };
               const dispatch: RustExpr = { kind: "field", receiver: error, name: "dispatch" };
               const receiver = item.source === "external" ? error : owned ? dispatch
@@ -21,9 +20,14 @@ export function planRustErrorProjectionTransport(plan: RustErrorTransportPlan): 
                 method: item.source === "external" && owned ? "into_project_error" : "project_error",
                 args: [{ kind: "path" as const, path: "output" }],
               } };
-            }),
-            { pattern: { kind: "wildcard" }, expression: unit },
-          ] })),
+        });
+        const expression: RustExpr = { kind: "path", path: "self" };
+        const value: RustExpr = arms.length === 0 ? unit : arms.length === 1
+          ? { kind: "if-let", expression, pattern: arms[0]!.pattern,
+              whenTrue: { kind: "block", body: { statements: [{ kind: "expr", expr: arms[0]!.expression }] } } }
+          : { kind: "match", expression, arms: [...arms, { pattern: { kind: "wildcard" }, expression: unit }] };
+        return projectionFunction(owned, value);
+      }),
     }));
 }
 

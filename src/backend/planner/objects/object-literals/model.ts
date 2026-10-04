@@ -112,6 +112,7 @@ export function rustObjectLiteralRequiresDispatchImplementation(
     return true;
   }
   const definition = context.input.program.projectTypes.definitionForCarrier(fact.resultCarrier);
+  if (definition?.kind === "interface") return true;
   if (definition !== undefined && !context.input.program.projectTypes.isPolymorphic(definition)) {
     return false;
   }

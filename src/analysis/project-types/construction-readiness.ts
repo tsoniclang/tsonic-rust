@@ -330,14 +330,23 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
       if (discriminant !== undefined) state = expression(discriminant, state, depth + 1);
       const clauses = CaseBlock_Clauses(input.ast, SwitchStatement_CaseBlock(input.ast, node));
       const branches: { readonly node?: Node; readonly flow: ConstructionFlow }[] = [];
+      const matched = new Map<Node, ConstructionState>();
+      for (const clause of clauses ?? []) {
+        if (clause === undefined) { issue(node, "Constructor switch contains an undefined clause."); continue; }
+        const clauseExpression = CaseOrDefaultClause_Expression(input.ast, clause);
+        if (clauseExpression !== undefined) {
+          state = enter(clauseExpression, state, [clauseExpression]);
+          state = expression(clauseExpression, state, depth + 1);
+          matched.set(clause, state);
+        }
+      }
       let previous: ConstructionState | undefined;
       let hasDefault = false;
       for (const clause of clauses ?? []) {
         if (clause === undefined) continue;
         hasDefault ||= input.ast.kindName(clause) === "KindDefaultClause";
-        const clauseExpression = CaseOrDefaultClause_Expression(input.ast, clause);
-        if (clauseExpression !== undefined) expression(clauseExpression, state, depth + 1);
-        const entry = previous === undefined ? state : intersection([state, previous]);
+        const selected = matched.get(clause) ?? state;
+        const entry = previous === undefined ? selected : intersection([selected, previous]);
         record(clause, entry);
         const flow = sequence(CaseOrDefaultClause_Statements(input.ast, clause) ?? [], entry, depth + 1);
         previous = flow.normal;

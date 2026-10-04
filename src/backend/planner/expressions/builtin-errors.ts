@@ -4,7 +4,7 @@ import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import {
   isRustProgramErrorCarrier,
-  rustOptionTargetType,
+  rustSourceOptionalTargetType,
   rustStringTargetType,
 } from "../../../target-model/types/index.js";
 import type { RustExpr } from "../../target-ast/nodes.js";
@@ -18,6 +18,7 @@ import { effectivePlannedExpressionCarrier, requireExpressionCarrier, selectedOp
 import { planRustNonConsumingValue, planRustSharedReceiver } from "./typed-locations.js";
 import { rustCarrierProvidesErrorObservation } from "../../../target-model/types/carriers/error-protocols.js";
 import { effectiveMemberResultCarrier } from "./special.js";
+import { isRustClosedValueCarrier } from "../../../target-model/types/carriers/closed-value-kind.js";
 
 
 export function planRustBuiltinErrorProperty(
@@ -27,13 +28,14 @@ export function planRustBuiltinErrorProperty(
 ): RustExpr | undefined {
   const receiverNode = Node_Expression(context.input.program.source.ast, node);
   const projection = receiverNode === undefined ? undefined : context.input.program.facts.getFact(receiverNode, rustFlowReadProjectionFactKey);
-  const borrowedProgramError = projection?.kind === "builtin-error" && isRustProgramErrorCarrier(projection.sourceCarrier) &&
+  const borrowedProgramError = projection?.kind === "builtin-error" &&
+    (isRustProgramErrorCarrier(projection.sourceCarrier) || isRustClosedValueCarrier(projection.sourceCarrier)) &&
     rustTargetTypeRefEquals(projection.selectedCarrier, fact.receiverCarrier) &&
     rustFlowReadProjectionMatches(projection, context.input.program.projectTypes, context.input.program.typeDefinitions);
   const receiver = receiverNode === undefined ? undefined : borrowedProgramError
     ? planExpressionBeforeValueProjections(receiverNode, context, "value") : planExpression(receiverNode, context);
   const resultCarrier = fact.property === "stack"
-    ? rustOptionTargetType(rustStringTargetType())
+    ? rustSourceOptionalTargetType(rustStringTargetType())
     : rustStringTargetType();
   const selectedResultCarrier = effectiveMemberResultCarrier(node, fact.resultCarrier, context);
   if (receiverNode === undefined || receiver === undefined ||
@@ -54,14 +56,16 @@ export function planRustBuiltinErrorProperty(
     return undefined;
   }
   if (borrowedProgramError) {
-    const boundary = rustCurrentErrorBoundary(context);
-    if (boundary === undefined) {
+    const closed = isRustClosedValueCarrier(projection.sourceCarrier);
+    const boundary = closed ? undefined : rustCurrentErrorBoundary(context);
+    if (!closed && boundary === undefined) {
       context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
         "rust.backend.builtin-error-boundary", "Builtin Error observation requires its exact native error domain."));
       return undefined;
     }
-    const observed: RustExpr = { kind: "method-call", receiver: planRustNonConsumingValue(receiverNode, receiver, context), method: "source_error", args: [] };
-    const borrowed: RustExpr = boundary.errorDomain === "runtime" ? observed
+    const observed: RustExpr = { kind: "method-call", receiver: planRustNonConsumingValue(receiverNode, receiver, context),
+      method: closed ? "as_error" : "source_error", args: [] };
+    const borrowed: RustExpr = boundary?.errorDomain === "runtime" ? observed
       : { kind: "method-call", receiver: observed, method: "expect", args: [{ kind: "str-literal", value: "exact checked flow selected a non-Error observation" }] };
     const read: RustExpr = { kind: "call", path: `tsonic_rust_runtime::ErrorObject::error_${fact.property}`, args: [borrowed] };
     return fact.property === "stack" ? { kind: "method-call", receiver: read, method: "map", args: [{ kind: "path", path: "String::from" }] }

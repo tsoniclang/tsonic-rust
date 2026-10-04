@@ -8,6 +8,7 @@ import type {
 } from "../../../analysis/facts/keys.js";
 import { isRustProgramErrorCarrier, rustOptionElementCarrier } from "../../../target-model/types/index.js";
 import { isRustSourceErrorCarrier, isRustRetainedErrorCarrier } from "../../../target-model/types/carriers/source-error.js";
+import { isRustClosedValueCarrier } from "../../../target-model/types/carriers/closed-value-kind.js";
 import { rustCarrierProvidesErrorObservation } from "../../../target-model/types/carriers/error-protocols.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
@@ -47,8 +48,8 @@ export function planRustProgramErrorEquality(
   const route = fact.comparison.kind === "project"
     ? resolveProgramErrorFactRoute(fact.sourceCarrier, fact.targetCarrier, fact.comparison.variant, context)
     : undefined;
-  if (builtin ? (!isRustProgramErrorCarrier(fact.sourceCarrier) && !isRustSourceErrorCarrier(fact.sourceCarrier) &&
-      !isRustRetainedErrorCarrier(fact.sourceCarrier)) ||
+  if (builtin ? (!isRustProgramErrorCarrier(fact.sourceCarrier) &&
+      !rustCarrierProvidesErrorObservation(fact.sourceCarrier, context.input.program.typeDefinitions) && !isRustClosedValueCarrier(fact.sourceCarrier)) ||
     !rustCarrierProvidesErrorObservation(fact.targetCarrier, context.input.program.typeDefinitions) : route === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -77,7 +78,10 @@ export function planRustProgramErrorEquality(
     const value = source === undefined ? expression : planRustNonConsumingValue(source, expression, context);
     if (fact.errorOperand === side) {
       if (builtin) {
-        const observed = isRustSourceErrorCarrier(fact.sourceCarrier) || isRustRetainedErrorCarrier(fact.sourceCarrier);
+        if (isRustClosedValueCarrier(fact.sourceCarrier)) {
+          return { kind: "method-call", receiver: value, method: "as_error", args: [] };
+        }
+        const observed = rustCarrierProvidesErrorObservation(fact.sourceCarrier, context.input.program.typeDefinitions);
         const source: RustExpr = observed
           ? { kind: "reference", expr: value }
           : { kind: "method-call", receiver: value, method: "source_error", args: [] };
@@ -142,6 +146,10 @@ export function planRustProgramErrorTypeTest(
   }
   context.usedAliases?.add("rt");
   const projection = (value: RustExpr): RustExpr | undefined => {
+    const definition = context.input.program.projectTypes.definitionForCarrier(fact.targetCarrier);
+    if (definition !== undefined && !context.input.program.projectTypes.sourceErrorDefinitions.includes(definition)) {
+      return { kind: "bool-literal", value: false };
+    }
     const selected = planCheckedErrorDispatch(value, fact.targetCarrier, context, false);
     return selected === undefined ? undefined : { kind: "option-presence", receiver: selected, present: true };
   };
@@ -150,11 +158,19 @@ export function planRustProgramErrorTypeTest(
     context.input.program.source.ast, node, []), "retained_error");
   const otherwise = projection({ kind: "path", path: otherName });
   if (otherwise === undefined) return undefined;
+  if (otherwise.kind === "bool-literal" && !otherwise.value) {
+    return { kind: "matches", expression: programErrorSubject(expression, fact.sourceCarrier, false),
+      pattern: programErrorPattern(route, { kind: "wildcard" }, isRustSourceErrorCarrier(fact.sourceCarrier)) };
+  }
+  if (isRustClosedValueCarrier(fact.sourceCarrier)) {
+    return { kind: "method-call", receiver: { kind: "method-call", receiver: expression, method: "as_error", args: [] },
+      method: "is_some_and", args: [{ kind: "closure", params: [{ name: otherName, byRefCopy: false }], body: otherwise }] };
+  }
   if (route.kind === "local") {
     return { kind: "match", expression: programErrorSubject(expression, fact.sourceCarrier, false), arms: [
       { pattern: programErrorPattern(route, { kind: "wildcard" }, isRustSourceErrorCarrier(fact.sourceCarrier)),
         expression: { kind: "bool-literal", value: true } },
-      { pattern: { kind: "binding", name: otherName }, expression: otherwise },
+      { pattern: otherwise.kind === "bool-literal" ? { kind: "wildcard" } : { kind: "binding", name: otherName }, expression: otherwise },
     ] };
   }
   const valueName = allocateRustSyntheticName(context.syntheticNames ?? createRustSyntheticNameState(
@@ -165,7 +181,7 @@ export function planRustProgramErrorTypeTest(
     { pattern: programErrorPattern(route, { kind: "binding", name: valueName }, isRustSourceErrorCarrier(fact.sourceCarrier)),
       expression: projectErrorPayload(route, fact.sourceCarrier, { kind: "path", path: valueName }, false,
         { kind: "bool-literal", value: true }, externalFallback) },
-    { pattern: { kind: "binding", name: otherName }, expression: otherwise },
+    { pattern: otherwise.kind === "bool-literal" ? { kind: "wildcard" } : { kind: "binding", name: otherName }, expression: otherwise },
   ] };
 }
 
@@ -192,6 +208,10 @@ export function planRustProgramErrorFlowRead(
   }
   context.usedAliases?.add("rt");
   const recovered = (value: RustExpr): RustExpr | undefined => {
+    const definition = context.input.program.projectTypes.definitionForCarrier(fact.selectedCarrier);
+    if (definition !== undefined && !context.input.program.projectTypes.sourceErrorDefinitions.includes(definition)) {
+      return { kind: "unreachable", message: "checked flow selected a different nominal thrown value" };
+    }
     const projected = planCheckedErrorDispatch(value, fact.selectedCarrier, context, ownsValue);
     const type = rustTypeFromCarrierInContext(fact.selectedCarrier, context);
     if (projected === undefined || type?.kind !== "named") return undefined;
@@ -205,6 +225,13 @@ export function planRustProgramErrorFlowRead(
     ] });
   };
   const dispatchCarrier = rustOptionElementCarrier(fact.sourceCarrier) ?? fact.sourceCarrier;
+  if (isRustClosedValueCarrier(dispatchCarrier)) {
+    const source = rustOptionElementCarrier(fact.sourceCarrier) === undefined ? expression
+      : programErrorSubject(expression, fact.sourceCarrier, ownsValue);
+    return recovered({ kind: "method-call", receiver: {
+      kind: "method-call", receiver: source, method: ownsValue ? "into_error" : "as_error", args: [],
+    }, method: "expect", args: [{ kind: "str-literal", value: "exact checked flow selected a non-Error payload" }] });
+  }
   if (isRustRetainedErrorCarrier(dispatchCarrier)) return recovered(rustOptionElementCarrier(fact.sourceCarrier) === undefined
     ? expression : programErrorSubject(expression, fact.sourceCarrier, ownsValue));
   const otherName = allocateRustSyntheticName(context.syntheticNames ?? createRustSyntheticNameState(
@@ -231,7 +258,7 @@ export function planRustProgramErrorFlowRead(
           args: [],
         }, externalFallback),
       },
-      { pattern: { kind: "binding", name: otherName }, expression: otherwise },
+      { pattern: otherwise.kind === "unreachable" ? { kind: "wildcard" } : { kind: "binding", name: otherName }, expression: otherwise },
     ],
   };
 }
@@ -244,11 +271,13 @@ function resolveProgramErrorFactRoute(
 ): RustProgramErrorRoute | undefined {
   sourceCarrier = rustOptionElementCarrier(sourceCarrier) ?? sourceCarrier;
   const definition = context.input.program.projectTypes.definitionForCarrier(targetCarrier);
-  if ((!isRustProgramErrorCarrier(sourceCarrier) && !isRustSourceErrorCarrier(sourceCarrier) && !isRustRetainedErrorCarrier(sourceCarrier)) ||
+  if ((!isRustProgramErrorCarrier(sourceCarrier) && !isRustSourceErrorCarrier(sourceCarrier) &&
+    !isRustRetainedErrorCarrier(sourceCarrier) && !isRustClosedValueCarrier(sourceCarrier)) ||
     definition === undefined ||
     context.input.program.projectTypes.programErrorVariant(definition) !== variant ||
     !rustTargetTypeRefEquals(context.input.program.projectTypes.openCarrier(definition), targetCarrier) ||
-    (isRustSourceErrorCarrier(sourceCarrier) || isRustRetainedErrorCarrier(sourceCarrier)) && !context.input.program.projectTypes.sourceErrorDefinitions.includes(definition)) {
+    (isRustSourceErrorCarrier(sourceCarrier) || isRustRetainedErrorCarrier(sourceCarrier) ||
+      isRustClosedValueCarrier(sourceCarrier)) && !context.input.program.projectTypes.sourceErrorDefinitions.includes(definition)) {
     return undefined;
   }
   return resolveRustProgramErrorRoute(
