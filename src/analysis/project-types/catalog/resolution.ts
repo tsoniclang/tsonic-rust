@@ -346,7 +346,7 @@ export function createRustProjectTypePolicy(
       continue;
     }
     const usedProgramErrorVariants = usedProgramErrorVariantsByComponent.get(componentId) ??
-      new Set(["Runtime", "Suppressed"]);
+      new Set(["Runtime", "SourceCreated", "Retained", "Suppressed"]);
     usedProgramErrorVariantsByComponent.set(componentId, usedProgramErrorVariants);
     const base = rustPascalCaseIdentifier(definition.sourceName);
     let variant = base;

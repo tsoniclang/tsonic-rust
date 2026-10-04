@@ -1,6 +1,7 @@
 import { rustJsArrayEntriesTargetId } from "./array-entries.js";
 import { rustJsArrayValueTargetId } from "./array-values.js";
-import { rustMutableJsErrorTargetId, rustSourceErrorTargetId, rustWritableSourceErrorTargetId } from "./source-error.js";
+import { rustMutableJsErrorTargetId, rustSourceErrorTargetId, rustWritableSourceErrorTargetId,
+  rustRetainedErrorTargetId, rustWritableRetainedErrorTargetId } from "./source-error.js";
 import {
   rustAsyncGeneratorTargetId,
   rustBigIntTargetId,
@@ -92,6 +93,8 @@ export const rustBuiltInCarrierRenderPaths: Readonly<Record<string, string>> = O
   [rustSourceErrorTargetId]: "rt::SourceError",
   [rustWritableSourceErrorTargetId]: "rt::WritableSourceError",
   [rustMutableJsErrorTargetId]: "rt::MutableJsError",
+  [rustRetainedErrorTargetId]: "tsonic_rust_runtime::RetainedError",
+  [rustWritableRetainedErrorTargetId]: "tsonic_rust_runtime::WritableRetainedError",
   [rustTsValueTargetId]: "rt::TsValue",
   [rustJsValueTargetId]: "js_abi::JsValue",
   [rustJsArrayTargetId]: "js_abi::JsArray",

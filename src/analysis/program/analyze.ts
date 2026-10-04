@@ -102,7 +102,8 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
       const demand = subject === undefined ? undefined : context.errorStorageDemands.storageFor(subject);
       return demand?.kind === "unresolved" ? undefined : demand?.kind === "writable"
         ? rustWritableSourceErrorTargetType() : subject !== undefined && context.errorStorageDemands.receivesWritableNative(subject)
-          ? rustSourceErrorTargetType() : context.projectTypes.sourceErrorCarrier();
+          ? rustSourceErrorTargetType() : context.errorStorageDemands.retainedBoundaries.length !== 0
+            ? rustSourceErrorTargetType() : context.projectTypes.sourceErrorCarrier();
     },
     resolveProjectUnionCarrier(memberCarriers) {
       return finalizedProjectTypes?.commonSupertype(memberCarriers);

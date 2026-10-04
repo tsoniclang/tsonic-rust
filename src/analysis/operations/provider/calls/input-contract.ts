@@ -1,7 +1,7 @@
 import { resolveSelectedSourceProfileMember } from "../../../../policy/evidence/selected-source.js";
 import { selectRustProviderOperation } from "../../../../policy/operations/provider-selection.js";
 import { selectJsSurfaceCallInputContract } from "../../../../policy/operations/source-profiles/js/index.js";
-import { selectedCallProviderDeclaration } from "../operators.js";
+import { selectedCallProviderDeclaration } from "../../../../policy/evidence/selected-source.js";
 import { providerOperationFact } from "../result.js";
 import { checkedCallIsConstruction, instantiateSelectedCallTemplate } from "./instantiation.js";
 import { selectedCallSourceParameterCarriers } from "./source-sequences.js";

@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRustPlanBuilder } from "../../../dist/analysis/facts/plan-store.js";
+import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { rustTargetOperationFactKey } from "../../../dist/analysis/facts/operations/keys.js";
 import {
   rustConversionKey,
@@ -196,13 +197,13 @@ test("assignment support distinguishes direct Rust places from reference-backed 
     abi: { target: { form: "receiver-method", name: "value" } },
   };
   assert.equal(rustTargetOperationIsDirectLocation(projectField), false);
-  assert.equal(rustTargetOperationSupportsAssignment(projectField), true);
+  assert.equal(rustTargetOperationSupportsAssignment(projectField, emptyRustTypeDefinitions), true);
   assert.equal(rustTargetOperationIsDirectLocation(providerField), true);
-  assert.equal(rustTargetOperationSupportsAssignment(providerField), true);
+  assert.equal(rustTargetOperationSupportsAssignment(providerField, emptyRustTypeDefinitions), true);
   assert.equal(rustTargetOperationIsDirectLocation(providerMethod), false);
-  assert.equal(rustTargetOperationSupportsAssignment(providerMethod), false);
+  assert.equal(rustTargetOperationSupportsAssignment(providerMethod, emptyRustTypeDefinitions), false);
   assert.equal(rustTargetOperationIsDirectLocation(undefined), false);
-  assert.equal(rustTargetOperationSupportsAssignment(undefined), false);
+  assert.equal(rustTargetOperationSupportsAssignment(undefined, emptyRustTypeDefinitions), false);
 });
 
 test("finalized carrier transitions require one exact conversion lane", () => {

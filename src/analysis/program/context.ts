@@ -76,11 +76,13 @@ import {
   createRustGeneratedDeclarationUseRegistry,
   type RustGeneratedDeclarationUseRegistry,
 } from "./generated-declaration-uses.js";
-import { createRustErrorStorageDemandQuery, type RustErrorStorageDemandQueries } from "../objects/error-storage-demands.js";
+import { createRustErrorStorageDemandQuery } from "../objects/error-storage-demands.js";
+import type { SourceErrorStorageDemandQueries } from "@tsonic/target-api/analysis";
+import { createRustRetainedErrorDemandSelection } from "../objects/retained-error-demands.js";
 import { createRustSourceProfileRegistry } from "../facts/source-profile-registry.js";
 
 export interface RustAnalysisContext extends RustSourcePolicyContext {
-  readonly errorStorageDemands: RustErrorStorageDemandQueries;
+  readonly errorStorageDemands: SourceErrorStorageDemandQueries;
   readonly typeDefinitions: RustTypeDefinitionRegistry;
   readonly typeFamilies: RustSourceTypeFamilyRegistry;
   readonly pointerBacking: TsonicPointerBackingDemands;
@@ -159,7 +161,8 @@ export function createRustAnalysisContext(
   const memoryBindings = createTsonicMemoryBindingIndex(input.source);
   return Object.freeze({
     errorStorageDemands: createRustErrorStorageDemandQuery(input.source,
-      createRustSourceProfileRegistry(input.source.sourceFiles, ast, jsEnabled), sourceFiles),
+      createRustSourceProfileRegistry(input.source.sourceFiles, ast, jsEnabled), sourceFiles,
+      createRustRetainedErrorDemandSelection(input.source, facts, providerSemantics.operations)),
     typeDefinitions,
     typeFamilies: createRustSourceTypeFamilyRegistry(),
     pointerBacking: createTsonicPointerBackingDemands(input.source),

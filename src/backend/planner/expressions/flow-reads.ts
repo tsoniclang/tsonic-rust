@@ -24,7 +24,7 @@ import { requireRustCarrierRequirements } from "../types/generic-requirements.js
 import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
 import { planRustOptionalStorageOperation } from "./optional-storage.js";
 import { planRustUnionMapping, planRustUnionProjection } from "./union-mappings.js";
-import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustWritableSourceErrorCarrier } from "../../../target-model/types/carriers/source-error.js";
+import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustWritableSourceErrorCarrier, isRustRetainedErrorCarrier } from "../../../target-model/types/carriers/source-error.js";
 import {
   allocateRustSyntheticName,
   createRustSyntheticNameState,
@@ -99,11 +99,17 @@ export function planRustValueProjection(
       const writable = isRustWritableSourceErrorCarrier(fact.selectedCarrier);
       const transport: RustExpr = ownsValue && isRustSourceErrorCarrier(fact.sourceCarrier)
         ? { kind: "method-call", receiver: exactSource, method: "into_transport", args: [] } : exactSource;
-      const selected: RustExpr = ownsValue
+      const selected: RustExpr = ownsValue && writable && isRustRetainedErrorCarrier(fact.sourceCarrier)
+        ? { kind: "method-call", receiver: { kind: "call", path: "rt::WritableRetainedError::try_from", args: [transport] },
+          method: "map", args: [{ kind: "path", path: "rt::WritableSourceError::from" }] }
+        : ownsValue
         ? { kind: "call", path: writable ? "rt::WritableSourceError::try_from" : "rt::SourceError::try_from", args: [transport] }
         : { kind: "method-call", receiver: exactSource, method: writable ? "writable_source_error_value" : "source_error_value", args: [] };
-      return { kind: "method-call", receiver: selected, method: "expect",
+      const recovered: RustExpr = { kind: "method-call", receiver: selected, method: "expect",
         args: [{ kind: "str-literal", value: "exact checked flow selected an Error outside its sealed admitted variants" }] };
+      return isRustRetainedErrorCarrier(fact.sourceCarrier) && !ownsValue ? {
+        kind: "call", path: writable ? "rt::WritableSourceError::from" : "rt::SourceError::from", args: [recovered],
+      } : recovered;
     }
     return { kind: "method-call", receiver: { kind: "method-call", receiver: exactSource,
       method: isRustMutableJsErrorCarrier(fact.selectedCarrier) ? "mutable_error_value" : "native_error_value", args: [] }, method: "expect",

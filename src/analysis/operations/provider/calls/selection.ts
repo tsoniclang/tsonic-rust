@@ -33,7 +33,8 @@ import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution.js
 import { rustModuleBindingFactKey, rustOptionalChainFactKey } from "../../../facts/keys.js";
 import { rustOptionElementCarrier } from "../../../../target-model/types/index.js";
 import { rustRuntimeCarrierKey, rustSelectedCallKey } from "../../../../target-model/facts/selections.js";
-import { selectedCallArgumentCarriers, selectedCallArgumentNodes, selectedCallCalleeDeclaration, selectedCallCalleeSymbol, selectedCallProviderDeclaration } from "../operators.js";
+import { selectedCallArgumentCarriers, selectedCallArgumentNodes, selectedCallCalleeDeclaration, selectedCallCalleeSymbol } from "../operators.js";
+import { selectedCallProviderDeclaration } from "../../../../policy/evidence/selected-source.js";
 import { selectedValueCarrier } from "../../selected-values.js";
 import { selectJsSurfaceConstructorBySourceOwner, selectJsSurfaceOperation } from "../../../../policy/operations/source-profiles/js/index.js";
 import { selectRustGeneratorSourceCall } from "../../../../policy/types/generator-source-profile.js";

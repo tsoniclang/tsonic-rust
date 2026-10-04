@@ -18,6 +18,8 @@ import { emptyRustGenerics } from "../../target-ast/nodes.js";
 import { planRustErrorObservations, planRustSuppressedErrorConstructor } from "./error-observations.js";
 import { planRustErrorTransport, planRustSourceErrorTransport, rustSuppressedErrorPattern } from "./error-transport.js";
 import { planRustSourceErrorObservations } from "./source-error-observations.js";
+import { planRustRetainedErrorAdmission } from "./retained-errors.js";
+import { planRustErrorProjectionTransport, planRustSourceErrorProjectionDelegates } from "./error-projections.js";
 
 const programErrorName = "TsonicError";
 const programResultName = "TsonicResult";
@@ -159,6 +161,12 @@ export function planRustProgramErrorModule(
       sourceErrorType: namedType(`${typePath.slice(0, -programErrorName.length)}SourceError`),
       writableSourceErrorType: namedType(`${typePath.slice(0, -programErrorName.length)}WritableSourceError`),
     })),
+    ...input.program.errorStorageDemands.retainedBoundaries.some(boundary =>
+      domain.componentId === input.program.sourcePackageComponents.componentForFile(
+        input.program.source.ast.getFileName(input.program.source.ast.getSourceFile(boundary)!))?.componentId)
+      ? [{ name: "Retained", type: namedType("tsonic_rust_runtime::RetainedError"), source: "external" as const,
+        sourceErrorType: namedType("tsonic_rust_runtime::RetainedError"),
+        writableSourceErrorType: namedType("tsonic_rust_runtime::WritableRetainedError") }] : [],
   ]);
   if (transport === undefined) {
     diagnostics.push({ code: "RUST_ERROR_TRANSPORT_ADMISSION_NOT_CLOSED", category: "error", source: "tsonic-rust",
@@ -188,12 +196,15 @@ export function planRustProgramErrorModule(
       fromImplementation(type, variant, false)),
     ...externalVariants.map(({ variant, type }) =>
       fromImplementation(type, variant, false)),
+    ...transport.variants.filter(variant => variant.name === "Retained").map(variant =>
+      fromImplementation(variant.type, variant.name, false)),
     displayImplementation(programErrorType, emptyRustGenerics, [
       ...exactProjectVariants.map(({ variant, definition }) => ({
         variant,
         delegate: input.program.projectTypes.inheritedExternalBaseForDefinition(definition)?.base.programError === true,
       })),
       ...externalVariants.map(({ variant }) => ({ variant, delegate: true })),
+      ...transport.variants.filter(variant => variant.name === "Retained").map(({ name }) => ({ variant: name, delegate: true })),
     ]),
     debugImplementation(programErrorType, emptyRustGenerics),
     {
@@ -210,6 +221,9 @@ export function planRustProgramErrorModule(
     ...planRustSourceErrorTransport(transport, true),
     ...planRustSourceErrorObservations(transport),
     ...planRustSourceErrorObservations(transport, true),
+    ...planRustRetainedErrorAdmission(transport),
+    ...planRustErrorProjectionTransport(transport),
+    ...planRustSourceErrorProjectionDelegates(),
     finishResourceFunction(),
     finishFinallyFunction(),
   ];

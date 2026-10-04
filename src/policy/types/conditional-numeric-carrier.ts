@@ -1,5 +1,7 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import { isRustAbsenceCarrier, isRustIntegerCarrier, rustOptionElementCarrier, rustOptionTargetType, rustSourcePrimitiveTargetType } from "../../target-model/types/index.js";
+import { isRustAbsenceCarrier, isRustIntegerCarrier, rustOptionElementCarrier, rustOptionTargetType,
+  rustSourceOptionalTargetType, rustSourcePrimitiveTargetType } from "../../target-model/types/index.js";
+import { rustSourceOptionalElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { rustNumericPromotionKind } from "../../target-model/conversions/numeric-promotion.js";
 import { selectedSourceLiteralIsRepresentable } from "./selected-numeric-literal.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -28,5 +30,8 @@ export function selectRustConditionalNumericCarrier(
   } else if (isRustIntegerCarrier(right) && selectedSourceLiteralIsRepresentable(whenTrue, right.name, ast)) {
     selected = right;
   }
-  return selected === undefined ? undefined : optional ? rustOptionTargetType(selected) : selected;
+  const sourceAbsence = isRustAbsenceCarrier(left) || isRustAbsenceCarrier(right) ||
+    rustSourceOptionalElementCarrier(trueCarrier) !== undefined || rustSourceOptionalElementCarrier(falseCarrier) !== undefined;
+  return selected === undefined ? undefined : !optional ? selected
+    : sourceAbsence ? rustSourceOptionalTargetType(selected) : rustOptionTargetType(selected);
 }

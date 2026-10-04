@@ -7,6 +7,7 @@ import {
   isRustStringCarrier,
   isRustUnitCarrier,
   isRustNeverCarrier,
+  isRustOptionCarrier,
   rustOptionElementCarrier,
   rustSourcePrimitiveTargetType,
 } from "../../../target-model/types/index.js";
@@ -28,7 +29,7 @@ import { negateRustBooleanExpression, rustStringConcat } from "../../target-ast/
 import { foldRustIntegerComparison } from "../../target-ast/integer-comparisons.js";
 import { planRustNativeZeroComparison } from "./native-zero-comparisons.js";
 import { planRustNativeIntegerIdentity } from "./native-integer-identities.js";
-import { planExpression, planExpressionBeforeValueProjections } from "./entry.js";
+import { planExpression, planExpressionBeforeOptionProjection, planExpressionBeforeValueProjections } from "./entry.js";
 import { planRustDiscardedValue } from "./discarded-values.js";
 import type { RustExpressionResultUse } from "./entry.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
@@ -46,7 +47,7 @@ import { rustOptionProjectionFactKey } from "../../../analysis/facts/keys.js";
 import { rustTargetOperationText } from "../../../analysis/facts/target-operation.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustOptionNestingDepth } from "../../../target-model/types/carriers/optional.js";
-import { rustValueCarrierBeforeOptionProjection } from "../../../analysis/facts/value-carrier-queries.js";
+import { rustValueCarrierBeforeOptionProjection, rustStrictEqualityOperandCarrier } from "../../../analysis/facts/value-carrier-queries.js";
 import { finalizedConversionIsValid } from "../../../analysis/facts/finalized-operation/conversions.js";
 import { hasExactObjectKeys, isClosedMetadata } from "../../../target-model/metadata/closed-data.js";
 import type { Node } from "@tsonic/tsts";
@@ -345,13 +346,13 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
     const rightNode = BinaryExpression_Right(context.input.program.source.ast, node);
     const left = leftNode === undefined
       ? undefined
-      : planExpressionBeforeValueProjections(leftNode, context, "value");
+      : planStrictEqualityOperand(leftNode, context);
     const right = rightNode === undefined
       ? undefined
-      : planExpressionBeforeValueProjections(rightNode, context, "value");
+      : planStrictEqualityOperand(rightNode, context);
     const boolCarrier = rustSourcePrimitiveTargetType("bool");
-    const leftCarrier = leftNode === undefined ? undefined : expressionCarrier(leftNode, context);
-    const rightCarrier = rightNode === undefined ? undefined : expressionCarrier(rightNode, context);
+    const leftCarrier = rustStrictEqualityOperandCarrier(context.input.program.facts, leftNode);
+    const rightCarrier = rustStrictEqualityOperandCarrier(context.input.program.facts, rightNode);
     const selectedOperation = context.input.program.facts.getSelectedTargetOperator(node);
     if (leftNode === undefined || rightNode === undefined || left === undefined || right === undefined ||
       !rustTargetTypeRefEquals(leftCarrier, fact.optionCarrier) ||
@@ -400,14 +401,14 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
     const valueNode = fact.optionOperand === "left" ? rightNode : leftNode;
     const option = optionNode === undefined
       ? undefined
-      : planExpressionBeforeValueProjections(optionNode, context, "value");
+      : planStrictEqualityOperand(optionNode, context);
     const value = valueNode === undefined ? undefined : planExpression(valueNode, context);
     const valueProjection = valueNode === undefined
       ? undefined
       : context.input.program.facts.getFact(valueNode, rustOptionProjectionFactKey);
     const optionCarrier = optionNode === undefined
       ? undefined
-      : expressionCarrier(optionNode, context);
+      : rustStrictEqualityOperandCarrier(context.input.program.facts, optionNode);
     const valueCarrier = valueNode === undefined
       ? undefined
       : rustValueCarrierBeforeOptionProjection(context.input.program.facts, valueNode);
@@ -843,6 +844,12 @@ function comparisonSubjectAndBound(
       : { subject: expression.right, bound: expression.left, relationship };
   }
   return undefined;
+}
+
+function planStrictEqualityOperand(node: Node, context: RustPlanContext): RustExpr | undefined {
+  return isRustOptionCarrier(expressionCarrier(node, context))
+    ? planExpressionBeforeValueProjections(node, context, "value")
+    : planExpressionBeforeOptionProjection(node, context);
 }
 
 function isRustNumericLiteral(expression: RustExpr): boolean {

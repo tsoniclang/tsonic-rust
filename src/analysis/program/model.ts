@@ -62,7 +62,7 @@ export interface RustPlanningHost {
 
 export interface RustTargetProgram {
   readonly lexicalFunctions: import("../callables/lexical-functions.js").RustLexicalFunctionQueries;
-  readonly errorStorageDemands: import("../objects/error-storage-demands.js").RustErrorStorageDemandQueries;
+  readonly errorStorageDemands: import("@tsonic/target-api/analysis").SourceErrorStorageDemandQueries;
   readonly localStorageAliases: RustLocalStorageAliasPlan;
   readonly deferredCaptures: import("../storage/deferred-captures.js").RustDeferredCaptureStorage;
   readonly numericRepresentations: RustNumericRepresentations;

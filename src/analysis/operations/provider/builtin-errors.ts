@@ -3,12 +3,10 @@ import {
 } from "../../../policy/evidence/selected-source.js";
 import { selectRustErrorTypePredicate } from "../../../policy/operations/source-profiles/js/type-tests.js";
 import {
-  rustJsErrorTargetType,
   rustOptionTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
 } from "../../../target-model/types/index.js";
-import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
 import { rustEffectiveValueCarrier } from "../../facts/value-carrier-queries.js";
 import { acceptRustMemberOperation, acceptRustOperation, rejectSelectedOperation } from "./result.js";
@@ -21,7 +19,7 @@ import type {
 } from "../../../policy/operations/contracts.js";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustWritableSourceErrorCarrier } from "../../../target-model/types/carriers/source-error.js";
+import { rustCarrierProvidesErrorObservation, rustCarrierProvidesErrorMutation } from "../../../target-model/types/carriers/error-protocols.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { selectRustClosedTypeTestPlan } from "../../../policy/operations/operators/type-tests.js";
 
@@ -66,12 +64,12 @@ export function selectRustBuiltinErrorProperty(
   const member = sourceMembers?.members[0];
   if (member === undefined || !sourceMembers?.members.every((candidate) =>
     candidate.ownerName === "Error" && candidate.memberName === member.memberName) ||
-    (!rustTargetTypeRefEquals(receiverCarrier, rustJsErrorTargetType()) && !isRustMutableJsErrorCarrier(receiverCarrier) && !isRustSourceErrorCarrier(receiverCarrier))) {
+    !rustCarrierProvidesErrorObservation(receiverCarrier, context.typeDefinitions)) {
     return undefined;
   }
   if (request.accessMode === "delete") return rejectSelectedOperation(request.expression, context,
     "RUST_BUILTIN_ERROR_DELETE_UNSUPPORTED", "An admitted native Error field cannot be removed from its physical storage.");
-  if (request.accessMode !== "read" && !isRustMutableJsErrorCarrier(receiverCarrier) && !isRustWritableSourceErrorCarrier(receiverCarrier)) {
+  if (request.accessMode !== "read" && !rustCarrierProvidesErrorMutation(receiverCarrier, context.typeDefinitions)) {
     return rejectSelectedOperation(
       request.expression, context, "RUST_BUILTIN_ERROR_MUTATION_UNSUPPORTED",
       "The exact selected native Error storage is immutable; writable Error admission requires an original physical setter owner.",

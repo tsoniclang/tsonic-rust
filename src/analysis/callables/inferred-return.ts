@@ -6,7 +6,9 @@ import { rustOperationContext, rustResolutionContext } from "../program/walk.js"
 import type { RustFactWalk } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { selectRustNumericBinaryPromotion } from "../../policy/operations/numeric/promotion.js";
-import { isRustBigIntCarrier, isRustAbsenceCarrier, isRustNumericCarrier, rustOptionElementCarrier, rustOptionTargetType } from "../../target-model/types/index.js";
+import { isRustBigIntCarrier, isRustAbsenceCarrier, isRustNumericCarrier, rustOptionElementCarrier, rustOptionTargetType,
+  rustSourceOptionalTargetType } from "../../target-model/types/index.js";
+import { rustSourceOptionalElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
@@ -47,7 +49,9 @@ export function selectRustInferredReturn(
       if (selected === undefined) break;
     }
     const result = expressions.length === 0 ? baseline : selected === undefined ? numericResult ? undefined : baseline
-      : rustOptionElementCarrier(baseline) === undefined ? selected : rustOptionTargetType(selected);
+      : rustOptionElementCarrier(baseline) === undefined ? selected
+        : rustSourceOptionalElementCarrier(baseline) === undefined ? rustOptionTargetType(selected)
+          : rustSourceOptionalTargetType(selected);
     walk.inferredReturns.set(declaration, result);
     return result;
 

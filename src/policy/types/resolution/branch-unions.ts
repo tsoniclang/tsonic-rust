@@ -39,11 +39,11 @@ export function resolveRustBranchUnion(
       carriers.push(...types.map(() => carrier));
     } else {
       for (const member of types) {
-        const selected = union.variants.filter(variant => variant.sourceTypes.some(source =>
-          semantics.types.isIdentical(source, member)));
-        if (selected.length !== 1) return undefined;
+        const indexes = options.sourceTypes.sourceUnionVariantIndexesForTypes(carrier, [member]);
+        const selected = indexes?.length === 1 ? union.variants[indexes[0]!] : undefined;
+        if (selected === undefined) return undefined;
         members.push(member);
-        carriers.push(selected[0]!.carrier);
+        carriers.push(selected.carrier);
       }
     }
     if (members.length > 4096) return undefined;

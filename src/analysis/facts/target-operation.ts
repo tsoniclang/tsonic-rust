@@ -13,7 +13,7 @@ import { rustValueConversionIsFallible } from "../../target-model/conversions/co
 import { rustStructuralFieldIsFallible } from "../objects/structural-shape-plan.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
-import { isRustMutableJsErrorCarrier, isRustWritableSourceErrorCarrier } from "../../target-model/types/carriers/source-error.js";
+import { rustCarrierProvidesErrorMutation } from "../../target-model/types/carriers/error-protocols.js";
 export function rustSourceCallCallableStorageCarrier(
   fact: RustTargetOperationFact | undefined,
   storage: RustStructuralStorageLookup,
@@ -104,12 +104,12 @@ export function rustTargetOperationIsDirectLocation(fact: RustTargetOperationFac
       fact.abi.target.form === "static");
 }
 
-export function rustTargetOperationSupportsAssignment(fact: RustTargetOperationFact | undefined): boolean {
+export function rustTargetOperationSupportsAssignment(fact: RustTargetOperationFact | undefined, definitions: RustTypeDefinitions): boolean {
   return (fact?.kind === "source-field" &&
       (fact.valueSemantics.kind === "stored" ||
         fact.valueSemantics.kind === "accessor" && fact.valueSemantics.writable)) ||
     (fact?.kind === "builtin-error-property" && fact.accessMode !== "read" &&
-      (isRustMutableJsErrorCarrier(fact.receiverCarrier) || isRustWritableSourceErrorCarrier(fact.receiverCarrier))) ||
+      rustCarrierProvidesErrorMutation(fact.receiverCarrier, definitions)) ||
     fact?.kind === "source-static-field" ||
     (fact?.kind === "source-union-field" && fact.selectedVariantIndexes.every((index) => {
       const field = fact.variants[index]?.field;

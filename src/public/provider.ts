@@ -58,6 +58,8 @@ export {
   rustJsTypedArrayTargetType,
   rustNeverTargetType,
   rustNamedTargetType,
+  rustRetainedErrorTargetType,
+  rustWritableRetainedErrorTargetType,
   rustOptionTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,

@@ -1,5 +1,6 @@
 import { isRustBigIntCarrier, isRustJsStringCarrier, isRustStringCarrier, isRustUnitCarrier } from "./js.js";
-import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, rustMutableJsErrorTargetId, rustSourceErrorTargetId, rustWritableSourceErrorTargetId } from "./source-error.js";
+import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, rustMutableJsErrorTargetId, rustSourceErrorTargetId, rustWritableSourceErrorTargetId,
+  rustRetainedErrorTargetId, rustWritableRetainedErrorTargetId, isRustRetainedErrorCarrier } from "./source-error.js";
 import { isRustAbsenceCarrier } from "./native.js";
 import { rustJsArrayValueTargetId } from "./array-values.js";
 import { isRustIntegerCarrier, isRustNumericCarrier, rustFutureTargetId, rustPrimitiveTypeName } from "./primitives.js";
@@ -222,7 +223,7 @@ export function rustCarrierReferentMutationRequiresMutableBinding(
 ): boolean {
   const element = rustOptionElementCarrier(carrier);
   if (element !== undefined) return rustCarrierReferentMutationRequiresMutableBinding(element, isSharedObject);
-  if (isRustMutableJsErrorCarrier(carrier) || isRustSourceErrorCarrier(carrier)) return false;
+  if (isRustMutableJsErrorCarrier(carrier) || isRustSourceErrorCarrier(carrier) || isRustRetainedErrorCarrier(carrier)) return false;
   if (carrier !== undefined && isSharedObject(carrier)) return false;
   const structural = rustStructuralObjectCarrierValue(carrier);
   return (structural === undefined || structural.representation === "value") &&
@@ -557,6 +558,8 @@ const rustUnconditionallyCloneTargetIds: ReadonlySet<string> = new Set([
   rustSourceErrorTargetId,
   rustWritableSourceErrorTargetId,
   rustMutableJsErrorTargetId,
+  rustRetainedErrorTargetId,
+  rustWritableRetainedErrorTargetId,
 ]);
 
 const rustUnconditionallyDefaultTargetIds: ReadonlySet<string> = new Set([
@@ -580,7 +583,7 @@ export function isRustSourceStringConvertibleCarrier(carrier: TargetTypeRef | un
     isRustAbsenceCarrier(carrier) ||
     isRustBigIntCarrier(carrier) ||
     (carrier?.kind === "target-named" && (carrier.id === rustProgramErrorTargetId || carrier.id === rustSourceErrorTargetId ||
-      carrier.id === rustWritableSourceErrorTargetId || carrier.id === rustMutableJsErrorTargetId)) ||
+      carrier.id === rustWritableSourceErrorTargetId || carrier.id === rustMutableJsErrorTargetId)) || isRustRetainedErrorCarrier(carrier) ||
     (carrier?.kind === "source-primitive" && carrier.name !== "char");
 }
 

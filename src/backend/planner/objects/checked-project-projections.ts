@@ -45,17 +45,23 @@ export function planCheckedProjectProjectionImplementation(
   structuralCarriers: readonly TargetTypeRef[],
   context: RustPlanContext,
 ): RustImplFunction | undefined {
-  const statements: RustBlock["statements"][number][] = [];
   const eligible = [...contracts.filter(contract => !contract.definition.genericParameters.some(parameter => parameter.kind === "lifetime"))
     .map(contract => contract.carrier), ...structuralCarriers];
-  for (const [index, carrier] of eligible.entries()) {
-    const type = checkedProjectProjectionResultType(carrier, context);
-    if (type === undefined) return undefined;
+  const types = eligible.map(carrier => checkedProjectProjectionResultType(carrier, context));
+  return types.some(type => type === undefined) ? undefined
+    : planCheckedNativeProjectionImplementation(slot, types.filter(type => type !== undefined));
+}
+
+export function planCheckedNativeProjectionImplementation(
+  slot: string, types: readonly RustType[],
+): RustImplFunction {
+  const statements: RustBlock["statements"][number][] = [];
+  for (const [index, type] of types.entries()) {
     statements.push({ kind: "expr", expr: { kind: "if-let", pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: "selected" }] }, expression: { kind: "method-call", receiver: { kind: "path", path: "output" },
         method: "downcast_mut", genericArguments: [{ kind: "type", type }], args: [] }, whenTrue: { kind: "block", body: { statements: [{ kind: "assign", operator: "=",
         target: { kind: "dereference", pointer: { kind: "path", path: "selected" } },
         value: { kind: "call", path: "Some", args: [{ kind: "path", path: "self" }] } },
-      ...(index === eligible.length - 1 ? [] : [{ kind: "return" as const }])] } } } });
+      ...(index === types.length - 1 ? [] : [{ kind: "return" as const }])] } } } });
   }
   return { ...checkedProjectProjectionSignature(slot), visibility: "private",
     body: { statements } };

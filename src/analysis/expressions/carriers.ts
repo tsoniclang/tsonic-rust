@@ -523,40 +523,41 @@ function applyOptionLane(
   integerConversion: "native" | "exact",
 ): TargetTypeRef | undefined {
   const expectedOptionElement = rustOptionElementCarrier(expected);
-  const target = expectedOptionElement !== undefined && isRustOptionCarrier(resolved)
-    ? expected
-    : expectedOptionElement ?? expected;
+  const target = expected;
   let projected = resolved;
   if (resolved !== undefined && target !== undefined &&
     !rustTargetTypeRefEquals(resolved, target)) {
+    const scalarTarget = expectedOptionElement ?? target;
     const retained = walk.context.facts.get(expression, rustContextualValueConversionFactKey);
     const refined = selectRustGuardedIntegerConversion({ ast: walk.context.ast, navigation: walk.context.source.navigation,
-      sourceFacts: walk.context.source.sourceFacts }, expression, resolved, target);
+      sourceFacts: walk.context.source.sourceFacts }, expression, resolved, scalarTarget);
     const exactInteger = refined ?? (integerConversion === "exact"
-      ? selectRustExactIntegerConversion(resolved, target) : undefined);
+      ? selectRustExactIntegerConversion(resolved, scalarTarget) : undefined);
     if (exactInteger !== undefined || retained?.conversion.kind === "exact-integer" &&
       rustTargetTypeRefEquals(retained.sourceCarrier, resolved) &&
       rustTargetTypeRefEquals(retained.targetCarrier, target)) {
       walk.context.facts.set(expression, rustContextualValueConversionFactKey, {
         sourceCarrier: resolved, targetCarrier: target,
-        conversion: exactInteger ?? { kind: "exact-integer", source: resolved, target },
+        conversion: exactInteger === undefined ? retained!.conversion : expectedOptionElement === undefined
+          ? exactInteger : { kind: "option-some", source: resolved, element: expectedOptionElement,
+            elementConversion: exactInteger },
       }, [{ message: "rust exact native integer storage" }]);
       projected = target;
     } else {
       const operation = walk.context.facts.get(expression, rustTargetOperationFactKey);
       const truncation = selectRustIntegerTruncationConversion(walk.context.ast, expression,
-        operation?.kind === "provider-operation" ? operation.operationId : undefined, resolved, target);
+        operation?.kind === "provider-operation" ? operation.operationId : undefined, resolved, scalarTarget);
       if (truncation !== undefined) {
         walk.context.facts.set(expression, rustContextualValueConversionFactKey, {
-          sourceCarrier: resolved, targetCarrier: target, conversion: truncation,
+          sourceCarrier: resolved, targetCarrier: scalarTarget, conversion: truncation,
         }, [{ message: "rust exact bounded integer result" }]);
-        projected = target;
+        projected = scalarTarget;
       }
-      let reconciliation = selectRustValueCarrierReconciliation(
+      let reconciliation = truncation === undefined ? selectRustValueCarrierReconciliation(
         resolved,
         target,
         walk.context.projectTypes, walk.context.typeDefinitions,
-      );
+      ) : { kind: "identity" as const };
       if (reconciliation.kind === "incompatible" && rustStructuralObjectCarrierValue(resolved) !== undefined) {
         const context = rustOperationContext(walk, expression);
         const conversion = selectProviderRecordArgument(

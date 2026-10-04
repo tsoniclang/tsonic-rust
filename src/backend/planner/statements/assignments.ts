@@ -37,7 +37,7 @@ import { planRustSourceAccessorReceiver } from "../objects/accessor-receivers.js
 import { applyRustValueConversion } from "../expressions/value-conversions.js";
 import { effectivePlannedExpressionCarrier, selectedOperationMatches } from "../expressions/fundamentals.js";
 import { planRustSharedReceiver } from "../expressions/typed-locations.js";
-import { isRustMutableJsErrorCarrier, isRustWritableSourceErrorCarrier } from "../../../target-model/types/carriers/source-error.js";
+import { rustCarrierProvidesErrorMutation } from "../../../target-model/types/carriers/error-protocols.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 
 export function planRustBuiltinErrorAssignment(
@@ -49,7 +49,7 @@ export function planRustBuiltinErrorAssignment(
 ): readonly RustStmt[] | undefined {
   const receiverNode = Node_Expression(context.input.program.source.ast, left);
   if (receiverNode === undefined || property.accessMode === "read" ||
-    !isRustMutableJsErrorCarrier(property.receiverCarrier) && !isRustWritableSourceErrorCarrier(property.receiverCarrier) ||
+    !rustCarrierProvidesErrorMutation(property.receiverCarrier, context.input.program.typeDefinitions) ||
     !rustTargetTypeRefEquals(effectivePlannedExpressionCarrier(receiverNode, context), property.receiverCarrier) ||
     !selectedOperationMatches(context.input.program.facts.getSelectedTargetProperty(left),
       property.operationId, "property", property.resultCarrier) || context.syntheticNames === undefined) {

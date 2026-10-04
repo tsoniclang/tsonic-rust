@@ -26,7 +26,7 @@ import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target
 import { selectRustProjectProjection } from "./project-projections.js";
 import { rustGenericCallableSignaturesMatch } from "../../target-model/conversions/generic-callable.js";
 import { selectRustCallableConversion } from "../../target-model/conversions/callable.js";
-import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustReadonlySourceErrorCarrier } from "../../target-model/types/carriers/source-error.js";
+import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustReadonlySourceErrorCarrier, isRustRetainedErrorCarrier } from "../../target-model/types/carriers/source-error.js";
 import { selectRustProjectUnionMapping } from "./project-union-mappings.js";
 
 export type RustValueCarrierReconciliation =
@@ -59,6 +59,13 @@ export function selectRustFlowReadProjection(
     return { kind: "identity" };
   }
   const dispatchCarrier = rustOptionElementCarrier(sourceCarrier) ?? sourceCarrier;
+  const optionalElement = rustOptionElementCarrier(sourceCarrier);
+  if (optionalElement !== undefined && rustTargetTypeRefEquals(optionalElement, selectedCarrier)) {
+    return { kind: "projection", fact: {
+      kind: selectedCarrier.kind === "reference" && selectedCarrier.mutable ? "option-reference" : "option-value",
+      sourceCarrier, selectedCarrier,
+    } };
+  }
   const union = definitions.sourceUnionVariants(dispatchCarrier);
   const selectedPayload = rustOptionElementCarrier(selectedCarrier);
   const mapping = rustTargetTypeRefEquals(dispatchCarrier, selectedPayload ?? selectedCarrier) ? undefined
@@ -89,18 +96,18 @@ export function selectRustFlowReadProjection(
     }
   }
   if ((isRustJsValueCarrier(sourceCarrier) && (rustTargetTypeRefEquals(selectedCarrier, rustJsErrorTargetType()) || isRustReadonlySourceErrorCarrier(selectedCarrier)) ||
-    (isRustProgramErrorCarrier(sourceCarrier) || isRustSourceErrorCarrier(sourceCarrier)) &&
+    (isRustProgramErrorCarrier(sourceCarrier) || isRustSourceErrorCarrier(sourceCarrier) || isRustRetainedErrorCarrier(sourceCarrier)) &&
     (isRustSourceErrorCarrier(selectedCarrier) && (isRustSourceErrorCarrier(projectTypes.sourceErrorCarrier()) ||
       projectTypes.sourceCreatedErrorOrigins.length !== 0) || isRustMutableJsErrorCarrier(selectedCarrier) ||
       rustTargetTypeRefEquals(selectedCarrier, rustJsErrorTargetType())))) {
     return { kind: "projection", fact: { kind: "builtin-error", sourceCarrier, selectedCarrier } };
   }
-  if (isRustProgramErrorCarrier(sourceCarrier) || isRustSourceErrorCarrier(sourceCarrier)) {
+  if (isRustProgramErrorCarrier(dispatchCarrier) || isRustSourceErrorCarrier(dispatchCarrier) || isRustRetainedErrorCarrier(dispatchCarrier)) {
     const selectedDefinition = projectTypes.definitionForCarrier(selectedCarrier);
     const variant = selectedDefinition === undefined
       ? undefined
       : projectTypes.programErrorVariant(selectedDefinition);
-    return variant !== undefined && (!isRustSourceErrorCarrier(sourceCarrier) ||
+    return variant !== undefined && (!(isRustSourceErrorCarrier(dispatchCarrier) || isRustRetainedErrorCarrier(dispatchCarrier)) ||
       selectedDefinition !== undefined && projectTypes.sourceErrorDefinitions.includes(selectedDefinition)) &&
       rustCarrierSupportsClone(selectedCarrier, definitions)
       ? {
@@ -113,14 +120,6 @@ export function selectRustFlowReadProjection(
           },
         }
       : { kind: "incompatible" };
-  }
-  const optionalElement = rustOptionElementCarrier(sourceCarrier);
-  if (optionalElement !== undefined &&
-    rustTargetTypeRefEquals(optionalElement, selectedCarrier)) {
-    if (selectedCarrier.kind === "reference" && selectedCarrier.mutable) {
-      return { kind: "projection", fact: { kind: "option-reference", sourceCarrier, selectedCarrier } };
-    }
-    return { kind: "projection", fact: { kind: "option-value", sourceCarrier, selectedCarrier } };
   }
   const sourceDefinition = projectTypes.definitionForCarrier(dispatchCarrier);
   const targetDefinition = projectTypes.definitionForCarrier(selectedCarrier);

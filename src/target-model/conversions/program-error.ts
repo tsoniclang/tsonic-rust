@@ -4,11 +4,13 @@ import { rustTargetTypeRefEquals } from "../types/equality.js";
 import { closedMetadataEquals, hasExactObjectKeys, isClosedMetadata, isDenseDataArray } from "../metadata/closed-data.js";
 import { rustUnionLeaves, type RustUnionLeaf } from "../types/union-relations.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../types/source-union-definitions.js";
-import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustWritableSourceErrorCarrier, rustWritableSourceErrorTargetType } from "../types/carriers/source-error.js";
+import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustWritableSourceErrorCarrier, rustWritableSourceErrorTargetType,
+  isRustRetainedErrorCarrier, isRustWritableRetainedErrorCarrier } from "../types/carriers/source-error.js";
 
 export type RustProgramErrorRoute =
   | { readonly kind: "source-error" }
   | { readonly kind: "source-created" }
+  | { readonly kind: "retained" }
   | { readonly kind: "runtime"; readonly boundary: "target-runtime" | "provider-native" }
   | { readonly kind: "project"; readonly variant: string }
   | { readonly kind: "union"; readonly arms: readonly (RustUnionLeaf & { readonly route: RustProgramErrorRoute })[] };
@@ -38,13 +40,17 @@ function selectRustIntrinsicErrorRoute(
   source: TargetTypeRef,
   target: TargetTypeRef,
 ): RustProgramErrorRoute | undefined {
-  if (!isRustProgramErrorCarrier(target) && !isRustSourceErrorCarrier(target)) return undefined;
-  if (isRustSourceErrorCarrier(source) && (!isRustSourceErrorCarrier(target) ||
+  if (!isErrorDestination(target)) return undefined;
+  if (isRustRetainedErrorCarrier(source) && (!isWritableDestination(target) || isRustWritableRetainedErrorCarrier(source))) {
+    return Object.freeze({ kind: "retained" });
+  }
+  if (isRustSourceErrorCarrier(source) && (isRustRetainedErrorCarrier(target) &&
+    (!isWritableDestination(target) || isRustWritableSourceErrorCarrier(source)) || !isRustSourceErrorCarrier(target) && !isWritableDestination(target) ||
     !isRustWritableSourceErrorCarrier(target) && isRustWritableSourceErrorCarrier(source))) {
     return Object.freeze({ kind: "source-error" });
   }
   if (isRustMutableJsErrorCarrier(source)) return Object.freeze({ kind: "source-created" });
-  return !isRustWritableSourceErrorCarrier(target) && rustTargetTypeRefEquals(source, rustJsErrorTargetType())
+  return !isWritableDestination(target) && rustTargetTypeRefEquals(source, rustJsErrorTargetType())
     ? Object.freeze({ kind: "runtime", boundary: "target-runtime" }) : undefined;
 }
 
@@ -53,13 +59,13 @@ export function selectRustProgramErrorConversion(
   target: TargetTypeRef = rustProgramErrorTargetType(),
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): RustProgramErrorConversion | undefined {
-  if (!isRustProgramErrorCarrier(target) && !isRustSourceErrorCarrier(target)) return undefined;
-  const sourceError = isRustSourceErrorCarrier(target);
+  if (!isErrorDestination(target)) return undefined;
+  const sourceError = isRustSourceErrorCarrier(target) || isRustRetainedErrorCarrier(target);
   const selectRoute = (carrier: TargetTypeRef): RustProgramErrorRoute | undefined => {
     const intrinsic = selectRustIntrinsicErrorRoute(carrier, target);
     if (intrinsic !== undefined) return intrinsic;
     const origin = definitions.programErrorOrigin(carrier);
-    if (origin?.kind === "provider" && !isRustWritableSourceErrorCarrier(target)) {
+    if (origin?.kind === "provider" && !isWritableDestination(target)) {
       return Object.freeze({ kind: "runtime", boundary: "provider-native" });
     }
     if (origin?.kind === "project" && (!sourceError || origin.sourceError)) {
@@ -118,10 +124,10 @@ export function rustProgramErrorConversionMatches(
 ): boolean {
   return isClosedMetadata(conversion) && hasExactObjectKeys(conversion, ["kind", "source", "target", "route"]) &&
     conversion.kind === "program-error" && rustTargetTypeRefEquals(source, conversion.source) &&
-    rustTargetTypeRefEquals(target, conversion.target) && (isRustProgramErrorCarrier(target) || isRustSourceErrorCarrier(target)) &&
+    rustTargetTypeRefEquals(target, conversion.target) && isErrorDestination(target) &&
     (!isRustSourceErrorCarrier(target) || !isRustSourceErrorCarrier(source) ||
       !isRustWritableSourceErrorCarrier(target) && isRustWritableSourceErrorCarrier(source)) &&
-    (!isRustWritableSourceErrorCarrier(target) || writableRouteMatches(conversion.route)) &&
+    (!isWritableDestination(target) || writableRouteMatches(conversion.route, source)) &&
     rustProgramErrorRouteMatches(conversion.route, source, definitions) &&
     closedMetadataEquals(conversion.route, selectRustProgramErrorConversion(source, target, definitions)?.route);
 }
@@ -131,6 +137,7 @@ function rustProgramErrorRouteMatches(
 ): boolean {
   if (typeof route !== "object" || route === null) return false;
   if (route.kind === "source-created") return hasExactObjectKeys(route, ["kind"]) && isRustMutableJsErrorCarrier(source);
+  if (route.kind === "retained") return hasExactObjectKeys(route, ["kind"]) && isRustRetainedErrorCarrier(source);
   if (route.kind === "source-error") {
     return hasExactObjectKeys(route, ["kind"]) && isRustSourceErrorCarrier(source);
   }
@@ -154,7 +161,17 @@ function rustProgramErrorRouteMatches(
     rustSourceTypeCarrierValue(source)?.shape === "object";
 }
 
-function writableRouteMatches(route: RustProgramErrorRoute): boolean {
+function writableRouteMatches(route: RustProgramErrorRoute, source: TargetTypeRef): boolean {
   return route.kind === "source-created" || route.kind === "project" ||
-    route.kind === "union" && route.arms.every(arm => writableRouteMatches(arm.route));
+    route.kind === "source-error" && isRustWritableSourceErrorCarrier(source) ||
+    route.kind === "retained" && isRustWritableRetainedErrorCarrier(source) ||
+    route.kind === "union" && route.arms.every(arm => writableRouteMatches(arm.route, arm.carrier));
+}
+
+function isErrorDestination(carrier: TargetTypeRef): boolean {
+  return isRustProgramErrorCarrier(carrier) || isRustSourceErrorCarrier(carrier) || isRustRetainedErrorCarrier(carrier);
+}
+
+function isWritableDestination(carrier: TargetTypeRef): boolean {
+  return isRustWritableSourceErrorCarrier(carrier) || isRustWritableRetainedErrorCarrier(carrier);
 }

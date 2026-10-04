@@ -54,7 +54,7 @@ export function planProjectRootImplementations(
   if (contracts === undefined || representation === undefined) {
     return undefined;
   }
-  const errorImplementations = planRustProjectErrorRoot(concrete, rootType, layers, context);
+  const errorImplementations = planRustProjectErrorRoot(concrete, concreteCarrier, rootType, layers, context);
   if (errorImplementations === undefined) return undefined;
   const generics = rustProjectRepresentationGenerics(representation, context);
   const items: RustItem[] = [...errorImplementations, rustProjectObjectIdentityImplementation(rootType, generics, {

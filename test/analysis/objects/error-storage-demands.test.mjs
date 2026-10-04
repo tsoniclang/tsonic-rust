@@ -23,7 +23,7 @@ function analyzed(files, jsEnabled) {
   const source = createTargetSourceProgram(checked);
   const projectFiles = source.sourceFiles.filter(file => Object.keys(files).some(name => source.ast.getFileName(file) === `/src/${name}`));
   const profiles = createRustSourceProfileRegistry(source.sourceFiles, source.ast, jsEnabled);
-  return { source, projectFiles, demand: createRustErrorStorageDemandQuery(source, profiles, projectFiles) };
+  return { source, projectFiles, demand: createRustErrorStorageDemandQuery(source, profiles, projectFiles, () => ({ kind: "ordinary" })) };
 }
 
 function declarations(source, projectFiles) {

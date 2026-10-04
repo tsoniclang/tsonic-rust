@@ -56,7 +56,6 @@ import { rustOptionalStorageValue, rustOptionalStorageNestingDepth } from "../..
 import {
   rustModuleBindingFactKey,
   rustMutatedBindingFactKey,
-  rustOptionProjectionFactKey,
   rustBindingStorageFactKey,
   rustPostCheckUnaryMinusOperationId,
   rustPostCheckUnaryPlusOperationId,
@@ -75,7 +74,7 @@ import { rustSelectedOperationKey } from "../../target-model/facts/selections.js
 import { rustTargetOperationSupportsAssignment, rustTargetOperationText } from "../facts/target-operation.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustOptionNestingDepth } from "../../target-model/types/carriers/optional.js";
-import { rustValueCarrierBeforeContextualConversion, rustValueCarrierBeforeOptionProjection } from "../facts/value-carrier-queries.js";
+import { rustValueCarrierBeforeContextualConversion, rustValueCarrierBeforeOptionProjection, rustStrictEqualityOperandCarrier } from "../facts/value-carrier-queries.js";
 import { rustRuntimeUnionContract, rustRuntimeUnionProjection } from "../../target-model/types/carriers/runtime-unions.js";
 import { selectedIntegerLiteralJoin, selectedIntegerLiteralUnionJoin, selectedSourceLiteralIsRepresentable } from "../../policy/types/selected-numeric-literal.js";
 import { rustNumericPromotionConversion } from "../../policy/operations/numeric/promotion.js";
@@ -268,9 +267,7 @@ function resolveContextualBinaryOperandCarriers(
         walk,
         leftNode,
         sourceFile,
-        right === undefined || rustUnionAlternatives(right, walk.context.typeDefinitions) === undefined
-          ? contextualLiteralOperandCarrier(walk.context.ast, leftNode, right)
-          : selectedIntegerLiteralUnionJoin(leftNode, right, walk.context.ast, walk.context.typeDefinitions),
+        contextualBinaryLiteralCarrier(walk, leftNode, right),
       ),
       right,
     };
@@ -283,9 +280,7 @@ function resolveContextualBinaryOperandCarriers(
         walk,
         rightNode,
         sourceFile,
-        left === undefined || rustUnionAlternatives(left, walk.context.typeDefinitions) === undefined
-          ? contextualLiteralOperandCarrier(walk.context.ast, rightNode, left)
-          : selectedIntegerLiteralUnionJoin(rightNode, left, walk.context.ast, walk.context.typeDefinitions),
+        contextualBinaryLiteralCarrier(walk, rightNode, left),
       ),
     };
   }
@@ -293,6 +288,17 @@ function resolveContextualBinaryOperandCarriers(
     left: resolveExpressionCarrier(walk, leftNode, sourceFile, undefined),
     right: resolveExpressionCarrier(walk, rightNode, sourceFile, undefined),
   };
+}
+
+function contextualBinaryLiteralCarrier(
+  walk: RustFactWalk,
+  expression: Node,
+  counterpart: TargetTypeRef | undefined,
+): TargetTypeRef | undefined {
+  const present = rustSourceOptionalElementCarrier(counterpart) ?? counterpart;
+  return present === undefined || rustUnionAlternatives(present, walk.context.typeDefinitions) === undefined
+    ? contextualLiteralOperandCarrier(walk.context.ast, expression, counterpart)
+    : selectedIntegerLiteralUnionJoin(expression, present, walk.context.ast, walk.context.typeDefinitions);
 }
 
 function contextualLiteralOperandCarrier(
@@ -365,10 +371,10 @@ export function resolvePostCheckBinaryCarrier(
   const strictEquality = operatorKind === KindEqualsEqualsEqualsToken ||
     operatorKind === KindExclamationEqualsEqualsToken;
   const leftComparisonCarrier = strictEquality
-    ? strictEqualityOperandCarrier(walk, operands.leftNode, left)
+    ? rustStrictEqualityOperandCarrier(walk.context.facts, operands.leftNode)
     : left;
   const rightComparisonCarrier = strictEquality
-    ? strictEqualityOperandCarrier(walk, operands.rightNode, right)
+    ? rustStrictEqualityOperandCarrier(walk.context.facts, operands.rightNode)
     : right;
   const optionNullishRelationship = selectedOptionNullishRelationship(
     walk,
@@ -420,7 +426,7 @@ export function resolvePostCheckBinaryCarrier(
     (walk.context.ast.kindName(location) === KindIdentifier && selectedLeftOperation === undefined ||
       selectedLeftFact?.kind === "source-field" || selectedLeftFact?.kind === "source-accessor" ||
       selectedLeftFact?.kind === "source-static-field") &&
-    (selectedLeftOperation === undefined || rustTargetOperationSupportsAssignment(selectedLeftFact))) {
+    (selectedLeftOperation === undefined || rustTargetOperationSupportsAssignment(selectedLeftFact, walk.context.typeDefinitions))) {
     const projected = rustOptionalStorageValue(left);
     const rightValue = projected === undefined
       ? rustValueCarrierBeforeContextualConversion(walk.context.facts, rightNode) : right;
@@ -596,7 +602,7 @@ export function resolvePostCheckBinaryCarrier(
       valueCarrier,
     };
   } else if (operatorKind === KindEqualsToken &&
-    (selectedLeftOperation === undefined || rustTargetOperationSupportsAssignment(selectedLeftFact)) &&
+    (selectedLeftOperation === undefined || rustTargetOperationSupportsAssignment(selectedLeftFact, walk.context.typeDefinitions)) &&
     left !== undefined && right !== undefined &&
     rustTargetTypeRefEquals(left, right)) {
     const parent = walk.context.ast.parent(expression);
@@ -691,7 +697,7 @@ export function resolvePostCheckBinaryCarrier(
   if (fact === undefined) {
     walk.postCheckOperations.delete(expression);
     if (operatorKind === KindEqualsToken && selectedLeftOperation !== undefined &&
-      !rustTargetOperationSupportsAssignment(selectedLeftFact)) {
+      !rustTargetOperationSupportsAssignment(selectedLeftFact, walk.context.typeDefinitions)) {
       appendRustDiagnostic(
         walk,
         "RUST_SELECTED_ASSIGNMENT_UNSUPPORTED",
@@ -777,21 +783,6 @@ function inPlaceStringAppendDeclarationFor(
       ? "in-place-string-append-parts"
       : "in-place-string-append-value",
   };
-}
-
-function strictEqualityOperandCarrier(
-  walk: RustFactWalk,
-  operand: Node,
-  effectiveCarrier: TargetTypeRef | undefined,
-): TargetTypeRef | undefined {
-  const runtimeCarrier = walk.context.facts.getRuntimeCarrierFact(operand)?.carrier;
-  if (isRustOptionCarrier(runtimeCarrier)) {
-    return runtimeCarrier;
-  }
-  const optionProjection = walk.context.facts.getFact(operand, rustOptionProjectionFactKey);
-  return optionProjection !== undefined && isRustOptionCarrier(optionProjection.resultCarrier)
-    ? optionProjection.sourceCarrier
-    : effectiveCarrier;
 }
 
 function selectEquivalentBindingAssignment(

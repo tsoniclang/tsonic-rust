@@ -1,4 +1,5 @@
 export { rustJsArrayValueTargetId, rustJsArrayValueTargetType, isRustJsArrayValueCarrier } from "./carriers/array-values.js";
+export { rustRetainedErrorTargetType, rustWritableRetainedErrorTargetType } from "./carriers/source-error.js";
 export type {
   RustTargetAssociatedConstraint,
   RustTargetConstArgument,

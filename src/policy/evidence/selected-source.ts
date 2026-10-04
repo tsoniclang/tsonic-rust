@@ -15,6 +15,7 @@ import { rustPolicyNode } from "../model/context.js";
 import type { RustSourceProfileRegistry } from "../types/source-profile.js";
 import { jsSourceSemanticsIdentity } from "@tsonic/js-source-profile";
 import { selectedSourcePropertyDeclarations } from "@tsonic/target-api/source";
+import type { RustCheckedCallSelectionInput } from "../operations/contracts.js";
 
 export interface RustSelectedSourceMemberIdentity {
   readonly profile: "native" | "js";
@@ -39,7 +40,7 @@ export interface RustProviderDeclarationCorroboration {
 }
 
 export function resolveSelectedProviderDeclaration(
-  context: RustSourcePolicyContext,
+  context: Pick<RustSourcePolicyContext, "facts">,
   selectedSubject: ExtensionFactSubject | undefined,
   corroborations: readonly RustProviderDeclarationCorroboration[] = [],
 ): RustSelectedProviderDeclarationResolution {
@@ -71,6 +72,17 @@ export function resolveSelectedProviderDeclaration(
     selected = merged;
   }
   return { kind: "selected", identity: selected };
+}
+
+export function selectedCallProviderDeclaration(
+  request: RustCheckedCallSelectionInput,
+  context: Pick<RustSourcePolicyContext, "facts">,
+): RustSelectedProviderDeclarationResolution {
+  return resolveSelectedProviderDeclaration(context, request.sourceSelectedDeclaration, [
+    { subject: request.source.selectedSignature, precision: "exact" },
+    { subject: request.source.sourceCallee.selectedDeclaration ?? request.source.sourceCallee.declaration, precision: "declaration" },
+    { subject: request.source.sourceCallee.selectedSymbol ?? request.source.sourceCallee.symbol, precision: "declaration" },
+  ]);
 }
 
 function providerDeclarationIdentityWithoutSignature(

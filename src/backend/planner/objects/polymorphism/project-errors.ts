@@ -5,6 +5,10 @@ import { emptyRustGenerics } from "../../../target-ast/nodes.js";
 import { projectFieldStoragePath, type ProjectClassStateLayer } from "./model.js";
 import { rustProjectRepresentationGenerics } from "./names.js";
 import { rustProjectObjectDispatchField, rustProjectObjectIdentityField, rustProjectObjectStateField } from "../project-objects.js";
+import { planCheckedProjectProjectionImplementation } from "../checked-project-projections.js";
+import { rustProjectInstanceContracts } from "../../../../analysis/project-types/type-policy.js";
+import type { TargetTypeRef } from "../../../../target-model/types/model.js";
+import { planRustErrorObjectFormatting } from "../../program/error-formatting.js";
 
 const path = (name: string): RustExpr => ({ kind: "path", path: name });
 const method = (receiver: RustExpr, name: string, ...args: readonly RustExpr[]): RustExpr =>
@@ -22,11 +26,12 @@ export function rustProjectErrorSuperTraits(
   context: RustPlanContext,
 ): readonly RustType[] {
   return context.input.program.projectTypes.externalBaseForDefinition(definition)?.programError === true
-    ? [{ kind: "named", path: "rt::WritableErrorObject" }] : [];
+    ? [{ kind: "named", path: "rt::WritableRetainedErrorObject" }] : [];
 }
 
 export function planRustProjectErrorRoot(
   definition: RustProjectTypeDefinition,
+  carrier: TargetTypeRef,
   rootType: RustType,
   layers: readonly ProjectClassStateLayer[],
   context: RustPlanContext,
@@ -66,10 +71,23 @@ export function planRustProjectErrorRoot(
     path("rt::JsErrorKind::Error")));
   functions.push(errorFunction("error_identity_key", { kind: "primitive", name: "usize" },
     method(field(path("self"), rustProjectObjectIdentityField), "key")));
-  return [{ kind: "impl", generics: rustProjectRepresentationGenerics(representation, context),
+  const contracts = rustProjectInstanceContracts(context.input.program.projectTypes, definition, carrier);
+  const projection = contracts === undefined ? undefined
+    : planCheckedProjectProjectionImplementation("project_error", contracts, [], context);
+  if (projection === undefined) return undefined;
+  const generics = rustProjectRepresentationGenerics(representation, context);
+  return [...planRustErrorObjectFormatting(rootType, generics), { kind: "impl", generics,
     trait: { kind: "named", path: "rt::ErrorObject" }, target: rootType, members: functions },
-    { kind: "impl", generics: rustProjectRepresentationGenerics(representation, context),
-      trait: { kind: "named", path: "rt::WritableErrorObject" }, target: rootType, members: setters }];
+    { kind: "impl", generics,
+      trait: { kind: "named", path: "rt::WritableErrorObject" }, target: rootType, members: setters },
+    { kind: "impl", generics, trait: { kind: "named", path: "rt::ErrorStack" }, target: rootType,
+      members: [{ ...errorFunction("set_stack", { kind: "unit" }, { kind: "call",
+        path: "rt::WritableErrorObject::set_error_stack", args: [path("self"), path("value")] }),
+        params: [{ name: "value", type: { kind: "named", path: "Option", genericArguments: [
+          { kind: "type", type: { kind: "string" } },
+        ] } }] }] },
+    { kind: "impl", generics, trait: { kind: "named", path: "rt::RetainedErrorObject" },
+      target: rootType, members: [projection] }];
 }
 
 export function planRustProjectErrorWrapper(
@@ -81,6 +99,11 @@ export function planRustProjectErrorWrapper(
   const representation = context.input.program.objectRepresentations.representationFor(definition);
   if (representation === undefined) return undefined;
   const receiver = field(path("self"), rustProjectObjectDispatchField);
+  const generics = rustProjectRepresentationGenerics(representation, context);
+  const retentionGenerics = { ...generics, wherePredicates: [...generics.wherePredicates,
+    { kind: "type" as const, type: wrapperType, bounds: [
+      { kind: "lifetime" as const, lifetime: { kind: "static" as const } },
+    ] }] };
   return [{ kind: "impl", generics: rustProjectRepresentationGenerics(representation, context),
     trait: { kind: "named", path: "rt::ErrorObject" }, target: wrapperType,
     members: [
@@ -97,7 +120,22 @@ export function planRustProjectErrorWrapper(
       params: [{ name: "value", type: name === "stack" ? { kind: "named" as const, path: "Option", genericArguments: [
         { kind: "type" as const, type: { kind: "string" as const } },
       ] } : { kind: "string" as const } }],
-    })) }];
+    })) },
+    ...["RetainedError", "WritableRetainedError"].map(name => ({
+      kind: "impl" as const, generics: retentionGenerics,
+      trait: { kind: "named" as const, path: "core::convert::From", genericArguments: [
+        { kind: "type" as const, type: wrapperType },
+      ] },
+      target: { kind: "named" as const, path: `rt::${name}` },
+      members: [{ kind: "function" as const, name: "from", visibility: "private" as const,
+        generics: emptyRustGenerics, params: [{ name: "value", type: wrapperType }],
+        returnType: { kind: "named" as const, path: "Self" },
+        body: { statements: [{ kind: "tail" as const, expr: { kind: "call" as const,
+          path: `Self::${name === "RetainedError" ? "WritableProject" : "Project"}`,
+          args: [field(path("value"), rustProjectObjectDispatchField)],
+        } }] },
+      }],
+    }))];
 }
 
 function errorFunction(name: string, returnType: RustType, value: RustExpr): RustImplFunction {

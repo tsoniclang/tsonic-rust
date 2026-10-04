@@ -3,6 +3,25 @@ import type { TargetTypeRef } from "../model.js";
 export const rustSourceErrorTargetId = "rust.program.SourceError";
 export const rustWritableSourceErrorTargetId = "rust.program.WritableSourceError";
 export const rustMutableJsErrorTargetId = "rust.runtime.MutableJsError";
+export const rustRetainedErrorTargetId = "rust.runtime.RetainedError";
+export const rustWritableRetainedErrorTargetId = "rust.runtime.WritableRetainedError";
+
+export function rustRetainedErrorTargetType(): TargetTypeRef {
+  return Object.freeze({ kind: "target-named", id: rustRetainedErrorTargetId });
+}
+
+export function rustWritableRetainedErrorTargetType(): TargetTypeRef {
+  return Object.freeze({ kind: "target-named", id: rustWritableRetainedErrorTargetId });
+}
+
+export function isRustRetainedErrorCarrier(carrier: TargetTypeRef | undefined): boolean {
+  const identity = nativeErrorIdentity(carrier);
+  return identity === rustRetainedErrorTargetId || identity === rustWritableRetainedErrorTargetId;
+}
+
+export function isRustWritableRetainedErrorCarrier(carrier: TargetTypeRef | undefined): boolean {
+  return nativeErrorIdentity(carrier) === rustWritableRetainedErrorTargetId;
+}
 
 export function rustSourceErrorTargetType(): TargetTypeRef {
   return Object.freeze({ kind: "target-named", id: rustSourceErrorTargetId });

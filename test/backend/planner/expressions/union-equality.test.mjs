@@ -8,6 +8,9 @@ import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/typ
 import { rustEffectiveValueCarrier } from "../../../../dist/analysis/facts/value-carrier-queries.js";
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
 import { printRustExpr } from "../../../../dist/print/source/index.js";
+import { crossFileBranchUnionFiles } from "../../../../../tsonic/test/fixtures/cross-file-branch-unions.mjs";
+import { rustStringTargetType } from "../../../../dist/target-model/types/index.js";
+import { rustSourceOptionalElementCarrier } from "../../../../dist/target-model/types/carriers/optional.js";
 
 function planningContext(program, node, selected) {
   const { ast } = program.source;
@@ -21,6 +24,32 @@ function planningContext(program, node, selected) {
     externalItemPathByIdentity: new Map(), externalStructuralShapeModuleByFileName: new Map(),
   };
 }
+
+test("inferred cross-file optional unions retain absence and compare literals without enum injection", () => {
+  const { program } = analyzeRust({ target: { id: "rust", options: { outputType: "bin" } }, files: {
+    ...crossFileBranchUnionFiles, "index.ts": crossFileBranchUnionFiles["index.ts"] +
+      '\nexport function main(): void { if (!run()) throw new Error("branch unions"); }',
+  } });
+  const { ast } = program.source;
+  const pending = [...program.sourceFiles];
+  let comparisons = 0;
+  while (pending.length !== 0) {
+    const node = pending.pop();
+    const binary = ast.as.AsBinaryExpression(node);
+    if (binary?.Right !== undefined && ast.is.IsStringLiteral(binary.Right)) {
+      const fact = program.facts.getFact(node, rustTargetOperationFactKey);
+      if (fact?.kind === "union-equality") {
+        comparisons++;
+        assert.equal(rustSourceOptionalElementCarrier(fact.leftCarrier) !== undefined, true, "checked inferred source absence survives");
+        assert.equal(rustTargetTypeRefEquals(fact.rightCarrier, rustStringTargetType()), true, "literal stays native string");
+        assert.equal(program.facts.getFact(binary.Right, rustContextualValueConversionFactKey) === undefined, true,
+          "comparison does not manufacture a complete enum payload");
+      }
+    }
+    pending.push(...ast.children(node));
+  }
+  assert.equal(comparisons, 2);
+});
 
 test("union equality rejects stale carriers, paths, operations, coverage and polarity", () => {
   const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `

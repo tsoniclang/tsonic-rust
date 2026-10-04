@@ -6,6 +6,7 @@ import type {
   RustPlanWriter,
 } from "../../target-model/facts/selections.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { isRustOptionCarrier } from "../../target-model/types/carriers/optional.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type {
   RustAppliedValueCarrierReconciliation,
@@ -94,6 +95,17 @@ export function rustEffectiveValueCarrier(
 ): TargetTypeRef | undefined {
   return facts.getFact(subject, rustOptionProjectionFactKey)?.resultCarrier ??
     rustValueCarrierBeforeOptionProjection(facts, subject);
+}
+
+export function rustStrictEqualityOperandCarrier(
+  facts: RustPlanQueries,
+  subject: ExtensionFactSubject | undefined,
+): TargetTypeRef | undefined {
+  const runtime = facts.getRuntimeCarrierFact(subject)?.carrier;
+  if (isRustOptionCarrier(runtime)) return runtime;
+  const projection = facts.getFact(subject, rustOptionProjectionFactKey);
+  return projection !== undefined && isRustOptionCarrier(projection.resultCarrier)
+    ? projection.sourceCarrier : rustEffectiveValueCarrier(facts, subject);
 }
 
 export function rustValueCarrierTransitionTarget(

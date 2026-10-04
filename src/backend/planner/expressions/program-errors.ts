@@ -6,7 +6,8 @@ import { diagnosticInput, registerAliasFromPath, rustCurrentErrorBoundary, type 
 import { resolveRustProgramErrorRoute, type RustSourcePackageErrorBoundary } from "../program/source-package-errors.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { planRustUnionFold } from "./union-folds.js";
-import { isRustSourceErrorCarrier, isRustWritableSourceErrorCarrier } from "../../../target-model/types/carriers/source-error.js";
+import { isRustSourceErrorCarrier, isRustWritableSourceErrorCarrier,
+  isRustRetainedErrorCarrier, isRustWritableRetainedErrorCarrier } from "../../../target-model/types/carriers/source-error.js";
 
 export function planRustProgramErrorConstruction(
   conversion: RustProgramErrorConversion,
@@ -23,7 +24,10 @@ export function planRustProgramErrorConstruction(
   }
   registerAliasFromPath(context, boundary.errorTypePath);
   const sourceError = isRustSourceErrorCarrier(conversion.target);
-  const targetPath = sourceError ? isRustWritableSourceErrorCarrier(conversion.target) ? "rt::WritableSourceError" : "rt::SourceError" : boundary.errorTypePath;
+  const retainedError = isRustRetainedErrorCarrier(conversion.target);
+  const targetPath = retainedError ? isRustWritableRetainedErrorCarrier(conversion.target)
+    ? "tsonic_rust_runtime::WritableRetainedError" : "tsonic_rust_runtime::RetainedError"
+    : sourceError ? isRustWritableSourceErrorCarrier(conversion.target) ? "rt::WritableSourceError" : "rt::SourceError" : boundary.errorTypePath;
   if (conversion.route.kind === "union") {
     return planRustUnionFold(value, conversion.route.arms, context, node,
       (arm, payload) => planRustProgramErrorConstruction({ ...conversion, source: arm.carrier, route: arm.route },
@@ -35,14 +39,20 @@ export function planRustProgramErrorConstruction(
         "rust.backend.throw-runtime-error-route", "Runtime error construction has no exact registered native error carrier."));
       return undefined;
     }
-    return { kind: "call", path: `${targetPath}::from`, args: [sourceError && conversion.route.boundary === "provider-native"
+    return { kind: "call", path: `${targetPath}::from`, args: [(sourceError || retainedError) && conversion.route.boundary === "provider-native"
       ? { kind: "call", path: "tsonic_rust_runtime::TsonicError::from", args: [value] } : value] };
   }
-  if (conversion.route.kind === "source-error" || conversion.route.kind === "source-created") {
+  if (conversion.route.kind === "source-error" || conversion.route.kind === "source-created" || conversion.route.kind === "retained") {
     return { kind: "call", path: `${targetPath}::from`, args: [value] };
   }
   const variant = conversion.route.variant;
   const definition = context.input.program.projectTypes.definitionForCarrier(conversion.source);
+  if (retainedError && definition !== undefined &&
+    context.input.program.projectTypes.sourceErrorDefinitions.includes(definition) &&
+    context.input.program.projectTypes.programErrorVariant(definition) === variant &&
+    rustTargetTypeRefEquals(context.input.program.projectTypes.openCarrier(definition), conversion.source)) {
+    return { kind: "call", path: `${targetPath}::from`, args: [value] };
+  }
   const route = definition === undefined ||
     sourceError && !context.input.program.projectTypes.sourceErrorDefinitions.includes(definition) ||
     context.input.program.projectTypes.programErrorVariant(definition) !== variant ||
