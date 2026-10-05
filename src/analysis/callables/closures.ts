@@ -228,7 +228,7 @@ export function resolveFunctionExpressionCarrier(
     return undefined;
   }
   const receiver = leadingParameters.find(parameter => parameter.kind === "this")?.carrier;
-  recordCallableSuspensionFacts(walk, expression, receiver?.kind === "reference" ? undefined : receiver);
+  recordCallableSuspensionFacts(walk, expression, receiver?.kind === "reference" ? undefined : receiver, selectedResult);
   const generator = walk.context.facts.get(expression, rustGeneratorFactKey);
   const asynchronous = walk.context.facts.get(expression, rustAsyncFunctionFactKey);
   if (walk.context.semanticsFor(expression).operations.generator(expression) !== undefined

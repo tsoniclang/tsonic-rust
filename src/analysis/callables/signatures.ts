@@ -28,21 +28,16 @@ import {
   rustSourceParameterAbiFactKey,
 } from "../facts/keys.js";
 import {
-  rustFutureOutputCarrier,
   isRustUnitCarrier,
   isRustNeverCarrier,
   rustOptionElementCarrier,
-  rustFutureTargetType,
   getRustGeneratorProtocol,
   rustSourceOptionalTargetType,
   rustCallableProtocol,
   rustClosureProtocol,
   rustCallableTargetType,
   rustGeneratorStorageTargetType,
-  rustJsPromiseTargetId,
-  rustJsPromiseTargetTypeWithLifetime,
 } from "../../target-model/types/index.js";
-import { rustPlaceholderLifetime, rustStaticLifetime } from "../../target-model/lifetimes/index.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { recordBindingPatternFacts, recordDefaultParameterInitializerFacts, recordParameterAbiFacts, setParameterAbiFact } from "../declarations/types-and-bindings.js";
@@ -64,6 +59,7 @@ import { closeRustSuspendedStorage } from "../../policy/types/suspended-storage.
 import { selectRustInferredReturn } from "./inferred-return.js";
 import { rustOptionalStorageValue } from "../../target-model/types/projections.js";
 import { selectRustClosedCallableInputs } from "./contextual-inputs.js";
+import { recordRustAsyncBodyFacts } from "./async-results.js";
 
 export function recordFunctionSignatureFacts(walk: RustFactWalk, declaration: Node): void {
   recordCallableParameterSignatureFacts(walk, declaration);
@@ -336,7 +332,7 @@ function recordCallableValueSignatureFacts(
   const selectedReturnCarrier = selectedCarrier?.kind === "function-pointer"
     ? selectedCarrier.result
     : closure?.result ?? callable?.result;
-  const returnCarrier = Node_Type(ast, declaration) === undefined
+  const returnCarrier = Node_Type(ast, declaration) === undefined && !ast.hasModifierKind(expression, "async")
     ? selectRustInferredReturn(walk, expression, selectedReturnCarrier)
     : selectedReturnCarrier;
   const parameters = ast.parameters(expression);
@@ -382,7 +378,7 @@ function recordCallableValueSignatureFacts(
     }
     parameterAbis.push(parameterAbi);
   }
-  recordCallableSuspensionFacts(walk, expression);
+  recordCallableSuspensionFacts(walk, expression, undefined, selectedReturnCarrier);
   if (!recordCallableReturnFact(walk, expression,
     walk.context.facts.get(expression, rustAsyncFunctionFactKey)?.outputCarrier ??
       walk.context.facts.get(expression, rustGeneratorFactKey)?.resultCarrier ?? returnCarrier)) {
@@ -411,7 +407,9 @@ function selectedCallableValueReturn(
   return rustCallableInvocationResult(walk.context.facts, declaration) ?? synchronousReturn;
 }
 
-export function recordCallableSuspensionFacts(walk: RustFactWalk, declaration: Node, ownedReceiver?: TargetTypeRef): void {
+export function recordCallableSuspensionFacts(
+  walk: RustFactWalk, declaration: Node, ownedReceiver?: TargetTypeRef, contextualResult?: TargetTypeRef,
+): void {
   const { ast } = walk.context;
   const sourceReturn = selectedSourceCallableReturn(walk, declaration);
   const sourceGenerator = walk.context.semanticsFor(declaration).operations.generator(declaration);
@@ -474,62 +472,7 @@ export function recordCallableSuspensionFacts(walk: RustFactWalk, declaration: N
       rustResolutionContext(walk, declaration),
       walk.operationOptions,
     );
-    const inferred = selectRustInferredReturn(walk, declaration, rustFutureOutputCarrier(futureCarrier));
-    const contextualType = isRustNeverCarrier(inferred) && Node_Type(ast, declaration) === undefined &&
-      (ast.is.IsArrowFunction(declaration) || ast.is.IsFunctionExpression(declaration))
-      ? walk.context.semanticsFor(declaration).types.contextualType(declaration) : undefined;
-    const contextual = contextualType === undefined ? undefined
-      : walk.context.semanticsFor(declaration).types.callable(contextualType);
-    const selectedContext = contextual === undefined ? undefined : resolveRustTargetTypeRef(
-      contextual.result.selectedType, rustResolutionContext(walk, declaration), walk.operationOptions);
-    const inner = contextual === undefined ? inferred
-      : rustFutureOutputCarrier(rustOptionElementCarrier(selectedContext) ?? selectedContext);
-    if (inner !== undefined) {
-      const isJsPromise = futureCarrier?.kind === "target-named" &&
-        futureCarrier.id === rustJsPromiseTargetId;
-      const storage = isJsPromise
-        ? resolveRustSuspendedCallableStorage(walk, declaration, [inner], ownedReceiver)
-        : undefined;
-      if (storage?.kind === "rejected") {
-        appendRustDiagnostic(
-          walk,
-          "RUST_ASYNC_PROMISE_STORAGE_LIFETIME_NOT_PROVEN",
-          storage.reason,
-          declaration,
-          ["target.capability=rust.async.js-promise-storage-lifetime"],
-        );
-        return;
-      }
-      const closedFutureCarrier = storage?.kind === "resolved"
-        ? rustJsPromiseTargetTypeWithLifetime(
-            inner,
-            storage.storage.kind === "static"
-              ? rustStaticLifetime
-              : storage.storage.kind === "receiver"
-                ? rustPlaceholderLifetime
-                : storage.storage.lifetime,
-          )
-        : rustFutureTargetType(inner);
-      walk.context.facts.set(declaration, rustAsyncFunctionFactKey,
-        storage?.kind === "resolved"
-          ? {
-              kind: "js-promise",
-              isAsync: true,
-              futureCarrier: closedFutureCarrier,
-              outputCarrier: inner,
-              capturedParameters: storage.capturedParameters,
-              storage: storage.storage,
-              ...(storage.ownedReceiver === undefined ? {} : { ownedReceiver: storage.ownedReceiver }),
-            }
-          : {
-              kind: "native-future",
-              isAsync: true,
-              futureCarrier: closedFutureCarrier,
-              outputCarrier: inner,
-            }, [
-        { message: "rust async function" },
-      ]);
-    }
+    recordRustAsyncBodyFacts(walk, declaration, futureCarrier, ownedReceiver, contextualResult);
   }
 }
 
