@@ -84,7 +84,7 @@ function rustCapturedFieldPayload(storage: RustCapturedFieldStorage, owner: Rust
 
 export function readRustCapturedField(storage: RustCapturedFieldStorage, owner: RustExpr, carrier: TargetTypeRef): RustExpr {
   const payload = rustCapturedFieldPayload(storage, owner);
-  if (storage.kind !== "shared") return rustBindingStorageOperations(storage.kind).read(payload);
+  if (storage.kind !== "shared") return rustBindingStorageOperations(storage.kind, isRustCopyCarrier(carrier)).read(payload);
   const reference: RustExpr = storage.initialization === "deferred" ? payload
     : { kind: "method-call", receiver: payload, method: "as_ref", args: [] };
   return isRustCopyCarrier(carrier) ? { kind: "dereference", pointer: reference }

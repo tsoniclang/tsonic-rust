@@ -105,7 +105,7 @@ export function planNullishAssignment(
   let writes: readonly RustStmt[] | undefined;
   if (location !== undefined) {
     const storedValue = planExpression(right, selectedContext);
-    const written = storedValue === undefined ? undefined : location.write(storedValue);
+    const written = storedValue === undefined ? undefined : location.write(storedValue, selectedContext);
     writes = written === undefined ? undefined : [{ kind: "expr", expr: written }];
   } else {
     writes = planRustAssignmentWrite(node, left, right, fact.assignment, selectedContext);

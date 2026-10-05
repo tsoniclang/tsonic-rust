@@ -58,6 +58,7 @@ export function createRustProjectObject(
   fields: readonly { readonly name: string; readonly value: RustExpr }[],
   representation: RustObjectRepresentation,
   contextValue?: RustExpr,
+  identity?: RustExpr,
 ): RustExpr {
   if (representation.kind === "value") {
     return { kind: "struct-literal", path: typePath, fields };
@@ -73,9 +74,10 @@ export function createRustProjectObject(
       name: rustProjectObjectStateField,
       value: {
         kind: "call",
-        path: `${carrierPath}::${contextValue === undefined ? "new" : "with_context"}`,
+        path: `${carrierPath}::${identity !== undefined ? "with_context_and_identity" : contextValue === undefined ? "new" : "with_context"}`,
         args: [{ kind: "struct-literal", path: statePath, fields },
-          ...(contextValue === undefined ? [] : [contextValue])],
+          ...(identity !== undefined ? [contextValue ?? { kind: "tuple-literal" as const, elements: [] }, identity]
+            : contextValue === undefined ? [] : [contextValue])],
       },
     }],
   };

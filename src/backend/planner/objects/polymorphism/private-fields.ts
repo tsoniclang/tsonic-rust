@@ -87,7 +87,7 @@ export function planProjectPrivateStateAccessors(
               value: { kind: "path", path: "value" },
             } : rustCapturedFieldLocation(rustCapturedFieldStorage(field.declaration, context)!,
               { kind: "method-call", receiver: fieldExpression, method: "clone", args: [] }, field.carrier)
-              .write({ kind: "path", path: "value" })!,
+              .write({ kind: "path", path: "value" }, context)!,
           }],
         },
       });

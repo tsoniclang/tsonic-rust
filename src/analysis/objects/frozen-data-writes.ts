@@ -1,4 +1,7 @@
-import type { AstReader, Node } from "@tsonic/tsts";
+import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
+import type { RustPlanQueries } from "../../target-model/facts/selections.js";
+import type { RustProjectStructuralView } from "./project-structural-views.js";
+import { rustFrozenReceiverCaptureFields } from "./frozen-receiver-captures.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
 import type { RustProjectTypeDefinition, RustProjectTypePolicy } from "../project-types/type-policy.js";
@@ -11,6 +14,7 @@ export type RustFrozenWriteReceiver = "receiver" | "state" | "identity";
 export interface RustFrozenDataWritePlan {
   receiverFor(storage: "project-object" | "structural-object", carrier: TargetTypeRef, index: number): RustFrozenWriteReceiver | undefined;
   receiverForDeclaration(declaration: Node): RustFrozenWriteReceiver | undefined;
+  retainsFieldIdentity(declaration: Node): boolean;
 }
 
 export interface RustFrozenDataWriteRegistry extends RustFrozenDataWritePlan {
@@ -20,6 +24,9 @@ export interface RustFrozenDataWriteRegistry extends RustFrozenDataWritePlan {
     readonly projectTypes: RustProjectTypePolicy;
     readonly representations: RustObjectRepresentationPlan;
     readonly structuralShapes: RustStructuralShapePlan;
+    readonly sourceFiles: readonly SourceFile[];
+    readonly facts: RustPlanQueries;
+    readonly views: readonly RustProjectStructuralView[];
   }): void;
   seal(): RustFrozenDataWritePlan;
 }
@@ -35,6 +42,8 @@ export function createRustFrozenDataWriteRegistry(): RustFrozenDataWriteRegistry
       if (current !== undefined) throw new Error("Frozen data-write analysis is already initialized.");
       const declarations = new Map<Node, RustFrozenWriteReceiver>();
       const fields = new Map<RustProjectTypeDefinition, ReadonlyMap<number, RustFrozenWriteReceiver>>();
+      const captures = input.representations.receiverCaptures;
+      const retained = input.jsEnabled ? rustFrozenReceiverCaptureFields({ ...input, captures }) : new Set<Node>();
       if (input.jsEnabled) for (const definition of input.projectTypes.definitions) {
         const representation = input.representations.representationFor(definition);
         const layout = rustProjectObjectLayout(definition.declaration, input.ast);
@@ -69,10 +78,12 @@ export function createRustFrozenDataWriteRegistry(): RustFrozenDataWriteRegistry
           return definition === undefined ? undefined : fields.get(definition)?.get(index);
         },
         receiverForDeclaration: (declaration: Node) => declarations.get(declaration),
+        retainsFieldIdentity: (declaration: Node) => retained.has(captures.storageDeclaration(declaration)),
       });
     },
     receiverFor: (storage, carrier, index) => requireCurrent().receiverFor(storage, carrier, index),
     receiverForDeclaration: declaration => requireCurrent().receiverForDeclaration(declaration),
+    retainsFieldIdentity: declaration => requireCurrent().retainsFieldIdentity(declaration),
     seal: requireCurrent,
   };
 }

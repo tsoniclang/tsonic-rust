@@ -309,6 +309,7 @@ export function planRustCallableExpressionBody(
     expressionOverrides: context.construction === undefined ? leadingPlan.context.expressionOverrides : undefined,
     valueFieldLocations: context.construction === undefined ? leadingPlan.context.valueFieldLocations : undefined,
     capturedFieldOwners: undefined,
+    capturedFieldIdentities: undefined,
     fallibleBoundary: callableErrorBoundary,
     asyncContext: asynchronous !== undefined || generator?.kind === "async",
     generator: generator === undefined ? undefined : {

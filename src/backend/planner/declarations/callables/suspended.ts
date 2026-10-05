@@ -17,7 +17,7 @@ import { rustLifetimeToAst } from "../../types/lifetime-syntax.js";
 import { rustDeclarationAssociatedPredicates } from "../../types/associated-bounds.js";
 import { bindRustElidedCallableInput, substituteElidedLifetime } from "../../../../target-model/types/carriers/lifetime-elision.js";
 import { rustCallableCaptureStorageType } from "../../types/capture-storage.js";
-import { rustCapturedFieldType } from "../../objects/captured-fields.js";
+import { rustCapturedReceiverFieldType } from "../../expressions/receiver-captures.js";
 
 export function planRustSuspendedCallableItems(context: RustPlanContext): readonly RustItem[] {
   const fileName = context.input.program.source.ast.getFileName(context.sourceFile);
@@ -67,7 +67,7 @@ function planImplementation(implementation: RustSuspendedCallableImplementation,
     substituteElidedLifetime(capture.carrier, rustStaticLifetime), scoped)),
     ...implementation.receiverFields.map((capture, index) => {
       const type = rustTypeFromCarrierInContext(implementation.storage[implementation.captures.length + index]!, scoped);
-      return type === undefined ? undefined : rustCapturedFieldType(capture.storage, type);
+      return type === undefined ? undefined : rustCapturedReceiverFieldType(capture, type, scoped);
     })];
   const requirements = context.input.program.declarationGenericRequirements.contractFor(declaration);
   if (protocol === undefined || argumentsType === undefined || resultType === undefined || target === undefined ||

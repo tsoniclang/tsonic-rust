@@ -20,8 +20,7 @@ import { rustAuthoredTypeParameterNames } from "../../../../target-model/names/t
 import { rustGeneratedTypeParameterContext } from "../../names/type-parameters.js";
 import { planRustGenericNativeFutureDispatch, type RustGenericNativeFutureInvocation } from "./generic-native-futures.js";
 import { rustCallableCaptureStorageType } from "../../types/capture-storage.js";
-import { rustCapturedFieldType } from "../../objects/captured-fields.js";
-import { rustCapturedReceiverFieldContext, validateRustCapturedReceiverFields } from "../../expressions/receiver-captures.js";
+import { rustCapturedReceiverFieldType, rustCapturedReceiverFieldContext, validateRustCapturedReceiverFields } from "../../expressions/receiver-captures.js";
 
 export function rustGenericCallableImplementationPath(
   implementation: RustGenericCallableImplementation, name: string, context: RustTypeRenderingContext,
@@ -74,7 +73,7 @@ function planImplementation(
   const captures = [...implementation.captures.map(capture => rustGenericCallableCaptureType(capture, helperContext)),
     ...implementation.receiverFields.map(capture => {
       const type = rustTypeFromCarrierInContext(capture.storageCarrier, helperContext);
-      return type === undefined ? undefined : rustCapturedFieldType(capture.storage, type);
+      return type === undefined ? undefined : rustCapturedReceiverFieldType(capture, type, helperContext);
     })];
   if (captures.some(type => type === undefined)) return undefined;
   const names = createRustSyntheticNameState(context.input.program.source.ast, implementation.declaration, []);

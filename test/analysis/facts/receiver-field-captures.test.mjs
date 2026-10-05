@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { rustClosureCaptureFactKey } from "../../../dist/analysis/facts/operations/keys.js";
 import { rustCapturedFieldStorageFactKey } from "../../../dist/analysis/facts/receiver-captures.js";
-import { stringCarrier } from "../../helpers/rust-session.mjs";
+import { stringCarrier, compileRust } from "../../helpers/rust-session.mjs";
 
 const declaration = {};
 const reference = {};
@@ -39,4 +39,17 @@ test("field storage facts reject missing, invalid and competing carrier represen
     { ...storage, storage: { kind: "borrow-cell", initialization: "unchecked" } },
     { ...storage, storage: { ...field.storage, extra: true } }])
     assert.equal(rustCapturedFieldStorageFactKey.equals(storage, changed), false);
+});
+
+for (const surfaces of [[], ["js"]]) test(`retained fields do not allocate freeze identity without demand in ${surfaces[0] ?? "native"}`, () => {
+  const { result } = compileRust({ surfaces, files: { "index.ts": `
+    export class Value {
+      value = 1;
+      change = (): void => { this.value = 2; };
+    }
+    export function main(): void { new Value().change(); }
+  ` } });
+  assert.equal(result.diagnostics.length, 0, "closed live-field source");
+  assert.equal(/ObjectIdentity::new|with_context_and_identity/u.test([...result.artifacts.values()].join("\n")), false,
+    "no freeze identity allocation or capture envelope");
 });

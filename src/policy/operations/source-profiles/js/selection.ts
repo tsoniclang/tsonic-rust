@@ -609,6 +609,7 @@ function carrierRequirementsMatch(
         const shape = rustStructuralObjectCarrierValue(carrier);
         return rustTargetTypeRefEquals(carrier, rustEmptyObjectTargetType()) ||
           rustTargetTypeRefEquals(carrier, rustObjectIdentityTargetType()) ||
+          (carrier !== undefined && request.carrierSupportsProjectIdentity?.(carrier) === true) ||
           shape?.representation === "reference" && shape.fields.every(field => field.bound !== true);
       }
     }

@@ -103,7 +103,7 @@ export function planCompoundAssignmentExpression(
   bindings.push({ name: currentName, value: current }, { name: valueName, value }, { name: resultName, value: next });
   const stored: RustExpr = copy ? result : { kind: "method-call", receiver: result, method: "clone", args: [] };
   overrides.set(right, { expression: stored, carrier: fact.resultCarrier, valueForm: "value" });
-  const locationWrite = location?.write(stored);
+  const locationWrite = location?.write(stored, context);
   const writes = location === undefined
     ? planRustAssignmentWrite(node, left, right, { kind: "operator-token", operator: "=", resultCarrier: fact.resultCarrier }, selected)
     : locationWrite === undefined ? undefined : [{ kind: "expr" as const, expr: locationWrite }];

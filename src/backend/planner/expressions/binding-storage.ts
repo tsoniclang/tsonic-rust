@@ -17,12 +17,14 @@ export function rustInlineBindingStorageType(storage: RustInlineBindingStorage, 
     genericArguments: [{ kind: "type", type: value }] };
 }
 
-export function rustBindingStorageOperations(storage: "location" | RustInlineBindingStorage): RustBindingStorageOperations {
+export function rustBindingStorageOperations(storage: "location" | RustInlineBindingStorage, copyPayload = false): RustBindingStorageOperations {
   const call = (receiver: RustExpr, method: string, args: readonly RustExpr[] = []): RustExpr =>
     ({ kind: "method-call", receiver: receiver.kind === "reference" ? receiver.expr : receiver, method, args });
   if (storage === "borrow-cell") {
     return {
-      read: receiver => (rustValueBlock([{ name: "borrowed", value: call(receiver, "borrow") }], call({ kind: "path", path: "borrowed" }, "clone"))),
+      read: receiver => (rustValueBlock([{ name: "borrowed", value: call(receiver, "borrow") }], copyPayload
+        ? { kind: "dereference", pointer: { kind: "path", path: "borrowed" } }
+        : call({ kind: "path", path: "borrowed" }, "clone"))),
       write: (receiver, value) => ({ kind: "block", body: { statements: [{ kind: "expr", expr: {
         kind: "assignment", operator: "=", target: { kind: "dereference", pointer: call(receiver, "borrow_mut") }, value,
       } }] } }),

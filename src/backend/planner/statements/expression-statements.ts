@@ -263,7 +263,7 @@ export function planRustAssignmentWrite(
     const valueName = allocateRustSyntheticName(context.syntheticNames, "field_value");
     const next = planRustCompoundAssignmentValue(fact, { kind: "path", path: currentName },
       { kind: "path", path: valueName }, left, context);
-    const written = next === undefined ? undefined : location.write(next);
+    const written = next === undefined ? undefined : location.write(next, context);
     return written === undefined ? undefined : [{ kind: "expr", expr: rustValueBlock([...location.bindings, ...(operator === "=" ? [] : [{ name: currentName, value: location.read }]),
         { name: valueName, value }], written) }];
   }

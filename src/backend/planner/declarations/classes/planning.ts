@@ -552,7 +552,7 @@ function planConstructor(
   }
   const construction = planRustConstructionBody(constructionPlan, fields,
     context.input.program.projectTypes.openCarrier(definition), classType,
-    values => createRustProjectObject(className, stateName,
+    (values, identity) => createRustProjectObject(className, stateName,
       fields.map(field => ({ name: field.targetName, value: values.get(field.declaration)! })).concat(
         methodProperties.map(property => ({ name: property.targetName, value: { kind: "none" as const } })),
         stateMarker === undefined ? [] : [{ name: stateMarker.name, value: stateMarker.value }],
@@ -560,7 +560,7 @@ function planConstructor(
           name: environment.instanceFieldName, value: { kind: "path" as const, path: environment.parameterName },
         }]),
       representation, !environment?.instancesUseEnvironment || representation.kind === "value"
-        ? undefined : { kind: "path", path: environment.parameterName }),
+        ? undefined : { kind: "path", path: environment.parameterName }, identity),
     constructorContext);
   if (construction === undefined) return undefined;
   const returnLabel = !constructionPlan.layerHasEarlyReturn(definition) ? undefined

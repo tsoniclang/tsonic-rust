@@ -20,12 +20,12 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { readRustStoredObjectField, writeRustStoredObjectField, rustProjectObjectRepresentation, rustDirectProjectFieldStoragePath } from "./project-storage.js";
 import { rustCapturedFieldStorage, rustCapturedFieldLocation } from "./captured-fields.js";
 import { readRustProjectObjectFieldOwner, readRustProjectDispatchedField, writeRustProjectDispatchedField, withRustProjectStoredField } from "./project-objects.js";
-import { planRustProjectFieldDispatchRoles } from "./project-field-dispatch.js";
+import { planRustProjectFieldDispatchRole } from "./project-field-dispatch.js";
 
 export interface RustValueFieldLocation {
   readonly bindings: readonly { readonly name: string; readonly value: RustExpr; readonly mutable?: boolean }[];
   readonly read: RustExpr;
-  readonly write: (value: RustExpr) => RustExpr | undefined;
+  readonly write: (value: RustExpr, context: RustPlanContext) => RustExpr | undefined;
   readonly project?: (names: readonly string[], carrier: TargetTypeRef) => RustValueFieldLocation;
   readonly withRead?: (project: (value: RustExpr) => RustExpr | undefined) => RustExpr | undefined;
 }
@@ -73,13 +73,16 @@ export function planRustValueFieldLocation(
             }) };
         }
         const dispatch = context.input.program.projectFieldDispatch.planFor(selectedField.declaration);
-        const roles = dispatch === undefined ? undefined : planRustProjectFieldDispatchRoles(dispatch, context);
-        if (roles === undefined) return undefined;
+        const readRole = dispatch === undefined ? undefined : planRustProjectFieldDispatchRole(dispatch, "read", context);
+        if (readRole === undefined) return undefined;
         const writeName = allocateRustSyntheticName(context.syntheticNames, "field_write_receiver");
-        return { bindings, read: readRustProjectDispatchedField(receiver, selectedField.dispatch.read, roles.read),
-          write: value => selectedField.dispatch?.write === undefined || roles.write === undefined ? undefined
-            : writeRustProjectDispatchedField(receiver, writeName, selectedField.dispatch.read, selectedField.dispatch.write,
-              "=", value, { read: roles.read, write: roles.write }) };
+        return { bindings, read: readRustProjectDispatchedField(receiver, selectedField.dispatch.read, readRole),
+          write: (value, writeContext) => {
+            const writeRole = dispatch === undefined ? undefined : planRustProjectFieldDispatchRole(dispatch, "write", writeContext);
+            return selectedField.dispatch?.write === undefined || writeRole === undefined ? undefined
+              : writeRustProjectDispatchedField(receiver, writeName, selectedField.dispatch.read, selectedField.dispatch.write,
+                "=", value, { read: readRole, write: writeRole });
+          } };
       }
       const owner = planRustCapturedFieldOwner(node, context, true);
       if (owner === undefined || context.syntheticNames === undefined) return undefined;

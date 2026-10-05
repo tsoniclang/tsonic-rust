@@ -151,7 +151,7 @@ function planRustUpdateExpression(
   if (rustSourceFieldHasValueReceiver(operand, context)) {
     const location = planRustValueFieldLocation(operand, context, "write");
     return location === undefined ? undefined : planRustUpdateValue({
-      locationBindings: location.bindings, read: location.read, write: location.write,
+      locationBindings: location.bindings, read: location.read, write: value => location.write(value, context),
       update: fact, step, returnsPrevious, context,
     });
   }

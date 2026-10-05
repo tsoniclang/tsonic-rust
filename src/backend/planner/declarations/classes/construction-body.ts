@@ -37,7 +37,7 @@ export function planRustConstructionBody(
   fields: readonly RustConstructionStorageField[],
   carrier: TargetTypeRef,
   type: RustType,
-  materialize: (values: ReadonlyMap<Node, RustExpr>) => RustExpr,
+  materialize: (values: ReadonlyMap<Node, RustExpr>, identity?: RustExpr) => RustExpr,
   context: RustPlanContext,
 ): RustConstructionBody | undefined {
   for (const issue of plan.issues) context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -52,6 +52,11 @@ export function planRustConstructionBody(
   }
   const slots: (RustConstructionStorageField & { readonly expression: Extract<RustExpr, { readonly kind: "path" }> })[] = [];
   const declarations: RustStmt[] = [];
+  const retainedIdentity = fields.some(field => context.input.program.frozenDataWrites.retainsFieldIdentity(field.declaration));
+  const identity: RustExpr | undefined = !retainedIdentity ? undefined : { kind: "path",
+    path: allocateRustSyntheticName(context.syntheticNames, "object_identity") };
+  if (identity?.kind === "path") declarations.push({ kind: "let", name: identity.path, mutable: false,
+    init: { kind: "call", path: "rt::ObjectIdentity::new", args: [] } });
   const values = new Map<Node, RustExpr>();
   const declarationAtInitialization = new Set<Node>();
   for (const field of fields) {
@@ -72,7 +77,7 @@ export function planRustConstructionBody(
   const rootName = allocateRustSyntheticName(context.syntheticNames, "constructed");
   const root: RustExpr = { kind: "path", path: rootName };
   if (plan.publishesReceiver) declarations.push({ kind: "let", name: rootName, mutable: true, type });
-  const publication = (): readonly RustStmt[] => [{ kind: "assign", target: root, operator: "=", value: materialize(values) }];
+  const publication = (): readonly RustStmt[] => [{ kind: "assign", target: root, operator: "=", value: materialize(values, identity) }];
   const overrideNodes = new Set(plan.expressions.flatMap(expression => expression.receiver === undefined
     ? [expression.node] : [expression.node, expression.receiver]));
   const prepare: RustConstructionBody["prepare"] = (node, selectedContext) => {
@@ -86,6 +91,7 @@ export function planRustConstructionBody(
     const overrides = new Map(selectedContext.expressionOverrides ?? []);
     const locations = new Map(selectedContext.valueFieldLocations ?? []);
     const capturedFieldOwners = new Map(selectedContext.capturedFieldOwners ?? []);
+    const capturedFieldIdentities = new Map(selectedContext.capturedFieldIdentities ?? []);
     for (const overridden of overrideNodes) overrides.delete(overridden);
     for (const expression of plan.expressionsWithin(node)) {
       if ((expression.kind === "field" || expression.kind === "capture") && !point.published) {
@@ -100,6 +106,8 @@ export function planRustConstructionBody(
           const initialized = selectedPoint.initializedFields.includes(slot.declaration);
           const possiblyInitialized = selectedPoint.possiblyInitializedFields.includes(slot.declaration);
           capturedFieldOwners.set(expression.node, slot.expression);
+          if (identity !== undefined && selectedContext.input.program.frozenDataWrites.retainsFieldIdentity(slot.declaration))
+            capturedFieldIdentities.set(expression.node, identity);
           const location = rustCapturedFieldLocation(storage, slot.expression, slot.carrier);
           locations.set(expression.node, initialized ? location : { ...location,
             write: value => possiblyInitialized ? initializeOrWriteRustCapturedField(storage, slot.expression, value)
@@ -118,7 +126,7 @@ export function planRustConstructionBody(
         overrides.set(receiverNode, { expression: receiver, carrier: substituted, valueForm: "storage" });
       }
     }
-    return { context: { ...selectedContext, expressionOverrides: overrides, valueFieldLocations: locations, capturedFieldOwners },
+    return { context: { ...selectedContext, expressionOverrides: overrides, valueFieldLocations: locations, capturedFieldOwners, capturedFieldIdentities },
       before: point.publishBefore ? publication() : [],
       finish(statements) {
         const planned = point.publishMissingElse ? statements.map(statement => statement.kind === "if"
@@ -165,7 +173,7 @@ export function planRustConstructionBody(
       if (slot?.expression.kind !== "path") return undefined;
       const storage = rustCapturedFieldStorage(physical, context);
       if (physical !== declaration) {
-        const update = storage === undefined ? undefined : rustCapturedFieldLocation(storage, slot.expression, slot.carrier).write(value);
+        const update = storage === undefined ? undefined : rustCapturedFieldLocation(storage, slot.expression, slot.carrier).write(value, context);
         return update === undefined ? undefined : [{ kind: "expr", expr: update }];
       }
       return declarationAtInitialization.has(physical)
@@ -187,6 +195,6 @@ export function planRustConstructionBody(
     },
     finish: () => !plan.completesNormally ? []
       : plan.publishesReceiver ? [...(final?.published ? [] : publication()), { kind: "tail", expr: root }]
-      : [{ kind: "tail", expr: materialize(values) }],
+      : [{ kind: "tail", expr: materialize(values, identity) }],
   };
 }

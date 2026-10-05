@@ -1,15 +1,27 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustClosureCaptureFact } from "../../../analysis/facts/operations/keys.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr, RustType } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustCapturedFieldOwner } from "../objects/value-fields.js";
-import { rustCapturedFieldLocation, rustCapturedFieldStorage } from "../objects/captured-fields.js";
+import { rustCapturedFieldLocation, rustCapturedFieldStorage, rustCapturedFieldType } from "../objects/captured-fields.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
-import { diagnosticInput } from "../program/plan-context.js";
+import { diagnosticInput, rustActiveErrorType } from "../program/plan-context.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { substituteRustTargetGenerics } from "../../../target-model/types/index.js";
+import { planExpression } from "./entry.js";
+import { checkRustDataWrite } from "../objects/data-writes.js";
+import { rustValueBlock } from "../../target-ast/value-block.js";
+
+export function rustCapturedReceiverFieldType(
+  capture: RustClosureCaptureFact["receiverFields"][number], type: RustType, context: RustPlanContext,
+): RustType {
+  const owner = rustCapturedFieldType(capture.storage, type);
+  return context.input.program.frozenDataWrites.retainsFieldIdentity(capture.declaration)
+    ? { kind: "tuple", elements: [{ kind: "named", path: "rt::ObjectIdentity" }, owner] } : owner;
+}
 
 export function validateRustCapturedReceiverFields(
   node: Node, fields: RustClosureCaptureFact["receiverFields"], context: RustPlanContext,
@@ -51,7 +63,20 @@ export function planRustCapturedReceiverFields(
       return undefined;
     }
     const name = allocateRustSyntheticName(creation.syntheticNames, "captured_field");
-    bindings.push({ name, value: owner });
+    const guarded = creation.input.program.frozenDataWrites.retainsFieldIdentity(capture.declaration);
+    const receiver = guarded && creation.capturedFieldIdentities?.get(capture.reference) === undefined
+      ? planExpression(capture.receiver, creation) : undefined;
+    const identity = creation.capturedFieldIdentities?.get(capture.reference) ?? (receiver === undefined ? undefined
+      : { kind: "call" as const, path: "rt::ObjectIdentityCarrier::object_identity",
+        args: [{ kind: "reference" as const, expr: receiver }] });
+    if (guarded && identity === undefined) {
+      creation.diagnostics.push(missingFactDiagnostic(diagnosticInput(creation, capture.reference),
+        "rust.backend.receiver-field-identity", "A frozen retained field requires its exact live object identity owner."));
+      return undefined;
+    }
+    bindings.push({ name, value: guarded ? { kind: "tuple-literal", elements: [
+      { kind: "method-call", receiver: identity!, method: "clone", args: [] }, owner,
+    ] } : owner });
     retained.push({ kind: "path", path: name });
   }
   return { bindings, context: rustCapturedReceiverFieldContext(fields, invocation, index => retained[index]!) };
@@ -63,12 +88,26 @@ export function rustCapturedReceiverFieldContext(
 ): RustPlanContext {
   const locations = new Map(context.valueFieldLocations ?? []);
   const owners = new Map(context.capturedFieldOwners ?? []);
+  const identities = new Map(context.capturedFieldIdentities ?? []);
   for (const [index, capture] of fields.entries()) {
-    const owner = ownerFor(index);
+    const retained = ownerFor(index);
+    const guarded = context.input.program.frozenDataWrites.retainsFieldIdentity(capture.declaration);
+    const identity: RustExpr = { kind: "field", receiver: retained, name: "0" };
+    const owner: RustExpr = guarded ? { kind: "field", receiver: retained, name: "1" } : retained;
+    const carrier = substituteRustTargetGenerics(capture.carrier, context.typeParameterSubstitutions ?? new Map(),
+      context.lifetimeSubstitutions ?? new Map());
     for (const reference of capture.references) {
       owners.set(reference, owner);
-      locations.set(reference, rustCapturedFieldLocation(capture.storage, owner, capture.carrier));
+      const location = rustCapturedFieldLocation(capture.storage, owner, carrier);
+      if (guarded) identities.set(reference, identity);
+      locations.set(reference, !guarded ? location : { ...location, write: (value, writeContext) => {
+        const errorType = rustActiveErrorType(writeContext);
+        if (errorType === undefined || writeContext.syntheticNames === undefined) return undefined;
+        const name = allocateRustSyntheticName(writeContext.syntheticNames, "field_value");
+        const effect = location.write({ kind: "path", path: name }, writeContext);
+        return effect === undefined ? undefined : rustValueBlock([{ name, value }], checkRustDataWrite("receiver", identity, effect, errorType));
+      } });
     }
   }
-  return { ...context, valueFieldLocations: locations, capturedFieldOwners: owners };
+  return { ...context, valueFieldLocations: locations, capturedFieldOwners: owners, capturedFieldIdentities: identities };
 }

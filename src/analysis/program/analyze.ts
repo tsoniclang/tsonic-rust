@@ -472,7 +472,8 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     finalizeRustCopiedMethods(walk, projectSourceFiles, fileName => sourcePackageComponentByFile.get(fileName)!),
   );
   context.frozenDataWrites.initialize({ jsEnabled: walk.jsEnabled, ast, projectTypes,
-    representations: context.objectRepresentations, structuralShapes: context.structuralShapes.seal() });
+    representations: context.objectRepresentations, structuralShapes: context.structuralShapes.seal(),
+    sourceFiles: projectSourceFiles, facts: context.facts, views: context.classValues.instanceViewRequests() });
   context.projectFieldDispatch.initialize({
     ast,
     projectTypes,
