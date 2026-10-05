@@ -4,6 +4,7 @@ import { receiverFieldCapturesSource } from "../../../../tsonic/test/fixtures/re
 import { receiverFieldCaptureEdges, receiverFieldFreezeSource, receiverFieldFreezeEdges } from "../../../../tsonic/test/fixtures/receiver-field-capture-edges.mjs";
 import { compileRust, rustSourceText } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
+import { genericCallableOwnershipCases } from "../../../../tsonic/test/fixtures/generic-callable-ownership.mjs";
 
 for (const surface of ["native", "js"]) {
   test(`native receiver field owners preserve escaped, inherited, generic and replaced storage in ${surface}`, { timeout: 300_000 }, () => {
@@ -33,5 +34,16 @@ for (const example of [...receiverFieldCaptureEdges, ...receiverFieldFreezeEdges
       files: { "index.ts": example.source + main } });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 6).map(row => row.message.slice(0, 256)).join("\n"));
     validateGeneratedProject(`receiver-field-${example.name}`, result.artifacts, { run: true });
+  });
+}
+
+for (const example of genericCallableOwnershipCases) for (const surfaces of [[], ["js"]]) {
+  test(`quantified callable ownership ${example.name} in ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
+      files: { "index.ts": example.source } });
+    assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 6).map(row => row.message.slice(0, 256)).join("\n"));
+    assert.equal(/dyn Any|downcast_unchecked|transmute|unsafe\s*\{/u.test(rustSourceText(result)), false,
+      `exact native quantified ownership ${example.name}`);
+    validateGeneratedProject(`generic-callable-${example.name}-${surfaces[0] ?? "native"}`, result.artifacts, { run: true });
   });
 }

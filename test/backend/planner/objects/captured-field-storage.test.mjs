@@ -1,14 +1,31 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rustBindingStorageOperations } from "../../../../dist/backend/planner/expressions/binding-storage.js";
-import { readRustCapturedField, writeRustCapturedField, writeRustCapturedFieldFromStorage } from "../../../../dist/backend/planner/objects/captured-fields.js";
-import { writeRustProjectObjectField } from "../../../../dist/backend/planner/objects/project-objects.js";
+import { createRustCapturedField, rustCapturedFieldType, readRustCapturedField, writeRustCapturedField, writeRustCapturedFieldFromStorage } from "../../../../dist/backend/planner/objects/captured-fields.js";
+import { readRustProjectObjectFieldOwner, writeRustProjectObjectField } from "../../../../dist/backend/planner/objects/project-objects.js";
 import { rustStoredObjectFieldSupportsBorrowedRead } from "../../../../dist/backend/planner/objects/project-storage.js";
 import { validatedRustCapturedFieldStorageFact } from "../../../../dist/analysis/facts/receiver-captures.js";
 import { int32Carrier, stringCarrier } from "../../../helpers/rust-session.mjs";
+import { selectRustCapturedFieldStorage } from "../../../../dist/policy/ownership/captured-field-storage.js";
 
 const owner = { kind: "path", path: "payload" };
 const next = { kind: "path", path: "next" };
+
+test("proven immutable scalar captures have no native heap owner or clone", () => {
+  const storage = selectRustCapturedFieldStorage(int32Carrier, true, false, true);
+  const type = { kind: "named", path: "i32" };
+  assert.equal(storage.kind, "copy");
+  assert.equal(rustCapturedFieldType(storage, type) === type, true);
+  assert.equal(createRustCapturedField(storage, next) === next, true);
+  assert.equal(readRustCapturedField(storage, owner, int32Carrier) === owner, true);
+  assert.equal(writeRustCapturedField(storage, owner, next), undefined);
+  const retained = readRustProjectObjectFieldOwner(owner, "value", { kind: "shared-immutable" }, storage);
+  assert.equal(countNodes(retained, node => node.method === "clone" || node.path === "alloc::rc::Rc::new"), 0);
+  assert.equal(selectRustCapturedFieldStorage(int32Carrier, true, false, false).kind, "cell");
+  assert.equal(selectRustCapturedFieldStorage(int32Carrier, true, true, true).kind, "shared");
+  assert.equal(selectRustCapturedFieldStorage(stringCarrier, true, false, true).kind, "shared");
+  assert.equal(selectRustCapturedFieldStorage(int32Carrier, false, false, true).kind, "cell");
+});
 
 function countNodes(expression, predicate) {
   if (expression === undefined || expression === null || typeof expression !== "object") return 0;
@@ -123,7 +140,8 @@ test("analysis validates exact captured storage facts against the canonical over
   const canonical = {};
   const fact = { storage: { kind: "borrow-cell", initialization: "deferred" }, valueCarrier: int32Carrier };
   const generic = { kind: "type-parameter", name: "Value", identity: "source:Value" };
-  const captures = { isCaptured: () => true, storageDeclaration: () => canonical, storageReadonly: () => false, isDeferred: () => true };
+  const captures = { isCaptured: () => true, storageDeclaration: () => canonical, storageReadonly: () => false,
+    storageImmutable: () => false, isDeferred: () => true };
   function program(selectedFact = fact, selectedCaptures = captures, valueCarrier = int32Carrier, storageCarrier = generic) {
     return { facts: { getFact: () => selectedFact, getRuntimeCarrierFact: selected => ({ carrier: selected === canonical ? storageCarrier : valueCarrier }) },
       objectRepresentations: { receiverCaptures: selectedCaptures } };
@@ -138,16 +156,26 @@ test("analysis validates exact captured storage facts against the canonical over
     assert.equal(validatedRustCapturedFieldStorageFact(declaration, input), undefined);
   }
   assert.equal(validatedRustCapturedFieldStorageFact(declaration, program(fact, { ...captures, isCaptured: () => false })), undefined);
-  assert.equal(validatedRustCapturedFieldStorageFact(declaration, program(fact, { ...captures, storageReadonly: () => true })), undefined);
+  assert.equal(validatedRustCapturedFieldStorageFact(declaration, program(fact,
+    { ...captures, storageReadonly: () => true, storageImmutable: () => true })), undefined);
   assert.equal(validatedRustCapturedFieldStorageFact(declaration, program(fact, captures, int32Carrier, int32Carrier)), undefined,
     "instantiated Copy cannot replace the generic declaration's physical storage");
   assert.equal(validatedRustCapturedFieldStorageFact(declaration, program(fact, { ...captures, storageDeclaration: () => ({}) })), undefined,
     "canonical override-family owner identity is required");
   const readonly = { ...fact, storage: { kind: "shared", initialization: "ready" } };
   assert.equal(validatedRustCapturedFieldStorageFact(declaration, program(readonly,
-    { ...captures, storageReadonly: () => true, isDeferred: () => false })) === readonly, true);
+    { ...captures, storageReadonly: () => true, storageImmutable: () => true, isDeferred: () => false })) === readonly, true);
   const ready = { ...fact, storage: { kind: "borrow-cell", initialization: "ready" } };
   assert.equal(validatedRustCapturedFieldStorageFact(declaration, program(ready, { ...captures, isDeferred: () => false })) === ready, true);
+  const copied = { storage: { kind: "copy", initialization: "ready" }, valueCarrier: int32Carrier };
+  const copiedCaptures = { ...captures, storageReadonly: () => true, storageImmutable: () => true, isDeferred: () => false };
+  assert.equal(validatedRustCapturedFieldStorageFact(declaration, program(copied, copiedCaptures, int32Carrier, int32Carrier)) === copied, true);
+  for (const selection of [{ ...copiedCaptures, storageImmutable: () => false },
+    { ...copiedCaptures, storageReadonly: () => false }, { ...copiedCaptures, isDeferred: () => true }]) {
+    assert.equal(validatedRustCapturedFieldStorageFact(declaration, program(copied, selection, int32Carrier, int32Carrier)), undefined);
+  }
+  assert.equal(validatedRustCapturedFieldStorageFact(declaration, program({ ...copied,
+    storage: { kind: "copy", initialization: "deferred" } }, copiedCaptures, int32Carrier, int32Carrier)), undefined);
   const missing = program();
   missing.facts.getRuntimeCarrierFact = () => undefined;
   assert.equal(validatedRustCapturedFieldStorageFact(declaration, missing), undefined);

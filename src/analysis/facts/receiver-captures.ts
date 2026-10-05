@@ -34,5 +34,5 @@ export function validatedRustCapturedFieldStorageFact(
     hasExactObjectKeys(fact, ["storage", "valueCarrier"]) && isRustCapturedFieldStorage(fact.storage) &&
     carrier !== undefined && storageCarrier !== undefined && rustTargetTypeRefEquals(fact.valueCarrier, carrier) &&
     closedMetadataEquals(selectRustCapturedFieldStorage(storageCarrier,
-      captures.storageReadonly(declaration), captures.isDeferred(declaration)), fact.storage) ? fact : undefined;
+      captures.storageReadonly(declaration), captures.isDeferred(declaration), captures.storageImmutable(declaration)), fact.storage) ? fact : undefined;
 }

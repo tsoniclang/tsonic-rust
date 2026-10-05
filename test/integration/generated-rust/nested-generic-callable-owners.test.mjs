@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { acmeTestingPackage, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
+import { receiverFieldUnconstrainedEqualitySource } from "../../../../tsonic/test/fixtures/receiver-field-capture-edges.mjs";
 
 for (const surfaces of [[], ["js"]]) {
   const profile = surfaces.length === 0 ? "native" : "js";
@@ -51,10 +52,8 @@ export function main(): void {
     const { result } = compileRust({
       surfaces,
       target: { id: "rust", options: { outputType: "bin", crateName: `unbounded_generic_equality_${profile}` } },
-      files: { "index.ts": `
-function same<Value>(value: Value): boolean { return value === value; }
-export function main(): void { if (!same(3)) throw new Error("equal"); }
-` },
+      files: { "index.ts": receiverFieldUnconstrainedEqualitySource +
+        '\nexport function main(): void { if (!run()) throw new Error("equal"); }' },
     });
     assert.equal(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_BINARY_OPERATOR_CARRIER_UNSUPPORTED"), true);
     assert.equal(result.artifacts.length, 0);

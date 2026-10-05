@@ -234,8 +234,10 @@ export function planRustCapturedFieldOwner(node: Node, context: RustPlanContext,
   const operation = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
   if (operation?.kind !== "source-field" || operation.declaration === undefined ||
     !sourceFieldSelectedOperationMatches(node, operation, context)) return undefined;
+  const storage = rustCapturedFieldStorage(operation.declaration, context);
+  if (storage === undefined) return undefined;
   const captured = context.capturedFieldOwners?.get(node);
-  if (captured !== undefined) return borrowed ? { kind: "reference", expr: captured }
+  if (captured !== undefined) return storage.kind === "copy" ? captured : borrowed ? { kind: "reference", expr: captured }
     : { kind: "method-call", receiver: captured, method: "clone", args: [] };
   const receiverNode = Node_Expression(context.input.program.source.ast, node);
   const planned = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
@@ -254,5 +256,5 @@ export function planRustCapturedFieldOwner(node: Node, context: RustPlanContext,
   const binding = receiverNode === undefined ? undefined : context.input.program.sourceNavigation.sourceReferenceFor(receiverNode)?.declaration;
   const stable = receiverNode !== undefined && (["KindThisExpression", "KindThisKeyword"].includes(ast.kindName(receiverNode)) ||
     ast.is.IsIdentifier(receiverNode) && binding !== undefined && !context.input.program.sourceNavigation.declarationUseSummary(binding).bindingWritten);
-  return readRustProjectObjectFieldOwner(receiver, path, representation, borrowed && stable);
+  return readRustProjectObjectFieldOwner(receiver, path, representation, storage, borrowed && stable && storage.kind !== "copy");
 }

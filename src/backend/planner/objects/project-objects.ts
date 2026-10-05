@@ -110,11 +110,11 @@ export function readRustProjectObjectField(
 
 export function readRustProjectObjectFieldOwner(
   receiver: RustExpr, storagePath: string | readonly string[], representation: RustObjectRepresentation,
-  borrowed = false,
+  captureStorage: RustCapturedFieldStorage, borrowed = false,
 ): RustExpr {
   if (borrowed && representation.kind === "value") return { kind: "reference", expr: rustProjectObjectDirectPath(receiver, storagePath) };
   return withRustProjectStoredField(receiver, storagePath, representation,
-    field => ({ kind: "method-call", receiver: field, method: "clone", args: [] }));
+    field => captureStorage.kind === "copy" ? field : ({ kind: "method-call", receiver: field, method: "clone", args: [] }));
 }
 
 export function withRustProjectStoredField(

@@ -25,7 +25,7 @@ export function rustCapturedFieldStorage(declaration: Node, context: RustPlanCon
 }
 
 export function rustCapturedFieldType(storage: RustCapturedFieldStorage | undefined, type: RustType): RustType {
-  if (storage === undefined) return type;
+  if (storage === undefined || storage.kind === "copy") return type;
   const payload = storage.kind === "shared" ? type : rustInlineBindingStorageType(storage.kind, type);
   const owner = storage.initialization === "ready" ? payload : { kind: "named" as const, path: "core::cell::OnceCell",
     genericArguments: [{ kind: "type" as const, type: payload }] };
@@ -33,7 +33,7 @@ export function rustCapturedFieldType(storage: RustCapturedFieldStorage | undefi
 }
 
 export function createRustCapturedField(storage: RustCapturedFieldStorage | undefined, value: RustExpr): RustExpr {
-  if (storage === undefined) return value;
+  if (storage === undefined || storage.kind === "copy") return value;
   const payload = createRustCapturedFieldPayload(storage, value);
   return { kind: "call", path: "alloc::rc::Rc::new", args: [storage.initialization === "ready" ? payload
     : { kind: "call", path: "core::cell::OnceCell::from", args: [payload] }] };
@@ -53,7 +53,7 @@ export function initializeRustCapturedField(storage: RustCapturedFieldStorage | 
 }
 
 export function initializeOrWriteRustCapturedField(storage: RustCapturedFieldStorage, owner: RustExpr, value: RustExpr): RustExpr | undefined {
-  if (storage.initialization !== "deferred" || storage.kind === "shared") return undefined;
+  if (storage.initialization !== "deferred" || storage.kind === "shared" || storage.kind === "copy") return undefined;
   const updated = rustBindingStorageOperations(storage.kind).write({ kind: "path", path: "initialized" }, { kind: "path", path: "value" });
   return { kind: "block", body: { statements: [
     { kind: "let", name: "value", mutable: false, init: value },
@@ -65,7 +65,7 @@ export function initializeOrWriteRustCapturedField(storage: RustCapturedFieldSto
 }
 
 function createRustCapturedFieldPayload(storage: RustCapturedFieldStorage, value: RustExpr): RustExpr {
-  return storage.kind === "shared" ? value : { kind: "associated-call", owner: { kind: "named",
+  return storage.kind === "shared" || storage.kind === "copy" ? value : { kind: "associated-call", owner: { kind: "named",
     path: storage.kind === "cell" ? "core::cell::Cell" : "core::cell::RefCell" }, method: "new", args: [value] };
 }
 
@@ -76,6 +76,7 @@ function rustCapturedFieldPayload(storage: RustCapturedFieldStorage, owner: Rust
 }
 
 export function readRustCapturedField(storage: RustCapturedFieldStorage, owner: RustExpr, carrier: TargetTypeRef): RustExpr {
+  if (storage.kind === "copy") return owner;
   const payload = rustCapturedFieldPayload(storage, owner);
   if (storage.kind !== "shared") return rustBindingStorageOperations(storage.kind, isRustCopyCarrier(carrier)).read(payload);
   const reference: RustExpr = storage.initialization === "deferred" ? payload
@@ -105,7 +106,7 @@ export function rustCapturedFieldLocation(
 export function writeRustCapturedField(
   storage: RustCapturedFieldStorage, owner: RustExpr, value: RustExpr, projection: readonly string[] = [],
 ): RustExpr | undefined {
-  if (storage.kind === "shared") return undefined;
+  if (storage.kind === "shared" || storage.kind === "copy") return undefined;
   const payload = rustCapturedFieldPayload(storage, owner);
   if (projection.length === 0) return rustBindingStorageOperations(storage.kind).write(payload, value);
   if (storage.kind === "borrow-cell") return { kind: "block", body: { statements: [
@@ -143,7 +144,7 @@ export function writeRustCapturedFieldFromStorage(
   releaseBorrow: boolean,
   projection: readonly string[] = [],
 ): RustExpr | undefined {
-  if (storage.kind === "shared") return undefined;
+  if (storage.kind === "shared" || storage.kind === "copy") return undefined;
   if (storage.kind === "borrow-cell" && releaseBorrow) {
     const owner = withOwner(selected => ({ kind: "method-call", receiver: selected, method: "clone", args: [] }));
     return owner === undefined ? undefined : writeRustCapturedField(storage, owner, value, projection);

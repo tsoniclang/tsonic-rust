@@ -109,7 +109,8 @@ export function recordClassSignatureFacts(walk: RustFactWalk, declaration: Node)
               continue;
             }
             walk.context.facts.set(member, rustCapturedFieldStorageFactKey, {
-              storage: selectRustCapturedFieldStorage(storageCarrier, captures.storageReadonly(member), captures.isDeferred(member)),
+              storage: selectRustCapturedFieldStorage(storageCarrier, captures.storageReadonly(member), captures.isDeferred(member),
+                captures.storageImmutable(member)),
               valueCarrier: storage,
             }, [{ message: "rust exact live receiver field storage" }]);
           }

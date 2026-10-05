@@ -231,12 +231,13 @@ function planRootContractFunctions(
       : undefined;
     if (rustCapturedFieldStorage(field.declaration, context) !== undefined) {
       const capture = context.input.program.projectTypes.memberSlotName(field.declaration, "capture");
+      const captureStorage = implementation?.kind === "stored" ? rustCapturedFieldStorage(implementation.declaration, context) : undefined;
       if (capture === undefined || implementation?.kind !== "stored" || storagePath === undefined ||
-        rustCapturedFieldStorage(implementation.declaration, context) === undefined) return undefined;
+        captureStorage === undefined) return undefined;
       functions.push({ kind: "function", name: capture, visibility: "private", generics: emptyRustGenerics,
         selfParam: rustSelfParameter("ref"), params: [], returnType: field.storageType,
         body: { statements: [{ kind: "tail", expr: readRustProjectObjectFieldOwner(
-          { kind: "path", path: "self" }, storagePath, representation) }] } });
+          { kind: "path", path: "self" }, storagePath, representation, captureStorage) }] } });
     }
     const readHelper = implementation?.kind === "accessor"
       ? accessorImplementationFor(implementation.getter, "read")

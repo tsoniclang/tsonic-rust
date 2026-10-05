@@ -5,56 +5,21 @@ import { join } from "node:path";
 import { compileRust, artifactText } from "../../helpers/rust-session.mjs";
 import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
-import { retainedFieldFreezeOrigins, retainedFieldFreezeValueSource } from "../../fixtures/retained-field-freeze-origins.mjs";
+import { retainedFieldFreezeOrigins, retainedFieldFreezeOriginSource, retainedFieldGenericFreezeSource } from "../../../../tsonic/test/fixtures/retained-field-freeze-origins.mjs";
 
 for (const { name, declarations, invocation } of retainedFieldFreezeOrigins)
   test(`retained direct writes observe ${name} freeze without guarding reads`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
-      files: { "index.ts": `${retainedFieldFreezeValueSource}
-${declarations}
-export function main(): void {
-  const value = new Value();
-  const read = value.read;
-  const change = value.change;
-  ${invocation}
-  let failed = false;
-  try { change(); } catch (error) {
-    if (!(error instanceof TypeError)) throw error;
-    failed = true;
-  }
-  if (!failed || read() !== 1 || value.value !== 1 || !Object.isFrozen(value))
-    throw new Error("retained freeze origin");
-}
-` } });
+      files: { "index.ts": retainedFieldFreezeOriginSource(declarations, invocation) +
+        '\nexport function main(): void { if (!run()) throw new Error("retained freeze origin"); }' } });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 4).map(row => row.message.slice(0, 256)).join("\n"));
     validateGeneratedProject(`retained-field-freeze-origin-${name}`, result.artifacts, { run: true });
   });
 
 test("generic inherited field captures observe freeze through the exact structural instantiation", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
-    files: { "index.ts": `
-class Base<T> {
-  value: T;
-  constructor(value: T) { this.value = value; }
-  read = (): T => this.value;
-  change = (next: T): void => { this.value = next; };
-}
-class Value extends Base<number> { constructor() { super(1); } }
-function freeze<T>(value: { value: T }): void { Object.freeze(value); }
-export function main(): void {
-  const value = new Value();
-  const read = value.read;
-  const change = value.change;
-  freeze(value);
-  let failed = false;
-  try { change(2); } catch (error) {
-    if (!(error instanceof TypeError)) throw error;
-    failed = true;
-  }
-  if (!failed || read() !== 1 || value.value !== 1 || !Object.isFrozen(value))
-    throw new Error("generic inherited freeze");
-}
-` } });
+    files: { "index.ts": retainedFieldGenericFreezeSource +
+      '\nexport function main(): void { if (!run()) throw new Error("generic inherited freeze"); }' } });
   assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 4).map(row => row.message.slice(0, 256)).join("\n"));
   validateGeneratedProject("retained-field-freeze-generic-inherited", result.artifacts, { run: true });
 });
@@ -65,6 +30,10 @@ test("read-only and shallow capture construction and identity release match hand
   } }, files: { "index.ts": `
 export class ReadOnly {
   value = 1;
+  read = (): number => this.value;
+}
+export class Immutable {
+  readonly value = 1;
   read = (): number => this.value;
 }
 export class Mixed {
@@ -108,6 +77,34 @@ mod capture_costs {
         let captured = value.clone();
         let read = rt::Callable::new(move |()| captured.get());
         rt::ObjectRef::new(NativeReadOnlyState { value, read })
+    }
+
+    struct NativeImmutableState {
+        value: f64,
+        read: rt::Callable<(), f64>,
+    }
+
+    fn native_immutable() -> rt::ObjectRef<NativeImmutableState> {
+        let value = 1.0;
+        let read = rt::Callable::new(move |()| value);
+        rt::ObjectRef::new(NativeImmutableState { value, read })
+    }
+
+    #[test]
+    fn immutable_scalar_captures_match_native_copy_ownership() {
+        let (generated, generated_cost) = measure(Immutable::new);
+        let (native, native_cost) = measure(native_immutable);
+        assert_eq!(generated_cost, native_cost);
+        assert_eq!(native.with(|state| state.value + state.read.call(())), 2.0);
+        let reader = generated.state.with(|state| state.read.clone());
+        let (observed, read_cost) = measure(|| reader.call(()));
+        assert_eq!(observed, 1.0);
+        assert_eq!(read_cost, Cost::default());
+        let (_, outer_drop) = measure(|| drop(generated));
+        assert_eq!(outer_drop.deallocations, 1);
+        assert_eq!(reader.call(()), 1.0);
+        let (_, last_drop) = measure(|| drop(reader));
+        assert_eq!(last_drop.deallocations, 1);
     }
 
     #[test]

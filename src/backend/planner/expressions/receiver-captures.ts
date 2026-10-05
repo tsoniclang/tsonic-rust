@@ -87,7 +87,7 @@ export function rustCapturedReceiverFieldType(
   capture: RustClosureCaptureFact["receiverFields"][number], type: RustType, context: RustPlanContext,
 ): RustType {
   const owner = rustCapturedFieldType(capture.storage, type);
-  return context.input.program.frozenDataWrites.retainsFieldIdentity(capture.declaration)
+  return context.input.program.frozenDataWrites.capturesFieldIdentity(capture.declaration, capture.reference)
     ? { kind: "tuple", elements: [{ kind: "named", path: "rt::ObjectIdentity" }, owner] } : owner;
 }
 
@@ -131,7 +131,7 @@ export function planRustCapturedReceiverFields(
       return undefined;
     }
     const name = allocateRustSyntheticName(creation.syntheticNames, "captured_field");
-    const guarded = creation.input.program.frozenDataWrites.retainsFieldIdentity(capture.declaration);
+    const guarded = creation.input.program.frozenDataWrites.capturesFieldIdentity(capture.declaration, capture.reference);
     const receiver = guarded && creation.capturedFieldIdentities?.get(capture.reference) === undefined
       ? planExpression(capture.receiver, creation) : undefined;
     const identity = creation.capturedFieldIdentities?.get(capture.reference) ?? (receiver === undefined ? undefined
@@ -159,7 +159,7 @@ export function rustCapturedReceiverFieldContext(
   const identities = new Map(context.capturedFieldIdentities ?? []);
   for (const [index, capture] of fields.entries()) {
     const retained = ownerFor(index);
-    const guarded = context.input.program.frozenDataWrites.retainsFieldIdentity(capture.declaration);
+    const guarded = context.input.program.frozenDataWrites.capturesFieldIdentity(capture.declaration, capture.reference);
     const identity: RustExpr = { kind: "field", receiver: retained, name: "0" };
     const owner: RustExpr = guarded ? { kind: "field", receiver: retained, name: "1" } : retained;
     const carrier = substituteRustTargetGenerics(capture.carrier, context.typeParameterSubstitutions ?? new Map(),

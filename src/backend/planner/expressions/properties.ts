@@ -21,7 +21,7 @@ import { planRustBuiltinErrorProperty } from "./builtin-errors.js";
 import { readRustProjectDispatchedField, rustProjectObjectDispatchField } from "../objects/project-objects.js";
 import { planRustProjectFieldDispatchRole } from "../objects/project-field-dispatch.js";
 import { readRustSourceStaticField } from "../declarations/classes/static-field-storage.js";
-import { readRustStoredObjectField } from "../objects/project-storage.js";
+import { readRustStoredObjectField, rustStoredObjectFieldSupportsBorrowedRead } from "../objects/project-storage.js";
 import { planRustValueFieldLocation, rustSourceFieldHasValueReceiver } from "../objects/value-fields.js";
 import { rustCallableProtocol, rustSourceTypeCarrierValue } from "../../../target-model/types/index.js";
 import { rustFallibleFactKey, rustSourceAccessorEffectsFactKey } from "../../../analysis/facts/keys.js";
@@ -137,7 +137,8 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
     const receiverNode = Node_Expression(context.input.program.source.ast, node);
     const receiverLocation = receiverNode === undefined ? undefined : context.valueFieldLocations?.get(receiverNode) ??
       (rustSourceFieldHasValueReceiver(receiverNode, context) ? planRustValueFieldLocation(receiverNode, context, "read") : undefined);
-    if (receiverLocation?.withRead !== undefined && fact.dispatch === undefined) {
+    if (receiverLocation?.withRead !== undefined && fact.dispatch === undefined && fact.valueSemantics.kind === "stored" &&
+      rustStoredObjectFieldSupportsBorrowedRead(fact.storage, fact.receiverCarrier, fact.storageIndex, context)) {
       const read = receiverLocation.withRead(receiver => readRustStoredObjectField(fact.storage, fact.receiverCarrier,
         receiver, fact.storageIndex, fact.resultCarrier, context));
       return read === undefined ? undefined : receiverLocation.bindings.length === 0 ? read

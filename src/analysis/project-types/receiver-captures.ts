@@ -27,6 +27,7 @@ export interface RustReceiverFieldCaptureQueries {
   isDeferred(declaration: Node): boolean;
   storageDeclaration(declaration: Node): Node;
   storageReadonly(declaration: Node): boolean;
+  storageImmutable(declaration: Node): boolean;
 }
 
 export function analyzeRustReceiverFieldCaptures(input: {
@@ -124,6 +125,7 @@ export function analyzeRustReceiverFieldCaptures(input: {
   }
   const storageDeclarations = new Map<Node, Node>();
   const readonlyStorage = new Set<Node>();
+  const immutableStorage = new Set<Node>();
   const deferredStorage = new Set<Node>();
   for (const declaration of fields) {
     const owner = input.projectTypes.definitionContainingDeclaration(declaration);
@@ -132,7 +134,12 @@ export function analyzeRustReceiverFieldCaptures(input: {
     const canonical = lineage?.flatMap(ancestor => [...family].filter(field =>
       input.projectTypes.definitionContainingDeclaration(field) === ancestor))[0] ?? declaration;
     storageDeclarations.set(declaration, canonical);
-    if ([...family].every(field => input.ast.hasModifierKind(field, "readonly"))) readonlyStorage.add(declaration);
+    if ([...family].every(field => input.ast.hasModifierKind(field, "readonly"))) {
+      readonlyStorage.add(declaration);
+      if (family.size === 1 && !input.navigation.declarationUseSummary(declaration).memberWritten) {
+        immutableStorage.add(declaration);
+      }
+    }
     if ([...family].some(field => input.deferredFields.has(field))) deferredStorage.add(declaration);
   }
   return Object.freeze({ issues: Object.freeze(issues.map(issue => Object.freeze(issue))), fields: Object.freeze([...fields]),
@@ -143,5 +150,6 @@ export function analyzeRustReceiverFieldCaptures(input: {
     isDeferred: (declaration: Node) => deferredStorage.has(declaration),
     storageDeclaration: (declaration: Node) => storageDeclarations.get(declaration) ?? declaration,
     storageReadonly: (declaration: Node) => readonlyStorage.has(declaration),
+    storageImmutable: (declaration: Node) => immutableStorage.has(declaration),
   });
 }

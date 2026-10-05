@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Node_Initializer } from "@tsonic/target-api/source";
 import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
-import { retainedFieldFreezeOrigins, retainedFieldFreezeValueSource } from "../../fixtures/retained-field-freeze-origins.mjs";
+import { retainedFieldFreezeOrigins, retainedFieldFreezeValueSource } from "../../../../tsonic/test/fixtures/retained-field-freeze-origins.mjs";
 
 function captures(program, className, memberName) {
   const ast = program.source.ast;

@@ -3,6 +3,7 @@ import test from "node:test";
 import { rustClosureCaptureFactKey } from "../../../dist/analysis/facts/operations/keys.js";
 import { rustCapturedFieldStorageFactKey } from "../../../dist/analysis/facts/receiver-captures.js";
 import { stringCarrier, compileRust, rustSourceText } from "../../helpers/rust-session.mjs";
+import { receiverFieldCaptureEdges } from "../../../../tsonic/test/fixtures/receiver-field-capture-edges.mjs";
 
 const declaration = {};
 const reference = {};
@@ -64,8 +65,21 @@ test("field storage facts reject missing, invalid and competing carrier represen
   assert.equal(rustCapturedFieldStorageFactKey.equals(storage, { ...storage }), true);
   for (const changed of [{ ...storage, extra: true }, { ...storage, valueCarrier: undefined },
     { ...storage, storage: { kind: "borrow-cell", initialization: "unchecked" } },
+    { ...storage, storage: { kind: "copy", initialization: "deferred" } },
     { ...storage, storage: { ...field.storage, extra: true } }])
     assert.equal(rustCapturedFieldStorageFactKey.equals(storage, changed), false);
+});
+
+for (const surfaces of [[], ["js"]]) test(`immutable scalar field captures have no Rc payload in ${surfaces[0] ?? "native"}`, () => {
+  const example = receiverFieldCaptureEdges.find(selected => selected.name === "readonly-scalar-copy");
+  assert.equal(example !== undefined, true, "shared immutable scalar source exists");
+  const { result } = compileRust({ surfaces, files: { "index.ts": example.source +
+    '\nexport function main(): void { if (!run()) throw new Error("immutable scalar field"); }' } });
+  assert.equal(result.diagnostics.length, 0, "exact immutable scalar capture source");
+  const emitted = rustSourceText(result);
+  assert.equal(emitted.includes("captured_field"), true, "the native environment retains its scalar");
+  assert.equal(/Rc<(?:f64|i32|core::cell::(?:Cell|RefCell)<(?:f64|i32)>)/u.test(emitted), false,
+    "a proven immutable scalar requires no retained heap payload");
 });
 
 for (const surfaces of [[], ["js"]]) test(`retained fields do not allocate freeze identity without demand in ${surfaces[0] ?? "native"}`, () => {
