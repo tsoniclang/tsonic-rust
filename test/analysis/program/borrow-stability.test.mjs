@@ -6,7 +6,7 @@ import { analyzeRustBorrowStability } from "../../../dist/analysis/program/borro
 import { rustBindingStorageFactKey, rustContextualValueConversionFactKey, rustSourceBindingFactKey,
   rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
 import { rustCapturedFieldStorageFactKey } from "../../../dist/analysis/facts/receiver-captures.js";
-import { borrowedScalarFieldWritesSource, ownedFieldSnapshotSource } from "../../fixtures/borrowed-scalar-field-writes.mjs";
+import { borrowedScalarFieldWritesSource, ordinaryScalarFieldWritesSource, ownedFieldSnapshotSource } from "../../../../tsonic/test/fixtures/borrowed-scalar-field-writes.mjs";
 import { receiverFieldCaptureEdges } from "../../../../tsonic/test/fixtures/receiver-field-capture-edges.mjs";
 
 function allNodes(ast, files) {
@@ -81,21 +81,7 @@ for (const surfaces of [[], ["js"]]) {
   });
 
   test(`ordinary class field borrows require independent physical states in ${profile}`, () => {
-    const { program } = analyzeRust({ surfaces, files: { "index.ts": `
-class Child { count: number = 0; }
-class Parent {
-  child: Child;
-  constructor(child: Child) { this.child = child; }
-  replace(child: Child): void { this.child = child; }
-}
-class Linked {
-  count: number = 0;
-  next: Linked;
-  constructor(next: Linked) { this.next = next; }
-}
-export function distinct(holder: Parent, value: number): void { holder.child.count = value; }
-export function identical(holder: Linked, value: number): void { holder.next.count = value; }
-` } });
+    const { program } = analyzeRust({ surfaces, files: { "index.ts": ordinaryScalarFieldWritesSource } });
     const distinct = program.borrowStability.borrowedWriteFor(functionAssignment(program, "distinct"));
     assert.equal(distinct !== undefined, true, "ordinary class scalar write");
     assert.equal(distinct.location, "stored-field");

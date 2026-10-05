@@ -3,7 +3,8 @@ import test from "node:test";
 import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { rustSourceCallEffectsFactKey } from "../../../dist/analysis/facts/keys.js";
-import { borrowedScalarFieldWritesSource, ownedFieldSnapshotSource } from "../../fixtures/borrowed-scalar-field-writes.mjs";
+import { borrowedScalarFieldWritesSource, borrowedScalarFieldFreezeSource, ordinaryScalarFieldWritesSource,
+  ownedFieldSnapshotSource, ownedFieldSnapshotRunSource } from "../../../../tsonic/test/fixtures/borrowed-scalar-field-writes.mjs";
 import { receiverFieldCaptureEdges } from "../../../../tsonic/test/fixtures/receiver-field-capture-edges.mjs";
 
 function functionText(output, name) {
@@ -40,18 +41,7 @@ for (const surfaces of [[], ["js"]]) {
 
   test(`pure captured writes avoid clones while replacements and getters retain the original child in ${profile}`,
     { timeout: 300_000 }, () => {
-      const frozen = surfaces.length === 0 ? "" : `
-export function frozenWrite(): boolean {
-  const holder = new Value();
-  Object.freeze(holder.point);
-  let failed = false;
-  try { parameter(holder, 99); } catch (error) {
-    if (!(error instanceof TypeError)) throw error;
-    failed = true;
-  }
-  return failed && holder.point.x === 1;
-}
-`;
+      const frozen = surfaces.length === 0 ? "" : borrowedScalarFieldFreezeSource;
       const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
         files: { "index.ts": borrowedScalarFieldWritesSource + frozen +
           `\nexport function main(): void { if (!run()${surfaces.length === 0 ? "" : " || !frozenWrite()"}) throw new Error("scalar write order"); }` } });
@@ -67,9 +57,21 @@ export function frozenWrite(): boolean {
       assert.equal(validateGeneratedProject(`borrowed-scalar-writes-${profile}`, result.artifacts, { run: true }).status, 0);
     });
 
+  test(`ordinary distinct child writes retain native borrowed storage in ${profile}`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
+      files: { "index.ts": ordinaryScalarFieldWritesSource +
+        '\nexport function main(): void { if (!run()) throw new Error("ordinary scalar write"); }' } });
+    assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 6).map(row => row.message.slice(0, 256)).join("\n"));
+    const body = functionText(artifactText(result, "src/index.rs"), "distinct");
+    assert.doesNotMatch(body, /\.clone\(\)|Rc::new|Box::new|ObjectHandle::new/u);
+    assert.match(body, /\.with_mut\(/u);
+    assert.equal(validateGeneratedProject(`borrowed-ordinary-write-${profile}`, result.artifacts, { run: true }).status, 0);
+  });
+
   test(`reentrant owned writes retain original-child and native Drop ordering in ${profile}`, { timeout: 300_000 }, () => {
     const options = { surfaces, target: { id: "rust", options: { outputType: "bin", crateName: `owned_write_${profile}` } },
-      files: { "index.ts": ownedFieldSnapshotSource + '\nexport function main(): void {}' } };
+      files: { "index.ts": ownedFieldSnapshotSource + ownedFieldSnapshotRunSource +
+        '\nexport function main(): void { if (!run()) throw new Error("owned snapshot write"); }' } };
     const { program } = analyzeRust(options);
     const { result } = compileRust(options);
     assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 6).map(row => row.message.slice(0, 256)).join("\n"));
@@ -112,6 +114,6 @@ fn replacement_preserves_the_original_child_through_rhs_and_store() {
     assert_eq!(trace.get(), 132);
 }
 `;
-    validateGeneratedProject(`owned-write-drop-${profile}`, [...result.artifacts, { path: "tests/drop_order.rs", text: native }]);
+    validateGeneratedProject(`owned-write-drop-${profile}`, [...result.artifacts, { path: "tests/drop_order.rs", text: native }], { run: true });
   });
 }
