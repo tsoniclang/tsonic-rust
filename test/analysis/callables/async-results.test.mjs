@@ -13,6 +13,7 @@ import {
   rustSourceOptionalTargetType,
   rustSourcePrimitiveTargetType,
   rustSourceUnionTargetType,
+  rustStringTargetType,
   rustUnitTargetType,
 } from "../../../dist/target-model/types/index.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
@@ -21,7 +22,7 @@ const owned = { kind: "static" };
 const borrowed = { kind: "parameter", identity: "scope::borrow", name: "borrow" };
 const unit = rustUnitTargetType();
 const integer = rustSourcePrimitiveTargetType("int64");
-const string = rustSourcePrimitiveTargetType("string");
+const string = rustStringTargetType();
 const optional = rustSourceOptionalTargetType(integer);
 const promise = (output, lifetime = owned, error) => rustJsPromiseTargetTypeWithLifetime(output, lifetime, error);
 const result = rustSourceUnionTargetType("/src/result.ts", "Completion");
@@ -90,7 +91,7 @@ test("contextual selection retains exact borrowed lifetimes for the existing sto
 });
 
 test("non-promise contexts preserve inferred output and opaque native Future stays a separate protocol", () => {
-  for (const contextual of [undefined, unit, integer, result]) {
+  for (const contextual of [undefined, unit, integer, string, result]) {
     const selected = select(integer, contextual, definitionsFor([integer, string]));
     assert.equal(selected.kind, "selected");
     assert.equal(rustTargetTypeRefEquals(selected.outputCarrier, integer), true);
@@ -112,7 +113,8 @@ test("async output selection retains bounded metadata, recursive-union and acces
   let reads = 0;
   const accessor = Object.defineProperty({}, "kind", { get() { reads += 1; return "target-named"; } });
   for (const malformed of [null, undefined, true, {}, accessor,
-    { ...promise(unit), genericArguments: [] }, { ...promise(unit), extra: true }]) {
+    { ...promise(unit), genericArguments: [] }, { ...promise(unit), extra: true },
+    promise(rustSourcePrimitiveTargetType("string"))]) {
     assert.equal(selectRustAsyncBodyPromise(malformed, unit, promise(optional), emptyRustTypeDefinitions).kind, "rejected");
     if (malformed !== undefined) assert.equal(select(unit, malformed).kind, "rejected");
   }

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { contextualAsyncResultSource, ordinaryAsyncResultSource } from "../../../../tsonic/test/fixtures/contextual-async-results.mjs";
 import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
-import { rustAsyncFunctionFactKey, rustClosureCaptureFactKey, rustSourceCallableReturnFactKey } from "../../../dist/analysis/facts/keys.js";
+import { rustAsyncFunctionFactKey, rustClosureCaptureFactKey, rustModuleBindingFactKey, rustSourceCallableReturnFactKey, rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
 import { rustCallableInvocationResult } from "../../../dist/analysis/facts/callable-results.js";
 import { rustAwaitSelection, rustAwaitSelectionLeaves } from "../../../dist/target-model/types/await.js";
 import { rustOptionElementCarrier } from "../../../dist/target-model/types/index.js";
@@ -19,9 +19,14 @@ test("contextual async literals seal the selected output before recording body a
   };
   program.sourceFiles.filter(file => ast.getFileName(file).endsWith("/index.ts")).forEach(visit);
   assert.equal(literals.length, 9);
+  let closureCount = 0;
+  let nativeFunctionCount = 0;
   for (const [index, literal] of literals.entries()) {
     const asynchronous = program.facts.getFact(literal, rustAsyncFunctionFactKey);
     const closure = program.facts.getFact(literal, rustClosureCaptureFactKey);
+    const operation = program.facts.getFact(literal, rustTargetOperationFactKey);
+    const declaration = ast.parent(literal);
+    const binding = declaration === undefined ? undefined : program.facts.getFact(declaration, rustModuleBindingFactKey);
     const label = `async literal ${index}`;
     assert.equal(asynchronous?.kind, "js-promise", label);
     assert.equal(asynchronous.storage.kind, "static", label);
@@ -31,18 +36,32 @@ test("contextual async literals seal the selected output before recording body a
     assert.equal(rustTargetTypeRefEquals(rustCallableInvocationResult(program.facts, literal), asynchronous.futureCarrier), true, label);
     assert.equal(asynchronous.futureCarrier.genericArguments[0].lifetime.kind, "static", label);
     assert.equal(asynchronous.futureCarrier.genericArguments[2].type.id, "rust.program.TsonicError", label);
-    assert.equal(closure !== undefined, true, label);
-    if (closure.invocationResult !== undefined) {
-      assert.equal(finalizedConversionIsValid(closure.invocationResult, program.typeDefinitions), true, label);
-      assert.equal(closure.invocationResult.fallible, false, `${label} result injection`);
-      assert.equal(rustTargetTypeRefEquals(closure.invocationResult.sourceCarrier, asynchronous.futureCarrier), true, label);
-      const selected = rustAwaitSelection(closure.invocationResult.targetCarrier, program.typeDefinitions);
+    if (binding?.storage === "native-callable") {
+      nativeFunctionCount += 1;
+      assert.equal(ast.is.IsVariableDeclaration(declaration), true, label);
+      assert.equal(ast.variableDeclarationKind(declaration), "const", label);
+      assert.equal(binding.callableDeclaration === literal, true, label);
+      assert.equal(binding.value === undefined, true, `${label} direct native calls require no callable wrapper`);
+      assert.equal(closure === undefined, true, `${label} native function has no capture wrapper`);
+      assert.equal(operation === undefined, true, `${label} native function has no closure operation`);
+    } else {
+      closureCount += 1;
+      assert.equal(closure !== undefined, true, label);
+      assert.equal(operation?.kind, "closure", label);
+      const conversion = operation.invocationResult;
+      assert.equal(conversion !== undefined, true, `${label} contextual union injection is required`);
+      assert.equal(finalizedConversionIsValid(conversion, program.typeDefinitions), true, label);
+      assert.equal(conversion.fallible, false, `${label} result injection`);
+      assert.equal(rustTargetTypeRefEquals(conversion.sourceCarrier, asynchronous.futureCarrier), true, label);
+      const selected = rustAwaitSelection(conversion.targetCarrier, program.typeDefinitions);
       assert.equal(selected !== undefined, true, label);
       const promises = rustAwaitSelectionLeaves(selected).filter(leaf => leaf.future !== undefined);
       assert.equal(promises.length, 1, label);
       assert.equal(rustTargetTypeRefEquals(promises[0].future.outputCarrier, asynchronous.outputCarrier), true, label);
     }
   }
+  assert.equal(closureCount, 7);
+  assert.equal(nativeFunctionCount, 2);
 });
 
 for (const surfaces of [[], ["js"]]) {
@@ -63,15 +82,19 @@ for (const surfaces of [[], ["js"]]) {
   });
 }
 
-test("ambiguous contextual Promise alternatives reject without publishing executable output", () => {
-  const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": `
-type Completion = void | Promise<string | void> | Promise<number | void>;
-export function make(): () => Completion { return async () => {}; }
+for (const alternatives of ["Promise<string | void> | Promise<number | void>",
+  "Promise<number | void> | Promise<string | void>"]) {
+  test(`ambiguous inline contextual Promise alternatives reject at the async owner: ${alternatives}`, () => {
+    const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": `
+export function make(): () => (void | ${alternatives}) { return async () => {}; }
 ` } });
-  assert.equal(result.artifacts.length, 0);
-  assert.equal(result.diagnostics.some(row => row.code === "RUST_ASYNC_CONTEXTUAL_PROMISE_NOT_CLOSED"), true,
-    result.diagnostics.map(row => row.code).join(", "));
-});
+    assert.equal(result.artifacts.length, 0);
+    assert.equal(result.diagnostics.some(row => row.code === "RUST_SOURCE_UNION_NOT_CLOSED"), false,
+      "the async ambiguity probe requires a closed contextual union, not a pending declared alias");
+    assert.equal(result.diagnostics.some(row => row.code === "RUST_ASYNC_CONTEXTUAL_PROMISE_NOT_CLOSED"), true,
+      result.diagnostics.map(row => row.code).join(", "));
+  });
+}
 
 for (const [label, source] of [
   ["explicit async annotation", `
