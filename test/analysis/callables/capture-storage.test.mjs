@@ -6,6 +6,7 @@ import { rustCapturedBindingStorage } from "../../../dist/analysis/callables/cap
 import { rustBindingStorageFactKey, rustMutatedBindingFactKey } from "../../../dist/analysis/facts/keys.js";
 import { rustArgumentPassingKey } from "../../../dist/target-model/facts/selections.js";
 import { rustTargetOperationFactKey } from "../../../dist/analysis/facts/operations/keys.js";
+import { rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
 
 const scalarCarrier = { kind: "source-primitive", name: "float64" };
 const stringCarrier = { kind: "target-named", id: "rust.std.String" };
@@ -31,7 +32,7 @@ function fixture(text, options = {}) {
   };
   visit(file);
   const declaration = declarations.get("seed");
-  const callback = declarations.get("callback");
+  const callback = declarations.get(options.ownerBinding ?? "callback");
   const owner = source.ast.as.AsVariableDeclaration(callback)?.Initializer ?? callback;
   assert.equal(declaration !== undefined && owner !== undefined, true, "exact binding and capture owner");
   const summary = source.navigation.declarationUseSummary(declaration);
@@ -140,6 +141,13 @@ for (const [name, text] of [
       return seed;
     }
   `],
+  ["external reassignment", `
+    export function outer(seed: number) {
+      const callback = () => ++seed;
+      seed = 99;
+      return callback;
+    }
+  `],
 ]) test(`${name} cannot acquire inline single-owner storage`, () => {
   assert.deepEqual(fixture(text).select(), { storage: "location" });
 });
@@ -152,6 +160,19 @@ test("deferred initialization cannot be reduced to inline storage", () => {
       return callback;
     }
   `);
+  assert.deepEqual(current.select(), { storage: "location", initialization: "deferred" });
+});
+
+test("a reassigned lexical callback retains deferred live binding storage instead of a fixed inline payload", () => {
+  const current = fixture(`
+    export function outer() {
+      let seed: (count: number) => number = count => count === 0 ? 1 : seed(count - 1);
+      const callback = seed;
+      seed = () => 99;
+      return callback;
+    }
+  `, { ownerBinding: "seed", carrier: rustCallableTargetType([scalarCarrier], scalarCarrier) });
+  assert.equal(current.summary.bindingWritten, true, "exact rebinding evidence");
   assert.deepEqual(current.select(), { storage: "location", initialization: "deferred" });
 });
 
