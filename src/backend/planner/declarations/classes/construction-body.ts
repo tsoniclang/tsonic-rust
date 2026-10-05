@@ -94,6 +94,12 @@ export function planRustConstructionBody(
     const capturedFieldIdentities = new Map(selectedContext.capturedFieldIdentities ?? []);
     for (const overridden of overrideNodes) overrides.delete(overridden);
     for (const expression of plan.expressionsWithin(node)) {
+      const fixedSelf = expression.kind !== "capture" ? undefined
+        : selectedContext.input.program.objectRepresentations.receiverCaptures.fixedSelfForReference(expression.node);
+      if (fixedSelf !== undefined) {
+        if (expression.declaration !== fixedSelf.declaration) return reject("A fixed field self lost its exact construction declaration.");
+        continue;
+      }
       if ((expression.kind === "field" || expression.kind === "capture") && !point.published) {
         const slot = slots.find(field => field.declaration === expression.declaration);
         if (slot === undefined) return reject("Sealed construction field has no matching physical local slot.");

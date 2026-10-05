@@ -61,7 +61,8 @@ import { planRustParameterEntryConversion } from "../declarations/callables/para
 import { planRustCallableLeadingParameters } from "../declarations/callables/leading-parameters.js";
 import { finalizedConversionIsValid } from "../../../analysis/facts/finalized-operation/conversions.js";
 import { applyFinalizedValueConversion } from "./value-conversions.js";
-import { planRustCapturedReceiverFields, planRustCapturedReceivers } from "./receiver-captures.js";
+import { planRustCapturedReceiverFields, planRustCapturedReceivers, rustRecursiveReceiverFieldContext,
+  validateRustRecursiveReceiverField } from "./receiver-captures.js";
 
 export function planCallableExpression(
   node: Node,
@@ -89,6 +90,16 @@ export function planRustCallableExpressionBody(
   if (!requireExpressionCarrier(node, closureFact.resultCarrier, context, "rust.backend.closure-carrier")) {
     return undefined;
   }
+  const captureFact = context.input.program.facts.getFact(node, rustClosureCaptureFactKey);
+  if (captureFact === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.closure-captures",
+      "Callable expressions require finalized exact capture evidence.",
+    ));
+    return undefined;
+  }
+  if (!validateRustRecursiveReceiverField(node, captureFact, closureFact.resultCarrier, context)) return undefined;
   const independent = context.input.program.facts.getFact(node, rustReceiverIndependentMethodFactKey);
   const constructionCarrier = independent?.carrier ?? closureFact.resultCarrier;
   if (rustGenericCallableValue(constructionCarrier) !== undefined) {
@@ -102,15 +113,6 @@ export function planRustCallableExpressionBody(
   const resultCarrier = closureFact.resultCarrier.kind === "function-pointer"
     ? closureFact.resultCarrier.result
     : nativeClosureProtocol?.result ?? callableProtocol?.result;
-  const captureFact = context.input.program.facts.getFact(node, rustClosureCaptureFactKey);
-  if (captureFact === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.closure-captures",
-      "Callable expressions require finalized exact capture evidence.",
-    ));
-    return undefined;
-  }
   if (closureFact.resultCarrier.kind === "function-pointer" &&
     (captureFact.captures.length !== 0 || captureFact.receiverFields.length !== 0 || captureFact.receivers.length !== 0 || captureFact.recursiveDeclaration !== undefined)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -354,8 +356,12 @@ export function planRustCallableExpressionBody(
       valueCarrier: closureFact.resultCarrier,
     });
   }
+  const recursiveContext = captureFact.recursiveField === undefined ? wholeEnvironment.context
+    : recursiveName === undefined ? undefined
+      : rustRecursiveReceiverFieldContext(captureFact.recursiveField, { kind: "path", path: recursiveName }, wholeEnvironment.context);
+  if (recursiveContext === undefined) return undefined;
   const callableClosureContext: RustPlanContext = {
-    ...wholeEnvironment.context,
+    ...recursiveContext,
     functionAbsenceReturnCarrier: undefined,
     capturedBindings,
   };

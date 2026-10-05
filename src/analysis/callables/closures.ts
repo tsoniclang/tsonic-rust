@@ -373,6 +373,7 @@ export function collectRustLexicalCaptures(
     readonly mutable?: true;
   }>();
   let recursiveDeclaration: Node | undefined;
+  let recursiveField: import("../facts/keys.js").RustClosureCaptureFact["recursiveField"];
   const valueDeclaration = callableExpressionValueDeclaration(expression, ast);
   const selected = sourceLexicalEnvironment(expression, roots, ast, walk.context.source.navigation,
     (use, declaration) => walk.context.facts.get(use.reference, rustCompileTimeSourceKey) !== true &&
@@ -380,6 +381,16 @@ export function collectRustLexicalCaptures(
   if (selected.kind === "unresolved") return undefined;
   const receiverFields: import("../facts/keys.js").RustClosureCaptureFact["receiverFields"][number][] = [];
   const fieldCaptures = walk.context.objectRepresentations.receiverCaptures.capturesFor(expression);
+  const fixedField = walk.context.objectRepresentations.receiverCaptures.fixedSelfFor(expression);
+  if (fixedField !== undefined) {
+    const carrier = walk.context.facts.get(fixedField.reference, rustRuntimeCarrierKey)?.carrier ??
+      walk.context.facts.resolve(fixedField.reference, rustRuntimeCarrierKey)?.carrier;
+    if (carrier === undefined || !fixedField.references.every(reference => rustTargetTypeRefEquals(
+      walk.context.facts.get(reference, rustRuntimeCarrierKey)?.carrier ??
+        walk.context.facts.resolve(reference, rustRuntimeCarrierKey)?.carrier, carrier))) return undefined;
+    recursiveDeclaration = fixedField.declaration;
+    recursiveField = { ...fixedField, carrier };
+  }
   for (const capture of fieldCaptures) {
     const storage = walk.context.facts.get(capture.declaration, rustCapturedFieldStorageFactKey);
     const carrier = walk.context.facts.get(capture.reference, rustRuntimeCarrierKey)?.carrier;
@@ -432,7 +443,9 @@ export function collectRustLexicalCaptures(
     captures.set(declaration, { declaration, reference, carrier, storage: selectedStorage.storage,
       ...(selectedStorage.mutable === undefined ? {} : { mutable: selectedStorage.mutable }) });
   }
-  return { receivers, receiverFields, captures: [...captures.values()], ...(recursiveDeclaration === undefined ? {} : { recursiveDeclaration }) };
+  return { receivers, receiverFields, captures: [...captures.values()],
+    ...(recursiveDeclaration === undefined ? {} : { recursiveDeclaration }),
+    ...(recursiveField === undefined ? {} : { recursiveField }) };
 }
 
 function callableExpressionValueDeclaration(

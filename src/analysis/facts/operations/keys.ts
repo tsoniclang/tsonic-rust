@@ -96,6 +96,7 @@ export interface RustClosureCaptureFact {
     readonly mutable?: true;
   }[];
   readonly recursiveDeclaration?: Node;
+  readonly recursiveField?: RustReceiverFieldCapture & { readonly carrier: TargetTypeRef };
 }
 
 export const rustClosureCaptureFactKey: RustPlanKey<RustClosureCaptureFact> = defineRustPlanKey(
@@ -119,6 +120,13 @@ export const rustClosureCaptureFactKey: RustPlanKey<RustClosureCaptureFact> = de
         capture.references.every((reference, offset) => reference === other.references[offset]);
     }) &&
     left.recursiveDeclaration === right.recursiveDeclaration &&
+    (left.recursiveField === undefined ? right.recursiveField === undefined : right.recursiveField !== undefined &&
+      left.recursiveField.declaration === right.recursiveField.declaration &&
+      left.recursiveField.receiver === right.recursiveField.receiver &&
+      left.recursiveField.reference === right.recursiveField.reference &&
+      rustTargetTypeRefEquals(left.recursiveField.carrier, right.recursiveField.carrier) &&
+      left.recursiveField.references.length === right.recursiveField.references.length &&
+      left.recursiveField.references.every((reference, index) => reference === right.recursiveField!.references[index])) &&
     left.captures.length === right.captures.length &&
     left.captures.every((capture, index) => {
       const other = right.captures[index];
@@ -133,9 +141,15 @@ export const rustClosureCaptureFactKey: RustPlanKey<RustClosureCaptureFact> = de
 
 function closureCaptureShapeMatches(value: RustClosureCaptureFact): boolean {
   if (!isMetadataRecord(value) || !hasExactObjectKeys(value, ["receivers", "receiverFields", "captures",
-    ...["invocationOwner", "recursiveDeclaration"].filter(key => Object.prototype.hasOwnProperty.call(value, key))]) ||
+    ...["invocationOwner", "recursiveDeclaration", "recursiveField"].filter(key => Object.prototype.hasOwnProperty.call(value, key))]) ||
     value.invocationOwner !== undefined && value.invocationOwner !== "shared-state" ||
     !isDenseDataArray(value.receivers) || !isDenseDataArray(value.receiverFields) || !isDenseDataArray(value.captures)) return false;
+  if (value.recursiveField !== undefined && (!isMetadataRecord(value.recursiveField) ||
+    !hasExactObjectKeys(value.recursiveField, ["declaration", "reference", "receiver", "references", "carrier"]) ||
+    value.recursiveField.declaration === undefined || value.recursiveField.declaration !== value.recursiveDeclaration || value.recursiveField.receiver === undefined ||
+    value.recursiveField.carrier === undefined || !isDenseDataArray(value.recursiveField.references) ||
+    value.recursiveField.references.length === 0 || value.recursiveField.reference !== value.recursiveField.references[0] ||
+    value.receiverFields.some(capture => !isMetadataRecord(capture) || capture.declaration === value.recursiveField!.declaration))) return false;
   return value.receivers.every(capture => isMetadataRecord(capture) &&
     hasExactObjectKeys(capture, ["owner", "reference", "references", "carrier"]) &&
     capture.owner !== undefined && capture.carrier !== undefined && isDenseDataArray(capture.references) &&
