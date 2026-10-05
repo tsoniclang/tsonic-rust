@@ -82,6 +82,18 @@ for (const surfaces of [[], ["js"]]) {
   });
 }
 
+test("ambiguous declared contextual Promise alternatives reject at the async owner without publishing executable output", () => {
+  const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": `
+type Completion = void | Promise<string | void> | Promise<number | void>;
+export function make(): () => Completion { return async () => {}; }
+` } });
+  assert.equal(result.artifacts.length, 0);
+  assert.equal(result.diagnostics.some(row => row.code === "RUST_SOURCE_UNION_NOT_CLOSED"), false,
+    "the declared contextual union must close before async ambiguity selection");
+  assert.equal(result.diagnostics.some(row => row.code === "RUST_ASYNC_CONTEXTUAL_PROMISE_NOT_CLOSED"), true,
+    result.diagnostics.map(row => row.code).join(", "));
+});
+
 for (const alternatives of ["Promise<string | void> | Promise<number | void>",
   "Promise<number | void> | Promise<string | void>"]) {
   test(`ambiguous inline contextual Promise alternatives reject at the async owner: ${alternatives}`, () => {
