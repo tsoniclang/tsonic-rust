@@ -51,7 +51,7 @@ export function rustFoundationForContextualConversion(
     .map(field => field.conversion === undefined ? "core" as const : rustFoundationForValueConversion(field.conversion, definitions))
     .reduce(maximumRustFoundation, "core");
   if (conversion.kind === "callable-adapter") return [...conversion.parameters, conversion.result]
-    .map(value => value.kind === "value" ? rustFoundationForValueConversion(value.conversion, definitions) : "core" as const)
+    .map(value => value.kind === "value" ? rustFoundationForContextualConversion(value.conversion, definitions) : "core" as const)
     .reduce(maximumRustFoundation, "core");
   if (conversion.kind === "project-union-map" || conversion.kind === "native-trait-object-upcast" ||
     conversion.kind === "reference-reborrow" || conversion.kind === "empty-record" ||

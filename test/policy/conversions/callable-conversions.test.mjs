@@ -76,8 +76,8 @@ test("nested callable inputs and results reuse exact recursive signature convers
   for (const [source, target, placement] of [
     [rustCallableTargetType([owned], number), rustCallableTargetType([borrowed], number), "parameter"],
     [rustCallableTargetType([], borrowed), rustCallableTargetType([], owned), "result"],
-    [rustCallableTargetType([rustCallableTargetType([], borrowed)], number),
-      rustCallableTargetType([rustCallableTargetType([], owned)], number), "parameter"],
+    [rustCallableTargetType([rustCallableTargetType([], owned)], number),
+      rustCallableTargetType([rustCallableTargetType([], borrowed)], number), "parameter"],
   ]) {
     const selected = select(source, target);
     assert.equal(selected !== undefined, true, placement);
@@ -99,6 +99,9 @@ test("nested callable inputs and results reuse exact recursive signature convers
       rustCallableTargetType([rustCallableTargetType([unsafeReference], number)], number)) === undefined, true);
   }
   assert.equal(select(rustCallableTargetType([], nativeString), rustCallableTargetType([], reference)) === undefined, true);
+  assert.equal(select(rustCallableTargetType([rustCallableTargetType([], borrowed)], number),
+    rustCallableTargetType([rustCallableTargetType([], owned)], number)) === undefined, true,
+    "contravariance cannot manufacture an escaping borrowed callback result");
 });
 
 test("native callable conversions retain contravariant parameter and covariant result evidence", () => {

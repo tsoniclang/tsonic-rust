@@ -41,6 +41,7 @@ import {
 } from "../../../target-model/conversions/contracts.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import type { RustValueConversion } from "../../../target-model/operations/model.js";
+import type { RustCallableConversion } from "../../../target-model/conversions/callable.js";
 import type { RustClosedTypeTestPlan } from "../../../target-model/operations/type-tests.js";
 import type { RustPlanQueries } from "../../../target-model/facts/selections.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
@@ -403,8 +404,14 @@ export function analyzeRustGeneratedItemUsage(input: {
       }
     }
   }
-  const visitConversion = (conversion: RustValueConversion | undefined): void => {
+  const visitConversion = (conversion: RustValueConversion | RustCallableConversion | undefined): void => {
     if (conversion === undefined) return;
+    if (conversion.kind === "callable-adapter") {
+      for (const selected of [...conversion.parameters, conversion.result]) {
+        if (selected.kind === "value") visitConversion(selected.conversion);
+      }
+      return;
+    }
     const contract = rustValueConversionContract(conversion, input.typeDefinitions);
     if (contract === undefined) {
       throw new Error("A finalized Rust value conversion has no valid dead-code usage contract.");
@@ -766,11 +773,7 @@ export function analyzeRustGeneratedItemUsage(input: {
           if (field.conversion !== undefined) visitConversion(field.conversion);
         }
       }
-      if (conversion?.kind === "callable-adapter") {
-        for (const selected of [...conversion.parameters, conversion.result]) {
-          if (selected.kind === "value") visitConversion(selected.conversion);
-        }
-      }
+      if (conversion?.kind === "callable-adapter") visitConversion(conversion);
       if (conversion !== undefined && conversion.kind !== "native-trait-object-upcast" &&
         conversion.kind !== "reference-reborrow" && conversion.kind !== "provider-record-copy" &&
         conversion.kind !== "empty-record" && conversion.kind !== "generic-callable-flow" &&
