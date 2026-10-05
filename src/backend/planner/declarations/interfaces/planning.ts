@@ -191,7 +191,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
   const interfaceDeadCode = rustProjectInterfaceDeadCodeDisposition(
     context,
     node,
-    interfaceVisibility === "public",
+    publiclyReachable,
   );
   const explicitWrapperTraits = representation.kind !== "value" &&
     generics.parameters.some(parameter => parameter.kind === "type");
@@ -219,7 +219,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
                 context,
                 node,
                 "index-storage",
-                interfaceVisibility === "public",
+                publiclyReachable,
                 indexField.visibility === "public",
               );
               return deadCode === undefined ? {} : { deadCode };

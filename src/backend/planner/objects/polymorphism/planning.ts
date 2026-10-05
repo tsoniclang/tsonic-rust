@@ -474,7 +474,7 @@ export function planPolymorphicInterfaceDeclaration(
   const wrapperDeadCode = rustProjectInterfaceDeadCodeDisposition(
     context,
     declaration,
-    wrapperVisibility === "public",
+    publiclyReachable,
   );
   return [
     trait,
@@ -502,7 +502,7 @@ export function planPolymorphicInterfaceDeclaration(
               context,
               declaration,
               "wrapper-dispatch",
-              wrapperVisibility === "public",
+              publiclyReachable,
               implementationVisibility === "public",
             );
             return {

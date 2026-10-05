@@ -438,6 +438,49 @@ export function main(): void {
   validateGeneratedProject("generated-storage-liveness", result.artifacts, { run: true });
 });
 
+for (const surfaces of [[], ["js"]]) {
+  for (const outputType of ["bin", "lib"]) {
+    test(`exported interfaces retain exact native ${outputType} reachability on ${surfaces[0] ?? "native"}`, {
+      timeout: 300_000,
+    }, () => {
+      const name = `exported_interface_liveness_${outputType}_${surfaces[0] ?? "native"}`;
+      const { result } = compileRust({
+        surfaces,
+        target: { id: "rust", options: { outputType, crateName: name } },
+        files: {
+          "contracts.ts": `
+            export interface BaseOptions { value: number; }
+            export interface SelectedOptions extends BaseOptions {}
+            export interface UnusedOptions { unused?: number; }
+          `,
+          "index.ts": `
+            import type { SelectedOptions } from "./contracts.js";
+            export function create(): SelectedOptions { return { value: 42 }; }
+            export function main(): void {
+              const options = create();
+              if (options.value !== 42) throw new Error("interface liveness");
+            }
+          `,
+        },
+      });
+      assert.equal(result.diagnostics.length, 0,
+        result.diagnostics.slice(0, 6).map(row => row.message.slice(0, 256)).join("\n"));
+      const contracts = artifactText(result, "src/contracts.rs");
+      assert.equal(itemHasAttribute(contracts, "struct UnusedOptions "), outputType === "bin");
+      assert.equal(itemHasAttribute(contracts, "struct SelectedOptions "), false);
+      assert.equal(itemHasAttribute(contracts, "struct SelectedOptions ", generatedUnconstructedInstance), false);
+      const base = rustBracedItem(contracts, "struct BaseOptions ");
+      assert.equal(itemHasAttribute(base, "dispatch:", generatedUnusedStorage), false,
+        "a retained base wrapper must not assert a dead field below an unused owner or a public native ABI");
+      if (outputType === "lib") {
+        assert.equal(itemHasAttribute(contracts, "struct BaseOptions "), false);
+        assert.equal(itemHasAttribute(contracts, "struct BaseOptions ", generatedUnconstructedInstance), false);
+      }
+      validateGeneratedProject(name, result.artifacts, { run: outputType === "bin" });
+    });
+  }
+}
+
 function itemHasAttribute(source, itemFragment, attribute = authoredDeadCode) {
   const lines = source.split("\n");
   const itemLine = lines.findIndex((line) => line.includes(itemFragment));
