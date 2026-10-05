@@ -383,6 +383,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
         return undefined;
       }
       value = { kind: "none" };
+      valuesByStorageIndex.set(field.storageIndex, value);
     }
     structuralInitializers.push({
       kind: field.method === true ? "method" : "stored",

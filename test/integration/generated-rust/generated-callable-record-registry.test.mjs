@@ -160,4 +160,45 @@ for (const surfaces of [[], ["js"]]) {
         result.diagnostics.slice(0, 6).map(row => row.message.slice(0, 256)).join("\n"));
       validateGeneratedProject(name, result.artifacts, { run: true });
     });
+
+  test(`method record state retains omitted optional fields and present false values on ${surfaces[0] ?? "native"}`,
+    { timeout: 300_000 }, () => {
+      const name = `method_record_optional_state_${surfaces[0] ?? "native"}`;
+      const { result } = compileRust({ surfaces,
+        target: { id: "rust", options: { outputType: "bin", crateName: name } },
+        files: {
+          "contract.ts": `
+            export interface Operation {
+              label?: string;
+              enabled?: boolean;
+              callback?: () => number;
+              run(): number;
+            }
+          `,
+          "factory.ts": `
+            import type { Operation } from "./contract.js";
+            export function absent(): Operation { return { run(): number { return 3; } }; }
+            export function present(): Operation {
+              return { label: "ready", enabled: false, callback: () => 7, run(): number { return 3; } };
+            }
+          `,
+          "index.ts": `
+            import { absent, present } from "./factory.js";
+            export function main(): void {
+              const empty = absent();
+              if (empty.label !== undefined || empty.enabled !== undefined ||
+                empty.callback !== undefined || empty.run() !== 3) throw new Error("absent fields");
+              const filled = present();
+              if (filled.label !== "ready" || filled.enabled !== false ||
+                filled.run() !== 3) throw new Error("present fields");
+              const callback = filled.callback;
+              if (callback === undefined || callback() !== 7) throw new Error("present callback");
+            }
+          `,
+        },
+      });
+      assert.equal(result.diagnostics.length, 0,
+        result.diagnostics.slice(0, 6).map(row => row.message.slice(0, 256)).join("\n"));
+      validateGeneratedProject(name, result.artifacts, { run: true });
+    });
 }
