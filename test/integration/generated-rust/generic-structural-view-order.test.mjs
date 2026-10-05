@@ -132,7 +132,7 @@ export function run(): boolean {
   if (selected.selected !== "after" || closed().selected !== "closed") return false;
   owner.fail = true;
   let caught = false;
-  try { const ignored = selected.selected; if (ignored === "before") return false; } catch { caught = true; }
+  try { const ignored = selected.selected; if (ignored !== "after") return false; } catch { caught = true; }
   if (!caught) return false;
   ${order === "closed-only" ? "" : `const numeric = new Box<number>(7); if (open(numeric).selected !== 7) return false;`}
   return true;
@@ -145,9 +145,18 @@ for (const surfaces of [[], ["js"]]) {
   for (const order of ["closed-only", "closed-first", "open-first"]) {
     for (const [name, source] of [["constant", constantSource], ["dependent", dependentSource], ["permuted", permutedSource], ["getter", getterSource]]) {
       test(`${name} generic structural views preserve native ABI and live state ${order} in ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
-        const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
+        const { result, source: checked } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
           files: { "index.ts": source(order) } });
-        assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 6).map(row => row.message.slice(0, 256)).join("\n"));
+        const diagnostics = result.diagnostics.slice(0, 32).map(row => {
+          const node = row.sourceNode;
+          const range = node === undefined ? undefined : checked.ast.authoredRange(node);
+          const file = node === undefined ? undefined : checked.ast.getSourceFile(node);
+          const text = range?.kind === "authored" && file !== undefined
+            ? checked.ast.getSourceText(file).slice(range.start, range.end).slice(0, 160) : "";
+          return JSON.stringify({ code: row.code, message: row.message.slice(0, 256),
+            kind: node === undefined ? undefined : checked.ast.kindName(node), text });
+        }).join("\n");
+        assert.equal(result.diagnostics.length, 0, diagnostics);
         const emitted = rustSourceText(result);
         assert.equal(/unsafe\s*\{|MaybeUninit|assume_init|transmute|downcast_unchecked/u.test(emitted), false,
           "the structural ABI must retain statically selected native dispatch");

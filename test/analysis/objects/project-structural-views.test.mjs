@@ -74,7 +74,7 @@ function structuralFieldSelection({ callable = false } = {}) {
       new Map([[parameter.identity, receiver.value.genericArguments[0].type]])),
   };
   const semantics = { declarations: { declaredType: node => node === declaration ? sourceType : undefined },
-    types: { structuralMembers: () => ({ kind: "available", destination: { calls: [], constructs: [], indexes: [] },
+    types: { typeArgumentBindings: () => [], structuralMembers: () => ({ kind: "available", destination: { calls: [], constructs: [], indexes: [] },
       members: [{ kind: "present", destination: { declarations: [destination], property: { symbol } },
         source: { read: "field", declarations: [member], getters: [], setters: [], property: { readonly: false } } }] }) } };
   const sourceTypes = { structuralInstantiations: () => [{ template, instance: carrier }], typeFamilies: { get: () => undefined } };
