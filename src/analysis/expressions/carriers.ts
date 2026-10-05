@@ -118,11 +118,9 @@ export function resolveExpressionCarrier(
       facts.resolve(expression, rustSelectedOperationKey);
     const targetOperation = facts.get(expression, rustTargetOperationFactKey) ??
       facts.resolve(expression, rustTargetOperationFactKey);
-    const optionalChain = facts.get(expression, rustOptionalChainFactKey) ??
-      facts.resolve(expression, rustOptionalChainFactKey);
     const selectedOperationOwnsResult = selectedOperation !== undefined || targetOperation !== undefined;
     const flowCarrier = selectedOperationOwnsResult &&
-        (optionalChain !== undefined || rustTargetTypeRefEquals(carrier, expected) ||
+        (rustTargetTypeRefEquals(carrier, expected) ||
           rustOptionElementCarrier(carrier) === undefined &&
           (carrier === undefined || rustUnionAlternatives(carrier, walk.context.typeDefinitions) === undefined))
       ? carrier

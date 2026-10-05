@@ -324,7 +324,9 @@ function resolveSelectedFlowReadCarrier(
   const semanticCarrier = resolveRustTargetTypeRef(
     selectedType, rustResolutionContext(walk, expression), walk.operationOptions,
   );
-  if (semanticCarrier !== undefined && walk.context.projectTypes.definitionForCarrier(semanticCarrier) !== undefined) {
+  if (semanticCarrier !== undefined && selectRustFlowReadProjection(
+    sourceCarrier, semanticCarrier, walk.context.projectTypes, walk.context.typeDefinitions,
+  ).kind === "projection") {
     return semanticCarrier;
   }
   if (semanticCarrier !== undefined && rustStructuralObjectCarrierValue(semanticCarrier)?.bases?.some(base =>
