@@ -10,8 +10,9 @@ import type { RustFactWalk } from "../program/walk.js";
 import type { RustSourceObjectShape } from "../project-types/source-type-registry.js";
 import type { RustCallableParameterAbi, RustCallableParameterAdapter, RustCallableValueAdapter } from "../facts/callable-adapters.js";
 import { callableRestElement, selectRustCallableValueAdapter } from "../callables/adapters.js";
+import type { RustProjectStructuralView } from "./project-structural-views.js";
 import { selectRustProjectStructuralViewFields, selectRustProjectStructuralViewSources,
-  type RustProjectStructuralView, type RustProjectStructuralViewSource } from "./project-structural-views.js";
+  type RustProjectStructuralViewSource } from "./project-structural-views-members.js";
 import { rustProjectViewMatches } from "./view-implementations.js";
 
 interface RustStructuralViewBindings extends RustTargetGenericBindings {
