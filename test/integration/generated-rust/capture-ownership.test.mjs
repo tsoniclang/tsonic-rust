@@ -8,7 +8,8 @@ import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../..
 function compile(source, options = {}) {
   const { result } = compileRust({ surfaces: ["js"],
     target: { id: "rust", options: { outputType: "bin", ...options } }, files: { "index.ts": source } });
-  assert.deepEqual(result.diagnostics, []);
+  assert.equal(result.diagnostics.length, 0,
+    result.diagnostics.slice(0, 4).map(row => row.message.slice(0, 256)).join("\n"));
   return { result, output: artifactText(result, "src/index.rs") };
 }
 
@@ -73,6 +74,41 @@ test("a single non-Copy capture uses inline native interior storage without a se
   assert.match(output, /core::cell::RefCell::new/u);
   assert.doesNotMatch(output, /Location::allocate|Rc::new\([^\n]*RefCell/u);
   validateGeneratedProject("single-owned-string-capture", result.artifacts, { run: true });
+});
+
+test("non-Copy independent, nested and deferred owners retain one live binding", { timeout: 300_000 }, () => {
+  const { result, output } = compile(`
+    function pair(seed: string): [(suffix: string) => string, () => string] {
+      return [suffix => { seed = seed + suffix; return seed; }, () => seed];
+    }
+    function nested(seed: string): () => (suffix: string) => string {
+      return () => suffix => { seed = seed + suffix; return seed; };
+    }
+    function deferred(): () => string {
+      const callback = () => { seed = seed + "x"; return seed; };
+      let seed = "d";
+      return callback;
+    }
+    export function main(): void {
+      const first = pair("a");
+      const alias = first[0];
+      const second = pair("b");
+      const factory = nested("n");
+      const left = factory();
+      const right = factory();
+      const later = deferred();
+      if (first[0]("x") !== "ax" || first[1]() !== "ax" ||
+        alias("y") !== "axy" || first[1]() !== "axy" ||
+        second[0]("z") !== "bz" || second[1]() !== "bz" ||
+        left("x") !== "nx" || right("y") !== "nxy" ||
+        later() !== "dx" || later() !== "dxx")
+        throw new Error("live non-Copy binding");
+    }
+  `);
+  assert.equal(/Location::allocate/u.test(output), true, "independent owners retain their shared binding");
+  assert.equal(/core::cell::(?:Cell|RefCell)::new/u.test(output), false,
+    "shared and deferred bindings cannot become independent inline payloads");
+  validateGeneratedProject("shared-owned-string-capture", result.artifacts, { run: true });
 });
 
 test("unique mutable capture allocation matches an independent native owning Fn", { timeout: 300_000 }, () => {
