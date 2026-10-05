@@ -37,6 +37,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { resolveRustTypeFamilyApplication, rustSourceTypeFamilyDeclaration } from "../../policy/types/resolution/type-families.js";
 import { resolveRustEvidenceNodesToCommonCarrier } from "../../policy/types/resolution/source-evidence.js";
 import { rustSourceUnionMemberDeclarationIsOwned } from "../../policy/evidence/source-union-members.js";
+import { rustSourceUnionValueTypes } from "../../policy/types/resolution/source-unions.js";
 
 export function reserveTypeAliasUnion(walk: RustFactWalk, declaration: Node): void {
   const {ast} = walk.context;
@@ -59,7 +60,8 @@ export function reserveTypeAliasUnion(walk: RustFactWalk, declaration: Node): vo
     contract?.parameters.map(parameter => parameter.kind === "type"
       ? {kind: "type" as const, type: {kind: "type-parameter" as const, identity: parameter.identity, name: parameter.targetName}}
       : {kind: "lifetime" as const, lifetime: parameter.lifetime}) ?? []);
-  const absent = semantics.types.unionOrIntersectionTypes(sourceType).some(member => semantics.types.isNullish(member));
+  const members = semantics.types.unionOrIntersectionTypes(sourceType);
+  const absent = rustSourceUnionValueTypes(members, semantics).length !== members.length;
   walk.sourceTypes.reserveSourceUnion(declaration, absent ? rustSourceOptionalTargetType(reference) : reference);
 }
 
@@ -176,8 +178,7 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
   }[] = [];
   const authoredType = Node_Type(ast, declaration);
   if (authoredType === undefined) return;
-  for (const member of sourceMembers as readonly Type[]) {
-    if (semantics.types.isNullish(member)) continue;
+  for (const member of rustSourceUnionValueTypes(sourceMembers as readonly Type[], semantics)) {
     const carrier = resolveRustEvidenceNodesToCommonCarrier(
       [authoredType],
       member,

@@ -6,6 +6,8 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isRustNumberArrayPayload } from "../../target-model/types/carriers/array-unions.js";
+import { instantiateRustSourceUnionVariants, rustGeneratedSourceUnionTemplate,
+  rustSourceUnionDefinitionIdentity } from "../../target-model/types/source-union-definitions.js";
 
 export interface RustGeneratedUnionDefinition {
   readonly ownerFileName: string;
@@ -59,11 +61,22 @@ export function createRustGeneratedUnionPlan(
       sourceCarriers: Object.freeze([...group.carriers].sort(([left], [right]) => left.localeCompare(right, "en")).map(([, carrier]) => carrier)),
     });
   });
-  const byCarrier = new Map(definitions.flatMap(definition => definition.sourceCarriers.map(carrier => [closedMetadataKey(carrier), definition] as const)));
+  const bySchema = new Map(definitions.flatMap(definition => definition.sourceCarriers.map(carrier => {
+    const value = rustSourceUnionCarrierValue(carrier)!;
+    const template = rustGeneratedSourceUnionTemplate({ carrier,
+      variants: value.genericArguments.map((argument, index) => ({ name: definition.variantNames[index]!,
+        carrier: (argument as Extract<typeof argument, { kind: "type" }>).type })),
+    })!;
+    return [rustSourceUnionDefinitionIdentity(carrier)!, { definition, template }] as const;
+  })));
   return Object.freeze({
     unionDefinitions: Object.freeze(definitions),
     unionForCarrier(carrier: TargetTypeRef) {
-      return rustSourceUnionCarrierValue(carrier)?.origin === "generated" ? byCarrier.get(closedMetadataKey(carrier)) : undefined;
+      const value = rustSourceUnionCarrierValue(carrier);
+      const identity = rustSourceUnionDefinitionIdentity(carrier);
+      const schema = value?.origin !== "generated" || identity === undefined ? undefined : bySchema.get(identity);
+      return schema !== undefined && instantiateRustSourceUnionVariants(schema.template, carrier) !== undefined
+        ? schema.definition : undefined;
     },
   });
 }

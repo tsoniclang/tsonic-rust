@@ -3,7 +3,7 @@ import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model
 import { rustSourceTypeCarrierValue, rustSourceUnionCarrierValue } from "../../target-model/types/carriers/source-types.js";
 import { closedMetadataKey, hasExactObjectKeys, isClosedMetadata, isDenseDataArray, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
-import { instantiateRustSourceUnionVariants, rustSourceUnionDefinitionIdentity,
+import { instantiateRustSourceUnionVariants, rustSourceUnionDefinitionIdentity, rustGeneratedSourceUnionTemplate,
   type RustTypeDefinitions, type RustSourceUnionDefinition, type RustProgramErrorOrigin } from "../../target-model/types/source-union-definitions.js";
 
 export interface RustTypeDefinitionRegistry extends RustTypeDefinitions {
@@ -67,10 +67,13 @@ export function createRustTypeDefinitionRegistry(): RustTypeDefinitionRegistry {
       if (expected !== undefined && (expected.length !== definition.variants.length ||
         expected.some((variant, index) => variant.name !== definition.variants[index]!.name ||
           !rustTargetTypeRefEquals(variant.carrier, definition.variants[index]!.carrier)))) return false;
-      if (template && templates.has(identity) && templates.get(identity) !== existing) return false;
+      if (template && value.origin !== "generated" && templates.has(identity) && templates.get(identity) !== existing) return false;
       const normalized = existing ?? snapshotClosedMetadata(definition);
       definitions.set(key, normalized);
-      if (template) templates.set(identity, normalized);
+      const generatedTemplate = rustGeneratedSourceUnionTemplate(normalized);
+      if (generatedTemplate !== undefined) {
+        if (!templates.has(identity)) templates.set(identity, generatedTemplate);
+      } else if (template) templates.set(identity, normalized);
       return true;
     },
     seal() {

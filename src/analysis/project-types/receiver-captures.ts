@@ -268,11 +268,25 @@ export function analyzeRustReceiverFieldCaptures(input: {
     if (!closed || constructions.length === 0) continue;
     for (const construction of constructions) {
       const flow = input.navigation.expressionValueFlow(construction);
+      const localAliasUse = (reference: Node): boolean => {
+        let expression = reference;
+        let parent = input.ast.parent(expression);
+        while (parent !== undefined && account() &&
+          (input.ast.is.IsParenthesizedExpression(parent) || input.ast.is.IsAsExpression(parent) ||
+            input.ast.is.IsSatisfiesExpression(parent) || input.ast.is.IsNonNullExpression(parent) || input.ast.is.IsTypeAssertion(parent)) &&
+          Node_Expression(input.ast, parent) === expression) {
+          expression = parent;
+          parent = input.ast.parent(expression);
+        }
+        return account() && parent !== undefined && input.ast.is.IsVariableDeclaration(parent) &&
+          Node_Initializer(input.ast, parent) === expression && flow.aliasDeclarations.includes(parent);
+      };
       if (!account() || flow.exported || flow.returned || flow.yielded || flow.passedAsArgument ||
         flow.storedOutsideBinding || flow.hasUnclassifiedUse || flow.memberWritten ||
         flow.aliasDeclarations.some(declaration => !account() || input.navigation.declarationUseSummary(declaration).bindingWritten) ||
         flow.uses.some(use => !account() || use.kind === "type-only" ||
-          !use.throughMember || use.role !== "receiver" || selectedAccess(use.reference) === undefined)) {
+          !(use.role === "storage" && !use.throughMember && localAliasUse(use.reference)) &&
+          (!use.throughMember || use.role !== "receiver" || selectedAccess(use.reference) === undefined))) {
         closed = false;
         break;
       }

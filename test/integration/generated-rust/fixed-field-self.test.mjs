@@ -40,3 +40,14 @@ mod fixed_field_owner_cost {
   const executed = runCargo(directory, ["test", "--release", "--", "--test-threads=1"]);
   assert.equal(executed.status, 0, executed.stdout.slice(-4096) + executed.stderr.slice(-4096));
 });
+
+for (const surfaces of [[], ["js"]]) test(`computed fixed field self retains the exact callable owner in ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
+  const source = fixedFieldSelfSource.replace("this.recurse(count - 1)", 'this["recurse"](count - 1)');
+  const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": source } });
+  assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 4).map(row => row.message.slice(0, 256)).join("\n"));
+  const emitted = artifactText(result, "src/index.rs");
+  assert.equal(typeof emitted === "string", true);
+  assert.equal(emitted.includes("::recursive("), true);
+  assert.equal(/captured_field|OnceCell|RefCell|rt::Field/u.test(emitted), false);
+  validateGeneratedProject(`computed-fixed-field-self-${surfaces[0] ?? "native"}`, result.artifacts, { run: true });
+});

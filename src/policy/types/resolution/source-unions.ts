@@ -1,5 +1,5 @@
 import type { Type } from "@tsonic/tsts";
-import { sourceBoundTypeRelationship } from "@tsonic/target-api/source";
+import { sourceBoundTypeRelationship, type SourceFileSemantics } from "@tsonic/target-api/source";
 import type { RustSourceUnion } from "../source-type-registry.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
@@ -19,6 +19,14 @@ import {
 import { rustSourceOptionalTargetType } from "../../../target-model/types/projections.js";
 import { retainRustStructuralInstantiation } from "./structural-instantiations.js";
 import { rustGenericCallableSignaturesMatch } from "../../../target-model/conversions/generic-callable.js";
+
+export function rustSourceUnionValueTypes(
+  members: readonly Type[],
+  semantics: SourceFileSemantics,
+): readonly Type[] {
+  const hasValue = members.some(member => !semantics.types.isNullish(member) && !semantics.types.isVoidLike(member));
+  return members.filter(member => !semantics.types.isNullish(member) && !(hasValue && semantics.types.isVoidLike(member)));
+}
 
 export function resolveRustUnionValueCarrier(
   values: readonly TargetTypeRef[],
@@ -54,7 +62,7 @@ export function retainRustSourceUnionInstantiation(
   const semantics = context.currentSemantics;
   if (value === undefined || expectedVariants === undefined || expectedVariants.length !== template.variants.length ||
     template.declaration === undefined || !semantics.types.isUnion(sourceType)) return undefined;
-  const members = semantics.types.unionOrIntersectionTypes(sourceType).filter(member => !semantics.types.isNullish(member));
+  const members = rustSourceUnionValueTypes(semantics.types.unionOrIntersectionTypes(sourceType), semantics);
   if (members.length !== template.variants.reduce((count, variant) => count + variant.sourceTypes.length, 0) ||
     members.some(member => member === undefined)) return undefined;
   const parameters = context.sourceLifetimes.contractFor(template.declaration)?.parameters ?? [];

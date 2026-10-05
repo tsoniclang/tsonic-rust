@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { contextualAsyncResultSource, ordinaryAsyncResultSource } from "../../../../tsonic/test/fixtures/contextual-async-results.mjs";
+import { contextualAsyncResultSource, inlineContextualAsyncResultSource, ordinaryAsyncResultSource } from "../../../../tsonic/test/fixtures/contextual-async-results.mjs";
 import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 import { rustAsyncFunctionFactKey, rustClosureCaptureFactKey, rustModuleBindingFactKey, rustSourceCallableReturnFactKey, rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
 import { rustCallableInvocationResult } from "../../../dist/analysis/facts/callable-results.js";
@@ -92,6 +92,12 @@ export function make(): () => Completion { return async () => {}; }
     "the declared contextual union must close before async ambiguity selection");
   assert.equal(result.diagnostics.some(row => row.code === "RUST_ASYNC_CONTEXTUAL_PROMISE_NOT_CLOSED"), true,
     result.diagnostics.map(row => row.code).join(", "));
+});
+
+test("inline contextual async unions retain the proven promise lifetime and exact generic payloads", () => {
+  const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": inlineContextualAsyncResultSource } });
+  assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.code).join(", "));
+  assert.equal(result.artifacts.length > 0, true);
 });
 
 for (const alternatives of ["Promise<string | void> | Promise<number | void>",

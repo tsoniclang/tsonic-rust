@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { appendFileSync } from "node:fs";
 import { join } from "node:path";
-import { contextualAsyncCostSource, contextualAsyncResultSource, ordinaryAsyncResultSource } from "../../../../tsonic/test/fixtures/contextual-async-results.mjs";
+import { contextualAsyncCostSource, contextualAsyncResultSource, inlineContextualAsyncResultSource, ordinaryAsyncResultSource } from "../../../../tsonic/test/fixtures/contextual-async-results.mjs";
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
@@ -15,6 +15,13 @@ test("native JS async bodies retain contextual union completion, captures, alias
   assert.doesNotMatch(output, /\.then\(|\.then_async\(|transmute|unreachable_unchecked/u);
   assert.doesNotMatch(output, /JsPromise<'static, \(\), rt::TsonicError>[\s\S]{0,100}\.map\(/u);
   validateGeneratedProject("contextual-async-results", result.artifacts, { run: true });
+});
+
+test("inline contextual async unions execute after native promise lifetime closure", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
+    files: { "index.ts": inlineContextualAsyncResultSource } });
+  assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.code).join(", "));
+  validateGeneratedProject("inline-contextual-async-results", result.artifacts, { run: true });
 });
 
 for (const surfaces of [[], ["js"]]) {

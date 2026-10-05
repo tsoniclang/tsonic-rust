@@ -90,19 +90,6 @@ export function selectRustCheckedElementAccess(
   if (record !== undefined) return record;
   const indexed = request.sourceReceiverType === undefined ? undefined
     : context.semanticsFor(request.expression).types.selectIndexedAccess(request.sourceReceiverType, request.sourceArgumentType);
-  if (request.sourceReceiverType !== undefined && request.accessMode !== "delete" && indexed?.kind === "deferred") {
-    const selected = resolveRustIndexedField(request.sourceReceiverType, request.sourceArgumentType,
-      context, options, new Set(), selectedReceiverCarrier);
-    if (selected?.result.kind !== "associated-type" || selectedReceiverCarrier === undefined) {
-      return rejectSelectedOperation(request.expression, context, "RUST_DEPENDENT_FIELD_NOT_PROVEN",
-        "Dependent indexed access requires an exact native owner, key and associated field type.");
-    }
-    return acceptRustMemberOperation(request, "indexer", {
-      kind: "source-indexed-field", operationId: sourceOperationId(context, request.expression, "indexed-field"),
-      receiverCarrier: selectedReceiverCarrier, keyCarrier: selected.key, resultCarrier: selected.result,
-      accessMode: request.accessMode,
-    }, context, options, elementProvenance(request));
-  }
   const indexMembers = selectRustSourceProfileIndexMembers(request, context, options, indexed);
   const jsMembers = indexMembers?.profile === "js" ? indexMembers.members : undefined;
   const jsIdentity = jsMembers?.[0];
@@ -118,11 +105,13 @@ export function selectRustCheckedElementAccess(
   }, indexMembers?.readonly === true, context.typeDefinitions);
   if (selectedIndexOperation === undefined && request.sourceReceiverType !== undefined && request.sourceSelectedSymbol !== undefined &&
     request.sourceSelectedElementIndex === undefined) {
-    const member = indexed?.kind === "resolved" && indexed.members.length === 1
-      ? indexed.members[0] : undefined;
-    if (member?.kind === "property" && member.property.symbol === request.sourceSelectedSymbol) {
-      const declarationKind = request.sourceSelectedDeclaration === undefined ? undefined :
-        context.ast.kindName(request.sourceSelectedDeclaration);
+    const declarationKind = request.sourceSelectedDeclaration === undefined ? undefined :
+      context.ast.kindName(request.sourceSelectedDeclaration);
+    if (request.sourceSelectedDeclaration !== undefined && declarationKind !== undefined && ["KindPropertyDeclaration", "KindPropertySignature",
+      "KindPropertyAssignment", "KindShorthandPropertyAssignment", "KindGetAccessor", "KindSetAccessor",
+      "KindMethodDeclaration", "KindMethodSignature"].includes(declarationKind) &&
+      context.currentSemantics.declarations.symbolDeclarations(request.sourceSelectedSymbol)
+        .includes(request.sourceSelectedDeclaration)) {
       const declarations = declarationKind === "KindGetAccessor" || declarationKind === "KindSetAccessor"
         ? context.currentSemantics.types.structuralMembers(request.sourceReceiverType, request.sourceReceiverType)
         : undefined;
@@ -144,6 +133,19 @@ export function selectRustCheckedElementAccess(
       }
       return result;
     }
+  }
+  if (request.sourceReceiverType !== undefined && request.accessMode !== "delete" && indexed?.kind === "deferred") {
+    const selected = resolveRustIndexedField(request.sourceReceiverType, request.sourceArgumentType,
+      context, options, new Set(), selectedReceiverCarrier);
+    if (selected?.result.kind !== "associated-type" || selectedReceiverCarrier === undefined) {
+      return rejectSelectedOperation(request.expression, context, "RUST_DEPENDENT_FIELD_NOT_PROVEN",
+        "Dependent indexed access requires an exact native owner, key and associated field type.");
+    }
+    return acceptRustMemberOperation(request, "indexer", {
+      kind: "source-indexed-field", operationId: sourceOperationId(context, request.expression, "indexed-field"),
+      receiverCarrier: selectedReceiverCarrier, keyCarrier: selected.key, resultCarrier: selected.result,
+      accessMode: request.accessMode,
+    }, context, options, elementProvenance(request));
   }
   const sourceProfileIdentity = indexMembers?.members[0];
   const providerEvidence = resolveSelectedProviderDeclaration(

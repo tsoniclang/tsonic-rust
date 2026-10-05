@@ -29,7 +29,10 @@ test("generated union definitions require complete exact payload identities and 
   assert.equal(plan.unionDefinitions.length, 2);
   assert.notEqual(plan.unionForCarrier(second.carrier).targetName, "Union2");
   assert.equal(plan.unionForCarrier(second.carrier), plan.unionForCarrier(third.carrier));
-  assert.equal(plan.unionForCarrier(make(payloads.toReversed())), undefined);
+  assert.equal(plan.unionForCarrier(make(payloads.toReversed())), plan.unionForCarrier(carrier),
+    "a generated generic enum's native definition is independent of its payload application");
+  assert.equal(plan.unionForCarrier(make(payloads.toReversed(), "/src/unregistered.ts")), undefined,
+    "unregistered source identities remain rejected");
   assert.ok(Object.isFrozen(plan.unionDefinitions));
   assert.ok(Object.isFrozen(plan.unionForCarrier(carrier).sourceCarriers));
   assert.throws(() => create([{ ...first, declaration: {} }]), /exact inferred union/u);

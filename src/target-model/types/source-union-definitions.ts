@@ -1,5 +1,5 @@
 import type { TargetTypeRef } from "./model.js";
-import { rustSourceUnionCarrierValue, type RustSourceUnionVariantCarrierValue } from "./carriers/source-types.js";
+import { rustSourceUnionCarrierValue, rustSourceUnionTargetType, type RustSourceUnionVariantCarrierValue } from "./carriers/source-types.js";
 import { inferRustTargetGenericBindings } from "./carriers/generic-inference.js";
 import { rustTargetGenericReferences } from "./carriers/generic-references.js";
 import { substituteRustTargetGenerics } from "./carriers/substitution.js";
@@ -27,6 +27,20 @@ export const emptyRustTypeDefinitions: RustTypeDefinitions = Object.freeze({
 export function rustSourceUnionDefinitionIdentity(carrier: TargetTypeRef): string | undefined {
   const value = rustSourceUnionCarrierValue(carrier);
   return value === undefined ? undefined : closedMetadataKey([value.origin, value.fileName, value.typeName]);
+}
+
+export function rustGeneratedSourceUnionTemplate(definition: RustSourceUnionDefinition): RustSourceUnionDefinition | undefined {
+  const value = rustSourceUnionCarrierValue(definition.carrier);
+  const identity = rustSourceUnionDefinitionIdentity(definition.carrier);
+  if (value?.origin !== "generated" || identity === undefined) return undefined;
+  const parameters = definition.variants.map((_, index): TargetTypeRef => ({
+    kind: "type-parameter", identity: `${identity}:payload:${index}`, name: `Payload${index}`,
+  }));
+  return snapshotClosedMetadata({
+    carrier: rustSourceUnionTargetType(value.fileName, value.typeName,
+      parameters.map(type => ({ kind: "type", type })), "generated"),
+    variants: definition.variants.map((variant, index) => ({ name: variant.name, carrier: parameters[index]! })),
+  });
 }
 
 export function instantiateRustSourceUnionVariants(
