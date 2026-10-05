@@ -9,6 +9,8 @@ import { rustModuleBindingFactKey } from "../../../dist/analysis/facts/keys.js";
 import { rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
 import { planRustReferenceOperationCall } from "../../../dist/backend/planner/expressions/reference-operations.js";
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
+import { Node_Expression } from "@tsonic/target-api/source";
+import { rustCapturedFieldStorageFactKey } from "../../../dist/analysis/facts/receiver-captures.js";
 
 test("owned exits, static text, direct helpers and scoped array reads execute without extra owners", { timeout: 300_000 }, () => {
   const { result } = compileRust({
@@ -74,17 +76,41 @@ export function main(): void {
 });
 
 test("local receiver field results do not force shared object storage", () => {
-  for (const [body, expected] of [
-    ["read(): number { return this.position; }", "value"],
-    ["read(): Parser { return this; }", "shared-immutable"],
-    ["read(): () => number { return () => this.position; }", "shared-immutable"],
+  for (const [body, expected, fieldOnly] of [
+    ["read(): number { return this.position; }", "value", false],
+    ["read(): Parser { return this; }", "shared-immutable", false],
+    ["read(): () => number { return () => this.position; }", "value", true],
   ]) {
     const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
       class Parser { position = 0; ${body} }
       export function run(): void { const parser = new Parser(); parser.read(); }
     ` } });
-    assert.equal(program.objectRepresentations.representations.find(value => value.definition.sourceName === "Parser")?.kind,
-      expected, body);
+    const representation = program.objectRepresentations.representations.find(value => value.definition.sourceName === "Parser");
+    assert.equal(representation !== undefined, true, "exact selected Parser representation");
+    assert.equal(representation.kind, expected, body);
+    const ast = program.source.ast;
+    const members = ast.members(representation.definition.declaration).filter(member => member !== undefined);
+    const method = members.find(member => ast.text(ast.name(member)) === "read");
+    assert.equal(method !== undefined, true, "exact selected read method");
+    const methodBody = ast.body(method);
+    assert.equal(methodBody !== undefined, true, "checked read method body");
+    const callable = Node_Expression(ast, ast.statements(methodBody)[0]);
+    assert.equal(callable !== undefined, true, "checked read return value");
+    assert.equal(ast.is.IsArrowFunction(callable), fieldOnly, "exact expected field-only closure input");
+    if (fieldOnly) {
+      const field = members.find(member => ast.text(ast.name(member)) === "position");
+      assert.equal(field !== undefined, true, "exact selected position field");
+      const captures = program.objectRepresentations.receiverCaptures.capturesFor(callable);
+      assert.equal(captures.length, 1, "one retained field, not the whole object");
+      assert.equal(captures[0].declaration === field, true, "capture retains the checked position declaration");
+      assert.equal(captures[0].references.length, 1, "one checked position read");
+      assert.equal(program.objectRepresentations.receiverCaptures.receiversFor(callable).length, 0,
+        "field-only closure has no whole receiver owner");
+      const storage = program.facts.getFact(field, rustCapturedFieldStorageFactKey);
+      assert.equal(storage !== undefined, true, "sealed live field storage");
+      assert.equal(storage.storage.kind, "cell", "mutable field retains its native Cell owner");
+      assert.equal(storage.storage.initialization, "ready", "field initializer precedes retention");
+    }
   }
 });
 
