@@ -1,7 +1,7 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import { Node_Expression, Node_Type } from "@tsonic/target-api/source";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
+import { rustCallableProtocol, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import { closedMetadataKey, closedMetadataEquals, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustPascalCaseIdentifier, rustScreamingSnakeIdentifier, rustSnakeCaseIdentifier } from "../../target-model/names/identifiers.js";
@@ -14,12 +14,15 @@ import { setCarrierFact } from "../operations/project-calls.js";
 import { rustClassValueFactKey } from "../facts/class-values.js";
 import type { RustAnalysisContext } from "../program/context.js";
 import { rustProjectStaticFieldStorage, type RustProjectStaticFieldStorage } from "../project-types/object-layout.js";
-import { selectRustClassValueCallable, type RustClassValueCallable } from "./class-value-callables.js";
-import type { RustProjectStructuralView, RustProjectStructuralViewImplementation } from "./project-structural-views.js";
+import { finalizeRustClassValueCallable, selectRustClassValueCallable, selectRustClassValueCallablePlan,
+  type RustClassValueCallable } from "./class-value-callables.js";
+import { selectRustProjectStructuralView,
+  type RustProjectStructuralView, type RustProjectStructuralViewImplementation } from "./project-structural-views.js";
 import { rustProjectViewMatches, selectRustProjectViewImplementations } from "./view-implementations.js";
 import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
 import type { RustCallableValueAdapter } from "../facts/callable-adapters.js";
 import { rustCallableAdapterValues } from "../callables/adapter-values.js";
+import { selectRustCallableValueAdapter } from "../callables/adapters.js";
 
 export interface RustClassValueView {
   readonly declaration: Node;
@@ -320,12 +323,21 @@ export function selectRustClassValueView(
     correspondence.members.length !== shape.fields.length) { reject(); return false; }
   const sourceConstructs = semantics.types.signatureInfos(sourceType, "construct");
   const targetConstructs = semantics.types.signatureInfos(destinationType, "construct");
-  const construction = shape.construction === undefined || correspondence.source.constructs.length !== 1 ||
+  const constructionPlan = shape.construction === undefined || correspondence.source.constructs.length !== 1 ||
     sourceConstructs.length !== 1 || targetConstructs.length !== 1 ||
     sourceConstructs[0]!.signature !== correspondence.source.constructs[0] ||
     targetConstructs[0]!.signature !== correspondence.destination.constructs[0]
-    ? undefined : selectRustClassValueCallable(walk, declaration, sourceConstructs[0]!,
+    ? undefined : selectRustClassValueCallablePlan(walk, declaration, sourceConstructs[0]!,
       targetConstructs[0]!, shape.construction.carrier, true, semantics, false, sourceCarrier);
+  const constructionResult = shape.construction === undefined ? undefined : rustCallableProtocol(shape.construction.carrier)?.result;
+  const constructionAdapter = constructionPlan === undefined || constructionResult === undefined ? undefined
+    : selectRustCallableValueAdapter(constructionPlan.resultCarrier, constructionResult, walk.context.projectTypes, walk.context.typeDefinitions) ??
+      (sourceConstructs[0]?.returnType !== undefined && selectRustProjectStructuralView(walk, declaration,
+        constructionPlan.resultCarrier, constructionResult, semantics, sourceConstructs[0].returnType)
+        ? { kind: "project-structural-view" as const, sourceCarrier: constructionPlan.resultCarrier, targetCarrier: constructionResult }
+        : undefined);
+  const construction = constructionPlan === undefined || constructionAdapter === undefined ? undefined
+    : finalizeRustClassValueCallable(constructionPlan, constructionAdapter);
   if (shape.construction !== undefined && construction === undefined) { reject(); return false; }
   const fields: RustClassValueView["fields"][number][] = [];
   for (const field of shape.fields) {
@@ -338,7 +350,7 @@ export function selectRustClassValueView(
       const sourceSignatures = semantics.types.signatureInfos(pair.source.property.type, "call");
       const targetSignatures = semantics.types.signatureInfos(pair.destination.property.type, "call");
       const callable = sourceSignatures.length === 1 && targetSignatures.length === 1
-        ? selectRustClassValueCallable(walk, declaration, sourceSignatures[0]!, targetSignatures[0]!, field.resultCarrier, false, semantics, false, sourceCarrier) : undefined;
+        ? selectRustClassValueCallable(walk, declaration, sourceSignatures[0]!, targetSignatures[0]!, field.resultCarrier, semantics, false, sourceCarrier) : undefined;
       if (callable === undefined) { reject(); return false; }
       if (!walk.sourceTypes.registerStructuralFieldImplementation({ carrier, storageIndex: field.storageIndex, kind: "dispatch" })) { reject(); return false; }
       fields.push({ declaration: sourceDeclaration, fileName: ast.getFileName(ast.getSourceFile(sourceDeclaration)),

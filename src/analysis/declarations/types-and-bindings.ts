@@ -290,9 +290,6 @@ export function recordParameterAbiFacts(walk: RustFactWalk, parameter: Node): vo
   }
   setCarrierFact(walk, parameter, parameterAbi.valueCarrier);
   setParameterAbiFact(walk, parameter, parameterAbi);
-  if (!recordDefaultParameterInitializerFacts(walk, parameter, parameterAbi)) {
-    return;
-  }
   const name = Node_Name(walk.context.ast, parameter);
   const nameKind = name === undefined ? "" : walk.context.ast.kindName(name);
   if (name !== undefined && (nameKind === KindArrayBindingPattern || nameKind === KindObjectBindingPattern) &&
@@ -365,7 +362,26 @@ export function setParameterAbiFact(
   ]);
 }
 
-export function recordDefaultParameterInitializerFacts(
+export function recordCallableDefaultParameterFacts(walk: RustFactWalk, declaration: Node): boolean {
+  const { ast, facts } = walk.context;
+  const parameters = requireDenseSourceNodes(walk, ast.parameters(declaration),
+    "Default parameter analysis requires exact callable parameter nodes.");
+  if (parameters === undefined) return false;
+  for (const parameter of parameters) {
+    if (Node_Initializer(ast, parameter) === undefined) continue;
+    const abi = facts.get(parameter, rustSourceParameterAbiFactKey);
+    if (abi === undefined) {
+      appendRustDiagnostic(walk, "RUST_DEFAULT_PARAMETER_ABI_MISSING",
+        "A default parameter body requires its exact finalized signature ABI.", parameter,
+        ["target.capability=rust.callable.default-parameter"]);
+      return false;
+    }
+    if (!recordDefaultParameterInitializerFacts(walk, parameter, abi)) return false;
+  }
+  return true;
+}
+
+function recordDefaultParameterInitializerFacts(
   walk: RustFactWalk,
   parameter: Node,
   abi: import("../../policy/ownership/source-callable-abi.js").RustSourceParameterAbi,

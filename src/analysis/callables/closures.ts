@@ -33,7 +33,7 @@ import {
   rustClosureProtocol,
   rustCallableTargetType,
 } from "../../target-model/types/index.js";
-import { recordBindingPatternFacts, recordDefaultParameterInitializerFacts, setParameterAbiFact } from "../declarations/types-and-bindings.js";
+import { recordBindingPatternFacts, recordCallableDefaultParameterFacts, setParameterAbiFact } from "../declarations/types-and-bindings.js";
 import { recordStatementFacts } from "../control-flow/statements.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
 import { reconcileRequiredCarrier, resolveExpressionCarrier } from "../expressions/carriers.js";
@@ -210,9 +210,6 @@ export function resolveFunctionExpressionCarrier(
     if (finalizedAbi === undefined) {
       setCarrierFact(walk, parameter, parameterAbi.valueCarrier);
       setParameterAbiFact(walk, parameter, parameterAbi);
-      if (!recordDefaultParameterInitializerFacts(walk, parameter, parameterAbi)) {
-        return undefined;
-      }
       const name = Node_Name(ast, parameter);
       const nameKind = name === undefined ? "" : ast.kindName(name);
       if (name !== undefined && (nameKind === KindArrayBindingPattern || nameKind === KindObjectBindingPattern) &&
@@ -284,6 +281,7 @@ export function resolveFunctionExpressionCarrier(
     ? previousThis
     : leadingParameters.find((parameter) => parameter.kind === "this")?.carrier;
   try {
+    if (!recordCallableDefaultParameterFacts(walk, expression)) return undefined;
     if (ast.kindName(body) === KindBlock) {
       if (bodyCarrier === undefined) {
         return undefined;

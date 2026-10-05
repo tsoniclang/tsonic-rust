@@ -20,7 +20,7 @@ import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { selectRustCapturedFieldStorage } from "../../policy/ownership/captured-field-storage.js";
 import { rustCapturedFieldStorageFactKey } from "../facts/receiver-captures.js";
 import { recordCallableReturnFact, recordCallableSuspensionFacts } from "../callables/signatures.js";
-import { recordParameterAbiFacts } from "./types-and-bindings.js";
+import { recordCallableDefaultParameterFacts, recordParameterAbiFacts } from "./types-and-bindings.js";
 import { recordStatementFacts, resolveTypeNodeCarrier } from "../control-flow/statements.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
@@ -232,6 +232,7 @@ export function recordClassBodyFacts(walk: RustFactWalk, declaration: Node, sour
       walk.currentMethodDeclaration = memberKind === "KindConstructor" ? undefined : member;
       walk.currentCallableDeclaration = member;
       walk.currentGeneratorDeclaration = generatorFact === undefined ? undefined : member;
+      recordCallableDefaultParameterFacts(walk, member);
       const body = ast.body(member);
       if (body !== undefined) {
         const statements = requireDenseSourceNodes(walk, ast.statements(body), "Class callable body contains an undefined or non-data statement slot.");

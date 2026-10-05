@@ -219,6 +219,7 @@ export function analyzeRustTargetProgram(
     valueLifetimes,
     objectRepresentations,
     context.callableValues.generic,
+    classValues.instanceViews,
   );
   if (declarationGenericRequirements.kind === "rejected") {
     return rejectedTargetStage(declarationGenericRequirements.diagnostics);

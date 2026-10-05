@@ -40,7 +40,7 @@ import {
 } from "../../target-model/types/index.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
-import { recordBindingPatternFacts, recordDefaultParameterInitializerFacts, recordParameterAbiFacts, setParameterAbiFact } from "../declarations/types-and-bindings.js";
+import { recordBindingPatternFacts, recordParameterAbiFacts, setParameterAbiFact } from "../declarations/types-and-bindings.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
 import { resolveRustContextualParameterAbi } from "../../policy/ownership/source-callable-abi.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
@@ -367,9 +367,6 @@ function recordCallableValueSignatureFacts(
     }
     setCarrierFact(walk, parameter, parameterAbi.valueCarrier);
     setParameterAbiFact(walk, parameter, parameterAbi);
-    if (!recordDefaultParameterInitializerFacts(walk, parameter, parameterAbi)) {
-      return;
-    }
     const name = Node_Name(ast, parameter);
     const nameKind = name === undefined ? "" : ast.kindName(name);
     if (name !== undefined && (nameKind === KindArrayBindingPattern || nameKind === KindObjectBindingPattern) &&

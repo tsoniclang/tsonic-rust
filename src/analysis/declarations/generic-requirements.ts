@@ -37,6 +37,7 @@ import { normalizeRustGenericRequirements } from "./generic-requirement-contract
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 import { rustTypeFamilyNormalizer } from "../../policy/types/type-family-normalization.js";
 import type { RustGenericCallablePlan } from "../callables/generic-values.js";
+import type { RustProjectStructuralView } from "../objects/project-structural-views.js";
 
 export type RustGenericRequirement = "clone" | "default" | "static" | "source-numeric" | "number-predicate";
 
@@ -91,6 +92,7 @@ export function analyzeRustDeclarationGenericRequirements(
   valueLifetimes: RustValueLifetimePlan,
   objectRepresentations: RustObjectRepresentationPlan,
   genericCallables: RustGenericCallablePlan,
+  structuralViews: readonly RustProjectStructuralView[],
 ): AnalyzeRustDeclarationGenericRequirementsResult {
   const ast = source.ast;
   const diagnostics: TargetDiagnostic[] = [];
@@ -168,6 +170,7 @@ export function analyzeRustDeclarationGenericRequirements(
         objectRepresentations,
         genericCallables,
         structuralShapes: shapes,
+        structuralViews,
         valueLifetimes,
         isStoredValue,
         readsValue(node) {

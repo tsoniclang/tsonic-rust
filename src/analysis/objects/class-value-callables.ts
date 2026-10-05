@@ -10,7 +10,6 @@ import { rustProjectCallableTargetName } from "../facts/source-member-name.js";
 import { resolveParameterAbi } from "../declarations/types-and-bindings.js";
 import { projectOwnerTypeSubstitutions, selectRustCallableParameterAdapters, selectRustCallableValueAdapter, substituteRustCallableParameterAbi } from "../callables/adapters.js";
 import { substituteRustTargetTypeParameters } from "../../target-model/types/index.js";
-import { selectRustProjectStructuralView } from "./project-structural-views.js";
 
 export interface RustClassValueCallable {
   readonly declaration: Node;
@@ -22,7 +21,37 @@ export interface RustClassValueCallable {
   readonly carrier: TargetTypeRef;
 }
 
+export interface RustClassValueCallablePlan extends Omit<RustClassValueCallable, "resultAdapter"> {
+  readonly resultCarrier: TargetTypeRef;
+}
+
 export function selectRustClassValueCallable(
+  walk: RustFactWalk,
+  classDeclaration: Node,
+  source: TypeSignatureInfo,
+  destination: TypeSignatureInfo,
+  targetCarrier: TargetTypeRef,
+  semantics: SourceFileSemantics,
+  instance = false,
+  selectedOwnerCarrier?: TargetTypeRef,
+): RustClassValueCallable | undefined {
+  const plan = selectRustClassValueCallablePlan(walk, classDeclaration, source, destination, targetCarrier,
+    false, semantics, instance, selectedOwnerCarrier);
+  const target = rustCallableProtocol(targetCarrier);
+  const adapter = plan === undefined || target === undefined ? undefined
+    : selectRustCallableValueAdapter(plan.resultCarrier, target.result, walk.context.projectTypes, walk.context.typeDefinitions);
+  return plan === undefined || adapter === undefined ? undefined : finalizeRustClassValueCallable(plan, adapter);
+}
+
+export function finalizeRustClassValueCallable(
+  plan: RustClassValueCallablePlan,
+  resultAdapter: RustCallableValueAdapter,
+): RustClassValueCallable {
+  const { resultCarrier, ...callable } = plan;
+  return Object.freeze({ ...callable, resultAdapter });
+}
+
+export function selectRustClassValueCallablePlan(
   walk: RustFactWalk,
   classDeclaration: Node,
   source: TypeSignatureInfo,
@@ -32,7 +61,7 @@ export function selectRustClassValueCallable(
   semantics: SourceFileSemantics,
   instance = false,
   selectedOwnerCarrier?: TargetTypeRef,
-): RustClassValueCallable | undefined {
+): RustClassValueCallablePlan | undefined {
   const { ast, projectTypes } = walk.context;
   const sourceSignature = source.signature;
   const owner = projectTypes.definitionForDeclaration(classDeclaration);
@@ -71,15 +100,8 @@ export function selectRustClassValueCallable(
   const declaredResult = construction ? ownerCarrier : resultSubject === undefined ? undefined :
     resolveRustTargetTypeRef(resultSubject, rustResolutionContext(walk, declaration), walk.operationOptions);
   const sourceResult = declaredResult === undefined ? undefined : substituteRustTargetTypeParameters(declaredResult, substitutions);
-  const selectedResultAdapter = sourceResult === undefined ? undefined : selectRustCallableValueAdapter(sourceResult, target.result,
-    projectTypes, walk.context.typeDefinitions);
-  const sourceInstanceType = source.returnType;
-  const resultAdapter: RustCallableValueAdapter | undefined = selectedResultAdapter ??
-    (construction && sourceResult !== undefined && sourceInstanceType !== undefined &&
-      selectRustProjectStructuralView(walk, classDeclaration, sourceResult, target.result, semantics, sourceInstanceType)
-      ? { kind: "project-structural-view", sourceCarrier: sourceResult, targetCarrier: target.result } : undefined);
   const targetName = construction ? sourceConstructor?.targetName : rustProjectCallableTargetName(declaration, walk.context);
-  if (parameterAdapters === undefined || resultAdapter === undefined || targetName === undefined) return undefined;
+  if (parameterAdapters === undefined || sourceResult === undefined || targetName === undefined) return undefined;
   return Object.freeze({ declaration, ownerCarrier, targetName, parameters: Object.freeze(parameters),
-    parameterAdapters: Object.freeze(parameterAdapters), resultAdapter, carrier: targetCarrier });
+    parameterAdapters: Object.freeze(parameterAdapters), resultCarrier: sourceResult, carrier: targetCarrier });
 }

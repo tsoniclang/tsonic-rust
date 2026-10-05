@@ -63,6 +63,7 @@ import type { RustGenericRequirement } from "./generic-requirements.js";
 import { normalizeRustGenericRequirements } from "./generic-requirement-contract.js";
 import type { RustGenericCallablePlan } from "../callables/generic-values.js";
 import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
+import type { RustProjectStructuralView } from "../objects/project-structural-views.js";
 import { rustSourceCallCallableStorageCarrier } from "../facts/target-operation.js";
 
 interface ClassifyCallableInput {
@@ -80,6 +81,7 @@ interface ClassifyCallableInput {
   readonly objectRepresentations: RustObjectRepresentationPlan;
   readonly genericCallables: RustGenericCallablePlan;
   readonly structuralShapes: RustStructuralShapePlan;
+  readonly structuralViews: readonly RustProjectStructuralView[];
   readonly idByDeclaration: WeakMap<Node, string>;
   readonly implementationDeclaration: (declaration: Node) => Node;
   readonly contractFor: (declaration: Node) => RequirementContractState | undefined;
@@ -317,6 +319,11 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       for (const inherited of input.projectTypes.directSupertypes(input.projectTypes.openCarrier(definition)) ?? []) {
         const inheritedError = collectType(inherited);
         if (inheritedError !== undefined) return inheritedError;
+      }
+      for (const view of input.structuralViews) {
+        if (view.declaration !== declaration) continue;
+        const viewError = collectType(view.targetCarrier);
+        if (viewError !== undefined) return viewError;
       }
     }
     const carrier = facts.getRuntimeCarrierFact(node)?.carrier;

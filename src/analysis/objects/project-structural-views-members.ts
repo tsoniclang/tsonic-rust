@@ -63,7 +63,7 @@ export function selectRustProjectStructuralViewSources(
         nativeDeclaration, sourceCarrier, sourceType, declared, rustOperationContext(walk, nativeDeclaration), walk.operationOptions);
       const callable = carrier === undefined ? undefined
         : selectRustClassValueCallable(walk, owner.declaration, declaredSignatures[0]!, declaredSignatures[0]!, carrier,
-          false, ownerSemantics, true, relationship.targetType);
+          ownerSemantics, true, relationship.targetType);
       if (callable === undefined || carrier === undefined) return undefined;
       sources.push({ kind: "method", declaration: member, storageIndex: field.storageIndex, carrier, callable,
         classDeclaration: owner.declaration, ownerCarrier: relationship.targetType,
@@ -97,7 +97,7 @@ export function selectRustProjectStructuralViewFields(
     if (field === undefined) return undefined;
     if (source.kind === "method") {
       const callable = selectRustClassValueCallable(walk, source.classDeclaration, source.sourceSignature,
-        source.destinationSignature, field.resultCarrier, false, walk.context.semanticsFor(source.callable.declaration), true, source.ownerCarrier);
+        source.destinationSignature, field.resultCarrier, walk.context.semanticsFor(source.callable.declaration), true, source.ownerCarrier);
       if (callable === undefined) return undefined;
       fields.push({ declaration: source.declaration, storageIndex: source.storageIndex, callable });
       continue;

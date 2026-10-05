@@ -9,7 +9,7 @@ import { hasExactObjectKeys, isClosedMetadata, isDenseDataArray, snapshotClosedM
 
 export type RustCallableValueConversion =
   | { readonly kind: "identity" }
-  | { readonly kind: "value"; readonly conversion: RustValueConversion }
+  | { readonly kind: "value"; readonly conversion: RustValueConversion | RustCallableConversion }
   | { readonly kind: "borrow" }
   | { readonly kind: "absence" }
   | { readonly kind: "discard" };
@@ -36,7 +36,11 @@ export function rustCallableValueConversionMatches(
   if (conversion.kind === "discard") return hasExactObjectKeys(conversion, ["kind"]) && isRustUnitCarrier(target);
   if (conversion.kind === "absence") return hasExactObjectKeys(conversion, ["kind"]) && (isRustUnitCarrier(source) || isRustAbsenceCarrier(source)) &&
     (rustOptionElementCarrier(target) !== undefined || rustOptionalStorageValue(target) !== undefined);
-  if (conversion.kind !== "value" || !hasExactObjectKeys(conversion, ["kind", "conversion"])) return false;
+  if (conversion.kind !== "value" || !hasExactObjectKeys(conversion, ["kind", "conversion"]) ||
+    typeof conversion.conversion !== "object" || conversion.conversion === null) return false;
+  if (conversion.conversion.kind === "callable-adapter") {
+    return rustCallableConversionMatches(conversion.conversion, source, target, definitions);
+  }
   const contract = rustValueConversionContract(conversion.conversion, definitions);
   return contract !== undefined && contract.sourceMode === "value" &&
     rustTargetTypeRefEquals(contract.source, source) && rustTargetTypeRefEquals(contract.target, target);
@@ -77,7 +81,8 @@ export function selectRustCallableConversion(
     sourceCallable.parameters.length > targetCallable.parameters.length) return undefined;
   const select = (sourceValue: TargetTypeRef, targetValue: TargetTypeRef): RustCallableValueConversion | undefined => {
     if (rustTargetTypeRefEquals(sourceValue, targetValue)) return { kind: "identity" };
-    const conversion = selectValue(sourceValue, targetValue);
+    const conversion = selectRustCallableConversion(sourceValue, targetValue, selectValue, definitions) ??
+      selectValue(sourceValue, targetValue);
     return conversion === undefined ? undefined : { kind: "value", conversion };
   };
   const parameters = sourceCallable.parameters.map((parameter, index) => {

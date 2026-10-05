@@ -54,7 +54,7 @@ import { appendRustDiagnostic, boolCarrier, rustResolutionContext } from "../pro
 import { collectDescendantsOfKind, recordForOfFacts } from "../operations/inputs.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { reconcileRequiredCarrier, resolveExpressionCarrier } from "../expressions/carriers.js";
-import { recordBindingPatternFacts, registerTypeAlias } from "../declarations/types-and-bindings.js";
+import { recordBindingPatternFacts, recordCallableDefaultParameterFacts, registerTypeAlias } from "../declarations/types-and-bindings.js";
 import { recordCallableValueSignatureForDeclaration } from "../callables/signatures.js";
 import { recordThrowFacts } from "../resources/suspension.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
@@ -80,6 +80,7 @@ export function recordFunctionBodyFacts(walk: RustFactWalk, declaration: Node, s
   walk.currentCallableDeclaration = declaration;
   walk.currentGeneratorDeclaration = generatorFact === undefined ? undefined : declaration;
   try {
+    if (!recordCallableDefaultParameterFacts(walk, declaration)) return;
     if (body !== undefined && ast.kindName(body) === KindBlock) {
       const statements = requireDenseSourceNodes(walk, ast.statements(body), "Function body contains an undefined or non-data statement slot.");
       if (statements === undefined) {

@@ -21,6 +21,18 @@ export function planRustCallableConversion(
   node: Node,
   context: RustPlanContext,
 ): RustExpr | undefined {
+  const reference = context.input.program.facts.getFact(node, rustDirectCallableReferenceFactKey);
+  if (reference !== undefined && !rustTargetTypeRefEquals(reference.carrier, conversion.source)) return undefined;
+  const selected = reference === undefined ? expression : planRustSourceCallableValue(reference, context);
+  return selected === undefined ? undefined : planSelectedRustCallableConversion(conversion, selected, node, context);
+}
+
+function planSelectedRustCallableConversion(
+  conversion: RustCallableConversion,
+  expression: RustExpr,
+  node: Node,
+  context: RustPlanContext,
+): RustExpr | undefined {
   const definitions = context.input.program.typeDefinitions;
   if (!rustCallableConversionMatches(conversion, conversion.source, conversion.target, definitions)) return undefined;
   const source = rustCallableProtocol(conversion.source)!;
@@ -39,11 +51,7 @@ export function planRustCallableConversion(
     type: rustTypeFromCarrierInContext(type, context),
   })) : [];
   if (nativeParameters.some(parameter => parameter.type === undefined)) return undefined;
-  const reference = context.input.program.facts.getFact(node, rustDirectCallableReferenceFactKey);
-  if (reference !== undefined && !rustTargetTypeRefEquals(reference.carrier, conversion.source)) return undefined;
-  const selected = reference === undefined ? expression : planRustSourceCallableValue(reference, context);
-  if (selected === undefined) return undefined;
-  const producer = inlineCallableProducer(selected, sourceType, argumentsType);
+  const producer = inlineCallableProducer(expression, sourceType, argumentsType);
   const arguments_: RustExpr[] = [];
   for (const [index, parameter] of conversion.parameters.entries()) {
     const value = lowerValue(parameter, native ? { kind: "path", path: nativeParameters[index]!.name } : {
@@ -63,6 +71,7 @@ export function planRustCallableConversion(
       : lowerValue(conversion.result, { kind: "path", path: resultName });
   if (result === undefined) return undefined;
   const fallibleResult = conversion.result.kind === "value" &&
+    conversion.result.conversion.kind !== "callable-adapter" &&
     rustValueConversionContract(conversion.result.conversion, definitions)?.fallible === true;
   const body: RustExpr = conversion.result.kind === "identity" ? invocation : {
     kind: "method-call", receiver: invocation, method: fallibleResult ? "and_then" : "map", args: [{
@@ -83,6 +92,9 @@ export function planRustCallableConversion(
     if (selected.kind === "identity") return value;
     if (selected.kind === "borrow") return { kind: "reference", expr: value };
     if (selected.kind !== "value") return undefined;
+    if (selected.conversion.kind === "callable-adapter") {
+      return planSelectedRustCallableConversion(selected.conversion, value, node, { ...context, syntheticNames: names });
+    }
     const contract = rustValueConversionContract(selected.conversion, definitions);
     const converted = contract === undefined ? undefined : lowerRustValueConversion(contract, value, context, node);
     return converted === undefined || contract === undefined ? undefined : contract.fallible

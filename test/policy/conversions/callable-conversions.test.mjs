@@ -68,6 +68,39 @@ test("stored void and exact absence callbacks complete only into proven native a
   }
 });
 
+test("nested callable inputs and results reuse exact recursive signature conversion", () => {
+  const nativeString = rustStringTargetType();
+  const reference = { kind: "reference", referent: nativeString, mutable: false };
+  const owned = rustCallableTargetType([nativeString], number);
+  const borrowed = rustCallableTargetType([reference], number);
+  for (const [source, target, placement] of [
+    [rustCallableTargetType([owned], number), rustCallableTargetType([borrowed], number), "parameter"],
+    [rustCallableTargetType([], borrowed), rustCallableTargetType([], owned), "result"],
+    [rustCallableTargetType([rustCallableTargetType([], borrowed)], number),
+      rustCallableTargetType([rustCallableTargetType([], owned)], number), "parameter"],
+  ]) {
+    const selected = select(source, target);
+    assert.equal(selected !== undefined, true, placement);
+    assert.equal(rustCallableConversionMatches(selected, source, target), true, placement);
+    const nested = placement === "parameter" ? selected.parameters[0] : selected.result;
+    assert.equal(nested.kind, "value");
+    assert.equal(nested.conversion.kind, "callable-adapter");
+    assert.equal(Object.isFrozen(nested.conversion), true);
+    for (const replacement of [null, undefined, { ...nested.conversion, extra: true },
+      { ...nested.conversion, source: target }, { ...nested.conversion, result: { kind: "borrow" } }]) {
+      const changed = { ...nested, conversion: replacement };
+      const mutation = placement === "parameter" ? { ...selected, parameters: [changed] }
+        : { ...selected, result: changed };
+      assert.equal(rustCallableConversionMatches(mutation, source, target), false);
+    }
+  }
+  for (const unsafeReference of [{ ...reference, mutable: true }, { ...reference, lifetime: { kind: "static" } }]) {
+    assert.equal(select(rustCallableTargetType([owned], number),
+      rustCallableTargetType([rustCallableTargetType([unsafeReference], number)], number)) === undefined, true);
+  }
+  assert.equal(select(rustCallableTargetType([], nativeString), rustCallableTargetType([], reference)) === undefined, true);
+});
+
 test("native callable conversions retain contravariant parameter and covariant result evidence", () => {
   for (const [source, target] of [
     [rustCallableTargetType([], number), rustCallableTargetType([optional], number)],
