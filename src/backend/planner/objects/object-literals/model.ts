@@ -112,16 +112,7 @@ export function rustObjectLiteralRequiresDispatchImplementation(
     return true;
   }
   const definition = context.input.program.projectTypes.definitionForCarrier(fact.resultCarrier);
-  if (definition !== undefined && !context.input.program.projectTypes.isPolymorphic(definition)) {
-    return false;
-  }
-  return fact.fields.some((field) => field.contractDeclarations.some((declaration) => {
-    const dispatch = context.input.program.projectFieldDispatch.planFor(declaration);
-    return dispatch === undefined ||
-      dispatch.read.selfMode !== "ref" || dispatch.read.fallible ||
-      dispatch.write !== undefined &&
-        (dispatch.write.selfMode !== "ref" || dispatch.write.fallible);
-  }));
+  return definition !== undefined && context.input.program.projectTypes.isPolymorphic(definition);
 }
 
 export function createRustObjectLiteralImplementationRegistry(
