@@ -233,7 +233,7 @@ export function planPolymorphicClassDeclaration(
           );
           return {
             name: field.targetName,
-            type: field.type,
+            type: field.storageType,
             visibility,
           };
         }),

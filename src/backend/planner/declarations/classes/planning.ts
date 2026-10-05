@@ -59,6 +59,7 @@ import { rustProjectTypeParameterContext } from "../../names/type-parameters.js"
 import { rustProjectWrapperTraits } from "../../objects/project-wrapper-traits.js";
 import { rustClassEnvironmentContext, rustClassEnvironmentParameter } from "../../objects/class-environments.js";
 import { rustClassEnvironmentHandleType } from "../../objects/class-environment-types.js";
+import { rustCapturedFieldStorage, rustCapturedFieldType } from "../../objects/captured-fields.js";
 
 export interface PlannedProjectObjectField {
   readonly declaration: Node;
@@ -67,6 +68,7 @@ export interface PlannedProjectObjectField {
   readonly storageIndex: number;
   readonly carrier: TargetTypeRef;
   readonly type: RustType;
+  readonly storageType: RustType;
   readonly visibility: import("../../../target-ast/nodes.js").RustVisibility;
   readonly initializer?: Node;
 }
@@ -217,6 +219,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
         storageIndex: layoutField.storageIndex,
         carrier: fieldCarrier,
         type: fieldType,
+        storageType: rustCapturedFieldType(rustCapturedFieldStorage(member, context), fieldType),
         visibility: rustProjectMemberStorageVisibility(ast, member, publiclyReachable),
         ...(initializer === undefined ? {} : { initializer }),
       });
@@ -288,7 +291,11 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   const implementationContext = rustProjectTypeParameterContext(definition, context, "implementation");
   const implementationType = rustTypeFromCarrierInContext(context.input.program.projectTypes.openCarrier(definition), implementationContext);
   const implementationGenerics = rustProjectGenerics(definition, implementationContext);
-  const implementationFields = fields.map(field => ({ ...field, type: rustTypeFromCarrierInContext(field.carrier, implementationContext) }));
+  const implementationFields = fields.map(field => {
+    const type = rustTypeFromCarrierInContext(field.carrier, implementationContext);
+    return { ...field, type, storageType: type === undefined ? undefined
+      : rustCapturedFieldType(rustCapturedFieldStorage(field.declaration, implementationContext), type) };
+  });
   if (implementationType === undefined || implementationFields.some(field => field.type === undefined)) return undefined;
   const constructorFn = planConstructor(
     node,
@@ -361,7 +368,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
       );
       return {
         name: field.targetName,
-        type: field.type,
+        type: field.storageType,
         visibility: field.visibility,
         ...(deadCode === undefined ? {} : { deadCode }),
       };
@@ -569,9 +576,9 @@ function planConstructor(
       if (prepared === undefined) return undefined;
       const value = planExpression(field.initializer, prepared.context);
       if (value === undefined) return undefined;
-      statements.push(...prepared.before, ...prepared.finish([{
-        kind: "assign", target: slot, operator: "=", value,
-      }]));
+      const initialization = construction.initialize(field.declaration, value);
+      if (initialization === undefined) return undefined;
+      statements.push(...prepared.before, ...prepared.finish(initialization));
     }
   }
   if (body !== undefined) {

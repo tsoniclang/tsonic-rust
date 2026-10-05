@@ -17,6 +17,8 @@ import {
 } from "../facts/keys.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
+import { selectRustCapturedFieldStorage } from "../../policy/ownership/captured-field-storage.js";
+import { rustCapturedFieldStorageFactKey } from "../facts/receiver-captures.js";
 import { recordCallableReturnFact, recordCallableSuspensionFacts } from "../callables/signatures.js";
 import { recordParameterAbiFacts } from "./types-and-bindings.js";
 import { recordStatementFacts, resolveTypeNodeCarrier } from "../control-flow/statements.js";
@@ -95,6 +97,13 @@ export function recordClassSignatureFacts(walk: RustFactWalk, declaration: Node)
             ["target.capability=rust.field.suspended-storage"]);
         } else {
           setCarrierFact(walk, member, storage);
+          if (walk.context.objectRepresentations.receiverCaptures.isCaptured(member)) {
+            walk.context.facts.set(member, rustCapturedFieldStorageFactKey, {
+              storage: selectRustCapturedFieldStorage(storage, ast.hasModifierKind(member, "readonly"),
+                walk.context.objectRepresentations.receiverCaptures.isDeferred(member)),
+              valueCarrier: storage,
+            }, [{ message: "rust exact live receiver field storage" }]);
+          }
         }
       }
       continue;

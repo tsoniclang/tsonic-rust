@@ -303,6 +303,10 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
   // Pass 1: finalize every callable declaration ABI before walking any body.
   // Cross-file and forward calls therefore observe the same parameter facts.
   const signatureDiagnosticCount = context.diagnostics.length;
+  for (const issue of context.objectRepresentations.receiverCaptures.issues) {
+    appendRustDiagnostic(walk, "RUST_RECEIVER_CAPTURE_NOT_CLOSED", issue.reason, issue.node,
+      ["target.capability=rust.callable.receiver-field-owner"]);
+  }
   for (const sourceFile of projectSourceFiles) {
     for (const statement of rustSourceTypeDeclarations(sourceFile, ast)) {
       const kind = ast.kindName(statement);
@@ -370,7 +374,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
           "Class evaluation requires one consistent, immutable capture and static-storage contract.", definition.declaration,
           ["target.capability=rust.class-value.environment"]);
       }
-      context.facts.set(definition.declaration, rustClosureCaptureFactKey, { captures: selected.environment.captures });
+      context.facts.set(definition.declaration, rustClosureCaptureFactKey, { receiverFields: [], captures: selected.environment.captures });
     }
   }
   const nativeFields = recordRustNativeBacking(walk);

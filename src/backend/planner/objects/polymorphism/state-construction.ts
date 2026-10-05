@@ -18,7 +18,7 @@ export function planRustStateConstruction(
   const publicAbi = rustProjectTypeHasPublicImplementationAbi(context, layer.definition.targetPath);
   const parameters = [
     ...(baseType === undefined ? [] : [{ name: baseName, type: baseType, mutable: false }]),
-    ...layer.fields.map(field => ({ name: field.targetName, type: field.type, mutable: false })),
+    ...layer.fields.map(field => ({ name: field.targetName, type: field.storageType, mutable: false })),
   ];
   return { kind: "impl", target: type, generics: rustProjectGenerics(layer.definition, context),
     members: [{ kind: "function", name: "new", generics: emptyRustGenerics,

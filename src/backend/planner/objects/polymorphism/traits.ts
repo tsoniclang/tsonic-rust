@@ -1,4 +1,5 @@
 import { rustHiddenAttribute } from "../../../target-ast/attributes.js";
+import { rustCapturedFieldStorage } from "../captured-fields.js";
 import {
   projectCallableShape,
   projectOwnAccessors,
@@ -188,6 +189,15 @@ export function planProjectDispatchTrait(
   for (const field of fields) {
     const dispatch = context.input.program.projectFieldDispatch.planFor(field.declaration);
     const read = context.input.program.projectTypes.memberSlotName(field.declaration, "read");
+    if (rustCapturedFieldStorage(field.declaration, context) !== undefined) {
+      const capture = context.input.program.projectTypes.memberSlotName(field.declaration, "capture");
+      if (!dispatch?.stored || capture === undefined) return undefined;
+      const deadCode = rustGeneratedDispatchDeadCodeDisposition(context, definition.declaration,
+        field.declaration, "capture", publiclyReachable);
+      functions.push({ kind: "function", name: capture, generics: emptyRustGenerics,
+        ...(deadCode === undefined ? {} : { deadCode }),
+        selfParam: rustSelfParameter("ref"), params: [], returnType: field.storageType });
+    }
     const write = dispatch?.write === undefined
       ? undefined
       : context.input.program.projectTypes.memberSlotName(field.declaration, "write");

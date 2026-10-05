@@ -16,6 +16,8 @@ import { rustTypeParameterBounds, rustGenericsWithAssociatedBounds } from "../..
 import { rustLifetimeToAst } from "../../types/lifetime-syntax.js";
 import { rustDeclarationAssociatedPredicates } from "../../types/associated-bounds.js";
 import { bindRustElidedCallableInput, substituteElidedLifetime } from "../../../../target-model/types/carriers/lifetime-elision.js";
+import { rustCallableCaptureStorageType } from "../../types/capture-storage.js";
+import { rustCapturedFieldType } from "../../objects/captured-fields.js";
 
 export function planRustSuspendedCallableItems(context: RustPlanContext): readonly RustItem[] {
   const fileName = context.input.program.source.ast.getFileName(context.sourceFile);
@@ -33,12 +35,13 @@ export function planRustSuspendedCallableItems(context: RustPlanContext): readon
 
 function planImplementation(implementation: RustSuspendedCallableImplementation, context: RustPlanContext): readonly RustItem[] | undefined {
   const { declaration } = implementation;
-  if (implementation.storage.length !== implementation.captures.length ||
+  if (implementation.storage.length !== implementation.captures.length + implementation.receiverFields.length ||
     !implementation.captures.every((capture, index) => {
       const carrier = substituteElidedLifetime(capture.carrier, rustStaticLifetime);
       return rustTargetTypeRefEquals(implementation.storage[index],
         capture.storage === "location" ? rustLocationTargetType(carrier) : carrier);
-    })) return undefined;
+    }) || !implementation.receiverFields.every((capture, index) => rustTargetTypeRefEquals(
+      implementation.storage[implementation.captures.length + index], substituteElidedLifetime(capture.carrier, rustStaticLifetime)))) return undefined;
   const scoped: RustPlanContext = { ...rustGeneratedTypeParameterContext(
     implementation.parameters.filter(parameter => parameter.kind === "type").map(rustTypeParameterFromSourceContract), [], context),
     callableDeclaration: declaration,
@@ -60,7 +63,12 @@ function planImplementation(implementation: RustSuspendedCallableImplementation,
   const resultArgument = callableType?.kind === "named" ? callableType.genericArguments?.[1] : undefined;
   const resultType = resultArgument?.kind === "type" ? resultArgument.type : undefined;
   const target = rustSuspendedCallableStateType(implementation, scoped);
-  const storage = implementation.storage.map(carrier => rustTypeFromCarrierInContext(carrier, scoped));
+  const storage = [...implementation.captures.map(capture => rustCallableCaptureStorageType(capture,
+    substituteElidedLifetime(capture.carrier, rustStaticLifetime), scoped)),
+    ...implementation.receiverFields.map((capture, index) => {
+      const type = rustTypeFromCarrierInContext(implementation.storage[implementation.captures.length + index]!, scoped);
+      return type === undefined ? undefined : rustCapturedFieldType(capture.storage, type);
+    })];
   const requirements = context.input.program.declarationGenericRequirements.contractFor(declaration);
   if (protocol === undefined || argumentsType === undefined || resultType === undefined || target === undefined ||
       requirements === undefined || storage.some(type => type === undefined)) return undefined;

@@ -7,12 +7,12 @@ import { rustProjectObjectLayout } from "./object-layout.js";
 import { analyzeRustConstructionReadiness, type RustConstructionReadinessField,
   type RustConstructionReadinessInput } from "./construction-readiness.js";
 
-export function analyzeRustConstructionMutation(
+export function analyzeRustConstructionEffects(
   definition: RustProjectTypeDefinition,
   input: RustObjectRepresentationAnalysisInput,
   aliases: RustReceiverFieldAliasQueries,
-): boolean {
-  if (definition.kind !== "class") return false;
+): { readonly publishedFieldWrites: readonly Node[]; readonly deferredCaptureFields: readonly Node[] } {
+  if (definition.kind !== "class") return { publishedFieldWrites: [], deferredCaptureFields: [] };
   const lineage = input.projectTypes.classLineage(definition);
   if (lineage === undefined || lineage.length > 256) throw new Error("Constructor effects require one bounded exact source lineage.");
   const layers: RustConstructionReadinessInput["layers"][number][] = [];
@@ -61,5 +61,5 @@ export function analyzeRustConstructionMutation(
         ?.selectedReadDeclaration !== undefined && input.ast.is.IsGetAccessorDeclaration(
           input.semantics.forNode(node).operations.propertyAccess(node)!.selectedReadDeclaration!),
   });
-  return readiness.mutatesPublishedFields;
+  return { publishedFieldWrites: readiness.publishedFieldWrites, deferredCaptureFields: readiness.deferredCaptureFields };
 }

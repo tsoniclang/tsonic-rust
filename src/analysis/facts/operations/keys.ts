@@ -1,4 +1,5 @@
-import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";
+import { closedMetadataEquals, hasExactObjectKeys, isDenseDataArray, isMetadataRecord } from "../../../target-model/metadata/closed-data.js";
+import { isRustCapturedFieldStorage } from "../../../target-model/types/field-storage.js";
 import { defineRustPlanKey } from "../../../target-model/facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { Node } from "@tsonic/tsts";
@@ -7,6 +8,8 @@ import type { RustPlanKey } from "../../../target-model/facts/keys.js";
 import type { RustTargetOperationFact, RustTypedLocationPlan } from "./facts.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetOperationFactEquals } from "./equality.js";
+import type { RustReceiverFieldCapture } from "../../project-types/receiver-captures.js";
+import type { RustCapturedFieldStorage } from "../../../target-model/types/field-storage.js";
 
 export const rustTargetOperationFactKey: RustPlanKey<RustTargetOperationFact> =
   defineRustPlanKey("targetOperation", rustTargetOperationFactEquals);
@@ -62,6 +65,10 @@ export const rustBindingStorageFactKey: RustPlanKey<RustBindingStorageFact> = de
 );
 
 export interface RustClosureCaptureFact {
+  readonly receiverFields: readonly (RustReceiverFieldCapture & {
+    readonly carrier: TargetTypeRef;
+    readonly storage: RustCapturedFieldStorage;
+  })[];
   readonly invocationOwner?: "shared-state";
   readonly captures: readonly {
     readonly declaration: Node;
@@ -75,7 +82,17 @@ export interface RustClosureCaptureFact {
 
 export const rustClosureCaptureFactKey: RustPlanKey<RustClosureCaptureFact> = defineRustPlanKey(
   "closureCaptures",
-  (left, right) => left.invocationOwner === right.invocationOwner &&
+  (left, right) => closureCaptureShapeMatches(left) && closureCaptureShapeMatches(right) &&
+    left.invocationOwner === right.invocationOwner &&
+    left.receiverFields.length === right.receiverFields.length &&
+    left.receiverFields.every((capture, index) => {
+      const other = right.receiverFields[index];
+      return other !== undefined && capture.declaration === other.declaration &&
+        capture.reference === other.reference && capture.receiver === other.receiver &&
+        closedMetadataEquals(capture.storage, other.storage) && rustTargetTypeRefEquals(capture.carrier, other.carrier) &&
+        capture.references.length === other.references.length &&
+        capture.references.every((reference, offset) => reference === other.references[offset]);
+    }) &&
     left.recursiveDeclaration === right.recursiveDeclaration &&
     left.captures.length === right.captures.length &&
     left.captures.every((capture, index) => {
@@ -88,6 +105,24 @@ export const rustClosureCaptureFactKey: RustPlanKey<RustClosureCaptureFact> = de
         rustTargetTypeRefEquals(capture.carrier, other.carrier);
     }),
 );
+
+function closureCaptureShapeMatches(value: RustClosureCaptureFact): boolean {
+  if (!isMetadataRecord(value) || !hasExactObjectKeys(value, ["receiverFields", "captures",
+    ...["invocationOwner", "recursiveDeclaration"].filter(key => Object.prototype.hasOwnProperty.call(value, key))]) ||
+    value.invocationOwner !== undefined && value.invocationOwner !== "shared-state" ||
+    !isDenseDataArray(value.receiverFields) || !isDenseDataArray(value.captures)) return false;
+  return value.receiverFields.every(capture => isMetadataRecord(capture) &&
+    hasExactObjectKeys(capture, ["declaration", "reference", "receiver", "references", "carrier", "storage"]) &&
+    capture.declaration !== undefined && capture.receiver !== undefined && capture.carrier !== undefined &&
+    isRustCapturedFieldStorage(capture.storage) && isDenseDataArray(capture.references) &&
+    capture.references.length > 0 && capture.reference === capture.references[0]) &&
+    value.captures.every(capture => isMetadataRecord(capture) &&
+      hasExactObjectKeys(capture, ["declaration", "reference", "carrier", "storage",
+        ...(Object.prototype.hasOwnProperty.call(capture, "mutable") ? ["mutable"] : [])]) &&
+      capture.declaration !== undefined && capture.reference !== undefined && capture.carrier !== undefined &&
+      (capture.storage === "value" || capture.storage === "location" || capture.storage === "cell" || capture.storage === "borrow-cell") &&
+      (capture.mutable === undefined || capture.mutable === true));
+}
 
 export interface RustSourceCallableValueFact {
   readonly form: "function";

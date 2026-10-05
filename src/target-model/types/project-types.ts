@@ -23,6 +23,7 @@ export interface RustProjectTypeIssue {
 export type RustProjectMemberSlotRole =
   | "read"
   | "write"
+  | "capture"
   | "virtual"
   | "exact"
   | "method-write"

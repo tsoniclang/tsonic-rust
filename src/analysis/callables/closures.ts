@@ -1,4 +1,6 @@
 import { rustTypeParameterFromSourceContract } from "../../target-model/names/type-parameters.js";
+import { rustCapturedFieldStorageFactKey } from "../facts/receiver-captures.js";
+import { appendRustDiagnostic } from "../program/walk.js";
 import {
   KindBlock,
   KindFunctionExpression,
@@ -315,7 +317,10 @@ export function resolveFunctionExpressionCarrier(
     : rustCallableTargetType(finalizedParameterCarriers, valueResult);
   if (closureCarrier === undefined ||
     !recordCallableReturnFact(walk, expression, generator?.resultCarrier ?? bodyCarrier)) return undefined;
-  const captures = collectRustLexicalCaptures(walk, expression, [body],
+  const captures = collectRustLexicalCaptures(walk, expression, [...parameters.flatMap(parameter => {
+    const initializer = parameter === undefined ? undefined : Node_Initializer(ast, parameter);
+    return initializer === undefined ? [] : [initializer];
+  }), body],
     generator === undefined && asynchronous === undefined && ast.typeParameters(expression).length === 0 &&
     ["KindArrowFunction", "KindFunctionExpression"].includes(ast.kindName(expression)),
     selectedExpected.kind === "closure" ? selectedExpected.callTrait : undefined);
@@ -326,7 +331,7 @@ export function resolveFunctionExpressionCarrier(
     ...captures,
     ...((generator !== undefined || asynchronous !== undefined) &&
         rustCallableProtocol(closureCarrier) !== undefined &&
-        (captures.captures.length > 0 || captures.recursiveDeclaration !== undefined)
+        (captures.captures.length > 0 || captures.receiverFields.length > 0 || captures.recursiveDeclaration !== undefined)
       ? { invocationOwner: "shared-state" as const } : {}),
   }, [
     { message: "rust exact callable-expression captures" },
@@ -367,6 +372,21 @@ export function collectRustLexicalCaptures(
     (use, declaration) => walk.context.facts.get(use.reference, rustCompileTimeSourceKey) !== true &&
       walk.context.runtimeValueUses.isRuntimeReference(declaration, use.reference));
   if (selected.kind === "unresolved") return undefined;
+  const receiverFields: import("../facts/keys.js").RustClosureCaptureFact["receiverFields"][number][] = [];
+  const fieldCaptures = walk.context.objectRepresentations.receiverCaptures.capturesFor(expression);
+  for (const capture of fieldCaptures) {
+    const storage = walk.context.facts.get(capture.declaration, rustCapturedFieldStorageFactKey);
+    const carrier = walk.context.facts.get(capture.reference, rustRuntimeCarrierKey)?.carrier;
+    if (storage === undefined || carrier === undefined) return undefined;
+    receiverFields.push({ ...capture, storage: storage.storage, carrier });
+  }
+  if (selected.receivers.some(receiver => receiver.references.some(reference =>
+    !walk.context.objectRepresentations.receiverCaptures.capturesReceiver(reference)))) {
+    appendRustDiagnostic(walk, "RUST_RECEIVER_CAPTURE_NOT_CLOSED",
+      "A whole native receiver capture requires an exact retained owner contract.", expression,
+      ["target.capability=rust.callable.receiver-owner"]);
+    return undefined;
+  }
   if (selected.selfReferences.length > 0 && ast.kindName(expression) !== "KindClassDeclaration" &&
     ast.kindName(expression) !== "KindClassExpression") recursiveDeclaration = expression;
   for (const capture of selected.captures) {
@@ -392,7 +412,7 @@ export function collectRustLexicalCaptures(
     }, [{ message: "rust captured mutable binding storage" }]);
     captures.set(declaration, { declaration, reference, carrier, ...selectedStorage });
   }
-  return { captures: [...captures.values()], ...(recursiveDeclaration === undefined ? {} : { recursiveDeclaration }) };
+  return { receiverFields, captures: [...captures.values()], ...(recursiveDeclaration === undefined ? {} : { recursiveDeclaration }) };
 }
 
 function callableExpressionValueDeclaration(

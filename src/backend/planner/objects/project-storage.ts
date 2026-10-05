@@ -1,4 +1,6 @@
 import { rustValueBlock } from "../../target-ast/value-block.js";
+import type { Node } from "@tsonic/tsts";
+import { rustCapturedFieldStorage } from "./captured-fields.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { planRustNativeMemoryCall } from "../expressions/native-memory.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -207,9 +209,19 @@ export function readRustStoredObjectField(
   }
   const path = rustDirectProjectFieldStoragePath(receiverCarrier, storageIndex, context);
   const representation = rustProjectObjectRepresentation(receiverCarrier, context);
+  const declaration = rustStoredProjectFieldDeclaration(receiverCarrier, storageIndex, context);
+  const captured = declaration === undefined ? undefined : rustCapturedFieldStorage(declaration, context);
   return path === undefined || representation === undefined
     ? undefined
-    : readRustProjectObjectField(receiver, [...path, ...projection], resultCarrier, representation);
+    : readRustProjectObjectField(receiver, captured === undefined ? [...path, ...projection] : path, resultCarrier, representation,
+      captured, captured === undefined ? [] : projection);
+}
+
+function rustStoredProjectFieldDeclaration(carrier: TargetTypeRef, storageIndex: number, context: RustPlanContext): Node | undefined {
+  const definition = context.input.program.projectTypes.definitionForCarrier(carrier);
+  return definition === undefined ? undefined
+    : rustProjectObjectLayout(definition.declaration, context.input.program.source.ast)?.fields.find(field =>
+      field.storageIndex + (context.input.program.projectTypes.externalBaseForDefinition(definition)?.fields.length ?? 0) === storageIndex)?.declaration;
 }
 
 export function readRustStructuralObjectMethodStorage(
@@ -389,9 +401,12 @@ function writeRustStoredObjectFieldStorage(
   }
   const path = rustDirectProjectFieldStoragePath(receiverCarrier, storageIndex, context);
   const representation = rustProjectObjectRepresentation(receiverCarrier, context);
+  const declaration = rustStoredProjectFieldDeclaration(receiverCarrier, storageIndex, context);
+  const captured = declaration === undefined ? undefined : rustCapturedFieldStorage(declaration, context);
   return path === undefined || representation === undefined
     ? undefined
-    : writeRustProjectObjectField(receiver, [...path, ...projection], operator, value, representation);
+    : writeRustProjectObjectField(receiver, captured === undefined ? [...path, ...projection] : path, operator, value, representation,
+      captured, captured === undefined ? [] : projection);
 }
 
 export function mutateRustStoredObjectField(

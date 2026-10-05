@@ -10,6 +10,7 @@ import type { ProjectClassStateLayer } from "./model.js";
 import { rustProjectRepresentationGenerics } from "./names.js";
 import { emptyRustGenerics } from "../../../target-ast/nodes.js";
 import { rustSelfParameter } from "../../declarations/callables/self-parameter.js";
+import { readRustCapturedField, rustCapturedFieldStorage, rustCapturedFieldLocation } from "../captured-fields.js";
 
 export function planProjectPrivateStateAccessors(
   stateType: RustType,
@@ -59,7 +60,10 @@ export function planProjectPrivateStateAccessors(
       body: {
         statements: [{
           kind: "tail",
-          expr: isRustCopyCarrier(field.carrier)
+          expr: rustCapturedFieldStorage(field.declaration, context) !== undefined
+            ? readRustCapturedField(rustCapturedFieldStorage(field.declaration, context)!,
+              { kind: "method-call", receiver: fieldExpression, method: "clone", args: [] }, field.carrier)
+            : isRustCopyCarrier(field.carrier)
             ? fieldExpression
             : { kind: "method-call", receiver: fieldExpression, method: "clone", args: [] },
         }],
@@ -76,12 +80,14 @@ export function planProjectPrivateStateAccessors(
         body: {
           statements: [{
             kind: "expr",
-            expr: {
+            expr: rustCapturedFieldStorage(field.declaration, context) === undefined ? {
               kind: "assignment",
               operator: "=",
               target: fieldExpression,
               value: { kind: "path", path: "value" },
-            },
+            } : rustCapturedFieldLocation(rustCapturedFieldStorage(field.declaration, context)!,
+              { kind: "method-call", receiver: fieldExpression, method: "clone", args: [] }, field.carrier)
+              .write({ kind: "path", path: "value" })!,
           }],
         },
       });

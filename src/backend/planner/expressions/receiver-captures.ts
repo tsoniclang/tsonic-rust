@@ -1,0 +1,74 @@
+import type { Node } from "@tsonic/tsts";
+import type { RustClosureCaptureFact } from "../../../analysis/facts/operations/keys.js";
+import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustPlanContext } from "../program/plan-context.js";
+import { allocateRustSyntheticName } from "../names/synthetic.js";
+import { planRustCapturedFieldOwner } from "../objects/value-fields.js";
+import { rustCapturedFieldLocation, rustCapturedFieldStorage } from "../objects/captured-fields.js";
+import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
+import { diagnosticInput } from "../program/plan-context.js";
+import { missingFactDiagnostic } from "../diagnostics.js";
+import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+
+export function validateRustCapturedReceiverFields(
+  node: Node, fields: RustClosureCaptureFact["receiverFields"], context: RustPlanContext,
+): boolean {
+  const selected = context.input.program.objectRepresentations.receiverCaptures.capturesFor(node);
+  const valid = selected.length === fields.length && selected.every((source, index) => {
+    const capture = fields[index];
+    return capture !== undefined && source.declaration === capture.declaration && source.receiver === capture.receiver &&
+      source.reference === capture.reference && source.references.length === capture.references.length &&
+      source.references.every((reference, offset) => reference === capture.references[offset] &&
+        rustTargetTypeRefEquals(context.input.program.facts.getRuntimeCarrierFact(reference)?.carrier, capture.carrier)) &&
+      closedMetadataEquals(rustCapturedFieldStorage(capture.declaration, context), capture.storage);
+  });
+  if (!valid) context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+    "rust.backend.receiver-field-capture", "A live receiver field capture differs from its sealed source membership, carrier and physical storage."));
+  return valid;
+}
+
+export function planRustCapturedReceiverFields(
+  node: Node, fields: RustClosureCaptureFact["receiverFields"], creation: RustPlanContext,
+  invocation: RustPlanContext, options: { readonly staticStorage: boolean; readonly sharedStateName?: string; readonly offset: number },
+): { readonly bindings: readonly { readonly name: string; readonly value: RustExpr }[];
+  readonly context: RustPlanContext } | undefined {
+  const bindings: { readonly name: string; readonly value: RustExpr }[] = [];
+  const retained: RustExpr[] = [];
+  if (!validateRustCapturedReceiverFields(node, fields, creation)) return undefined;
+  for (const [index, capture] of fields.entries()) {
+    if (!requireRustCarrierRequirements(capture.carrier, options.staticStorage ? ["static"] : [], capture.reference, creation)) return undefined;
+    if (options.sharedStateName !== undefined) {
+      retained.push({ kind: "field", receiver: { kind: "field", receiver: { kind: "path", path: options.sharedStateName }, name: "state" },
+        name: String(options.offset + index) });
+      continue;
+    }
+    if (creation.syntheticNames === undefined) return undefined;
+    const owner = planRustCapturedFieldOwner(capture.reference, creation);
+    if (owner === undefined) {
+      creation.diagnostics.push(missingFactDiagnostic(diagnosticInput(creation, capture.reference),
+        "rust.backend.receiver-field-owner", "A live receiver field capture lost its exact initialized physical owner."));
+      return undefined;
+    }
+    const name = allocateRustSyntheticName(creation.syntheticNames, "captured_field");
+    bindings.push({ name, value: owner });
+    retained.push({ kind: "path", path: name });
+  }
+  return { bindings, context: rustCapturedReceiverFieldContext(fields, invocation, index => retained[index]!) };
+}
+
+export function rustCapturedReceiverFieldContext(
+  fields: RustClosureCaptureFact["receiverFields"], context: RustPlanContext,
+  ownerFor: (index: number) => RustExpr,
+): RustPlanContext {
+  const locations = new Map(context.valueFieldLocations ?? []);
+  const owners = new Map(context.capturedFieldOwners ?? []);
+  for (const [index, capture] of fields.entries()) {
+    const owner = ownerFor(index);
+    for (const reference of capture.references) {
+      owners.set(reference, owner);
+      locations.set(reference, rustCapturedFieldLocation(capture.storage, owner, capture.carrier));
+    }
+  }
+  return { ...context, valueFieldLocations: locations, capturedFieldOwners: owners };
+}

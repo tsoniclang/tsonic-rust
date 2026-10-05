@@ -9,6 +9,8 @@ import { planRustReceiverAlias } from "../../objects/polymorphism/receiver-alias
 import { diagnosticInput, type RustPlanContext, type RustConstructionPreparation } from "../../program/plan-context.js";
 import { Node_Expression } from "@tsonic/target-api/source";
 import { planRustAbsentValue } from "../../expressions/optional-storage.js";
+import { createRustCapturedField, createRustDeferredFieldOwner, initializeRustCapturedField,
+  rustCapturedFieldLocation, rustCapturedFieldStorage, initializeOrWriteRustCapturedField } from "../../objects/captured-fields.js";
 
 export interface RustConstructionStorageField {
   readonly declaration: Node;
@@ -16,12 +18,15 @@ export interface RustConstructionStorageField {
   readonly targetName: string;
   readonly carrier: TargetTypeRef;
   readonly type: RustType;
+  readonly storageType: RustType;
 }
 
 export interface RustConstructionBody {
   readonly declarations: readonly RustStmt[];
   readonly values: ReadonlyMap<Node, RustExpr>;
   readonly root: RustExpr;
+  initialize(declaration: Node, value: RustExpr): readonly RustStmt[] | undefined;
+  exportInitialized(declarations: readonly Node[], statements: readonly RustStmt[]): readonly RustStmt[];
   prepare(node: Node, context: RustPlanContext): RustConstructionPreparation | undefined;
   contextForLayer(context: RustPlanContext, returnLabel?: { readonly id: number; readonly label: string }): RustPlanContext;
   finish(): readonly RustStmt[];
@@ -38,21 +43,29 @@ export function planRustConstructionBody(
   for (const issue of plan.issues) context.diagnostics.push(unsupportedConstructDiagnostic(
     diagnosticInput(context, issue.node), "rust.backend.constructor-readiness", issue.reason));
   if (plan.issues.length !== 0 || context.syntheticNames === undefined) return undefined;
-  if (fields.length !== plan.fields.length || fields.some(field => !plan.fields.some(planned =>
+  if (fields.length !== plan.fields.length || new Set(fields.map(field => field.declaration)).size !== fields.length ||
+    fields.some(field => !plan.fields.some(planned =>
     planned.declaration === field.declaration))) {
     context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, plan.definition.declaration),
       "rust.backend.constructor-storage", "Native constructor storage differs from its sealed physical field plan."));
     return undefined;
   }
-  const slots: (RustConstructionStorageField & { readonly expression: RustExpr })[] = [];
+  const slots: (RustConstructionStorageField & { readonly expression: Extract<RustExpr, { readonly kind: "path" }> })[] = [];
   const declarations: RustStmt[] = [];
   const values = new Map<Node, RustExpr>();
+  const declarationAtInitialization = new Set<Node>();
   for (const field of fields) {
     const name = allocateRustSyntheticName(context.syntheticNames, `field_${field.targetName}`);
-    const expression: RustExpr = { kind: "path", path: name };
-    const absence = plan.fields.find(planned => planned.declaration === field.declaration)?.absenceDefault === true;
-    declarations.push({ kind: "let", name, mutable: true, type: field.type,
-      ...(absence ? { init: planRustAbsentValue(field.carrier, context) } : {}) });
+    const expression: Extract<RustExpr, { readonly kind: "path" }> = { kind: "path", path: name };
+    const planned = plan.fields.find(planned => planned.declaration === field.declaration);
+    const absence = planned?.absenceDefault === true;
+    const storage = rustCapturedFieldStorage(field.declaration, context);
+    if (storage?.initialization !== "deferred" && !plan.layerHasEarlyReturn(planned!.owner) &&
+      (planned?.initializer !== undefined || planned?.externallyInitialized === true))
+      declarationAtInitialization.add(field.declaration);
+    else declarations.push({ kind: "let", name, mutable: storage === undefined, type: field.storageType,
+      ...(absence ? { init: createRustCapturedField(storage, planRustAbsentValue(field.carrier, context)) }
+        : storage?.initialization === "deferred" ? { init: createRustDeferredFieldOwner() } : {}) });
     slots.push({ ...field, expression });
     values.set(field.declaration, expression);
   }
@@ -71,12 +84,28 @@ export function planRustConstructionBody(
       return undefined;
     };
     const overrides = new Map(selectedContext.expressionOverrides ?? []);
+    const locations = new Map(selectedContext.valueFieldLocations ?? []);
+    const capturedFieldOwners = new Map(selectedContext.capturedFieldOwners ?? []);
     for (const overridden of overrideNodes) overrides.delete(overridden);
     for (const expression of plan.expressionsWithin(node)) {
-      if (expression.kind === "field" && !point.published) {
+      if ((expression.kind === "field" || expression.kind === "capture") && !point.published) {
         const slot = slots.find(field => field.declaration === expression.declaration);
         if (slot === undefined) return reject("Sealed construction field has no matching physical local slot.");
-        overrides.set(expression.node, { expression: slot.expression, carrier: slot.carrier, valueForm: "storage" });
+        const storage = rustCapturedFieldStorage(slot.declaration, selectedContext);
+        if (storage === undefined) {
+          if (expression.kind === "capture") return reject("A captured native field lost its exact physical owner contract.");
+          overrides.set(expression.node, { expression: slot.expression, carrier: slot.carrier, valueForm: "storage" });
+        } else {
+          const selectedPoint = plan.pointFor(expression.node) ?? point;
+          const initialized = selectedPoint.initializedFields.includes(slot.declaration);
+          const possiblyInitialized = selectedPoint.possiblyInitializedFields.includes(slot.declaration);
+          capturedFieldOwners.set(expression.node, slot.expression);
+          const location = rustCapturedFieldLocation(storage, slot.expression, slot.carrier);
+          locations.set(expression.node, initialized ? location : { ...location,
+            write: value => possiblyInitialized ? initializeOrWriteRustCapturedField(storage, slot.expression, value)
+              : initializeRustCapturedField(storage, slot.expression, value),
+          });
+        }
       } else if (point.published) {
         const receiverNode = expression.kind === "receiver" ? expression.node : expression.receiver;
         if (receiverNode === undefined) return reject("Sealed construction projection has no exact receiver node.");
@@ -89,7 +118,7 @@ export function planRustConstructionBody(
         overrides.set(receiverNode, { expression: receiver, carrier: substituted, valueForm: "storage" });
       }
     }
-    return { context: { ...selectedContext, expressionOverrides: overrides },
+    return { context: { ...selectedContext, expressionOverrides: overrides, valueFieldLocations: locations, capturedFieldOwners },
       before: point.publishBefore ? publication() : [],
       finish(statements) {
         const planned = point.publishMissingElse ? statements.map(statement => statement.kind === "if"
@@ -125,6 +154,27 @@ export function planRustConstructionBody(
   });
   const final = plan.pointFor(plan.definition.declaration);
   return { declarations, values, root, prepare, contextForLayer,
+    initialize(declaration, value) {
+      const slot = slots.find(field => field.declaration === declaration);
+      if (slot?.expression.kind !== "path") return undefined;
+      const storage = rustCapturedFieldStorage(declaration, context);
+      return declarationAtInitialization.has(declaration)
+        ? [{ kind: "let", name: slot.expression.path, mutable: storage === undefined,
+          type: slot.storageType, init: createRustCapturedField(storage, value) }]
+        : storage?.initialization === "deferred" ? [{ kind: "expr", expr: initializeRustCapturedField(storage, slot.expression, value) }]
+        : [{ kind: "assign", target: slot.expression, operator: "=", value: createRustCapturedField(storage, value) }];
+    },
+    exportInitialized(declarations, statements) {
+      const exported = slots.filter(slot => declarations.includes(slot.declaration) && declarationAtInitialization.has(slot.declaration));
+      if (exported.length === 0) return [{ kind: "scope", body: { statements } }];
+      const name = allocateRustSyntheticName(context.syntheticNames!, "initialized_fields");
+      return [{ kind: "let", name, mutable: false, init: { kind: "block", body: { statements: [
+        ...statements, { kind: "tail", expr: { kind: "tuple-literal", elements: exported.map(slot => slot.expression) } },
+      ] } } }, ...exported.map((slot, index): RustStmt => ({ kind: "let", name: slot.expression.path,
+        mutable: rustCapturedFieldStorage(slot.declaration, context) === undefined, type: slot.storageType,
+        init: { kind: "field", receiver: { kind: "path", path: name }, name: String(index) },
+      }))];
+    },
     finish: () => !plan.completesNormally ? []
       : plan.publishesReceiver ? [...(final?.published ? [] : publication()), { kind: "tail", expr: root }]
       : [{ kind: "tail", expr: materialize(values) }],

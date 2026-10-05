@@ -40,6 +40,7 @@ import { createRustSyntheticNameState } from "../../names/synthetic.js";
 import { rustDeclarationRequiresUnsafe } from "../../safety/explicit-safety.js";
 import { rustCallableInvocationResult } from "../../../../analysis/facts/callable-results.js";
 import { rustProjectStateType as rustProjectNamedStateType } from "./names.js";
+import { rustCapturedFieldStorage, rustCapturedFieldType } from "../captured-fields.js";
 
 export interface ProjectFieldPlan {
   readonly storage: "stored" | "receiver-alias";
@@ -49,6 +50,7 @@ export interface ProjectFieldPlan {
   readonly storageIndex: number;
   readonly carrier: TargetTypeRef;
   readonly type: RustType;
+  readonly storageType: RustType;
   readonly origin: "project" | "external";
   readonly readonly: boolean;
   readonly initializer?: Node;
@@ -142,6 +144,7 @@ export function projectOwnFields(
       carrier: field.carrier,
       type,
       origin: "external",
+      storageType: type,
       readonly: false,
     });
   }
@@ -183,6 +186,7 @@ export function projectOwnFields(
       carrier,
       type,
       origin: "project",
+      storageType: rustCapturedFieldType(rustCapturedFieldStorage(layoutField.declaration, context), type),
       readonly: context.input.program.source.ast.hasModifierKind(layoutField.declaration, "readonly"),
       ...(initializer === undefined ? {} : { initializer }),
     });

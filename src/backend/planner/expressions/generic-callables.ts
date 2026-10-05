@@ -9,6 +9,8 @@ import { diagnosticInput, rustSourceBindingPath } from "../program/plan-context.
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planRustCaptureValue } from "./typed-locations.js";
+import { planRustCapturedReceiverFields } from "./receiver-captures.js";
+import { rustValueBlock } from "../../target-ast/value-block.js";
 
 export function planRustGenericCallableValue(
   node: Node, carrier: TargetTypeRef, context: RustPlanContext,
@@ -34,11 +36,17 @@ export function planRustGenericCallableValue(
       move ? [] : ["clone"], capture.reference, { ...context, callableDeclaration: node })) return undefined;
     fields.push({ name: `capture_${index}`, value: planRustCaptureValue(capture.reference, source, capture.storage, move, context) });
   }
+  const receivers = planRustCapturedReceiverFields(node, implementation.receiverFields, context, context,
+    { staticStorage: false, offset: implementation.captures.length });
+  if (receivers === undefined) return undefined;
+  for (const [index, binding] of receivers.bindings.entries()) fields.push({
+    name: `capture_${implementation.captures.length + index}`, value: { kind: "path", path: binding.name },
+  });
   if (definition.signature.environmentParameters.length > 0) {
     fields.push({ name: "marker", value: { kind: "path", path: "core::marker::PhantomData" } });
   }
   const state: RustExpr = { kind: "struct-literal", path, fields };
-  return { kind: "associated-call", owner, method: implementation.variantName,
+  return rustValueBlock(receivers.bindings, { kind: "associated-call", owner, method: implementation.variantName,
     args: [implementation.storage === "shared" ? { kind: "call", path: "alloc::rc::Rc::new", args: [state] } : state],
-  };
+  });
 }

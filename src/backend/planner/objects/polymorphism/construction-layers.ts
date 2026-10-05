@@ -67,7 +67,8 @@ export function planRustConstructionLayers(
       }
       const body = planLayer(index - 1, baseParameters);
       if (body === undefined) return undefined;
-      statements.push(...temporaries, { kind: "scope", body: { statements: [...bindings, ...body] } });
+      statements.push(...temporaries, ...construction.exportInitialized(
+        plan.layers.slice(0, index).flatMap(layer => layer.fields.map(field => field.declaration)), [...bindings, ...body]));
       if (!plan.layerCompletes(base.definition)) return statements;
     } else {
       const external = context.input.program.projectTypes.externalBaseForDefinition(layer.definition);
@@ -79,7 +80,9 @@ export function planRustConstructionLayers(
           const target = construction.values.get(field.declaration);
           const value = initializers[fieldIndex];
           if (target === undefined || value === undefined) return undefined;
-          statements.push({ kind: "assign", target, operator: "=", value });
+          const initialization = construction.initialize(field.declaration, value);
+          if (initialization === undefined) return undefined;
+          statements.push(...initialization);
         }
       }
     }
@@ -92,7 +95,9 @@ export function planRustConstructionLayers(
         if (prepared === undefined) return undefined;
         const value = planExpression(field.initializer, prepared.context);
         if (value === undefined) return undefined;
-        statements.push(...prepared.before, ...prepared.finish([{ kind: "assign", target, operator: "=", value }]));
+        const initialization = construction.initialize(field.declaration, value);
+        if (initialization === undefined) return undefined;
+        statements.push(...prepared.before, ...prepared.finish(initialization));
       }
     }
     const body = layer.constructor === undefined ? undefined : context.input.program.source.ast.body(layer.constructor);

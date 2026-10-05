@@ -42,7 +42,8 @@ export function planRustCapturedEnvironment(
       continue;
     }
     const name = allocateRustSyntheticName(context.syntheticNames, `capture_${sourceName}`);
-    bindings.push({ name, value: planRustCaptureValue(capture.reference, sourcePath, capture.storage, move, context) });
+    if (options.sharedStateName === undefined)
+      bindings.push({ name, value: planRustCaptureValue(capture.reference, sourcePath, capture.storage, move, context) });
     capturedBindings.push({ declaration: capture.declaration,
       expression: options.sharedStateName === undefined ? { kind: "path", path: name } : {
         kind: "reference", expr: { kind: "field", receiver: {

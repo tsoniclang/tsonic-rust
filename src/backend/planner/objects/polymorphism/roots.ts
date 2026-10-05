@@ -10,6 +10,7 @@ import {
 import { planProjectDowncastRouteImplementation, planProjectFieldAccessorCall, planRootAccessorForwarder, planRootAccessorImplementation, planRootMethodForwarder, planRootMethodImplementation, projectAccessorCallableShape } from "./forwarders.js";
 import {
   readRustProjectObjectField,
+  readRustProjectObjectFieldOwner,
   readRustProjectPrivateField,
   writeRustProjectMethodOverride,
   writeRustProjectObjectField,
@@ -33,6 +34,7 @@ import type { RustProjectTypeDefinition } from "../../../../analysis/project-typ
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { ProjectClassStateLayer } from "./model.js";
 import type { RustObjectRepresentation } from "../../../../analysis/project-types/object-representation.js";
+import { rustCapturedFieldStorage } from "../captured-fields.js";
 import { rustProjectMemberIsPrivate } from "../../../../analysis/project-types/member-privacy.js";
 import { checkRustDataWrite } from "../data-writes.js";
 import { checkedProjectProjectionTypes, planCheckedProjectProjectionImplementation } from "../checked-project-projections.js";
@@ -227,6 +229,15 @@ function planRootContractFunctions(
     const storagePath = implementation?.kind === "stored"
       ? projectFieldStoragePath(implementation.declaration, layers, context)
       : undefined;
+    if (rustCapturedFieldStorage(field.declaration, context) !== undefined) {
+      const capture = context.input.program.projectTypes.memberSlotName(field.declaration, "capture");
+      if (capture === undefined || implementation?.kind !== "stored" || storagePath === undefined ||
+        rustCapturedFieldStorage(implementation.declaration, context) === undefined) return undefined;
+      functions.push({ kind: "function", name: capture, visibility: "private", generics: emptyRustGenerics,
+        selfParam: rustSelfParameter("ref"), params: [], returnType: field.storageType,
+        body: { statements: [{ kind: "tail", expr: readRustProjectObjectFieldOwner(
+          { kind: "path", path: "self" }, storagePath, representation) }] } });
+    }
     const readHelper = implementation?.kind === "accessor"
       ? accessorImplementationFor(implementation.getter, "read")
       : undefined;
@@ -258,6 +269,7 @@ function planRootContractFunctions(
                   storagePath,
                   field.carrier,
                   representation,
+                  rustCapturedFieldStorage(implementation.declaration, context),
                 );
             return expression === undefined ? undefined : { expression };
           })()
@@ -347,6 +359,7 @@ function planRootContractFunctions(
                     "=",
                     { kind: "path", path: "value" },
                     representation,
+                    rustCapturedFieldStorage(implementation.declaration, context),
                   );
               const check = context.input.program.frozenDataWrites.receiverForDeclaration(implementation.declaration);
               return expression === undefined || check !== undefined && fieldErrorType === undefined

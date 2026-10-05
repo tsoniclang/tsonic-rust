@@ -1,6 +1,7 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import {
   sourceNodesEqual,
+  Node_Expression,
   sourceObjectMemberDeclarations,
   type SourceDeclarationUse,
   type SourceExpressionValueFlowSummary,
@@ -17,7 +18,8 @@ import {
 } from "../../target-model/lifetimes/index.js";
 import type { RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { analyzeRustReceiverFieldAliases, type RustReceiverFieldAliasQueries } from "./receiver-field-aliases.js";
-import { analyzeRustConstructionMutation } from "./construction-effects.js";
+import { analyzeRustConstructionEffects } from "./construction-effects.js";
+import { analyzeRustReceiverFieldCaptures, type RustReceiverFieldCaptureQueries } from "./receiver-captures.js";
 
 export type RustObjectRepresentationKind =
   | "value"
@@ -37,6 +39,7 @@ export interface RustObjectRepresentation {
 }
 
 export interface RustObjectRepresentationPlan extends RustReceiverFieldAliasQueries {
+  readonly receiverCaptures: RustReceiverFieldCaptureQueries;
   readonly representations: readonly RustObjectRepresentation[];
   representationFor(
     definition: RustProjectTypeDefinition | undefined,
@@ -87,6 +90,9 @@ export function createRustObjectRepresentationPlanRegistry(): RustObjectRepresen
     get aliases() {
       return requireCurrent().aliases;
     },
+    get receiverCaptures() {
+      return requireCurrent().receiverCaptures;
+    },
     aliasFor(declaration: Node) {
       return requireCurrent().aliasFor(declaration);
     },
@@ -102,22 +108,28 @@ export function createRustObjectRepresentationPlanRegistry(): RustObjectRepresen
 export function createRustObjectRepresentationPlan(
   input: RustObjectRepresentationAnalysisInput,
 ): RustObjectRepresentationPlan {
-  const { origins, escapingSuspendedMethods } = collectProjectObjectOrigins(input);
   const receiverAliases = analyzeRustReceiverFieldAliases(input);
-  const mutatingMethods = collectMutatingProjectMethods(input);
+  const constructionEffects = new Map(input.projectTypes.definitions.map(definition =>
+    [definition, analyzeRustConstructionEffects(definition, input, receiverAliases)]));
+  const receiverCaptures = analyzeRustReceiverFieldCaptures({ ...input,
+    isStoredField: declaration => receiverAliases.aliasFor(declaration) === undefined,
+    deferredFields: new Set([...constructionEffects.values()].flatMap(effect => effect.deferredCaptureFields)) });
+  const { origins, escapingSuspendedMethods } = collectProjectObjectOrigins(input);
+  const mutatingMethods = collectMutatingProjectMethods(input, receiverCaptures);
   const representations = input.projectTypes.definitions.map((definition) => {
     const creationFlows = origins.get(definition) ?? [];
     const promotedStorage = creationFlows.some((flow) =>
       flow.aliasDeclarations.some(input.hasPromotedStorage));
-    const mutable = promotedStorage || creationFlows.some(flow => flow.memberWritten) ||
-      analyzeRustConstructionMutation(definition, input, receiverAliases) || projectDefinitionIsMutable(
+    const mutable = promotedStorage || creationFlows.some(flow => flow.uses.some(use => use.role === "write" &&
+      use.throughMember && !writesCapturedField(use.reference, input, receiverCaptures))) ||
+      constructionEffects.get(definition)?.publishedFieldWrites.some(declaration => !receiverCaptures.isCaptured(declaration)) === true || projectDefinitionIsMutable(
       definition,
       mutatingMethods,
-      input,
+      input, receiverCaptures,
     );
     const identityObserved = creationFlows.some((flow) => flow.identityCompared);
     const escapes = creationFlows.some((flow) => flow.escapes) ||
-      projectReceiverEscapes(definition, input, escapingSuspendedMethods);
+      projectReceiverEscapes(definition, input, escapingSuspendedMethods, receiverCaptures);
     const exported = input.navigation.declarationUseSummary(
       definition.declaration,
     ).exported;
@@ -154,6 +166,7 @@ export function createRustObjectRepresentationPlan(
   const byDefinition = new Map(representations.map((representation) =>
     [representation.definition, representation] as const));
   return Object.freeze({
+    receiverCaptures,
     aliases: receiverAliases.aliases,
     aliasFor: receiverAliases.aliasFor,
     representations: Object.freeze(representations),
@@ -209,12 +222,14 @@ function projectReceiverEscapes(
   definition: RustProjectTypeDefinition,
   input: RustObjectRepresentationAnalysisInput,
   escapingSuspendedMethods: ReadonlySet<Node>,
+  receiverCaptures: RustReceiverFieldCaptureQueries,
 ): boolean {
   let escapes = false;
   const visit = (node: Node, nestedCallable: boolean): void => {
     if (escapes) return;
     const kind = input.ast.kindName(node);
     if (kind === "KindThisExpression" || kind === "KindThisKeyword") {
+      if (nestedCallable && receiverCaptures.capturesReceiver(node)) return;
       const flow = input.navigation.expressionValueFlow(node);
       escapes = nestedCallable || flow.escapes || flow.hasUnclassifiedUse || flow.identityCompared;
       return;
@@ -306,13 +321,15 @@ function collectMutatingProjectMethods(input: {
   readonly navigation: SourceProgramNavigation;
   readonly projectTypes: RustProjectTypePolicy;
   readonly valueWrites: ReadonlySet<Node>;
-}): ReadonlySet<Node> {
+  readonly semantics: SourceProgramSemantics;
+}, receiverCaptures: RustReceiverFieldCaptureQueries): ReadonlySet<Node> {
   const methods = input.projectTypes.definitions.flatMap((definition) =>
     input.ast.members(definition.declaration).filter((member): member is Node =>
       member !== undefined && isInstanceCallable(member, input.ast)));
   const methodSet = new Set(methods);
   const mutating = new Set<Node>();
   for (const write of input.valueWrites) {
+    if (writesCapturedField(write, input, receiverCaptures)) continue;
     const caller = enclosingProjectMethod(write, input.ast, methodSet);
     if (caller !== undefined) mutating.add(caller);
   }
@@ -328,7 +345,7 @@ function collectMutatingProjectMethods(input: {
         if (caller === undefined) {
           continue;
         }
-        if (use.role === "write") {
+        if (use.role === "write" && !receiverCaptures.isCaptured(member)) {
           mutating.add(caller);
         }
         if (isInstanceCallable(member, input.ast) && use.kind === "direct-call" &&
@@ -361,12 +378,30 @@ function projectDefinitionIsMutable(
     readonly navigation: SourceProgramNavigation;
     readonly hasMutableStorageUse: (declaration: Node) => boolean;
   },
+  receiverCaptures: RustReceiverFieldCaptureQueries,
 ): boolean {
   return sourceObjectMemberDeclarations(input.ast, definition.declaration).some((member) =>
-    member !== undefined && !input.ast.hasModifierKind(member, "static") &&
+    member !== undefined && !input.ast.hasModifierKind(member, "static") && !receiverCaptures.isCaptured(member) &&
     (mutatingMethods.has(member) ||
       input.hasMutableStorageUse(member) ||
       input.navigation.declarationUseSummary(member).mutatedAfterInitialization));
+}
+
+function writesCapturedField(
+  reference: Node, input: { readonly ast: AstReader; readonly semantics: SourceProgramSemantics },
+  captures: RustReceiverFieldCaptureQueries,
+): boolean {
+  let current = reference;
+  for (let depth = 0; depth < 256; depth += 1) {
+    const selection = input.ast.is.IsPropertyAccessExpression(current)
+      ? input.semantics.forNode(current).operations.propertyAccess(current)
+      : input.ast.is.IsElementAccessExpression(current) ? input.semantics.forNode(current).operations.elementAccess(current) : undefined;
+    if (selection?.selectedDeclaration !== undefined) return captures.isCaptured(selection.selectedDeclaration);
+    const parent = input.ast.parent(current);
+    if (parent === undefined || Node_Expression(input.ast, parent) !== current && input.ast.name(parent) !== current) return false;
+    current = parent;
+  }
+  return false;
 }
 
 function isInstanceCallable(node: Node, ast: AstReader): boolean {

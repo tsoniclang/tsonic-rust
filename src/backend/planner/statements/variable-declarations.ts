@@ -170,12 +170,12 @@ function planVariableDeclaration(
     rustCarrierReferentMutationRequiresMutableBinding(declarationCarrier, carrier => {
       const representation = context.input.program.objectRepresentations.representationFor(
         context.input.program.projectTypes.definitionForCarrier(carrier));
-      return representation !== undefined && representation.kind !== "value";
+      return representation !== undefined && (representation.kind !== "value" || !representation.mutable);
     });
   const mutable = nativeArray !== undefined ? sourceUseSummary.bindingWritten : locationStorage === undefined &&
     (context.input.program.localStorageAliases.requiresMutableOwner(declaration) || sourceUseSummary.bindingWritten ||
       context.input.program.facts.getFact(declaration, rustMutatedBindingFactKey) !== undefined ||
-      (objectRepresentation?.kind === "value" && sourceUseSummary.memberWritten) ||
+      (objectRepresentation?.kind === "value" && objectRepresentation.mutable && sourceUseSummary.memberWritten) ||
       (ownedBinding && referentMutationRequiresMutableBinding &&
         context.input.program.facts.getFact(declaration, rustMutatedReferentFactKey) !== undefined) ||
       resourceFact !== undefined && resourceDisposalReceiverMode(resourceFact) === "mut-ref");

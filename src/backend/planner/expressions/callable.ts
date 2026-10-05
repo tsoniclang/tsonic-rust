@@ -61,6 +61,7 @@ import { planRustParameterEntryConversion } from "../declarations/callables/para
 import { planRustCallableLeadingParameters } from "../declarations/callables/leading-parameters.js";
 import { finalizedConversionIsValid } from "../../../analysis/facts/finalized-operation/conversions.js";
 import { applyFinalizedValueConversion } from "./value-conversions.js";
+import { planRustCapturedReceiverFields } from "./receiver-captures.js";
 
 export function planCallableExpression(
   node: Node,
@@ -111,7 +112,7 @@ export function planRustCallableExpressionBody(
     return undefined;
   }
   if (closureFact.resultCarrier.kind === "function-pointer" &&
-    (captureFact.captures.length !== 0 || captureFact.recursiveDeclaration !== undefined)) {
+    (captureFact.captures.length !== 0 || captureFact.receiverFields.length !== 0 || captureFact.recursiveDeclaration !== undefined)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.function-pointer-capture",
@@ -211,7 +212,7 @@ export function planRustCallableExpressionBody(
       rustCarrierReferentMutationRequiresMutableBinding(parameterCarrier, carrier => {
         const representation = context.input.program.objectRepresentations.representationFor(
           context.input.program.projectTypes.definitionForCarrier(carrier));
-        return representation !== undefined && representation.kind !== "value";
+        return representation !== undefined && (representation.kind !== "value" || !representation.mutable);
       });
     sourceParameterPlans.push({
       parameter,
@@ -304,6 +305,10 @@ export function planRustCallableExpressionBody(
     controlFlow: { nextLoopId: 0 },
     controlTargets: undefined,
     completionBoundary: undefined,
+    construction: undefined,
+    expressionOverrides: context.construction === undefined ? leadingPlan.context.expressionOverrides : undefined,
+    valueFieldLocations: context.construction === undefined ? leadingPlan.context.valueFieldLocations : undefined,
+    capturedFieldOwners: undefined,
     fallibleBoundary: callableErrorBoundary,
     asyncContext: asynchronous !== undefined || generator?.kind === "async",
     generator: generator === undefined ? undefined : {
@@ -317,7 +322,12 @@ export function planRustCallableExpressionBody(
     ...(ownedStateName === undefined ? {} : { sharedStateName: ownedStateName }),
   });
   if (environment === undefined) return undefined;
-  const captureBindings = environment.bindings;
+  const receiverEnvironment = planRustCapturedReceiverFields(node, captureFact.receiverFields, context, closureContext, {
+    staticStorage: nativeClosureProtocol === undefined, offset: captureFact.captures.length,
+    ...(ownedStateName === undefined ? {} : { sharedStateName: ownedStateName }),
+  });
+  if (receiverEnvironment === undefined) return undefined;
+  const captureBindings = [...environment.bindings, ...receiverEnvironment.bindings];
   const capturedBindings = [...environment.capturedBindings];
   let recursiveName: string | undefined;
   if (captureFact.recursiveDeclaration !== undefined) {
@@ -339,13 +349,13 @@ export function planRustCallableExpressionBody(
     });
   }
   const callableClosureContext: RustPlanContext = {
-    ...closureContext,
+    ...receiverEnvironment.context,
     functionAbsenceReturnCarrier: undefined,
     capturedBindings,
   };
   const bindingStatements: RustStmt[] = [];
   let closureParams: { name: string; mutable: boolean; byRefCopy?: boolean }[];
-  let closureMove = nativeClosureProtocol !== undefined && captureFact.captures.length > 0;
+  let closureMove = nativeClosureProtocol !== undefined && (captureFact.captures.length > 0 || captureFact.receiverFields.length > 0);
   if (callableProtocol === undefined) {
     closureParams = [
       ...leadingParameterPlans.map((parameter) => ({

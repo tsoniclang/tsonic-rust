@@ -124,6 +124,7 @@ export interface RustPlanContext {
     returnFor(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined;
   };
   readonly valueFieldLocations?: ReadonlyMap<Node, import("../objects/value-fields.js").RustValueFieldLocation>;
+  readonly capturedFieldOwners?: ReadonlyMap<Node, RustExpr>;
   readonly flowReadOverrides?: ReadonlyMap<Node, RustFlowReadOverride>;
   readonly capturedBindings?: readonly RustCapturedBinding[];
   readonly classEnvironment?: { readonly declaration: Node; readonly expression: RustExpr; readonly borrowed?: boolean };

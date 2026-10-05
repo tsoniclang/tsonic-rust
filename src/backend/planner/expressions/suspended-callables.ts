@@ -10,6 +10,7 @@ import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { planRustCaptureValue } from "./typed-locations.js";
 import { rustSuspendedCallableStateType } from "../types/suspended-callables.js";
+import { planRustCapturedReceiverFields } from "./receiver-captures.js";
 
 export function planRustSuspendedCallableConstruction(node: Node, context: RustPlanContext): RustExpr | undefined {
   const implementation = context.input.program.callableValues.suspended.implementationFor(node);
@@ -31,6 +32,10 @@ export function planRustSuspendedCallableConstruction(node: Node, context: RustP
       value: planRustCaptureValue(capture.reference, source, capture.storage, move, context),
     });
   }
+  const receivers = planRustCapturedReceiverFields(node, implementation.receiverFields, context, context,
+    { staticStorage: true, offset: bindings.length });
+  if (receivers === undefined) return undefined;
+  bindings.push(...receivers.bindings);
   const weakName = allocateRustSyntheticName(context.syntheticNames, "callable_owner");
   context.usedAliases?.add("rt");
   return rustValueBlock(bindings, {

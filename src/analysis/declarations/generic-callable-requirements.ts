@@ -560,6 +560,10 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
         rustClosureProtocol(operation.resultCarrier) === undefined && rustGenericCallableValue(operation.resultCarrier) === undefined
           ? ["clone", "static"]
           : ["clone"];
+      for (const capture of captures.receiverFields) {
+        const error = addUse(capture.reference, capture.carrier, required.filter(requirement => requirement !== "clone"), true);
+        if (error !== undefined) return error;
+      }
       for (const capture of captures.captures) {
         const error = addUse(capture.reference, capture.carrier,
           capture.storage === "cell" || capture.storage === "borrow-cell" ||

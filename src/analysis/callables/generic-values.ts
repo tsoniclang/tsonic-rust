@@ -30,6 +30,7 @@ export interface RustGenericCallableImplementation {
   readonly functionName: string;
   readonly storage: "value" | "shared";
   readonly captures: readonly (RustClosureCaptureFact["captures"][number] & { readonly storageCarrier: TargetTypeRef })[];
+  readonly receiverFields: readonly (RustClosureCaptureFact["receiverFields"][number] & { readonly storageCarrier: TargetTypeRef })[];
   readonly substitutions: readonly (readonly [string, TargetTypeRef])[];
 }
 
@@ -131,8 +132,11 @@ export function createRustGenericCallablePlan(
       const captures = capture?.captures.map(selected => Object.freeze({ ...selected,
         storageCarrier: snapshotClosedMetadata(substituteRustTargetTypeParameters(selected.carrier, substitutions)),
       }));
-      if (sourceFileName.length === 0 || capture === undefined || captures === undefined ||
-        capture.recursiveDeclaration !== undefined || captures.some(selected =>
+      const receiverFields = capture?.receiverFields.map(selected => Object.freeze({ ...selected,
+        storageCarrier: snapshotClosedMetadata(substituteRustTargetTypeParameters(selected.carrier, substitutions)),
+      }));
+      if (sourceFileName.length === 0 || capture === undefined || captures === undefined || receiverFields === undefined ||
+        capture.recursiveDeclaration !== undefined || [...captures, ...receiverFields].some(selected =>
           rustTargetTypeParameterIdentities(selected.storageCarrier).some(identity => !value.signature.environmentParameters.some(parameter => parameter.identity === identity)))) {
         issues.push({ subject: node, message: "A generic callable environment has no exact closed capture contract; recursive or hidden existential captures are not erased." });
       } else {
@@ -143,9 +147,9 @@ export function createRustGenericCallablePlan(
           storage: !identityFamilies.has(identity) &&
             (facts.getFact(node, rustAsyncFunctionFactKey) === undefined || rustNativeFutureCallableResult(value.signature.result) !== undefined) &&
             facts.getFact(node, rustGeneratorFactKey) === undefined &&
-            captures.every(selected => selected.storage === "value" && isRustCopyCarrier(selected.storageCarrier))
+            receiverFields.length === 0 && captures.every(selected => selected.storage === "value" && isRustCopyCarrier(selected.storageCarrier))
               ? "value" as const : "shared" as const,
-          captures: Object.freeze(captures), substitutions: snapshotClosedMetadata([...substitutions]),
+          captures: Object.freeze(captures), receiverFields: Object.freeze(receiverFields), substitutions: snapshotClosedMetadata([...substitutions]),
         });
         const group = groups.get(identity);
         if (group !== undefined && closedMetadataKey(group.signature) !== signatureKey) {

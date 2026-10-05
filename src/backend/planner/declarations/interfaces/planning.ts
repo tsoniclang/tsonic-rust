@@ -166,6 +166,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
       storageIndex: layoutField.storageIndex,
       carrier: fieldCarrier,
       type: fieldType,
+      storageType: fieldType,
       visibility: storageVisibility,
     });
   }

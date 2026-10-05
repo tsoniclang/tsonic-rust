@@ -59,6 +59,7 @@ import {
 export type RustDispatchMemberRole =
   | "read"
   | "write"
+  | "capture"
   | "content"
   | "method-virtual"
   | "method-exact";
@@ -304,7 +305,7 @@ export function analyzeRustGeneratedItemUsage(input: {
       const implementation = selected.kind === "resolved"
         ? selected.implementation.declaration
         : declaration;
-      if (role === "read" || role === "write" || role === "content") {
+      if (role === "read" || role === "write" || role === "content" || role === "capture") {
         markProjectStatePathUsed(concrete, implementation);
         if (role !== "write") readAuthoredFields.add(implementation);
         continue;
@@ -486,13 +487,19 @@ export function analyzeRustGeneratedItemUsage(input: {
         }
         if (fact.dispatch !== undefined) {
           markProjectCarrierFieldUsed(fact.receiverCarrier, "wrapper-dispatch");
-          if (fact.resultCarrier.kind === "array" && fact.valueSemantics.kind === "stored" &&
+          let enclosing = input.ast.parent(node);
+          while (enclosing !== undefined && !input.ast.is.IsArrowFunction(enclosing) && !input.ast.is.IsFunctionDeclaration(enclosing) &&
+            !input.ast.is.IsFunctionExpression(enclosing) && !input.ast.is.IsMethodDeclaration(enclosing)) enclosing = input.ast.parent(enclosing);
+          const captured = enclosing !== undefined && input.objectRepresentations.receiverCaptures.capturesFor(enclosing)
+            .some(capture => capture.references.includes(node));
+          if (captured) markProjectMemberUsed(fact.receiverCarrier, fact.declaration, "capture");
+          else if (fact.resultCarrier.kind === "array" && fact.valueSemantics.kind === "stored" &&
               isRustArrayFieldContentAssignment(node, input.ast, input.facts)) {
             markProjectMemberUsed(fact.receiverCarrier, fact.declaration, "content");
           } else if (fact.accessMode !== "write") {
             markProjectMemberUsed(fact.receiverCarrier, fact.declaration, "read");
           }
-          if (fact.accessMode !== "read") {
+          if (!captured && fact.accessMode !== "read") {
             markProjectMemberUsed(fact.receiverCarrier, fact.declaration, "write");
           }
         } else if (fact.storage === "project-object") {

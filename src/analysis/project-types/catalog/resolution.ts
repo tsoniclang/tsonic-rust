@@ -539,7 +539,7 @@ export function createRustProjectTypePolicy(
       }
       if (kind === "KindPropertyDeclaration" || kind === "KindPropertySignature" ||
         sourceParameterIsProperty(host.ast, member)) {
-        candidates.push({ declaration: member, targetName, roles: ["read", "write"] });
+        candidates.push({ declaration: member, targetName, roles: ["read", "write", "capture"] });
       } else if (kind === "KindGetAccessor") {
         candidates.push({ declaration: member, targetName, roles: ["read"] });
       } else if (kind === "KindSetAccessor") {

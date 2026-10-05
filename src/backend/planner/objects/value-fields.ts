@@ -10,22 +10,30 @@ import { planExpression } from "../expressions/entry.js";
 import { effectivePlannedExpressionCarrier } from "../expressions/fundamentals.js";
 import { sourceFieldSelectedOperationMatches } from "../expressions/properties.js";
 import { planRustDirectStorage } from "../expressions/updates/target.js";
-import { findRustLocationStorageRoot, planRustSourceLocationStorage, rustExpressionHasBoundRecordField, planRustSharedReceiver, rustLocationStorageForReference, rustRawLocationRoot } from "../expressions/typed-locations.js";
+import { findRustLocationStorageRoot, planRustSourceLocationStorage, rustExpressionHasBoundRecordField, planRustSharedReceiver,
+  planRustNonConsumingValue, rustLocationStorageForReference, rustRawLocationRoot } from "../expressions/typed-locations.js";
 import { rustRecordFieldResult, readRustBoundRecordField, writeRustBoundRecordField } from "./record-fields.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustIndexedFieldLocation } from "../expressions/indexed-fields.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { readRustStoredObjectField, writeRustStoredObjectField, rustProjectObjectRepresentation, rustDirectProjectFieldStoragePath } from "./project-storage.js";
+import { rustCapturedFieldStorage, rustCapturedFieldLocation } from "./captured-fields.js";
+import { readRustProjectObjectFieldOwner, readRustProjectDispatchedField, writeRustProjectDispatchedField } from "./project-objects.js";
+import { planRustProjectFieldDispatchRoles } from "./project-field-dispatch.js";
 
 export interface RustValueFieldLocation {
   readonly bindings: readonly { readonly name: string; readonly value: RustExpr; readonly mutable?: boolean }[];
   readonly read: RustExpr;
   readonly write: (value: RustExpr) => RustExpr | undefined;
+  readonly project?: (names: readonly string[], carrier: TargetTypeRef) => RustValueFieldLocation;
 }
 
 export function rustSourceFieldHasValueReceiver(node: Node, context: RustPlanContext): boolean {
+  if (context.valueFieldLocations?.has(node)) return true;
   const operation = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
+  if (operation?.kind === "source-field" && operation.declaration !== undefined &&
+    rustCapturedFieldStorage(operation.declaration, context) !== undefined) return true;
   return operation?.kind === "source-indexed-field" || operation?.kind === "source-field" &&
     (operation.storage === "structural-object"
       ? rustStructuralObjectCarrierValue(operation.receiverCarrier)?.representation === "value"
@@ -40,6 +48,39 @@ export function planRustValueFieldLocation(
   const prepared = context.valueFieldLocations?.get(node);
   if (prepared !== undefined) return prepared;
   const selectedField = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
+  if (selectedField?.kind === "source-field" && selectedField.declaration !== undefined) {
+    const storage = rustCapturedFieldStorage(selectedField.declaration, context);
+    if (storage !== undefined) {
+      if (!sourceFieldSelectedOperationMatches(node, selectedField, context) || context.syntheticNames === undefined) return undefined;
+      if (rustProjectObjectRepresentation(selectedField.receiverCarrier, context)?.kind !== "value") {
+        const receiverNode = Node_Expression(context.input.program.source.ast, node);
+        const planned = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
+        if (receiverNode === undefined || planned === undefined) return undefined;
+        const name = allocateRustSyntheticName(context.syntheticNames, "field_receiver");
+        const receiver: RustExpr = { kind: "path", path: name };
+        const bindings = [{ name, value: planRustSharedReceiver(receiverNode, planned, context) }];
+        if (selectedField.dispatch === undefined) {
+          const read = readRustStoredObjectField(selectedField.storage, selectedField.receiverCarrier, receiver,
+            selectedField.storageIndex, selectedField.resultCarrier, context);
+          return read === undefined ? undefined : { bindings, read, write: value => writeRustStoredObjectField(selectedField.storage,
+            selectedField.receiverCarrier, receiver, selectedField.storageIndex, "=", value, context) };
+        }
+        const dispatch = context.input.program.projectFieldDispatch.planFor(selectedField.declaration);
+        const roles = dispatch === undefined ? undefined : planRustProjectFieldDispatchRoles(dispatch, context);
+        if (roles === undefined) return undefined;
+        const writeName = allocateRustSyntheticName(context.syntheticNames, "field_write_receiver");
+        return { bindings, read: readRustProjectDispatchedField(receiver, selectedField.dispatch.read, roles.read),
+          write: value => selectedField.dispatch?.write === undefined || roles.write === undefined ? undefined
+            : writeRustProjectDispatchedField(receiver, writeName, selectedField.dispatch.read, selectedField.dispatch.write,
+              "=", value, { read: roles.read, write: roles.write }) };
+      }
+      const owner = planRustCapturedFieldOwner(node, context, true);
+      if (owner === undefined || context.syntheticNames === undefined) return undefined;
+      const name = allocateRustSyntheticName(context.syntheticNames, "field_owner");
+      return { ...rustCapturedFieldLocation(storage, { kind: "path", path: name }, selectedField.resultCarrier),
+        bindings: [{ name, value: owner }] };
+    }
+  }
   if (selectedField?.kind === "source-indexed-field") return planRustIndexedFieldLocation(node, selectedField, context, access);
   const reject = (): undefined => {
     context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
@@ -88,6 +129,8 @@ export function planRustValueFieldLocation(
       continue;
     }
     const operation = context.input.program.facts.getFact(current, rustTargetOperationFactKey);
+    if (context.valueFieldLocations?.has(current) || operation?.kind === "source-field" &&
+      operation.declaration !== undefined && rustCapturedFieldStorage(operation.declaration, context) !== undefined) break;
     if (operation?.kind !== "source-field" || !rustSourceFieldHasValueReceiver(current, context)) break;
     if (!sourceFieldSelectedOperationMatches(current, operation, context) ||
       operation.valueSemantics.kind !== "stored" || operation.dispatch !== undefined ||
@@ -117,6 +160,13 @@ export function planRustValueFieldLocation(
     return isRustCopyCarrier(resultCarrier) || access === "read" && context.input.program.valueLifetimes.canMove(node)
       ? selected : { kind: "method-call", receiver: selected, method: "clone", args: [] };
   };
+  const capturedRoot = context.valueFieldLocations?.get(current);
+  if (capturedRoot !== undefined) {
+    if (capturedRoot.project !== undefined) return capturedRoot.project(names, resultCarrier);
+    const value = capturedRoot.read;
+    if (access === "read") return { bindings: capturedRoot.bindings, read: read(value), write: () => reject() };
+    return reject();
+  }
   const overridden = context.expressionOverrides?.has(current) === true;
   const rootField = overridden ? undefined : context.input.program.facts.getFact(current, rustTargetOperationFactKey);
   if (rootField?.kind === "source-field") {
@@ -168,4 +218,31 @@ export function planRustValueFieldLocation(
     read: read(direct),
     write: value => ({ kind: "assignment", operator: "=", target: project(direct), value }),
   };
+}
+
+export function planRustCapturedFieldOwner(node: Node, context: RustPlanContext, borrowed = false): RustExpr | undefined {
+  const operation = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
+  if (operation?.kind !== "source-field" || operation.declaration === undefined ||
+    !sourceFieldSelectedOperationMatches(node, operation, context)) return undefined;
+  const captured = context.capturedFieldOwners?.get(node);
+  if (captured !== undefined) return borrowed ? { kind: "reference", expr: captured }
+    : { kind: "method-call", receiver: captured, method: "clone", args: [] };
+  const receiverNode = Node_Expression(context.input.program.source.ast, node);
+  const planned = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
+  const receiver = receiverNode === undefined || planned === undefined ? undefined
+    : planRustNonConsumingValue(receiverNode, planned, context);
+  if (receiver !== undefined && operation.dispatch !== undefined) {
+    const slot = context.input.program.projectTypes.memberSlotName(operation.declaration, "capture");
+    return slot === undefined ? undefined : { kind: "method-call", receiver: {
+      kind: "field", receiver, name: "dispatch",
+    }, method: slot, args: [] };
+  }
+  const path = rustDirectProjectFieldStoragePath(operation.receiverCarrier, operation.storageIndex, context);
+  const representation = rustProjectObjectRepresentation(operation.receiverCarrier, context);
+  if (receiver === undefined || path === undefined || representation === undefined) return undefined;
+  const ast = context.input.program.source.ast;
+  const binding = receiverNode === undefined ? undefined : context.input.program.sourceNavigation.sourceReferenceFor(receiverNode)?.declaration;
+  const stable = receiverNode !== undefined && (["KindThisExpression", "KindThisKeyword"].includes(ast.kindName(receiverNode)) ||
+    ast.is.IsIdentifier(receiverNode) && binding !== undefined && !context.input.program.sourceNavigation.declarationUseSummary(binding).bindingWritten);
+  return readRustProjectObjectFieldOwner(receiver, path, representation, borrowed && stable);
 }

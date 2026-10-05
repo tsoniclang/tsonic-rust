@@ -2,6 +2,7 @@ import type { Node } from "@tsonic/tsts";
 
 export interface RustConstructionState {
   readonly initialized: ReadonlySet<Node>;
+  readonly possiblyInitialized: ReadonlySet<Node>;
   readonly published: boolean;
 }
 

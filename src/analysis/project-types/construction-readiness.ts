@@ -15,7 +15,7 @@ import type { RustProjectTypeDefinition } from "./type-policy.js";
 
 export interface RustConstructionExpression {
   readonly node: Node;
-  readonly kind: "receiver" | "field";
+  readonly kind: "receiver" | "field" | "capture";
   readonly declaration?: Node;
   readonly receiver?: Node;
 }
@@ -23,6 +23,7 @@ export interface RustConstructionExpression {
 export interface RustConstructionPoint {
   readonly node: Node;
   readonly initializedFields: readonly Node[];
+  readonly possiblyInitializedFields: readonly Node[];
   readonly published: boolean;
   readonly publishBefore: boolean;
   readonly publishAfter: boolean;
@@ -65,7 +66,11 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
   readonly issues: readonly RustConstructionIssue[];
   readonly publishesReceiver: boolean;
   readonly mutatesPublishedFields: boolean;
+  readonly deferredCaptureFields: readonly Node[];
+  readonly publishedFieldWrites: readonly Node[];
 } {
+  const deferredCaptureFields = new Set<Node>();
+  const publishedFieldWrites = new Set<Node>();
   const points = new Map<Node, RustConstructionPoint>();
   const expressions = new Map<Node, readonly RustConstructionExpression[]>();
   const issues: RustConstructionIssue[] = [];
@@ -93,7 +98,11 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
     return selected !== undefined && declarations.has(selected.declaration) ? selected.declaration : undefined;
   };
   const receiverIsThis = (node: Node): boolean => {
-    const receiver = Node_Expression(input.ast, node);
+    let receiver = Node_Expression(input.ast, node);
+    for (let depth = 0; receiver !== undefined && depth < 256 &&
+      (input.ast.is.IsParenthesizedExpression(receiver) || input.ast.is.IsAsExpression(receiver) ||
+        input.ast.is.IsSatisfiesExpression(receiver) || input.ast.is.IsNonNullExpression(receiver) || input.ast.is.IsTypeAssertion(receiver)); depth += 1)
+      receiver = Node_Expression(input.ast, receiver);
     return receiver !== undefined && (input.ast.kindName(receiver) === "KindThisExpression" ||
       input.ast.kindName(receiver) === "KindThisKeyword");
   };
@@ -110,10 +119,8 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
         receiverIsThis(node)) {
         const declaration = selectedField(node);
         if (declaration !== undefined) {
-          if (captured) {
-            const receiver = Node_Expression(input.ast, node);
-            if (receiver !== undefined) found.push(Object.freeze({ node: receiver, kind: "receiver" }));
-          } else found.push(Object.freeze({ node, declaration, receiver: Node_Expression(input.ast, node), kind: "field" }));
+          found.push(Object.freeze({ node, declaration, receiver: Node_Expression(input.ast, node),
+            kind: captured ? "capture" : "field" }));
           return;
         }
       }
@@ -132,15 +139,20 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
   const record = (node: Node, state: ConstructionState, publishBefore = false, publishAfter = false): void => {
     if (node !== input.definition.declaration) selectedExpressions(node);
     points.set(node, Object.freeze({ node, initializedFields: Object.freeze([...state.initialized]),
+      possiblyInitializedFields: Object.freeze([...state.possiblyInitialized]),
       published: state.published, publishBefore, publishAfter, publishMissingElse: false }));
   };
   const enter = (node: Node, state: ConstructionState, roots: readonly Node[]): ConstructionState => {
+    for (const root of roots) for (const capture of selectedExpressions(root)) {
+      if (capture.kind === "capture" && capture.declaration !== undefined && !state.initialized.has(capture.declaration))
+        deferredCaptureFields.add(capture.declaration);
+    }
     const requiresReceiver = roots.some(root => selectedExpressions(root).some(expression => expression.kind === "receiver"));
     let selected = state;
     if (!state.published && requiresReceiver) {
       if (ready(state)) {
         publishesReceiver = true;
-        selected = Object.freeze({ initialized: state.initialized, published: true });
+        selected = Object.freeze({ ...state, published: true });
       } else issue(node, "A native receiver cannot be published before every physical field has been definitely initialized.");
     }
     record(node, selected, selected !== state);
@@ -170,8 +182,12 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
         const declaration = receiverIsThis(left) ? selectedField(left) : undefined;
         if (declaration !== undefined && operation === "KindEqualsToken") {
           const afterValue = expression(right, state, depth + 1);
-          if (afterValue.published) mutatesPublishedFields = true;
-          return Object.freeze({ initialized: new Set([...afterValue.initialized, declaration]), published: afterValue.published });
+          record(left, afterValue);
+          if (afterValue.possiblyInitialized.has(declaration) && !afterValue.initialized.has(declaration))
+            deferredCaptureFields.add(declaration);
+          if (afterValue.published) { mutatesPublishedFields = true; publishedFieldWrites.add(declaration); }
+          return Object.freeze({ ...afterValue, initialized: new Set([...afterValue.initialized, declaration]),
+            possiblyInitialized: new Set([...afterValue.possiblyInitialized, declaration]) });
         }
         if (operation === "KindAmpersandAmpersandToken" || operation === "KindBarBarToken" ||
           operation === "KindQuestionQuestionToken") {
@@ -187,10 +203,13 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
     if ((input.ast.is.IsPropertyAccessExpression(node) || input.ast.is.IsElementAccessExpression(node)) && receiverIsThis(node)) {
       const declaration = selectedField(node);
       if (declaration !== undefined) {
+        record(node, state);
         const field = input.selectedField(node);
         if (field !== undefined && field.accessMode !== "write" && !state.initialized.has(declaration))
           issue(node, "A native constructor field read has no dominating exact initialization.");
-        if (field !== undefined && field.accessMode !== "read" && state.published) mutatesPublishedFields = true;
+        if (field !== undefined && field.accessMode !== "read" && state.published) {
+          mutatesPublishedFields = true; publishedFieldWrites.add(declaration);
+        }
         return state;
       }
     }
@@ -241,7 +260,7 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
       }
     }
     return { normal: normal.length === 0 ? undefined : intersection(normal.map(branch =>
-      Object.freeze({ initialized: branch.flow.normal!.initialized, published }))),
+      Object.freeze({ ...branch.flow.normal!, published }))),
       returned: branches.flatMap(branch => branch.flow.returned), thrown: branches.flatMap(branch => branch.flow.thrown),
       breaks: branches.flatMap(branch => branch.flow.breaks),
       continues: branches.flatMap(branch => branch.flow.continues) };
@@ -280,6 +299,9 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
       const guard = condition === undefined ? kind === "KindForStatement" ? true : undefined : input.guardResult(condition);
       if (kind !== "KindDoStatement" && guard === false) return fallthrough(state);
       const body = kind === "KindDoStatement" ? DoStatement_Statement(input.ast, node) : IterationStatement_Statement(input.ast, node);
+      const repeatedWrites = (body === undefined ? [] : selectedExpressions(body)).filter(entry => entry.kind === "field" &&
+        entry.declaration !== undefined && input.selectedField(entry.node)?.accessMode !== "read").map(entry => entry.declaration!);
+      state = Object.freeze({ ...state, possiblyInitialized: new Set([...state.possiblyInitialized, ...repeatedWrites]) });
       const flow = body === undefined ? fallthrough(state) : statement(body, state, depth + 1);
       const continuing = [...(flow.normal === undefined ? [] : [flow.normal]),
         ...flow.continues.filter(transfer => transfer.target === node).map(transfer => transfer.state)];
@@ -382,8 +404,8 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
     }
     return fallthrough(after);
   };
-  let state: ConstructionState = Object.freeze({ initialized: new Set(input.fields
-    .filter(field => field.absenceDefault).map(field => field.declaration)), published: false });
+  const absenceFields = new Set(input.fields.filter(field => field.absenceDefault).map(field => field.declaration));
+  let state: ConstructionState = Object.freeze({ initialized: absenceFields, possiblyInitialized: absenceFields, published: false });
   let completesNormally = true;
   for (const layer of input.layers) {
     const previousReturns = earlyReturns;
@@ -393,7 +415,8 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
         state = expression(field.initializer, state, 0);
       } else record(field.declaration, state);
       if (field.initializer !== undefined || field.absenceDefault || field.externallyInitialized)
-        state = Object.freeze({ initialized: new Set([...state.initialized, field.declaration]), published: state.published });
+        state = Object.freeze({ ...state, initialized: new Set([...state.initialized, field.declaration]),
+          possiblyInitialized: new Set([...state.possiblyInitialized, field.declaration]) });
     }
     const flow = sequence(layer.statements, state, 0);
     if (earlyReturns !== previousReturns) layerEarlyReturn.add(layer.definition);
@@ -411,6 +434,8 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
   const indexedExpressions = new Map<Node, RustConstructionExpression>();
   for (const entries of expressions.values()) for (const entry of entries) indexedExpressions.set(entry.node, entry);
   return Object.freeze({ issues: Object.freeze(issues), publishesReceiver, mutatesPublishedFields, completesNormally,
+    deferredCaptureFields: Object.freeze([...deferredCaptureFields]),
+    publishedFieldWrites: Object.freeze([...publishedFieldWrites]),
     layerCompletes: (definition: RustProjectTypeDefinition) => layerCompletion.get(definition) === true,
     layerHasEarlyReturn: (definition: RustProjectTypeDefinition) => layerEarlyReturn.has(definition),
     expressions: Object.freeze([...indexedExpressions.values()]),
@@ -424,5 +449,6 @@ function intersection(states: readonly ConstructionState[]): ConstructionState {
   const first = states[0];
   return Object.freeze({ initialized: new Set(first === undefined ? [] :
     [...first.initialized].filter(declaration => states.every(state => state.initialized.has(declaration)))),
+    possiblyInitialized: new Set(states.flatMap(state => [...state.possiblyInitialized])),
     published: states.every(state => state.published) });
 }
