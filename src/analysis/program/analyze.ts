@@ -473,7 +473,8 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
   );
   context.frozenDataWrites.initialize({ jsEnabled: walk.jsEnabled, ast, projectTypes,
     representations: context.objectRepresentations, structuralShapes: context.structuralShapes.seal(),
-    sourceFiles: projectSourceFiles, facts: context.facts, views: context.classValues.instanceViewRequests() });
+    sourceFiles: projectSourceFiles, facts: context.facts, views: context.classValues.instanceViewRequests(),
+    typeDefinitions: context.typeDefinitions });
   context.projectFieldDispatch.initialize({
     ast,
     projectTypes,

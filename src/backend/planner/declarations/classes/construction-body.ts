@@ -52,7 +52,7 @@ export function planRustConstructionBody(
   }
   const slots: (RustConstructionStorageField & { readonly expression: Extract<RustExpr, { readonly kind: "path" }> })[] = [];
   const declarations: RustStmt[] = [];
-  const retainedIdentity = fields.some(field => context.input.program.frozenDataWrites.retainsFieldIdentity(field.declaration));
+  const retainedIdentity = fields.some(field => context.input.program.frozenDataWrites.capturesFieldIdentity(field.declaration));
   const identity: RustExpr | undefined = !retainedIdentity ? undefined : { kind: "path",
     path: allocateRustSyntheticName(context.syntheticNames, "object_identity") };
   if (identity?.kind === "path") declarations.push({ kind: "let", name: identity.path, mutable: false,
@@ -106,7 +106,7 @@ export function planRustConstructionBody(
           const initialized = selectedPoint.initializedFields.includes(slot.declaration);
           const possiblyInitialized = selectedPoint.possiblyInitializedFields.includes(slot.declaration);
           capturedFieldOwners.set(expression.node, slot.expression);
-          if (identity !== undefined && selectedContext.input.program.frozenDataWrites.retainsFieldIdentity(slot.declaration))
+          if (identity !== undefined && selectedContext.input.program.frozenDataWrites.capturesFieldIdentity(slot.declaration, expression.node))
             capturedFieldIdentities.set(expression.node, identity);
           const location = rustCapturedFieldLocation(storage, slot.expression, slot.carrier);
           locations.set(expression.node, initialized ? location : { ...location,
