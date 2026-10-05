@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { contextualAsyncResultSource, ordinaryAsyncResultSource } from "../../fixtures/contextual-async-results.mjs";
+import { contextualAsyncResultSource, ordinaryAsyncResultSource } from "../../../../tsonic/test/fixtures/contextual-async-results.mjs";
 import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 import { rustAsyncFunctionFactKey, rustClosureCaptureFactKey, rustSourceCallableReturnFactKey } from "../../../dist/analysis/facts/keys.js";
 import { rustCallableInvocationResult } from "../../../dist/analysis/facts/callable-results.js";

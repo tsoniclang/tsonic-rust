@@ -5,7 +5,7 @@ import { receiverFieldStorageCases } from "../../../../tsonic/test/fixtures/rece
 import { generalizeRustProjectStructuralView } from "../../../dist/analysis/objects/project-structural-views-generics.js";
 import { selectRustProjectStructuralViewFields, selectRustProjectStructuralViewSources } from "../../../dist/analysis/objects/project-structural-views.js";
 import { rustProjectViewMatches } from "../../../dist/analysis/objects/view-implementations.js";
-import { rustSourceTypeCarrier, rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from "../../../dist/target-model/types/carriers/source-types.js";
+import { rustSourceTypeCarrier, rustSourceTypeCarrierValue, rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from "../../../dist/target-model/types/carriers/source-types.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustTargetGenericReferences } from "../../../dist/target-model/types/carriers/generic-references.js";
 import { rustStringTargetType } from "../../../dist/target-model/types/carriers/native.js";
@@ -68,6 +68,10 @@ function structuralFieldSelection({ callable = false, sourceParameter = type => 
     parent: node => node.parent, members: node => node === declaration ? [member] : [],
     parameters: () => [], hasModifierKind: () => false, questionToken: () => undefined };
   const projectTypes = {
+    definitionForCarrier: carrier => {
+      const selected = rustSourceTypeCarrierValue(carrier);
+      return selected?.fileName === "/model.ts" && selected.typeName === "Box" && selected.shape === "object" ? definition : undefined;
+    },
     definitionForDeclaration: node => node === declaration ? definition : undefined,
     definitionContainingDeclaration: node => node === member ? definition : undefined,
     isPolymorphic: () => true, openCarrier: () => source(parameter), externalBaseForDefinition: () => undefined,

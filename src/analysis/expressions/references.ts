@@ -72,6 +72,7 @@ import { resolveRustClassValue } from "../objects/class-values.js";
 import { readRustNativeControl, resolveRustNativeControl } from "./native-controls.js";
 import { rustSourceCallArgumentCarriers, rustSourceCallResultWithInputLifetimes } from "../facts/source-call-lifetimes.js";
 import { retainRustSelectedSourceCallResultStorage } from "../../policy/types/resolution/call-results.js";
+import { callableRestElement } from "../callables/adapters.js";
 
 export function resolveIdentifierCarrier(
   walk: RustFactWalk,
@@ -671,7 +672,7 @@ function applySelectedRuntimeCallableCall(
       consumedBindings.add(binding);
       const inputCarrier = form === "rest" &&
           binding.sourceParameterForm === "rest-element"
-        ? valueCarrier.kind === "array" ? valueCarrier.element : undefined
+        ? callableRestElement(valueCarrier)
         : form === "optional" ? parameterCarrier : valueCarrier;
       return inputCarrier === undefined
         ? undefined

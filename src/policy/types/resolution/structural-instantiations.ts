@@ -14,6 +14,7 @@ import { rustCallableProtocol } from "../../../target-model/types/carriers/calla
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
 import type { SourceCallableTypeEvidence } from "@tsonic/target-api/source";
 import { isRustErasedNominalMember } from "../source-shapes.js";
+import { rustSourcePropertyTargetType } from "../../../target-model/types/projections.js";
 
 export function retainRustStructuralInstantiation(
   sourceType: Type,
@@ -88,7 +89,7 @@ export function retainRustStructuralInstantiation(
     const normalize = rustTypeFamilyNormalizer(options.sourceTypes.typeFamilies);
     const expected = mapRustTargetTypes(targetField.type, normalize);
     if (declared.some(carrier => carrier === undefined ||
-      !rustTargetTypeRefEquals(mapRustTargetTypes(carrier, normalize), expected))) return undefined;
+      !rustTargetTypeRefEquals(mapRustTargetTypes(rustSourcePropertyTargetType(carrier, selected.source.property.optional), normalize), expected))) return undefined;
     if (!retainRustStructuralInstantiation(selected.source.property.type, field.resultCarrier,
       targetField.type, context, options, resolving, authoredNodes[0])) return undefined;
     return {

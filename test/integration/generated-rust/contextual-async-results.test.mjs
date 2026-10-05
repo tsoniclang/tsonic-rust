@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { appendFileSync } from "node:fs";
 import { join } from "node:path";
-import { contextualAsyncCostSource, contextualAsyncResultSource, ordinaryAsyncResultSource } from "../../fixtures/contextual-async-results.mjs";
+import { contextualAsyncCostSource, contextualAsyncResultSource, ordinaryAsyncResultSource } from "../../../../tsonic/test/fixtures/contextual-async-results.mjs";
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
@@ -10,7 +10,7 @@ import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.
 test("native JS async bodies retain contextual union completion, captures, aliases and rejection", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
     files: { "index.ts": contextualAsyncResultSource } });
-  assert.deepEqual(result.diagnostics, []);
+  assert.equal(result.diagnostics.length, 0, "contextual async source has no diagnostics");
   const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
   assert.doesNotMatch(output, /\.then\(|\.then_async\(|transmute|unreachable_unchecked/u);
   assert.doesNotMatch(output, /JsPromise<'static, \(\), rt::TsonicError>[\s\S]{0,100}\.map\(/u);
@@ -21,7 +21,7 @@ for (const surfaces of [[], ["js"]]) {
   test(`ordinary async output stays native and lossless on ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
       files: { "index.ts": ordinaryAsyncResultSource } });
-    assert.deepEqual(result.diagnostics, []);
+    assert.equal(result.diagnostics.length, 0, "ordinary async source has no diagnostics");
     const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
     assert.match(output, /\bi64\b/u);
     assert.doesNotMatch(output, /\bBigInt\b|as f64|dyn Future/u);
@@ -33,7 +33,7 @@ for (const surfaces of [[], ["js"]]) {
 test("contextual async output construction costs exactly one native promise without a mapping owner", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "lib" } },
     files: { "index.ts": contextualAsyncCostSource } });
-  assert.deepEqual(result.diagnostics, []);
+  assert.equal(result.diagnostics.length, 0, "contextual async cost source has no diagnostics");
   const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
   assert.equal((output.match(/JsPromise::from_infallible_factory\(/gu) ?? []).length, 1);
   assert.doesNotMatch(output, /\.then\(|\.then_async\(|JsPromise::resolved|\.map\(/u);
@@ -94,7 +94,7 @@ export function escape<Region extends Life>(value: Ref<int32, Region>): () => Pr
   return async () => await pending;
 }
 ` } });
-  assert.deepEqual(result.diagnostics, []);
+  assert.equal(result.diagnostics.length, 0, "borrowed async source reaches exact native lifetime checking");
   const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
   assert.doesNotMatch(output, /transmute|unreachable_unchecked|\.then\(|\.then_async\(/u);
   const project = writeGeneratedProject("contextual-async-borrow-rejected", result.artifacts);

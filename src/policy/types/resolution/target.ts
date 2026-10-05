@@ -9,7 +9,6 @@ import {
   rustAbsenceTargetType,
   rustNeverTargetType,
   rustOptionElementCarrier,
-  rustSourceOptionalTargetType,
   rustSourcePrimitiveTargetType,
   rustStructuralObjectTargetType,
   rustStructuralObjectCarrierValue,
@@ -50,6 +49,7 @@ import { resolveRustSourceMarker } from "./markers.js";
 import { resolveRustIndexedField } from "./indexed-fields.js";
 import { resolveRustConstructType } from "./constructors.js";
 import { resolveRustIndexedRecordType } from "./records.js";
+import { rustSourcePropertyTargetType } from "../../../target-model/types/projections.js";
 
 export function resolveRustFixedArrayTargetType(
   fixedArray: TsonicFixedArrayFact,
@@ -404,9 +404,7 @@ export function resolveStructuralObjectType(
       : authoredCarrier;
     const fieldCarrier = selectedFieldCarrier === undefined
       ? undefined
-      : property.optional && rustOptionElementCarrier(selectedFieldCarrier) === undefined
-        ? rustSourceOptionalTargetType(selectedFieldCarrier)
-        : selectedFieldCarrier;
+      : rustSourcePropertyTargetType(selectedFieldCarrier, property.optional);
     const accessor = getters.length === 1 && setters.length <= 1 &&
         ordinaryDeclarations.length === 0 && methods.length === 0
       ? { getter: true as const, setter: setters.length === 1 }

@@ -3,7 +3,7 @@ import type { TargetTypeRef } from "./model.js";
 import { closedMetadataKey } from "../metadata/closed-data.js";
 import { isRustAbsenceCarrier, rustAbsenceTargetType } from "./carriers/native.js";
 import { isRustUnitCarrier } from "./carriers/js.js";
-import { rustOptionTargetType } from "./carriers/optional.js";
+import { rustOptionTargetType, rustOptionElementCarrier } from "./carriers/optional.js";
 import { rustJsValueTargetId, rustTsValueTargetId } from "./carriers/source-types.js";
 import { rustOptionNestingDepth } from "./carriers/optional.js";
 import { rustTargetTypeRefEquals } from "./equality.js";
@@ -25,6 +25,10 @@ export function rustSourceOptionalTargetType(value: TargetTypeRef): TargetTypeRe
   if (value.kind === "type-parameter" && value.optionalStorageValue !== undefined) return value;
   if (value.kind === "type-parameter" || value.kind === "associated-type") return rustOptionalStorageProjection(value);
   return { ...rustOptionTargetType(value) as Extract<TargetTypeRef, { readonly kind: "target-named" }>, sourceAbsence: true };
+}
+
+export function rustSourcePropertyTargetType(value: TargetTypeRef, optional: boolean): TargetTypeRef {
+  return optional && rustOptionElementCarrier(value) === undefined ? rustSourceOptionalTargetType(value) : value;
 }
 
 export function rustOptionalStorageValue(type: TargetTypeRef | undefined): TargetTypeRef | undefined {

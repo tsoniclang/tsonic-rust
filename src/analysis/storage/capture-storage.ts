@@ -1,5 +1,5 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
-import { sourceBindingScope } from "@tsonic/target-api/source";
+import { sourceBindingScope, sourceBindingIterationScope } from "@tsonic/target-api/source";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import { rustBindingStorageFactKey } from "../facts/keys.js";
 
@@ -25,8 +25,7 @@ export function analyzeRustCaptureStorage(input: {
       scopes.set(scope, declarations);
     }
     if (fact?.iterationScope !== undefined) {
-      if (fact.storage !== "location" || input.ast.variableDeclarationKind(node) !== "let" ||
-        input.ast.kindName(fact.iterationScope) !== "KindForStatement" ||
+      if (fact.storage !== "location" || sourceBindingIterationScope(node, input.ast) !== fact.iterationScope ||
         sourceBindingScope(node, input.ast) !== fact.iterationScope) {
         throw new Error("Iteration capture storage requires its exact lexical activation scope.");
       }

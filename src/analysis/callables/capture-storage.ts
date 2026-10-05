@@ -1,5 +1,5 @@
 import type { Node, SourceFile, Symbol } from "@tsonic/tsts";
-import { sourceBindingHasSingleCaptureOwner, sourceBindingCapturedBeforeInitialization, sourceBindingScope } from "@tsonic/target-api/source";
+import { sourceBindingHasSingleCaptureOwner, sourceBindingCapturedBeforeInitialization, sourceBindingScope, sourceBindingIterationScope } from "@tsonic/target-api/source";
 import type { SourceDeclarationUse } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -57,10 +57,8 @@ export function rustCapturedBindingStorage(
       : unique && rustCarrierSupportsClone(carrier, walk.context.typeDefinitions)
         ? { storage: isRustCopyCarrier(carrier) ? "cell" : "borrow-cell" }
         : { storage: "location" };
-  const iterationScope = selectedStorage.storage === "location" &&
-      walk.context.ast.variableDeclarationKind(declaration) === "let" &&
-      scope !== undefined && walk.context.ast.kindName(scope) === "KindForStatement"
-    ? scope : undefined;
+  const iterationScope = selectedStorage.storage === "location"
+    ? sourceBindingIterationScope(declaration, walk.context.ast) : undefined;
   const storage = iterationScope === undefined ? selectedStorage : { ...selectedStorage, iterationScope };
   walk.capturedBindingStorage.set(declaration, storage);
   return storage;
@@ -74,8 +72,7 @@ function iterationCaptureCanUseValue(
   sourceFile: SourceFile,
 ): boolean {
   const { ast, source } = walk.context;
-  if (symbol === undefined || ast.variableDeclarationKind(declaration) !== "let" ||
-    ast.kindName(scope) !== "KindForStatement") return false;
+  if (symbol === undefined || sourceBindingIterationScope(declaration, ast) !== scope) return false;
   const incrementor = ast.as.AsForStatement(scope)?.Incrementor;
   if (incrementor === undefined) return false;
   let steps = 0;
