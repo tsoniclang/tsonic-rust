@@ -369,7 +369,7 @@ export function resolveStructuralObjectType(
     const propertyTypeNodes = [...new Set([
       ...(declaredField === undefined ? [] : [declaredField.type]),
       ...sourcePropertyTypeEvidenceNodes(context.ast, semantics, property),
-      ...projectDeclarations.flatMap(declaration => {
+      ...[...ordinaryDeclarations, ...getters].flatMap(declaration => {
         const node = context.ast.typeNode(declaration);
         return node !== undefined && resolveBoundSourceTypeParameter(node, context) !== undefined ? [node] : [];
       }),

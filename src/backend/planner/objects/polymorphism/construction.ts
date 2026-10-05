@@ -1,8 +1,7 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustProjectTypeDefinition, RustProjectConstructorSignature } from "../../../../analysis/project-types/type-policy.js";
-import { rustFallibleFactKey, rustSourceParameterAbiFactKey } from "../../../../analysis/facts/keys.js";
-import { rustTargetIdentifier } from "../../../../target-model/names/identifiers.js";
-import type { RustExpr, RustFunctionParam, RustImplFunction, RustType } from "../../../target-ast/nodes.js";
+import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
+import { rustFallibleFactKey } from "../../../../analysis/facts/keys.js";
+import type { RustExpr, RustImplFunction, RustType } from "../../../target-ast/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/nodes.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
 import { createRustSyntheticNameState } from "../../names/synthetic.js";
@@ -10,8 +9,7 @@ import { planRustConstructionBody } from "../../declarations/classes/constructio
 import { planRustCallableParameters } from "../../declarations/callables/parameters.js";
 import { rustClassEnvironmentContext, rustClassEnvironmentParameter } from "../class-environments.js";
 import { diagnosticInput, rustErrorBoundaryForDeclaration, rustErrorType,
-  rustProjectTypeHasPublicImplementationAbi, isValidRustIdentifier, type RustPlanContext } from "../../program/plan-context.js";
-import { rustTypeFromCarrierInContext } from "../../types/render.js";
+  rustProjectTypeHasPublicImplementationAbi, type RustPlanContext } from "../../program/plan-context.js";
 import { applyFallibleShape } from "../../types/fallible-shape.js";
 import { rustDeclarationRequiresUnsafe, rustSafetyAttributesForDeclaration } from "../../safety/explicit-safety.js";
 import { rustProjectConstructorDeadCodeDisposition } from "../../liveness/directives.js";
@@ -19,6 +17,7 @@ import { rustProjectObjectDispatchField, rustProjectObjectIdentityField, rustPro
 import { cloneExpression, type ProjectClassStateLayer } from "./model.js";
 import { rustProjectStateType } from "./names.js";
 import { planRustConstructionLayers } from "./construction-layers.js";
+import { planRustImplicitConstructorParameters } from "./construction-parameters.js";
 
 export function planProjectClassConstructor(
   definition: RustProjectTypeDefinition,
@@ -43,7 +42,7 @@ export function planProjectClassConstructor(
     for (const name of layerNames.reserved) syntheticNames.reserved.add(name);
   }
   const parameterPlan = constructor === undefined
-    ? planImplicitProjectConstructorParameters(definition, selected.signature, context)
+    ? planRustImplicitConstructorParameters(selected.signature, context.input.program.projectTypes.openCarrier(definition), context)
     : planRustCallableParameters(constructor, context, syntheticNames);
   if (parameterPlan === undefined) return undefined;
   const environmentSelection = context.input.program.classValues.forDeclaration(definition.declaration)?.environment;
@@ -115,41 +114,4 @@ export function planProjectClassConstructor(
       fallible ? { fallible: true, hasReturnValue: true, errorType: rustErrorType(boundary!),
         inferErrorTypeFromReturnType: true } : { fallible: false, hasReturnValue: true }),
   } };
-}
-
-function planImplicitProjectConstructorParameters(
-  definition: RustProjectTypeDefinition,
-  signature: RustProjectConstructorSignature,
-  context: RustPlanContext,
-): {
-  readonly params: readonly RustFunctionParam[];
-  readonly prelude: readonly never[];
-} | undefined {
-  const receiver = context.input.program.projectTypes.openCarrier(definition);
-  const params: RustFunctionParam[] = [];
-  for (const parameter of signature.parameters) {
-    const abi = context.input.program.facts.getFact(
-      parameter.parameterDeclaration,
-      rustSourceParameterAbiFactKey,
-    );
-    const carrier = abi === undefined
-      ? undefined
-      : context.input.program.projectTypes.instantiateMemberCarrier(
-          parameter.parameterDeclaration,
-          receiver,
-          abi.parameterCarrier,
-        );
-    const type = rustTypeFromCarrierInContext(carrier, context);
-    const name = rustTargetIdentifier(parameter.parameterName);
-    if (type === undefined || !isValidRustIdentifier(name)) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, parameter.parameterDeclaration),
-        "rust.backend.project-implicit-constructor-parameter",
-        "An inherited effective constructor parameter has no exact instantiated Rust ABI.",
-      ));
-      return undefined;
-    }
-    params.push({ name, type, mutable: false });
-  }
-  return { params, prelude: [] };
 }

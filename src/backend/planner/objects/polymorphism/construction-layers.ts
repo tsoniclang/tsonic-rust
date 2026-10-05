@@ -9,6 +9,7 @@ import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { diagnosticInput, type RustPlanContext } from "../../program/plan-context.js";
 import { planStatementSequence } from "../../statements/index.js";
 import { planRustExternalProjectInitialization } from "./external-construction.js";
+import { planRustImplicitConstructorParameters } from "./construction-parameters.js";
 import { projectTypeSubstitutions, projectLifetimeSubstitutions, type ProjectClassStateLayer } from "./model.js";
 
 export function planRustConstructionLayers(
@@ -46,7 +47,8 @@ export function planRustConstructionLayers(
         lifetimeSubstitutions: new Map([...context.lifetimeSubstitutions ?? [],
           ...projectLifetimeSubstitutions(base.definition, baseStorage.carrier)]),
       };
-      const baseParameters = base.constructor === undefined ? parameterPlan
+      const baseParameters = base.constructor === undefined
+        ? planRustImplicitConstructorParameters(base.signature, baseStorage.carrier, baseContext)
         : planRustCallableParameters(base.constructor, baseContext, syntheticNames);
       const args = layer.baseCall === undefined
         ? parameterPlan.params.map(parameter => ({ kind: "path" as const, path: parameter.name }))
