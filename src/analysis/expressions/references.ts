@@ -71,6 +71,7 @@ import { rustMemoryLayoutObservationKey } from "../../target-model/operations/me
 import { resolveRustClassValue } from "../objects/class-values.js";
 import { readRustNativeControl, resolveRustNativeControl } from "./native-controls.js";
 import { rustSourceCallArgumentCarriers, rustSourceCallResultWithInputLifetimes } from "../facts/source-call-lifetimes.js";
+import { retainRustSelectedSourceCallResultStorage } from "../../policy/types/resolution/call-results.js";
 
 export function resolveIdentifierCarrier(
   walk: RustFactWalk,
@@ -721,6 +722,13 @@ function applySelectedRuntimeCallableCall(
   const resultCarrier = rustSourceCallResultWithInputLifetimes(callable.result,
     finalizedParameters.map(parameter => parameter.parameterCarrier), bindings,
     rustSourceCallArgumentCarriers(expression, walk.context.ast, walk.context.facts));
+  if (!retainRustSelectedSourceCallResultStorage(selectedSignature, finalized!.targetGenericArguments,
+    resultCarrier, rustResolutionContext(walk, expression), walk.operationOptions)) {
+    appendRustDiagnostic(walk, "RUST_RUNTIME_CALLABLE_RESULT_STORAGE_MISSING",
+      "The selected runtime-callable result has no exact instantiated structural storage correspondence.",
+      expression, ["target.capability=rust.source-call.result-storage"]);
+    return undefined;
+  }
   const runtimeValue = selectedSignature.sourceStructuralMethod === undefined && selectedSignature.sourceConstructorCarrier === undefined;
   const calleeCarrier = runtimeValue ? resolveExpressionCarrier(walk, callee, sourceFile, carrier) : undefined;
   if (runtimeValue) {

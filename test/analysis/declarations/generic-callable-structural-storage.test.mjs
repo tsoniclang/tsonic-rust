@@ -4,7 +4,7 @@ import { createRustSourceTypeRegistry } from "../../../dist/analysis/project-typ
 import { retainRustCallableStructuralStorage } from "../../../dist/policy/types/resolution/structural-instantiations.js";
 import { rustGenericCallableProtocol, rustGenericCallableTargetType } from "../../../dist/target-model/types/carriers/generic-callables.js";
 import { rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from "../../../dist/target-model/types/carriers/source-types.js";
-import { resolveRustSelectedSourceCallResult, retainRustSelectedCallableResultTemplate } from "../../../dist/policy/types/resolution/call-results.js";
+import { resolveRustSelectedSourceCallResult, retainRustSelectedCallableResultTemplate, retainRustSelectedSourceCallResultStorage } from "../../../dist/policy/types/resolution/call-results.js";
 import { rustSourceTypeParameter } from "../../../dist/target-model/names/type-parameters.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 
@@ -156,6 +156,35 @@ test("stored callable invocation rejects foreign native binders, signatures and 
     assert.equal(retainRustSelectedCallableResultTemplate(input.selected, input.context, { sourceTypes: input.sourceTypes }), false);
     assert.equal(input.sourceTypes.structuralInstantiations().length, originalCount,
       "rejected native invocation never publishes a rebound structural template");
+  }
+});
+
+test("finalized runtime invocation retains its closed structural result through the shared result owner", () => {
+  const input = invocationFixture();
+  const result = rustStructuralObjectTargetType("/factory.ts", [{
+    sourceName: "value", type: input.integer, presence: "required", readonly: false,
+  }]);
+  assert.equal(retainRustSelectedSourceCallResultStorage(input.selected,
+    input.selected.targetGenericArguments, result, input.context, { sourceTypes: input.sourceTypes }), true);
+  const shape = input.sourceTypes.structuralObjectForType(input.resultType, result);
+  assert.equal(shape !== undefined, true, "finalized invocation owns exact closed field evidence");
+  assert.equal(rustTargetTypeRefEquals(shape.fields[0].resultCarrier, input.integer), true);
+});
+
+test("finalized runtime result rejects missing and foreign native argument identities", () => {
+  for (const mutate of [
+    input => { input.selected.targetGenericArguments = []; },
+    input => { input.selected.sourceSelectedMethodTypeArguments[0].typeParameter = {}; },
+  ]) {
+    const input = invocationFixture();
+    const result = rustStructuralObjectTargetType("/factory.ts", [{
+      sourceName: "value", type: input.integer, presence: "required", readonly: false,
+    }]);
+    mutate(input);
+    assert.equal(retainRustSelectedSourceCallResultStorage(input.selected, input.selected.targetGenericArguments, result,
+      input.context, { sourceTypes: input.sourceTypes }), false);
+    assert.equal(input.sourceTypes.structuralObjectForType(input.resultType, result) === undefined, true,
+      "rejected result publishes no closed structural field evidence");
   }
 });
 

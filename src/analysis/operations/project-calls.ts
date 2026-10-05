@@ -48,7 +48,7 @@ import { rustGenericCallableProtocol } from "../../target-model/types/carriers/g
 import { substituteRustValueConversion } from "../../target-model/conversions/substitution.js";
 import { recordSelectedMethodSpecialization } from "./project-method-calls.js";
 import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
-import { retainRustSelectedCallableResultTemplate, selectRustSourceCallResult } from "../../policy/types/resolution/call-results.js";
+import { retainRustSelectedCallableResultTemplate, retainRustSelectedSourceCallResultStorage, selectRustSourceCallResult } from "../../policy/types/resolution/call-results.js";
 import { rustSourceCallArgumentCarriers, rustSourceCallResultWithInputLifetimes } from "../facts/source-call-lifetimes.js";
 
 export function applySelectedProjectSourceCall(
@@ -607,9 +607,8 @@ export function applySelectedProjectSourceCall(
     return undefined;
   }
   const resultCarrier = sourceResult.selectedType;
-  if (declaredResultCarrier !== undefined && selectedSignature.sourceReturnType !== undefined &&
-    !retainRustStructuralInstantiation(selectedSignature.sourceReturnType, declaredResultCarrier,
-      nativeResultCarrier, storageContext, walk.operationOptions, new Set(), ast.typeNode(selectedDeclaration))) {
+  if (!retainRustSelectedSourceCallResultStorage(selectedSignature, targetGenericArguments,
+    nativeResultCarrier, rustResolutionContext(walk, expression), walk.operationOptions)) {
     appendRustDiagnostic(walk, "RUST_SOURCE_CALL_RESULT_STORAGE_MISSING",
       "The selected source return type has no exact instantiated structural storage correspondence.", expression,
       ["target.capability=rust.source-call.result-storage"]);

@@ -1,4 +1,4 @@
-import type { RustSelectedTargetSignature, TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustSelectedTargetSignature, RustTargetGenericArgument, TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustFlowReadProjectionFact } from "../../../target-model/types/value-projections.js";
 import type { RustProjectTypePolicy } from "../../../target-model/types/project-types.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -45,25 +45,37 @@ export function resolveRustSelectedSourceCallResult(
 ): TargetTypeRef | undefined {
   const template = selected.member.returnType;
   if (template === undefined) return undefined;
-  if (!retainRustSelectedCallableResultTemplate(selected, context, options)) return undefined;
   const arguments_ = selected.targetGenericArguments ?? [];
   const parameters = selected.member.genericParameters ?? [];
   const substitutions = rustTargetGenericBindingsForArguments(parameters, arguments_);
-  const storageContext = parameters.length === 0 ? context : bindRustSelectedCallTypeArguments(
-    selected.sourceSelectedMethodTypeArguments ?? [], arguments_, context);
-  if (substitutions === undefined || storageContext === undefined) return undefined;
+  if (substitutions === undefined) return undefined;
   const normalize = rustTypeFamilyNormalizer(options.sourceTypes.typeFamilies);
   const result = substituteRustTargetGenerics(template, substitutions.types, substitutions.lifetimes,
     substitutions.consts, normalize);
-  if (selected.sourceReturnType !== undefined && !retainRustStructuralInstantiation(selected.sourceReturnType,
-    template, result, storageContext, options, new Set(), selected.sourceDeclaration === undefined
-      ? undefined : context.ast.typeNode(selected.sourceDeclaration))) return undefined;
+  if (!retainRustSelectedSourceCallResultStorage(selected, arguments_, result, context, options)) return undefined;
   const projection = selected.sourceResultProjection;
   if (projection === undefined) return result;
   const projectionSource = substituteRustTargetGenerics(projection.sourceCarrier,
     substitutions.types, substitutions.lifetimes, substitutions.consts, normalize);
   return !rustTargetTypeRefEquals(projectionSource, result) ? undefined : substituteRustTargetGenerics(projection.selectedCarrier,
     substitutions.types, substitutions.lifetimes, substitutions.consts, normalize);
+}
+
+export function retainRustSelectedSourceCallResultStorage(
+  selected: RustSelectedTargetSignature,
+  arguments_: readonly RustTargetGenericArgument[],
+  result: TargetTypeRef,
+  context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
+): boolean {
+  const template = selected.member.returnType;
+  if (template === undefined || !retainRustSelectedCallableResultTemplate(selected, context, options)) return false;
+  const storageContext = bindRustSelectedCallTypeArguments(
+    selected.sourceSelectedMethodTypeArguments ?? [], arguments_, context);
+  return storageContext !== undefined && (selected.sourceReturnType === undefined ||
+    retainRustStructuralInstantiation(selected.sourceReturnType, template, result,
+      storageContext, options, new Set(), selected.sourceDeclaration === undefined
+        ? undefined : context.ast.typeNode(selected.sourceDeclaration)));
 }
 
 export interface RustSourceCallResult {

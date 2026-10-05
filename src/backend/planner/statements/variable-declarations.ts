@@ -89,20 +89,13 @@ function planVariableDeclaration(
   const annotatedCarrier = typeNode === undefined
     ? undefined
     : context.input.program.facts.getRuntimeCarrierFact(typeNode)?.carrier;
-  let rustType: RustType | undefined;
-  if (typeNode !== undefined) {
-    const renderedCarrier = locationStorage?.storage !== "location"
-      ? annotatedCarrier
-      : rustLocationTargetType(locationStorage.valueCarrier);
-    rustType = rustTypeFromCarrierInContext(renderedCarrier, context);
-    if (rustType === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, typeNode),
-        "rust.backend.variable",
-        "Variable type annotation has no supported Rust carrier fact.",
-      ));
-      return undefined;
-    }
+  if (typeNode !== undefined && annotatedCarrier === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, typeNode),
+      "rust.backend.variable",
+      "Variable type annotation has no finalized Rust carrier fact.",
+    ));
+    return undefined;
   }
   const declarationCarrier = context.input.program.facts.getRuntimeCarrierFact(declaration)?.carrier;
   if (declarationCarrier === undefined) {
@@ -123,24 +116,20 @@ function planVariableDeclaration(
     ));
     return undefined;
   }
-  if (rustType === undefined) {
-    const renderedCarrier = locationStorage?.storage !== "location"
-      ? declarationCarrier
-      : rustLocationTargetType(locationStorage.valueCarrier);
-    rustType = rustTypeFromCarrierInContext(renderedCarrier, context);
-    if (rustType === undefined && initializer === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, declaration),
-        "rust.backend.variable",
-        "Uninitialized variable declaration has no renderable finalized Rust carrier.",
-      ));
-      return undefined;
-    }
+  const renderedCarrier = locationStorage?.storage !== "location"
+    ? declarationCarrier
+    : rustLocationTargetType(locationStorage.valueCarrier);
+  let rustType: RustType | undefined = rustTypeFromCarrierInContext(renderedCarrier, context);
+  if (rustType === undefined && (initializer === undefined || typeNode !== undefined)) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, typeNode ?? declaration),
+      "rust.backend.variable",
+      "Variable declaration has no renderable finalized Rust carrier.",
+    ));
+    return undefined;
   }
   if (locationStorage !== undefined &&
-    (!rustTargetTypeRefEquals(declarationCarrier, locationStorage.valueCarrier) ||
-      (annotatedCarrier !== undefined &&
-        !rustTargetTypeRefEquals(annotatedCarrier, locationStorage.valueCarrier)))) {
+    !rustTargetTypeRefEquals(declarationCarrier, locationStorage.valueCarrier)) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, declaration),
       "rust.backend.typed-location-storage-carrier",
