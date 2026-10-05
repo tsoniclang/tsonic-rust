@@ -12,6 +12,21 @@ interface RustProjectView {
   readonly fields: readonly { readonly declaration: Node; readonly storageIndex: number }[];
 }
 
+export function rustProjectViewMatches(
+  view: Pick<RustProjectView, "sourceCarrier" | "targetCarrier">,
+  sourceCarrier: TargetTypeRef, targetCarrier: TargetTypeRef,
+): boolean {
+  const parameters = rustTargetGenericReferences(view.sourceCarrier);
+  const bindings = inferRustTargetGenericBindings(view.sourceCarrier, sourceCarrier, {
+    typeIdentities: new Set(parameters.typeIdentities), lifetimeIdentities: new Set(parameters.lifetimeIdentities),
+    constIdentities: new Set(parameters.constIdentities),
+  });
+  return bindings !== undefined && bindings.types.size === parameters.typeIdentities.length &&
+    bindings.lifetimes.size === parameters.lifetimeIdentities.length && bindings.consts.size === parameters.constIdentities.length &&
+    rustTargetTypeRefEquals(substituteRustTargetGenerics(view.sourceCarrier, bindings.types, bindings.lifetimes, bindings.consts), sourceCarrier) &&
+    rustTargetTypeRefEquals(substituteRustTargetGenerics(view.targetCarrier, bindings.types, bindings.lifetimes, bindings.consts), targetCarrier);
+}
+
 export function selectRustProjectViewImplementations<View extends RustProjectView>(
   views: readonly View[], context: RustAnalysisContext,
 ): readonly (View & { readonly ownerFileName: string })[] {
@@ -22,18 +37,11 @@ export function selectRustProjectViewImplementations<View extends RustProjectVie
   const selected: typeof candidates = [];
   for (const candidate of candidates) {
     const view = candidate.view;
-    const covered = selected.some(({ view: pattern, parameters }) => {
+    const covered = selected.some(({ view: pattern }) => {
       if (pattern.declaration !== view.declaration || pattern.fields.length !== view.fields.length ||
         pattern.fields.some((field, index) => field.declaration !== view.fields[index]?.declaration ||
           field.storageIndex !== view.fields[index]?.storageIndex)) return false;
-      const bindings = inferRustTargetGenericBindings(pattern.sourceCarrier, view.sourceCarrier, {
-        typeIdentities: new Set(parameters.typeIdentities), lifetimeIdentities: new Set(parameters.lifetimeIdentities),
-        constIdentities: new Set(parameters.constIdentities),
-      });
-      if (bindings === undefined || bindings.types.size !== parameters.typeIdentities.length ||
-        bindings.lifetimes.size !== parameters.lifetimeIdentities.length || bindings.consts.size !== parameters.constIdentities.length) return false;
-      return rustTargetTypeRefEquals(substituteRustTargetGenerics(pattern.sourceCarrier, bindings.types, bindings.lifetimes, bindings.consts), view.sourceCarrier) &&
-        rustTargetTypeRefEquals(substituteRustTargetGenerics(pattern.targetCarrier, bindings.types, bindings.lifetimes, bindings.consts), view.targetCarrier);
+      return rustProjectViewMatches(pattern, view.sourceCarrier, view.targetCarrier);
     });
     if (!covered) selected.push(candidate);
   }

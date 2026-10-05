@@ -10,6 +10,7 @@ import { isRustErasedNominalMember } from "../../policy/types/source-shapes.js";
 import { resolveRustProjectAccessor, type RustProjectAccessorSelection } from "../operations/provider/project-accessors.js";
 import { selectRustCallableValueAdapter } from "../callables/adapters.js";
 import type { RustCallableValueAdapter } from "../facts/callable-adapters.js";
+import { generalizeRustProjectStructuralView } from "./project-structural-views-generics.js";
 
 export interface RustProjectStructuralView {
   readonly declaration: Node;
@@ -72,7 +73,8 @@ export function selectRustProjectStructuralView(
       fields.push({ declaration: member, storageIndex: field.storageIndex, field: selected, readAdapter });
     }
   }
-  if (!walk.context.classValues.recordInstanceView({ declaration, sourceCarrier, targetCarrier, fields })) return false;
+  const view = generalizeRustProjectStructuralView({ declaration, sourceCarrier, targetCarrier, fields }, target, walk);
+  if (view === undefined || !walk.context.classValues.recordInstanceView(view)) return false;
   return fields.every(field => walk.sourceTypes.registerStructuralFieldImplementation({
     carrier: targetCarrier, storageIndex: field.storageIndex, kind: "dispatch",
   }) && (field.accessor === undefined || walk.sourceTypes.registerStructuralFieldImplementation({

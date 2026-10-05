@@ -1,7 +1,6 @@
 import { rustValueBlock } from "../../target-ast/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { emptyRustGenerics, type RustExpr, type RustImplFunction, type RustItem } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustCurrentErrorBoundary, rustErrorBoundaryForProjectMember, rustErrorType } from "../program/plan-context.js";
@@ -22,12 +21,13 @@ import { checkRustDataWrite } from "./data-writes.js";
 import { planRustSourceAccessorCall } from "../expressions/properties.js";
 import { applyRustFallibleResultExpression } from "../types/fallible-shape.js";
 import { rustStructuralDispatchType } from "./project-structural-types.js";
+import { rustProjectViewMatches } from "../../../analysis/objects/view-implementations.js";
 
 export function planRustProjectStructuralConversion(
   expression: RustExpr, sourceCarrier: TargetTypeRef, targetCarrier: TargetTypeRef, context: RustPlanContext,
 ): RustExpr | undefined {
   const view = context.input.program.classValues.instanceViews.find(view =>
-    rustTargetTypeRefEquals(view.sourceCarrier, sourceCarrier) && rustTargetTypeRefEquals(view.targetCarrier, targetCarrier));
+    rustProjectViewMatches(view, sourceCarrier, targetCarrier));
   const type = rustTypeFromCarrierInContext(targetCarrier, context);
   const definition = context.input.program.projectTypes.definitionForCarrier(sourceCarrier);
   const representation = context.input.program.objectRepresentations.representationFor(definition);
