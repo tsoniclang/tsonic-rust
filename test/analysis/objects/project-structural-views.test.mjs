@@ -13,6 +13,7 @@ import { rustSourceOptionalTargetType } from "../../../dist/target-model/types/p
 import { rustCallableProtocol, rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
 import { substituteRustTargetTypeParameters } from "../../../dist/target-model/types/carriers/substitution.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
+import { selectRustCallableValueAdapter } from "../../../dist/analysis/callables/adapters.js";
 
 const parameter = { kind: "type-parameter", identity: "source:Value", name: "Value" };
 const otherParameter = { kind: "type-parameter", identity: "destination:Value", name: "Value" };
@@ -45,7 +46,8 @@ test("monomorphic structural views retain exact carriers without introducing a g
   assert.equal(rustProjectViewMatches(view, source(number), target(number)), false);
 });
 
-function structuralFieldSelection({ callable = false } = {}) {
+function structuralFieldSelection({ callable = false, sourceParameter = type => type,
+  destinationParameter = type => type, result = type => type } = {}) {
   const declaration = { kind: "KindClassDeclaration" };
   const name = { kind: "KindIdentifier", text: "value" };
   const member = { kind: "KindPropertyDeclaration", name, parent: declaration };
@@ -54,8 +56,8 @@ function structuralFieldSelection({ callable = false } = {}) {
   const sourceType = {};
   const destinationType = {};
   const nativeText = rustStringTargetType();
-  const sourceCarrier = callable ? rustCallableTargetType([parameter], parameter) : parameter;
-  const destinationCarrier = type => callable ? rustCallableTargetType([type, number], type) : rustSourceOptionalTargetType(type);
+  const sourceCarrier = callable ? rustCallableTargetType([sourceParameter(parameter)], result(parameter)) : parameter;
+  const destinationCarrier = type => callable ? rustCallableTargetType([destinationParameter(type), number], result(type)) : rustSourceOptionalTargetType(type);
   const presence = callable ? "required" : "optional";
   const template = target(destinationCarrier(otherParameter), { presence });
   const carrier = target(destinationCarrier(nativeText), { presence });
@@ -153,6 +155,51 @@ test("closed callable-field adapters infer the open binder from selected paramet
   assert.equal(generalizeRustProjectStructuralView(contradictory, shape, walk, sources) === undefined, true,
     "contradictory callable parameter correspondence must reject");
 });
+
+for (const [name, sourceParameter, destinationParameter] of [
+  ["borrowed input", type => ({ kind: "reference", mutable: false, referent: type }), type => type],
+  ["contravariant callback input", type => rustCallableTargetType([type], number),
+    type => rustCallableTargetType([{ kind: "reference", mutable: false, referent: type }], number)],
+]) {
+  test(`closed callable-field ${name} retains the canonical parameter-only borrow correspondence`, () => {
+    const { view, shape, walk, sources, nativeText } = structuralFieldSelection({ callable: true,
+      sourceParameter, destinationParameter, result: () => number });
+    const adapter = view.fields[0].readAdapter;
+    assert.equal(adapter.kind, "conversion");
+    assert.equal(adapter.conversion.kind, "callable-adapter");
+    const parameterConversion = adapter.conversion.parameters[0];
+    assert.equal(parameterConversion !== undefined, true);
+    assert.equal(parameterConversion.kind, name === "borrowed input" ? "borrow" : "value");
+    if (name !== "borrowed input") assert.equal(parameterConversion.conversion.kind, "callable-adapter");
+    const borrow = name === "borrowed input" ? parameterConversion : parameterConversion.conversion.parameters[0];
+    assert.equal(borrow.kind, "borrow");
+    assert.equal(selectRustCallableValueAdapter(nativeText, { kind: "reference", mutable: false, referent: nativeText },
+      walk.context.projectTypes, walk.context.typeDefinitions) === undefined, true,
+      "parameter-only borrowing must not become a general value adaptation");
+    const generalized = generalizeRustProjectStructuralView(view, shape, walk, sources);
+    assert.equal(generalized !== undefined, true, "the destination binder must be inferred from the parameter, not the constant result");
+    const selected = generalized.fields[0].readAdapter;
+    assert.equal(selected.kind, "conversion");
+    assert.equal(selected.conversion.kind, "callable-adapter");
+    const provided = rustCallableProtocol(selected.sourceCarrier);
+    const expected = rustCallableProtocol(selected.targetCarrier);
+    assert.equal(provided !== undefined && expected !== undefined, true);
+    assert.equal(rustTargetTypeRefEquals(provided.parameters[0], sourceParameter(parameter)), true);
+    assert.equal(rustTargetTypeRefEquals(expected.parameters[0], destinationParameter(parameter)), true);
+    assert.equal(rustTargetTypeRefEquals(expected.result, number), true);
+    assert.equal(rustProjectViewMatches(generalized, view.sourceCarrier, view.targetCarrier), true);
+    const member = view.fields[0];
+    for (const [label, conversion] of [
+      ["invented identity", { ...adapter.conversion, parameters: [{ kind: "identity" }] }],
+      ["borrowed result", { ...adapter.conversion, result: { kind: "borrow" } }],
+      ["unselected borrow data", { ...adapter.conversion, parameters: [{ ...parameterConversion, referent: number }] }],
+    ]) {
+      const contradictory = { ...view, fields: [{ ...member,
+        readAdapter: { ...adapter, conversion } }] };
+      assert.equal(generalizeRustProjectStructuralView(contradictory, shape, walk, sources) === undefined, true, label);
+    }
+  });
+}
 
 test("nonpolymorphic structural implementations keep their selected optional and callable adapters", () => {
   const view = { declaration: {}, sourceCarrier: source(text), targetCarrier: target(text), fields: [{ callable: {} }] };

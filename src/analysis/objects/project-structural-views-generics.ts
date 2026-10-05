@@ -4,6 +4,7 @@ import { inferRustTargetGenericBindings, rustCallableProtocol, rustOptionElement
 import { rustTargetGenericArgumentEquals, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustLifetimesEqual, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
+import { rustCallableValueConversionMatches } from "../../target-model/conversions/callable.js";
 import type { RustTargetGenericBindings, RustTargetGenericParameterSet } from "../../target-model/types/carriers/generic-inference.js";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustSourceObjectShape } from "../project-types/source-type-registry.js";
@@ -180,13 +181,19 @@ function collectStructuralViewBindings(
       const selected = selectRustCallableValueAdapter(source, target, walk.context.projectTypes, walk.context.typeDefinitions);
       return selected !== undefined && collectStructuralViewBindings(expected, provided, selected, parameter, parameters, bindings, walk);
     };
-    for (const [index] of adapter.conversion.parameters.entries()) {
+    for (const [index, conversion] of adapter.conversion.parameters.entries()) {
       const expectedParameter = expected.parameters[index];
       const providedParameter = provided.parameters[index];
       const sourceParameter = source.parameters[index];
       const targetParameter = target.parameters[index];
-      if (expectedParameter === undefined || providedParameter === undefined || sourceParameter === undefined || targetParameter === undefined ||
-        !collect(expectedParameter, providedParameter, targetParameter, sourceParameter, !parameter)) return false;
+      if (expectedParameter === undefined || providedParameter === undefined || sourceParameter === undefined || targetParameter === undefined) return false;
+      if (conversion.kind === "borrow") {
+        const expectedValue = parameter ? expectedParameter.kind === "reference" ? expectedParameter.referent : undefined : expectedParameter;
+        const providedValue = parameter ? providedParameter : providedParameter.kind === "reference" ? providedParameter.referent : undefined;
+        if (!rustCallableValueConversionMatches(conversion, targetParameter, sourceParameter, walk.context.typeDefinitions) ||
+          expectedValue === undefined || providedValue === undefined || !collectStructuralViewBindings(
+            expectedValue, providedValue, undefined, !parameter, parameters, bindings, walk)) return false;
+      } else if (!collect(expectedParameter, providedParameter, targetParameter, sourceParameter, !parameter)) return false;
     }
     return adapter.conversion.result.kind === "absence" || adapter.conversion.result.kind === "discard" ||
       collect(expected.result, provided.result, source.result, target.result, parameter);
