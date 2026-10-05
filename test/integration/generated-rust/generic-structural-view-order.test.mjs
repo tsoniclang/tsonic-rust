@@ -13,7 +13,8 @@ type Tagged = { tag(): string; readonly label?: string };
 class Base {}
 class Box<T> extends Base {
   label: string = "tag";
-  constructor(public value: T) { super(); }
+  value: T;
+  constructor(value: T) { super(); this.value = value; }
   tag(): string { return this.label; }
 }
 ${orderedDeclarations(order,
@@ -38,7 +39,8 @@ type Maybe<T> = { readonly value?: T; read(): T | undefined };
 type Head<T> = { head(...values: T[]): T };
 type Default<T> = { defaulted(value: T): T };
 class Base<T> {
-  constructor(public value: T) {}
+  value: T;
+  constructor(value: T) { this.value = value; }
   read(): T { return this.value; }
   write(value: T): void { this.value = value; }
   head(first: T, ...rest: T[]): T { return first; }
@@ -84,7 +86,9 @@ function permutedSource(order) {
   return `
 type View<First, Second> = { readonly first?: First; readFirst(): First; readonly second?: Second; readSecond(): Second; writeFirst(value: First): void };
 class Base<Left, Right> {
-  constructor(public first: Left, public second: Right) {}
+  first: Left;
+  second: Right;
+  constructor(first: Left, second: Right) { this.first = first; this.second = second; }
   readFirst() { return this.first; }
   readSecond() { return this.second; }
   writeFirst(value: Left): void { this.first = value; }
@@ -115,7 +119,8 @@ function getterSource(order) {
 type Selected<T> = { readonly selected?: T };
 class Base<T> {
   fail = false;
-  constructor(public value: T) {}
+  value: T;
+  constructor(value: T) { this.value = value; }
   get selected(): T {
     if (this.fail) throw new Error("selected getter failed");
     return this.value;
@@ -167,9 +172,9 @@ for (const surfaces of [[], ["js"]]) {
   }
   test(`generic structural views reject incompatible carriers and readonly destinations in ${surfaces[0] ?? "native"}`, () => {
     for (const [name, source] of [
-      ["incompatible field", "type View<T> = { readonly value?: T }; class Box<T> { constructor(public value: T) {} } const view: View<string> = new Box<number>(1);"],
-      ["incompatible method", "type View<T> = { read(): T }; class Box<T> { constructor(public value: T) {} read(): T { return this.value; } } const view: View<string> = new Box<number>(1);"],
-      ["readonly write", "type View<T> = { readonly value?: T }; class Box<T> { constructor(public value: T) {} } const view: View<number> = new Box<number>(1); view.value = 2;"],
+      ["incompatible field", "type View<T> = { readonly value?: T }; class Box<T> { value: T; constructor(value: T) { this.value = value; } } const view: View<string> = new Box<number>(1);"],
+      ["incompatible method", "type View<T> = { read(): T }; class Box<T> { value: T; constructor(value: T) { this.value = value; } read(): T { return this.value; } } const view: View<string> = new Box<number>(1);"],
+      ["readonly write", "type View<T> = { readonly value?: T }; class Box<T> { value: T; constructor(value: T) { this.value = value; } } const view: View<number> = new Box<number>(1); view.value = 2;"],
     ]) {
       const session = createRustSession({ surfaces, files: { "index.ts": source } });
       assert.match(rustSourceDiagnostics(session), /error TS(?:2322|2540)/u, name);
