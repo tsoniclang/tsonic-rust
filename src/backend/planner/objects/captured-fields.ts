@@ -2,14 +2,11 @@ import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustCapturedFieldStorage } from "../../../target-model/types/field-storage.js";
 import { isRustCopyCarrier } from "../../../target-model/types/index.js";
-import { rustCapturedFieldStorageFactKey } from "../../../analysis/facts/receiver-captures.js";
+import { rustCapturedFieldStorageFactKey, validatedRustCapturedFieldStorageFact } from "../../../analysis/facts/receiver-captures.js";
 import type { RustExpr, RustType } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustInlineBindingStorageType, rustBindingStorageOperations } from "../expressions/binding-storage.js";
 import type { RustValueFieldLocation } from "./value-fields.js";
-import { selectRustCapturedFieldStorage } from "../../../policy/ownership/captured-field-storage.js";
-import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { closedMetadataEquals, hasExactObjectKeys } from "../../../target-model/metadata/closed-data.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { diagnosticInput } from "../program/plan-context.js";
 
@@ -18,17 +15,13 @@ export function rustCapturedFieldStorage(declaration: Node, context: RustPlanCon
   const captures = context.input.program.objectRepresentations.receiverCaptures;
   const demanded = captures.isCaptured(declaration);
   if (!demanded && fact === undefined) return undefined;
-  const carrier = context.input.program.facts.getRuntimeCarrierFact(declaration)?.carrier;
-  const storageCarrier = context.input.program.facts.getRuntimeCarrierFact(captures.storageDeclaration(declaration))?.carrier;
-  if (!demanded || fact === undefined || !hasExactObjectKeys(fact, ["storage", "valueCarrier"]) ||
-    carrier === undefined || storageCarrier === undefined || !rustTargetTypeRefEquals(fact.valueCarrier, carrier) ||
-    !closedMetadataEquals(selectRustCapturedFieldStorage(storageCarrier,
-      captures.storageReadonly(declaration), captures.isDeferred(declaration)), fact.storage)) {
+  const validated = validatedRustCapturedFieldStorageFact(declaration, context.input.program);
+  if (validated === undefined) {
     context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, declaration),
       "rust.backend.captured-field-storage", "A live field owner requires its exact canonical declaration-carrier storage fact."));
     return undefined;
   }
-  return fact.storage;
+  return validated.storage;
 }
 
 export function rustCapturedFieldType(storage: RustCapturedFieldStorage | undefined, type: RustType): RustType {
@@ -115,13 +108,45 @@ export function writeRustCapturedField(
   if (storage.kind === "shared") return undefined;
   const payload = rustCapturedFieldPayload(storage, owner);
   if (projection.length === 0) return rustBindingStorageOperations(storage.kind).write(payload, value);
-  const target: RustExpr = storage.kind === "borrow-cell"
-    ? { kind: "method-call", receiver: payload, method: "borrow_mut", args: [] } : { kind: "path", path: "captured_value" };
-  return { kind: "block", body: { statements: [
-    ...(storage.kind === "cell" ? [{ kind: "let" as const, name: "captured_value", mutable: true,
-      init: { kind: "method-call" as const, receiver: payload, method: "get", args: [] } }] : []),
-    { kind: "assign", target: projection.reduce<RustExpr>((receiver, name) => ({ kind: "field", receiver, name }), target), operator: "=", value },
-    ...(storage.kind === "cell" ? [{ kind: "expr" as const, expr: { kind: "method-call" as const,
-      receiver: payload, method: "set", args: [{ kind: "path" as const, path: "captured_value" }] } }] : []),
+  if (storage.kind === "borrow-cell") return { kind: "block", body: { statements: [
+    { kind: "let", name: "selected", mutable: false, init: { kind: "tuple-literal", elements: [
+      { kind: "reference", expr: payload }, value,
+    ] } },
+    { kind: "let", name: "_", mutable: false, init: { kind: "block", body: { statements: [
+      { kind: "let", name: "borrowed", mutable: true,
+        init: { kind: "method-call", receiver: { kind: "field", receiver: { kind: "path", path: "selected" }, name: "0" }, method: "borrow_mut", args: [] } },
+      { kind: "tail", expr: { kind: "call", path: "core::mem::replace", args: [
+        { kind: "reference", mutable: true, expr: projection.reduce<RustExpr>((receiver, name) =>
+          ({ kind: "field", receiver, name }), { kind: "path", path: "borrowed" }) },
+        { kind: "field", receiver: { kind: "path", path: "selected" }, name: "1" },
+      ] } },
+    ] } } },
   ] } };
+  const target: RustExpr = { kind: "path", path: "captured_value" };
+  return { kind: "block", body: { statements: [
+    { kind: "let", name: "selected", mutable: false, init: { kind: "tuple-literal", elements: [
+      { kind: "reference", expr: payload }, value,
+    ] } },
+    { kind: "let", name: "captured_value", mutable: true,
+      init: { kind: "method-call", receiver: { kind: "field", receiver: { kind: "path", path: "selected" }, name: "0" }, method: "get", args: [] } },
+    { kind: "assign", target: projection.reduce<RustExpr>((receiver, name) => ({ kind: "field", receiver, name }), target), operator: "=",
+      value: { kind: "field", receiver: { kind: "path", path: "selected" }, name: "1" } },
+    { kind: "expr", expr: { kind: "method-call", receiver: { kind: "field", receiver: { kind: "path", path: "selected" }, name: "0" }, method: "set",
+      args: [{ kind: "path", path: "captured_value" }] } },
+  ] } };
+}
+
+export function writeRustCapturedFieldFromStorage(
+  storage: RustCapturedFieldStorage,
+  withOwner: (project: (owner: RustExpr) => RustExpr | undefined) => RustExpr | undefined,
+  value: RustExpr,
+  releaseBorrow: boolean,
+  projection: readonly string[] = [],
+): RustExpr | undefined {
+  if (storage.kind === "shared") return undefined;
+  if (storage.kind === "borrow-cell" && releaseBorrow) {
+    const owner = withOwner(selected => ({ kind: "method-call", receiver: selected, method: "clone", args: [] }));
+    return owner === undefined ? undefined : writeRustCapturedField(storage, owner, value, projection);
+  }
+  return withOwner(owner => writeRustCapturedField(storage, owner, value, projection));
 }

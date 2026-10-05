@@ -6,7 +6,7 @@ import type { RustExpr, RustType } from "../../target-ast/nodes.js";
 import type { RustObjectRepresentation } from "../../../analysis/project-types/object-representation.js";
 import type { RustPlannedProjectFieldDispatchRole } from "./project-field-dispatch.js";
 import type { RustCapturedFieldStorage } from "../../../target-model/types/field-storage.js";
-import { rustCapturedFieldLocation, writeRustCapturedField } from "./captured-fields.js";
+import { rustCapturedFieldLocation, writeRustCapturedFieldFromStorage } from "./captured-fields.js";
 
 export const rustProjectObjectStateField = "state";
 export const rustProjectObjectIdentityField = "identity";
@@ -189,8 +189,9 @@ export function writeRustProjectObjectField(
   if (captureStorage !== undefined) {
     if (operator !== "=") return undefined;
     if (captureStorage.kind === "shared") return undefined;
-    return withRustProjectStoredField(receiver, storagePath, representation,
-      field => writeRustCapturedField(captureStorage, field, value, projection));
+    return writeRustCapturedFieldFromStorage(captureStorage,
+      project => withRustProjectStoredField(receiver, storagePath, representation, project), value,
+      representation.kind !== "value" && representation.kind !== "shared-immutable", projection);
   }
   if (representation.kind === "value") {
     return {

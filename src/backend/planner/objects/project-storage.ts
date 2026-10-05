@@ -177,11 +177,14 @@ export function readRustStoredObjectField(
     if (context.input.program.structuralShapes.definitionForCarrier(receiverCarrier)?.dispatchName !== undefined) {
       const error = rustActiveErrorType(context);
       const operand = rustTypeFromCarrierInContext(rustProgramErrorTargetType(), context);
-      if (field.property === undefined || error === undefined || operand === undefined || projection.length !== 0) return undefined;
-      const dispatch: RustExpr = { kind: "field", receiver, name: "dispatch" };
-      return { kind: "try", expr: { kind: "method-call", receiver: field.property.selfMode === "ref" ? dispatch
-        : { kind: "method-call", receiver: dispatch, method: "clone", args: [] },
-        method: field.property.getterTargetName, args: [] }, resultErrorType: error, operandErrorType: operand };
+      if (field.property === undefined || error === undefined || operand === undefined || projection.length !== 0 ||
+        context.syntheticNames === undefined) return undefined;
+      const name = allocateRustSyntheticName(context.syntheticNames, "property_receiver");
+      const dispatch: RustExpr = { kind: "field", receiver: { kind: "path", path: name }, name: "dispatch" };
+      return rustValueBlock([{ name, value: { kind: "reference", expr: receiver } }], { kind: "try", expr: {
+        kind: "method-call", receiver: field.property.selfMode === "ref" ? dispatch : cloneExpression(dispatch),
+        method: field.property.getterTargetName, args: [],
+      }, resultErrorType: error, operandErrorType: operand });
     }
     if (field.method === true && field.receiverIndependent !== true) {
       return undefined;
@@ -215,6 +218,17 @@ export function readRustStoredObjectField(
     ? undefined
     : readRustProjectObjectField(receiver, captured === undefined ? [...path, ...projection] : path, resultCarrier, representation,
       captured, captured === undefined ? [] : projection);
+}
+
+export function rustStoredObjectFieldSupportsBorrowedRead(
+  storage: "project-object" | "structural-object", receiverCarrier: TargetTypeRef, storageIndex: number,
+  context: RustPlanContext,
+): boolean {
+  if (storage === "project-object") return rustDirectProjectFieldStoragePath(receiverCarrier, storageIndex, context) !== undefined;
+  const definition = context.input.program.structuralShapes.definitionForCarrier(receiverCarrier);
+  const field = context.input.program.structuralShapes.field(receiverCarrier, storageIndex);
+  return definition !== undefined && definition.dispatchName === undefined && field?.storage === "stored" &&
+    field.method !== true && field.nativeLayout === undefined;
 }
 
 function rustStoredProjectFieldDeclaration(carrier: TargetTypeRef, storageIndex: number, context: RustPlanContext): Node | undefined {

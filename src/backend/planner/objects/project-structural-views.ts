@@ -17,6 +17,7 @@ import { isRustCopyCarrier } from "../../../target-model/types/index.js";
 import { rustStructuralViewInstance, rustStructuralViewIntoRoot, rustStructuralViewRootType,
   rustStructuralViewImplementationContext, rustStructuralViewImplementationGenerics } from "./project-structural-roots.js";
 import { rustDirectProjectFieldStoragePath } from "./project-storage.js";
+import { readRustCapturedField, rustCapturedFieldStorage, writeRustCapturedFieldFromStorage } from "./captured-fields.js";
 import { checkRustDataWrite } from "./data-writes.js";
 import { planRustSourceAccessorCall } from "../expressions/properties.js";
 import { applyRustFallibleResultExpression } from "../types/fallible-shape.js";
@@ -140,10 +141,12 @@ export function planRustProjectStructuralImplementations(declaration: Node, cont
       if (source !== undefined && source.dispatch === undefined) {
         const path = rustDirectProjectFieldStoragePath(view.sourceCarrier, source.storageIndex, context);
         if (path === undefined || type === undefined || field.property === undefined) return undefined;
+        const captured = rustCapturedFieldStorage(member.declaration, local);
         const selected = path.reduce<RustExpr>((receiver, name) => ({ kind: "field", receiver, name }), { kind: "path", path: "state" });
         const read: RustExpr = { kind: "method-call", receiver: { kind: "path", path: "self" }, method: "with", args: [{
           kind: "closure", params: [{ name: "state", byRefCopy: false }],
-          body: isRustCopyCarrier(source.resultCarrier) ? selected : { kind: "method-call", receiver: selected, method: "clone", args: [] },
+          body: captured !== undefined ? readRustCapturedField(captured, selected, source.resultCarrier)
+            : isRustCopyCarrier(source.resultCarrier) ? selected : { kind: "method-call", receiver: selected, method: "clone", args: [] },
         }] };
         const adapted = member.readAdapter === undefined ? undefined : applyRustCallableValueAdapter(read, member.readAdapter, member.declaration, local);
         if (adapted === undefined) return undefined;
@@ -152,11 +155,23 @@ export function planRustProjectStructuralImplementations(declaration: Node, cont
           body: { statements: [{ kind: "tail", expr: { kind: "call", path: "Ok", args: [adapted] } }] },
         });
         if (field.property.setterTargetName !== undefined) {
-          if (representation.kind !== "shared-mutable") return undefined;
-          let write: RustExpr = { kind: "method-call", receiver: { kind: "path", path: "self" }, method: "with_mut", args: [{
-            kind: "closure-block", params: [{ name: "state", mutable: false }], move: false, async: false,
-            body: { statements: [{ kind: "assign", target: selected, operator: "=", value: { kind: "path", path: "value" } }] },
-          }] };
+          let write: RustExpr;
+          if (captured !== undefined) {
+            const replacement = writeRustCapturedFieldFromStorage(captured, project => {
+              const body = project(selected);
+              return body === undefined ? undefined : { kind: "method-call", receiver: { kind: "path", path: "self" }, method: "with", args: [{
+                kind: "closure", params: [{ name: "state", byRefCopy: false }], body,
+              }] };
+            }, { kind: "path", path: "value" }, representation.kind === "shared-mutable");
+            if (replacement === undefined) return undefined;
+            write = replacement;
+          } else {
+            if (representation.kind !== "shared-mutable") return undefined;
+            write = { kind: "method-call", receiver: { kind: "path", path: "self" }, method: "with_mut", args: [{
+              kind: "closure-block", params: [{ name: "state", mutable: false }], move: false, async: false,
+              body: { statements: [{ kind: "assign", target: selected, operator: "=", value: { kind: "path", path: "value" } }] },
+            }] };
+          }
           if (context.input.program.frozenDataWrites.receiverForDeclaration(member.declaration) !== undefined) {
             write = checkRustDataWrite("receiver", { kind: "path", path: "self" }, write, rustErrorType(boundary));
           }
