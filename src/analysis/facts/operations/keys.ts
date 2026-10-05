@@ -65,6 +65,12 @@ export const rustBindingStorageFactKey: RustPlanKey<RustBindingStorageFact> = de
 );
 
 export interface RustClosureCaptureFact {
+  readonly receivers: readonly {
+    readonly owner: Node;
+    readonly reference: Node;
+    readonly references: readonly Node[];
+    readonly carrier: TargetTypeRef;
+  }[];
   readonly receiverFields: readonly (RustReceiverFieldCapture & {
     readonly carrier: TargetTypeRef;
     readonly storage: RustCapturedFieldStorage;
@@ -84,6 +90,13 @@ export const rustClosureCaptureFactKey: RustPlanKey<RustClosureCaptureFact> = de
   "closureCaptures",
   (left, right) => closureCaptureShapeMatches(left) && closureCaptureShapeMatches(right) &&
     left.invocationOwner === right.invocationOwner &&
+    left.receivers.length === right.receivers.length &&
+    left.receivers.every((capture, index) => {
+      const other = right.receivers[index];
+      return other !== undefined && capture.owner === other.owner && capture.reference === other.reference &&
+        rustTargetTypeRefEquals(capture.carrier, other.carrier) && capture.references.length === other.references.length &&
+        capture.references.every((reference, offset) => reference === other.references[offset]);
+    }) &&
     left.receiverFields.length === right.receiverFields.length &&
     left.receiverFields.every((capture, index) => {
       const other = right.receiverFields[index];
@@ -107,11 +120,15 @@ export const rustClosureCaptureFactKey: RustPlanKey<RustClosureCaptureFact> = de
 );
 
 function closureCaptureShapeMatches(value: RustClosureCaptureFact): boolean {
-  if (!isMetadataRecord(value) || !hasExactObjectKeys(value, ["receiverFields", "captures",
+  if (!isMetadataRecord(value) || !hasExactObjectKeys(value, ["receivers", "receiverFields", "captures",
     ...["invocationOwner", "recursiveDeclaration"].filter(key => Object.prototype.hasOwnProperty.call(value, key))]) ||
     value.invocationOwner !== undefined && value.invocationOwner !== "shared-state" ||
-    !isDenseDataArray(value.receiverFields) || !isDenseDataArray(value.captures)) return false;
-  return value.receiverFields.every(capture => isMetadataRecord(capture) &&
+    !isDenseDataArray(value.receivers) || !isDenseDataArray(value.receiverFields) || !isDenseDataArray(value.captures)) return false;
+  return value.receivers.every(capture => isMetadataRecord(capture) &&
+    hasExactObjectKeys(capture, ["owner", "reference", "references", "carrier"]) &&
+    capture.owner !== undefined && capture.carrier !== undefined && isDenseDataArray(capture.references) &&
+    capture.references.length > 0 && capture.reference === capture.references[0]) &&
+    value.receiverFields.every(capture => isMetadataRecord(capture) &&
     hasExactObjectKeys(capture, ["declaration", "reference", "receiver", "references", "carrier", "storage"]) &&
     capture.declaration !== undefined && capture.receiver !== undefined && capture.carrier !== undefined &&
     isRustCapturedFieldStorage(capture.storage) && isDenseDataArray(capture.references) &&

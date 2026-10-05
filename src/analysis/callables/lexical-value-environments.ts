@@ -34,7 +34,7 @@ export function recordRustLexicalValueEnvironments(walk: RustFactWalk, lexical: 
         });
         captures.push({ declaration: capture.declaration, reference: capture.reference, carrier, storage: storage.storage });
       }
-      facts.set(node, rustClosureCaptureFactKey, { receiverFields: [], captures });
+      facts.set(node, rustClosureCaptureFactKey, { receivers: [], receiverFields: [], captures });
     }
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };

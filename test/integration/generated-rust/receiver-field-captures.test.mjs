@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { receiverFieldCapturesSource } from "../../../../tsonic/test/fixtures/receiver-field-captures.mjs";
 import { receiverFieldCaptureEdges, receiverFieldFreezeSource, receiverFieldFreezeEdges } from "../../../../tsonic/test/fixtures/receiver-field-capture-edges.mjs";
-import { compileRust } from "../../helpers/rust-session.mjs";
+import { compileRust, rustSourceText } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 for (const surface of ["native", "js"]) {
@@ -11,7 +11,7 @@ for (const surface of ["native", "js"]) {
       target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": receiverFieldCapturesSource +
         '\nexport function main(): void { if (!run()) throw new Error("receiver field owners"); }' } });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 6).map(row => row.message.slice(0, 256)).join("\n"));
-    assert.equal(/unsafe\s*\{|MaybeUninit|assume_init|transmute|downcast_unchecked/u.test([...result.artifacts.values()].join("\n")), false);
+    assert.equal(/unsafe\s*\{|MaybeUninit|assume_init|transmute|downcast_unchecked/u.test(rustSourceText(result)), false);
     validateGeneratedProject(`receiver-field-captures-${surface}`, result.artifacts, { run: true });
   });
 }

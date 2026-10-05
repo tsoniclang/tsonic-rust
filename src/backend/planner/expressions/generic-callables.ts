@@ -9,7 +9,7 @@ import { diagnosticInput, rustSourceBindingPath } from "../program/plan-context.
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planRustCaptureValue } from "./typed-locations.js";
-import { planRustCapturedReceiverFields } from "./receiver-captures.js";
+import { planRustCapturedReceiverFields, planRustCapturedReceivers } from "./receiver-captures.js";
 import { rustValueBlock } from "../../target-ast/value-block.js";
 
 export function planRustGenericCallableValue(
@@ -39,14 +39,18 @@ export function planRustGenericCallableValue(
   const receivers = planRustCapturedReceiverFields(node, implementation.receiverFields, context, context,
     { staticStorage: false, offset: implementation.captures.length });
   if (receivers === undefined) return undefined;
-  for (const [index, binding] of receivers.bindings.entries()) fields.push({
+  const whole = planRustCapturedReceivers(node, implementation.receivers, context, context,
+    { staticStorage: false, offset: implementation.captures.length + implementation.receiverFields.length });
+  if (whole === undefined) return undefined;
+  const receiverBindings = [...receivers.bindings, ...whole.bindings];
+  for (const [index, binding] of receiverBindings.entries()) fields.push({
     name: `capture_${implementation.captures.length + index}`, value: { kind: "path", path: binding.name },
   });
   if (definition.signature.environmentParameters.length > 0) {
     fields.push({ name: "marker", value: { kind: "path", path: "core::marker::PhantomData" } });
   }
   const state: RustExpr = { kind: "struct-literal", path, fields };
-  return rustValueBlock(receivers.bindings, { kind: "associated-call", owner, method: implementation.variantName,
+  return rustValueBlock(receiverBindings, { kind: "associated-call", owner, method: implementation.variantName,
     args: [implementation.storage === "shared" ? { kind: "call", path: "alloc::rc::Rc::new", args: [state] } : state],
   });
 }

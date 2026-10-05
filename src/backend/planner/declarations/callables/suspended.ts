@@ -35,13 +35,16 @@ export function planRustSuspendedCallableItems(context: RustPlanContext): readon
 
 function planImplementation(implementation: RustSuspendedCallableImplementation, context: RustPlanContext): readonly RustItem[] | undefined {
   const { declaration } = implementation;
-  if (implementation.storage.length !== implementation.captures.length + implementation.receiverFields.length ||
+  if (implementation.storage.length !== implementation.captures.length + implementation.receiverFields.length + implementation.receivers.length ||
     !implementation.captures.every((capture, index) => {
       const carrier = substituteElidedLifetime(capture.carrier, rustStaticLifetime);
       return rustTargetTypeRefEquals(implementation.storage[index],
         capture.storage === "location" ? rustLocationTargetType(carrier) : carrier);
     }) || !implementation.receiverFields.every((capture, index) => rustTargetTypeRefEquals(
-      implementation.storage[implementation.captures.length + index], substituteElidedLifetime(capture.carrier, rustStaticLifetime)))) return undefined;
+      implementation.storage[implementation.captures.length + index], substituteElidedLifetime(capture.carrier, rustStaticLifetime))) ||
+    !implementation.receivers.every((capture, index) => rustTargetTypeRefEquals(
+      implementation.storage[implementation.captures.length + implementation.receiverFields.length + index],
+      substituteElidedLifetime(capture.carrier, rustStaticLifetime)))) return undefined;
   const scoped: RustPlanContext = { ...rustGeneratedTypeParameterContext(
     implementation.parameters.filter(parameter => parameter.kind === "type").map(rustTypeParameterFromSourceContract), [], context),
     callableDeclaration: declaration,
@@ -68,7 +71,8 @@ function planImplementation(implementation: RustSuspendedCallableImplementation,
     ...implementation.receiverFields.map((capture, index) => {
       const type = rustTypeFromCarrierInContext(implementation.storage[implementation.captures.length + index]!, scoped);
       return type === undefined ? undefined : rustCapturedReceiverFieldType(capture, type, scoped);
-    })];
+    }), ...implementation.receivers.map((capture, index) => rustTypeFromCarrierInContext(
+      implementation.storage[implementation.captures.length + implementation.receiverFields.length + index]!, scoped))];
   const requirements = context.input.program.declarationGenericRequirements.contractFor(declaration);
   if (protocol === undefined || argumentsType === undefined || resultType === undefined || target === undefined ||
       requirements === undefined || storage.some(type => type === undefined)) return undefined;

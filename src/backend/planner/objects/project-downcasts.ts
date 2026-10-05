@@ -149,7 +149,7 @@ export function planRustProjectTypeTest(
   context: RustPlanContext,
 ): RustExpr | undefined {
   if (fact.lowering.kind === "closed-native") {
-    const selected = planRustClosedNativeProjection(node, expression, fact.sourceCarrier, fact.targetCarrier, context);
+    const selected = planRustClosedNativeProjection(node, expression, fact, context);
     return selected === undefined ? undefined
       : { kind: "option-presence", receiver: selected.expression, present: true };
   }

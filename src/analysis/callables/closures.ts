@@ -333,7 +333,7 @@ export function resolveFunctionExpressionCarrier(
     ...captures,
     ...((generator !== undefined || asynchronous !== undefined) &&
         rustCallableProtocol(closureCarrier) !== undefined &&
-        (captures.captures.length > 0 || captures.receiverFields.length > 0 || captures.recursiveDeclaration !== undefined)
+        (captures.captures.length > 0 || captures.receiverFields.length > 0 || captures.receivers.length > 0 || captures.recursiveDeclaration !== undefined)
       ? { invocationOwner: "shared-state" as const } : {}),
   }, [
     { message: "rust exact callable-expression captures" },
@@ -382,12 +382,20 @@ export function collectRustLexicalCaptures(
     if (storage === undefined || carrier === undefined) return undefined;
     receiverFields.push({ ...capture, storage: storage.storage, carrier });
   }
-  if (selected.receivers.some(receiver => receiver.references.some(reference =>
-    !walk.context.objectRepresentations.receiverCaptures.capturesReceiver(reference)))) {
-    appendRustDiagnostic(walk, "RUST_RECEIVER_CAPTURE_NOT_CLOSED",
-      "A whole native receiver capture requires an exact retained owner contract.", expression,
-      ["target.capability=rust.callable.receiver-owner"]);
-    return undefined;
+  const receivers: import("../facts/keys.js").RustClosureCaptureFact["receivers"][number][] = [];
+  for (const receiver of walk.context.objectRepresentations.receiverCaptures.receiversFor(expression)) {
+    const carrier = walk.context.facts.get(receiver.reference, rustRuntimeCarrierKey)?.carrier;
+    const definition = carrier === undefined ? undefined : walk.context.projectTypes.definitionForCarrier(carrier);
+    const representation = walk.context.objectRepresentations.representationFor(definition);
+    if (carrier === undefined || representation === undefined || representation.kind === "value" ||
+      !receiver.references.every(reference => rustTargetTypeRefEquals(
+        walk.context.facts.get(reference, rustRuntimeCarrierKey)?.carrier, carrier))) {
+      appendRustDiagnostic(walk, "RUST_RECEIVER_CAPTURE_NOT_CLOSED",
+        "A whole native receiver capture requires its exact retained native owner and selected carrier.", expression,
+        ["target.capability=rust.callable.receiver-owner"]);
+      return undefined;
+    }
+    receivers.push({ ...receiver, carrier });
   }
   if (selected.selfReferences.length > 0 && ast.kindName(expression) !== "KindClassDeclaration" &&
     ast.kindName(expression) !== "KindClassExpression") recursiveDeclaration = expression;
@@ -414,7 +422,7 @@ export function collectRustLexicalCaptures(
     }, [{ message: "rust captured mutable binding storage" }]);
     captures.set(declaration, { declaration, reference, carrier, ...selectedStorage });
   }
-  return { receiverFields, captures: [...captures.values()], ...(recursiveDeclaration === undefined ? {} : { recursiveDeclaration }) };
+  return { receivers, receiverFields, captures: [...captures.values()], ...(recursiveDeclaration === undefined ? {} : { recursiveDeclaration }) };
 }
 
 function callableExpressionValueDeclaration(

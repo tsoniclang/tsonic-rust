@@ -44,7 +44,7 @@ function input() {
     if (key === rustContextualValueConversionFactKey && node.conversion !== undefined) return { conversion: node.conversion };
     if (!closures.includes(node)) return undefined;
     if (key === rustTargetOperationFactKey) return { kind: "closure", resultCarrier: node.carrier };
-    if (key === rustClosureCaptureFactKey) return { receiverFields: [], captures: node.captures ?? [] };
+    if (key === rustClosureCaptureFactKey) return { receivers: [], receiverFields: [], captures: node.captures ?? [] };
     return undefined;
   } };
   const names = { nameForDeclaration: () => undefined, functionNameForDeclaration: () => undefined, callableValueNameForDeclaration: () => undefined };

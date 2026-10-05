@@ -234,7 +234,7 @@ export function planRustValueProjection(
     }, node, context);
   }
   if (fact.kind === "closed-native") {
-    const selected = planRustClosedNativeProjection(node, expression, fact.sourceCarrier, fact.selectedCarrier, context);
+    const selected = planRustClosedNativeProjection(node, expression, fact, context);
     if (selected === undefined) return undefined;
     const name = allocateRustSyntheticName(context.syntheticNames ??
       createRustSyntheticNameState(context.input.program.source.ast, node, []), "native_owner");

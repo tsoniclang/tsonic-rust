@@ -1,7 +1,7 @@
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { Node } from "@tsonic/tsts";
 import { isRustProgramErrorCarrier, rustOptionElementCarrier } from "../../../target-model/types/index.js";
-import { selectRustProjectTypeTestPlan } from "../../../policy/operations/operators/type-tests.js";
+import type { RustProjectTypeTestPlan } from "../../../target-model/operations/type-tests.js";
+import type { RustFlowReadProjectionFact } from "../../../target-model/types/value-projections.js";
 import type { RustExpr, RustType } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustCurrentErrorBoundary } from "../program/plan-context.js";
@@ -18,13 +18,14 @@ export interface RustClosedNativeProjection {
 export function planRustClosedNativeProjection(
   node: Node,
   expression: RustExpr,
-  sourceCarrier: TargetTypeRef,
-  targetCarrier: TargetTypeRef,
+  evidence: RustProjectTypeTestPlan | Extract<RustFlowReadProjectionFact, { readonly kind: "closed-native" }>,
   context: RustPlanContext,
 ): RustClosedNativeProjection | undefined {
-  if (selectRustProjectTypeTestPlan(sourceCarrier, targetCarrier, context.input.program.projectTypes)?.lowering.kind !== "closed-native") {
+  if ("lowering" in evidence && evidence.lowering.kind !== "closed-native") {
     return undefined;
   }
+  const sourceCarrier = evidence.sourceCarrier;
+  const targetCarrier = "lowering" in evidence ? evidence.targetCarrier : evidence.selectedCarrier;
   const definition = context.input.program.projectTypes.definitionForCarrier(targetCarrier);
   const representation = context.input.program.objectRepresentations.representationFor(definition);
   const type = rustTypeFromCarrierInContext(targetCarrier, context);

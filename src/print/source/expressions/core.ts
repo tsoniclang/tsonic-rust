@@ -211,7 +211,7 @@ function printRustMatchExpression(
 
 function printConditionalArm(expression: RustExpr, allowInnerAttributes = true): string {
   if (expression.kind === "tuple-literal" && expression.elements.length === 0) return "";
-  if (expression.kind === "block" &&
+  if (expression.kind === "block" && expression.label === undefined &&
     (allowInnerAttributes || (expression.body.innerAttrs?.length ?? 0) === 0)) {
     return printRustBlockExpressionContents(expression);
   }
@@ -224,7 +224,7 @@ function printConditionalArm(expression: RustExpr, allowInnerAttributes = true):
 
 function printConditionalAlternative(expression: RustExpr): string {
   if (expression.kind === "conditional" || expression.kind === "if-let") return printRustExpr(expression);
-  if (expression.kind === "block") {
+  if (expression.kind === "block" && expression.label === undefined) {
     const chained = printRustElseBranch(expression.body);
     if (chained !== undefined) return chained;
   }

@@ -20,6 +20,7 @@ export interface RustSuspendedCallableImplementation {
   readonly carrier: TargetTypeRef;
   readonly captures: RustClosureCaptureFact["captures"];
   readonly receiverFields: RustClosureCaptureFact["receiverFields"];
+  readonly receivers: RustClosureCaptureFact["receivers"];
   readonly storage: readonly TargetTypeRef[];
   readonly environment: ReturnType<typeof rustTargetGenericReferences>;
   readonly signature: ReturnType<typeof rustTargetGenericReferences>;
@@ -60,9 +61,10 @@ export function createRustSuspendedCallablePlan(
     const captureFact = facts.getFact(declaration, rustClosureCaptureFactKey);
     const captures = captureFact?.captures;
     const receiverFields = captureFact?.receiverFields;
+    const receivers = captureFact?.receivers;
     const carrier = operation?.kind === "closure" ? operation.resultCarrier : undefined;
     const protocol = rustCallableProtocol(carrier);
-    if (carrier === undefined || protocol === undefined || captures === undefined || receiverFields === undefined) {
+    if (carrier === undefined || protocol === undefined || captures === undefined || receiverFields === undefined || receivers === undefined) {
       issues.push({ subject: declaration, message: "A suspended callable owner has no exact invocation signature and capture storage." });
       continue;
     }
@@ -71,7 +73,8 @@ export function createRustSuspendedCallablePlan(
     const storage = Object.freeze([...captures.map(capture => {
       const carrier = substituteElidedLifetime(capture.carrier, rustStaticLifetime);
       return capture.storage === "location" ? rustLocationTargetType(carrier) : carrier;
-    }), ...receiverFields.map(capture => substituteElidedLifetime(capture.carrier, rustStaticLifetime))]);
+    }), ...receiverFields.map(capture => substituteElidedLifetime(capture.carrier, rustStaticLifetime)),
+    ...receivers.map(capture => substituteElidedLifetime(capture.carrier, rustStaticLifetime))]);
     const environment = rustTargetGenericReferences({ kind: "tuple", elements: storage });
     const authoredSignature = rustTargetGenericReferences({ kind: "tuple", elements: [...storage, ...protocol.parameters, protocol.result] });
     const lifetime: Extract<RustLifetimeRef, { readonly kind: "parameter" }> = {
@@ -93,7 +96,7 @@ export function createRustSuspendedCallablePlan(
       issues.push({ subject: declaration, message: "A suspended callable state lost its exact enclosing generic parameter declarations." });
       continue;
     }
-    implementations.set(declaration, Object.freeze({ declaration, sourceFileName, carrier, captures, receiverFields, storage,
+    implementations.set(declaration, Object.freeze({ declaration, sourceFileName, carrier, captures, receiverFields, receivers, storage,
       stateName: allocateRustGeneratedName(usedNames, `CallableState${identity.slice(0, 12)}`), environment, signature,
       parameters,
       ...(bound === undefined ? {} : { elision: Object.freeze({ parameterIndex: bound.parameterIndex, lifetime }) }),

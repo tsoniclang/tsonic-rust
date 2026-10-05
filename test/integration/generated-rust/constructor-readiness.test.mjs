@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { constructorReadinessSource, constructorLinkageFiles, parameterPropertiesSource } from "../../../../tsonic/test/fixtures/constructor-readiness.mjs";
-import { compileRust } from "../../helpers/rust-session.mjs";
+import { compileRust, rustSourceText } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 for (const surfaces of [[], ["js"]]) {
@@ -22,7 +22,7 @@ for (const surfaces of [[], ["js"]]) {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
       files: { "index.ts": `${constructorReadinessSource}\nexport function main(): void { if (!run()) throw new Error("constructor-readiness"); }` } });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 5).map(row => row.message.slice(0, 256)).join("\n"));
-    const generated = [...result.artifacts.values()].join("\n");
+    const generated = rustSourceText(result);
     assert.doesNotMatch(generated, /MaybeUninit|assume_init|transmute|downcast_unchecked/u);
     validateGeneratedProject(`constructor-readiness-${lane}`, result.artifacts, { run: true });
   });

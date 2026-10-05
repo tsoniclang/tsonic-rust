@@ -61,7 +61,7 @@ import { planRustParameterEntryConversion } from "../declarations/callables/para
 import { planRustCallableLeadingParameters } from "../declarations/callables/leading-parameters.js";
 import { finalizedConversionIsValid } from "../../../analysis/facts/finalized-operation/conversions.js";
 import { applyFinalizedValueConversion } from "./value-conversions.js";
-import { planRustCapturedReceiverFields } from "./receiver-captures.js";
+import { planRustCapturedReceiverFields, planRustCapturedReceivers } from "./receiver-captures.js";
 
 export function planCallableExpression(
   node: Node,
@@ -112,7 +112,7 @@ export function planRustCallableExpressionBody(
     return undefined;
   }
   if (closureFact.resultCarrier.kind === "function-pointer" &&
-    (captureFact.captures.length !== 0 || captureFact.receiverFields.length !== 0 || captureFact.recursiveDeclaration !== undefined)) {
+    (captureFact.captures.length !== 0 || captureFact.receiverFields.length !== 0 || captureFact.receivers.length !== 0 || captureFact.recursiveDeclaration !== undefined)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.function-pointer-capture",
@@ -328,7 +328,12 @@ export function planRustCallableExpressionBody(
     ...(ownedStateName === undefined ? {} : { sharedStateName: ownedStateName }),
   });
   if (receiverEnvironment === undefined) return undefined;
-  const captureBindings = [...environment.bindings, ...receiverEnvironment.bindings];
+  const wholeEnvironment = planRustCapturedReceivers(node, captureFact.receivers, context, receiverEnvironment.context, {
+    staticStorage: nativeClosureProtocol === undefined, offset: captureFact.captures.length + captureFact.receiverFields.length,
+    ...(ownedStateName === undefined ? {} : { sharedStateName: ownedStateName }),
+  });
+  if (wholeEnvironment === undefined) return undefined;
+  const captureBindings = [...environment.bindings, ...receiverEnvironment.bindings, ...wholeEnvironment.bindings];
   const capturedBindings = [...environment.capturedBindings];
   let recursiveName: string | undefined;
   if (captureFact.recursiveDeclaration !== undefined) {
@@ -350,13 +355,14 @@ export function planRustCallableExpressionBody(
     });
   }
   const callableClosureContext: RustPlanContext = {
-    ...receiverEnvironment.context,
+    ...wholeEnvironment.context,
     functionAbsenceReturnCarrier: undefined,
     capturedBindings,
   };
   const bindingStatements: RustStmt[] = [];
   let closureParams: { name: string; mutable: boolean; byRefCopy?: boolean }[];
-  let closureMove = nativeClosureProtocol !== undefined && (captureFact.captures.length > 0 || captureFact.receiverFields.length > 0);
+  let closureMove = nativeClosureProtocol !== undefined &&
+    (captureFact.captures.length > 0 || captureFact.receiverFields.length > 0 || captureFact.receivers.length > 0);
   if (callableProtocol === undefined) {
     closureParams = [
       ...leadingParameterPlans.map((parameter) => ({

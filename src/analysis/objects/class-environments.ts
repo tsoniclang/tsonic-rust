@@ -74,7 +74,7 @@ export function selectRustClassEnvironment(walk: RustFactWalk, declaration: Node
   if (moduleClass && !constructorValue) return { kind: "none" };
   const captureRoots = ast.members(declaration).filter((member): member is Node => member !== undefined &&
     !(ast.hasModifierKind(member, "static") && ast.kindName(member) === "KindPropertyDeclaration"));
-  const selected = moduleClass ? { receiverFields: [], captures: [], recursiveDeclaration: undefined } : collectRustLexicalCaptures(walk, declaration, captureRoots);
+  const selected = moduleClass ? { receivers: [], receiverFields: [], captures: [], recursiveDeclaration: undefined } : collectRustLexicalCaptures(walk, declaration, captureRoots);
   if (selected === undefined || selected.recursiveDeclaration !== undefined) {
     return { kind: "unresolved", reason: "Class captures require exact lexical binding and storage facts." };
   }

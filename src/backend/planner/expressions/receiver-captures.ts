@@ -14,6 +14,74 @@ import { substituteRustTargetGenerics } from "../../../target-model/types/index.
 import { planExpression } from "./entry.js";
 import { checkRustDataWrite } from "../objects/data-writes.js";
 import { rustValueBlock } from "../../target-ast/value-block.js";
+import { planRustReceiverAlias } from "../objects/polymorphism/receiver-aliases.js";
+
+export function validateRustCapturedReceivers(
+  node: Node, receivers: RustClosureCaptureFact["receivers"], context: RustPlanContext,
+): boolean {
+  const selected = context.input.program.objectRepresentations.receiverCaptures.receiversFor(node);
+  const valid = selected.length === receivers.length && selected.every((source, index) => {
+    const capture = receivers[index];
+    const definition = capture === undefined ? undefined : context.input.program.projectTypes.definitionForCarrier(capture.carrier);
+    const representation = context.input.program.objectRepresentations.representationFor(definition);
+    return capture !== undefined && representation !== undefined && representation.kind !== "value" &&
+      source.owner === capture.owner && source.reference === capture.reference &&
+      source.references.length === capture.references.length && source.references.every((reference, offset) =>
+        reference === capture.references[offset] &&
+        rustTargetTypeRefEquals(context.input.program.facts.getRuntimeCarrierFact(reference)?.carrier, capture.carrier));
+  });
+  if (!valid) context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+    "rust.backend.receiver-capture", "A retained native receiver differs from its sealed owner, source references or carrier."));
+  return valid;
+}
+
+export function planRustCapturedReceivers(
+  node: Node, receivers: RustClosureCaptureFact["receivers"], creation: RustPlanContext,
+  invocation: RustPlanContext, options: { readonly staticStorage: boolean; readonly sharedStateName?: string; readonly offset: number },
+): { readonly bindings: readonly { readonly name: string; readonly value: RustExpr }[];
+  readonly context: RustPlanContext } | undefined {
+  if (!validateRustCapturedReceivers(node, receivers, creation)) return undefined;
+  const bindings: { readonly name: string; readonly value: RustExpr }[] = [];
+  const retained: RustExpr[] = [];
+  for (const [index, capture] of receivers.entries()) {
+    if (!requireRustCarrierRequirements(capture.carrier, options.staticStorage ? ["clone", "static"] : ["clone"],
+      capture.reference, { ...creation, callableDeclaration: node })) return undefined;
+    if (options.sharedStateName !== undefined) {
+      retained.push({ kind: "field", receiver: { kind: "field", receiver: { kind: "path", path: options.sharedStateName }, name: "state" },
+        name: String(options.offset + index) });
+      continue;
+    }
+    if (creation.syntheticNames === undefined) return undefined;
+    const source = planExpression(capture.reference, creation);
+    const value = source === undefined ? undefined : creation.projectDispatchRoot === undefined ||
+      creation.expressionOverrides?.has(capture.reference) === true ? source
+      : planRustReceiverAlias(source, capture.carrier, capture.carrier, creation, true);
+    if (value === undefined) {
+      creation.diagnostics.push(missingFactDiagnostic(diagnosticInput(creation, capture.reference),
+        "rust.backend.receiver-owner", "A lexical receiver capture lost its exact existing native ownership handle."));
+      return undefined;
+    }
+    const name = allocateRustSyntheticName(creation.syntheticNames, "captured_receiver");
+    bindings.push({ name, value });
+    retained.push({ kind: "path", path: name });
+  }
+  return { bindings, context: rustCapturedReceiverContext(receivers, invocation, index => retained[index]!) };
+}
+
+export function rustCapturedReceiverContext(
+  receivers: RustClosureCaptureFact["receivers"], context: RustPlanContext, ownerFor: (index: number) => RustExpr,
+): RustPlanContext {
+  if (receivers.length === 0) return context;
+  const overrides = new Map(context.expressionOverrides ?? []);
+  for (const [index, capture] of receivers.entries()) {
+    const carrier = substituteRustTargetGenerics(capture.carrier, context.typeParameterSubstitutions ?? new Map(),
+      context.lifetimeSubstitutions ?? new Map());
+    for (const reference of capture.references) overrides.set(reference, {
+      expression: ownerFor(index), carrier, valueForm: "storage",
+    });
+  }
+  return { ...context, expressionOverrides: overrides, projectDispatchRoot: undefined };
+}
 
 export function rustCapturedReceiverFieldType(
   capture: RustClosureCaptureFact["receiverFields"][number], type: RustType, context: RustPlanContext,

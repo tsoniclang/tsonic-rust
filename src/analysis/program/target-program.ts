@@ -166,7 +166,7 @@ export function analyzeRustTargetProgram(
         if (carrier === undefined) return undefined;
         captures.push({ declaration: capture.declaration, reference: capture.reference, carrier, storage });
       }
-      return { receiverFields: [], captures };
+      return { receivers: [], receiverFields: [], captures };
     },
     captureRootsFor: (closure) => {
       const selection = lexicalFunctions.forDeclaration(closure);

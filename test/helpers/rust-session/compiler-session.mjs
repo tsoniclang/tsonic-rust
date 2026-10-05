@@ -416,3 +416,12 @@ export function artifactText(result, path) {
   }
   return artifact.text;
 }
+
+export function rustSourceText(result) {
+  const sources = result.artifacts.filter(artifact => artifact.path.endsWith(".rs"));
+  if (sources.length === 0) throw new Error("Rust source assertions require an actual generated source artifact.");
+  return sources.map(artifact => {
+    if (typeof artifact.text !== "string") throw new Error(`Rust source artifact '${artifact.path}' has no text.`);
+    return artifact.text;
+  }).join("\n");
+}

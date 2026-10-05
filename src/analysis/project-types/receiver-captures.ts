@@ -11,10 +11,17 @@ export interface RustReceiverFieldCapture {
   readonly references: readonly Node[];
 }
 
+export interface RustReceiverCapture {
+  readonly owner: Node;
+  readonly reference: Node;
+  readonly references: readonly Node[];
+}
+
 export interface RustReceiverFieldCaptureQueries {
   readonly issues: readonly { readonly node: Node; readonly reason: string }[];
   readonly fields: readonly Node[];
   capturesFor(callable: Node): readonly RustReceiverFieldCapture[];
+  receiversFor(callable: Node): readonly RustReceiverCapture[];
   capturesReceiver(reference: Node): boolean;
   isCaptured(declaration: Node): boolean;
   isDeferred(declaration: Node): boolean;
@@ -35,6 +42,7 @@ export function analyzeRustReceiverFieldCaptures(input: {
   const fields = new Set<Node>();
   const receivers = new Set<Node>();
   const selections = new Map<Node, readonly RustReceiverFieldCapture[]>();
+  const wholeReceivers = new Map<Node, readonly RustReceiverCapture[]>();
   const related = new Map<Node, Set<Node>>();
   const pending: Node[] = [...input.sourceFiles];
   let visited = 0;
@@ -56,7 +64,9 @@ export function analyzeRustReceiverFieldCaptures(input: {
         continue;
       }
       const captures = new Map<Node, { readonly receiver: Node; readonly references: Node[] }>();
+      const retained: RustReceiverCapture[] = [];
       for (const receiver of selected?.receivers ?? []) {
+        const selectedFields: { readonly declaration: Node; readonly reference: Node; readonly access: Node }[] = [];
         for (const reference of receiver.references) {
           let expression = reference;
           let access = input.ast.parent(expression);
@@ -75,13 +85,22 @@ export function analyzeRustReceiverFieldCaptures(input: {
           const declaration = member?.selectedDeclaration;
           if (declaration === undefined || !input.isStoredField(declaration) ||
             rustProjectObjectField(declaration, input.ast) === undefined) continue;
-          const capture = captures.get(declaration) ?? { receiver: reference, references: [] };
-          capture.references.push(access);
-          captures.set(declaration, capture);
-          fields.add(declaration);
-          receivers.add(reference);
+          selectedFields.push({ declaration, reference, access });
+        }
+        if (selectedFields.length !== receiver.references.length) {
+          if (receiver.references.length > 0) retained.push(Object.freeze({ owner: receiver.owner,
+            reference: receiver.references[0]!, references: Object.freeze([...receiver.references]) }));
+          continue;
+        }
+        for (const selected of selectedFields) {
+          const capture = captures.get(selected.declaration) ?? { receiver: selected.reference, references: [] };
+          capture.references.push(selected.access);
+          captures.set(selected.declaration, capture);
+          fields.add(selected.declaration);
+          receivers.add(selected.reference);
         }
       }
+      wholeReceivers.set(node, Object.freeze(retained));
       selections.set(node, Object.freeze([...captures].map(([declaration, capture]) => Object.freeze({
         declaration, receiver: capture.receiver, reference: capture.references[0]!,
         references: Object.freeze(capture.references),
@@ -118,6 +137,7 @@ export function analyzeRustReceiverFieldCaptures(input: {
   }
   return Object.freeze({ issues: Object.freeze(issues.map(issue => Object.freeze(issue))), fields: Object.freeze([...fields]),
     capturesFor: (callable: Node) => selections.get(callable) ?? [],
+    receiversFor: (callable: Node) => wholeReceivers.get(callable) ?? [],
     capturesReceiver: (reference: Node) => receivers.has(reference),
     isCaptured: (declaration: Node) => fields.has(declaration),
     isDeferred: (declaration: Node) => deferredStorage.has(declaration),

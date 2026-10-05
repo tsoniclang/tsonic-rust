@@ -374,7 +374,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
           "Class evaluation requires one consistent, immutable capture and static-storage contract.", definition.declaration,
           ["target.capability=rust.class-value.environment"]);
       }
-      context.facts.set(definition.declaration, rustClosureCaptureFactKey, { receiverFields: [], captures: selected.environment.captures });
+      context.facts.set(definition.declaration, rustClosureCaptureFactKey, { receivers: [], receiverFields: [], captures: selected.environment.captures });
     }
   }
   const nativeFields = recordRustNativeBacking(walk);
