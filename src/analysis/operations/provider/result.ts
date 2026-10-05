@@ -123,9 +123,14 @@ export function selectedMemberReceiverCarrier(
     const declaredType = sourceRefinement.kind === "resolved"
       ? context.currentSemantics.types.withoutMissingOrUndefined(sourceRefinement.declaredType)
       : undefined;
-    if (declaredType !== undefined) {
+    const declaration = sourceUnion.declaration ?? (declaredType === undefined ? undefined :
+      context.currentSemantics.types.aliasApplication(declaredType)?.declaration);
+    const declaredCarrier = declaration === undefined ? undefined : options.sourceTypes.carrierForDeclaration(declaration, context.ast);
+    const templateCarrier = rustOptionElementCarrier(declaredCarrier) ?? declaredCarrier;
+    const template = templateCarrier === undefined ? undefined : options.sourceTypes.sourceUnionForCarrier(templateCarrier);
+    if (declaredType !== undefined && declaration !== undefined && template !== undefined) {
       retainRustSourceUnionInstantiation(
-        declaredType, sourceUnion, sourceUnionCarrier, context, options,
+        declaredType, template, sourceUnionCarrier, context, options, declaration,
       );
     }
   }

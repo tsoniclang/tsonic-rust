@@ -2,7 +2,8 @@ import type { Node, TypeSignatureInfo, Type } from "@tsonic/tsts";
 import { ArrayTypeNode_ElementType } from "@tsonic/target-api/source";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
-import { rustStructuralObjectCarrierValue } from "../../../target-model/types/carriers/source-types.js";
+import { rustStructuralObjectCarrierValue, rustSourceUnionCarrierValue } from "../../../target-model/types/carriers/source-types.js";
+import { rustOptionElementCarrier } from "../../../target-model/types/index.js";
 import { rustJsArrayLikeElementTargetType, isRustJsArrayCarrier } from "../../../target-model/types/carriers/js.js";
 import { resolveRustConstructType } from "./constructors.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -15,6 +16,7 @@ import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../../
 import type { SourceCallableTypeEvidence } from "@tsonic/target-api/source";
 import { isRustErasedNominalMember } from "../source-shapes.js";
 import { rustSourcePropertyTargetType } from "../../../target-model/types/projections.js";
+import { retainRustSourceUnionInstantiation, rustSourceUnionValueTypes } from "./source-unions.js";
 
 export function retainRustStructuralInstantiation(
   sourceType: Type,
@@ -25,7 +27,31 @@ export function retainRustStructuralInstantiation(
   resolving: Set<object> = new Set(),
   authoredTypeNode?: Node,
 ): boolean {
-  if (!containsStructuralStorage(templateCarrier)) return true;
+  const structuralStorage = containsStructuralStorage(templateCarrier, options);
+  if (structuralStorage !== true) return structuralStorage === false;
+  const templateOptional = rustOptionElementCarrier(templateCarrier);
+  const optional = rustOptionElementCarrier(carrier);
+  if (templateOptional !== undefined || optional !== undefined) {
+    if (templateOptional === undefined || optional === undefined) return false;
+    const semantics = context.currentSemantics;
+    const present = semantics.types.nonNullableType(sourceType);
+    if (present === undefined) return false;
+    const values = rustSourceUnionValueTypes(semantics.types.isUnion(present)
+      ? semantics.types.unionOrIntersectionTypes(present) : [present], semantics);
+    const sourceValue = values.length === 1 ? values[0] : values.length > 1 ? present : undefined;
+    return sourceValue !== undefined && retainRustStructuralInstantiation(sourceValue,
+      templateOptional, optional, context, options, resolving, authoredTypeNode);
+  }
+  if (rustSourceUnionCarrierValue(templateCarrier) !== undefined) {
+    const application = context.currentSemantics.types.aliasApplication(sourceType);
+    const declaration = application?.declaration;
+    const declarationCarrier = declaration === undefined ? templateCarrier :
+      options.sourceTypes.carrierForDeclaration(declaration, context.ast);
+    const template = declarationCarrier === undefined ? undefined : options.sourceTypes.sourceUnionForCarrier(
+      rustOptionElementCarrier(declarationCarrier) ?? declarationCarrier);
+    return template !== undefined &&
+      retainRustSourceUnionInstantiation(sourceType, template, carrier, context, options, declaration) !== undefined;
+  }
   if (rustGenericCallableProtocol(templateCarrier) !== undefined || rustCallableProtocol(templateCarrier) !== undefined) {
     const signatures = context.currentSemantics.types.signatureInfos(sourceType, "call");
     return signatures.length === 1 && retainSignature(signatures[0]!, templateCarrier, carrier, context, options, resolving);
@@ -106,17 +132,37 @@ export function retainRustStructuralInstantiation(
     fields: fields as NonNullable<(typeof fields)[number]>[] }, templateCarrier);
 }
 
-function containsStructuralStorage(carrier: TargetTypeRef): boolean {
-  let current = carrier;
-  for (;;) {
+function containsStructuralStorage(carrier: TargetTypeRef, options: RustTargetTypeResolutionOptions): boolean | undefined {
+  const pending = [carrier];
+  const visited = new Set<TargetTypeRef>();
+  let rows = 1;
+  const append = (carriers: readonly TargetTypeRef[]): boolean => {
+    rows += carriers.length;
+    if (rows > 4096) return false;
+    pending.push(...carriers);
+    return true;
+  };
+  while (pending.length !== 0) {
+    const current = pending.pop()!;
+    if (visited.has(current)) continue;
+    visited.add(current);
     if (rustStructuralObjectCarrierValue(current) !== undefined) return true;
+    if (rustSourceUnionCarrierValue(current)?.origin === "generated") {
+      const variants = options.sourceTypes.sourceUnionVariants(current);
+      if (variants === undefined || variants.length === 0 || variants.length > 4096 ||
+        !append(variants.map(variant => variant.carrier))) return undefined;
+      continue;
+    }
     const callable = rustGenericCallableProtocol(current) ?? rustCallableProtocol(current);
-    if (callable !== undefined) return [callable.result, ...callable.parameters].some(containsStructuralStorage);
-    const element = current.kind === "array" ? current.element :
-      isRustJsArrayCarrier(current) ? rustJsArrayLikeElementTargetType(current) : undefined;
-    if (element === undefined) return false;
-    current = element;
+    if (callable !== undefined) {
+      if (!append([callable.result, ...callable.parameters])) return undefined;
+      continue;
+    }
+    const element = rustOptionElementCarrier(current) ?? (current.kind === "array" ? current.element :
+      isRustJsArrayCarrier(current) ? rustJsArrayLikeElementTargetType(current) : undefined);
+    if (element !== undefined && !append([element])) return undefined;
   }
+  return false;
 }
 
 function retainSignature(
@@ -151,7 +197,9 @@ export function retainRustCallableStructuralStorage(
   options: RustTargetTypeResolutionOptions,
   resolving: Set<object>,
 ): boolean {
-  if (![result, ...parameters].some(containsStructuralStorage)) return true;
+  const storage = [result, ...parameters].map(carrier => containsStructuralStorage(carrier, options));
+  if (storage.some(selected => selected === undefined)) return false;
+  if (!storage.some(selected => selected === true)) return true;
   const generic = rustGenericCallableValue(carrier);
   const protocol = rustGenericCallableProtocol(carrier);
   const declaration = callable.result.declaration;

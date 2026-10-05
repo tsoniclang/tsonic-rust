@@ -5,7 +5,7 @@ import {
   rustSourceCallEffectsFactKey,
 } from "../../../analysis/facts/keys.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { applyRustFallibleResultExpression } from "../types/fallible-shape.js";
+import { applyRustFallibleResultExpression, rustExpressionUsesTryInCurrentRegion } from "../types/fallible-shape.js";
 import { diagnosticInput, registerAliasFromPath, rustActiveErrorType } from "../program/plan-context.js";
 import { expressionCarrier, providerSelectedCallMatches, requireExpressionCarrier, rustOperationFact } from "./fundamentals.js";
 import { finishProviderOperationExpression, planProviderOperationExpression } from "./conversions.js";
@@ -245,7 +245,7 @@ export function planOptionalChainExpression(
     context.input.program.frozenDataWrites, context.input.program.typeDefinitions,
   ) ||
     sourceCallEffects?.invocation === "fallible" ||
-    sourceAccessorEffects?.read === "fallible";
+    sourceAccessorEffects?.read === "fallible" || rustExpressionUsesTryInCurrentRegion(body);
   if (innerFallible) {
     context.usedAliases?.add("rt");
   }

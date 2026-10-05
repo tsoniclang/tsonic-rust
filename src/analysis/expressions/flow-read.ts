@@ -41,6 +41,8 @@ import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustRetainedEr
   isRustWritableSourceErrorCarrier, isRustWritableRetainedErrorCarrier, rustRetainedErrorTargetType } from "../../target-model/types/carriers/source-error.js";
 import { rustWritableErrorRecoveryOriginMatches } from "../../target-model/conversions/program-error.js";
 import { rustSourceUsePreservesAbsence } from "./absence-use.js";
+import { resolveRustNativeFlowCarrier } from "../../policy/types/resolution/native-flow-refinement.js";
+import { rustUnionLeaves } from "../../target-model/types/union-relations.js";
 
 export function applyFlowReadLane(
   walk: RustFactWalk,
@@ -262,6 +264,14 @@ function resolveSelectedFlowReadCarrier(
         return hasAbsence ? rustSourceOptionalTargetType(payload) : payload;
       }
     }
+  }
+  const sourceLeaves = rustUnionLeaves(dispatchCarrier, walk.context.typeDefinitions);
+  if (guarded !== undefined && guarded.length > 1 && sourceLeaves !== undefined && guarded.length < sourceLeaves.length) {
+    const selected = resolveRustNativeFlowCarrier(selectedType, guarded, resolution, walk.operationOptions);
+    const carrier = selected === undefined || !includesAbsence ? selected : rustSourceOptionalTargetType(selected);
+    if (carrier !== undefined && selectRustFlowReadProjection(
+      sourceCarrier, carrier, walk.context.projectTypes, walk.context.typeDefinitions,
+    ).kind === "projection") return carrier;
   }
   if (isRustClosedValueCarrier(sourceCarrier)) {
     const resolution = rustResolutionContext(walk, expression);

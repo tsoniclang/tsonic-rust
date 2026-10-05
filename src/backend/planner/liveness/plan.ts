@@ -34,8 +34,8 @@ export interface RustPlannerLiveness {
   isStructuralFieldWritten(carrier: TargetTypeRef, storageIndex: number): boolean;
   isStructuralShapeConstructed(carrier: TargetTypeRef): boolean;
   isStructuralShapeUsed(carrier: TargetTypeRef): boolean;
-  isVariantConstructed(declaration: Node, variantName: string): boolean;
-  isUnionVariantConstructed(carrier: TargetTypeRef, variantName: string): boolean;
+  isVariantUsed(declaration: Node, variantName: string): boolean;
+  isUnionVariantUsed(carrier: TargetTypeRef, variantName: string): boolean;
 }
 
 type DeclarationOwner =
@@ -228,8 +228,8 @@ export function createRustPlannerLiveness(program: RustTargetProgram): RustPlann
     isStructuralFieldWritten: generatedUsage.isStructuralFieldWritten,
     isStructuralShapeConstructed: generatedUsage.isStructuralShapeConstructed,
     isStructuralShapeUsed: generatedUsage.isStructuralShapeUsed,
-    isVariantConstructed: generatedUsage.isVariantConstructed,
-    isUnionVariantConstructed: generatedUsage.isUnionVariantConstructed,
+    isVariantUsed: generatedUsage.isVariantUsed,
+    isUnionVariantUsed: generatedUsage.isUnionVariantUsed,
   });
 }
 

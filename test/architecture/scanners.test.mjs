@@ -998,7 +998,7 @@ test("Rust dead-code obligations are planner-local and normalized before output 
   assert.match(generatedUsage, /isProjectTypeConstructed/u);
   assert.match(generatedUsage, /isProjectGeneratedFieldUsed/u);
   assert.match(generatedUsage, /isStructuralShapeConstructed/u);
-  assert.match(generatedUsage, /isVariantConstructed/u);
+  assert.match(generatedUsage, /isVariantUsed/u);
   assert.doesNotMatch(targetProgram, /deadCode|liveness/u);
   assert.match(planningContext, /liveness: createRustPlannerLiveness\(program\)/u);
   assert.match(directives, /context\.input\.liveness\.requiresSuppression/u);

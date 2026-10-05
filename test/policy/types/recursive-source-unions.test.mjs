@@ -21,7 +21,8 @@ for (const surfaces of [[], ["js"]]) {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
       files: { ...files, "index.ts": `${files["index.ts"]}
 export function main(): void { if (!run()) throw new Error("recursive optional collections"); }` } });
-    assert.deepEqual(result.diagnostics, []);
+    assert.equal(result.diagnostics.length, 0,
+      result.diagnostics.slice(0, 6).map(row => row.message.slice(0, 256)).join("\n"));
     const source = artifactText(result, "src/tree.rs");
     assert.doesNotMatch(source, /String::from\("(?:number|object)"\)|child\.clone\(\)|children\.clone\(\)/u);
     assert.equal(validateGeneratedProject(`recursive-optional-collection-unions-${surfaces[0] ?? "native"}`, result.artifacts, { run: true }).status, 0);
@@ -30,7 +31,8 @@ export function main(): void { if (!run()) throw new Error("recursive optional c
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
       files: { ...recursiveGenericCollectionUnionFiles, "index.ts": `${recursiveGenericCollectionUnionFiles["index.ts"]}
 export function main(): void { if (!run()) throw new Error("recursive generic collections"); }` } });
-    assert.deepEqual(result.diagnostics, []);
+    assert.equal(result.diagnostics.length, 0,
+      result.diagnostics.slice(0, 6).map(row => row.message.slice(0, 256)).join("\n"));
     assert.equal(validateGeneratedProject(`recursive-generic-collection-unions-${surfaces[0] ?? "native"}`, result.artifacts, { run: true }).status, 0);
   });
   test(`recursive collection unions preserve native payloads on ${surfaces[0] ?? "native"} profile`, { timeout: 300_000 }, () => {
@@ -38,7 +40,8 @@ export function main(): void { if (!run()) throw new Error("recursive generic co
       files: { ...recursiveCollectionUnionFiles, "index.ts": `${recursiveCollectionUnionFiles["index.ts"]}
 ${surfaces.length === 0 ? "" : recursiveCollectionUnionIdentitySource}
 export function main(): void { if (!run()${surfaces.length === 0 ? "" : " || !aliases()"}) throw new Error("recursive collections"); }` } });
-    assert.deepEqual(result.diagnostics, []);
+    assert.equal(result.diagnostics.length, 0,
+      result.diagnostics.slice(0, 6).map(row => row.message.slice(0, 256)).join("\n"));
     assert.equal(validateGeneratedProject(`recursive-collection-unions-${surfaces[0] ?? "native"}`, result.artifacts, { run: true }).status, 0);
   });
 }

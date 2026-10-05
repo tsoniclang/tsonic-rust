@@ -228,10 +228,11 @@ test("nominal union liveness reuses exact upcast fields and retains every nested
       definitionForCarrier: carrier => classes.find(definition => rustTargetTypeRefEquals(definition.carrier, carrier)) },
     classValues: { instanceViews: [], instanceViewFor: () => undefined }, declarationGenericRequirements: { projectionImplementationsFor: () => [] },
     typeDefinitions: definitions,
+    structuralShapes: { unionForCarrier: () => undefined },
   });
   for (const arm of conversion.arms) {
     for (const step of [...arm.source, ...arm.target]) {
-      assert.equal(usage.isUnionVariantConstructed(step.union, step.variant.name), true);
+      assert.equal(usage.isUnionVariantUsed(step.union, step.variant.name), true);
     }
   }
   for (const definition of classes) {
@@ -244,7 +245,7 @@ test("nominal union liveness reuses exact upcast fields and retains every nested
     }
   }
   assert.equal(usage.isProjectTypeUsed(unused), false);
-  assert.equal(usage.isUnionVariantConstructed(target, "Missing"), false);
+  assert.equal(usage.isUnionVariantUsed(target, "Missing"), false);
 });
 
 test("dispatcher fuses finalized narrowing and heritage without intermediate enum or identity clones", () => {

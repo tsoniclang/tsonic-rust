@@ -159,12 +159,15 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
     walk.operationOptions,
   ) : undefined;
   if (compositeCarrier !== undefined) {
-    if (!walk.sourceTypes.registerRepresentationAlias(declaration, compositeCarrier)) {
+    const carrier = closeRustSuspendedStorage(compositeCarrier, [], genericContract, "field");
+    if (carrier === undefined || !walk.sourceTypes.registerRepresentationAlias(declaration, carrier)) {
       return;
     }
-    setCarrierFact(walk, declaration, compositeCarrier);
+    setCarrierFact(walk, declaration, carrier);
     walk.context.facts.set(declaration, rustTypeAliasDeclarationFactKey, {
-      kind: "erased",
+      ...(lifetimeBearingAlias
+        ? { kind: "native-alias" as const, target: carrier }
+        : { kind: "erased" as const }),
     }, [{ message: "rust representation-identical union declaration" }]);
     return;
   }

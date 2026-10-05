@@ -93,70 +93,55 @@ export function structuralFieldKey(carrier: TargetTypeRef, storageIndex: number)
 
 export function visitConversionContract(
   contract: RustValueConversionContract,
-  markStructuralFieldRead: (carrier: TargetTypeRef, storageIndex: number) => void,
-  markVariantConstructed: (carrier: TargetTypeRef, variantName: string) => void,
-  markClosedObjectUsed: (carrier: TargetTypeRef) => void,
+  usage: {
+    readonly structuralFieldRead: (carrier: TargetTypeRef, storageIndex: number) => void;
+    readonly variantRead: (carrier: TargetTypeRef, variantName: string) => void;
+    readonly variantConstructed: (carrier: TargetTypeRef, variantName: string) => void;
+    readonly closedObjectUsed: (carrier: TargetTypeRef) => void;
+  },
 ): void {
   switch (contract.lowering) {
     case "project-closed-value":
-      markClosedObjectUsed(contract.source);
+      usage.closedObjectUsed(contract.source);
       return;
     case "rest-sequence":
       for (const conversion of contract.elementConversions) {
-        if (conversion !== null) visitConversionContract(conversion, markStructuralFieldRead, markVariantConstructed, markClosedObjectUsed);
+        if (conversion !== null) visitConversionContract(conversion, usage);
       }
       return;
     case "source-union-variant":
-      for (const step of contract.path) markVariantConstructed(step.union, step.variant.name);
+      for (const step of contract.path) usage.variantConstructed(step.union, step.variant.name);
       if (contract.payloadConversion !== null) {
-        visitConversionContract(contract.payloadConversion, markStructuralFieldRead, markVariantConstructed, markClosedObjectUsed);
+        visitConversionContract(contract.payloadConversion, usage);
       }
       return;
     case "union-map":
       for (const arm of contract.arms) {
-        for (const step of arm.target) markVariantConstructed(step.union, step.variant.name);
+        for (const step of arm.source) usage.variantRead(step.union, step.variant.name);
+        for (const step of arm.target) usage.variantConstructed(step.union, step.variant.name);
       }
       return;
     case "option-map":
-      visitConversionContract(contract.element, markStructuralFieldRead, markVariantConstructed, markClosedObjectUsed);
+      visitConversionContract(contract.element, usage);
       return;
     case "closed-value-from-option":
     case "js-value-from-array":
-      visitConversionContract(
-        contract.elementConversion,
-        markStructuralFieldRead,
-        markVariantConstructed,
-        markClosedObjectUsed,
-      );
+      visitConversionContract(contract.elementConversion, usage);
       return;
     case "union-fold":
       for (const arm of contract.arms) {
-        visitConversionContract(
-          arm.conversion,
-          markStructuralFieldRead,
-          markVariantConstructed,
-          markClosedObjectUsed,
-        );
+        for (const step of arm.path) usage.variantRead(step.union, step.variant.name);
+        visitConversionContract(arm.conversion, usage);
       }
       return;
     case "js-value-from-structural-to-json":
-      markStructuralFieldRead(contract.source, contract.storageIndex);
-      visitConversionContract(
-        contract.resultConversion,
-        markStructuralFieldRead,
-        markVariantConstructed,
-        markClosedObjectUsed,
-      );
+      usage.structuralFieldRead(contract.source, contract.storageIndex);
+      visitConversionContract(contract.resultConversion, usage);
       return;
     case "js-value-from-structural-object":
       for (const field of contract.fields) {
-        markStructuralFieldRead(contract.source, field.storageIndex);
-        visitConversionContract(
-          field.conversion,
-          markStructuralFieldRead,
-          markVariantConstructed,
-          markClosedObjectUsed,
-        );
+        usage.structuralFieldRead(contract.source, field.storageIndex);
+        visitConversionContract(field.conversion, usage);
       }
       return;
     case "call":
@@ -169,8 +154,7 @@ export function visitConversionContract(
     case "union-project":
       return;
     case "option-some":
-      if (contract.element !== null) visitConversionContract(contract.element, markStructuralFieldRead,
-        markVariantConstructed, markClosedObjectUsed);
+      if (contract.element !== null) visitConversionContract(contract.element, usage);
       return;
   }
 }

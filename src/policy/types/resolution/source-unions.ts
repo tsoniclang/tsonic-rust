@@ -1,4 +1,4 @@
-import type { Type } from "@tsonic/tsts";
+import type { Node, Type } from "@tsonic/tsts";
 import { sourceBoundTypeRelationship, type SourceFileSemantics } from "@tsonic/target-api/source";
 import type { RustSourceUnion } from "../source-type-registry.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
@@ -19,6 +19,8 @@ import {
 import { rustSourceOptionalTargetType } from "../../../target-model/types/projections.js";
 import { retainRustStructuralInstantiation } from "./structural-instantiations.js";
 import { rustGenericCallableSignaturesMatch } from "../../../target-model/conversions/generic-callable.js";
+import { inferRustTargetGenericBindings } from "../../../target-model/types/carriers/generic-inference.js";
+import { rustTargetGenericReferences } from "../../../target-model/types/carriers/generic-references.js";
 
 export function rustSourceUnionValueTypes(
   members: readonly Type[],
@@ -26,6 +28,29 @@ export function rustSourceUnionValueTypes(
 ): readonly Type[] {
   const hasValue = members.some(member => !semantics.types.isNullish(member) && !semantics.types.isVoidLike(member));
   return members.filter(member => !semantics.types.isNullish(member) && !(hasValue && semantics.types.isVoidLike(member)));
+}
+
+export function rustSourceUnionMemberTypes(
+  members: readonly Type[],
+  semantics: SourceFileSemantics,
+): readonly Type[] | undefined {
+  if (members.length > 4096) return undefined;
+  const result: Type[] = [];
+  const retained = new Set<Type>();
+  let rows = 0;
+  for (const member of members) {
+    if (member === undefined) return undefined;
+    const selected = semantics.types.isUnion(member)
+      ? rustSourceUnionValueTypes(semantics.types.unionOrIntersectionTypes(member), semantics) : [member];
+    rows += selected.length;
+    if (selected.length === 0 || rows > 4096 ||
+      selected.some(type => type === undefined)) return undefined;
+    for (const type of selected) if (!retained.has(type)) {
+      retained.add(type);
+      result.push(type);
+    }
+  }
+  return result;
 }
 
 export function resolveRustUnionValueCarrier(
@@ -54,6 +79,7 @@ export function retainRustSourceUnionInstantiation(
   carrier: TargetTypeRef,
   context: RustTargetTypeResolutionContext,
   options: RustTargetTypeResolutionOptions,
+  declaration?: Node,
 ): TargetTypeRef | undefined {
   const existing = options.sourceTypes.sourceUnionForCarrier(carrier);
   if (existing !== undefined && options.sourceTypes.sourceUnionVariantIndexesForTypes(carrier, [sourceType]) !== undefined) return carrier;
@@ -61,21 +87,32 @@ export function retainRustSourceUnionInstantiation(
   const expectedVariants = options.sourceTypes.sourceUnionVariants(carrier);
   const semantics = context.currentSemantics;
   if (value === undefined || expectedVariants === undefined || expectedVariants.length !== template.variants.length ||
-    template.declaration === undefined || !semantics.types.isUnion(sourceType)) return undefined;
+    template.declaration !== undefined && template.declaration !== declaration ||
+    !context.source.navigation.isProjectDeclaration(declaration ?? context.currentSourceFile) ||
+    !semantics.types.isUnion(sourceType)) return undefined;
   const members = rustSourceUnionValueTypes(semantics.types.unionOrIntersectionTypes(sourceType), semantics);
-  if (members.length !== template.variants.reduce((count, variant) => count + variant.sourceTypes.length, 0) ||
+  const templateMembers = template.variants.map(variant => rustSourceUnionMemberTypes(variant.sourceTypes, semantics));
+  if (templateMembers.some(member => member === undefined) ||
+    members.length !== templateMembers.reduce((count, selected) => count + (selected?.length ?? 0), 0) ||
     members.some(member => member === undefined)) return undefined;
-  const parameters = context.sourceLifetimes.contractFor(template.declaration)?.parameters ?? [];
-  if (parameters.length !== value.genericArguments.length) return undefined;
   const substitutions = new Map(context.sourceTypeParameterSubstitutions);
+  const parameters = declaration === undefined ? [] : context.sourceLifetimes.contractFor(declaration)?.parameters ?? [];
+  const references = rustTargetGenericReferences(template.carrier);
+  const nativeBindings = inferRustTargetGenericBindings(template.carrier, carrier, {
+    typeIdentities: new Set(references.typeIdentities),
+    lifetimeIdentities: new Set(references.lifetimeIdentities),
+    constIdentities: new Set(),
+  });
+  if (nativeBindings === undefined) return undefined;
   const application = semantics.types.aliasApplication(sourceType);
-  for (const [index, parameter] of parameters.entries()) {
-    const argument = value.genericArguments[index];
-    if (argument?.kind !== parameter.kind) return undefined;
-    if (parameter.kind === "type" && argument.kind === "type") {
+  for (const parameter of parameters) {
+    if (parameter.kind === "type") {
       const binding = application?.bindings.find(binding => binding.declaration === parameter.declaration);
-      if (binding === undefined) return undefined;
-      substitutions.set(parameter.declaration, { sourceType: binding.argument, carrier: argument.type });
+      const selected = substitutions.get(parameter.declaration);
+      const argument = nativeBindings.types.get(parameter.identity);
+      if (binding === undefined || argument === undefined || selected !== undefined &&
+        (selected.sourceType !== binding.argument || !rustTargetTypeRefEquals(selected.carrier, argument))) return undefined;
+      substitutions.set(parameter.declaration, { sourceType: binding.argument, carrier: argument });
     }
   }
   const used = new Set<Type>();
@@ -83,10 +120,12 @@ export function retainRustSourceUnionInstantiation(
   const variants = template.variants.map((variant, index) => {
     const expected = expectedVariants[index];
     if (expected === undefined || expected.name !== variant.name) return undefined;
-    const matches = members.filter(member => variant.sourceTypes.some(type =>
+    const sources = templateMembers[index];
+    if (sources === undefined) return undefined;
+    const matches = members.filter(member => sources.some(type =>
       sourceBoundTypeRelationship(type, member, semantics,
         declaration => substitutions.get(declaration)?.sourceType) !== undefined));
-    if (matches.length !== variant.sourceTypes.length || matches.some(member => used.has(member))) return undefined;
+    if (matches.length !== sources.length || matches.some(member => used.has(member))) return undefined;
     const selectedMember = matches[0]!;
     if (!retainRustStructuralInstantiation(selectedMember, variant.carrier, expected.carrier,
       instantiatedContext, options, new Set([sourceType]))) return undefined;

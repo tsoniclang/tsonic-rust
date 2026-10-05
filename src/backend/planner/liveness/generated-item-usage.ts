@@ -89,8 +89,8 @@ export interface RustGeneratedItemUsage {
   isStructuralFieldWritten(carrier: TargetTypeRef, storageIndex: number): boolean;
   isStructuralShapeConstructed(carrier: TargetTypeRef): boolean;
   isStructuralShapeUsed(carrier: TargetTypeRef): boolean;
-  isVariantConstructed(declaration: Node, variantName: string): boolean;
-  isUnionVariantConstructed(carrier: TargetTypeRef, variantName: string): boolean;
+  isVariantUsed(declaration: Node, variantName: string): boolean;
+  isUnionVariantUsed(carrier: TargetTypeRef, variantName: string): boolean;
 }
 
 type RustOperationAbi = Extract<
@@ -114,6 +114,11 @@ export function analyzeRustGeneratedItemUsage(input: {
   readonly structuralShapes: RustStructuralShapePlan;
   readonly navigation: TargetPlanningSourceNavigation;
 }): RustGeneratedItemUsage {
+  const variantOwnerKey = (carrier: TargetTypeRef): string => {
+    const union = input.structuralShapes.unionForCarrier(carrier);
+    return union === undefined ? closedMetadataKey(carrier) :
+      closedMetadataKey({ componentId: union.componentId, targetName: union.targetName });
+  };
   const carriersByDeclaration = new Map<Node, string>();
   for (const declaration of input.declarations) {
     const kind = input.ast.kindName(declaration);
@@ -124,7 +129,7 @@ export function analyzeRustGeneratedItemUsage(input: {
     }
     const carrier = input.facts.getRuntimeCarrierFact(declaration)?.carrier;
     if (carrier === undefined) continue;
-    carriersByDeclaration.set(declaration, closedMetadataKey(carrier));
+    carriersByDeclaration.set(declaration, variantOwnerKey(carrier));
   }
 
   const structuralFieldReads = new Set<string>();
@@ -239,14 +244,17 @@ export function analyzeRustGeneratedItemUsage(input: {
       structuralFieldWrites.add(structuralFieldKey(carrier, storageIndex));
     }
   };
-  const markVariantConstructed = (carrier: TargetTypeRef, variantName: string): void => {
-    const key = closedMetadataKey(carrier);
-    if (rustSourceUnionCarrierValue(carrier)?.origin === "generated") {
-      constructedStructuralShapes.add(key);
-    }
+  const markVariantUsed = (carrier: TargetTypeRef, variantName: string): void => {
+    const key = variantOwnerKey(carrier);
     const variants = variantsByCarrier.get(key) ?? new Set<string>();
     variants.add(variantName);
     variantsByCarrier.set(key, variants);
+  };
+  const markVariantConstructed = (carrier: TargetTypeRef, variantName: string): void => {
+    markVariantUsed(carrier, variantName);
+    if (rustSourceUnionCarrierValue(carrier)?.origin === "generated") {
+      constructedStructuralShapes.add(closedMetadataKey(carrier));
+    }
   };
   const markStructuralShapeConstructed = (carrier: TargetTypeRef | undefined): void => {
     if (carrier !== undefined) constructedStructuralShapes.add(closedMetadataKey(carrier));
@@ -342,9 +350,11 @@ export function analyzeRustGeneratedItemUsage(input: {
     const flow = input.facts.getFact(node, rustFlowReadProjectionFactKey);
     if (flow?.kind === "union-map") {
       for (const arm of flow.arms) {
+        for (const step of arm.source) markVariantUsed(step.union, step.variant.name);
         for (const step of arm.target) markVariantConstructed(step.union, step.variant.name);
       }
     }
+    if (flow?.kind === "source-union") markVariantUsed(flow.dispatchCarrier, flow.variant);
     if (flow?.kind === "project-downcast") {
       markProjectCarrierFieldUsed(flow.dispatchCarrier, "wrapper-identity");
       markProjectCarrierFieldUsed(flow.dispatchCarrier, "wrapper-dispatch");
@@ -416,14 +426,15 @@ export function analyzeRustGeneratedItemUsage(input: {
     if (contract === undefined) {
       throw new Error("A finalized Rust value conversion has no valid dead-code usage contract.");
     }
-    visitConversionContract(contract, markStructuralFieldRead, markVariantConstructed, carrier => {
+    visitConversionContract(contract, { structuralFieldRead: markStructuralFieldRead,
+      variantRead: markVariantUsed, variantConstructed: markVariantConstructed, closedObjectUsed: carrier => {
       const representation = input.objectRepresentations.representationFor(input.projectTypes.definitionForCarrier(carrier));
       if (representation?.kind === "open-hierarchy" || representation?.kind === "closed-hierarchy") {
         markProjectCarrierFieldUsed(carrier, "wrapper-dispatch");
       } else if (representation !== undefined && representation.kind !== "value") {
         markProjectCarrierFieldUsed(carrier, "wrapper-state");
       }
-    });
+    } });
   };
   const visitFinalizedConversion = (conversion: RustFinalizedValueConversion): void => {
     if (conversion.kind === "semantic") visitConversion(conversion.conversion);
@@ -467,7 +478,10 @@ export function analyzeRustGeneratedItemUsage(input: {
         visitAbi(fact.abi);
         return;
       case "union-property":
-        fact.variants.forEach(variant => { if (variant.operation !== undefined) visitAbi(variant.operation.abi); });
+        fact.variants.forEach(variant => {
+          markVariantUsed(fact.unionCarrier, variant.name);
+          if (variant.operation !== undefined) visitAbi(variant.operation.abi);
+        });
         return;
       case "object-shape-projection":
         if (fact.projection === "values" || fact.projection === "entries") {
@@ -521,6 +535,7 @@ export function analyzeRustGeneratedItemUsage(input: {
         return;
       case "source-union-field":
         for (const variant of fact.variants) {
+          markVariantUsed(fact.unionCarrier, variant.name);
           if (variant.field === undefined) continue;
           if (fact.accessMode !== "write" && variant.field.declaration !== undefined) readAuthoredFields.add(variant.field.declaration);
           if (variant.field.dispatch !== undefined) {
@@ -555,6 +570,7 @@ export function analyzeRustGeneratedItemUsage(input: {
           markStructuralShapeConstructed(fact.resultCarrier);
         } else if (fact.target.form === "union-method") {
           for (const method of fact.target.variants) {
+            markVariantUsed(fact.target.receiverCarrier, method.name);
             if (method.dispatchOwner !== undefined) {
               markProjectCarrierFieldUsed(method.carrier, "wrapper-dispatch");
             }
@@ -763,7 +779,7 @@ export function analyzeRustGeneratedItemUsage(input: {
       if (conversion?.kind === "project-union-map") {
         for (const arm of conversion.arms) {
           markProjectTypeUsed(arm.carrier);
-          for (const step of arm.source) markVariantConstructed(step.union, step.variant.name);
+          for (const step of arm.source) markVariantUsed(step.union, step.variant.name);
           for (const step of arm.target) markVariantConstructed(step.union, step.variant.name);
           if (arm.upcast !== null) markProjectUpcastUsed(arm.upcast);
         }
@@ -831,9 +847,9 @@ export function analyzeRustGeneratedItemUsage(input: {
       constructedStructuralShapes.has(closedMetadataKey(carrier)),
     isStructuralShapeUsed: (carrier: TargetTypeRef) =>
       constructedStructuralShapes.has(closedMetadataKey(carrier)) || accessedStructuralShapes.has(closedMetadataKey(carrier)),
-    isVariantConstructed: (declaration: Node, variantName: string) =>
+    isVariantUsed: (declaration: Node, variantName: string) =>
       variantsByCarrier.get(carriersByDeclaration.get(declaration) ?? "")?.has(variantName) === true,
-    isUnionVariantConstructed: (carrier: TargetTypeRef, variantName: string) =>
-      variantsByCarrier.get(closedMetadataKey(carrier))?.has(variantName) === true,
+    isUnionVariantUsed: (carrier: TargetTypeRef, variantName: string) =>
+      variantsByCarrier.get(variantOwnerKey(carrier))?.has(variantName) === true,
   });
 }

@@ -7,7 +7,7 @@ import { createRustAssociatedRequirementCollector } from "./associated-requireme
 import { classifyCarrierRequirements } from "./generic-carrier-requirements.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
-import { rustSourceTypeCarrierValue } from "../../target-model/types/index.js";
+import { rustSourceTypeCarrierValue, rustSourceUnionCarrierValue } from "../../target-model/types/index.js";
 import { substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
 import { emptyRustTypeDefinitions, rustSourceUnionDefinitionIdentity, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
@@ -34,12 +34,13 @@ export function analyzeRustShapeGenericRequirements(
     const unionIdentity = rustSourceUnionDefinitionIdentity(type);
     if (unionIdentity !== undefined) {
       const key = closedMetadataKey(type);
-      if (activeUnions.has(unionIdentity)) return activeUnions.get(unionIdentity) === key;
+      const recursionIdentity = rustSourceUnionCarrierValue(type)?.origin === "generated" ? key : unionIdentity;
+      if (activeUnions.has(recursionIdentity)) return activeUnions.get(recursionIdentity) === key;
       const variants = definitions.sourceUnionVariants(type);
       if (variants === undefined) return false;
-      activeUnions.set(unionIdentity, key);
+      activeUnions.set(recursionIdentity, key);
       try { return variants.every(variant => visit(variant.carrier)); }
-      finally { activeUnions.delete(unionIdentity); }
+      finally { activeUnions.delete(recursionIdentity); }
     }
     const source = rustSourceTypeCarrierValue(type);
     const definition = source === undefined ? undefined : projectTypes.definitionForCarrier(type);

@@ -5,7 +5,8 @@ import { createRustAssociatedRequirementCollector } from "../../../dist/analysis
 import { analyzeRustShapeGenericRequirements } from "../../../dist/analysis/declarations/generic-shape-requirements.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustCarrierSupportsTrait } from "../../../dist/target-model/types/carriers/traits.js";
-import { rustSourceTypeCarrier } from "../../../dist/target-model/types/carriers/source-types.js";
+import { rustSourceTypeCarrier, rustSourceUnionTargetType } from "../../../dist/target-model/types/carriers/source-types.js";
+import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
 import { mapRustTargetTypes, substituteRustTargetGenerics } from "../../../dist/target-model/types/carriers/substitution.js";
 import { rustTypeFamilyNormalizer } from "../../../dist/policy/types/type-family-normalization.js";
 import { rustTypeFromCarrier } from "../../../dist/backend/planner/types/render.js";
@@ -218,6 +219,49 @@ test("nongeneric shapes acquire no speculative generic bounds", () => {
   const selected = analyzeRustShapeGenericRequirements({ kind: "tuple", elements: [signed, unsigned] },
     { definitionForCarrier: () => undefined }, registry, () => undefined);
   assert.deepEqual(selected, { typeParameters: [], associatedTypes: [] });
+});
+
+test("nested generated sum instantiations retain independent payload requirements", () => {
+  const registry = createRustSourceTypeFamilyRegistry();
+  assert.equal(registry.register(family), true);
+  const definitions = createRustTypeDefinitionRegistry();
+  const union = payloads => rustSourceUnionTargetType("/nested.ts", "Union2",
+    payloads.map(type => ({ kind: "type", type })), "generated");
+  const definition = payloads => ({ carrier: union(payloads), variants: payloads.map((carrier, index) => ({
+    name: `Variant${index}`, carrier,
+  })) });
+  assert.equal(definitions.registerSourceUnion(definition([signed, unsigned]), false), true);
+  const inner = union([parameter, projection]);
+  const outer = union([inner, signed]);
+  const policy = { definitionForCarrier: () => undefined };
+  const selected = analyzeRustShapeGenericRequirements(outer, policy, registry, () => undefined, definitions.seal());
+  assert.deepEqual(selected, {
+    typeParameters: [{ identity: "T", name: "T", requirements: [] }],
+    associatedTypes: [{ carrier: projection, requirements: [] }],
+  });
+  assert.equal(analyzeRustShapeGenericRequirements(union([union([parameter, { ...projection, owner: unsigned }]), signed]),
+    policy, registry, () => undefined, definitions.seal()), undefined);
+  const invalidInner = union([parameter, { ...projection,
+    owner: { kind: "type-parameter", identity: "Other", name: "Other" } }]);
+  const invalidOuter = union([invalidInner, signed]);
+  assert.equal(analyzeRustShapeGenericRequirements(invalidOuter, policy, registry, () => undefined,
+    { sourceUnionVariants: carrier => rustTargetTypeRefEquals(carrier, invalidInner) ? undefined :
+      [{ name: "Variant0", carrier: invalidInner }, { name: "Variant1", carrier: signed }] }), undefined);
+});
+
+test("authored recursive sums reject changing recursive instantiations and missing payload evidence", () => {
+  const registry = createRustSourceTypeFamilyRegistry();
+  const policy = { definitionForCarrier: () => undefined };
+  const authored = type => rustSourceUnionTargetType("/nested.ts", "Recursive", [{ kind: "type", type }]);
+  const initial = authored(signed);
+  const changed = authored(unsigned);
+  assert.equal(analyzeRustShapeGenericRequirements(initial, policy, registry, () => undefined,
+    { sourceUnionVariants: () => [{ name: "Next", carrier: changed }] }), undefined);
+  assert.equal(analyzeRustShapeGenericRequirements(initial, policy, registry, () => undefined,
+    { sourceUnionVariants: () => undefined }), undefined);
+  assert.deepEqual(analyzeRustShapeGenericRequirements(initial, policy, registry, () => undefined,
+    { sourceUnionVariants: () => [{ name: "Next", carrier: initial }] }),
+    { typeParameters: [], associatedTypes: [] });
 });
 
 test("indexed families distinguish exact keys and retain readonly storage and independent obligations", () => {

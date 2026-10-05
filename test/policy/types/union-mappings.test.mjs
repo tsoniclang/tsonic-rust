@@ -39,8 +39,14 @@ test("union mappings require complete exact coverage and reject forged or numeri
   const conversion = { kind: "union-map", source: narrow, target: wide, coverage: "source", arms: widening };
   assert.equal(rustValueConversionContract(conversion, definitions).lowering, "union-map");
   const constructed = [];
-  visitConversionContract(rustValueConversionContract(conversion, definitions), () => assert.fail("no field read"),
-    (carrier, variant) => constructed.push([carrier, variant]), () => assert.fail("no closed object"));
+  const read = [];
+  visitConversionContract(rustValueConversionContract(conversion, definitions), {
+    structuralFieldRead: () => assert.fail("no field read"),
+    variantRead: (carrier, variant) => read.push([carrier, variant]),
+    variantConstructed: (carrier, variant) => constructed.push([carrier, variant]),
+    closedObjectUsed: () => assert.fail("no closed object"),
+  });
+  assert.deepEqual(read, [[narrow, "Variant0"], [narrow, "Variant1"]]);
   assert.deepEqual(constructed, [[wide, "Variant2"], [wide, "Variant0"]]);
   assert.deepEqual(substituteRustValueConversion(conversion, new Map()), conversion);
   const explicit = selectRustSourceAssertionConversion(wide, narrow, definitions);
@@ -171,8 +177,14 @@ test("nested union paths retain exact coverage, terminal array payloads and all 
   assert.deepEqual(arms.map(arm => arm.carrier), [array, string, boolean, integer]);
   const conversion = { kind: "union-map", source: flat, target: nested, coverage: "source", arms };
   const constructed = [];
-  visitConversionContract(rustValueConversionContract(conversion, definitions), () => assert.fail("no structural read"),
-    (carrier, name) => constructed.push([carrier, name]), () => assert.fail("no closed object"));
+  const read = [];
+  visitConversionContract(rustValueConversionContract(conversion, definitions), {
+    structuralFieldRead: () => assert.fail("no structural read"),
+    variantRead: (carrier, variant) => read.push([carrier, variant]),
+    variantConstructed: (carrier, name) => constructed.push([carrier, name]),
+    closedObjectUsed: () => assert.fail("no closed object"),
+  });
+  assert.deepEqual(read, arms.flatMap(arm => arm.source.map(step => [step.union, step.variant.name])));
   assert.deepEqual(constructed.slice(0, 2), [[nested, "Variant1"], [inner, "Variant2"]]);
   for (const target of [arms[0].target.slice(1), arms[0].target.toReversed(),
     arms[0].target.map(step => ({ ...step, union: flat })),

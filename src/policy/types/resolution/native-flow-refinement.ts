@@ -9,6 +9,27 @@ import { selectRustClosedTypeTestPlan } from "../../operations/operators/type-te
 import type { RustProjectTypePolicy } from "../../../target-model/types/project-types.js";
 import { isRustAbsenceCarrier, rustAbsenceTargetType } from "../../../target-model/types/carriers/native.js";
 import { rustOptionElementCarrier } from "../../../target-model/types/carriers/optional.js";
+import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
+import { resolveRustSelectedUnion } from "./inferred-unions.js";
+import type { RustUnionLeaf } from "../../../target-model/types/union-relations.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+
+export function resolveRustNativeFlowCarrier(
+  sourceType: Type,
+  members: readonly RustUnionLeaf[],
+  context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
+): TargetTypeRef | undefined {
+  if (members.length === 1) return members[0]!.carrier;
+  const variants = members.map(member => {
+    const step = member.path[member.path.length - 1];
+    const union = step === undefined ? undefined : options.sourceTypes.sourceUnionForCarrier(step.union);
+    const variant = union?.variants.find(variant => variant.name === step?.variant.name);
+    return variant !== undefined && rustTargetTypeRefEquals(variant.carrier, member.carrier) ? variant : undefined;
+  });
+  return variants.some(variant => variant === undefined) ? undefined
+    : resolveRustSelectedUnion(sourceType, variants as NonNullable<typeof variants[number]>[], context, options);
+}
 
 export function selectRustNativeFlowMembers(
   context: SourceValueFlowQueryContext,

@@ -26,9 +26,10 @@ type ExpressionPlanner = typeof planRustExpression;
 
 export function sourceIndexSelectedOperationMatches(node: Node, fact: SourceIndexFact, context: RustPlanContext): boolean {
   const property = context.input.program.source.ast.is.IsPropertyAccessExpression(node);
-  return selectedOperationMatches(property
+  const resultCarrier = effectiveMemberResultCarrier(node, fact.resultCarrier, context);
+  return resultCarrier !== undefined && selectedOperationMatches(property
     ? context.input.program.facts.getSelectedTargetProperty(node)
-    : context.input.program.facts.getSelectedTargetElementAccess(node), fact.operationId, "indexer", fact.resultCarrier);
+    : context.input.program.facts.getSelectedTargetElementAccess(node), fact.operationId, "indexer", resultCarrier);
 }
 
 export function planRustSourceIndexKey(

@@ -140,7 +140,7 @@ export function rustAuthoredVariantDeadCodeDisposition(
   const liveness = context.input.liveness;
   return liveness.isExternallyReachable(declaration) ||
       liveness.requiresSuppression(declaration) ||
-      liveness.isVariantConstructed(declaration, variantName)
+      liveness.isVariantUsed(declaration, variantName)
     ? undefined
     : "authored-unused-variant";
 }
@@ -164,7 +164,7 @@ export function rustGeneratedUnionVariantDeadCodeDisposition(
 ): RustDeadCodeDisposition | undefined {
   return publiclyReachable ||
     !carriers.some(carrier => context.input.liveness.isStructuralShapeUsed(carrier)) ||
-    carriers.some(carrier => context.input.liveness.isUnionVariantConstructed(carrier, variantName))
+    carriers.some(carrier => context.input.liveness.isUnionVariantUsed(carrier, variantName))
     ? undefined : "generated-unconstructed-variant";
 }
 

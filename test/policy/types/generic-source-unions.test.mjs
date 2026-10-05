@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { rustSourceUnionMemberTypes } from "../../../dist/policy/types/resolution/source-unions.js";
 import { acmeTestingPackage, compileRust, artifactText } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { rustSourceUnionTargetType, rustSourceUnionCarrierValue, rustSourcePrimitiveTargetType, rustStructuralObjectTargetType } from "../../../dist/target-model/types/index.js";
@@ -9,6 +10,25 @@ import { createRustSourceTypeRegistry } from "../../../dist/analysis/project-typ
 import { createRustStructuralShapePlan } from "../../../dist/analysis/objects/structural-shape-plan.js";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
 
+test("union member retention expands checked Boolean leaves with finite exact accounting", () => {
+  const falseType = Object.freeze({ identity: "false" });
+  const trueType = Object.freeze({ identity: "true" });
+  const booleanType = Object.freeze({ identity: "boolean" });
+  const numberType = Object.freeze({ identity: "number" });
+  const malformed = Object.freeze({ identity: "malformed" });
+  const semantics = { types: {
+    isUnion: type => type === booleanType || type === malformed,
+    unionOrIntersectionTypes: type => type === booleanType ? [falseType, trueType] : [undefined],
+    isNullish: () => false, isVoidLike: () => false,
+  } };
+  assert.deepEqual(rustSourceUnionMemberTypes([booleanType, numberType], semantics), [falseType, trueType, numberType]);
+  assert.deepEqual(rustSourceUnionMemberTypes([trueType, booleanType], semantics), [trueType, falseType]);
+  assert.equal(rustSourceUnionMemberTypes([malformed], semantics) === undefined, true);
+  assert.equal(rustSourceUnionMemberTypes([undefined], semantics) === undefined, true);
+  assert.equal(rustSourceUnionMemberTypes(Array(4097).fill(numberType), semantics) === undefined, true);
+  assert.equal(rustSourceUnionMemberTypes(Array(2049).fill(booleanType), semantics) === undefined, true);
+  assert.deepEqual(rustSourceUnionMemberTypes(Array(2048).fill(booleanType), semantics), [falseType, trueType]);
+});
 test("source union generic arguments survive substitution and reject malformed metadata", () => {
   const parameter = { kind: "type-parameter", identity: "Element", name: "Element" };
   const integer = rustSourcePrimitiveTargetType("int32");
@@ -113,8 +133,12 @@ export function main(): void {
 `,
     },
   });
-  assert.deepEqual(result.diagnostics, []);
-  assert.match(artifactText(result, "src/region.rs"), /enum Region<Element>/u);
+  assert.equal(result.diagnostics.length, 0,
+    result.diagnostics.slice(0, 6).map(row => row.message.slice(0, 256)).join("\n"));
+  assert.equal(/enum Region<Element>/u.test(artifactText(result, "src/region.rs")), false,
+    "a source type alias does not invent another physical enum");
+  assert.equal((artifactText(result, "src/shapes.rs").match(/pub enum Union2</gu) ?? []).length, 1,
+    "all exact payload instantiations share one native sum definition");
   const run = validateGeneratedProject("generic-source-union", result.artifacts, { run: true });
   assert.equal(run.status, 0, JSON.stringify(run));
 });

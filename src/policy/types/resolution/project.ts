@@ -128,8 +128,10 @@ export function resolveProjectSourceCarrier(
       });
       const instantiated = substituteRustTargetGenerics(carrier, substitutions, lifetimes);
       if (template === undefined || selectedType === undefined || referenceOnly) return instantiated;
+      const selectedContext = bindRustSourceDeclarationArguments(declaration, selectedType, genericArguments.values, context);
+      if (selectedContext === undefined) continue;
       const optional = rustOptionElementCarrier(instantiated);
-      const result = retainRustSourceUnionInstantiation(selectedType, template, optional ?? instantiated, context, options);
+      const result = retainRustSourceUnionInstantiation(selectedType, template, optional ?? instantiated, selectedContext, options, declaration);
       if (result !== undefined) return optional === undefined ? result : rustSourceOptionalTargetType(result);
       continue;
     }
