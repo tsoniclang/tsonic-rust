@@ -57,8 +57,8 @@ export function rustBorrowPureCopyValue(
   if (provider === undefined || provider.abi.result.kind !== "sync" ||
     provider.abi.effects.invocation !== "infallible" || provider.abi.result.conversion.kind !== "identity" ||
     !rustTargetTypeRefEquals(provider.abi.result.carrier, facts.getRuntimeCarrierFact(node)?.carrier)) return false;
-  const argumentsList = ast.arguments(node);
-  if (argumentsList.length !== provider.abi.sourceArguments.length ||
+  const argumentsList = borrowedOperationArguments(node, ast);
+  if (argumentsList === undefined || argumentsList.length !== provider.abi.sourceArguments.length ||
     !provider.abi.sourceArguments.every((argument, index) => argument.form === "value" && argument.sourceIndex === index &&
       argumentsList[index] !== undefined && isPure(argumentsList[index]!))) return false;
   const receiver = ast.is.IsCallExpression(node)
@@ -120,14 +120,26 @@ export function rustBorrowedStringInputs(node: Node, operation: ProviderOperatio
   const inputs = operation.abi.targetReceiver.kind === "input"
     ? [operation.abi.targetReceiver.input, ...operation.abi.targetArguments] : operation.abi.targetArguments;
   const output: Node[] = [];
+  const argumentsList = borrowedOperationArguments(node, ast);
+  if (argumentsList === undefined) return output;
   for (const input of inputs) {
     if (!("mode" in input) || input.mode !== "ref" || !("sourceCarrier" in input) ||
       !isRustStringCarrier(input.sourceCarrier) || input.conversion.kind !== "identity") continue;
     const callee = Node_Expression(ast, node);
-    const source = input.source.kind === "argument" ? ast.arguments(node)[input.source.sourceIndex]
+    const source = input.source.kind === "argument" ? argumentsList[input.source.sourceIndex]
       : input.source.kind === "receiver" ? ast.is.IsCallExpression(node)
         ? callee === undefined ? undefined : Node_Expression(ast, callee) : callee : undefined;
     if (source !== undefined) output.push(source);
   }
   return output;
+}
+
+function borrowedOperationArguments(node: Node, ast: AstReader): readonly (Node | undefined)[] | undefined {
+  if (ast.is.IsCallExpression(node) || ast.is.IsNewExpression(node)) return ast.arguments(node);
+  if (ast.is.IsPropertyAccessExpression(node)) return [];
+  if (ast.is.IsElementAccessExpression(node)) {
+    const argument = ElementAccessExpression_ArgumentExpression(ast, node);
+    return argument === undefined ? undefined : [argument];
+  }
+  return undefined;
 }

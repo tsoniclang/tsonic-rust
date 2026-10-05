@@ -54,7 +54,7 @@ import {
   rustProjectImplementationVisibility,
   rustProjectMemberStorageVisibility,
 } from "../../objects/project-storage-abi.js";
-import { rustProjectObjectIdentityImplementation } from "../../objects/project-identity.js";
+import { rustProjectStateIdentityImplementation } from "../../objects/project-identity.js";
 import { rustProjectTypeParameterContext } from "../../names/type-parameters.js";
 import { rustProjectWrapperTraits } from "../../objects/project-wrapper-traits.js";
 import { rustClassEnvironmentContext, rustClassEnvironmentParameter } from "../../objects/class-environments.js";
@@ -442,16 +442,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     ...(explicitWrapperTraits ? rustProjectWrapperTraits(openType, className, generics) : []),
     ...(representation.kind === "value"
       ? []
-      : [rustProjectObjectIdentityImplementation(openType, generics, {
-          kind: "method-call",
-          receiver: {
-            kind: "field",
-            receiver: { kind: "path", path: "self" },
-            name: rustProjectObjectStateField,
-          },
-          method: "object_identity",
-          args: [],
-        })]),
+      : [rustProjectStateIdentityImplementation(openType, generics)]),
     implementation,
     ...(defaultImplementation === undefined ? [] : [defaultImplementation]),
   ];

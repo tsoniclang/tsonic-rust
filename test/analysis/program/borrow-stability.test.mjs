@@ -90,11 +90,14 @@ for (const surfaces of [[], ["js"]]) {
   });
 
   test(`borrowed writes reject stale captures, unknown projections and non-stored views in ${profile}`, () => {
-    const { program } = analyzeRust({ surfaces, files: { "index.ts": borrowedScalarFieldWritesSource } });
+    const source = borrowedScalarFieldWritesSource.replace("interface Point { x: number; y: number; }",
+      "type Point = { x: number; y: number };");
+    const { program } = analyzeRust({ surfaces, files: { "index.ts": source } });
     const assignment = functionAssignment(program, "parameter");
     const selected = program.borrowStability.borrowedWriteFor(assignment);
     assert.equal(selected !== undefined, true);
     const targetFact = program.facts.getFact(selected.target, rustTargetOperationFactKey);
+    assert.equal(targetFact.storage, "structural-object", "the structural mutation bank targets its actual owner");
     const storageFact = program.facts.getFact(selected.field.declaration, rustCapturedFieldStorageFactKey);
     assert.equal(storageFact !== undefined, true);
     const mutations = [
@@ -178,6 +181,19 @@ export function provider(holder: Value, value: number): void { holder.point.x = 
     } };
     assert.equal(analyzeRustBorrowStability(analysisInput(program, facts)).plan.borrowedWriteFor(assignment) === undefined, true, String(index));
   }
+});
+
+test("provider property and indexed reads use their own AST input shape without call argument reconstruction", () => {
+  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": borrowedScalarFieldWritesSource + `
+export function constant(holder: Value): void { holder.point.x = Math.PI; }
+export function observed(holder: Value, text: string): void { holder.point.x = text.length; }
+export function indexed(values: string[]): number { return values[0].length; }
+` } });
+  const constant = functionAssignment(program, "constant");
+  assert.equal(program.borrowStability.borrowedWriteFor(constant) !== undefined, true, "exact pure constant ABI");
+  const observed = functionAssignment(program, "observed");
+  assert.equal(program.borrowStability.borrowedWriteFor(observed) === undefined, true,
+    "an owned string observation is not an unprojected primitive Copy input");
 });
 
 test("borrow stability budgets are finite, bounded and reject cycles without AST diagnostics", () => {

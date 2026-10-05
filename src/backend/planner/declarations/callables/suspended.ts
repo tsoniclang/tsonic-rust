@@ -71,7 +71,7 @@ function planImplementation(implementation: RustSuspendedCallableImplementation,
     ...implementation.receiverFields.map((capture, index) => {
       const type = rustTypeFromCarrierInContext(implementation.storage[implementation.captures.length + index]!, scoped);
       return type === undefined ? undefined : rustCapturedReceiverFieldType(capture, type, scoped);
-    }), ...implementation.receivers.map((capture, index) => rustTypeFromCarrierInContext(
+    }), ...implementation.receivers.map((_capture, index) => rustTypeFromCarrierInContext(
       implementation.storage[implementation.captures.length + implementation.receiverFields.length + index]!, scoped))];
   const requirements = context.input.program.declarationGenericRequirements.contractFor(declaration);
   if (protocol === undefined || argumentsType === undefined || resultType === undefined || target === undefined ||

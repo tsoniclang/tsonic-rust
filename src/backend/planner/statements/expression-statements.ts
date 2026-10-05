@@ -21,7 +21,6 @@ import {
 } from "@tsonic/target-api/source";
 import {
   planRustMutableProjectReceiver,
-  planRustSharedReceiver,
   planRustNonConsumingValue,
   planRustPromotedStorageLocation,
   planRustPromotedStorageWrite,
@@ -284,7 +283,7 @@ export function planRustAssignmentWrite(
         borrowedWrite.field.storageIndex, context);
       const representation = rustProjectObjectRepresentation(borrowedWrite.field.receiverCarrier, context);
       if (plannedOwner === undefined || path === undefined || representation === undefined) return undefined;
-      const owner = planRustSharedReceiver(borrowedWrite.owner, plannedOwner, context);
+      const owner = planRustNonConsumingValue(borrowedWrite.owner, plannedOwner, context);
       selected = withRustProjectStoredField(owner, path, representation, write);
     } else {
       context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, expression),

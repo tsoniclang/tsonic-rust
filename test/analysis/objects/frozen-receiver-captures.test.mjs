@@ -198,7 +198,7 @@ test("closed union variants preserve source owner demand without freezing unrela
   const unrelatedGroup = capture({ owner: unrelated }, ["write"]);
   const selected = fixture({ freezeCarrier: union, owners: [owner, unrelated],
     groups: [capture({}, ["write"]), unrelatedGroup],
-    unions: new Map([[closedMetadataKey(union), [{ carrier: view }]]),
+    unions: new Map([[closedMetadataKey(union), [{ carrier: view }]]]),
     views: [{ sourceCarrier: ownerCarrier, targetCarrier: view }] });
   const plan = selected.analyze();
   assert.equal(plan.capturesFieldIdentity(selected.groups[0].declaration), true);

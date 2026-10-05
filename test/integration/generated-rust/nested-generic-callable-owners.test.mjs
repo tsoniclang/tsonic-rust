@@ -18,8 +18,8 @@ import { check } from "@acme/testing";
 const create = <Outer>(seed: Outer) => {
   let calls = 0;
   return <Value>(value: Value): Value => {
-    const held: Outer[] = [seed];
-    if (held.length === 0) throw new Error("missing capture");
+    const held: [Outer, boolean] = [seed, true];
+    if (!held[1]) throw new Error("missing capture");
     calls += 1;
     if (calls === 3) throw new Error("third invocation");
     return value;

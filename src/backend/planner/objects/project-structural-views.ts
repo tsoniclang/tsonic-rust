@@ -21,13 +21,11 @@ import { checkRustDataWrite } from "./data-writes.js";
 import { planRustSourceAccessorCall } from "../expressions/properties.js";
 import { applyRustFallibleResultExpression } from "../types/fallible-shape.js";
 import { rustStructuralDispatchType } from "./project-structural-types.js";
-import { rustProjectViewMatches } from "../../../analysis/objects/view-implementations.js";
 
 export function planRustProjectStructuralConversion(
   expression: RustExpr, sourceCarrier: TargetTypeRef, targetCarrier: TargetTypeRef, context: RustPlanContext,
 ): RustExpr | undefined {
-  const view = context.input.program.classValues.instanceViews.find(view =>
-    rustProjectViewMatches(view, sourceCarrier, targetCarrier));
+  const view = context.input.program.classValues.instanceViewFor(sourceCarrier, targetCarrier);
   const type = rustTypeFromCarrierInContext(targetCarrier, context);
   const definition = context.input.program.projectTypes.definitionForCarrier(sourceCarrier);
   const representation = context.input.program.objectRepresentations.representationFor(definition);

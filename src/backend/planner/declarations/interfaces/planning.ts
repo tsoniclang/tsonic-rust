@@ -16,6 +16,7 @@ import { rustProjectWrapperTraits } from "../../objects/project-wrapper-traits.j
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustProjectImplementationVisibility } from "../../objects/project-storage-abi.js";
 import { structAttributes } from "../struct-attributes.js";
+import { rustProjectStateIdentityImplementation } from "../../objects/project-identity.js";
 
 export function planInterfaceDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
   const { ast } = context.input.program.source;
@@ -254,5 +255,6 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
       visibility: storageVisibility,
       ...(publiclyReachable ? { attrs: [rustHiddenAttribute] } : {}),
     }],
-  }, ...(explicitWrapperTraits ? rustProjectWrapperTraits(interfaceType, interfaceName, generics) : [])];
+  }, ...(explicitWrapperTraits ? rustProjectWrapperTraits(interfaceType, interfaceName, generics) : []),
+  ...(representation.kind === "value" ? [] : [rustProjectStateIdentityImplementation(interfaceType, generics)])];
 }

@@ -2,6 +2,16 @@ import { rustSelfParameter } from "../declarations/callables/self-parameter.js";
 import type { RustExpr, RustGenerics, RustItem, RustType } from "../../target-ast/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/nodes.js";
 import { planCheckedNativeProjectionImplementation } from "./checked-project-projections.js";
+import { rustProjectObjectStateField } from "./project-objects.js";
+
+export function rustProjectStateIdentityImplementation(target: RustType, generics: RustGenerics): RustItem {
+  return rustProjectObjectIdentityImplementation(target, generics, {
+    kind: "method-call",
+    receiver: { kind: "field", receiver: { kind: "path", path: "self" }, name: rustProjectObjectStateField },
+    method: "object_identity",
+    args: [],
+  });
+}
 
 export function rustProjectObjectIdentityImplementation(
   target: RustType,

@@ -660,7 +660,7 @@ export const jsOperationRows = defineJsOperationRows([
   { owner: "Math", member: "ceil", operationKind: "call", lane: "math", shape: { op: "operation", operationKind: "method", target: { form: "arg-method", name: "ceil" }, result: { ref: "float64" }, params: [{ ref: "float64" }] } },
   { owner: "Math", member: "clz32", operationKind: "call", lane: "math", requirements: [{ carrier: { ref: "argument", index: 0 }, capability: "numeric" }], shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::math_clz32" }, result: { ref: "int32" }, params: [{ ref: "argument", index: 0 }] } },
   { owner: "Math", member: "trunc", operationKind: "call", lane: "math", shape: { op: "operation", operationKind: "method", target: { form: "arg-method", name: "trunc" }, result: { ref: "float64" }, params: [{ ref: "float64" }] } },
-  { owner: "Math", member: "abs", operationKind: "call", lane: "math", shape: { op: "operation", operationKind: "method", target: { form: "arg-method", name: "abs" }, result: { ref: "float64" }, params: [{ ref: "float64" }] } },
+  { owner: "Math", member: "abs", operationKind: "call", lane: "math", shape: { op: "operation", evaluation: "pure", operationKind: "method", target: { form: "arg-method", name: "abs" }, result: { ref: "float64" }, params: [{ ref: "float64" }] } },
   { owner: "Math", member: "acos", operationKind: "call", lane: "math", shape: { op: "operation", operationKind: "method", target: { form: "arg-method", name: "acos" }, result: { ref: "float64" }, params: [{ ref: "float64" }] } },
   { owner: "Math", member: "acosh", operationKind: "call", lane: "math", shape: { op: "operation", operationKind: "method", target: { form: "arg-method", name: "acosh" }, result: { ref: "float64" }, params: [{ ref: "float64" }] } },
   { owner: "Math", member: "asin", operationKind: "call", lane: "math", shape: { op: "operation", operationKind: "method", target: { form: "arg-method", name: "asin" }, result: { ref: "float64" }, params: [{ ref: "float64" }] } },
@@ -700,7 +700,7 @@ export const jsOperationRows = defineJsOperationRows([
     ["PI", "js_abi::MATH_PI"],
     ["SQRT1_2", "js_abi::MATH_SQRT1_2"],
     ["SQRT2", "js_abi::MATH_SQRT2"],
-  ] as const).map(([member, path]): JsOperationRowData => ({ owner: "Math", member, operationKind: "property", lane: "math", shape: { op: "operation", operationKind: "property", target: { form: "path", path }, result: { ref: "float64" } } })),
+  ] as const).map(([member, path]): JsOperationRowData => ({ owner: "Math", member, operationKind: "property", lane: "math", shape: { op: "operation", evaluation: "pure", operationKind: "property", target: { form: "path", path }, result: { ref: "float64" } } })),
 
   ...nativeNumberPredicateRows("NumberConstructor", "number"),
   { owner: "NumberConstructor", member: "parseFloat", operationKind: "call", lane: "number", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::number_parse_float", argModes: ["ref"] }, result: { ref: "float64" }, params: [{ ref: "string" }] } },

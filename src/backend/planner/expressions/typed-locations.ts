@@ -151,9 +151,7 @@ export function planRustNonConsumingValue(
   context: RustPlanContext,
 ): RustExpr {
   if (!rustExpressionReadsStorage(node, context)) return expression;
-  const carrier = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
-  return rustReadRequiresClone(carrier, context) &&
-      expression.kind === "method-call" && expression.method === "clone" &&
+  return expression.kind === "method-call" && expression.method === "clone" &&
       expression.args.length === 0
     ? expression.receiver
     : expression;

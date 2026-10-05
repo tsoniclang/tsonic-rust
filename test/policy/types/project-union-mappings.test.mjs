@@ -8,7 +8,8 @@ import { composeRustUnionArmMappings, selectRustUnionArmMapping } from "../../..
 import { selectRustProjectUnionMapConversion, isRustProjectUnionMapConversion, rustProjectUnionMapConversionMatches } from "../../../dist/target-model/conversions/project-union.js";
 import { rustCompilerOwnedContextualConversionMatches, rustContextualRuntimeConversionContract,
   rustContextualValueConversionIsFallible } from "../../../dist/target-model/conversions/contextual.js";
-import { selectRustProjectUnionMapping, rustProjectUnionUpcastRelation } from "../../../dist/policy/types/project-union-mappings.js";
+import { selectRustProjectUnionMapping } from "../../../dist/policy/types/project-union-mappings.js";
+import { rustProjectUnionUpcastRelation } from "../../../dist/target-model/conversions/project-union-relations.js";
 import { selectRustFlowReadProjection, selectRustValueCarrierReconciliation } from "../../../dist/policy/types/value-carrier-reconciliation.js";
 import { planRustProjectUnionMapping } from "../../../dist/backend/planner/expressions/project-union-mappings.js";
 import { planExpression, planRustProjectUpcast } from "../../../dist/backend/planner/expressions/entry.js";
@@ -225,7 +226,7 @@ test("nominal union liveness reuses exact upcast fields and retains every nested
     projectTypes: { ...projectTypes, definitions: classes, isPolymorphic: () => false,
       definitionForDeclaration: () => undefined,
       definitionForCarrier: carrier => classes.find(definition => rustTargetTypeRefEquals(definition.carrier, carrier)) },
-    classValues: { instanceViews: [] }, declarationGenericRequirements: { projectionImplementationsFor: () => [] },
+    classValues: { instanceViews: [], instanceViewFor: () => undefined }, declarationGenericRequirements: { projectionImplementationsFor: () => [] },
     typeDefinitions: definitions,
   });
   for (const arm of conversion.arms) {

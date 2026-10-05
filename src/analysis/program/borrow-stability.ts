@@ -149,7 +149,7 @@ function selectBorrowedWrite(
       selected.readonly || !rustTargetTypeRefEquals(selected.carrier, stored.resultCarrier)) return undefined;
   } else {
     const child = projectTypes.definitionForCarrier(stored.receiverCarrier);
-    if (child === undefined || parent === child || child.kind !== "class" ||
+    if (child === undefined || parent === child || child.kind !== "class" && child.kind !== "interface" ||
       projectTypes.isPolymorphic(child) || projectTypes.inheritedExternalBaseForDefinition(child) !== undefined ||
       objectRepresentations.representationFor(child)?.kind !== "shared-mutable") return undefined;
   }

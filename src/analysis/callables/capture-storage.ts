@@ -68,33 +68,32 @@ function singleOwnerDirectBinding(
     !summary.uses.some(use => use.reference === reference) ||
     summary.hasUnclassifiedValueUse !== summary.uses.some(use => use.role === "value")) return false;
   const roots = new Set(captureRoots);
-  const directReferences = new Set<Node>();
   let steps = 0;
-  for (const use of summary.uses) {
-    if (++steps > 262_144) return false;
-    if (use.kind === "type-only") continue;
-    for (let current = ast.parent(use.reference); current === undefined || !roots.has(current); current = ast.parent(current)) {
-      if (++steps > 262_144) return false;
-      if (current === undefined || ["KindArrowFunction", "KindFunctionExpression", "KindFunctionDeclaration",
-        "KindMethodDeclaration", "KindGetAccessor", "KindSetAccessor", "KindConstructor"].includes(ast.kindName(current))) return false;
-    }
-    let expression = use.reference;
-    let parent = ast.parent(expression);
-    while (parent !== undefined && rustSourceValueWrapperContains(parent, expression, ast)) {
-      if (++steps > 262_144) return false;
-      expression = parent;
-      parent = ast.parent(expression);
-    }
-    if (parent !== undefined && (ast.is.IsCallExpression(parent) || ast.is.IsNewExpression(parent))) {
-      if (!rustCallArgumentIsOwned(expression, ast, walk.context.facts)) return false;
-    } else if (parent === undefined || !["KindReturnStatement", "KindBinaryExpression", "KindPrefixUnaryExpression",
-      "KindPostfixUnaryExpression", "KindConditionalExpression", "KindVariableDeclaration", "KindArrayLiteralExpression",
-      "KindPropertyAssignment", "KindShorthandPropertyAssignment", "KindIfStatement", "KindWhileStatement",
-      "KindDoStatement", "KindForStatement", "KindSwitchStatement", "KindCaseClause", "KindExpressionStatement"].includes(ast.kindName(parent))) {
-      return false;
-    }
-    directReferences.add(use.reference);
-  }
   return sourceBindingHasSingleCaptureOwner(declaration, owner, captureRoots, ast, source.navigation,
-    (use: SourceDeclarationUse) => directReferences.has(use.reference));
+    (use: SourceDeclarationUse) => {
+      if (++steps > 262_144) return false;
+      for (let current = ast.parent(use.reference); current === undefined || !roots.has(current); current = ast.parent(current)) {
+        if (++steps > 262_144) return false;
+        if (current === undefined || ["KindArrowFunction", "KindFunctionExpression", "KindFunctionDeclaration",
+          "KindMethodDeclaration", "KindGetAccessor", "KindSetAccessor", "KindConstructor"].includes(ast.kindName(current))) return false;
+      }
+      let expression = use.reference;
+      let parent = ast.parent(expression);
+      while (parent !== undefined && rustSourceValueWrapperContains(parent, expression, ast)) {
+        if (++steps > 262_144) return false;
+        expression = parent;
+        parent = ast.parent(expression);
+      }
+      if (parent !== undefined && (ast.is.IsCallExpression(parent) || ast.is.IsNewExpression(parent))) {
+        if (!rustCallArgumentIsOwned(expression, ast, walk.context.facts)) return false;
+      } else if (parent !== undefined && ast.is.IsArrowFunction(parent) && ast.body(parent) === expression) {
+        return true;
+      } else if (parent === undefined || !["KindReturnStatement", "KindBinaryExpression", "KindPrefixUnaryExpression",
+        "KindPostfixUnaryExpression", "KindConditionalExpression", "KindVariableDeclaration", "KindArrayLiteralExpression",
+        "KindPropertyAssignment", "KindShorthandPropertyAssignment", "KindIfStatement", "KindWhileStatement",
+        "KindDoStatement", "KindForStatement", "KindSwitchStatement", "KindCaseClause", "KindExpressionStatement"].includes(ast.kindName(parent))) {
+        return false;
+      }
+      return true;
+    });
 }

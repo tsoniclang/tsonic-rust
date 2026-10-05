@@ -312,12 +312,13 @@ function planRootContractFunctions(
       ? undefined
       : rustErrorType(fieldErrorBoundary);
     const readResult = dispatch.read.fallible
-      ? readValue.errorType !== undefined &&
-          !rustTypeEquals(readValue.errorType, fieldErrorType)
-        ? undefined
-        : applyRustFallibleResultExpression(readValue.expression, {
+      ? readValue.errorType === undefined
+        ? applyRustFallibleResultExpression(readValue.expression, {
             errorType: fieldErrorType!,
           })
+        : rustTypeEquals(readValue.errorType, fieldErrorType)
+          ? readValue.expression
+          : undefined
       : readValue.errorType === undefined
         ? readValue.expression
         : undefined;

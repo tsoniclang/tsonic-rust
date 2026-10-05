@@ -408,7 +408,11 @@ export function collectRustLexicalCaptures(
   for (const capture of selected.captures) {
     const declaration = capture.declaration;
     if (walk.context.facts.get(declaration, rustCompileTimeSourceKey) === true) continue;
-    if (declaration === valueDeclaration) { recursiveDeclaration = declaration; continue; }
+    if (declaration === valueDeclaration &&
+      !walk.context.source.navigation.declarationUseSummary(declaration).bindingWritten) {
+      recursiveDeclaration = declaration;
+      continue;
+    }
     const kind = ast.kindName(declaration);
     if (kind !== KindParameter && kind !== KindVariableDeclaration && kind !== KindBindingElement &&
       kind !== "KindFunctionDeclaration") continue;

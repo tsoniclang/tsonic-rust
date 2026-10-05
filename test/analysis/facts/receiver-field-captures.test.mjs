@@ -84,13 +84,23 @@ for (const surfaces of [[], ["js"]]) test(`immutable scalar field captures have 
 
 for (const surfaces of [[], ["js"]]) test(`retained fields do not allocate freeze identity without demand in ${surfaces[0] ?? "native"}`, () => {
   const { result } = compileRust({ surfaces, files: { "index.ts": `
-    export class Value {
+    class Value {
       value = 1;
       change = (): void => { this.value = 2; };
     }
     export function main(): void { new Value().change(); }
   ` } });
   assert.equal(result.diagnostics.length, 0, "closed live-field source");
-  assert.equal(/ObjectIdentity::new|with_context_and_identity/u.test(rustSourceText(result)), false,
+  assert.equal(/ObjectIdentity::new\s*\(|let \w*object_identity\w*\s*=|let captured_field\w*\s*=\s*\(/u.test(rustSourceText(result)), false,
     "no freeze identity allocation or capture envelope");
+});
+
+for (const surfaces of [[], ["js"]]) test(`nominal field captures do not retain an unused freeze token in ${surfaces[0] ?? "native"}`, () => {
+  const { result } = compileRust({ surfaces, files: { "index.ts": `
+    export class Value { value = 1; change = (): void => { this.value = 2; }; }
+    export function main(): void { new Value().change(); }
+  ` } });
+  assert.equal(result.diagnostics.length, 0, "closed nominal live-field source");
+  assert.equal(/let \w*object_identity\w*\s*=|let captured_field\w*\s*=\s*\(/u.test(rustSourceText(result)), false,
+    "nominal owner identity is not retained by an unrelated field-only callback");
 });

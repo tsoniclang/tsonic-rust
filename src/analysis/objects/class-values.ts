@@ -16,7 +16,7 @@ import type { RustAnalysisContext } from "../program/context.js";
 import { rustProjectStaticFieldStorage, type RustProjectStaticFieldStorage } from "../project-types/object-layout.js";
 import { selectRustClassValueCallable, type RustClassValueCallable } from "./class-value-callables.js";
 import type { RustProjectStructuralView, RustProjectStructuralViewImplementation } from "./project-structural-views.js";
-import { selectRustProjectViewImplementations } from "./view-implementations.js";
+import { rustProjectViewMatches, selectRustProjectViewImplementations } from "./view-implementations.js";
 import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
 import type { RustCallableValueAdapter } from "../facts/callable-adapters.js";
 import { rustCallableAdapterValues } from "../callables/adapter-values.js";
@@ -49,6 +49,7 @@ export interface RustClassValuePlan {
   readonly constructorViewImplementations: readonly (RustClassValueView & { readonly ownerFileName: string })[];
   readonly instanceViews: readonly RustProjectStructuralView[];
   readonly instanceViewImplementations: readonly RustProjectStructuralViewImplementation[];
+  instanceViewFor(sourceCarrier: TargetTypeRef, targetCarrier: TargetTypeRef): RustProjectStructuralView | undefined;
   forDeclaration(declaration: Node): RustClassValueDefinition | undefined;
   forCarrier(carrier: TargetTypeRef): RustClassValueDefinition | undefined;
   viewFor(declaration: Node, sourceCarrier: TargetTypeRef, carrier: TargetTypeRef): RustClassValueDefinition["views"][number] | undefined;
@@ -227,6 +228,8 @@ export function createRustClassValueRegistry(): RustClassValueRegistry {
         constructorViewImplementations: selectRustProjectViewImplementations([...byDeclaration.values()].flatMap(definition => definition.views), context),
         instanceViews: Object.freeze([...instanceViews]),
         instanceViewImplementations: selectRustProjectViewImplementations(instanceViews, context),
+        instanceViewFor: (sourceCarrier: TargetTypeRef, targetCarrier: TargetTypeRef) =>
+          instanceViews.find(view => rustProjectViewMatches(view, sourceCarrier, targetCarrier)),
         forDeclaration: (declaration: Node) => byDeclaration.get(declaration),
         forCarrier(carrier: TargetTypeRef) {
           const definition = context.projectTypes.definitionForCarrier(carrier);

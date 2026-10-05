@@ -5,12 +5,12 @@ import { receiverFieldStorageCases } from "../../../../tsonic/test/fixtures/rece
 import { generalizeRustProjectStructuralView } from "../../../dist/analysis/objects/project-structural-views-generics.js";
 import { rustProjectViewMatches } from "../../../dist/analysis/objects/view-implementations.js";
 import { rustSourceTypeCarrier, rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from "../../../dist/target-model/types/carriers/source-types.js";
-import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
+import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustTargetGenericReferences } from "../../../dist/target-model/types/carriers/generic-references.js";
 
 const parameter = { kind: "type-parameter", identity: "source:Value", name: "Value" };
 const otherParameter = { kind: "type-parameter", identity: "destination:Value", name: "Value" };
-const text = { kind: "source-primitive", name: "string" };
+const text = { kind: "target-named", id: "rust.std.String" };
 const number = { kind: "source-primitive", name: "float64" };
 const source = (type, name = "Box") => rustSourceTypeCarrier("/model.ts", name, "object", [{ kind: "type", type }]);
 const target = (type, options = {}) => rustStructuralObjectTargetType(options.file ?? "/view.ts", [
@@ -20,6 +20,8 @@ const target = (type, options = {}) => rustStructuralObjectTargetType(options.fi
 test("native structural view selection instantiates the same exact source and destination binder", () => {
   const view = { sourceCarrier: source(parameter), targetCarrier: target(parameter) };
   for (const type of [text, number, otherParameter]) {
+    assert.equal(isRustTargetTypeRef(source(type)), true, "the source uses a valid native carrier");
+    assert.equal(isRustTargetTypeRef(target(type)), true, "the destination uses a valid native carrier");
     assert.equal(rustProjectViewMatches(view, source(type), target(type)), true);
   }
   assert.equal(rustProjectViewMatches(view, source(text), target(number)), false);
