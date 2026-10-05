@@ -6,7 +6,7 @@ import {
 } from "@tsonic/target-api/source";
 import { resolveOwnedSourceProfileTypeNameForDeclaration } from "./providers.js";
 import { resolveRustTargetType } from "./target.js";
-import { resolveRustTargetTypeSyntax } from "./source.js";
+import { resolveRustTargetTypeRef, resolveRustTargetTypeSyntax } from "./source.js";
 import { resolveRustConditionalAlias } from "./type-families.js";
 import { resolveRustTypeComponentEvidence } from "./source-evidence.js";
 import { rustSliceMutRefTargetType, rustSliceRefTargetType } from "../../../target-model/types/index.js";
@@ -147,12 +147,10 @@ export function resolveReferencedDeclarationType(
         }
       }
       const initializer = Node_Initializer(ast, declaration);
-      const selectedResult = initializer === undefined
+      const selectedCall = initializer === undefined
         ? undefined
-        : context.facts.getSelectedTargetCall(initializer)?.member.returnType;
-      if (selectedResult !== undefined) {
-        return selectedResult;
-      }
+        : context.facts.getSelectedTargetCall(initializer);
+      if (selectedCall !== undefined) return resolveRustTargetTypeRef(initializer, context, options);
   }
   return undefined;
 }

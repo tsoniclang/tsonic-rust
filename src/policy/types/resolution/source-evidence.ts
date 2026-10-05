@@ -38,6 +38,7 @@ import { rustGenericCallableOrigin } from "../generic-callable-origin.js";
 import { closeRustSuspendedStorage } from "../suspended-storage.js";
 import { rustSourceSelectionUsesExactBindings } from "./bound-source-selection.js";
 import { bindRustCallableEnvironment, resolveRustCallableEnvironment } from "./callable-environments.js";
+import { retainRustCallableStructuralStorage } from "./structural-instantiations.js";
 
 export function resolveRustSignatureParameterListTarget(
   parameters: SourceCallableTypeEvidence["parameters"],
@@ -109,8 +110,10 @@ export function resolveRustCallableEvidence(
     genericContract.parameters.every(parameter => parameter.kind === "type")) {
     const origin = rustGenericCallableOrigin(context.ast, declaration);
     const environment = resolveRustCallableEnvironment(declaration, context, options, resolving);
-    return origin === undefined || environment === undefined ? undefined : bindRustCallableEnvironment(rustGenericCallableTargetType(
+    const carrier = origin === undefined || environment === undefined ? undefined : bindRustCallableEnvironment(rustGenericCallableTargetType(
       genericContract.parameters.map(rustTypeParameterFromSourceContract), parameters as readonly TargetTypeRef[], result, origin, environment), context);
+    return carrier !== undefined && retainRustCallableStructuralStorage(callable,
+      parameters as readonly TargetTypeRef[], result, carrier, context, options, resolving) ? carrier : undefined;
   }
   if (genericContract?.lifetimeBinder !== undefined) {
     return genericContract.parameters.some((parameter) => parameter.kind !== "lifetime")

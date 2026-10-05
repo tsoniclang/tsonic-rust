@@ -48,7 +48,7 @@ import { rustGenericCallableProtocol } from "../../target-model/types/carriers/g
 import { substituteRustValueConversion } from "../../target-model/conversions/substitution.js";
 import { recordSelectedMethodSpecialization } from "./project-method-calls.js";
 import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
-import { selectRustSourceCallResult } from "../../policy/types/resolution/call-results.js";
+import { retainRustSelectedCallableResultTemplate, selectRustSourceCallResult } from "../../policy/types/resolution/call-results.js";
 import { rustSourceCallArgumentCarriers, rustSourceCallResultWithInputLifetimes } from "../facts/source-call-lifetimes.js";
 
 export function applySelectedProjectSourceCall(
@@ -66,6 +66,12 @@ export function applySelectedProjectSourceCall(
   const selectedMember = selectedSignature.member;
   if (!isDenseDataArray(callArguments) || callArguments.some((argument) => argument === undefined)) {
     appendMalformedSourceAst(walk, "Checked project-source call contains an undefined or non-data argument slot.");
+    return undefined;
+  }
+  if (!retainRustSelectedCallableResultTemplate(selectedSignature, rustResolutionContext(walk, expression), walk.operationOptions)) {
+    appendRustDiagnostic(walk, "RUST_SOURCE_CALL_CALLABLE_RESULT_STORAGE_MISSING",
+      "The selected callable invocation has no exact rebound structural result storage.", expression,
+      ["target.capability=rust.source-call.callable-result-storage"]);
     return undefined;
   }
   const genericInstantiation = finalizeProjectSourceGenericArguments(

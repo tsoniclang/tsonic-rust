@@ -18,12 +18,15 @@ import {
 } from "../../../target-model/types/index.js";
 import { rustSourceOptionalTargetType } from "../../../target-model/types/projections.js";
 import { retainRustStructuralInstantiation } from "./structural-instantiations.js";
+import { rustGenericCallableSignaturesMatch } from "../../../target-model/conversions/generic-callable.js";
 
 export function resolveRustUnionValueCarrier(
   values: readonly TargetTypeRef[],
   options: RustTargetTypeResolutionOptions,
   resolveInferred: () => TargetTypeRef | undefined,
 ): TargetTypeRef | undefined {
+  const callable = values[0];
+  if (callable !== undefined && values.every(value => rustGenericCallableSignaturesMatch(value, callable))) return callable;
   if (options.jsEnabled && values.length === 2 &&
     values.some(carrier => rustTargetTypeRefEquals(carrier, rustSourcePrimitiveTargetType("float64")))) {
     if (values.some(carrier => rustTargetTypeRefEquals(carrier, rustStringTargetType()))) {

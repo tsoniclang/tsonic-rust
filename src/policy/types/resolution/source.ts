@@ -68,6 +68,7 @@ import { resolveRustProviderIndexedAccess } from "./indexed-access.js";
 import { resolveRustSourceDeclarationArguments } from "./generic-arguments.js";
 import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
 import { rustSourceErrorComponentContext } from "./error-storage-projection.js";
+import { resolveRustSelectedSourceCallResult } from "./call-results.js";
 
 export function resolveRustTargetTypeRef(
   subject: ExtensionFactSubject | undefined,
@@ -167,10 +168,8 @@ export function resolveRustTargetTypeRef(
   if (operationResult !== undefined) {
     return operationResult;
   }
-  const selectedCallResult = context.facts.getSelectedTargetCall(subject)?.member.returnType;
-  if (selectedCallResult !== undefined) {
-    return selectedCallResult;
-  }
+  const selectedCall = context.facts.getSelectedTargetCall(subject);
+  if (selectedCall !== undefined) return resolveRustSelectedSourceCallResult(selectedCall, context, options);
   if (node !== undefined && (context.ast.is.IsPropertyDeclaration(node) || context.ast.is.IsPropertySignatureDeclaration(node))) {
     const typeNode = Node_Type(context.ast, node);
     if (typeNode !== undefined) {

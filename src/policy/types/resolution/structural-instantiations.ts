@@ -9,9 +9,10 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { resolveRustTypeComponentEvidence } from "./source-evidence.js";
 import { rustTypeFamilyNormalizer } from "../type-family-normalization.js";
 import { mapRustTargetTypes } from "../../../target-model/types/carriers/substitution.js";
-import { bindRustSourceAliasArguments } from "./generic-arguments.js";
+import { bindRustCallableTypeParameters, bindRustSourceAliasArguments } from "./generic-arguments.js";
 import { rustCallableProtocol } from "../../../target-model/types/carriers/callables.js";
-import { rustGenericCallableProtocol } from "../../../target-model/types/carriers/generic-callables.js";
+import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
+import type { SourceCallableTypeEvidence } from "@tsonic/target-api/source";
 import { isRustErasedNominalMember } from "../source-shapes.js";
 
 export function retainRustStructuralInstantiation(
@@ -125,9 +126,41 @@ function retainSignature(
   const selected = rustGenericCallableProtocol(carrier) ?? rustCallableProtocol(carrier);
   const result = signature.returnType;
   const parameters = signature.parameters;
+  const generic = rustGenericCallableValue(carrier);
+  if (generic !== undefined) {
+    const declaration = context.currentSemantics.declarations.signatureDeclaration(signature.signature);
+    const selectedContext = declaration === undefined ? undefined :
+      bindRustCallableTypeParameters(declaration, generic.signature.typeParameters, context);
+    if (selectedContext === undefined) return false;
+    context = selectedContext;
+  }
   if (template === undefined || selected === undefined || result === undefined ||
     template.parameters.length !== selected.parameters.length || parameters.length !== selected.parameters.length ||
     !retainRustStructuralInstantiation(result, template.result, selected.result, context, options, resolving)) return false;
   return parameters.every((parameter, index) => retainRustStructuralInstantiation(
     parameter.type, template.parameters[index]!, selected.parameters[index]!, context, options, resolving));
+}
+
+export function retainRustCallableStructuralStorage(
+  callable: SourceCallableTypeEvidence,
+  parameters: readonly TargetTypeRef[],
+  result: TargetTypeRef,
+  carrier: TargetTypeRef,
+  context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
+  resolving: Set<object>,
+): boolean {
+  if (![result, ...parameters].some(containsStructuralStorage)) return true;
+  const generic = rustGenericCallableValue(carrier);
+  const protocol = rustGenericCallableProtocol(carrier);
+  const declaration = callable.result.declaration;
+  const selectedContext = generic === undefined || declaration === undefined ? undefined :
+    bindRustCallableTypeParameters(declaration, generic.signature.typeParameters, context);
+  if (protocol === undefined || selectedContext === undefined ||
+    protocol.parameters.length !== parameters.length || callable.parameters.length !== parameters.length) return false;
+  return retainRustStructuralInstantiation(callable.result.selectedType, result, protocol.result,
+    selectedContext, options, resolving, callable.result.authoredTypeNode) &&
+    callable.parameters.every((parameter, index) => retainRustStructuralInstantiation(parameter.type,
+      parameters[index]!, protocol.parameters[index]!, selectedContext, options, resolving,
+      parameter.declaration === undefined ? undefined : context.ast.typeNode(parameter.declaration)));
 }

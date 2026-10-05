@@ -42,6 +42,30 @@ export function bindRustSelectedCallTypeArguments(
   return { ...context, sourceTypeParameterSubstitutions: substitutions };
 }
 
+export function bindRustCallableTypeParameters(
+  declaration: Node,
+  targetParameters: readonly Extract<TargetTypeRef, { readonly kind: "type-parameter" }>[],
+  context: RustTargetTypeResolutionContext,
+): RustTargetTypeResolutionContext | undefined {
+  const parameters = context.sourceLifetimes.contractFor(declaration)?.parameters ?? [];
+  if (parameters.length !== targetParameters.length ||
+    parameters.some(parameter => parameter.kind !== "type") ||
+    new Set(targetParameters.map(parameter => parameter.identity)).size !== targetParameters.length) return undefined;
+  if (parameters.length === 0) return context;
+  const semantics = context.semanticsFor(declaration);
+  const substitutions = new Map(context.sourceTypeParameterSubstitutions);
+  const declarations = new Set<Node>();
+  for (const [index, parameter] of parameters.entries()) {
+    const sourceType = semantics.declarations.declaredType(parameter.declaration);
+    const symbol = sourceType === undefined ? undefined : semantics.declarations.typeSymbol(sourceType);
+    if (sourceType === undefined || symbol === undefined || declarations.has(parameter.declaration) ||
+      semantics.declarations.primarySymbolDeclaration(symbol) !== parameter.declaration) return undefined;
+    declarations.add(parameter.declaration);
+    substitutions.set(parameter.declaration, { sourceType, carrier: targetParameters[index]! });
+  }
+  return { ...context, currentSemantics: semantics, sourceTypeParameterSubstitutions: substitutions };
+}
+
 export function bindRustSourceAliasArguments(
   type: Type,
   context: RustTargetTypeResolutionContext,

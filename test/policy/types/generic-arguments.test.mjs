@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bindRustSourceAliasArguments, bindRustSourceDeclarationArguments } from "../../../dist/policy/types/resolution/generic-arguments.js";
+import { bindRustCallableTypeParameters, bindRustSourceAliasArguments, bindRustSourceDeclarationArguments } from "../../../dist/policy/types/resolution/generic-arguments.js";
 
 function fixture() {
   const declaration = {};
@@ -29,6 +29,66 @@ function fixture() {
   };
   return { declaration, parameter, sourceType, carrier, type, authoredTypeNode, application, context };
 }
+
+function callableFixture() {
+  const declaration = {};
+  const outerDeclaration = {};
+  const innerDeclaration = {};
+  const innerType = {};
+  const innerSymbol = {};
+  const outerType = {};
+  const outerCarrier = { kind: "source-primitive", name: "int64" };
+  const native = { kind: "type-parameter", identity: "generic-callable:Call:0", name: "CallType0" };
+  const parameters = [{ kind: "type", declaration: innerDeclaration, sourceName: "Item" }];
+  const semantics = { declarations: {
+    declaredType: selected => selected === innerDeclaration ? innerType : undefined,
+    typeSymbol: selected => selected === innerType ? innerSymbol : undefined,
+    primarySymbolDeclaration: selected => selected === innerSymbol ? innerDeclaration : undefined,
+  } };
+  const context = {
+    sourceLifetimes: { contractFor: selected => selected === declaration ? { parameters } : undefined },
+    semanticsFor: selected => {
+      assert.equal(selected === declaration, true, "selected declaration owns its binder queries");
+      return semantics;
+    },
+    sourceTypeParameterSubstitutions: new Map([[outerDeclaration, { sourceType: outerType, carrier: outerCarrier }]]),
+  };
+  return { declaration, outerDeclaration, innerDeclaration, innerType, outerType,
+    outerCarrier, native, parameters, semantics, context };
+}
+
+test("normalized callable binders retain the exact source owner and outer environment", () => {
+  const input = callableFixture();
+  const selected = bindRustCallableTypeParameters(input.declaration, [input.native], input.context);
+  assert.equal(selected !== undefined, true, "exact normalized binder is retained");
+  assert.deepEqual(selected.sourceTypeParameterSubstitutions.get(input.innerDeclaration), {
+    sourceType: input.innerType, carrier: input.native,
+  });
+  assert.deepEqual(selected.sourceTypeParameterSubstitutions.get(input.outerDeclaration), {
+    sourceType: input.outerType, carrier: input.outerCarrier,
+  });
+  assert.equal(selected.currentSemantics === input.semantics, true, "binder queries use their declaration's semantics");
+  assert.equal(input.context.sourceTypeParameterSubstitutions.size, 1);
+});
+
+test("normalized callable binders reject missing, duplicated, foreign and lifetime owners", () => {
+  for (const mutate of [
+    input => { input.semantics.declarations.declaredType = () => undefined; },
+    input => { input.semantics.declarations.primarySymbolDeclaration = () => ({}); },
+    input => { input.parameters[0].kind = "lifetime"; },
+  ]) {
+    const input = callableFixture();
+    mutate(input);
+    assert.equal(bindRustCallableTypeParameters(input.declaration, [input.native], input.context) === undefined, true);
+    assert.equal(input.context.sourceTypeParameterSubstitutions.size, 1);
+  }
+  const input = callableFixture();
+  assert.equal(bindRustCallableTypeParameters(input.declaration, [], input.context) === undefined, true);
+  input.parameters.push(input.parameters[0]);
+  assert.equal(bindRustCallableTypeParameters(input.declaration, [input.native, input.native], input.context) === undefined, true);
+  assert.equal(bindRustCallableTypeParameters(input.declaration, [input.native,
+    { ...input.native, identity: "other-call-binder" }], input.context) === undefined, true);
+});
 
 test("alias binding does not borrow argument syntax from a different selected declaration", () => {
   const { parameter, sourceType, carrier, type, authoredTypeNode, context } = fixture();
