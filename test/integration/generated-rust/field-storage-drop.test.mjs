@@ -21,6 +21,10 @@ test("canonical native field replacements release every guard before reentrant D
     { kind: "path", path: "captured_value" }, { kind: "call", path: "replacement", args: [] }, ["first"]));
   const projectedCopy = printRustExpr(writeRustCapturedField({ kind: "borrow-cell", initialization: "ready" },
     owner, { kind: "int-literal", text: "7" }, ["first"]));
+  const temporaryRead = printRustExpr(rustBindingStorageOperations("borrow-cell").read({
+    kind: "call", path: "temporary_owner", args: [],
+  }));
+  const borrowedRead = printRustExpr(rustBindingStorageOperations("borrow-cell", true).read(owner));
   const { result } = compileRust({ target: { id: "rust", options: { outputType: "lib", crateName: "field_storage_contract" } },
     files: { "index.ts": "export function seed(value: number): number { return value; }" } });
   assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 6).map(row => row.message.slice(0, 256)).join("\n"));
@@ -145,6 +149,30 @@ fn projected_copy_values_need_no_drop_warning_or_clone() {
     ${projectedCopy};
     assert_eq!(owner.borrow().first, 7);
     assert_eq!(owner.borrow().second, 2);
+}
+
+#[test]
+fn temporary_cell_owner_outlives_the_payload_guard_without_repeated_evaluation() {
+    let calls = Cell::new(0);
+    let source = Rc::new(RefCell::new(String::from("retained")));
+    let temporary_owner = || {
+        calls.set(calls.get() + 1);
+        source.clone()
+    };
+    let result = ${temporaryRead};
+    assert_eq!(result, "retained");
+    assert_eq!(calls.get(), 1);
+    assert_eq!(Rc::strong_count(&source), 1);
+    source.borrow_mut().push_str(" value");
+    assert_eq!(source.borrow().as_str(), "retained value");
+}
+
+#[test]
+fn copy_cell_reads_borrow_without_moving_the_original_owner() {
+    let owner = RefCell::new(7u32);
+    assert_eq!(${borrowedRead}, 7);
+    owner.replace(9);
+    assert_eq!(*owner.borrow(), 9);
 }
 `);
   runCargo(root, ["generate-lockfile", "--offline"]);

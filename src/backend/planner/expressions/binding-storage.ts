@@ -22,7 +22,10 @@ export function rustBindingStorageOperations(storage: "location" | RustInlineBin
     ({ kind: "method-call", receiver: receiver.kind === "reference" ? receiver.expr : receiver, method, args });
   if (storage === "borrow-cell") {
     return {
-      read: receiver => (rustValueBlock([{ name: "borrowed", value: call(receiver, "borrow") }], copyPayload
+      read: receiver => (rustValueBlock([
+        { name: "owner", value: { kind: "reference", expr: receiver } },
+        { name: "borrowed", value: call({ kind: "path", path: "owner" }, "borrow") },
+      ], copyPayload
         ? { kind: "dereference", pointer: { kind: "path", path: "borrowed" } }
         : call({ kind: "path", path: "borrowed" }, "clone"))),
       write: (receiver, value) => ({ kind: "block", body: { statements: [{ kind: "let", name: "_", mutable: false,

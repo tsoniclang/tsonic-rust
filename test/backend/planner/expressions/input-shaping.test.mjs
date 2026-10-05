@@ -66,6 +66,18 @@ test("ordinary String reference arguments are not silently changed to native str
   { kind: "str-literal", value: "value" });
 });
 
+test("shared retained payload fields are reborrowed rather than passed as owned values", () => {
+  const payload = { kind: "field", receiver: { kind: "path", path: "state" }, name: "payload" };
+  const selected = context(undefined, undefined, "shared");
+  selected.capturedBindings = [{ ...selected.capturedBindings[0],
+    expression: { kind: "reference", expr: payload },
+  }];
+  const read = { kind: "method-call", receiver: payload, method: "clone", args: [] };
+  const expected = { kind: "reference", expr: payload };
+  assert.deepEqual(planRustSharedReceiver(sourceNode, read, selected), expected);
+  assert.deepEqual(applyFinalizedRustArgumentMode(selected, sourceNode, read, input, false), expected);
+});
+
 test("already borrowed native parameters and optional receiver views retain their exact ABI", () => {
   const expression = { kind: "path", path: "value" };
   const parameter = { mode: "ref", parameterCarrier: input.parameterCarrier };

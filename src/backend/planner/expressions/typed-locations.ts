@@ -186,7 +186,8 @@ export function planRustSharedReceiver(
   }
   const captured = rustCapturedBinding(node, context);
   if (captured?.storage === "value" && captured.borrowed !== undefined) {
-    return captured.borrowed === "shared" ? value
+    return captured.borrowed === "shared"
+      ? captured.expression.kind === "reference" ? { kind: "reference", expr: value } : value
       : { kind: "reference", expr: { kind: "dereference", pointer: value } };
   }
   const loaded = planRustLoadedSharedReference(node, value, context);
