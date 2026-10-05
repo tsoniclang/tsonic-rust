@@ -90,7 +90,7 @@ export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): 
     ...(deadCode === undefined ? {} : { deadCode }),
     attrs: rustDeriveAttributes(fact.kind === "string-literal"
       ? ["Clone", "Copy", "Debug", "PartialEq"]
-      : ["Clone", "Debug", "PartialEq"]),
+      : ["Clone"]),
     variants: fact.variants.map((variant, index) => {
       const variantDeadCode = rustAuthoredVariantDeadCodeDisposition(
         context,

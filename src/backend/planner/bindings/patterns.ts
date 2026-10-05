@@ -42,6 +42,8 @@ import { rustOptionDefaultValue } from "../expressions/option-default.js";
 import { planRustCheckedSourceOptional } from "../expressions/optional-storage.js";
 import { rustBindingNormalizationContract } from "../../../target-model/types/binding-normalization.js";
 import { rustEffectiveValueCarrier } from "../../../analysis/facts/value-carrier-queries.js";
+import { rustBindingStorageForDeclaration } from "../expressions/typed-locations.js";
+import { planRustLocalBindingStorage } from "./local-storage.js";
 
 export type RustBindingExpressionPlanner = (
   node: Node,
@@ -121,12 +123,20 @@ export function planRustBindingPattern(
         ));
         return undefined;
       }
+      const location = rustBindingStorageForDeclaration(element, context);
+      const storage = planRustLocalBindingStorage(element, bindingName, fact.bindingCarrier, bindingType, normalized, location, context);
+      if (storage === undefined) return undefined;
+      if (storage.kind === "store") {
+        statements.push(storage.statement);
+        continue;
+      }
       statements.push({
         kind: "let",
         name: bindingName,
-        mutable: context.input.program.facts.getFact(element, rustMutatedBindingFactKey) !== undefined,
-        type: bindingType,
-        init: normalized,
+        mutable: location?.iterationScope !== undefined || location === undefined &&
+          context.input.program.facts.getFact(element, rustMutatedBindingFactKey) !== undefined,
+        ...(storage.type === undefined ? {} : { type: storage.type }),
+        init: storage.value,
       });
       continue;
     }

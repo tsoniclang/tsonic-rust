@@ -6,9 +6,7 @@ import {
   Node_Type,
 } from "@tsonic/target-api/source";
 import { rustBindingStorageForDeclaration } from "../expressions/typed-locations.js";
-import { rustInlineBindingStoragePath, rustInlineBindingStorageType } from "../expressions/binding-storage.js";
-import { planRustNativeAllocation } from "../expressions/native-memory.js";
-import { rustNativeBackingKey, rustNativeArrayStorageKey } from "../../../target-model/operations/native-memory.js";
+import { rustNativeArrayStorageKey } from "../../../target-model/operations/native-memory.js";
 import { nativeRustArrayType } from "../expressions/native-arrays.js";
 import {
   rustMutatedBindingFactKey,
@@ -21,20 +19,19 @@ import { collectVariableDeclarations, resourceDisposalReceiverMode } from "./res
 import { diagnosticInput, isValidRustIdentifier } from "../program/plan-context.js";
 import {
   rustCarrierReferentMutationRequiresMutableBinding,
-  rustLocationTargetType,
   rustOptionElementCarrier,
   rustCallableProtocol,
 } from "../../../target-model/types/index.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planExpression } from "../expressions/index.js";
 import { planRustBindingPattern } from "../bindings/patterns.js";
-import { requireRustLocationValueCarrier } from "../types/generic-requirements.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr, RustStmt, RustType } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustCompileTimeSourceKey } from "../../../target-model/facts/source-declarations.js";
+import { planRustLocalBindingStorage } from "../bindings/local-storage.js";
 
 export function planVariableStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const declarations = collectVariableDeclarations(node, context);
@@ -116,10 +113,7 @@ function planVariableDeclaration(
     ));
     return undefined;
   }
-  const renderedCarrier = locationStorage?.storage !== "location"
-    ? declarationCarrier
-    : rustLocationTargetType(locationStorage.valueCarrier);
-  let rustType: RustType | undefined = rustTypeFromCarrierInContext(renderedCarrier, context);
+  let rustType: RustType | undefined = rustTypeFromCarrierInContext(declarationCarrier, context);
   if (rustType === undefined && (initializer === undefined || typeNode !== undefined)) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, typeNode ?? declaration),
@@ -128,24 +122,7 @@ function planVariableDeclaration(
     ));
     return undefined;
   }
-  if (locationStorage !== undefined &&
-    !rustTargetTypeRefEquals(declarationCarrier, locationStorage.valueCarrier)) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, declaration),
-      "rust.backend.typed-location-storage-carrier",
-      "Promoted Rust storage conflicts with its finalized declaration carrier.",
-    ));
-    return undefined;
-  }
   const ownedBinding = declarationCarrier.kind !== "pointer" && declarationCarrier.kind !== "reference";
-  if (locationStorage?.initialization === "deferred") {
-    if (locationStorage.storage !== "location" || initializer === undefined || planned === undefined) return undefined;
-    return [{ kind: "expr", expr: { kind: "method-call", receiver: { kind: "path", path: name },
-      method: "store", args: [planned] } }];
-  }
-  if (locationStorage !== undefined && locationStorage.storage !== "location" && rustType !== undefined) {
-    rustType = rustInlineBindingStorageType(locationStorage.storage, rustType);
-  }
   if (nativeArray !== undefined) {
     rustType = nativeRustArrayType(declaration, context);
     if (rustType === undefined) return undefined;
@@ -168,26 +145,11 @@ function planVariableDeclaration(
       (ownedBinding && referentMutationRequiresMutableBinding &&
         context.input.program.facts.getFact(declaration, rustMutatedReferentFactKey) !== undefined) ||
       resourceFact !== undefined && resourceDisposalReceiverMode(resourceFact) === "mut-ref");
-  let init: RustExpr | undefined;
-  if (planned !== undefined) {
-    if (locationStorage === undefined) {
-      init = planned;
-    } else if (locationStorage.storage !== "location") {
-      init = { kind: "call", path: `${rustInlineBindingStoragePath(locationStorage.storage)}::new`, args: [planned] };
-    } else {
-      if (!requireRustLocationValueCarrier(
-        locationStorage.valueCarrier,
-        declaration,
-        context,
-      )) {
-        return undefined;
-      }
-      context.usedAliases?.add("rt");
-      init = context.input.program.facts.getFact(declaration, rustNativeBackingKey) === undefined
-        ? { kind: "call", path: "rt::Location::allocate", args: [planned] }
-        : planRustNativeAllocation(declaration, planned, context);
-    }
-  }
+  const storage = planRustLocalBindingStorage(declaration, name, declarationCarrier, rustType, planned, locationStorage, context);
+  if (storage === undefined) return undefined;
+  if (storage.kind === "store") return [storage.statement];
+  rustType = storage.type;
+  const init = storage.value;
   if (initializer !== undefined && init === undefined) {
     return undefined;
   }

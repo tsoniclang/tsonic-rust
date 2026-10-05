@@ -424,7 +424,7 @@ export function collectRustLexicalCaptures(
     }
     const kind = ast.kindName(declaration);
     if (kind !== KindParameter && kind !== KindVariableDeclaration && kind !== KindBindingElement &&
-      kind !== "KindFunctionDeclaration") continue;
+      kind !== "KindFunctionDeclaration" && kind !== KindFunctionExpression) continue;
     const reference = capture.references[capture.references.length - 1];
     if (reference === undefined) return undefined;
     const carrier = walk.context.facts.get(reference, rustRuntimeCarrierKey)?.carrier ??

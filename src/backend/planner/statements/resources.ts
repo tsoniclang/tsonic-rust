@@ -3,7 +3,10 @@ import { applyRustErrorBoundary } from "../types/error-boundary.js";
 import {
   BreakOrContinueStatement_Label,
   KindVariableDeclaration,
+  KindVariableDeclarationList,
   KindVariableStatement,
+  VariableDeclarationList_Declarations,
+  VariableStatement_DeclarationList,
 } from "@tsonic/target-api/source";
 import {
   diagnosticInput,
@@ -22,6 +25,7 @@ import type { RustResourceManagementFact } from "../../../analysis/facts/keys.js
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planRustVirtualProjectMethodCall } from "../objects/project-method-dispatch.js";
 import { rustBlockDefinitelyExits } from "../../target-ast/normalization/block-flow.js";
+import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
 
 export function directResourceDeclaration(
   statement: Node,
@@ -43,20 +47,13 @@ export function directResourceDeclaration(
 
 export function collectVariableDeclarations(node: Node, context: RustPlanContext): readonly Node[] {
   const { ast } = context.input.program.source;
-  const declarations: Node[] = [];
-  const visit = (candidate: Node): void => {
-    if (ast.kindName(candidate) === KindVariableDeclaration) {
-      declarations.push(candidate);
-      return;
-    }
-    ast.forEachChild(candidate, (child) => {
-      if (child !== undefined) {
-        visit(child);
-      }
-    });
-  };
-  visit(node);
-  return declarations;
+  if (ast.kindName(node) === KindVariableDeclaration) return [node];
+  const list = ast.kindName(node) === KindVariableStatement ? VariableStatement_DeclarationList(ast, node) : node;
+  if (ast.kindName(list) !== KindVariableDeclarationList) return [];
+  const declarations = VariableDeclarationList_Declarations(ast, list);
+  return declarations === undefined || !isDenseDataArray(declarations) || declarations.some(declaration =>
+    declaration === undefined || ast.kindName(declaration) !== KindVariableDeclaration)
+    ? [] : declarations as readonly Node[];
 }
 
 export function planResourceDeclarationScope(

@@ -16,6 +16,7 @@ import {
   KindNumericLiteral,
   KindStringLiteral,
   KindWhileStatement,
+  KindVariableDeclarationList,
   Node_Expression,
 } from "@tsonic/target-api/source";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
@@ -393,14 +394,16 @@ export function planForStatement(
     const loop = planLoop(context);
     return loop?.statements;
   }
-  const declarations = collectVariableDeclarations(initializer, context);
+  const declarationInitializer = context.input.program.source.ast.kindName(initializer) === KindVariableDeclarationList;
+  const declarations = declarationInitializer ? collectVariableDeclarations(initializer, context) : [];
   const resourceDeclaration = declarations.length === 1 &&
       (context.input.program.source.ast.variableDeclarationKind(declarations[0]) === "using" ||
         context.input.program.source.ast.variableDeclarationKind(declarations[0]) === "await using")
     ? declarations[0]
     : undefined;
   const deferred = planRustDeferredCaptureStorage(node, context);
-  const initialization = planVariableStatement(initializer, context);
+  const initialization = declarationInitializer ? planVariableStatement(initializer, context)
+    : planExpressionAsStatement(initializer, context);
   const rotation = planRustCaptureStorageRotation(node, context);
   if (deferred === undefined || initialization === undefined || rotation === undefined) {
     return undefined;

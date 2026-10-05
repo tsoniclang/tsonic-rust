@@ -31,6 +31,7 @@ import {
   KindReturnStatement,
   KindSwitchStatement,
   KindVariableDeclaration,
+  KindVariableDeclarationList,
   KindVariableStatement,
   KindWhileStatement,
   Node_Expression,
@@ -51,7 +52,7 @@ import {
   rustSourceCallableReturnFactKey,
 } from "../facts/keys.js";
 import { appendRustDiagnostic, boolCarrier, rustResolutionContext } from "../program/walk.js";
-import { collectDescendantsOfKind, recordForOfFacts } from "../operations/inputs.js";
+import { recordForOfFacts } from "../operations/inputs.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { reconcileRequiredCarrier, resolveExpressionCarrier } from "../expressions/carriers.js";
 import { recordBindingPatternFacts, recordCallableDefaultParameterFacts, registerTypeAlias } from "../declarations/types-and-bindings.js";
@@ -101,6 +102,16 @@ export function recordFunctionBodyFacts(walk: RustFactWalk, declaration: Node, s
 export function recordVariableStatementFacts(walk: RustFactWalk, statement: Node, sourceFile: SourceFile): void {
   const moduleLevel = walk.context.ast.kindName(walk.context.ast.parent(statement)) === "KindSourceFile";
   const declarationList = VariableStatement_DeclarationList(walk.context.ast, statement);
+  recordVariableDeclarationListFacts(walk, declarationList, statement, sourceFile, moduleLevel);
+}
+
+function recordVariableDeclarationListFacts(
+  walk: RustFactWalk,
+  declarationList: Node | undefined,
+  owner: Node,
+  sourceFile: SourceFile,
+  moduleLevel: boolean,
+): void {
   const declarationSlots = VariableDeclarationList_Declarations(
     walk.context.ast,
     declarationList,
@@ -111,8 +122,8 @@ export function recordVariableStatementFacts(walk: RustFactWalk, statement: Node
     appendRustDiagnostic(
       walk,
       "RUST_VARIABLE_DECLARATIONS_NOT_CLOSED",
-      "Variable statement has no exact dense declaration list.",
-      statement,
+      "Variable declaration owner has no exact dense declaration list.",
+      owner,
       ["target.capability=rust.source.variable-declarations"],
     );
     return;
@@ -136,20 +147,28 @@ export function recordVariableStatementFacts(walk: RustFactWalk, statement: Node
       resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, declaration)));
     const predeclared = walk.context.facts.get(declaration, rustRuntimeCarrierKey)?.carrier ??
       walk.context.facts.resolve(declaration, rustRuntimeCarrierKey)?.carrier;
+    const induction = walk.context.ast.kindName(owner) === KindForStatement
+      ? sourceIntegerInduction(declaration, walk.context.ast, walk.context.source.navigation, {
+          sourceFacts: walk.context.source.sourceFacts, semanticsFor: walk.context.semanticsFor,
+        })
+      : undefined;
+    if (induction !== undefined) resolveExpressionCarrier(walk, induction.bound, sourceFile, undefined);
+    const selected = annotated ?? (induction === undefined ? undefined :
+      resolveRustTargetTypeRef(declaration, rustResolutionContext(walk, declaration), walk.operationOptions));
     const initializer = Node_Initializer(walk.context.ast, declaration);
     const inferredContext = initializer !== undefined && walk.context.ast.is.IsConditionalExpression(initializer) &&
       predeclared?.kind === "source-primitive" && predeclared.name === "float64"
       ? undefined : predeclared;
     const initializerCarrier = initializer === undefined
       ? undefined
-      : resolveExpressionCarrier(walk, initializer, sourceFile, annotated ?? inferredContext);
+      : resolveExpressionCarrier(walk, initializer, sourceFile, selected ?? inferredContext);
     if (initializer !== undefined && annotated !== undefined && initializerCarrier !== undefined &&
       !reconcileRequiredCarrier(walk, initializer, initializerCarrier, annotated)) {
       appendRustDiagnostic(walk, "RUST_INITIALIZER_CARRIER_MISMATCH",
         "The initializer cannot be represented by the declaration's exact Rust carrier.", initializer,
         ["target.capability=rust.initializer-carrier"]);
     }
-    const effective = annotated ?? initializerCarrier ?? predeclared;
+    const effective = selected ?? initializerCarrier ?? predeclared;
     if (effective !== undefined) {
       setCarrierFact(walk, declaration, effective);
       const name = Node_Name(walk.context.ast, declaration);
@@ -362,29 +381,9 @@ export function recordStatementFacts(
   if (kind === KindForStatement) {
     const initializer = ForStatement_Initializer(walk.context.ast, statement);
     if (initializer !== undefined) {
-      for (const declaration of collectDescendantsOfKind(walk, initializer, KindVariableDeclaration)) {
-        const annotated = resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, declaration));
-        const induction = sourceIntegerInduction(declaration, walk.context.ast, walk.context.source.navigation, {
-          sourceFacts: walk.context.source.sourceFacts, semanticsFor: walk.context.semanticsFor,
-        });
-        if (induction !== undefined) resolveExpressionCarrier(walk, induction.bound, sourceFile, undefined);
-        const selected = annotated ?? (induction === undefined ? undefined :
-          resolveRustTargetTypeRef(declaration, rustResolutionContext(walk, declaration), walk.operationOptions));
-        const declarationInitializer = Node_Initializer(walk.context.ast, declaration);
-        const initializerCarrier = declarationInitializer === undefined
-          ? undefined
-          : resolveExpressionCarrier(walk, declarationInitializer, sourceFile, selected);
-        if (declarationInitializer !== undefined && annotated !== undefined && initializerCarrier !== undefined &&
-          !reconcileRequiredCarrier(walk, declarationInitializer, initializerCarrier, annotated)) {
-          appendRustDiagnostic(walk, "RUST_INITIALIZER_CARRIER_MISMATCH",
-            "The initializer cannot be represented by the declaration's exact Rust carrier.", declarationInitializer,
-            ["target.capability=rust.initializer-carrier"]);
-        }
-        const effective = selected ?? initializerCarrier;
-        if (effective !== undefined) {
-          setCarrierFact(walk, declaration, effective);
-        }
-      }
+      if (walk.context.ast.kindName(initializer) === KindVariableDeclarationList) {
+        recordVariableDeclarationListFacts(walk, initializer, statement, sourceFile, false);
+      } else resolveExpressionCarrier(walk, initializer, sourceFile, undefined);
     }
     const condition = ForStatement_Condition(walk.context.ast, statement);
     if (condition !== undefined) {

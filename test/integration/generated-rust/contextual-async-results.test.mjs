@@ -14,6 +14,12 @@ test("native JS async bodies retain contextual union completion, captures, alias
   const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
   assert.doesNotMatch(output, /\.then\(|\.then_async\(|transmute|unreachable_unchecked/u);
   assert.doesNotMatch(output, /JsPromise<'static, \(\), rt::TsonicError>[\s\S]{0,100}\.map\(/u);
+  const module = result.artifacts.find(artifact => artifact.path === "src/index.rs")?.text;
+  assert.equal(typeof module, "string");
+  assert.match(module, /#\[derive\(Clone\)\]\n(?:#\[[^\n]+\]\n)*pub\(crate\) enum HandlerResult/u,
+    "runtime unions require only their selected Clone contract, not unsolicited payload traits");
+  assert.match(module, /JsPromise<'static, Option<Reply>, rt::TsonicError>/u,
+    "stored async payloads retain their owning lifetime and exact native output");
   validateGeneratedProject("contextual-async-results", result.artifacts, { run: true });
 });
 

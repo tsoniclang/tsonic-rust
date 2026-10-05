@@ -38,6 +38,7 @@ import { resolveRustTypeFamilyApplication, rustSourceTypeFamilyDeclaration } fro
 import { resolveRustEvidenceNodesToCommonCarrier } from "../../policy/types/resolution/source-evidence.js";
 import { rustSourceUnionMemberDeclarationIsOwned } from "../../policy/evidence/source-union-members.js";
 import { rustSourceUnionValueTypes } from "../../policy/types/resolution/source-unions.js";
+import { closeRustSuspendedStorage } from "../../policy/types/suspended-storage.js";
 
 export function reserveTypeAliasUnion(walk: RustFactWalk, declaration: Node): void {
   const {ast} = walk.context;
@@ -179,13 +180,14 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
   const authoredType = Node_Type(ast, declaration);
   if (authoredType === undefined) return;
   for (const member of rustSourceUnionValueTypes(sourceMembers as readonly Type[], semantics)) {
-    const carrier = resolveRustEvidenceNodesToCommonCarrier(
+    const resolved = resolveRustEvidenceNodesToCommonCarrier(
       [authoredType],
       member,
       rustResolutionContext(walk, declaration),
       walk.operationOptions,
       new Set(),
     );
+    const carrier = resolved === undefined ? undefined : closeRustSuspendedStorage(resolved, [], genericContract, "field");
     if (carrier === undefined) {
       return;
     }
