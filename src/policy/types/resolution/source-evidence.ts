@@ -88,7 +88,6 @@ export function resolveRustCallableEvidence(
         context,
         options,
         resolving,
-        "callable",
     )
   );
   if (parameters.some((parameter) => parameter === undefined)) {
@@ -150,7 +149,6 @@ export function resolveRustSignatureParameterEvidence(
   context: RustTargetTypeResolutionContext,
   options: RustTargetTypeResolutionOptions,
   resolving: Set<object>,
-  use: "callable" | "parameter-list",
 ): TargetTypeRef | undefined {
   const authoredTypeNode = parameter.declaration === undefined
     ? undefined
@@ -169,9 +167,7 @@ export function resolveRustSignatureParameterEvidence(
     options,
     resolving,
   );
-  const optional = use === "parameter-list"
-    ? parameter.parameterKind === "optional"
-    : parameter.omissionKind === "undefined";
+  const optional = parameter.parameterKind === "optional";
   return resolved === undefined || !optional ||
       rustOptionElementCarrier(resolved) !== undefined
     ? resolved

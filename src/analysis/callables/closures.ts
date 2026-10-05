@@ -28,6 +28,7 @@ import {
 } from "../facts/keys.js";
 import {
   rustSourceOptionalTargetType,
+  rustOptionElementCarrier,
   rustCallableProtocol,
   rustClosureProtocol,
   rustCallableTargetType,
@@ -195,7 +196,8 @@ export function resolveFunctionExpressionCarrier(
     );
     if (parameterAbi === undefined ||
       (sourceParameterCarrier !== undefined &&
-        !rustTargetTypeRefEquals(parameterAbi.valueCarrier, sourceParameterCarrier)) ||
+        !rustTargetTypeRefEquals(parameterAbi.valueCarrier, parameterAbi.form === "default"
+          ? rustOptionElementCarrier(sourceParameterCarrier) : sourceParameterCarrier)) ||
       !rustTargetTypeRefEquals(
         parameterAbi.parameterCarrier,
         targetParameterCarrier,

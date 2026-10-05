@@ -135,6 +135,14 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
         : rustValueBlock(location.bindings, location.read);
     }
     const receiverNode = Node_Expression(context.input.program.source.ast, node);
+    const receiverLocation = receiverNode === undefined ? undefined : context.valueFieldLocations?.get(receiverNode) ??
+      (rustSourceFieldHasValueReceiver(receiverNode, context) ? planRustValueFieldLocation(receiverNode, context, "read") : undefined);
+    if (receiverLocation?.withRead !== undefined && fact.dispatch === undefined) {
+      const read = receiverLocation.withRead(receiver => readRustStoredObjectField(fact.storage, fact.receiverCarrier,
+        receiver, fact.storageIndex, fact.resultCarrier, context));
+      return read === undefined ? undefined : receiverLocation.bindings.length === 0 ? read
+        : rustValueBlock(receiverLocation.bindings, read);
+    }
     const plannedReceiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
     if (receiverNode === undefined || plannedReceiver === undefined) {
       return undefined;

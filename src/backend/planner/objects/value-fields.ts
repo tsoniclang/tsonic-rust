@@ -19,7 +19,7 @@ import { diagnosticInput } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { readRustStoredObjectField, writeRustStoredObjectField, rustProjectObjectRepresentation, rustDirectProjectFieldStoragePath } from "./project-storage.js";
 import { rustCapturedFieldStorage, rustCapturedFieldLocation } from "./captured-fields.js";
-import { readRustProjectObjectFieldOwner, readRustProjectDispatchedField, writeRustProjectDispatchedField } from "./project-objects.js";
+import { readRustProjectObjectFieldOwner, readRustProjectDispatchedField, writeRustProjectDispatchedField, withRustProjectStoredField } from "./project-objects.js";
 import { planRustProjectFieldDispatchRoles } from "./project-field-dispatch.js";
 
 export interface RustValueFieldLocation {
@@ -27,6 +27,7 @@ export interface RustValueFieldLocation {
   readonly read: RustExpr;
   readonly write: (value: RustExpr) => RustExpr | undefined;
   readonly project?: (names: readonly string[], carrier: TargetTypeRef) => RustValueFieldLocation;
+  readonly withRead?: (project: (value: RustExpr) => RustExpr | undefined) => RustExpr | undefined;
 }
 
 export function rustSourceFieldHasValueReceiver(node: Node, context: RustPlanContext): boolean {
@@ -62,8 +63,14 @@ export function planRustValueFieldLocation(
         if (selectedField.dispatch === undefined) {
           const read = readRustStoredObjectField(selectedField.storage, selectedField.receiverCarrier, receiver,
             selectedField.storageIndex, selectedField.resultCarrier, context);
+          const path = rustDirectProjectFieldStoragePath(selectedField.receiverCarrier, selectedField.storageIndex, context);
+          const representation = rustProjectObjectRepresentation(selectedField.receiverCarrier, context);
           return read === undefined ? undefined : { bindings, read, write: value => writeRustStoredObjectField(selectedField.storage,
-            selectedField.receiverCarrier, receiver, selectedField.storageIndex, "=", value, context) };
+            selectedField.receiverCarrier, receiver, selectedField.storageIndex, "=", value, context),
+            ...(path === undefined || representation === undefined ? {} : {
+              withRead: (apply: (value: RustExpr) => RustExpr | undefined) => withRustProjectStoredField(receiver, path, representation,
+                field => rustCapturedFieldLocation(storage, field, selectedField.resultCarrier).withRead(apply)),
+            }) };
         }
         const dispatch = context.input.program.projectFieldDispatch.planFor(selectedField.declaration);
         const roles = dispatch === undefined ? undefined : planRustProjectFieldDispatchRoles(dispatch, context);

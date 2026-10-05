@@ -153,12 +153,22 @@ export function planRustConstructionBody(
     },
   });
   const final = plan.pointFor(plan.definition.declaration);
+  const physicalDeclaration = context.input.program.objectRepresentations.receiverCaptures.storageDeclaration;
+  for (const layer of plan.layers) for (const field of layer.fields) {
+    const value = values.get(physicalDeclaration(field.declaration));
+    if (value !== undefined) values.set(field.declaration, value);
+  }
   return { declarations, values, root, prepare, contextForLayer,
     initialize(declaration, value) {
-      const slot = slots.find(field => field.declaration === declaration);
+      const physical = physicalDeclaration(declaration);
+      const slot = slots.find(field => field.declaration === physical);
       if (slot?.expression.kind !== "path") return undefined;
-      const storage = rustCapturedFieldStorage(declaration, context);
-      return declarationAtInitialization.has(declaration)
+      const storage = rustCapturedFieldStorage(physical, context);
+      if (physical !== declaration) {
+        const update = storage === undefined ? undefined : rustCapturedFieldLocation(storage, slot.expression, slot.carrier).write(value);
+        return update === undefined ? undefined : [{ kind: "expr", expr: update }];
+      }
+      return declarationAtInitialization.has(physical)
         ? [{ kind: "let", name: slot.expression.path, mutable: storage === undefined,
           type: slot.storageType, init: createRustCapturedField(storage, value) }]
         : storage?.initialization === "deferred" ? [{ kind: "expr", expr: initializeRustCapturedField(storage, slot.expression, value) }]

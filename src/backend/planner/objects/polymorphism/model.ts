@@ -111,6 +111,7 @@ export function projectClassStateLayers(
       definition: owner,
       carrier: relation.targetType,
       fields: fields.filter((field) => field.storage === "stored" &&
+        context.input.program.objectRepresentations.receiverCaptures.storageDeclaration(field.declaration) === field.declaration &&
         !context.input.program.source.ast.hasModifierKind(field.declaration, "abstract")),
       methodProperties,
     });
@@ -417,6 +418,7 @@ export function projectFieldStoragePath(
   layers: readonly ProjectClassStateLayer[],
   context: RustPlanContext,
 ): readonly string[] | undefined {
+  implementation = context.input.program.objectRepresentations.receiverCaptures.storageDeclaration(implementation);
   const matches = layers.flatMap((layer, ownerIndex) =>
     layer.fields
       .filter((candidate) => candidate.declaration === implementation)

@@ -15,14 +15,15 @@ import { diagnosticInput } from "../program/plan-context.js";
 
 export function rustCapturedFieldStorage(declaration: Node, context: RustPlanContext): RustCapturedFieldStorage | undefined {
   const fact = context.input.program.facts.getFact(declaration, rustCapturedFieldStorageFactKey);
-  const demanded = context.input.program.objectRepresentations.receiverCaptures.isCaptured(declaration);
+  const captures = context.input.program.objectRepresentations.receiverCaptures;
+  const demanded = captures.isCaptured(declaration);
   if (!demanded && fact === undefined) return undefined;
   const carrier = context.input.program.facts.getRuntimeCarrierFact(declaration)?.carrier;
+  const storageCarrier = context.input.program.facts.getRuntimeCarrierFact(captures.storageDeclaration(declaration))?.carrier;
   if (!demanded || fact === undefined || !hasExactObjectKeys(fact, ["storage", "valueCarrier"]) ||
-    carrier === undefined || !rustTargetTypeRefEquals(fact.valueCarrier, carrier) ||
-    !closedMetadataEquals(selectRustCapturedFieldStorage(carrier,
-      context.input.program.source.ast.hasModifierKind(declaration, "readonly"),
-      context.input.program.objectRepresentations.receiverCaptures.isDeferred(declaration)), fact.storage)) {
+    carrier === undefined || storageCarrier === undefined || !rustTargetTypeRefEquals(fact.valueCarrier, carrier) ||
+    !closedMetadataEquals(selectRustCapturedFieldStorage(storageCarrier,
+      captures.storageReadonly(declaration), captures.isDeferred(declaration)), fact.storage)) {
     context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, declaration),
       "rust.backend.captured-field-storage", "A live field owner requires its exact canonical declaration-carrier storage fact."));
     return undefined;
@@ -94,7 +95,7 @@ export function readRustCapturedField(storage: RustCapturedFieldStorage, owner: 
 export function rustCapturedFieldLocation(
   storage: RustCapturedFieldStorage, owner: RustExpr, carrier: TargetTypeRef,
   projection: readonly string[] = [], resultCarrier: TargetTypeRef = carrier,
-): RustValueFieldLocation {
+): RustValueFieldLocation & { readonly withRead: NonNullable<RustValueFieldLocation["withRead"]> } {
   const payload = rustCapturedFieldPayload(storage, owner);
   const project = (root: RustExpr): RustExpr => projection.reduce<RustExpr>((receiver, name) => ({ kind: "field", receiver, name }), root);
   const borrowed: RustExpr = storage.kind === "borrow-cell" ? { kind: "method-call", receiver: payload, method: "borrow", args: [] }
@@ -104,6 +105,7 @@ export function rustCapturedFieldLocation(
       : isRustCopyCarrier(resultCarrier) ? selected : { kind: "method-call", receiver: selected, method: "clone", args: [] },
     write: value => writeRustCapturedField(storage, owner, value, projection),
     project: (names, selectedCarrier) => rustCapturedFieldLocation(storage, owner, carrier, [...projection, ...names], selectedCarrier),
+    withRead: apply => apply(project(borrowed)),
   };
 }
 

@@ -5,6 +5,7 @@ import { selectRustCallableStorageLifetime } from "../../policy/ownership/suspen
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustSuspendedOwnedReceiver } from "../facts/callables-and-resources.js";
+import { rustCapturedFieldStorageFactKey } from "../facts/receiver-captures.js";
 
 export type RustSuspendedCallableStorageResolution =
   | {
@@ -34,11 +35,13 @@ export function resolveRustSuspendedCallableStorage(
   const parameterSet = new Set(exactParameters);
   const capturedParameterSet = new Set<Node>();
   const receiverOccurrences: Node[] = [];
+  const receiverCaptures = walk.context.objectRepresentations.receiverCaptures;
+  const capturedFields = receiverCaptures.capturesFor(declaration);
   const visit = (node: Node): void => {
     if (ast.is.IsFunctionExpression(node) || ast.is.IsFunctionDeclaration(node) ||
       ast.is.IsClassDeclaration(node) || ast.is.IsClassExpression(node)) return;
     if (ast.kindName(node) === "KindThisKeyword" || ast.kindName(node) === "KindThisExpression") {
-      receiverOccurrences.push(node);
+      if (capturedFields.length === 0 || !receiverCaptures.capturesReceiver(node)) receiverOccurrences.push(node);
     } else if (ast.kindName(node) === "KindIdentifier") {
       const selectedDeclaration = walk.context.source.navigation.sourceReferenceFor(node)?.declaration;
       const ownerParameter = selectedDeclaration === undefined
@@ -73,6 +76,13 @@ export function resolveRustSuspendedCallableStorage(
   }
 
   const carriers: TargetTypeRef[] = [...storedCarriers, ...(ownedReceiver === undefined ? [] : [ownedReceiver.carrier])];
+  for (const field of capturedFields) {
+    const carrier = walk.context.facts.get(field.declaration, rustCapturedFieldStorageFactKey)?.valueCarrier;
+    if (carrier === undefined) {
+      return { kind: "rejected", reason: "A captured suspended-callable field has no exact finalized Rust storage carrier." };
+    }
+    carriers.push(carrier);
+  }
   for (const parameter of capturedParameters) {
     const carrier = walk.context.facts.get(parameter, rustSourceParameterAbiFactKey)
       ?.parameterCarrier;

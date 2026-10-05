@@ -9,6 +9,8 @@ import { rustInheritedProjectConstructor, type RustProjectConstructorSignature, 
   type RustProjectTypePolicy } from "./type-policy.js";
 import { rustProjectObjectLayout } from "./object-layout.js";
 import type { RustReceiverFieldAliasQueries } from "./receiver-field-aliases.js";
+import type { RustReceiverFieldCaptureQueries } from "./receiver-captures.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { analyzeRustConstructionReadiness, type RustConstructionPointQueries } from "./construction-readiness.js";
 
 export interface RustConstructionField {
@@ -52,6 +54,7 @@ export interface RustConstructionAnalysisInput {
   readonly facts: RustPlanQueries;
   readonly projectTypes: RustProjectTypePolicy;
   readonly receiverFieldAliases: RustReceiverFieldAliasQueries;
+  readonly receiverCaptures: RustReceiverFieldCaptureQueries;
   mayThrow(node: Node): boolean;
 }
 
@@ -123,13 +126,30 @@ export function analyzeRustProjectConstructions(input: RustConstructionAnalysisI
         }
       }
     }
-    const fields = Object.freeze(layers.flatMap(layer => layer.fields));
-    const readiness = analyzeRustConstructionReadiness({ ast: input.ast, definition, layers, fields,
+    const physicalDeclaration = input.receiverCaptures.storageDeclaration;
+    const logicalFields = layers.flatMap(layer => layer.fields);
+    const fields = Object.freeze(logicalFields.filter(field => physicalDeclaration(field.declaration) === field.declaration));
+    const physicalFields = new Map(fields.map(field => [field.declaration, field]));
+    const receiver = input.projectTypes.openCarrier(definition);
+    for (const field of logicalFields) {
+      const declaration = physicalDeclaration(field.declaration);
+      if (declaration === field.declaration) continue;
+      const physical = physicalFields.get(declaration);
+      const actualCarrier = input.projectTypes.instantiateMemberCarrier(field.declaration, receiver, field.carrier);
+      const physicalCarrier = physical === undefined ? undefined
+        : input.projectTypes.instantiateMemberCarrier(physical.declaration, receiver, physical.carrier);
+      if (physicalCarrier === undefined || !rustTargetTypeRefEquals(actualCarrier, physicalCarrier))
+        issues.push(Object.freeze({ node: field.declaration,
+          reason: "A retained override family requires one exact native physical payload carrier." }));
+    }
+    const readiness = analyzeRustConstructionReadiness({ ast: input.ast, definition,
+      layers: layers.map(layer => ({ ...layer, fields: layer.fields.map(field => ({ ...field,
+        declaration: physicalDeclaration(field.declaration) })) })), fields,
       selectedField(node) {
         const fact = input.facts.getFact(node, rustTargetOperationFactKey);
         return fact?.kind === "source-field" && fact.storage === "project-object" &&
           fact.valueSemantics.kind === "stored" && fact.declaration !== undefined
-          ? { declaration: fact.declaration, accessMode: fact.accessMode } : undefined;
+          ? { declaration: physicalDeclaration(fact.declaration), accessMode: fact.accessMode } : undefined;
       },
       guardResult: node => input.facts.getFact(node, rustNativeGuardResultFactKey),
       unreachable: node => input.facts.getFact(node, rustNativeUnreachableFactKey) === true,

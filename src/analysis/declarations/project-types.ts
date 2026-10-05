@@ -98,9 +98,18 @@ export function recordClassSignatureFacts(walk: RustFactWalk, declaration: Node)
         } else {
           setCarrierFact(walk, member, storage);
           if (walk.context.objectRepresentations.receiverCaptures.isCaptured(member)) {
+            const captures = walk.context.objectRepresentations.receiverCaptures;
+            const storageDeclaration = captures.storageDeclaration(member);
+            const storageCarrier = storageDeclaration === member ? storage : resolveRustTargetTypeRef(
+              storageDeclaration, rustResolutionContext(walk, storageDeclaration), walk.operationOptions);
+            if (storageCarrier === undefined) {
+              appendRustDiagnostic(walk, "RUST_CAPTURED_FIELD_STORAGE_NOT_CLOSED",
+                "A retained override family has no exact physical declaration carrier.", member,
+                ["target.capability=rust.field.capture-storage"]);
+              continue;
+            }
             walk.context.facts.set(member, rustCapturedFieldStorageFactKey, {
-              storage: selectRustCapturedFieldStorage(storage, ast.hasModifierKind(member, "readonly"),
-                walk.context.objectRepresentations.receiverCaptures.isDeferred(member)),
+              storage: selectRustCapturedFieldStorage(storageCarrier, captures.storageReadonly(member), captures.isDeferred(member)),
               valueCarrier: storage,
             }, [{ message: "rust exact live receiver field storage" }]);
           }

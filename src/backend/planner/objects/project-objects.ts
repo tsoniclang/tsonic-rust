@@ -101,7 +101,7 @@ export function readRustProjectObjectField(
   captureStorage?: RustCapturedFieldStorage,
   projection: readonly string[] = [],
 ): RustExpr {
-  return readRustProjectStoredField(receiver, storagePath, representation, field => captureStorage !== undefined
+  return withRustProjectStoredField(receiver, storagePath, representation, field => captureStorage !== undefined
     ? rustCapturedFieldLocation(captureStorage, field, resultCarrier, projection, resultCarrier).read
     : isRustCopyCarrier(resultCarrier) ? field : { kind: "method-call", receiver: field, method: "clone", args: [] });
 }
@@ -111,19 +111,33 @@ export function readRustProjectObjectFieldOwner(
   borrowed = false,
 ): RustExpr {
   if (borrowed && representation.kind === "value") return { kind: "reference", expr: rustProjectObjectDirectPath(receiver, storagePath) };
-  return readRustProjectStoredField(receiver, storagePath, representation,
+  return withRustProjectStoredField(receiver, storagePath, representation,
     field => ({ kind: "method-call", receiver: field, method: "clone", args: [] }));
 }
 
-function readRustProjectStoredField(
-  receiver: RustExpr, storagePath: string | readonly string[], representation: RustObjectRepresentation,
+export function withRustProjectStoredField(
+  receiver: RustExpr,
+  storagePath: string | readonly string[],
+  representation: RustObjectRepresentation,
   project: (field: RustExpr) => RustExpr,
-): RustExpr {
+): RustExpr;
+export function withRustProjectStoredField(
+  receiver: RustExpr,
+  storagePath: string | readonly string[],
+  representation: RustObjectRepresentation,
+  project: (field: RustExpr) => RustExpr | undefined,
+): RustExpr | undefined;
+export function withRustProjectStoredField(
+  receiver: RustExpr, storagePath: string | readonly string[], representation: RustObjectRepresentation,
+  project: (field: RustExpr) => RustExpr | undefined,
+): RustExpr | undefined {
   if (representation.kind === "value") {
     const field = rustProjectObjectDirectPath(receiver, storagePath);
     return project(field);
   }
   const field = rustProjectObjectStatePath(storagePath);
+  const selected = project(field);
+  if (selected === undefined) return undefined;
   return {
     kind: "method-call",
     receiver: {
@@ -135,7 +149,7 @@ function readRustProjectStoredField(
     args: [{
       kind: "closure",
       params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
-      body: project(field),
+      body: selected,
     }],
   };
 }
@@ -173,8 +187,8 @@ export function writeRustProjectObjectField(
   if (captureStorage !== undefined) {
     if (operator !== "=") return undefined;
     if (captureStorage.kind === "shared") return undefined;
-    return readRustProjectStoredField(receiver, storagePath, representation,
-      field => writeRustCapturedField(captureStorage, field, value, projection)!);
+    return withRustProjectStoredField(receiver, storagePath, representation,
+      field => writeRustCapturedField(captureStorage, field, value, projection));
   }
   if (representation.kind === "value") {
     return {

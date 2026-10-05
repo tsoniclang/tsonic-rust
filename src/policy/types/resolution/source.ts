@@ -763,7 +763,6 @@ function resolveStandardSourceTypeTransformation(
         context,
         options,
         resolving,
-        "parameter-list",
       )
     );
     return elements.some((element) => element === undefined)

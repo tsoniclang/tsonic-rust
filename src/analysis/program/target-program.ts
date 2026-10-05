@@ -263,6 +263,7 @@ export function analyzeRustTargetProgram(
     projectMethodDispatch: context.projectMethodDispatch.seal(),
     projectConstructions: analyzeRustProjectConstructions({ ast: context.ast, facts,
       projectTypes: context.projectTypes, receiverFieldAliases: objectRepresentations,
+      receiverCaptures: objectRepresentations.receiverCaptures,
       mayThrow(node) {
         const accessor = facts.getFact(node, rustSourceAccessorEffectsFactKey);
         return facts.getFact(node, rustSourceCallEffectsFactKey)?.invocation === "fallible" ||
