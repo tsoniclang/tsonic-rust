@@ -24,6 +24,7 @@ import { analyzeRustLocalStorageAliases } from "../storage/local-aliases.js";
 import { analyzeRustProjectConstructions } from "../project-types/construction-plan.js";
 import { rustCallArgumentIsOwned } from "../facts/parameter-passing.js";
 import { analyzeRustBorrowedElementReads } from "./borrowed-element-reads.js";
+import { analyzeRustBorrowStability } from "./borrow-stability.js";
 import {
   analyzeRustBinaryHooks,
   analyzeRustRuntimeReferences,
@@ -239,6 +240,12 @@ export function analyzeRustTargetProgram(
     })));
   }
   const borrowedElementReads = analyzeRustBorrowedElementReads(context.ast, context.sourceFiles, facts, context.source.navigation);
+  const borrowStability = analyzeRustBorrowStability({
+    ast: context.ast, sourceFiles: context.sourceFiles, facts,
+    projectTypes: context.projectTypes, objectRepresentations, frozenDataWrites: context.frozenDataWrites,
+    structuralShapes: context.structuralShapes,
+  });
+  if (borrowStability.kind === "rejected") return rejectedTargetStage(borrowStability.diagnostics);
   const program: RustTargetProgram = Object.freeze({
     deferredCaptures: analyzeRustDeferredCaptureStorage({ ast: context.ast, sourceFiles: context.sourceFiles, facts }),
     lexicalFunctions,
@@ -281,6 +288,7 @@ export function analyzeRustTargetProgram(
     declarationGenericRequirements: declarationGenericRequirements.index,
     valueLifetimes,
     borrowedElementReads,
+    borrowStability: borrowStability.plan,
     structuralShapes: context.structuralShapes.seal(),
     frozenDataWrites: context.frozenDataWrites.seal(),
     classValues,

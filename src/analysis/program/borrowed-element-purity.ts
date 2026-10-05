@@ -1,13 +1,77 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import { BinaryExpression_Left, ElementAccessExpression_ArgumentExpression, Node_Expression } from "@tsonic/target-api/source";
-import { rustTargetOperationFactKey, type RustTargetOperationFact } from "../facts/keys.js";
-import { isRustStringCarrier } from "../../target-model/types/index.js";
+import { BinaryExpression_Left, BinaryExpression_Right, ElementAccessExpression_ArgumentExpression, Node_Expression } from "@tsonic/target-api/source";
+import {
+  rustBindingStorageFactKey, rustCallScopedLifetimeReconciliationFactKey, rustContextualValueConversionFactKey,
+  rustFlowReadProjectionFactKey, rustOptionProjectionFactKey, rustProjectDowncastFactKey, rustProjectUpcastFactKey,
+  rustSourceBindingFactKey, rustTargetOperationFactKey, type RustTargetOperationFact,
+} from "../facts/keys.js";
+import { isRustCopyCarrier, isRustStringCarrier } from "../../target-model/types/index.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { isRustBinaryOperator } from "../../target-model/syntax/tokens.js";
 import type { RustTargetProgram } from "./model.js";
 import type { RustBorrowedElementRead } from "./borrowed-element-reads.js";
 import { rustEffectiveValueCarrier } from "../facts/value-carrier-queries.js";
 import { hasExactObjectKeys } from "../../target-model/metadata/closed-data.js";
+import { rustObjectReferenceViewKey } from "../facts/object-reference-views.js";
 
 type ProviderOperation = Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>;
+
+export function rustBorrowValueIsUnprojected(node: Node, facts: RustTargetProgram["facts"]): boolean {
+  const carrier = facts.getRuntimeCarrierFact(node)?.carrier;
+  return carrier !== undefined && rustTargetTypeRefEquals(carrier, rustEffectiveValueCarrier(facts, node)) &&
+    facts.getTargetConversionFact(node) === undefined &&
+    facts.getFact(node, rustFlowReadProjectionFactKey) === undefined &&
+    facts.getFact(node, rustProjectUpcastFactKey) === undefined &&
+    facts.getFact(node, rustProjectDowncastFactKey) === undefined &&
+    facts.getFact(node, rustObjectReferenceViewKey) === undefined &&
+    facts.getFact(node, rustCallScopedLifetimeReconciliationFactKey) === undefined &&
+    facts.getFact(node, rustContextualValueConversionFactKey) === undefined &&
+    facts.getFact(node, rustOptionProjectionFactKey) === undefined;
+}
+
+export function rustBorrowPrimitiveCopyValue(node: Node, facts: RustTargetProgram["facts"]): boolean {
+  const carrier = facts.getRuntimeCarrierFact(node)?.carrier;
+  return carrier?.kind === "source-primitive" && isRustCopyCarrier(carrier) && rustBorrowValueIsUnprojected(node, facts);
+}
+
+export function rustBorrowPureCopyValue(
+  node: Node, ast: AstReader, facts: RustTargetProgram["facts"], isPure: (node: Node) => boolean,
+): boolean {
+  if (!rustBorrowPrimitiveCopyValue(node, facts)) return false;
+  if (["KindNumericLiteral", "KindTrueKeyword", "KindFalseKeyword"].includes(ast.kindName(node))) return true;
+  if (ast.is.IsIdentifier(node)) {
+    const binding = facts.getFact(node, rustSourceBindingFactKey);
+    return binding?.scope === "lexical" &&
+      facts.getFact(binding.sourceDeclaration, rustBindingStorageFactKey)?.storage !== "location";
+  }
+  const operand = Node_Expression(ast, node);
+  if (ast.is.IsParenthesizedExpression(node)) return operand !== undefined && isPure(operand);
+  const operation = facts.getFact(node, rustTargetOperationFactKey);
+  if (operation?.kind === "operator-token" && ast.is.IsBinaryExpression(node) &&
+    operation.leftConversion === undefined && operation.rightConversion === undefined && isRustBinaryOperator(operation.operator)) {
+    const left = BinaryExpression_Left(ast, node);
+    const right = BinaryExpression_Right(ast, node);
+    return left !== undefined && right !== undefined && isPure(left) && isPure(right);
+  }
+  const provider = rustBorrowPureOperation(node, facts);
+  if (provider === undefined || provider.abi.result.kind !== "sync" ||
+    provider.abi.effects.invocation !== "infallible" || provider.abi.result.conversion.kind !== "identity" ||
+    !rustTargetTypeRefEquals(provider.abi.result.carrier, facts.getRuntimeCarrierFact(node)?.carrier)) return false;
+  const argumentsList = ast.arguments(node);
+  if (argumentsList.length !== provider.abi.sourceArguments.length ||
+    !provider.abi.sourceArguments.every((argument, index) => argument.form === "value" && argument.sourceIndex === index &&
+      argumentsList[index] !== undefined && isPure(argumentsList[index]!))) return false;
+  const receiver = ast.is.IsCallExpression(node)
+    ? operand === undefined ? undefined : Node_Expression(ast, operand) : operand;
+  if (provider.abi.sourceReceiver.kind === "receiver" && provider.abi.sourceReceiver.disposition === "runtime" &&
+    (receiver === undefined || !isPure(receiver))) return false;
+  const inputs = provider.abi.targetReceiver.kind === "input"
+    ? [provider.abi.targetReceiver.input, ...provider.abi.targetArguments] : provider.abi.targetArguments;
+  return inputs.every(selected => selected.source.kind === "constant" ||
+    "conversion" in selected && selected.conversion.kind === "identity" &&
+    selected.sourceCarrier.kind === "source-primitive" && isRustCopyCarrier(selected.sourceCarrier) &&
+    selected.mode !== "mut-ref");
+}
 
 export function rustBorrowedElementRead(
   receiver: Node,

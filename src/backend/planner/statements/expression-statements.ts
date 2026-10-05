@@ -21,6 +21,7 @@ import {
 } from "@tsonic/target-api/source";
 import {
   planRustMutableProjectReceiver,
+  planRustSharedReceiver,
   planRustNonConsumingValue,
   planRustPromotedStorageLocation,
   planRustPromotedStorageWrite,
@@ -30,7 +31,8 @@ import {
   rustTargetOperationFactKey,
 } from "../../../analysis/facts/keys.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { diagnosticInput } from "../program/plan-context.js";
+import { diagnosticInput, rustActiveErrorType } from "../program/plan-context.js";
+import { applyRustFallibleResultExpression } from "../types/fallible-shape.js";
 import {
   isRustAssignmentOperator,
   rustStringPushMethod,
@@ -43,9 +45,9 @@ import { planRuntimeSetStatement, selectedOperatorMatches } from "./iteration.js
 import { planRustCompoundAssignmentValue, planRustDirectOperatorCallAssignment, planRustSourceAccessorAssignment, planRustSourceIndexAssignment, planRustSourceMethodPropertyAssignment, planRustSourceStaticFieldAssignment } from "./assignments.js";
 import { planRustBuiltinErrorAssignment } from "./assignments.js";
 import { planRustSourceUnionFieldProjection, readRustUnionField, writeRustUnionField } from "../expressions/unions.js";
-import { readRustProjectDispatchedField, writeRustProjectDispatchedField } from "../objects/project-objects.js";
+import { readRustProjectDispatchedField, writeRustProjectDispatchedField, withRustProjectStoredField } from "../objects/project-objects.js";
 import { planRustProjectFieldDispatchRoles } from "../objects/project-field-dispatch.js";
-import { readRustStoredObjectField, rustProjectObjectRepresentation, writeRustStoredObjectField } from "../objects/project-storage.js";
+import { readRustStoredObjectField, rustDirectProjectFieldStoragePath, rustProjectObjectRepresentation, writeRustStoredObjectField } from "../objects/project-storage.js";
 import { rustStringConcat } from "../../target-ast/expressions.js";
 import { planRustDirectStorage } from "../expressions/updates/target.js";
 import type { Node } from "@tsonic/tsts";
@@ -242,6 +244,56 @@ export function planRustAssignmentWrite(
     return undefined;
   }
   const sourceField = context.input.program.facts.getFact(left, rustTargetOperationFactKey);
+  const borrowedWrite = context.input.program.borrowStability.borrowedWriteFor(expression);
+  if (borrowedWrite !== undefined && context.expressionOverrides?.has(borrowedWrite.receiver) !== true) {
+    if (borrowedWrite.target !== left || borrowedWrite.value !== valueNode ||
+      !sourceFieldSelectedOperationMatches(borrowedWrite.receiver, borrowedWrite.field, context)) {
+      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, expression),
+        "rust.backend.borrowed-field-write", "Borrowed field write conflicts with its sealed source selection."));
+      return undefined;
+    }
+    const errorType = borrowedWrite.fallible ? rustActiveErrorType(context) : undefined;
+    if (borrowedWrite.fallible && errorType === undefined) {
+      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, expression),
+        "rust.backend.borrowed-field-write-boundary", "A guarded borrowed field write requires its active native error boundary."));
+      return undefined;
+    }
+    const write = (field: RustExpr): RustExpr | undefined => {
+      const overrides = new Map(context.expressionOverrides ?? []);
+      overrides.set(borrowedWrite.receiver, { expression: { kind: "reference", expr: field },
+        carrier: borrowedWrite.field.resultCarrier, valueForm: "shared-reference" });
+      const statements = planRustAssignmentWrite(expression, left, valueNode, fact,
+        { ...context, expressionOverrides: overrides });
+      return statements === undefined ? undefined : { kind: "block", body: {
+        statements: errorType === undefined ? statements : [...statements, {
+          kind: "tail", expr: applyRustFallibleResultExpression({ kind: "tuple-literal", elements: [] }, { errorType }),
+        }],
+      } };
+    };
+    const location = context.valueFieldLocations?.get(borrowedWrite.receiver) ??
+      (borrowedWrite.location === "captured-field"
+        ? planRustValueFieldLocation(borrowedWrite.receiver, context, "read") : undefined);
+    let selected: RustExpr | undefined;
+    if (location?.withRead !== undefined) {
+      const body = location.withRead(write);
+      selected = body === undefined ? undefined : location.bindings.length === 0 ? body
+        : rustValueBlock(location.bindings, body);
+    } else if (borrowedWrite.location === "stored-field") {
+      const plannedOwner = planExpression(borrowedWrite.owner, context);
+      const path = rustDirectProjectFieldStoragePath(borrowedWrite.field.receiverCarrier,
+        borrowedWrite.field.storageIndex, context);
+      const representation = rustProjectObjectRepresentation(borrowedWrite.field.receiverCarrier, context);
+      if (plannedOwner === undefined || path === undefined || representation === undefined) return undefined;
+      const owner = planRustSharedReceiver(borrowedWrite.owner, plannedOwner, context);
+      selected = withRustProjectStoredField(owner, path, representation, write);
+    } else {
+      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, expression),
+        "rust.backend.borrowed-field-location", "A sealed captured field write requires its exact borrowed physical location."));
+      return undefined;
+    }
+    return selected === undefined ? undefined : [{ kind: "expr", expr: errorType === undefined ? selected
+      : { kind: "try", expr: selected, resultErrorType: errorType, operandErrorType: errorType } }];
+  }
   if (sourceField?.kind === "builtin-error-property") return planRustBuiltinErrorAssignment(left, valueNode, sourceField, fact, context);
   const compoundWrite = context.input.program.facts.getFact(expression, rustCompoundWriteFactKey);
   if (compoundWrite !== undefined) {

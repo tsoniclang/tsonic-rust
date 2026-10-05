@@ -87,6 +87,7 @@ export interface RustTargetProgram {
   readonly declarationGenericRequirements: RustDeclarationGenericRequirementIndex;
   readonly valueLifetimes: RustValueLifetimePlan;
   readonly borrowedElementReads: import("./borrowed-element-reads.js").RustBorrowedElementReads;
+  readonly borrowStability: import("./borrow-stability.js").RustBorrowStabilityPlan;
   readonly structuralShapes: RustStructuralShapePlan;
   readonly frozenDataWrites: import("../objects/frozen-data-writes.js").RustFrozenDataWritePlan;
   readonly classValues: import("../objects/class-values.js").RustClassValuePlan;
