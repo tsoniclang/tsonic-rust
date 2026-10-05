@@ -96,19 +96,11 @@ export function planRustSourceCallableValueConstruction(
   const invocation: RustExpr = {
     kind: "call",
     path,
-    args: [...value.parameterCarriers.map((_carrier, index): RustExpr => {
-      const argument: RustExpr = {
+    args: [...value.parameterCarriers.map((_carrier, index): RustExpr => ({
         kind: "field",
         receiver: { kind: "path", path: argumentsName },
         name: String(index),
-      };
-      const mode = value.argumentModes[index];
-      return mode === "ref"
-        ? { kind: "reference", expr: argument }
-        : mode === "mut-ref"
-          ? { kind: "reference", expr: argument, mutable: true }
-          : argument;
-    }), ...environmentArguments],
+      })), ...environmentArguments],
   };
   const fallible = context.input.program.facts.getFact(
     value.sourceDeclaration,
@@ -139,11 +131,10 @@ export function planRustSourceCallableValueConstruction(
     ? { kind: "evaluate-then", effect: completed, discard: "unit",
         value: applyRustFallibleResultExpression({ kind: "tuple-literal", elements: [] }, { errorType: currentErrorType }) }
     : applyRustFallibleResultExpression(completed, { errorType: currentErrorType });
-  const mutableArguments = value.argumentModes.some((mode) => mode === "mut-ref");
-  const implementation: RustExpr = mutableArguments || captures.length > 0
+  const implementation: RustExpr = captures.length > 0
     ? {
         kind: "closure-block",
-        params: [{ name: argumentsName, mutable: mutableArguments }],
+        params: [{ name: argumentsName }],
         move: true,
         async: false,
         body: { statements: [{ kind: "tail", expr: callableResult }] },

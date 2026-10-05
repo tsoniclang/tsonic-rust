@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { absenceCallableConversionSource, broadCallableConversionSource, nativeCallableAdapterCostSource } from "../../../../tsonic/test/fixtures/callable-conversion-evaluation.mjs";
+import { absenceCallableConversionSource, broadCallableConversionSource, nativeCallableAdapterCostSource, nativeCallableInputBorrowSource } from "../../../../tsonic/test/fixtures/callable-conversion-evaluation.mjs";
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
@@ -14,6 +14,16 @@ for (const surfaces of [[], ["js"]]) {
       files: { "index.ts": absenceCallableConversionSource + '\nexport function main(): void { if (!run()) throw new Error("callable conversion"); }' } });
     assert.deepEqual(result.diagnostics, []);
     validateGeneratedProject(`absence-callable-conversion-${lane}`, result.artifacts, { run: true });
+  });
+}
+
+for (const surfaces of [[], ["js"]]) {
+  const lane = surfaces[0] ?? "native";
+  test(`source callable input adaptation borrows native string parameters in ${lane}`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
+      files: { "index.ts": nativeCallableInputBorrowSource + '\nexport function main(): void { if (!run()) throw new Error("callable input borrow"); }' } });
+    assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\n").slice(0, 6000));
+    validateGeneratedProject(`source-callable-input-borrow-${lane}`, result.artifacts, { run: true });
   });
 }
 

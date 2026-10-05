@@ -3,7 +3,7 @@ import { isRustCapturedFieldStorage } from "../../../target-model/types/field-st
 import { defineRustPlanKey } from "../../../target-model/facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustArgumentMode, RustOptionalChainFact, RustProviderFactOperationKind } from "../../../target-model/operations/model.js";
+import type { RustOptionalChainFact, RustProviderFactOperationKind } from "../../../target-model/operations/model.js";
 import type { RustPlanKey } from "../../../target-model/facts/keys.js";
 import type { RustTargetOperationFact, RustTypedLocationPlan } from "./facts.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
@@ -160,7 +160,6 @@ export interface RustSourceCallableValueFact {
   readonly name: string;
   readonly carrier: TargetTypeRef;
   readonly parameterCarriers: readonly TargetTypeRef[];
-  readonly argumentModes: readonly RustArgumentMode[];
   readonly resultCarrier: TargetTypeRef;
 }
 
@@ -173,8 +172,6 @@ function sourceCallableValuesEqual(left: RustSourceCallableValueFact, right: Rus
     left.parameterCarriers.length === right.parameterCarriers.length &&
     left.parameterCarriers.every((carrier, index) =>
       rustTargetTypeRefEquals(carrier, right.parameterCarriers[index])) &&
-    left.argumentModes.length === right.argumentModes.length &&
-    left.argumentModes.every((mode, index) => mode === right.argumentModes[index]) &&
     rustTargetTypeRefEquals(left.resultCarrier, right.resultCarrier);
 }
 
@@ -201,7 +198,6 @@ export type RustModuleBindingFact =
         readonly name: string;
         readonly carrier: TargetTypeRef;
         readonly parameterCarriers: readonly TargetTypeRef[];
-        readonly argumentModes: readonly RustArgumentMode[];
         readonly resultCarrier: TargetTypeRef;
       };
     }
@@ -239,8 +235,6 @@ function nativeCallableValuesEqual(
       left.parameterCarriers.length === right.parameterCarriers.length &&
       left.parameterCarriers.every((carrier, index) =>
         rustTargetTypeRefEquals(carrier, right.parameterCarriers[index])) &&
-      left.argumentModes.length === right.argumentModes.length &&
-      left.argumentModes.every((mode, index) => mode === right.argumentModes[index]) &&
       rustTargetTypeRefEquals(left.resultCarrier, right.resultCarrier);
 }
 

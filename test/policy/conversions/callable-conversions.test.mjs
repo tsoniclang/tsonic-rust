@@ -3,7 +3,7 @@ import test from "node:test";
 import { rustCallableConversionMatches, selectRustCallableConversion } from "../../../dist/target-model/conversions/callable.js";
 import { rustCompilerOwnedContextualConversionMatches } from "../../../dist/target-model/conversions/contextual.js";
 import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
-import { rustAbsenceTargetType, rustCallableTargetType, rustClosureTargetType, rustJsValueTargetType, rustOptionTargetType, rustUnitTargetType } from "../../../dist/target-model/types/index.js";
+import { rustAbsenceTargetType, rustCallableTargetType, rustClosureTargetType, rustJsValueTargetType, rustOptionTargetType, rustStringTargetType, rustUnitTargetType } from "../../../dist/target-model/types/index.js";
 
 const number = { kind: "source-primitive", name: "float64" };
 const string = { kind: "source-primitive", name: "string" };
@@ -24,6 +24,33 @@ test("native closure adapters retain exact inputs, results and invocation failur
   assert.equal(select(source, rustClosureTargetType([string], number, true)) === undefined, true);
   assert.equal(select(source, rustClosureTargetType([integer], string, true)) === undefined, true);
   assert.equal(rustCallableConversionMatches({ ...selected, parameters: [{ kind: "discard" }] }, source, target), false);
+});
+
+test("owning callable inputs borrow only exact elided shared parameters for invocation", () => {
+  const nativeString = rustStringTargetType();
+  const reference = { kind: "reference", referent: nativeString, mutable: false };
+  const source = rustCallableTargetType([reference], number);
+  const target = rustCallableTargetType([nativeString], number);
+  const selected = select(source, target);
+  assert.equal(selected !== undefined, true);
+  assert.equal(selected.parameters[0].kind, "borrow");
+  assert.equal(Object.isFrozen(selected.parameters[0]), true);
+  assert.equal(rustCallableConversionMatches(selected, source, target), true);
+  for (const changed of [
+    { ...selected, parameters: [{ kind: "borrow", extra: true }] },
+    { ...selected, result: { kind: "borrow" } },
+  ]) assert.equal(rustCallableConversionMatches(changed, source, target), false);
+  for (const carrier of [
+    { ...reference, mutable: true },
+    { ...reference, lifetime: { kind: "static" } },
+    { ...reference, lifetime: { kind: "placeholder" } },
+    { ...reference, referent: number },
+  ]) {
+    const unsafeSource = rustCallableTargetType([carrier], number);
+    assert.equal(select(unsafeSource, target), undefined);
+    assert.equal(rustCallableConversionMatches({ ...selected, source: unsafeSource }, unsafeSource, target), false);
+  }
+  assert.equal(select(rustCallableTargetType([], nativeString), rustCallableTargetType([], reference)), undefined);
 });
 
 test("stored void and exact absence callbacks complete only into proven native absence storage", () => {

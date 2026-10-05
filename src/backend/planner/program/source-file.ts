@@ -325,7 +325,6 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
             name: binding.name,
             carrier: binding.value.carrier,
             parameterCarriers: binding.value.parameterCarriers,
-            argumentModes: binding.value.argumentModes,
             resultCarrier: binding.value.resultCarrier,
           }, initializationContext);
           const type = rustTypeFromCarrierInContext(binding.value.carrier, initializationContext);
@@ -673,7 +672,6 @@ function planTopLevelVariableStatement(
         name: binding.name,
         carrier: binding.value.carrier,
         parameterCarriers: binding.value.parameterCarriers,
-        argumentModes: binding.value.argumentModes,
         resultCarrier: binding.value.resultCarrier,
       }, context);
       const rustType = rustTypeFromCarrierInContext(binding.value.carrier, context);

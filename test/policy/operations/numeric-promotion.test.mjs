@@ -215,6 +215,27 @@ test("native-sized integers select checked narrowing without a floating intermed
   }
 });
 
+test("native-sized integers retain checked same-signedness wide call boundaries", () => {
+  for (const [name, targets] of [["native-int", ["int64", "int128"]], ["native-uint", ["uint64", "uint128"]]]) {
+    for (const targetName of targets) {
+      const source = { kind: "source-primitive", name };
+      const target = { kind: "source-primitive", name: targetName };
+      const selected = selectRustSourceValueConversion(source, target);
+      assert.equal(selected?.kind, "exact-integer", `${name} to ${targetName}`);
+      const contract = rustValueConversionContract(selected);
+      assert.equal(contract !== undefined, true);
+      assert.deepEqual(contract.source, source);
+      assert.deepEqual(contract.target, target);
+      assert.equal(contract.lowering, "exact-integer");
+    }
+  }
+  for (const [sourceName, targetName] of [["native-int", "int32"], ["native-uint", "uint32"],
+    ["native-int", "uint64"], ["native-uint", "int64"]]) {
+    assert.equal(selectRustSourceValueConversion({ kind: "source-primitive", name: sourceName },
+      { kind: "source-primitive", name: targetName }), undefined, `${sourceName} to ${targetName}`);
+  }
+});
+
 test("generated Rust compiles representative mixed numeric operations", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     files: {

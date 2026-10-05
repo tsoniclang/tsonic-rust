@@ -237,7 +237,6 @@ function finalizedNativeCallableValue(
       resultCarrier,
     ),
     parameterCarriers: closed.map((abi) => abi.parameterCarrier),
-    argumentModes: closed.map((abi) => abi.mode),
     resultCarrier,
   };
 }

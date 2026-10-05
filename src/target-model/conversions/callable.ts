@@ -10,6 +10,7 @@ import { hasExactObjectKeys, isClosedMetadata, isDenseDataArray, snapshotClosedM
 export type RustCallableValueConversion =
   | { readonly kind: "identity" }
   | { readonly kind: "value"; readonly conversion: RustValueConversion }
+  | { readonly kind: "borrow" }
   | { readonly kind: "absence" }
   | { readonly kind: "discard" };
 
@@ -29,6 +30,9 @@ export function rustCallableValueConversionMatches(
 ): boolean {
   if (typeof conversion !== "object" || conversion === null || !isClosedMetadata(conversion)) return false;
   if (conversion.kind === "identity") return hasExactObjectKeys(conversion, ["kind"]) && rustTargetTypeRefEquals(source, target);
+  if (conversion.kind === "borrow") return hasExactObjectKeys(conversion, ["kind"]) &&
+    target.kind === "reference" && target.mutable === false && target.lifetime === undefined &&
+    rustTargetTypeRefEquals(source, target.referent);
   if (conversion.kind === "discard") return hasExactObjectKeys(conversion, ["kind"]) && isRustUnitCarrier(target);
   if (conversion.kind === "absence") return hasExactObjectKeys(conversion, ["kind"]) && (isRustUnitCarrier(source) || isRustAbsenceCarrier(source)) &&
     (rustOptionElementCarrier(target) !== undefined || rustOptionalStorageValue(target) !== undefined);
@@ -56,6 +60,7 @@ export function rustCallableConversionMatches(
     conversion.parameters.every((parameter, index) =>
       rustCallableValueConversionMatches(parameter, targetCallable.parameters[index]!, sourceCallable.parameters[index]!, definitions) &&
       parameter.kind !== "absence" && parameter.kind !== "discard") &&
+    conversion.result.kind !== "borrow" &&
     rustCallableValueConversionMatches(conversion.result, sourceCallable.result, targetCallable.result, definitions);
 }
 
@@ -75,7 +80,12 @@ export function selectRustCallableConversion(
     const conversion = selectValue(sourceValue, targetValue);
     return conversion === undefined ? undefined : { kind: "value", conversion };
   };
-  const parameters = sourceCallable.parameters.map((parameter, index) => select(targetCallable.parameters[index]!, parameter));
+  const parameters = sourceCallable.parameters.map((parameter, index) => {
+    const input = targetCallable.parameters[index]!;
+    return parameter.kind === "reference" && parameter.mutable === false && parameter.lifetime === undefined &&
+      rustTargetTypeRefEquals(input, parameter.referent)
+      ? { kind: "borrow" as const } : select(input, parameter);
+  });
   const result: RustCallableValueConversion | undefined =
     (isRustUnitCarrier(sourceCallable.result) || isRustAbsenceCarrier(sourceCallable.result)) &&
       (rustOptionElementCarrier(targetCallable.result) !== undefined || rustOptionalStorageValue(targetCallable.result) !== undefined)

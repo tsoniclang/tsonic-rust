@@ -171,7 +171,6 @@ export function resolveIdentifierCarrier(
           name: targetName,
           carrier: callableCarrier,
           parameterCarriers: closedParameterAbis.map((abi) => abi.parameterCarrier),
-          argumentModes: closedParameterAbis.map((abi) => abi.mode),
           resultCarrier: returnCarrier,
         }, [{ message: "rust exact project-source callable value" }]);
         return setCarrierFact(walk, identifier, callableCarrier);
@@ -228,7 +227,7 @@ export function recordProjectSourceBinding(
     walk.context.facts.set(identifier, rustDirectCallableReferenceFactKey, {
       form: "function", sourceDeclaration: module.callableDeclaration,
       fileName: binding.fileName, name: module.name, carrier: module.value.carrier,
-      parameterCarriers: module.value.parameterCarriers, argumentModes: module.value.argumentModes,
+      parameterCarriers: module.value.parameterCarriers,
       resultCarrier: module.value.resultCarrier,
     }, [{ message: "rust immutable finalized native callable reference" }]);
   }

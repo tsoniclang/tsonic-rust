@@ -293,6 +293,10 @@ export function selectRustSourceValueConversion(
   if (source.name === "uint64" && target.name === "float64") {
     return rustUint64ToFloat64ValueConversion;
   }
+  if (source.name === "native-int" && (target.name === "int64" || target.name === "int128") ||
+    source.name === "native-uint" && (target.name === "uint64" || target.name === "uint128")) {
+    return selectRustExactIntegerConversion(source, target);
+  }
   return rustNumericValueConversionIsSupported(source.name, target.name)
     ? { kind: "numeric-promotion", source: source.name, target: target.name }
     : undefined;

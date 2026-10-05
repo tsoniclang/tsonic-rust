@@ -81,6 +81,7 @@ export function planRustCallableConversion(
 
   function lowerValue(selected: RustCallableValueConversion, value: RustExpr): RustExpr | undefined {
     if (selected.kind === "identity") return value;
+    if (selected.kind === "borrow") return { kind: "reference", expr: value };
     if (selected.kind !== "value") return undefined;
     const contract = rustValueConversionContract(selected.conversion, definitions);
     const converted = contract === undefined ? undefined : lowerRustValueConversion(contract, value, context, node);
