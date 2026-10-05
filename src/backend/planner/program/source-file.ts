@@ -59,6 +59,7 @@ import { planBlockLike, planStatement } from "../statements/index.js";
 import { applyFallibleShape } from "../types/fallible-shape.js";
 import {
   createRustSyntheticNameState,
+  type RustSyntheticNameState,
 } from "../names/synthetic.js";
 import {
   planClassDeclaration,
@@ -125,7 +126,7 @@ export function planRustSourceFile(
   const diagnosticsBeforePlanning = diagnostics.length;
   diagnoseRustSafetyApplications(sourceFile, input, diagnostics);
   const usedAliases = new Set<string>();
-  const context: RustPlanContext = {
+  const baseContext: RustPlanContext = {
     input,
     sourceFile,
     sourcePackageComponentId,
@@ -146,9 +147,16 @@ export function planRustSourceFile(
     usedAliases,
     planBlock: planBlockLike,
   };
-  const baseModule = planModuleItems(context);
+  const syntheticNames = createRustSyntheticNameState(input.program.source.ast, sourceFile, []);
+  const objectLiteralImplementations = createRustObjectLiteralImplementationRegistry(
+    sourceFile,
+    { ...baseContext, syntheticNames },
+    syntheticNames,
+  );
+  const context: RustPlanContext = { ...baseContext, objectLiteralImplementations };
+  const baseModule = planModuleItems(context, syntheticNames);
   const plannedModule = { ...baseModule,
-    items: [...baseModule.items, ...planRustTypeFamilyImplementations(context), ...planRustGenericCallableItems(context), ...planRustSuspendedCallableItems(context)] };
+    items: [...objectLiteralImplementations.items, ...baseModule.items, ...planRustTypeFamilyImplementations(context), ...planRustGenericCallableItems(context), ...planRustSuspendedCallableItems(context)] };
   const initializationRequirement = input.program.moduleInitialization.requirementFor(sourceFile);
   if (initializationRequirement.kind === "unresolved") {
     diagnostics.push(unsupportedConstructDiagnostic(
@@ -223,25 +231,17 @@ interface PlannedRustModuleItems {
   };
 }
 
-function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
+function planModuleItems(
+  context: RustPlanContext,
+  syntheticNames: RustSyntheticNameState,
+): PlannedRustModuleItems {
   const { ast } = context.input.program.source;
   const items: RustItem[] = [];
   const initializationStatements = [] as import("../../target-ast/nodes.js").RustStmt[];
-  const syntheticNames = createRustSyntheticNameState(ast, context.sourceFile, []);
   const initializationFunctionName = rustModuleInitializerFunctionName(
     context.input,
     context.sourceFile,
   );
-  const objectLiteralImplementations = createRustObjectLiteralImplementationRegistry(
-    context.sourceFile,
-    { ...context, syntheticNames },
-    syntheticNames,
-  );
-  context = {
-    ...context,
-    objectLiteralImplementations,
-  };
-  items.push(...objectLiteralImplementations.items);
   const viewOwners = new Set(context.input.program.classValues.instanceViewImplementations.filter(view =>
     view.ownerFileName === ast.getFileName(context.sourceFile)).map(view => view.declaration));
   for (const declaration of viewOwners) {
