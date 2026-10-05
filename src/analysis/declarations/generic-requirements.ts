@@ -36,6 +36,7 @@ import { classifyRustCallableRequirements } from "./generic-callable-requirement
 import { normalizeRustGenericRequirements } from "./generic-requirement-contract.js";
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 import { rustTypeFamilyNormalizer } from "../../policy/types/type-family-normalization.js";
+import type { RustGenericCallablePlan } from "../callables/generic-values.js";
 
 export type RustGenericRequirement = "clone" | "default" | "static" | "source-numeric" | "number-predicate";
 
@@ -89,6 +90,7 @@ export function analyzeRustDeclarationGenericRequirements(
   definitions: RustTypeDefinitions,
   valueLifetimes: RustValueLifetimePlan,
   objectRepresentations: RustObjectRepresentationPlan,
+  genericCallables: RustGenericCallablePlan,
 ): AnalyzeRustDeclarationGenericRequirementsResult {
   const ast = source.ast;
   const diagnostics: TargetDiagnostic[] = [];
@@ -164,6 +166,8 @@ export function analyzeRustDeclarationGenericRequirements(
         typeFamilies,
         projectTypes,
         objectRepresentations,
+        genericCallables,
+        structuralShapes: shapes,
         valueLifetimes,
         isStoredValue,
         readsValue(node) {

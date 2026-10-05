@@ -10,7 +10,7 @@ import { rustObjectLiteralMethodAdapterFactKey } from "../../../dist/analysis/fa
 import { rustProjectCallableAdaptersKey } from "../../../dist/analysis/facts/project-callable-adapters.js";
 import { rustRuntimeCarrierKey } from "../../../dist/target-model/facts/selections.js";
 import { rustReceiverIndependentMethodFactKey } from "../../../dist/analysis/facts/operations/keys.js";
-import { rustStructuralObjectTargetType } from "../../../dist/target-model/types/carriers/source-types.js";
+import { rustSourceTypeCarrier, rustStructuralObjectTargetType } from "../../../dist/target-model/types/carriers/source-types.js";
 import { rustObjectReferenceViewKey } from "../../../dist/analysis/facts/object-reference-views.js";
 import { rustBindingProjectionFactKey } from "../../../dist/analysis/facts/keys.js";
 
@@ -44,7 +44,7 @@ function input() {
     if (key === rustContextualValueConversionFactKey && node.conversion !== undefined) return { conversion: node.conversion };
     if (!closures.includes(node)) return undefined;
     if (key === rustTargetOperationFactKey) return { kind: "closure", resultCarrier: node.carrier };
-    if (key === rustClosureCaptureFactKey) return { receivers: [], receiverFields: [], captures: node.captures ?? [] };
+    if (key === rustClosureCaptureFactKey) return { receivers: node.receivers ?? [], receiverFields: [], captures: node.captures ?? [] };
     return undefined;
   } };
   const names = { nameForDeclaration: () => undefined, functionNameForDeclaration: () => undefined, callableValueNameForDeclaration: () => undefined };
@@ -202,6 +202,66 @@ test("contradictory signatures under one origin fail closed instead of selecting
   assert.equal(plan.issues.length, 1);
   assert.match(plan.issues[0].message, /conflicting native signatures/u);
   assert.equal(plan.definitionFor(closures[1].carrier), undefined);
+});
+
+test("body-only generic captures keep one exact substituted environment owner", () => {
+  const { closures, create } = input();
+  const owner = { kind: "type-parameter", identity: "Outer", name: "Outer" };
+  closures[0].carrier = rustGenericCallableTargetType([parameter], [parameter], parameter,
+    closures[0].carrier.value.origin, [owner]);
+  closures[0].captures = [{ declaration: {}, reference: {}, storage: "value", carrier: owner }];
+  const plan = create();
+  assert.equal(plan.issues.length, 0);
+  const implementation = plan.implementationFor(closures[0]);
+  assert.equal(implementation !== undefined, true);
+  assert.equal(implementation.captures[0].storageCarrier.identity, "generic-callable:Environment:0");
+  assert.deepEqual(implementation.substitutions, [["Outer", {
+    kind: "type-parameter", identity: "generic-callable:Environment:0", name: "EnvironmentType0",
+  }]]);
+});
+
+test("foreign body-only generic captures are rejected rather than erased from the owner", () => {
+  const { closures, create } = input();
+  const owner = { kind: "type-parameter", identity: "Outer", name: "Outer" };
+  closures[0].carrier = rustGenericCallableTargetType([parameter], [parameter], parameter,
+    closures[0].carrier.value.origin, [owner]);
+  closures[0].captures = [{ declaration: {}, reference: {}, storage: "value",
+    carrier: { kind: "type-parameter", identity: "Foreign", name: "Foreign" } }];
+  const plan = create();
+  assert.equal(plan.issues.length, 1);
+  assert.match(plan.issues[0].message, /hidden existential captures/u);
+  assert.equal(plan.implementationFor(closures[0]) === undefined, true);
+});
+
+test("whole native receiver captures retain their exact generic storage environment", () => {
+  const { closures, create } = input();
+  const ownerParameter = { kind: "type-parameter", identity: "Outer", name: "Outer" };
+  const carrier = rustSourceTypeCarrier("/owner.ts", "Owner", "object", [{ kind: "type", type: ownerParameter }]);
+  const reference = {};
+  closures[0].carrier = rustGenericCallableTargetType([parameter], [parameter], parameter,
+    closures[0].carrier.value.origin, [carrier]);
+  closures[0].receivers = [{ owner: {}, reference, references: [reference], carrier }];
+  const plan = create();
+  assert.equal(plan.issues.length, 0);
+  const implementation = plan.implementationFor(closures[0]);
+  assert.equal(implementation !== undefined, true);
+  assert.equal(implementation.receivers[0].storageCarrier.value.genericArguments[0].type.identity, "generic-callable:Environment:0");
+  assert.equal(implementation.receivers[0].reference === reference, true);
+});
+
+test("whole receiver captures cannot introduce an undeclared foreign generic owner", () => {
+  const { closures, create } = input();
+  const ownerParameter = { kind: "type-parameter", identity: "Outer", name: "Outer" };
+  const foreignParameter = { kind: "type-parameter", identity: "Foreign", name: "Foreign" };
+  const carrier = rustSourceTypeCarrier("/owner.ts", "Owner", "object", [{ kind: "type", type: foreignParameter }]);
+  const reference = {};
+  closures[0].carrier = rustGenericCallableTargetType([parameter], [parameter], parameter,
+    closures[0].carrier.value.origin, [ownerParameter]);
+  closures[0].receivers = [{ owner: {}, reference, references: [reference], carrier }];
+  const plan = create();
+  assert.equal(plan.issues.length, 1);
+  assert.match(plan.issues[0].message, /hidden existential captures/u);
+  assert.equal(plan.implementationFor(closures[0]) === undefined, true);
 });
 
 test("receiver-independent methods retain their proven physical ABI without mutating source evidence", () => {

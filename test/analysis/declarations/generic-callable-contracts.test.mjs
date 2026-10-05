@@ -58,6 +58,55 @@ test("quantified callables retain alpha equivalence without leaking call binders
   });
 });
 
+test("body-only captures retain their free native generic environment without entering the call signature", () => {
+  const callable = rustGenericCallableTargetType([parameter("Value")], [parameter("Value")], parameter("Value"), origin,
+    [{ kind: "array", element: parameter("Owner") }, parameter("Owner"), parameter("Value"), number]);
+  assert.deepEqual(rustGenericCallableValue(callable).environment, [parameter("Owner")]);
+  assert.deepEqual(rustTargetTypeParameterIdentities(callable), ["Owner"]);
+  assert.deepEqual(rustGenericCallableProtocol(callable, [string]), { parameters: [string], result: string });
+  const concrete = substituteRustTargetTypeParameters(callable, new Map([["Owner", number]]));
+  assert.deepEqual(rustGenericCallableValue(concrete).environment, [number]);
+  assert.deepEqual(rustGenericCallableProtocol(concrete, [string]), { parameters: [string], result: string });
+  assert.equal(Object.isFrozen(callable.value.environment), true);
+});
+
+test("a structural receiver rebuild preserves body-only generic dependencies", () => {
+  const callable = rustGenericCallableTargetType([parameter("Value")], [parameter("Value")], parameter("Value"), origin,
+    [parameter("Hidden")]);
+  const stored = rustStructuralMethodStorageCarrier(parameter("Receiver"), callable, "required");
+  assert.deepEqual(rustGenericCallableValue(stored).environment, [parameter("Receiver"), parameter("Hidden")]);
+  assert.deepEqual(rustGenericCallableProtocol(stored, [string]), {
+    parameters: [parameter("Receiver"), string], result: string,
+  });
+});
+
+test("nested quantified signatures substitute outer environments without capturing an inner call binder", () => {
+  const outer = { ...parameter("Same"), identity: "outer:Same" };
+  const inner = { ...parameter("Same"), identity: "inner:Same" };
+  const returned = rustGenericCallableTargetType([inner], [inner], inner, origin, [outer]);
+  const factory = rustGenericCallableTargetType([outer], [outer], returned, {
+    ...origin, declarationIdentity: "factory",
+  });
+  assert.deepEqual(rustTargetTypeParameterIdentities(factory), []);
+  const first = rustGenericCallableProtocol(factory, [number]).result;
+  const second = rustGenericCallableProtocol(factory, [string]).result;
+  assert.deepEqual(rustGenericCallableValue(first).environment, [number]);
+  assert.deepEqual(rustGenericCallableValue(second).environment, [string]);
+  assert.deepEqual(rustGenericCallableProtocol(first, [string]), { parameters: [string], result: string });
+  assert.deepEqual(rustGenericCallableProtocol(second, [number]), { parameters: [number], result: number });
+  assert.equal(rustTargetTypeRefEquals(first, second), false);
+});
+
+test("body-only environment inputs reject malformed and accessor-backed carrier arrays", () => {
+  let reads = 0;
+  const accessor = [];
+  Object.defineProperty(accessor, "0", { enumerable: true, get() { reads++; return parameter("Owner"); } });
+  for (const inputs of [Array(1), [undefined], [{ kind: "unknown" }], accessor]) {
+    assert.equal(rustGenericCallableTargetType([parameter("Value")], [parameter("Value")], parameter("Value"), origin, inputs) === undefined, true);
+  }
+  assert.equal(reads, 0);
+});
+
 test("quantified callable contract rejects malformed binders and missing environments", () => {
   assert.equal(rustGenericCallableTargetType(["Value"], [], number, origin), undefined);
   assert.equal(rustGenericCallableTargetType([{ kind: "type-parameter", name: "Value" }], [], number, origin), undefined);

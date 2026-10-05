@@ -61,6 +61,9 @@ import { rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 
 import type { RustGenericRequirement } from "./generic-requirements.js";
 import { normalizeRustGenericRequirements } from "./generic-requirement-contract.js";
+import type { RustGenericCallablePlan } from "../callables/generic-values.js";
+import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
+import { rustSourceCallCallableStorageCarrier } from "../facts/target-operation.js";
 
 interface ClassifyCallableInput {
   readonly valueLifetimes: RustValueLifetimePlan;
@@ -75,6 +78,8 @@ interface ClassifyCallableInput {
   readonly typeFamilies: RustSourceTypeFamilyRegistry;
   readonly projectTypes: RustProjectTypePolicy;
   readonly objectRepresentations: RustObjectRepresentationPlan;
+  readonly genericCallables: RustGenericCallablePlan;
+  readonly structuralShapes: RustStructuralShapePlan;
   readonly idByDeclaration: WeakMap<Node, string>;
   readonly implementationDeclaration: (declaration: Node) => Node;
   readonly contractFor: (declaration: Node) => RequirementContractState | undefined;
@@ -544,7 +549,12 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
     }
     const sourceValue = facts.getFact(node, rustSourceCallableValueFactKey);
     if (sourceValue !== undefined) {
-      for (const capture of facts.getFact(sourceValue.sourceDeclaration, rustClosureCaptureFactKey)?.captures ?? []) {
+      const captures = facts.getFact(sourceValue.sourceDeclaration, rustClosureCaptureFactKey);
+      for (const capture of captures?.receivers ?? []) {
+        const error = addUse(capture.reference, capture.carrier, ["clone", "static"], true);
+        if (error !== undefined) return error;
+      }
+      for (const capture of captures?.captures ?? []) {
         const move = capture.storage === "cell" || capture.storage === "borrow-cell" ||
           input.valueLifetimes.canMoveCapture(sourceValue.sourceDeclaration, capture.declaration);
         const error = addUse(capture.reference, capture.carrier, [...(move ? [] : ["clone" as const]), "static"], true);
@@ -560,6 +570,10 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
         rustClosureProtocol(operation.resultCarrier) === undefined && rustGenericCallableValue(operation.resultCarrier) === undefined
           ? ["clone", "static"]
           : ["clone"];
+      for (const capture of captures.receivers) {
+        const error = addUse(capture.reference, capture.carrier, required, true);
+        if (error !== undefined) return error;
+      }
       for (const capture of captures.receiverFields) {
         const error = addUse(capture.reference, capture.carrier, required.filter(requirement => requirement !== "clone"), true);
         if (error !== undefined) return error;
@@ -605,11 +619,21 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
         }
       }
       const selected = facts.getSelectedTargetCall(node);
-      if (selected?.sourceDeclaration !== undefined) {
-        const selectedDeclaration = input.implementationDeclaration(
-          selected.sourceDeclaration,
-        );
+      const callableCarrier = rustSourceCallCallableStorageCarrier(operation, input.structuralShapes);
+      const genericCallable = rustGenericCallableValue(callableCarrier);
+      const genericDefinition = callableCarrier === undefined ? undefined : input.genericCallables.definitionFor(callableCarrier);
+      if (genericCallable !== undefined && genericDefinition === undefined) {
+        return "A quantified call has no exact sealed implementation family for its generic obligations.";
+      }
+      const callees = genericDefinition === undefined
+        ? selected?.sourceDeclaration === undefined ? [] : [{ declaration: input.implementationDeclaration(selected.sourceDeclaration) }]
+        : genericDefinition.implementations;
+      for (const implementation of callees) {
+        const selectedDeclaration = implementation.declaration;
         const calleeId = input.idByDeclaration.get(selectedDeclaration);
+        if (genericDefinition !== undefined && calleeId === undefined) {
+          return "A quantified implementation has no exact source generic-contract owner.";
+        }
         const selectedClass = operation.target.form === "constructor"
           ? input.projectTypes.definitionForCarrier(operation.target.typeCarrier)
           : undefined;
@@ -634,8 +658,17 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
             }
             const substitutions = new Map(callee.typeParameters.map((parameter, index) =>
               [parameter.identity, targetTypeArguments[index]!] as const));
+            if (genericCallable !== undefined && genericDefinition !== undefined && "substitutions" in implementation) {
+              for (const [identity, parameter] of implementation.substitutions) {
+                const index = parameter.kind === "type-parameter"
+                  ? genericDefinition.signature.environmentParameters.findIndex(candidate => candidate.identity === parameter.identity) : -1;
+                const argument = genericCallable.environment[index];
+                if (index < 0 || argument === undefined) return "A quantified invocation lost its exact captured generic environment binding.";
+                substitutions.set(identity, argument);
+              }
+            }
             const receiver = operation.target.form === "constructor" ? operation.target.typeCarrier
-              : selected.sourceSelectedOwnerCarrier ?? selected.sourceSelectedReceiverCarrier;
+              : selected?.sourceSelectedOwnerCarrier ?? selected?.sourceSelectedReceiverCarrier;
             const instantiate = (carrier: TargetTypeRef): TargetTypeRef | undefined => {
               const instantiated = substituteRustTargetTypeParameters(carrier, substitutions);
               return receiver === undefined || input.projectTypes.definitionContainingDeclaration(selectedDeclaration) === undefined

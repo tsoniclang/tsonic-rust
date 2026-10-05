@@ -29,13 +29,15 @@ export function rustGenericCallableTargetType(
   parameters: readonly TargetTypeRef[],
   result: TargetTypeRef,
   origin: RustGenericCallableOrigin,
+  environmentInputs: readonly TargetTypeRef[] = [],
 ): TargetTypeRef | undefined {
   if (!isDenseDataArray(typeParameters) || typeParameters.some(parameter => !isRustTargetTypeRef(parameter) ||
-    parameter.kind !== "type-parameter" || parameter.optionalStorageValue !== undefined)) return undefined;
+    parameter.kind !== "type-parameter" || parameter.optionalStorageValue !== undefined) ||
+    !isDenseDataArray(environmentInputs) || !environmentInputs.every(isRustTargetTypeRef)) return undefined;
   const bound = new Set(typeParameters.map(parameter => parameter.identity));
   if (bound.size !== typeParameters.length || typeParameters.length === 0 &&
     rustNativeFutureCallableResult(result) === undefined) return undefined;
-  const free = [...new Map([...parameters, result].flatMap(type => rustTargetGenericReferences(type).typeParameters)
+  const free = [...new Map([...parameters, result, ...environmentInputs].flatMap(type => rustTargetGenericReferences(type).typeParameters)
     .filter(parameter => !bound.has(parameter.identity)).map(parameter => [parameter.identity, parameter])).values()];
   const callParameters = typeParameters.map((_parameter, index) => protocolParameter("Call", index));
   const environmentParameters = free.map((_parameter, index) => protocolParameter("Environment", index));
