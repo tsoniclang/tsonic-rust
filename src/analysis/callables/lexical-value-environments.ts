@@ -31,6 +31,7 @@ export function recordRustLexicalValueEnvironments(walk: RustFactWalk, lexical: 
         if (storage.storage !== "value") facts.set(capture.declaration, rustBindingStorageFactKey, {
           storage: storage.storage, valueCarrier: carrier,
           ...(storage.initialization === undefined ? {} : { initialization: storage.initialization }),
+          ...(storage.iterationScope === undefined ? {} : { iterationScope: storage.iterationScope }),
         });
         captures.push({ declaration: capture.declaration, reference: capture.reference, carrier, storage: storage.storage });
       }

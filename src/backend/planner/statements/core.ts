@@ -40,7 +40,7 @@ import { planRustClassEnvironmentValue } from "../objects/class-environments.js"
 import { planRustAbsentValue } from "../expressions/optional-storage.js";
 import { rustNativeGuardResultFactKey, rustNativeUnreachableFactKey } from "../../../analysis/facts/native-control-flow.js";
 import { planFunctionDeclarations } from "../declarations/callables/functions.js";
-import { planRustDeferredCaptureStorage } from "../bindings/deferred-captures.js";
+import { planRustDeferredCaptureStorage } from "../bindings/capture-storage.js";
 import { planRustLexicalFunctionValues } from "../declarations/callables/lexical-values.js";
 
 export type RustAssignmentOperationFact = Extract<

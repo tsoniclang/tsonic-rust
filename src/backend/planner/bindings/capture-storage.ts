@@ -10,7 +10,7 @@ import { requireRustLocationValueCarrier } from "../types/generic-requirements.j
 
 export function planRustDeferredCaptureStorage(scope: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const statements: RustStmt[] = [];
-  for (const declaration of context.input.program.deferredCaptures.forScope(scope)) {
+  for (const declaration of context.input.program.captureStorage.deferredForScope(scope)) {
     const fact = context.input.program.facts.getFact(declaration, rustBindingStorageFactKey);
     const name = context.input.program.names.nameForDeclaration(declaration);
     const type = fact === undefined ? undefined : rustTypeFromCarrierInContext(rustLocationTargetType(fact.valueCarrier), context);
@@ -21,8 +21,27 @@ export function planRustDeferredCaptureStorage(scope: Node, context: RustPlanCon
     }
     if (!requireRustLocationValueCarrier(fact.valueCarrier, declaration, context)) return undefined;
     context.usedAliases?.add("rt");
-    statements.push({ kind: "let", name, mutable: false, type,
+    statements.push({ kind: "let", name, mutable: fact.iterationScope !== undefined, type,
       init: { kind: "call", path: "rt::Location::uninitialized", args: [] } });
+  }
+  return statements;
+}
+
+export function planRustCaptureStorageRotation(scope: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
+  const statements: RustStmt[] = [];
+  for (const declaration of context.input.program.captureStorage.iterationsForScope(scope)) {
+    const fact = context.input.program.facts.getFact(declaration, rustBindingStorageFactKey);
+    const name = context.input.program.names.nameForDeclaration(declaration);
+    if (name === undefined || fact?.storage !== "location" || fact.iterationScope !== scope) {
+      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, declaration),
+        "rust.backend.iteration-capture-storage", "Iteration capture storage requires its exact native location and activation scope."));
+      return undefined;
+    }
+    context.usedAliases?.add("rt");
+    statements.push({ kind: "assign", operator: "=", target: { kind: "path", path: name },
+      value: { kind: "call", path: "rt::Location::allocate", args: [{
+        kind: "method-call", receiver: { kind: "path", path: name }, method: "load", args: [],
+      }] } });
   }
   return statements;
 }

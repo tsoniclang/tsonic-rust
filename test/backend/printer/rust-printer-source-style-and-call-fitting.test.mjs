@@ -63,6 +63,29 @@ test("native parameter mutability follows the existing sealed AST write owner ac
   }
 });
 
+test("loop back-edge liveness preserves the possible exit before the next write", () => {
+  const path = { kind: "path", path: "last" };
+  const read = { kind: "tail", expr: path };
+  const write = { kind: "assign", operator: "=", target: path, value: { kind: "int-literal", value: 1 } };
+  const loops = [
+    { kind: "while", condition: { kind: "path", path: "condition" }, body: { statements: [write] } },
+    { kind: "while-let-some", expression: { kind: "path", path: "condition" }, binding: "current",
+      body: { statements: [write] } },
+    { kind: "for", binding: "current", iterable: { kind: "path", path: "values" }, body: { statements: [write] } },
+  ];
+  for (const loop of loops) {
+    const fn = { kind: "function", name: "run", visibility: "crate", generics: emptyRustGenerics,
+      params: [], returnType: { kind: "primitive", name: "i32" }, body: { statements: [
+        { kind: "let", name: "last", mutable: true, init: { kind: "int-literal", value: 0 } }, loop, read,
+      ] } };
+    const model = finalizeRustSourceStyle({ headerComment, items: [fn] });
+    const body = model.items[0].body.statements.find(statement => statement.kind === loop.kind).body;
+    assert.equal(body.statements[0].kind, "assign", "the final iteration value can be observed after exit");
+    assert.equal(body.innerAttrs?.includes(rustLintAttributes.unusedAssignmentsInner) ?? false, false);
+    assert.deepEqual(finalizeRustSourceStyle(model), model);
+  }
+});
+
 test("native unit block and conditional tails print as implicit unit", () => {
   const unit = { kind: "tuple-literal", elements: [] };
   const text = printFinalRustSourceFile({ headerComment, items: [{ kind: "function", name: "run", visibility: "crate",
@@ -135,6 +158,28 @@ test("only native-unused generic parameters retain a focused contract expectatio
   } }] });
   const boundItem = finalizeRustSourceStyle({ headerComment, items: [bounded] }).items[0];
   assert.equal(boundItem.attrs?.includes(rustLintAttributes.unusedTypeParameters) ?? false, false);
+});
+
+test("unused generic expectations follow native exported API reachability", () => {
+  const fn = visibility => ({ kind: "function", name: "retain", visibility,
+    generics: { parameters: [{ kind: "type", name: "Payload", bounds: [] }], wherePredicates: [] },
+    params: [], returnType: { kind: "primitive", name: "bool" },
+    body: { statements: [{ kind: "tail", expr: { kind: "bool-literal", value: true } }] } });
+  const model = finalizeRustSourceStyle({ headerComment, items: [
+    fn("public"), fn("crate"),
+    { kind: "struct", name: "Exposed", visibility: "public", generics: emptyRustGenerics, fields: [] },
+    { kind: "struct", name: "Internal", visibility: "crate", generics: emptyRustGenerics, fields: [] },
+    { kind: "impl", target: { kind: "named", path: "Exposed" }, generics: emptyRustGenerics,
+      members: [fn("public"), fn("crate")] },
+    { kind: "impl", target: { kind: "named", path: "Internal" }, generics: emptyRustGenerics, members: [fn("public")] },
+  ] });
+  const expects = item => item.attrs?.includes(rustLintAttributes.unusedTypeParameters) ?? false;
+  assert.equal(expects(model.items[0]), false, "exported API retains its native generic contract without a lint expectation");
+  assert.equal(expects(model.items[1]), true, "internal source function still has the exact native lint");
+  assert.equal(expects(model.items[4].members[0]), false, "exported native method");
+  assert.equal(expects(model.items[4].members[1]), true, "internal native method");
+  assert.equal(expects(model.items[5].members[0]), true, "public method on an internal owner");
+  assert.deepEqual(finalizeRustSourceStyle(model), model);
 });
 
 test("identical native absence branches preserve conditions without merging different constants", () => {

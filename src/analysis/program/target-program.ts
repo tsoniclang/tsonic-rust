@@ -15,7 +15,7 @@ import type {
   RustTargetAnalysisRequest,
   RustTargetProgram,
 } from "./model.js";
-import { analyzeRustDeferredCaptureStorage } from "../storage/deferred-captures.js";
+import { analyzeRustCaptureStorage } from "../storage/capture-storage.js";
 import { createRustModuleInitializationPlan } from "../module-initialization/analyze.js";
 import { analyzeRustProviderErrorCarriers } from "./provider-errors.js";
 import { analyzeRustDeclarationGenericRequirements } from "../declarations/generic-requirements.js";
@@ -247,7 +247,7 @@ export function analyzeRustTargetProgram(
   });
   if (borrowStability.kind === "rejected") return rejectedTargetStage(borrowStability.diagnostics);
   const program: RustTargetProgram = Object.freeze({
-    deferredCaptures: analyzeRustDeferredCaptureStorage({ ast: context.ast, sourceFiles: context.sourceFiles, facts }),
+    captureStorage: analyzeRustCaptureStorage({ ast: context.ast, sourceFiles: context.sourceFiles, facts }),
     lexicalFunctions,
     errorStorageDemands: context.errorStorageDemands,
     localStorageAliases: analyzeRustLocalStorageAliases({ ast: context.ast,

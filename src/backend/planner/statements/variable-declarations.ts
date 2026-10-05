@@ -161,7 +161,7 @@ function planVariableDeclaration(
         context.input.program.projectTypes.definitionForCarrier(carrier));
       return representation !== undefined && (representation.kind !== "value" || !representation.mutable);
     });
-  const mutable = nativeArray !== undefined ? sourceUseSummary.bindingWritten : locationStorage === undefined &&
+  const mutable = nativeArray !== undefined ? sourceUseSummary.bindingWritten : locationStorage?.iterationScope !== undefined || locationStorage === undefined &&
     (context.input.program.localStorageAliases.requiresMutableOwner(declaration) || sourceUseSummary.bindingWritten ||
       context.input.program.facts.getFact(declaration, rustMutatedBindingFactKey) !== undefined ||
       (objectRepresentation?.kind === "value" && objectRepresentation.mutable && sourceUseSummary.memberWritten) ||

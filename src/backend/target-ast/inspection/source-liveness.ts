@@ -93,7 +93,7 @@ function finalizeRustNestedStatementLiveness(
     case "while":
     case "while-let-some":
     case "for":
-      return { ...statement, body: finalizeRustBlockLiveness(statement.body, [...statement.body.statements, ...following], locals) };
+      return { ...statement, body: finalizeRustBlockLiveness(statement.body, [statement, ...following], locals) };
     case "resource-scope":
       return {
         ...statement,

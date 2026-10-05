@@ -34,7 +34,7 @@ import { missingFactDiagnostic } from "../diagnostics.js";
 import { planBlockLike } from "./core.js";
 import { planExpressionAsStatement } from "./expression-statements.js";
 import { planVariableStatement } from "./variable-declarations.js";
-import { planRustDeferredCaptureStorage } from "../bindings/deferred-captures.js";
+import { planRustDeferredCaptureStorage, planRustCaptureStorageRotation } from "../bindings/capture-storage.js";
 import { planForInStatement, planForOfStatement } from "./iteration.js";
 import {
   rustMutatedBindingFactKey,
@@ -351,10 +351,12 @@ export function planForStatement(
     const incrementStatements = incrementor === undefined
       ? []
       : planIncrementor(incrementor, loopContext);
-    if (conditionExpr === undefined || incrementStatements === undefined) {
+    const rotation = planRustCaptureStorageRotation(node, loopContext);
+    if (conditionExpr === undefined || incrementStatements === undefined || rotation === undefined) {
       return undefined;
     }
-    const target = createRustLoopTarget(loopContext, incrementStatements, sourceLabel);
+    const continuation = [...rotation, ...incrementStatements];
+    const target = createRustLoopTarget(loopContext, continuation, sourceLabel);
     if (target === undefined) {
       return undefined;
     }
@@ -367,7 +369,7 @@ export function planForStatement(
     }
     const loopBody: RustBlock = rustBlockDefinitelyExits(body)
       ? body
-      : { statements: [...body.statements, ...incrementStatements] };
+      : { statements: [...body.statements, ...continuation] };
     return conditionExpr.kind === "bool-literal" && conditionExpr.value
       ? {
           statements: [{
@@ -399,10 +401,11 @@ export function planForStatement(
     : undefined;
   const deferred = planRustDeferredCaptureStorage(node, context);
   const initialization = planVariableStatement(initializer, context);
-  if (deferred === undefined || initialization === undefined) {
+  const rotation = planRustCaptureStorageRotation(node, context);
+  if (deferred === undefined || initialization === undefined || rotation === undefined) {
     return undefined;
   }
-  const initStatements = [...deferred, ...initialization];
+  const initStatements = [...deferred, ...initialization, ...rotation];
   if (resourceDeclaration === undefined) {
     const loop = planLoop(context);
     return loop === undefined

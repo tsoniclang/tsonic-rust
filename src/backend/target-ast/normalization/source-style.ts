@@ -58,7 +58,9 @@ function finalizeRustItemStyle(
     let attrs = item.params.length <= 7
       ? item.attrs
       : appendRustAttribute(item.attrs, rustLintAttributes.tooManyArguments);
-    if (hasErasedGenericParameter(item)) attrs = appendRustAttribute(attrs, rustLintAttributes.unusedTypeParameters);
+    if (item.visibility !== "public" && hasErasedGenericParameter(item)) {
+      attrs = appendRustAttribute(attrs, rustLintAttributes.unusedTypeParameters);
+    }
     if (hasUnusedParameter(item)) attrs = appendRustAttribute(attrs, rustLintAttributes.unusedVariables);
     if (hasOverwrittenParameter(item)) attrs = appendRustAttribute(attrs, rustLintAttributes.unusedAssignments);
     return { ...item, attrs };
@@ -119,7 +121,9 @@ function finalizeRustImplFunctionStyle(
   let attrs = fn.attrs;
   if (hasUnusedParameter(fn)) attrs = appendRustAttribute(attrs, rustLintAttributes.unusedVariables);
   if (hasOverwrittenParameter(fn)) attrs = appendRustAttribute(attrs, rustLintAttributes.unusedAssignments);
-  if (inherent && hasErasedGenericParameter(fn)) attrs = appendRustAttribute(attrs, rustLintAttributes.unusedTypeParameters);
+  if (inherent && !(publicOwner && fn.visibility === "public") && hasErasedGenericParameter(fn)) {
+    attrs = appendRustAttribute(attrs, rustLintAttributes.unusedTypeParameters);
+  }
   const argumentCount = fn.params.length + (fn.selfParam === undefined ? 0 : 1);
   if (inherent && argumentCount > 7) {
     attrs = appendRustAttribute(attrs, rustLintAttributes.tooManyArguments);

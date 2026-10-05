@@ -56,13 +56,25 @@ export interface RustBindingStorageFact {
   readonly storage: "location" | "cell" | "borrow-cell";
   readonly valueCarrier: TargetTypeRef;
   readonly initialization?: "deferred";
+  readonly iterationScope?: Node;
 }
 
 export const rustBindingStorageFactKey: RustPlanKey<RustBindingStorageFact> = defineRustPlanKey(
   "bindingStorage",
-  (left, right) => left.storage === right.storage && left.initialization === right.initialization &&
+  (left, right) => bindingStorageShapeMatches(left) && bindingStorageShapeMatches(right) &&
+    left.storage === right.storage && left.initialization === right.initialization &&
+    left.iterationScope === right.iterationScope &&
     rustTargetTypeRefEquals(left.valueCarrier, right.valueCarrier),
 );
+
+function bindingStorageShapeMatches(value: RustBindingStorageFact): boolean {
+  return isMetadataRecord(value) && hasExactObjectKeys(value, ["storage", "valueCarrier",
+    ...["initialization", "iterationScope"].filter(key => Object.prototype.hasOwnProperty.call(value, key))]) &&
+    (value.storage === "location" || value.storage === "cell" || value.storage === "borrow-cell") &&
+    value.valueCarrier !== undefined && (value.initialization === undefined ||
+      value.initialization === "deferred" && value.storage === "location") &&
+    (value.iterationScope === undefined || value.iterationScope !== null && value.storage === "location");
+}
 
 export interface RustClosureCaptureFact {
   readonly receivers: readonly {

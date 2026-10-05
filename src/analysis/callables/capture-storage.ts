@@ -1,5 +1,5 @@
-import type { Node } from "@tsonic/tsts";
-import { sourceBindingHasSingleCaptureOwner, sourceBindingCapturedBeforeInitialization } from "@tsonic/target-api/source";
+import type { Node, SourceFile, Symbol } from "@tsonic/tsts";
+import { sourceBindingHasSingleCaptureOwner, sourceBindingCapturedBeforeInitialization, sourceBindingScope } from "@tsonic/target-api/source";
 import type { SourceDeclarationUse } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -11,6 +11,7 @@ import { rustSourceValueWrapperContains } from "../../policy/ownership/source-va
 
 export type RustCaptureStorage = Pick<RustClosureCaptureFact["captures"][number], "storage" | "mutable"> & {
   readonly initialization?: "deferred";
+  readonly iterationScope?: Node;
 };
 
 export function rustCapturedBindingStorage(
@@ -41,20 +42,58 @@ export function rustCapturedBindingStorage(
     walk.context.source.navigation.bindingWritesWithin(selected.symbol, sourceFile).length > 0;
   const existing = walk.context.facts.get(declaration, rustBindingStorageFactKey);
   const deferred = sourceBindingCapturedBeforeInitialization(declaration, walk.context.ast, walk.context.source.navigation);
+  const scope = sourceBindingScope(declaration, walk.context.ast);
+  const iterationValue = existing === undefined && isRustCopyCarrier(carrier) && scope !== undefined &&
+    iterationCaptureCanUseValue(walk, declaration, selected.symbol, scope, sourceFile);
   const unique = mutated && permitSingleOwner && existing === undefined &&
     singleOwnerDirectBinding(walk, declaration, reference, owner, captureRoots);
-  const storage: RustCaptureStorage = deferred
+  const selectedStorage: RustCaptureStorage = deferred
     ? { storage: "location", initialization: "deferred" }
     : existing?.storage === "location"
     ? { storage: "location" }
-    : !mutated ? { storage: "value" }
+    : !mutated || iterationValue ? { storage: "value" }
     : unique && (nativeCallTrait === "FnMut" || nativeCallTrait === "FnOnce")
       ? { storage: "value", mutable: true }
       : unique && rustCarrierSupportsClone(carrier, walk.context.typeDefinitions)
         ? { storage: isRustCopyCarrier(carrier) ? "cell" : "borrow-cell" }
         : { storage: "location" };
+  const iterationScope = selectedStorage.storage === "location" &&
+      walk.context.ast.variableDeclarationKind(declaration) === "let" &&
+      scope !== undefined && walk.context.ast.kindName(scope) === "KindForStatement"
+    ? scope : undefined;
+  const storage = iterationScope === undefined ? selectedStorage : { ...selectedStorage, iterationScope };
   walk.capturedBindingStorage.set(declaration, storage);
   return storage;
+}
+
+function iterationCaptureCanUseValue(
+  walk: RustFactWalk,
+  declaration: Node,
+  symbol: Symbol,
+  scope: Node,
+  sourceFile: SourceFile,
+): boolean {
+  const { ast, source } = walk.context;
+  if (symbol === undefined || ast.variableDeclarationKind(declaration) !== "let" ||
+    ast.kindName(scope) !== "KindForStatement") return false;
+  const incrementor = ast.as.AsForStatement(scope)?.Incrementor;
+  if (incrementor === undefined) return false;
+  let steps = 0;
+  const insideIncrementor = (node: Node, direct: boolean): boolean | undefined => {
+    for (let current: Node | undefined = node; current !== undefined; current = ast.parent(current)) {
+      if (++steps > 262_144) return undefined;
+      if (current === incrementor) return true;
+      if (current === scope) return false;
+      if (direct && ["KindArrowFunction", "KindFunctionExpression", "KindFunctionDeclaration",
+        "KindMethodDeclaration", "KindConstructor", "KindGetAccessor", "KindSetAccessor"].includes(ast.kindName(current))) return false;
+    }
+    return false;
+  };
+  const writes = source.navigation.bindingWritesWithin(symbol, sourceFile);
+  const references = source.navigation.referencesToDeclaration(declaration);
+  return writes.length <= 262_144 && writes.every(write => insideIncrementor(write.operation, true) === true) &&
+    references.length <= 262_144 && references.every(reference =>
+      insideIncrementor(reference, false) === false || insideIncrementor(reference, true) === true);
 }
 
 function singleOwnerDirectBinding(

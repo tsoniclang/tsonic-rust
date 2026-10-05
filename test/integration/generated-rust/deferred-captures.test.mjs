@@ -16,11 +16,11 @@ test("deferred storage is sealed once per exact lexical activation", () => {
   });
   assert.equal(run !== undefined, true);
   const scope = ast.body(run);
-  const declarations = program.deferredCaptures.forScope(scope);
+  const declarations = program.captureStorage.deferredForScope(scope);
   assert.equal(declarations.length, 2);
   assert.equal(Object.isFrozen(declarations), true);
-  assert.equal(program.deferredCaptures.forScope(scope) === declarations, true);
-  assert.equal(program.deferredCaptures.forScope(file).length, 0);
+  assert.equal(program.captureStorage.deferredForScope(scope) === declarations, true);
+  assert.equal(program.captureStorage.deferredForScope(file).length, 0);
   for (const declaration of declarations) {
     const fact = program.facts.getFact(declaration, rustBindingStorageFactKey);
     assert.equal(fact?.storage, "location");

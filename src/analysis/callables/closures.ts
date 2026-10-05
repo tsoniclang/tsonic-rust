@@ -429,8 +429,10 @@ export function collectRustLexicalCaptures(
       storage: selectedStorage.storage,
       valueCarrier: carrier,
       ...(selectedStorage.initialization === undefined ? {} : { initialization: selectedStorage.initialization }),
+      ...(selectedStorage.iterationScope === undefined ? {} : { iterationScope: selectedStorage.iterationScope }),
     }, [{ message: "rust captured mutable binding storage" }]);
-    captures.set(declaration, { declaration, reference, carrier, ...selectedStorage });
+    captures.set(declaration, { declaration, reference, carrier, storage: selectedStorage.storage,
+      ...(selectedStorage.mutable === undefined ? {} : { mutable: selectedStorage.mutable }) });
   }
   return { receivers, receiverFields, captures: [...captures.values()], ...(recursiveDeclaration === undefined ? {} : { recursiveDeclaration }) };
 }

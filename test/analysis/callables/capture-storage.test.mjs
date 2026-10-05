@@ -11,6 +11,83 @@ import { rustCallableTargetType } from "../../../dist/target-model/types/carrier
 const scalarCarrier = { kind: "source-primitive", name: "float64" };
 const stringCarrier = { kind: "target-named", id: "rust.std.String" };
 
+test("loop activation identities distinguish immutable values, live lexical storage and var bindings", () => {
+  for (const [kind, body, expected] of [
+    ["let", "", "value"], ["let", "seed += 1;", "location"], ["var", "", "location"],
+  ]) {
+    const current = fixture(`
+      export function outer() {
+        let previous: (() => number) | undefined;
+        for (${kind} seed = 0; seed < 3; seed++) {
+          const callback = () => seed;
+          ${body}
+          previous = callback;
+        }
+        return previous;
+      }
+    `);
+    const selected = current.select({ permitSingleOwner: false });
+    assert.equal(selected?.storage, expected, "exact native capture representation");
+    const scope = current.source.ast.as.AsForStatement(current.source.ast.parent(
+      current.source.ast.parent(current.declaration)));
+    assert.equal(scope !== undefined, true, "source header has an exact for scope");
+    assert.equal(selected?.iterationScope !== undefined, kind === "let" && expected === "location");
+    if (selected?.iterationScope !== undefined) {
+      assert.equal(current.source.ast.kindName(selected.iterationScope), "KindForStatement");
+      const fact = { storage: selected.storage, valueCarrier: scalarCarrier, iterationScope: selected.iterationScope };
+      assert.equal(rustBindingStorageFactKey.equals(fact, { ...fact }), true);
+      assert.equal(rustBindingStorageFactKey.equals(fact, { ...fact, iterationScope: {} }), false);
+      assert.equal(rustBindingStorageFactKey.equals(fact, { storage: selected.storage, valueCarrier: scalarCarrier }), false);
+    }
+  }
+});
+
+test("incrementor-created captures retain their live lexical activation", () => {
+  const current = fixture(`
+    export function outer() {
+      let callback = () => -1;
+      for (let seed = 0; seed < 3; (callback = () => seed, seed++)) {}
+      return callback;
+    }
+  `);
+  const owner = current.source.ast.as.AsForStatement(
+    current.source.ast.parent(current.source.ast.parent(current.declaration)))?.Incrementor;
+  assert.equal(owner !== undefined, true, "exact incrementor expression");
+  const selected = current.select({ permitSingleOwner: false, roots: [owner] });
+  assert.equal(selected?.storage, "location");
+  assert.equal(selected?.iterationScope !== undefined, true);
+});
+
+test("loop storage selection includes later incrementor captures before caching any owner", () => {
+  const current = fixture(`
+    export function outer() {
+      let saved = () => -1;
+      for (let seed = 0; seed < 3; (saved = () => seed, seed++)) {
+        const callback = () => seed;
+        callback();
+      }
+      return saved;
+    }
+  `);
+  const selected = current.select({ permitSingleOwner: false });
+  assert.equal(selected?.storage, "location", "a body capture cannot hide a later live incrementor capture");
+  assert.equal(selected?.iterationScope !== undefined, true);
+});
+
+test("binding activation facts reject incomplete, accessor-backed and competing storage", () => {
+  const scope = {};
+  const fact = { storage: "location", valueCarrier: scalarCarrier, iterationScope: scope };
+  for (const changed of [{ ...fact, unrelated: true }, { ...fact, valueCarrier: undefined },
+    { ...fact, storage: "cell" }, { ...fact, initialization: "unchecked" }, { ...fact, iterationScope: null }]) {
+    assert.equal(rustBindingStorageFactKey.equals(fact, changed), false, "exact sealed native activation");
+  }
+  let reads = 0;
+  const accessor = { ...fact };
+  Object.defineProperty(accessor, "iterationScope", { get() { reads++; return scope; }, enumerable: true });
+  assert.equal(rustBindingStorageFactKey.equals(fact, accessor), false);
+  assert.equal(reads, 0, "evidence validation never evaluates a metadata accessor");
+});
+
 function fixture(text, options = {}) {
   const checked = createCompilerSessionFromFiles({
     currentDirectory: "/project",
