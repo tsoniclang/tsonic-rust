@@ -26,6 +26,8 @@ import {
 import { rustSourceItemIdentity } from "../program/source-package-facades.js";
 import { rustExplicitNamedTypeArguments } from "./generic-defaults.js";
 import { rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
+import { rustFrameCallableValue } from "../../../target-model/types/carriers/frame-callables.js";
+import { rustFrameCallableTypes } from "./frame-callables.js";
 import { rustClassConstructorInstance } from "../../../target-model/types/carriers/class-constructors.js";
 import { rustRuntimeUnionContract } from "../../../target-model/types/carriers/runtime-unions.js";
 import { rustClassEnvironmentHandleType } from "../objects/class-environment-types.js";
@@ -231,7 +233,8 @@ export function rustTypeFromCarrier(
         };
   }
   const structuralObject = rustStructuralObjectCarrierValue(carrier);
-  if (structuralObject !== undefined || rustGenericCallableValue(carrier) !== undefined || rustClassConstructorInstance(carrier) !== undefined) {
+  if (structuralObject !== undefined || rustGenericCallableValue(carrier) !== undefined ||
+    rustFrameCallableValue(carrier) !== undefined || rustClassConstructorInstance(carrier) !== undefined) {
     return resolveStructuralShape?.(carrier);
   }
   if (carrier.kind === "array") {
@@ -520,6 +523,7 @@ export function rustTypeFromCarrierInContext(
       : moduleName === context.moduleName ? typeName : `crate::${moduleName}::${typeName}`;
   };
   const resolveStructuralShape = (shapeCarrier: TargetTypeRef): RustType | undefined => {
+    if (rustFrameCallableValue(shapeCarrier) !== undefined) return rustFrameCallableTypes(shapeCarrier, context)?.rootType;
     const instance = rustClassConstructorInstance(shapeCarrier);
     if (instance !== undefined) return rustClassEnvironmentHandleType(instance, context);
     const genericCallable = rustGenericCallableValue(shapeCarrier);

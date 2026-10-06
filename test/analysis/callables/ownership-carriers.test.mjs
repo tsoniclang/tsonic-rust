@@ -7,6 +7,7 @@ import { rustFrameCallableValue } from "../../../dist/target-model/types/carrier
 import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/carriers/native.js";
+import { Node_Expression, Node_Initializer } from "@tsonic/target-api/source";
 
 const source = `
 export function escaped(seed: number): (count: number) => number {
@@ -46,6 +47,7 @@ for (const jsEnabled of [false, true]) {
     const { ast } = program.source;
     const named = new Map();
     const arrows = [];
+    const returns = [];
     const pending = [...program.sourceFiles];
     while (pending.length !== 0) {
       const node = pending.pop();
@@ -54,6 +56,7 @@ for (const jsEnabled of [false, true]) {
         if (name !== undefined) named.set(ast.text(name), node);
       }
       if (ast.is.IsArrowFunction(node)) arrows.push(node);
+      if (ast.is.IsReturnStatement(node)) returns.push(node);
       ast.forEachChild(node, child => { if (child !== undefined) pending.push(child); });
     }
     const escaped = named.get("escaped");
@@ -94,6 +97,22 @@ for (const jsEnabled of [false, true]) {
     assert.equal(program.callableValues.frames.entryFor(returned) === definition.entries[0], true);
     assert.equal(Object.isFrozen(definition), true);
     assert.equal(Object.isFrozen(definition.entries[0].implementations), true);
+    const slotInput = Node_Initializer(ast, before);
+    const aliasInput = returns.map(node => Node_Expression(ast, node)).find(node => node !== undefined && ast.is.IsIdentifier(node) && ast.text(node) === "before");
+    assert.equal(slotInput !== undefined && program.callableValues.frames.isSameActivationInput(slotInput, definition), true,
+      "an exact live slot retains the current runtime activation");
+    assert.equal(aliasInput !== undefined && program.callableValues.frames.isSameActivationInput(aliasInput, definition), true,
+      "an immutable same-activation alias retains its own selected entry");
+    const ordinaryArrow = arrows.find(node => {
+      let parent = ast.parent(node);
+      while (parent !== undefined && !ast.is.IsFunctionDeclaration(parent)) parent = ast.parent(parent);
+      return parent === ordinary;
+    });
+    assert.equal(ordinaryArrow !== undefined, true, "the unrelated ordinary callback is present");
+    assert.equal(program.callableValues.frames.isSameActivationInput(ordinaryArrow, definition), false,
+      "an unrelated closure cannot lose its owning activation");
+    assert.equal(program.callableValues.frames.isSameActivationInput(slotInput, { ...definition }), false,
+      "a forged copied definition does not authorize a physical input");
   });
 }
 

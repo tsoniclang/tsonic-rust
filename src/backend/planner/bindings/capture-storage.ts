@@ -11,6 +11,7 @@ import { requireRustLocationValueCarrier } from "../types/generic-requirements.j
 export function planRustDeferredCaptureStorage(scope: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const statements: RustStmt[] = [];
   for (const declaration of context.input.program.captureStorage.deferredForScope(scope)) {
+    if (context.bindingLocations?.has(declaration)) continue;
     const fact = context.input.program.facts.getFact(declaration, rustBindingStorageFactKey);
     const name = context.input.program.names.nameForDeclaration(declaration);
     const type = fact === undefined ? undefined : rustTypeFromCarrierInContext(rustLocationTargetType(fact.valueCarrier), context);

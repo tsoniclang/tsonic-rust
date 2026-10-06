@@ -308,7 +308,9 @@ export function planRustAssignmentWrite(
   }
   if (storageOverride?.valueForm !== "storage" && rustSourceFieldHasValueReceiver(left, context)) {
     const location = planRustValueFieldLocation(left, context, "write");
-    const value = planExpression(valueNode, context);
+    const sourceValue = planExpression(valueNode, context);
+    const value = sourceValue === undefined || location === undefined ? undefined : location.writeInput === undefined
+      ? sourceValue : location.writeInput(valueNode, sourceValue, context);
     if (location === undefined || value === undefined || context.syntheticNames === undefined) return undefined;
     const currentName = allocateRustSyntheticName(context.syntheticNames, "field_previous");
     const valueName = allocateRustSyntheticName(context.syntheticNames, "field_value");

@@ -113,7 +113,7 @@ test("function values and returned callbacks retain distinct exact storage roles
   const createdOwner = registry.storageFor(creation.subject);
   assert.equal(returnedOwner.kind, "frame");
   assert.equal(createdOwner.kind, "frame");
-  assert.equal(returnedOwner.component === createdOwner.component, true);
+  assert.equal(returnedOwner.activation === createdOwner.activation, true, "return and creation have the same exact activation owner");
 });
 
 test("foreign or forged source storage subjects cannot select a physical activation owner", () => {

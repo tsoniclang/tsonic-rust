@@ -92,8 +92,8 @@ export function rustCapturedFieldLocation(
 ): RustValueFieldLocation & { readonly withRead: NonNullable<RustValueFieldLocation["withRead"]> } {
   const payload = rustCapturedFieldPayload(storage, owner);
   const project = (root: RustExpr): RustExpr => projection.reduce<RustExpr>((receiver, name) => ({ kind: "field", receiver, name }), root);
-  const borrowed: RustExpr = storage.kind === "borrow-cell" ? { kind: "method-call", receiver: payload, method: "borrow", args: [] }
-    : storage.kind === "cell" ? { kind: "method-call", receiver: payload, method: "get", args: [] } : payload;
+  const borrowed: RustExpr = storage.kind === "borrow-cell" || storage.kind === "cell"
+    ? rustBindingStorageOperations(storage.kind).borrowedRead(payload) : payload;
   const selected = project(borrowed);
   return { bindings: [], read: projection.length === 0 ? readRustCapturedField(storage, owner, carrier)
       : isRustCopyCarrier(resultCarrier) ? selected : { kind: "method-call", receiver: selected, method: "clone", args: [] },

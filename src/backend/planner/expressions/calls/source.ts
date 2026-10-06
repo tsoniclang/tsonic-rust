@@ -1,4 +1,5 @@
 import { rustValueBlock } from "../../../target-ast/value-block.js";
+import { rustPreparedValueLocation } from "../../objects/value-fields.js";
 import { planRustLexicalFunctionArguments } from "../../declarations/callables/lexical-functions.js";
 import {
   isRustNeverCarrier,
@@ -391,6 +392,11 @@ export function planSelectedSourceCall(
       break;
     }
     case "callable": {
+      const location = callee === undefined ? undefined : rustPreparedValueLocation(callee, context);
+      if (location?.invoke !== undefined) {
+        planned = location.invoke(shaped, context);
+        break;
+      }
       const plannedCallable = callee === undefined ? undefined : planExpression(callee, context);
       if (callee === undefined || plannedCallable === undefined) {
         break;

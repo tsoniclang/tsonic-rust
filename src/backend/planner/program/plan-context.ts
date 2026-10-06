@@ -6,6 +6,7 @@ import { rustModuleBindingFactKey } from "../../../analysis/facts/keys.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustSyntheticNameState } from "../names/synthetic.js";
 import type { RustObjectLiteralImplementationRegistry } from "../objects/object-literal-implementations.js";
+import type { RustFrameOwner } from "./frame-owners.js";
 import {
   resolveRustSourcePackageErrorBoundary,
   type RustSourcePackageErrorBoundary,
@@ -124,6 +125,8 @@ export interface RustPlanContext {
     returnFor(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined;
   };
   readonly valueFieldLocations?: ReadonlyMap<Node, import("../objects/value-fields.js").RustValueFieldLocation>;
+  readonly bindingLocations?: ReadonlyMap<Node, import("../objects/value-fields.js").RustValueFieldLocation>;
+  readonly frameOwners?: ReadonlyMap<import("../../../analysis/callables/frame-values.js").RustFrameCallableDefinition, RustFrameOwner>;
   readonly capturedFieldOwners?: ReadonlyMap<Node, RustExpr>;
   readonly capturedFieldIdentities?: ReadonlyMap<Node, RustExpr>;
   readonly flowReadOverrides?: ReadonlyMap<Node, RustFlowReadOverride>;

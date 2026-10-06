@@ -83,6 +83,7 @@ import { planRustClassInitialization } from "../declarations/classes/static-fiel
 import { planProjectStaticFunctionItems } from "../declarations/classes/methods.js";
 import { planRustTypeFamilyImplementations } from "../declarations/type-families.js";
 import { planRustGenericCallableItems } from "../declarations/callables/generic-implementations.js";
+import { planRustFrameCallableItems } from "../declarations/callables/frame-implementations.js";
 import { planRustSuspendedCallableItems } from "../declarations/callables/suspended.js";
 import { completeRustAuthoredStructScopes } from "../declarations/scoped-types.js";
 import { createRustObjectLiteralImplementationRegistry } from "../objects/object-literal-implementations.js";
@@ -156,7 +157,8 @@ export function planRustSourceFile(
   const context: RustPlanContext = { ...baseContext, objectLiteralImplementations };
   const baseModule = planModuleItems(context, syntheticNames);
   const plannedModule = { ...baseModule,
-    items: [...objectLiteralImplementations.items, ...baseModule.items, ...planRustTypeFamilyImplementations(context), ...planRustGenericCallableItems(context), ...planRustSuspendedCallableItems(context)] };
+    items: [...objectLiteralImplementations.items, ...baseModule.items, ...planRustTypeFamilyImplementations(context),
+      ...planRustGenericCallableItems(context), ...planRustFrameCallableItems(context), ...planRustSuspendedCallableItems(context)] };
   const initializationRequirement = input.program.moduleInitialization.requirementFor(sourceFile);
   if (initializationRequirement.kind === "unresolved") {
     diagnostics.push(unsupportedConstructDiagnostic(

@@ -5,6 +5,7 @@ export type RustInlineBindingStorage = "cell" | "borrow-cell";
 
 export interface RustBindingStorageOperations {
   readonly read: (receiver: RustExpr) => RustExpr;
+  readonly borrowedRead: (receiver: RustExpr) => RustExpr;
   readonly write: (receiver: RustExpr, value: RustExpr) => RustExpr;
 }
 
@@ -22,6 +23,7 @@ export function rustBindingStorageOperations(storage: "location" | RustInlineBin
     ({ kind: "method-call", receiver: receiver.kind === "reference" ? receiver.expr : receiver, method, args });
   if (storage === "borrow-cell") {
     return {
+      borrowedRead: receiver => call(receiver, "borrow"),
       read: receiver => (rustValueBlock([
         { name: "owner", value: { kind: "reference", expr: receiver } },
         { name: "borrowed", value: call({ kind: "path", path: "owner" }, "borrow") },
@@ -33,6 +35,7 @@ export function rustBindingStorageOperations(storage: "location" | RustInlineBin
     };
   }
   return {
+    borrowedRead: receiver => call(receiver, storage === "cell" ? "get" : "load"),
     read: receiver => call(receiver, storage === "cell" ? "get" : "load"),
     write: (receiver, value) => call(receiver, storage === "cell" ? "set" : "store", [value]),
   };

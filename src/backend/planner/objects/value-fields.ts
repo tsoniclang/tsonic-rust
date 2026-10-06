@@ -1,6 +1,6 @@
 import { Node_Expression } from "@tsonic/target-api/source";
 import type { Node } from "@tsonic/tsts";
-import { rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
+import { rustSourceBindingFactKey, rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { isRustCopyCarrier, rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
@@ -28,10 +28,20 @@ export interface RustValueFieldLocation {
   readonly write: (value: RustExpr, context: RustPlanContext) => RustExpr | undefined;
   readonly project?: (names: readonly string[], carrier: TargetTypeRef) => RustValueFieldLocation;
   readonly withRead?: (project: (value: RustExpr) => RustExpr | undefined) => RustExpr | undefined;
+  readonly initialize?: (value: RustExpr, context: RustPlanContext) => RustExpr | undefined;
+  readonly invoke?: (arguments_: readonly RustExpr[], context: RustPlanContext) => RustExpr | undefined;
+  readonly writeInput?: (node: Node, value: RustExpr, context: RustPlanContext) => RustExpr | undefined;
+}
+
+export function rustPreparedValueLocation(node: Node, context: RustPlanContext): RustValueFieldLocation | undefined {
+  const expression = context.valueFieldLocations?.get(node);
+  if (expression !== undefined) return expression;
+  const binding = context.input.program.facts.getFact(node, rustSourceBindingFactKey);
+  return binding === undefined ? undefined : context.bindingLocations?.get(binding.sourceDeclaration);
 }
 
 export function rustSourceFieldHasValueReceiver(node: Node, context: RustPlanContext): boolean {
-  if (context.valueFieldLocations?.has(node)) return true;
+  if (rustPreparedValueLocation(node, context) !== undefined) return true;
   const operation = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
   if (operation?.kind === "source-field" && operation.declaration !== undefined &&
     rustCapturedFieldStorage(operation.declaration, context) !== undefined) return true;
@@ -46,7 +56,7 @@ export function planRustValueFieldLocation(
   context: RustPlanContext,
   access: "read" | "write",
 ): RustValueFieldLocation | undefined {
-  const prepared = context.valueFieldLocations?.get(node);
+  const prepared = rustPreparedValueLocation(node, context);
   if (prepared !== undefined) return prepared;
   const selectedField = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
   if (selectedField?.kind === "source-field" && selectedField.declaration !== undefined) {

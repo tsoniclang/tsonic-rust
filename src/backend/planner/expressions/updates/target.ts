@@ -298,7 +298,7 @@ export function planRustOwnedUpdateLocation(
   step: RustExpr,
   returnsPrevious: boolean,
   context: RustPlanContext,
-  methods: import("../binding-storage.js").RustBindingStorageOperations,
+  methods: Pick<import("../binding-storage.js").RustBindingStorageOperations, "read" | "write">,
 ): RustExpr | undefined {
   if (context.syntheticNames === undefined) {
     return undefined;

@@ -18,6 +18,7 @@ import {
   sourceLexicalFunctionIsUnused,
 } from "@tsonic/target-api/source";
 import { diagnosticInput } from "../program/plan-context.js";
+import { prepareRustFrameScope } from "../bindings/frame-storage.js";
 import { directResourceDeclaration, planLoopExitStatement, planResourceDeclarationScope } from "./resources.js";
 import { isErasedRustSafetyExpressionStatement, isRustExplicitUnsafeBlockMarker, withExplicitUnsafeContext } from "../safety/explicit-safety.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
@@ -193,9 +194,12 @@ export function planStatementSequence(
   context: RustPlanContext,
   initializeScope = true,
 ): RustBlock | undefined {
+  const frame = initializeScope ? prepareRustFrameScope(diagnosticNode, context) : { context, statements: [] };
+  if (frame === undefined) return undefined;
+  context = frame.context;
   const prologue = initializeScope ? planRustDeferredCaptureStorage(diagnosticNode, context) : [];
   if (prologue === undefined) return undefined;
-  const statements: RustStmt[] = [...prologue];
+  const statements: RustStmt[] = [...frame.statements, ...prologue];
   let failed = false;
   let sequenceContext = context;
   for (let index = 0; index < children.length; index += 1) {

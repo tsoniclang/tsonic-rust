@@ -18,6 +18,7 @@ import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../n
 import { genericCallableCopyStateItems, genericCallableStorageItems } from "./generic-storage.js";
 import { rustAuthoredTypeParameterNames } from "../../../../target-model/names/type-parameters.js";
 import { rustGeneratedTypeParameterContext } from "../../names/type-parameters.js";
+import { rustInvariantTypeMarker } from "../../types/invariant-marker.js";
 import { planRustGenericNativeFutureDispatch, type RustGenericNativeFutureInvocation } from "./generic-native-futures.js";
 import { rustCallableCaptureStorageType } from "../../types/capture-storage.js";
 import { rustCapturedReceiverFieldType, rustCapturedReceiverFieldContext, validateRustCapturedReceiverFields,
@@ -38,12 +39,9 @@ export function rustGenericCallableCaptureType(
 }
 
 export function rustGenericCallableMarker(definition: RustGenericCallableDefinition, context: RustTypeRenderingContext): RustType {
-  const environment: RustType = { kind: "tuple", elements: definition.signature.environmentParameters.map(parameter => ({
+  return rustInvariantTypeMarker(definition.signature.environmentParameters.map(parameter => ({
     kind: "named", path: context.typeParameterNames?.get(parameter.identity) ?? parameter.name,
-  })) };
-  return { kind: "named", path: "core::marker::PhantomData", genericArguments: [{ kind: "type", type: {
-    kind: "function-pointer", parameters: [environment], result: environment,
-  } }] };
+  })));
 }
 
 export function planRustGenericCallableItems(context: RustPlanContext): readonly RustItem[] {

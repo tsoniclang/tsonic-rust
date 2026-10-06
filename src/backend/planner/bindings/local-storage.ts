@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { Node_Initializer } from "@tsonic/target-api/source";
 import type { RustBindingStorageFact } from "../../../analysis/facts/operations/keys.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustExpr, RustStmt, RustType } from "../../target-ast/nodes.js";
@@ -18,6 +19,15 @@ export function planRustLocalBindingStorage(
   value: RustExpr | undefined, storage: RustBindingStorageFact | undefined, context: RustPlanContext,
 ): { readonly kind: "binding"; readonly type: RustType | undefined; readonly value: RustExpr | undefined }
   | { readonly kind: "store"; readonly statement: RustStmt } | undefined {
+  const prepared = context.bindingLocations?.get(declaration);
+  if (prepared !== undefined) {
+    if (value === undefined) return undefined;
+    const initializer = Node_Initializer(context.input.program.source.ast, declaration);
+    const input = prepared.writeInput === undefined ? value : initializer === undefined ? undefined
+      : prepared.writeInput(initializer, value, context);
+    const initialization = input === undefined ? undefined : prepared.initialize?.(input, context);
+    return initialization === undefined ? undefined : { kind: "store", statement: { kind: "expr", expr: initialization } };
+  }
   if (storage === undefined) return { kind: "binding", type, value };
   if (!rustTargetTypeRefEquals(carrier, storage.valueCarrier) || value === undefined) {
     context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, declaration),

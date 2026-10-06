@@ -56,6 +56,7 @@ import { rustNativeArrayStorageKey } from "../../../target-model/operations/nati
 import { planNativeRustArrayAccess } from "./native-arrays.js";
 import { rustRecordFieldStorageType, rustRecordFieldSelector } from "../objects/record-fields.js";
 import { rustExpressionHasReferenceObjectField, planRustReferenceObjectFieldLocation } from "./object-field-locations.js";
+import { rustPreparedValueLocation } from "../objects/value-fields.js";
 
 export type RustExpressionPlanner = (
   node: Node,
@@ -76,6 +77,8 @@ export function planRustIdentifierValue(
   path: string,
   context: RustPlanContext,
 ): RustExpr {
+  const prepared = rustPreparedValueLocation(node, context);
+  if (prepared !== undefined) return prepared.read;
   const binding = context.input.program.facts.getFact(node, rustSourceBindingFactKey);
   const module = binding === undefined ? undefined
     : context.input.program.facts.getFact(binding.sourceDeclaration, rustModuleBindingFactKey);
