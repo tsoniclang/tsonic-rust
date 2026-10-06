@@ -44,7 +44,7 @@ import {
 import {
   analyzeRustCountedLoopRepresentations,
 } from "../control-flow/counted-loop-representations.js";
-import type { RustProviderBinaryHookRow } from "../../providers/packages/model.js";
+import { rustJsAsyncExecutor, rustJsEventLoopEpilogue, rustJsTimerDispatchContextId } from "../../providers/builtins/js-dispatch.js";
 import { analyzeRustSourceModuleConstructions } from "../source-modules/index.js";
 import { analyzeRustFoundation } from "../foundation/plan.js";
 import { rustFoundationForCarrier } from "../foundation/requirements.js";
@@ -55,24 +55,6 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustClosureCaptureFactKey, rustTargetOperationFactKey, rustBindingStorageFactKey,
   rustSourceCallEffectsFactKey, rustSourceAccessorEffectsFactKey } from "../facts/keys.js";
 import { rustTargetOperationIsFallible } from "../facts/target-operation.js";
-
-const rustJsEventLoopEpilogue: RustProviderBinaryHookRow = Object.freeze({
-  id: "tsonic.rust.js.event-loop",
-  phase: "after-entry",
-  path: "tsonic_rust_js::event_loop::run_event_loop",
-  requiredCrate: "tsonic_rust_js",
-  isFallible: true,
-  errorBoundary: "target-runtime",
-  providerPackageId: "tsonic.rust.js-surface",
-  providerVersion: "1",
-});
-
-const rustJsAsyncExecutor: RustProviderBinaryHookRow = Object.freeze({
-  ...rustJsEventLoopEpilogue,
-  id: "tsonic.rust.js.async-executor",
-  phase: "async-execution",
-  path: "tsonic_rust_js::event_loop::block_on",
-});
 
 export function analyzeRustTargetProgram(
   request: RustTargetAnalysisRequest,
@@ -99,7 +81,10 @@ export function analyzeRustTargetProgram(
   const providerBinaryHooks = providerSemantics.binaryHooks.filter(row => runtimeActivatedCapabilities.has(row.providerPackageId));
   const activeProviderHooks = analyzeRustBinaryHooks(providerBinaryHooks, runtimeReferences.plan.activeCrates);
   const binaryHooks = analyzeRustBinaryHooks(
-    jsEnabled ? [...providerBinaryHooks, rustJsEventLoopEpilogue,
+    jsEnabled ? [...providerBinaryHooks,
+      ...(activeProviderHooks.some(hook => hook.phase === "after-entry" &&
+        hook.dispatchGroups?.some(group => group.contextIds.includes(rustJsTimerDispatchContextId)))
+        ? [] : [rustJsEventLoopEpilogue]),
       ...(activeProviderHooks.some(hook => hook.phase === "async-execution") ? [] : [rustJsAsyncExecutor])] : providerBinaryHooks,
     runtimeReferences.plan.activeCrates,
   );

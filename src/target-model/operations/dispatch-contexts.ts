@@ -14,8 +14,8 @@ export interface RustDispatchContextDefinition {
   readonly requiredCrate: string;
   readonly rootCarrier: TargetTypeRef;
   readonly construct: RustDispatchContextConstruction & { readonly const: boolean };
-  readonly handleCarrier: TargetTypeRef;
-  readonly handle: RustDispatchContextProjection;
+  readonly handleCarrier?: TargetTypeRef;
+  readonly handle?: RustDispatchContextProjection;
   readonly composedContexts: readonly {
     readonly contextId: string;
     readonly project: RustDispatchContextProjection;

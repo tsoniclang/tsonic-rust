@@ -405,7 +405,7 @@ export function main(): void {
   assert.match(source, /tsonic_rust_node::timers::set_interval_callable/u);
   assert.match(source, /rt::Callable::<[^;]+rt::TsonicResult<\(\)>>/u);
   const main = artifactText(result, "src/main.rs");
-  assert.match(main, /tsonic_rust_node::run_event_loop\(\)\?/u);
+  assert.match(main, /tsonic_rust_node::run_with_contexts\(/u);
   validateGeneratedProject("node-server-contract", result.artifacts);
 });
 

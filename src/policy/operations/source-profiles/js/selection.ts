@@ -555,6 +555,7 @@ function selectJsSurfaceOperationForDemand(
           }),
       isAsync: row.asynchronous === true,
       isFallible: row.fallible === true,
+      ...(row.dispatchInputs === undefined ? {} : { dispatchInputs: row.dispatchInputs }),
       ...(row.returnedFuture === undefined
         ? {}
         : { returnedFuture: row.returnedFuture }),

@@ -91,6 +91,22 @@ test("dispatch contexts preserve exact composed-root projections without guessin
   assert.equal(Object.isFrozen(row.composedContexts[0].project), true);
 });
 
+test("root-only contexts have no manufactured scheduling handle", () => {
+  const input = context();
+  delete input.handleCarrier;
+  delete input.handle;
+  const selected = collectRustProviderSemanticsFromDefinitions([definition({ dispatchContexts: [input] })]).dispatchContexts[0];
+  assert.equal(Object.hasOwn(selected, "handleCarrier"), false);
+  assert.equal(Object.hasOwn(selected, "handle"), false);
+  assert.equal(Object.isFrozen(selected), true);
+  assert.equal(Object.isFrozen(selected.rootCarrier), true);
+  for (const mutation of [{ handle: context().handle }, { handleCarrier: context().handleCarrier },
+    { handle: undefined }, { handleCarrier: undefined }]) {
+    assert.throws(() => createRustProviderPackage(definition({ dispatchContexts: [{ ...input, ...mutation }] })),
+      /Provider package 'acme-dispatch':/u);
+  }
+});
+
 test("dispatch contexts reject malformed declarations and unsupported execution forms", () => {
   const invalid = [
     { id: "" },

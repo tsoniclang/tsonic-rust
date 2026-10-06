@@ -22,8 +22,15 @@ export function validateDispatchContexts(definition: RustProviderPackageDefiniti
     ids.add(context.id);
     requireRustIdentifier(context.requiredCrate, `dispatch context '${context.id}' required crate`, fail);
     if (!crates.has(context.requiredCrate)) fail(`dispatch context '${context.id}' requires an undeclared crate`);
-    for (const [label, carrier] of [["root", context.rootCarrier], ["handle", context.handleCarrier]] as const) {
-      validateClosedDispatchCarrier(carrier, definition, `dispatch context '${context.id}' ${label}`, fail);
+    validateClosedDispatchCarrier(context.rootCarrier, definition, `dispatch context '${context.id}' root`, fail);
+    const hasHandleCarrier = Object.prototype.hasOwnProperty.call(context, "handleCarrier");
+    const hasHandleProjection = Object.prototype.hasOwnProperty.call(context, "handle");
+    if (hasHandleCarrier !== hasHandleProjection) {
+      fail(`dispatch context '${context.id}' requires both handle carrier and projection or neither`);
+    }
+    if (hasHandleCarrier) {
+      validateClosedDispatchCarrier(context.handleCarrier!, definition, `dispatch context '${context.id}' handle`, fail);
+      validateProjection(context.handle!, context.id, fail);
     }
     requireExactKeys(context.construct,
       ["form", "path", "const"], `dispatch context '${context.id}' construction`, fail);
@@ -33,7 +40,6 @@ export function validateDispatchContexts(definition: RustProviderPackageDefiniti
     if (!isDenseDataArray(context.composedContexts)) {
       fail(`dispatch context '${context.id}' composition must be a dense metadata array`);
     }
-    validateProjection(context.handle, context.id, fail);
     const children = new Set<string>();
     for (const child of context.composedContexts) {
       requireExactKeys(child,

@@ -1,4 +1,5 @@
 export { createRustProviderPackage } from "../providers/packages/package.js";
+export { rustJsTimerDispatchContextId } from "../providers/builtins/js-dispatch.js";
 export type {
   RustProviderBinaryHookDefinition,
   RustProviderBinaryHookRow,

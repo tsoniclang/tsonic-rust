@@ -17,6 +17,7 @@ import type {
   RustProviderTypeRow,
 } from "../packages/model.js";
 import { rustNativeScalarTargetId } from "../../target-model/types/index.js";
+import { rustJsTimerDispatchContext } from "./js-dispatch.js";
 
 const nativePointerType = pointerType(
   "tsonic-source-core",
@@ -65,7 +66,7 @@ export function rustBuiltInSourceTypeSemantics(): RustProviderSemantics {
     carrierPaths: Object.freeze({ [rustNativeScalarTargetId]: "char" }),
     carrierTraits: Object.freeze({}),
     binaryHooks: Object.freeze([]),
-    dispatchContexts: Object.freeze([]),
+    dispatchContexts: Object.freeze([rustJsTimerDispatchContext]),
     types: Object.freeze([
       nativePointerType,
       rustConstPointerType,

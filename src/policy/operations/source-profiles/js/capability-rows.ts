@@ -1,5 +1,6 @@
 import type { JsOperationRowData } from "./model.js";
 import { atomicOperationRows } from "./atomic-rows.js";
+import { rustJsTimerDispatchInput } from "../../../../providers/builtins/js-dispatch.js";
 import {
   rustJsValueTargetType,
   rustSourcePrimitiveTargetType,
@@ -234,12 +235,12 @@ const timerRows: readonly JsOperationRowData[] = [
       ? "js_abi::set_timeout_callable"
       : "js_abi::set_interval_callable";
     return [
-      { owner: "Global", member, operationKind: "call", lane: "global", variant: "default", shape: { op: "operation", operationKind: "method", target: { form: "call", path, trailingArguments: [{ kind: "float64", value: 0 }] }, result: { ref: "uint64" }, params: [{ ref: "argument", index: 0 }] } },
-      { owner: "Global", member, operationKind: "call", lane: "global", variant: "delay", shape: { op: "operation", operationKind: "method", target: { form: "call", path }, result: { ref: "uint64" }, params: [{ ref: "argument", index: 0 }, { ref: "float64" }] } },
+      { owner: "Global", member, operationKind: "call", lane: "global", fallible: true, dispatchInputs: [rustJsTimerDispatchInput], variant: "default", shape: { op: "operation", operationKind: "method", target: { form: "call", path, trailingArguments: [{ kind: "float64", value: 0 }] }, result: { ref: "uint64" }, params: [{ ref: "argument", index: 0 }] } },
+      { owner: "Global", member, operationKind: "call", lane: "global", fallible: true, dispatchInputs: [rustJsTimerDispatchInput], variant: "delay", shape: { op: "operation", operationKind: "method", target: { form: "call", path }, result: { ref: "uint64" }, params: [{ ref: "argument", index: 0 }, { ref: "float64" }] } },
     ];
   }),
-  { owner: "Global", member: "clearTimeout", operationKind: "call", lane: "global", requirements: [{ carrier: { ref: "argument", index: 0 }, capability: "numeric" }], shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::clear_timeout" }, result: { ref: "unit" }, params: [{ ref: "argument", index: 0 }] } },
-  { owner: "Global", member: "clearInterval", operationKind: "call", lane: "global", requirements: [{ carrier: { ref: "argument", index: 0 }, capability: "numeric" }], shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::clear_interval" }, result: { ref: "unit" }, params: [{ ref: "argument", index: 0 }] } },
+  { owner: "Global", member: "clearTimeout", operationKind: "call", lane: "global", dispatchInputs: [rustJsTimerDispatchInput], requirements: [{ carrier: { ref: "argument", index: 0 }, capability: "numeric" }], shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::clear_timeout" }, result: { ref: "unit" }, params: [{ ref: "argument", index: 0 }] } },
+  { owner: "Global", member: "clearInterval", operationKind: "call", lane: "global", dispatchInputs: [rustJsTimerDispatchInput], requirements: [{ carrier: { ref: "argument", index: 0 }, capability: "numeric" }], shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::clear_interval" }, result: { ref: "unit" }, params: [{ ref: "argument", index: 0 }] } },
 ];
 
 const promiseRows: readonly JsOperationRowData[] = [

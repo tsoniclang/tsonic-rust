@@ -9,6 +9,9 @@ import type {
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustJsTypedArrayName } from "../../../../target-model/types/index.js";
 import { rustProviderOperationFormDeclaresWritableInput } from "../../forms.js";
+import type { RustDispatchContextInput } from "../../../../target-model/operations/dispatch-contexts.js";
+import { isRustDispatchContextInput } from "../../dispatch-contexts.js";
+import { isDenseDataArray } from "../../../../target-model/metadata/closed-data.js";
 import type { RustSourceGenericContract } from "../../../../target-model/lifetimes/index.js";
 
 export interface JsOperationRequest {
@@ -208,6 +211,7 @@ export interface JsOperationRowData {
   readonly callback?: RustCallbackOperationTemplate;
   readonly selectedMethodTypeArgumentArity?: number;
   readonly fallible?: boolean;
+  readonly dispatchInputs?: readonly RustDispatchContextInput[];
   readonly asynchronous?: true;
   readonly returnedFuture?: {
     readonly awaiting: "infallible" | "fallible";
@@ -247,6 +251,14 @@ export function defineJsOperationRows(rows: readonly JsOperationRowData[]): read
   const identities = new Set<string>();
   const variantsByOperation = new Map<string, string[]>();
   for (const row of rows) {
+    if (row.dispatchInputs !== undefined && (
+      row.shape.op !== "operation" || !isDenseDataArray(row.dispatchInputs) ||
+      row.dispatchInputs.some(input => !isRustDispatchContextInput(input) ||
+        input.targetArgumentIndex > (row.shape.op === "operation" ? row.shape.params?.length ?? 0 : 0)) ||
+      new Set(row.dispatchInputs.map(input => input.targetArgumentIndex)).size !== row.dispatchInputs.length
+    )) {
+      throw new Error(`JavaScript operation row '${row.owner}.${row.member}' has invalid dispatch context inputs.`);
+    }
     if (row.numericRest === true && (row.variadic !== true || row.shape.target.form !== "call-value-slice" ||
       row.shape.target.leadingArguments.length !== 0)) {
       throw new Error(`Numeric rest row '${row.owner}.${row.member}' requires one closed numeric sequence.`);

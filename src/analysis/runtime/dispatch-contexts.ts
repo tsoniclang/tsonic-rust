@@ -72,9 +72,10 @@ export function analyzeRustDispatchContextCatalog(
     resolveInput(input: unknown): RustResolvedDispatchContextInput | undefined {
       if (!isRustDispatchContextInput(input)) return undefined;
       const context = byId.get(input.contextId);
-      return context === undefined ? undefined : snapshotClosedMetadata({
+      const carrier = input.view === "root" ? context?.rootCarrier : context?.handleCarrier;
+      return carrier === undefined ? undefined : snapshotClosedMetadata({
         ...input,
-        carrier: input.view === "root" ? context.rootCarrier : context.handleCarrier,
+        carrier,
       });
     },
     compose: (demandedContextIds: readonly string[]) =>

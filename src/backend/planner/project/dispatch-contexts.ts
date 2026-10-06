@@ -75,6 +75,7 @@ export function planRustDispatchContextInputScope(
     roots.set(access.rootContextId, rootName);
     let value = projectRustDispatchContext({ kind: "path", path: rootName }, access.projections);
     if (input.source.view === "handle") {
+      if (declaration.handle === undefined) return invalid("The selected native context has no scheduling handle projection.");
       value = { kind: "method-call", receiver: value, method: declaration.handle.name, args: [] };
       if (input.mode === "ref") value = { kind: "reference", expr: value };
     }

@@ -99,6 +99,17 @@ test("physical context ownership never guesses between demanded roots or diamond
   assert.equal(diamond.compose(["root"]).kind, "rejected");
 });
 
+test("root-only input queries fail closed for absent handle projections", () => {
+  const input = context();
+  delete input.handleCarrier;
+  delete input.handle;
+  const selected = catalog([input]);
+  assert.equal(selected.resolveInput({ contextId: input.id, view: "root", targetArgumentIndex: 0, mode: "ref" }) !== undefined, true);
+  for (const mode of ["ref", "value"]) {
+    assert.equal(selected.resolveInput({ contextId: input.id, view: "handle", targetArgumentIndex: 0, mode }) === undefined, true);
+  }
+});
+
 test("context input queries select exact owned root and handle carriers without error erasure", () => {
   const selected = catalog([context()]);
   for (const [view, mode] of [["root", "ref"], ["handle", "value"], ["handle", "ref"]]) {

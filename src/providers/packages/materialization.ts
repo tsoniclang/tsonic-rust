@@ -37,7 +37,9 @@ export function materializeProviderDispatchContextRow(
     ...context,
     ...owner,
     rootCarrier: materializeProviderCarrier(context.rootCarrier, carrierPaths, carrierTraits),
-    handleCarrier: materializeProviderCarrier(context.handleCarrier, carrierPaths, carrierTraits),
+    ...(context.handleCarrier === undefined ? {} : {
+      handleCarrier: materializeProviderCarrier(context.handleCarrier, carrierPaths, carrierTraits),
+    }),
     construct: { ...context.construct, path: expandProviderPath(context.construct.path, aliases) },
   };
 }
