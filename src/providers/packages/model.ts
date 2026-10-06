@@ -16,6 +16,7 @@ import type {
   TargetTypeRef,
 } from "../../target-model/types/model.js";
 import type { RustFoundation } from "../../target-model/foundation/model.js";
+import type { RustDispatchContextDefinition } from "../../target-model/operations/dispatch-contexts.js";
 
 export interface RustProviderModuleDefinition {
   readonly moduleSpecifier: string;
@@ -129,7 +130,13 @@ export interface RustProviderSemantics {
   readonly carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>>;
   readonly types: readonly RustProviderTypeRow[];
   readonly binaryHooks: readonly RustProviderBinaryHookRow[];
+  readonly dispatchContexts: readonly RustProviderDispatchContextRow[];
 }
+
+export type RustProviderDispatchContextRow = RustDispatchContextDefinition & {
+  readonly providerPackageId: string;
+  readonly providerVersion: string;
+};
 
 export interface RustProviderCrateDefinition {
   readonly crateName: string;
@@ -204,6 +211,7 @@ export interface RustProviderPackageDefinition {
   // materialize as move-only; consumers never infer traits from Rust names.
   readonly carrierTraits?: Readonly<Record<string, RustNamedTypeTraitContract>>;
   readonly binaryHooks?: readonly RustProviderBinaryHookDefinition[];
+  readonly dispatchContexts?: readonly RustDispatchContextDefinition[];
 }
 
 export const rustProviderPolicyContributionKind = "rust-provider-policy";

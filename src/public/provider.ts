@@ -3,6 +3,7 @@ export type {
   RustProviderBinaryHookDefinition,
   RustProviderBinaryHookRow,
   RustProviderCrateDefinition,
+  RustProviderDispatchContextRow,
   RustProviderExportRow,
   RustProviderImmediateCallbackDefinition,
   RustProviderModuleAliasDefinition,
@@ -22,6 +23,10 @@ export type {
   RustProviderTypeRequirement,
 } from "../target-model/operations/model.js";
 export type { RustTargetTypeRef } from "../target-model/types/model.js";
+export type {
+  RustDispatchContextDefinition,
+  RustDispatchContextInput,
+} from "../target-model/operations/dispatch-contexts.js";
 export type {
   RustProviderConstantArgument,
   RustProviderOperationForm,

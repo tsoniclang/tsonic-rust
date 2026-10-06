@@ -65,6 +65,7 @@ export function rustBuiltInSourceTypeSemantics(): RustProviderSemantics {
     carrierPaths: Object.freeze({ [rustNativeScalarTargetId]: "char" }),
     carrierTraits: Object.freeze({}),
     binaryHooks: Object.freeze([]),
+    dispatchContexts: Object.freeze([]),
     types: Object.freeze([
       nativePointerType,
       rustConstPointerType,

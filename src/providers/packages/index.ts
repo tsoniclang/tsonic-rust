@@ -4,6 +4,7 @@ export type {
   RustProviderBinaryHookDefinition,
   RustProviderBinaryHookRow,
   RustProviderCrateDefinition,
+  RustProviderDispatchContextRow,
   RustProviderExportRow,
   RustProviderImmediateCallbackDefinition,
   RustProviderModuleAliasDefinition,

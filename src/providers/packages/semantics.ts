@@ -1,6 +1,7 @@
 import {
   canonicalizeProviderOperationRow,
   materializeProviderBinaryHookRow,
+  materializeProviderDispatchContextRow,
   materializeProviderCarrier,
   materializeProviderGenericParameter,
   materializeProviderOperationRow,
@@ -11,7 +12,7 @@ import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.
 import { rustBuiltInSourceTypeSemantics } from "../builtins/source-types.js";
 import type { RustNamedTypeTraitContract } from "../../target-model/types/model.js";
 import { rustProviderPolicyContributionKind } from "./model.js";
-import type { RustProviderBinaryHookRow, RustProviderExportRow, RustProviderOperationRow, RustProviderPackageDefinition, RustProviderPolicyContribution, RustProviderSemantics, RustProviderTypeRow } from "./model.js";
+import type { RustProviderBinaryHookRow, RustProviderDispatchContextRow, RustProviderExportRow, RustProviderOperationRow, RustProviderPackageDefinition, RustProviderPolicyContribution, RustProviderSemantics, RustProviderTypeRow } from "./model.js";
 import type { SelectedTargetCapabilityContributions } from "@tsonic/target-api/provider";
 
 export function rustProviderPolicyContributionsOf(
@@ -108,6 +109,7 @@ export function collectRustProviderSemanticsFromDefinitions(
   const carrierTraits = new Map<string, RustNamedTypeTraitContract>();
   const types: RustProviderTypeRow[] = [];
   const binaryHooks: RustProviderBinaryHookRow[] = [];
+  const dispatchContexts: RustProviderDispatchContextRow[] = [];
   for (const definition of definitions) {
     validateProviderPackageDefinition(definition);
     const providerId = rustProviderBindingProviderId(definition.id);
@@ -172,6 +174,11 @@ export function collectRustProviderSemanticsFromDefinitions(
       }));
     }
     const aliases = new Map((definition.aliasImports ?? []).map((entry) => [entry.alias, entry.path]));
+    dispatchContexts.push(...(definition.dispatchContexts ?? []).map((context) =>
+      materializeProviderDispatchContextRow(context, aliases, carrierPathRows, carrierTraitRows, {
+        providerPackageId: definition.id,
+        providerVersion: definition.version,
+      })));
     binaryHooks.push(...(definition.binaryHooks ?? []).map((epilogue) =>
       snapshotClosedMetadata(materializeProviderBinaryHookRow(
         epilogue,
@@ -220,6 +227,7 @@ export function collectRustProviderSemanticsFromDefinitions(
       targetCarrier: materializeProviderCarrier(row.targetCarrier, canonicalCarrierPaths, canonicalCarrierTraits),
     }))),
     binaryHooks: Object.freeze(binaryHooks),
+    dispatchContexts: canonicalDispatchContexts(dispatchContexts, canonicalCarrierPaths, canonicalCarrierTraits),
   });
 }
 
@@ -290,9 +298,22 @@ export function mergeRustProviderSemantics(
     operations,
     types,
     binaryHooks,
+    dispatchContexts: canonicalDispatchContexts(
+      inputs.flatMap((input) => input.dispatchContexts), canonicalCarrierPaths, canonicalCarrierTraits,
+    ),
     carrierPaths: canonicalCarrierPaths,
     carrierTraits: canonicalCarrierTraits,
   });
+}
+
+function canonicalDispatchContexts(
+  contexts: readonly RustProviderDispatchContextRow[],
+  carrierPaths: Readonly<Record<string, string>>,
+  carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>>,
+): readonly RustProviderDispatchContextRow[] {
+  return mergeExactRows(contexts.map(context =>
+    materializeProviderDispatchContextRow(context, new Map(), carrierPaths, carrierTraits, context)),
+  context => context.id, "dispatch context");
 }
 
 function freezeSortedRecord<T>(entries: ReadonlyMap<string, T>): Readonly<Record<string, T>> {

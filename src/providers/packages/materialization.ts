@@ -13,6 +13,7 @@ import type {
 import type {
   RustProviderBinaryHookDefinition,
   RustProviderBinaryHookRow,
+  RustProviderDispatchContextRow,
   RustProviderOperationDefinition,
   RustProviderOperationRow,
 } from "./model.js";
@@ -23,6 +24,23 @@ import type {
 } from "../../target-model/operations/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { mapRustProgramErrorRoute } from "../../target-model/conversions/program-error.js";
+import type { RustDispatchContextDefinition } from "../../target-model/operations/dispatch-contexts.js";
+
+export function materializeProviderDispatchContextRow(
+  context: RustDispatchContextDefinition,
+  aliases: ReadonlyMap<string, string>,
+  carrierPaths: Readonly<Record<string, string>>,
+  carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>>,
+  owner: Pick<RustProviderDispatchContextRow, "providerPackageId" | "providerVersion">,
+): RustProviderDispatchContextRow {
+  return {
+    ...context,
+    ...owner,
+    rootCarrier: materializeProviderCarrier(context.rootCarrier, carrierPaths, carrierTraits),
+    handleCarrier: materializeProviderCarrier(context.handleCarrier, carrierPaths, carrierTraits),
+    construct: { ...context.construct, path: expandProviderPath(context.construct.path, aliases) },
+  };
+}
 
 export function canonicalizeProviderOperationRow(
   row: RustProviderOperationRow,
