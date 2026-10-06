@@ -54,6 +54,7 @@ import { createRustLexicalFunctionQueries, type RustLexicalFunctionQueries } fro
 import { recordRustLexicalValueEnvironments } from "../callables/lexical-value-environments.js";
 import { rustSourceErrorTargetType, rustWritableSourceErrorTargetType } from "../../target-model/types/carriers/source-error.js";
 import { analyzeRustReceiverStorage } from "../project-types/receiver-storage.js";
+import { selectRustCallableOwnershipCarrier } from "../callables/ownership-carriers.js";
 
 export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFunctionQueries | undefined {
   const { ast } = context;
@@ -99,6 +100,17 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     jsEnabled,
     sourceProfiles,
     sourceTypes,
+    callableStorageCarrier(subject, logicalCarrier, environmentFor) {
+      const selected = selectRustCallableOwnershipCarrier({ ast, ownership: context.callableOwnership,
+        subject, logicalCarrier, environmentFor(component) {
+          const excluded = new Set([...component.slotDeclarations, component.ownerDeclaration]);
+          const environments = component.callableDeclarations.map(declaration => environmentFor(declaration, excluded));
+          return environments.some(environment => environment === undefined) ? undefined
+            : Object.freeze(environments.flatMap(environment => environment!));
+        },
+      });
+      return selected.kind === "selected" ? selected.carrier : undefined;
+    },
     sourceErrorCarrier(subject, projection) {
       const demand = subject === undefined ? undefined : context.errorStorageDemands.storageFor(subject, projection);
       if (demand?.kind === "unresolved") return undefined;

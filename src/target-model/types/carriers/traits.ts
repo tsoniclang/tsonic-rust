@@ -6,6 +6,7 @@ import { rustJsArrayValueTargetId } from "./array-values.js";
 import { isRustIntegerCarrier, isRustNumericCarrier, rustFutureTargetId, rustPrimitiveTypeName } from "./primitives.js";
 import { rustRawPointerTargetId } from "./source-types.js";
 import { rustGenericCallableValue } from "./generic-callables.js";
+import { rustFrameCallableValue } from "./frame-callables.js";
 import { rustClassConstructorInstance } from "./class-constructors.js";
 import { isRustClosedValueCarrier } from "./closed-value-kind.js";
 import { emptyRustTypeDefinitions, rustSourceUnionDefinitionIdentity, type RustTypeDefinitions } from "../source-union-definitions.js";
@@ -122,7 +123,8 @@ function supportsCloneWithContracts(
   if (carrier?.kind === "associated-type") return associatedTypeSupports(carrier, "core::clone::Clone");
   const supports = (type: TargetTypeRef): boolean =>
     supportsCloneWithContracts(type, typeParameterSupports, associatedTypeSupports, definitions, active);
-  if (rustGenericCallableValue(carrier) !== undefined || rustClassConstructorInstance(carrier) !== undefined) return true;
+  if (rustGenericCallableValue(carrier) !== undefined || rustFrameCallableValue(carrier) !== undefined ||
+    rustClassConstructorInstance(carrier) !== undefined) return true;
   if (carrier === undefined ||
     carrier.kind === "opaque" || carrier.kind === "closure" ||
     carrier.kind === "slice" ||

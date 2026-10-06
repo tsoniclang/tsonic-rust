@@ -84,6 +84,18 @@ export function resolveRustCallableEvidence(
   options: RustTargetTypeResolutionOptions,
   resolving: Set<object>,
 ): TargetTypeRef | undefined {
+  const carrier = resolveRustCallableSignatureCarrier(callable, context, options, resolving);
+  const subject = context.sourceStorageSubject;
+  return carrier === undefined || subject === undefined ? carrier : options.callableStorageCarrier(subject, carrier,
+    (owner, excludedCaptures) => resolveRustCallableEnvironment(owner, context, options, resolving, excludedCaptures));
+}
+
+function resolveRustCallableSignatureCarrier(
+  callable: SourceCallableTypeEvidence,
+  context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
+  resolving: Set<object>,
+): TargetTypeRef | undefined {
   const parameters = callable.parameters.map((parameter) =>
       resolveRustSignatureParameterEvidence(
         parameter,
@@ -95,13 +107,14 @@ export function resolveRustCallableEvidence(
   if (parameters.some((parameter) => parameter === undefined)) {
     return undefined;
   }
+  const declaration = callable.result.declaration;
+  const returned = declaration === undefined ? undefined : context.sourceStorage.subject(declaration, "return");
   const sourceResult = resolveRustTypeComponentEvidence(
     callable.result,
-    context,
+    { ...context, sourceStorageSubject: returned?.kind === "resolved" ? returned.subject : undefined },
     options,
     resolving,
   );
-  const declaration = callable.result.declaration;
   const genericContract = context.sourceLifetimes.contractFor(declaration);
   const result = sourceResult === undefined ? undefined
     : closeRustSuspendedStorage(sourceResult, parameters, genericContract, "callable-result");
@@ -160,6 +173,8 @@ export function resolveRustSignatureParameterEvidence(
   const authoredTypeNode = parameter.declaration === undefined
     ? undefined
     : context.ast.typeNode(parameter.declaration);
+  const selection = parameter.declaration === undefined ? undefined
+    : context.sourceStorage.subject(parameter.declaration, "value");
   const resolved = resolveRustTypeComponentEvidence(
     {
       selectedType: parameter.type,
@@ -170,7 +185,7 @@ export function resolveRustSignatureParameterEvidence(
             ...(authoredTypeNode === undefined ? {} : { authoredTypeNode }),
           }),
     },
-    context,
+    { ...context, sourceStorageSubject: selection?.kind === "resolved" ? selection.subject : undefined },
     options,
     resolving,
   );

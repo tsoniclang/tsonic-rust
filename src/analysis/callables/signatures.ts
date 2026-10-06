@@ -53,8 +53,9 @@ import { resolveRustSuspendedCallableStorage } from "./suspension-storage.js";
 import { rustHigherRankedNativeFunctionCarrier } from "./higher-ranked-function.js";
 import { selectRustPointerReturnContract } from "../../policy/operations/pointers/return.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustGenericCallableProtocol, rustGenericCallableTargetType, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
+import { rustGenericCallableProtocol } from "../../target-model/types/carriers/generic-callables.js";
 import { rustGenericCallableValueOwner } from "../../policy/types/callable-origins.js";
+import { rebindRustCallableCarrier } from "../../target-model/types/carriers/callable-rebinding.js";
 import { closeRustSuspendedStorage } from "../../policy/types/suspended-storage.js";
 import { selectRustInferredReturn } from "./inferred-return.js";
 import { rustOptionalStorageValue } from "../../target-model/types/projections.js";
@@ -387,12 +388,8 @@ function recordCallableValueSignatureFacts(
     ...parameterCarriers.slice(parameters.length),
   ];
   const valueReturnCarrier = selectedCallableValueReturn(walk, expression, returnCarrier);
-  const runtimeCarrier = selectedCarrier.kind === "function-pointer" || selectedCarrier.kind === "closure"
-    ? { ...selectedCarrier, args: runtimeParameterCarriers, result: valueReturnCarrier }
-    : rustGenericCallableValue(selectedCarrier) !== undefined
-      ? rustGenericCallableTargetType(ownParameters ?? [], runtimeParameterCarriers, valueReturnCarrier,
-        rustGenericCallableValue(selectedCarrier)!.origin, rustGenericCallableValue(selectedCarrier)!.environment)
-    : rustCallableTargetType(runtimeParameterCarriers, valueReturnCarrier);
+  const runtimeCarrier = rebindRustCallableCarrier(selectedCarrier, runtimeParameterCarriers, valueReturnCarrier,
+    { typeParameters: ownParameters ?? [] });
   if (runtimeCarrier !== undefined) setCarrierFact(walk, declaration, runtimeCarrier);
 }
 

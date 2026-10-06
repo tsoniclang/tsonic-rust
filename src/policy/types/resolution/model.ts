@@ -3,7 +3,7 @@ import type { RustSourcePolicyContext } from "../../model/context.js";
 import type { RustSourceProfileRegistry } from "../source-profile.js";
 import type { RustSourceTypeRegistry } from "../source-type-registry.js";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
-import type { SourceStorageProjection } from "@tsonic/target-api/analysis";
+import type { SourceStorageProjection, SourceStorageSubject } from "@tsonic/target-api/analysis";
 import type { Node, SourceFile, Type } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
@@ -14,6 +14,11 @@ export interface RustTargetTypeResolutionOptions {
   readonly sourceProfiles: RustSourceProfileRegistry;
   readonly sourceTypes: RustSourceTypeRegistry;
   readonly sourceErrorCarrier: (subject: Node | undefined, projection?: readonly SourceStorageProjection[]) => TargetTypeRef | undefined;
+  readonly callableStorageCarrier: (
+    subject: SourceStorageSubject,
+    logicalCarrier: TargetTypeRef,
+    environmentFor: (declaration: Node, excludedCaptures: ReadonlySet<Node>) => readonly TargetTypeRef[] | undefined,
+  ) => TargetTypeRef | undefined;
   readonly projectCarrierSupportsObjectIdentity: (carrier: TargetTypeRef) => boolean;
   readonly resolveProjectUnionCarrier: (
     memberCarriers: readonly TargetTypeRef[],
@@ -21,8 +26,7 @@ export interface RustTargetTypeResolutionOptions {
 }
 
 export interface RustTargetTypeResolutionContext extends RustSourcePolicyContext {
-  readonly sourceStorageSubject?: Node;
-  readonly sourceStorageProjection?: readonly SourceStorageProjection[];
+  readonly sourceStorageSubject?: SourceStorageSubject;
   readonly currentSourceFile: SourceFile;
   readonly currentSemantics: SourceFileSemantics;
   readonly sourceTypeParameterSubstitutions?: ReadonlyMap<Node, RustSourceTypeArgument>;

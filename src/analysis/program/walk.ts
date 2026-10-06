@@ -88,13 +88,16 @@ export const boolCarrier = rustSourcePrimitiveTargetType("bool");
 export function rustResolutionContext(
   walk: RustFactWalk,
   node: Node,
+  kind?: import("@tsonic/target-api/analysis").SourceStorageSubject["kind"],
 ): RustTargetTypeResolutionContext {
   const semantics = walk.context.semanticsFor(node);
+  const selection = kind === undefined ? walk.context.sourceStorage.storageSubjectFor(node)
+    : walk.context.sourceStorage.subject(node, kind);
   return {
     ...walk.context,
     currentSourceFile: semantics.sourceFile,
     currentSemantics: semantics,
-    sourceStorageSubject: node,
+    sourceStorageSubject: selection.kind === "resolved" ? selection.subject : undefined,
   };
 }
 

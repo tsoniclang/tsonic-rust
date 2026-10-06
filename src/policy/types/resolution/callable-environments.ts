@@ -12,6 +12,7 @@ export function resolveRustCallableEnvironment(
   context: RustTargetTypeResolutionContext,
   options: RustTargetTypeResolutionOptions,
   resolving: Set<object>,
+  excludedCaptures: ReadonlySet<Node> = new Set(),
 ): readonly TargetTypeRef[] | undefined {
   const body = declaration === undefined ? undefined : context.ast.body(declaration);
   if (declaration === undefined || body === undefined) return [];
@@ -22,13 +23,18 @@ export function resolveRustCallableEnvironment(
   const lexical = sourceLexicalEnvironment(declaration, roots, context.ast, context.source.navigation);
   if (lexical.kind === "unresolved") return undefined;
   const parameters = new Map<string, Extract<TargetTypeRef, { readonly kind: "type-parameter" }>>();
-  for (const reference of [...lexical.captures.flatMap(capture => capture.references.slice(0, 1)),
-    ...lexical.receivers.flatMap(receiver => receiver.references.slice(0, 1))]) {
+  for (const reference of [...lexical.captures.filter(capture => !excludedCaptures.has(capture.declaration))
+    .flatMap(capture => capture.references.slice(0, 1)),
+    ...lexical.receivers.filter(receiver => !excludedCaptures.has(receiver.owner))
+      .flatMap(receiver => receiver.references.slice(0, 1))]) {
     const semantics = context.semanticsFor(reference);
     const refinement = context.source.semantics.selectValueTypeRefinement(reference);
     if (refinement.kind === "unresolved") return undefined;
     const type = refinement.kind === "resolved" ? refinement.declaredType : semantics.types.expressionType(reference);
+    const selected = context.sourceStorage.subjectFor(reference);
+    if (selected.kind === "unresolved") return undefined;
     const carrier = resolveRustTargetType(type, { ...context, currentSemantics: semantics,
+      sourceStorageSubject: selected.subject,
       sourceTypeParameterSubstitutions: new Map() }, options, resolving);
     if (carrier === undefined) return undefined;
     for (const parameter of rustTargetGenericReferences(carrier).typeParameters) parameters.set(parameter.identity, parameter);

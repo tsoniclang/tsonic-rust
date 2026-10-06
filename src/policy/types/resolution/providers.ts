@@ -383,7 +383,7 @@ export function resolveSourceProfileCarrier(
   }
   const direct = targetArguments.every((argument) => argument !== undefined)
     ? resolveSourceProfileCarrierFromArguments(name, targetArguments as TargetTypeRef[], options,
-      context.sourceStorageSubject, context.sourceStorageProjection)
+      context.sourceStorageSubject?.node, context.sourceStorageSubject?.projection)
     : undefined;
   if (direct !== undefined && name !== "Array" && name !== "ReadonlyArray") {
     return direct;

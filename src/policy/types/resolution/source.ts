@@ -79,7 +79,10 @@ export function resolveRustTargetTypeRef(
     return undefined;
   }
   const subjectNode = asNode(subject, context);
-  if (subjectNode !== undefined && context.sourceStorageProjection === undefined) context = { ...context, sourceStorageSubject: subjectNode };
+  if (subjectNode !== undefined && context.sourceStorageSubject === undefined) {
+    const selection = context.sourceStorage.storageSubjectFor(subjectNode);
+    context = { ...context, sourceStorageSubject: selection.kind === "resolved" ? selection.subject : undefined };
+  }
   const subjectFile = subjectNode === undefined ? undefined : context.ast.getSourceFile(subjectNode);
   if (subjectFile !== undefined && context.source.semantics.includes(subjectFile) &&
     subjectFile !== context.currentSemantics.sourceFile) {
@@ -524,7 +527,7 @@ export function resolveRustTargetTypeSyntax(
     : resolveOwnedSourceProfileTypeNameForDeclaration(referencedDeclaration, context, options.sourceProfiles);
   if (sourceProfileName !== undefined) {
     return resolveSourceProfileCarrierFromArguments(sourceProfileName, typeArguments as TargetTypeRef[], options,
-      context.sourceStorageSubject ?? node, context.sourceStorageProjection);
+      context.sourceStorageSubject?.node ?? node, context.sourceStorageSubject?.projection);
   }
   const sourceType = resolveProjectSourceCarrier(
     selectedTypeSymbol,

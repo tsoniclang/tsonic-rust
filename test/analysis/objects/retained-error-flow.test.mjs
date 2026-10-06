@@ -5,31 +5,11 @@ import { analyzeRust, compileRust, nodejsCapability } from "../../helpers/rust-s
 import { rustFlowReadProjectionFactKey, rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
 import { rustJsErrorTargetType, rustProgramErrorTargetType } from "../../../dist/target-model/types/index.js";
 import { rustSourceErrorTargetType } from "../../../dist/target-model/types/carriers/source-error.js";
-
-const source = `
-import { createGzip } from "node:zlib";
-
-export function run(): boolean {
-  const original = new Error("original finish failure");
-  const stack = original.stack;
-  const stream = createGzip();
-  stream.once("finish", (): void => { throw original; });
-  let retained = false;
-  try { stream.end(); }
-  catch (failure) {
-    if (failure instanceof Error) {
-      retained = failure === original && failure.message === "original finish failure"
-        && failure.name === "Error" && failure.stack === stack;
-    }
-  }
-  stream.destroy();
-  return retained;
-}
-`;
+import { nativeRetainedErrorFlowSource } from "../../../../tsonic/test/fixtures/native-retained-errors.mjs";
 
 test("retained-provider catch reads select exact readonly Error flow and observation facts without mutable origins", async () => {
   const { program } = analyzeRust({ surfaces: ["js"], capabilities: [await nodejsCapability()],
-    files: { "index.ts": source } });
+    files: { "index.ts": nativeRetainedErrorFlowSource } });
   assert.deepEqual(program.projectTypes.sourceErrorCarrier(), rustJsErrorTargetType());
   assert.equal(program.projectTypes.sourceErrorDefinitions.length, 0);
   assert.equal(program.projectTypes.sourceCreatedErrorOrigins.length, 0);
@@ -63,7 +43,7 @@ test("retained-provider catch reads select exact readonly Error flow and observa
 
 test("retained-provider readonly Error identity and member observations lower through the existing exact projection", async () => {
   const { result } = compileRust({ surfaces: ["js"], capabilities: [await nodejsCapability()],
-    files: { "index.ts": source } });
+    files: { "index.ts": nativeRetainedErrorFlowSource } });
   assert.equal(result.diagnostics.length, 0,
     result.diagnostics.slice(0, 6).map(diagnostic => diagnostic.message.slice(0, 256)).join("\n"));
   assert.equal(result.artifacts.some(artifact => artifact.path.endsWith("/index.rs")), true);

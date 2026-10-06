@@ -1,3 +1,4 @@
+import type { Node } from "@tsonic/tsts";
 import type { SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
 import {
   createRustCallableOwnershipComponentQueries,

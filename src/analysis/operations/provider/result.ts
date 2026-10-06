@@ -165,9 +165,10 @@ export function selectedMemberReceiverCarrier(
     ) !== undefined) {
     return sourceUnionCarrier;
   }
+  const receiverStorage = context.sourceStorage.subjectFor(receiver);
   const selectedCarrier = resolveRustTargetTypeRef(
     request.sourceReceiverType,
-    { ...context, sourceStorageSubject: receiver, sourceStorageProjection: undefined },
+    { ...context, sourceStorageSubject: receiverStorage.kind === "resolved" ? receiverStorage.subject : undefined },
     options,
   );
   const selectedOwner = options.projectTypes.definitionContainingDeclaration(

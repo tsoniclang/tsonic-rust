@@ -31,7 +31,6 @@ import {
   rustOptionElementCarrier,
   rustCallableProtocol,
   rustClosureProtocol,
-  rustCallableTargetType,
 } from "../../target-model/types/index.js";
 import { recordBindingPatternFacts, recordCallableDefaultParameterFacts, setParameterAbiFact } from "../declarations/types-and-bindings.js";
 import { recordStatementFacts } from "../control-flow/statements.js";
@@ -46,7 +45,8 @@ import { setCarrierFact, setRustOperationFact } from "../operations/project-call
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustGenericCallableProtocol, rustGenericCallableTargetType, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
+import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
+import { rebindRustCallableCarrier } from "../../target-model/types/carriers/callable-rebinding.js";
 import { recordCallableReturnFact, recordCallableSuspensionFacts, selectedSourceCallableReturn } from "./signatures.js";
 import { rustCapturedBindingStorage } from "./capture-storage.js";
 import { selectRustInferredReturn } from "./inferred-return.js";
@@ -65,7 +65,7 @@ export function resolveFunctionExpressionSignature(
     .flatMap(parameter => parameter.kind === "type" ? [rustTypeParameterFromSourceContract(parameter)] : []);
   const parameters = ast.parameters(expression);
   const sourceSelected = sourceCarrier ?? resolveRustTargetTypeRef(
-    expression, rustResolutionContext(walk, expression), walk.operationOptions,
+    expression, rustResolutionContext(walk, expression, "value"), walk.operationOptions,
   );
   const sourceProtocol = sourceSelected?.kind === "function-pointer"
     ? { parameters: sourceSelected.args, result: sourceSelected.result }
@@ -77,12 +77,8 @@ export function resolveFunctionExpressionSignature(
   if (sourceSelected === undefined || sourceProtocol === undefined || sourceResult === undefined) return undefined;
   const parameterCarriers = sourceProtocol.parameters.map((carrier, index) =>
     Node_Initializer(ast, parameters[index]) === undefined ? carrier : rustSourceOptionalTargetType(carrier));
-  const carrier = sourceSelected.kind === "function-pointer" || sourceSelected.kind === "closure"
-    ? { ...sourceSelected, args: parameterCarriers, result: sourceResult }
-    : rustGenericCallableValue(sourceSelected) !== undefined
-      ? rustGenericCallableTargetType(genericParameters ?? [], parameterCarriers, sourceResult,
-        rustGenericCallableValue(sourceSelected)!.origin, rustGenericCallableValue(sourceSelected)!.environment)
-      : rustCallableTargetType(parameterCarriers, sourceResult);
+  const carrier = rebindRustCallableCarrier(sourceSelected, parameterCarriers, sourceResult,
+    { typeParameters: genericParameters ?? [] });
   return carrier === undefined ? undefined : {
     carrier,
     sourceCarrier: sourceSelected,
@@ -262,10 +258,9 @@ export function resolveFunctionExpressionCarrier(
     if (selectedValueResult === undefined) {
       return undefined;
     }
-    const recursiveCarrier: TargetTypeRef = selectedExpected.kind === "function-pointer" ||
-        selectedExpected.kind === "closure"
-      ? { ...selectedExpected, args: parameterCarriers, result: selectedValueResult }
-      : rustCallableTargetType(parameterCarriers, selectedValueResult);
+    const recursiveCarrier = rebindRustCallableCarrier(selectedExpected, parameterCarriers, selectedValueResult,
+      { typeParameters: genericParameters ?? [] });
+    if (recursiveCarrier === undefined) return undefined;
     setCarrierFact(walk, expression, recursiveCarrier);
     setCarrierFact(walk, expressionName, recursiveCarrier);
   }
@@ -325,13 +320,11 @@ export function resolveFunctionExpressionCarrier(
     return undefined;
   }
   const selectedGeneric = rustGenericCallableValue(selectedExpected);
-  const closureCarrier = selectedExpected.kind === "function-pointer" || selectedExpected.kind === "closure"
-    ? { ...selectedExpected, args: finalizedParameterCarriers, result: valueResult }
-    : selectedGeneric !== undefined
-      ? rustGenericCallableTargetType(genericParameters ?? [], finalizedParameterCarriers, valueResult, selectedGeneric.origin,
-        [...selectedGeneric.environment, ...captures.captures.map(capture => capture.carrier),
-          ...captures.receiverFields.map(capture => capture.carrier), ...captures.receivers.map(capture => capture.carrier)])
-    : rustCallableTargetType(finalizedParameterCarriers, valueResult);
+  const closureCarrier = rebindRustCallableCarrier(selectedExpected, finalizedParameterCarriers, valueResult,
+    { typeParameters: genericParameters ?? [], ...(selectedGeneric === undefined ? {} : {
+      environment: [...selectedGeneric.environment, ...captures.captures.map(capture => capture.carrier),
+        ...captures.receiverFields.map(capture => capture.carrier), ...captures.receivers.map(capture => capture.carrier)],
+    }) });
   if (closureCarrier === undefined) return undefined;
   walk.context.facts.set(expression, rustClosureCaptureFactKey, {
     ...captures,
