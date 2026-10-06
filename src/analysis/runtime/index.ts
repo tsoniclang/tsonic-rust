@@ -4,6 +4,12 @@ export {
 export {
   analyzeRustBinaryHooks,
 } from "./hooks.js";
+export { analyzeRustDispatchContextCatalog } from "./dispatch-contexts.js";
+export type {
+  RustDispatchContextAccess,
+  RustDispatchContextCatalog,
+  RustDispatchContextComposition,
+} from "./dispatch-contexts.js";
 export type {
   RustRuntimeReferenceAnalysisResult,
   RustRuntimeReferencePlan,

@@ -93,6 +93,7 @@ export interface RustTargetProgram {
   readonly frozenDataWrites: import("../objects/frozen-data-writes.js").RustFrozenDataWritePlan;
   readonly classValues: import("../objects/class-values.js").RustClassValuePlan;
   readonly runtimeReferences: RustRuntimeReferencePlan;
+  readonly dispatchContexts: import("../runtime/dispatch-contexts.js").RustDispatchContextCatalog;
   readonly foundation: RustFoundationPlan;
   readonly binaryHooks: readonly RustBinaryHookPlan[];
   readonly providerErrorCarriers: readonly import("../../target-model/types/model.js").TargetTypeRef[];

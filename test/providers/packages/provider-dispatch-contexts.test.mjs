@@ -1,47 +1,15 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { resolve } from "node:path";
 import { createRustProviderPackage } from "../../../dist/public/provider.js";
 import {
   collectRustProviderSemanticsFromDefinitions,
   mergeRustProviderSemantics,
 } from "../../../dist/providers/packages/index.js";
 import { rustNamedTypeCarrierValue } from "../../../dist/target-model/types/index.js";
-
-function context(overrides = {}) {
-  return {
-    id: "acme.dispatch",
-    requiredCrate: "acme_dispatch",
-    rootCarrier: { kind: "target-named", id: "acme.Dispatch", genericArguments: [
-      { kind: "type", type: { kind: "target-named", id: "rust.program.TsonicError" } },
-    ] },
-    construct: { form: "call", path: "runtime::Dispatch::new" },
-    handleCarrier: { kind: "target-named", id: "acme.DispatchHandle", genericArguments: [
-      { kind: "type", type: { kind: "target-named", id: "rust.program.TsonicError" } },
-    ] },
-    handle: { form: "receiver-method", name: "handle" },
-    composedContexts: [],
-    ...overrides,
-  };
-}
-
-function definition(overrides = {}) {
-  return {
-    id: "acme-dispatch",
-    displayName: "Acme dispatch",
-    version: "1.0.0",
-    modules: [{ moduleSpecifier: "@acme/dispatch", providerModuleId: "acme.dispatch", exports: [] }],
-    operations: [],
-    crates: [{ crateName: "acme_dispatch", cargoPath: resolve("test/fixtures/crates/acme_files") }],
-    carrierPaths: {
-      "acme.Dispatch": "acme_dispatch::Dispatch",
-      "acme.DispatchHandle": "acme_dispatch::DispatchHandle",
-    },
-    aliasImports: [{ alias: "runtime", path: "acme_dispatch" }],
-    dispatchContexts: [context()],
-    ...overrides,
-  };
-}
+import {
+  dispatchContextDefinition as context,
+  dispatchProviderDefinition as definition,
+} from "../../helpers/rust-session/provider-dispatch-contexts.mjs";
 
 test("dispatch contexts materialize exact native carriers, generic errors and factory aliases", () => {
   const semantics = collectRustProviderSemanticsFromDefinitions([definition()]);

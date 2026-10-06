@@ -28,3 +28,7 @@ export interface RustDispatchContextInput {
   readonly targetArgumentIndex: number;
   readonly mode: "value" | "ref";
 }
+
+export interface RustResolvedDispatchContextInput extends RustDispatchContextInput {
+  readonly carrier: TargetTypeRef;
+}

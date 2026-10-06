@@ -27,6 +27,7 @@ import { analyzeRustBorrowedElementReads } from "./borrowed-element-reads.js";
 import { analyzeRustBorrowStability } from "./borrow-stability.js";
 import {
   analyzeRustBinaryHooks,
+  analyzeRustDispatchContextCatalog,
   analyzeRustRuntimeReferences,
 } from "../runtime/index.js";
 import {
@@ -88,6 +89,10 @@ export function analyzeRustTargetProgram(
   if (runtimeReferences.kind === "rejected") {
     return rejectedTargetStage(runtimeReferences.diagnostics);
   }
+  const dispatchContexts = analyzeRustDispatchContextCatalog(
+    providerSemantics.dispatchContexts, runtimeReferences.plan.activeCrates,
+  );
+  if (dispatchContexts.kind === "rejected") return rejectedTargetStage(dispatchContexts.diagnostics);
   const runtimeActivatedCapabilities = new Set(input.runtimeActivatedCapabilityIds);
   const providerBinaryHooks = providerSemantics.binaryHooks.filter(row => runtimeActivatedCapabilities.has(row.providerPackageId));
   const activeProviderHooks = analyzeRustBinaryHooks(providerBinaryHooks, runtimeReferences.plan.activeCrates);
@@ -108,6 +113,7 @@ export function analyzeRustTargetProgram(
     providerSemantics,
     jsEnabled,
     rootPublishesLibrary,
+    dispatchContexts.plan,
   );
   const lexicalFunctions = analyzeRustProgram(context);
   if (context.diagnostics.length > 0) {
@@ -299,6 +305,7 @@ export function analyzeRustTargetProgram(
     frozenDataWrites: context.frozenDataWrites.seal(),
     classValues,
     runtimeReferences: runtimeReferences.plan,
+    dispatchContexts: dispatchContexts.plan,
     foundation: foundation.plan,
     binaryHooks,
     providerErrorCarriers: analyzeRustProviderErrorCarriers(
