@@ -266,7 +266,10 @@ test("static class storage is not falsely certified as an instance activation fr
     "  rebind(): void", "  static rebind(): void"));
   const queries = current.analyze();
   assert.equal(queries.components.length, 0);
-  assert.equal(queries.issues.some(issue => issue.reason.includes("static class owner")), true);
+  const field = current.named("recurse", "KindPropertyDeclaration")[0];
+  assert.equal(queries.componentForSlot(field) === undefined, true, "static storage has no instance frame");
+  for (const arrow of current.arrows)
+    assert.equal(queries.componentForCallable(arrow) === undefined, true, "static callback has no instance frame");
 });
 
 test("ordinary non-cyclic field captures remain explicit physical-planning inputs", () => {

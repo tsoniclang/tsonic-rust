@@ -351,7 +351,7 @@ export function createRustCallableOwnershipComponentQueries(input: {
     if (!account()) return result();
     const info = accessInfo(node);
     const declaration = info?.selectedDeclaration;
-    if (declaration === undefined || !isField(declaration) || info.accessMode === "read") continue;
+    if (info === undefined || declaration === undefined || !isField(declaration) || info.accessMode === "read") continue;
     const slot = canonical(declaration);
     const accesses = writes.get(slot) ?? [];
     accesses.push(node);
