@@ -54,6 +54,7 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustReceiverIndependentMethodFactKey } from "../../../analysis/facts/operations/keys.js";
 import { rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
 import { rustFrameCallableValue } from "../../../target-model/types/carriers/frame-callables.js";
+import { rustCallableInputProtocol } from "../../../target-model/types/carriers/callables.js";
 import { planRustFrameCallableValue } from "./frame-callables.js";
 import { planRustGenericCallableValue } from "./generic-callables.js";
 import { planRustGeneratorBody } from "../declarations/callables/generator-body.js";
@@ -110,6 +111,7 @@ export function planRustCallableExpressionBody(
     return planRustGenericCallableValue(node, constructionCarrier, context);
   }
   const callableProtocol = rustCallableProtocol(closureFact.resultCarrier);
+  const borrowedInput = rustCallableInputProtocol(constructionCarrier) !== undefined;
   const nativeClosureProtocol = rustClosureProtocol(closureFact.resultCarrier);
   const allParameterCarriers = closureFact.resultCarrier.kind === "function-pointer"
     ? closureFact.resultCarrier.args
@@ -323,19 +325,19 @@ export function planRustCallableExpressionBody(
     },
   };
   const environment = planRustCapturedEnvironment(node, captureFact.captures, closureContext, {
-    staticStorage: nativeClosureProtocol === undefined,
+    staticStorage: nativeClosureProtocol === undefined && !borrowedInput,
     mutableValueCapture: closureFact.resultCarrier.kind === "closure" &&
       (closureFact.resultCarrier.callTrait === "FnMut" || closureFact.resultCarrier.callTrait === "FnOnce"),
     ...(ownedStateName === undefined ? {} : { sharedStateName: ownedStateName }),
   });
   if (environment === undefined) return undefined;
   const receiverEnvironment = planRustCapturedReceiverFields(node, captureFact.receiverFields, context, closureContext, {
-    staticStorage: nativeClosureProtocol === undefined, offset: captureFact.captures.length,
+    staticStorage: nativeClosureProtocol === undefined && !borrowedInput, offset: captureFact.captures.length,
     ...(ownedStateName === undefined ? {} : { sharedStateName: ownedStateName }),
   });
   if (receiverEnvironment === undefined) return undefined;
   const wholeEnvironment = planRustCapturedReceivers(node, captureFact.receivers, context, receiverEnvironment.context, {
-    staticStorage: nativeClosureProtocol === undefined, offset: captureFact.captures.length + captureFact.receiverFields.length,
+    staticStorage: nativeClosureProtocol === undefined && !borrowedInput, offset: captureFact.captures.length + captureFact.receiverFields.length,
     ...(ownedStateName === undefined ? {} : { sharedStateName: ownedStateName }),
   });
   if (wholeEnvironment === undefined) return undefined;
@@ -558,6 +560,7 @@ export function planRustCallableExpressionBody(
         body: finalizedBlock,
       };
   if (ownedStateName !== undefined) return closure;
+  if (borrowedInput) return { kind: "reference", mutable: false, expr: rustValueBlock(captureBindings, closure) };
   if (callableProtocol === undefined) {
     return nativeClosureProtocol === undefined || captureBindings.length === 0
       ? closure

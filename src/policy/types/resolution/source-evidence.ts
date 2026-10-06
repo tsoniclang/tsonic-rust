@@ -3,7 +3,6 @@ import {
   isRustJsArrayCarrier,
   rustCallableTargetType,
   rustCallableProtocol,
-  rustCallableInputTargetType,
   rustJsArrayLikeElementTargetType,
   rustJsArrayTargetType,
   rustOptionElementCarrier,
@@ -41,6 +40,7 @@ import { closeRustSuspendedStorage } from "../suspended-storage.js";
 import { rustSourceSelectionUsesExactBindings } from "./bound-source-selection.js";
 import { bindRustCallableEnvironment, resolveRustCallableEnvironment } from "./callable-environments.js";
 import { retainRustCallableStructuralStorage } from "./structural-instantiations.js";
+import { resolveRustCallableInputCarrier } from "./callable-inputs.js";
 
 export function resolveRustSignatureParameterListTarget(
   parameters: SourceCallableTypeEvidence["parameters"],
@@ -110,7 +110,7 @@ export function resolveRustCallableStorageCarrier(
     parameter.Initializer === undefined && parameter.QuestionToken === undefined &&
     uses !== undefined && uses.uses.length > 0 &&
     uses.uses.every(use => use.kind === "direct-call" && !use.captured && !use.throughMember)) {
-    return rustCallableInputTargetType(protocol.parameters, protocol.result);
+    return resolveRustCallableInputCarrier(subject!, carrier!, context, options);
   }
   return carrier === undefined || subject === undefined ? carrier : options.callableStorageCarrier(subject, carrier,
     (owner, excludedCaptures) => resolveRustCallableEnvironment(owner, context, options, resolving, excludedCaptures),

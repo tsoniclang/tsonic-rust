@@ -6,6 +6,7 @@ import {
   isRustVecCarrier,
   isRustJsArrayCarrier,
   rustCallableProtocol,
+  rustCallableInputProtocol,
   rustNativeCallableProtocol,
   rustFixedArrayCarrierValue,
   rustSliceElementCarrier,
@@ -515,7 +516,8 @@ export function sourceCallSelectedMemberMatches(
         if (parameter === undefined || !rustTargetTypeRefEquals(carrier, mapRustTargetTypes(parameter.parameterCarrier, normalize))) return false;
         if (parameter.mode === "value") return true;
         const valueCarrier = mapRustTargetTypes(parameter.valueCarrier, normalize);
-        return callableCarrier?.kind === "closure" && carrier.kind === "reference" &&
+        return (callableCarrier?.kind === "closure" || rustCallableInputProtocol(callableCarrier) !== undefined) &&
+          carrier.kind === "reference" &&
           parameter.mode === (carrier.mutable ? "mut-ref" : "ref") &&
           (rustTargetTypeRefEquals(carrier.referent, valueCarrier) ||
             valueCarrier.kind === "array" &&

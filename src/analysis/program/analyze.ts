@@ -5,6 +5,9 @@ import { recordRustModuleCallableStorage } from "../callables/module-values.js";
 import { recordRustModuleValueDeclarations } from "./module-declarations.js";
 import { selectRustClassEnvironment, recordRustClassEnvironmentDemands } from "../objects/class-environments.js";
 import { rustClosureCaptureFactKey, rustSourceParameterAbiFactKey } from "../facts/keys.js";
+import { rustCallableInvocationResult } from "../facts/callable-results.js";
+import { rustCallableTargetType } from "../../target-model/types/carriers/callables.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { createRustSourceCallableAbiResolver } from "../../policy/ownership/source-callable-abi.js";
 import { createRustSourceProfileRegistry } from "../facts/source-profile-registry.js";
 import { createRustSourceTypeRegistry } from "../project-types/source-type-registry.js";
@@ -93,6 +96,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     parameterAbiFor: parameter => context.facts.get(parameter, rustSourceParameterAbiFactKey),
   });
   let finalizedProjectTypes: RustProjectTypePolicy | undefined;
+  const resolvingCallableSignatures = new Set<Node>();
   const operationOptions: RustOperationsProviderOptions = {
     dispatchContextInputFor: context.dispatchContexts.resolveInput,
     providerExports: providerSemantics.exports,
@@ -101,6 +105,22 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     jsEnabled,
     sourceProfiles,
     sourceTypes,
+    callableSignatureCarrier(declaration) {
+      if (resolvingCallableSignatures.has(declaration) || ast.body(declaration) === undefined ||
+        !ast.is.IsFunctionDeclaration(declaration) && !ast.is.IsArrowFunction(declaration) && !ast.is.IsFunctionExpression(declaration) ||
+        ast.typeParameters(declaration).length !== 0) return undefined;
+      resolvingCallableSignatures.add(declaration);
+      try {
+        recordFunctionSignatureFacts(walk, declaration);
+        const parameters = ast.parameters(declaration).map(parameter => parameter === undefined ? undefined
+          : context.facts.getFact(parameter, rustSourceParameterAbiFactKey)?.parameterCarrier);
+        const result = rustCallableInvocationResult(context.facts, declaration);
+        return result === undefined || parameters.some(parameter => parameter === undefined) ? undefined
+          : rustCallableTargetType(parameters as readonly TargetTypeRef[], result);
+      } finally {
+        resolvingCallableSignatures.delete(declaration);
+      }
+    },
     callableStorageCarrier(subject, logicalCarrier, environmentFor, instanceFor) {
       const selected = selectRustCallableOwnershipCarrier({ ast, ownership: context.callableOwnership,
         subject, logicalCarrier, instanceFor, environmentFor(component) {
