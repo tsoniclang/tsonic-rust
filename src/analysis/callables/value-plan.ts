@@ -17,10 +17,13 @@ import { rustStructuralObjectCarrierValue } from "../../target-model/types/carri
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { createRustFrameCallablePlan, type RustFrameCallablePlan } from "./frame-values.js";
+import type { RustCallableOwnershipPlan } from "./ownership-plan.js";
 
 export interface RustCallableValuePlan {
   readonly generic: RustGenericCallablePlan;
   readonly suspended: RustSuspendedCallablePlan;
+  readonly frames: RustFrameCallablePlan;
   readonly issues: readonly RustSourceCallableSpecializationIssue[];
 }
 
@@ -33,6 +36,7 @@ export interface RustCallableValuePlanInput {
   readonly lifetimes: RustLifetimeIndex;
   readonly classValueAdapters: readonly { readonly subject: Node; readonly adapter: RustCallableValueAdapter }[];
   readonly closedSourceFiles: ReadonlySet<SourceFile>;
+  readonly ownership: RustCallableOwnershipPlan;
 }
 
 export interface RustCallableValuePlanRegistry extends RustCallableValuePlan {
@@ -55,12 +59,14 @@ export function createRustCallableValuePlanRegistry(): RustCallableValuePlanRegi
     seal: requireCurrent,
     get generic() { return requireCurrent().generic; },
     get suspended() { return requireCurrent().suspended; },
+    get frames() { return requireCurrent().frames; },
     get issues() { return requireCurrent().issues; },
   });
 }
 
 function createRustCallableValuePlan(input: RustCallableValuePlanInput): RustCallableValuePlan {
   const flows: { subject: Node; conversion: RustGenericCallableConversion }[] = [];
+  const usedNames = new Set<string>();
   const recordField = (subject: Node, source: TargetTypeRef | undefined, target: TargetTypeRef | undefined): void => {
     if (source === undefined || target === undefined) return;
     const sourceCarrier = rustOptionElementCarrier(source) ?? source;
@@ -84,6 +90,10 @@ function createRustCallableValuePlan(input: RustCallableValuePlanInput): RustCal
   };
   for (const { subject, adapter } of input.classValueAdapters) record(subject, adapter);
   const visit = (node: Node): void => {
+    for (const name of [input.names.nameForDeclaration(node), input.names.functionNameForDeclaration(node),
+      input.names.callableValueNameForDeclaration(node)]) {
+      if (name !== undefined) usedNames.add(name);
+    }
     const operation = input.facts.getFact(node, rustTargetOperationFactKey);
     if (operation?.kind === "record-literal") {
       const targets = new Map(operation.fields.map(field => [field.storageIndex, field.carrier]));
@@ -118,5 +128,15 @@ function createRustCallableValuePlan(input: RustCallableValuePlanInput): RustCal
   for (const sourceFile of input.sourceFiles) visit(sourceFile);
   const generic = createRustGenericCallablePlan(input.ast, input.sourceFiles, input.facts, input.names, input.navigation, flows, input.closedSourceFiles);
   const suspended = createRustSuspendedCallablePlan(input.ast, input.sourceFiles, input.facts, input.names, input.lifetimes);
-  return Object.freeze({ generic, suspended, issues: Object.freeze([...generic.issues, ...suspended.issues]) });
+  for (const definition of generic.definitions) {
+    usedNames.add(definition.targetName);
+    for (const implementation of definition.implementations) {
+      usedNames.add(implementation.functionName);
+      usedNames.add(implementation.stateName);
+    }
+  }
+  for (const implementation of suspended.implementations) usedNames.add(implementation.stateName);
+  const frames = createRustFrameCallablePlan({ ...input, usedNames });
+  return Object.freeze({ generic, suspended, frames,
+    issues: Object.freeze([...generic.issues, ...suspended.issues, ...frames.issues]) });
 }

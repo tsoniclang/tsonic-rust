@@ -21,6 +21,26 @@ export function ordinary(seed: number): (count: number) => number {
 `;
 
 for (const jsEnabled of [false, true]) {
+  test(`${jsEnabled ? "JS" : "native"} independent recursive components share a source activation, not a dispatch family`, () => {
+    const { program } = analyzeRust({ surfaces: jsEnabled ? ["js"] : [], files: { "index.ts": `
+export function escaped(flag: boolean): (count: number) => number {
+  let left = (count: number): number => count === 0 ? 1 : left(count - 1);
+  let right = (count: number): number => count === 0 ? 2 : right(count - 1);
+  left = (count: number): number => count === 0 ? 3 : left(count - 1);
+  right = (count: number): number => count === 0 ? 4 : right(count - 1);
+  return flag ? left : right;
+}
+` } });
+    const definitions = program.callableValues.frames.definitions;
+    assert.equal(definitions.length, 1);
+    assert.equal(definitions[0].activation.components.length, 2);
+    assert.equal(definitions[0].bindings.length, 2);
+    assert.equal(definitions[0].entries.length, 1);
+    assert.equal(definitions[0].entries[0].implementations.length, 4);
+  });
+}
+
+for (const jsEnabled of [false, true]) {
   test(`${jsEnabled ? "JS" : "native"} callable ABI selects exact activation storage before signatures and captures`, () => {
     const { program } = analyzeRust({ surfaces: jsEnabled ? ["js"] : [], files: { "index.ts": source } });
     const { ast } = program.source;
@@ -64,5 +84,56 @@ for (const jsEnabled of [false, true]) {
     const ordinaryResult = program.facts.getFact(ordinary, rustSourceCallableReturnFactKey)?.returnCarrier;
     assert.equal(rustFrameCallableValue(ordinaryResult) === undefined, true, "ordinary callbacks acquire no frame ABI");
     assert.equal(rustCallableProtocol(ordinaryResult)?.parameters.length, 1);
+    const definition = program.callableValues.frames.definitionFor(returned);
+    assert.equal(definition !== undefined, true, "exact frame carrier has one sealed physical definition");
+    assert.equal(definition.activation.components.includes(program.callableOwnership.componentForSlot(selected)), true);
+    assert.equal(definition.entries.length, 1);
+    assert.equal(definition.entries[0].implementations.length, 2);
+    assert.equal(definition.bindings.length, 2, "recursive slot and same-activation captured seed share one frame");
+    assert.equal(program.callableValues.frames.bindingFor(selected)?.entry === definition.entries[0], true);
+    assert.equal(program.callableValues.frames.entryFor(returned) === definition.entries[0], true);
+    assert.equal(Object.isFrozen(definition), true);
+    assert.equal(Object.isFrozen(definition.entries[0].implementations), true);
   });
+}
+
+for (const jsEnabled of [false, true]) {
+  for (const [name, classSource, count] of [
+    ["mutable", `
+class Value {
+  recurse = (count: number): number => count === 0 ? 1 : this.recurse(count - 1);
+  rebind(): void { this.recurse = (count: number): number => count === 0 ? 2 : this.recurse(count - 1); }
+}
+export function escaped(): (count: number) => number {
+  const value = new Value();
+  const before = value.recurse;
+  value.rebind();
+  return before;
+}
+`, 1],
+    ["mutual", `
+class Parity {
+  readonly even = (count: number): boolean => count === 0 ? true : this.odd(count - 1);
+  readonly odd = (count: number): boolean => count === 0 ? false : this.even(count - 1);
+}
+export function escaped(): (count: number) => boolean { return new Parity().even; }
+`, 2],
+  ]) {
+    test(`${jsEnabled ? "JS" : "native"} ${name} receiver slots retain one sealed native activation definition`, () => {
+      const { program } = analyzeRust({ surfaces: jsEnabled ? ["js"] : [], files: { "index.ts": classSource } });
+      const definitions = program.callableValues.frames.definitions;
+      assert.equal(definitions.length, 1, "one source receiver owns one physical activation");
+      const definition = definitions[0];
+      assert.equal(definition.activation.kind, "class");
+      assert.equal(definition.entries.length, 1, "equal native invocation protocols share one typed entry");
+      assert.equal(definition.entries[0].implementations.length, 2);
+      assert.equal(definition.bindings.length, count);
+      for (const binding of definition.bindings) {
+        assert.equal(binding.entry === definition.entries[0], true);
+        assert.equal(program.callableValues.frames.definitionFor(binding.carrier) === definition, true);
+      }
+      for (const implementation of definition.entries[0].implementations)
+        assert.equal(program.callableValues.frames.implementationFor(implementation.declaration) === implementation, true);
+    });
+  }
 }

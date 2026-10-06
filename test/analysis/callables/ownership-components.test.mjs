@@ -83,7 +83,8 @@ test("owning activation selection is initialized once before source ABI consumer
     assert.equal(subject.kind, "resolved", "exact source storage subject");
     const selection = registry.storageFor(subject.subject);
     assert.equal(selection.kind, "frame", "same activation survives checked binding and return transport");
-    assert.equal(selection.component === plan.components[0], true);
+    assert.equal(selection.activation === plan.activations[0], true, "one exact physical activation");
+    assert.equal(selection.activation.components[0] === plan.components[0], true, "original exact dispatch component");
   }
 });
 
@@ -186,7 +187,7 @@ test("frame signatures retain captured body-only types and reject missing owners
   assert.equal(selectRustCallableOwnershipCarrier({ ...input, logicalCarrier: forged, environmentFor: () => [] }).kind, "unresolved");
 });
 
-test("different closed callback origins never silently share a physical frame type", () => {
+test("independent dispatch components in one activation share its exact physical frame", () => {
   const current = fixture(`
     export function select(flag: boolean) {
       let left = (count: number): number => count === 0 ? 1 : left(count - 1);
@@ -198,6 +199,36 @@ test("different closed callback origins never silently share a physical frame ty
   `);
   const registry = createRustCallableOwnershipRegistry();
   registry.initialize(current.input);
+  const subject = current.storage.storageSubjectFor(current.named("select", "KindFunctionDeclaration")[0]);
+  assert.equal(subject.kind, "resolved");
+  const selection = registry.storageFor(subject.subject);
+  assert.equal(selection.kind, "frame");
+  assert.equal(selection.activation.components.length, 2);
+  assert.equal(selection.activation.slotDeclarations.length, 2);
+  assert.equal(registry.activations.length, 1);
+  assert.equal(selection.activation === registry.activations[0], true);
+  assert.equal(Object.isFrozen(selection.activation.components), true);
+});
+
+test("different source activations cannot be relabeled as one physical frame", () => {
+  const current = fixture(`
+    export function left() {
+      let selected = (count: number): number => count === 0 ? 1 : selected(count - 1);
+      selected = (): number => 3;
+      return selected;
+    }
+    export function right() {
+      let selected = (count: number): number => count === 0 ? 2 : selected(count - 1);
+      selected = (): number => 4;
+      return selected;
+    }
+    export function select(flag: boolean) { return flag ? left() : right(); }
+  `);
+  const registry = createRustCallableOwnershipRegistry();
+  registry.initialize(current.input);
+  assert.equal(registry.activations.length, 2);
+  const scopes = new Set(registry.activations.map(activation => activation.activationScope));
+  assert.equal(scopes.size, 2);
   const subject = current.storage.storageSubjectFor(current.named("select", "KindFunctionDeclaration")[0]);
   assert.equal(subject.kind, "resolved");
   assert.equal(registry.storageFor(subject.subject).kind, "unresolved");

@@ -5,8 +5,7 @@ import { rustCallableOrigin } from "../../policy/types/callable-origins.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustFrameCallableTargetType, rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
-import type { RustCallableOwnershipComponent } from "./ownership-components.js";
-import type { RustCallableOwnershipPlan } from "./ownership-plan.js";
+import type { RustCallableActivation, RustCallableOwnershipPlan } from "./ownership-plan.js";
 
 export type RustCallableOwnershipCarrierSelection =
   | { readonly kind: "selected"; readonly carrier: TargetTypeRef }
@@ -17,7 +16,7 @@ export function selectRustCallableOwnershipCarrier(input: {
   readonly ownership: RustCallableOwnershipPlan;
   readonly subject: SourceStorageSubject;
   readonly logicalCarrier: TargetTypeRef;
-  readonly environmentFor: (component: RustCallableOwnershipComponent) => readonly TargetTypeRef[] | undefined;
+  readonly environmentFor: (activation: RustCallableActivation) => readonly TargetTypeRef[] | undefined;
 }): RustCallableOwnershipCarrierSelection {
   const protocol = rustCallableProtocol(input.logicalCarrier);
   if (protocol === undefined)
@@ -28,15 +27,14 @@ export function selectRustCallableOwnershipCarrier(input: {
   const generic = rustGenericCallableValue(input.logicalCarrier);
   if (generic !== undefined && generic.signature.typeParameters.length !== 0)
     return Object.freeze({ kind: "unresolved", reason: "A quantified frame requires its exact generic entry invocation protocol." });
-  const origin = rustCallableOrigin(input.ast, selection.component.kind === "class"
-    ? selection.component.ownerDeclaration : selection.component.identity);
+  const origin = rustCallableOrigin(input.ast, selection.activation.activationScope);
   if (origin === undefined)
     return Object.freeze({ kind: "unresolved", reason: "Callable frame storage has no exact source activation identity." });
   const previous = rustFrameCallableValue(input.logicalCarrier);
   if (previous !== undefined && (previous.owner.fileName !== origin.fileName ||
     previous.owner.declarationIdentity !== origin.declarationIdentity))
     return Object.freeze({ kind: "unresolved", reason: "A callable cannot silently change its physical activation owner." });
-  const environment = input.environmentFor(selection.component);
+  const environment = input.environmentFor(selection.activation);
   const selected = environment === undefined ? undefined
     : rustFrameCallableTargetType(protocol.parameters, protocol.result, origin, environment);
   if (selected === undefined)

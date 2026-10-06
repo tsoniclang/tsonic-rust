@@ -51,7 +51,8 @@ function input() {
   const navigation = { expressionValueFlow: node => ({ escapes: node === closures[1], identityCompared: false,
     hasUnclassifiedUse: false, captured: false }) };
   return { closures, planInput: { ast, sourceFiles: files, facts, names, navigation,
-    lifetimes: { contractFor: () => undefined }, classValueAdapters: [], closedSourceFiles: new Set() },
+    lifetimes: { contractFor: () => undefined }, classValueAdapters: [], closedSourceFiles: new Set(),
+    ownership: { components: [], activations: [], failureReason: () => undefined } },
     create: (closed = new Set()) => createRustGenericCallablePlan(ast, files, facts, names, navigation, [], closed) };
 }
 
@@ -59,6 +60,7 @@ test("callable value plans seal only after adapter classification and cannot be 
   const registry = createRustCallableValuePlanRegistry();
   assert.throws(() => registry.generic, /finalized after their selected adapters/u);
   assert.throws(() => registry.suspended, /finalized after their selected adapters/u);
+  assert.throws(() => registry.frames, /finalized after their selected adapters/u);
   assert.throws(() => registry.issues, /finalized after their selected adapters/u);
   assert.throws(() => registry.seal(), /finalized after their selected adapters/u);
   const { planInput } = input();
@@ -66,6 +68,8 @@ test("callable value plans seal only after adapter classification and cannot be 
   assert.equal(registry.seal(), plan);
   assert.equal(registry.generic, plan.generic);
   assert.equal(registry.suspended, plan.suspended);
+  assert.equal(registry.frames, plan.frames);
+  assert.equal(plan.frames.definitions.length, 0);
   assert.deepEqual(registry.issues, []);
   assert.equal(Object.isFrozen(plan), true);
   assert.throws(() => registry.initialize(planInput), /only once/u);
