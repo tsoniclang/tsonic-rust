@@ -18,6 +18,48 @@ import { captureRustProviderContributions } from "../../helpers/provider-contrib
 
 const int32Carrier = { kind: "source-primitive", name: "int32" };
 
+test("native failures incorporated into source results have exact closed immutable evidence", () => {
+  const native = { kind: "target-named", id: "acme.NativeError" };
+  const input = definition();
+  Object.assign(input, { carrierPaths: { "acme.NativeError": "acme_validation::NativeError" } });
+  Object.assign(input.operations[0], { isFallible: true, errorBoundary: "source-program", nativeErrorCarriers: [native] });
+  const provider = createRustProviderPackage(input);
+  native.id = "acme.Wrong";
+  input.operations[0].nativeErrorCarriers.push({ kind: "target-named", id: "acme.Other" });
+  const published = provider.createTargetContributions()[0].definition;
+  const row = collectRustProviderSemanticsFromDefinitions([published]).operations[0];
+  assert.equal(row.nativeErrorCarriers.length, 1);
+  assert.equal(rustNamedTypeCarrierValue(row.nativeErrorCarriers[0]).path, "acme_validation::NativeError");
+  assert.equal(Object.isFrozen(row.nativeErrorCarriers), true);
+  assert.equal(Object.isFrozen(row.nativeErrorCarriers[0]), true);
+});
+
+test("native source-result evidence rejects malformed or unrelated error boundaries", () => {
+  const native = { kind: "target-named", id: "acme.NativeError" };
+  const base = definition();
+  const operation = { ...base.operations[0], isFallible: true, errorBoundary: "source-program", nativeErrorCarriers: [native] };
+  const withOperation = change => definition({ carrierPaths: { "acme.NativeError": "acme_validation::NativeError" },
+    operations: [{ ...operation, ...change }] });
+  assert.doesNotThrow(() => createRustProviderPackage(withOperation({})));
+  const sparse = []; sparse.length = 1;
+  const accessor = Object.defineProperty({}, "kind", { enumerable: true, get() { throw new Error("must not execute"); } });
+  const cyclic = { kind: "target-named", id: "acme.NativeError" };
+  cyclic.genericArguments = [{ kind: "type", type: cyclic }];
+  for (const nativeErrorCarriers of [undefined, null, {}, [], sparse, [accessor], [cyclic], [native, native],
+    [{ kind: "source-primitive", name: "int32" }], [{ kind: "target-named", id: "acme.Undeclared" }],
+    [{ ...native, genericArguments: [{ kind: "type", type: { kind: "type-parameter", identity: "free", name: "T" } }] }],
+    [{ ...native, genericArguments: [{ kind: "lifetime", lifetime: { kind: "placeholder" } }] }],
+    [{ ...native, genericArguments: [{ kind: "const", value: { kind: "parameter", identity: "free", name: "N" } }] }]]) {
+    assert.throws(() => createRustProviderPackage(withOperation({ nativeErrorCarriers })));
+  }
+  for (const change of [{ isFallible: false }, { errorBoundary: "none" }, { errorBoundary: "target-runtime" },
+    { errorBoundary: "provider-native", errorCarrier: native }]) {
+    assert.throws(() => createRustProviderPackage(withOperation(change)));
+  }
+  const ordinary = collectRustProviderSemanticsFromDefinitions([definition()]).operations[0];
+  assert.equal(Object.hasOwn(ordinary, "nativeErrorCarriers"), false);
+});
+
 function functionExport(moduleSpecifier, name = "run") {
   return {
     id: `${moduleSpecifier}::${name}`,

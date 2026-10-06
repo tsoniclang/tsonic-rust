@@ -198,6 +198,7 @@ export function instantiateProviderOperationTemplate<
       ...(template.errorCarrier === undefined
         ? {}
         : { errorCarrier: substituteProviderCarrier(template.errorCarrier, substitutions) }),
+      ...(Object.prototype.hasOwnProperty.call(template, "nativeErrorCarriers") ? { nativeErrorCarriers: template.nativeErrorCarriers } : {}),
     },
     substitutions,
   };
@@ -629,6 +630,7 @@ export function finalizeProviderOperationFact(
       : { evaluationOnlySourceArgumentIndexes: template.evaluationOnlySourceArgumentIndexes }),
     resultCarrier: template.resultCarrier,
     dispatchInputs: dispatchInputs.filter(input => input !== undefined),
+    ...(Object.prototype.hasOwnProperty.call(template, "nativeErrorCarriers") ? { nativeErrorCarriers: template.nativeErrorCarriers } : {}),
     ...(template.targetGenericArguments === undefined
       ? {}
       : { targetGenericArguments: template.targetGenericArguments }),

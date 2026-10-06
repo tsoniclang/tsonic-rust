@@ -21,6 +21,7 @@ export function collectRustDeclaredProviderErrorCarriers(
 ): readonly TargetTypeRef[] {
   const carriers: TargetTypeRef[] = [];
   for (const row of rows) {
+    for (const carrier of row.nativeErrorCarriers ?? []) appendUniqueCarrier(carriers, carrier);
     if (row.isFallible === true && row.errorBoundary === "provider-native") appendUniqueCarrier(carriers, row.errorCarrier);
     if (row.target.form === "source-module-construction" && row.target.bootstrap.errorBoundary === "provider-native") {
       appendUniqueCarrier(carriers, row.target.bootstrap.errorCarrier);
@@ -49,6 +50,9 @@ export function analyzeRustProviderErrorCarriers(
   };
   const visit = (node: Node): void => {
     const operation = facts.getFact(node, rustTargetOperationFactKey);
+    if (operation?.kind === "provider-operation") {
+      for (const carrier of operation.abi.effects.nativeErrorCarriers ?? []) add(carrier);
+    }
     if (operation?.kind === "throw-op" && operation.error.kind === "conversion") {
       addRoute(operation.error.conversion.source, operation.error.conversion.route);
     }

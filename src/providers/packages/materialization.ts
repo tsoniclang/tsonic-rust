@@ -75,6 +75,9 @@ export function materializeProviderOperationRow(
     ...definition,
     ...owner,
     target: materializeProviderOperationForm(row.target, aliases, carrierPaths, carrierTraits),
+    ...(row.nativeErrorCarriers === undefined ? {} : {
+      nativeErrorCarriers: row.nativeErrorCarriers.map(carrier => materializeProviderCarrier(carrier, carrierPaths, carrierTraits)),
+    }),
     resultCarrier: materializeProviderCarrier(row.resultCarrier, carrierPaths, carrierTraits),
     ...(row.receiverCarrier === undefined
       ? {}

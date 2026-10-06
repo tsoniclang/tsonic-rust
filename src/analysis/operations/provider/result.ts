@@ -422,6 +422,7 @@ export function providerOperationTemplate<
     ...(row.evaluation === undefined ? {} : { evaluation: row.evaluation }),
     errorBoundary: row.isFallible === true ? row.errorBoundary : "none",
     ...(row.errorCarrier === undefined ? {} : { errorCarrier: row.errorCarrier }),
+    ...(row.nativeErrorCarriers === undefined ? {} : { nativeErrorCarriers: row.nativeErrorCarriers }),
     isUnsafe: row.isUnsafe === true,
   };
 }

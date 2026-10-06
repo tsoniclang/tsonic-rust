@@ -62,6 +62,7 @@ interface RustProviderOperationDefinitionBase<
   readonly isUnsafe?: boolean;
   readonly immediateCallback?: RustProviderImmediateCallbackDefinition;
   readonly dispatchInputs?: readonly RustDispatchContextInput[];
+  readonly nativeErrorCarriers?: readonly TargetTypeRef[];
 }
 
 export type RustProviderOperationDefinition<

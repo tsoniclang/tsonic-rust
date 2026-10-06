@@ -25,6 +25,27 @@ const base = {
   isAsync: false, isFallible: false, dispatchInputs: [rootInput],
 };
 
+test("source-module constructors retain exact source slots around selected context roots", () => {
+  const string = { kind: "target-named", id: "rust.std.String" };
+  const form = { form: "source-module-construction", path: "acme_dispatch::Worker::create",
+    sourceArgumentIndex: 0, targetArgumentIndex: 1, argOrder: [1, 0],
+    bootstrap: { id: "acme.worker", path: "acme_dispatch::bootstrap", errorBoundary: "target-runtime" } };
+  for (const position of [0, 1, 2]) {
+    const root = catalog.resolveInput({ ...request, targetArgumentIndex: position });
+    const abi = finalizeRustProviderOperationAbi({ ...base, operationKind: "constructor", form,
+      sourceArgumentCarriers: [string, integer], dispatchInputs: [root] });
+    assert.equal(abi !== undefined, true, `root position ${position}`);
+    assert.equal(validateRustFinalizedOperationAbi(abi), true);
+    assert.deepEqual(abi.targetArguments.filter(input => input.source.kind === "argument")
+      .map(input => input.source.sourceIndex), [1, 0]);
+    const selected = abi.targetArguments.findIndex(input => input.source.kind === "argument" && input.source.sourceIndex === 0);
+    assert.equal(selected, position <= 1 ? 2 : 1);
+    assert.equal(abi.target.sourceArgumentIndex, 0);
+    assert.equal(abi.target.targetArgumentIndex, 1);
+    assert.equal(abi.targetArguments[position].source.kind, "dispatch-context");
+  }
+});
+
 test("native dispatch inputs interleave with, but never manufacture, authored source slots", () => {
   const abi = finalizeRustProviderOperationAbi(base);
   assert.equal(abi !== undefined, true);

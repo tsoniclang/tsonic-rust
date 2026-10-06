@@ -1,6 +1,6 @@
 import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
 import type { RustResolvedDispatchContextInput } from "../../../target-model/operations/dispatch-contexts.js";
-import { isRustResolvedDispatchContextInput } from "../../../policy/operations/dispatch-contexts.js";
+import { isRustResolvedDispatchContextInput, rustProviderOperationFormAcceptsDispatchInputs } from "../../../policy/operations/dispatch-contexts.js";
 import { carrierAfterMode } from "./conversions.js";
 import type { RustFinalizedOperationAbi, RustFinalizedTargetInput } from "./model.js";
 
@@ -10,7 +10,7 @@ export function insertRustDispatchContextInputs(
   form: RustFinalizedOperationAbi["target"],
 ): Pick<RustFinalizedOperationAbi, "targetReceiver" | "targetArguments"> | undefined {
   if (!isDenseDataArray(inputs) || !inputs.every(isRustResolvedDispatchContextInput) ||
-    inputs.length > 0 && form.form !== "call") return undefined;
+    inputs.length > 0 && !rustProviderOperationFormAcceptsDispatchInputs(form)) return undefined;
   if (inputs.length === 0) return mapping;
   const count = mapping.targetArguments.length + inputs.length;
   const byIndex = new Map(inputs.map(input => [input.targetArgumentIndex, input]));

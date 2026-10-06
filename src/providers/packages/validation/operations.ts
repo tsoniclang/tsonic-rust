@@ -1,6 +1,7 @@
 import { asRecord, requireExactKeys, requireRustIdentifier, validateCarrier, validateValueConversion } from "./carriers.js";
 import { closedMetadataKey, isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
-import { isRustDispatchContextInput } from "../../../policy/operations/dispatch-contexts.js";
+import { isRustDispatchContextInput, rustProviderOperationFormAcceptsDispatchInputs } from "../../../policy/operations/dispatch-contexts.js";
+import { isRustNativeErrorCarriers } from "../../../target-model/operations/native-error-carriers.js";
 import { isRustFallibleErrorBoundary } from "../../../target-model/operations/error-boundary.js";
 import {
   rustProviderOperationFormAcceptsTargetGenericArguments,
@@ -34,12 +35,12 @@ export function validateOperationRows(
   for (const row of definition.operations) {
     requireExactKeys(asRecord(row), [
       "exportId", "memberId", "signatureId", "operationKind", "target", "resultCarrier",
-      "parameterCarriers", "receiverCarrier", "genericParameters", "typeRequirements", "targetGenericArguments", "resultConversion", "evaluation", "isAsync", "isFallible", "errorBoundary", "errorCarrier", "isUnsafe", "immediateCallback", "dispatchInputs",
+      "parameterCarriers", "receiverCarrier", "genericParameters", "typeRequirements", "targetGenericArguments", "resultConversion", "evaluation", "isAsync", "isFallible", "errorBoundary", "errorCarrier", "isUnsafe", "immediateCallback", "dispatchInputs", "nativeErrorCarriers",
     ], `operation row '${String((row as { readonly memberId?: unknown; readonly exportId?: unknown }).memberId ?? row.exportId)}'`, fail);
     const label = row.memberId ?? row.exportId;
     if (row.dispatchInputs !== undefined && (
       !isDenseDataArray(row.dispatchInputs) || !row.dispatchInputs.every(isRustDispatchContextInput) ||
-      row.dispatchInputs.length > 0 && (row.target.form !== "call" || row.evaluation === "pure") ||
+      row.dispatchInputs.length > 0 && (!rustProviderOperationFormAcceptsDispatchInputs(row.target) || row.evaluation === "pure") ||
       new Set(row.dispatchInputs.map(input => input.targetArgumentIndex)).size !== row.dispatchInputs.length
     )) fail(`row '${label}' requires exact distinct dispatch inputs on an observable native call`);
     if (!rustLengthEmptinessContractIsValid({ ...row,
@@ -132,6 +133,14 @@ export function validateOperationRows(
       }
     } else if (row.errorCarrier !== undefined) {
       fail(`row '${label}' cannot declare an errorCarrier outside a provider-native boundary.`);
+    }
+    if (Object.prototype.hasOwnProperty.call(row, "nativeErrorCarriers")) {
+      if (row.isFallible !== true || row.errorBoundary !== "source-program" || !isRustNativeErrorCarriers(row.nativeErrorCarriers)) {
+        fail(`row '${label}' requires distinct closed native errors incorporated into a fallible source-program result.`);
+      }
+      for (const carrier of row.nativeErrorCarriers!) {
+        validateCarrier(carrier, definition, `${label}.nativeErrorCarriers`, fail, { position: "return" });
+      }
     }
     if (row.isAsync !== undefined && typeof row.isAsync !== "boolean") {
       fail(`isAsync must be boolean when present (row '${label}').`);

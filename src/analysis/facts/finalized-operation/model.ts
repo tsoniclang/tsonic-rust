@@ -130,6 +130,7 @@ export interface RustFinalizedOperationAbi {
     readonly errorBoundary: RustErrorBoundary;
     readonly errorCarrier?: TargetTypeRef;
     readonly safety: "safe" | "requires-unsafe";
+    readonly nativeErrorCarriers?: readonly TargetTypeRef[];
   };
 }
 
@@ -152,6 +153,7 @@ export interface FinalizeRustProviderOperationAbiOptions<
   readonly evaluationOnlySourceArgumentIndexes?: readonly number[];
   readonly resultCarrier: TargetTypeRef;
   readonly dispatchInputs?: readonly RustResolvedDispatchContextInput[];
+  readonly nativeErrorCarriers?: readonly TargetTypeRef[];
   readonly targetGenericArguments?: readonly RustTargetGenericArgument[];
   readonly resultConversion?: RustValueConversion;
   readonly isAsync: boolean;

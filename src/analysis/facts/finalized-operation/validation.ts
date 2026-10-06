@@ -27,6 +27,7 @@ import { isFinalizedConversion } from "./conversion-shape.js";
 import { hasExactKeys, isRecord } from "./validation-records.js";
 import { insertRustDispatchContextInputs } from "./dispatch-inputs.js";
 import { isRustResolvedDispatchContextInput } from "../../../policy/operations/dispatch-contexts.js";
+import { isRustNativeErrorCarriers } from "../../../target-model/operations/native-error-carriers.js";
 
 export function validateRustFinalizedOperationAbi(candidate: unknown, definitions: RustTypeDefinitions = emptyRustTypeDefinitions): candidate is RustFinalizedOperationAbi {
   if (!isClosedMetadata(candidate) || !isRustFinalizedOperationAbiShape(candidate)) {
@@ -361,14 +362,19 @@ function isOperationResult(value: unknown): value is RustFinalizedOperationResul
 function isEffects(value: unknown): value is RustFinalizedOperationAbi["effects"] {
   return isRecord(value) && hasExactKeys(
     value,
-    value.errorBoundary === "provider-native"
+    [...(value.errorBoundary === "provider-native"
       ? ["evaluation", "invocation", "awaiting", "errorBoundary", "errorCarrier", "safety"]
-      : ["evaluation", "invocation", "awaiting", "errorBoundary", "safety"],
+      : ["evaluation", "invocation", "awaiting", "errorBoundary", "safety"]),
+      ...(Object.prototype.hasOwnProperty.call(value, "nativeErrorCarriers") ? ["nativeErrorCarriers"] : [])],
   ) &&
     (value.evaluation === "observable" || value.evaluation === "pure") &&
     (value.invocation === "infallible" || value.invocation === "fallible") &&
     (value.awaiting === "not-applicable" || value.awaiting === "infallible" || value.awaiting === "fallible") &&
     isRustErrorBoundary(value.errorBoundary) &&
     (value.errorCarrier === undefined || isRustTargetTypeRef(value.errorCarrier)) &&
+    (!Object.prototype.hasOwnProperty.call(value, "nativeErrorCarriers") ||
+      value.errorBoundary === "source-program" &&
+      (value.invocation === "fallible" || value.awaiting === "fallible") &&
+      isRustNativeErrorCarriers(value.nativeErrorCarriers)) &&
     (value.safety === "safe" || value.safety === "requires-unsafe");
 }

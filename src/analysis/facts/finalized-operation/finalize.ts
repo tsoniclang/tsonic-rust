@@ -21,6 +21,7 @@ import { rustProviderOperationFormAcceptsTargetGenericArguments, rustProviderOpe
 import type { FinalizeRustProviderOperationAbiOptions, RustFinalizedOperationAbiFor, RustFinalizedOperationResult, RustFinalizedTargetInput } from "./model.js";
 import type { RustFinalizedOperationKind } from "../../../target-model/operations/model.js";
 import { insertRustDispatchContextInputs } from "./dispatch-inputs.js";
+import { isRustNativeErrorCarriers } from "../../../target-model/operations/native-error-carriers.js";
 
 const emptyDispatchInputs = Object.freeze([]);
 
@@ -48,6 +49,8 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
           !isRustTargetGenericArgument(argument)) ||
         !rustProviderOperationFormAcceptsTargetGenericArguments(options.form))) ||
     typeof options.isAsync !== "boolean" || typeof options.isFallible !== "boolean" ||
+    (Object.prototype.hasOwnProperty.call(options, "nativeErrorCarriers") && (!options.isFallible || options.errorBoundary !== "source-program" ||
+      !isRustNativeErrorCarriers(options.nativeErrorCarriers))) ||
     (options.returnedFuture !== undefined && (
       options.isAsync || options.isFallible ||
       rustFutureOutputCarrier(options.resultCarrier) === undefined ||
@@ -188,6 +191,7 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
           ? { errorCarrier: options.errorCarrier }
           : {}),
       safety: options.isUnsafe ? "requires-unsafe" : "safe",
+      ...(options.nativeErrorCarriers === undefined ? {} : { nativeErrorCarriers: options.nativeErrorCarriers }),
     },
   };
   return validateRustFinalizedOperationAbi(abi, definitions) ? abi : undefined;

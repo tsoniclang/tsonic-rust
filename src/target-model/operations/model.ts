@@ -465,6 +465,7 @@ export interface RustProviderOperationTemplate<
   readonly target: RustProviderOperationForm;
   readonly resultCarrier: TargetTypeRef;
   readonly dispatchInputs?: readonly import("./dispatch-contexts.js").RustDispatchContextInput[];
+  readonly nativeErrorCarriers?: readonly TargetTypeRef[];
   readonly sourceResultCarrier?: TargetTypeRef;
   readonly sourceAbsenceCarrier?: TargetTypeRef;
   readonly indexedLocationMethod?: string;

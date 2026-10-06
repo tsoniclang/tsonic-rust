@@ -251,7 +251,10 @@ export function planProviderOperationExpression(
         construction.targetSourceFile,
       );
       const entryIdentity = context.workerEntryIdentityByFileName.get(targetFileName);
-      const moduleInput = fact.abi.targetArguments[form.targetArgumentIndex];
+      const moduleArgumentIndex = fact.abi.targetArguments.findIndex(input =>
+        isRustFinalizedSourceInput(input) && input.source.kind === "argument" &&
+        input.source.sourceIndex === form.sourceArgumentIndex);
+      const moduleInput = fact.abi.targetArguments[moduleArgumentIndex];
       const moduleIdentity = moduleInput !== undefined && isRustFinalizedSourceInput(moduleInput) &&
           moduleInput.source.kind === "argument" &&
           moduleInput.source.sourceIndex === form.sourceArgumentIndex
@@ -261,7 +264,7 @@ export function planProviderOperationExpression(
             ? { kind: "string-literal" as const, value: entryIdentity ?? "" }
             : undefined
         : undefined;
-      if (entryIdentity === undefined || args[form.targetArgumentIndex] === undefined ||
+      if (entryIdentity === undefined || args[moduleArgumentIndex] === undefined ||
         moduleIdentity === undefined) {
         context.diagnostics.push(missingFactDiagnostic(
           diagnosticInput(context, operationNode),
@@ -275,7 +278,7 @@ export function planProviderOperationExpression(
         kind: "call",
         path: form.path,
         args: args.map((argument, index) =>
-          index === form.targetArgumentIndex
+          index === moduleArgumentIndex
             ? moduleIdentity
             : argument),
         ...(concreteTargetGenericArguments === undefined

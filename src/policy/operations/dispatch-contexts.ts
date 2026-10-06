@@ -2,6 +2,11 @@ import { hasExactObjectKeys, isClosedMetadata } from "../../target-model/metadat
 import type { RustDispatchContextInput, RustResolvedDispatchContextInput } from "../../target-model/operations/dispatch-contexts.js";
 import { isRustTargetTypeRef } from "../../target-model/types/equality.js";
 import { rustNamedTypeCarrierValue } from "../../target-model/types/index.js";
+import type { RustProviderOperationForm } from "../../target-model/operations/model.js";
+
+export function rustProviderOperationFormAcceptsDispatchInputs(form: RustProviderOperationForm): boolean {
+  return form.form === "call" || form.form === "source-module-construction";
+}
 
 export function isRustDispatchContextInput(value: unknown): value is RustDispatchContextInput {
   if (!isClosedMetadata(value) || typeof value !== "object" || value === null ||

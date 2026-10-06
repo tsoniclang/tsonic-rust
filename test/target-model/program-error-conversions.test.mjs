@@ -143,3 +143,22 @@ test("native throw carriers are declared once and transported by the used-error 
     assert.ok(Object.isFrozen(used));
   }
 });
+
+test("source-program native errors enter inventory only through selected operation evidence", () => {
+  const native = { kind: "target-named", id: "example.NativeFailure" };
+  const declared = collectRustDeclaredProviderErrorCarriers([
+    { target: { form: "call" }, isFallible: true, errorBoundary: "source-program", nativeErrorCarriers: [native] },
+    { target: { form: "call" }, isFallible: true, errorBoundary: "source-program", nativeErrorCarriers: [{ ...native }] },
+  ], []);
+  assert.deepEqual(declared, [native]);
+  const statement = {};
+  for (const [selected, expected] of [[undefined, []],
+    [{ kind: "provider-operation", abi: { target: { form: "call" }, effects: { nativeErrorCarriers: [native] } } }, [native]],
+    [{ kind: "provider-operation", abi: { target: { form: "call" }, effects: {} } }, []]]) {
+    const used = analyzeRustProviderErrorCarriers({ forEachChild() {} }, [statement], {
+      getFact: (node, key) => node === statement && key === rustTargetOperationFactKey ? selected : undefined,
+    }, []);
+    assert.deepEqual(used, expected);
+    assert.equal(Object.isFrozen(used), true);
+  }
+});
