@@ -13,7 +13,7 @@ export interface RustDispatchContextDefinition {
   readonly id: string;
   readonly requiredCrate: string;
   readonly rootCarrier: TargetTypeRef;
-  readonly construct: RustDispatchContextConstruction;
+  readonly construct: RustDispatchContextConstruction & { readonly const: boolean };
   readonly handleCarrier: TargetTypeRef;
   readonly handle: RustDispatchContextProjection;
   readonly composedContexts: readonly {
@@ -27,6 +27,15 @@ export interface RustDispatchContextInput {
   readonly view: "root" | "handle";
   readonly targetArgumentIndex: number;
   readonly mode: "value" | "ref";
+}
+
+export interface RustDispatchContextGroupInput {
+  readonly contextId: string;
+  readonly targetArgumentIndex: number;
+  readonly empty: Pick<
+    Extract<RustProviderOperationForm, { readonly form: "associated-call" }>, "form" | "owner" | "method"
+  >;
+  readonly prepend: RustDispatchContextConstruction;
 }
 
 export interface RustResolvedDispatchContextInput extends RustDispatchContextInput {

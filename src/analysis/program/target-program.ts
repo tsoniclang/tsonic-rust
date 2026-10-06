@@ -9,6 +9,7 @@ import {
 import { Node_Expression } from "@tsonic/target-api/source";
 import { analyzeRustProgram } from "./analyze.js";
 import { analyzeRustNumericRepresentations } from "../numeric/representations.js";
+import { analyzeRustBinaryDispatchDemand } from "../runtime/binary-dispatch-demand.js";
 import { createRustAnalysisContext } from "./context.js";
 import type {
   AnalyzeRustTargetProgramResult,
@@ -156,6 +157,10 @@ export function analyzeRustTargetProgram(
     context.ast, context.sourceFiles, facts, sourcePackageComponents.plan, dispatchContexts.plan,
   );
   if (dispatchContextDemand.kind === "rejected") return rejectedTargetStage(dispatchContextDemand.diagnostics);
+  const binaryDispatchDemand = analyzeRustBinaryDispatchDemand(
+    binaryHooks, sourcePackageComponents.plan, dispatchContexts.plan, dispatchContextDemand.plan,
+  );
+  if (binaryDispatchDemand.kind === "rejected") return rejectedTargetStage(binaryDispatchDemand.diagnostics);
   const valueLifetimes = analyzeRustValueLifetimes({
     ast: context.ast,
     sourceFiles: context.sourceFiles,
@@ -312,6 +317,7 @@ export function analyzeRustTargetProgram(
     runtimeReferences: runtimeReferences.plan,
     dispatchContexts: dispatchContexts.plan,
     dispatchContextDemand: dispatchContextDemand.plan,
+    binaryDispatchDemand: binaryDispatchDemand.plan,
     foundation: foundation.plan,
     binaryHooks,
     providerErrorCarriers: analyzeRustProviderErrorCarriers(

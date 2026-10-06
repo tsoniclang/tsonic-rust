@@ -287,6 +287,7 @@ export function planRustSourcePackageCargo(
   rootManifest: CargoManifestPlan,
   components: readonly RustSourcePackageComponentPlan[],
   diagnostics: TargetDiagnostic[],
+  linkedComponentIds: readonly string[] = [],
 ): RustSourcePackageCargoPlan | undefined {
   const root = components.find((component) => component.root);
   if (root === undefined) {
@@ -344,7 +345,7 @@ export function planRustSourcePackageCargo(
   };
   const rootDependencies = mergeCargoDependencies(
     rootManifest.dependencies,
-    root.dependencyComponentIds.flatMap((dependencyId) => {
+    [...new Set([...root.dependencyComponentIds, ...linkedComponentIds])].flatMap((dependencyId) => {
       const dependency = dependencyFor(root, dependencyId);
       return dependency === undefined ? [] : [dependency];
     }),

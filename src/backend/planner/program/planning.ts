@@ -21,6 +21,8 @@ import {
 } from "../names/source-output-identities.js";
 import { applyRustErrorBoundary } from "../types/error-boundary.js";
 import { rustTypeFromCarrier } from "../types/render.js";
+import { planRustBinaryHookCallPlan } from "./binary-hook-contexts.js";
+import type { RustBinaryHookCallPlan } from "./binary-hook-contexts.js";
 import {
   resolveBinaryEntry,
   resolveProjectEntrySourceFile,
@@ -252,7 +254,8 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     input.program.runtimeReferences,
   );
   const sourcePackageCargo = cargoProject.kind === "generated"
-    ? planRustSourcePackageCargo(cargoProject.manifest, componentPlans, diagnostics)
+    ? planRustSourcePackageCargo(cargoProject.manifest, componentPlans, diagnostics,
+      input.program.configuration.outputType === "bin" ? input.program.binaryDispatchDemand.linkedComponentIds : [])
     : undefined;
   if (cargoProject.kind === "generated" && sourcePackageCargo === undefined) {
     return rejectedTargetStage(diagnostics);
@@ -441,8 +444,16 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
       args: [],
     };
     const executor = executors[0];
+    const hookCalls = new Map<(typeof activeHooks)[number], RustBinaryHookCallPlan>();
+    for (const hook of activeHooks) {
+      const plan = planRustBinaryHookCallPlan(hook, input, componentPlans, sourcePackageErrors, diagnostics);
+      if (plan === undefined) return rejectedTargetStage(diagnostics);
+      hookCalls.set(hook, plan);
+    }
     const executeAsync = (future: import("../../target-ast/nodes.js").RustExpr) =>
-      planRustAsyncExecution(future, executor, mainErrorType,
+      planRustAsyncExecution(executor === undefined
+        ? { kind: "call", path: "tsonic_rust_runtime::block_on", args: [future] }
+        : hookCalls.get(executor)!.call([future]), executor, mainErrorType,
         executor === undefined ? undefined : hookErrorTypes.get(executor));
     const entryExecution = entryFunction.async
       ? executeAsync(entryFunction.async === "js-promise"
@@ -490,7 +501,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
                 },
         }];
     const planHook = (epilogue: (typeof activeHooks)[number]) => {
-      const call = { kind: "call" as const, path: epilogue.path, args: [] };
+      const call = hookCalls.get(epilogue)!.call([]);
       if (epilogue.isFallible !== true) {
         return { kind: "expr" as const, expr: call };
       }

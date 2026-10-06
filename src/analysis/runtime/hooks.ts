@@ -1,11 +1,13 @@
 import type { RustProviderBinaryHookRow } from "../../providers/packages/model.js";
 import type { RustFallibleErrorBoundary } from "../../target-model/operations/error-boundary.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustDispatchContextGroupInput } from "../../target-model/operations/dispatch-contexts.js";
 
 interface RustBinaryHookPlanBase {
   readonly id: string;
   readonly phase: "before-initialization" | "async-execution" | "after-entry";
   readonly path: string;
+  readonly dispatchGroups: readonly RustDispatchContextGroupInput[];
 }
 
 export type RustBinaryHookPlan =
@@ -42,6 +44,7 @@ export function analyzeRustBinaryHooks(
         id: row.id,
         phase: row.phase,
         path: row.path,
+        dispatchGroups: row.dispatchGroups ?? emptyDispatchGroups,
         isFallible: false,
       })];
     }
@@ -50,6 +53,7 @@ export function analyzeRustBinaryHooks(
         id: row.id,
         phase: row.phase,
         path: row.path,
+        dispatchGroups: row.dispatchGroups ?? emptyDispatchGroups,
         isFallible: true,
         errorBoundary: row.errorBoundary,
         errorCarrier: row.errorCarrier,
@@ -59,8 +63,11 @@ export function analyzeRustBinaryHooks(
       id: row.id,
       phase: row.phase,
       path: row.path,
+      dispatchGroups: row.dispatchGroups ?? emptyDispatchGroups,
       isFallible: true,
       errorBoundary: row.errorBoundary,
     })];
   }));
 }
+
+const emptyDispatchGroups: readonly RustDispatchContextGroupInput[] = Object.freeze([]);

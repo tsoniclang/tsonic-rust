@@ -6,6 +6,36 @@ import { allocateRustSyntheticName, createRustSyntheticNameState } from "../name
 import { diagnosticInput } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
+import type { RustDispatchContextProjection } from "../../../target-model/operations/dispatch-contexts.js";
+
+export interface RustDispatchContextBinding {
+  readonly name: string;
+  readonly path: string;
+}
+
+export function projectRustDispatchContext(
+  root: RustExpr,
+  projections: readonly RustDispatchContextProjection[],
+): RustExpr {
+  return projections.reduce<RustExpr>((receiver, projection) => ({
+    kind: "method-call", receiver, method: projection.name, args: [],
+  }), root);
+}
+
+export function applyRustDispatchContextBindings(
+  expression: RustExpr,
+  bindings: readonly RustDispatchContextBinding[],
+): RustExpr {
+  let value = expression;
+  for (let index = bindings.length - 1; index >= 0; index -= 1) {
+    const binding = bindings[index]!;
+    value = {
+      kind: "method-call", receiver: { kind: "path", path: binding.path }, method: "with",
+      args: [{ kind: "closure", params: [{ name: binding.name, byRefCopy: false }], body: value }],
+    };
+  }
+  return value;
+}
 
 export interface RustDispatchContextInputScope {
   input(input: RustFinalizedDispatchContextInput): RustExpr | undefined;
@@ -43,10 +73,7 @@ export function planRustDispatchContextInputScope(
     }
     const rootName = roots.get(access.rootContextId) ?? allocateRustSyntheticName(names, "dispatch_root");
     roots.set(access.rootContextId, rootName);
-    let value: RustExpr = { kind: "path", path: rootName };
-    for (const projection of access.projections) {
-      value = { kind: "method-call", receiver: value, method: projection.name, args: [] };
-    }
+    let value = projectRustDispatchContext({ kind: "path", path: rootName }, access.projections);
     if (input.source.view === "handle") {
       value = { kind: "method-call", receiver: value, method: declaration.handle.name, args: [] };
       if (input.mode === "ref") value = { kind: "reference", expr: value };
@@ -60,16 +87,7 @@ export function planRustDispatchContextInputScope(
   }));
   return {
     input: input => values.get(input),
-    apply(expression) {
-      let value = expression;
-      for (const binding of [...bindings].reverse()) {
-        value = {
-          kind: "method-call", receiver: { kind: "path", path: binding.path }, method: "with",
-          args: [{ kind: "closure", params: [{ name: binding.name, byRefCopy: false }], body: value }],
-        };
-      }
-      return value;
-    },
+    apply: expression => applyRustDispatchContextBindings(expression, bindings),
   };
 
   function invalid(message: string): undefined {

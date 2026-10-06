@@ -16,7 +16,7 @@ import type {
   TargetTypeRef,
 } from "../../target-model/types/model.js";
 import type { RustFoundation } from "../../target-model/foundation/model.js";
-import type { RustDispatchContextDefinition, RustDispatchContextInput } from "../../target-model/operations/dispatch-contexts.js";
+import type { RustDispatchContextDefinition, RustDispatchContextInput, RustDispatchContextGroupInput } from "../../target-model/operations/dispatch-contexts.js";
 
 export interface RustProviderModuleDefinition {
   readonly moduleSpecifier: string;
@@ -163,6 +163,7 @@ interface RustProviderBinaryHookDefinitionBase {
   readonly phase: "before-initialization" | "async-execution" | "after-entry";
   readonly path: string;
   readonly requiredCrate: string;
+  readonly dispatchGroups?: readonly RustDispatchContextGroupInput[];
 }
 
 export type RustProviderBinaryHookDefinition =

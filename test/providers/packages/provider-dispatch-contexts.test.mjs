@@ -101,6 +101,9 @@ test("dispatch contexts reject malformed declarations and unsupported execution 
     { construct: null },
     { construct: { form: "path", path: "runtime::Dispatch::new" } },
     { construct: { form: "call", path: "runtime::Dispatch::new()" } },
+    { construct: { form: "call", path: "runtime::Dispatch::new" } },
+    { construct: { form: "call", path: "runtime::Dispatch::new", const: "true" } },
+    { construct: { form: "call", path: "runtime::Dispatch::new", const: null } },
     { construct: { form: "call", path: "runtime::Dispatch::new", argModes: ["value"] } },
     { handle: null },
     { handle: { form: "method", name: "handle" } },
@@ -120,6 +123,19 @@ test("dispatch contexts reject malformed declarations and unsupported execution 
   for (const [index, change] of invalid.entries()) {
     assert.throws(() => createRustProviderPackage(definition({ dispatchContexts: [context(change)] })),
       /Provider package 'acme-dispatch':/u, `malformed dispatch context ${index}`);
+  }
+});
+
+test("dispatch construction retains immutable compiler-checked native const evidence", () => {
+  for (const constant of [true, false]) {
+    const input = definition({ dispatchContexts: [context({ construct: {
+      form: "call", path: "runtime::Dispatch::new", const: constant,
+    } })] });
+    const selected = collectRustProviderSemanticsFromDefinitions([input]).dispatchContexts[0];
+    assert.equal(selected.construct.const, constant);
+    assert.equal(Object.isFrozen(selected.construct), true);
+    input.dispatchContexts[0].construct.const = !constant;
+    assert.equal(selected.construct.const, constant);
   }
 });
 

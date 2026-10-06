@@ -30,7 +30,7 @@ import type { ExportRecord, Fail, MemberRecord, SignatureRecord } from "./model.
 import type { RustProviderPackageDefinition } from "../index.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { isRustFoundation } from "../../../target-model/foundation/model.js";
-import { validateDispatchContexts } from "./dispatch-contexts.js";
+import { validateDispatchContexts, validateDispatchContextGroups } from "./dispatch-contexts.js";
 
 export function validateProviderPackageDefinition(definition: RustProviderPackageDefinition): void {
   const fail: Fail = (message) => {
@@ -580,7 +580,7 @@ function validateBinaryHooks(definition: RustProviderPackageDefinition, fail: Fa
     const epilogueId = epilogue.id;
     requireExactKeys(
       record,
-      ["id", "phase", "path", "requiredCrate", "isFallible", "errorBoundary", "errorCarrier"],
+      ["id", "phase", "path", "requiredCrate", "isFallible", "errorBoundary", "errorCarrier", "dispatchGroups"],
       "binary hook",
       fail,
     );
@@ -589,6 +589,7 @@ function validateBinaryHooks(definition: RustProviderPackageDefinition, fail: Fa
       fail(`binary hook '${epilogue.id}' requires an exact lifecycle phase`);
     }
     requireRustPath(epilogue.path, `path for binary hook '${epilogue.id}'`, fail);
+    validateDispatchContextGroups(epilogue.dispatchGroups, epilogue.phase, definition, `binary hook '${epilogue.id}'`, fail);
     requireRustIdentifier(epilogue.requiredCrate, `required crate for binary hook '${epilogue.id}'`, fail);
     if (!crates.has(epilogue.requiredCrate)) {
       fail(`binary hook '${epilogue.id}' requires undeclared crate '${epilogue.requiredCrate}'`);

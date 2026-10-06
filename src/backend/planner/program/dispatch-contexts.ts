@@ -30,8 +30,8 @@ export function planRustDispatchContextRoots(
     const type = rustTypeFromCarrierInContext(carrier, { ...context, usedAliases });
     if (type === undefined) return invalid("A demanded native dispatch root has no exact renderable carrier.");
     items.push({
-      kind: "thread-local", name: rustDispatchContextRootName(index), visibility: "crate", type,
-      value: { kind: "call", path: declaration.construct.path, args: [] }, constInitializer: false,
+      kind: "thread-local", name: rustDispatchContextRootName(index), visibility: "public", type,
+      value: { kind: "call", path: declaration.construct.path, args: [] }, constInitializer: declaration.construct.const,
     });
   }
   return [...rustRuntimeAliasUseItems(usedAliases, domain.errorDomain === "project" ? programModuleName : undefined), ...items];

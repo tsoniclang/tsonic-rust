@@ -95,6 +95,7 @@ export interface RustTargetProgram {
   readonly runtimeReferences: RustRuntimeReferencePlan;
   readonly dispatchContexts: import("../runtime/dispatch-contexts.js").RustDispatchContextCatalog;
   readonly dispatchContextDemand: import("../runtime/dispatch-demand.js").RustDispatchContextDemandPlan;
+  readonly binaryDispatchDemand: import("../runtime/binary-dispatch-demand.js").RustBinaryDispatchDemandPlan;
   readonly foundation: RustFoundationPlan;
   readonly binaryHooks: readonly RustBinaryHookPlan[];
   readonly providerErrorCarriers: readonly import("../../target-model/types/model.js").TargetTypeRef[];

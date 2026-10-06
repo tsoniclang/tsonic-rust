@@ -304,7 +304,9 @@ class InternalModel {
   assert.match(source, /#\[doc\(hidden\)\][\s\S]*pub trait ModelDispatch/u);
   assert.match(source, /#\[doc\(hidden\)\][\s\S]*pub struct ModelState \{\s+pub value: i32,/u);
   assert.match(source, /pub struct Model \{\s+#\[doc\(hidden\)\]\s+pub identity: rt::ObjectIdentity,\s+#\[doc\(hidden\)\]\s+pub dispatch:/u);
-  assert.match(source, /#\[doc\(hidden\)\]\s+pub fn initialize_state/u);
+  assert.equal(/impl ModelState \{\s+#\[doc\(hidden\)\]\s+#\[inline\(always\)\]\s+pub fn new\(value: i32\) -> ModelState/u.test(source), true,
+    "external Model state has one public native field-value constructor");
+  assert.equal(source.includes("initialize_state"), false, "superseded constructor ABI is removed");
   assert.match(source, /#\[doc\(hidden\)\][\s\S]*pub struct InternalModelState \{\s+pub value: i32,/u);
   assert.match(source, /pub struct InternalModel \{\s+#\[doc\(hidden\)\]\s+pub state: rt::ObjectRef<InternalModelState>,/u);
   validateGeneratedProject("public-class-storage-lib", result.artifacts);
@@ -353,7 +355,9 @@ export class Derived extends Base implements Readable {
   assert.match(source, /pub struct Readable \{\s+#\[doc\(hidden\)\]\s+pub identity: rt::ObjectIdentity,\s+#\[doc\(hidden\)\]\s+pub dispatch:/u);
   assert.match(source, /#\[doc\(hidden\)\][\s\S]*pub struct BaseState \{\s+pub value: i32,/u);
   assert.match(source, /pub struct Base \{\s+#\[doc\(hidden\)\]\s+pub identity: rt::ObjectIdentity,\s+#\[doc\(hidden\)\]\s+pub dispatch:/u);
-  assert.match(source, /#\[doc\(hidden\)\]\s+pub fn initialize_state/u);
+  assert.equal(/impl BaseState \{\s+#\[doc\(hidden\)\]\s+#\[inline\(always\)\]\s+pub fn new\(value: i32\) -> BaseState/u.test(source), true,
+    "public Base state has one native field-value constructor");
+  assert.equal(source.includes("initialize_state"), false, "superseded constructor ABI is removed");
   validateGeneratedProject("public-dispatch-storage-lib", result.artifacts);
 });
 
@@ -439,12 +443,15 @@ export class Consumer extends EngineBase {
   const engineHelper = artifactText(engine, "src/internal/helper.rs");
   const consumerSource = artifactText(consumer, "src/index.rs");
   assert.match(engineLibrary, /#\[doc\(hidden\)\]\s+pub mod internal;/u);
-  assert.match(engineBase, /#\[doc\(hidden\)\]\s+pub fn initialize_state/u);
+  assert.equal(/impl EngineBaseState \{[\s\S]*pub fn new\(/u.test(engineBase), true,
+    "cross-crate EngineBase publishes its native state constructor");
+  assert.equal(engineBase.includes("initialize_state"), false, "superseded constructor ABI is removed");
   assert.match(engineBase, /crate::internal::helper::normalize/u);
   assert.match(engineBase, /\n\s+secret: i32,/u);
   assert.doesNotMatch(engineBase, /\n\s+pub secret: i32,/u);
   assert.match(engineHelper, /pub fn normalize\(value: i32\) -> i32/u);
-  assert.match(consumerSource, /acme_engine::EngineBase::initialize_state/u);
+  assert.equal(/acme_engine::base::EngineBaseState::new/u.test(consumerSource), true,
+    "cross-crate construction consumes the same native state constructor");
 
   const combined = writeGeneratedProject("source-package-user-cargo-abi", [
     ...engine.artifacts.map((artifact) => ({

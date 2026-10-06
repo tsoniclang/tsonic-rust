@@ -8,7 +8,7 @@ export function dispatchContextDefinition(overrides = {}) {
     rootCarrier: { kind: "target-named", id: "acme.Dispatch", genericArguments: [
       { kind: "type", type: { kind: "target-named", id: "rust.program.TsonicError" } },
     ] },
-    construct: { form: "call", path: "runtime::Dispatch::new" },
+    construct: { form: "call", path: "runtime::Dispatch::new", const: false },
     handleCarrier: { kind: "target-named", id: "acme.DispatchHandle", genericArguments: [
       { kind: "type", type: { kind: "target-named", id: "rust.program.TsonicError" } },
     ] },
@@ -70,7 +70,7 @@ export function dispatchProviderPackage({ composed = false } = {}) {
     input.dispatchContexts.push(dispatchContextDefinition({
       id: "acme.parent", rootCarrier: { ...input.dispatchContexts[0].rootCarrier, id: "acme.Parent" },
       handleCarrier: { ...input.dispatchContexts[0].handleCarrier, id: "acme.ParentHandle" },
-      construct: { form: "call", path: "runtime::Parent::new" },
+      construct: { form: "call", path: "runtime::Parent::new", const: false },
       composedContexts: [{ contextId: "acme.dispatch", project: { form: "receiver-method", name: "child" } }],
     }));
     input.carrierPaths["acme.Parent"] = "acme_dispatch::Parent";

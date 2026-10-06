@@ -152,6 +152,14 @@ export function materializeProviderBinaryHookRow(
     phase: epilogue.phase,
     path: expandProviderPath(epilogue.path, aliases),
     requiredCrate: epilogue.requiredCrate,
+    ...(epilogue.dispatchGroups === undefined ? {} : {
+      dispatchGroups: epilogue.dispatchGroups.map(group => ({
+        ...group,
+        empty: { ...group.empty,
+          owner: materializeProviderCarrier(group.empty.owner, carrierPaths, carrierTraits) },
+        prepend: { ...group.prepend, path: expandProviderPath(group.prepend.path, aliases) },
+      })),
+    }),
     ...owner,
   };
   if (epilogue.isFallible !== true) {

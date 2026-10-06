@@ -26,6 +26,7 @@ export type { RustTargetTypeRef } from "../target-model/types/model.js";
 export type {
   RustDispatchContextDefinition,
   RustDispatchContextInput,
+  RustDispatchContextGroupInput,
 } from "../target-model/operations/dispatch-contexts.js";
 export type {
   RustProviderConstantArgument,
@@ -66,6 +67,7 @@ export {
   rustRetainedErrorTargetType,
   rustWritableRetainedErrorTargetType,
   rustOptionTargetType,
+  rustProgramErrorTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
   rustUnitTargetType,
