@@ -1,7 +1,8 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/nodes.js";
-import { rustTsValueAdmission } from "../../../target-model/types/carriers/traits.js";
-import { planRustProjectClosedValue } from "../objects/project-closed-values.js";
+import { selectRustSourceValueConversion } from "../../../policy/conversions/selection.js";
+import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
+import { lowerRustValueConversion } from "./value-conversions.js";
 import { rustProgramErrorConversionMatches, rustProgramErrorRuntimeRouteMatches, type RustProgramErrorConversion } from "../../../target-model/conversions/program-error.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { diagnosticInput, registerAliasFromPath, rustCurrentErrorBoundary, type RustPlanContext } from "../program/plan-context.js";
@@ -36,12 +37,13 @@ export function planRustProgramErrorConstruction(
         "rust.backend.closed-throw-domain", "Closed thrown values require their own sealed source-package payload transport."));
       return undefined;
     }
-    const admission = conversion.route.kind === "closed-admission"
-      ? rustTsValueAdmission(conversion.source, context.input.program.typeDefinitions) : undefined;
-    const admitted = conversion.route.kind === "closed" ? value : admission?.kind === "call"
-      ? { kind: "call" as const, path: admission.path, args: [value] }
-      : admission?.kind === "project-object"
-        ? planRustProjectClosedValue(value, "rt::TsValue", conversion.source, node, context) : undefined;
+    const selected = conversion.route.kind === "closed-admission"
+      ? selectRustSourceValueConversion(conversion.source, context.input.program.typeDefinitions.closedValueCarrier,
+        context.input.program.typeDefinitions) : undefined;
+    const contract = selected === undefined ? undefined
+      : rustValueConversionContract(selected, context.input.program.typeDefinitions);
+    const admitted = conversion.route.kind === "closed" ? value
+      : contract === undefined || contract.fallible ? undefined : lowerRustValueConversion(contract, value, context, node);
     return admitted === undefined ? undefined : { kind: "call", path: `${targetPath}::from`, args: [admitted] };
   }
   if (conversion.route.kind === "union") {

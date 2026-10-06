@@ -78,6 +78,7 @@ export function selectRustProgramErrorConversion(
     }
     const leaves = rustUnionLeaves(carrier, definitions);
     if (leaves === undefined) return isRustProgramErrorCarrier(target) && !isErrorDestination(carrier) &&
+      isRustClosedValueCarrier(definitions.closedValueCarrier) &&
       rustTsValueAdmission(carrier, definitions) !== undefined
       ? Object.freeze({ kind: "closed-admission" }) : undefined;
     const arms: Extract<RustProgramErrorRoute, { kind: "union" }>["arms"][number][] = [];
@@ -145,6 +146,7 @@ function rustProgramErrorRouteMatches(
   if (typeof route !== "object" || route === null) return false;
   if (route.kind === "closed") return hasExactObjectKeys(route, ["kind"]) && isRustClosedValueCarrier(source);
   if (route.kind === "closed-admission") return hasExactObjectKeys(route, ["kind"]) &&
+    isRustClosedValueCarrier(definitions.closedValueCarrier) &&
     !isErrorDestination(source) && rustTsValueAdmission(source, definitions) !== undefined;
   if (route.kind === "source-created") return hasExactObjectKeys(route, ["kind"]) && isRustMutableJsErrorCarrier(source);
   if (route.kind === "retained") return hasExactObjectKeys(route, ["kind"]) && isRustRetainedErrorCarrier(source);

@@ -19,6 +19,24 @@ assert.equal(registry.registerProgramErrorOrigin(unrelated, { kind: "project", v
 const definitions = registry.seal();
 const closedCarriers = [rustJsValueTargetType(), rustTsValueTargetType()];
 
+test("closed type definitions preserve one immutable profile selection and reject foreign storage", () => {
+  for (const carrier of closedCarriers) {
+    const selected = { ...carrier };
+    const registry = createRustTypeDefinitionRegistry(selected);
+    selected.id = "foreign.closed";
+    const definitions = registry.seal();
+    assert.equal(isRustClosedValueCarrier(definitions.closedValueCarrier), true);
+    assert.equal(Object.isFrozen(definitions.closedValueCarrier), true);
+    const source = rustSourcePrimitiveTargetType("uint64");
+    const conversion = selectRustProgramErrorConversion(source, undefined, definitions);
+    assert.equal(conversion.route.kind, "closed-admission");
+    assert.equal(rustProgramErrorConversionMatches(conversion, source, conversion.target, definitions), true);
+  }
+  for (const carrier of [null, { kind: "target-named", id: "foreign.closed" }, rustJsErrorTargetType()]) {
+    assert.throws(() => createRustTypeDefinitionRegistry(carrier), /exact closed value carrier/u);
+  }
+});
+
 test("finite native closed admission preserves direct routes and rejects malformed or escaping carriers", () => {
   for (const source of [rustEmptyObjectTargetType(), rustSourcePrimitiveTargetType("uint64")]) {
     const conversion = selectRustProgramErrorConversion(source);

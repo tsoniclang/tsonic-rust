@@ -17,6 +17,15 @@ test("native admission seals the existing native closed payload family", () => {
     { thrownCarriers: [rustTsValueTargetType()], retained: true });
 });
 
+test("typed admission seals the selected profile's exact closed payload carrier", () => {
+  for (const carrier of [rustTsValueTargetType(), rustJsValueTargetType()]) {
+    const definitions = { ...emptyRustTypeDefinitions, closedValueCarrier: carrier };
+    const { file, ast, facts } = scenario(rustSourcePrimitiveTargetType("uint64"));
+    assert.deepEqual(rustClosedErrorTransportDemand(file, ast, facts, definitions, projectTypes),
+      { thrownCarriers: [carrier], retained: true });
+  }
+});
+
 function scenario(source, mutate = operation => operation) {
   const expression = { kind: "KindIdentifier", children: [] };
   const statement = { kind: "KindThrowStatement", expression, children: [expression] };

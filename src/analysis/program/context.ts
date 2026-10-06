@@ -11,6 +11,7 @@ import type {
   TargetSelection,
 } from "@tsonic/target-api";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
+import { rustJsValueTargetType, rustTsValueTargetType } from "../../target-model/types/index.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustSourcePolicyContext } from "../../policy/model/context.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
@@ -141,7 +142,7 @@ export function createRustAnalysisContext(
     navigation: input.source.navigation,
     safetyApplications,
   });
-  const typeDefinitions = createRustTypeDefinitionRegistry();
+  const typeDefinitions = createRustTypeDefinitionRegistry(jsEnabled ? rustJsValueTargetType() : rustTsValueTargetType());
   const facts = createRustPlanBuilder(input.source.sourceFacts, typeDefinitions);
   const names = createRustNamePlan({
     ast,

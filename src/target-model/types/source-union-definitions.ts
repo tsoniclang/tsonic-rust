@@ -1,4 +1,5 @@
 import type { TargetTypeRef } from "./model.js";
+import { rustTsValueTargetType } from "./carriers/native.js";
 import { rustSourceUnionCarrierValue, rustSourceUnionTargetType, type RustSourceUnionVariantCarrierValue } from "./carriers/source-types.js";
 import { inferRustTargetGenericBindings } from "./carriers/generic-inference.js";
 import { rustTargetGenericReferences } from "./carriers/generic-references.js";
@@ -11,6 +12,7 @@ export interface RustSourceUnionDefinition {
 }
 
 export interface RustTypeDefinitions {
+  readonly closedValueCarrier: TargetTypeRef;
   sourceUnionVariants(carrier: TargetTypeRef): readonly RustSourceUnionVariantCarrierValue[] | undefined;
   programErrorOrigin(carrier: TargetTypeRef): RustProgramErrorOrigin | undefined;
 }
@@ -20,6 +22,7 @@ export type RustProgramErrorOrigin =
   | { readonly kind: "project"; readonly variant: string; readonly sourceError: boolean };
 
 export const emptyRustTypeDefinitions: RustTypeDefinitions = Object.freeze({
+  closedValueCarrier: Object.freeze(rustTsValueTargetType()),
   sourceUnionVariants: () => undefined,
   programErrorOrigin: () => undefined,
 });

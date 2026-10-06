@@ -5,64 +5,10 @@ import { join } from "node:path";
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
-
-const cases = [
-  ["async-object-unit", `
-async function fail(): Promise<void> { throw new Error("selected rejection"); }
-const api = { async dispatch(): Promise<void> { await fail(); } };
-export async function main(): Promise<void> {
-  let caught = false;
-  try { await api.dispatch(); } catch { caught = true; }
-  if (!caught) throw new Error("async object method lost its rejection");
-}
-`],
-  ["caught-record-contribution", `
-interface Envelope { value: unknown; }
-const failure = new Error("selected rejection");
-function fail(): never { throw failure; }
-function capture(): Envelope {
-  try { fail(); } catch (error) { return { value: error }; }
-}
-export function main(): void {
-  const result = capture();
-  if (!(result.value instanceof Error) || result.value !== failure) {
-    throw new Error("record contribution lost its error");
-  }
-}
-`],
-  ["caught-project-error", `
-class Failure extends Error {}
-interface Envelope { value: unknown; }
-const failure = new Failure("selected rejection");
-function fail(): never { throw failure; }
-function capture(): Envelope {
-  try { fail(); } catch (error) { return { value: error }; }
-}
-export function main(): void {
-  const result = capture();
-  if (!(result.value instanceof Error) || result.value !== failure) {
-    throw new Error("project record contribution lost its error");
-  }
-}
-`],
-  ["caught-closed-payload", `
-interface Envelope { value: unknown; }
-const payload: unknown = "selected value";
-function fail(): never { throw payload; }
-function capture(): Envelope {
-  try { fail(); } catch (error) { return { value: error }; }
-}
-export function main(): void {
-  const result = capture();
-  if (result.value instanceof Error || result.value !== payload) {
-    throw new Error("non-Error record contribution changed its payload");
-  }
-}
-`],
-];
+import { nativeErrorTransportCases } from "../../../../tsonic/test/fixtures/native-error-transport.mjs";
 
 for (const surfaces of [[], ["js"]]) {
-  for (const [name, source] of cases) {
+  for (const [name, source] of nativeErrorTransportCases) {
     test(`object-method Error owner ${name} (${surfaces[0] ?? "native"})`,
       { timeout: 300_000 }, () => {
         const { result } = compileRust({
@@ -93,6 +39,7 @@ export function admit(): unknown {
 #[cfg(test)]
 mod program_error_cost {
     use super::*;
+    use tsonic_rust_runtime::ErrorObject;
     ${nativeOwnershipCostSupport}
 
     #[test]
@@ -112,8 +59,18 @@ mod program_error_cost {
                 drop(value);
             });
             assert_eq!(actual, expected);
-            assert_eq!(actual.allocations, 0);
+            assert_eq!(actual.allocations, actual.deallocations);
+            assert_eq!(actual.allocated_bytes, actual.deallocated_bytes);
             assert_eq!(actual.reallocations, 0);
+
+            let error = tsonic_rust_runtime::TsonicError::from(
+                tsonic_rust_runtime::JsError::error("selected rejection"),
+            );
+            let identity = error.source_error().identity_key();
+            let (value, admission) = measure(|| ${ownerPath}::from_error(error));
+            assert_eq!(admission, Cost::default());
+            assert_eq!(value.as_error().unwrap().error_identity_key(), identity);
+            drop(value);
         }
     }
 }
