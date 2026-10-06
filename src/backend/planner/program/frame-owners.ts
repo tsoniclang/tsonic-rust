@@ -1,10 +1,12 @@
 import type { RustExpr } from "../../target-ast/nodes.js";
+import type { Node } from "@tsonic/tsts";
 
 export interface RustLiveFrameOwner {
   readonly kind: "live";
   readonly expression: RustExpr;
   readonly borrowed: boolean;
   readonly data: { readonly kind: "direct" } | { readonly kind: "object"; readonly name: string };
+  readonly receiver?: Node;
 }
 
 export type RustFrameOwner = RustLiveFrameOwner | {

@@ -206,8 +206,40 @@ test("frame signatures retain captured body-only types and reject missing owners
   assert.equal(selectRustCallableOwnershipCarrier({ ...input, environmentFor: () => Array(1) }).kind, "unresolved");
   assert.equal(selectRustCallableOwnershipCarrier({ ...input, logicalCarrier: number, environmentFor: () => [] }).kind, "unresolved");
   const value = rustFrameCallableValue(selection.carrier);
-  const forged = { ...selection.carrier, value: { ...value, owner: { ...value.owner, declarationIdentity: "different:owner" } } };
+  const forged = { ...selection.carrier, value: { ...value, owner: { ...value.owner,
+    origin: { ...value.owner.origin, declarationIdentity: "different:owner" } } } };
   assert.equal(selectRustCallableOwnershipCarrier({ ...input, logicalCarrier: forged, environmentFor: () => [] }).kind, "unresolved");
+});
+
+test("instance receiver identity is sealed, exact and distinct from a same-class parameter", () => {
+  const current = fixture(`
+class Value {
+  recurse = (count: number): number => count === 0 ? 1 : this.recurse(count - 1);
+  rebind(other: Value): void {
+    this.recurse = (count: number): number => count === 0 ? 2 : this.recurse(count - 1);
+    other.recurse(0);
+  }
+  outside(): number { return function(this: Value): number { return this.recurse(0); }.call(this); }
+}
+`);
+  const queries = current.analyze();
+  assert.equal(queries.failureReason() === undefined, true, "receiver identity indexing stays bounded");
+  const owner = current.named("Value", "KindClassDeclaration")[0];
+  assert.equal(owner !== undefined, true);
+  let accepted = 0;
+  let rejected = 0;
+  for (const node of current.nodes) {
+    if (current.source.ast.kindName(node) !== "KindThisKeyword") continue;
+    let parent = current.source.ast.parent(node);
+    while (parent !== undefined && !current.source.ast.is.IsFunctionExpression(parent) && parent !== owner)
+      parent = current.source.ast.parent(parent);
+    const expected = parent === owner;
+    assert.equal(queries.instanceReceiverOwner(node) === owner, expected, "lexical instance receiver proof");
+    if (expected) accepted++; else rejected++;
+  }
+  const parameter = current.named("other", "KindParameter")[0];
+  assert.equal(queries.instanceReceiverOwner(parameter) === undefined, true, "a class type is not an instance relation");
+  assert.equal(accepted > 0 && rejected > 0, true);
 });
 
 test("independent dispatch components in one activation share its exact physical frame", () => {

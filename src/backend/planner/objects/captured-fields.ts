@@ -9,6 +9,7 @@ import { rustInlineBindingStorageType, rustBindingStorageOperations } from "../e
 import type { RustValueFieldLocation } from "./value-fields.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { diagnosticInput } from "../program/plan-context.js";
+import { initializeOrWriteRustDeferredStorage, initializeRustDeferredStorage } from "../bindings/deferred-storage.js";
 
 export function rustCapturedFieldStorage(declaration: Node, context: RustPlanContext): RustCapturedFieldStorage | undefined {
   const fact = context.input.program.facts.getFact(declaration, rustCapturedFieldStorageFactKey);
@@ -46,22 +47,15 @@ export function createRustDeferredFieldOwner(): RustExpr {
 export function initializeRustCapturedField(storage: RustCapturedFieldStorage | undefined, owner: RustExpr, value: RustExpr): RustExpr {
   if (storage?.initialization !== "deferred") return { kind: "assignment", operator: "=", target: owner,
     value: createRustCapturedField(storage, value) };
-  return { kind: "macro-invocation", path: "assert", delimiter: "parentheses", args: [{
-    kind: "method-call", receiver: { kind: "method-call", receiver: owner, method: "set",
-      args: [createRustCapturedFieldPayload(storage, value)] }, method: "is_ok", args: [],
-  }, { kind: "str-literal", value: "captured field initialized twice" }] };
+  return initializeRustDeferredStorage(owner, createRustCapturedFieldPayload(storage, value), "captured field initialized twice");
 }
 
-export function initializeOrWriteRustCapturedField(storage: RustCapturedFieldStorage, owner: RustExpr, value: RustExpr): RustExpr | undefined {
+export function initializeOrWriteRustCapturedField(storage: RustCapturedFieldStorage, owner: RustExpr, value: RustExpr,
+  context: RustPlanContext): RustExpr | undefined {
   if (storage.initialization !== "deferred" || storage.kind === "shared" || storage.kind === "copy") return undefined;
-  const updated = rustBindingStorageOperations(storage.kind).write({ kind: "path", path: "initialized" }, { kind: "path", path: "value" });
-  return { kind: "block", body: { statements: [
-    { kind: "let", name: "value", mutable: false, init: value },
-    { kind: "expr", expr: { kind: "match", expression: { kind: "method-call", receiver: owner, method: "get", args: [] }, arms: [
-      { pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: "initialized" }] }, expression: updated },
-      { pattern: { kind: "path", path: "None" }, expression: initializeRustCapturedField(storage, owner, { kind: "path", path: "value" }) },
-    ] } },
-  ] } };
+  return initializeOrWriteRustDeferredStorage(owner, value, context,
+    selected => createRustCapturedFieldPayload(storage, selected), rustBindingStorageOperations(storage.kind).write,
+    "captured field initialized twice");
 }
 
 function createRustCapturedFieldPayload(storage: RustCapturedFieldStorage, value: RustExpr): RustExpr {

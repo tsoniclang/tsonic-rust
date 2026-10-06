@@ -53,6 +53,7 @@ export interface RustFrameCallableDefinition {
   readonly ownerFileName: string;
   readonly targetName: string;
   readonly counterName: string;
+  readonly storage: { readonly kind: "standalone"; readonly instanceFieldName?: string } | { readonly kind: "object" };
   readonly entries: readonly RustFrameCallableEntryDefinition[];
   readonly bindings: readonly RustFrameCallableBinding[];
   readonly environmentParameters: readonly Extract<TargetTypeRef, { readonly kind: "type-parameter" }>[];
@@ -62,10 +63,11 @@ export interface RustFrameCallablePlan {
   readonly definitions: readonly RustFrameCallableDefinition[];
   readonly issues: readonly RustSourceCallableSpecializationIssue[];
   definitionFor(carrier: TargetTypeRef): RustFrameCallableDefinition | undefined;
+  definitionForOwner(declaration: Node): RustFrameCallableDefinition | undefined;
   entryFor(carrier: TargetTypeRef): RustFrameCallableEntryDefinition | undefined;
   implementationFor(declaration: Node): RustFrameCallableImplementation | undefined;
   bindingFor(declaration: Node): RustFrameCallableBinding | undefined;
-  isSameActivationInput(expression: Node, definition: RustFrameCallableDefinition): boolean;
+  isSameActivationInput(expression: Node, definition: RustFrameCallableDefinition, receiver?: Node): boolean;
 }
 
 export function createRustFrameCallablePlan(input: {
@@ -80,6 +82,7 @@ export function createRustFrameCallablePlan(input: {
   const definitions: RustFrameCallableDefinition[] = [];
   const issues: RustSourceCallableSpecializationIssue[] = [];
   const byOwner = new Map<string, RustFrameCallableDefinition>();
+  const byDeclaration = new Map<Node, RustFrameCallableDefinition>();
   const implementations = new Map<Node, RustFrameCallableImplementation>();
   const bindings = new Map<Node, RustFrameCallableBinding>();
   const usedNames = new Set(input.usedNames);
@@ -104,7 +107,19 @@ export function createRustFrameCallablePlan(input: {
       issue(activation.ownerDeclaration, "A class activation requires its exact native project owner and field layout.");
       continue;
     }
-    for (const field of classLayout?.fields ?? []) frameDeclarations.add(field.declaration);
+    const representation = classDefinition === undefined ? undefined : input.objectRepresentations.representationFor(classDefinition);
+    if (classDefinition !== undefined && representation === undefined) {
+      issue(activation.ownerDeclaration, "A class activation requires its sealed native object representation.");
+      continue;
+    }
+    const standalone = classDefinition === undefined || representation?.kind === "value";
+    if (!standalone) for (const field of classLayout?.fields ?? []) frameDeclarations.add(field.declaration);
+    else if (classDefinition !== undefined) {
+      for (const component of activation.components) {
+        for (const capture of component.captures) if (capture.kind === "field") frameDeclarations.add(capture.declaration);
+        for (const relation of component.receiverRelations) frameDeclarations.add(relation.storageDeclaration);
+      }
+    }
     if (activation.kind === "lexical") for (const capture of activation.externalCaptures) {
       if (capture.kind === "lexical" && sourceBindingScope(capture.declaration, input.ast) === activation.activationScope)
         frameDeclarations.add(capture.declaration);
@@ -190,11 +205,15 @@ export function createRustFrameCallablePlan(input: {
       }
     }
     const definition = Object.freeze({ activation, owner, ownerFileName: owner.fileName,
+      storage: standalone ? Object.freeze({ kind: "standalone" as const,
+        ...(classDefinition === undefined ? {} : { instanceFieldName: allocateRustGeneratedName(usedNames, `tsonic_frame_${prefix}`) }) })
+        : Object.freeze({ kind: "object" as const }),
       counterName: classDefinition === undefined ? "counter" : allocateRustGeneratedName(usedNames, `tsonic_frame_counter_${prefix}`),
       targetName: allocateRustGeneratedName(usedNames, `TsonicCallableFrame_${prefix}`),
       entries, bindings: Object.freeze(frameBindings), environmentParameters });
     definitions.push(definition);
     byOwner.set(ownerKey(owner), definition);
+    byDeclaration.set(activation.ownerDeclaration, definition);
   }
   const definitionFor = (carrier: TargetTypeRef): RustFrameCallableDefinition | undefined => {
     const value = rustFrameCallableValue(carrier);
@@ -203,8 +222,10 @@ export function createRustFrameCallablePlan(input: {
     return value.owner.kind === "class" && input.projectTypes.definitionForCarrier(value.owner.instance)?.declaration !== definition.activation.ownerDeclaration
       ? undefined : definition;
   };
-  const isSameActivationInput = (expression: Node, definition: RustFrameCallableDefinition): boolean => {
+  const isSameActivationInput = (expression: Node, definition: RustFrameCallableDefinition, receiver?: Node): boolean => {
     if (!definitions.includes(definition)) return false;
+    if (definition.activation.kind === "class" && receiver !== undefined &&
+      input.ownership.instanceReceiverOwner(receiver) !== definition.activation.ownerDeclaration) return false;
     const visited = new Set<Node>();
     let current: Node | undefined = expression;
     while (current !== undefined && !visited.has(current)) {
@@ -234,6 +255,7 @@ export function createRustFrameCallablePlan(input: {
   };
   return Object.freeze({ definitions: Object.freeze(definitions), issues: Object.freeze(issues),
     definitionFor,
+    definitionForOwner: (declaration: Node) => byDeclaration.get(declaration),
     entryFor(carrier: TargetTypeRef) {
       const key = signatureKey(carrier);
       return key === undefined ? undefined : definitionFor(carrier)?.entries.find(entry => entry.key === key);

@@ -58,6 +58,7 @@ export interface RustCallableOwnershipComponentQueries {
   componentForSlot(declaration: Node): RustCallableOwnershipComponent | undefined;
   isCyclicCallable(declaration: Node): boolean;
   isCyclicSlot(declaration: Node): boolean;
+  instanceReceiverOwner(receiver: Node): Node | undefined;
 }
 
 type Vertex = { readonly kind: "callable" | "slot"; readonly declaration: Node };
@@ -83,6 +84,7 @@ export function createRustCallableOwnershipComponentQueries(input: {
   const neighbours = new Map<Vertex, Set<Vertex>>();
   const captures = new Map<Node, RustCallableOwnershipCapture[]>();
   const relations = new Map<Node, RustCallableOwnershipReceiverRelation[]>();
+  const receiverOwners = new Map<Node, Node>();
   const supplied = new Map<Node, Set<Node>>();
   const canonicalSlots = new Map<Node, Node>();
   const writes = new Map<Node, Node[]>();
@@ -204,6 +206,9 @@ export function createRustCallableOwnershipComponentQueries(input: {
   const pending: Vertex[] = [];
   for (const node of sourceNodes) {
     if (!account()) return result();
+    const receiver = unwrap(node);
+    const owner = receiver === undefined ? undefined : receiverOwner(receiver);
+    if (owner !== undefined) receiverOwners.set(node, owner);
     if (isCallable(node) && ast.body(node) !== undefined && receiverCaptures.fixedSelfFor(node) === undefined) {
       const selected = vertex("callable", node);
       if (selected !== undefined) pending.push(selected);
@@ -481,6 +486,7 @@ export function createRustCallableOwnershipComponentQueries(input: {
       componentForSlot: (declaration: Node) => failure === undefined
         ? slotComponents.get(canonicalSlots.get(declaration) ?? declaration) : undefined,
       isCyclicCallable: (declaration: Node) => failure === undefined && cyclicCallables.has(declaration),
-      isCyclicSlot: (declaration: Node) => failure === undefined && cyclicSlots.has(canonicalSlots.get(declaration) ?? declaration) });
+      isCyclicSlot: (declaration: Node) => failure === undefined && cyclicSlots.has(canonicalSlots.get(declaration) ?? declaration),
+      instanceReceiverOwner: (receiver: Node) => failure === undefined ? receiverOwners.get(receiver) : undefined });
   }
 }

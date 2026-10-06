@@ -60,6 +60,8 @@ import { rustProjectWrapperTraits } from "../../objects/project-wrapper-traits.j
 import { rustClassEnvironmentContext, rustClassEnvironmentParameter } from "../../objects/class-environments.js";
 import { rustClassEnvironmentHandleType } from "../../objects/class-environment-types.js";
 import { rustCapturedFieldStorage, rustCapturedFieldType } from "../../objects/captured-fields.js";
+import { rustFrameBindingType } from "../../bindings/frame-storage.js";
+import { rustClassFrameLayout } from "../../objects/frame-storage.js";
 
 export interface PlannedProjectObjectField {
   readonly declaration: Node;
@@ -219,7 +221,9 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
         storageIndex: layoutField.storageIndex,
         carrier: fieldCarrier,
         type: fieldType,
-        storageType: rustCapturedFieldType(rustCapturedFieldStorage(member, context), fieldType),
+        storageType: context.input.program.callableValues.frames.bindingFor(member) === undefined
+          ? rustCapturedFieldType(rustCapturedFieldStorage(member, context), fieldType)
+          : rustFrameBindingType(context.input.program.callableValues.frames.bindingFor(member)!, context)!,
         visibility: rustProjectMemberStorageVisibility(ast, member, publiclyReachable),
         ...(initializer === undefined ? {} : { initializer }),
       });
@@ -294,9 +298,11 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   const implementationFields = fields.map(field => {
     const type = rustTypeFromCarrierInContext(field.carrier, implementationContext);
     return { ...field, type, storageType: type === undefined ? undefined
-      : rustCapturedFieldType(rustCapturedFieldStorage(field.declaration, implementationContext), type) };
+      : context.input.program.callableValues.frames.bindingFor(field.declaration) === undefined
+        ? rustCapturedFieldType(rustCapturedFieldStorage(field.declaration, implementationContext), type)
+        : rustFrameBindingType(context.input.program.callableValues.frames.bindingFor(field.declaration)!, implementationContext) };
   });
-  if (implementationType === undefined || implementationFields.some(field => field.type === undefined)) return undefined;
+  if (implementationType === undefined || implementationFields.some(field => field.type === undefined || field.storageType === undefined)) return undefined;
   const constructorFn = planConstructor(
     node,
     constructorMember,
@@ -355,11 +361,15 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   const stateCarrier = stateType === undefined
     ? undefined
     : rustProjectObjectType(stateType, representation, environmentType);
+  const frame = context.input.program.callableValues.frames.definitionForOwner(node);
+  const frameLayout = frame === undefined ? undefined : rustClassFrameLayout(frame, context, storageVisibility);
+  if (frame !== undefined && frameLayout === undefined) return undefined;
   const valueFields: readonly RustStructField[] = [
+    ...(frameLayout?.fields ?? []),
     ...(representation.kind !== "value" || environment === undefined || environmentType === undefined ? [] : [{
       name: environment.instanceFieldName, type: environmentType, visibility: "private" as const,
     }]),
-    ...fields.map((field): RustStructField => {
+    ...fields.filter(field => frameLayout?.ownsField(field.declaration) !== true).map((field): RustStructField => {
       const deadCode = rustAuthoredFieldDeadCodeDisposition(
         context,
         node,
@@ -541,17 +551,25 @@ function planConstructor(
       "rust.backend.constructor-plan", "Class has no sealed native constructor readiness plan."));
     return undefined;
   }
+  const frame = context.input.program.callableValues.frames.definitionForOwner(classDeclaration);
+  const frameLayout = frame === undefined ? undefined : rustClassFrameLayout(frame, constructorContext,
+    rustProjectImplementationVisibility(publiclyReachable));
+  if (frame !== undefined && frameLayout === undefined) return undefined;
   const construction = planRustConstructionBody(constructionPlan, fields,
     context.input.program.projectTypes.openCarrier(definition), classType,
-    (values, identity) => createRustProjectObject(className, stateName,
-      fields.map(field => ({ name: field.targetName, value: values.get(field.declaration)! })).concat(
+    (values, identity, frameCounter) => {
+      return createRustProjectObject(className, stateName,
+      fields.filter(field => frameLayout?.ownsField(field.declaration) !== true)
+        .map(field => ({ name: field.targetName, value: values.get(field.declaration)! })).concat(
+        frameCounter === undefined ? [] : frameLayout?.materialize(values, frameCounter) ?? [],
         methodProperties.map(property => ({ name: property.targetName, value: { kind: "none" as const } })),
         stateMarker === undefined ? [] : [{ name: stateMarker.name, value: stateMarker.value }],
         representation.kind !== "value" || !environment?.instancesUseEnvironment ? [] : [{
           name: environment.instanceFieldName, value: { kind: "path" as const, path: environment.parameterName },
         }]),
       representation, !environment?.instancesUseEnvironment || representation.kind === "value"
-        ? undefined : { kind: "path", path: environment.parameterName }, identity),
+        ? undefined : { kind: "path", path: environment.parameterName }, identity);
+    },
     constructorContext);
   if (construction === undefined) return undefined;
   const returnLabel = !constructionPlan.layerHasEarlyReturn(definition) ? undefined
@@ -565,7 +583,8 @@ function planConstructor(
     if (field.initializer !== undefined) {
       const prepared = construction.prepare(field.initializer, layerContext);
       if (prepared === undefined) return undefined;
-      const value = planExpression(field.initializer, prepared.context);
+      const value = construction.input(field.declaration, field.initializer, prepared.context,
+        () => planExpression(field.initializer!, prepared.context));
       if (value === undefined) return undefined;
       const initialization = construction.initialize(field.declaration, value);
       if (initialization === undefined) return undefined;

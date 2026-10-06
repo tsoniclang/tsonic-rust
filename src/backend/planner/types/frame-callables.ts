@@ -38,7 +38,7 @@ export function rustFrameCallableTypes(
   const prefix = `${external !== undefined && external !== context.crateName ? external : "crate"}::${module}`;
   const genericArguments = (types as RustType[]).map(type => ({ kind: "type" as const, type }));
   let frameType: RustType | undefined;
-  if (definition.activation.kind === "lexical") frameType = { kind: "named", path: `${prefix}::${definition.targetName}`, genericArguments };
+  if (definition.storage.kind === "standalone") frameType = { kind: "named", path: `${prefix}::${definition.targetName}`, genericArguments };
   else {
     if (value.owner.kind !== "class") return undefined;
     const selected = value.owner.instance;

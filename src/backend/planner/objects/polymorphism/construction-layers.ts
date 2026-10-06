@@ -95,7 +95,8 @@ export function planRustConstructionLayers(
       if (field.initializer !== undefined) {
         const prepared = construction.prepare(field.initializer, layerContext);
         if (prepared === undefined) return undefined;
-        const value = planExpression(field.initializer, prepared.context);
+        const value = construction.input(field.declaration, field.initializer, prepared.context,
+          () => planExpression(field.initializer!, prepared.context));
         if (value === undefined) return undefined;
         const initialization = construction.initialize(field.declaration, value);
         if (initialization === undefined) return undefined;

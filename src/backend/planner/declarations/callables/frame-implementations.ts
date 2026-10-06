@@ -129,7 +129,7 @@ function planFrameEntry(
     const frameName = allocateRustSyntheticName(names, "frame_owner");
     const stateName = allocateRustSyntheticName(names, "frame_state");
     const owner: RustLiveFrameOwner = { kind: "live", expression: { kind: "path", path: frameName }, borrowed: true,
-      data: definition.activation.kind === "lexical" ? { kind: "direct" }
+      data: definition.storage.kind === "standalone" ? { kind: "direct" }
         : { kind: "object", name: allocateRustSyntheticName(names, "frame_data") } };
     const helperContext = rustFrameBindingContext(definition, owner, { ...context,
       capturedBindings: implementation.captures.map((capture, index) => ({
@@ -186,7 +186,7 @@ export function planRustFrameCallableItems(context: RustPlanContext): readonly R
   const result: RustItem[] = [];
   const fileName = context.input.program.source.ast.getFileName(context.sourceFile);
   for (const definition of context.input.program.callableValues.frames.definitions) {
-    if (definition.ownerFileName !== fileName || definition.activation.kind !== "lexical") continue;
+    if (definition.ownerFileName !== fileName) continue;
     const local = definitionContext(definition, context);
     const fields = definition.bindings.map(binding => {
       const type = rustFrameBindingType(binding, local);
@@ -201,12 +201,13 @@ export function planRustFrameCallableItems(context: RustPlanContext): readonly R
     context.usedAliases?.add("rt");
     const generics = definitionGenerics(definition, local);
     const marker = definitionMarker(generics);
-    result.push({ kind: "struct", name: definition.targetName, visibility: "public",
+    if (definition.storage.kind === "standalone") result.push({ kind: "struct", name: definition.targetName, visibility: "public",
       generics, fields: [
         { name: definition.counterName, type: { kind: "named", path: "rt::FrameEntryCounter" }, visibility: "public" },
         ...fields as { readonly name: string; readonly type: RustType; readonly visibility: "public" }[],
         ...(marker === undefined ? [] : [{ name: "marker", type: marker, visibility: "public" as const }]),
-      ] }, ...(entries as readonly (readonly RustItem[])[]).flat());
+      ] });
+    result.push(...(entries as readonly (readonly RustItem[])[]).flat());
   }
   return result;
 }

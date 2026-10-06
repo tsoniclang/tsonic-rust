@@ -21,6 +21,8 @@ import { readRustStoredObjectField, writeRustStoredObjectField, rustProjectObjec
 import { rustCapturedFieldStorage, rustCapturedFieldLocation } from "./captured-fields.js";
 import { readRustProjectObjectFieldOwner, readRustProjectDispatchedField, writeRustProjectDispatchedField, withRustProjectStoredField } from "./project-objects.js";
 import { planRustProjectFieldDispatchRole } from "./project-field-dispatch.js";
+import { rustFrameBindingLocation } from "../bindings/frame-storage.js";
+import { rustClassFrameOwner } from "./frame-storage.js";
 
 export interface RustValueFieldLocation {
   readonly bindings: readonly { readonly name: string; readonly value: RustExpr; readonly mutable?: boolean }[];
@@ -53,7 +55,8 @@ export function rustSourceFieldHasValueReceiver(node: Node, context: RustPlanCon
   if (rustPreparedValueLocation(node, context) !== undefined) return true;
   const operation = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
   if (operation?.kind === "source-field" && operation.declaration !== undefined &&
-    rustCapturedFieldStorage(operation.declaration, context) !== undefined) return true;
+    (context.input.program.callableValues.frames.bindingFor(operation.declaration) !== undefined ||
+      rustCapturedFieldStorage(operation.declaration, context) !== undefined)) return true;
   return operation?.kind === "source-indexed-field" || operation?.kind === "source-field" &&
     (operation.storage === "structural-object"
       ? rustStructuralObjectCarrierValue(operation.receiverCarrier)?.representation === "value"
@@ -69,6 +72,20 @@ export function planRustValueFieldLocation(
   if (prepared !== undefined) return prepared;
   const selectedField = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
   if (selectedField?.kind === "source-field" && selectedField.declaration !== undefined) {
+    const binding = context.input.program.callableValues.frames.bindingFor(selectedField.declaration);
+    if (binding !== undefined) {
+      const definition = context.input.program.projectTypes.definitionForCarrier(selectedField.receiverCarrier);
+      const frame = definition === undefined ? undefined : context.input.program.callableValues.frames.definitionForOwner(definition.declaration);
+      const receiverNode = Node_Expression(context.input.program.source.ast, node);
+      const planned = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
+      if (frame === undefined || receiverNode === undefined || planned === undefined || context.syntheticNames === undefined ||
+        !frame.bindings.includes(binding) || !sourceFieldSelectedOperationMatches(node, selectedField, context)) return undefined;
+      const name = allocateRustSyntheticName(context.syntheticNames, "frame_receiver");
+      const owner = rustClassFrameOwner(frame, { kind: "path", path: name }, context, receiverNode);
+      if (owner === undefined) return undefined;
+      return { ...rustFrameBindingLocation(binding, owner, context),
+        bindings: [{ name, value: planRustSharedReceiver(receiverNode, planned, context) }] };
+    }
     const storage = rustCapturedFieldStorage(selectedField.declaration, context);
     if (storage !== undefined) {
       if (!sourceFieldSelectedOperationMatches(node, selectedField, context) || context.syntheticNames === undefined) return undefined;
