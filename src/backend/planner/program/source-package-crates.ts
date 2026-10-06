@@ -13,6 +13,7 @@ import { closeRustModuleTypeVisibility } from "../../target-ast/normalization/mo
 import type { RustPlanningContext } from "../context.js";
 import { planRustStructuralShapeModule } from "../objects/structural-shapes.js";
 import { planRustProgramErrorModule } from "./errors.js";
+import { planRustDispatchContextRoots } from "./dispatch-contexts.js";
 import type { PlannedRustSourceFile } from "./source-file.js";
 import type { RustSourcePackageComponentPlan } from "./source-package-components.js";
 import type {
@@ -28,7 +29,7 @@ export interface RustSourcePackageCrateContentPlan {
   readonly initializerFacadeModuleName: string;
   readonly sources: readonly PlannedRustSourceFile[];
   readonly libraryItems: readonly RustItem[];
-  readonly programErrorModel?: RustSourceFileModel;
+  readonly programModel?: RustSourceFileModel;
   readonly structuralShapeModel?: RustSourceFileModel;
   readonly initializerFacadeModel?: RustSourceFileModel;
   readonly structuralShapeNames: ReadonlySet<string>;
@@ -104,6 +105,14 @@ export function planRustSourcePackageCrateContent(
     errorDomain,
     diagnostics,
   );
+  const dispatchRoots = planRustDispatchContextRoots({
+    input, moduleName: component.programModuleName, moduleNameByFileName,
+    externalCrateNameByFileName, externalItemPathByIdentity, externalStructuralShapeModuleByFileName,
+    structuralShapesModuleName: component.structuralShapesModuleName,
+  }, errorDomain, component.programModuleName, diagnostics);
+  if (dispatchRoots === undefined) return undefined;
+  const programModel = programErrorModel === undefined && dispatchRoots.length === 0
+    ? undefined : createRustSourceFile([...(programErrorModel?.items ?? []), ...dispatchRoots], programErrorModel?.innerAttrs ?? []);
   const initializerFacadeModel = planRustInitializerFacadeModule(
     facades.sources,
     packageInitializers,
@@ -137,7 +146,7 @@ export function planRustSourcePackageCrateContent(
   const publicTopLevelModuleNames = new Set([...publicModuleNames]
     .filter((name) => !name.includes("::")));
   const libraryItems: RustItem[] = [
-    ...(programErrorModel === undefined
+    ...(programModel === undefined
       ? []
       : [{
           kind: "mod-decl" as const,
@@ -183,7 +192,7 @@ export function planRustSourcePackageCrateContent(
     ...facades.sources.map(source => [source.moduleName, source.model] as const),
     ...facades.syntheticModules,
     ...(structuralShapeModel === undefined ? [] : [[component.structuralShapesModuleName, structuralShapeModel] as const]),
-    ...(programErrorModel === undefined ? [] : [[component.programModuleName, programErrorModel] as const]),
+    ...(programModel === undefined ? [] : [[component.programModuleName, programModel] as const]),
     ...(initializerFacadeModel === undefined ? [] : [[initializerFacadeModuleName, initializerFacadeModel] as const]),
   ]));
   return Object.freeze({
@@ -191,7 +200,7 @@ export function planRustSourcePackageCrateContent(
     initializerFacadeModuleName,
     sources: facades.sources.map(source => ({ ...source, model: visibleModels.get(source.moduleName)! })),
     libraryItems: Object.freeze(libraryItems),
-    ...(programErrorModel === undefined ? {} : { programErrorModel: visibleModels.get(component.programModuleName)! }),
+    ...(programModel === undefined ? {} : { programModel: visibleModels.get(component.programModuleName)! }),
     ...(structuralShapeModel === undefined ? {} : { structuralShapeModel: visibleModels.get(component.structuralShapesModuleName)! }),
     ...(initializerFacadeModel === undefined ? {} : { initializerFacadeModel: visibleModels.get(initializerFacadeModuleName)! }),
     structuralShapeNames: Object.freeze(structuralShapeNames),
@@ -225,10 +234,10 @@ export function materializeRustSourcePackageCrateArtifacts(
       ...(options.additionalLibraryItems ?? []),
     ]),
   ));
-  if (plan.programErrorModel !== undefined) {
+  if (plan.programModel !== undefined) {
     artifacts.push(rustSourceArtifact(
       prefixedPath(options.prefix, `src/${plan.component.programModuleName}.rs`),
-      plan.programErrorModel,
+      plan.programModel,
     ));
   }
   if (plan.structuralShapeModel !== undefined) {

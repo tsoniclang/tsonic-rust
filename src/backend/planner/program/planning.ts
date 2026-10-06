@@ -332,10 +332,9 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     return rejectedTargetStage(diagnostics);
   }
   const rootErrorTypeIdentity = rootErrorDomain.errorTypeIdentity;
-  const programErrorModel = rootCrateContent.programErrorModel;
   const rootCrateErrorType: import("../../target-ast/nodes.js").RustType = {
     kind: "named",
-    path: programErrorModel === undefined
+    path: rootErrorDomain.errorDomain === "runtime"
       ? "tsonic_rust_runtime::TsonicError"
       : `crate::${programModuleName}::TsonicError`,
     identity: rootErrorTypeIdentity,
@@ -431,7 +430,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     const crateName = input.program.configuration.crateName;
     const mainErrorType: import("../../target-ast/nodes.js").RustType = {
       kind: "named",
-      path: programErrorModel === undefined
+      path: rootErrorDomain.errorDomain === "runtime"
         ? "tsonic_rust_runtime::TsonicError"
         : `${crateName}::${programModuleName}::TsonicError`,
       identity: rootErrorTypeIdentity,

@@ -4,6 +4,7 @@ import type { RustProviderPackageDefinition } from "../model.js";
 import type { Fail } from "./model.js";
 import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
 import type { RustDispatchContextProjection } from "../../../target-model/operations/dispatch-contexts.js";
+import { rustTargetGenericReferences } from "../../../target-model/types/carriers/generic-references.js";
 
 export function validateDispatchContexts(definition: RustProviderPackageDefinition, fail: Fail): void {
   if (definition.dispatchContexts !== undefined && !isDenseDataArray(definition.dispatchContexts)) {
@@ -26,6 +27,11 @@ export function validateDispatchContexts(definition: RustProviderPackageDefiniti
         fail(`dispatch context '${context.id}' ${label} requires an exact owned native named carrier`);
       }
       validateCarrier(carrier, definition, `dispatch context '${context.id}' ${label}`, fail);
+      const references = rustTargetGenericReferences(carrier);
+      if (references.typeIdentities.length > 0 || references.lifetimeIdentities.length > 0 ||
+        references.constIdentities.length > 0 || references.hasUnnameableLifetime) {
+        fail(`dispatch context '${context.id}' ${label} requires a closed component-owned native carrier`);
+      }
     }
     requireExactKeys(context.construct,
       ["form", "path"], `dispatch context '${context.id}' construction`, fail);

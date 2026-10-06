@@ -5,7 +5,7 @@ import { rustValueConversionContract } from "../../../target-model/conversions/c
 import { selectRustSourceValueConversion } from "../../../policy/conversions/selection.js";
 import { isFinalizedConversion } from "./conversion-shape.js";
 import type { RustArgumentMode, RustProviderOperationForm, RustValueConversion } from "../keys.js";
-import type { RustFinalizedArrayInput, RustFinalizedConstantInput, RustFinalizedSliceInput, RustFinalizedSourceInput, RustFinalizedTaggedArrayInput, RustFinalizedTargetInput, RustFinalizedValueConversion } from "./model.js";
+import type { RustFinalizedArrayInput, RustFinalizedConstantInput, RustFinalizedDispatchContextInput, RustFinalizedSliceInput, RustFinalizedSourceInput, RustFinalizedTaggedArrayInput, RustFinalizedTargetInput, RustFinalizedValueConversion } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function isRustFinalizedSourceInput(input: RustFinalizedTargetInput): input is RustFinalizedSourceInput {
@@ -26,6 +26,10 @@ export function isRustFinalizedTaggedArrayInput(input: RustFinalizedTargetInput)
 
 export function isRustFinalizedConstantInput(input: RustFinalizedTargetInput): input is RustFinalizedConstantInput {
   return input.source.kind === "constant";
+}
+
+export function isRustFinalizedDispatchContextInput(input: RustFinalizedTargetInput): input is RustFinalizedDispatchContextInput {
+  return input.source.kind === "dispatch-context";
 }
 
 export function rustFinalizedTargetInputMayMutateSource(

@@ -7,6 +7,7 @@ import type {
 } from "../facts/finalized-operation-abi.js";
 import {
   isRustFinalizedArrayInput,
+  isRustFinalizedDispatchContextInput,
   isRustFinalizedSliceInput,
   isRustFinalizedSourceInput,
   isRustFinalizedTaggedArrayInput,
@@ -199,7 +200,10 @@ function rustFoundationForFinalizedTargetInput(
   const require = (candidate: RustFoundation): void => {
     foundation = maximumRustFoundation(foundation, candidate);
   };
-  if (isRustFinalizedSourceInput(input)) {
+  if (isRustFinalizedDispatchContextInput(input)) {
+    require("std");
+    require(rustFoundationForCarrier(input.carrier));
+  } else if (isRustFinalizedSourceInput(input)) {
     require(rustFoundationForCarrier(input.sourceCarrier));
     require(rustFoundationForFinalizedConversion(input.conversion, definitions));
     require(rustFoundationForCarrier(input.parameterCarrier));

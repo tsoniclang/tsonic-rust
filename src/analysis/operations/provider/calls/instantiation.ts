@@ -387,7 +387,7 @@ export function acceptSelectedCall(
   const spreadIndexes = request.source.sourceArguments.flatMap((argument, index) =>
     context.ast.is.IsSpreadElement(argument.expression) ? [index] : []);
   const fact = finalizeProviderOperationFact(instantiatedTemplate, sourceArguments.carriers, selectedReceiverCarrier,
-    context.typeDefinitions, spreadIndexes.length === 0 ? undefined : spreadIndexes);
+    context.typeDefinitions, spreadIndexes.length === 0 ? undefined : spreadIndexes, resolutionOptions.dispatchContextInputFor);
   if (fact === undefined) {
     return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_OPERATION_ABI_INCOMPLETE", `Selected call '${callIdentity.sourceName}' cannot finalize one total Rust operation ABI.`);
   }

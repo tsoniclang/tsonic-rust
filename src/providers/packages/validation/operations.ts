@@ -1,5 +1,6 @@
 import { asRecord, requireExactKeys, requireRustIdentifier, validateCarrier, validateValueConversion } from "./carriers.js";
-import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
+import { closedMetadataKey, isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
+import { isRustDispatchContextInput } from "../../../policy/operations/dispatch-contexts.js";
 import { isRustFallibleErrorBoundary } from "../../../target-model/operations/error-boundary.js";
 import {
   rustProviderOperationFormAcceptsTargetGenericArguments,
@@ -33,9 +34,14 @@ export function validateOperationRows(
   for (const row of definition.operations) {
     requireExactKeys(asRecord(row), [
       "exportId", "memberId", "signatureId", "operationKind", "target", "resultCarrier",
-      "parameterCarriers", "receiverCarrier", "genericParameters", "typeRequirements", "targetGenericArguments", "resultConversion", "evaluation", "isAsync", "isFallible", "errorBoundary", "errorCarrier", "isUnsafe", "immediateCallback",
+      "parameterCarriers", "receiverCarrier", "genericParameters", "typeRequirements", "targetGenericArguments", "resultConversion", "evaluation", "isAsync", "isFallible", "errorBoundary", "errorCarrier", "isUnsafe", "immediateCallback", "dispatchInputs",
     ], `operation row '${String((row as { readonly memberId?: unknown; readonly exportId?: unknown }).memberId ?? row.exportId)}'`, fail);
     const label = row.memberId ?? row.exportId;
+    if (row.dispatchInputs !== undefined && (
+      !isDenseDataArray(row.dispatchInputs) || !row.dispatchInputs.every(isRustDispatchContextInput) ||
+      row.dispatchInputs.length > 0 && (row.target.form !== "call" || row.evaluation === "pure") ||
+      new Set(row.dispatchInputs.map(input => input.targetArgumentIndex)).size !== row.dispatchInputs.length
+    )) fail(`row '${label}' requires exact distinct dispatch inputs on an observable native call`);
     if (!rustLengthEmptinessContractIsValid({ ...row,
       sourceArgumentCount: row.parameterCarriers?.length ?? 0,
       isFallible: row.isFallible === true, isAsync: row.isAsync === true,

@@ -16,7 +16,7 @@ import type {
   TargetTypeRef,
 } from "../../target-model/types/model.js";
 import type { RustFoundation } from "../../target-model/foundation/model.js";
-import type { RustDispatchContextDefinition } from "../../target-model/operations/dispatch-contexts.js";
+import type { RustDispatchContextDefinition, RustDispatchContextInput } from "../../target-model/operations/dispatch-contexts.js";
 
 export interface RustProviderModuleDefinition {
   readonly moduleSpecifier: string;
@@ -61,6 +61,7 @@ interface RustProviderOperationDefinitionBase<
   // context; source code must still select an explicit unsafecontext region.
   readonly isUnsafe?: boolean;
   readonly immediateCallback?: RustProviderImmediateCallbackDefinition;
+  readonly dispatchInputs?: readonly RustDispatchContextInput[];
 }
 
 export type RustProviderOperationDefinition<

@@ -409,6 +409,7 @@ export function providerOperationTemplate<
     operationId: providerOperationId(row),
     operationKind,
     target: row.target,
+    ...(row.dispatchInputs === undefined ? {} : { dispatchInputs: row.dispatchInputs }),
     resultCarrier: row.resultCarrier,
     ...(row.parameterCarriers === undefined ? {} : { parameterCarriers: row.parameterCarriers }),
     ...(row.receiverCarrier === undefined ? {} : { receiverCarrier: row.receiverCarrier }),

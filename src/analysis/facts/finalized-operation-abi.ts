@@ -1,6 +1,7 @@
 export {
   isRustFinalizedArrayInput,
   isRustFinalizedConstantInput,
+  isRustFinalizedDispatchContextInput,
   isRustFinalizedSliceInput,
   isRustFinalizedSourceInput,
   isRustFinalizedTaggedArrayInput,
@@ -10,6 +11,7 @@ export type {
   FinalizeRustProviderOperationAbiOptions,
   RustFinalizedArrayInput,
   RustFinalizedConstantInput,
+  RustFinalizedDispatchContextInput,
   RustFinalizedOperationAbi,
   RustFinalizedOperationAbiFor,
   RustFinalizedOperationResult,

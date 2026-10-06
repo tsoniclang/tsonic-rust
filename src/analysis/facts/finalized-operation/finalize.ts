@@ -20,6 +20,9 @@ import { rustFutureOutputCarrier, rustFutureTargetType } from "../../../target-m
 import { rustProviderOperationFormAcceptsTargetGenericArguments, rustProviderOperationFormContractViolation } from "../../../policy/operations/forms.js";
 import type { FinalizeRustProviderOperationAbiOptions, RustFinalizedOperationAbiFor, RustFinalizedOperationResult, RustFinalizedTargetInput } from "./model.js";
 import type { RustFinalizedOperationKind } from "../../../target-model/operations/model.js";
+import { insertRustDispatchContextInputs } from "./dispatch-inputs.js";
+
+const emptyDispatchInputs = Object.freeze([]);
 
 export function finalizeRustProviderOperationAbi<OperationKind extends RustFinalizedOperationKind>(
   options: FinalizeRustProviderOperationAbiOptions<OperationKind>,
@@ -98,16 +101,20 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
   }
   const input = createInputFactory(options.sourceReceiverCarrier, options.sourceArgumentCarriers, spreadIndexes,
     definitions, options.declaredSourceReceiverCarrier);
-  const mapping = finalizeTargetInputs(
+  const sourceMapping = finalizeTargetInputs(
     options.operationKind,
     options.form,
     input,
     options.sourceArgumentCarriers.length, definitions,
   );
+  const dispatchInputs = options.dispatchInputs === undefined ? emptyDispatchInputs : options.dispatchInputs;
+  const mapping = sourceMapping === undefined ? undefined
+    : insertRustDispatchContextInputs(sourceMapping, dispatchInputs, options.form);
   if (mapping === undefined) {
     return undefined;
   }
   if (options.evaluation === "pure" && (
+    dispatchInputs.length > 0 ||
     options.operationKind === "constructor" ||
     options.operationKind === "property-set" ||
     options.operationKind === "index-set" ||
@@ -161,6 +168,7 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
     sourceArguments,
     targetReceiver: mapping.targetReceiver,
     targetArguments: mapping.targetArguments,
+    dispatchInputs: dispatchInputs.length === 0 ? emptyDispatchInputs : Object.freeze([...dispatchInputs]),
     targetGenericArguments: options.targetGenericArguments ?? [],
     result,
     effects: {

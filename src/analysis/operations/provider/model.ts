@@ -23,6 +23,8 @@ export const sourceCallMarkerByIdentity = new Map(
 );
 
 export interface RustOperationsProviderOptions extends RustTargetTypeResolutionOptions {
+  readonly dispatchContextInputFor: (input: unknown) =>
+    import("../../../target-model/operations/dispatch-contexts.js").RustResolvedDispatchContextInput | undefined;
   readonly receiverFieldAliases: RustReceiverFieldAliasQueries;
   readonly providerExports: readonly import("../../../providers/packages/model.js").RustProviderExportRow[];
   readonly sourceCallableAbi: RustSourceCallableAbiResolver;

@@ -345,6 +345,11 @@ function providerInputStabilizationKeys(
         : context.input.program.sourceNavigation.expressionEffects(slot.node),
     ] as const;
   }));
+  if (fact.abi.dispatchInputs.length > 0) {
+    for (const slot of sourceSlots) {
+      if (!preplannedKeys.has(slot.key) && expressionHasEffects(effects.get(slot.key))) keys.add(slot.key);
+    }
+  }
   const sourceEffectOrder = sourceSlots
     .filter((slot) => !preplannedKeys.has(slot.key) &&
       expressionHasEffects(effects.get(slot.key)))

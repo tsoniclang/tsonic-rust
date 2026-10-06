@@ -11,6 +11,7 @@ import type {
   RustTargetGenericArgument,
   TargetTypeRef,
 } from "../../../target-model/types/model.js";
+import type { RustResolvedDispatchContextInput } from "../../../target-model/operations/dispatch-contexts.js";
 
 export type RustFinalizedSourceArgumentRole = "parameter" | "index" | "evaluation-only";
 
@@ -83,7 +84,14 @@ export interface RustFinalizedConstantInput {
   readonly source: { readonly kind: "constant"; readonly value: RustProviderConstantArgument };
 }
 
-export type RustFinalizedTargetInput = RustFinalizedSourceInput | RustFinalizedSliceInput | RustFinalizedArrayInput | RustFinalizedTaggedArrayInput | RustFinalizedConstantInput;
+export interface RustFinalizedDispatchContextInput {
+  readonly source: { readonly kind: "dispatch-context"; readonly contextId: string; readonly view: "root" | "handle" };
+  readonly carrier: TargetTypeRef;
+  readonly mode: "value" | "ref";
+  readonly parameterCarrier: TargetTypeRef;
+}
+
+export type RustFinalizedTargetInput = RustFinalizedSourceInput | RustFinalizedSliceInput | RustFinalizedArrayInput | RustFinalizedTaggedArrayInput | RustFinalizedConstantInput | RustFinalizedDispatchContextInput;
 
 export type RustFinalizedOperationResult =
   | {
@@ -112,6 +120,7 @@ export interface RustFinalizedOperationAbi {
   readonly sourceArguments: readonly RustFinalizedSourceArgument[];
   readonly targetReceiver: { readonly kind: "none" } | { readonly kind: "input"; readonly input: RustFinalizedSourceInput };
   readonly targetArguments: readonly RustFinalizedTargetInput[];
+  readonly dispatchInputs: readonly RustResolvedDispatchContextInput[];
   readonly targetGenericArguments: readonly RustTargetGenericArgument[];
   readonly result: RustFinalizedOperationResult;
   readonly effects: {
@@ -142,6 +151,7 @@ export interface FinalizeRustProviderOperationAbiOptions<
   readonly declaredSourceArgumentCarriers?: readonly (TargetTypeRef | undefined)[];
   readonly evaluationOnlySourceArgumentIndexes?: readonly number[];
   readonly resultCarrier: TargetTypeRef;
+  readonly dispatchInputs?: readonly RustResolvedDispatchContextInput[];
   readonly targetGenericArguments?: readonly RustTargetGenericArgument[];
   readonly resultConversion?: RustValueConversion;
   readonly isAsync: boolean;

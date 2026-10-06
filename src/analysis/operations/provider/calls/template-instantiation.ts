@@ -611,7 +611,11 @@ export function finalizeProviderOperationFact(
   sourceReceiverCarrier: TargetTypeRef | undefined,
   definitions: RustTypeDefinitions,
   spreadSourceArgumentIndexes?: readonly number[],
+  dispatchContextInputFor?: (input: unknown) =>
+    import("../../../../target-model/operations/dispatch-contexts.js").RustResolvedDispatchContextInput | undefined,
 ): Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }> | undefined {
+  const dispatchInputs = (template.dispatchInputs ?? []).map(input => dispatchContextInputFor?.(input));
+  if (dispatchInputs.some(input => input === undefined)) return undefined;
   const abi = finalizeRustProviderOperationAbi({
     operationKind: template.operationKind,
     form: template.target,
@@ -624,6 +628,7 @@ export function finalizeProviderOperationFact(
       ? {}
       : { evaluationOnlySourceArgumentIndexes: template.evaluationOnlySourceArgumentIndexes }),
     resultCarrier: template.resultCarrier,
+    dispatchInputs: dispatchInputs.filter(input => input !== undefined),
     ...(template.targetGenericArguments === undefined
       ? {}
       : { targetGenericArguments: template.targetGenericArguments }),

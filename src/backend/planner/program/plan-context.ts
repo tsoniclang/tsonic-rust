@@ -13,7 +13,7 @@ import {
   type RustSourcePackageErrorPlan,
 } from "./source-package-errors.js";
 import { rustSourceItemIdentity } from "./source-package-facades.js";
-import type { RustBlock, RustErrorDomain, RustExpr, RustStmt, RustType } from "../../target-ast/nodes.js";
+import type { RustBlock, RustErrorDomain, RustExpr, RustItem, RustStmt, RustType } from "../../target-ast/nodes.js";
 import {
   isValidRustIdentifier,
   rustTargetIdentifier,
@@ -248,6 +248,17 @@ export const rustRuntimeAliasImports: ReadonlyMap<string, { readonly path: strin
   ["js_string", { path: "tsonic_rust_js::string", alias: "js_string" }],
   ["rt", { path: "tsonic_rust_runtime", alias: "rt" }],
 ]);
+
+export function rustRuntimeAliasUseItems(
+  aliases: ReadonlySet<string>,
+  programModuleName?: string,
+): readonly Extract<RustItem, { readonly kind: "use" }>[] {
+  return [...aliases].map(alias => alias === "rt" && programModuleName !== undefined
+    ? { path: `crate::${programModuleName}`, alias: "rt" } : rustRuntimeAliasImports.get(alias))
+    .filter((entry): entry is { path: string; alias: string } => entry !== undefined)
+    .sort((left, right) => left.path.localeCompare(right.path, "en") || left.alias.localeCompare(right.alias, "en"))
+    .map(entry => ({ kind: "use", path: entry.path, alias: entry.alias }));
+}
 
 export function registerAliasFromPath(
   context: { readonly usedAliases?: Set<string>; readonly input?: object },

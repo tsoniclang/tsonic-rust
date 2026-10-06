@@ -326,5 +326,6 @@ export function finalizeProviderOperationFromSubjects(
   if (providerFormRequiresSourceReceiver(instantiatedTemplate.target) && sourceReceiverCarrier === undefined) {
     return undefined;
   }
-  return finalizeProviderOperationFact(instantiatedTemplate, sourceArgumentCarriers as TargetTypeRef[], sourceReceiverCarrier, context.typeDefinitions);
+  return finalizeProviderOperationFact(instantiatedTemplate, sourceArgumentCarriers as TargetTypeRef[], sourceReceiverCarrier,
+    context.typeDefinitions, undefined, options.dispatchContextInputFor);
 }

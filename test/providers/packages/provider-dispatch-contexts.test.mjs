@@ -42,6 +42,30 @@ test("dispatch context publication snapshots every mutable provider input", () =
   }
 });
 
+test("component-owned contexts accept closed native generics and reject unbound parameters", () => {
+  const closed = [
+    { kind: "type", type: { kind: "source-primitive", name: "int32" } },
+    { kind: "lifetime", lifetime: { kind: "static" } },
+    { kind: "const", value: { kind: "integer", value: "4" } },
+  ];
+  for (const label of ["rootCarrier", "handleCarrier"]) {
+    const carrier = context()[label];
+    assert.doesNotThrow(() => createRustProviderPackage(definition({ dispatchContexts: [context({
+      [label]: { ...carrier, genericArguments: closed },
+    })] })));
+    for (const argument of [
+      { kind: "type", type: { kind: "type-parameter", identity: "free-type", name: "T" } },
+      { kind: "lifetime", lifetime: { kind: "parameter", identity: "free-lifetime", name: "a" } },
+      { kind: "lifetime", lifetime: { kind: "placeholder" } },
+      { kind: "const", value: { kind: "parameter", identity: "free-const", name: "N" } },
+    ]) {
+      assert.throws(() => createRustProviderPackage(definition({ dispatchContexts: [context({
+        [label]: { ...carrier, genericArguments: [argument] },
+      })] })), /closed component-owned native carrier/u, `${label}: ${argument.kind}`);
+    }
+  }
+});
+
 test("dispatch context identity has one exact owner and idempotent publication", () => {
   const original = collectRustProviderSemanticsFromDefinitions([definition()]);
   assert.equal(mergeRustProviderSemantics(original, original).dispatchContexts.length, 1);

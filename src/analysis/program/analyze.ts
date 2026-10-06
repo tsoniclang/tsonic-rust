@@ -94,6 +94,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
   });
   let finalizedProjectTypes: RustProjectTypePolicy | undefined;
   const operationOptions: RustOperationsProviderOptions = {
+    dispatchContextInputFor: context.dispatchContexts.resolveInput,
     providerExports: providerSemantics.exports,
     providerRows,
     providerTypes: providerSemantics.types,

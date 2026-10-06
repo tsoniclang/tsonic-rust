@@ -4,6 +4,7 @@ import {
   finalizedConversionIsValid,
   isRustFinalizedArrayInput,
   isRustFinalizedConstantInput,
+  isRustFinalizedDispatchContextInput,
   isRustFinalizedSliceInput,
   isRustFinalizedTaggedArrayInput,
   rustFinalizedTargetInputMayMutateSource,
@@ -24,6 +25,8 @@ import type { RustProviderConstantArgument } from "../keys.js";
 import { rustLengthEmptinessContractIsValid } from "../../../target-model/operations/length-emptiness.js";
 import { isFinalizedConversion } from "./conversion-shape.js";
 import { hasExactKeys, isRecord } from "./validation-records.js";
+import { insertRustDispatchContextInputs } from "./dispatch-inputs.js";
+import { isRustResolvedDispatchContextInput } from "../../../policy/operations/dispatch-contexts.js";
 
 export function validateRustFinalizedOperationAbi(candidate: unknown, definitions: RustTypeDefinitions = emptyRustTypeDefinitions): candidate is RustFinalizedOperationAbi {
   if (!isClosedMetadata(candidate) || !isRustFinalizedOperationAbiShape(candidate)) {
@@ -62,6 +65,7 @@ export function validateRustFinalizedOperationAbi(candidate: unknown, definition
       : abi.effects.errorCarrier !== undefined) ||
     (abi.effects.safety !== "safe" && abi.effects.safety !== "requires-unsafe") ||
     (abi.effects.evaluation === "pure" && (
+      abi.dispatchInputs.length > 0 ||
       abi.operationKind === "constructor" || abi.operationKind === "property-set" ||
       abi.operationKind === "index-set" ||
       (abi.targetReceiver.kind === "input" &&
@@ -117,6 +121,10 @@ export function validateRustFinalizedOperationAbi(candidate: unknown, definition
     return false;
   }
   for (const input of abi.targetArguments) {
+    if (isRustFinalizedDispatchContextInput(input)) {
+      if (!rustTargetTypeRefEquals(input.parameterCarrier, carrierAfterMode(input.carrier, input.mode))) return false;
+      continue;
+    }
     if (isRustFinalizedConstantInput(input)) {
       continue;
     }
@@ -163,7 +171,7 @@ export function validateRustFinalizedOperationAbi(candidate: unknown, definition
   const sourceReceiverCarrier = abi.sourceReceiver.kind === "receiver"
     ? abi.sourceReceiver.carrier
     : undefined;
-  const expectedMapping = finalizeTargetInputs(
+  const expectedSourceMapping = finalizeTargetInputs(
     abi.operationKind,
     abi.target,
     createInputFactory(sourceReceiverCarrier, abi.sourceArguments.map((argument) => argument.carrier),
@@ -171,6 +179,8 @@ export function validateRustFinalizedOperationAbi(candidate: unknown, definition
       definitions, abi.sourceReceiver.kind === "receiver" ? abi.sourceReceiver.declaredCarrier : undefined),
     abi.sourceArguments.length, definitions,
   );
+  const expectedMapping = expectedSourceMapping === undefined ? undefined
+    : insertRustDispatchContextInputs(expectedSourceMapping, abi.dispatchInputs, abi.target);
   if (expectedMapping === undefined ||
     !closedMetadataEquals(expectedMapping.targetReceiver, abi.targetReceiver) ||
     !closedMetadataEquals(expectedMapping.targetArguments, abi.targetArguments)) {
@@ -207,11 +217,13 @@ function isRustFinalizedOperationAbiShape(value: unknown): value is RustFinalize
     "sourceArguments",
     "targetReceiver",
     "targetArguments",
+    "dispatchInputs",
     "targetGenericArguments",
     "result",
     "effects",
   ]) || !operationKinds.has(value.operationKind) || !isRecord(value.target) ||
     !Array.isArray(value.sourceArguments) || !Array.isArray(value.targetArguments) ||
+    !Array.isArray(value.dispatchInputs) || !value.dispatchInputs.every(isRustResolvedDispatchContextInput) ||
     !Array.isArray(value.targetGenericArguments)) {
     return false;
   }
@@ -260,6 +272,14 @@ function isTargetInput(value: unknown): value is RustFinalizedTargetInput {
   }
   if (value.source.kind === "receiver" || value.source.kind === "argument") {
     return isSourceInput(value);
+  }
+  if (value.source.kind === "dispatch-context") {
+    return hasExactKeys(value, ["source", "carrier", "mode", "parameterCarrier"]) &&
+      hasExactKeys(value.source, ["kind", "contextId", "view"]) &&
+      isRustResolvedDispatchContextInput({
+        contextId: value.source.contextId, view: value.source.view, targetArgumentIndex: 0,
+        mode: value.mode, carrier: value.carrier,
+      }) && isRustTargetTypeRef(value.parameterCarrier);
   }
   if (value.source.kind === "argument-slice") {
     return hasExactKeys(value, ["source", "elements", "elementCarrier", "mode", "parameterCarrier"]) &&

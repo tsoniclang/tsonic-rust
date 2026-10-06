@@ -50,7 +50,7 @@ import {
   rustCurrentErrorBoundary,
   rustErrorType,
   rustSourceItemIsPubliclyReachable,
-  rustRuntimeAliasImports,
+  rustRuntimeAliasUseItems,
 } from "./plan-context.js";
 import { rustAuthoredDeadCodeDisposition } from "../liveness/directives.js";
 import type { RustPlanContext } from "./plan-context.js";
@@ -181,16 +181,7 @@ export function planRustSourceFile(
     [...usedAliases].filter((alias) =>
       rustItemsReferenceModuleAlias(plannedModule.items, alias)),
   ));
-  const useItems: RustItem[] = [...aliases]
-    .map((alias) => alias === "rt" && errorDomain === "project"
-      ? { path: `crate::${programModuleName}`, alias: "rt" }
-      : rustRuntimeAliasImports.get(alias))
-    .filter((entry): entry is { path: string; alias: string } =>
-      entry !== undefined)
-    .sort((left, right) =>
-      left.path.localeCompare(right.path, "en") ||
-      left.alias.localeCompare(right.alias, "en"))
-    .map((entry) => ({ kind: "use", path: entry.path, alias: entry.alias }));
+  const useItems = rustRuntimeAliasUseItems(aliases, errorDomain === "project" ? programModuleName : undefined);
   const scopes = new Set(input.program.projectTypes.definitions
     .filter(definition => definition.sourceFile === sourceFile)
     .flatMap(definition => {

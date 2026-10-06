@@ -7,6 +7,7 @@ import {
 import {
   isRustFinalizedArrayInput,
   isRustFinalizedConstantInput,
+  isRustFinalizedDispatchContextInput,
   isRustFinalizedSliceInput,
   isRustFinalizedSourceInput,
   isRustFinalizedTaggedArrayInput,
@@ -51,6 +52,8 @@ import { invokeRustStructuralObjectMethod } from "../objects/project-storage.js"
 import { applyFinalizedValueConversion } from "./value-conversions.js";
 import { planRustRestAssembly } from "./calls/rest-assembly.js";
 import { rustCarrierHasCloneContract } from "../types/generic-requirements.js";
+import { planRustDispatchContextInputScope } from "../project/dispatch-contexts.js";
+import type { RustDispatchContextInputScope } from "../project/dispatch-contexts.js";
 
 function providerConstantExpression(argument: RustProviderConstantArgument, context: RustPlanContext): RustExpr | undefined {
   switch (argument.kind) {
@@ -146,6 +149,10 @@ export function planProviderOperationExpression(
   if (fact.abi.targetReceiver.kind === "input" && receiver === undefined) {
     return undefined;
   }
+  const dispatchScope = planRustDispatchContextInputScope(
+    fact.abi.targetArguments.filter(isRustFinalizedDispatchContextInput), operationNode, context,
+  );
+  if (dispatchScope === undefined) return undefined;
   const args: RustExpr[] = [];
   for (const input of fact.abi.targetArguments) {
     const planned = planFinalizedTargetInput(
@@ -155,6 +162,7 @@ export function planProviderOperationExpression(
       argumentNodes,
       operationNode,
       overrides,
+      dispatchScope,
     );
     if (planned === undefined) {
       return undefined;
@@ -181,10 +189,12 @@ export function planProviderOperationExpression(
   const concreteTargetGenericArguments = targetGenericArguments.length === 0
     ? undefined
     : targetGenericArguments as readonly RustCallGenericArgument[];
-  const scoped = (expression: RustExpr | undefined): RustExpr | undefined =>
-    expression === undefined || evaluationScope.kind !== "selected"
-      ? expression
-      : applyRustProviderEvaluationScope(expression, evaluationScope);
+  const scoped = (expression: RustExpr | undefined): RustExpr | undefined => {
+    if (expression === undefined) return undefined;
+    const dispatched = dispatchScope.apply(expression);
+    return evaluationScope.kind !== "selected" ? dispatched
+      : applyRustProviderEvaluationScope(dispatched, evaluationScope);
+  };
   switch (form.form) {
     case "numeric-cast":
       return scoped(args[0]);
@@ -599,7 +609,9 @@ export function planFinalizedTargetInput(
   argumentNodes: readonly (Node | undefined)[],
   operationNode: Node,
   overrides?: RustFinalizedInputPlanOverrides,
+  dispatchScope?: RustDispatchContextInputScope,
 ): RustExpr | undefined {
+  if (isRustFinalizedDispatchContextInput(input)) return dispatchScope?.input(input);
   if (isRustFinalizedConstantInput(input)) {
     return providerConstantExpression(input.source.value, context);
   }

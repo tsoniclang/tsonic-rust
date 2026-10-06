@@ -5,6 +5,8 @@ export {
   analyzeRustBinaryHooks,
 } from "./hooks.js";
 export { analyzeRustDispatchContextCatalog } from "./dispatch-contexts.js";
+export { analyzeRustDispatchContextDemand } from "./dispatch-demand.js";
+export type { RustDispatchContextDemandPlan } from "./dispatch-demand.js";
 export type {
   RustDispatchContextAccess,
   RustDispatchContextCatalog,

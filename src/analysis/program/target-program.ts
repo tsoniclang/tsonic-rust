@@ -28,6 +28,7 @@ import { analyzeRustBorrowStability } from "./borrow-stability.js";
 import {
   analyzeRustBinaryHooks,
   analyzeRustDispatchContextCatalog,
+  analyzeRustDispatchContextDemand,
   analyzeRustRuntimeReferences,
 } from "../runtime/index.js";
 import {
@@ -151,6 +152,10 @@ export function analyzeRustTargetProgram(
     return rejectedTargetStage(foundation.diagnostics);
   }
   const facts = context.facts.seal();
+  const dispatchContextDemand = analyzeRustDispatchContextDemand(
+    context.ast, context.sourceFiles, facts, sourcePackageComponents.plan, dispatchContexts.plan,
+  );
+  if (dispatchContextDemand.kind === "rejected") return rejectedTargetStage(dispatchContextDemand.diagnostics);
   const valueLifetimes = analyzeRustValueLifetimes({
     ast: context.ast,
     sourceFiles: context.sourceFiles,
@@ -306,6 +311,7 @@ export function analyzeRustTargetProgram(
     classValues,
     runtimeReferences: runtimeReferences.plan,
     dispatchContexts: dispatchContexts.plan,
+    dispatchContextDemand: dispatchContextDemand.plan,
     foundation: foundation.plan,
     binaryHooks,
     providerErrorCarriers: analyzeRustProviderErrorCarriers(

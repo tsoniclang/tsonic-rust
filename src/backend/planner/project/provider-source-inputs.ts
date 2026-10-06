@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustFinalizedSourceInput } from "../../../analysis/facts/finalized-operation-abi.js";
-import { isRustFinalizedArrayInput, isRustFinalizedConstantInput, isRustFinalizedSliceInput, isRustFinalizedTaggedArrayInput } from "../../../analysis/facts/finalized-operation-abi.js";
+import { isRustFinalizedArrayInput, isRustFinalizedConstantInput, isRustFinalizedDispatchContextInput, isRustFinalizedSliceInput, isRustFinalizedTaggedArrayInput } from "../../../analysis/facts/finalized-operation-abi.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 import { isRustAbsenceCarrier, isRustUnitCarrier } from "../../../target-model/types/index.js";
 
@@ -37,7 +37,7 @@ export function providerTargetRuntimeSlotKeys(
 ): readonly string[] {
   const keys: string[] = [];
   const collect = (input: import("../../../analysis/facts/finalized-operation-abi.js").RustFinalizedTargetInput): void => {
-    if (isRustFinalizedConstantInput(input)) {
+    if (isRustFinalizedConstantInput(input) || isRustFinalizedDispatchContextInput(input)) {
       return;
     }
     if (isRustFinalizedSliceInput(input) || isRustFinalizedArrayInput(input)) {
@@ -73,7 +73,7 @@ export function providerSourceInputs(
     ...fact.abi.targetArguments.flatMap((input) =>
       isRustFinalizedSliceInput(input) || isRustFinalizedArrayInput(input) ? input.elements :
         isRustFinalizedTaggedArrayInput(input) ? input.elements.map((element) => element.input) :
-        isRustFinalizedConstantInput(input) ? [] : [input]),
+        isRustFinalizedConstantInput(input) || isRustFinalizedDispatchContextInput(input) ? [] : [input]),
   ];
 }
 
