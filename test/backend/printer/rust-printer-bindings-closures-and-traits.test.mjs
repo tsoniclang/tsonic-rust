@@ -275,7 +275,7 @@ test("fitting string concatenations remain on typed binding lines", () => {
 
   assert.match(
     source,
-    /let file: String = format!\("\{\}\{\}\{\}", temporary, separator, String::from\("payload\.bin"\)\);/u,
+    /let file: String = \[\s*core::convert::AsRef::<str>::as_ref\(&temporary\),\s*core::convert::AsRef::<str>::as_ref\(&separator\),\s*core::convert::AsRef::<str>::as_ref\(&String::from\("payload\.bin"\)\),?\s*\]\s*\.concat\(\);/u,
   );
 });
 
@@ -639,10 +639,10 @@ test("string concatenation preserves vertical chains inside trailing blocks", ()
     }],
   });
 
-  assert.match(source, /format!\("\{\}\{\}", current, \{/u);
+  assert.match(source, /core::convert::AsRef::<str>::as_ref\(&current\),\s*core::convert::AsRef::<str>::as_ref\(&\{/u);
   assert.match(
     source,
-    /receiver_with_a_deliberately_long_name\n            \.__tsonic_state_with_a_deliberately_long_name\n            \.load_the_complete_project_state_without_inference\(\)\n            \.clone_the_exact_selected_value\(\)/u,
+    /receiver_with_a_deliberately_long_name\n                \.__tsonic_state_with_a_deliberately_long_name\n                \.load_the_complete_project_state_without_inference\(\)\n                \.clone_the_exact_selected_value\(\)/u,
   );
 });
 

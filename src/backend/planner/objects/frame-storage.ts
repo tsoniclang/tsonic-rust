@@ -50,6 +50,7 @@ export function rustClassFrameOwner(
       borrowed: false, data: { kind: "direct" }, ...(sourceReceiver === undefined ? {} : { receiver: sourceReceiver }) };
   if (context.syntheticNames === undefined) return undefined;
   return { kind: "live", expression: { kind: "method-call", receiver: { kind: "field", receiver, name: rustProjectObjectStateField },
-    method: "shared", args: [] }, borrowed: true, data: { kind: "object", name: allocateRustSyntheticName(context.syntheticNames, "frame_data") },
+    method: "shared", args: [] }, borrowed: true, data: { kind: "object", mutable: definition.storage.mutable,
+      name: allocateRustSyntheticName(context.syntheticNames, "frame_data") },
     ...(sourceReceiver === undefined ? {} : { receiver: sourceReceiver }) };
 }

@@ -53,7 +53,8 @@ export interface RustFrameCallableDefinition {
   readonly ownerFileName: string;
   readonly targetName: string;
   readonly counterName: string;
-  readonly storage: { readonly kind: "standalone"; readonly instanceFieldName?: string } | { readonly kind: "object" };
+  readonly storage: { readonly kind: "standalone"; readonly instanceFieldName?: string }
+    | { readonly kind: "object"; readonly mutable: boolean };
   readonly entries: readonly RustFrameCallableEntryDefinition[];
   readonly bindings: readonly RustFrameCallableBinding[];
   readonly environmentParameters: readonly Extract<TargetTypeRef, { readonly kind: "type-parameter" }>[];
@@ -184,7 +185,7 @@ export function createRustFrameCallablePlan(input: {
       const immutable = classDefinition === undefined ? !input.navigation.declarationUseSummary(declaration).bindingWritten
         : classStorage === undefined ? !input.navigation.declarationUseSummary(declaration).memberWritten
           : classStorage.kind === "shared" || classStorage.kind === "copy";
-      const storage = immutable && (classDefinition !== undefined || entry === undefined)
+      const storage = !standalone && representation?.mutable === true || immutable && (classDefinition !== undefined || entry === undefined)
         ? "value" as const : entry?.copy === true || entry === undefined && isRustCopyCarrier(carrier)
           ? "cell" as const : "borrow-cell" as const;
       const fieldName = classDefinition === undefined ? `binding_${frameBindings.length}`
@@ -207,7 +208,7 @@ export function createRustFrameCallablePlan(input: {
     const definition = Object.freeze({ activation, owner, ownerFileName: owner.fileName,
       storage: standalone ? Object.freeze({ kind: "standalone" as const,
         ...(classDefinition === undefined ? {} : { instanceFieldName: allocateRustGeneratedName(usedNames, `tsonic_frame_${prefix}`) }) })
-        : Object.freeze({ kind: "object" as const }),
+        : Object.freeze({ kind: "object" as const, mutable: representation!.mutable }),
       counterName: classDefinition === undefined ? "counter" : allocateRustGeneratedName(usedNames, `tsonic_frame_counter_${prefix}`),
       targetName: allocateRustGeneratedName(usedNames, `TsonicCallableFrame_${prefix}`),
       entries, bindings: Object.freeze(frameBindings), environmentParameters });

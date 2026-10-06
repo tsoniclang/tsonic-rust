@@ -16,6 +16,7 @@ import {
   RustPrecedence,
 } from "./precedence.js";
 import type { RustExpr } from "../../../backend/target-ast/nodes.js";
+import { rustStringConcatenationParts } from "../../../backend/target-ast/expressions.js";
 
 export function printRustExpr(expression: RustExpr): string {
   switch (expression.kind) {
@@ -106,9 +107,8 @@ export function printRustExpr(expression: RustExpr): string {
       return `{ ${statement} ${printRustExpr(expression.value)} }`;
     }
     case "string-concat": {
-      const placeholders = expression.parts.map(() => "{}").join("");
-      const values = expression.parts.map(printRustExpr);
-      return `format!("${placeholders}"${values.length === 0 ? "" : `, ${values.join(", ")}`})`;
+      const parts = rustStringConcatenationParts(expression.parts).map(printRustExpr);
+      return `[${parts.join(", ")}].concat()`;
     }
     case "format-write": {
       const args = expression.args.length === 0

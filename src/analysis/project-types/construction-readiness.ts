@@ -35,6 +35,7 @@ export interface RustConstructionPointQueries {
   readonly completesNormally: boolean;
   layerCompletes(definition: RustProjectTypeDefinition): boolean;
   layerHasEarlyReturn(definition: RustProjectTypeDefinition): boolean;
+  mutatesUnpublishedField(declaration: Node): boolean;
   pointFor(node: Node): RustConstructionPoint | undefined;
   expressionsWithin(node: Node): readonly RustConstructionExpression[];
 }
@@ -71,6 +72,7 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
 } {
   const deferredCaptureFields = new Set<Node>();
   const publishedFieldWrites = new Set<Node>();
+  const unpublishedFieldWrites = new Set<Node>();
   const points = new Map<Node, RustConstructionPoint>();
   const expressions = new Map<Node, readonly RustConstructionExpression[]>();
   const issues: RustConstructionIssue[] = [];
@@ -186,6 +188,7 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
           if (afterValue.possiblyInitialized.has(declaration) && !afterValue.initialized.has(declaration))
             deferredCaptureFields.add(declaration);
           if (afterValue.published) { mutatesPublishedFields = true; publishedFieldWrites.add(declaration); }
+          else if (afterValue.possiblyInitialized.has(declaration)) unpublishedFieldWrites.add(declaration);
           return Object.freeze({ ...afterValue, initialized: new Set([...afterValue.initialized, declaration]),
             possiblyInitialized: new Set([...afterValue.possiblyInitialized, declaration]) });
         }
@@ -210,6 +213,8 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
         if (field !== undefined && field.accessMode !== "read" && state.published) {
           mutatesPublishedFields = true; publishedFieldWrites.add(declaration);
         }
+        if (field !== undefined && field.accessMode !== "read" && !state.published &&
+          state.possiblyInitialized.has(declaration)) unpublishedFieldWrites.add(declaration);
         return state;
       }
     }
@@ -438,6 +443,7 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
     publishedFieldWrites: Object.freeze([...publishedFieldWrites]),
     layerCompletes: (definition: RustProjectTypeDefinition) => layerCompletion.get(definition) === true,
     layerHasEarlyReturn: (definition: RustProjectTypeDefinition) => layerEarlyReturn.has(definition),
+    mutatesUnpublishedField: (declaration: Node) => unpublishedFieldWrites.has(declaration),
     expressions: Object.freeze([...indexedExpressions.values()]),
     pointFor: (node: Node) => points.get(node),
     expressionsWithin: (node: Node) => expressions.get(node) ?? emptyExpressions });

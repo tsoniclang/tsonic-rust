@@ -55,7 +55,7 @@ export function initializeOrWriteRustCapturedField(storage: RustCapturedFieldSto
   if (storage.initialization !== "deferred" || storage.kind === "shared" || storage.kind === "copy") return undefined;
   return initializeOrWriteRustDeferredStorage(owner, value, context,
     selected => createRustCapturedFieldPayload(storage, selected), rustBindingStorageOperations(storage.kind).write,
-    "captured field initialized twice");
+    "captured field initialized twice", false);
 }
 
 function createRustCapturedFieldPayload(storage: RustCapturedFieldStorage, value: RustExpr): RustExpr {

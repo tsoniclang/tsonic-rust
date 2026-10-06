@@ -74,7 +74,7 @@ export function planRustConstructionBody(
     const expression: Extract<RustExpr, { readonly kind: "path" }> = { kind: "path", path: name };
     const planned = plan.fields.find(planned => planned.declaration === field.declaration);
     const absence = planned?.absenceDefault === true;
-    const storage = rustConstructionFieldStorage(field.declaration, field.carrier, context);
+    const storage = rustConstructionFieldStorage(field.declaration, field.carrier, context, plan);
     if (!storage.deferred && !plan.layerHasEarlyReturn(planned!.owner) &&
       (planned?.initializer !== undefined || planned?.externallyInitialized === true))
       declarationAtInitialization.add(field.declaration);
@@ -121,7 +121,7 @@ export function planRustConstructionBody(
       if ((expression.kind === "field" || expression.kind === "capture") && !point.published && !point.publishBefore) {
         const slot = slots.find(field => field.declaration === expression.declaration);
         if (slot === undefined) return reject("Sealed construction field has no matching physical local slot.");
-        const storage = rustConstructionFieldStorage(slot.declaration, slot.carrier, selectedContext);
+        const storage = rustConstructionFieldStorage(slot.declaration, slot.carrier, selectedContext, plan);
         const location = storage.location(slot.expression);
         if (location === undefined) {
           if (expression.kind === "capture") return reject("A captured native field lost its exact physical owner contract.");
@@ -194,14 +194,14 @@ export function planRustConstructionBody(
     input(declaration, node, inputContext, planValue) {
       const slot = slots.find(field => field.declaration === physicalDeclaration(declaration));
       if (slot === undefined) return undefined;
-      const location = rustConstructionFieldStorage(slot.declaration, slot.carrier, inputContext).location(slot.expression);
+      const location = rustConstructionFieldStorage(slot.declaration, slot.carrier, inputContext, plan).location(slot.expression);
       return location === undefined ? planValue() : planRustValueFieldInput(location, node, inputContext, planValue);
     },
     initialize(declaration, value) {
       const physical = physicalDeclaration(declaration);
       const slot = slots.find(field => field.declaration === physical);
       if (slot?.expression.kind !== "path") return undefined;
-      const storage = rustConstructionFieldStorage(physical, slot.carrier, context);
+      const storage = rustConstructionFieldStorage(physical, slot.carrier, context, plan);
       if (physical !== declaration) {
         const update = storage.location(slot.expression)?.write(value, context);
         return update === undefined ? undefined : [{ kind: "expr", expr: update }];
@@ -219,7 +219,7 @@ export function planRustConstructionBody(
       return [{ kind: "let", name, mutable: false, init: { kind: "block", body: { statements: [
         ...statements, { kind: "tail", expr: { kind: "tuple-literal", elements: exported.map(slot => slot.expression) } },
       ] } } }, ...exported.map((slot, index): RustStmt => ({ kind: "let", name: slot.expression.path,
-        mutable: rustConstructionFieldStorage(slot.declaration, slot.carrier, context).mutable, type: slot.storageType,
+        mutable: rustConstructionFieldStorage(slot.declaration, slot.carrier, context, plan).mutable, type: slot.storageType,
         init: { kind: "field", receiver: { kind: "path", path: name }, name: String(index) },
       }))];
     },

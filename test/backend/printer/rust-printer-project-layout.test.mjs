@@ -387,7 +387,7 @@ test("detached logical block operands use the continuation indentation", () => {
   assert.match(text, /\n        \}\) != String::from\("two"\)\n    \{/u);
 });
 
-test("format macro arguments keep borrowed blocks attached to their call", () => {
+test("native concat keeps borrowed blocks attached to their checked call", () => {
   const text = projectFunction({
     kind: "string-concat",
     parts: [
@@ -413,11 +413,11 @@ test("format macro arguments keep borrowed blocks attached to their call", () =>
   });
 
   assert.match(text, /rt::source_string\(&\{\n            let receiver/u);
-  assert.match(text, /\n        \}\),\n/u);
+  assert.match(text, /\n        \}\)\),\n/u);
   assert.doesNotMatch(text, /rt::source_string\(\n/u);
 });
 
-test("format macro arguments keep borrowed nested calls attached to their call", () => {
+test("native concat preserves checked borrowed associated calls", () => {
   const expression = {
     kind: "string-concat",
     parts: [
@@ -458,13 +458,12 @@ test("format macro arguments keep borrowed nested calls attached to their call",
 
   assert.match(
     text,
-    /rt::source_string\(&<Self as MiddleDispatch>::exact_middle_describe\(\n/u,
+    /rt::source_string\(\n {16}&<Self as MiddleDispatch>::exact_middle_describe\(self\.clone\(\)\),\n {12}\)\),/u,
   );
-  assert.match(text, /self\.clone\(\)\n\s+\)\),/u);
-  assert.doesNotMatch(text, /rt::source_string\(\n/u);
+  assert.doesNotMatch(text, /exact_middle_describe\(\n/u);
 });
 
-test("expanded format macros keep fitting borrowed nested calls horizontal", () => {
+test("native concat keeps borrowed nested calls attached to their native borrow", () => {
   const text = projectFunction({
     kind: "string-concat",
     parts: [
@@ -493,11 +492,11 @@ test("expanded format macros keep fitting borrowed nested calls horizontal", () 
 
   assert.match(
     text,
-    /rt::source_string\(&Self::exact_middle_describe\(self\.clone\(\)\)\),/u,
+    /rt::source_string\(&Self::exact_middle_describe\(\n {12}self\.clone\(\),\n {8}\)\)\),/u,
   );
 });
 
-test("expanded format macros separate call-valued arguments", () => {
+test("native concat separates call-valued borrowed inputs", () => {
   const text = projectFunction({
     kind: "string-concat",
     parts: [
@@ -513,11 +512,11 @@ test("expanded format macros separate call-valued arguments", () => {
 
   assert.match(
     text,
-    /"\{\}\{\}\{\}",\n\s+String::from\(""\),\n\s+rt::source_string\(&error\),\n\s+String::from\(""\)\n/u,
+    /core::convert::AsRef::<str>::as_ref\(&String::from\(""\)\),\n\s+core::convert::AsRef::<str>::as_ref\(&rt::source_string\(&error\)\),\n\s+core::convert::AsRef::<str>::as_ref\(&String::from\(""\)\),\n/u,
   );
 });
 
-test("expanded format macros pack fitting source values", () => {
+test("native string concat renders exact borrowed views in source order", () => {
   const text = projectFunction({
     kind: "string-concat",
     parts: [
@@ -531,7 +530,7 @@ test("expanded format macros pack fitting source values", () => {
 
   assert.match(
     text,
-    /"\{\}\{\}\{\}\{\}\{\}",\n\s+text, text_kind, count_kind, wide_kind, enabled_kind\n/u,
+    /core::convert::AsRef::<str>::as_ref\(&text\),\n\s+core::convert::AsRef::<str>::as_ref\(&text_kind\),\n\s+core::convert::AsRef::<str>::as_ref\(&count_kind\),\n\s+core::convert::AsRef::<str>::as_ref\(&wide_kind\),\n\s+core::convert::AsRef::<str>::as_ref\(&enabled_kind\),\n/u,
   );
 });
 

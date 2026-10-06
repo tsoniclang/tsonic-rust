@@ -33,6 +33,7 @@ import { planExpression, planExpressionBeforeOptionProjection, planExpressionBef
 import { planRustDiscardedValue } from "./discarded-values.js";
 import type { RustExpressionResultUse } from "./entry.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
+import { planRustScopedStringComparison } from "./scoped-comparisons.js";
 import { planNullishAssignment } from "./nullish-assignment.js";
 import { planCompoundAssignmentExpression } from "./compound-assignment.js";
 import { planRustProgramErrorEquality, planRustProgramErrorTypeTest } from "./error-operations.js";
@@ -508,6 +509,10 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
   }
   const leftNode = BinaryExpression_Left(context.input.program.source.ast, node);
   const rightNode = BinaryExpression_Right(context.input.program.source.ast, node);
+  if (leftNode !== undefined && rightNode !== undefined && fact.kind === "operator-token") {
+    const scoped = planRustScopedStringComparison(leftNode, rightNode, fact, context);
+    if (scoped !== undefined) return scoped;
+  }
   const left = leftNode === undefined ? undefined : planExpression(leftNode, context);
   const right = rightNode === undefined ? undefined : planExpression(rightNode, context);
   if (leftNode === undefined || rightNode === undefined || left === undefined || right === undefined) {

@@ -596,9 +596,11 @@ export function main(): void {
   assert.doesNotMatch(output, /push_str\(&String::from/u);
   assert.doesNotMatch(appendOutput, /push_str\(&[^;]*\.clone\(\)/u);
   assert.doesNotMatch(appendOutput, /output\.push_str\(&format!/u);
-  assert.match(appendFailureOutput, /output\.push_str\(&format!/u);
+  assert.equal(/output\.push_str\(\s*&\[/u.test(appendFailureOutput), true, "effectful append snapshots the complete native concat");
+  assert.equal(/\.concat\(\)/u.test(appendFailureOutput), true, "effectful append retains native concat");
   assert.doesNotMatch(appendFailureOutput, /output\.push_str\("prefix"\)/u);
-  assert.match(selfAppendOutput, /format!\("\{\}\{\}"/u);
+  assert.equal(/core::convert::AsRef::<str>::as_ref\(&current\)/u.test(selfAppendOutput), true, "self append borrows its snapshot");
+  assert.equal(/\.concat\(\)/u.test(selfAppendOutput), true, "self append retains native concat");
   assert.doesNotMatch(appendOutput, /output\.clone\(\)\s*\}/u);
   assert.doesNotMatch(combineOutput, /Ok\(output\.clone\(\)\)/u);
   assert.match(combineOutput, /\.borrow_number_element\(/u);

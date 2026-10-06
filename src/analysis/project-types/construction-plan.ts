@@ -160,6 +160,7 @@ export function analyzeRustProjectConstructions(input: RustConstructionAnalysisI
       expressions: readiness.expressions,
       completesNormally: readiness.completesNormally, layerCompletes: readiness.layerCompletes,
       layerHasEarlyReturn: readiness.layerHasEarlyReturn,
+      mutatesUnpublishedField: readiness.mutatesUnpublishedField,
       expressionsWithin: readiness.expressionsWithin, publishesReceiver: readiness.publishesReceiver,
       mutatesPublishedFields: readiness.mutatesPublishedFields }));
   }

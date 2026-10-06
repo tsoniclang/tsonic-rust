@@ -14,6 +14,7 @@ export function initializeOrWriteRustDeferredStorage(
   create: (value: RustExpr) => RustExpr,
   write: (owner: RustExpr, value: RustExpr) => RustExpr,
   message: string,
+  mutable: boolean,
 ): RustExpr | undefined {
   if (context.syntheticNames === undefined) return undefined;
   const valueName = allocateRustSyntheticName(context.syntheticNames, "field_value");
@@ -21,7 +22,8 @@ export function initializeOrWriteRustDeferredStorage(
   const selected: RustExpr = { kind: "path", path: valueName };
   return { kind: "block", body: { statements: [
     { kind: "let", name: valueName, mutable: false, init: value },
-    { kind: "expr", expr: { kind: "match", expression: { kind: "method-call", receiver: owner, method: "get", args: [] }, arms: [
+    { kind: "expr", expr: { kind: "match", expression: { kind: "method-call", receiver: owner,
+      method: mutable ? "get_mut" : "get", args: [] }, arms: [
       { pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: ownerName }] },
         expression: write({ kind: "path", path: ownerName }, selected) },
       { pattern: { kind: "path", path: "None" }, expression: initializeRustDeferredStorage(owner, create(selected), message) },

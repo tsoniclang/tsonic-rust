@@ -70,7 +70,8 @@ test("indexed string append selects one immutable borrowed read for emission and
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /for index in 0(?:_usize)?\.\.values\.len\(\)/u);
   assert.match(output, /\.borrow_number_element\(array_index(?:_\d+)?\)/u);
-  assert.match(output, /output\.push_str\(&\*element(?:_\d+)?\)/u);
+  assert.match(output, /output\.push_str\(&element(?:_\d+)?\)/u);
+  assert.doesNotMatch(output, /&\*element/u);
   assert.doesNotMatch(output, /get_number|\.clone\(\)|iter_cloned|format!|\bf64\b/u);
 });
 

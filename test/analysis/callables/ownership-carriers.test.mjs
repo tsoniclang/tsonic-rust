@@ -9,6 +9,7 @@ import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equali
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/carriers/native.js";
 import { Node_Expression, Node_Initializer } from "@tsonic/target-api/source";
 import { rustTargetGenericReferences } from "../../../dist/target-model/types/carriers/generic-references.js";
+import { recursiveCallbackProtocolCases } from "../../../../tsonic/test/fixtures/recursive-callback-protocols.mjs";
 
 const source = `
 export function escaped(seed: number): (count: number) => number {
@@ -21,6 +22,26 @@ export function ordinary(seed: number): (count: number) => number {
   return (count: number): number => count + seed;
 }
 `;
+
+for (const jsEnabled of [false, true]) {
+  for (const name of ["captured-class-field", "shared-class-frame", "shared-class-string-field", "shared-class-construction-writes"]) {
+    test(`${jsEnabled ? "JS" : "native"} ${name} selects one native field mutability owner`, () => {
+      const source = recursiveCallbackProtocolCases.find(current => current.name === name).source;
+      const { program } = analyzeRust({ surfaces: jsEnabled ? ["js"] : [], files: { "index.ts": source } });
+      const frames = program.callableValues.frames.definitions;
+      assert.equal(frames.length, 1);
+      const frame = frames[0];
+      assert.equal(program.objectRepresentations.representations.length, 1);
+      const representation = program.objectRepresentations.representations[0];
+      const shared = name !== "captured-class-field";
+      assert.equal(representation.kind, shared ? "shared-mutable" : "value");
+      assert.equal(frame.storage.kind, shared ? "object" : "standalone");
+      if (shared) assert.equal(frame.storage.mutable, true);
+      assert.equal(frame.bindings.length, shared ? 3 : 2);
+      for (const binding of frame.bindings) assert.equal(binding.storage, shared ? "value" : "cell");
+    });
+  }
+}
 
 for (const jsEnabled of [false, true]) {
   for (const generic of [false, true]) {

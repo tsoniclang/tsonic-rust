@@ -41,6 +41,22 @@ export class Value {
   });
 }
 
+for (const [name, statements, mutable] of [
+  ["first-store", "this.value = 3;", false],
+  ["repeated-store", "this.value = 3; this.value = 4;", true],
+  ["branch-store", "if (flag) this.value = 3; else this.value = 4;", false],
+  ["branch-rewrite", "if (flag) this.value = 3; else this.value = 4; this.value = 5;", true],
+  ["local-increment", "this.value = 3; this.value++;", true],
+  ["published-store", "this.value = 3; this.read(); this.value = 4;", false],
+]) test(`construction readiness retains exact field-local mutability: ${name}`, async () => {
+  const result = await readiness(`construction-mutability-${name}`, statements);
+  assert.equal(result.issues.length, 0, result.issues.map(row => row.reason).join("\n"));
+  const fields = [...new Set(result.expressions.filter(entry => entry.kind === "field").map(entry => entry.declaration))];
+  assert.equal(fields.length, 1);
+  assert.equal(result.mutatesUnpublishedField(fields[0]), mutable);
+  assert.equal(result.mutatesUnpublishedField({}), false, "foreign field identities cannot acquire local writes");
+});
+
 for (const [name, statements] of [
   ["finally-return", "try { return; } finally { this.value = 7; }"],
   ["do-initialization", "do { this.value = 4; } while (false);"],

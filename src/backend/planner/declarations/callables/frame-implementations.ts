@@ -130,7 +130,7 @@ function planFrameEntry(
     const stateName = allocateRustSyntheticName(names, "frame_state");
     const owner: RustLiveFrameOwner = { kind: "live", expression: { kind: "path", path: frameName }, borrowed: true,
       data: definition.storage.kind === "standalone" ? { kind: "direct" }
-        : { kind: "object", name: allocateRustSyntheticName(names, "frame_data") } };
+        : { kind: "object", mutable: definition.storage.mutable, name: allocateRustSyntheticName(names, "frame_data") } };
     const helperContext = rustFrameBindingContext(definition, owner, { ...context,
       capturedBindings: implementation.captures.map((capture, index) => ({
         declaration: capture.declaration, valueCarrier: capture.carrier, storage: capture.storage, borrowed: "shared" as const,

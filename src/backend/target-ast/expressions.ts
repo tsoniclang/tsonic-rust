@@ -75,9 +75,17 @@ export function rustStringConcat(parts: readonly RustExpr[]): RustExpr {
 }
 
 export function rustBorrowedStringView(expression: RustExpr): RustExpr {
-  return expression.kind === "owned-string-from-borrowed-str"
+  return expression.kind === "string-literal" ? { kind: "str-literal", value: expression.value }
+    : expression.kind === "owned-string-from-borrowed-str"
     ? expression.expression
     : expression;
+}
+
+export function rustStringConcatenationParts(parts: readonly RustExpr[]): readonly RustExpr[] {
+  return parts.map(part => part.kind === "string-literal" || part.kind === "str-literal"
+    ? { kind: "str-literal", value: part.value }
+    : { kind: "call", path: "core::convert::AsRef::<str>::as_ref",
+      args: [{ kind: "reference", expr: part }] });
 }
 
 export function tupleRustClosureArguments(

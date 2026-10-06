@@ -28,9 +28,10 @@ export function rustFrameBindingType(binding: RustFrameCallableBinding, context:
 }
 
 function frameBindingPayload(binding: RustFrameCallableBinding,
-  field: RustExpr, context: RustPlanContext,
+  field: RustExpr, context: RustPlanContext, mutable = false,
 ) {
-  const cell: RustExpr = binding.initialization === "ready" ? field : { kind: "method-call", receiver: { kind: "method-call", receiver: field, method: "get", args: [] },
+  const cell: RustExpr = binding.initialization === "ready" ? field : { kind: "method-call", receiver: { kind: "method-call", receiver: field,
+    method: mutable ? "get_mut" : "get", args: [] },
     method: "expect", args: [{ kind: "str-literal", value: "callable activation binding read before initialization" }] };
   const copy = binding.entry?.copy === true || binding.entry === undefined && rustCarrierHasCopyContract(binding.carrier, context);
   const operations = binding.storage === "value" ? undefined : rustBindingStorageOperations(binding.storage);
@@ -38,6 +39,14 @@ function frameBindingPayload(binding: RustFrameCallableBinding,
     : { kind: "dereference", pointer: cell }
     : { kind: "method-call", receiver: cell, method: "clone", args: [] });
   return { field, cell, read, operations };
+}
+
+function writeRustFrameBindingPayload(binding: RustFrameCallableBinding, field: RustExpr, value: RustExpr,
+  context: RustPlanContext, mutable: boolean,
+): RustExpr | undefined {
+  const { cell, operations } = frameBindingPayload(binding, field, context, mutable);
+  return operations?.write(cell, value) ?? (mutable ? { kind: "assignment", operator: "=",
+    target: binding.initialization === "ready" ? cell : { kind: "dereference", pointer: cell }, value } : undefined);
 }
 
 export function createRustFrameBindingValue(binding: RustFrameCallableBinding, value: RustExpr): RustExpr {
@@ -58,19 +67,23 @@ export function initializeRustFrameBindingValue(binding: RustFrameCallableBindin
 export function initializeOrWriteRustFrameBindingValue(
   binding: RustFrameCallableBinding, field: RustExpr, value: RustExpr, context: RustPlanContext,
 ): RustExpr | undefined {
-  if (binding.initialization !== "deferred" || binding.storage === "value") return undefined;
+  if (binding.initialization !== "deferred") return undefined;
   const storage = binding.storage;
-  const operations = rustBindingStorageOperations(storage);
+  const operations = storage === "value" ? undefined : rustBindingStorageOperations(storage);
   return initializeOrWriteRustDeferredStorage(field, value, context,
-    selected => ({ kind: "call", path: `${rustInlineBindingStoragePath(storage)}::new`, args: [selected] }),
-    operations.write, "callable activation binding initialized twice");
+    selected => storage === "value" ? selected
+      : { kind: "call", path: `${rustInlineBindingStoragePath(storage)}::new`, args: [selected] },
+    (owner, selected) => operations?.write(owner, selected) ?? { kind: "assignment", operator: "=",
+      target: { kind: "dereference", pointer: owner }, value: selected },
+    "callable activation binding initialized twice", storage === "value");
 }
 
 export function rustFrameBindingLocalLocation(
   binding: RustFrameCallableBinding, field: RustExpr, context: RustPlanContext,
 ): RustValueFieldLocation {
   const { cell, read, operations } = frameBindingPayload(binding, field, context);
-  return { bindings: [], read, write: value => operations?.write(cell, value),
+  return { bindings: [], read, write: value => writeRustFrameBindingPayload(binding, field, value, context,
+    binding.storage === "value"),
     withRead: project => project(operations?.borrowedRead(cell) ?? cell),
     ...(binding.initialization !== "deferred" ? {} : { initialize: (value: RustExpr) => initializeRustFrameBindingValue(binding, field, value) }),
     ...(binding.entry === undefined ? {} : { planInput: (node: Node, inputContext: RustPlanContext, planValue: () => RustExpr | undefined) =>
@@ -123,10 +136,9 @@ export function rustFrameBindingLocation(
         return project(operations?.borrowedRead(cell) ?? cell);
       }) } : {}),
     write: (value, writeContext) => {
-      const effect = projectRustFrameOwnerData(owner, data => {
-        const { cell, operations } = select(data);
-        return operations?.write(cell, value);
-      });
+      const mutable = binding.storage === "value" && owner.data.kind === "object" && owner.data.mutable;
+      const effect = projectRustFrameOwnerData(owner, data => writeRustFrameBindingPayload(binding,
+        { kind: "field", receiver: data, name: binding.fieldName }, value, context, mutable), mutable);
       const checked = owner.data.kind === "object" &&
         writeContext.input.program.frozenDataWrites.receiverForDeclaration(binding.declaration) !== undefined;
       const errorType = checked ? rustActiveErrorType(writeContext) : undefined;

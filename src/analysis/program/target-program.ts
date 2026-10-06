@@ -150,6 +150,10 @@ export function analyzeRustTargetProgram(
     sourceFiles: context.sourceFiles,
     navigation: context.source.navigation,
     isOwnedString: (declaration) => isRustStringCarrier(facts.getRuntimeCarrierFact(declaration)?.carrier),
+    isInstanceFieldUse: (reference, declaration) => {
+      const operation = facts.getFact(reference, rustTargetOperationFactKey);
+      return operation?.kind === "source-field" && operation.declaration === declaration;
+    },
     hasSharedIdentityStorage: (declaration) => isRustJsArrayCarrier(facts.getRuntimeCarrierFact(declaration)?.carrier),
     mayBorrowArgument: (argument) => facts.getArgumentPassingFact(argument)?.mode !== "by-value",
     isOwnedCallArgument: (argument) => rustCallArgumentIsOwned(argument, context.ast, facts),

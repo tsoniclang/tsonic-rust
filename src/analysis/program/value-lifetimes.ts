@@ -6,6 +6,7 @@ import {
   ForInOrOfStatement_Initializer,
   ForInOrOfStatement_Statement,
   sourceNodesEqual,
+  sourceParameterIsProperty,
   sourceEnclosingCallable as enclosingCallable,
   type SourceProgramNavigation,
 } from "@tsonic/target-api/source";
@@ -21,6 +22,7 @@ export function analyzeRustValueLifetimes(input: {
   readonly sourceFiles: readonly SourceFile[];
   readonly navigation: SourceProgramNavigation;
   readonly isOwnedString: (declaration: Node) => boolean;
+  readonly isInstanceFieldUse: (reference: Node, declaration: Node) => boolean;
   readonly hasSharedIdentityStorage: (declaration: Node) => boolean;
   readonly mayBorrowArgument: (argument: Node) => boolean;
   readonly isOwnedCallArgument: (argument: Node) => boolean;
@@ -47,6 +49,12 @@ export function analyzeRustValueLifetimes(input: {
     if (kind === "KindVariableDeclaration" || kind === "KindParameter" || kind === "KindBindingElement") {
       classifyDeclaration(node, input, movableReferences);
       const summary = input.navigation.declarationUseSummary(node);
+      if (sourceParameterIsProperty(input.ast, node) && !summary.bindingWritten &&
+        summary.uses.every(use => use.kind === "source-linkage" || use.kind === "type-only" ||
+          input.isInstanceFieldUse(use.reference, node))) {
+        const name = input.ast.name(node);
+        if (name !== undefined) movableReferences.add(name);
+      }
       const immutableString = input.isOwnedString(node) && !summary.hasUnclassifiedValueUse &&
         summary.uses.every(use => use.kind === "type-only" ||
           use.role === "argument" && input.isSharedBorrowArgument(transparentUseExpression(use.reference, input.ast)) ||
