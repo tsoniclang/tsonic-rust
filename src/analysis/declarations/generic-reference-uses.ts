@@ -3,6 +3,23 @@ import { Node_Expression } from "@tsonic/target-api/source";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import { rustTargetOperationFactKey } from "../facts/keys.js";
 
+export function isRustBorrowedValueRead(node: Node, ast: AstReader, facts: RustPlanQueries): boolean {
+  let current = node;
+  for (;;) {
+    const passing = facts.getArgumentPassingFact(current);
+    if (passing !== undefined && passing.mode !== "by-value") return true;
+    const parent = ast.parent(current);
+    if (parent === undefined || Node_Expression(ast, parent) !== current) return false;
+    if (["KindParenthesizedExpression", "KindNonNullExpression", "KindAsExpression",
+      "KindSatisfiesExpression", "KindTypeAssertionExpression"].includes(ast.kindName(parent))) {
+      current = parent;
+      continue;
+    }
+    return ast.is.IsPropertyAccessExpression(parent) || ast.is.IsElementAccessExpression(parent) ||
+      ast.is.IsCallExpression(parent);
+  }
+}
+
 export function isRustReturnedValue(node: Node, declaration: Node, ast: AstReader): boolean {
   let current = node;
   for (;;) {

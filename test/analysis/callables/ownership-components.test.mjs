@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createCompilerSessionFromFiles, formatDiagnostics } from "@tsonic/tsts";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
-import { createTargetSourceProgram, Node_Initializer } from "@tsonic/target-api/source";
+import { createTargetSourceProgram, Node_Initializer, sourceParameterIsProperty } from "@tsonic/target-api/source";
 import {
   createRustCallableOwnershipComponentQueries, defaultRustCallableOwnershipLimits,
 } from "../../../dist/analysis/callables/ownership-components.js";
@@ -51,7 +51,7 @@ function fixture(text, options = {}) {
   const receiverCaptures = analyzeRustReceiverFieldCaptures({ ast: source.ast,
     navigation: source.navigation, semantics: source.semantics, sourceFiles: [file],
     projectTypes: { definitions: [], definitionContainingDeclaration: () => undefined },
-    isStoredField: declaration => source.ast.is.IsPropertyDeclaration(declaration), deferredFields: new Set() });
+    isStoredField: declaration => source.ast.is.IsPropertyDeclaration(declaration) || sourceParameterIsProperty(source.ast, declaration), deferredFields: new Set() });
   const input = { storage, receiverCaptures, ...options };
   const named = (name, kind) => nodes.filter(node => source.ast.kindName(node) === kind &&
     source.ast.name(node) !== undefined && source.ast.text(source.ast.name(node)) === name);
@@ -67,6 +67,25 @@ function onlyComponent(queries) {
   assert.equal(queries.components.length, 1, "one exact cyclic ownership component");
   return queries.components[0];
 }
+
+test("constructor parameter properties retain exact class field capture roles without inventing ordinary parameter fields", () => {
+  const current = fixture(`
+class Value {
+  constructor(seed: number, readonly value: number) { void seed; }
+  recurse = (count: number): number => count === 0 ? this.value : this.recurse(count - 1);
+  rebind(): void { this.recurse = (count: number): number => count === 0 ? this.value + 1 : this.recurse(count - 1); }
+}
+`);
+  const component = onlyComponent(current.analyze());
+  const stored = current.named("value", "KindParameter")[0];
+  const ordinary = current.named("seed", "KindParameter")[0];
+  assert.equal(stored !== undefined && ordinary !== undefined, true, "exact checked parameter declarations");
+  assert.equal(component.kind, "class");
+  assert.equal(component.captures.some(capture => capture.kind === "field" && capture.declaration === stored), true,
+    "parameter property remains an exact field");
+  assert.equal(component.captures.some(capture => capture.declaration === ordinary), false,
+    "ordinary constructor parameter has no invented field relation");
+});
 
 test("owning activation selection is initialized once before source ABI consumers", () => {
   const current = fixture(lexicalSource);

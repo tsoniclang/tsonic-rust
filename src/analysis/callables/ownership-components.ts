@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { targetStronglyConnectedComponents, type SourceStorageQueries } from "@tsonic/target-api/analysis";
 import {
-  Node_Expression, Node_Initializer, sourceBindingScope, sourceEnclosingCallable, sourceLexicalEnvironment,
+  Node_Expression, Node_Initializer, sourceBindingScope, sourceEnclosingCallable, sourceLexicalEnvironment, sourceParameterIsProperty,
   type SourceDeclarationUse,
 } from "@tsonic/target-api/source";
 import type { RustReceiverFieldCaptureQueries } from "../project-types/receiver-captures.js";
@@ -169,7 +169,7 @@ export function createRustCallableOwnershipComponentQueries(input: {
   };
   const isCallable = (node: Node): boolean => ast.is.IsArrowFunction(node) || ast.is.IsFunctionExpression(node) ||
     ast.is.IsFunctionDeclaration(node) && sourceEnclosingCallable(ast.parent(node), boundedAst) !== undefined;
-  const isField = (node: Node): boolean => ast.is.IsPropertyDeclaration(node);
+  const isField = (node: Node): boolean => ast.is.IsPropertyDeclaration(node) || sourceParameterIsProperty(boundedAst, node);
   const canonical = (node: Node): Node => {
     if (!isField(node)) return node;
     let selected = canonicalSlots.get(node);

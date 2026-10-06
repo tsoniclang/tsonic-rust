@@ -9,7 +9,7 @@ import type { AstReader, Node } from "@tsonic/tsts";
 import { rustGenericNumericOperandsKey } from "../facts/generic-numeric.js";
 import { classifyCarrierRequirements } from "./generic-carrier-requirements.js";
 import { createRustOptionalStorageCollector } from "./type-projections.js";
-import { isRustDeclarationPathUse, isRustReturnedValue, isRustIndependentCallable, isRustGenericTypeDeclaration } from "./generic-reference-uses.js";
+import { isRustBorrowedValueRead, isRustDeclarationPathUse, isRustReturnedValue, isRustIndependentCallable, isRustGenericTypeDeclaration } from "./generic-reference-uses.js";
 import { createRustAssociatedRequirementCollector } from "./associated-requirements.js";
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
@@ -130,7 +130,6 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
   if (definition !== undefined) {
     const dispatchLifetime = input.objectRepresentations.representationFor(definition)?.dispatchObjectLifetime;
     for (const name of exactNames) {
-      byParameter.get(name)!.add("clone");
       if (dispatchLifetime?.kind === "static") byParameter.get(name)!.add("static");
     }
   }
@@ -380,6 +379,12 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       }
     }
     const indexedField = facts.getFact(node, rustTargetOperationFactKey);
+    if (indexedField?.kind === "source-field" && indexedField.valueSemantics.kind === "stored" &&
+      input.readsValue(node) && !input.valueLifetimes.canMove(node) &&
+      !isRustBorrowedValueRead(node, ast, facts)) {
+      const fieldError = addUse(node, indexedField.resultCarrier, ["clone"]);
+      if (fieldError !== undefined) return fieldError;
+    }
     if (indexedField?.kind === "source-indexed-field" && !associated.requireField(indexedField.resultCarrier,
       indexedField.accessMode === "read-write" ? ["read", "write"] : [indexedField.accessMode])) {
       return "A dependent field operation has no exact read/write trait obligation.";
