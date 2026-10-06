@@ -38,6 +38,7 @@ const runtimeJsErrorType: RustType = {
 };
 const unitType: RustType = { kind: "unit" };
 const typeParameterT: RustType = { kind: "named", path: "T" };
+const typeParameterNormal: RustType = { kind: "named", path: "TNormal" };
 function namedType(path: string, typeArguments?: readonly RustType[]): RustType {
   return {
     kind: "named",
@@ -53,12 +54,20 @@ const oneTypeParameterGenerics = Object.freeze({
   wherePredicates: Object.freeze([]),
 });
 
+const completionGenerics = Object.freeze({
+  parameters: Object.freeze([
+    { kind: "type" as const, name: "T", bounds: Object.freeze([]) },
+    { kind: "type" as const, name: "TNormal", bounds: Object.freeze([]) },
+  ]),
+  wherePredicates: Object.freeze([]),
+});
+
 function resultType(value: RustType): RustType {
   return namedType(programResultName, [value]);
 }
 
-function completionType(value: RustType): RustType {
-  return namedType("Completion", [value]);
+function completionType(value: RustType, normal: RustType): RustType {
+  return namedType("Completion", [value, normal]);
 }
 
 function binding(name: string): RustPattern {
@@ -427,13 +436,13 @@ function sourceStringImplementation(target: RustType, generics: RustGenerics): R
 }
 
 function finishResourceFunction(): RustItem {
-  const completion = completionType(typeParameterT);
+  const completion = completionType(typeParameterT, typeParameterNormal);
   return {
     kind: "function",
     name: "finish_resource",
     visibility: "public",
     attrs: [rustHiddenAttribute],
-    generics: oneTypeParameterGenerics,
+    generics: completionGenerics,
     params: [
       { name: "body", type: resultType(completion) },
       { name: "cleanup", type: resultType(unitType) },
@@ -501,16 +510,16 @@ function finishResourceFunction(): RustItem {
 }
 
 function finishFinallyFunction(): RustItem {
-  const completion = completionType(typeParameterT);
+  const completion = completionType(typeParameterT, typeParameterNormal);
   return {
     kind: "function",
     name: "finish_finally",
     visibility: "public",
     attrs: [rustHiddenAttribute],
-    generics: oneTypeParameterGenerics,
+    generics: completionGenerics,
     params: [
       { name: "body", type: resultType(completion) },
-      { name: "finally", type: resultType(completion) },
+      { name: "finally", type: resultType(completionType(typeParameterT, unitType)) },
     ],
     returnType: resultType(completion),
     body: {
@@ -521,13 +530,13 @@ function finishFinallyFunction(): RustItem {
           expression: path("finally"),
           arms: [
             {
-              pattern: tupleVariant("Ok", { kind: "path", path: "Completion::Normal" }),
+              pattern: tupleVariant("Ok", tupleVariant("Completion::Normal", { kind: "path", path: "()" })),
               expression: path("body"),
             },
-            {
-              pattern: tupleVariant("Ok", binding("completion")),
-              expression: call("Ok", path("completion")),
-            },
+            ...["Return", "Break", "Continue"].map(name => ({
+              pattern: tupleVariant("Ok", tupleVariant(`Completion::${name}`, binding("value"))),
+              expression: call("Ok", call(`Completion::${name}`, path("value"))),
+            })),
             {
               pattern: tupleVariant("Err", binding("error")),
               expression: call("Err", path("error")),

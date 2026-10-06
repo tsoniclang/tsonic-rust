@@ -185,10 +185,11 @@ function recordVariableDeclarationListFacts(
       }
       const declarationKind = walk.context.ast.variableDeclarationKind(declaration);
       if (moduleLevel && (declarationKind === "const" || declarationKind === "let" || declarationKind === "var")) {
-        walk.context.facts.set(
+        const binding = walk.moduleBindings.classifyValue(declaration, declarationKind, effective);
+        if (binding !== undefined) walk.context.facts.set(
           declaration,
           rustModuleBindingFactKey,
-          walk.moduleBindings.classifyValue(declaration, declarationKind, effective),
+          binding,
           [{ message: "rust finalized project module binding storage" }],
         );
       }

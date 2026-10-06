@@ -634,7 +634,7 @@ test("try-scope match bindings follow all rustfmt width boundaries", () => {
   );
   assert.match(
     exactWidth,
-    /let __tsonic_try_flow_11: rt::TsonicResult<rt::Completion<i32>> =\n                match __tsonic_try_body_10 \{/u,
+    /let __tsonic_try_flow_11: rt::TsonicResult<rt::Completion<i32, \(\)>> =\n                match __tsonic_try_body_10 \{/u,
   );
 
   const overWidth = nestedTryScopeSource(
@@ -648,7 +648,7 @@ test("try-scope match bindings follow all rustfmt width boundaries", () => {
   );
   assert.match(
     overWidth,
-    /let __tsonic_try_flow_2: rt::TsonicResult<rt::Completion<Option<String>>> =\n                match __tsonic_try_body_1 \{/u,
+    /let __tsonic_try_flow_2: rt::TsonicResult<rt::Completion<Option<String>, \(\)>> =\n                match __tsonic_try_body_1 \{/u,
   );
 });
 

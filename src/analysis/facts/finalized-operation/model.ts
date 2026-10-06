@@ -23,7 +23,7 @@ export interface RustFinalizedSourceArgument {
   readonly disposition: "runtime" | "evaluation-only";
 }
 
-export type RustFinalizedValueConversion =
+export type RustFinalizedAtomicValueConversion =
   | {
       readonly kind: "identity";
       readonly sourceCarrier: TargetTypeRef;
@@ -37,6 +37,14 @@ export type RustFinalizedValueConversion =
       readonly targetCarrier: TargetTypeRef;
       readonly fallible: boolean;
     };
+
+export type RustFinalizedValueConversion = RustFinalizedAtomicValueConversion | {
+  readonly kind: "sequence";
+  readonly steps: readonly Extract<RustFinalizedAtomicValueConversion, { readonly kind: "semantic" }>[];
+  readonly sourceCarrier: TargetTypeRef;
+  readonly targetCarrier: TargetTypeRef;
+  readonly fallible: boolean;
+};
 
 export interface RustFinalizedSourceInput {
   readonly source: { readonly kind: "receiver" } | { readonly kind: "argument"; readonly sourceIndex: number };
@@ -98,6 +106,7 @@ export interface RustFinalizedOperationAbi {
   readonly sourceReceiver: { readonly kind: "none" } | {
     readonly kind: "receiver";
     readonly carrier: TargetTypeRef;
+    readonly declaredCarrier: TargetTypeRef;
     readonly disposition: "runtime" | "compile-time";
   };
   readonly sourceArguments: readonly RustFinalizedSourceArgument[];
@@ -127,6 +136,7 @@ export interface FinalizeRustProviderOperationAbiOptions<
   readonly operationKind: OperationKind;
   readonly form: RustProviderOperationForm;
   readonly sourceReceiverCarrier?: TargetTypeRef;
+  readonly declaredSourceReceiverCarrier?: TargetTypeRef;
   readonly sourceArgumentCarriers: readonly TargetTypeRef[];
   readonly spreadSourceArgumentIndexes?: readonly number[];
   readonly declaredSourceArgumentCarriers?: readonly (TargetTypeRef | undefined)[];

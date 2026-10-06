@@ -28,7 +28,7 @@ export interface RustModuleBindingPolicy {
     declaration: Node,
     declarationKind: "const" | "let" | "var",
     valueCarrier: TargetTypeRef,
-  ): Exclude<RustModuleBindingFact, { readonly storage: "native-callable" }>;
+  ): Exclude<RustModuleBindingFact, { readonly storage: "native-callable" }> | undefined;
 }
 
 export interface RustNativeModuleCallable {
@@ -43,12 +43,15 @@ export function createRustModuleBindingPolicy(
 ): RustModuleBindingPolicy {
   const callableByDeclaration = collectNativeCallableCandidates(context);
   const cyclic = cyclicSourceFiles(context.source.navigation, context.sourceFiles);
+  if (cyclic.kind === "unresolved") context.diagnostics.push({
+    code: "RUST_SOURCE_MODULE_GRAPH_NOT_PROVEN", category: "error", source: "tsonic-rust", message: cyclic.reason,
+  });
   const nativeCallables = new Map<Node, RustNativeModuleCallable>();
   const nativeExpressions = new WeakSet<Node>();
   for (const [declaration, callableDeclaration] of callableByDeclaration) {
     const sourceFile = context.ast.getSourceFile(declaration);
     const name = context.names.functionNameForDeclaration(declaration);
-    if (sourceFile !== undefined && name !== undefined && !cyclic.has(sourceFile) &&
+    if (cyclic.kind === "resolved" && sourceFile !== undefined && name !== undefined && !cyclic.sourceFiles.has(sourceFile) &&
       !context.runtimeValueUses.hasSameFileRuntimeUseBeforeDeclaration(declaration)) {
       const valueObserved = context.runtimeValueUses.hasFirstClassUse(declaration);
       nativeCallables.set(declaration, Object.freeze({
@@ -70,7 +73,8 @@ export function createRustModuleBindingPolicy(
       declaration: Node,
       declarationKind: "const" | "let" | "var",
       valueCarrier: TargetTypeRef,
-    ): Exclude<RustModuleBindingFact, { readonly storage: "native-callable" }> {
+    ): Exclude<RustModuleBindingFact, { readonly storage: "native-callable" }> | undefined {
+      if (cyclic.kind === "unresolved") return undefined;
       const initializer = Node_Initializer(context.ast, declaration);
       const initializerKind = initializer === undefined
         ? undefined
@@ -78,7 +82,7 @@ export function createRustModuleBindingPolicy(
       const stringConstant = isRustStringCarrier(valueCarrier) &&
         (initializerKind === "KindStringLiteral" || initializerKind === "KindNoSubstitutionTemplateLiteral") &&
         moduleStringCanUseStaticStorage(declaration, context) &&
-        !cyclic.has(context.ast.getSourceFile(declaration)!) &&
+        !cyclic.sourceFiles.has(context.ast.getSourceFile(declaration)!) &&
         !context.runtimeValueUses.hasSameFileRuntimeUseBeforeDeclaration(declaration);
       const nativeConst = declarationKind === "const" && !addressTakenDeclarations.has(declaration) && (
         initializerKind === KindNumericLiteral ||

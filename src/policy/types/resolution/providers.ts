@@ -68,7 +68,7 @@ import { jsRegExpSourceProfileIdentity } from "@tsonic/js-source-profile";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
 import type { RustSourcePolicyContext } from "../../model/context.js";
-import type { SourceErrorStorageProjection } from "@tsonic/target-api/analysis";
+import type { SourceStorageProjection } from "@tsonic/target-api/analysis";
 import { rustSourceErrorComponentContext } from "./error-storage-projection.js";
 
 const regExpIdentity = jsRegExpSourceProfileIdentity;
@@ -447,7 +447,7 @@ export function resolveSourceProfileCarrierFromArguments(
   arguments_: readonly TargetTypeRef[],
   options: RustTargetTypeResolutionOptions,
   subject: Node | undefined,
-  projection?: readonly SourceErrorStorageProjection[],
+  projection?: readonly SourceStorageProjection[],
 ): TargetTypeRef | undefined {
   if (options.jsEnabled && name === "ArrayEntriesIterator" && arguments_.length === 1) {
     return rustJsArrayEntriesTargetType(arguments_[0]!);

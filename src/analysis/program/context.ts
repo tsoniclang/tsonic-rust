@@ -77,11 +77,12 @@ import {
   type RustGeneratedDeclarationUseRegistry,
 } from "./generated-declaration-uses.js";
 import { createRustErrorStorageDemandQuery } from "../objects/error-storage-demands.js";
-import type { SourceErrorStorageDemandQueries } from "@tsonic/target-api/analysis";
+import { createSourceStorageQuery, type SourceErrorStorageDemandQueries, type SourceStorageQueries } from "@tsonic/target-api/analysis";
 import { createRustRetainedErrorDemandSelection } from "../objects/retained-error-demands.js";
 import { createRustSourceProfileRegistry } from "../facts/source-profile-registry.js";
 
 export interface RustAnalysisContext extends RustSourcePolicyContext {
+  readonly sourceStorage: SourceStorageQueries;
   readonly errorStorageDemands: SourceErrorStorageDemandQueries;
   readonly typeDefinitions: RustTypeDefinitionRegistry;
   readonly typeFamilies: RustSourceTypeFamilyRegistry;
@@ -159,9 +160,12 @@ export function createRustAnalysisContext(
     semanticsFor: input.source.semantics.forNode,
   });
   const memoryBindings = createTsonicMemoryBindingIndex(input.source);
+  const sourceStorage = createSourceStorageQuery(input.source, sourceFiles);
+  const sourceStorageFailure = sourceStorage.failureReason();
   return Object.freeze({
+    sourceStorage,
     errorStorageDemands: createRustErrorStorageDemandQuery(input.source,
-      createRustSourceProfileRegistry(input.source.sourceFiles, ast, jsEnabled), sourceFiles,
+      createRustSourceProfileRegistry(input.source.sourceFiles, ast, jsEnabled), sourceStorage,
       createRustRetainedErrorDemandSelection(input.source, facts, providerSemantics.operations)),
     typeDefinitions,
     typeFamilies: createRustSourceTypeFamilyRegistry(),
@@ -193,7 +197,10 @@ export function createRustAnalysisContext(
     runtimeValueUses,
     generatedDeclarationUses: createRustGeneratedDeclarationUseRegistry(),
     names,
-    diagnostics: [...names.diagnostics, ...lifetimes.diagnostics, ...memoryBindings.issues.map(issue => ({
+    diagnostics: [...names.diagnostics, ...lifetimes.diagnostics,
+      ...(sourceStorageFailure === undefined ? [] : [{ code: "RUST_SOURCE_STORAGE_NOT_PROVEN",
+        category: "error" as const, source: "tsonic-rust", message: sourceStorageFailure }]),
+      ...memoryBindings.issues.map(issue => ({
       code: "RUST_MEMORY_BINDING_NOT_PROVEN", category: "error" as const, source: "tsonic-rust",
       sourceNode: issue.node, message: issue.reason,
     }))],

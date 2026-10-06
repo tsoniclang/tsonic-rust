@@ -434,6 +434,7 @@ test("provider methods finalize receiver, source order, passing modes, conversio
   assert.deepEqual(abi.sourceReceiver, {
     kind: "receiver",
     carrier: string,
+    declaredCarrier: string,
     disposition: "runtime",
   });
   assert.equal(abi.targetReceiver.kind, "input");
@@ -518,6 +519,7 @@ test("provider receivers distinguish runtime values from compile-time owner iden
   assert.deepEqual(abi.sourceReceiver, {
     kind: "receiver",
     carrier: owner,
+    declaredCarrier: owner,
     disposition: "compile-time",
   });
   assert.deepEqual(abi.targetArguments.map((input) => input.source), [

@@ -167,7 +167,8 @@ export function validateRustFinalizedOperationAbi(candidate: unknown, definition
     abi.operationKind,
     abi.target,
     createInputFactory(sourceReceiverCarrier, abi.sourceArguments.map((argument) => argument.carrier),
-      new Set(abi.sourceArguments.filter(argument => argument.form === "spread-sequence").map(argument => argument.sourceIndex)), definitions),
+      new Set(abi.sourceArguments.filter(argument => argument.form === "spread-sequence").map(argument => argument.sourceIndex)),
+      definitions, abi.sourceReceiver.kind === "receiver" ? abi.sourceReceiver.declaredCarrier : undefined),
     abi.sourceArguments.length, definitions,
   );
   if (expectedMapping === undefined ||
@@ -235,8 +236,8 @@ function isSourceReceiver(value: unknown): value is RustFinalizedOperationAbi["s
   return isRecord(value) && (value.kind === "none"
     ? hasExactKeys(value, ["kind"])
     : value.kind === "receiver" &&
-      hasExactKeys(value, ["kind", "carrier", "disposition"]) &&
-      isRustTargetTypeRef(value.carrier) && dispositions.has(value.disposition));
+      hasExactKeys(value, ["kind", "carrier", "declaredCarrier", "disposition"]) &&
+      isRustTargetTypeRef(value.carrier) && isRustTargetTypeRef(value.declaredCarrier) && dispositions.has(value.disposition));
 }
 
 function isSourceArgument(value: unknown): value is RustFinalizedSourceArgument {

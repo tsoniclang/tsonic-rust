@@ -114,7 +114,7 @@ export function run(): void {
   const completionTypes = [...source.matchAll(/rt::Completion<([^>\n]+)>/gu)]
     .map((match) => match[1]);
   assert.equal(completionTypes.length > 0, true);
-  assert.deepEqual([...new Set(completionTypes)], ["String"]);
+  assert.deepEqual([...new Set(completionTypes)], ["String, ()"]);
   validateGeneratedProject("generator-completion-return-carrier", result.artifacts);
 });
 

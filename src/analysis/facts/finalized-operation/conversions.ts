@@ -2,6 +2,7 @@ import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../tar
 import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
+import { selectRustSourceValueConversion } from "../../../policy/conversions/selection.js";
 import { isFinalizedConversion } from "./conversion-shape.js";
 import type { RustArgumentMode, RustProviderOperationForm, RustValueConversion } from "../keys.js";
 import type { RustFinalizedArrayInput, RustFinalizedConstantInput, RustFinalizedSliceInput, RustFinalizedSourceInput, RustFinalizedTaggedArrayInput, RustFinalizedTargetInput, RustFinalizedValueConversion } from "./model.js";
@@ -49,8 +50,14 @@ export function sourceInput(
   mode: RustArgumentMode,
   conversion: RustValueConversion | undefined,
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
+  declaredCarrier: TargetTypeRef = sourceCarrier,
 ): RustFinalizedSourceInput | undefined {
-  const finalized = finalizeValueConversion(conversion, sourceCarrier, undefined, definitions);
+  const selected = rustTargetTypeRefEquals(sourceCarrier, declaredCarrier)
+    ? undefined : selectRustSourceValueConversion(sourceCarrier, declaredCarrier, definitions);
+  const sourceConversion = finalizeValueConversion(selected, sourceCarrier, declaredCarrier, definitions);
+  const targetConversion = finalizeValueConversion(conversion, declaredCarrier, undefined, definitions);
+  const finalized = sourceConversion === undefined || targetConversion === undefined
+    ? undefined : composeFinalizedValueConversions(sourceConversion, targetConversion);
   const parameterCarrier = finalized === undefined ? undefined : carrierAfterMode(finalized.targetCarrier, mode);
   return finalized === undefined || parameterCarrier === undefined ? undefined : {
     source,
@@ -96,6 +103,13 @@ export function finalizeValueConversion(
 
 export function finalizedConversionIsValid(conversion: RustFinalizedValueConversion, definitions: RustTypeDefinitions = emptyRustTypeDefinitions): boolean {
   if (!isFinalizedConversion(conversion)) return false;
+  if (conversion.kind === "sequence") {
+    return rustTargetTypeRefEquals(conversion.sourceCarrier, conversion.steps[0]!.sourceCarrier) &&
+      rustTargetTypeRefEquals(conversion.targetCarrier, conversion.steps[conversion.steps.length - 1]!.targetCarrier) &&
+      conversion.fallible === conversion.steps.some(step => step.fallible) &&
+      conversion.steps.every((step, index) => finalizedConversionIsValid(step, definitions) &&
+        (index === 0 || rustTargetTypeRefEquals(conversion.steps[index - 1]!.targetCarrier, step.sourceCarrier)));
+  }
   if (conversion.kind === "identity") {
     return conversion.fallible === false && rustTargetTypeRefEquals(conversion.sourceCarrier, conversion.targetCarrier);
   }
@@ -104,6 +118,25 @@ export function finalizedConversionIsValid(conversion: RustFinalizedValueConvers
     rustTargetTypeRefEquals(conversion.sourceCarrier, contract.source) &&
     rustTargetTypeRefEquals(conversion.targetCarrier, contract.target) &&
     conversion.fallible === contract.fallible;
+}
+
+function composeFinalizedValueConversions(
+  source: RustFinalizedValueConversion,
+  target: RustFinalizedValueConversion,
+): RustFinalizedValueConversion | undefined {
+  if (!rustTargetTypeRefEquals(source.targetCarrier, target.sourceCarrier)) return undefined;
+  if (source.kind === "identity") return target;
+  if (target.kind === "identity") return source;
+  return {
+    kind: "sequence",
+    steps: Object.freeze([
+      ...(source.kind === "sequence" ? source.steps : [source]),
+      ...(target.kind === "sequence" ? target.steps : [target]),
+    ]),
+    sourceCarrier: source.sourceCarrier,
+    targetCarrier: target.targetCarrier,
+    fallible: source.fallible || target.fallible,
+  };
 }
 
 export function carrierAfterMode(carrier: TargetTypeRef, mode: RustArgumentMode): TargetTypeRef | undefined {

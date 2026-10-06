@@ -1,6 +1,6 @@
-import type { Node, SourceFile } from "@tsonic/tsts";
+import type { Node } from "@tsonic/tsts";
 import { VariableDeclarationList_Declarations, VariableStatement_DeclarationList, type TargetSourceProgram } from "@tsonic/target-api/source";
-import { createSourceErrorStorageDemandQuery, type SourceErrorRetainedDemand, type SourceErrorStorageDemandQueries } from "@tsonic/target-api/analysis";
+import { createSourceErrorStorageDemandQuery, type SourceErrorRetainedDemand, type SourceErrorStorageDemandQueries, type SourceStorageQueries } from "@tsonic/target-api/analysis";
 import { resolveRustSourceErrorDeclaration } from "../../policy/types/external-project-types.js";
 import type { RustSourceProfileRegistry } from "../../policy/types/source-profile.js";
 import { rustSourceErrorConstructors } from "../../target-model/identities/source-errors.js";
@@ -8,7 +8,7 @@ import { rustSourceErrorConstructors } from "../../target-model/identities/sourc
 export function createRustErrorStorageDemandQuery(
   source: TargetSourceProgram,
   profiles: RustSourceProfileRegistry,
-  sourceFiles: readonly SourceFile[],
+  storage: SourceStorageQueries,
   retention: (node: Node) => SourceErrorRetainedDemand,
 ): SourceErrorStorageDemandQueries {
   const { ast } = source;
@@ -36,5 +36,5 @@ export function createRustErrorStorageDemandQuery(
     }
   }
   return createSourceErrorStorageDemandQuery(source, { fields: [...fields], constructors: [...constructors],
-    stackCaptures: [...stackCaptures], storageMutators: [], retention }, sourceFiles);
+    stackCaptures: [...stackCaptures], storageMutators: [], retention }, storage);
 }

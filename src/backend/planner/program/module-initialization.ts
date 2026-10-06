@@ -185,8 +185,12 @@ function validateRuntimeModuleGraph(
 ): boolean {
   const reachable = collectReachableSourceFiles(input, roots);
   const components = stronglyConnectedSourceFiles(input.program.sourceNavigation, reachable);
+  if (components.kind === "unresolved") {
+    diagnostics.push({ code: "RUST_SOURCE_MODULE_GRAPH_NOT_PROVEN", category: "error", source: "tsonic-rust", message: components.reason });
+    return false;
+  }
   let valid = true;
-  for (const component of components) {
+  for (const component of components.components) {
     const cyclic = component.length > 1 || input.program.sourceNavigation
       .moduleDependencies(component[0]!)
       .some((dependency) => dependency.sourceFile === component[0]);
@@ -229,17 +233,14 @@ function collectReachableSourceFiles(
   roots: readonly SourceFile[],
 ): ReadonlySet<SourceFile> {
   const reachable = new Set<SourceFile>();
-  const visit = (sourceFile: SourceFile): void => {
-    if (reachable.has(sourceFile)) {
-      return;
-    }
+  const pending = [...roots];
+  while (pending.length > 0) {
+    const sourceFile = pending.pop()!;
+    if (reachable.has(sourceFile)) continue;
     reachable.add(sourceFile);
     for (const dependency of input.program.sourceNavigation.moduleDependencies(sourceFile)) {
-      visit(dependency.sourceFile);
+      if (!reachable.has(dependency.sourceFile)) pending.push(dependency.sourceFile);
     }
-  };
-  for (const root of roots) {
-    visit(root);
   }
   return reachable;
 }

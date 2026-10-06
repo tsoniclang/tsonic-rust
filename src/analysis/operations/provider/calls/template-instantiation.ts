@@ -616,6 +616,7 @@ export function finalizeProviderOperationFact(
     operationKind: template.operationKind,
     form: template.target,
     ...(sourceReceiverCarrier === undefined ? {} : { sourceReceiverCarrier }),
+    ...(template.receiverCarrier === undefined ? {} : { declaredSourceReceiverCarrier: template.receiverCarrier }),
     sourceArgumentCarriers,
     ...(spreadSourceArgumentIndexes === undefined ? {} : { spreadSourceArgumentIndexes }),
     declaredSourceArgumentCarriers: template.parameterCarriers,

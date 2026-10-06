@@ -23,6 +23,7 @@ import { mergeRustAdjacentConditionalBranches, simplifyRustBooleanConditional } 
 import { normalizeRustOptionalUnitMatch } from "./option-conditionals.js";
 import { mapRustExpressionChildren } from "../expression-children.js";
 import { lowerRustCompletionScope } from "./completion-regions.js";
+import { closeRustCompletionBindings } from "./completion-bindings.js";
 import { appendRustNamingAllowance, finalizeRustFunctionNames, finalizeRustItemNames,
   rustExpressionDeclaresNonSnakeName, rustStatementDeclaresNonSnakeName } from "./authored-names.js";
 
@@ -178,6 +179,7 @@ function finalizeRustFunctionBodyStyle(block: RustBlock): RustBlock {
 }
 
 function finalizeRustBlockStyle(block: RustBlock): RustBlock {
+  block = closeRustCompletionBindings(block);
   const localItems = block.statements.flatMap(statement => statement.kind === "item" ? [statement.item] : []);
   const scope = finalizeRustItemScope(localItems);
   let nextItem = 0;

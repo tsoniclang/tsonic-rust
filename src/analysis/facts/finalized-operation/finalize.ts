@@ -27,6 +27,8 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
 ): RustFinalizedOperationAbiFor<OperationKind> | undefined {
   if (!operationKinds.has(options.operationKind) || !isRustTargetTypeRef(options.resultCarrier) ||
     (options.sourceReceiverCarrier !== undefined && !isRustTargetTypeRef(options.sourceReceiverCarrier)) ||
+    (options.declaredSourceReceiverCarrier !== undefined && (
+      options.sourceReceiverCarrier === undefined || !isRustTargetTypeRef(options.declaredSourceReceiverCarrier))) ||
     !isDenseDataArray(options.sourceArgumentCarriers) ||
     options.sourceArgumentCarriers.some((carrier) => !isRustTargetTypeRef(carrier)) ||
     (options.declaredSourceArgumentCarriers !== undefined &&
@@ -94,7 +96,8 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
   )) {
     return undefined;
   }
-  const input = createInputFactory(options.sourceReceiverCarrier, options.sourceArgumentCarriers, spreadIndexes, definitions);
+  const input = createInputFactory(options.sourceReceiverCarrier, options.sourceArgumentCarriers, spreadIndexes,
+    definitions, options.declaredSourceReceiverCarrier);
   const mapping = finalizeTargetInputs(
     options.operationKind,
     options.form,
@@ -150,6 +153,7 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
       : {
           kind: "receiver",
           carrier: options.sourceReceiverCarrier,
+          declaredCarrier: options.declaredSourceReceiverCarrier ?? options.sourceReceiverCarrier,
           disposition: mappingUsesSourceReceiver(mapping.targetReceiver, mapping.targetArguments)
             ? "runtime"
             : "compile-time",

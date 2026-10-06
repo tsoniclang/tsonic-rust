@@ -332,6 +332,7 @@ export type RustStmt =
   | { readonly kind: "throw"; readonly error: RustExpr; readonly tail?: true }
   | {
       readonly kind: "try-scope";
+      readonly normalBindings?: readonly Extract<RustStmt, { readonly kind: "let" }>[];
       readonly bodyName: string;
       readonly flowName: string;
       readonly finallyName?: string;

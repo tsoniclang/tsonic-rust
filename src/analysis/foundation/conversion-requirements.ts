@@ -184,6 +184,9 @@ export function rustFoundationForFinalizedConversion(
       foundation,
       rustFoundationForValueConversion(conversion.conversion, definitions),
     );
+  } else if (conversion.kind === "sequence") {
+    for (const step of conversion.steps) foundation = maximumRustFoundation(
+      foundation, rustFoundationForFinalizedConversion(step, definitions));
   }
   return foundation;
 }

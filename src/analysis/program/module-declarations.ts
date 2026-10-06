@@ -33,7 +33,8 @@ function recordDeclaration(walk: RustFactWalk, declaration: Node): void {
   if (declarationKind !== "const" && declarationKind !== "let" && declarationKind !== "var") return;
   const carrier = resolveTypeNodeCarrier(walk, Node_Type(ast, declaration));
   if (carrier === undefined || setCarrierFact(walk, declaration, carrier) === undefined) return;
-  facts.set(declaration, rustModuleBindingFactKey,
-    walk.moduleBindings.classifyValue(declaration, declarationKind, carrier),
+  const binding = walk.moduleBindings.classifyValue(declaration, declarationKind, carrier);
+  if (binding !== undefined) facts.set(declaration, rustModuleBindingFactKey,
+    binding,
     [{ message: "rust finalized annotated module storage before dependent bodies" }]);
 }

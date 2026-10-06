@@ -438,6 +438,7 @@ export function analyzeRustGeneratedItemUsage(input: {
   };
   const visitFinalizedConversion = (conversion: RustFinalizedValueConversion): void => {
     if (conversion.kind === "semantic") visitConversion(conversion.conversion);
+    else if (conversion.kind === "sequence") conversion.steps.forEach(visitFinalizedConversion);
   };
   const visitTargetInput = (targetInput: RustFinalizedTargetInput): void => {
     if (isRustFinalizedSourceInput(targetInput)) {

@@ -20,11 +20,12 @@ export function createInputFactory(
   argumentCarriers: readonly TargetTypeRef[],
   spreadIndexes: ReadonlySet<number> = new Set(),
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
+  declaredReceiverCarrier: TargetTypeRef | undefined = receiverCarrier,
 ) {
   const receiver = (mode: RustArgumentMode, conversion?: RustValueConversion): RustFinalizedSourceInput | undefined =>
     receiverCarrier === undefined
       ? undefined
-      : sourceInput({ kind: "receiver" }, receiverCarrier, mode, conversion, definitions);
+      : sourceInput({ kind: "receiver" }, receiverCarrier, mode, conversion, definitions, declaredReceiverCarrier);
   const argument = (
     sourceIndex: number,
     mode: RustArgumentMode,

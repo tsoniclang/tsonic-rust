@@ -2,7 +2,8 @@ import type { RustBlock, RustExpr, RustPattern, RustStmt, RustType } from "../no
 import { mapRustExpressionChildren } from "../expression-children.js";
 import { rustTypeEquals } from "../inspection/type-equality.js";
 import { applyRustTailShape } from "./block-flow.js";
-import { rustBlockBreaksToLabel } from "../inspection/source-usage.js";
+import { rustBlockBreaksToLabel, rustBlockReferencesPath } from "../inspection/source-usage.js";
+import { closeRustCompletionBindings } from "./completion-bindings.js";
 
 type CompletionScope = Extract<RustStmt, { readonly kind: "try-scope" | "resource-scope" }>;
 const path = (name: string): RustExpr => ({ kind: "path", path: name });
@@ -13,13 +14,25 @@ const variant = (name: string, ...elements: readonly RustPattern[]): RustPattern
 const unit = (): RustExpr => ({ kind: "tuple-literal", elements: [] });
 
 export function lowerRustCompletionScope(scope: CompletionScope): RustStmt {
+  const normalBindings = scope.kind === "try-scope" ? scope.normalBindings ?? [] : [];
+  const normalType: RustType = normalBindings.length === 0 ? { kind: "unit" }
+    : { kind: "tuple", elements: normalBindings.map(declaration => declaration.type!) };
   const completionType: RustType = { kind: "named", path: "rt::Completion",
-    genericArguments: [{ kind: "type", type: scope.returnType }] };
+    genericArguments: [{ kind: "type", type: scope.returnType }, { kind: "type", type: normalType }] };
+  const unitCompletionType: RustType = { ...completionType,
+    genericArguments: [{ kind: "type", type: scope.returnType }, { kind: "type", type: { kind: "unit" } }] };
+  const normal = (): RustExpr => call("rt::Completion::Normal", normalBindings.length === 0 ? unit()
+    : { kind: "tuple-literal", elements: normalBindings.map(declaration => path(declaration.name)) });
   const resultType = (type: RustType): RustType => ({ kind: "named", path: "rt::TsonicResult",
     genericArguments: [{ kind: "type", type }] });
   const capture = (name: string, body: RustBlock, fallible: boolean, terminates: boolean, type: RustType = completionType,
-    normal: RustExpr = path("rt::Completion::Normal")): RustStmt => {
-    const region = { ...body, statements: [...lowerRegion(body, scope.asynchronous ? undefined : name).statements,
+    normal: RustExpr = call("rt::Completion::Normal", unit()),
+    bindings: readonly Extract<RustStmt, { readonly kind: "let" }>[] = []): RustStmt => {
+    const ownedBody = { ...body, statements: [
+      ...bindings.filter(declaration => !terminates || rustBlockReferencesPath(body, declaration.name)),
+      ...body.statements] };
+    const region = { ...ownedBody, statements: [
+      ...lowerRegion(ownedBody, scope.asynchronous ? undefined : name).statements,
       ...(terminates ? [] : [{ kind: "tail" as const, expr: fallible ? call("Ok", normal) : normal }])] };
     return { kind: "let", name, mutable: false, type: fallible ? resultType(type) : type,
       init: scope.asynchronous
@@ -28,7 +41,8 @@ export function lowerRustCompletionScope(scope: CompletionScope): RustStmt {
   };
   const statements: RustStmt[] = [];
   if (scope.kind === "try-scope") {
-    statements.push(capture(scope.bodyName, scope.body, scope.bodyFallible, scope.bodyTerminates));
+    statements.push(capture(scope.bodyName, scope.body, scope.bodyFallible, scope.bodyTerminates,
+      completionType, normal(), normalBindings));
     let fallible = scope.bodyFallible;
     const caught = scope.catchClause;
     statements.push({ kind: "let", name: scope.flowName, mutable: false,
@@ -37,7 +51,8 @@ export function lowerRustCompletionScope(scope: CompletionScope): RustStmt {
         { pattern: variant("Ok", binding("completion")), expression: caught.fallible
           ? call("Ok", path("completion")) : path("completion") },
         { pattern: variant("Err", binding(caught.binding)), expression: {
-          kind: "block", body: { statements: [capture(scope.flowName, caught.body, caught.fallible, caught.terminates),
+          kind: "block", body: { statements: [capture(scope.flowName, caught.body, caught.fallible, caught.terminates,
+            completionType, normal(), normalBindings),
             { kind: "tail", expr: path(scope.flowName) }] },
         } },
       ] } });
@@ -45,15 +60,15 @@ export function lowerRustCompletionScope(scope: CompletionScope): RustStmt {
     const finalized = scope.finallyClause;
     if (finalized !== undefined) {
       if (scope.finallyName === undefined) throw new Error("Finalized completion requires its exact hygienic capture identity.");
-      statements.push(capture(scope.finallyName, finalized.body, finalized.fallible, finalized.terminates));
+      statements.push(capture(scope.finallyName, finalized.body, finalized.fallible, finalized.terminates, unitCompletionType));
       statements.push({ kind: "let", name: scope.flowName, mutable: false,
         type: fallible || finalized.fallible ? resultType(completionType) : completionType,
         init: fallible || finalized.fallible
           ? call("rt::finish_finally", fallible ? path(scope.flowName) : call("Ok", path(scope.flowName)),
             finalized.fallible ? path(scope.finallyName) : call("Ok", path(scope.finallyName)))
           : { kind: "match", expression: path(scope.finallyName), arms: [
-            { pattern: { kind: "path", path: "rt::Completion::Normal" }, expression: path(scope.flowName) },
-            { pattern: binding("completion"), expression: path("completion") },
+            { pattern: variant("rt::Completion::Normal", { kind: "wildcard" }), expression: path(scope.flowName) },
+            ...abruptVariants(false),
           ] } });
       fallible ||= finalized.fallible;
     }
@@ -69,8 +84,10 @@ export function lowerRustCompletionScope(scope: CompletionScope): RustStmt {
       expr: { kind: "await", expr: { kind: "async-block", move: false, body: scope.cleanup } } });
     else statements.push(...scope.cleanup.statements);
   }
-  statements.push(dispatch(scope));
-  return { kind: "scope", body: { statements } };
+  const dispatched = dispatch(scope);
+  statements.push(normalBindings.length === 0 ? dispatched : { kind: "tail", expr: dispatched.expr });
+  return normalBindings.length === 0 ? { kind: "scope", body: { statements } }
+    : { kind: "let", name: scope.flowName, mutable: false, type: normalType, init: { kind: "block", body: { statements } } };
 }
 
 const runtimeError: RustType = { kind: "named", path: "rt::TsonicError" };
@@ -81,15 +98,16 @@ function unwrap(name: string): RustStmt {
   } };
 }
 
-function dispatch(scope: CompletionScope): RustStmt {
+function dispatch(scope: CompletionScope): Extract<RustStmt, { readonly kind: "expr" | "tail" }> {
   const exit = (value: RustExpr): RustExpr => scope.tail && scope.terminates ? value
     : { kind: "return-expression", expr: value };
   const arms: Extract<RustExpr, { readonly kind: "match" }>["arms"][number][] = [{
-    pattern: { kind: "path", path: "rt::Completion::Normal" }, expression: scope.terminates
-      ? { kind: "unreachable", message: "terminating Tsonic completion scope completed normally" } : unit(),
+    pattern: variant("rt::Completion::Normal", scope.kind === "try-scope" && (scope.normalBindings?.length ?? 0) > 0
+      ? binding("normal") : { kind: "wildcard" }), expression: scope.terminates
+      ? { kind: "unreachable", message: "terminating Tsonic completion scope completed normally" }
+      : scope.kind === "try-scope" && (scope.normalBindings?.length ?? 0) > 0 ? path("normal") : unit(),
   }];
-  if (scope.propagate) arms.push({ pattern: binding("completion"),
-    expression: exit(scope.fallible ? call("Ok", path("completion")) : path("completion")) });
+  if (scope.propagate) arms.push(...abruptVariants(scope.fallible).map(arm => ({ ...arm, expression: exit(arm.expression) })));
   else {
     if (scope.dispatchReturn) arms.push({ pattern: variant("rt::Completion::Return", binding("value")),
       expression: exit(scope.fallible ? call("Ok", path("value")) : path("value")) });
@@ -109,6 +127,14 @@ function dispatch(scope: CompletionScope): RustStmt {
   }
   return { kind: scope.tail && scope.terminates ? "tail" : "expr",
     expr: { kind: "match", expression: path(scope.flowName), arms } };
+}
+
+function abruptVariants(fallible: boolean): Extract<RustExpr, { readonly kind: "match" }>["arms"] {
+  return ["Return", "Break", "Continue"].map(name => {
+    const value = call(`rt::Completion::${name}`, path("value"));
+    return { pattern: variant(`rt::Completion::${name}`, binding("value")),
+      expression: fallible ? call("Ok", value) : value };
+  });
 }
 
 function lowerRegion(body: RustBlock, label: string | undefined): RustBlock {
@@ -175,6 +201,6 @@ function lowerRegion(body: RustBlock, label: string | undefined): RustBlock {
       case "continue": return value;
     }
   };
-  const block = (value: RustBlock): RustBlock => ({ ...value, statements: value.statements.map(statement) });
+  const block = (value: RustBlock): RustBlock => ({ ...value, statements: closeRustCompletionBindings(value).statements.map(statement) });
   return block(body);
 }

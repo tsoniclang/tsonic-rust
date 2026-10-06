@@ -56,7 +56,9 @@ test("genuine callable boundaries retain their own returns while nested completi
   assert.equal(capture.body.statements[0].init, callback);
   const text = printRustBlockStatements({ statements: [lowered] }, 0);
   assert.match(text, /return callback_value;/u);
-  assert.match(text, /completion => break 'body_flow Ok\(completion\)/u);
+  for (const completion of ["Return", "Break", "Continue"]) {
+    assert.equal(text.includes(`rt::Completion::${completion}(value) => break 'body_flow Ok(rt::Completion::${completion}(value))`), true, completion);
+  }
   assert.doesNotMatch(text, /break 'body_flow callback_value/u);
 });
 

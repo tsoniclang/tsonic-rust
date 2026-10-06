@@ -46,7 +46,11 @@ export function createRustModuleInitializationPlan(
     if (requirement.kind === "required") minimumFoundation = "std";
   }
   const stateIndependentCycles = new Set<SourceFile>();
-  for (const component of stronglyConnectedSourceFiles(input.source.navigation, new Set(input.sourceFiles))) {
+  const components = stronglyConnectedSourceFiles(input.source.navigation, new Set(input.sourceFiles));
+  if (components.kind === "unresolved") {
+    for (const sourceFile of input.sourceFiles) requirements.set(sourceFile, unresolved(sourceFile, components.reason));
+  }
+  for (const component of components.kind === "resolved" ? components.components : []) {
     const first = component[0];
     if (first === undefined || component.length === 1 && !input.source.navigation.moduleDependencies(first)
       .some(dependency => dependency.sourceFile === first)) continue;

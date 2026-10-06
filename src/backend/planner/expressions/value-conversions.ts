@@ -594,6 +594,14 @@ export function applyFinalizedValueConversion(
   node: Node,
   position: "source-input" | "operation-result",
 ): RustExpr | undefined {
+  if (conversion.kind === "sequence") {
+    let result: RustExpr | undefined = expression;
+    for (const step of conversion.steps) {
+      result = applyFinalizedValueConversion(context, result, step, node, position);
+      if (result === undefined) return undefined;
+    }
+    return result;
+  }
   return conversion.kind === "identity"
     ? expression
     : applyRustValueConversion(

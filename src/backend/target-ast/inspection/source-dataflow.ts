@@ -431,8 +431,17 @@ function firstAccessesInStatement(
         new Set<FirstAccess>(["exit"]),
       );
     case "resource-scope":
-    case "try-scope":
-      return conservativeStatementAccess(statement, path);
+      return replaceNone(firstAccessesInStatements(statement.body.statements, path),
+        firstAccessesInStatements(statement.cleanup.statements, path));
+    case "try-scope": {
+      const body = firstAccessesInStatements(statement.body.statements, path);
+      const caught = statement.catchClause;
+      const alternatives = caught === undefined ? body : unionFirstAccesses(body,
+        caught.binding === path ? new Set<FirstAccess>(["exit"])
+          : firstAccessesInStatements(caught.body.statements, path));
+      return statement.finallyClause === undefined ? alternatives
+        : replaceNone(alternatives, firstAccessesInStatements(statement.finallyClause.body.statements, path));
+    }
     case "index-assign":
       return firstAccessesInSequence([
         statement.receiver,
@@ -597,13 +606,4 @@ function unionFirstAccesses(
   ...values: readonly ReadonlySet<FirstAccess>[]
 ): Set<FirstAccess> {
   return new Set(values.flatMap((value) => [...value]));
-}
-
-function conservativeStatementAccess(
-  statement: RustStmt,
-  path: string,
-): ReadonlySet<FirstAccess> {
-  return rustStatementReferencesPath(statement, path)
-    ? new Set(["read"])
-    : new Set(["none"]);
 }
