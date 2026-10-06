@@ -472,8 +472,12 @@ function rustTypedLocationPlan(
         return {
           kind: "rejected",
           reason:
-            "Selected address-of storage has no exact function-local variable or parameter root.",
+            "Selected address-of storage has no exact local, module, or stored object-field root.",
         };
+      }
+      if (root.storage === "object-field" && (root.declaration !== operation.storageDeclaration ||
+        !rustTargetTypeRefEquals(root.carrier, pointeeCarrier))) {
+        return { kind: "rejected", reason: "Selected field address differs from its exact writable declaration or pointee carrier." };
       }
       const rootCarrier = root.carrier ??
         (root.expression === operation.storageExpression
@@ -554,9 +558,14 @@ function rustTypedLocationStorageRoot(
 ): {
   readonly expression: Node;
   readonly declaration: Node;
-  readonly storage: "local-location" | "module-cell";
+  readonly storage: "local-location" | "module-cell" | "object-field";
   readonly carrier?: TargetTypeRef;
 } | undefined {
+  const field = context.facts.get(storage, rustTargetOperationFactKey);
+  if (field?.kind === "source-field" && field.storage === "project-object" &&
+    field.declaration !== undefined && field.valueSemantics.kind === "stored") {
+    return { expression: storage, declaration: field.declaration, storage: "object-field", carrier: field.resultCarrier };
+  }
   const root = rustTypedLocationStorageRootReference(
     storage,
     context.ast,

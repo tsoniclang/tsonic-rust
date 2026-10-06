@@ -294,7 +294,13 @@ export function rustBindingStorageForDeclaration(
 export function rustRawLocationRoot(
   expression: Node,
   context: RustPlanContext,
+  cloneRoot = false,
 ): RustExpr | undefined {
+  const prepared = rustPreparedValueLocation(expression, context);
+  if (prepared?.address !== undefined) {
+    const address = prepared.address(undefined, context);
+    return address?.kind === "infallible" ? address.value : undefined;
+  }
   const binding = context.input.program.facts.getFact(
     expression,
     rustSourceBindingFactKey,
@@ -309,9 +315,8 @@ export function rustRawLocationRoot(
   if (captured === undefined && sourcePath === undefined) return undefined;
   const selectedValue: RustExpr = captured?.expression ?? { kind: "path", path: sourcePath! };
   const value = selectedValue.kind === "reference" ? selectedValue.expr : selectedValue;
-  return storage?.storage === "module-cell"
-    ? rustModuleCellAccess(value, "location", [])
-    : value;
+  return storage.storage === "module-cell" ? rustModuleCellAccess(value, "location", [])
+    : cloneRoot && storage.storage === "local-location" ? { kind: "method-call", receiver: value, method: "clone", args: [] } : value;
 }
 
 export function planRustModuleBindingStore(
@@ -529,11 +534,20 @@ export function rustExpressionHasBoundRecordField(expression: Node, context: Rus
 
 export function planRustSourceLocationStorage(
   expression: Node, rootExpression: Node, context: RustPlanContext, planExpression: RustExpressionPlanner,
+  cloneRoot = true,
 ): RustExpr | undefined {
+  const operation = context.input.program.facts.getFact(expression, rustTargetOperationFactKey);
+  const prepared = rustPreparedValueLocation(expression, context);
+  if (prepared?.address !== undefined) {
+    const address = prepared.address(operation?.kind === "source-field" ? operation.operationId : undefined, context);
+    const error = address?.kind === "infallible" ? rustTypeFromCarrierInContext(rustProgramErrorTargetType(), context) : undefined;
+    return address === undefined ? undefined : address.kind === "fallible" ? address.value
+      : error === undefined ? undefined : { kind: "method-call", receiver: address.value, method: "into_fallible",
+        genericArguments: [{ kind: "type", type: error }], args: [] };
+  }
   if (rustExpressionHasReferenceObjectField(expression, context)) {
     return planRustReferenceObjectFieldLocation(expression, context, planExpression);
   }
-  const operation = context.input.program.facts.getFact(expression, rustTargetOperationFactKey);
   if (operation?.kind === "source-field" && operation.storage === "structural-object") {
     const field = context.input.program.structuralShapes.field(operation.receiverCarrier, operation.storageIndex);
     if (field?.storage === "bound") {
@@ -554,7 +568,7 @@ export function planRustSourceLocationStorage(
       return value ? fallibleLocationAccess(expression, result, context) : result;
     }
   }
-  const location = planRustLocationStorage(expression, rootExpression, true, context, planExpression);
+  const location = planRustLocationStorage(expression, rootExpression, cloneRoot, context, planExpression);
   const error = rustTypeFromCarrierInContext(rustProgramErrorTargetType(), context);
   return location === undefined || error === undefined ? undefined : { kind: "method-call", receiver: location, method: "into_fallible",
     genericArguments: [{ kind: "type", type: error }], args: [] };
@@ -581,7 +595,7 @@ export function planRustLocationStorage(
     }
   }
   if (expression === rootExpression) {
-    const root = rustRawLocationRoot(expression, context);
+    const root = rustRawLocationRoot(expression, context, cloneRoot);
     return root === undefined
       ? rejectLocationStorage(
           expression,
@@ -590,8 +604,6 @@ export function planRustLocationStorage(
         )
       : ["cell", "borrow-cell"].includes(rustLocationStorageForReference(expression, context)?.storage ?? "")
         ? { kind: "reference", expr: root }
-        : cloneRoot
-        ? { kind: "method-call", receiver: root, method: "clone", args: [] }
         : root;
   }
   if (context.input.program.source.ast.kindName(expression) === "KindParenthesizedExpression") {

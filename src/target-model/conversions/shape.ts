@@ -68,7 +68,7 @@ function isValueProjectionConversion(value: Record<string, unknown>): boolean {
       (value.coverage === "source" || value.coverage === "target") &&
       isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) && isRustUnionArmMappings(value.arms);
   }
-  if (value.kind === "exact-integer" || value.kind === "native-representation") {
+  if (value.kind === "exact-integer" || value.kind === "native-representation" || value.kind === "callable-input") {
     return hasExactKeys(value, ["kind", "source", "target"]) &&
       isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target);
   }

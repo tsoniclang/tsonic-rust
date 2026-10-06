@@ -1,7 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rustCallTypeFromCarrierInContext, rustReturnTypeFromCarrier, rustTypeFromCarrierInContext } from "../../../../dist/backend/planner/types/render.js";
-import { rustNamedTargetType, rustVecTargetType } from "../../../../dist/target-model/types/index.js";
+import { rustNamedTargetType, rustVecTargetType, rustCallableInputTargetType } from "../../../../dist/target-model/types/index.js";
+
+test("borrowed invocation protocols render only in native parameter or return positions", () => {
+  const input = rustCallableInputTargetType([scalar], scalar);
+  const borrowed = input;
+  const rendered = rustTypeFromCarrierInContext(borrowed, {}, "parameter");
+  assert.equal(rendered?.kind, "reference");
+  assert.equal(rendered?.referent.kind, "impl-trait");
+  assert.equal(rendered?.referent.bounds[0].reference.trait.path, "rt::CallableImplementation");
+  assert.equal(rustTypeFromCarrierInContext(borrowed, {}) === undefined, true);
+  assert.equal(rustTypeFromCarrierInContext({ kind: "function-pointer", args: [borrowed], result: scalar }, {}, "parameter") === undefined, true);
+});
 
 const scalar = { kind: "source-primitive", name: "native-uint" };
 const callable = { kind: "closure", callTrait: "FnMut", args: [scalar], result: scalar };

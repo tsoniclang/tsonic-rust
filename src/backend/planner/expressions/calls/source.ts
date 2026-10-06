@@ -5,6 +5,7 @@ import {
   isRustNeverCarrier,
   isRustUnitCarrier,
   rustCallableProtocol,
+  rustCallableInputProtocol,
   rustAwaitCarrier,
   rustSourceTypeCarrierValue,
   rustTargetGenericTypeArguments,
@@ -413,7 +414,7 @@ export function planSelectedSourceCall(
         planned = {
           kind: "method-call",
           receiver: callable,
-          method: "call",
+          method: rustCallableInputProtocol(fact.target.carrier) === undefined ? "call" : "invoke",
           args: generic === undefined ? [{ kind: "tuple-literal", elements: shaped }] : shaped,
           ...(generic === undefined || callGenericArguments === undefined ? {} : { genericArguments: callGenericArguments }),
         };

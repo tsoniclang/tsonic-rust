@@ -1,6 +1,6 @@
 import type { RustValueConversion } from "../operations/model.js";
 import type { TargetTypeRef } from "../types/model.js";
-import { isRustAbsenceCarrier, isRustUnitCarrier, rustCallableProtocol, rustClosureProtocol, rustOptionElementCarrier } from "../types/index.js";
+import { isRustAbsenceCarrier, isRustUnitCarrier, rustCallableProtocol, rustCallableInputProtocol, rustClosureProtocol, rustOptionElementCarrier } from "../types/index.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../types/equality.js";
 import { rustOptionalStorageValue } from "../types/projections.js";
 import { rustValueConversionContract } from "./contracts.js";
@@ -54,7 +54,7 @@ export function rustCallableConversionMatches(
 ): boolean {
   if (!isClosedMetadata(conversion) || !hasExactObjectKeys(conversion, ["kind", "source", "target", "parameters", "result"]) ||
     conversion.kind !== "callable-adapter" || !isDenseDataArray(conversion.parameters) ||
-    !isRustTargetTypeRef(source) || !isRustTargetTypeRef(target)) return false;
+    !isRustTargetTypeRef(source) || !isRustTargetTypeRef(target) || rustCallableInputProtocol(source) !== undefined) return false;
   const sourceCallable = rustCallableProtocol(source);
   const targetCallable = callableConversionTarget(target);
   return rustTargetTypeRefEquals(conversion.source, source) && rustTargetTypeRefEquals(conversion.target, target) &&
@@ -74,7 +74,7 @@ export function selectRustCallableConversion(
   selectValue: (source: TargetTypeRef, target: TargetTypeRef) => RustValueConversion | undefined,
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): RustCallableConversion | undefined {
-  if (!isRustTargetTypeRef(source) || !isRustTargetTypeRef(target)) return undefined;
+  if (!isRustTargetTypeRef(source) || !isRustTargetTypeRef(target) || rustCallableInputProtocol(source) !== undefined) return undefined;
   const sourceCallable = rustCallableProtocol(source);
   const targetCallable = callableConversionTarget(target);
   if (sourceCallable === undefined || targetCallable === undefined ||
@@ -103,6 +103,7 @@ export function selectRustCallableConversion(
 }
 
 function callableConversionTarget(target: TargetTypeRef) {
+  if (rustCallableInputProtocol(target) !== undefined) return undefined;
   return target.kind === "closure" && target.fallible === true
     ? rustClosureProtocol(target) : rustCallableProtocol(target);
 }

@@ -10,7 +10,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { isRustCopyCarrier } from "../../target-model/types/index.js";
 import { rustCallableOrigin } from "../../policy/types/callable-origins.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
-import { rustClosureCaptureFactKey, rustTargetOperationFactKey, type RustClosureCaptureFact } from "../facts/keys.js";
+import { rustBindingStorageFactKey, rustClosureCaptureFactKey, rustTargetOperationFactKey, type RustClosureCaptureFact } from "../facts/keys.js";
 import type { RustCallableActivation, RustCallableOwnershipPlan } from "./ownership-plan.js";
 import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
@@ -44,7 +44,7 @@ export interface RustFrameCallableBinding {
   readonly carrier: TargetTypeRef;
   readonly entry: RustFrameCallableEntryDefinition | undefined;
   readonly initialization: "ready" | "deferred";
-  readonly storage: "value" | "cell" | "borrow-cell";
+  readonly storage: "value" | "location" | "cell" | "borrow-cell";
 }
 
 export interface RustFrameCallableDefinition {
@@ -176,6 +176,11 @@ export function createRustFrameCallablePlan(input: {
         continue;
       }
       const classStorage = classDefinition === undefined ? undefined : validatedRustCapturedFieldStorageFact(declaration, input)?.storage;
+      const lexicalStorage = classDefinition === undefined ? input.facts.getFact(declaration, rustBindingStorageFactKey) : undefined;
+      if (lexicalStorage !== undefined && !rustTargetTypeRefEquals(lexicalStorage.valueCarrier, carrier)) {
+        issue(declaration, "A native frame binding differs from its sealed physical storage carrier.");
+        continue;
+      }
       if (classDefinition !== undefined && input.objectRepresentations.receiverCaptures.isCaptured(declaration) && classStorage === undefined) {
         issue(declaration, "A captured class frame field requires its sealed declaration-carrier storage fact.");
         continue;
@@ -185,7 +190,8 @@ export function createRustFrameCallablePlan(input: {
       const immutable = classDefinition === undefined ? !input.navigation.declarationUseSummary(declaration).bindingWritten
         : classStorage === undefined ? !input.navigation.declarationUseSummary(declaration).memberWritten
           : classStorage.kind === "shared" || classStorage.kind === "copy";
-      const storage = !standalone && representation?.mutable === true || immutable && (classDefinition !== undefined || entry === undefined)
+      const storage = entry === undefined && lexicalStorage?.storage === "location" ? "location" as const
+        : !standalone && representation?.mutable === true || immutable && (classDefinition !== undefined || entry === undefined)
         ? "value" as const : entry?.copy === true || entry === undefined && isRustCopyCarrier(carrier)
           ? "cell" as const : "borrow-cell" as const;
       const fieldName = classDefinition === undefined ? `binding_${frameBindings.length}`

@@ -544,6 +544,7 @@ function materializeProviderValueConversion(
     case "union-project":
     case "exact-integer":
     case "native-representation":
+    case "callable-input":
     case "native-upcast":
     case "bottom-coercion":
     case "js-argument-vector-callback":

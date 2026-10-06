@@ -1,6 +1,7 @@
 import type { TargetTypeRef } from "../types/model.js";
 import { isRustValueConversion } from "./shape.js";
 import { rustNativeRepresentationMatches } from "./native-representation.js";
+import { rustCallableInputMatches } from "./callable-input.js";
 import { rustUnionPayloadAdmission } from "./union-injection.js";
 import { rustProgramErrorConversionMatches, type RustProgramErrorRoute } from "./program-error.js";
 import { rustJsRecordValueAdmission } from "./closed-record.js";
@@ -205,6 +206,12 @@ export function rustValueConversionContract(
       isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) &&
       !rustTargetTypeRefEquals(value.source, value.target) && rustNativeRepresentationMatches(value.source, value.target)
       ? { category: "exact", lowering: "identity", sourceMode: "value", source: value.source, target: value.target, fallible: false }
+      : undefined;
+  }
+  if (value.kind === "callable-input") {
+    return rustCallableInputMatches(value.source, value.target)
+      ? { category: "exact", lowering: "identity", sourceMode: "ref", source: value.source,
+          target: value.target, fallible: false }
       : undefined;
   }
   if (value.kind === "native-upcast") {
@@ -759,6 +766,9 @@ export function rustValueConversionIsFallible(value: RustValueConversion | undef
 }
 
 export function rustValueConversionIdentity(value: RustValueConversion): string {
+  if (value.kind === "callable-input") {
+    return `callable-input.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}`;
+  }
   if (value.kind === "program-error") return `program-error.${JSON.stringify(value)}`;
   if (value.kind === "exact-integer") {
     return `exact-integer.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}`;

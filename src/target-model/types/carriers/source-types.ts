@@ -23,6 +23,7 @@ export const rustLocationTargetId = "rust.runtime.Location";
 export const rustInfallibleTargetId = "rust.core.Infallible";
 export const rustRawPointerTargetId = "rust.runtime.RawPointer";
 export const rustCallableTargetId = "rust.runtime.Callable";
+export const rustCallableInputTargetId = "rust.runtime.CallableImplementation";
 export const rustGeneratorTargetId = "rust.runtime.Generator";
 export const rustAsyncGeneratorTargetId = "rust.runtime.AsyncGenerator";
 export const rustBorrowedGeneratorTargetId = "rust.runtime.BorrowedGenerator";

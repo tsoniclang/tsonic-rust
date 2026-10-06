@@ -3,6 +3,7 @@ import {
   rustBorrowedAsyncGeneratorTargetId,
   rustBorrowedGeneratorTargetId,
   rustCallableTargetId,
+  rustCallableInputTargetId,
   rustGeneratorTargetId,
   rustIteratorResultTargetId,
   rustLocationTargetId,
@@ -58,7 +59,30 @@ export function isRustCallableCarrier(
   return carrier?.kind === "closure" || carrier?.kind === "function-pointer" ||
     rustGenericCallableValue(carrier) !== undefined ||
     rustFrameCallableValue(carrier) !== undefined ||
+    rustCallableInputProtocol(carrier) !== undefined ||
     carrier?.kind === "target-named" && carrier.id === rustCallableTargetId;
+}
+
+export function rustCallableInputTargetType(
+  parameters: readonly TargetTypeRef[],
+  result: TargetTypeRef,
+): TargetTypeRef {
+  return {
+    kind: "reference",
+    mutable: false,
+    referent: {
+      kind: "target-named",
+      id: rustCallableInputTargetId,
+      genericArguments: rustTypeGenericArguments([{ kind: "tuple", elements: parameters }, result]),
+    },
+  };
+}
+
+export function rustCallableInputProtocol(carrier: TargetTypeRef | undefined):
+  { readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef } | undefined {
+  return carrier?.kind === "reference" && !carrier.mutable &&
+    carrier.referent.kind === "target-named" && carrier.referent.id === rustCallableInputTargetId
+    ? rustCallableProtocol(carrier.referent) : undefined;
 }
 
 export function rustCallableProtocol(
@@ -66,7 +90,9 @@ export function rustCallableProtocol(
 ): { readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef } | undefined {
   const frame = rustFrameCallableProtocol(carrier);
   if (frame !== undefined) return frame;
-  if (carrier?.kind !== "target-named" || carrier.id !== rustCallableTargetId) {
+  if (carrier?.kind === "reference") return rustCallableInputProtocol(carrier);
+  if (carrier?.kind !== "target-named" ||
+    carrier.id !== rustCallableTargetId && carrier.id !== rustCallableInputTargetId) {
     return undefined;
   }
   const arguments_ = rustOnlyTypeGenericArguments(carrier.genericArguments);

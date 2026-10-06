@@ -12,13 +12,10 @@ import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planRustLocationCallback } from "./location-callbacks.js";
 import { locationMethodReceiver, optionReference, typedLocationFactMatchesPlan } from "./location-expressions.js";
 import { planRustNativeAllocation } from "./native-memory.js";
-import { rustExpressionHasReferenceObjectField } from "./object-field-locations.js";
 import {
   fallibleLocationAccess,
-  planRustLocationStorage,
   planRustNonConsumingValue,
   planRustSourceLocationStorage,
-  rustExpressionHasBoundRecordField,
 } from "./typed-locations.js";
 import type { RustExpressionPlanner } from "./typed-locations.js";
 
@@ -86,22 +83,8 @@ export function planRustTypedLocationCall(
         : { kind: "method-call", receiver: source, method: "try_map", args: [read, write] };
     }
     case "address-of": {
-      if (rustExpressionHasBoundRecordField(plan.storageExpression, context) ||
-        rustExpressionHasReferenceObjectField(plan.storageExpression, context)) {
-        return planRustSourceLocationStorage(plan.storageExpression, plan.rootExpression, context, planExpression);
-      }
-      const location = planRustLocationStorage(
-        plan.storageExpression,
-        plan.rootExpression,
-        plan.storageExpression === plan.rootExpression,
-        context,
-        planExpression,
-      );
-      const error = rustTypeFromCarrierInContext(rustProgramErrorTargetType(), context);
-      return location === undefined || error === undefined ? undefined : {
-        kind: "method-call", receiver: location, method: "into_fallible",
-        genericArguments: [{ kind: "type", type: error }], args: [],
-      };
+      return planRustSourceLocationStorage(plan.storageExpression, plan.rootExpression, context, planExpression,
+        plan.storageExpression === plan.rootExpression);
     }
     case "allocate": {
       const initial = planExpression(plan.initialExpression, context);

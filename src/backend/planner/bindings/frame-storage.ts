@@ -5,11 +5,12 @@ import { rustValueBlock } from "../../target-ast/value-block.js";
 import type { RustValueFieldLocation } from "../objects/value-fields.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { diagnosticInput, rustActiveErrorType } from "../program/plan-context.js";
+import { diagnosticInput, rustActiveErrorType, rustCurrentErrorBoundary } from "../program/plan-context.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustFrameCallableTypes } from "../types/frame-callables.js";
-import { rustCarrierHasCopyContract } from "../types/generic-requirements.js";
+import { requireRustLocationValueCarrier, rustCarrierHasCopyContract } from "../types/generic-requirements.js";
+import { rustCallableCaptureStorageType } from "../types/capture-storage.js";
 import { planRustFrameCallableEntry } from "../expressions/frame-callables.js";
 import { planRustNonConsumingValue } from "../expressions/typed-locations.js";
 import { rustSourceBindingFactKey } from "../../../analysis/facts/keys.js";
@@ -17,12 +18,16 @@ import { rustBindingStorageOperations, rustInlineBindingStoragePath, rustInlineB
 import { projectRustFrameOwnerData, rustFrameOwnerReference, type RustLiveFrameOwner } from "../program/frame-owners.js";
 import { checkRustDataWrite } from "../objects/data-writes.js";
 import { initializeOrWriteRustDeferredStorage, initializeRustDeferredStorage } from "./deferred-storage.js";
+import { planRustProjectedObjectLocation } from "../expressions/object-field-locations.js";
 
 export function rustFrameBindingType(binding: RustFrameCallableBinding, context: RustPlanContext): RustType | undefined {
+  if (binding.storage === "location" && !requireRustLocationValueCarrier(binding.carrier, binding.declaration, context)) return undefined;
   const type = binding.entry === undefined ? rustTypeFromCarrierInContext(binding.carrier, context)
     : rustFrameCallableTypes(binding.carrier, context)?.entryType;
   if (type === undefined) return undefined;
-  const payload = binding.storage === "value" ? type : rustInlineBindingStorageType(binding.storage, type);
+  const payload = binding.storage === "location" ? rustCallableCaptureStorageType(binding, binding.carrier, context)
+    : binding.storage === "value" ? type : rustInlineBindingStorageType(binding.storage, type);
+  if (payload === undefined) return undefined;
   return binding.initialization === "ready" ? payload
     : { kind: "named", path: "core::cell::OnceCell", genericArguments: [{ kind: "type", type: payload }] };
 }
@@ -49,9 +54,13 @@ function writeRustFrameBindingPayload(binding: RustFrameCallableBinding, field: 
     target: binding.initialization === "ready" ? cell : { kind: "dereference", pointer: cell }, value } : undefined);
 }
 
+function createRustFrameBindingPayload(binding: RustFrameCallableBinding, value: RustExpr): RustExpr {
+  return binding.storage === "value" ? value : { kind: "call", args: [value],
+    path: binding.storage === "location" ? "rt::Location::allocate" : `${rustInlineBindingStoragePath(binding.storage)}::new` };
+}
+
 export function createRustFrameBindingValue(binding: RustFrameCallableBinding, value: RustExpr): RustExpr {
-  const payload = binding.storage === "value" ? value
-    : { kind: "call" as const, path: `${rustInlineBindingStoragePath(binding.storage)}::new`, args: [value] };
+  const payload = createRustFrameBindingPayload(binding, value);
   return binding.initialization === "ready" ? payload
     : { kind: "call", path: "core::cell::OnceCell::from", args: [payload] };
 }
@@ -59,8 +68,7 @@ export function createRustFrameBindingValue(binding: RustFrameCallableBinding, v
 export function initializeRustFrameBindingValue(binding: RustFrameCallableBinding, field: RustExpr, value: RustExpr): RustExpr {
   if (binding.initialization === "ready") return { kind: "assignment", operator: "=", target: field,
     value: createRustFrameBindingValue(binding, value) };
-  const payload = binding.storage === "value" ? value
-    : { kind: "call" as const, path: `${rustInlineBindingStoragePath(binding.storage)}::new`, args: [value] };
+  const payload = createRustFrameBindingPayload(binding, value);
   return initializeRustDeferredStorage(field, payload, "callable activation binding initialized twice");
 }
 
@@ -71,8 +79,7 @@ export function initializeOrWriteRustFrameBindingValue(
   const storage = binding.storage;
   const operations = storage === "value" ? undefined : rustBindingStorageOperations(storage);
   return initializeOrWriteRustDeferredStorage(field, value, context,
-    selected => storage === "value" ? selected
-      : { kind: "call", path: `${rustInlineBindingStoragePath(storage)}::new`, args: [selected] },
+    selected => createRustFrameBindingPayload(binding, selected),
     (owner, selected) => operations?.write(owner, selected) ?? { kind: "assignment", operator: "=",
       target: { kind: "dereference", pointer: owner }, value: selected },
     "callable activation binding initialized twice", storage === "value");
@@ -84,6 +91,8 @@ export function rustFrameBindingLocalLocation(
   const { cell, read, operations } = frameBindingPayload(binding, field, context);
   return { bindings: [], read, write: value => writeRustFrameBindingPayload(binding, field, value, context,
     binding.storage === "value"),
+    ...(binding.storage !== "location" ? {} : { address: () => ({ kind: "infallible" as const,
+      value: { kind: "method-call" as const, receiver: cell, method: "clone", args: [] } }) }),
     withRead: project => project(operations?.borrowedRead(cell) ?? cell),
     ...(binding.initialization !== "deferred" ? {} : { initialize: (value: RustExpr) => initializeRustFrameBindingValue(binding, field, value) }),
     ...(binding.entry === undefined ? {} : { planInput: (node: Node, inputContext: RustPlanContext, planValue: () => RustExpr | undefined) =>
@@ -127,6 +136,25 @@ export function rustFrameBindingLocation(
   const types = binding.entry === undefined ? undefined : rustFrameCallableTypes(binding.carrier, context);
   return {
     bindings: [],
+    address: (member, addressContext) => {
+      if (binding.storage === "location") return { kind: "infallible", value: projectRustFrameOwnerData(owner,
+        data => ({ kind: "method-call", receiver: select(data).cell, method: "clone", args: [] })) };
+      if (member === undefined || owner.data.kind !== "object" || binding.entry !== undefined) {
+        addressContext.diagnostics.push(missingFactDiagnostic(diagnosticInput(addressContext, binding.declaration),
+          "rust.backend.frame-address", "A frame field address requires its exact stored member identity and live native object owner."));
+        return undefined;
+      }
+      const boundary = rustCurrentErrorBoundary(addressContext);
+      if (boundary === undefined) return undefined;
+      const callbackContext = { ...addressContext, fallibleBoundary: boundary };
+      const withOwner = (expression: RustExpr): RustLiveFrameOwner => ({ ...owner, expression, borrowed: false });
+      const value = planRustProjectedObjectLocation(rustFrameOwnerReference(owner), member, callbackContext,
+        reader => rustFrameBindingLocation(binding, withOwner(reader), callbackContext).read,
+        (writer, selected) => rustFrameBindingLocation(binding, withOwner(writer), callbackContext).write(selected, callbackContext),
+        selected => ({ kind: "method-call", receiver: { kind: "call", path: "rt::ObjectIdentityCarrier::object_identity",
+          args: [{ kind: "reference", expr: { kind: "dereference", pointer: selected } }] }, method: "clone", args: [] }));
+      return value === undefined ? undefined : { kind: "fallible", value };
+    },
     read: binding.entry === undefined ? read : { kind: "call", path: "rt::FrameCallable::from_frame", args: [
       { kind: "call", path: "alloc::rc::Rc::clone", args: [rustFrameOwnerReference(owner)] }, read,
     ] },
@@ -204,7 +232,7 @@ export function prepareRustFrameScope(
     const parameter = binding.initialization === "ready" ? context.input.program.names.nameForDeclaration(binding.declaration) : undefined;
     const value: RustExpr | undefined = binding.initialization === "deferred"
       ? { kind: "call", path: "core::cell::OnceCell::new", args: [] }
-      : parameter === undefined ? undefined : binding.storage === "value" ? { kind: "path", path: parameter }
+      : parameter === undefined ? undefined : binding.storage === "value" || binding.storage === "location" ? { kind: "path", path: parameter }
         : { kind: "call", path: `${rustInlineBindingStoragePath(binding.storage)}::new`, args: [{ kind: "path", path: parameter }] };
     return value === undefined ? undefined : { name: binding.fieldName, value };
   });

@@ -21,8 +21,7 @@ import { readRustStoredObjectField, writeRustStoredObjectField, rustProjectObjec
 import { rustCapturedFieldStorage, rustCapturedFieldLocation } from "./captured-fields.js";
 import { readRustProjectObjectFieldOwner, readRustProjectDispatchedField, writeRustProjectDispatchedField, withRustProjectStoredField } from "./project-objects.js";
 import { planRustProjectFieldDispatchRole } from "./project-field-dispatch.js";
-import { rustFrameBindingLocation } from "../bindings/frame-storage.js";
-import { rustClassFrameOwner } from "./frame-storage.js";
+import { rustClassFrameFieldLocation } from "./frame-storage.js";
 
 export interface RustValueFieldLocation {
   readonly bindings: readonly { readonly name: string; readonly value: RustExpr; readonly mutable?: boolean }[];
@@ -31,6 +30,8 @@ export interface RustValueFieldLocation {
   readonly project?: (names: readonly string[], carrier: TargetTypeRef) => RustValueFieldLocation;
   readonly withRead?: (project: (value: RustExpr) => RustExpr | undefined) => RustExpr | undefined;
   readonly initialize?: (value: RustExpr, context: RustPlanContext) => RustExpr | undefined;
+  readonly address?: (member: string | undefined, context: RustPlanContext) =>
+    { readonly kind: "infallible" | "fallible"; readonly value: RustExpr } | undefined;
   readonly invoke?: (arguments_: readonly RustExpr[], context: RustPlanContext) => RustExpr | undefined;
   readonly planInput?: (node: Node, context: RustPlanContext, planValue: () => RustExpr | undefined) => RustExpr | undefined;
 }
@@ -74,16 +75,15 @@ export function planRustValueFieldLocation(
   if (selectedField?.kind === "source-field" && selectedField.declaration !== undefined) {
     const binding = context.input.program.callableValues.frames.bindingFor(selectedField.declaration);
     if (binding !== undefined) {
-      const definition = context.input.program.projectTypes.definitionForCarrier(selectedField.receiverCarrier);
-      const frame = definition === undefined ? undefined : context.input.program.callableValues.frames.definitionForOwner(definition.declaration);
       const receiverNode = Node_Expression(context.input.program.source.ast, node);
       const planned = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
-      if (frame === undefined || receiverNode === undefined || planned === undefined || context.syntheticNames === undefined ||
-        !frame.bindings.includes(binding) || !sourceFieldSelectedOperationMatches(node, selectedField, context)) return undefined;
+      if (receiverNode === undefined || planned === undefined || context.syntheticNames === undefined ||
+        !sourceFieldSelectedOperationMatches(node, selectedField, context)) return undefined;
       const name = allocateRustSyntheticName(context.syntheticNames, "frame_receiver");
-      const owner = rustClassFrameOwner(frame, { kind: "path", path: name }, context, receiverNode);
-      if (owner === undefined) return undefined;
-      return { ...rustFrameBindingLocation(binding, owner, context),
+      const location = rustClassFrameFieldLocation(selectedField.declaration, selectedField.receiverCarrier,
+        { kind: "path", path: name }, context, receiverNode);
+      if (location === undefined) return undefined;
+      return { ...location,
         bindings: [{ name, value: planRustSharedReceiver(receiverNode, planned, context) }] };
     }
     const storage = rustCapturedFieldStorage(selectedField.declaration, context);
@@ -237,14 +237,13 @@ export function planRustValueFieldLocation(
   const location = overridden ? undefined : rustLocationStorageForReference(current, context);
   if (location !== undefined) {
     if (!rustTargetTypeRefEquals(location.valueCarrier, expectedReceiver!)) return reject();
-    const root = rustRawLocationRoot(current, context);
+    const root = rustRawLocationRoot(current, context, location.storage === "local-location");
     if (root === undefined) return reject();
     const rootName = allocateRustSyntheticName(context.syntheticNames, "value_location");
     const storage: RustExpr = { kind: "path", path: rootName };
     const ownerName = allocateRustSyntheticName(context.syntheticNames, "value_storage");
     return {
-      bindings: [{ name: rootName, value: location.storage === "local-location"
-        ? { kind: "method-call", receiver: root, method: "clone", args: [] } : root }],
+      bindings: [{ name: rootName, value: root }],
       read: read({ kind: "method-call", receiver: storage, method: "load", args: [] }),
       write: value => ({ kind: "method-call", receiver: storage, method: "with_mut", args: [{
         kind: "closure", params: [{ name: ownerName, byRefCopy: false }],

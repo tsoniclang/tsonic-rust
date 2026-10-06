@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { rustRuntimeCarrierKey } from "../../../dist/target-model/facts/selections.js";
-import { rustSourceCallableReturnFactKey, rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
+import { rustBindingStorageFactKey, rustSourceCallableReturnFactKey, rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
 import { rustFrameCallableValue } from "../../../dist/target-model/types/carriers/frame-callables.js";
 import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
@@ -22,6 +22,29 @@ export function ordinary(seed: number): (count: number) => number {
   return (count: number): number => count + seed;
 }
 `;
+
+for (const jsEnabled of [false, true]) {
+  for (const name of ["addressed-lexical-frame", "addressed-class-frame"]) {
+    test(`${jsEnabled ? "JS" : "native"} ${name} preserves the addressed physical owner and declaration role`, () => {
+      const source = recursiveCallbackProtocolCases.find(current => current.name === name).source;
+      const { program } = analyzeRust({ surfaces: jsEnabled ? ["js"] : [], files: { "index.ts": source } });
+      assert.equal(program.callableValues.frames.definitions.length, 1);
+      const frame = program.callableValues.frames.definitions[0];
+      const value = frame.bindings.find(binding => binding.entry === undefined &&
+        program.source.ast.text(program.source.ast.name(binding.declaration)) === "seed");
+      assert.equal(value !== undefined, true, "addressed seed has one frame binding");
+      const lexical = name === "addressed-lexical-frame";
+      assert.equal(value.storage, lexical ? "location" : "value");
+      const physical = program.facts.getFact(value.declaration, rustBindingStorageFactKey);
+      assert.equal(lexical ? physical?.storage === "location" : physical === undefined, true,
+        "stored constructor field never promotes its formal parameter");
+      assert.equal(frame.entries.every(entry => frame.bindings.filter(binding => binding.entry === entry)
+        .every(binding => binding.storage !== "location")), true, "entry protocol remains owner-free inside the frame");
+      assert.equal(frame.storage.kind, lexical ? "standalone" : "object");
+      if (!lexical) assert.equal(frame.storage.mutable, true);
+    });
+  }
+}
 
 for (const jsEnabled of [false, true]) {
   for (const name of ["captured-class-field", "shared-class-frame", "shared-class-string-field", "shared-class-construction-writes"]) {

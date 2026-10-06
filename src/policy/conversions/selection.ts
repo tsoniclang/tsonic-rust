@@ -1,6 +1,7 @@
 import type { RustValueConversion } from "../../target-model/operations/model.js";
 import { selectRustUnionArmMapping, rustUnionProjectionContract, rustUnionLeaves, type RustUnionLeaf } from "../../target-model/types/union-relations.js";
 import { rustNativeRepresentationMatches } from "../../target-model/conversions/native-representation.js";
+import { rustCallableInputMatches } from "../../target-model/conversions/callable-input.js";
 import { rustUnionPayloadAdmission } from "../../target-model/conversions/union-injection.js";
 import { selectRustProgramErrorConversion } from "../../target-model/conversions/program-error.js";
 import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
@@ -76,6 +77,9 @@ export function selectRustSourceValueConversion(
   if (ancestors.some(ancestor => rustTargetTypeRefEquals(ancestor.source, source) &&
     rustTargetTypeRefEquals(ancestor.target, target))) return undefined;
   const nextAncestors = [...ancestors, {source, target}];
+  if (!rustTargetTypeRefEquals(source, target) && rustCallableInputMatches(source, target)) {
+    return { kind: "callable-input", source, target };
+  }
   if (!rustTargetTypeRefEquals(source, target)) {
     const error = selectRustProgramErrorConversion(source, target, definitions);
     if (error !== undefined) return error;

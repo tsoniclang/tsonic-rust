@@ -6,6 +6,20 @@ import type { RustLiveFrameOwner } from "../program/frame-owners.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { rustProjectObjectStateField } from "./project-objects.js";
 import { rustFrameCallableTypes } from "../types/frame-callables.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustValueFieldLocation } from "./value-fields.js";
+import { rustFrameBindingLocation } from "../bindings/frame-storage.js";
+
+export function rustClassFrameFieldLocation(
+  declaration: Node, receiverCarrier: TargetTypeRef, receiver: RustExpr, context: RustPlanContext, sourceReceiver?: Node,
+): RustValueFieldLocation | undefined {
+  const binding = context.input.program.callableValues.frames.bindingFor(declaration);
+  const definition = context.input.program.projectTypes.definitionForCarrier(receiverCarrier);
+  const frame = definition === undefined ? undefined : context.input.program.callableValues.frames.definitionForOwner(definition.declaration);
+  if (binding === undefined || frame === undefined || !frame.bindings.includes(binding)) return undefined;
+  const owner = rustClassFrameOwner(frame, receiver, context, sourceReceiver);
+  return owner === undefined ? undefined : rustFrameBindingLocation(binding, owner, context);
+}
 
 export interface RustClassFrameLayout {
   readonly fields: readonly RustStructField[];

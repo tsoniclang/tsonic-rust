@@ -2,6 +2,8 @@ import { resolveRustSourceUnionCarrier } from "./source-unions.js";
 import {
   isRustJsArrayCarrier,
   rustCallableTargetType,
+  rustCallableProtocol,
+  rustCallableInputTargetType,
   rustJsArrayLikeElementTargetType,
   rustJsArrayTargetType,
   rustOptionElementCarrier,
@@ -86,6 +88,20 @@ export function resolveRustCallableEvidence(
 ): TargetTypeRef | undefined {
   const carrier = resolveRustCallableSignatureCarrier(callable, context, options, resolving);
   const subject = context.sourceStorageSubject;
+  const parameterNode = subject?.kind === "value" && subject.projection.length === 0 ? subject.node : undefined;
+  const parameter = parameterNode === undefined ? undefined : context.ast.as.AsParameterDeclaration(parameterNode);
+  const uses = parameterNode === undefined || parameter === undefined ? undefined :
+    context.source.navigation.parameterUseSummary(parameterNode);
+  const owner = parameterNode === undefined || parameter === undefined ? undefined : context.ast.parent(parameterNode);
+  const nativeDeclaration = owner !== undefined && context.ast.is.IsFunctionDeclaration(owner) &&
+    context.source.navigation.declarationUseSummary(owner).uses.every(use => use.kind !== "first-class");
+  const protocol = rustCallableProtocol(carrier);
+  if (nativeDeclaration && parameter !== undefined && protocol !== undefined && parameter.DotDotDotToken === undefined &&
+    parameter.Initializer === undefined && parameter.QuestionToken === undefined &&
+    uses !== undefined && uses.uses.length > 0 &&
+    uses.uses.every(use => use.kind === "direct-call" && !use.captured && !use.throughMember)) {
+    return rustCallableInputTargetType(protocol.parameters, protocol.result);
+  }
   return carrier === undefined || subject === undefined ? carrier : options.callableStorageCarrier(subject, carrier,
     (owner, excludedCaptures) => resolveRustCallableEnvironment(owner, context, options, resolving, excludedCaptures),
     owner => {

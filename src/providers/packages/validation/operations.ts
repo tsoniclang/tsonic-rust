@@ -393,7 +393,7 @@ function valueConversionCarriers(
     return [conversion.source, conversion.target, conversion.payloadCarrier,
       ...valueConversionCarriers(conversion.payloadConversion ?? undefined)];
   }
-  if (conversion.kind === "union-project" || conversion.kind === "native-representation" || conversion.kind === "bottom-coercion" ||
+  if (conversion.kind === "union-project" || conversion.kind === "native-representation" || conversion.kind === "callable-input" || conversion.kind === "bottom-coercion" ||
     conversion.kind === "js-argument-vector-callback" || conversion.kind === "native-upcast" ||
     conversion.kind === "exact-integer") {
     return [conversion.source, conversion.target];

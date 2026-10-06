@@ -36,6 +36,7 @@ import { rustOptionalStorageTypeArguments } from "./type-projections.js";
 import {
   rustBuiltInCarrierRenderPaths,
   rustCallableTargetId,
+  rustCallableInputTargetId,
   rustFixedArrayCarrierValue,
   rustNamedTypeCarrierValue,
   rustPrimitiveTypeName,
@@ -90,7 +91,8 @@ export function rustTypeFromCarrier(
   if (carrier.kind === "target-named" && carrier.id === rustStrTargetId) {
     return { kind: "str" };
   }
-  if (carrier.kind === "target-named" && carrier.id === rustCallableTargetId) {
+  if (carrier.kind === "target-named" &&
+    (carrier.id === rustCallableTargetId || carrier.id === rustCallableInputTargetId)) {
     const callableTypeArguments = rustOnlyTypeGenericArguments(carrier.genericArguments);
     const [argumentsCarrier, resultCarrier] = callableTypeArguments ?? [];
     if (callableTypeArguments?.length !== 2 || argumentsCarrier?.kind !== "tuple" ||
@@ -99,6 +101,18 @@ export function rustTypeFromCarrier(
     }
     const argumentsType = rustTypeFromCarrier(argumentsCarrier, resolveSourceTypePath, resolveStructuralShape);
     const resultType = rustTypeFromCarrier(resultCarrier, resolveSourceTypePath, resolveStructuralShape);
+    if (carrier.id === rustCallableInputTargetId) {
+      return argumentsType === undefined || resultType === undefined ? undefined : {
+        kind: "impl-trait",
+        bounds: [{ kind: "trait-type", reference: {
+          trait: { kind: "named", path: "rt::CallableImplementation", genericArguments: typeGenericArguments([
+            argumentsType, { kind: "named", path: "rt::TsonicResult", genericArguments: typeGenericArguments([resultType]) },
+          ]) },
+          binder: [],
+        } }],
+        outlives: [],
+      };
+    }
     return argumentsType === undefined || resultType === undefined
       ? undefined
       : {
@@ -622,7 +636,8 @@ function rustTypeIsLegalInPosition(
 ): boolean {
   if (type === undefined) return true;
   const containsImplTrait = rustTypeContainsImplTrait(type);
-  return !containsImplTrait || position !== "general" && type.kind === "impl-trait";
+  return !containsImplTrait || position !== "general" &&
+    (type.kind === "impl-trait" || type.kind === "reference" && type.referent.kind === "impl-trait");
 }
 
 function rustTypeContainsImplTrait(type: RustType): boolean {

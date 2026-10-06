@@ -744,7 +744,8 @@ export function writeRustProjectDispatchedField(
     method: writeSlot,
     args: [selectedValue],
   };
-  return rustValueBlock([{ name: receiverBinding, value: receiver }], roles.write.fallible
+  return rustValueBlock([{ name: receiverBinding, value: receiver.kind === "reference"
+    ? receiver : { kind: "reference", expr: receiver } }], roles.write.fallible
       ? {
           kind: "try",
           expr: writeCall,

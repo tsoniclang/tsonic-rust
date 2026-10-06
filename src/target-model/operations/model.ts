@@ -133,6 +133,7 @@ export type RustValueConversionId =
   | "borrowed-str-from-optional-string";
 
 export type RustNonOptionValueConversion =
+  | { readonly kind: "callable-input"; readonly source: TargetTypeRef; readonly target: TargetTypeRef }
   | RustProgramErrorConversion
   | { readonly kind: "source-optional"; readonly element: TargetTypeRef }
   | { readonly kind: "union-project"; readonly source: TargetTypeRef; readonly target: TargetTypeRef }

@@ -1,5 +1,5 @@
 import { flowStateFactKey } from "@tsonic/tsts";
-import { selectRustBindPointerSourceOperation } from "../../policy/operations/typed-locations/source-typed-locations.js";
+import { selectRustAddressOfSourceOperation, selectRustBindPointerSourceOperation } from "../../policy/operations/typed-locations/source-typed-locations.js";
 import {
   KindCallExpression,
   KindElementAccessExpression,
@@ -20,6 +20,7 @@ import {
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustAnalysisContext } from "../program/context.js";
 import type { RustProjectTypePolicy } from "./type-policy.js";
+import { rustProjectObjectField } from "./object-layout.js";
 import type { RustProviderOperationRow } from "../../providers/packages/model.js";
 import { createRustStructuralStorageCollector } from "./structural-storage-requirements.js";
 
@@ -84,6 +85,11 @@ export function collectRustMutableProjectStorageRequirements(
     collectStructural(node);
     const { ast } = context;
     const kind = ast.kindName(node);
+    const address = selectRustAddressOfSourceOperation(node, context.facts.resolve, context.facts.get);
+    if (address?.storageDeclaration !== undefined && rustProjectObjectField(address.storageDeclaration, ast) !== undefined) {
+      const definition = projectTypes.definitionContainingDeclaration(address.storageDeclaration);
+      if (definition?.kind === "class") referenceDeclarations.add(definition.declaration);
+    }
     const pointer = selectRustBindPointerSourceOperation(node, context.facts.resolve, context.facts.get);
     if (pointer !== undefined) {
       const semantics = context.semantics(sourceFile);

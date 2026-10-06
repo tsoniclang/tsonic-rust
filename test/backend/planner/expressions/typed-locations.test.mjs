@@ -736,8 +736,8 @@ export function retainGeneric<T>(value: T): T { retain(value); return value; }
   validateGeneratedProject("typed-location-reachability", result.artifacts);
 });
 
-test("typed-location storage outside the safe owned-root model fails closed", () => {
-  assertRustTargetRejection({
+test("stored class fields retain a safe owned address through their exact physical owner", () => {
+  const { result } = compileRust({
     files: {
       "index.ts": `
 import { addressof } from "@tsonic/core/lang.js";
@@ -752,10 +752,12 @@ export class Box {
 }
 `,
     },
-  }, [{
-    code: "RUST_POINTER_STORAGE_NOT_REPRESENTABLE",
-    message: "Selected address-of storage has no exact function-local variable or parameter root.",
-  }]);
+  });
+  assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 4).map(row => row.message.slice(0, 256)).join("\n"));
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /Location::try_bind_projected/u);
+  assert.doesNotMatch(source, /\bunsafe\b/u);
+  validateGeneratedProject("typed-location-stored-class-field", result.artifacts);
 });
 
 test("same-spelled project functions remain ordinary source calls", () => {
