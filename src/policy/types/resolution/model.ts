@@ -21,8 +21,8 @@ export interface RustTargetTypeResolutionOptions {
 }
 
 export interface RustTargetTypeResolutionContext extends RustSourcePolicyContext {
-  readonly sourceErrorSubject?: Node;
-  readonly sourceErrorProjection?: readonly SourceStorageProjection[];
+  readonly sourceStorageSubject?: Node;
+  readonly sourceStorageProjection?: readonly SourceStorageProjection[];
   readonly currentSourceFile: SourceFile;
   readonly currentSemantics: SourceFileSemantics;
   readonly sourceTypeParameterSubstitutions?: ReadonlyMap<Node, RustSourceTypeArgument>;

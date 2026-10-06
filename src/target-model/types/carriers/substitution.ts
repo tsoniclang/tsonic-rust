@@ -10,6 +10,7 @@ import type {
 import { rustLifetimeKey } from "../../lifetimes/index.js";
 import type { RustLifetimeRef } from "../../lifetimes/index.js";
 import { rustGenericCallableCarrier, rustGenericCallableValue } from "./generic-callables.js";
+import { rustFrameCallableCarrier, rustFrameCallableValue } from "./frame-callables.js";
 import { rustSourceOptionalTargetType } from "../projections.js";
 
 export function substituteRustTargetTypeParameters(
@@ -359,6 +360,13 @@ function substituteCarrierParts(
         origin: callable.origin,
         signature: callable.signature,
         environment: callable.environment.map(argument => substituteRustTargetGenerics(
+          argument, substitutions, lifetimeSubstitutions, constSubstitutions, normalize)),
+      });
+      const frame = rustFrameCallableValue(type);
+      if (frame !== undefined) return rustFrameCallableCarrier({
+        owner: frame.owner,
+        signature: frame.signature,
+        environment: frame.environment.map(argument => substituteRustTargetGenerics(
           argument, substitutions, lifetimeSubstitutions, constSubstitutions, normalize)),
       });
       const sourceType = rustSourceTypeCarrierValue(type);

@@ -20,6 +20,7 @@ import {
 } from "../generic-arguments.js";
 import type { RustLifetimeRef } from "../../lifetimes/index.js";
 import { rustGenericCallableProtocol, rustGenericCallableTargetType, rustGenericCallableValue } from "./generic-callables.js";
+import { rustFrameCallableProtocol, rustFrameCallableValue } from "./frame-callables.js";
 
 export function rustLocationTargetType(
   pointee: TargetTypeRef,
@@ -56,12 +57,15 @@ export function isRustCallableCarrier(
 ): boolean {
   return carrier?.kind === "closure" || carrier?.kind === "function-pointer" ||
     rustGenericCallableValue(carrier) !== undefined ||
+    rustFrameCallableValue(carrier) !== undefined ||
     carrier?.kind === "target-named" && carrier.id === rustCallableTargetId;
 }
 
 export function rustCallableProtocol(
   carrier: TargetTypeRef | undefined,
 ): { readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef } | undefined {
+  const frame = rustFrameCallableProtocol(carrier);
+  if (frame !== undefined) return frame;
   if (carrier?.kind !== "target-named" || carrier.id !== rustCallableTargetId) {
     return undefined;
   }

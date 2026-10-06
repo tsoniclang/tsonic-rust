@@ -62,6 +62,7 @@ export interface RustPlanningHost {
 }
 
 export interface RustTargetProgram {
+  readonly callableOwnership: import("../callables/ownership-plan.js").RustCallableOwnershipPlan;
   readonly lexicalFunctions: import("../callables/lexical-functions.js").RustLexicalFunctionQueries;
   readonly errorStorageDemands: import("@tsonic/target-api/analysis").SourceErrorStorageDemandQueries;
   readonly localStorageAliases: RustLocalStorageAliasPlan;

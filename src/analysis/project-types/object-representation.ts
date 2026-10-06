@@ -17,9 +17,9 @@ import {
   rustStaticLifetime,
 } from "../../target-model/lifetimes/index.js";
 import type { RustLifetimeRef } from "../../target-model/lifetimes/index.js";
-import { analyzeRustReceiverFieldAliases, type RustReceiverFieldAliasQueries } from "./receiver-field-aliases.js";
-import { analyzeRustConstructionEffects } from "./construction-effects.js";
-import { analyzeRustReceiverFieldCaptures, type RustReceiverFieldCaptureQueries } from "./receiver-captures.js";
+import type { RustReceiverFieldAliasQueries } from "./receiver-field-aliases.js";
+import type { RustReceiverFieldCaptureQueries } from "./receiver-captures.js";
+import type { RustReceiverStoragePlan } from "./receiver-storage.js";
 
 export type RustObjectRepresentationKind =
   | "value"
@@ -48,6 +48,7 @@ export interface RustObjectRepresentationPlan extends RustReceiverFieldAliasQuer
 }
 
 export interface RustObjectRepresentationAnalysisInput {
+  readonly receiverStorage: RustReceiverStoragePlan;
   readonly ast: AstReader;
   readonly navigation: SourceProgramNavigation;
   readonly semantics: SourceProgramSemantics;
@@ -108,12 +109,8 @@ export function createRustObjectRepresentationPlanRegistry(): RustObjectRepresen
 export function createRustObjectRepresentationPlan(
   input: RustObjectRepresentationAnalysisInput,
 ): RustObjectRepresentationPlan {
-  const receiverAliases = analyzeRustReceiverFieldAliases(input);
-  const constructionEffects = new Map(input.projectTypes.definitions.map(definition =>
-    [definition, analyzeRustConstructionEffects(definition, input, receiverAliases)]));
-  const receiverCaptures = analyzeRustReceiverFieldCaptures({ ...input,
-    isStoredField: declaration => receiverAliases.aliasFor(declaration) === undefined,
-    deferredFields: new Set([...constructionEffects.values()].flatMap(effect => effect.deferredCaptureFields)) });
+  const receiverAliases = input.receiverStorage;
+  const receiverCaptures = input.receiverStorage.captures;
   const { origins, escapingSuspendedMethods } = collectProjectObjectOrigins(input);
   const mutatingMethods = collectMutatingProjectMethods(input, receiverCaptures);
   const representations = input.projectTypes.definitions.map((definition) => {
@@ -122,7 +119,7 @@ export function createRustObjectRepresentationPlan(
       flow.aliasDeclarations.some(input.hasPromotedStorage));
     const mutable = promotedStorage || creationFlows.some(flow => flow.uses.some(use => use.role === "write" &&
       use.throughMember && !writesCapturedField(use.reference, input, receiverCaptures))) ||
-      constructionEffects.get(definition)?.publishedFieldWrites.some(declaration => !receiverCaptures.isCaptured(declaration)) === true || projectDefinitionIsMutable(
+      input.receiverStorage.publishedFieldWrites(definition).some(declaration => !receiverCaptures.isCaptured(declaration)) || projectDefinitionIsMutable(
       definition,
       mutatingMethods,
       input, receiverCaptures,

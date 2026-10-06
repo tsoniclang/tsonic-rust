@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
-import type { RustGenericCallableOrigin, RustGenericCallableSignature } from "../../target-model/types/carriers/generic-callables.js";
+import type { RustCallableOrigin, RustCallableSignature } from "../../target-model/types/carriers/callable-signatures.js";
 import { rustGenericCallableValue, rustNativeFutureCallableResult } from "../../target-model/types/carriers/generic-callables.js";
 import { closedMetadataKey, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
@@ -37,13 +37,13 @@ export interface RustGenericCallableImplementation {
 
 export interface RustGenericCallableDefinition {
   readonly identity: string;
-  readonly origin: RustGenericCallableOrigin;
+  readonly origin: RustCallableOrigin;
   readonly targetName: string;
   readonly nativeFutureDispatchName?: string;
   readonly copy: boolean;
   readonly identityObserved: boolean;
   readonly ownerFileName: string;
-  readonly signature: RustGenericCallableSignature;
+  readonly signature: RustCallableSignature;
   readonly implementations: readonly RustGenericCallableImplementation[];
 }
 
@@ -60,7 +60,7 @@ export function createRustGenericCallablePlan(
   adapterFlows: readonly { readonly subject: Node; readonly conversion: RustGenericCallableConversion }[] = [],
   closedSourceFiles: ReadonlySet<SourceFile> = new Set(),
 ): RustGenericCallablePlan {
-  const groups = new Map<string, { origin: RustGenericCallableOrigin; signature: RustGenericCallableSignature; implementations: RustGenericCallableImplementation[] }>();
+  const groups = new Map<string, { origin: RustCallableOrigin; signature: RustCallableSignature; implementations: RustGenericCallableImplementation[] }>();
   const implementations = new Map<Node, RustGenericCallableImplementation>();
   const issues: RustSourceCallableSpecializationIssue[] = [];
   const usedNames = new Set<string>();

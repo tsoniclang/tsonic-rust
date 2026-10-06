@@ -7,6 +7,7 @@ import {
   createRustCallableOwnershipComponentQueries, defaultRustCallableOwnershipLimits,
 } from "../../../dist/analysis/callables/ownership-components.js";
 import { analyzeRustReceiverFieldCaptures } from "../../../dist/analysis/project-types/receiver-captures.js";
+import { createRustCallableOwnershipRegistry } from "../../../dist/analysis/callables/ownership-plan.js";
 
 const lexicalSource = `
 export function escaped(seed: number): (count: number) => number {
@@ -61,6 +62,54 @@ function onlyComponent(queries) {
   assert.equal(queries.components.length, 1, "one exact cyclic ownership component");
   return queries.components[0];
 }
+
+test("owning activation selection is initialized once before source ABI consumers", () => {
+  const current = fixture(lexicalSource);
+  const registry = createRustCallableOwnershipRegistry();
+  assert.throws(() => registry.seal(), /before declaration ABI selection/);
+  const plan = registry.initialize(current.input);
+  assert.equal(registry.seal() === plan, true);
+  assert.throws(() => registry.initialize(current.input), /only once/);
+  const slot = current.named("selected", "KindVariableDeclaration")[0];
+  const alias = current.named("before", "KindVariableDeclaration")[0];
+  const returned = current.named("escaped", "KindFunctionDeclaration")[0];
+  for (const node of [slot, alias, returned]) {
+    const selection = registry.storageFor(node);
+    assert.equal(selection.kind, "frame", "same activation survives checked binding and return transport");
+    assert.equal(selection.component === plan.components[0], true);
+  }
+});
+
+test("plain callback storage does not invent a cyclic owning activation", () => {
+  const current = fixture("export function identity(value: (count: number) => number) { return value; }");
+  const registry = createRustCallableOwnershipRegistry();
+  registry.initialize(current.input);
+  const selected = registry.storageFor(current.named("value", "KindParameter")[0]);
+  assert.equal(selected.kind, "ordinary");
+});
+
+test("different closed callback origins never silently share a physical frame type", () => {
+  const current = fixture(`
+    export function select(flag: boolean) {
+      let left = (count: number): number => count === 0 ? 1 : left(count - 1);
+      let right = (count: number): number => count === 0 ? 2 : right(count - 1);
+      left = (): number => 3;
+      right = (): number => 4;
+      return flag ? left : right;
+    }
+  `);
+  const registry = createRustCallableOwnershipRegistry();
+  registry.initialize(current.input);
+  assert.equal(registry.storageFor(current.named("select", "KindFunctionDeclaration")[0]).kind, "unresolved");
+});
+
+test("bounded ownership failure cannot be read as ordinary callback storage", () => {
+  const current = fixture(lexicalSource);
+  const registry = createRustCallableOwnershipRegistry();
+  registry.initialize({ ...current.input, limits: { ...defaultRustCallableOwnershipLimits, maximumSteps: 1 } });
+  assert.equal(registry.storageFor(current.named("selected", "KindVariableDeclaration")[0]).kind, "unresolved");
+  assert.equal(registry.isCyclicSlot(current.named("selected", "KindVariableDeclaration")[0]), false);
+});
 
 test("mutable lexical callbacks close over every original and replacement origin", () => {
   const current = fixture(lexicalSource);

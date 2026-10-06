@@ -53,6 +53,7 @@ import { collectRustDeclaredProviderErrorCarriers } from "./provider-errors.js";
 import { createRustLexicalFunctionQueries, type RustLexicalFunctionQueries } from "../callables/lexical-functions.js";
 import { recordRustLexicalValueEnvironments } from "../callables/lexical-value-environments.js";
 import { rustSourceErrorTargetType, rustWritableSourceErrorTargetType } from "../../target-model/types/carriers/source-error.js";
+import { analyzeRustReceiverStorage } from "../project-types/receiver-storage.js";
 
 export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFunctionQueries | undefined {
   const { ast } = context;
@@ -214,6 +215,19 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
       throw new Error("Rust project Error origin conflicts with its canonical type definition.");
     }
   }
+  const receiverStorage = analyzeRustReceiverStorage({ ast, navigation: context.source.navigation,
+    semantics: context.source.semantics, projectTypes, sourceFiles: projectSourceFiles,
+  });
+  const callableOwnership = context.callableOwnership.initialize({ storage: context.sourceStorage,
+    receiverCaptures: receiverStorage.captures,
+    isRuntimeUse: (use, declaration) => context.runtimeValueUses.isRuntimeReference(declaration, use.reference),
+  });
+  const ownershipFailure = callableOwnership.failureReason();
+  if (ownershipFailure !== undefined) {
+    appendRustDiagnostic(walk, "RUST_CALLABLE_OWNERSHIP_NOT_CLOSED", ownershipFailure, undefined,
+      ["target.capability=rust.callable.activation-owner"]);
+    return;
+  }
   const callableAlias = createRustSourceProfileCallableAliasQuery(context, sourceProfiles);
   const collectPromotedStorage = (node: Node): void => {
     if (ast.is.IsVariableDeclaration(node)) {
@@ -264,6 +278,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     node => rustStructuralObjectCarrierValue(resolveRustTargetTypeRef(node, rustResolutionContext(walk, node), operationOptions))?.representation === "value",
   );
   context.objectRepresentations.initialize({
+    receiverStorage,
     ast,
     navigation: context.source.navigation,
     semantics: context.source.semantics,

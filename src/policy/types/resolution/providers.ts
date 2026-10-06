@@ -69,7 +69,7 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
 import type { RustSourcePolicyContext } from "../../model/context.js";
 import type { SourceStorageProjection } from "@tsonic/target-api/analysis";
-import { rustSourceErrorComponentContext } from "./error-storage-projection.js";
+import { rustSourceStorageComponentContext } from "./source-storage-projection.js";
 
 const regExpIdentity = jsRegExpSourceProfileIdentity;
 const regExpResultCarrierByOwner = new Map<string, () => TargetTypeRef>([
@@ -365,7 +365,7 @@ export function resolveSourceProfileCarrier(
     return undefined;
   }
   const argumentContext = name === "Array" || name === "ReadonlyArray"
-    ? rustSourceErrorComponentContext(context, { kind: "array-element" }) : context;
+    ? rustSourceStorageComponentContext(context, { kind: "array-element" }) : context;
   const targetArguments = arguments_.map((argument) => resolveRustTargetType(argument, argumentContext, options, resolving));
   if (options.jsEnabled && name === regExpIdentity.owners.regExpStringIterator) {
     const [element] = targetArguments;
@@ -383,7 +383,7 @@ export function resolveSourceProfileCarrier(
   }
   const direct = targetArguments.every((argument) => argument !== undefined)
     ? resolveSourceProfileCarrierFromArguments(name, targetArguments as TargetTypeRef[], options,
-      context.sourceErrorSubject, context.sourceErrorProjection)
+      context.sourceStorageSubject, context.sourceStorageProjection)
     : undefined;
   if (direct !== undefined && name !== "Array" && name !== "ReadonlyArray") {
     return direct;

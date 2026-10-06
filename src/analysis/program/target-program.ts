@@ -285,6 +285,7 @@ export function analyzeRustTargetProgram(
     projectFieldDispatch: context.projectFieldDispatch.seal(),
     sourceCallableSpecializations: context.sourceCallableSpecializations.seal(),
     callableValues: context.callableValues.seal(),
+    callableOwnership: context.callableOwnership.seal(),
     sourceLifetimes: context.sourceLifetimes,
     declarationGenericRequirements: declarationGenericRequirements.index,
     valueLifetimes,

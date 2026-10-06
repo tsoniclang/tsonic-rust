@@ -56,6 +56,8 @@ export interface RustCallableOwnershipComponentQueries {
   failureReason(): string | undefined;
   componentForCallable(declaration: Node): RustCallableOwnershipComponent | undefined;
   componentForSlot(declaration: Node): RustCallableOwnershipComponent | undefined;
+  isCyclicCallable(declaration: Node): boolean;
+  isCyclicSlot(declaration: Node): boolean;
 }
 
 type Vertex = { readonly kind: "callable" | "slot"; readonly declaration: Node };
@@ -88,6 +90,8 @@ export function createRustCallableOwnershipComponentQueries(input: {
   const callableComponents = new Map<Node, RustCallableOwnershipComponent>();
   const slotComponents = new Map<Node, RustCallableOwnershipComponent>();
   const components: RustCallableOwnershipComponent[] = [];
+  const cyclicCallables = new Set<Node>();
+  const cyclicSlots = new Set<Node>();
   const reject = (reason: string): void => { failure ??= reason; };
   const account = (cost = 1): boolean => {
     if (failure !== undefined) return false;
@@ -323,6 +327,7 @@ export function createRustCallableOwnershipComponentQueries(input: {
     for (const member of members) {
       if (!account()) return result();
       (member.kind === "slot" ? cycleSlots : cycleCallables).add(member);
+      (member.kind === "slot" ? cyclicSlots : cyclicCallables).add(member.declaration);
     }
   }
   const affinityVertices = new Set<Vertex>([...cycleSlots, ...cycleCallables]);
@@ -470,6 +475,8 @@ export function createRustCallableOwnershipComponentQueries(input: {
       issues: Object.freeze([...issues]), failureReason: () => failure,
       componentForCallable: (declaration: Node) => failure === undefined ? callableComponents.get(declaration) : undefined,
       componentForSlot: (declaration: Node) => failure === undefined
-        ? slotComponents.get(canonicalSlots.get(declaration) ?? declaration) : undefined });
+        ? slotComponents.get(canonicalSlots.get(declaration) ?? declaration) : undefined,
+      isCyclicCallable: (declaration: Node) => failure === undefined && cyclicCallables.has(declaration),
+      isCyclicSlot: (declaration: Node) => failure === undefined && cyclicSlots.has(canonicalSlots.get(declaration) ?? declaration) });
   }
 }

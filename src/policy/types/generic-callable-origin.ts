@@ -1,10 +1,10 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import { sourceNodeIdentity } from "@tsonic/target-api/source";
-import type { RustGenericCallableOrigin } from "../../target-model/types/carriers/generic-callables.js";
+import type { RustCallableOrigin } from "../../target-model/types/carriers/callable-signatures.js";
 import { rustGenericCallableCarrier, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
-export function rustGenericCallableOrigin(ast: AstReader, declaration: Node | undefined): RustGenericCallableOrigin | undefined {
+export function rustGenericCallableOrigin(ast: AstReader, declaration: Node | undefined): RustCallableOrigin | undefined {
   if (declaration === undefined) return undefined;
   const identity = sourceNodeIdentity(ast, declaration);
   const sourceFile = ast.getSourceFile(declaration);

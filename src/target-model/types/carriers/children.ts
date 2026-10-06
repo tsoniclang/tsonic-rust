@@ -2,6 +2,7 @@ import type { RustTargetGenericArgument, TargetTypeRef } from "../model.js";
 import { rustFixedArrayCarrierValue, rustNamedTypeCarrierValue } from "./native.js";
 import { rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustStructuralObjectCarrierValue } from "./source-types.js";
 import { rustGenericCallableValue } from "./generic-callables.js";
+import { rustFrameCallableValue } from "./frame-callables.js";
 import { rustClassConstructorFreeArguments } from "./class-constructors.js";
 
 export function rustTargetTypeChildren(type: TargetTypeRef): readonly TargetTypeRef[] {
@@ -30,6 +31,8 @@ export function rustTargetTypeChildren(type: TargetTypeRef): readonly TargetType
       if (constructorArguments !== undefined) return arguments_(constructorArguments);
       const callable = rustGenericCallableValue(type);
       if (callable !== undefined) return callable.environment;
+      const frame = rustFrameCallableValue(type);
+      if (frame !== undefined) return frame.environment;
       const source = rustSourceTypeCarrierValue(type);
       if (source !== undefined) return arguments_(source.genericArguments);
       const shape = rustStructuralObjectCarrierValue(type);

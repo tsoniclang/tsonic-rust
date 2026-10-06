@@ -8,6 +8,7 @@ import {
   rustStructuralObjectCarrierValue,
 } from "./source-types.js";
 import { rustGenericCallableValue } from "./generic-callables.js";
+import { rustFrameCallableValue } from "./frame-callables.js";
 import { rustClassConstructorFreeArguments } from "./class-constructors.js";
 import type {
   RustTargetConstArgument,
@@ -220,6 +221,11 @@ export function rustTargetGenericReferences(
         const callable = rustGenericCallableValue(value);
         if (callable !== undefined) {
           callable.environment.forEach(argument => visitType(argument, bound));
+          return;
+        }
+        const frame = rustFrameCallableValue(value);
+        if (frame !== undefined) {
+          frame.environment.forEach(argument => visitType(argument, bound));
           return;
         }
         const sourceType = rustSourceTypeCarrierValue(value);

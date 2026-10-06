@@ -1,6 +1,6 @@
 import { Node_Initializer, sourceParameterIsProperty, selectSourceNativeGuardResult } from "@tsonic/target-api/source";
 import type { Node } from "@tsonic/tsts";
-import type { RustObjectRepresentationAnalysisInput } from "./object-representation.js";
+import type { RustReceiverStorageInput } from "./receiver-storage.js";
 import type { RustReceiverFieldAliasQueries } from "./receiver-field-aliases.js";
 import type { RustProjectTypeDefinition } from "./type-policy.js";
 import { rustProjectObjectLayout } from "./object-layout.js";
@@ -9,7 +9,7 @@ import { analyzeRustConstructionReadiness, type RustConstructionReadinessField,
 
 export function analyzeRustConstructionEffects(
   definition: RustProjectTypeDefinition,
-  input: RustObjectRepresentationAnalysisInput,
+  input: RustReceiverStorageInput,
   aliases: RustReceiverFieldAliasQueries,
 ): { readonly publishedFieldWrites: readonly Node[]; readonly deferredCaptureFields: readonly Node[] } {
   if (definition.kind !== "class") return { publishedFieldWrites: [], deferredCaptureFields: [] };

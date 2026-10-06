@@ -81,9 +81,11 @@ import { createRustErrorStorageDemandQuery } from "../objects/error-storage-dema
 import { createSourceStorageQuery, type SourceErrorStorageDemandQueries, type SourceStorageQueries } from "@tsonic/target-api/analysis";
 import { createRustRetainedErrorDemandSelection } from "../objects/retained-error-demands.js";
 import { createRustSourceProfileRegistry } from "../facts/source-profile-registry.js";
+import { createRustCallableOwnershipRegistry, type RustCallableOwnershipRegistry } from "../callables/ownership-plan.js";
 
 export interface RustAnalysisContext extends RustSourcePolicyContext {
   readonly sourceStorage: SourceStorageQueries;
+  readonly callableOwnership: RustCallableOwnershipRegistry;
   readonly errorStorageDemands: SourceErrorStorageDemandQueries;
   readonly typeDefinitions: RustTypeDefinitionRegistry;
   readonly typeFamilies: RustSourceTypeFamilyRegistry;
@@ -165,6 +167,7 @@ export function createRustAnalysisContext(
   const sourceStorageFailure = sourceStorage.failureReason();
   return Object.freeze({
     sourceStorage,
+    callableOwnership: createRustCallableOwnershipRegistry(),
     errorStorageDemands: createRustErrorStorageDemandQuery(input.source,
       createRustSourceProfileRegistry(input.source.sourceFiles, ast, jsEnabled), sourceStorage,
       createRustRetainedErrorDemandSelection(input.source, facts, providerSemantics.operations)),

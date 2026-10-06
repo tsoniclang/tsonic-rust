@@ -167,7 +167,7 @@ export function selectedMemberReceiverCarrier(
   }
   const selectedCarrier = resolveRustTargetTypeRef(
     request.sourceReceiverType,
-    { ...context, sourceErrorSubject: receiver, sourceErrorProjection: undefined },
+    { ...context, sourceStorageSubject: receiver, sourceStorageProjection: undefined },
     options,
   );
   const selectedOwner = options.projectTypes.definitionContainingDeclaration(

@@ -21,7 +21,7 @@ import {
   isRustNumericCarrier,
 } from "../../../target-model/types/index.js";
 import { denseDefined, resolveProjectSourceCarrier } from "./project.js";
-import { rustSourceErrorComponentContext } from "./error-storage-projection.js";
+import { rustSourceStorageComponentContext } from "./source-storage-projection.js";
 import { bindRustSourceAliasArguments } from "./generic-arguments.js";
 import { instantiateTargetType, providerCarrierFromRelations, resolveOwnedSourceProfileTypeName, resolveProviderTypeIdentity, resolveSourceProfileCarrier } from "./providers.js";
 import { isRustStructuralObjectFieldDeclaration, isRustErasedNominalMember } from "../source-shapes.js";
@@ -237,7 +237,7 @@ export function resolveRustTargetType(
           resolveRustTupleElementTargetTypeWithState(
             element,
             semantics,
-            rustSourceErrorComponentContext(context, { kind: "tuple-element", index }),
+            rustSourceStorageComponentContext(context, { kind: "tuple-element", index }),
             options,
             resolving,
             authoredTypeRoot,
@@ -251,7 +251,7 @@ export function resolveRustTargetType(
     if (semantics.types.isArrayLike(type) && semantics.types.isTypeReference(type)) {
       const [elementType] = semantics.types.typeArguments(type);
       const element = resolveRustTargetType(elementType,
-        rustSourceErrorComponentContext(context, { kind: "array-element" }), options, resolving);
+        rustSourceStorageComponentContext(context, { kind: "array-element" }), options, resolving);
       return element === undefined
         ? undefined
         : options.jsEnabled
