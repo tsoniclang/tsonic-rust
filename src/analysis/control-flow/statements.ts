@@ -43,7 +43,7 @@ import {
   sourceIntegerInduction,
 } from "@tsonic/target-api/source";
 import { rustOptionElementCarrier, rustProgramErrorTargetType } from "../../target-model/types/index.js";
-import { rustGenericCallableValueOwner } from "../../policy/types/generic-callable-origin.js";
+import { rustGenericCallableValueOwner } from "../../policy/types/callable-origins.js";
 import { rustSwitchCarrierSupportsEquality, selectRustSwitchComparison } from "../../policy/operations/control-flow/switch.js";
 import {
   rustAsyncFunctionFactKey,

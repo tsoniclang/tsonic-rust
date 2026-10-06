@@ -43,7 +43,7 @@ import type { RustTargetOperationFact } from "../../facts/keys.js";
 import { selectRustPointerReturnCarrier } from "../../../policy/operations/pointers/return.js";
 import { resolveRustUnionMethodContracts, rustUnionMethodOwner, selectRustUnionMethods } from "./calls/union-methods.js";
 import { rustSourceUnionCarrierValue } from "../../../target-model/types/carriers/source-types.js";
-import { rustGenericCallableValueOwner } from "../../../policy/types/generic-callable-origin.js";
+import { rustGenericCallableValueOwner } from "../../../policy/types/callable-origins.js";
 import { selectRustRecordObjectCall } from "./records.js";
 import { selectRustSourceCallResult } from "../../../policy/types/resolution/call-results.js";
 import { resolveRustTypeComponentEvidence } from "../../../policy/types/resolution/source-evidence.js";

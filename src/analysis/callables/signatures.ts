@@ -54,7 +54,7 @@ import { rustHigherRankedNativeFunctionCarrier } from "./higher-ranked-function.
 import { selectRustPointerReturnContract } from "../../policy/operations/pointers/return.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustGenericCallableProtocol, rustGenericCallableTargetType, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
-import { rustGenericCallableValueOwner } from "../../policy/types/generic-callable-origin.js";
+import { rustGenericCallableValueOwner } from "../../policy/types/callable-origins.js";
 import { closeRustSuspendedStorage } from "../../policy/types/suspended-storage.js";
 import { selectRustInferredReturn } from "./inferred-return.js";
 import { rustOptionalStorageValue } from "../../target-model/types/projections.js";

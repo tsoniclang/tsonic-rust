@@ -4,7 +4,7 @@ import type { RustCallableOrigin } from "../../target-model/types/carriers/calla
 import { rustGenericCallableCarrier, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
-export function rustGenericCallableOrigin(ast: AstReader, declaration: Node | undefined): RustCallableOrigin | undefined {
+export function rustCallableOrigin(ast: AstReader, declaration: Node | undefined): RustCallableOrigin | undefined {
   if (declaration === undefined) return undefined;
   const identity = sourceNodeIdentity(ast, declaration);
   const sourceFile = ast.getSourceFile(declaration);
@@ -18,6 +18,6 @@ export function rustGenericCallableValueOwner(
 ): TargetTypeRef | undefined {
   const value = rustGenericCallableValue(carrier);
   if (value === undefined) return carrier;
-  const origin = rustGenericCallableOrigin(ast, declaration);
+  const origin = rustCallableOrigin(ast, declaration);
   return origin === undefined ? undefined : rustGenericCallableCarrier({ ...value, origin });
 }

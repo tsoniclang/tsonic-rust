@@ -1,5 +1,4 @@
-import type { Node } from "@tsonic/tsts";
-import type { SourceStorageProjection, SourceStorageQueries } from "@tsonic/target-api/analysis";
+import type { SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
 import {
   createRustCallableOwnershipComponentQueries,
   type RustCallableOwnershipComponent, type RustCallableOwnershipComponentQueries,
@@ -11,7 +10,7 @@ export type RustCallableStorageOwnership =
   | { readonly kind: "unresolved"; readonly reason: string };
 
 export interface RustCallableOwnershipPlan extends RustCallableOwnershipComponentQueries {
-  storageFor(node: Node, projection?: readonly SourceStorageProjection[]): RustCallableStorageOwnership;
+  storageFor(subject: SourceStorageSubject): RustCallableStorageOwnership;
 }
 
 export interface RustCallableOwnershipRegistry extends RustCallableOwnershipPlan {
@@ -39,7 +38,7 @@ export function createRustCallableOwnershipRegistry(): RustCallableOwnershipRegi
     componentForSlot: (declaration: Node) => requireCurrent().componentForSlot(declaration),
     isCyclicCallable: (declaration: Node) => requireCurrent().isCyclicCallable(declaration),
     isCyclicSlot: (declaration: Node) => requireCurrent().isCyclicSlot(declaration),
-    storageFor: (node: Node, projection?: readonly SourceStorageProjection[]) => requireCurrent().storageFor(node, projection),
+    storageFor: (subject: SourceStorageSubject) => requireCurrent().storageFor(subject),
   });
 }
 
@@ -50,12 +49,10 @@ export function createRustCallableOwnershipPlan(
   const ordinary: RustCallableStorageOwnership = Object.freeze({ kind: "ordinary" });
   const unresolved = (reason: string): RustCallableStorageOwnership => Object.freeze({ kind: "unresolved", reason });
   return Object.freeze({ ...components,
-    storageFor(node: Node, projection?: readonly SourceStorageProjection[]): RustCallableStorageOwnership {
+    storageFor(subject: SourceStorageSubject): RustCallableStorageOwnership {
       const failure = components.failureReason() ?? storage.failureReason();
       if (failure !== undefined) return unresolved(failure);
-      const subject = storage.storageSubjectFor(node, projection);
-      if (subject.kind === "unresolved") return unresolved(subject.reason);
-      const origins = storage.originsFor(subject.subject);
+      const origins = storage.originsFor(subject);
       if (origins.kind === "unresolved") return unresolved(origins.reason);
       let selected: RustCallableOwnershipComponent | undefined;
       let ordinaryOrigins = false;
@@ -71,7 +68,7 @@ export function createRustCallableOwnershipPlan(
           return unresolved("Callable storage receives different physical activation families.");
         } else selected = component;
       }
-      if (selected === undefined) return components.isCyclicSlot(subject.subject.node)
+      if (selected === undefined) return components.isCyclicSlot(subject.node)
         ? unresolved("Cyclic callback storage has no exact contributing callback creation.") : ordinary;
       return ordinaryOrigins ? unresolved("Callable storage mixes an owning frame with an independent callable origin.")
         : Object.freeze({ kind: "frame", component: selected });

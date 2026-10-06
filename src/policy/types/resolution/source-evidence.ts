@@ -34,7 +34,7 @@ import { resolveBoundSourceTypeParameter } from "./callables.js";
 import { rustTypeFamilyNormalizer } from "../type-family-normalization.js";
 import { rustGenericCallableTargetType, rustNativeFutureCallableResult } from "../../../target-model/types/carriers/generic-callables.js";
 import { rustTypeParameterFromSourceContract } from "../../../target-model/names/type-parameters.js";
-import { rustGenericCallableOrigin } from "../generic-callable-origin.js";
+import { rustCallableOrigin } from "../callable-origins.js";
 import { closeRustSuspendedStorage } from "../suspended-storage.js";
 import { rustSourceSelectionUsesExactBindings } from "./bound-source-selection.js";
 import { bindRustCallableEnvironment, resolveRustCallableEnvironment } from "./callable-environments.js";
@@ -108,7 +108,7 @@ export function resolveRustCallableEvidence(
   if (result === undefined) return undefined;
   if (genericContract !== undefined && genericContract.parameters.length > 0 &&
     genericContract.parameters.every(parameter => parameter.kind === "type")) {
-    const origin = rustGenericCallableOrigin(context.ast, declaration);
+    const origin = rustCallableOrigin(context.ast, declaration);
     const environment = resolveRustCallableEnvironment(declaration, context, options, resolving);
     const carrier = origin === undefined || environment === undefined ? undefined : bindRustCallableEnvironment(rustGenericCallableTargetType(
       genericContract.parameters.map(rustTypeParameterFromSourceContract), parameters as readonly TargetTypeRef[], result, origin, environment), context);
@@ -126,7 +126,7 @@ export function resolveRustCallableEvidence(
         });
   }
   if (rustNativeFutureCallableResult(result) !== undefined) {
-    const origin = rustGenericCallableOrigin(context.ast, declaration);
+    const origin = rustCallableOrigin(context.ast, declaration);
     const environment = resolveRustCallableEnvironment(declaration, context, options, resolving);
     return origin === undefined || environment === undefined ? undefined : bindRustCallableEnvironment(rustGenericCallableTargetType(
       [], parameters as readonly TargetTypeRef[], result, origin, environment), context);
