@@ -196,9 +196,11 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
   }
   for (const sourceFile of projectSourceFiles) {
     const visitCallableDeclarations = (node: Node): void => {
-      if (ast.kindName(node) === KindFunctionDeclaration) registerCallableDeclaration(node);
       const operation = walk.context.facts.get(node, rustTargetOperationFactKey) ??
         walk.context.facts.resolve(node, rustTargetOperationFactKey);
+      if (ast.kindName(node) === KindFunctionDeclaration || operation?.kind === "closure") {
+        registerCallableDeclaration(node);
+      }
       if (operation?.kind === "record-literal") {
         for (const contribution of operation.contributions) {
           if (contribution.kind !== "method") {

@@ -50,6 +50,7 @@ import {
   rustCarrierSupportsTrait,
   rustJsClosedValueCarrierTraitPath,
   rustTsValueTargetType,
+  rustProgramErrorTargetType,
 } from "../types/index.js";
 import type { RustPrimitiveTypeName } from "../syntax/tokens.js";
 import { rustNumericValueConversionIsSupported } from "./numeric-promotion.js";
@@ -87,6 +88,7 @@ interface RustValueConversionContractBase {
 
 export type RustValueConversionContract = RustValueConversionContractBase & (
   | { readonly lowering: "program-error"; readonly route: RustProgramErrorRoute }
+  | { readonly lowering: "program-error-closed-value" }
   | { readonly lowering: "project-closed-value"; readonly ownerPath: "rt::TsValue" | "js_abi::JsValue" }
   | { readonly lowering: "js-array-backing"; readonly element: TargetTypeRef; readonly method: "cast" | "cast_array" }
   | { readonly lowering: "source-optional"; readonly element: TargetTypeRef }
@@ -239,6 +241,10 @@ export function rustValueConversionContract(
     };
   }
   if (value.kind === "ts-value-from-closed-carrier") {
+    if (rustTargetTypeRefEquals(value.source, rustProgramErrorTargetType())) {
+      return { category: "projection", lowering: "program-error-closed-value",
+        sourceMode: "value", source: value.source, target: tsValueCarrier, fallible: false };
+    }
     if (rustClosedValueRetainsError(value.source, definitions)) {
       return { category: "projection", lowering: "call", path: "rt::TsValue::from_error",
         sourceMode: "value", source: value.source, target: tsValueCarrier, fallible: false };
@@ -259,6 +265,10 @@ export function rustValueConversionContract(
   if (value.kind === "js-value-from-closed-carrier") {
     if (!isClosedMetadata(value) || !hasExactObjectKeys(value, ["kind", "source"]) ||
       !isRustTargetTypeRef(value.source)) return undefined;
+    if (rustTargetTypeRefEquals(value.source, rustProgramErrorTargetType())) {
+      return { category: "projection", lowering: "program-error-closed-value",
+        sourceMode: "value", source: value.source, target: jsValueCarrier, fallible: false };
+    }
     if (rustClosedValueRetainsError(value.source, definitions)) {
       return { category: "projection", lowering: "call", path: "js_abi::JsValue::from_error",
         sourceMode: "value", source: value.source, target: jsValueCarrier, fallible: false };

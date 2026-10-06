@@ -16,12 +16,14 @@ import {
 } from "../../target-ast/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/nodes.js";
 import { planRustErrorObservations, planRustSuppressedErrorConstructor } from "./error-observations.js";
-import { planRustErrorTransport, planRustSourceErrorTransport, rustSuppressedErrorPattern } from "./error-transport.js";
+import { planRustErrorTransport, planRustSourceErrorTransport, rustSuppressedErrorPattern,
+  type RustErrorTransportVariant } from "./error-transport.js";
 import { planRustSourceErrorObservations } from "./source-error-observations.js";
 import { planRustRetainedErrorAdmission } from "./retained-errors.js";
 import { planRustErrorProjectionTransport, planRustSourceErrorProjectionDelegates } from "./error-projections.js";
 import { planRustClosedThrowAdmission } from "./closed-throws.js";
 import { planRustNativeValueProjections } from "./native-value-projections.js";
+import { selectRustErrorVariants } from "./error-variant-selection.js";
 
 const programErrorName = "TsonicError";
 const programResultName = "TsonicResult";
@@ -162,13 +164,12 @@ export function planRustProgramErrorModule(
     return undefined;
   }
 
-  const closedDemand = input.program.sourcePackageComponents.forComponent(domain.componentId)?.closedErrorDemand;
-  if (closedDemand === undefined) {
+  const selectedVariants = selectRustErrorVariants(input.program, domain);
+  if (selectedVariants === undefined) {
     diagnostics.push({ code: "RUST_CLOSED_ERROR_DEMAND_MISSING", category: "error", source: "tsonic-rust",
-      message: "Program Error transport requires its sealed component demand." });
+      message: "Program Error transport requires its exact sealed variant inventory." });
     return undefined;
   }
-  const closedCarriers = closedDemand.thrownCarriers;
   const nativeProjectVariants = exactProjectVariants.map(variant => ({
     name: variant.variant, representation: input.program.objectRepresentations.representationFor(variant.definition),
   }));
@@ -177,27 +178,32 @@ export function planRustProgramErrorModule(
       message: "Native thrown-value queries require exact finalized project storage." });
     return undefined;
   }
-  const closedVariants = [...new Set(closedCarriers.map(carrier => rustTargetTypeRefEquals(carrier, rustTsValueTargetType())
-    ? "ClosedNative" : "ClosedJs"))].sort().map(name => ({ name, source: "thrown" as const,
-      type: namedType(name === "ClosedNative" ? "tsonic_rust_runtime::TsValue" : "tsonic_rust_js::value::JsValue") }));
-  const transport = planRustErrorTransport([
-    ...exactProjectVariants.map(({ definition, variant, type }) => ({
-      name: variant, type,
-      source: input.program.projectTypes.sourceErrorDefinitions.includes(definition) ? "error" as const : "thrown" as const,
-    })),
-    ...externalVariants.map(({ variant, type, typePath }) => ({
-      name: variant, type, source: "external" as const,
-      sourceErrorType: namedType(`${typePath.slice(0, -programErrorName.length)}SourceError`),
-      writableSourceErrorType: namedType(`${typePath.slice(0, -programErrorName.length)}WritableSourceError`),
-    })),
-    ...closedVariants,
-    ...(closedDemand.retained || input.program.errorStorageDemands.retainedBoundaries.some(boundary =>
-      domain.componentId === input.program.sourcePackageComponents.componentForFile(
-        input.program.source.ast.getFileName(input.program.source.ast.getSourceFile(boundary)!))?.componentId))
-      ? [{ name: "Retained", type: namedType("tsonic_rust_runtime::RetainedError"), source: "external" as const,
+  const closedVariants: RustErrorTransportVariant[] = [];
+  const projectVariantByDefinition = new Map(exactProjectVariants.map(variant => [variant.definition, variant] as const));
+  const transportVariants: RustErrorTransportVariant[] = [];
+  for (const selected of selectedVariants) {
+    if (selected.kind === "project") {
+      const variant = projectVariantByDefinition.get(selected.definition);
+      if (variant === undefined) return undefined;
+      transportVariants.push({ name: selected.name, type: variant.type,
+        source: selected.sourceError ? "error" : "thrown" });
+    } else if (selected.kind === "external") {
+      transportVariants.push({ name: selected.name, type: namedType(selected.external.typePath), source: "external",
+        sourceErrorType: namedType(`${selected.external.typePath.slice(0, -programErrorName.length)}SourceError`),
+        writableSourceErrorType: namedType(`${selected.external.typePath.slice(0, -programErrorName.length)}WritableSourceError`) });
+    } else if (selected.kind === "closed") {
+      const variant = { name: selected.name, source: "thrown" as const,
+        type: namedType(rustTargetTypeRefEquals(selected.carrier, rustTsValueTargetType())
+          ? "tsonic_rust_runtime::TsValue" : "tsonic_rust_js::value::JsValue") };
+      closedVariants.push(variant);
+      transportVariants.push(variant);
+    } else {
+      transportVariants.push({ name: selected.name, type: namedType("tsonic_rust_runtime::RetainedError"), source: "external",
         sourceErrorType: namedType("tsonic_rust_runtime::RetainedError"),
-        writableSourceErrorType: namedType("tsonic_rust_runtime::WritableRetainedError") }] : [],
-  ]);
+        writableSourceErrorType: namedType("tsonic_rust_runtime::WritableRetainedError") });
+    }
+  }
+  const transport = planRustErrorTransport(transportVariants);
   if (transport === undefined) {
     diagnostics.push({ code: "RUST_ERROR_TRANSPORT_ADMISSION_NOT_CLOSED", category: "error", source: "tsonic-rust",
       message: "Program Error transport has no exact unique variant admission and external Error-only specialization." });

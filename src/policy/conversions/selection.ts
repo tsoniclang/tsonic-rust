@@ -15,6 +15,7 @@ import {
   rustJsNumericTargetType,
   rustJsStringNumberTargetType,
   isRustNeverCarrier,
+  rustProgramErrorTargetType,
   isRustAbsenceCarrier,
   rustCarrierSupportsClone,
   rustCarrierCanEnterTsValue,
@@ -203,7 +204,8 @@ export function selectRustSourceValueConversion(
     if (rustTargetTypeRefEquals(source, symbolCarrier)) {
       return rustSymbolToJsValueConversion;
     }
-    if (rustClosedValueRetainsError(source, definitions) || rustTargetTypeRefEquals(source, rustEmptyObjectTargetType()) ||
+    if (rustTargetTypeRefEquals(source, rustProgramErrorTargetType()) ||
+      rustClosedValueRetainsError(source, definitions) || rustTargetTypeRefEquals(source, rustEmptyObjectTargetType()) ||
       rustJsRecordValueAdmission(source) || rustTsValueAdmission(source, definitions)?.kind === "project-object" ||
       rustCarrierSupportsClone(source, definitions) &&
       rustCarrierSupportsTrait(source, rustJsClosedValueCarrierTraitPath, undefined, undefined, definitions)) {

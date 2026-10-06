@@ -144,6 +144,7 @@ export function visitConversionContract(
         visitConversionContract(field.conversion, usage);
       }
       return;
+    case "program-error-closed-value":
     case "call":
     case "exact-integer":
     case "numeric-cast":
