@@ -8,7 +8,7 @@ import { dispatchContextDefinition, dispatchProviderDefinition } from "../../hel
 
 export function dispatchGroup(overrides = {}) {
   return {
-    contextId: "acme.dispatch",
+    contextIds: ["acme.dispatch"],
     targetArgumentIndex: 0,
     empty: { form: "associated-call", owner: dispatchContextDefinition().rootCarrier, method: "new" },
     prepend: { form: "call", path: "runtime::prepend" },
@@ -37,14 +37,14 @@ test("dispatch groups materialize aliases and exact native empty constructor car
 test("dispatch groups snapshot every caller-owned constructor and selection", () => {
   const input = definition();
   const captured = createRustProviderPackage(input).createTargetContributions()[0].definition;
-  input.binaryHooks[0].dispatchGroups[0].contextId = "wrong";
+  input.binaryHooks[0].dispatchGroups[0].contextIds[0] = "wrong";
   input.binaryHooks[0].dispatchGroups[0].prepend.path = "runtime::wrong";
   input.binaryHooks[0].dispatchGroups[0].empty.owner.genericArguments[0].type.id = "wrong";
   const row = collectRustProviderSemanticsFromDefinitions([captured]).binaryHooks[0];
-  assert.equal(row.dispatchGroups[0].contextId, "acme.dispatch");
+  assert.deepEqual(row.dispatchGroups[0].contextIds, ["acme.dispatch"]);
   assert.equal(row.dispatchGroups[0].prepend.path, "acme_dispatch::prepend");
   assert.equal(rustNamedTypeCarrierValue(row.dispatchGroups[0].empty.owner)?.genericArguments[0].type.id, "rust.program.TsonicError");
-  for (const value of [row.dispatchGroups, row.dispatchGroups[0], row.dispatchGroups[0].empty,
+  for (const value of [row.dispatchGroups, row.dispatchGroups[0], row.dispatchGroups[0].contextIds, row.dispatchGroups[0].empty,
     row.dispatchGroups[0].empty.owner, row.dispatchGroups[0].prepend]) assert.equal(Object.isFrozen(value), true);
 });
 
@@ -58,7 +58,7 @@ test("dispatch groups reject invalid positions and repeated selection identities
   const repeated = definition();
   repeated.binaryHooks[0].dispatchGroups.push(dispatchGroup());
   assert.throws(() => createRustProviderPackage(repeated), /distinct non-empty context/u);
-  repeated.binaryHooks[0].dispatchGroups[1].contextId = "another";
+  repeated.binaryHooks[0].dispatchGroups[1].contextIds = ["another"];
   assert.throws(() => createRustProviderPackage(repeated), /distinct valid target argument/u);
   repeated.binaryHooks[0].dispatchGroups[1].targetArgumentIndex = 1;
   assert.doesNotThrow(() => createRustProviderPackage(repeated));
@@ -66,7 +66,13 @@ test("dispatch groups reject invalid positions and repeated selection identities
 
 test("dispatch groups reject malformed constructors, free generics and non-dense metadata", () => {
   const invalid = [
-    dispatchGroup({ contextId: "" }),
+    dispatchGroup({ contextIds: [""] }),
+    dispatchGroup({ contextIds: [] }),
+    dispatchGroup({ contextIds: "acme.dispatch" }),
+    dispatchGroup({ contextIds: ["acme.dispatch", "acme.dispatch"] }),
+    dispatchGroup({ contextIds: ["acme.dispatch", 1] }),
+    dispatchGroup({ contextIds: new Array(1) }),
+    dispatchGroup({ contextId: "acme.dispatch" }),
     dispatchGroup({ unexpected: true }),
     dispatchGroup({ empty: { ...dispatchGroup().empty, form: "call" } }),
     dispatchGroup({ empty: { ...dispatchGroup().empty, method: "new()" } }),
@@ -88,6 +94,21 @@ test("dispatch groups reject malformed constructors, free generics and non-dense
   const sparse = definition();
   sparse.binaryHooks[0].dispatchGroups = new Array(1);
   assert.throws(() => createRustProviderPackage(sparse), /contains a sparse, accessor-backed, or custom-property array/u);
+});
+
+test("one native argument selects multiple immutable independent dispatch roots", () => {
+  const input = definition(dispatchGroup({ contextIds: ["acme.dispatch", "other.dispatch"] }));
+  const captured = createRustProviderPackage(input).createTargetContributions()[0].definition;
+  input.binaryHooks[0].dispatchGroups[0].contextIds.push("wrong");
+  assert.deepEqual(captured.binaryHooks[0].dispatchGroups[0].contextIds, ["acme.dispatch", "other.dispatch"]);
+  assert.equal(Object.isFrozen(captured.binaryHooks[0].dispatchGroups[0].contextIds), true);
+  const overlapping = definition(dispatchGroup({ contextIds: ["acme.dispatch", "other.dispatch"] }));
+  overlapping.binaryHooks[0].dispatchGroups.push(dispatchGroup({ contextIds: ["other.dispatch"], targetArgumentIndex: 1 }));
+  assert.throws(() => createRustProviderPackage(overlapping), /distinct non-empty context/u);
+  const removed = dispatchGroup();
+  delete removed.contextIds;
+  removed.contextId = "acme.dispatch";
+  assert.throws(() => createRustProviderPackage(definition(removed)));
 });
 
 test("conflicting native group constructors cannot share one binary hook identity", () => {

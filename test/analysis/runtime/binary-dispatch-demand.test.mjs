@@ -5,7 +5,7 @@ import { analyzeRustDispatchContextCatalog } from "../../../dist/analysis/runtim
 import { dispatchContextDefinition } from "../../helpers/rust-session/provider-dispatch-contexts.mjs";
 
 function group() {
-  return { contextId: "acme.dispatch", targetArgumentIndex: 0,
+  return { contextIds: ["acme.dispatch"], targetArgumentIndex: 0,
     empty: { form: "associated-call", owner: dispatchContextDefinition().rootCarrier, method: "new" },
     prepend: { form: "call", path: "acme_dispatch::prepend" } };
 }
@@ -59,7 +59,7 @@ test("dependency diamonds dispatch each native owner once through real error dep
 
 test("binary dispatch rejects unavailable context identities, components and unsealed demand", () => {
   const unknown = fixture();
-  unknown.hooks[0].dispatchGroups[0].contextId = "missing";
+  unknown.hooks[0].dispatchGroups[0].contextIds = ["missing"];
   const missingContext = analyze(unknown);
   assert.equal(missingContext.kind, "rejected");
   assert.equal(missingContext.diagnostics[0].code, "RUST_BINARY_DISPATCH_DEMAND_INVALID");
@@ -68,6 +68,28 @@ test("binary dispatch rejects unavailable context identities, components and uns
   const unsealed = fixture();
   unsealed.demand.forComponent = () => undefined;
   assert.equal(analyze(unsealed).kind, "rejected");
+});
+
+test("multiple context selectors retain independent roots in one component group", () => {
+  const input = fixture(["leaf"]);
+  const first = dispatchContextDefinition();
+  const second = { ...first, id: "other.dispatch" };
+  const catalog = analyzeRustDispatchContextCatalog([first, second], ["acme_dispatch"]);
+  assert.equal(catalog.kind, "resolved");
+  input.contexts = catalog.plan;
+  const selected = catalog.plan.compose(["acme.dispatch", "other.dispatch"]);
+  assert.equal(selected.kind, "resolved");
+  const original = input.demand.forComponent;
+  input.demand.forComponent = id => id === "leaf" ? selected.plan : original(id);
+  input.hooks[0].dispatchGroups[0].contextIds = ["acme.dispatch", "other.dispatch"];
+  const result = analyze(input);
+  assert.equal(result.kind, "resolved");
+  const leaf = result.plan.forHook("drain")[0].components.find(row => row.componentId === "leaf");
+  assert.deepEqual(leaf.accesses.map(access => access.rootContextId), ["acme.dispatch", "other.dispatch"]);
+  assert.equal(Object.isFrozen(leaf.accesses), true);
+  assert.equal(result.plan.linkedComponentIds.filter(id => id === "leaf").length, 1);
+  input.hooks[0].dispatchGroups[0].contextIds[1] = "missing";
+  assert.equal(analyze(input).kind, "rejected");
 });
 
 test("deep native dependency routing is iterative and bounded rather than recursive", () => {

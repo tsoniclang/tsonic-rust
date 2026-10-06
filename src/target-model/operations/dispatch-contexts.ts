@@ -30,7 +30,7 @@ export interface RustDispatchContextInput {
 }
 
 export interface RustDispatchContextGroupInput {
-  readonly contextId: string;
+  readonly contextIds: readonly string[];
   readonly targetArgumentIndex: number;
   readonly empty: Pick<
     Extract<RustProviderOperationForm, { readonly form: "associated-call" }>, "form" | "owner" | "method"

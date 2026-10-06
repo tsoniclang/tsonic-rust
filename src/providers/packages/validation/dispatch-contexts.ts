@@ -59,11 +59,16 @@ export function validateDispatchContextGroups(
   const contexts = new Set<string>();
   const argumentCount = groups.length + (phase === "async-execution" ? 1 : 0);
   for (const group of groups) {
-    requireExactKeys(group, ["contextId", "targetArgumentIndex", "empty", "prepend"], `${label} dispatch group`, fail);
-    if (typeof group.contextId !== "string" || group.contextId.length === 0 || contexts.has(group.contextId)) {
-      fail(`${label} dispatch groups require distinct non-empty context identities`);
+    requireExactKeys(group, ["contextIds", "targetArgumentIndex", "empty", "prepend"], `${label} dispatch group`, fail);
+    if (!isDenseDataArray(group.contextIds) || group.contextIds.length === 0) {
+      fail(`${label} dispatch groups require a non-empty dense context identity array`);
     }
-    contexts.add(group.contextId);
+    for (const contextId of group.contextIds) {
+      if (typeof contextId !== "string" || contextId.length === 0 || contexts.has(contextId)) {
+        fail(`${label} dispatch groups require distinct non-empty context identities`);
+      }
+      contexts.add(contextId);
+    }
     if (!Number.isInteger(group.targetArgumentIndex) || group.targetArgumentIndex < 0 ||
       group.targetArgumentIndex >= argumentCount || positions.has(group.targetArgumentIndex)) {
       fail(`${label} dispatch groups require distinct valid target argument positions`);

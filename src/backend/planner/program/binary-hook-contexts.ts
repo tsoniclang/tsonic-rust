@@ -44,12 +44,13 @@ export function planRustBinaryHookCallPlan(
           { kind: "reference", expr: child }, value,
         ] };
       }
-      if (selected.access !== undefined) {
-        const key = `${selected.componentId}:${selected.access.rootContextId}`;
+      for (let index = selected.accesses.length - 1; index >= 0; index -= 1) {
+        const access = selected.accesses[index]!;
+        const key = `${selected.componentId}:${access.rootContextId}`;
         let binding = bindings.get(key);
         if (binding === undefined) {
           const demand = input.program.dispatchContextDemand.forComponent(selected.componentId);
-          const rootIndex = demand?.rootContextIds.indexOf(selected.access.rootContextId);
+          const rootIndex = demand?.rootContextIds.indexOf(access.rootContextId);
           if (rootIndex === undefined || rootIndex < 0) return invalid("Binary context access has no exact demanded physical root.");
           const crateName = component.root ? input.program.configuration.crateName : component.crateName;
           if (crateName === undefined) return invalid("Binary context access has no exact native crate identity.");
@@ -58,7 +59,7 @@ export function planRustBinaryHookCallPlan(
           bindings.set(key, binding);
         }
         value = { kind: "call", path: group.input.prepend.path, args: [
-          projectRustDispatchContext({ kind: "path", path: binding.name }, selected.access.projections), value,
+          projectRustDispatchContext({ kind: "path", path: binding.name }, access.projections), value,
         ] };
       }
       values.set(selected.componentId, value);

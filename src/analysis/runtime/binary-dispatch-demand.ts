@@ -9,7 +9,7 @@ import type { RustDispatchContextGroupInput } from "../../target-model/operation
 export interface RustBinaryDispatchComponent {
   readonly componentId: string;
   readonly children: readonly string[];
-  readonly access?: RustDispatchContextAccess;
+  readonly accesses: readonly RustDispatchContextAccess[];
 }
 
 export interface RustBinaryDispatchGroup {
@@ -52,21 +52,25 @@ export function analyzeRustBinaryDispatchDemand(
   for (const hook of hooks) {
     const groups: RustBinaryDispatchGroup[] = [];
     for (const input of hook.dispatchGroups) {
-      if (contexts.declaration(input.contextId) === undefined) return rejected("Binary dispatch selects an unavailable native context identity.");
+      if (input.contextIds.some(contextId => contexts.declaration(contextId) === undefined)) {
+        return rejected("Binary dispatch selects an unavailable native context identity.");
+      }
       const selectedComponents = new Map<string, RustBinaryDispatchComponent>();
       const postorder: RustBinaryDispatchComponent[] = [];
       for (let index = order.length - 1; index >= 0; index -= 1) {
         const componentId = order[index]!;
         const selection = demand.forComponent(componentId);
         if (selection === undefined) return rejected("Binary dispatch has no sealed component context demand.");
-        const access = selection.access(input.contextId);
+        const accesses = input.contextIds.flatMap(contextId => {
+          const access = selection.access(contextId);
+          return access === undefined ? [] : [access];
+        });
         const selectedChildren = children.get(componentId)!.filter(childId => selectedComponents.has(childId));
-        if (access === undefined && selectedChildren.length === 0) continue;
-        const selected = snapshotClosedMetadata({ componentId, children: selectedChildren,
-          ...(access === undefined ? {} : { access }) });
+        if (accesses.length === 0 && selectedChildren.length === 0) continue;
+        const selected = snapshotClosedMetadata({ componentId, children: selectedChildren, accesses });
         selectedComponents.set(componentId, selected);
         postorder.push(selected);
-        if (componentId !== rootId && (access !== undefined || components.forComponent(componentId)?.errorDomain === "project")) {
+        if (componentId !== rootId && (accesses.length > 0 || components.forComponent(componentId)?.errorDomain === "project")) {
           linked.add(componentId);
         }
       }
