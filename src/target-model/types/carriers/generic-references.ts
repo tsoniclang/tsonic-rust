@@ -226,6 +226,7 @@ export function rustTargetGenericReferences(
         const frame = rustFrameCallableValue(value);
         if (frame !== undefined) {
           frame.environment.forEach(argument => visitType(argument, bound));
+          if (frame.owner.kind === "class") visitType(frame.owner.instance, bound);
           return;
         }
         const sourceType = rustSourceTypeCarrierValue(value);

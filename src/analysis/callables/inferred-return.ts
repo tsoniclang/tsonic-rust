@@ -16,6 +16,7 @@ import { checkedPropertySelectionInput, selectRustCheckedPropertyAccess } from "
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { selectRustConditionalNumericCarrier } from "../../policy/types/conditional-numeric-carrier.js";
 import { resolveRustBranchUnion } from "../../policy/types/resolution/branch-unions.js";
+import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
 
 export function selectRustInferredReturn(
   walk: RustFactWalk,
@@ -24,8 +25,10 @@ export function selectRustInferredReturn(
 ): TargetTypeRef | undefined {
   const { ast } = walk.context;
   const scalar = rustOptionElementCarrier(baseline) ?? baseline;
+  const annotated = Node_Type(ast, declaration) !== undefined;
+  const callableResult = rustCallableProtocol(scalar);
   if (baseline === undefined || scalar === undefined ||
-    Node_Type(ast, declaration) !== undefined || ast.body(declaration) === undefined ||
+    (annotated && callableResult === undefined) || ast.body(declaration) === undefined ||
     walk.context.semanticsFor(declaration).operations.generator(declaration) !== undefined) return baseline;
   const numericResult = isRustNumericCarrier(scalar) || isRustBigIntCarrier(scalar);
   if (walk.inferredReturns.has(declaration)) return walk.inferredReturns.get(declaration);
@@ -44,6 +47,12 @@ export function selectRustInferredReturn(
       if (value === undefined || numericResult && !isRustNumericCarrier(value) && !isRustBigIntCarrier(value)) {
         selected = undefined;
         break;
+      }
+      if (annotated && callableResult !== undefined) {
+        const protocol = rustCallableProtocol(value);
+        if (protocol === undefined || protocol.parameters.length !== callableResult.parameters.length ||
+          protocol.parameters.some((parameter, index) => !rustTargetTypeRefEquals(parameter, callableResult.parameters[index])) ||
+          !rustTargetTypeRefEquals(protocol.result, callableResult.result)) return baseline;
       }
       selected = selected === undefined ? value : rustTargetTypeRefEquals(selected, value)
         ? selected : numericResult ? selectRustNumericBinaryPromotion(selected, value)?.carrier : undefined;

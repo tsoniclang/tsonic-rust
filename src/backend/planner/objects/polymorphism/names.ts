@@ -1,4 +1,5 @@
 import type { TargetTypeRef, RustTargetGenericArgument } from "../../../../target-model/types/model.js";
+import type { RustTypeRenderingContext } from "../../types/render.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
 import type { RustObjectRepresentation } from "../../../../analysis/project-types/object-representation.js";
 import { rustGenericsWithAssociatedBounds } from "../../types/generic-bounds.js";
@@ -155,7 +156,7 @@ export function rustProjectRootType(
 
 export function rustProjectStateType(
   carrier: TargetTypeRef,
-  context: RustPlanContext,
+  context: RustTypeRenderingContext,
 ): RustType | undefined {
   return rustProjectGeneratedType(carrier, context, (definition) => definition.stateName);
 }
@@ -201,7 +202,7 @@ export function rustProjectStateMarker(
 
 function rustProjectGeneratedType(
   carrier: TargetTypeRef,
-  context: RustPlanContext,
+  context: RustTypeRenderingContext,
   generatedName: (definition: RustProjectTypeDefinition) => string,
 ): RustType | undefined {
   const value = rustSourceTypeCarrierValue(carrier);

@@ -13,6 +13,10 @@ import { allocateRustGeneratedName } from "../../target-model/names/generated.js
 import { rustClosureCaptureFactKey, rustTargetOperationFactKey, type RustClosureCaptureFact } from "../facts/keys.js";
 import type { RustCallableActivation, RustCallableOwnershipPlan } from "./ownership-plan.js";
 import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
+import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
+import { rustProjectObjectLayout } from "../project-types/object-layout.js";
+import { validatedRustCapturedFieldStorageFact } from "../facts/receiver-captures.js";
+import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
 
 export interface RustFrameCallableImplementation {
   readonly declaration: Node;
@@ -48,6 +52,7 @@ export interface RustFrameCallableDefinition {
   readonly owner: RustCallableOrigin;
   readonly ownerFileName: string;
   readonly targetName: string;
+  readonly counterName: string;
   readonly entries: readonly RustFrameCallableEntryDefinition[];
   readonly bindings: readonly RustFrameCallableBinding[];
   readonly environmentParameters: readonly Extract<TargetTypeRef, { readonly kind: "type-parameter" }>[];
@@ -69,6 +74,8 @@ export function createRustFrameCallablePlan(input: {
   readonly ownership: RustCallableOwnershipPlan;
   readonly usedNames: ReadonlySet<string>;
   readonly navigation: SourceProgramNavigation;
+  readonly projectTypes: RustProjectTypePolicy;
+  readonly objectRepresentations: RustObjectRepresentationPlan;
 }): RustFrameCallablePlan {
   const definitions: RustFrameCallableDefinition[] = [];
   const issues: RustSourceCallableSpecializationIssue[] = [];
@@ -91,6 +98,13 @@ export function createRustFrameCallablePlan(input: {
       continue;
     }
     const frameDeclarations = new Set(activation.slotDeclarations);
+    const classDefinition = activation.kind !== "class" ? undefined : input.projectTypes.definitionForDeclaration(activation.ownerDeclaration);
+    const classLayout = classDefinition === undefined ? undefined : rustProjectObjectLayout(classDefinition.declaration, input.ast);
+    if (activation.kind === "class" && (classDefinition?.kind !== "class" || classLayout?.kind !== "class")) {
+      issue(activation.ownerDeclaration, "A class activation requires its exact native project owner and field layout.");
+      continue;
+    }
+    for (const field of classLayout?.fields ?? []) frameDeclarations.add(field.declaration);
     if (activation.kind === "lexical") for (const capture of activation.externalCaptures) {
       if (capture.kind === "lexical" && sourceBindingScope(capture.declaration, input.ast) === activation.activationScope)
         frameDeclarations.add(capture.declaration);
@@ -103,7 +117,7 @@ export function createRustFrameCallablePlan(input: {
       const carrier = operation?.kind === "closure" ? operation.resultCarrier : undefined;
       const value = rustFrameCallableValue(carrier);
       if (carrier === undefined || capture === undefined || value === undefined ||
-        ownerKey(value.owner) !== ownerKey(owner)) {
+        ownerKey(value.owner.origin) !== ownerKey(owner)) {
         issue(declaration, "A native frame entry requires its finalized closure, exact activation carrier and capture evidence.");
         continue;
       }
@@ -145,11 +159,26 @@ export function createRustFrameCallablePlan(input: {
         issue(declaration, "A native frame binding requires its exact selected carrier and closed entry protocol.");
         continue;
       }
-      const initialization = input.ast.is.IsParameterDeclaration(declaration) ? "ready" as const : "deferred" as const;
-      const storage = entry === undefined && !input.navigation.declarationUseSummary(declaration).bindingWritten
+      const classStorage = classDefinition === undefined ? undefined : validatedRustCapturedFieldStorageFact(declaration, input)?.storage;
+      if (classDefinition !== undefined && input.objectRepresentations.receiverCaptures.isCaptured(declaration) && classStorage === undefined) {
+        issue(declaration, "A captured class frame field requires its sealed declaration-carrier storage fact.");
+        continue;
+      }
+      const initialization = classDefinition !== undefined ? classStorage?.initialization === "deferred" ? "deferred" as const : "ready" as const
+        : input.ast.is.IsParameterDeclaration(declaration) ? "ready" as const : "deferred" as const;
+      const immutable = classDefinition === undefined ? !input.navigation.declarationUseSummary(declaration).bindingWritten
+        : classStorage === undefined ? !input.navigation.declarationUseSummary(declaration).memberWritten
+          : classStorage.kind === "shared" || classStorage.kind === "copy";
+      const storage = immutable && (classDefinition !== undefined || entry === undefined)
         ? "value" as const : entry?.copy === true || entry === undefined && isRustCopyCarrier(carrier)
           ? "cell" as const : "borrow-cell" as const;
-      const binding = Object.freeze({ declaration, carrier, entry, initialization, storage, fieldName: `binding_${frameBindings.length}` });
+      const fieldName = classDefinition === undefined ? `binding_${frameBindings.length}`
+        : input.projectTypes.fieldStorageName(classDefinition, declaration);
+      if (fieldName === undefined) {
+        issue(declaration, "A class frame field requires its exact canonical storage name.");
+        continue;
+      }
+      const binding = Object.freeze({ declaration, carrier, entry, initialization, storage, fieldName });
       bindings.set(declaration, binding);
       frameBindings.push(binding);
     }
@@ -161,6 +190,7 @@ export function createRustFrameCallablePlan(input: {
       }
     }
     const definition = Object.freeze({ activation, owner, ownerFileName: owner.fileName,
+      counterName: classDefinition === undefined ? "counter" : allocateRustGeneratedName(usedNames, `tsonic_frame_counter_${prefix}`),
       targetName: allocateRustGeneratedName(usedNames, `TsonicCallableFrame_${prefix}`),
       entries, bindings: Object.freeze(frameBindings), environmentParameters });
     definitions.push(definition);
@@ -168,7 +198,10 @@ export function createRustFrameCallablePlan(input: {
   }
   const definitionFor = (carrier: TargetTypeRef): RustFrameCallableDefinition | undefined => {
     const value = rustFrameCallableValue(carrier);
-    return value === undefined ? undefined : byOwner.get(ownerKey(value.owner));
+    const definition = value === undefined ? undefined : byOwner.get(ownerKey(value.owner.origin));
+    if (definition === undefined || value === undefined || value.owner.kind !== definition.activation.kind) return undefined;
+    return value.owner.kind === "class" && input.projectTypes.definitionForCarrier(value.owner.instance)?.declaration !== definition.activation.ownerDeclaration
+      ? undefined : definition;
   };
   const isSameActivationInput = (expression: Node, definition: RustFrameCallableDefinition): boolean => {
     if (!definitions.includes(definition)) return false;

@@ -30,7 +30,16 @@ export interface RustValueFieldLocation {
   readonly withRead?: (project: (value: RustExpr) => RustExpr | undefined) => RustExpr | undefined;
   readonly initialize?: (value: RustExpr, context: RustPlanContext) => RustExpr | undefined;
   readonly invoke?: (arguments_: readonly RustExpr[], context: RustPlanContext) => RustExpr | undefined;
-  readonly writeInput?: (node: Node, value: RustExpr, context: RustPlanContext) => RustExpr | undefined;
+  readonly planInput?: (node: Node, context: RustPlanContext, planValue: () => RustExpr | undefined) => RustExpr | undefined;
+}
+
+export function planRustValueFieldInput(
+  location: RustValueFieldLocation,
+  node: Node,
+  context: RustPlanContext,
+  planValue: () => RustExpr | undefined = () => planExpression(node, context),
+): RustExpr | undefined {
+  return location.planInput === undefined ? planValue() : location.planInput(node, context, planValue);
 }
 
 export function rustPreparedValueLocation(node: Node, context: RustPlanContext): RustValueFieldLocation | undefined {

@@ -13,6 +13,7 @@ import { rustInlineBindingStoragePath, rustInlineBindingStorageType } from "../e
 import { planRustNativeAllocation } from "../expressions/native-memory.js";
 import { requireRustLocationValueCarrier } from "../types/generic-requirements.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
+import { planRustValueFieldInput } from "../objects/value-fields.js";
 
 export function planRustLocalBindingStorage(
   declaration: Node, name: string, carrier: TargetTypeRef, type: RustType | undefined,
@@ -23,8 +24,7 @@ export function planRustLocalBindingStorage(
   if (prepared !== undefined) {
     if (value === undefined) return undefined;
     const initializer = Node_Initializer(context.input.program.source.ast, declaration);
-    const input = prepared.writeInput === undefined ? value : initializer === undefined ? undefined
-      : prepared.writeInput(initializer, value, context);
+    const input = initializer === undefined ? undefined : planRustValueFieldInput(prepared, initializer, context, () => value);
     const initialization = input === undefined ? undefined : prepared.initialize?.(input, context);
     return initialization === undefined ? undefined : { kind: "store", statement: { kind: "expr", expr: initialization } };
   }

@@ -8,6 +8,7 @@ import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/carriers/native.js";
 import { Node_Expression, Node_Initializer } from "@tsonic/target-api/source";
+import { rustTargetGenericReferences } from "../../../dist/target-model/types/carriers/generic-references.js";
 
 const source = `
 export function escaped(seed: number): (count: number) => number {
@@ -20,6 +21,46 @@ export function ordinary(seed: number): (count: number) => number {
   return (count: number): number => count + seed;
 }
 `;
+
+for (const jsEnabled of [false, true]) {
+  for (const generic of [false, true]) {
+    test(`${jsEnabled ? "JS" : "native"} class callback return preserves ${generic ? "factory" : "concrete"} owner arguments`, () => {
+      const { program } = analyzeRust({ surfaces: jsEnabled ? ["js"] : [], files: { "index.ts": `
+class Value<T> {
+  constructor(readonly seed: T) {}
+  recurse = (count: number): number => count === 0 ? 1 : this.recurse(count - 1);
+  rebind(): void { this.recurse = (count: number): number => count === 0 ? 2 : this.recurse(count - 1); }
+}
+export function escaped${generic ? "<U>(seed: U)" : "()"}: (count: number) => number {
+  const value = new Value(${generic ? "seed" : '"seed"'});
+  const before = value.recurse;
+  value.rebind();
+  return before;
+}
+` } });
+      const ast = program.source.ast;
+      const pending = [...program.source.sourceFiles];
+      let factory;
+      let retained;
+      while (pending.length !== 0) {
+        const node = pending.pop();
+        const name = ast.name(node);
+        const text = name !== undefined && ast.is.IsIdentifier(name) ? ast.text(name) : "";
+        if (ast.is.IsFunctionDeclaration(node) && text === "escaped") factory = node;
+        if (ast.is.IsVariableDeclaration(node) && text === "before") retained = node;
+        ast.forEachChild(node, child => { if (child !== undefined) pending.push(child); });
+      }
+      assert.equal(factory !== undefined && retained !== undefined, true, "exact authored factory and retained callback");
+      const returned = program.facts.getFact(factory, rustSourceCallableReturnFactKey)?.returnCarrier;
+      const local = program.facts.getFact(retained, rustRuntimeCarrierKey)?.carrier;
+      assert.equal(rustFrameCallableValue(returned) !== undefined, true, "physical owner remains a closed frame");
+      assert.equal(rustTargetTypeRefEquals(returned, local), true, "return preserves the selected instance's owner arguments");
+      const references = rustTargetGenericReferences(returned).typeParameters;
+      assert.equal(references.length, generic ? 1 : 0);
+      if (generic) assert.equal(references[0].name, "U", "class declaration parameter cannot leak into factory ABI");
+    });
+  }
+}
 
 for (const jsEnabled of [false, true]) {
   test(`${jsEnabled ? "JS" : "native"} independent recursive components share a source activation, not a dispatch family`, () => {

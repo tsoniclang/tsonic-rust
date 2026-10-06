@@ -364,7 +364,9 @@ function substituteCarrierParts(
       });
       const frame = rustFrameCallableValue(type);
       if (frame !== undefined) return rustFrameCallableCarrier({
-        owner: frame.owner,
+        owner: frame.owner.kind === "lexical" ? frame.owner : { ...frame.owner,
+          instance: substituteRustTargetGenerics(frame.owner.instance, substitutions,
+            lifetimeSubstitutions, constSubstitutions, normalize) },
         signature: frame.signature,
         environment: frame.environment.map(argument => substituteRustTargetGenerics(
           argument, substitutions, lifetimeSubstitutions, constSubstitutions, normalize)),

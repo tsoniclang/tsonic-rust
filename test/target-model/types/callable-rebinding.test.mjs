@@ -11,7 +11,7 @@ import { rustCarrierSupportsClone } from "../../../dist/target-model/types/carri
 const int32 = rustSourcePrimitiveTargetType("int32");
 const int64 = rustSourcePrimitiveTargetType("int64");
 const bool = rustSourcePrimitiveTargetType("bool");
-const owner = { fileName: "/project/index.ts", declarationIdentity: "owner" };
+const owner = { kind: "lexical", origin: { fileName: "/project/index.ts", declarationIdentity: "owner" } };
 
 test("finalizing a callable signature preserves native representation and frame activation identity", () => {
   const frame = rustFrameCallableTargetType([int32], int32, owner);
@@ -27,7 +27,7 @@ test("finalizing a callable signature preserves native representation and frame 
     assert.equal(rustTargetTypeRefEquals(protocol.result, bool), true);
     assert.equal(Object.isFrozen(selected), true);
     if (source === frame) {
-      assert.equal(rustFrameCallableValue(selected)?.owner.declarationIdentity, "owner");
+      assert.equal(rustFrameCallableValue(selected)?.owner.origin.declarationIdentity, "owner");
       assert.equal(rustCarrierSupportsClone(selected), true, "frame root cloning does not require cloning its captures");
     }
     if (source.kind === "function-pointer") {
@@ -44,7 +44,7 @@ test("finalizing a callable signature preserves native representation and frame 
 test("generic and frame signature finalization retain body-only captured type bindings", () => {
   const parameter = { kind: "type-parameter", name: "Value", identity: "source:Value" };
   const captured = { kind: "type-parameter", name: "Captured", identity: "source:Captured" };
-  const generic = rustGenericCallableTargetType([parameter], [parameter], parameter, owner, [captured]);
+  const generic = rustGenericCallableTargetType([parameter], [parameter], parameter, owner.origin, [captured]);
   const selected = rebindRustCallableCarrier(generic, [parameter, int64], bool,
     { typeParameters: [parameter] });
   assert.equal(selected !== undefined, true);

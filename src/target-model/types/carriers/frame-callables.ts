@@ -1,12 +1,18 @@
 import type { TargetTypeRef } from "../model.js";
 import { hasExactObjectKeys, snapshotClosedMetadata } from "../../metadata/closed-data.js";
+import { isRustTargetTypeRef } from "../equality.js";
+import { rustSourceTypeCarrierValue } from "./source-types.js";
 import {
   isRustCallableOrigin, isRustCallableSignatureBinding, rustCallableSignatureBinding, rustCallableSignatureProtocol,
   type RustCallableOrigin, type RustCallableSignature,
 } from "./callable-signatures.js";
 
+export type RustFrameCallableOwner =
+  | { readonly kind: "lexical"; readonly origin: RustCallableOrigin }
+  | { readonly kind: "class"; readonly origin: RustCallableOrigin; readonly instance: TargetTypeRef };
+
 export interface RustFrameCallableValue {
-  readonly owner: RustCallableOrigin;
+  readonly owner: RustFrameCallableOwner;
   readonly signature: RustCallableSignature;
   readonly environment: readonly TargetTypeRef[];
 }
@@ -14,11 +20,13 @@ export interface RustFrameCallableValue {
 export function rustFrameCallableTargetType(
   parameters: readonly TargetTypeRef[],
   result: TargetTypeRef,
-  owner: RustCallableOrigin,
+  owner: RustFrameCallableOwner,
   environmentInputs: readonly TargetTypeRef[] = [],
 ): TargetTypeRef | undefined {
-  const binding = rustCallableSignatureBinding([], parameters, result, environmentInputs);
-  return binding === undefined || !isRustCallableOrigin(owner) ? undefined : rustFrameCallableCarrier({ owner, ...binding });
+  if (!isRustFrameCallableOwner(owner)) return undefined;
+  const binding = rustCallableSignatureBinding([], parameters, result,
+    [...environmentInputs, ...(owner.kind === "class" ? [owner.instance] : [])]);
+  return binding === undefined ? undefined : rustFrameCallableCarrier({ owner, ...binding });
 }
 
 export function rustFrameCallableCarrier(value: RustFrameCallableValue): TargetTypeRef {
@@ -35,8 +43,21 @@ export function rustFrameCallableValue(carrier: TargetTypeRef | undefined): Rust
     !hasExactObjectKeys(value, ["environment", "signature", "owner"])) return undefined;
   const selected = value as Partial<RustFrameCallableValue>;
   const binding = { signature: selected.signature, environment: selected.environment };
-  return !isRustCallableOrigin(selected.owner) || !isRustCallableSignatureBinding(binding) ||
+  return !isRustFrameCallableOwner(selected.owner) || !isRustCallableSignatureBinding(binding) ||
     binding.signature.typeParameters.length !== 0 ? undefined : selected as RustFrameCallableValue;
+}
+
+export function isRustFrameCallableOwner(value: unknown): value is RustFrameCallableOwner {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const lexical = hasExactObjectKeys(value, ["kind", "origin"]);
+  const object = hasExactObjectKeys(value, ["kind", "origin", "instance"]);
+  if (!lexical && !object) return false;
+  const owner = value as Partial<RustFrameCallableOwner>;
+  if (lexical) return owner.kind === "lexical" && isRustCallableOrigin(owner.origin);
+  if (owner.kind !== "class" ||
+    !isRustCallableOrigin(owner.origin) || !isRustTargetTypeRef(owner.instance)) return false;
+  const instance = rustSourceTypeCarrierValue(owner.instance);
+  return instance?.shape === "object" && instance.fileName === owner.origin.fileName;
 }
 
 export function rustFrameCallableProtocol(

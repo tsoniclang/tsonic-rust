@@ -52,6 +52,17 @@ export function rustProjectObjectType(
   };
 }
 
+export function rustProjectObjectSharedStateType(
+  stateType: RustType,
+  representation: RustObjectRepresentation,
+  contextType?: RustType,
+): RustType | undefined {
+  const paths = rustProjectObjectOwnerPaths(representation);
+  return paths === undefined ? undefined : { kind: "named", path: paths.state,
+    genericArguments: [{ kind: "type", type: stateType },
+      ...(contextType === undefined ? [] : [{ kind: "type" as const, type: contextType }])] };
+}
+
 export function createRustProjectObject(
   typePath: string,
   statePath: string,
@@ -639,13 +650,20 @@ function rustProjectObjectValueRead(
 function rustSharedObjectCarrierPath(
   representation: RustObjectRepresentation,
 ): "rt::ObjectHandle" | "rt::ObjectRef" | undefined {
+  return rustProjectObjectOwnerPaths(representation)?.owner;
+}
+
+function rustProjectObjectOwnerPaths(
+  representation: RustObjectRepresentation,
+): { readonly owner: "rt::ObjectHandle" | "rt::ObjectRef";
+  readonly state: "rt::ObjectHandleState" | "rt::ObjectRefState" } | undefined {
   switch (representation.kind) {
     case "shared-immutable":
-      return "rt::ObjectRef";
+      return { owner: "rt::ObjectRef", state: "rt::ObjectRefState" };
     case "shared-mutable":
     case "closed-hierarchy":
     case "open-hierarchy":
-      return "rt::ObjectHandle";
+      return { owner: "rt::ObjectHandle", state: "rt::ObjectHandleState" };
     case "value":
       return undefined;
   }

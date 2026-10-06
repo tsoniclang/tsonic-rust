@@ -17,6 +17,7 @@ export function selectRustCallableOwnershipCarrier(input: {
   readonly subject: SourceStorageSubject;
   readonly logicalCarrier: TargetTypeRef;
   readonly environmentFor: (activation: RustCallableActivation) => readonly TargetTypeRef[] | undefined;
+  readonly instanceFor: (declaration: RustCallableActivation["ownerDeclaration"]) => TargetTypeRef | undefined;
 }): RustCallableOwnershipCarrierSelection {
   const protocol = rustCallableProtocol(input.logicalCarrier);
   if (protocol === undefined)
@@ -31,12 +32,15 @@ export function selectRustCallableOwnershipCarrier(input: {
   if (origin === undefined)
     return Object.freeze({ kind: "unresolved", reason: "Callable frame storage has no exact source activation identity." });
   const previous = rustFrameCallableValue(input.logicalCarrier);
-  if (previous !== undefined && (previous.owner.fileName !== origin.fileName ||
-    previous.owner.declarationIdentity !== origin.declarationIdentity))
+  if (previous !== undefined && (previous.owner.origin.fileName !== origin.fileName ||
+    previous.owner.origin.declarationIdentity !== origin.declarationIdentity))
     return Object.freeze({ kind: "unresolved", reason: "A callable cannot silently change its physical activation owner." });
   const environment = input.environmentFor(selection.activation);
-  const selected = environment === undefined ? undefined
-    : rustFrameCallableTargetType(protocol.parameters, protocol.result, origin, environment);
+  const instance = selection.activation.kind === "class" ? input.instanceFor(selection.activation.ownerDeclaration) : undefined;
+  const owner = selection.activation.kind === "lexical" ? { kind: "lexical" as const, origin }
+    : instance === undefined ? undefined : { kind: "class" as const, origin, instance };
+  const selected = environment === undefined || owner === undefined ? undefined
+    : rustFrameCallableTargetType(protocol.parameters, protocol.result, owner, environment);
   if (selected === undefined)
     return Object.freeze({ kind: "unresolved", reason: "Callable frame storage has no exact owner, signature or captured type environment." });
   return Object.freeze({ kind: "selected", carrier: selected });

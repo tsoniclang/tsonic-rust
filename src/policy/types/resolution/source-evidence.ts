@@ -87,7 +87,13 @@ export function resolveRustCallableEvidence(
   const carrier = resolveRustCallableSignatureCarrier(callable, context, options, resolving);
   const subject = context.sourceStorageSubject;
   return carrier === undefined || subject === undefined ? carrier : options.callableStorageCarrier(subject, carrier,
-    (owner, excludedCaptures) => resolveRustCallableEnvironment(owner, context, options, resolving, excludedCaptures));
+    (owner, excludedCaptures) => resolveRustCallableEnvironment(owner, context, options, resolving, excludedCaptures),
+    owner => {
+      const semantics = context.semanticsFor(owner);
+      const type = semantics.declarations.declaredType(owner);
+      return type === undefined ? undefined : resolveRustTargetType(type,
+        { ...context, currentSemantics: semantics, sourceStorageSubject: undefined }, options, resolving);
+    });
 }
 
 function resolveRustCallableSignatureCarrier(

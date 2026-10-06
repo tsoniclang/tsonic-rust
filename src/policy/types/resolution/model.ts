@@ -18,6 +18,7 @@ export interface RustTargetTypeResolutionOptions {
     subject: SourceStorageSubject,
     logicalCarrier: TargetTypeRef,
     environmentFor: (declaration: Node, excludedCaptures: ReadonlySet<Node>) => readonly TargetTypeRef[] | undefined,
+    instanceFor: (declaration: Node) => TargetTypeRef | undefined,
   ) => TargetTypeRef | undefined;
   readonly projectCarrierSupportsObjectIdentity: (carrier: TargetTypeRef) => boolean;
   readonly resolveProjectUnionCarrier: (

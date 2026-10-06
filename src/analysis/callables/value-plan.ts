@@ -19,6 +19,7 @@ import { rustGenericCallableValue } from "../../target-model/types/carriers/gene
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { createRustFrameCallablePlan, type RustFrameCallablePlan } from "./frame-values.js";
 import type { RustCallableOwnershipPlan } from "./ownership-plan.js";
+import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
 
 export interface RustCallableValuePlan {
   readonly generic: RustGenericCallablePlan;
@@ -37,6 +38,8 @@ export interface RustCallableValuePlanInput {
   readonly classValueAdapters: readonly { readonly subject: Node; readonly adapter: RustCallableValueAdapter }[];
   readonly closedSourceFiles: ReadonlySet<SourceFile>;
   readonly ownership: RustCallableOwnershipPlan;
+  readonly projectTypes: RustProjectTypePolicy;
+  readonly objectRepresentations: import("../project-types/object-representation.js").RustObjectRepresentationPlan;
 }
 
 export interface RustCallableValuePlanRegistry extends RustCallableValuePlan {

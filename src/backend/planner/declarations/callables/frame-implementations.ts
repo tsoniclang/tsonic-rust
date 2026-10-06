@@ -17,6 +17,7 @@ import { rustGenericRequirementBounds, rustGenericsWithAssociatedBounds } from "
 import { rustDeclarationAssociatedPredicates } from "../../types/associated-bounds.js";
 import { closedMetadataKey } from "../../../../target-model/metadata/closed-data.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
+import type { RustLiveFrameOwner } from "../../program/frame-owners.js";
 
 function shared(type: RustType): RustType {
   return { kind: "named", path: "alloc::rc::Rc", genericArguments: [{ kind: "type", type }] };
@@ -127,7 +128,9 @@ function planFrameEntry(
     const names = createRustSyntheticNameState(context.input.program.source.ast, implementation.declaration, []);
     const frameName = allocateRustSyntheticName(names, "frame_owner");
     const stateName = allocateRustSyntheticName(names, "frame_state");
-    const owner = { expression: { kind: "path" as const, path: frameName }, borrowed: true };
+    const owner: RustLiveFrameOwner = { kind: "live", expression: { kind: "path", path: frameName }, borrowed: true,
+      data: definition.activation.kind === "lexical" ? { kind: "direct" }
+        : { kind: "object", name: allocateRustSyntheticName(names, "frame_data") } };
     const helperContext = rustFrameBindingContext(definition, owner, { ...context,
       capturedBindings: implementation.captures.map((capture, index) => ({
         declaration: capture.declaration, valueCarrier: capture.carrier, storage: capture.storage, borrowed: "shared" as const,
@@ -200,7 +203,7 @@ export function planRustFrameCallableItems(context: RustPlanContext): readonly R
     const marker = definitionMarker(generics);
     result.push({ kind: "struct", name: definition.targetName, visibility: "public",
       generics, fields: [
-        { name: "counter", type: { kind: "named", path: "rt::FrameEntryCounter" }, visibility: "public" },
+        { name: definition.counterName, type: { kind: "named", path: "rt::FrameEntryCounter" }, visibility: "public" },
         ...fields as { readonly name: string; readonly type: RustType; readonly visibility: "public" }[],
         ...(marker === undefined ? [] : [{ name: "marker", type: marker, visibility: "public" as const }]),
       ] }, ...(entries as readonly (readonly RustItem[])[]).flat());

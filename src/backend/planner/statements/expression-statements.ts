@@ -54,7 +54,7 @@ import type { RustAssignmentOperationFact, RustAssignmentOperationPlan } from ".
 import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustCompileTimeSourceKey } from "../../../target-model/facts/source-declarations.js";
-import { planRustValueFieldLocation, rustSourceFieldHasValueReceiver } from "../objects/value-fields.js";
+import { planRustValueFieldInput, planRustValueFieldLocation, rustSourceFieldHasValueReceiver } from "../objects/value-fields.js";
 import { planRustFieldProjectionAssignment } from "./field-projection-assignment.js";
 import { planRustCompoundRuntimeWrite } from "./compound-runtime-write.js";
 import { rustCompoundWriteFactKey } from "../../../analysis/facts/operations/keys.js";
@@ -308,9 +308,7 @@ export function planRustAssignmentWrite(
   }
   if (storageOverride?.valueForm !== "storage" && rustSourceFieldHasValueReceiver(left, context)) {
     const location = planRustValueFieldLocation(left, context, "write");
-    const sourceValue = planExpression(valueNode, context);
-    const value = sourceValue === undefined || location === undefined ? undefined : location.writeInput === undefined
-      ? sourceValue : location.writeInput(valueNode, sourceValue, context);
+    const value = location === undefined ? undefined : planRustValueFieldInput(location, valueNode, context);
     if (location === undefined || value === undefined || context.syntheticNames === undefined) return undefined;
     const currentName = allocateRustSyntheticName(context.syntheticNames, "field_previous");
     const valueName = allocateRustSyntheticName(context.syntheticNames, "field_value");
