@@ -25,9 +25,6 @@ export function applyRustFoundationImports(
     if (record.kind === "string" || record.kind === "owned-string-from-borrowed-str") {
       imports.add("alloc::string::String");
     }
-    if (record.kind === "string-concat" || record.kind === "format-write") {
-      imports.add("alloc::format");
-    }
     if (record.kind === "vec-literal") {
       imports.add("alloc::vec");
     }
@@ -39,7 +36,9 @@ export function applyRustFoundationImports(
         imports.add("alloc::vec::Vec");
       }
     }
-    Object.values(record).forEach(inspect);
+    for (const [field, child] of Object.entries(record)) {
+      if (field !== "attrs" && field !== "innerAttrs" && field !== "valueAttrs") inspect(child);
+    }
   };
   inspect(model);
   if (imports.size === 0) {

@@ -32,3 +32,10 @@ test("foundation verification still rejects allocating and native runtime syntax
     assert.ok(diagnostics[0].evidence.includes(`rust.foundation.planned=${expected}`));
   }
 });
+
+test("native formatter writes do not invent allocation requirements", () => {
+  assert.deepEqual(verify({ items: [{ kind: "const", name: "VALUE", type: { kind: "unit" }, value: {
+    kind: "format-write", writer: { kind: "path", path: "formatter" }, format: "{}",
+    args: [{ kind: "int-literal", text: "7" }],
+  } }] }), []);
+});

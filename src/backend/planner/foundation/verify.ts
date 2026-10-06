@@ -11,7 +11,6 @@ import type { RustPlannedArtifact } from "../../artifact-model/output.js";
 const allocKinds = new Set([
   "owned-string-from-borrowed-str",
   "string-concat",
-  "format-write",
   "vec-literal",
 ]);
 
