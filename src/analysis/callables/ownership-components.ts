@@ -387,7 +387,11 @@ export function createRustCallableOwnershipComponentQueries(input: {
       continue;
     }
     if (storageDeclarations.length === 1 && declarations.length === 1 && owner.kind === "lexical" &&
-      !navigation.declarationUseSummary(storageDeclarations[0]!).bindingWritten) continue;
+      !navigation.declarationUseSummary(storageDeclarations[0]!).bindingWritten) {
+      cyclicSlots.delete(storageDeclarations[0]!);
+      cyclicCallables.delete(declarations[0]!);
+      continue;
+    }
     const slotSet = new Set(storageDeclarations);
     const retained: RustCallableOwnershipCapture[] = [];
     for (const declaration of declarations) for (const capture of captures.get(declaration) ?? []) {

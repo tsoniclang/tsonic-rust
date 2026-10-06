@@ -98,6 +98,29 @@ test("plain callback storage does not invent a cyclic owning activation", () => 
   assert.equal(selected.kind, "ordinary");
 });
 
+test("an unwritten self-recursive callback retains ordinary storage through creation, binding and return", () => {
+  const current = fixture(`
+export function create(): (count: number, seed: number) => number {
+  let selected = (count: number, seed: number): number => count === 0 ? seed : selected(count - 1, seed);
+  return selected;
+}
+`);
+  const registry = createRustCallableOwnershipRegistry();
+  registry.initialize(current.input);
+  assert.equal(registry.activations.length, 0);
+  assert.equal(registry.issues.length, 0);
+  const binding = current.named("selected", "KindVariableDeclaration")[0];
+  const creation = current.initializer(binding);
+  const returned = current.named("create", "KindFunctionDeclaration")[0];
+  assert.equal(registry.isCyclicSlot(binding), false);
+  assert.equal(registry.isCyclicCallable(creation), false);
+  for (const [node, kind] of [[binding, "value"], [creation, "value"], [returned, "return"]]) {
+    const subject = current.storage.subject(node, kind);
+    assert.equal(subject.kind, "resolved");
+    assert.equal(registry.storageFor(subject.subject).kind, "ordinary", kind);
+  }
+});
+
 test("function values and returned callbacks retain distinct exact storage roles", () => {
   const current = fixture(lexicalSource);
   const registry = createRustCallableOwnershipRegistry();
