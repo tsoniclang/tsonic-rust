@@ -54,6 +54,8 @@ import { selectRustSourceValueConversion } from "../../policy/conversions/select
 import { finalizeValueConversion } from "../facts/finalized-operation/conversions.js";
 import { rustCompileTimeSourceKey } from "../../target-model/facts/source-declarations.js";
 import { rustCallableInvocationResult } from "../facts/callable-results.js";
+import { resolveRustCallableStorageCarrier } from "../../policy/types/resolution/source-evidence.js";
+import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 
 export function resolveFunctionExpressionSignature(
   walk: RustFactWalk,
@@ -320,15 +322,18 @@ export function resolveFunctionExpressionCarrier(
     return undefined;
   }
   const selectedGeneric = rustGenericCallableValue(selectedExpected);
-  const closureCarrier = rebindRustCallableCarrier(selectedExpected, finalizedParameterCarriers, valueResult,
+  const logicalCarrier = rebindRustCallableCarrier(selectedExpected, finalizedParameterCarriers, valueResult,
     { typeParameters: genericParameters ?? [], ...(selectedGeneric === undefined ? {} : {
       environment: [...selectedGeneric.environment, ...captures.captures.map(capture => capture.carrier),
         ...captures.receiverFields.map(capture => capture.carrier), ...captures.receivers.map(capture => capture.carrier)],
     }) });
+  const closureCarrier = resolveRustCallableStorageCarrier(logicalCarrier,
+    rustResolutionContext(walk, expression, "value"), walk.operationOptions, new Set());
   if (closureCarrier === undefined) return undefined;
   walk.context.facts.set(expression, rustClosureCaptureFactKey, {
     ...captures,
     ...((generator !== undefined || asynchronous !== undefined) &&
+        rustFrameCallableValue(closureCarrier) === undefined &&
         rustCallableProtocol(closureCarrier) !== undefined &&
         (captures.captures.length > 0 || captures.receiverFields.length > 0 || captures.receivers.length > 0 || captures.recursiveDeclaration !== undefined)
       ? { invocationOwner: "shared-state" as const } : {}),

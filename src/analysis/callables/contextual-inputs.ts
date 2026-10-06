@@ -2,7 +2,8 @@ import { sourceClosedCallableArguments } from "@tsonic/target-api/source";
 import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import { rustOperationContext } from "../program/walk.js";
-import { rustCallableProtocol, rustCallableTargetType, rustClosureProtocol, rustOptionElementCarrier } from "../../target-model/types/index.js";
+import { rustCallableProtocol, rustClosureProtocol, rustOptionElementCarrier } from "../../target-model/types/index.js";
+import { rebindRustCallableCarrier } from "../../target-model/types/carriers/callable-rebinding.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { selectedRustCheckedCallInputCarrier } from "../operations/provider/calls/input-contract.js";
@@ -17,7 +18,7 @@ export function selectRustClosedCallableInputs(
   carrier: TargetTypeRef | undefined,
 ): TargetTypeRef | undefined {
   const protocol = rustCallableProtocol(carrier);
-  if (protocol === undefined) return carrier;
+  if (carrier === undefined || protocol === undefined) return carrier;
   const { ast } = walk.context;
   const parameters = ast.parameters(expression);
   if (!isDenseDataArray(parameters) || parameters.some(parameter => parameter === undefined)) return carrier;
@@ -58,7 +59,7 @@ export function selectRustClosedCallableInputs(
     return contract?.category === "exact" && contract.sourceMode === "value" && !contract.fallible ? input : undefined;
   });
   return selected.some(type => type === undefined) ? carrier
-    : rustCallableTargetType(selected as readonly TargetTypeRef[], protocol.result);
+    : rebindRustCallableCarrier(carrier, selected as readonly TargetTypeRef[], protocol.result);
 }
 
 function concrete(type: TargetTypeRef): boolean {

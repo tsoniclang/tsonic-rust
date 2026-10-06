@@ -2,8 +2,8 @@ import type { AstReader } from "@tsonic/tsts";
 import type { SourceStorageSubject } from "@tsonic/target-api/analysis";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustCallableOrigin } from "../../policy/types/callable-origins.js";
-import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
-import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
+import { rustCallableProtocol, rustNativeCallableProtocol } from "../../target-model/types/carriers/callables.js";
+import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustFrameCallableTargetType, rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import type { RustCallableActivation, RustCallableOwnershipPlan } from "./ownership-plan.js";
 
@@ -19,13 +19,14 @@ export function selectRustCallableOwnershipCarrier(input: {
   readonly environmentFor: (activation: RustCallableActivation) => readonly TargetTypeRef[] | undefined;
   readonly instanceFor: (declaration: RustCallableActivation["ownerDeclaration"]) => TargetTypeRef | undefined;
 }): RustCallableOwnershipCarrierSelection {
-  const protocol = rustCallableProtocol(input.logicalCarrier);
+  const generic = rustGenericCallableValue(input.logicalCarrier);
+  const protocol = rustCallableProtocol(input.logicalCarrier) ?? rustNativeCallableProtocol(input.logicalCarrier) ??
+    rustGenericCallableProtocol(input.logicalCarrier, generic?.signature.typeParameters);
   if (protocol === undefined)
     return Object.freeze({ kind: "unresolved", reason: "Callable ownership requires a valid native callable signature." });
   const selection = input.ownership.storageFor(input.subject);
   if (selection.kind === "unresolved") return selection;
   if (selection.kind === "ordinary") return Object.freeze({ kind: "selected", carrier: input.logicalCarrier });
-  const generic = rustGenericCallableValue(input.logicalCarrier);
   if (generic !== undefined && generic.signature.typeParameters.length !== 0)
     return Object.freeze({ kind: "unresolved", reason: "A quantified frame requires its exact generic entry invocation protocol." });
   const origin = rustCallableOrigin(input.ast, selection.activation.activationScope);

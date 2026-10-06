@@ -5,8 +5,10 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { resolveProviderTypeIdentity, providerCarrierFromRelations, instantiateProviderTargetType } from "./providers.js";
 import { resolveRustTargetTypeRef } from "./source.js";
 import { selectRustProviderOperation } from "../../operations/provider-selection.js";
-import { rustNamedTypeCarrierValue, rustTargetGenericBindingsForArguments, substituteRustTargetGenerics, rustOptionElementCarrier, rustSourceOptionalTargetType } from "../../../target-model/types/index.js";
+import { rustNamedTypeCarrierValue, substituteRustTargetGenerics, rustOptionElementCarrier, rustSourceOptionalTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { inferRustTargetGenericBindings } from "../../../target-model/types/carriers/generic-inference.js";
+import type { RustTargetGenericArgument } from "../../../target-model/types/model.js";
 
 export function resolveRustProviderIndexedAccess(
   node: Node, context: RustTargetTypeResolutionContext, options: RustTargetTypeResolutionOptions,
@@ -19,17 +21,38 @@ export function resolveRustProviderIndexedAccess(
   const rejected: TargetTypeRef = { kind: "opaque", id: "provider-indexed-type-evidence-unavailable" };
   const owner = resolveRustTargetTypeRef(evidence.owner, context, options);
   const named = rustNamedTypeCarrierValue(owner);
-  if (named === undefined) return rejected;
+  if (owner === undefined || named === undefined) return rejected;
   let result: TargetTypeRef | undefined;
   for (const [index, identity] of identities.entries()) {
     if (identity === undefined) return rejected;
     const typeRow = providerCarrierFromRelations(identity, options);
     const operation = selectRustProviderOperation(options.providerRows, identity, "property");
     if (typeRow === undefined || operation.kind !== "selected") return rejected;
-    const instantiatedOwner = instantiateProviderTargetType(typeRow, named.genericArguments, context.typeDefinitions);
-    if (instantiatedOwner === undefined || !rustTargetTypeRefEquals(instantiatedOwner, owner)) return rejected;
-    const substitutions = rustTargetGenericBindingsForArguments(typeRow.genericParameters ?? [], named.genericArguments);
+    const parameters = typeRow.genericParameters ?? [];
+    const substitutions = inferRustTargetGenericBindings(typeRow.targetCarrier, owner, {
+      typeIdentities: new Set(parameters.flatMap(parameter => parameter.kind === "type" ? [parameter.targetIdentity] : [])),
+      lifetimeIdentities: new Set(parameters.flatMap(parameter => parameter.kind === "lifetime" ? [parameter.targetIdentity] : [])),
+      constIdentities: new Set(parameters.flatMap(parameter => parameter.kind === "const" ? [parameter.targetIdentity] : [])),
+    });
     if (substitutions === undefined) return rejected;
+    const arguments_: RustTargetGenericArgument[] = [];
+    for (const parameter of parameters) {
+      if (parameter.kind === "type") {
+        const type = substitutions.types.get(parameter.targetIdentity);
+        if (type === undefined) return rejected;
+        arguments_.push({ kind: "type", type });
+      } else if (parameter.kind === "lifetime") {
+        const lifetime = substitutions.lifetimes.get(parameter.targetIdentity);
+        if (lifetime === undefined) return rejected;
+        arguments_.push({ kind: "lifetime", lifetime });
+      } else {
+        const value = substitutions.consts.get(parameter.targetIdentity);
+        if (value === undefined) return rejected;
+        arguments_.push({ kind: "const", value });
+      }
+    }
+    const instantiatedOwner = instantiateProviderTargetType(typeRow, arguments_, context.typeDefinitions);
+    if (instantiatedOwner === undefined || !rustTargetTypeRefEquals(instantiatedOwner, owner)) return rejected;
     const instantiate = (carrier: TargetTypeRef): TargetTypeRef =>
       substituteRustTargetGenerics(carrier, substitutions.types, substitutions.lifetimes, substitutions.consts);
     if (operation.row.receiverCarrier !== undefined &&

@@ -23,6 +23,7 @@ import {
   sourceSequenceInputChoice,
   sourceSequenceInputIsEmpty,
   KindVoidExpression,
+  KindAwaitExpression,
   Node_Expression,
   Node_Type,
 } from "@tsonic/target-api/source";
@@ -335,7 +336,7 @@ function resolveExpressionOperationDependencies(
     }
     return;
   }
-  if (kind === KindVoidExpression) {
+  if (kind === KindVoidExpression || kind === KindAwaitExpression) {
     const operand = Node_Expression(ast, expression);
     if (operand !== undefined) {
       resolveExpressionCarrier(walk, operand, sourceFile, undefined);

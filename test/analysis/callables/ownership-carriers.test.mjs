@@ -10,6 +10,7 @@ import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/
 import { Node_Expression, Node_Initializer } from "@tsonic/target-api/source";
 import { rustTargetGenericReferences } from "../../../dist/target-model/types/carriers/generic-references.js";
 import { recursiveCallbackProtocolCases } from "../../../../tsonic/test/fixtures/recursive-callback-protocols.mjs";
+import { awaitOperandCallableSource } from "../../../../tsonic/test/fixtures/await-operand-callables.mjs";
 
 const source = `
 export function escaped(seed: number): (count: number) => number {
@@ -22,6 +23,48 @@ export function ordinary(seed: number): (count: number) => number {
   return (count: number): number => count + seed;
 }
 `;
+
+for (const jsEnabled of [false, true]) {
+  test(`${jsEnabled ? "JS" : "native"} awaited executors retain selected callback environments and exact frame bindings`, () => {
+    const { program } = analyzeRust({ surfaces: jsEnabled ? ["js"] : [],
+      files: { "index.ts": awaitOperandCallableSource },
+    });
+    const frames = program.callableValues.frames;
+    assert.equal(frames.issues.length, 0, "all awaited callback entries and bindings close");
+    assert.equal(frames.definitions.length > 0, true, "mutual callbacks require a real owning activation");
+    for (const frame of frames.definitions) {
+      for (const entry of frame.entries) {
+        for (const implementation of entry.implementations) {
+          assert.equal(rustFrameCallableValue(implementation.carrier) !== undefined, true,
+            "provider contextual signatures cannot replace the physical activation");
+          assert.equal(frames.entryFor(implementation.carrier) === entry, true, "one entry protocol");
+        }
+      }
+    }
+  });
+
+  test(`${jsEnabled ? "JS" : "native"} contextual provider inputs retain the selected recursive activation`, () => {
+    const { program } = analyzeRust({ surfaces: jsEnabled ? ["js"] : [], files: { "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+export function run(): int32 {
+  let total: int32 = 0;
+  const receive = (value: int32): void => { total += value; detach(); };
+  const detach = (): void => { if (total < 0) receive(0); };
+  const values: int32[] = [1, 2];
+  values.forEach(receive);
+  return total;
+}
+` } });
+    assert.equal(program.callableValues.frames.issues.length, 0, "all selected frame entries and bindings close");
+    const definitions = program.callableValues.frames.definitions;
+    assert.equal(definitions.length, 1, "recursive callbacks share one activation");
+    for (const binding of definitions[0].bindings.filter(binding => binding.entry !== undefined)) {
+      assert.equal(rustFrameCallableValue(binding.carrier) !== undefined, true, "contextual inputs preserve physical ownership");
+      assert.equal(program.callableValues.frames.entryFor(binding.carrier) === binding.entry, true,
+        "selected binding and finalized entry have one exact protocol");
+    }
+  });
+}
 
 for (const jsEnabled of [false, true]) {
   for (const name of ["addressed-lexical-frame", "addressed-class-frame"]) {

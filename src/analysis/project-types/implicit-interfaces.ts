@@ -43,7 +43,7 @@ export function collectRustImplicitInterfaceContracts(walk: RustFactWalk): reado
     const pairs = semantics.types.structuralMembers(sourceTemplate, targetTemplate);
     if (pairs.kind !== "available" || pairs.destination.calls.length !== 0 || pairs.destination.constructs.length !== 0 ||
       pairs.destination.indexes.length !== 0 || pairs.members.some(pair => pair.kind !== "present")) return;
-    const context = rustResolutionContext(walk, subject);
+    const context = { ...rustResolutionContext(walk, subject), callableRepresentation: "signature" as const };
     const resolve = (type: Type) => resolveRustTargetTypeRef(type, context, walk.operationOptions);
     const openSource = resolve(sourceTemplate);
     const openTarget = resolve(targetTemplate);

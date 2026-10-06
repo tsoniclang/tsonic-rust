@@ -15,6 +15,8 @@ test("provider indexed types preserve native fields, aliases and unannotated ret
   assert.deepEqual(result.diagnostics, []);
   const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
   assert.match(output, /size: u64/u);
+  assert.match(output, /written: usize/u);
+  assert.match(output, /fn writtenBytes\(value: usize\) -> usize/u);
   assert.match(output, /direct: u64/u);
   assert.match(output, /optional: Option<u64>/u);
   assert.match(output, /fn forward\(size: u64\) -> u64/u);

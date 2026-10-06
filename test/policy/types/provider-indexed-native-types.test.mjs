@@ -9,10 +9,14 @@ const integer = { kind: "source-primitive", name: "uint64" };
 
 function fixture(options = {}) {
   const selected = providerIndexedPolicyFixture(options.keys);
-  const parameters = [{ kind: "type", targetIdentity: "T", sourceName: "T" }];
+  const parameters = options.noSourceParameters ? [] : [{ kind: "type", targetIdentity: "T", sourceName: "T" }];
   const argument = { kind: "type", type: integer };
-  const carrier = rustNamedTargetType("native.box", "native::Box", [argument]);
-  const generic = rustNamedTargetType("native.box", "native::Box", [{ kind: "type", type: { kind: "type-parameter", identity: "T", name: "T" } }]);
+  const physical = { kind: "type", type: { kind: "source-primitive", name: "bool" } };
+  const selectedPhysical = options.wrongPhysical ? { kind: "type", type: integer } : physical;
+  const carrier = rustNamedTargetType("native.box", "native::Box", options.physicalArguments ? [selectedPhysical, argument] : [argument]);
+  const memberCarrier = options.noSourceParameters ? integer : { kind: "type-parameter", identity: "T", name: "T" };
+  const genericArgument = { kind: "type", type: memberCarrier };
+  const generic = rustNamedTargetType("native.box", "native::Box", options.physicalArguments ? [physical, genericArgument] : [genericArgument]);
   const owner = { providerId: "fixture", providerVersion: "1", providerModuleId: "native", moduleSpecifier: "@fixture/native", exportId: "box", exportName: "Box" };
   const facts = new Map();
   const rows = selected.evidence.properties.map((member, index) => {
@@ -21,8 +25,8 @@ function fixture(options = {}) {
     return { ...identity, operationKind: "property", target: { form: "receiver-field", name: `field_${index}` },
       resultCarrier: options.conflicting && index === 1
         ? { kind: "source-primitive", name: "int64" } : options.nativeOptional
-          ? rustOptionTargetType({ kind: "type-parameter", identity: "T", name: "T" })
-          : { kind: "type-parameter", identity: "T", name: "T" } };
+          ? rustOptionTargetType(memberCarrier)
+          : memberCarrier };
   });
   const get = (subject, key) => key === providerVirtualDeclarationFactKey && !options.unowned ? facts.get(subject) : undefined;
   const context = {
@@ -43,6 +47,9 @@ test("provider indexed type policy closes native generics and optional propertie
   assert.deepEqual(fixture({ keys: '"optional"' }), rustSourceOptionalTargetType(integer));
   assert.deepEqual(fixture({ keys: '"optional"', nativeOptional: true }), rustSourceOptionalTargetType(integer));
   assert.deepEqual(fixture({ nativeOptional: true }), rustOptionTargetType(integer));
+  assert.deepEqual(fixture({ physicalArguments: true }), integer);
+  assert.deepEqual(fixture({ noSourceParameters: true }), integer);
+  assert.deepEqual(fixture({ noSourceParameters: true, physicalArguments: true }), integer);
   assert.equal(fixture({ unowned: true }), undefined);
 });
 
@@ -50,5 +57,7 @@ test("provider indexed type policy rejects incomplete, ambiguous and mismatched 
   for (const options of [
     { missingRelation: true }, { duplicate: true }, { wrongOwner: true }, { missingGeneric: true },
     { keys: '"value" | "other"', conflicting: true }, { keys: '"value" | "other"', missingFact: true },
+    { physicalArguments: true, wrongPhysical: true },
+    { noSourceParameters: true, physicalArguments: true, wrongPhysical: true },
   ]) assert.deepEqual(fixture(options), { kind: "opaque", id: "provider-indexed-type-evidence-unavailable" }, JSON.stringify(options));
 });

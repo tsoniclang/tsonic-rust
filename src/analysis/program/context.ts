@@ -168,6 +168,7 @@ export function createRustAnalysisContext(
   const sourceStorage = createSourceStorageQuery(input.source, sourceFiles);
   const sourceStorageFailure = sourceStorage.failureReason();
   return Object.freeze({
+    callableRepresentation: "storage" as const,
     sourceStorage,
     callableOwnership: createRustCallableOwnershipRegistry(),
     errorStorageDemands: createRustErrorStorageDemandQuery(input.source,

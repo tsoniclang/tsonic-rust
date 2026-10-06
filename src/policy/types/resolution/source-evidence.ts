@@ -87,6 +87,16 @@ export function resolveRustCallableEvidence(
   resolving: Set<object>,
 ): TargetTypeRef | undefined {
   const carrier = resolveRustCallableSignatureCarrier(callable, context, options, resolving);
+  return resolveRustCallableStorageCarrier(carrier, context, options, resolving);
+}
+
+export function resolveRustCallableStorageCarrier(
+  carrier: TargetTypeRef | undefined,
+  context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
+  resolving: Set<object>,
+): TargetTypeRef | undefined {
+  if (context.callableRepresentation === "signature") return carrier;
   const subject = context.sourceStorageSubject;
   const parameterNode = subject?.kind === "value" && subject.projection.length === 0 ? subject.node : undefined;
   const parameter = parameterNode === undefined ? undefined : context.ast.as.AsParameterDeclaration(parameterNode);

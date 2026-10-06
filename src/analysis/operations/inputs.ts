@@ -20,6 +20,7 @@ import {
   KindPrefixUnaryExpression,
   KindPropertyAccessExpression,
   KindVoidExpression,
+  KindAwaitExpression,
   KindVariableDeclaration,
   Node_Expression,
   Node_Name,
@@ -109,7 +110,7 @@ export function recordSelectedOperationInputs(
     }
     return;
   }
-  if (kind === KindVoidExpression) {
+  if (kind === KindVoidExpression || kind === KindAwaitExpression) {
     const operand = Node_Expression(ast, expression);
     if (operand !== undefined) {
       resolveExpressionCarrier(walk, operand, sourceFile, undefined);

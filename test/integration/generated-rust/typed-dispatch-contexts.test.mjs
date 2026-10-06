@@ -94,3 +94,29 @@ test("authored fallible argument evaluation precedes native root initialization"
     }
   `);
 });
+
+test("receiver dispatch inputs retain native mutation source order and callback failure identity", { timeout: 300_000 }, () => {
+  const result = compile("receiver-context", `
+    import { constructions, poll, Receiver } from "@acme/dispatch";
+    export function main(): void {
+      const receiver = new Receiver();
+      const failure = new Error("receiver callback");
+      let order = 0;
+      function right(): number { order = order * 10 + 2; return 2; }
+      function left(): number { order = order * 10 + 1; return 1; }
+      receiver.enqueue(right(), left(), () => { throw failure; });
+      if (order !== 21 || receiver.value !== 12 || constructions() !== 1) {
+        throw new Error("receiver or argument correspondence");
+      }
+      let caught = false;
+      try { poll(); } catch (error) {
+        if (error !== failure) throw new Error("receiver callback identity");
+        caught = true;
+      }
+      if (!caught) throw new Error("receiver callback lost");
+    }
+  `);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /\.enqueue\(/u);
+  assert.doesNotMatch(source, /ERR_TSONIC_CALLBACK|to_string\(\)/u);
+});

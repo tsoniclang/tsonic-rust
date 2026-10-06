@@ -1,5 +1,5 @@
 import type { RustFrameCallableDefinition, RustFrameCallableEntryDefinition, RustFrameCallableImplementation } from "../../../../analysis/callables/frame-values.js";
-import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey } from "../../../../analysis/facts/keys.js";
+import { rustAsyncFunctionFactKey, rustGeneratorFactKey } from "../../../../analysis/facts/keys.js";
 import type { RustExpr, RustGenerics, RustItem, RustPattern, RustType } from "../../../target-ast/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
@@ -113,8 +113,8 @@ function planFrameEntry(
   let argumentTypes: readonly RustType[] | undefined;
   let resultType: RustType | undefined;
   for (const implementation of entry.implementations) {
-    if (context.input.program.facts.getFact(implementation.declaration, rustAsyncFunctionFactKey) !== undefined ||
-      context.input.program.facts.getFact(implementation.declaration, rustGeneratorFactKey) !== undefined) return undefined;
+    const suspended = context.input.program.facts.getFact(implementation.declaration, rustAsyncFunctionFactKey) !== undefined ||
+      context.input.program.facts.getFact(implementation.declaration, rustGeneratorFactKey) !== undefined;
     const state = stateType(implementation, generics);
     const captures = implementation.captures.map(capture => rustCallableCaptureStorageType(capture, capture.carrier, context));
     if (captures.some(type => type === undefined)) return undefined;
@@ -128,7 +128,7 @@ function planFrameEntry(
     const names = createRustSyntheticNameState(context.input.program.source.ast, implementation.declaration, []);
     const frameName = allocateRustSyntheticName(names, "frame_owner");
     const stateName = allocateRustSyntheticName(names, "frame_state");
-    const owner: RustLiveFrameOwner = { kind: "live", expression: { kind: "path", path: frameName }, borrowed: true,
+    const owner: RustLiveFrameOwner = { kind: "live", expression: { kind: "path", path: frameName }, borrowed: !suspended,
       data: definition.storage.kind === "standalone" ? { kind: "direct" }
         : { kind: "object", mutable: definition.storage.mutable, name: allocateRustSyntheticName(names, "frame_data") } };
     const helperContext = rustFrameBindingContext(definition, owner, { ...context,
@@ -140,24 +140,30 @@ function planFrameEntry(
     });
     const helper = planNativeModuleFunction(implementation.declaration, implementation.declaration,
       implementation.functionName, true, helperContext);
-    if (helper?.kind !== "function") return undefined;
+    if (helper?.kind !== "function" || helper.isAsync === true) return undefined;
     const parameters = helper.params;
     argumentTypes ??= parameters.map(parameter => parameter.type);
-    const fallible = context.input.program.facts.getFact(implementation.declaration, rustFallibleFactKey) !== undefined;
+    const fallible = helper.errorType !== undefined;
     const output: RustType = { kind: "named", path: "Result", genericArguments: [
       { kind: "type" as const, type: helper.returnType ?? { kind: "unit" as const } },
       { kind: "type" as const, type: rustErrorType(boundary) },
     ] };
     resultType ??= output;
     items.push({ ...helper, generics, params: [
-      { name: frameName, type: { kind: "reference", referent: shared(types.frameType), mutable: false } },
-      ...(captures.length === 0 ? [] : [{ name: stateName, type: { kind: "reference" as const, referent: state, mutable: false } }]),
+      { name: frameName, type: suspended ? shared(types.frameType)
+        : { kind: "reference", referent: shared(types.frameType), mutable: false } },
+      ...(captures.length === 0 ? [] : [{ name: stateName, type: suspended ? implementation.copy ? state : shared(state)
+        : { kind: "reference" as const, referent: state, mutable: false } }]),
       ...parameters,
     ] });
     variants.push({ name: implementation.variantName, fields: [{ kind: "primitive", name: "usize" },
       ...(!entryHasPayload(implementation, generics) ? [] : [implementation.copy ? state : shared(state)])] });
     const call: RustExpr = { kind: "call", path: implementation.functionName, args: [
-      { kind: "path", path: "frame" }, ...(captures.length === 0 ? [] : [{ kind: "path" as const, path: "state" }]),
+      suspended ? { kind: "call", path: "alloc::rc::Rc::clone", args: [{ kind: "path", path: "frame" }] }
+        : { kind: "path", path: "frame" },
+      ...(captures.length === 0 ? [] : [!suspended ? { kind: "path" as const, path: "state" }
+        : implementation.copy ? { kind: "dereference" as const, pointer: { kind: "path" as const, path: "state" } }
+          : { kind: "call" as const, path: "alloc::rc::Rc::clone", args: [{ kind: "path" as const, path: "state" }] }]),
       ...parameters.map((_parameter, index) => ({ kind: "field" as const,
         receiver: { kind: "path" as const, path: "arguments" }, name: String(index) })),
     ] };

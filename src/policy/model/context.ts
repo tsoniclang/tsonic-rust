@@ -17,6 +17,7 @@ import type { RustTypeDefinitions } from "../../target-model/types/source-union-
 import type { SourceStorageQueries } from "@tsonic/target-api/analysis";
 
 export interface RustSourcePolicyContext {
+  readonly callableRepresentation: "signature" | "storage";
   readonly typeDefinitions: RustTypeDefinitions;
   readonly source: TargetSourceProgram;
   readonly sourceStorage: SourceStorageQueries;

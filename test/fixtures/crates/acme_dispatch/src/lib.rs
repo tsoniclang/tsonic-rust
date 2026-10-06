@@ -15,6 +15,28 @@ pub struct Parent<TError>(Dispatch<TError>);
 
 pub type ParentHandle<TError> = DispatchHandle<TError>;
 
+#[derive(Clone, Default)]
+pub struct Receiver {
+    pub value: i32,
+}
+
+impl Receiver {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn enqueue<TError: 'static>(
+        &mut self,
+        left: i32,
+        root: &Dispatch<TError>,
+        right: i32,
+        callback: impl CallableImplementation<(), Result<(), TError>> + 'static,
+    ) {
+        self.value = left * 10 + right;
+        enqueue(root.handle(), callback);
+    }
+}
+
 impl<TError> Dispatch<TError> {
     pub fn new() -> Self {
         CONSTRUCTIONS.with(|count| count.set(count.get() + 1));

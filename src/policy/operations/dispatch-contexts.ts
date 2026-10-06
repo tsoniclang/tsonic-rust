@@ -5,7 +5,8 @@ import { rustNamedTypeCarrierValue } from "../../target-model/types/index.js";
 import type { RustProviderOperationForm } from "../../target-model/operations/model.js";
 
 export function rustProviderOperationFormAcceptsDispatchInputs(form: RustProviderOperationForm): boolean {
-  return form.form === "call" || form.form === "source-module-construction";
+  return form.form === "call" || form.form === "receiver-method" ||
+    form.form === "source-module-construction";
 }
 
 export function isRustDispatchContextInput(value: unknown): value is RustDispatchContextInput {

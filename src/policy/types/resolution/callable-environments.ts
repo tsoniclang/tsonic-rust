@@ -33,7 +33,9 @@ export function resolveRustCallableEnvironment(
     const type = refinement.kind === "resolved" ? refinement.declaredType : semantics.types.expressionType(reference);
     const selected = context.sourceStorage.subjectFor(reference);
     if (selected.kind === "unresolved") return undefined;
-    const carrier = resolveRustTargetType(type, { ...context, currentSemantics: semantics,
+    const storageCarrier = selected.subject.kind === "value" && selected.subject.projection.length === 0
+      ? context.facts.getRuntimeCarrierFact(selected.subject.node)?.carrier : undefined;
+    const carrier = storageCarrier ?? resolveRustTargetType(type, { ...context, currentSemantics: semantics,
       sourceStorageSubject: selected.subject,
       sourceTypeParameterSubstitutions: new Map() }, options, resolving);
     if (carrier === undefined) return undefined;

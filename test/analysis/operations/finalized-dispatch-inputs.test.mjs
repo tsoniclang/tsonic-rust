@@ -76,6 +76,34 @@ test("native roots borrow once while weak handles have independent owned or borr
   }
 });
 
+test("receiver calls interleave native roots without changing receiver or authored correspondence", () => {
+  const receiver = { kind: "target-named", id: "acme.Receiver" };
+  for (const mutable of [false, true]) {
+    for (const position of [0, 1, 2]) {
+      const input = catalog.resolveInput({ ...request, targetArgumentIndex: position });
+      const options = { ...base, form: {
+        form: "receiver-method", name: "accept", mutatesReceiver: mutable, argOrder: [1, 0],
+      }, sourceReceiverCarrier: receiver, dispatchInputs: [input] };
+      const abi = finalizeRustProviderOperationAbi(options);
+      assert.equal(abi !== undefined, true, `receiver root position ${position}`);
+      assert.equal(validateRustFinalizedOperationAbi(abi), true);
+      assert.equal(abi.targetReceiver.kind, "input");
+      assert.equal(abi.targetReceiver.input.source.kind, "receiver");
+      assert.equal(abi.targetReceiver.input.mode, mutable ? "mut-ref" : "ref");
+      assert.equal(abi.targetArguments[position].source.kind, "dispatch-context");
+      assert.deepEqual(abi.targetArguments.filter(slot => slot.source.kind === "argument")
+        .map(slot => slot.source.sourceIndex), [1, 0]);
+      assert.deepEqual(abi.sourceArguments.map(slot => slot.sourceIndex), [0, 1]);
+      assert.equal(Object.isFrozen(abi.targetReceiver.input), true);
+      assert.equal(finalizeRustProviderOperationAbi({ ...options, evaluation: "pure" }) === undefined, true);
+      assert.equal(validateRustFinalizedOperationAbi({ ...abi, dispatchInputs: [] }), false);
+      assert.equal(validateRustFinalizedOperationAbi({ ...abi, targetArguments: [
+        ...abi.targetArguments.slice(0, position), ...abi.targetArguments.slice(position + 1),
+      ] }), false);
+    }
+  }
+});
+
 test("dispatch selections reject malformed, sparse, executable and inconsistent native metadata", () => {
   const sparse = []; sparse.length = 1;
   const accessor = Object.defineProperty({}, "contextId", { get() { throw new Error("must not execute"); } });
