@@ -40,7 +40,7 @@ import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions }
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustRawPointerTargetType } from "../../../target-model/types/carriers/callables.js";
 import { isRustSourceRawPointer } from "../../operations/pointers/source-raw-pointers.js";
-import { resolveRustAuthoredBroadSourceValueTargetType } from "./broad-values.js";
+import { resolveRustAuthoredBroadSourceValueTargetType, rustBroadSourceValueTargetType } from "./broad-values.js";
 import { selectTsonicFixedArrayFromSource } from "@tsonic/source-core/facts";
 import type { TsonicFixedArrayFact } from "@tsonic/source-core/facts";
 import { resolveRustSemanticConditionalAlias } from "./type-families.js";
@@ -79,6 +79,7 @@ export function resolveRustTargetType(
   authoredTypeRoot?: Node,
 ): TargetTypeRef | undefined {
   if (type === undefined) return undefined;
+  if (context.currentSemantics.types.isNonPrimitive(type)) return rustBroadSourceValueTargetType(options.jsEnabled);
   if (resolving.has(type)) {
     const symbol = context.currentSemantics.declarations.typeAliasSymbol(type);
     if (symbol === undefined || !context.currentSemantics.declarations.symbolDeclarations(symbol).some(declaration => {
