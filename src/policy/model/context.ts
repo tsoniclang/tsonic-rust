@@ -34,7 +34,7 @@ export interface RustSourcePolicyContext {
 }
 
 export function rustPolicyNode(
-  context: RustSourcePolicyContext,
+  context: Pick<RustSourcePolicyContext, "ast">,
   subject: ExtensionFactSubject | undefined,
 ): Node | undefined {
   if (subject === undefined) {

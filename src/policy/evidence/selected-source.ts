@@ -6,6 +6,7 @@ import type {
   Node,
   ProviderDeclarationIdentity,
   ProviderMemberKey,
+  ReadonlySourceFactResolver,
   Symbol,
   TypeIndexInfo,
   Type,
@@ -198,7 +199,9 @@ export function resolveSelectedJsSourceMember(
 }
 
 export function resolveSelectedSourceProfileMember(
-  context: RustSourcePolicyContext,
+  context: Pick<RustSourcePolicyContext, "ast" | "semanticsFor"> & {
+    readonly facts: { readonly get: ReadonlySourceFactResolver["getFact"] };
+  },
   declarationSubject: ExtensionFactSubject | undefined,
   sourceProfiles: RustSourceProfileRegistry,
 ): RustSelectedSourceMemberIdentity | undefined {
@@ -209,7 +212,11 @@ export function resolveSelectedSourceProfileMember(
   );
   if (provider?.providerId === jsSourceSemanticsIdentity.providerId) {
     const ownerName = provider.exportName;
-    const memberName = provider.memberName;
+    const memberName = provider.memberKey?.kind === "property-key"
+      ? provider.memberKey.name
+      : provider.memberKey?.kind === "well-known-symbol"
+        ? `@@${provider.memberKey.name}`
+        : provider.memberName;
     return declaration !== undefined && ownerName !== undefined && memberName !== undefined
       ? { profile: "js", ownerName, memberName, declaration }
       : undefined;
@@ -247,7 +254,7 @@ export function resolveSelectedSourceProfileMember(
 }
 
 function selectedSourceProfileMemberName(
-  context: RustSourcePolicyContext,
+  context: Pick<RustSourcePolicyContext, "ast" | "semanticsFor">,
   declaration: Node,
 ): string {
   const name = context.ast.name(declaration);
