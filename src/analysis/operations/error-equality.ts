@@ -15,10 +15,12 @@ export function selectRustProgramErrorEquality(
   right: TargetTypeRef | undefined,
   negated: boolean,
 ): Extract<RustTargetOperationFact, { readonly kind: "program-error-equality" }> | undefined {
-  const errorOperand = isRustProgramErrorCarrier(left) || rustCarrierProvidesErrorObservation(left, walk.context.typeDefinitions) ||
+  const errorOperand = isRustProgramErrorCarrier(left) ||
     isRustClosedValueCarrier(left) && rustCarrierProvidesErrorObservation(right, walk.context.typeDefinitions) ? "left"
-    : isRustProgramErrorCarrier(right) || rustCarrierProvidesErrorObservation(right, walk.context.typeDefinitions) ||
-      isRustClosedValueCarrier(right) && rustCarrierProvidesErrorObservation(left, walk.context.typeDefinitions) ? "right" : undefined;
+    : isRustProgramErrorCarrier(right) ||
+      isRustClosedValueCarrier(right) && rustCarrierProvidesErrorObservation(left, walk.context.typeDefinitions) ? "right"
+    : rustCarrierProvidesErrorObservation(left, walk.context.typeDefinitions) ? "left"
+    : rustCarrierProvidesErrorObservation(right, walk.context.typeDefinitions) ? "right" : undefined;
   const sourceCarrier = errorOperand === "left" ? left : right;
   const targetCarrier = errorOperand === "left" ? right : left;
   if (errorOperand === undefined || sourceCarrier === undefined || targetCarrier === undefined) return undefined;

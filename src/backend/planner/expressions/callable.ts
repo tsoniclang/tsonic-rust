@@ -113,15 +113,16 @@ export function planRustCallableExpressionBody(
   if (rustGenericCallableValue(constructionCarrier) !== undefined) {
     return planRustGenericCallableValue(node, constructionCarrier, context);
   }
-  const callableProtocol = rustCallableProtocol(closureFact.resultCarrier);
+  const sourceCallableProtocol = rustCallableProtocol(closureFact.resultCarrier);
+  const callableProtocol = rustCallableProtocol(constructionCarrier);
   const borrowedInput = rustCallableInputProtocol(constructionCarrier) !== undefined;
   const nativeClosureProtocol = rustClosureProtocol(closureFact.resultCarrier);
   const allParameterCarriers = closureFact.resultCarrier.kind === "function-pointer"
     ? closureFact.resultCarrier.args
-    : nativeClosureProtocol?.parameters ?? callableProtocol?.parameters;
+    : nativeClosureProtocol?.parameters ?? sourceCallableProtocol?.parameters;
   const resultCarrier = closureFact.resultCarrier.kind === "function-pointer"
     ? closureFact.resultCarrier.result
-    : nativeClosureProtocol?.result ?? callableProtocol?.result;
+    : nativeClosureProtocol?.result ?? sourceCallableProtocol?.result;
   if (closureFact.resultCarrier.kind === "function-pointer" &&
     (captureFact.captures.length !== 0 || captureFact.receiverFields.length !== 0 || captureFact.receivers.length !== 0 || captureFact.recursiveDeclaration !== undefined)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -310,6 +311,19 @@ export function planRustCallableExpressionBody(
     return undefined;
   }
   const leadingParameterPlans = leadingPlan.parameters;
+  const constructionParameters = [
+    ...leadingParameterPlans.map(parameter => parameter.carrier),
+    ...parameterCarriers,
+  ];
+  if (callableProtocol !== undefined &&
+    (!rustTargetTypeRefEquals(callableProtocol.result, resultCarrier) ||
+      callableProtocol.parameters.length !== constructionParameters.length ||
+      !callableProtocol.parameters.every((carrier, index) =>
+        rustTargetTypeRefEquals(carrier, constructionParameters[index])))) {
+    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+      "rust.backend.closure-construction-abi", "Callable construction requires its exact finalized receiver and source parameter ABI."));
+    return undefined;
+  }
   const closureContext: RustPlanContext = {
     ...leadingPlan.context,
     callableDeclaration: node,
