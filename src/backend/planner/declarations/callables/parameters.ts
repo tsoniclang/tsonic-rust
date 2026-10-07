@@ -105,12 +105,12 @@ export function planRustCallableParameters(
     const sourceCarrier = context.input.program.facts.getRuntimeCarrierFact(parameter)?.carrier;
     const locationStorage = rustBindingStorageForDeclaration(parameter, context);
     if (pattern !== undefined &&
-      (abi?.mode !== "value" || sourceCarrier === undefined || parameterCarrier === undefined ||
-        !rustTargetTypeRefEquals(sourceCarrier, parameterCarrier) || locationStorage !== undefined)) {
+      (abi?.mode !== "value" || sourceCarrier === undefined || abi.valueCarrier === undefined ||
+        !rustTargetTypeRefEquals(sourceCarrier, abi.valueCarrier) || locationStorage !== undefined)) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, parameter),
         "rust.backend.binding-parameter-abi",
-        "Binding-pattern parameters require one exact by-value Rust source and parameter carrier.",
+        "Binding-pattern parameters require one exact by-value Rust source and initialized value carrier.",
       ));
       return undefined;
     }

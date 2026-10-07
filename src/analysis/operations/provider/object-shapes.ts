@@ -616,8 +616,10 @@ export function acceptProjectSourceCall(
     if (parameterCarrier === undefined || valueCarrier === undefined) {
       return undefined;
     }
+    const parameterName = ast.name(parameter);
     return {
-      name: ast.text(ast.name(parameter)) || `arg${index}`,
+      name: parameterName !== undefined && ast.is.IsIdentifier(parameterName)
+        ? ast.text(parameterName) : `arg${index}`,
       type: parameterCarrier,
       passingMode: abi.mode === "mut-ref"
         ? "borrow-mut" as const

@@ -52,6 +52,8 @@ function rustDefaultMayEvaluateEagerly(expression: RustExpr): boolean {
     case "int-literal":
     case "float-literal":
     case "bool-literal":
+    case "char-literal":
+    case "str-literal":
     case "none":
     case "path":
     case "associated-value":
@@ -60,6 +62,8 @@ function rustDefaultMayEvaluateEagerly(expression: RustExpr): boolean {
       return rustDefaultMayEvaluateEagerly(expression.operand);
     case "numeric-cast":
       return rustDefaultMayEvaluateEagerly(expression.expression);
+    case "tuple-literal":
+      return expression.elements.every(rustDefaultMayEvaluateEagerly);
     default:
       return false;
   }
