@@ -352,12 +352,12 @@ function selectJsSurfaceOperationForDemand(
           (request.selectedMethodTypeArgumentCarriers?.length ?? 0)) &&
       (candidate.callback === undefined || callbackArgumentCarrier === undefined ||
         isRustCallableCarrier(callbackArgumentCarrier)) &&
-      carrierRequirementsMatch(candidate.requirements, candidateBindings, request, definitions, demand) &&
       (candidate.firstArgCarrierId === undefined
         ? firstArgumentId(request) === undefined || !jsOperationRows.some((other) =>
             other.owner === candidate.owner && other.member === candidate.member &&
             other.operationKind === candidate.operationKind && other.firstArgCarrierId === firstArgumentId(request))
-        : candidate.firstArgCarrierId === firstArgumentId(request))
+        : candidate.firstArgCarrierId === firstArgumentId(request)) &&
+      carrierRequirementsMatch(candidate.requirements, candidateBindings, request, definitions, demand)
     )) {
       return [];
     }
@@ -606,6 +606,9 @@ function carrierRequirementsMatch(
       case "object-identity":
         return rustCarrierSupportsObjectIdentity(carrier) ||
           (carrier !== undefined && request.carrierSupportsProjectIdentity?.(carrier) === true);
+      case "empty-object-domain":
+        return requirement.carrier.ref === "argument" && carrier !== undefined &&
+          request.argumentValueDomainHasTargetType?.(requirement.carrier.index, rustEmptyObjectTargetType()) === true;
       case "freezable-object": {
         const shape = rustStructuralObjectCarrierValue(carrier);
         return rustTargetTypeRefEquals(carrier, rustEmptyObjectTargetType()) ||
