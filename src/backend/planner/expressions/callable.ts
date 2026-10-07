@@ -42,7 +42,7 @@ import {
   rustOperationFact,
 } from "./fundamentals.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
-import { planExpression } from "./entry.js";
+import { planExpression, type RustExpressionResultUse } from "./entry.js";
 import { planRustBindingPattern } from "../bindings/patterns.js";
 import { rustOptionDefaultValue } from "./option-default.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -70,15 +70,17 @@ import { planRustCapturedReceiverFields, planRustCapturedReceivers, rustRecursiv
 export function planCallableExpression(
   node: Node,
   context: RustPlanContext,
+  resultUse: RustExpressionResultUse = "value",
 ): RustExpr | undefined {
-  return context.input.program.facts.getFact(node, rustClosureCaptureFactKey)?.invocationOwner === "shared-state"
+  return resultUse !== "discarded" && context.input.program.facts.getFact(node, rustClosureCaptureFactKey)?.invocationOwner === "shared-state"
     ? planRustSuspendedCallableConstruction(node, context)
-    : planRustCallableExpressionBody(node, context);
+    : planRustCallableExpressionBody(node, context, resultUse);
 }
 
 export function planRustCallableExpressionBody(
   node: Node,
   context: RustPlanContext,
+  resultUse: RustExpressionResultUse = "value",
 ): RustExpr | undefined {
   const { ast } = context.input.program.source;
   const closureFact = rustOperationFact(node, context);
@@ -103,6 +105,7 @@ export function planRustCallableExpressionBody(
     return undefined;
   }
   if (!validateRustRecursiveReceiverField(node, captureFact, closureFact.resultCarrier, context)) return undefined;
+  if (resultUse === "discarded") return { kind: "tuple-literal", elements: [] };
   const independent = context.input.program.facts.getFact(node, rustReceiverIndependentMethodFactKey);
   const constructionCarrier = independent?.carrier ?? closureFact.resultCarrier;
   if (rustFrameCallableValue(constructionCarrier) !== undefined)

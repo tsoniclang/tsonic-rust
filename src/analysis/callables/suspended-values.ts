@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
+import { sourceCallableDefinitionIsDiscarded } from "@tsonic/target-api/source";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -47,6 +48,8 @@ export function createRustSuspendedCallablePlan(
   const selected: Node[] = [];
   const usedNames = new Set<string>();
   const visit = (node: Node): void => {
+    if ((ast.is.IsArrowFunction(node) || ast.is.IsFunctionExpression(node)) &&
+      sourceCallableDefinitionIsDiscarded(node, ast)) return;
     const name = names.nameForDeclaration(node);
     if (name !== undefined) usedNames.add(name);
     if (facts.getFact(node, rustClosureCaptureFactKey)?.invocationOwner === "shared-state") selected.push(node);

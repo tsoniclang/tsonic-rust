@@ -1,4 +1,5 @@
 import type { TypeSignatureInfo, Type } from "@tsonic/tsts";
+import { sourceCallableParameterEvidence } from "@tsonic/target-api/source";
 import type { RustSourceObjectShape } from "../source-type-registry.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import { resolveRustCallableEvidence } from "./source-evidence.js";
@@ -38,10 +39,7 @@ export function resolveRustConstructSignature(
   if (declaration === undefined || result === undefined || context.ast.typeParameters(declaration).length !== 0) return undefined;
   const typeNode = context.ast.typeNode(declaration);
   const carrier = resolveRustCallableEvidence({
-    parameters: selected.parameters.map(parameter => ({
-      ...parameter,
-      omissionKind: parameter.parameterKind === "optional" ? "undefined" : parameter.parameterKind,
-    })),
+    parameters: selected.parameters.map(parameter => sourceCallableParameterEvidence(parameter, context.ast)),
     result: { selectedType: result, declaration, ...(typeNode === undefined ? {} : { authoredTypeNode: typeNode }) },
   }, context, options, resolving);
   return carrier === undefined || rustCallableProtocol(carrier) === undefined ? undefined :

@@ -7,6 +7,7 @@ import { isRustAbsenceCarrier } from "./carriers/native.js";
 export type RustBindingNormalization =
   | "identity"
   | "default-on-none"
+  | "default-on-absence"
   | "checked-array"
   | "checked-array-default";
 
@@ -17,6 +18,9 @@ export function rustBindingNormalizationContract(
 ): { readonly storageCarrier: TargetTypeRef; readonly bindingCarrier: TargetTypeRef; readonly normalization: RustBindingNormalization } | undefined {
   if (checkedArrayElement !== undefined &&
     !rustTargetTypeRefEquals(rustOptionElementCarrier(projectedCarrier), checkedArrayElement)) return undefined;
+  if (isRustAbsenceCarrier(projectedCarrier) && defaultCarrier !== undefined) return {
+    storageCarrier: projectedCarrier, bindingCarrier: defaultCarrier, normalization: "default-on-absence",
+  };
   const storageCarrier = checkedArrayElement === undefined ? projectedCarrier : rustSourceOptionalTargetType(checkedArrayElement);
   const value = rustOptionElementCarrier(storageCarrier) ?? rustOptionalStorageValue(storageCarrier);
   const defaulted = defaultCarrier !== undefined && value !== undefined;

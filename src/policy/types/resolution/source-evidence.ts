@@ -217,7 +217,7 @@ export function resolveRustSignatureParameterEvidence(
     options,
     resolving,
   );
-  const optional = parameter.parameterKind === "optional";
+  const optional = parameter.omissionKind === "undefined" || parameter.omissionKind === "initializer";
   return resolved === undefined || !optional ||
       rustOptionElementCarrier(resolved) !== undefined
     ? resolved

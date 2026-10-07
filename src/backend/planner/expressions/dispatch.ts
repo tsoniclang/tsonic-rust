@@ -442,7 +442,7 @@ export function planExpressionInner(
     case "KindMethodDeclaration":
     case "KindGetAccessor":
     case "KindSetAccessor": {
-      return planCallableExpression(node, context);
+      return planCallableExpression(node, context, resultUse);
     }
     case "KindRegularExpressionLiteral": {
       return planRegExpCreate(node, context);

@@ -427,6 +427,9 @@ function normalizeBindingValue(
     ));
     return undefined;
   }
+  if (selected.normalization === "default-on-absence") return {
+    kind: "evaluate-then", effect: stored, discard: "unit", value: fallback,
+  };
   return rustOptionDefaultValue(stored, fallback, selected.storageCarrier, context, selected.bindingCarrier);
 }
 

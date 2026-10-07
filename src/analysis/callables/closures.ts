@@ -17,6 +17,7 @@ import {
   Node_Name,
   Node_Type,
   sourceLexicalEnvironment,
+  sourceCallableDefinitionIsDiscarded,
 } from "@tsonic/target-api/source";
 import {
   rustAsyncFunctionFactKey,
@@ -311,7 +312,9 @@ export function resolveFunctionExpressionCarrier(
   ];
   const valueResult = selectedValueResult ?? bodyCarrier;
   if (!recordCallableReturnFact(walk, expression, generator?.resultCarrier ?? bodyCarrier)) return undefined;
-  const captures = collectRustLexicalCaptures(walk, expression, [...parameters.flatMap(parameter => {
+  const discarded = sourceCallableDefinitionIsDiscarded(expression, ast);
+  const captures = discarded ? { receivers: [], receiverFields: [], captures: [] }
+    : collectRustLexicalCaptures(walk, expression, [...parameters.flatMap(parameter => {
     const initializer = parameter === undefined ? undefined : Node_Initializer(ast, parameter);
     return initializer === undefined ? [] : [initializer];
   }), body],

@@ -12,7 +12,7 @@ import type { RustNamePlan } from "../../target-model/names/model.js";
 import { rustClosureCaptureFactKey, rustTargetOperationFactKey, rustContextualValueConversionFactKey } from "../facts/keys.js";
 import type { RustClosureCaptureFact } from "../facts/operations/keys.js";
 import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
-import type { SourceProgramNavigation } from "@tsonic/target-api/source";
+import { sourceCallableDefinitionIsDiscarded, type SourceProgramNavigation } from "@tsonic/target-api/source";
 import { isRustCopyCarrier } from "../../target-model/types/index.js";
 import { rustAsyncFunctionFactKey, rustGeneratorFactKey } from "../facts/keys.js";
 import { createRustGenericCallableFlowIndex } from "./generic-callable-flow.js";
@@ -74,6 +74,8 @@ export function createRustGenericCallablePlan(
       : undefined;
   };
   const visit = (node: Node): void => {
+    if ((ast.is.IsArrowFunction(node) || ast.is.IsFunctionExpression(node)) &&
+      sourceCallableDefinitionIsDiscarded(node, ast)) return;
     for (const name of [names.nameForDeclaration(node), names.functionNameForDeclaration(node), names.callableValueNameForDeclaration(node)]) {
       if (name !== undefined) usedNames.add(name);
     }

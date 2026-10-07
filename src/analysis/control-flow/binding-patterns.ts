@@ -55,7 +55,7 @@ export interface RustBindingPatternFactContext {
   ) => TargetTypeRef | undefined;
   readonly resolveExpressionCarrier: (
     expression: Node,
-    expected: TargetTypeRef,
+    expected: TargetTypeRef | undefined,
   ) => TargetTypeRef | undefined;
   readonly setCarrier: (subject: Node, carrier: TargetTypeRef) => void;
 }
@@ -89,7 +89,8 @@ export function recordRustBindingPatternFacts(
       return false;
     }
     const initializer = Node_Initializer(context.ast, element);
-    const defaultCarrier = initializer === undefined ? undefined : context.resolveCarrier(initializer);
+    const defaultCarrier = initializer === undefined ? undefined : context.resolveExpressionCarrier(
+      initializer, context.resolveCarrier(initializer) ?? context.resolveCarrier(name));
     if (initializer !== undefined && defaultCarrier === undefined) return false;
     const selected = kind === KindArrayBindingPattern
       ? selectArrayProjection(sourceCarrier, index, BindingElement_IsRest(context.ast, element), defaultCarrier)

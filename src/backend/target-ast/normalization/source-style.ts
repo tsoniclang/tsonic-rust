@@ -197,9 +197,16 @@ function finalizeRustBlockStyle(block: RustBlock): RustBlock {
     ...(retainsFieldAssignment ? { innerAttrs: appendRustAttribute(block.innerAttrs, rustLintAttributes.fieldReassignWithDefault) } : {}),
     statements: [
       ...scope.aliases.map((item): RustStmt => ({ kind: "item", item })),
-      ...block.statements.map(statement => statement.kind === "item"
-        ? { ...statement, item: scope.items[nextItem++]! }
-        : finalizeRustStatementStyle(statement)),
+      ...block.statements.flatMap((statement): RustStmt[] => {
+        const selected = statement.kind === "item"
+          ? { ...statement, item: scope.items[nextItem++]! } : finalizeRustStatementStyle(statement);
+        const value = selected.kind === "expr" ? selected.expr
+          : selected.kind === "let" && selected.name === "_" && !selected.mutable && selected.type === undefined
+            ? selected.init : undefined;
+        const attributed = "attrs" in selected && (selected.attrs?.length ?? 0) !== 0;
+        return !attributed && value?.kind === "tuple-literal" && value.elements.length === 0
+          ? [] : [selected];
+      }),
     ],
   };
 }
