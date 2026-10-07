@@ -1,6 +1,6 @@
 import type { SourceStorageEffects } from "@tsonic/target-api/analysis";
 import type { TargetSourceProgram } from "@tsonic/target-api/source";
-import { jsSourceCallStorageEffect } from "@tsonic/js-source-profile";
+import { createJsSourceCallStorageEffects } from "@tsonic/js-source-profile";
 import { resolveSelectedSourceProfileMember } from "../../evidence/selected-source.js";
 import type { RustSourceProfileRegistry } from "../../types/source-profile.js";
 
@@ -13,15 +13,12 @@ export function createRustSourceProfileStorageEffects(
     facts: { get: (subject, key) => source.sourceFacts.getFact(subject, key) },
     semanticsFor: source.semantics.forNode,
   };
-  return Object.freeze({
-    call(node, call) {
-      if (call.sourceSelectedSignatureKind !== "resolved") return undefined;
-      const semantics = source.semantics.forNode(node);
-      const declaration = semantics.declarations.signatureDeclaration(call.selectedSignature);
-      const identity = resolveSelectedSourceProfileMember(context, declaration, sourceProfiles);
-      if (identity === undefined) return undefined;
-      const effect = jsSourceCallStorageEffect(identity, call);
-      return identity.profile === "js" || effect?.resultAllocation !== undefined ? effect : undefined;
-    },
-  } satisfies SourceStorageEffects);
+  return createJsSourceCallStorageEffects(source, (node, call) => {
+    const semantics = source.semantics.forNode(node);
+    const declaration = semantics.declarations.signatureDeclaration(call.selectedSignature);
+    const identity = resolveSelectedSourceProfileMember(context, declaration, sourceProfiles);
+    if (identity === undefined) return undefined;
+    return identity.profile === "js" || identity.memberName === "constructor" || identity.memberName === "call"
+      ? identity : undefined;
+  });
 }
