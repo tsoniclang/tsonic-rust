@@ -12,7 +12,11 @@ function compile(source) {
     result.diagnostics.slice(0, 4).map(diagnostic => `${diagnostic.code}: ${diagnostic.message.slice(0, 256)}`).join("\n"));
   const text = artifactText(result, "src/index.rs");
   assert.equal(typeof text === "string" && text.length > 0, true, "actual generated source");
-  assert.doesNotMatch(text, /FrozenObject|ConditionalWeakTable|downcast|transmute|unsafe\s*\{/u);
+  assert.equal(/FrozenObject|ConditionalWeakTable|transmute|unsafe\s*\{/u.test(text), false,
+    "freeze emission has no additional wrapper or unsafe conversion");
+  const run = text.match(/^pub fn run\b[\s\S]*?^\}/mu)?.[0];
+  assert.equal(run !== undefined, true, "actual emitted run function is present");
+  assert.equal(/downcast/u.test(run), false, "freeze operations do not use native downcasts");
   return { result, text };
 }
 
