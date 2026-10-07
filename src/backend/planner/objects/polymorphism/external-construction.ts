@@ -1,12 +1,11 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustProjectConstructorSignature } from "../../../../target-model/types/project-types.js";
 import type { RustExternalProjectBase } from "../../../../target-model/types/external-project-types.js";
-import { rustSourceParameterAbiFactKey, rustTargetOperationFactKey } from "../../../../analysis/facts/keys.js";
-import { validateRustFinalizedOperationAbi } from "../../../../analysis/facts/finalized-operation-abi.js";
+import { rustSourceParameterAbiFactKey } from "../../../../analysis/facts/keys.js";
 import { rustSourceOptionalTargetType, rustStringTargetType } from "../../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { rustTargetIdentifier } from "../../../../target-model/names/identifiers.js";
-import { planFinalizedTargetInput } from "../../expressions/conversions.js";
+import { planFinalizedSourceInput } from "../../expressions/conversions.js";
 import type { RustExpr } from "../../../target-ast/nodes.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
 import { diagnosticInput, type RustPlanContext } from "../../program/plan-context.js";
@@ -20,7 +19,7 @@ export function planRustExternalProjectInitialization(
 ): readonly RustExpr[] | undefined {
   const message = call === undefined
     ? inheritedMessage(base, signature, context)
-    : explicitMessage(base, call, context);
+    : explicitMessage(call, context);
   if (message === undefined) {
     context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, call ?? declaration),
       "rust.backend.external-project-constructor",
@@ -50,16 +49,15 @@ function inheritedMessage(
 }
 
 function explicitMessage(
-  base: RustExternalProjectBase,
   call: Node,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  const fact = context.input.program.facts.getFact(call, rustTargetOperationFactKey);
-  if (fact?.kind !== "provider-operation" || fact.operationId !== base.constructorOperationId ||
-    fact.abi.operationKind !== "constructor" || !validateRustFinalizedOperationAbi(fact.abi, context.input.program.typeDefinitions) ||
-    fact.abi.target.form !== "call" || fact.abi.target.path !== base.constructorPath ||
-    fact.abi.targetArguments.length !== 1 || !rustTargetTypeRefEquals(fact.resultCarrier, base.targetType)) return undefined;
-  const value = planFinalizedTargetInput(context, fact.abi.targetArguments[0]!, undefined,
+  const initialization = context.input.program.projectConstructions.externalInitializationForCall(call);
+  if (initialization === undefined) return undefined;
+  if (initialization.kind === "empty") return { kind: "string-literal", value: "" };
+  const value = planFinalizedSourceInput(context, initialization.input, undefined,
     context.input.program.source.ast.arguments(call), call);
-  return value === undefined ? undefined : { kind: "method-call", receiver: value, method: "to_string", args: [] };
+  if (value === undefined) return undefined;
+  return initialization.kind === "value" ? value
+    : { kind: "method-call", receiver: value, method: "unwrap_or_default", args: [] };
 }

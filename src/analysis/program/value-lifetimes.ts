@@ -274,11 +274,15 @@ function isLastUseOnPath(
       terminalRegion = parent;
     }
     const kind = input.ast.kindName(parent);
+    const assignment = input.ast.as.AsBinaryExpression(parent);
+    const storesValue = assignment?.Right === current &&
+      input.ast.kindName(assignment.OperatorToken) === "KindEqualsToken";
     if (input.ast.is.IsCallExpression(parent) || input.ast.is.IsNewExpression(parent)) invocations.add(parent);
     if (!rustSourceValueWrapperContains(parent, current, input.ast) &&
       !(input.storageOnly === true && ["KindPropertyAssignment", "KindShorthandPropertyAssignment",
         "KindObjectLiteralExpression", "KindArrayLiteralExpression"].includes(kind)) &&
       !(input.isOwnedFieldProjection?.(parent) === true && Node_Expression(input.ast, parent) === current) &&
+      !storesValue &&
       kind !== "KindCallExpression" && kind !== "KindNewExpression" &&
       kind !== "KindAwaitExpression" &&
       kind !== "KindTryStatement" && kind !== "KindCatchClause" &&

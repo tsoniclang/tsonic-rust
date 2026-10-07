@@ -140,6 +140,18 @@ export function analyzeRustTargetProgram(
     return rejectedTargetStage(foundation.diagnostics);
   }
   const facts = context.facts.seal();
+  const projectConstructions = analyzeRustProjectConstructions({ ast: context.ast, facts,
+    typeDefinitions: context.typeDefinitions,
+    projectTypes: context.projectTypes, receiverFieldAliases: objectRepresentations,
+    receiverCaptures: objectRepresentations.receiverCaptures,
+    mayThrow(node) {
+      const accessor = facts.getFact(node, rustSourceAccessorEffectsFactKey);
+      return facts.getFact(node, rustSourceCallEffectsFactKey)?.invocation === "fallible" ||
+        accessor?.read === "fallible" || accessor?.write === "fallible" ||
+        rustTargetOperationIsFallible(facts.getFact(node, rustTargetOperationFactKey), context.structuralShapes,
+          context.projectFieldDispatch, context.frozenDataWrites, context.typeDefinitions);
+    },
+  });
   const dispatchContextDemand = analyzeRustDispatchContextDemand(
     context.ast, context.sourceFiles, facts, sourcePackageComponents.plan, dispatchContexts.plan,
   );
@@ -158,9 +170,12 @@ export function analyzeRustTargetProgram(
       return operation?.kind === "source-field" && operation.declaration === declaration;
     },
     hasSharedIdentityStorage: (declaration) => isRustJsArrayCarrier(facts.getRuntimeCarrierFact(declaration)?.carrier),
-    mayBorrowArgument: (argument) => facts.getArgumentPassingFact(argument)?.mode !== "by-value",
-    isOwnedCallArgument: (argument) => rustCallArgumentIsOwned(argument, context.ast, facts),
-    isSharedBorrowArgument: (argument) => facts.getArgumentPassingFact(argument)?.mode === "borrow-shared",
+    mayBorrowArgument: (argument) => !projectConstructions.ownsExternalArgument(argument) &&
+      facts.getArgumentPassingFact(argument)?.mode !== "by-value",
+    isOwnedCallArgument: (argument) => projectConstructions.ownsExternalArgument(argument) ||
+      rustCallArgumentIsOwned(argument, context.ast, facts),
+    isSharedBorrowArgument: (argument) => !projectConstructions.ownsExternalArgument(argument) &&
+      facts.getArgumentPassingFact(argument)?.mode === "borrow-shared",
     capturesFor: (closure) => {
       const existing = facts.getFact(closure, rustClosureCaptureFactKey);
       if (existing !== undefined) return existing;
@@ -283,17 +298,7 @@ export function analyzeRustTargetProgram(
     errorTransport: errorTransport.value,
     objectRepresentations,
     projectMethodDispatch: context.projectMethodDispatch.seal(),
-    projectConstructions: analyzeRustProjectConstructions({ ast: context.ast, facts,
-      projectTypes: context.projectTypes, receiverFieldAliases: objectRepresentations,
-      receiverCaptures: objectRepresentations.receiverCaptures,
-      mayThrow(node) {
-        const accessor = facts.getFact(node, rustSourceAccessorEffectsFactKey);
-        return facts.getFact(node, rustSourceCallEffectsFactKey)?.invocation === "fallible" ||
-          accessor?.read === "fallible" || accessor?.write === "fallible" ||
-          rustTargetOperationIsFallible(facts.getFact(node, rustTargetOperationFactKey), context.structuralShapes,
-            context.projectFieldDispatch, context.frozenDataWrites, context.typeDefinitions);
-      },
-    }),
+    projectConstructions,
     projectMethodProperties: context.projectMethodProperties.seal(),
     projectFieldDispatch: context.projectFieldDispatch.seal(),
     sourceCallableSpecializations: context.sourceCallableSpecializations.seal(),

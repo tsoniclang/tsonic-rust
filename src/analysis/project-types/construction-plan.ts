@@ -12,6 +12,8 @@ import type { RustReceiverFieldAliasQueries } from "./receiver-field-aliases.js"
 import type { RustReceiverFieldCaptureQueries } from "./receiver-captures.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { analyzeRustConstructionReadiness, type RustConstructionPointQueries } from "./construction-readiness.js";
+import { selectRustExternalInitialization, type RustExternalInitialization } from "./external-initialization.js";
+import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 
 export interface RustConstructionField {
   readonly declaration: Node;
@@ -47,11 +49,14 @@ export interface RustProjectConstructionPlan extends RustConstructionPointQuerie
 
 export interface RustProjectConstructionQueries {
   forDefinition(definition: RustProjectTypeDefinition): RustProjectConstructionPlan | undefined;
+  externalInitializationForCall(call: Node): RustExternalInitialization | undefined;
+  ownsExternalArgument(argument: Node): boolean;
 }
 
 export interface RustConstructionAnalysisInput {
   readonly ast: AstReader;
   readonly facts: RustPlanQueries;
+  readonly typeDefinitions: RustTypeDefinitions;
   readonly projectTypes: RustProjectTypePolicy;
   readonly receiverFieldAliases: RustReceiverFieldAliasQueries;
   readonly receiverCaptures: RustReceiverFieldCaptureQueries;
@@ -60,6 +65,8 @@ export interface RustConstructionAnalysisInput {
 
 export function analyzeRustProjectConstructions(input: RustConstructionAnalysisInput): RustProjectConstructionQueries {
   const plans = new Map<RustProjectTypeDefinition, RustProjectConstructionPlan>();
+  const externalInitializations = new WeakMap<Node, RustExternalInitialization>();
+  const ownedExternalArguments = new WeakSet<Node>();
   for (const definition of input.projectTypes.definitions) {
     if (definition.kind !== "class") continue;
     const lineage = input.projectTypes.classLineage(definition);
@@ -90,6 +97,17 @@ export function analyzeRustProjectConstructions(input: RustConstructionAnalysisI
         const callee = call === undefined ? undefined : Node_Expression(input.ast, call);
         const baseCall = call !== undefined && input.ast.is.IsCallExpression(call) &&
           callee !== undefined && input.ast.kindName(callee) === "KindSuperKeyword" ? call : undefined;
+        if (external !== undefined && baseCall !== undefined) {
+          const initialization = selectRustExternalInitialization(external, baseCall, input.ast, input.facts, input.typeDefinitions);
+          if (initialization === undefined) issues.push(Object.freeze({ node: baseCall,
+            reason: "External field initialization has no exact selected native input contract." }));
+          else {
+            externalInitializations.set(baseCall, initialization);
+            const argument = input.ast.arguments(baseCall)[0];
+            if (argument !== undefined && (initialization.kind === "value" || initialization.kind === "optional"))
+              ownedExternalArguments.add(argument);
+          }
+        }
         const fields: RustConstructionField[] = [];
         for (const field of external?.fields ?? []) fields.push(Object.freeze({
           declaration: field.declaration, owner, carrier: field.carrier,
@@ -164,5 +182,7 @@ export function analyzeRustProjectConstructions(input: RustConstructionAnalysisI
       expressionsWithin: readiness.expressionsWithin, publishesReceiver: readiness.publishesReceiver,
       mutatesPublishedFields: readiness.mutatesPublishedFields }));
   }
-  return Object.freeze({ forDefinition: (definition: RustProjectTypeDefinition) => plans.get(definition) });
+  return Object.freeze({ forDefinition: (definition: RustProjectTypeDefinition) => plans.get(definition),
+    externalInitializationForCall: (call: Node) => externalInitializations.get(call),
+    ownsExternalArgument: (argument: Node) => ownedExternalArguments.has(argument) });
 }

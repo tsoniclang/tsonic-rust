@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { sourceErrorConstructorCostProof, sourceErrorConstructorProof, sourceJsErrorConstructorProof, sourceOwnedErrorConstructorProof } from "../../../../tsonic/test/fixtures/source-error-constructors.mjs";
+import { sourceErrorConstructorCostProof, sourceErrorConstructorProof, sourceExplicitErrorInitializationCostProof,
+  sourceExplicitErrorInitializationProof, sourceJsErrorConstructorProof, sourceOwnedErrorConstructorProof } from "../../../../tsonic/test/fixtures/source-error-constructors.mjs";
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
@@ -16,6 +17,13 @@ import { lowerRustValueConversion } from "../../../dist/backend/planner/expressi
 
 for (const surfaces of [[], ["js"]]) {
   const profile = surfaces.length === 0 ? "native" : "js";
+  test(`explicit native error fields preserve owned inputs, reused inputs and absence effects (${profile})`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
+      files: { "index.ts": sourceExplicitErrorInitializationProof + `
+        export function main(): void { if (!run()) throw new Error("explicit error initialization"); }` } });
+    assertNoTargetDiagnostics(result.diagnostics);
+    validateGeneratedProject(`explicit-error-initialization-${profile}`, result.artifacts, { run: true });
+  });
   for (const [name, source] of [["inherited-native", sourceErrorConstructorProof], ["same-spelled-project", sourceOwnedErrorConstructorProof]]) {
     test(`${name} error constructors retain exact arguments and project types (${profile})`, { timeout: 300_000 }, () => {
       const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
@@ -38,6 +46,46 @@ test("JS error constructor families preserve native optional message parameters"
   assert.equal(result.diagnostics.length, 0, result.diagnostics.map(({ code, message }) => `${code}: ${message}`).join("\n"));
   validateGeneratedProject("source-js-error-constructors", result.artifacts, { run: true });
 });
+
+for (const surfaces of [[], ["js"]]) {
+  test(`explicit native error field initialization matches owned storage cost (${surfaces[0] ?? "native"})`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces, target: { id: "rust", options: { crateName: "explicit_error_cost" } },
+      files: { "index.ts": sourceExplicitErrorInitializationCostProof } });
+    assertNoTargetDiagnostics(result.diagnostics);
+    const root = writeGeneratedProject(`explicit-error-cost-${surfaces[0] ?? "native"}`, result.artifacts);
+    mkdirSync(join(root, "tests"), { recursive: true });
+    writeFileSync(join(root, "tests/ownership.rs"), nativeOwnershipCostSupport + `
+use explicit_error_cost::index;
+
+#[test]
+fn terminal_owned_inputs_have_no_copy_and_retained_inputs_have_one_native_copy() {
+    for _ in 0..1000 {
+        let input = String::from("café😀 owned message");
+        let required = input.clone();
+        let optional = input.clone();
+        let retained = input.clone();
+        let implicit = measure(|| index::ImplicitOwnedFailure::new(Some(input)));
+        let actual = measure(|| index::RequiredOwnedFailure::new(required));
+        assert_eq!(actual.1, implicit.1);
+        let actual_optional = measure(|| index::OptionalOwnedFailure::new(Some(optional)));
+        assert_eq!(actual_optional.1, implicit.1);
+        let actual_retained = measure(|| index::RetainedOwnedFailure::new(retained));
+        assert_eq!(actual_retained.1.allocations, implicit.1.allocations + 1);
+        assert_eq!(actual_retained.1.allocated_bytes, implicit.1.allocated_bytes + "café😀 owned message".len()
+            + std::mem::size_of::<index::RetainedOwnedFailureState>() - std::mem::size_of::<index::ImplicitOwnedFailureState>());
+        assert_eq!(actual_retained.1.reallocations, implicit.1.reallocations);
+    }
+    assert_eq!(measure(|| index::OptionalOwnedFailure::new(None)).1,
+        measure(|| index::ImplicitOwnedFailure::new(None)).1);
+}
+`);
+    runCargo(root, ["generate-lockfile", "--offline"]);
+    runCargo(root, ["fmt", "--all"]);
+    runCargo(root, ["fmt", "--all", "--check"]);
+    runCargo(root, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
+    runCargo(root, ["test", "--release", "--locked", "--offline"]);
+  });
+}
 
 test("optional native string conversion borrows the original storage and an empty literal", () => {
   const contract = rustValueConversionContract(rustOptionalStringToBorrowedStrValueConversion);
