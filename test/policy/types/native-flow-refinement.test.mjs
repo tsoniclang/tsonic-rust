@@ -1,10 +1,10 @@
 import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createCompilerSessionFromFiles } from "@tsonic/tsts";
+import { argumentPassingFactKey, pointerOperationFactKey, createCompilerSessionFromFiles } from "@tsonic/tsts";
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { selectRustNativeFlowMembers } from "../../../dist/policy/types/resolution/native-flow-refinement.js";
-import { rustJsArrayTargetType, rustJsErrorTargetType, rustJsRegExpTargetType, rustJsValueTargetType, rustSourceUnionTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
+import { rustJsArrayTargetType, rustJsErrorTargetType, rustJsRegExpTargetType, rustJsValueTargetType, rustSourcePrimitiveTargetType, rustSourceUnionTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
 import { resolveRustInstanceType } from "../../../dist/policy/types/resolution/instance-tests.js";
 
 test("subset-kind guards never exclude the complete shared native Error carrier", () => {
@@ -133,4 +133,82 @@ test("literal guards retain exact native integer widths and broad unknown payloa
   const selected = reads.map(reference => selectRustNativeFlowMembers(context, reference, carrier,
     { definitionForCarrier: () => undefined }, definitions, () => undefined, () => undefined)?.map(member => member.carrier));
   assert.deepEqual(selected, [carriers.slice(0, 3), carriers.slice(0, 3), carriers.slice(2)]);
+});
+
+function guardedArrayMembers(body, passingMode) {
+  const checked = createCompilerSessionFromFiles({ currentDirectory: "/src", files: { "/src/index.ts": `
+    declare function list(value: unknown): value is unknown[];
+    declare function observe(value: unknown): void;
+    declare function consume(value: unknown): void;
+    function run(value: string | readonly string[] | bigint | undefined, other: unknown): void { ${body} }
+  ` }, compilerOptions: { strict: true, target: "es2022", module: "esnext" } }).checkSource();
+  assertNoTargetDiagnostics(checked.diagnostics);
+  const source = createTargetSourceProgram(checked);
+  const reads = [];
+  let guardDeclaration;
+  let consumeCall;
+  const visit = node => {
+    if (source.ast.is.IsFunctionDeclaration(node) && source.ast.text(source.ast.name(node)) === "list") guardDeclaration = node;
+    const call = source.semantics.forNode(node).operations.call(node);
+    if (source.ast.text(call?.sourceCallee.expression) === "observe") reads.push(call.sourceArguments[0].expression);
+    if (source.ast.text(call?.sourceCallee.expression) === "consume") consumeCall = node;
+    source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  visit(checked.getSourceFile("/src/index.ts"));
+  assert.equal(guardDeclaration !== undefined, true, "exact selected guard declaration");
+  const integer = rustSourcePrimitiveTargetType("int64");
+  const string = rustStringTargetType();
+  const array = rustJsArrayTargetType(string);
+  const carriers = [string, array, integer];
+  const carrier = rustSourceUnionTargetType("/src/index.ts", "Value");
+  const definitions = { programErrorOrigin: () => undefined, sourceUnionVariants: selected => selected === carrier
+    ? carriers.map((value, index) => ({ name: `Variant${index}`, carrier: value })) : undefined };
+  const sourceFacts = passingMode === undefined ? source.sourceFacts : { getFact(subject, key) {
+    if (subject !== consumeCall) return undefined;
+    if (passingMode === "address-of") return key === pointerOperationFactKey ? { operation: "address-of" } : undefined;
+    return key === argumentPassingFactKey ? { mode: passingMode } : undefined;
+  } };
+  const context = { ast: source.ast, navigation: source.navigation, sourceFacts,
+    semanticsFor: node => source.semantics.forNode(node) };
+  const selected = reads.map(reference => selectRustNativeFlowMembers(context, reference, carrier,
+    { definitionForCarrier: () => undefined }, definitions, expression => {
+      const semantics = source.semantics.forNode(expression);
+      const call = semantics.operations.call(expression);
+      return call === undefined || semantics.declarations.signatureDeclaration(call.selectedSignature) !== guardDeclaration
+        ? undefined : { sourceOperand: call.sourceArguments[0].expression, predicate: { kind: "array" } };
+    }, () => undefined)?.map(member => member.carrier));
+  return { selected, string, integer, array };
+}
+
+test("stable array disjunctions retain exact native subsets and 64-bit integer widths", () => {
+  for (const body of [
+    "if (list(value) || typeof value === 'bigint') observe(value);",
+    "if (!(list(value) || typeof value === 'bigint')) return; observe(value);",
+  ]) {
+    const result = guardedArrayMembers(body);
+    assert.equal(result.selected.length, 1);
+    assert.deepEqual(result.selected[0], [result.array, result.integer], body);
+    assert.equal(result.selected[0].includes(result.string), false, body);
+  }
+  const result = guardedArrayMembers("if (!(list(value) || typeof value === 'string')) return; if (typeof value === 'string') return; observe(value);");
+  assert.deepEqual(result.selected, [[result.array]]);
+});
+
+test("native array flow rejects rebinding, captured mutation, foreign bindings and shadowing", () => {
+  for (const body of [
+    "if (!list(value)) return; value = 'changed'; observe(value);",
+    "if (!list(value)) return; [value] = ['changed']; observe(value);",
+    "if (!list(value)) return; const change = () => { value = 'changed'; }; change(); observe(value);",
+    "if (list(other)) observe(value);",
+    "if (list(value)) { const value = other; observe(value); }",
+  ]) assert.deepEqual(guardedArrayMembers(body).selected, [undefined], body);
+});
+
+test("native array flow keeps immutable passing and invalidates mutable or address exposure", () => {
+  const body = "if (!list(value)) return; consume(value); observe(value);";
+  for (const mode of ["by-value", "borrow-shared", "byref-readonly", "borrow-mut", "byref", "out", "address-of"]) {
+    const result = guardedArrayMembers(body, mode);
+    const safe = mode === "by-value" || mode === "borrow-shared" || mode === "byref-readonly";
+    assert.deepEqual(result.selected, [safe ? [result.array] : undefined], mode);
+  }
 });
