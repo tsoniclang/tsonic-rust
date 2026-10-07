@@ -9,8 +9,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { selectedRustCheckedCallInputCarrier } from "../operations/provider/calls/input-contract.js";
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
-import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
-import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
+import { selectRustParameterEntryConversion } from "../../policy/ownership/parameter-entry-conversion.js";
 
 export function selectRustClosedCallableInputs(
   walk: RustFactWalk,
@@ -53,10 +52,7 @@ export function selectRustClosedCallableInputs(
     const input = inputs[index];
     if (input === undefined || rustTargetTypeRefEquals(input, type)) return type;
     if (broad[index]) return input;
-    const conversion = selectRustSourceValueConversion(input, type, walk.context.typeDefinitions);
-    const contract = conversion === undefined ? undefined
-      : rustValueConversionContract(conversion, walk.context.typeDefinitions);
-    return contract?.category === "exact" && contract.sourceMode === "value" && !contract.fallible ? input : undefined;
+    return selectRustParameterEntryConversion(input, type, walk.context.typeDefinitions) === undefined ? undefined : input;
   });
   return selected.some(type => type === undefined) ? carrier
     : rebindRustCallableCarrier(carrier, selected as readonly TargetTypeRef[], protocol.result);

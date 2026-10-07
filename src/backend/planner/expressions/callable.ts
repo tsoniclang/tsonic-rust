@@ -400,13 +400,11 @@ export function planRustCallableExpressionBody(
       ? `_${allocatedTupleName}`
       : allocatedTupleName;
     const tupleType = rustTypeFromCarrierInContext({ kind: "tuple", elements: callableProtocol.parameters }, context);
-    if (tupleType?.kind !== "tuple") return undefined;
+    if (tupleType === undefined) return undefined;
     closureParams = [
       ...(ownedStateName === undefined ? [] : [{ name: ownedStateName, mutable: false }]),
       ...(recursiveName === undefined ? [] : [{ name: recursiveName, mutable: false }]),
-      { name: tupleName, mutable: false, type: borrowedInput
-        ? { kind: "tuple", elements: tupleType.elements.map(() => ({ kind: "infer" })) }
-        : tupleType },
+      { name: tupleName, mutable: false, type: tupleType },
     ];
     closureMove = true;
     for (const [index, parameter] of leadingParameterPlans.entries()) {

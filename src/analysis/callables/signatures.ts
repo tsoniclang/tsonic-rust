@@ -78,8 +78,18 @@ function recordCallableParameterSignatureFacts(walk: RustFactWalk, declaration: 
   if (parameters === undefined) {
     return;
   }
-  for (const parameter of parameters) {
-    recordParameterAbiFacts(walk, parameter);
+  const signature = walk.context.ast.is.IsArrowFunction(declaration) || walk.context.ast.is.IsFunctionExpression(declaration)
+    ? resolveRustTargetTypeRef(declaration,
+        { ...rustResolutionContext(walk, declaration), callableRepresentation: "signature" }, walk.operationOptions)
+    : undefined;
+  const contextual = selectRustClosedCallableInputs(walk, declaration, signature);
+  const logical = rustCallableProtocol(signature) ?? rustClosureProtocol(signature);
+  const protocol = rustCallableProtocol(contextual) ?? rustClosureProtocol(contextual);
+  for (const [index, parameter] of parameters.entries()) {
+    const input = protocol?.parameters[index];
+    const selected = rustTargetTypeRefEquals(input, logical?.parameters[index]) ? undefined : input;
+    recordParameterAbiFacts(walk, parameter, selected === undefined || Node_Initializer(walk.context.ast, parameter) === undefined
+      ? selected : rustSourceOptionalTargetType(selected));
   }
 }
 

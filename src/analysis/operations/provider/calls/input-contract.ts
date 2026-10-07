@@ -1,4 +1,5 @@
-import { resolveSelectedSourceProfileMember } from "../../../../policy/evidence/selected-source.js";
+import { isProjectSourceDeclaration, resolveSelectedSourceProfileMember } from "../../../../policy/evidence/selected-source.js";
+import { resolveRustTypeComponentEvidence } from "../../../../policy/types/resolution/source-evidence.js";
 import { selectRustProviderOperation } from "../../../../policy/operations/provider-selection.js";
 import { selectJsSurfaceCallInputContract } from "../../../../policy/operations/source-profiles/js/index.js";
 import { selectedCallProviderDeclaration } from "../../../../policy/evidence/selected-source.js";
@@ -17,6 +18,18 @@ export function selectedRustCheckedCallInputCarrier(
   options: RustOperationsProviderOptions,
 ): TargetTypeRef | undefined {
   if (checkedCallIsConstruction(request, context)) return undefined;
+  if (isProjectSourceDeclaration(context, request.sourceSelectedDeclaration)) {
+    const bindings = request.source.sourceArgumentBindings.filter(binding => binding.sourceArgumentIndex === argumentIndex);
+    const first = bindings[0];
+    if (first === undefined || first.sourceForm !== "value" ||
+      bindings.some(binding => binding.sourceParameterIndex !== first.sourceParameterIndex || binding.sourceForm !== "value")) return undefined;
+    const parameter = request.source.sourceSelectedSignatureParameters[first.sourceParameterIndex];
+    return parameter === undefined || parameter.parameterIndex !== first.sourceParameterIndex || parameter.rest ? undefined
+      : resolveRustTypeComponentEvidence({ selectedType: parameter.selectedType,
+          ...(parameter.parameterDeclaration === undefined ? {} : { declaration: parameter.parameterDeclaration }),
+          ...(parameter.authoredTypeNode === undefined ? {} : { authoredTypeNode: parameter.authoredTypeNode }) },
+        { ...context, callableRepresentation: "signature", sourceStorageSubject: undefined }, options, new Set());
+  }
   const sourceMember = resolveSelectedSourceProfileMember(context, request.sourceSelectedDeclaration, options.sourceProfiles);
   if (sourceMember?.profile === "js") {
     const nativeRequest = createRustJsCallRequest(request, context, options);

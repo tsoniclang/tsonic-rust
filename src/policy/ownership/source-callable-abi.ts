@@ -1,8 +1,6 @@
 import { flowStateFactKey } from "@tsonic/tsts";
 import type { RustValueConversion } from "../../target-model/operations/model.js";
-import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
-import { rustIntegerKindIsExactlyRepresentableAsFloat64 } from "../../target-model/conversions/numeric-promotion.js";
-import { selectRustSourceValueConversion } from "../conversions/selection.js";
+import { selectRustParameterEntryConversion } from "./parameter-entry-conversion.js";
 import type { Node } from "@tsonic/tsts";
 import {
   inferRustTargetGenericBindings,
@@ -13,6 +11,7 @@ import {
   rustOptionElementCarrier,
   rustSourceOptionalTargetType,
   rustSliceElementCarrier,
+  rustSliceRefTargetType,
   isRustJsValueCarrier,
   rustProgramErrorTargetType,
   rustTsValueTargetType,
@@ -169,11 +168,10 @@ export function createRustSourceCallableAbiResolver(input: {
           : rustParameterLaneTargetType(base, typeNode, context, options)
         : undefined;
       const requiredParameterCarrier = parameterLaneCarrier !== undefined &&
-          rustTargetTypeRefEquals(parameterLaneCarrier, base) &&
-          isRustStringCarrier(base) &&
+          (isRustVecCarrier(base) || rustTargetTypeRefEquals(parameterLaneCarrier, base) && isRustStringCarrier(base)) &&
           !requiresOwnedValue &&
           parameterCanUseSharedBorrow(parameter, context, options, input.isNativeCallableExpression)
-        ? {
+        ? isRustVecCarrier(base) ? rustSliceRefTargetType(base.element) : {
             kind: "reference" as const,
             referent: base,
             mutable: false,
@@ -281,14 +279,8 @@ export function resolveRustContextualParameterAbi(
         selectedValueCarrier,
       ))) {
     if (form === "required" && authoredCarrier !== undefined) {
-      const conversion = selectRustSourceValueConversion(selectedParameterCarrier, authoredCarrier, context.typeDefinitions);
-      const contract = conversion === undefined ? undefined : rustValueConversionContract(conversion, context.typeDefinitions);
-      const exactFloat = authoredCarrier.kind === "source-primitive" && selectedParameterCarrier.kind === "source-primitive" &&
-        authoredCarrier.name === "float64" &&
-        (selectedParameterCarrier.name === "float32" ||
-          rustIntegerKindIsExactlyRepresentableAsFloat64(selectedParameterCarrier.name));
-      if (conversion !== undefined && contract !== undefined && contract.sourceMode === "value" && !contract.fallible &&
-        (contract.category === "exact" || exactFloat)) {
+      const conversion = selectRustParameterEntryConversion(selectedParameterCarrier, authoredCarrier, context.typeDefinitions);
+      if (conversion !== undefined) {
         return { form, valueCarrier: authoredCarrier, parameterCarrier: selectedParameterCarrier,
           mode: "value", entryConversion: conversion };
       }
@@ -472,7 +464,7 @@ function parameterCanUseSharedBorrow(
         currentSourceFile: destinationFile,
         currentSemantics: context.semanticsFor(destination),
       }, options);
-      if (carrier === undefined || !isRustStringCarrier(carrier)) return false;
+      if (carrier === undefined || !isRustStringCarrier(carrier) && !isRustVecCarrier(carrier)) return false;
       pending.push(destination);
     }
   }

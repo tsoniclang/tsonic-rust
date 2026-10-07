@@ -82,14 +82,16 @@ export function finalizeRustCallbackOperation(
   const accumulator = accumulatorIndex === undefined
     ? undefined
     : argumentCarriers[accumulatorIndex];
-  if (!rustCallbackCarrierMatchesTemplate(callbackTemplate, callback) && !acceptsConversion(callback, callbackTemplate) || accumulator === undefined ||
+  if (accumulator === undefined) return undefined;
+  const selectedCallback = replaceRustInferCarrier(callbackTemplate, accumulator);
+  if (!rustCallbackCarrierMatchesTemplate(selectedCallback, callback) && !acceptsConversion(callback, selectedCallback) ||
     (callbackProtocol.parameters[0] !== undefined &&
       !rustTargetTypeRefEquals(callbackProtocol.parameters[0], accumulator)) ||
     !rustTargetTypeRefEquals(callbackProtocol.result, accumulator)) {
     return undefined;
   }
   const parameterCarriers = [...argumentCarriers];
-  parameterCarriers[selection.callback.sourceArgumentIndex] = callbackTemplate;
+  parameterCarriers[selection.callback.sourceArgumentIndex] = selectedCallback;
   return {
     ...selection,
     fact: {

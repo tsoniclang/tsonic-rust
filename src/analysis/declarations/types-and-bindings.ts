@@ -42,6 +42,7 @@ import { rustSourceUnionValueTypes } from "../../policy/types/resolution/source-
 import { closeRustSuspendedStorage } from "../../policy/types/suspended-storage.js";
 import { rustEnclosingStorageContract } from "../../policy/ownership/suspended-storage.js";
 import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
+import { resolveRustContextualParameterAbi } from "../../policy/ownership/source-callable-abi.js";
 
 export function resolveTypeNodeCarrier(walk: RustFactWalk, typeNode: Node | undefined): TargetTypeRef | undefined {
   if (typeNode === undefined) return undefined;
@@ -316,8 +317,9 @@ export function resolveParameterAbi(walk: RustFactWalk, parameter: Node) {
   );
 }
 
-export function recordParameterAbiFacts(walk: RustFactWalk, parameter: Node): void {
-  const parameterAbi = resolveParameterAbi(walk, parameter);
+export function recordParameterAbiFacts(walk: RustFactWalk, parameter: Node, selectedCarrier?: TargetTypeRef): void {
+  const parameterAbi = selectedCarrier === undefined ? resolveParameterAbi(walk, parameter)
+    : resolveRustContextualParameterAbi(parameter, selectedCarrier, rustResolutionContext(walk, parameter), walk.operationOptions);
   if (parameterAbi === undefined) {
     appendRustDiagnostic(
       walk,

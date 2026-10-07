@@ -93,8 +93,9 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /matches!\(error\.clone\(\), rt::TsonicError::NamedError\(_\)\)/u);
-  assert.match(source, /rt::TsonicError::NamedError\(program_error\)/u);
+  assert.match(source, /match &error \{\s*rt::ErrorTransport::NamedError\(_\) => true,/u);
+  assert.match(source, /rt::ErrorTransport::NamedError\(program_error\)/u);
+  assert.doesNotMatch(source, /matches!\(error\.clone\(\)/u);
   assert.equal(validateGeneratedProject("caught-project-error", result.artifacts, { run: true }).status, 0);
 });
 
@@ -303,10 +304,10 @@ export function inspectJson(): boolean {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /let value: js_abi::JsValue = js_abi::json_parse\("\{\\"tag\\":\\"tsonic\\"\}"\)\?;/u);
+  assert.match(text, /let value: js_abi::JsValue = match js_abi::json_parse\("\{\\"tag\\":\\"tsonic\\"\}"\) \{\s*Ok\(value\) => value,\s*Err\(error\) => break 'try_body Err\(rt::TsonicError::from\(error\)\),/u);
   assert.match(
     text,
-    /let rendered: String = rt::option_coalesce\(\s*js_abi::json_stringify\(&value\)\?,\s*core::convert::identity,\s*\|\| String::from\(""\),\s*\);/u,
+    /let rendered: String = rt::option_coalesce\(\s*match js_abi::json_stringify\(&value\) \{\s*Ok\(value\) => value,\s*Err\(error\) => break 'try_body Err\(rt::TsonicError::from\(error\)\),\s*\},\s*core::convert::identity,\s*\|\| String::from\(""\),\s*\);/u,
   );
   assert.match(text, /ok = js_string::includes_from_start\(&rendered, "tsonic"\);/u);
 });
@@ -497,7 +498,8 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /fn initialize_state[^\n]*-> Result<[^,>]+, rt::TsonicError>/u);
+  assert.match(text, /let field_value: i32 = checkedValue\(40\)\?;/u);
+  assert.doesNotMatch(text, /fn initialize_state/u);
   assert.match(text, /pub fn new\([^)]*\) -> Result<Derived, rt::TsonicError>/u);
   assert.match(text, /pub fn new\(\) -> Result<Initialized, rt::TsonicError>/u);
   assert.match(text, /fn dispatch_[^(]+\([^)]*\) -> Result<i32, rt::TsonicError>/u);

@@ -4,6 +4,7 @@ import { rustCallableInputTargetType, rustCallableProtocol, rustNativeCallablePr
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import { rustNativeCallableResultMatches } from "../../ownership/callable-result-contract.js";
+import { selectRustParameterEntryConversion } from "../../ownership/parameter-entry-conversion.js";
 
 export function resolveRustCallableInputCarrier(
   subject: SourceStorageSubject,
@@ -24,15 +25,20 @@ export function resolveRustCallableInputCarrier(
     const protocol = exact === undefined ? logical : rustCallableProtocol(exact) ?? rustNativeCallableProtocol(exact);
     if (protocol === undefined) return undefined;
     if (protocol.parameters.length !== logical.parameters.length ||
-      !rustNativeCallableResultMatches(protocol.result, logical.result) ||
-      protocol.parameters.some((parameter, index) => !rustTargetTypeRefEquals(parameter, logical.parameters[index]) &&
-        !(parameter.kind === "reference" && !parameter.mutable &&
-          rustTargetTypeRefEquals(parameter.referent, logical.parameters[index])))) return undefined;
-    if (selected === undefined) selected = protocol;
+      !rustNativeCallableResultMatches(protocol.result, logical.result)) return undefined;
+    const parameters = protocol.parameters.map((parameter, index) => {
+      const input = logical.parameters[index]!;
+      return rustTargetTypeRefEquals(parameter, input) || parameter.kind === "reference" && !parameter.mutable &&
+        rustTargetTypeRefEquals(parameter.referent, input) ? parameter
+        : selectRustParameterEntryConversion(input, parameter, context.typeDefinitions) === undefined ? undefined : input;
+    });
+    if (parameters.some(parameter => parameter === undefined)) return undefined;
+    const adapted = { result: protocol.result, parameters: parameters as readonly TargetTypeRef[] };
+    if (selected === undefined) selected = adapted;
     else {
-      if (!rustTargetTypeRefEquals(protocol.result, selected.result)) return undefined;
+      if (!rustTargetTypeRefEquals(adapted.result, selected.result)) return undefined;
       selected = { result: selected.result, parameters: selected.parameters.map((parameter, index) =>
-        rustTargetTypeRefEquals(parameter, protocol.parameters[index]) ? parameter : logical.parameters[index]!) };
+        rustTargetTypeRefEquals(parameter, adapted.parameters[index]) ? parameter : logical.parameters[index]!) };
     }
   }
   return rustCallableInputTargetType((selected ?? logical).parameters, (selected ?? logical).result);

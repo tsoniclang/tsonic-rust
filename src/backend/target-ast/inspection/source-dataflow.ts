@@ -7,7 +7,7 @@ import {
   rustStatementsReferencePath,
 } from "./source-usage.js";
 
-type FirstAccess = "read" | "write" | "exit" | "none";
+type FirstAccess = "read" | "write" | "exit" | "none" | `break:${string}`;
 
 export function firstDirectPathAccessInStatements(
   statements: readonly RustStmt[],
@@ -421,6 +421,7 @@ function firstAccessesInStatement(
     }
 
     case "break":
+      return new Set<FirstAccess>([statement.label === undefined ? "exit" : `break:${statement.label}`]);
     case "continue":
       return new Set(["exit"]);
     case "completion-exit":
@@ -548,6 +549,10 @@ function firstAccessesInExpression(
           : firstAccessesInExpression(expression.expr, path),
         new Set<FirstAccess>(["exit"]),
       );
+    case "break-expression":
+      return replaceNone(expression.expr === undefined ? new Set<FirstAccess>(["none"])
+        : firstAccessesInExpression(expression.expr, path),
+        new Set<FirstAccess>([expression.label === undefined ? "exit" : `break:${expression.label}`]));
     default:
       return firstAccessesInSequence(rustExpressionChildren(expression), path);
   }
@@ -558,17 +563,20 @@ function firstAccessesInBlockExpression(
   path: string,
 ): ReadonlySet<FirstAccess> {
   let outcomes = new Set<FirstAccess>(["none"]);
+  const completed = (selected: ReadonlySet<FirstAccess>): ReadonlySet<FirstAccess> =>
+    expression.label === undefined ? selected : new Set([...selected].map(access =>
+      access === `break:${expression.label}` ? "none" : access));
   for (const statement of expression.body.statements) {
     if (statement.kind === "let" && statement.name === path) {
-      return statement.init === undefined ? outcomes : replaceNone(outcomes, firstAccessesInExpression(statement.init, path));
+      return completed(statement.init === undefined ? outcomes : replaceNone(outcomes, firstAccessesInExpression(statement.init, path)));
     }
     outcomes = replaceNone(outcomes, statement.kind === "tail"
       ? firstAccessesInExpression(statement.expr, path) : firstAccessesInStatement(statement, path));
     if (!outcomes.has("none")) {
-      return outcomes;
+      return completed(outcomes);
     }
   }
-  return outcomes;
+  return completed(outcomes);
 }
 
 function firstAccessesInSequence(

@@ -667,6 +667,9 @@ export function acceptProjectSourceCall(
   }
   const sourceResult = selectRustSourceCallResult(options.projectTypes, returnType, () => {
     const result = context.currentSemantics.operations.callResult(request.source);
+    const implementationResult = context.semanticsFor(callableDeclaration).types.declarationSignatureInfo(callableDeclaration)?.returnType;
+    if (result !== undefined && implementationResult !== undefined &&
+      context.currentSemantics.types.isIdentical(implementationResult, result.selectedReturnType)) return returnType;
     const bound = bindRustSelectedCallTypeArguments(selectedTypeArguments, templateGenericArguments, receiverContext);
     const carrier = result === undefined || bound === undefined ? undefined
       : resolveRustTypeComponentEvidence({ selectedType: result.selectedReturnType,

@@ -3,6 +3,7 @@ import test from "node:test";
 import { resolveRustCallableInputCarrier } from "../../../dist/policy/types/resolution/callable-inputs.js";
 import { rustCallableTargetType, rustCallableInputTargetType, rustCallableInputProtocol } from "../../../dist/target-model/types/carriers/callables.js";
 import { sourceCallSelectedMemberMatches } from "../../../dist/backend/planner/expressions/calls/arguments.js";
+import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 
 const value = { kind: "target-named", id: "rust.std.String" };
 const borrowed = { kind: "reference", mutable: false, referent: value };
@@ -40,6 +41,25 @@ test("invocation-only inputs preserve one exact native numeric result until an e
     }, { callableSignatureCarrier: () => rustCallableTargetType([borrowed], results[index++]) });
     assert.equal(rejected === undefined, true, "different native result ABIs cannot be combined");
   }
+});
+
+test("closed invocation inputs admit exact authored entry conversion without weakening wide or borrowed contracts", () => {
+  const primitive = name => ({ kind: "source-primitive", name });
+  const float = primitive("float64");
+  const selectedFor = input => resolveRustCallableInputCarrier(subject, rustCallableTargetType([input], float), {
+    typeDefinitions: emptyRustTypeDefinitions,
+    sourceStorage: { closedOriginsFor: () => ({ kind: "complete", origins: [
+      { subject: { kind: "value", node: {}, projection: [] } },
+    ] }) },
+  }, { callableSignatureCarrier: () => rustCallableTargetType([float], float) });
+  const byte = primitive("uint8");
+  const selected = rustCallableInputProtocol(selectedFor(byte));
+  assert.equal(selected?.parameters[0] === byte, true, "native byte input drives the exact authored float entry conversion");
+  assert.equal(selected?.result === float, true);
+  for (const name of ["int64", "uint64", "int128", "uint128", "native-int", "native-uint"]) {
+    assert.equal(selectedFor(primitive(name)) === undefined, true, name);
+  }
+  assert.equal(selectedFor({ kind: "reference", mutable: true, referent: byte }) === undefined, true);
 });
 
 test("closed invocation inputs retain the producer's exact borrowed protocol without a value adapter", () => {

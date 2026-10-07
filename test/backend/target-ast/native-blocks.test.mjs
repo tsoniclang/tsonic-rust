@@ -17,6 +17,31 @@ const pattern = { kind: "tuple-variant", path: "Some", elements: [{ kind: "bindi
 const block = (...statements) => ({ kind: "block", body: { statements } });
 const options = { fallible: true, hasReturnValue: true, errorType: { kind: "primitive", name: "i32" }, inferErrorTypeFromReturnType: true };
 
+test("labeled expression exits bypass assignments until their exact owning region completes", () => {
+  const assignment = value => ({ kind: "assign", target: path("value"), operator: "=", value });
+  const escaping = { kind: "break-expression", label: "region", expr: unit };
+  const selected = { kind: "match", expression: path("source"), arms: [
+    { pattern: { kind: "path", path: "true" }, expression: path("input") },
+    { pattern: { kind: "path", path: "false" }, expression: escaping },
+  ] };
+  const region = { kind: "block", label: "region", body: { statements: [assignment(selected)] } };
+  const first = statements => new Set(firstAccessesInStatements(statements, "value"));
+  assert.deepEqual(first([{ kind: "expr", expr: region }, { kind: "expr", expr: path("value") }]),
+    new Set(["write", "read"]), "the local exit leaves the original value live after its region");
+  assert.deepEqual(first([{ kind: "expr", expr: region }, assignment(path("replacement"))]), new Set(["write"]),
+    "a later definite overwrite remains proven");
+  const nested = { kind: "block", body: { statements: [assignment(escaping)] } };
+  const outer = { ...region, body: { statements: [{ kind: "expr", expr: nested }] } };
+  assert.deepEqual(first([{ kind: "expr", expr: outer }, { kind: "expr", expr: path("value") }]), new Set(["read"]),
+    "nested blocks cannot intercept an outer label or invent the bypassed write");
+  const observed = { ...escaping, expr: path("value") };
+  assert.deepEqual(first([{ kind: "expr", expr: { ...region, body: { statements: [assignment(observed)] } } }]),
+    new Set(["read"]), "a break value is evaluated before the exit");
+  const returning = { kind: "return-expression", expr: unit };
+  assert.deepEqual(first([{ kind: "expr", expr: { ...region, body: { statements: [assignment(returning)] } } },
+    { kind: "expr", expr: path("value") }]), new Set(["exit"]), "function returns never become a local region completion");
+});
+
 test("one native block shape preserves binding, body and terminal attributes", () => {
   const binding = { kind: "word", path: "binding_attribute" };
   const inner = { kind: "word", path: "body_attribute" };

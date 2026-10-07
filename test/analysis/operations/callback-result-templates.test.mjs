@@ -118,3 +118,21 @@ test("native closure finalization preserves physical callable effects for direct
     ], accepts) === undefined, true, "incompatible native inputs remain rejected");
   }
 });
+
+test("reduce finalization closes accumulator placeholders before publishing the immutable native callback contract", () => {
+  const input = { ...selection(integer, [{ kind: "closure", args: [inferred, integer], result: inferred }, inferred]),
+    callback: { shape: "reduce", sourceArgumentIndex: 0, accumulatorArgumentIndex: 1,
+      failure: { kind: "invocation", fallibleTarget: { form: "receiver-method", name: "try_reduce" } } } };
+  const callback = { kind: "closure", args: [integer, integer], result: integer };
+  const selected = finalizeRustCallbackOperation(input, [callback, integer]);
+  assert.equal(selected !== undefined, true);
+  assert.deepEqual(selected.parameterCarriers, [callback, integer]);
+  assert.deepEqual(selected.fact.parameterCarriers, [callback, integer]);
+  assert.equal(selected.resultCarrier === integer, true);
+  assert.equal(input.parameterCarriers[0].args[0] === inferred, true, "the original operation template is not mutated");
+  assert.equal(input.parameterCarriers[0].result === inferred, true);
+  for (const arguments_ of [[], [callback], [callback, number], [{ ...callback, result: number }, integer],
+    [{ ...callback, args: [number, integer] }, integer]]) {
+    assert.equal(finalizeRustCallbackOperation(input, arguments_) === undefined, true, "inconsistent or missing accumulator evidence rejects");
+  }
+});
