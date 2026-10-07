@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { rustProgramErrorConversionMatches } from "../../dist/target-model/conversions/program-error.js";
@@ -66,7 +67,7 @@ test("program-error emission rejects stale variants and unrelated source-package
         value, undefined, context, boundary);
       if (variant === "Failure" && owner === "root") {
         assert.deepEqual(result, { kind: "call", path: "rt::TsonicError::Failure", args: [value] });
-        assert.deepEqual(context.diagnostics, []);
+        assertNoTargetDiagnostics(context.diagnostics);
       } else {
         assert.equal(result, undefined);
         assert.equal(context.diagnostics.length, 1);
@@ -104,7 +105,7 @@ test("runtime error emission requires an exact registered carrier and selected b
       route: { kind: "runtime", boundary: selectedBoundary } }, value, undefined, context, boundary);
     if (accepted) {
       assert.deepEqual(result, { kind: "call", path: "rt::TsonicError::from", args: [value] });
-      assert.deepEqual(context.diagnostics, []);
+      assertNoTargetDiagnostics(context.diagnostics);
     } else {
       assert.equal(result, undefined);
       assert.equal(context.diagnostics.length, 1);

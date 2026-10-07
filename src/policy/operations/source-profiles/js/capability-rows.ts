@@ -1,6 +1,6 @@
 import type { JsOperationRowData } from "./model.js";
 import { atomicOperationRows } from "./atomic-rows.js";
-import { rustJsTimerDispatchInput } from "../../../../providers/builtins/js-dispatch.js";
+import { rustJsTimerDispatchInput } from "../../../../providers/model/js-dispatch.js";
 import {
   rustJsValueTargetType,
   rustSourcePrimitiveTargetType,

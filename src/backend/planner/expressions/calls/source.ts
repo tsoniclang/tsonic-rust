@@ -27,10 +27,6 @@ import {
 } from "../../program/plan-context.js";
 import { invokeRustStructuralObjectMethod } from "../../objects/project-storage.js";
 import { isDenseDataArray } from "../../../../target-model/metadata/closed-data.js";
-import {
-  KindPropertyAccessExpression,
-  Node_Expression,
-} from "@tsonic/target-api/source";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
 import { planExpression } from "../entry.js";
 import {
@@ -62,6 +58,7 @@ import { rustExpressionReferencesPath } from "../../../target-ast/inspection/sou
 import { propagateRustBottomOperand } from "../bottom-operands.js";
 import { rustOptionalStorageCallArguments } from "../../types/type-projections.js";
 import { rustLintAttributes } from "../../../target-ast/normalization/lint-policy.js";
+import { rustMemberAccessReceiver } from "../../../../target-model/syntax/expressions.js";
 
 export function sourceCallEffectsMatch(
   fact: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>,
@@ -272,9 +269,7 @@ export function planSelectedSourceCall(
       if (!isValidRustIdentifier(targetName)) {
         break;
       }
-      const receiverNode = callee !== undefined && context.input.program.source.ast.kindName(callee) === KindPropertyAccessExpression
-        ? Node_Expression(context.input.program.source.ast, callee)
-        : undefined;
+      const receiverNode = rustMemberAccessReceiver(context.input.program.source.ast, callee);
       if (fact.target.dispatch !== undefined) {
         const dispatchDeclaration = selected.sourceDeclaration;
         const dispatchVariant = dispatchDeclaration === undefined
@@ -422,10 +417,7 @@ export function planSelectedSourceCall(
       break;
     }
     case "structural-method": {
-      const receiverNode = callee !== undefined &&
-          context.input.program.source.ast.kindName(callee) === KindPropertyAccessExpression
-        ? Node_Expression(context.input.program.source.ast, callee)
-        : undefined;
+      const receiverNode = rustMemberAccessReceiver(context.input.program.source.ast, callee);
       const receiver = receiverNode === undefined
         ? undefined
         : planExpression(receiverNode, context);

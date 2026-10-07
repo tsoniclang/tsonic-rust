@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
@@ -158,7 +159,7 @@ for (const surfaces of [[], ["js"]]) {
       target: { id: "rust", options: { outputType: "bin", crateName: "recursive_unions" } },
       files: { ...recursiveSourceUnionFiles, "index.ts": `${recursiveSourceUnionFiles["index.ts"]}
         import { check } from "@acme/testing"; export function main(): void { check(run()); }` } });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     assert.match(artifactText(result, "src/steps.rs"), /enum Step<Value>/u);
     assert.match(artifactText(result, "src/steps.rs"), /fn delayed<Value: Clone \+ 'static>/u);
     assert.match(artifactText(result, "src/steps.rs"), /done::<Value>\(capture_value\.clone\(\)\)/u);

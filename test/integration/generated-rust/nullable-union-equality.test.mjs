@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { artifactText, compileRust } from "../../helpers/rust-session.mjs";
@@ -40,7 +41,7 @@ function run(): boolean {
 }
 export function main(): void { if (!run()) throw new Error("nullable union equality"); }
 ` } });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     const generated = artifactText(result, "src/index.rs");
     assert.doesNotMatch(generated, /\bAny\b|downcast|into_any|from_closed|reflect/u);
     validateGeneratedProject("nullable-union-equality", result.artifacts, { run: true });

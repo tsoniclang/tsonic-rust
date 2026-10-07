@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
@@ -28,7 +29,7 @@ export function read(values: Record<string, string> | undefined): string | undef
     sourceFile: ast.getSourceFile(node) });
   const valid = context(program.facts);
   assert.equal(sourceIndexSelectedOperationMatches(node, fact, valid), true);
-  assert.deepEqual(valid.diagnostics, []);
+  assertNoTargetDiagnostics(valid.diagnostics);
   for (const mutation of [
     undefined,
     { ...selected, operationId: "incorrect" },

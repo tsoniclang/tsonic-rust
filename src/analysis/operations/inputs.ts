@@ -61,6 +61,7 @@ import { rustMemoryLayoutObservationKey } from "../../target-model/operations/me
 import { rustRawLocationPlanKey } from "../../target-model/operations/native-memory.js";
 import { rustMemoryBindingPlanKey } from "../../target-model/operations/memory-bindings.js";
 import { rustBorrowedSequenceElementCandidates, selectRustBorrowedSequenceInput } from "./borrowed-sequences.js";
+import { rustMemberAccessReceiver } from "../../target-model/syntax/expressions.js";
 
 export function recordSelectedOperationInputs(
   walk: RustFactWalk,
@@ -173,8 +174,8 @@ export function recordSelectedOperationInputs(
   }
   if (kind === KindCallExpression || kind === KindNewExpression) {
     const callee = Node_Expression(walk.context.ast, expression);
-    if (callee !== undefined && ast.kindName(callee) === KindPropertyAccessExpression) {
-      const receiver = Node_Expression(walk.context.ast, callee);
+    if (callee !== undefined) {
+      const receiver = rustMemberAccessReceiver(ast, callee);
       if (receiver !== undefined) {
         resolveExpressionCarrier(walk, receiver, sourceFile, undefined);
         if (providerOperationSourceReceiverMode(fact) === "mut-ref") {

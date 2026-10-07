@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { applyRustTailShape, retainRustCheckedCompletion, rustBlockDefinitelyExits, rustBlockTerminates } from "../../../../dist/backend/target-ast/normalization/block-flow.js";
@@ -83,7 +84,7 @@ export function main(): void {
 }
 ` },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   assert.doesNotMatch(artifactText(result, "src/index.rs"), /else\s*\{\s*\}|unreachable_unchecked/u);
   validateGeneratedProject("checked-callable-completion", result.artifacts, { run: true });
 });

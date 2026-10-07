@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust, artifactText } from "../../helpers/rust-session.mjs";
@@ -29,7 +30,7 @@ async function run(): Promise<boolean> {
 }
 export async function main(): Promise<void> { if (!await run()) throw new Error("retained input"); }
 ` } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /impl<'input>/u);
   assert.match(source, /impl<'input, Value:/u);

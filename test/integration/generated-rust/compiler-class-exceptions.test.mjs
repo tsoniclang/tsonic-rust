@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { acmeTestingPackage, artifactText, compileRust } from "../../helpers/rust-session.mjs";
@@ -32,7 +33,7 @@ export function main(): void {
 }
 ` },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("compiler-class-exceptions", result.artifacts, { run: true });
 });
 
@@ -42,7 +43,7 @@ test(`throw-only parameter selection does not erase other broad value uses in ${
   const ordinary = compileRust({ surfaces, files: { "index.ts": `
 export function identical(value: object): boolean { return value === value; }
 ` } }).result;
-  assert.deepEqual(ordinary.diagnostics, []);
+  assertNoTargetDiagnostics(ordinary.diagnostics);
   assert.doesNotMatch(artifactText(ordinary, "src/index.rs"), /identical\(value: rt::TsonicError/u);
   for (const [index, source] of [
     "export function rejected(value: object): never { value = {}; throw value; }",

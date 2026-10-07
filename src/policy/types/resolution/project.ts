@@ -20,10 +20,11 @@ import { retainRustStructuralInstantiation } from "./structural-instantiations.j
 import { rustTypeFamilyNormalizer } from "../type-family-normalization.js";
 import { rustClassConstructorTargetType } from "../../../target-model/types/carriers/class-constructors.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { sourceCallableInterface } from "@tsonic/target-api/source";
+import { Node_Type, sourceCallableInterface } from "@tsonic/target-api/source";
 import { resolveCallableType } from "./callables.js";
 import { bindRustSourceDeclarationArguments, resolveRustSourceDeclarationArguments } from "./generic-arguments.js";
 import { rustGenericCallableSignaturesMatch } from "../../../target-model/conversions/generic-callable.js";
+import { resolveRustAuthoredTargetType } from "./tuples.js";
 
 export interface RustResolvedProjectGenericArguments {
   readonly values: readonly RustTargetGenericArgument[];
@@ -80,6 +81,15 @@ export function resolveProjectSourceCarrier(
         : resolveProjectCallableInterface(declaration, selectedType, selectedContext, options, resolving);
     }
     const carrier = options.sourceTypes.carrierForDeclaration(declaration, context.ast);
+    if (carrier === undefined && context.ast.is.IsTypeAliasDeclaration(declaration)) {
+      const typeNode = Node_Type(context.ast, declaration);
+      const instance = selectedType ?? context.semanticsFor(declaration).declarations.declaredType(declaration);
+      const selectedContext = instance === undefined ? undefined : bindRustSourceDeclarationArguments(
+        declaration, instance, genericArguments.values, context,
+      );
+      if (typeNode === undefined || selectedContext === undefined) return undefined;
+      return resolveRustAuthoredTargetType(typeNode, selectedContext, options, resolving);
+    }
     if (selectedType !== undefined && (context.ast.is.IsClassDeclaration(declaration) || context.ast.is.IsClassExpression(declaration))) {
       const signatures = context.currentSemantics.types.signatureInfos(selectedType, "construct");
       if (signatures.length > 0) {

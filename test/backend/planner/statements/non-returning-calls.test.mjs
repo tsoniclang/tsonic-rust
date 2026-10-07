@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust } from "../../../helpers/rust-session.mjs";
@@ -12,7 +13,7 @@ test("non-returning calls preserve native termination, catches and evaluation co
         if (!await run()) throw new Error("non-returning call observations");
       }` },
     });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject("non-returning-calls", result.artifacts, { run: true });
   }
 });

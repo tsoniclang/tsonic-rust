@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { artifactText, compileRust } from "../../helpers/rust-session.mjs";
@@ -13,7 +14,7 @@ export function main(): void {
   if (selected() !== 9 || selected(2) !== 9) throw new Error("native direct adapter");
 }`,
     } });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     const output = artifactText(result, "src/index.rs");
     assert.doesNotMatch(output, /ModuleCell|OnceLock|OnceCell|INITIALIZED/u);
     validateGeneratedProject("private-native-callable-adapters", result.artifacts, { run: true });
@@ -23,7 +24,7 @@ export function main(): void {
       ...nativeModuleCallableFiles,
       "index.ts": nativeModuleCallableFiles["index.ts"] + '\nexport async function main(): Promise<void> { if (!await run()) throw new Error("module callable contract"); }',
     } });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     const output = artifactText(result, "src/api.rs");
     assert.match(output, surfaces.length === 0 ? /pub async fn exact\(value: i64\) -> i64/u
       : /pub fn exact\(value: i64\) -> js_abi::JsPromise<'static, i64, rt::TsonicError>/u);

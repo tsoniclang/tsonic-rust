@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { test } from "node:test";
@@ -27,7 +28,7 @@ export function identity(value: int32): int32 {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /pub fn identity\(value: i32\) -> i32/u);
   assert.doesNotMatch(source, /identity<'|&(?:'\w+ )?i32/u);
@@ -92,7 +93,7 @@ export function inferred(value: Ref<int32, Placeholder>): Ref<int32, Placeholder
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /pub type Shared<'L> = &'L i32;/u);
   assert.match(source, /pub struct View<'L>/u);
@@ -222,7 +223,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /fn increment\(value: &mut i32\)/u);
   assert.match(source, /\*value \+= 1;/u);
@@ -309,7 +310,7 @@ export async function* borrowedAsyncValues<L extends Life>(
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(
     source,
@@ -410,7 +411,7 @@ export function invalid<L extends Life>(value: Ref<int32, L>): Ref<int32, L> {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /pub fn invalid<'L>\(value: &'L i32\) -> &'L i32/u);
   assert.match(source, /&local/u);

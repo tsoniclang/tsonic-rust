@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
@@ -33,7 +34,7 @@ export function copy(values: int32[]): int32[] { return [...values]; }
   });
   const valid = context(fact);
   assert.ok(planArrayLiteral(node, valid));
-  assert.deepEqual(valid.diagnostics, []);
+  assertNoTargetDiagnostics(valid.diagnostics);
   const mutations = [
     { ...fact, contributions: undefined }, { ...fact, contributions: [] },
     { ...fact, contributions: new Array(1) },

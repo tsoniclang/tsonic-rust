@@ -128,18 +128,15 @@ function resolveRustCallableSignatureCarrier(
   options: RustTargetTypeResolutionOptions,
   resolving: Set<object>,
 ): TargetTypeRef | undefined {
-  const parameters = callable.parameters.map((parameter) =>
-      resolveRustSignatureParameterEvidence(
-        parameter,
-        context,
-        options,
-        resolving,
-    )
-  );
+  const declaration = callable.result.declaration;
+  const genericContract = context.sourceLifetimes.contractFor(declaration);
+  const parameters = callable.parameters.map(parameter => {
+    const selected = resolveRustSignatureParameterEvidence(parameter, context, options, resolving);
+    return selected === undefined ? undefined : closeRustSuspendedStorage(selected, [], genericContract, "field");
+  });
   if (parameters.some((parameter) => parameter === undefined)) {
     return undefined;
   }
-  const declaration = callable.result.declaration;
   const returned = declaration === undefined ? undefined : context.sourceStorage.subject(declaration, "return");
   const sourceResult = resolveRustTypeComponentEvidence(
     callable.result,
@@ -147,7 +144,6 @@ function resolveRustCallableSignatureCarrier(
     options,
     resolving,
   );
-  const genericContract = context.sourceLifetimes.contractFor(declaration);
   const result = sourceResult === undefined ? undefined
     : closeRustSuspendedStorage(sourceResult, parameters, genericContract, "callable-result");
   if (result === undefined) return undefined;

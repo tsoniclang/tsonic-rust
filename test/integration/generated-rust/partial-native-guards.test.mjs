@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
@@ -9,7 +10,7 @@ for (const surfaces of [[], ["js"]]) {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: {
       "index.ts": partialNativeGuardsSource + '\nexport function main(): void { if (!run()) throw new Error("partial native guards"); }',
     } });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject("partial-native-guards", result.artifacts, { run: true });
   });
 }

@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { nativeAsyncResultOwnershipFiles } from "../../../../tsonic/test/fixtures/native-async-result-ownership.mjs";
@@ -9,7 +10,7 @@ for (const surfaces of [[], ["js"]]) {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
       files: { ...nativeAsyncResultOwnershipFiles, "index.ts": nativeAsyncResultOwnershipFiles["index.ts"] +
         '\nexport async function main(): Promise<void> { if (!await run()) throw new Error("native async result ownership"); }' } });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
     assert.match(output, /\bi64\b/u);
     assert.match(output, /\bu64\b/u);

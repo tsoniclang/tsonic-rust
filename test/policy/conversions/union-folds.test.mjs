@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
@@ -123,7 +124,7 @@ test("native fold planning moves one input and emits unit constants without copy
       configuration: { edition: "2024" } } }, sourceFile, diagnostics: [], usedAliases: new Set() };
     const expression = { kind: "call", path: "produce", args: [] };
     const planned = lowerRustValueConversion(contract, expression, context, node);
-    assert.deepEqual(context.diagnostics, []);
+    assertNoTargetDiagnostics(context.diagnostics);
     assert.equal(planned.kind, "match");
     assert.equal(planned.expression, expression);
     assert.equal(planned.arms.length, contract.arms.length);

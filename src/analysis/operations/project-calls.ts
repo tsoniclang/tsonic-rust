@@ -10,9 +10,7 @@ import {
   KindFunctionDeclaration,
   KindFunctionExpression,
   KindNewExpression,
-  KindPropertyAccessExpression,
   KindSpreadElement,
-  Node_Expression,
   asSourceNode,
 } from "@tsonic/target-api/source";
 import {
@@ -50,6 +48,8 @@ import { recordSelectedMethodSpecialization } from "./project-method-calls.js";
 import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
 import { retainRustSelectedCallableResultTemplate, retainRustSelectedSourceCallResultStorage, selectRustSourceCallResult } from "../../policy/types/resolution/call-results.js";
 import { rustSourceCallArgumentCarriers, rustSourceCallResultWithInputLifetimes } from "../facts/source-call-lifetimes.js";
+import { rustMemberAccessReceiver } from "../../target-model/syntax/expressions.js";
+import { recordRustComputedMemberEvaluation } from "./computed-members.js";
 
 export function applySelectedProjectSourceCall(
   walk: RustFactWalk,
@@ -311,7 +311,7 @@ export function applySelectedProjectSourceCall(
     };
   } else if (selectedSignature.sourceUnionMethods !== undefined) {
     const union = selectedSignature.sourceUnionMethods;
-    const receiver = ast.kindName(callee) === KindPropertyAccessExpression ? Node_Expression(ast, callee) : undefined;
+    const receiver = rustMemberAccessReceiver(ast, callee);
     if (receiver === undefined) return undefined;
     const receiverCarrier = resolveExpressionCarrier(walk, receiver, sourceFile, undefined);
     if (!rustTargetTypeRefEquals(receiverCarrier, union.receiverCarrier)) return undefined;
@@ -372,7 +372,7 @@ export function applySelectedProjectSourceCall(
       if (typeCarrier === undefined) {
         return undefined;
       }
-      const receiver = Node_Expression(ast, callee);
+      const receiver = rustMemberAccessReceiver(ast, callee);
       const direct = receiver !== undefined && walk.context.source.navigation.sourceReferenceFor(receiver)?.declaration === classDeclaration;
       const classReceiver = direct ? undefined : receiver;
       if (!direct) {
@@ -386,9 +386,7 @@ export function applySelectedProjectSourceCall(
             fileName: ast.getFileName(ast.getSourceFile(selectedDeclaration)), selectedTargetName: selectedMember.targetName,
             ...(classReceiver === undefined ? {} : { classReceiver }) };
     } else {
-      const receiver = ast.kindName(callee) === KindPropertyAccessExpression
-        ? Node_Expression(walk.context.ast, callee)
-        : undefined;
+      const receiver = rustMemberAccessReceiver(ast, callee);
       if (receiver === undefined) {
         return undefined;
       }
@@ -627,6 +625,14 @@ export function applySelectedProjectSourceCall(
     return undefined;
   }
   const finalResultCarrier = optionalCall?.resultCarrier ?? resultCarrier;
+  const calleeAccess = walk.context.semanticsFor(expression).operations.call(expression)?.sourceCalleeAccess;
+  if (calleeAccess?.kind === "element" && calleeAccess.expression === callee) {
+    const evaluateReceiver = target.form !== "function" && target.form !== "static-method" ||
+      target.classReceiver !== undefined;
+    recordRustComputedMemberEvaluation(ast, walk.context.facts, calleeAccess.expression,
+      calleeAccess.receiver.expression, calleeAccess.argument.expression, "read", evaluateReceiver);
+    if (resolveExpressionCarrier(walk, calleeAccess.argument.expression, sourceFile, undefined) === undefined) return undefined;
+  }
   recordTargetOperation(
     walk,
     expression,

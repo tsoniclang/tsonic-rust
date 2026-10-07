@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { acmeTestingPackage, artifactText, compileRust } from "../../helpers/rust-session.mjs";
@@ -26,7 +27,7 @@ export function main(): void {
 }
 ` },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("bigint-width", result.artifacts, { run: true });
 });
 
@@ -44,7 +45,7 @@ export function main(): void {
 }
 ` },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("json-string-result", result.artifacts, { run: true });
 });
 
@@ -76,7 +77,7 @@ export function main(): void {
 }
 ` },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   assert.match(artifactText(result, "src/index.rs"), /js_abi::string_from_value/u);
   const native = validateGeneratedProject("string-construction", result.artifacts, { run: true });
   assert.equal(native.status, 0, JSON.stringify(native));
@@ -113,7 +114,7 @@ export function main(): void {
   }
 }
 ` } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("void-source-values", result.artifacts, { run: true });
 });
 
@@ -130,7 +131,7 @@ export async function main(): Promise<void> {
   }
 }
 ` } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("void-awaited-values", result.artifacts, { run: true });
 });
 
@@ -144,7 +145,7 @@ export async function main(): Promise<void> {
   console.log(visits);
 }
 ` } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   assert.match(artifactText(result, "src/main.rs"), /tsonic_entry\(\)\.into_value\(\)/u);
   const native = validateGeneratedProject("infallible-js-async-entry", result.artifacts, { run: true });
   assert.equal(native.stdout.trim(), "1");

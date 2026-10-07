@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust, artifactText } from "../../helpers/rust-session.mjs";
@@ -11,7 +12,7 @@ test("native-word conversions preserve exact values, absence and evaluation coun
       export function main(): void { if (!run()) throw new Error("native word conversion"); }
     ` },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /checked_integer::<usize>/u);
   assert.match(output, /value as usize/u);
@@ -44,7 +45,7 @@ test("explicit native integer casts reject out-of-range values without floating 
       }
     ` },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   assert.doesNotMatch(artifactText(result, "src/index.rs"), /as f64|_to_f64/u);
   validateGeneratedProject("checked-native-integer-casts", result.artifacts, { run: true });
 });

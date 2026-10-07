@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
@@ -42,7 +43,7 @@ export async function read(value: uint64 | Promise<uint64>): Promise<uint64> { r
   const operand = { kind: "call", path: "next", args: [] };
   let evaluations = 0;
   const result = planRustAwaitExpression(node, selected, () => { evaluations += 1; return operand; });
-  assert.deepEqual(selected.diagnostics, []);
+  assertNoTargetDiagnostics(selected.diagnostics);
   assert.equal(evaluations, 1);
   assert.equal(result.kind, "match");
   assert.equal(result.expression, operand);
@@ -64,7 +65,7 @@ export async function finish(value: Promise<void> | null | undefined): Promise<v
   assert.equal(fact.selection.kind, "optional");
   const selected = contextFor(program, node);
   const result = planRustAwaitExpression(node, selected, () => ({ kind: "path", path: "value" }));
-  assert.deepEqual(selected.diagnostics, []);
+  assertNoTargetDiagnostics(selected.diagnostics);
   assert.equal(result.kind, "match");
   assert.equal(result.arms[0].pattern.path, "Some");
   assert.equal(result.arms[0].expression.kind, "try");

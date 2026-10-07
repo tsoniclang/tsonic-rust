@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
@@ -205,7 +206,7 @@ test("canonical nominal union emission moves owned fields and borrows views with
     } } },
   });
   assert.deepEqual(projected, adapted.expression);
-  assert.deepEqual(context.diagnostics, []);
+  assertNoTargetDiagnostics(context.diagnostics);
 });
 
 test("nominal union liveness reuses exact upcast fields and retains every nested source and target path", () => {
@@ -302,7 +303,7 @@ test("dispatcher fuses finalized narrowing and heritage without intermediate enu
       assert.equal((rendered.match(/"method":"clone"/gu) ?? []).length, owned ? 0 : 3);
       assert.doesNotMatch(rendered, /Source::|Box|Rc::|RefCell|Any|downcast|reflect|alloc/u);
       if (absent) assert.ok(planned.arms.slice(0, 2).every(arm => arm.pattern.path === "Some"));
-      assert.deepEqual(context.diagnostics, []);
+      assertNoTargetDiagnostics(context.diagnostics);
       if (!absent && !owned) {
         const direct = planExpression(node, { ...context,
           expressionOverrides: new Map([[node, { expression, carrier: source, valueForm: "owned" }]]),

@@ -20,6 +20,7 @@ import { rustCallableInvocationResult } from "../../facts/callable-results.js";
 import { rustClassConstructorInstance } from "../../../target-model/types/carriers/class-constructors.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
+import { rustProjectGenericContractCorrespondence } from "../../../policy/types/project-generic-contract.js";
 import { selectedCallCalleeDeclaration, selectedCallCalleeSymbol, selectedSourceValueCarrier } from "./operators.js";
 import { selectedValueCarrier } from "../selected-values.js";
 import { selectedRustCallSignature } from "./calls/signatures.js";
@@ -505,20 +506,13 @@ export function acceptProjectSourceCall(
   const targetGenericArguments = genericOwner === undefined
     ? undefined
     : mapSelectedProjectGenericArguments(request, genericOwner, context, options);
-  const sourceGenericParameters = genericOwner === undefined
-    ? undefined
-    : context.ast.typeParameters(genericOwner);
-  const genericContract = sourceGenericParameters?.length === 0
-    ? Object.freeze([])
-    : genericOwner === undefined
-      ? undefined
-      : context.sourceLifetimes.contractFor(genericOwner)?.parameters;
-  if (targetGenericArguments === undefined || genericContract === undefined ||
-    sourceGenericParameters === undefined ||
-    sourceGenericParameters.some((parameter) => parameter === undefined) ||
-    genericContract.length !== sourceGenericParameters.length) {
+  const implementationGenericOwner = genericOwner === selectedCallableDeclaration && callableDeclaration !== selectedCallableDeclaration;
+  const correspondence = genericOwner === undefined ? undefined : rustProjectGenericContractCorrespondence(
+    genericOwner, implementationGenericOwner ? callableDeclaration : genericOwner, context);
+  if (targetGenericArguments === undefined || correspondence === undefined) {
     return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_GENERIC_ARGUMENT_NOT_PROVEN", "A TSTS-selected project-source call does not have one exact lifetime/type generic instantiation.");
   }
+  const { selected: selectedGenericContract, implementation: genericContract } = correspondence;
   const templateGenericArguments = targetGenericArguments.map((argument, index) => {
     const parameter = genericContract[index]!;
     return parameter.kind === "type" && argument.kind === "type"
@@ -709,15 +703,15 @@ export function acceptProjectSourceCall(
     ...(genericContract.length === 0
       ? {}
       : {
-          genericParameters: genericContract.map((parameter) => parameter.kind === "type"
+          genericParameters: genericContract.map((parameter, index) => parameter.kind === "type"
             ? {
                 kind: "type" as const,
-                sourceName: parameter.sourceName,
+                sourceName: selectedGenericContract[index]!.sourceName,
                 targetIdentity: parameter.identity,
               }
             : {
                 kind: "lifetime" as const,
-                sourceName: parameter.sourceName,
+                sourceName: selectedGenericContract[index]!.sourceName,
                 targetIdentity: rustLifetimeKey(parameter.lifetime),
               }),
         }),

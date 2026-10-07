@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Node_Expression } from "@tsonic/target-api/source";
@@ -18,7 +19,7 @@ for (const surfaces of [[], ["js"]]) {
       files: { ...caughtErrorProofFiles, "index.ts": `${caughtErrorProofFiles["index.ts"]}
 export function main(): void { if (!run()) throw new Error("caught Error transport"); }` },
     });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     assert.equal(validateGeneratedProject(`caught-errors-${surfaces.length}`, result.artifacts, { run: true }).status, 0);
   });
   test(`stored Error values cross native throw boundaries in the ${surfaces.length === 0 ? "native" : "JS"} profile`, { timeout: 300_000 }, () => {
@@ -56,7 +57,7 @@ export function main(): void {
 `,
       },
     });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     assert.equal(validateGeneratedProject(`error-transport-${surfaces.length}`, result.artifacts, { run: true }).status, 0);
   });
 }
@@ -93,7 +94,7 @@ export function main(): void {
 }
 ` },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   assert.equal(validateGeneratedProject("caught-error-variants", result.artifacts, { run: true }).status, 0);
 });
 
@@ -108,7 +109,7 @@ export function run(): string {
   return "other";
 }
 ` } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("inherited-error-storage", result.artifacts);
 });
 

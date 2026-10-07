@@ -1,6 +1,6 @@
 import { rustValueBlock } from "../../../target-ast/value-block.js";
 import type { Node } from "@tsonic/tsts";
-import { Node_Expression } from "@tsonic/target-api/source";
+import { rustMemberAccessReceiver } from "../../../../target-model/syntax/expressions.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { rustSourceCallEffectsFactKey } from "../../../../analysis/facts/keys.js";
 import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
@@ -29,7 +29,7 @@ export function planRustUnionMethodCall(
   context: RustPlanContext,
 ): RustExpr | undefined {
   const { ast } = context.input.program.source;
-  const receiverNode = callee === undefined || !ast.is.IsPropertyAccessExpression(callee) ? undefined : Node_Expression(ast, callee);
+  const receiverNode = rustMemberAccessReceiver(ast, callee);
   const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
   const variants = context.input.program.typeDefinitions.sourceUnionVariants(target.receiverCarrier);
   const typePath = rustUnionTypePathInContext(target.receiverCarrier, context);

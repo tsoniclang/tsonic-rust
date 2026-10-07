@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { planRustNativeZeroComparison } from "../../../../dist/backend/planner/expressions/native-zero-comparisons.js";
@@ -161,7 +162,7 @@ export function main(): void {
   if (!signed(-1) || !floating(-0.5)) throw new Error("signed controls");
 }
 ` } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /values\.is_empty\(\)/u);
   assert.doesNotMatch(output, /\.len\(\) (?:>=|<) 1\b/u);

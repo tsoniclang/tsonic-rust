@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { nativeAsyncDiscardSource } from "../../../../tsonic/test/fixtures/native-async-discard.mjs";
@@ -9,7 +10,7 @@ for (const surfaces of [[], ["js"]]) {
   test(`discarded async values retain native scheduling on ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
       files: { "index.ts": nativeAsyncDiscardSource(1) + '\nexport async function main(): Promise<void> { if (!await run()) throw new Error("native async discard"); }' } });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     const output = artifactText(result, "src/index.rs");
     if (native) {
       assert.match(output, /core::mem::drop\(produce\(argument\(\)\)\)/u);

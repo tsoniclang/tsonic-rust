@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -23,7 +24,7 @@ export function literal(): number {
 `,
     },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   for (const method of ["floor", "ceil", "trunc", "abs", "sqrt"]) {
     assert.ok(text.includes(`.${method}(`), method);
@@ -44,7 +45,7 @@ export function f(x: number): number {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /js_abi::math_round\(x\)/u);
   assert.match(text, /js_abi::math_min\(&\[x, 1\.0\]\)/u);
@@ -79,7 +80,7 @@ export function main(): void {
 `,
     },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const run = validateGeneratedProject("math-proof-bin", result.artifacts, { run: true });
   assert.equal(run.status, 0);
 });
@@ -110,7 +111,7 @@ export function empty(): string {
 `,
     },
   });
-  assert.deepEqual(good.result.diagnostics, []);
+  assertNoTargetDiagnostics(good.result.diagnostics);
   const text = artifactText(good.result, "src/index.rs");
   assert.match(text, /tsonic_rust_node::util::inspect\(&value\)/u);
   assert.match(text, /tsonic_rust_node::util::inspect\(&js_abi::JsValue::from\(name\)\)/u);
@@ -157,7 +158,7 @@ export function scrub(text: string): nativeInt {
 `,
     },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /js_abi::regexp_new_native\("\\\\s\+", "g"\)\?/u);
   assert.match(text, /js_abi::string_replace_regexp_native/u);
@@ -176,7 +177,7 @@ export function probe(text: string): boolean {
 `,
     },
   });
-  assert.deepEqual(constructed.result.diagnostics, []);
+  assertNoTargetDiagnostics(constructed.result.diagnostics);
   assert.match(artifactText(constructed.result, "src/index.rs"), /js_abi::regexp_from_string_with_flags_native\("\\\\d\+", "g"\)\?/u);
 });
 
@@ -197,7 +198,7 @@ export function complete(pattern: string, value: string): boolean {
 `,
     },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /js_abi::regexp_new_native/u);
   assert.match(source, /js_abi::regexp_from_string_native/u);
@@ -257,7 +258,7 @@ export function main(): void {
 `,
     },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const run = validateGeneratedProject("regexp-proof-bin", result.artifacts, { run: true });
   assert.equal(run.status, 0);
 });
@@ -313,7 +314,7 @@ export function main(): void {
 `,
     },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const run = validateGeneratedProject("grand-proof-bin", result.artifacts, { run: true });
   assert.equal(run.status, 0);
 });

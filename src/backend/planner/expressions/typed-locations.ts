@@ -1,4 +1,5 @@
 import { rustValueBlock } from "../../target-ast/value-block.js";
+import { cloneRustExpression } from "../../target-ast/expressions.js";
 import type { RustBindingStorageFact } from "../../../analysis/facts/operations/keys.js";
 import type { Node } from "@tsonic/tsts";
 import { rustBindingStorageOperations, type RustBindingStorageOperations } from "./binding-storage.js";
@@ -89,7 +90,7 @@ export function planRustIdentifierValue(
   const storage = rustLocationStorageForReference(node, context);
   const value: RustExpr = captured?.expression ?? { kind: "path", path };
   if (context.input.program.facts.getFact(node, rustNativeArrayStorageKey)?.kind === "reference") {
-    return { kind: "method-call", receiver: value, method: "clone", args: [] };
+    return cloneRustExpression(value);
   }
   if (captured !== undefined && captured.storage !== "value") {
     return rustBindingStorageOperations(captured.storage).read(value.kind === "reference" ? value.expr : value);
@@ -103,7 +104,7 @@ export function planRustIdentifierValue(
     const referent = value.kind === "reference" ? value.expr : undefined;
     return rustCarrierHasCopyContract(captured.valueCarrier, context)
       ? referent ?? { kind: "dereference", pointer: value }
-      : { kind: "method-call", receiver: referent ?? value, method: "clone", args: [] };
+      : cloneRustExpression(referent ?? value);
   }
   return planRustValueRead(node, value, context);
 }
@@ -116,7 +117,7 @@ export function planRustValueRead(
   const carrier = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
   return rustReadRequiresClone(carrier, context) &&
       !context.input.program.valueLifetimes.canMove(node)
-    ? { kind: "method-call", receiver: value, method: "clone", args: [] }
+    ? cloneRustExpression(value)
     : value;
 }
 
@@ -132,19 +133,14 @@ export function planRustCaptureValue(
   const capturedValue = selectedValue.kind === "reference" ? selectedValue.expr : selectedValue;
   if (storage === "cell" || storage === "borrow-cell") return capturedValue;
   if (storage === "location") {
-    return {
-      kind: "method-call",
-      receiver: capturedValue,
-      method: "clone",
-      args: [],
-    };
+    return cloneRustExpression(capturedValue);
   }
   if (move && captured?.borrowed === undefined) return capturedValue;
   const value = planRustIdentifierValue(node, path, context);
   const carrier = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
   return rustReadRequiresClone(carrier, context) &&
       !(value.kind === "method-call" && value.method === "clone" && value.args.length === 0)
-    ? { kind: "method-call", receiver: value, method: "clone", args: [] }
+    ? cloneRustExpression(value)
     : value;
 }
 
@@ -316,7 +312,7 @@ export function rustRawLocationRoot(
   const selectedValue: RustExpr = captured?.expression ?? { kind: "path", path: sourcePath! };
   const value = selectedValue.kind === "reference" ? selectedValue.expr : selectedValue;
   return storage.storage === "module-cell" ? rustModuleCellAccess(value, "location", [])
-    : cloneRoot && storage.storage === "local-location" ? { kind: "method-call", receiver: value, method: "clone", args: [] } : value;
+    : cloneRoot && storage.storage === "local-location" ? cloneRustExpression(value) : value;
 }
 
 export function planRustModuleBindingStore(

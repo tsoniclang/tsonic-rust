@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
@@ -10,7 +11,7 @@ for (const surfaces of [[], ["js"]]) {
       ...typeSignatureOwnershipFiles,
       "index.ts": typeSignatureOwnershipFiles["index.ts"] + '\nexport function main(): void { if (!run()) throw new Error("type signature ownership"); }',
     } });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject("type-signature-ownership", result.artifacts, { run: true });
   });
   test(`generic method-only interface contracts retain conflicting native widths on ${surfaces[0] ?? "native"}`, () => {

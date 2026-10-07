@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
@@ -53,7 +54,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const api = artifactText(result, "src/api.rs");
   assert.match(api, /pub fn increment\(value: i32\) -> i32/u);
   assert.doesNotMatch(api, /ModuleCell|Callable|thread_local!/u);
@@ -79,7 +80,7 @@ export function run(value: int32): int32 { return apply(value); }
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const api = artifactText(result, "src/api.rs");
   assert.match(api, /pub type IncrementCallableCallable = rt::Callable/u);
   assert.match(api, /ModuleCell<IncrementCallableCallable>/u);
@@ -108,7 +109,7 @@ export const retained = [selected];
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /pub type SelectedCallableCallable = rt::Callable/u);
   assert.match(output, /ModuleCell<SelectedCallableCallable>/u);
@@ -165,7 +166,7 @@ export const later = (): int32 => 1;
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /pub static later: rt::ModuleCell/u);
   assert.doesNotMatch(output, /pub fn later/u);
@@ -184,7 +185,7 @@ export function run(): int32 { return fooBar(1) + foo_bar(1); }
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /pub fn foo_bar\(value: i32\) -> i32/u);
   assert.match(output, /pub fn fooBar\(value: i32\) -> i32/u);
@@ -221,7 +222,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /pub fn identity<T>/u);
   assert.match(output, /pub fn add\(value: i32, amount: Option<i32>\)/u);
@@ -260,7 +261,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /pub fn identity<T>\(&self, value: T\) -> T/u);
   assert.match(output, /identity\.identity::<String>\(String::from\("value"\)\)/u);
@@ -310,7 +311,7 @@ export function passByValue(page: Page): string { return consume(page); }
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /let dispatch_receiver(?:_\d+)? = &page;/u);
   assert.match(output, /dispatch_receiver(?:_\d+)?\.dispatch\.read_page_title\(\)/u);
@@ -352,7 +353,7 @@ export function forwards(): int32 { return risky(false); }
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /pub fn risky\(flag: bool\) -> Result<i32, rt::TsonicError>/u);
   assert.match(output, /pub fn forwards\(\) -> Result<i32, rt::TsonicError>/u);
@@ -537,7 +538,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   const returnAfterStart = output.indexOf("fn returnAfterRead(");
   const assertionStart = output.indexOf("fn returnThroughAssertion(");

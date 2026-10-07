@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { acmeTestingPackage, artifactText, compileRust } from "../../helpers/rust-session.mjs";
@@ -28,7 +29,7 @@ export function run(): boolean {
 }
 export function main(): void { check(run()); }
 ` } });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     assert.match(artifactText(result, "src/shapes.rs"), /retains an unconstructed checked union variant/);
     validateGeneratedProject("union-assertions", result.artifacts, { run: true });
   });
@@ -44,7 +45,7 @@ export function main(): void {
   check(invoke(() => "called") === "called" && choose(7) === 7 && choose(true) === 3);
 }
 ` } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const shapes = artifactText(result, "src/shapes.rs");
   assert.equal((shapes.match(/enum Union2</g) ?? []).length, 1);
   assert.doesNotMatch(shapes, /dead_code/);

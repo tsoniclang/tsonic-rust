@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust, artifactText } from "../../helpers/rust-session.mjs";
@@ -48,7 +49,7 @@ async function run(): Promise<boolean> {
 }
 export async function main(): Promise<void> { if (!await run()) throw new Error("Promise storage"); }
 ` } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.doesNotMatch(source, /\.then\(|\.then_async\(/);
   assert.match(source, /JsPromise<'static, \(\), rt::TsonicError>/);

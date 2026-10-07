@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -266,6 +267,6 @@ export function nativeUnsigned(a: usize, b: usize): usize { return a + b; }
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("numeric-promotion", result.artifacts);
 });

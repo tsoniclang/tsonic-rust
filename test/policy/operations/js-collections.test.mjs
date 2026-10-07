@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -206,7 +207,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /for entry in map\.entries\(\)/u);
   assert.match(source, /for value in set\.values\(\)/u);
@@ -261,7 +262,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /let values: js_abi::JsMap<String, Item> = js_abi::JsMap::new\(\);/u);
   assert.equal(validateGeneratedProject("js-map-project-values", result.artifacts, { run: true }).status, 0);
@@ -300,7 +301,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /map\.set_eq/u);
   assert.match(source, /map\.get_eq/u);
@@ -332,7 +333,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /match value\.as_ref\(\)/u);
   assert.equal(validateGeneratedProject("js-flow-selected-string", result.artifacts, { run: true }).status, 0);
@@ -364,7 +365,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /values\s*\.sort_borrowed\(/u);
   assert.doesNotMatch(source, /let operation_input_\d+ = \|left, right\|/u);
@@ -413,7 +414,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /values\.for_each_zero\(\{[\s\S]*move \|\|/u);
   assert.match(source, /values\.for_each\(\{[\s\S]*move \|value, index, array\|/u);

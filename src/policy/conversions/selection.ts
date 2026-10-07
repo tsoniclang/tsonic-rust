@@ -7,7 +7,7 @@ import { selectRustProgramErrorConversion } from "../../target-model/conversions
 import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
 import { rustNumericValueConversionIsSupported } from "../../target-model/conversions/numeric-promotion.js";
 import { selectRustExactIntegerConversion } from "../../target-model/conversions/exact-integer.js";
-import { rustNumberBoxingConversionId } from "../../target-model/conversions/number-boxing.js";
+import { rustClosedValueAdmissionConversion } from "../../target-model/conversions/closed-admission.js";
 import {
   isRustJsArrayCarrier,
   isRustJsArrayValueCarrier,
@@ -16,18 +16,11 @@ import {
   rustJsNumericTargetType,
   rustJsStringNumberTargetType,
   isRustNeverCarrier,
-  rustProgramErrorTargetType,
   isRustAbsenceCarrier,
   rustCarrierSupportsClone,
   rustCarrierCanEnterTsValue,
-  rustTsValueAdmission,
-  rustCarrierSupportsTrait,
-  rustJsClosedValueCarrierTraitPath,
   rustJsArrayLikeElementTargetType,
-  rustJsSymbolTargetType,
   rustJsValueTargetType,
-  rustJsErrorTargetType,
-  rustEmptyObjectTargetType,
   rustOptionElementCarrier,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
@@ -39,32 +32,22 @@ import {
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustNamedTypeCarrierValue } from "../../target-model/types/carriers/native.js";
-import { rustJsRecordValueAdmission } from "../../target-model/conversions/closed-record.js";
-import { rustClosedValueRetainsError } from "../../target-model/types/carriers/closed-values.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import {
-  rustBoolToJsValueConversion,
   rustFloat64ToInt32ValueConversion,
   rustFloat64ToUint8ValueConversion,
   rustInt32ToFloat64ValueConversion,
   rustInt32ToUint8ValueConversion,
   rustIsizeToInt32ValueConversion,
-  rustJsValueCloneConversion,
-  rustTsValueCloneConversion,
-  rustAbsenceToJsValueConversion,
-  rustStringToJsValueConversion,
-  rustSymbolToJsValueConversion,
   rustUint32ToInt32ValueConversion,
   rustUint64ToFloat64ValueConversion,
   rustUint8ToInt32ValueConversion,
   rustUsizeToInt32ValueConversion,
 } from "../../target-model/conversions/model.js";
 
-const boolCarrier = rustSourcePrimitiveTargetType("bool");
 const int32Carrier = rustSourcePrimitiveTargetType("int32");
 const float64Carrier = rustSourcePrimitiveTargetType("float64");
 const stringCarrier = rustStringTargetType();
-const symbolCarrier = rustJsSymbolTargetType();
 const jsValueCarrier = rustJsValueTargetType();
 const tsValueCarrier = rustTsValueTargetType();
 
@@ -164,7 +147,7 @@ export function selectRustSourceValueConversion(
   }
   if (rustTargetTypeRefEquals(target, tsValueCarrier)) {
     if (rustTargetTypeRefEquals(source, tsValueCarrier)) {
-      return rustTsValueCloneConversion;
+      return rustClosedValueAdmissionConversion(source, target, definitions);
     }
     if (sourceOptionElement !== undefined) {
       const elementConversion = selectRustSourceValueConversion(sourceOptionElement, target, definitions, nextAncestors);
@@ -176,48 +159,11 @@ export function selectRustSourceValueConversion(
     const leaves = rustUnionLeaves(source, definitions);
     if (leaves !== undefined) return selectUnionFold(source, target, leaves, carrier =>
       selectRustSourceValueConversion(carrier, target, definitions, nextAncestors));
-    return rustClosedValueRetainsError(source, definitions) || rustTsValueAdmission(source, definitions) !== undefined
-      ? Object.freeze({
-          kind: "ts-value-from-closed-carrier" as const,
-          source,
-        })
-      : undefined;
+    return rustClosedValueAdmissionConversion(source, target, definitions);
   }
   if (rustTargetTypeRefEquals(target, jsValueCarrier)) {
-    if (rustTargetTypeRefEquals(source, rustJsErrorTargetType())) {
-      return { kind: "semantic-conversion", id: "js-value-from-error" };
-    }
-    if (rustTargetTypeRefEquals(source, jsValueCarrier)) {
-      return rustJsValueCloneConversion;
-    }
-    if (rustTargetTypeRefEquals(source, boolCarrier)) {
-      return rustBoolToJsValueConversion;
-    }
-    const numberBoxing = source.kind === "source-primitive"
-      ? rustNumberBoxingConversionId(source.name)
-      : undefined;
-    if (numberBoxing !== undefined) {
-      return Object.freeze({ kind: "semantic-conversion", id: numberBoxing });
-    }
-    if (isRustAbsenceCarrier(source)) {
-      return rustAbsenceToJsValueConversion;
-    }
-    if (rustTargetTypeRefEquals(source, stringCarrier)) {
-      return rustStringToJsValueConversion;
-    }
-    if (rustTargetTypeRefEquals(source, symbolCarrier)) {
-      return rustSymbolToJsValueConversion;
-    }
-    if (rustTargetTypeRefEquals(source, rustProgramErrorTargetType()) ||
-      rustClosedValueRetainsError(source, definitions) || rustTargetTypeRefEquals(source, rustEmptyObjectTargetType()) ||
-      rustJsRecordValueAdmission(source) || rustTsValueAdmission(source, definitions)?.kind === "project-object" ||
-      rustCarrierSupportsClone(source, definitions) &&
-      rustCarrierSupportsTrait(source, rustJsClosedValueCarrierTraitPath, undefined, undefined, definitions)) {
-      return Object.freeze({
-        kind: "js-value-from-closed-carrier" as const,
-        source,
-      });
-    }
+    const admission = rustClosedValueAdmissionConversion(source, target, definitions);
+    if (admission !== undefined) return admission;
     const optionElement = rustOptionElementCarrier(source);
     if (optionElement !== undefined) {
       const elementConversion = selectRustSourceValueConversion(

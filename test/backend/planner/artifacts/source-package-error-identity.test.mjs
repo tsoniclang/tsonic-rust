@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRustSourcePackageComponents } from "../../../../dist/analysis/program/source-package-components.js";
@@ -36,7 +37,7 @@ test("chain and diamond error forwarding preserve one sealed owner and one conve
   const { context, components } = classify({ leaf: [], left: ["leaf"], right: ["leaf"], root: ["left", "right"] }, ["leaf"]);
   assert.ok(components.every(component => component.errorOwnerComponentId === "leaf"));
   const { plan, diagnostics } = planRustSourcePackageErrors({ program: context }, components);
-  assert.deepEqual(diagnostics, []);
+  assertNoTargetDiagnostics(diagnostics);
   const root = plan.domainsByComponentId.get("root");
   assert.equal(root.externalErrors.length, 1);
   assert.equal(root.forwardModulePath, "left_crate::program");
@@ -56,7 +57,7 @@ test("local errors and independent dependency domains retain distinct closed uni
     const root = components.find(component => component.root);
     assert.equal(root.errorOwnerComponentId, "root");
     const result = planRustSourcePackageErrors({ program: context }, components);
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     assert.equal(result.plan.domainsByComponentId.get("root").forwardModulePath, undefined);
   }
 });
@@ -79,7 +80,7 @@ test("retained cross-package callbacks preserve the original thrown object", { t
     files: { ...sourcePackageCallbackErrorFiles, "index.ts": `${sourcePackageCallbackErrorFiles["index.ts"]}
 export function main(): void { if (!run()) throw new Error("callback identity"); }` },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   assert.equal(result.artifacts.filter(artifact => artifact.path.endsWith("Cargo.toml")).length, 3);
   assert.equal(validateGeneratedProject("package-callback-errors", result.artifacts, { run: true }).status, 0);
 });

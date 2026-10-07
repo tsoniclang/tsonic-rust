@@ -19,6 +19,7 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { planRustCapturedEnvironment } from "./capture-environments.js";
 import { planRustLexicalFunctionArguments } from "../declarations/callables/lexical-functions.js";
 import { rustValueBlock } from "../../target-ast/value-block.js";
+import { rustTypeFromCarrierInContext } from "../types/render.js";
 
 export function planRustSourceCallableValue(
   value: RustSourceCallableValueFact,
@@ -75,7 +76,8 @@ export function planRustSourceCallableValueConstruction(
     }
     return { kind: "path", path };
   }
-  if (callableType === undefined) {
+  const argumentsType = rustTypeFromCarrierInContext({ kind: "tuple", elements: value.parameterCarriers }, context);
+  if (callableType === undefined || argumentsType === undefined) {
     return undefined;
   }
   const captures = lexical === undefined ? [] : context.input.program.facts.getFact(value.sourceDeclaration, rustClosureCaptureFactKey)?.captures;
@@ -134,14 +136,14 @@ export function planRustSourceCallableValueConstruction(
   const implementation: RustExpr = captures.length > 0
     ? {
         kind: "closure-block",
-        params: [{ name: argumentsName }],
+        params: [{ name: argumentsName, type: argumentsType }],
         move: true,
         async: false,
         body: { statements: [{ kind: "tail", expr: callableResult }] },
       }
     : {
         kind: "closure",
-        params: [{ name: argumentsName, byRefCopy: false }],
+        params: [{ name: argumentsName, byRefCopy: false, type: argumentsType }],
         body: callableResult,
       };
   context.usedAliases?.add("rt");

@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
@@ -10,7 +11,7 @@ for (const surfaces of [[], ["js"]]) {
     const { result } = compileRust({ surfaces,
       target: { id: "rust", options: { outputType: "bin", crateName: "guarded_integers" } },
       files: { "index.ts": guardedNativeIntegerSource + '\nexport function main(): void { if (!run()) throw new Error("guarded integers"); }' } });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
     assert.match(output, /value as u64/u);
     assert.match(output, /value as usize/u);

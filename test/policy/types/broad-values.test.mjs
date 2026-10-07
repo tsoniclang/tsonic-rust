@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -152,7 +153,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /rt::TsValue/u);
   assert.match(source, /TsValue::from_closed/u);
@@ -195,7 +196,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /js_abi::JsValue/u);
   assert.doesNotMatch(source, /rt::TsValue/u);
@@ -218,7 +219,7 @@ export function main(): void {
 }
 ` },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.doesNotMatch(source, /js_abi|tsonic_rust_js/u);
   assert.match(source, /TsValue::from\(/u);
@@ -244,6 +245,6 @@ export function main(): void {
 }
 ` },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   assert.equal(validateGeneratedProject("boxed-empty-identity", result.artifacts, { run: true }).status, 0);
 });

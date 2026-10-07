@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust, createRustSession, rustSourceDiagnostics } from "../../helpers/rust-session.mjs";
@@ -11,7 +12,7 @@ for (const surface of ["native", "js"]) {
         ...classMemberVisibilityFiles,
         "index.ts": classMemberVisibilityFiles["index.ts"] + '\nexport function main(): void { if (!run()) throw new Error("member visibility"); }',
       } });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject(`class-member-visibility-${surface}`, result.artifacts, { run: true });
   });
 }

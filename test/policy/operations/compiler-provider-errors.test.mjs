@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { acmeTestingPackage, artifactText, compileRust } from "../../helpers/rust-session.mjs";
@@ -47,7 +48,7 @@ export function main(): void {
 }
 ` },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /JsValue::from_error/u);
   assert.match(source, /\.is_error\(\)/u);
@@ -73,7 +74,7 @@ export function main(): void {
 }
 ` },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /JsError::has_same_identity/u);
   assert.match(source, /JsError::has_distinct_identity/u);
@@ -104,7 +105,7 @@ export function main(): void {
 }
 ` },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   assert.doesNotMatch(artifactText(result, "src/index.rs"), /\.(?:is_error|is_error_kind|error_value)\(/u);
   assert.equal(validateGeneratedProject("project-error-identity", result.artifacts, { run: true }).status, 0);
 });
@@ -138,7 +139,7 @@ export function main(): void {
 }
 ` },
     });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     const source = artifactText(result, "src/index.rs");
     assert.match(source, /Option<String>/u);
     assert.match(source, /\.borrowed_stack\(\)/u);

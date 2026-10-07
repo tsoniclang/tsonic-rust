@@ -16,7 +16,7 @@ test("invocation-only callback inputs consume exact inferred borrowed producer s
     });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.map(value => value.message).join("\n"));
     const output = artifactText(result, "src/index.rs");
-    assert.match(output, /fn normalize\(value: &String\)/u);
+    assert.match(output, /fn normalize\(value: &str\)/u);
     const directory = writeGeneratedProject(name, result.artifacts);
     appendFileSync(join(directory, "src/index.rs"), `
 #[cfg(test)]

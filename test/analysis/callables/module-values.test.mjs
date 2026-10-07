@@ -24,6 +24,7 @@ function classify({ exported = false, kind = "first-class", direct = source, con
   recordRustModuleCallableStorage({ context: {
     ast: { forEachChild() {} }, sourceFiles: [declaration],
     source: { navigation: { declarationUseSummary() { return { exported }; },
+      expressionValueFlow() { return { aliasDeclarations: [] }; },
       declarationUses() { return [{ kind, reference }]; } } },
     facts: { get(node, key) { return values.get(node)?.get(key); },
       set(node, key, value) { values.get(node).set(key, value); } },

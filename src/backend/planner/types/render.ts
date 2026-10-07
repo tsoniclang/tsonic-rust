@@ -4,6 +4,7 @@ import type {
   TargetTypeRef,
 } from "../../../target-model/types/model.js";
 import { registerAliasFromPath } from "../program/plan-context.js";
+import { rustTypeIsLegalInPosition, rustTypeContainsImplTrait, collectAliasesFromRustType } from "./type-observations.js";
 import type {
   RustCallGenericArgument,
   RustGenericArgument,
@@ -33,6 +34,7 @@ import { rustRuntimeUnionContract } from "../../../target-model/types/carriers/r
 import { rustClassEnvironmentHandleType } from "../objects/class-environment-types.js";
 import { rustLifetimeToAst } from "./lifetime-syntax.js";
 import { rustOptionalStorageTypeArguments } from "./type-projections.js";
+import { bindRustCallableInputLifetimes } from "../../../target-model/types/carriers/callable-input-lifetimes.js";
 import {
   rustBuiltInCarrierRenderPaths,
   rustCallableTargetId,
@@ -99,8 +101,12 @@ export function rustTypeFromCarrier(
       resultCarrier === undefined) {
       return undefined;
     }
-    const argumentsType = rustTypeFromCarrier(argumentsCarrier, resolveSourceTypePath, resolveStructuralShape);
-    const resultType = rustTypeFromCarrier(resultCarrier, resolveSourceTypePath, resolveStructuralShape);
+    const signature = carrier.id === rustCallableInputTargetId
+      ? bindRustCallableInputLifetimes(argumentsCarrier.elements, resultCarrier) : undefined;
+    if (carrier.id === rustCallableInputTargetId && signature === undefined) return undefined;
+    const argumentsType = rustTypeFromCarrier(signature === undefined ? argumentsCarrier :
+      { kind: "tuple", elements: signature.parameters }, resolveSourceTypePath, resolveStructuralShape);
+    const resultType = rustTypeFromCarrier(signature?.result ?? resultCarrier, resolveSourceTypePath, resolveStructuralShape);
     if (carrier.id === rustCallableInputTargetId) {
       return argumentsType === undefined || resultType === undefined ? undefined : {
         kind: "impl-trait",
@@ -108,7 +114,7 @@ export function rustTypeFromCarrier(
           trait: { kind: "named", path: "rt::CallableImplementation", genericArguments: typeGenericArguments([
             argumentsType, { kind: "named", path: "rt::TsonicResult", genericArguments: typeGenericArguments([resultType]) },
           ]) },
-          binder: [],
+          binder: rustLifetimeBinderToAst(signature!.binder),
         } }],
         outlives: [],
       };
@@ -630,187 +636,6 @@ export function rustReturnTypeFromCarrierInContext(
     : rustTypeFromCarrierInContext(carrier, context, "return");
 }
 
-function rustTypeIsLegalInPosition(
-  type: RustType | undefined,
-  position: "general" | "parameter" | "return",
-): boolean {
-  if (type === undefined) return true;
-  const containsImplTrait = rustTypeContainsImplTrait(type);
-  return !containsImplTrait || position !== "general" &&
-    (type.kind === "impl-trait" || type.kind === "reference" && type.referent.kind === "impl-trait");
-}
-
-function rustTypeContainsImplTrait(type: RustType): boolean {
-  switch (type.kind) {
-    case "impl-trait":
-      return true;
-    case "named":
-      return rustGenericArgumentsContainImplTrait(type.genericArguments);
-    case "qualified":
-      return rustTypeContainsImplTrait(type.owner) ||
-        (type.trait !== undefined && rustTypeContainsImplTrait(type.trait)) ||
-        rustGenericArgumentsContainImplTrait(type.genericArguments);
-    case "trait-object":
-      return rustTypeContainsImplTrait(type.principal.trait) ||
-        type.autoTraits.some((trait) => rustTypeContainsImplTrait(trait.trait));
-    case "reference":
-      return rustTypeContainsImplTrait(type.referent);
-    case "raw-pointer":
-      return rustTypeContainsImplTrait(type.pointee);
-    case "fixed-array":
-    case "slice":
-      return rustTypeContainsImplTrait(type.element);
-    case "function-pointer":
-    case "callable-trait":
-      return type.parameters.some(rustTypeContainsImplTrait) ||
-        rustTypeContainsImplTrait(type.result);
-    case "tuple":
-      return type.elements.some(rustTypeContainsImplTrait);
-    case "infer":
-    case "primitive":
-    case "string":
-    case "str":
-    case "unit":
-    case "never":
-      return false;
-  }
-}
-
-function rustGenericArgumentsContainImplTrait(
-  arguments_: readonly RustGenericArgument[] | undefined,
-): boolean {
-  return (arguments_ ?? []).some((argument) => {
-    switch (argument.kind) {
-      case "type":
-        return rustTypeContainsImplTrait(argument.type);
-      case "associated-equality":
-        return rustGenericArgumentsContainImplTrait(argument.genericArguments) ||
-          rustTypeContainsImplTrait(argument.type);
-      case "associated-bounds":
-        return rustGenericArgumentsContainImplTrait(argument.genericArguments) ||
-          argument.bounds.some(rustTypeBoundContainsImplTrait);
-      case "lifetime":
-      case "const":
-        return false;
-    }
-  });
-}
-
-function rustTypeBoundContainsImplTrait(bound: RustTypeBound): boolean {
-  switch (bound.kind) {
-    case "trait-type":
-      return rustTypeContainsImplTrait(bound.reference.trait);
-    case "callable":
-      return bound.parameters.some(rustTypeContainsImplTrait) ||
-        rustTypeContainsImplTrait(bound.result);
-    case "trait":
-    case "lifetime":
-    case "maybe-sized":
-      return false;
-  }
-}
-
-export function collectAliasesFromRustType(
-  type: RustType | undefined,
-  register: (path: string) => void,
-): void {
-  if (type === undefined) {
-    return;
-  }
-  if (type.kind === "named") {
-    register(type.path);
-    collectAliasesFromRustGenericArguments(type.genericArguments, register);
-    return;
-  }
-  if (type.kind === "qualified") {
-    collectAliasesFromRustType(type.owner, register);
-    collectAliasesFromRustType(type.trait, register);
-    collectAliasesFromRustGenericArguments(type.genericArguments, register);
-    return;
-  }
-  if (type.kind === "trait-object") {
-    collectAliasesFromRustType(type.principal.trait, register);
-    for (const trait of type.autoTraits) collectAliasesFromRustType(trait.trait, register);
-    return;
-  }
-  if (type.kind === "impl-trait") {
-    for (const bound of type.bounds) collectAliasesFromRustTypeBound(bound, register);
-    return;
-  }
-  if (type.kind === "slice") {
-    collectAliasesFromRustType(type.element, register);
-    return;
-  }
-  if (type.kind === "reference") {
-    collectAliasesFromRustType(type.referent, register);
-    return;
-  }
-  if (type.kind === "function-pointer" || type.kind === "callable-trait") {
-    for (const parameter of type.parameters) {
-      collectAliasesFromRustType(parameter, register);
-    }
-    collectAliasesFromRustType(type.result, register);
-    return;
-  }
-  if (type.kind === "fixed-array") {
-    collectAliasesFromRustType(type.element, register);
-    return;
-  }
-  if (type.kind === "tuple") {
-    for (const element of type.elements) {
-      collectAliasesFromRustType(element, register);
-    }
-  }
-}
-
-function collectAliasesFromRustGenericArguments(
-  arguments_: readonly RustGenericArgument[] | undefined,
-  register: (path: string) => void,
-): void {
-  for (const argument of arguments_ ?? []) {
-    switch (argument.kind) {
-      case "type":
-        collectAliasesFromRustType(argument.type, register);
-        break;
-      case "associated-equality":
-        collectAliasesFromRustGenericArguments(argument.genericArguments, register);
-        collectAliasesFromRustType(argument.type, register);
-        break;
-      case "associated-bounds":
-        collectAliasesFromRustGenericArguments(argument.genericArguments, register);
-        for (const bound of argument.bounds) {
-          collectAliasesFromRustTypeBound(bound, register);
-        }
-        break;
-      case "lifetime":
-      case "const":
-        break;
-    }
-  }
-}
-
-function collectAliasesFromRustTypeBound(
-  bound: RustTypeBound,
-  register: (path: string) => void,
-): void {
-  switch (bound.kind) {
-    case "trait":
-      register(bound.path);
-      return;
-    case "trait-type":
-      collectAliasesFromRustType(bound.reference.trait, register);
-      return;
-    case "callable":
-      for (const parameter of bound.parameters) {
-        collectAliasesFromRustType(parameter, register);
-      }
-      collectAliasesFromRustType(bound.result, register);
-      return;
-    case "lifetime":
-    case "maybe-sized":
-      return;
-  }
-}
 
 export function rustTargetGenericArgumentToAstInContext(
   argument: RustTargetGenericArgument,

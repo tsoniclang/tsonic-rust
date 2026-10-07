@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { acmeTestingPackage, artifactText, compileRust, nodejsCapability } from "../../helpers/rust-session.mjs";
@@ -22,7 +23,7 @@ export function main(): void {
 }
 ` },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const main = artifactText(result, "src/main.rs");
   const initializeClock = main.indexOf("tsonic_rust_node::perf_hooks::initialize_clock()");
   const initializeSource = main.indexOf("provider_performance::initialize()");

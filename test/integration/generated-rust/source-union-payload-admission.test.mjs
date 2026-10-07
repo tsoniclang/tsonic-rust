@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { artifactText, compileRust } from "../../helpers/rust-session.mjs";
@@ -25,7 +26,7 @@ export async function main(): Promise<void> {
 }
 ` },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   assert.doesNotMatch(output, /Box::|boxed\(|\.map\(|\.then\(|from_closed|Any|downcast/u);
   validateGeneratedProject("source-union-payload-admission", result.artifacts, { run: true });

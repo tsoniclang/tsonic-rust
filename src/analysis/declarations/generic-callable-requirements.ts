@@ -4,6 +4,8 @@ import { rustStaticLifetime } from "../../target-model/lifetimes/index.js";
 import { rustObjectReferenceViewKey } from "../facts/object-reference-views.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
+import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
+import { rustCallableInputProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustTypeParameterFromSourceContract } from "../../target-model/names/type-parameters.js";
 import type { AstReader, Node } from "@tsonic/tsts";
 import { rustGenericNumericOperandsKey } from "../facts/generic-numeric.js";
@@ -579,7 +581,9 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
         return "A Rust closure has no exact capture classification.";
       }
       const required: readonly RustGenericRequirement[] =
-        rustClosureProtocol(operation.resultCarrier) === undefined && rustGenericCallableValue(operation.resultCarrier) === undefined
+        rustClosureProtocol(operation.resultCarrier) === undefined && rustGenericCallableValue(operation.resultCarrier) === undefined &&
+          rustFrameCallableValue(operation.resultCarrier) === undefined
+          && rustCallableInputProtocol(operation.resultCarrier) === undefined
           ? ["clone", "static"]
           : ["clone"];
       for (const capture of captures.receivers) {

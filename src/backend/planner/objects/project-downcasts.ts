@@ -1,4 +1,5 @@
 import { rustValueBlock } from "../../target-ast/value-block.js";
+import { cloneRustExpression } from "../../target-ast/expressions.js";
 import { planRustClosedNativeProjection } from "./closed-native-values.js";
 import type { Node } from "@tsonic/tsts";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -271,10 +272,5 @@ function projectDowncastDispatch(
 }
 
 function cloneProjectField(expression: RustExpr, field: string): RustExpr {
-  return {
-    kind: "method-call",
-    receiver: { kind: "field", receiver: expression, name: field },
-    method: "clone",
-    args: [],
-  };
+  return cloneRustExpression({ kind: "field", receiver: expression, name: field });
 }

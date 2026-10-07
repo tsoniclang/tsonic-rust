@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { acmeTestingPackage, artifactText, compileRust } from "../../../helpers/rust-session.mjs";
@@ -20,7 +21,7 @@ export function* exchange(seed: int32): Generator<int32, int32, int32> {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /pub fn exchange\(seed: i32\) -> rt::Generator<i32, i32, i32>/u);
   assert.match(source, /rt::Generator::new\(move \|generator(?:_\d+)?\| async move \{/u);
@@ -45,7 +46,7 @@ export async function* exchange(seed: int32): AsyncGenerator<int32, int32, int32
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /pub fn exchange\(seed: i32\) -> rt::AsyncGenerator<i32, i32, i32>/u);
   assert.match(source, /rt::AsyncGenerator::new\(move \|generator(?:_\d+)?\| async move \{/u);
@@ -70,7 +71,7 @@ export async function* asyncValues(seed: int32): AsyncGenerator<int32, int32, in
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("generator-declarations", result.artifacts);
 });
 
@@ -109,7 +110,7 @@ export function run(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   const completionTypes = [...source.matchAll(/rt::Completion<([^>\n]+)>/gu)]
     .map((match) => match[1]);
@@ -156,7 +157,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const run = validateGeneratedProject("generator-protocol", result.artifacts, { run: true });
   assert.equal(run.status, 0);
 });
@@ -184,7 +185,7 @@ export async function read(): Promise<int32> {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   assert.match(artifactText(result, "src/index.rs"), /generator\.resume\(\)\.await/u);
 });
 
@@ -222,7 +223,7 @@ export async function main(): Promise<void> {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /let first = generator\.resume\(\);/u);
   assert.match(source, /let second = generator\.resume_with\(7\);/u);
@@ -242,7 +243,7 @@ export function* exchange<A, B, C>(initial: A, completed: B): Generator<A, B, C>
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /exchange<A: 'static, B: 'static, C: 'static>/u);
   validateGeneratedProject("generic-generator", result.artifacts);
@@ -280,7 +281,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   assert.match(artifactText(result, "src/index.rs"), /yield_from\(inner\(\)\)\.await/u);
   const run = validateGeneratedProject("generator-delegation", result.artifacts, { run: true });
   assert.equal(run.status, 0);
@@ -308,7 +309,7 @@ export function close(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /let operation_input_\d+ = rt::JsError::error\("stop"\);/u);
   assert.match(source, /generator\.throw_value\(operation_input_\d+\)/u);
@@ -384,7 +385,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /rt::GeneratorResume::Return/u);
   assert.match(source, /rt::GeneratorResume::Throw/u);
@@ -434,7 +435,7 @@ export async function main(): Promise<void> {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /return_value\(9\)\.await/u);
   assert.match(source, /throw_value\(rt::JsError::error/u);
@@ -462,7 +463,7 @@ export function run(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /pub fn items\(value: i32\) -> rt::Generator<i32, \(\), \(\)>/u);
   validateGeneratedProject("static-generator-method", result.artifacts);
@@ -494,7 +495,7 @@ export function run(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /-> rt::BorrowedGenerator<'_, i32, \(\), \(\)>/u);
   assert.match(source, /rt::BorrowedGenerator::new/u);
@@ -527,7 +528,7 @@ export async function run(): Promise<void> {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /-> rt::BorrowedAsyncGenerator<'_, i32, \(\), \(\)>/u);
   assert.match(source, /rt::BorrowedAsyncGenerator::new/u);

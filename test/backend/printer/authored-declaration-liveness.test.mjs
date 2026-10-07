@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -73,7 +74,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const helpers = artifactText(result, "src/helpers.rs");
   const index = artifactText(result, "src/index.rs");
   assert.equal(itemHasAttribute(helpers, "fn usedLeaf("), false);
@@ -131,7 +132,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.equal(itemHasAttribute(source, "struct UsedBox "), false);
   assert.equal(itemHasAttribute(source, "readValue:"), false);
@@ -171,7 +172,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.equal(itemHasAttribute(source, "fn initializedDependency("), false);
   assert.equal(itemHasAttribute(source, "fn unusedDependency("), true);
@@ -194,7 +195,7 @@ export function main(): void {}
     files: binaryFiles,
     sourcePackages: sourcePackageGraphWithoutFacades(binaryFiles),
   });
-  assert.deepEqual(binaryResult.diagnostics, []);
+  assertNoTargetDiagnostics(binaryResult.diagnostics);
   const binarySource = artifactText(binaryResult, "src/index.rs");
   assert.equal(itemHasAttribute(binarySource, "fn main("), false);
   validateGeneratedProject("binary-entry-liveness", binaryResult.artifacts, { run: true });
@@ -211,7 +212,7 @@ export enum PublicChoice { First, Second }
     files: libraryFiles,
     sourcePackages: sourcePackageGraphWithoutFacades(libraryFiles),
   });
-  assert.deepEqual(libraryResult.diagnostics, []);
+  assertNoTargetDiagnostics(libraryResult.diagnostics);
   const librarySource = artifactText(libraryResult, "src/index.rs");
   assert.equal(itemHasAttribute(librarySource, "fn exportedButUnused("), false);
   assert.equal(itemHasAttribute(librarySource, "fn implementationOnly("), false);
@@ -254,7 +255,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.equal(itemHasAttribute(source, "struct UsedModelState"), false);
   assert.equal(itemHasAttribute(source, "struct UsedModel "), false);
@@ -311,7 +312,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const shapes = artifactText(result, "src/shapes.rs");
   assert.equal(itemHasAttribute(shapes, "readValue:", authoredUnreadField), false);
   assert.equal(itemHasAttribute(shapes, "writeOnlyValue:", authoredUnreadField), true);
@@ -357,7 +358,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.equal(
     itemHasAttribute(source, "struct StaticOnlyState", generatedUnconstructedInstance),
@@ -421,7 +422,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   const shapes = artifactText(result, "src/shapes.rs");
   const root = rustBracedItem(source, "struct ReaderObjectLiteralRoot");

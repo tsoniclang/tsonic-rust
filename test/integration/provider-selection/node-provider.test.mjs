@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -31,7 +32,7 @@ export function probe(dir: string, file: string): boolean {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.doesNotMatch(text, /use tsonic_rust_node::path as node_path;/u);
   assert.match(text, /pub fn probe\(dir: String, file: String\)/u);
@@ -60,7 +61,7 @@ export function setExitStatus(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /tsonic_rust_node::process::set_exit_code\(Some\(2\)\)/u);
   assert.match(text, /tsonic_rust_node::process::set_exit_code\(Option::<i32>::None\)/u);
@@ -83,7 +84,7 @@ export function readOffset(bytes: Buffer): int32 {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /read_uint8_number\(\s*&bytes,\s*index \+ 1\.0,?\s*\)/u);
   assert.match(text, /u8_to_i32\([\s\S]*read_uint8_number/u);
@@ -141,7 +142,7 @@ export function defaultedOptions(path: string): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /tsonic_rust_node::path::relative/u);
   assert.match(text, /String::from\(tsonic_rust_node::path::sep\(\)\)/u);
@@ -213,7 +214,7 @@ export function appendSeparator(value: string): string {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn ownedSeparator\(\) -> String \{[\s\S]*String::from\(tsonic_rust_node::path::sep\(\)\)/u);
   assert.match(text, /ends_with_at_end\(value, tsonic_rust_node::path::sep\(\)\)/u);
@@ -242,7 +243,7 @@ export function verify(value: boolean): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /tsonic_rust_node::assert::ok\(value, None\)\?/u);
   assert.match(text, /tsonic_rust_node::assert::ok_with_message\(value, "value must be true"\)\?/u);
@@ -268,7 +269,7 @@ export function render(label: string, count: number, ok: boolean): string {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(
     text,
@@ -299,7 +300,7 @@ export function observe(path: string): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /tsonic_rust_node::fs::watch(&path)?/u);
   assert.match(source, /watcher\.unref\(\)/u);
@@ -349,7 +350,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /JsValue::from\(label\.clone\(\)\)/u);
   assert.match(text, /clone_js_value\(&parsed\)/u);
@@ -394,7 +395,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /tsonic_rust_node::http::create_server_optional\(Some\(aliasedHandle\)\)/u);
   assert.match(source, /fn handle\([^)]*\) -> Result<\(\), rt::TsonicError>/u);
@@ -426,7 +427,7 @@ export function register(
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /handler: rt::Callable<[\s\S]*?rt::TsonicResult<\(\)>,?\s*>/u);
   assert.match(source, /tsonic_rust_node::http::create_server_optional\(Some\(handler\)\)/u);
@@ -490,7 +491,7 @@ export function exerciseNodeFamilies(
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /node_events::EventEmitter::new|emit_callable/u);
   assert.match(source, /\.pipe_to\(/u);
@@ -586,7 +587,7 @@ if (parentPort !== undefined) {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /tsonic_rust_node::tls::connect_callable/u);
   assert.match(source, /tsonic_rust_node::tls::create_server/u);
@@ -615,7 +616,7 @@ export async function run_migration(path: string): Promise<int32> {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub async fn run_migration\(path: String\) -> i32/u);
   assert.match(text, /acme_db::connect\(path\)\.await/u);
@@ -641,6 +642,6 @@ export async function run_migration(path: string): Promise<int32> {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("r5-async-provider-lib", result.artifacts);
 });

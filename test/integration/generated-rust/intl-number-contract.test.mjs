@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust, compileRust, acmeTestingPackage } from "../../helpers/rust-session.mjs";
@@ -60,7 +61,7 @@ test("Intl exact integer, optional precision and grouping contracts execute in R
       }
     ` },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("intl-number-contract", result.artifacts, { run: true });
 });
 

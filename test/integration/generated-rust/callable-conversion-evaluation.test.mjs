@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -12,7 +13,7 @@ for (const surfaces of [[], ["js"]]) {
   test(`stored and factory-produced absence callbacks bind once in ${lane}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
       files: { "index.ts": absenceCallableConversionSource + '\nexport function main(): void { if (!run()) throw new Error("callable conversion"); }' } });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject(`absence-callable-conversion-${lane}`, result.artifacts, { run: true });
   });
 }
@@ -30,14 +31,14 @@ for (const surfaces of [[], ["js"]]) {
 test("stored and factory-produced broad callbacks bind once on the JS surface", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
     files: { "index.ts": broadCallableConversionSource + '\nexport function main(): void { if (!run()) throw new Error("broad callable conversion"); }' } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("broad-callable-conversion", result.artifacts, { run: true });
 });
 
 test("native callable adapters retain one construction frame and no per-call allocation", { timeout: 300_000 }, () => {
   const { result } = compileRust({ target: { id: "rust", options: { outputType: "lib", crateName: "native_callable_cost" } },
     files: { "index.ts": nativeCallableAdapterCostSource } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const root = writeGeneratedProject("native-callable-adapter-allocation", result.artifacts);
   mkdirSync(join(root, "tests"), { recursive: true });
   writeFileSync(join(root, "tests/ownership.rs"), nativeOwnershipCostSupport + `

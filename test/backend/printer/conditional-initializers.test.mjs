@@ -4,6 +4,22 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { finalizeRustBlockLiveness } from "../../../dist/backend/target-ast/inspection/source-liveness.js";
 import { printRustExpr } from "../../../dist/print/source/expressions/core.js";
+import { cloneRustExpression } from "../../../dist/backend/target-ast/expressions.js";
+
+test("exact native Clone receiver evidence removes only unnecessary binding mutability", () => {
+  const owner = { kind: "path", path: "owner" };
+  const binding = { kind: "let", name: "owner", mutable: true,
+    init: { kind: "path", path: "input" } };
+  const cloned = finalizeRustBlockLiveness({ statements: [binding,
+    { kind: "tail", expr: cloneRustExpression(owner) }] });
+  assert.equal(cloned.statements[0].mutable, false, "Clone borrows its native receiver immutably");
+  for (const receiverMode of [undefined, "mut-ref"]) {
+    const retained = finalizeRustBlockLiveness({ statements: [binding,
+      { kind: "tail", expr: { kind: "method-call", receiver: owner, method: "call", args: [],
+        ...(receiverMode === undefined ? {} : { receiverMode }) } }] });
+    assert.equal(retained.statements[0].mutable, true, "unknown or genuinely mutable receiver ABI cannot be weakened");
+  }
+});
 
 const path = (name) => ({ kind: "path", path: name });
 const literal = (value) => ({ kind: "int-literal", text: String(value) });

@@ -20,6 +20,28 @@ function select(carriers, resolved = true) {
   }, { callableSignatureCarrier: declaration => carriers[declarations.indexOf(declaration)] });
 }
 
+test("invocation-only inputs preserve one exact native numeric result until an explicit return contract", () => {
+  const native = { kind: "source-primitive", name: "uint32" };
+  const float = { kind: "source-primitive", name: "float64" };
+  const origin = {};
+  const declared = rustCallableTargetType([value], float);
+  const selected = resolveRustCallableInputCarrier(subject, declared, {
+    sourceStorage: { originsFor: () => ({ kind: "resolved", origins: [
+      { subject: { kind: "value", node: origin, projection: [] } },
+    ] }) },
+  }, { callableSignatureCarrier: () => rustCallableTargetType([borrowed], native) });
+  assert.equal(rustCallableInputProtocol(selected)?.result === native, true,
+    "the producer's native result is not rounded or adapted inside the borrowed callback");
+  for (const results of [[native, float], [float, native]]) {
+    let index = 0;
+    const rejected = resolveRustCallableInputCarrier(subject, declared, {
+      sourceStorage: { originsFor: () => ({ kind: "resolved", origins: results.map(() =>
+        ({ subject: { kind: "value", node: {}, projection: [] } })) }) },
+    }, { callableSignatureCarrier: () => rustCallableTargetType([borrowed], results[index++]) });
+    assert.equal(rejected === undefined, true, "different native result ABIs cannot be combined");
+  }
+});
+
 test("closed invocation inputs retain the producer's exact borrowed protocol without a value adapter", () => {
   const selected = select([rustCallableTargetType([borrowed], value), rustCallableTargetType([borrowed], value)]);
   assert.equal(rustCallableInputProtocol(selected)?.parameters[0] === borrowed, true);

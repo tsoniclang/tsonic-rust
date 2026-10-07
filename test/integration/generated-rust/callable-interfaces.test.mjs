@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
@@ -10,7 +11,7 @@ for (const surfaces of [[], ["js"]]) {
       ...callableInterfaceFiles,
       "index.ts": callableInterfaceFiles["index.ts"] + '\nexport function main(): void { if (!run()) throw new Error("callable interface"); }',
     } });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject("callable-interfaces", result.artifacts, { run: true });
   });
   test(`callable interfaces retain async results and one absence on ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
@@ -18,7 +19,7 @@ for (const surfaces of [[], ["js"]]) {
       ...asyncCallableInterfaceFiles,
       "index.ts": asyncCallableInterfaceFiles["index.ts"] + '\nexport async function main(): Promise<void> { if (!await run()) throw new Error("async callable interface"); }',
     } });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject("async-callable-interfaces", result.artifacts, { run: true });
   });
   test(`closed native async callables retain invocation timing and owner identity on ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
@@ -26,7 +27,7 @@ for (const surfaces of [[], ["js"]]) {
       ...nativeAsyncCallableFiles,
       "index.ts": nativeAsyncCallableFiles["index.ts"] + '\nexport async function main(): Promise<void> { if (!await run()) throw new Error("native callable ownership"); }',
     } });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject("native-async-callable-ownership", result.artifacts, { run: true });
     if (surfaces.length === 0) {
       const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
@@ -41,7 +42,7 @@ for (const surfaces of [[], ["js"]]) {
       ...inlineNativeAsyncCallableFiles,
       "index.ts": inlineNativeAsyncCallableFiles["index.ts"] + '\nexport async function main(): Promise<void> { if (!await run()) throw new Error("inline async callable"); }',
     } });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject("inline-native-async-callables", result.artifacts, { run: true });
     if (surfaces.length === 0) {
       const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");

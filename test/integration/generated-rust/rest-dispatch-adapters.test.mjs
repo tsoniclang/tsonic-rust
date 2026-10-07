@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { acmeTestingPackage, artifactText, compileRust } from "../../helpers/rust-session.mjs";
@@ -41,7 +42,7 @@ export function run(): boolean {
 }
 export function main(): void { check(run()); }
 ` } });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     const output = artifactText(result, "src/index.rs");
     assert.doesNotMatch(output, /\.values\(\)\.into_iter\(\)/);
     if (surfaces.length !== 0) assert.match(output, /\.into_values\(\)\.into_iter\(\)/);
@@ -87,7 +88,7 @@ export function run(): boolean {
 }
 export function main(): void { check(run()); }
 ` } });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject("rest-dispatch-generics", result.artifacts, { run: true });
   });
 }

@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rustJsValueTargetType, rustOptionTargetType, rustStringTargetType,
@@ -31,7 +32,7 @@ test("closed record admission keeps the exact native backing and one source abse
   const source = { kind: "call", path: "produce_record", args: [] };
   assert.deepEqual(lowerRustValueConversion(contract, source, context, node),
     { kind: "call", path: "js_abi::JsValue::from", args: [source] });
-  assert.deepEqual(context.diagnostics, []);
+  assertNoTargetDiagnostics(context.diagnostics);
 });
 
 test("closed record admission rejects incorrect identity, invariant elements and unowned data", () => {

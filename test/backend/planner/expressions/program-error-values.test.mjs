@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { planRustProgramErrorClosedValue } from "../../../../dist/backend/planner/expressions/program-error-values.js";
-import { selectRustErrorVariants } from "../../../../dist/backend/planner/program/error-variant-selection.js";
+import { planRustErrorVariants } from "../../../../dist/backend/planner/program/error-variants.js";
+import { analyzeRustErrorTransport } from "../../../../dist/analysis/program/error-transport.js";
+import { emptyRustTypeDefinitions } from "../../../../dist/target-model/types/source-union-definitions.js";
 import { rustJsValueTargetType, rustTsValueTargetType } from "../../../../dist/target-model/types/index.js";
 
 function context(errorDomain, thrownCarriers = [], retained = false, external = []) {
@@ -16,8 +18,8 @@ function context(errorDomain, thrownCarriers = [], retained = false, external = 
     sourcePackageErrors: { domainsByComponentId: new Map([["root", domain]]),
       dependencyErrorsByComponentId: new Map([["root", external]]) },
     input: { program: {
-      projectTypes: { sourceErrorDefinitions: [], programErrorVariant: () => undefined },
-      typeDefinitions: { sourceUnionVariants: () => undefined, programErrorOrigin: () => undefined },
+      projectTypes: { programErrorDefinitions: [], sourceErrorDefinitions: [], programErrorVariant: () => undefined },
+      typeDefinitions: emptyRustTypeDefinitions,
       errorStorageDemands: { retainedBoundaries: [] },
       sourcePackageComponents: { forComponent: () => ({ closedErrorDemand: { thrownCarriers, retained } }) },
       source: { ast: { kindName: node => node.kind, pos: () => 0, end: () => 0,
@@ -26,10 +28,27 @@ function context(errorDomain, thrownCarriers = [], retained = false, external = 
   };
 }
 
+function seal(input) {
+  const program = input.input.program;
+  const components = [...input.sourcePackageErrors.domainsByComponentId.values()].flatMap(domain => {
+    const selected = program.sourcePackageComponents.forComponent(domain.componentId);
+    return selected === undefined ? [] : [{ ...domain, closedErrorDemand: selected.closedErrorDemand }];
+  });
+  const result = analyzeRustErrorTransport({
+    ...program, ast: program.source.ast,
+    sourcePackageComponents: {
+      components,
+      componentForFile: () => components[0],
+    },
+  });
+  program.errorTransport = result.kind === "resolved" ? result.value : undefined;
+}
+
 test("runtime transport uses native Error admission without copying, projection probes or boxing", () => {
   const source = { kind: "path", path: "original" };
   for (const target of [rustTsValueTargetType(), rustJsValueTargetType()]) {
     const input = context("runtime");
+    seal(input);
     const result = planRustProgramErrorClosedValue(source, target, undefined, input);
     assert.equal(result !== undefined, true, target.id);
     assert.equal(result.kind, "call");
@@ -43,12 +62,14 @@ test("runtime transport uses native Error admission without copying, projection 
 test("project transport exhaustively preserves same-carrier payloads and Error categories", () => {
   for (const target of [rustTsValueTargetType(), rustJsValueTargetType()]) {
     const input = context("project", [target], true);
-    const selected = selectRustErrorVariants(input.input.program,
+    seal(input);
+    const selected = planRustErrorVariants(input.input.program,
       input.sourcePackageErrors.domainsByComponentId.get("root"));
     assert.deepEqual(selected.map(variant => variant.name),
       [target.id === rustTsValueTargetType().id ? "ClosedNative" : "ClosedJs", "Retained"]);
     assert.equal(Object.isFrozen(selected) && selected.every(Object.isFrozen), true);
     const source = { kind: "path", path: "original" };
+    seal(input);
     const result = planRustProgramErrorClosedValue(source, target, undefined, input);
     assert.equal(result !== undefined, true, target.id);
     assert.equal(result.kind, "match");
@@ -73,6 +94,7 @@ test("program carrier admission uses its component-owned value domain, not an ou
   const input = context("project", [rustTsValueTargetType()], true);
   input.fallibleBoundary = { componentId: "unrelated", errorDomain: "project",
     errorTypePath: "unrelated_crate::program::TsonicError", errorTypeIdentity: "unrelated:error" };
+  seal(input);
   const result = planRustProgramErrorClosedValue({ kind: "path", path: "original" },
     rustTsValueTargetType(), undefined, input);
   assert.equal(result !== undefined, true);
@@ -93,8 +115,10 @@ test("a forwarding component projects the exact owner inventory through the publ
   input.sourcePackageErrors.domainsByComponentId.set("owner", owner);
   const ownerDemand = input.input.program.sourcePackageComponents.forComponent("owner");
   input.input.program.sourcePackageComponents.forComponent = component => component === "owner" ? ownerDemand : undefined;
-  assert.equal(selectRustErrorVariants(input.input.program, forwarding) === undefined, true);
+  seal(input);
+  assert.equal(planRustErrorVariants(input.input.program, forwarding) === undefined, true);
   const source = { kind: "path", path: "original" };
+  seal(input);
   const result = planRustProgramErrorClosedValue(source, target, undefined, input);
   assert.equal(result !== undefined, true);
   assert.equal(result.kind, "match");
@@ -111,6 +135,7 @@ test("a forwarding component projects the exact owner inventory through the publ
     input.sourcePackageErrors.domainsByComponentId.set("owner", owner);
     owner.errorTypeIdentity = forwarding.errorTypeIdentity;
     mutate();
+    seal(input);
     assert.equal(planRustProgramErrorClosedValue(source, target, undefined, input) === undefined, true);
   }
   assert.equal(input.diagnostics.length, 2);
@@ -129,6 +154,7 @@ test("external transport projection moves its exact nested payload without a wra
     closedErrorDemand: { thrownCarriers: component === "dependency" ? [target] : [], retained: component === "dependency" },
   });
   const source = { kind: "path", path: "original" };
+  seal(input);
   const result = planRustProgramErrorClosedValue(source, target, undefined, input);
   assert.equal(result !== undefined, true);
   assert.equal(result.expression === source, true);
@@ -161,8 +187,10 @@ test("sealed transport inventory rejects unsupported carriers and duplicate nati
   ]) {
     const input = context("project", [rustTsValueTargetType()]);
     mutate(input);
-    assert.equal(selectRustErrorVariants(input.input.program,
+    seal(input);
+    assert.equal(planRustErrorVariants(input.input.program,
       input.sourcePackageErrors.domainsByComponentId.get("root")) === undefined, true);
+    seal(input);
     assert.equal(planRustProgramErrorClosedValue({ kind: "path", path: "original" },
       rustTsValueTargetType(), undefined, input) === undefined, true);
     assert.equal(input.diagnostics.length, 1);
@@ -182,6 +210,7 @@ test("missing and cyclic component evidence fails closed without boxing a transp
   ]) {
     const input = context("project");
     mutate(input);
+    seal(input);
     assert.equal(planRustProgramErrorClosedValue(source, rustTsValueTargetType(), undefined, input) === undefined, true);
     assert.equal(input.diagnostics.length, 1);
     assert.equal(input.diagnostics[0].code, "RUST_MISSING_TARGET_FACT");
@@ -190,6 +219,7 @@ test("missing and cyclic component evidence fails closed without boxing a transp
 
 test("unproved cross-carrier admission is not a passive or lossy fallback", () => {
   const input = context("project", [rustTsValueTargetType()], true);
+  seal(input);
   const result = planRustProgramErrorClosedValue({ kind: "path", path: "original" },
     rustJsValueTargetType(), undefined, input);
   assert.equal(result === undefined, true);
@@ -211,6 +241,7 @@ test("deep component evidence remains bounded without producing a partial value"
       errorTypeIdentity: `${dependencyId}:error`, definitions: [], externalErrors: [],
     });
   }
+  seal(input);
   assert.equal(planRustProgramErrorClosedValue({ kind: "path", path: "original" },
     rustTsValueTargetType(), undefined, input) === undefined, true);
   assert.equal(input.diagnostics.length, 1);

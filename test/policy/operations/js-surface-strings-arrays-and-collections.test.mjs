@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -164,7 +165,7 @@ export function same(): boolean {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /js_abi::object_is\(\[[\s\S]*?JsValue::from\(js_abi::NUMBER_NAN\),[\s\S]*?JsValue::from\(js_abi::NUMBER_NAN\),[\s\S]*?\]\)/u);
   assert.match(text, /!js_abi::object_is\(\[[\s\S]*?JsValue::from\(0\.0\),[\s\S]*?JsValue::from\(-0\.0\),?[\s\S]*?\]\)/u);
@@ -186,7 +187,7 @@ export function write(label: string, count: int32, ok: boolean): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /js_abi::console_log\(&\[\n        js_abi::JsValue::from\(label\),\n        js_abi::JsValue::from\(count\),\n        js_abi::JsValue::from\(ok\),\n    \]\);/u);
   assert.doesNotMatch(text, /label\.clone\(\)|js_value_from_string/u);
@@ -198,7 +199,7 @@ export function write(label: string, count: int32, ok: boolean): void {
       "index.ts": "export function write(): void { console.log({ ok: true }); }\n",
     },
   });
-  assert.deepEqual(object.result.diagnostics, []);
+  assertNoTargetDiagnostics(object.result.diagnostics);
   const objectText = artifactText(object.result, "src/index.rs");
   assert.match(objectText, /js_abi::console_log\(&\[\{[\s\S]*?js_value_from_optional_pairs\(vec!\[[\s\S]*?Some\(\([\s\S]*?"ok",[\s\S]*?JsValue::from\([\s\S]*?state\.ok[\s\S]*?\)\),[\s\S]*?\]\)[\s\S]*?\}\]\);/u);
 });
@@ -215,7 +216,7 @@ export function pad(): string {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn pad\(\) -> Result<String, rt::TsonicError>/u);
   assert.match(text, /js_string::pad_start_with\("7", 3\.0, "0"\)\?/u);
@@ -225,7 +226,7 @@ export function pad(): string {
 test("JS arrays lower to one identity-preserving carrier with fact-backed iteration", () => {
   const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": denseSource } });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /let xs: js_abi::JsArray<i32> = js_abi::JsArray::from_dense\(vec!\[1, 2, 3\]\);/u);
   assert.match(text, /for value in xs\.iter_values\(\) \{/u);
@@ -272,7 +273,7 @@ export function edit(values: int32[]): int32 {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /values\.push_many\(\[2, 3\]\)/u);
   assert.match(text, /values\.unshift_many_discard\(\[0, 1\]\)/u);
@@ -319,7 +320,7 @@ export function values(): string {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(
     text,
@@ -343,7 +344,7 @@ export function copy(values: Map<string, string>): string {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /js_abi::array_from_vec\(&values\.values\(\)\)/u);
   assert.match(text, /js_abi::array_from_vec_map/u);
@@ -390,7 +391,7 @@ export function values(): string {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /left[\s\S]*\.concat\(\[[\s\S]*JsArrayConcatItem::Value\([\s\S]*f64_to_i32\(4\.0\)\?[\s\S]*JsArrayConcatItem::Array\(right\)[\s\S]*\]\)/u);
 });
@@ -418,7 +419,7 @@ export function update(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /let dense: js_abi::JsArray<i32> = js_abi::JsArray::from_dense\(vec!\[1, 2, 3\]\);/u);
   assert.match(text, /let inferred: js_abi::JsArray<f64> = js_abi::JsArray::from_dense/u);
@@ -438,7 +439,7 @@ export function probe(name: string): boolean {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn probe\(name: &str\) -> bool \{/u);
   assert.match(text, /js_string::to_upper_case\(name\)/u);
@@ -463,7 +464,7 @@ export function probe(text: string, index: int32): boolean {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn probe\(text: &str, index: i32\)/u);
   assert.match(text, /js_string::char_at\(text, 0\.0\)\?/u);
@@ -493,7 +494,7 @@ export function probe(text: string, values: readonly int32[]): boolean {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn probe\(text: &str, values: js_abi::JsArray<i32>\) -> Result<bool, rt::TsonicError>/u);
   assert.match(text, /values\.slice_to\(1\.0, 3\.0\)/u);
@@ -530,7 +531,7 @@ export function probe(text: string, index: int32): string {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /js_string::split\(text, ",", 2\.0\)\?/u);
   assert.match(text, /js_string::char_code_at\(text, index\)/u);
@@ -587,7 +588,7 @@ export function probe(value: number, integer: int32): boolean {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /js_abi::number_is_finite\(value\)/u);
   assert.match(text, /js_abi::number_is_integer\(value\)/u);
@@ -625,7 +626,7 @@ export function collections(): boolean {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /let m: js_abi::JsMap<i32, String> = js_abi::JsMap::new\(\);/u);
   assert.match(text, /m\.set_discard\(1, String::from\("one"\)\);/u);
@@ -649,7 +650,7 @@ export function timing(): boolean {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /js_abi::JsDate::from_millis\(1000\.0\)/u);
   assert.match(text, /d\.get_time\(\) == 1000\.0/u);

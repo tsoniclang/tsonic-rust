@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -41,7 +42,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /item\s*\.as_ref\(\)\s*\.map\(\s*\|optional_receiver/u);
   assert.match(source, /value\s*\.as_ref\(\)\s*\.map\(\s*\|optional_receiver/u);
@@ -79,7 +80,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /values\s*\.as_ref\(\)\s*\.and_then\(\s*\|optional_receiver/u);
   assert.doesNotMatch(source, /\.transpose\(\)|\.flatten\(\)/u);
@@ -102,7 +103,7 @@ export function count(store: Store | undefined): int32 | undefined {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   assert.match(
     artifactText(result, "src/index.rs"),
     /store\s*\.as_ref\(\)\s*\.map\(\s*\|optional_receiver.*optional_receiver\.count/su,
@@ -125,7 +126,7 @@ export function total(meter: Meter | undefined): int32 | undefined {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   assert.match(
     artifactText(result, "src/index.rs"),
     /meter\s*\.as_ref\(\)\s*\.map\(\s*\|optional_receiver.*optional_receiver\.total\(\)/su,
@@ -147,7 +148,7 @@ export function length(value: string): nativeUint {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.doesNotMatch(source, /\.map\(/u);
   validateGeneratedProject("optional-non-null", result.artifacts);
@@ -180,7 +181,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   assert.match(
     artifactText(result, "src/index.rs"),
     /counter\s*\.as_ref\(\)\s*\.map\(\s*\|optional_receiver.*optional_receiver\.current\(\)/su,
@@ -219,7 +220,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /value\s*\.as_ref\(\)\s*\.map\(\s*\|optional_receiver/u);
   assert.match(

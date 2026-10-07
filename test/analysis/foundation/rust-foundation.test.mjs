@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -49,7 +50,7 @@ export function add(left: int32, right: int32): int32 {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   assert.match(artifactText(result, "src/lib.rs"), /#!\[no_std\]/u);
   assert.doesNotMatch(
     result.artifacts.filter((artifact) => artifact.language === "rust")
@@ -71,7 +72,7 @@ export function greet(name: string): string {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   assert.match(artifactText(result, "src/lib.rs"), /#!\[no_std\][\s\S]*extern crate alloc;/u);
   assert.match(artifactText(result, "Cargo.toml"), /features = \["alloc"\]/u);
   validateGeneratedProject("foundation-alloc-string", result.artifacts);
@@ -121,7 +122,7 @@ export function length(values: Vec<int32>): nativeUint {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /alloc::vec::Vec<i32>/u);
   assert.doesNotMatch(source, /std::/u);

@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
@@ -17,7 +18,7 @@ for (const surfaces of [undefined, ["js"]]) {
       files: { ...pointerViewFiles, "index.ts": `${pointerViewFiles["index.ts"]}
 export function main(): void { if (!run()) throw new Error("pointer view contract"); }` },
     });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     assert.match(artifactText(result, "src/index.rs"), /base\.try_view\(/u);
     assert.doesNotMatch(artifactText(result, "src/index.rs"), /\bunsafe\b/u);
     validateGeneratedProject(`pointer-views-${surfaces?.[0] ?? "native"}`, result.artifacts, { run: true });
@@ -38,7 +39,7 @@ export function check(left: Address | undefined, right: Address | undefined): bo
 export function main(): void { if (!check(undefined, undefined)) throw new Error("raw identity"); }
 ` },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /Option<rt::RawPointer>/u);
   assert.match(output, /RawPointer::same\(/u);
@@ -61,7 +62,7 @@ export function optional(pointer: Pointer<int32> | undefined): Pointer<int32> | 
 }
 ` },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /Location::<T, rt::TsonicError>::hash\(pointer\.as_ref\(\)\)/u);
   assert.match(output, /pointer\.try_map\(/u);
@@ -87,7 +88,7 @@ export function run(): int32 {
 }
 ` },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /Location::try_bind\(/u);
   assert.match(output, /Location::try_bind\(\s*identity,/u);
@@ -120,7 +121,7 @@ export function bothMissing(): boolean {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /pub fn replace<T>\(\s*pointer: rt::Location<T, rt::TsonicError>,\s*value: T,?\s*\) -> Result<T, rt::TsonicError>/u);
   assert.match(output, /pointer\.try_store\(value\)\?;\s*pointer\.try_load\(\)/u);
@@ -152,7 +153,7 @@ export function retainFunction<T>(
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /pub fn retainRaw<T: 'static>\(value: \*const T\) -> rt::Location<\*const T, rt::TsonicError>/u);
   assert.match(output, /pub fn retainFunction<T: 'static>\(value: fn\(T\) -> T\) -> rt::Location<fn\(T\) -> T, rt::TsonicError>/u);
@@ -179,7 +180,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   assert.match(artifactText(result, "src/index.rs"), /value\.clone\(\)/u);
   validateGeneratedProject("captured-string-updates", result.artifacts, { run: true });
 });
@@ -210,7 +211,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /rt::Location::allocate\(false\)/u);
   assert.match(output, /rt::Location::allocate\(String::from\(""\)\)/u);
@@ -310,7 +311,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /let local: rt::Location<i32, core::convert::Infallible> = rt::Location::allocate\(1\);/u);
   assert.match(output, /fn allocateGeneric<T: Clone \+ 'static>\(value: T\) -> rt::Location<T, rt::TsonicError>/u);
@@ -377,7 +378,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /let update_location/u);
   assert.match(output, /let update_previous/u);
@@ -436,7 +437,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /pub static value: rt::ModuleCell<i32>/u);
   assert.match(output, /\.with\(\|module_binding\| module_binding\.location\(\)\)/u);
@@ -473,7 +474,7 @@ export function publicValue<V>(value: V): Pointer<V> {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   assert.match(
     artifactText(result, "src/storage.rs"),
     /pub fn allocateValue<T: Clone \+ 'static>\(value: T\) -> rt::Location<T, rt::TsonicError>/u,
@@ -523,7 +524,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const run = validateGeneratedProject(
     "typed-location-provider-proof-bin",
     result.artifacts,
@@ -556,7 +557,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const run = validateGeneratedProject(
     "typed-location-provider-argument-proof-bin",
     result.artifacts,
@@ -613,7 +614,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const run = validateGeneratedProject(
     "typed-location-element-argument-proof-bin",
     result.artifacts,
@@ -662,7 +663,7 @@ export function main(): void {
 `,
     },
   });
-  assert.deepEqual(distinct.result.diagnostics, []);
+  assertNoTargetDiagnostics(distinct.result.diagnostics);
   const run = validateGeneratedProject(
     "typed-location-disjoint-roots-proof-bin",
     distinct.result.artifacts,
@@ -709,7 +710,7 @@ export function main(): void {
   }
 }
 ` } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("typed-location-empty-identity", result.artifacts, { run: true });
 });
 
@@ -727,7 +728,7 @@ export function run(value: string): string {
 export function ordinary(value: int32): int32 { return keepalive(value); }
 export function retainGeneric<T>(value: T): T { retain(value); return value; }
 ` } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   assert.equal(output.match(/rt::keep_alive\(&value\)/gu)?.length, 3);
   assert.match(output, /fn retainGeneric<T>\(value: T\) -> T/u);
@@ -777,7 +778,7 @@ export function run(value: int32): int32 {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /fn loadptr\(value: i32\) -> i32/u);
   assert.match(output, /loadptr\(value\)/u);

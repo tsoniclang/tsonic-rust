@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust, artifactText } from "../../helpers/rust-session.mjs";
@@ -25,7 +26,7 @@ test("Promise.resolve preserves exact values, absence, evaluation and existing p
       }
     ` },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   assert.match(artifactText(result, "src/index.rs"), /JsPromise::resolved/);
   assert.match(artifactText(result, "src/index.rs"), /std::convert::identity/);
   validateGeneratedProject("promise-resolution", result.artifacts, { run: true });

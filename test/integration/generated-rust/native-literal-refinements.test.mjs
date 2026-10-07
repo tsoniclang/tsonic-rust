@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
@@ -10,7 +11,7 @@ for (const surface of ["native", "js"]) {
       target: { id: "rust", options: { outputType: "bin" } }, files: {
         "index.ts": nativeLiteralRefinementsSource + '\nexport function main(): void { if (!run()) throw new Error("native literal refinements"); }',
       } });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject(`native-literal-refinements-${surface}`, result.artifacts, { run: true });
   });
 }

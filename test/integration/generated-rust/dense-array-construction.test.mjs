@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { artifactText, compileRust } from "../../helpers/rust-session.mjs";
@@ -13,7 +14,7 @@ for (const [name, source, surfaces] of [
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: {
       "index.ts": source + '\nexport function main(): void { if (!run()) throw new Error("dense construction"); }',
     } });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     const generated = artifactText(result, "src/index.rs");
     assert.match(generated, /extend_from_slice/u);
     assert.doesNotMatch(generated.replace(/for value in combined\.iter_values\(\)/u, ""), /iter_values|\.to_vec\(|\.concat\(/u);

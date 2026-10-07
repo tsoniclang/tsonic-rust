@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { multipleArrayRefinementSource } from "../../../../../tsonic/test/fixtures/recursive-array-refinement.mjs";
@@ -30,7 +31,7 @@ test("native union projection proves every carrier and selection without copying
     variant => variant.operation, payload => payload);
   const valid = context();
   const result = plan(fact, valid);
-  assert.deepEqual(valid.diagnostics, []);
+  assertNoTargetDiagnostics(valid.diagnostics);
   assert.equal(result.kind, "match");
   assert.equal(result.expression.kind, "reference");
   assert.equal(result.expression.expr, receiver);

@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { selectRustFlowReadProjection } from "../../../dist/policy/types/value-carrier-reconciliation.js";
@@ -22,7 +23,7 @@ test("optional exclusive-reference projection is a native reborrow, never a Clon
     } }, sourceFile, diagnostics: [] };
     const expression = { kind: "path", path: "selected" };
     const projected = planRustFlowReadProjection(node, expression, selected.fact, context);
-    assert.deepEqual(context.diagnostics, []);
+    assertNoTargetDiagnostics(context.diagnostics);
     assert.equal(projected.kind, "match");
     assert.deepEqual(projected.expression, canMove ? expression : {
       kind: "method-call", receiver: expression, method: "as_deref_mut", receiverMode: "mut-ref", args: [],
@@ -57,7 +58,7 @@ test("optional non-Clone payloads may move or borrow but cannot acquire a clone 
     if (canMove || borrowed) {
       assert.equal(projected.kind, "match");
       assert.equal(projected.arms[0].expression.kind, "path");
-      assert.deepEqual(context.diagnostics, []);
+      assertNoTargetDiagnostics(context.diagnostics);
     } else {
       assert.equal(projected, undefined);
       assert.equal(context.diagnostics.length, 1);

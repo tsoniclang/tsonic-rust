@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
@@ -10,7 +11,7 @@ for (const surfaces of [[], ["js"]]) {
     ["physical builtin and project setters", { "index.ts": liveErrorBaseWriteSource }]]) {
     test(`exact Error compilation retains ${name} in ${profile}`, () => {
       const { result } = compileRust({ surfaces, files });
-      assert.deepEqual(result.diagnostics, []);
+      assertNoTargetDiagnostics(result.diagnostics);
       assert.ok(result.artifacts.length !== 0);
     });
   }
@@ -24,7 +25,7 @@ for (const surfaces of [[], ["js"]]) {
         }
         return original.message === "changed";
       }` } });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     const source = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
     assert.match(source, /rt::MutableJsError::error\("original"\)/);
     assert.match(source, /WritableErrorObject::set_error_message/);
@@ -45,7 +46,7 @@ for (const surfaces of [[], ["js"]]) {
   for (const projectError of [false, true]) {
     test(`sealed non-Error thrown variants do not poison writable ${projectError ? "project" : "native"} Error recovery in ${profile}`, () => {
       const { result } = compileRust({ surfaces, files: { "index.ts": liveErrorMixedRecoverySource(projectError) } });
-      assert.deepEqual(result.diagnostics, []);
+      assertNoTargetDiagnostics(result.diagnostics);
       const source = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
       assert.match(source, /WritableErrorObject::set_error_message/);
       assert.match(source, /ErrorTransport::Unrelated\(_\) => None/);
@@ -57,7 +58,7 @@ for (const surfaces of [[], ["js"]]) {
       class Failure extends Error { readonly code = 7; }
       export function run(value: Error): boolean { return value instanceof Failure; }
       ` } });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     const source = result.artifacts.filter(artifact => artifact.path.endsWith("/index.rs")).map(artifact => artifact.text).join("\n");
     assert.match(source, /value\.as_transport\(\)/);
     assert.match(source, /rt::ErrorTransport::Failure/);
@@ -71,7 +72,7 @@ for (const surfaces of [[], ["js"]]) {
         let original = new Error("first"); original = new Error("second");
         mutate(original); return original.message === "changed";
       }` } });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     const source = result.artifacts.filter(artifact => artifact.path.endsWith("/index.rs")).map(artifact => artifact.text).join("\n");
     assert.match(source, /fn mutate\(error: rt::WritableSourceError\)/);
     assert.doesNotMatch(source, /fn mutate\(mut error/);
@@ -80,13 +81,13 @@ for (const surfaces of [[], ["js"]]) {
 
   test(`captured Error writes publish coherent lifetime effects through arrow closures in ${profile}`, () => {
     const { result } = compileRust({ surfaces, files: { "index.ts": errorBorrowEffectsSource("arrow") } });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     assert.ok(result.artifacts.length !== 0);
   });
 }
 
 test("captured immutable Error stack recapture publishes coherent guard effects through an arrow closure", () => {
   const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": errorStackRecaptureSource("arrow") } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   assert.ok(result.artifacts.length !== 0);
 });

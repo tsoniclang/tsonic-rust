@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
@@ -10,7 +11,7 @@ for (const surface of ["native", "js"]) {
       target: { id: "rust", options: { outputType: "bin" } }, files: {
         "index.ts": closedRuntimeCategoriesSource + '\nexport function main(): void { if (!run()) throw new Error("closed runtime categories"); }',
       } });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     const source = result.artifacts.map(artifact => artifact.text).join("\n");
     assert.doesNotMatch(source, /std::any::|type_name\(/);
     validateGeneratedProject(`closed-runtime-categories-${surface}`, result.artifacts, { run: true });

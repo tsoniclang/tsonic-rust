@@ -1,4 +1,5 @@
 import { rustValueBlock } from "../../target-ast/value-block.js";
+import { cloneRustExpression as cloneExpression } from "../../target-ast/expressions.js";
 import type { Node } from "@tsonic/tsts";
 import { rustCapturedFieldStorage } from "./captured-fields.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
@@ -295,7 +296,7 @@ export function invokeRustStructuralObjectMethod(
     if (storageOverride !== undefined || field.presence !== "required" || field.storage !== "stored") return undefined;
     const dispatch: RustExpr = { kind: "field", receiver, name: "dispatch" };
     return { kind: "method-call", receiver: context.input.program.structuralShapes.definitionForCarrier(receiverCarrier)?.construction === undefined
-      ? { kind: "method-call", receiver: dispatch, method: "clone", args: [] } : dispatch,
+      ? cloneExpression(dispatch) : dispatch,
       method: field.targetName, args: arguments_, ...(genericArguments.length === 0 ? {} : { genericArguments }) };
   }
   const receiverName = allocateRustSyntheticName(
@@ -309,9 +310,9 @@ export function invokeRustStructuralObjectMethod(
   const receiverPath: RustExpr = { kind: "path", path: receiverName };
   const method = storageOverride?.expression ?? readRustStructuralObjectMethodStorage(receiverCarrier, receiverPath, storageIndex, context);
   if (method === undefined) return undefined;
-  const inputs: readonly RustExpr[] = [...(field.receiverIndependent === true ? [] : [{
-    kind: "method-call", receiver: receiverPath, method: "clone", args: [],
-  } satisfies RustExpr]), ...arguments_];
+  const inputs: readonly RustExpr[] = [...(field.receiverIndependent === true ? [] : [
+    cloneExpression(receiverPath),
+  ]), ...arguments_];
   return rustValueBlock([{ name: receiverName, value: receiver }, {
       name: methodName,
       value: method,
@@ -377,7 +378,7 @@ function writeRustStoredObjectFieldStorage(
         projection.length !== 0 || operator !== "=") return undefined;
       const dispatch: RustExpr = { kind: "field", receiver, name: "dispatch" };
       return { kind: "try", expr: { kind: "method-call", receiver: field.property.selfMode === "ref" ? dispatch
-        : { kind: "method-call", receiver: dispatch, method: "clone", args: [] },
+        : cloneExpression(dispatch),
         method: field.property.setterTargetName, args: [value] }, resultErrorType: error, operandErrorType: operand };
     }
     if (field.method === true && field.receiverIndependent !== true || field.readonly && projection.length === 0) {
@@ -782,14 +783,5 @@ function callRustStructuralObjectAccessor(
       method: "call",
       args: [{ kind: "tuple-literal", elements: arguments_ }],
     },
-  };
-}
-
-function cloneExpression(expression: RustExpr): RustExpr {
-  return {
-    kind: "method-call",
-    receiver: expression,
-    method: "clone",
-    args: [],
   };
 }

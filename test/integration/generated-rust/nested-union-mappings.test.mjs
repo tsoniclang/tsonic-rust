@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { acmeTestingPackage, compileRust } from "../../helpers/rust-session.mjs";
@@ -35,7 +36,7 @@ export function main(): void {
     read(flatten(group(true))) === 1n && read(flatten(group(() => wide))) === wide);
 }
 ` } });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject("nested-union-mappings", result.artifacts, { run: true });
   });
 }

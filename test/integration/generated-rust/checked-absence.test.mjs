@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
@@ -9,6 +10,6 @@ test("checked array values and loose absence tests use the canonical native abse
     target: { id: "rust", options: { outputType: "bin" } }, files: {
       "index.ts": checkedAbsenceSource + '\nexport function main(): void { if (!run()) throw new Error("checked absence"); }',
     } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("checked-absence", result.artifacts, { run: true });
 });

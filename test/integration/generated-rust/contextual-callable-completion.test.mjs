@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { contextualCallableCompletionSource, optionalCallableCompletionSource } from "../../../../tsonic/test/fixtures/contextual-callable-completion.mjs";
@@ -7,7 +8,7 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 test("contextual broad callbacks complete through their native absence storage", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
     files: { "index.ts": contextualCallableCompletionSource + '\nexport function main(): void { if (!run()) throw new Error("contextual completion"); }' } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
   assert.match(output, /OptionalStorage<.*JsValue>.*>::absent\(/u);
   assert.doesNotMatch(output, /\.map\(\|_\||from_closed\(&\(\)\)|unreachable_unchecked/u);
@@ -19,7 +20,7 @@ for (const surfaces of [[], ["js"]]) {
   test(`optional callable completion retains exact native absence in ${lane}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
       files: { "index.ts": optionalCallableCompletionSource + '\nexport function main(): void { if (!run()) throw new Error("optional completion"); }' } });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject(`optional-callable-completion-${lane}`, result.artifacts, { run: true });
   });
 }

@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
@@ -32,7 +33,7 @@ export function choose(value: string | undefined, candidate: string | undefined)
   });
   const valid = context(fact);
   assert.ok(planSwitchStatement(node, valid), JSON.stringify(valid.diagnostics.map(({ code, message }) => ({ code, message }))));
-  assert.deepEqual(valid.diagnostics, []);
+  assertNoTargetDiagnostics(valid.diagnostics);
   const first = fact.clauses[0];
   for (const mutation of [
     { clauses: undefined }, { clauses: [] }, { clauses: new Array(fact.clauses.length) },

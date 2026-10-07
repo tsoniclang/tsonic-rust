@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
@@ -10,7 +11,7 @@ for (const surface of ["native", "js"]) test(`empty array storage retains its un
     target: { id: "rust", options: { outputType: "bin" } }, files: {
       "index.ts": files["index.ts"] + '\nexport function main(): void { if (!run()) throw new Error("empty array storage"); }',
     } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
   assert.match(source, /core::convert::Infallible/u);
   assert.doesNotMatch(source, /js_value_from_array|JsValue|\.clone\(\)/u);

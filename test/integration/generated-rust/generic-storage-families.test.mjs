@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { acmeTestingPackage, compileRust } from "../../helpers/rust-session.mjs";
@@ -93,7 +94,7 @@ export function main(): void {
 `,
     },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("generic-storage-families", result.artifacts, { run: true });
 });
 
@@ -108,7 +109,7 @@ for (const surfaces of [[], ["js"]]) {
           '\nexport function main(): void { if (!run()) throw new Error("independent storage families"); }',
       },
     });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject(`independent-storage-families-${surfaces[0] ?? "native"}`, result.artifacts, { run: true });
   });
   test(`inferred structural arrays preserve backing and element aliases (${surfaces[0] ?? "native"})`, { timeout: 300_000 }, () => {
@@ -117,7 +118,7 @@ for (const surfaces of [[], ["js"]]) {
       files: { "index.ts": structuralArrayStorageSource +
         '\nexport function main(): void { if (!run()) throw new Error("structural array storage"); }' },
     });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     if (surfaces.length === 0) {
       const generated = result.artifacts.filter(artifact => artifact.path.endsWith(".rs"))
         .map(artifact => artifact.text).join("\n");
@@ -166,7 +167,7 @@ export function main(): void {
 `,
     },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("inferred-pointer-family", result.artifacts, { run: true });
 });
 
@@ -213,7 +214,7 @@ export function main(): void {
 }
 ` },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("inferred-native-pointer", result.artifacts, { run: true });
 });
 
@@ -237,7 +238,7 @@ export function main(): void {
 }
 ` },
     });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject(`generic-reference-interfaces-${surfaces[0] ?? "native"}`, result.artifacts, { run: true });
   });
 }

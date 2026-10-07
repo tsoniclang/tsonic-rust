@@ -14,6 +14,24 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { planRustSourceCallableValue } from "./source-callable-value.js";
 import { planRustAbsentValue } from "./optional-storage.js";
 import { lowerRustValueConversion } from "./value-conversions.js";
+import { rustModuleCallableStorageFactKey } from "../../../analysis/callables/module-values.js";
+
+export function planRustCallableInputProducer(
+  expression: RustExpr, source: import("../../../target-model/types/model.js").TargetTypeRef, context: RustPlanContext,
+  node?: Node,
+): RustExpr | undefined {
+  const reference = node === undefined ? undefined : context.input.program.facts.getFact(node, rustDirectCallableReferenceFactKey);
+  if (reference !== undefined && context.input.program.facts.getFact(reference.sourceDeclaration, rustModuleCallableStorageFactKey)?.kind === "inline") {
+    if (!rustTargetTypeRefEquals(reference.carrier, source)) return undefined;
+    const selected = planRustSourceCallableValue(reference, context);
+    if (selected === undefined) return undefined;
+    expression = selected;
+  }
+  const sourceType = rustCallableConstructionType(source, context);
+  if (sourceType === undefined) return undefined;
+  const producer = inlineCallableProducer(expression, sourceType);
+  return producer.inline ? { kind: "block", body: { statements: [...producer.statements, { kind: "tail", expr: producer.value }] } } : expression;
+}
 
 export function planRustCallableConversion(
   conversion: RustCallableConversion,
@@ -41,7 +59,7 @@ function planSelectedRustCallableConversion(
   if (target === undefined) return undefined;
   const sourceType = rustCallableConstructionType(conversion.source, context);
   const targetType = rustCallableConstructionType(conversion.target, context);
-  const argumentsType = rustTypeFromCarrierInContext({ kind: "tuple", elements: source.parameters }, context);
+  const argumentsType = rustTypeFromCarrierInContext({ kind: "tuple", elements: target.parameters }, context);
   if (sourceType === undefined || !native && targetType === undefined || argumentsType === undefined) return undefined;
   const names = context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []);
   const callable = allocateRustSyntheticName(names, "callable");
@@ -51,7 +69,7 @@ function planSelectedRustCallableConversion(
     type: rustTypeFromCarrierInContext(type, context),
   })) : [];
   if (nativeParameters.some(parameter => parameter.type === undefined)) return undefined;
-  const producer = inlineCallableProducer(expression, sourceType, argumentsType);
+  const producer = inlineCallableProducer(expression, sourceType);
   const arguments_: RustExpr[] = [];
   for (const [index, parameter] of conversion.parameters.entries()) {
     const value = lowerValue(parameter, native ? { kind: "path", path: nativeParameters[index]!.name } : {
@@ -80,7 +98,7 @@ function planSelectedRustCallableConversion(
     }],
   };
   const closure: RustExpr = {
-    kind: "closure", move: true, params: native ? nativeParameters : [{ name: argumentsName, byRefCopy: false }], body,
+    kind: "closure", move: true, params: native ? nativeParameters : [{ name: argumentsName, byRefCopy: false, type: argumentsType }], body,
   };
   return { kind: "block", body: { statements: [...producer.statements, {
     kind: "let", mutable: false, name: callable, init: producer.value,
@@ -106,20 +124,20 @@ function planSelectedRustCallableConversion(
 function inlineCallableProducer(
   expression: RustExpr,
   sourceType: RustType,
-  argumentsType: RustType,
 ): { readonly statements: readonly RustStmt[]; readonly value: RustExpr; readonly inline: boolean } {
   if (expression.kind === "block") {
     const terminal = expression.body.statements[expression.body.statements.length - 1];
     if (terminal?.kind !== "tail" || (terminal.attrs?.length ?? 0) !== 0 ||
       (expression.body.innerAttrs?.length ?? 0) !== 0) return { statements: [], value: expression, inline: false };
-    const selected = inlineCallableProducer(terminal.expr, sourceType, argumentsType);
+    const selected = inlineCallableProducer(terminal.expr, sourceType);
     return selected.inline ? { ...selected, statements: [...expression.body.statements.slice(0, -1), ...selected.statements] }
       : { statements: [], value: expression, inline: false };
   }
-  const body = expression.kind === "associated-call" && expression.method === "new" &&
+  const body = expression.kind === "closure" || expression.kind === "closure-block" ? expression
+    : expression.kind === "associated-call" && expression.method === "new" &&
     expression.trait === undefined && expression.genericArguments === undefined &&
     rustTypeEquals(expression.owner, sourceType) && expression.args.length === 1 ? expression.args[0] : undefined;
   return (body?.kind === "closure" || body?.kind === "closure-block") && body.params.length === 1
-    ? { statements: [], inline: true, value: { ...body, params: body.params.map(parameter => ({ ...parameter, type: argumentsType })) } }
+    ? { statements: [], inline: true, value: body }
     : { statements: [], value: expression, inline: false };
 }

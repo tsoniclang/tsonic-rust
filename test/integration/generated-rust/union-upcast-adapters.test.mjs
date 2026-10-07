@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
@@ -10,7 +11,7 @@ for (const surfaces of [[], ["js"]]) {
       ...closedInstanceAdapterFiles, "index.ts": closedInstanceAdapterFiles["index.ts"] +
         '\nexport function main(): void { if (!run()) throw new Error("union override result"); }',
     } });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject("union-upcast-adapters", result.artifacts, { run: true });
   });
 }
@@ -21,7 +22,7 @@ for (const surfaces of [[], ["js"]]) {
       ...genericInstanceAdapterFiles, "index.ts": genericInstanceAdapterFiles["index.ts"] +
         '\nexport function main(): void { if (!run()) throw new Error("generic override result"); }',
     } });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject("generic-upcast-adapters", result.artifacts, { run: true });
   });
 }

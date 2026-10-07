@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { compileRust, artifactText } from "../../helpers/rust-session.mjs";
@@ -24,7 +25,7 @@ test("Promise executors and continuations preserve exact native values and adopt
       }
     `,
   } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   assert.match(artifactText(result, "src/index.rs"), /PromiseResolution::Value/);
   validateGeneratedProject("promise-continuations", result.artifacts, { run: true });
 });
@@ -49,7 +50,7 @@ test("Promise rejection preserves a source error's identity and native payload",
       }
     `,
   } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("promise-rejection-identity", result.artifacts, { run: true });
 });
 
@@ -73,7 +74,7 @@ test("authored unknown rejection handlers receive the exact native error for the
       }
     `,
   } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /\.then\(/u);
   assert.match(source, /\.catch\(/u);

@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { planRustFlowReadProjection, planRustValueProjection } from "../../../../dist/backend/planner/expressions/flow-reads.js";
@@ -19,7 +20,7 @@ test("optional readonly native references preserve one exact borrow without redu
   } }, diagnostics, syntheticNames: { reserved: new Set(), nextSuffixByBase: new Map() } };
   for (const ownership of ["move", "clone", "borrow"]) {
     const result = planRustValueProjection({}, { kind: "path", path: "values" }, fact, context, ownership);
-    assert.deepEqual(diagnostics, []);
+    assertNoTargetDiagnostics(diagnostics);
     assert.equal(result.arms[0].expression.kind, "path");
     if (ownership === "borrow") assert.equal(result.expression.method, "as_ref");
     else assert.equal(result.expression.kind, "path");
@@ -47,7 +48,7 @@ test("optional native associated values move or borrow without inventing Clone, 
     if (succeeds) {
       assert.equal(result.kind, "match");
       assert.equal(result.arms[0].expression.kind, "path");
-      assert.deepEqual(diagnostics, []);
+      assertNoTargetDiagnostics(diagnostics);
     } else {
       assert.equal(result, undefined);
       assert.equal(diagnostics.length, 1);
@@ -69,20 +70,20 @@ test("source-call and flow-read projections share one native payload planner wit
     const expression = { kind: "call", path: "produce", args: [] };
     const owned = context();
     const result = planRustValueProjection(node, expression, fact, owned, "move");
-    assert.deepEqual(owned.diagnostics, []);
+    assertNoTargetDiagnostics(owned.diagnostics);
     assert.equal(result.kind, "match");
     assert.equal(result.expression, expression);
     assert.equal(result.arms[0].expression.kind, "path");
     assert.doesNotMatch(JSON.stringify(result), /clone|Box::|Rc::|from_closed/u);
     const borrowed = context();
     const borrow = planRustValueProjection(node, expression, fact, borrowed, "borrow");
-    assert.deepEqual(borrowed.diagnostics, []);
+    assertNoTargetDiagnostics(borrowed.diagnostics);
     assert.equal(borrow.expression.kind, "reference");
     assert.equal(borrow.expression.expr, expression);
     assert.equal(borrow.arms[0].expression.kind, "path");
     const copied = context();
     const copy = planRustValueProjection(node, expression, fact, copied, "clone");
-    assert.deepEqual(copied.diagnostics, []);
+    assertNoTargetDiagnostics(copied.diagnostics);
     assert.equal(copy.arms[0].expression.kind, selectedCarrier.kind === "source-primitive"
       ? "dereference" : "method-call");
     if (selectedCarrier.kind !== "source-primitive") assert.equal(copy.arms[0].expression.method, "clone");

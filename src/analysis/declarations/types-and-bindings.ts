@@ -39,6 +39,14 @@ import { resolveRustEvidenceNodesToCommonCarrier } from "../../policy/types/reso
 import { rustSourceUnionMemberDeclarationIsOwned } from "../../policy/evidence/source-union-members.js";
 import { rustSourceUnionValueTypes } from "../../policy/types/resolution/source-unions.js";
 import { closeRustSuspendedStorage } from "../../policy/types/suspended-storage.js";
+import { rustEnclosingStorageContract } from "../../policy/ownership/suspended-storage.js";
+
+export function closeRustBindingStorage(
+  walk: RustFactWalk, declaration: Node, carrier: TargetTypeRef | undefined,
+): TargetTypeRef | undefined {
+  return carrier === undefined ? undefined : closeRustSuspendedStorage(carrier, [],
+    rustEnclosingStorageContract(declaration, walk.context.ast, walk.context.sourceLifetimes), "field");
+}
 
 export function reserveTypeAliasUnion(walk: RustFactWalk, declaration: Node): void {
   const {ast} = walk.context;

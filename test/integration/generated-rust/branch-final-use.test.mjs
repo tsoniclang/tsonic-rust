@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
@@ -157,7 +158,7 @@ test("branch ownership and stable receiver borrowing compile and preserve alias 
     target: { id: "rust", options: { outputType: "bin", crateName: "branch_final_use" } },
     files: { "index.ts": sourceText },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   const branch = output.slice(output.indexOf("fn branch("), output.indexOf("fn retained("));
   assert.doesNotMatch(branch, /snapshot\.clone\(\)/u);

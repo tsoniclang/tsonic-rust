@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust, acmeTestingPackage } from "../../helpers/rust-session.mjs";
@@ -40,7 +41,7 @@ test("union flow projections retain exact optional dispatch and reject altered e
         externalCrateNameByFileName: new Map() };
       const input = { kind: "path", path: "selected" };
       const planned = planRustFlowReadProjection(node, input, selected.fact, context);
-      assert.deepEqual(context.diagnostics, []);
+      assertNoTargetDiagnostics(context.diagnostics);
       assert.equal(planned.arms[0].pattern.path, optional ? "Some" : "Value::Integer");
       assert.deepEqual(planned.expression, canMove ? input : { kind: "reference", expr: input });
       const projected = retainedAbsence ? planned.arms[0].expression.args[0] : planned.arms[0].expression;
@@ -86,7 +87,7 @@ for (const surfaces of [[], ["js"]]) {
         }
       ` },
     });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     const run = validateGeneratedProject("inferred-value-unions", result.artifacts, { run: true });
     assert.equal(run.status, 0, JSON.stringify(run));
   });
@@ -105,7 +106,7 @@ test("recursive array unions retain checker-selected inherited members", { timeo
       }
     ` },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const run = validateGeneratedProject("recursive-array-unions", result.artifacts, { run: true });
   assert.equal(run.status, 0, JSON.stringify(run));
 });

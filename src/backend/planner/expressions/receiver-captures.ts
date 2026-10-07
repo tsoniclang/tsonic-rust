@@ -72,6 +72,14 @@ export function planRustCapturedReceivers(
 ): { readonly bindings: readonly { readonly name: string; readonly value: RustExpr }[];
   readonly context: RustPlanContext } | undefined {
   if (!validateRustCapturedReceivers(node, receivers, creation)) return undefined;
+  return planRustReceiverOwners(node, receivers, creation, invocation, options);
+}
+
+export function planRustReceiverOwners(
+  node: Node, receivers: RustClosureCaptureFact["receivers"], creation: RustPlanContext,
+  invocation: RustPlanContext, options: { readonly staticStorage: boolean; readonly sharedStateName?: string; readonly offset: number },
+): { readonly bindings: readonly { readonly name: string; readonly value: RustExpr }[];
+  readonly context: RustPlanContext } | undefined {
   const bindings: { readonly name: string; readonly value: RustExpr }[] = [];
   const retained: RustExpr[] = [];
   for (const [index, capture] of receivers.entries()) {
@@ -144,9 +152,17 @@ export function planRustCapturedReceiverFields(
   invocation: RustPlanContext, options: { readonly staticStorage: boolean; readonly sharedStateName?: string; readonly offset: number },
 ): { readonly bindings: readonly { readonly name: string; readonly value: RustExpr }[];
   readonly context: RustPlanContext } | undefined {
+  if (!validateRustCapturedReceiverFields(node, fields, creation)) return undefined;
+  return planRustReceiverFieldOwners(fields, creation, invocation, options);
+}
+
+export function planRustReceiverFieldOwners(
+  fields: RustClosureCaptureFact["receiverFields"], creation: RustPlanContext,
+  invocation: RustPlanContext, options: { readonly staticStorage: boolean; readonly sharedStateName?: string; readonly offset: number },
+): { readonly bindings: readonly { readonly name: string; readonly value: RustExpr }[];
+  readonly context: RustPlanContext } | undefined {
   const bindings: { readonly name: string; readonly value: RustExpr }[] = [];
   const retained: RustExpr[] = [];
-  if (!validateRustCapturedReceiverFields(node, fields, creation)) return undefined;
   for (const [index, capture] of fields.entries()) {
     if (!requireRustCarrierRequirements(capture.carrier, options.staticStorage ? ["static"] : [], capture.reference, creation)) return undefined;
     if (options.sharedStateName !== undefined) {

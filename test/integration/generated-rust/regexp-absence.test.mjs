@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
@@ -7,6 +8,6 @@ import { regexpAbsenceSource } from "../../../../tsonic/test/fixtures/regexp-abs
 test("RegExp capture, index and split results preserve one native absence", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
     files: { "index.ts": regexpAbsenceSource + '\nexport function main(): void { if (!run()) throw new Error("RegExp absence"); }' } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("regexp-absence", result.artifacts, { run: true });
 });

@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -23,7 +24,7 @@ export function run(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /let resource: Resource = Resource::new\(\);/u);
   assert.match(source, /rt::Completion<\(\), \(\)>/u);
@@ -66,7 +67,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.doesNotMatch(
     methodAttributesInImpl(source, "Resource", "dispose"),
@@ -124,7 +125,7 @@ export function doValues(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /rt::Completion::Return\(value\)/u);
   assert.match(source, /rt::Completion::Return\(resource\.clone\(\)\)/u);
@@ -150,7 +151,7 @@ export function run(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.deepEqual(
     [...source.matchAll(/let dispatch_receiver(?:_\d+)? = (second|first);/gu)]
@@ -176,7 +177,7 @@ export async function run(): Promise<void> {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /async fn dispose_async\(&self\)/u);
   assert.match(source, /resource\.dispose_async\(\)\.await/u);
@@ -229,7 +230,7 @@ export async function run(fail: boolean): Promise<void> {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.equal([...source.matchAll(/let resource: (?:Resource|AsyncResource) =/gu)].length, 2);
   assert.match(source, /let dispatch_receiver(?:_\d+)? = resource;[\s\S]*dispatch_resource_dispose\(\)/u);
@@ -251,7 +252,7 @@ export function run(resource: Resource | null): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /if let Some\(resource_2\) = active\.as_ref\(\)/u);
   assert.match(source, /let dispatch_receiver(?:_\d+)? = resource_2;[\s\S]*dispatch_resource_dispose\(\)/u);
@@ -277,7 +278,7 @@ export function run(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /rt::TsonicResult<rt::Completion<\(\), \(\)>>/u);
   assert.match(source, /rt::finish_resource/u);
@@ -299,7 +300,7 @@ export function run(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.equal(source.indexOf("Resource::new()") < source.indexOf("while false"), true);
   assert.equal(source.indexOf("while false") < source.indexOf("dispatch_resource_dispose()"), true);
@@ -324,7 +325,7 @@ export function run(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /for resource in rt::iter_cloned\(&resources\)/u);
   assert.match(source, /let dispatch_receiver(?:_\d+)? = resource;[\s\S]*dispatch_resource_dispose\(\)/u);
@@ -351,7 +352,7 @@ export async function run(): Promise<void> {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /while let Some\(resource\) = .*next_yield\(\)\.await/u);
   assert.match(source, /resource\.dispose_async\(\)\.await/u);
@@ -408,7 +409,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /generator(?:_\d+)?\.yield_value\(7\)\.await/u);
   assert.match(source, /resource\.dispose\(\)/u);
@@ -459,7 +460,7 @@ export async function main(): Promise<void> {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /generator(?:_\d+)?\.yield_value\(7\)\.await/u);
   assert.match(source, /resource\.dispose_async\(\)\.await/u);

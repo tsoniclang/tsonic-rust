@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -52,7 +53,7 @@ export function collide(): int32 {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /let fooBar: i32 = 1;/u);
   assert.match(text, /let foo_bar: i32 = 2;/u);
@@ -79,7 +80,7 @@ export function read(type: string): string {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /fn new\(r#type: String\)/u);
   assert.match(text, /pub fn read\(r#type: String\) -> String/u);
@@ -106,7 +107,7 @@ export function read(value: string): string {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /fn r#match\(&self, value: String\) -> String/u);
   assert.match(text, /matcher\.r#match\(value\)/u);
@@ -156,7 +157,7 @@ export function some_value(): int32 {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn value_or_zero\(value: Option<i32>\) -> i32 \{/u);
   assert.match(text, /rt::option_coalesce\(value, core::convert::identity, \|\| 0\)/u);
@@ -213,7 +214,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /rt::option_coalesce\(left, Some, \|\| right\)/u);
   assert.equal(validateGeneratedProject("nullish-lazy-proof", result.artifacts, { run: true }).status, 0);
@@ -236,7 +237,7 @@ export function some_value(): int32 {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn value_or_zero\(value: Option<i32>\) -> i32/u);
   assert.match(text, /value_or_zero\(Some\(5\)\)/u);
@@ -266,7 +267,7 @@ export function shift(p: Point, dx: int32): Point {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /#\[doc\(hidden\)\][\s\S]*pub struct PointState \{\s*pub x: i32,\s*pub y: i32,/u);
   assert.match(text, /#\[derive\(Clone, Debug, PartialEq\)\]\npub struct Point \{\s*#\[doc\(hidden\)\]\s*pub state: rt::ObjectHandle<PointState>,/u);
@@ -323,7 +324,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const run = validateGeneratedProject("interface-identity-bin", result.artifacts, { run: true });
   assert.equal(run.status, 0);
 });
@@ -351,7 +352,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(
     artifactText(result, "src/shapes.rs"),
@@ -382,7 +383,7 @@ export function first(entry: [int32, string]): int32 {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn pair\(a: i32, label: String\) -> \(i32, String\)/u);
   assert.match(text, /let entry: \(i32, String\) = \(a, label\);/u);
@@ -411,7 +412,7 @@ export function main(): void {
 `,
     },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   assert.match(artifactText(result, "src/index.rs"), /entry\[rt::conversions::checked_integer::<usize>\(i\)\?\]/u);
   assert.equal(validateGeneratedProject("dynamic-tuple-index", result.artifacts, { run: true }).status, 0);
 });
@@ -436,7 +437,7 @@ export function is_off(mode: Mode): boolean {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub enum Mode \{\n    Off,\n    ReadOnly,\n    ReadWrite,\n\}/u);
   assert.match(text, /return Mode::ReadWrite;/u);
@@ -493,7 +494,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub enum Shape/u);
   assert.match(text, /match &shape/u);
@@ -527,7 +528,7 @@ export function drive(): int32 {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn zero\(\) -> Counter \{/u);
   assert.match(text, /Counter::zero\(\)/u);
@@ -550,7 +551,7 @@ export function drive(): int32 {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn pass_through<T>\(value: T\) -> T \{/u);
   assert.match(text, /pub fn drive\(\) -> Result<i32, rt::TsonicError>/u);
@@ -593,7 +594,7 @@ export async function drive(): Promise<int32> {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub async fn fetch_value\(seed: i32\) -> i32 \{/u);
   assert.match(text, /fetch_value\(41\)\.await/u);
@@ -616,7 +617,7 @@ export function bad(): int32 {
 `,
     },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   assert.match(artifactText(result, "src/index.rs"), /let stored = fetch_value\(\);/u);
 
   const asyncMain = compileRust({
@@ -627,7 +628,7 @@ export async function main(): Promise<void> {}
 `,
     },
   });
-  assert.deepEqual(asyncMain.result.diagnostics, []);
+  assertNoTargetDiagnostics(asyncMain.result.diagnostics);
   assert.match(
     artifactText(asyncMain.result, "src/main.rs"),
     /tsonic_rust_runtime::block_on\(async_main::tsonic_entry\(\)\)/u,
@@ -660,7 +661,7 @@ export function caller(flag: boolean): int32 {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn risky\(flag: bool\) -> Result<i32, rt::TsonicError> \{/u);
   assert.match(text, /return Err\(rt::TsonicError::from\(rt::JsError::error\(/u);

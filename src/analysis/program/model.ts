@@ -88,6 +88,7 @@ export interface RustTargetProgram {
   readonly declarationGenericRequirements: RustDeclarationGenericRequirementIndex;
   readonly valueLifetimes: RustValueLifetimePlan;
   readonly borrowedElementReads: import("./borrowed-element-reads.js").RustBorrowedElementReads;
+  readonly borrowedInitializers: import("../storage/borrowed-initializers.js").RustBorrowedInitializerQueries;
   readonly borrowStability: import("./borrow-stability.js").RustBorrowStabilityPlan;
   readonly structuralShapes: RustStructuralShapePlan;
   readonly frozenDataWrites: import("../objects/frozen-data-writes.js").RustFrozenDataWritePlan;
@@ -105,6 +106,7 @@ export interface RustTargetProgram {
   readonly enumMemberConstants: RustEnumMemberConstantIndex;
   readonly sourcePackageFacades: RustSourcePackageFacadeClassifications;
   readonly sourcePackageComponents: RustSourcePackageComponentClassifications;
+  readonly errorTransport: import("./error-transport.js").RustErrorTransportQueries;
   readonly countedLoops: RustCountedLoopRepresentationPlan;
   readonly projectFlowReadSelections: RustProjectFlowReadSelectionIndex;
   readonly sourceModuleConstructions: RustSourceModuleConstructionIndex;

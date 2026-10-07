@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -5,6 +6,7 @@ import { join } from "node:path";
 import { compileRust, artifactText } from "../../../helpers/rust-session.mjs";
 import { runCargo, writeGeneratedProject } from "../../../helpers/cargo-projects.mjs";
 import { nativeOwnershipCostSupport } from "../../../helpers/native-ownership-cost.mjs";
+import { nativeBorrowedHeaderReadTest } from "../../../helpers/native-borrowed-headers.mjs";
 import { borrowedNullishSequencesSource, incompatibleBorrowedSequenceSource, mutableBorrowedHeaderSource } from "../../../../../tsonic/test/fixtures/borrowed-nullish-sequences.mjs";
 import { createTsonicPlugin } from "../../../../../rust-nodejs/dist/index.js";
 
@@ -13,7 +15,7 @@ for (const surfaces of [[], ["js"]]) {
     const { result } = compileRust({ surfaces, capabilities: [createTsonicPlugin()],
       target: { id: "rust", options: { outputType: "lib", crateName: "borrowed_nullish_sequences" } },
       files: { "index.ts": borrowedNullishSequencesSource } });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     const output = artifactText(result, "src/index.rs");
     assert.doesNotMatch(output, /\.to_vec\(|\.collect\(|Box<dyn|Vec\s*<\s*Vec\s*<|option_coalesce/u);
     assert.match(output, /if let Some\(sequence_\d+\) = headers\.get_values\(&key\)\?\.as_ref\(\)/u);
@@ -42,7 +44,7 @@ for (const surfaces of [[], ["js"]]) {
     const mixedValues = surfaces.length === 0 ? 'assert_eq!(mixed, ["before", "fallback", "after"]);'
       : 'assert_eq!(mixed.get(0), Some("before".to_owned())); assert_eq!(mixed.get(1), Some("fallback".to_owned())); assert_eq!(mixed.get(2), Some("after".to_owned()));';
     writeFileSync(join(root, "tests/selection.rs"), `${nativeOwnershipCostSupport}
-use borrowed_nullish_sequences::index;
+use borrowed_nullish_sequences as index;
 ${surfaces.length === 0 ? "" : "use tsonic_rust_js::JsArray;"}
 
 fn handwritten(authored: Option<${authored}>, native: Option<${authored}>) -> ${authored} { ${hand} }
@@ -76,6 +78,8 @@ fn native_selection_aliasing_and_cost() {
     assert_eq!(index::chooseFromHeaders(None, headers.clone(), "missing".to_owned()).unwrap().len(), 0);
     assert_eq!(index::snapshotFromHeaders(headers.clone(), "missing".to_owned()).unwrap().len(), 0);
     assert_eq!(index::firstFromHeaders(headers.clone(), "missing".to_owned()).unwrap(), None);
+    assert_eq!(index::firstFromHeaderHolder(headers.clone(), "missing".to_owned()).unwrap(), None);
+    assert_eq!(index::guardedFirstFromHeaderHolder(headers.clone(), "missing".to_owned()).unwrap(), None);
     assert_eq!(index::joinFromHeaders(headers, "missing".to_owned()).unwrap(), "");
     let eager = tsonic_rust_runtime::Callable::new(|()| panic!("Eager fallback."));
     assert_eq!(index::chooseLazy(Some(authored), Some(native), eager).unwrap().len(), 4);
@@ -89,6 +93,8 @@ fn native_selection_aliasing_and_cost() {
     ${mixedValues}
     assert_eq!(calls.get(), 1);
 }
+
+${nativeBorrowedHeaderReadTest}
 `);
     runCargo(root, ["generate-lockfile", "--offline"]);
     runCargo(root, ["fmt", "--all"]);

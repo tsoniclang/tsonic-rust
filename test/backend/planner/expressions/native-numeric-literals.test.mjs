@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { planNumericLiteralWithCarrier, planBigIntLiteral } from "../../../../dist/backend/planner/expressions/fundamentals.js";
@@ -23,7 +24,7 @@ test("numeric literal producers preserve each exact native width independently o
     const { node, context } = contextFor("7", "NumericLiteral", carrier);
     assert.deepEqual(planNumericLiteralWithCarrier(node, carrier, context),
       { kind: "int-literal", text: suffix === undefined ? "7" : `7_${suffix}` });
-    assert.deepEqual(context.diagnostics, []);
+    assertNoTargetDiagnostics(context.diagnostics);
   }
   for (const [name, text] of [["float32", "7.0_f32"], ["float64", "7.0"]]) {
     const carrier = rustSourcePrimitiveTargetType(name);
@@ -36,6 +37,6 @@ test("wide bigint literals retain their checked native signedness without roundi
   for (const [name, suffix] of [["uint64", "u64"], ["int64", "i64"]]) {
     const { node, context } = contextFor("9007199254740993n", "BigIntLiteral", rustSourcePrimitiveTargetType(name));
     assert.deepEqual(planBigIntLiteral(node, context), { kind: "int-literal", text: `9007199254740993_${suffix}` });
-    assert.deepEqual(context.diagnostics, []);
+    assertNoTargetDiagnostics(context.diagnostics);
   }
 });

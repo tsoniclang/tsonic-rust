@@ -1,9 +1,10 @@
 import { rustValueBlock } from "../../target-ast/value-block.js";
 import type { Node } from "@tsonic/tsts";
-import { rustComputedMemberFactKey } from "../../../analysis/facts/operations/keys.js";
+import { rustComputedMemberFactKey, rustTargetOperationFactKey } from "../../../analysis/facts/operations/keys.js";
 import type { RustExpr } from "../../target-ast/nodes.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import type { RustPlanContext } from "../program/plan-context.js";
+import { diagnosticInput, type RustPlanContext } from "../program/plan-context.js";
+import { missingFactDiagnostic } from "../diagnostics.js";
 import { planExpression } from "./entry.js";
 import { effectivePlannedExpressionCarrier } from "./fundamentals.js";
 import { planRustValueFieldLocation, rustSourceFieldHasValueReceiver } from "../objects/value-fields.js";
@@ -20,6 +21,19 @@ export function prepareRustComputedMemberEvaluation(
   context: RustPlanContext,
 ): RustComputedMemberEvaluation | undefined {
   const fact = context.input.program.facts.getFact(node, rustComputedMemberFactKey);
+  const ast = context.input.program.source.ast;
+  const element = ast.is.IsElementAccessExpression(node) ? ast.as.AsElementAccessExpression(node) : undefined;
+  const parent = ast.parent(node);
+  const call = parent === undefined ? undefined
+    : context.input.program.facts.getFact(parent, rustTargetOperationFactKey);
+  if (fact !== undefined && (element === undefined || fact.receiver !== element.Expression ||
+    fact.key !== element.ArgumentExpression) ||
+    fact === undefined && element !== undefined && call?.kind === "source-call") {
+    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+      "rust.backend.computed-member-evaluation",
+      "Computed source member requires its exact sealed receiver and key evaluation."));
+    return undefined;
+  }
   if (fact === undefined || !fact.evaluateKey || context.expressionOverrides?.has(fact.key)) {
     return { bindings: [], context };
   }
@@ -33,6 +47,10 @@ export function prepareRustComputedMemberEvaluation(
   overrides.set(fact.key, {
     expression: { kind: "path", path: keyName }, carrier: keyCarrier, valueForm: "shared-reference",
   });
+  if (!fact.evaluateReceiver) return {
+    bindings: [{ name: keyName, value: evaluatedKey }],
+    context: { ...context, expressionOverrides: overrides },
+  };
   if (rustSourceAccessorHasValueReceiver(node, context)) {
     const evaluation = planRustSourceAccessorReceiver(node, [fact.key], context);
     if (evaluation === undefined) return undefined;

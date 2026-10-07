@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { optionalOverloadedMethodSource, optionalOverloadedBroadMethodSource } from "../../../../tsonic/test/fixtures/optional-overloaded-methods.mjs";
@@ -10,7 +11,7 @@ for (const surfaces of [[], ["js"]]) {
     test(`optional overloaded ${name} methods retain selected native calls in ${lane}`, { timeout: 300_000 }, () => {
       const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
         files: { "index.ts": sourceText + '\nexport function main(): void { if (!run()) throw new Error("optional overload"); }' } });
-      assert.deepEqual(result.diagnostics, []);
+      assertNoTargetDiagnostics(result.diagnostics);
       const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
       assert.doesNotMatch(output, /invoke_dynamic|read_dynamic_slot/u);
       validateGeneratedProject(`optional-overloaded-${name}-${lane}`, result.artifacts, { run: true });

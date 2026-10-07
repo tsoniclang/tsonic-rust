@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustTypeDefinitionRegistry } from "../../dist/analysis/project-types/type-definitions.js";
-import { rustProgramErrorConversionMatches, selectRustProgramErrorConversion } from "../../dist/target-model/conversions/program-error.js";
+import { rustProgramErrorConversionMatches, selectRustProgramErrorConversion,
+  mapRustProgramErrorRoute, rustProgramErrorRouteCarriers } from "../../dist/target-model/conversions/program-error.js";
 import { rustValueConversionContract } from "../../dist/target-model/conversions/contracts.js";
 import { selectRustSourceValueConversion } from "../../dist/policy/conversions/selection.js";
 import { isRustClosedValueCarrier } from "../../dist/target-model/types/carriers/closed-value-kind.js";
@@ -40,7 +41,8 @@ test("closed type definitions preserve one immutable profile selection and rejec
 test("finite native closed admission preserves direct routes and rejects malformed or escaping carriers", () => {
   for (const source of [rustEmptyObjectTargetType(), rustSourcePrimitiveTargetType("uint64")]) {
     const conversion = selectRustProgramErrorConversion(source);
-    assert.deepEqual(conversion.route, { kind: "closed-admission" });
+    assert.deepEqual(conversion.route, { kind: "closed-admission",
+      admission: selectRustSourceValueConversion(source, rustTsValueTargetType()) });
     assert.equal(rustProgramErrorConversionMatches(conversion, source, conversion.target), true);
     for (const route of [{ kind: "closed-admission", extra: true }, { kind: "closed" }, { kind: "runtime", boundary: "target-runtime" }]) {
       assert.equal(rustProgramErrorConversionMatches({ ...conversion, route }, source, conversion.target), false);
@@ -85,6 +87,35 @@ test("only exact canonical closed carriers admit a general thrown payload", () =
   }
   for (const source of [undefined, rustSourcePrimitiveTargetType("uint64"), unrelated]) {
     assert.equal(isRustClosedValueCarrier(source), false);
+  }
+});
+
+test("closed throw admission is selected once, profile-exact, carrier-checked and immutable", () => {
+  const source = rustSourcePrimitiveTargetType("uint64");
+  for (const target of closedCarriers) {
+    const registry = createRustTypeDefinitionRegistry(target);
+    const definitions = registry.seal();
+    const conversion = selectRustProgramErrorConversion(source, undefined, definitions);
+    assert.equal(conversion.route.kind, "closed-admission");
+    assert.equal(Object.isFrozen(conversion.route.admission), true);
+    assert.deepEqual(conversion.route.admission, selectRustSourceValueConversion(source, target, definitions));
+    const contract = rustValueConversionContract(conversion.route.admission, definitions);
+    assert.equal(contract !== undefined && !contract.fallible, true);
+    assert.deepEqual(contract.source, source);
+    assert.deepEqual(contract.target, target);
+    assert.deepEqual(mapRustProgramErrorRoute(conversion.route, carrier => carrier), conversion.route);
+    const carriers = rustProgramErrorRouteCarriers(conversion.route);
+    assert.deepEqual(carriers, conversion.route.admission.kind === "semantic-conversion" ? [] : [source]);
+    let reads = 0;
+    const getter = {};
+    Object.defineProperty(getter, "kind", { enumerable: true, get() { reads++; return "semantic-conversion"; } });
+    for (const admission of [undefined, getter, { ...conversion.route.admission, extra: true },
+      { kind: "semantic-conversion", id: "js-value-from-number" },
+      { kind: "ts-value-from-closed-carrier", source: rustSourcePrimitiveTargetType("uint32") }]) {
+      const changed = { ...conversion, route: { ...conversion.route, admission } };
+      assert.equal(rustProgramErrorConversionMatches(changed, source, conversion.target, definitions), false);
+    }
+    assert.equal(reads, 0);
   }
 });
 

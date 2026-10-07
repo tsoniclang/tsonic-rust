@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { acmeTestingPackage, compileRust } from "../../helpers/rust-session.mjs";
@@ -33,7 +34,7 @@ export function main(): void {
   check(take("moved") === "moved" && take(17) === "other");
 }
 ` } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const emitted = result.artifacts.find(artifact => artifact.path === "src/values.rs")?.text;
   assert.ok(emitted);
   assert.doesNotMatch(emitted, /\.clone\(\)/u);

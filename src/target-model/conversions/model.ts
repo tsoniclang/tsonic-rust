@@ -5,7 +5,7 @@ import type {
 
 function semanticConversion(
   id: RustValueConversionId,
-): RustNonOptionValueConversion {
+): Extract<RustNonOptionValueConversion, { readonly kind: "semantic-conversion" }> {
   return Object.freeze({ kind: "semantic-conversion", id });
 }
 

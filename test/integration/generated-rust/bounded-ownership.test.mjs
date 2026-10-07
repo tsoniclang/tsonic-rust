@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -8,7 +9,7 @@ import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../..
 function compile(source, options = {}) {
   const { result } = compileRust({ surfaces: ["js"],
     target: { id: "rust", options: { outputType: "bin", ...options } }, files: { "index.ts": source } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   return { result, output: artifactText(result, "src/index.rs") };
 }
 

@@ -1,11 +1,11 @@
 import {
-  cloneExpression,
   cloneField,
   projectCallableShape,
   projectLifetimeSubstitutions,
   projectTypeSubstitutions,
   rustFunctionTypesMatch,
 } from "./model.js";
+import { cloneRustExpression as cloneExpression } from "../../../target-ast/expressions.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
 import {
   diagnosticInput,

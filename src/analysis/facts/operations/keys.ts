@@ -20,10 +20,12 @@ export const rustCompoundWriteFactKey: RustPlanKey<Extract<RustTargetOperationFa
 export const rustComputedMemberFactKey: RustPlanKey<{
   readonly receiver: Node;
   readonly key: Node;
+  readonly evaluateReceiver: boolean;
   readonly evaluateKey: boolean;
   readonly accessMode: "read" | "write" | "read-write" | "delete";
 }> = defineRustPlanKey("computedMember", (left, right) =>
   left.receiver === right.receiver && left.key === right.key &&
+  left.evaluateReceiver === right.evaluateReceiver &&
   left.evaluateKey === right.evaluateKey && left.accessMode === right.accessMode);
 
 export const rustReceiverIndependentMethodFactKey: RustPlanKey<{ readonly carrier: TargetTypeRef }> =

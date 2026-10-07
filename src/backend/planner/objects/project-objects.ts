@@ -1,4 +1,5 @@
 import { rustValueBlock } from "../../target-ast/value-block.js";
+import { cloneRustExpression } from "../../target-ast/expressions.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustAssignmentOperator } from "../../../target-model/syntax/tokens.js";
 import { isRustCopyCarrier } from "../../../target-model/types/index.js";
@@ -692,8 +693,9 @@ export function readRustProjectDispatchedField(
   const call: RustExpr = {
     kind: "method-call",
     receiver: role.selfMode === "rc"
-      ? { kind: "method-call", receiver: dispatch, method: "clone", args: [] }
+      ? cloneRustExpression(dispatch)
       : dispatch,
+    receiverMode: role.selfMode === "rc" ? "value" : "ref",
     method: readSlot,
     args: [],
   };
@@ -739,8 +741,9 @@ export function writeRustProjectDispatchedField(
   const writeCall: RustExpr = {
     kind: "method-call",
     receiver: roles.write.selfMode === "rc"
-      ? { kind: "method-call", receiver: dispatch, method: "clone", args: [] }
+      ? cloneRustExpression(dispatch)
       : dispatch,
+    receiverMode: roles.write.selfMode === "rc" ? "value" : "ref",
     method: writeSlot,
     args: [selectedValue],
   };

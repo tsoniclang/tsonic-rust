@@ -1,6 +1,5 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/nodes.js";
-import { selectRustSourceValueConversion } from "../../../policy/conversions/selection.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import { lowerRustValueConversion } from "./value-conversions.js";
 import { rustProgramErrorConversionMatches, rustProgramErrorRuntimeRouteMatches, type RustProgramErrorConversion } from "../../../target-model/conversions/program-error.js";
@@ -38,8 +37,7 @@ export function planRustProgramErrorConstruction(
       return undefined;
     }
     const selected = conversion.route.kind === "closed-admission"
-      ? selectRustSourceValueConversion(conversion.source, context.input.program.typeDefinitions.closedValueCarrier,
-        context.input.program.typeDefinitions) : undefined;
+      ? conversion.route.admission : undefined;
     const contract = selected === undefined ? undefined
       : rustValueConversionContract(selected, context.input.program.typeDefinitions);
     const admitted = conversion.route.kind === "closed" ? value

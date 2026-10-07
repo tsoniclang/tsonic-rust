@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { acmeTestingPackage, artifactText, compileRust } from "../../helpers/rust-session.mjs";
@@ -11,7 +12,7 @@ test("generic Number predicates borrow exact native carriers and propagate their
 import { check } from "@acme/testing";
 export function main(): void { check(run()); }
 ` } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /NativeNumberPredicate/u);
   assert.doesNotMatch(source, /number_is_(?:integer|safe_integer|finite|nan)\([^\n]*clone\(\)/u);
@@ -38,7 +39,7 @@ export function main(): void {
 }
 ` },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("generic-numeric-constraints", result.artifacts, { run: true });
 });
 
@@ -83,7 +84,7 @@ export function main(): void {
 }
 ` },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("generic-numeric-constructors", result.artifacts, { run: true });
 });
 

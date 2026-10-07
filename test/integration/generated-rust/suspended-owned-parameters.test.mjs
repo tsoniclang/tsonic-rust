@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust, artifactText } from "../../helpers/rust-session.mjs";
@@ -28,7 +29,7 @@ test("retained async and generator inputs keep owned carriers without disabling 
       }
     ` },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const readers = artifactText(result, "src/readers.rs");
   assert.match(readers, /fn read\(value: &(?:String|str)\)/);
   for (const name of ["later", "forward", "sequence"]) assert.match(readers, new RegExp(`fn ${name}\\(value: String\\)`));

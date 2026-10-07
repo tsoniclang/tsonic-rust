@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
@@ -70,7 +71,7 @@ export function same(value: string | Token): boolean { return value === "a"; }
   const context = selected => planningContext(program, node, selected);
   const valid = context(fact);
   assert.ok(planBinaryExpression(node, valid), JSON.stringify(valid.diagnostics));
-  assert.deepEqual(valid.diagnostics, []);
+  assertNoTargetDiagnostics(valid.diagnostics);
   const arm = fact.arms[0];
   const mutations = [
     { arms: undefined }, { arms: [] }, { arms: [arm, arm] }, { arms: new Array(1) },
@@ -118,7 +119,7 @@ export function reversed(right: Entry, left: OptionalValue): boolean { return ri
       const nativeContext = planningContext(program, node, fact);
       const native = planBinaryExpression(node, nativeContext);
       assert.ok(native, JSON.stringify(nativeContext.diagnostics));
-      assert.deepEqual(nativeContext.diagnostics, []);
+      assertNoTargetDiagnostics(nativeContext.diagnostics);
       assert.doesNotMatch(printRustExpr(native), /\.clone\(|Box::|Arc::|Rc::|dyn |from_closed|\.map\(/u);
       const context = planningContext(program, node, fact);
       context.expressionOverrides = new Map([
@@ -127,7 +128,7 @@ export function reversed(right: Entry, left: OptionalValue): boolean { return ri
       ]);
       const planned = planBinaryExpression(node, context);
       assert.ok(planned, JSON.stringify(context.diagnostics));
-      assert.deepEqual(context.diagnostics, []);
+      assertNoTargetDiagnostics(context.diagnostics);
       const output = printRustExpr(planned);
       assert.equal(output.match(/produceLeft\(\)/gu)?.length, 1);
       assert.equal(output.match(/produceRight\(\)/gu)?.length, 1);

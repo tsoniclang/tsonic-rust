@@ -4,6 +4,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import { rustLintAttributes } from "../../dist/backend/target-ast/normalization/lint-policy.js";
+import { maskNativeMethodLiterals } from "./native-method-syntax.mjs";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const sourceRoot = join(repositoryRoot, "src");
@@ -130,11 +131,13 @@ test("Rust compiler reflection remains isolated from semantic and backend layers
 
 test("no source-name target guessing in the backend", () => {
   const bannedTokens = ['"node:', '"@acme', "readText", '"homeDir"', '"Math"', '"console"', '"push"', '"readFile"'];
+  const nativeSyntax = maskNativeMethodLiterals(new Map(sourceFiles.filter(({ path }) =>
+    path.includes("/backend/")).map(({ path, text }) => [path, text])));
   for (const { path, text } of sourceFiles) {
     if (!path.includes("/backend/")) {
       continue;
     }
-    const productText = sourceSelectionText(text);
+    const productText = nativeSyntax.get(path).replace(/from "node:[a-z_/-]+"/gu, "");
     const tokens = path.endsWith("/backend/emission/rustfmt.ts")
       ? bannedTokens
       : [...bannedTokens, "readFileSync"];
@@ -145,14 +148,16 @@ test("no source-name target guessing in the backend", () => {
 });
 
 function sourceSelectionText(text) {
-  return text.replace(/from "node:[a-z_/-]+"/gu, "")
-    .replace(/\bmethod:\s*"push"(?=\s*[,}])/gu, "method: native_method");
+  return maskNativeMethodLiterals(new Map([["probe.ts", text]])).get("probe.ts")
+    .replace(/from "node:[a-z_/-]+"/gu, "");
 }
 
 test("source-name guard permits native AST methods but rejects source-name dispatch", () => {
   assert.ok(!sourceSelectionText('({ kind: "method-call", receiver, method: "push", args: [value] })').includes('"push"'));
   for (const source of ['if (sourceName === "push") select();', 'if (member === "push") lower();',
-    'const names = ["push"];', '({ name: "push", selected: true })']) {
+    'const names = ["push"];', '({ name: "push", selected: true })',
+    '({ method: "push" })', '({ kind: "selection", receiver, method: "push", args: [] })',
+    '({ kind: "method-call", method: "push" })', '({ [key]: "push" })', `const source = 'method: "push"';`]) {
     assert.ok(sourceSelectionText(source).includes('"push"'), source);
   }
 });

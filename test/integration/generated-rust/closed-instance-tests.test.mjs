@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { artifactText, compileRust } from "../../helpers/rust-session.mjs";
@@ -9,7 +10,7 @@ for (const surfaces of [[], ["js"]]) {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: {
       ...closedInstanceFiles, "index.ts": closedInstanceFiles["index.ts"] + '\nexport function main(): void { if (!run()) throw new Error("closed class tests"); }',
     } });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject("closed-instance-tests", result.artifacts, { run: true });
   });
 }
@@ -18,7 +19,7 @@ test("selected native constructors test closed payloads without copying them", {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } }, files: {
     "index.ts": closedNativeInstanceSource + '\nexport function main(): void { if (!run()) throw new Error("closed native tests"); }',
   } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   const start = output.indexOf("fn pattern(");
   const end = output.indexOf("fn r#match(");

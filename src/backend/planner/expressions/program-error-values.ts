@@ -2,14 +2,14 @@ import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustJsValueTargetType, rustTsValueTargetType } from "../../../target-model/types/index.js";
-import { selectRustSourceValueConversion } from "../../../policy/conversions/selection.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import type { RustExpr } from "../../target-ast/nodes.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { diagnosticInput, registerAliasFromPath, rustCurrentErrorBoundary,
   type RustPlanContext } from "../program/plan-context.js";
-import { selectRustErrorVariants } from "../program/error-variant-selection.js";
+import { planRustErrorVariants } from "../program/error-variants.js";
+import type { RustErrorPayloadVariant } from "../../../analysis/program/error-transport.js";
 import { resolveRustSourcePackageErrorBoundary,
   type RustSourcePackageErrorBoundary } from "../program/source-package-errors.js";
 import { lowerRustValueConversion } from "./value-conversions.js";
@@ -32,12 +32,15 @@ export function planRustProgramErrorClosedValue(
   let reservations = 0;
   const call = (path: string, input: RustExpr): RustExpr => ({ kind: "call", path, args: [input] });
   const error = (payload: RustExpr): RustExpr => call(`${ownerPath}::from_error`, payload);
-  const convert = (source: TargetTypeRef, payload: RustExpr): RustExpr | undefined => {
-    if (rustTargetTypeRefEquals(source, target)) return payload;
-    const conversion = selectRustSourceValueConversion(source, target, context.input.program.typeDefinitions);
+  const convert = (variant: Extract<RustErrorPayloadVariant, { readonly kind: "project" | "closed" }>,
+    payload: RustExpr): RustExpr | undefined => {
+    const admission = variant.admissions.find(candidate => rustTargetTypeRefEquals(candidate.target, target));
+    if (admission?.conversion === null && rustTargetTypeRefEquals(variant.carrier, target)) return payload;
+    const conversion = admission?.conversion;
     const contract = conversion === undefined ? undefined
-      : rustValueConversionContract(conversion, context.input.program.typeDefinitions);
-    return contract === undefined || contract.fallible || contract.lowering === "program-error-closed-value"
+      : conversion === null ? undefined : rustValueConversionContract(conversion, context.input.program.typeDefinitions);
+    return contract === undefined || contract.fallible || contract.lowering === "program-error-closed-value" ||
+      !rustTargetTypeRefEquals(contract.source, variant.carrier) || !rustTargetTypeRefEquals(contract.target, target)
       ? reject("A sealed thrown payload has no exact infallible conversion to the selected closed destination.")
       : lowerRustValueConversion(contract, payload, context, node);
   };
@@ -54,7 +57,7 @@ export function planRustProgramErrorClosedValue(
       : selectedDomain.errorOwnerComponentId === undefined ? undefined
         : context.sourcePackageErrors.domainsByComponentId.get(selectedDomain.errorOwnerComponentId);
     const variants = domain === undefined ? undefined
-      : selectRustErrorVariants(context.input.program, domain);
+      : planRustErrorVariants(context.input.program, domain);
     if (domain === undefined || variants === undefined || selectedDomain?.errorTypeIdentity !== selected.errorTypeIdentity ||
       domain.errorTypeIdentity !== selected.errorTypeIdentity) return reject(
       "Program-error value admission has no exact sealed transport variant inventory.");
@@ -81,7 +84,7 @@ export function planRustProgramErrorClosedValue(
       for (const variant of variants) {
         if (!add(variant.name, payload => {
           if (variant.kind === "retained") return error(payload);
-          if (variant.kind === "project" || variant.kind === "closed") return convert(variant.carrier, payload);
+          if (variant.kind === "project" || variant.kind === "closed") return convert(variant, payload);
           const external = resolveRustSourcePackageErrorBoundary(context.sourcePackageErrors,
             domain.componentId, variant.external.componentId);
           return external === undefined ? reject(

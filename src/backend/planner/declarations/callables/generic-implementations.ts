@@ -21,8 +21,8 @@ import { rustGeneratedTypeParameterContext } from "../../names/type-parameters.j
 import { rustInvariantTypeMarker } from "../../types/invariant-marker.js";
 import { planRustGenericNativeFutureDispatch, type RustGenericNativeFutureInvocation } from "./generic-native-futures.js";
 import { rustCallableCaptureStorageType } from "../../types/capture-storage.js";
-import { rustCapturedReceiverFieldType, rustCapturedReceiverFieldContext, validateRustCapturedReceiverFields,
-  rustCapturedReceiverContext, validateRustCapturedReceivers } from "../../expressions/receiver-captures.js";
+import { validateRustCapturedReceiverFields, validateRustCapturedReceivers } from "../../expressions/receiver-captures.js";
+import { rustCallablePayloadContext, rustCallablePayloadTypes } from "../../expressions/capture-payloads.js";
 
 export function rustGenericCallableImplementationPath(
   implementation: RustGenericCallableImplementation, name: string, context: RustTypeRenderingContext,
@@ -69,12 +69,8 @@ function planImplementation(
   const helperContext = rustGeneratedTypeParameterContext(definition.signature.environmentParameters,
     rustAuthoredTypeParameterNames(implementation.declaration, context.input.program.source.ast),
     { ...context, typeParameterSubstitutions: substitutions });
-  const captures = [...implementation.captures.map(capture => rustGenericCallableCaptureType(capture, helperContext)),
-    ...implementation.receiverFields.map(capture => {
-      const type = rustTypeFromCarrierInContext(capture.storageCarrier, helperContext);
-      return type === undefined ? undefined : rustCapturedReceiverFieldType(capture, type, helperContext);
-    }), ...implementation.receivers.map(capture => rustTypeFromCarrierInContext(capture.storageCarrier, helperContext))];
-  if (captures.some(type => type === undefined)) return undefined;
+  const captures = rustCallablePayloadTypes(implementation, helperContext);
+  if (captures === undefined) return undefined;
   const names = createRustSyntheticNameState(context.input.program.source.ast, implementation.declaration, []);
   const owner = allocateRustSyntheticName(names, "environment");
   const suspended = context.input.program.facts.getFact(implementation.declaration, rustAsyncFunctionFactKey) !== undefined ||
@@ -82,16 +78,7 @@ function planImplementation(
   if (suspended && implementation.storage !== "shared" && rustNativeFutureCallableResult(definition.signature.result) === undefined) return undefined;
   if (!validateRustCapturedReceiverFields(implementation.declaration, implementation.receiverFields, context) ||
     !validateRustCapturedReceivers(implementation.declaration, implementation.receivers, context)) return undefined;
-  const fieldContext = rustCapturedReceiverFieldContext(implementation.receiverFields, {
-    ...helperContext, capturedBindings: implementation.captures.map((capture, index) => ({
-    declaration: capture.declaration, expression: { kind: "reference", expr: {
-      kind: "field", receiver: { kind: "path", path: owner }, name: `capture_${index}`,
-    } },
-    storage: capture.storage, valueCarrier: capture.carrier, borrowed: "shared",
-  })) }, index => ({ kind: "field", receiver: { kind: "path", path: owner },
-    name: `capture_${implementation.captures.length + index}` }));
-  const bodyContext = rustCapturedReceiverContext(implementation.receivers, fieldContext, index => ({ kind: "field",
-    receiver: { kind: "path", path: owner }, name: `capture_${implementation.captures.length + implementation.receiverFields.length + index}` }));
+  const bodyContext = rustCallablePayloadContext(implementation, { kind: "path", path: owner }, helperContext);
   const helper = planNativeModuleFunction(implementation.declaration, implementation.declaration,
     implementation.functionName, true, bodyContext);
   if (helper?.kind !== "function") return undefined;

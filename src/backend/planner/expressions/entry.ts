@@ -59,6 +59,7 @@ import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustNativeFutureCallableResult } from "../../../target-model/types/carriers/generic-callables.js";
+import { cloneRustExpression } from "../../target-ast/expressions.js";
 
 export type RustExpressionResultUse = "value" | "discarded";
 type RustExpressionAccess = "value" | "shared-reference" | "shared-place";
@@ -334,12 +335,7 @@ export function planExpressionBeforeValueProjections(
     ));
     return undefined;
   }
-  return {
-    kind: "method-call",
-    receiver: override.expression,
-    method: "clone",
-    args: [],
-  };
+  return cloneRustExpression(override.expression);
 }
 
 export function planRawExpression(
@@ -578,15 +574,13 @@ export function planRustProjectUpcast(
       path: targetPath,
       fields: [rustProjectObjectIdentityField, rustProjectObjectDispatchField].map(name => {
         if (name === rustProjectObjectIdentityField && rustStructuralObjectCarrierValue(fact.sourceCarrier) !== undefined) {
-          return { name, value: { kind: "method-call", receiver: {
+          return { name, value: cloneRustExpression({
             kind: "method-call", receiver: { kind: "field", receiver: { kind: "path", path: valueName },
               name: rustProjectObjectDispatchField }, method: "object_identity", args: [],
-          }, method: "clone", args: [] } as RustExpr };
+          }) };
         }
         const field: RustExpr = { kind: "field", receiver: { kind: "path", path: valueName }, name };
-        return { name, value: ownership === "owned" ? field : {
-          kind: "method-call", receiver: field, method: "clone", args: [],
-        } };
+        return { name, value: ownership === "owned" ? field : cloneRustExpression(field) };
       }),
     });
 }

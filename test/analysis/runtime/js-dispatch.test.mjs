@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRustDispatchContextCatalog } from "../../../dist/analysis/runtime/dispatch-contexts.js";
 import { rustBuiltInSourceTypeSemantics } from "../../../dist/providers/builtins/source-types.js";
-import { rustJsAsyncExecutor, rustJsEventLoopEpilogue, rustJsTimerDispatchContextId } from "../../../dist/providers/builtins/js-dispatch.js";
+import { rustJsAsyncExecutor, rustJsEventLoopEpilogue, rustJsTimerDispatchContextId } from "../../../dist/providers/model/js-dispatch.js";
 
 test("JS dispatch roots remain immutable, root-only and inactive without their exact native crate", () => {
   const semantics = rustBuiltInSourceTypeSemantics();

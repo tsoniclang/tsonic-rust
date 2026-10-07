@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { acmeTestingPackage, analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
@@ -48,7 +49,7 @@ test("checked overrides adapt widened inputs and narrowed outputs without changi
     surfaces: ["js"], packages: [acmeTestingPackage()], files,
     target: { id: "rust", options: { outputType: "bin", crateName: "override_adapter_proof" } },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   assert.doesNotMatch(artifactText(result, "src/index.rs"), /SourceNumeric::strict_equal\([^\n]*&\*/u);
   validateGeneratedProject("override-adapter-proof", result.artifacts, { run: true });
 });

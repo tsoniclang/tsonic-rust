@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { providerIndexedNativeTypes, providerIndexedNativeUse } from "../../../../tsonic/test/fixtures/provider-indexed-native-types.mjs";
@@ -12,7 +13,7 @@ test("provider indexed types preserve native fields, aliases and unannotated ret
       "index.ts": providerIndexedNativeUse + '\nexport function main(): void { if (!run()) throw new Error("provider indexed native types"); }',
     },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
   assert.match(output, /size: u64/u);
   assert.match(output, /written: usize/u);

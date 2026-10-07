@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust, artifactText, analyzeRust } from "../../helpers/rust-session.mjs";
@@ -36,7 +37,7 @@ export function main(): void {
 }
 ` },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /const separator: &str/u);
   assert.match(output, /fn rightParen\(value: &str\)/u);
@@ -68,7 +69,7 @@ export function main(): void {
 }
 ` },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   assert.doesNotMatch(output, /sort_borrowed/u);
   assert.match(output, /get_number/u);
@@ -137,7 +138,7 @@ export function main(): void {
 }
 ` },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /select\(&direct, direct\.clone\(\)\)/u);
   assert.match(output, /select\(&nested, identity\(nested\.clone\(\)\)\)/u);
@@ -163,7 +164,7 @@ export function main(): void {
 }
 ` },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /format!\("\{\}\{\}", first, second\)/u);
   assert.match(output, /combined\(borrowed\(&value\), value\.clone\(\)\)/u);
@@ -192,7 +193,7 @@ export function read(value: Ref<string>): string { return load(value); }
   const diagnostics = [];
   assert.deepEqual(planRustReferenceOperationCall(call, fact, { input: { program }, diagnostics }, () => operand),
     { kind: "owned-string-from-borrowed-str", expression: operand });
-  assert.deepEqual(diagnostics, []);
+  assertNoTargetDiagnostics(diagnostics);
   for (const invalid of [
     { ...fact, referenceCarrier: { ...fact.referenceCarrier, mutable: true } },
     { ...fact, resultCarrier: rustSourcePrimitiveTargetType("int32") },
@@ -216,7 +217,7 @@ export function joined<Region extends Life>(left: Ref<string, Region>, right: Re
 export function observed<Region extends Life>(value: Ref<string, Region>): boolean { return load(value).length > 0; }
 export function equal<Region extends Life>(left: Ref<string, Region>, right: Ref<string, Region>): boolean { return load(left) === load(right); }
 ` } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const root = writeGeneratedProject("shared-string-load-cost", result.artifacts);
   mkdirSync(join(root, "tests"), { recursive: true });
   writeFileSync(join(root, "tests/ownership.rs"), `${nativeOwnershipCostSupport}
@@ -308,7 +309,7 @@ export function main(): void {
 }
 ` },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   assert.equal([...output.matchAll(/counter\.clone\(\)/gu)].length, 3);
   validateGeneratedProject("authored-clone-effects", result.artifacts, { run: true });
@@ -336,7 +337,7 @@ export function main(): void {
 }
 ` },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /ModuleCell<NormalizeCallable>/u);
   assert.match(output, /fn width\(value: String\)/u);
@@ -364,7 +365,7 @@ export function main(): void {
 }
 ` },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /std::fs::write::<&str, &str>\(&capture_path, &capture_value\)/u);
   assert.doesNotMatch(output, /&capture_(?:path|value)\.clone\(\)/u);
@@ -393,7 +394,7 @@ export function main(): void {
 }
 ` },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /fn next\(&mut self\)/u);
   assert.match(output, /fn next\(&self\)/u);

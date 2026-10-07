@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
@@ -35,7 +36,7 @@ export function missing(values: (number | undefined)[]): boolean {
   });
   const valid = context(program.facts);
   assert.ok(planBinaryExpression(node, valid));
-  assert.deepEqual(valid.diagnostics, []);
+  assertNoTargetDiagnostics(valid.diagnostics);
   for (const nullishDepths of [undefined, [], [-1], [0.5], [NaN], [Infinity], [2], [0, 0], [1, 0]]) {
     const selected = context({ ...program.facts, getFact: (subject, key) =>
       subject === node && key === rustTargetOperationFactKey
@@ -109,7 +110,7 @@ export function read(values: (string | undefined)[]): string {
   });
   const valid = context(program.facts);
   assert.ok(planBinaryExpression(node, valid));
-  assert.deepEqual(valid.diagnostics, []);
+  assertNoTargetDiagnostics(valid.diagnostics);
   const mutations = [
     ...[undefined, 0, -1, 2, 3, 0.5, NaN, Infinity].map(leftOptionDepth => ({ leftOptionDepth })),
     ...[undefined, -1, 1, 0.5, NaN, Infinity].map(rightOptionDepth => ({ rightOptionDepth })),

@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createCompilerSessionFromFiles, formatDiagnostics } from "@tsonic/tsts";
@@ -14,7 +15,7 @@ function analyzed(files, jsEnabled) {
     projectDirectory: "/src", target: { id: "rust", options: {} }, targetPackId: jsEnabled ? "js" : "rust",
     selectedCapabilities: [], selectedSurfaces: [], targetContributions: jsEnabled
       ? rustJsSurfaceSourceProfileContributions() : rustNativeSourceProfileContributions() });
-  assert.deepEqual(profile.diagnostics, []);
+  assertNoTargetDiagnostics(profile.diagnostics);
   const checked = createCompilerSessionFromFiles({ currentDirectory: "/src",
     files: new Map([...Object.entries(files).map(([name, text]) => [`/src/${name}`, text]), ...profile.files.map(file => [file.path, file.text])]),
     compilerOptions: { noLib: true, strict: true, skipLibCheck: true, module: "esnext", moduleResolution: "bundler", target: "es2022" } }).checkSource();

@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust, acmeTestingPackage } from "../../helpers/rust-session.mjs";
@@ -113,8 +114,8 @@ for (const surfaces of [[], ["js"]]) {
         }
       ` },
     });
-    assert.deepEqual(source.diagnostics, []);
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(source.diagnostics);
+    assertNoTargetDiagnostics(result.diagnostics);
     const run = validateGeneratedProject("indexed-records", result.artifacts, { run: true });
     assert.equal(run.status, 0, JSON.stringify(run));
   });
@@ -141,8 +142,8 @@ test("Object operations retain native indexed storage and requested dense result
       }
     ` },
   });
-  assert.deepEqual(source.diagnostics, []);
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(source.diagnostics);
+  assertNoTargetDiagnostics(result.diagnostics);
   const run = validateGeneratedProject("indexed-object-api", result.artifacts, { run: true });
   assert.equal(run.status, 0, JSON.stringify(run));
 });

@@ -18,6 +18,7 @@ import {
   rustTsValueTargetType,
   rustEmptyObjectTargetType,
   rustObjectIdentityTargetType,
+  rustCallableInputProtocol,
 } from "../../target-model/types/index.js";
 import {
   rustTargetTypeRefEquals,
@@ -447,6 +448,15 @@ function parameterCanUseSharedBorrow(
         continue;
       }
       if (provider.kind === "conflict") return false;
+      const sourceFile = ast.getSourceFile(call);
+      const callback = argumentIndex < 0 || sourceFile === undefined ? undefined : rustCallableInputProtocol(resolveRustTargetTypeRef(
+        selected.sourceCallee.expression, { ...context, currentSourceFile: sourceFile, currentSemantics: semantics,
+          sourceStorageSubject: undefined }, options));
+      if (callback !== undefined) {
+        const input = callback.parameters[argumentIndex];
+        if (input?.kind !== "reference" || input.mutable || !isRustStringCarrier(input.referent)) return false;
+        continue;
+      }
       const implementation = declaration === undefined ? undefined : context.source.navigation.callableImplementation(declaration);
       if (argumentIndex < 0 || implementation?.kind !== "resolved" ||
         !(ast.is.IsFunctionDeclaration(implementation.implementation.declaration) ||

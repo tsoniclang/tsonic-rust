@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { acmeTelemetryCapability, artifactText, compileRust } from "../../helpers/rust-session.mjs";
@@ -383,7 +384,7 @@ test("evaluation-only provider arguments do not require native parameter-passing
     fact,
     [runtimeArgument, omittedNull, omittedIndent],
   ), true);
-  assert.deepEqual(context.diagnostics, []);
+  assertNoTargetDiagnostics(context.diagnostics);
 });
 
 test("runtime module bindings publish one explicit Rust crate startup contract", () => {
@@ -397,7 +398,7 @@ export let VALUE: int32 = 1;
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   assert.match(
     artifactText(result, "src/lib.rs"),
     /pub fn initialize\(\) \{\s*crate::index::module_init\(\);\s*\}/su,
@@ -417,7 +418,7 @@ export function singleton(value: int32): [int32] {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   assert.match(artifactText(result, "src/index.rs"), /pub fn singleton\(value: i32\) -> \(i32,\) \{\n    \(value,\)\n\}/u);
   validateGeneratedProject("backend-singleton-tuple", result.artifacts);
 });
@@ -437,7 +438,7 @@ export function make(): Empty {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub struct Empty \{\n    #\[doc\(hidden\)\]\n    pub identity: rt::ObjectIdentity,\n    #\[doc\(hidden\)\]\n    pub dispatch: alloc::rc::Rc<dyn EmptyDispatch \+ 'static>,\n\}/u);
   assert.match(text, /let root = alloc::rc::Rc::new\(EmptyRoot \{/u);
@@ -471,7 +472,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(
     text,
@@ -512,7 +513,7 @@ export class Secret {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub struct Secret \{\n    #\[doc\(hidden\)\]\n    pub identity: rt::ObjectIdentity,\n    #\[doc\(hidden\)\]\n    pub dispatch: alloc::rc::Rc<dyn SecretDispatch \+ 'static>,\n\}/u);
   assert.match(text, /    value: i32,/u);
@@ -533,7 +534,7 @@ export function main(): void {}
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   assert.match(
     artifactText(result, "src/main.rs"),
     /fn main\(\) \{\n    structured_main::tsonic_entry\(\);\n\}/u,
@@ -558,7 +559,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   assert.match(
     artifactText(result, "src/main.rs"),
     /exact_entry_path::tsonic_entry\(\);/u,
@@ -581,7 +582,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   assert.match(
     artifactText(result, "src/main.rs"),
     /fn main\(\) -> Result<\(\), tsonic_rust_runtime::TsonicError> \{\n    fallible_main::tsonic_entry\(\)\?;\n    Ok::<\(\), tsonic_rust_runtime::TsonicError>\(\(\)\)\n\}/u,

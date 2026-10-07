@@ -17,6 +17,7 @@ import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { selectRustConditionalNumericCarrier } from "../../policy/types/conditional-numeric-carrier.js";
 import { resolveRustBranchUnion } from "../../policy/types/resolution/branch-unions.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
+import { rustNativeCallableResultMatches } from "../../policy/ownership/callable-result-contract.js";
 
 export function selectRustInferredReturn(
   walk: RustFactWalk,
@@ -52,7 +53,7 @@ export function selectRustInferredReturn(
         const protocol = rustCallableProtocol(value);
         if (protocol === undefined || protocol.parameters.length !== callableResult.parameters.length ||
           protocol.parameters.some((parameter, index) => !rustTargetTypeRefEquals(parameter, callableResult.parameters[index])) ||
-          !rustTargetTypeRefEquals(protocol.result, callableResult.result)) return baseline;
+          !rustNativeCallableResultMatches(protocol.result, callableResult.result)) return baseline;
       }
       selected = selected === undefined ? value : rustTargetTypeRefEquals(selected, value)
         ? selected : numericResult ? selectRustNumericBinaryPromotion(selected, value)?.carrier : undefined;
@@ -62,7 +63,7 @@ export function selectRustInferredReturn(
       : rustOptionElementCarrier(baseline) === undefined ? selected
         : rustSourceOptionalElementCarrier(baseline) === undefined ? rustOptionTargetType(selected)
           : rustSourceOptionalTargetType(selected);
-    walk.inferredReturns.set(declaration, result);
+    if (selected !== undefined && result !== undefined) walk.inferredReturns.set(declaration, result);
     return result;
 
     function expressionCarrier(expression: Node): TargetTypeRef | undefined {

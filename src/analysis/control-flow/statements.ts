@@ -55,7 +55,7 @@ import { appendRustDiagnostic, boolCarrier, rustResolutionContext } from "../pro
 import { recordForOfFacts } from "../operations/inputs.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { reconcileRequiredCarrier, resolveExpressionCarrier } from "../expressions/carriers.js";
-import { recordBindingPatternFacts, recordCallableDefaultParameterFacts, registerTypeAlias } from "../declarations/types-and-bindings.js";
+import { closeRustBindingStorage, recordBindingPatternFacts, recordCallableDefaultParameterFacts, registerTypeAlias } from "../declarations/types-and-bindings.js";
 import { recordCallableValueSignatureForDeclaration } from "../callables/signatures.js";
 import { recordThrowFacts } from "../resources/suspension.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
@@ -144,7 +144,7 @@ function recordVariableDeclarationListFacts(
       continue;
     }
     const annotated = rustGenericCallableValueOwner(walk.context.ast, declaration,
-      resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, declaration)));
+      closeRustBindingStorage(walk, declaration, resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, declaration))));
     const predeclared = walk.context.facts.get(declaration, rustRuntimeCarrierKey)?.carrier ??
       walk.context.facts.resolve(declaration, rustRuntimeCarrierKey)?.carrier;
     const induction = walk.context.ast.kindName(owner) === KindForStatement

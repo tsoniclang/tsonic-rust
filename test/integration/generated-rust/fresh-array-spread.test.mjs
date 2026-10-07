@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -11,7 +12,7 @@ for (const surfaces of [[], ["js"]]) {
   test(`fresh dense spread uses exact element conversions on ${surfaces.length === 0 ? "native" : "JS"} storage`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
       files: { "index.ts": (surfaces.length === 0 ? freshArraySpreadSource : freshArraySpreadJsSource) + '\nexport function main(): void { if (!run()) throw new Error("fresh spread"); }' } });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     const source = result.artifacts.filter(artifact => artifact.path.endsWith("index.rs")).map(artifact => artifact.text).join("\n");
     assert.ok(source.length > 0);
     assert.doesNotMatch(source, /\.values\(\)|\.to_vec\(\)|\.collect::<|Box::new/);
@@ -28,7 +29,7 @@ for (const surfaces of [[], ["js"]]) {
 test("fresh numeric spread allocates only its destination, matching handwritten native loops", { timeout: 300_000 }, () => {
   const { result } = compileRust({ target: { id: "rust", options: { outputType: "lib", crateName: "fresh_spread_cost" } },
     files: { "index.ts": freshArraySpreadCostSource } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const root = writeGeneratedProject("fresh-array-spread-cost", result.artifacts);
   mkdirSync(join(root, "tests"), { recursive: true });
   writeFileSync(join(root, "tests/cost.rs"), nativeOwnershipCostSupport + `

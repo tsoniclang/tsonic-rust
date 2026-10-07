@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -25,7 +26,7 @@ export function read(pair: Pair, tuple: [int32, int32]): int32 {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /let binding = pair;/u);
   assert.match(source, /let first: i32 = binding\.state\.with/u);
@@ -51,7 +52,7 @@ export function summarize(envelope: Envelope): boolean {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /let binding_2 = binding[\s\S]*\.state[\s\S]*\.with/u);
   assert.match(source, /let count: i32 = binding_2\.0;/u);
@@ -74,7 +75,7 @@ export function read(): int32 {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /binding\.first\(\)\.cloned\(\)\.unwrap_or\(9\)/u);
   assert.match(source, /binding\[1\.\.binding\.len\(\)\]\.to_vec\(\)/u);
@@ -97,7 +98,7 @@ export function read(): int32 {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /binding\.get\(0\)\.unwrap_or\(9\)/u);
   assert.match(source, /let rest: js_abi::JsArray<i32> = binding\.slice_from\(1\.0\);/u);
@@ -129,7 +130,7 @@ export function main(): void {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(
     artifactText(result, "src/shapes.rs"),
@@ -168,7 +169,7 @@ class Accumulator {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /fn add\(binding_parameter: Pair\)/u);
   assert.match(source, /fn new\(binding_parameter(?:_\d+)?: \[i32; 2\]\)/u);
@@ -190,7 +191,7 @@ export function read(values: [int32, int32][]): int32[] {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /\|binding_parameter\| \{/u);
   assert.match(source, /let left: i32 = binding_parameter\[0\];/u);
@@ -215,7 +216,7 @@ export function total(values: [int32, int32][]): int32 {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /for binding_element in rt::iter_copied\(values\)/u);
   assert.match(source, /let left: i32 = binding_element\[0\];/u);

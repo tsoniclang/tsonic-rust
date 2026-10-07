@@ -32,6 +32,7 @@ import type { RustExpr, RustStmt, RustType } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustCompileTimeSourceKey } from "../../../target-model/facts/source-declarations.js";
 import { planRustLocalBindingStorage } from "../bindings/local-storage.js";
+import { planRustBorrowedInitializer } from "../bindings/borrowed-initializers.js";
 
 export function planVariableStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const declarations = collectVariableDeclarations(node, context);
@@ -78,7 +79,8 @@ function planVariableDeclaration(
   const initializer = Node_Initializer(context.input.program.source.ast, declaration);
   const nativeArray = context.input.program.facts.getFact(declaration, rustNativeArrayStorageKey);
   const locationStorage = nativeArray === undefined ? rustBindingStorageForDeclaration(declaration, context) : undefined;
-  const sourceInitializer = initializer === undefined ? undefined : planExpression(initializer, context);
+  const initializerPlan = initializer === undefined ? undefined : planRustBorrowedInitializer(initializer, context);
+  const sourceInitializer = initializerPlan?.value;
   if (initializer !== undefined && sourceInitializer === undefined) {
     return undefined;
   }
@@ -147,7 +149,7 @@ function planVariableDeclaration(
       resourceFact !== undefined && resourceDisposalReceiverMode(resourceFact) === "mut-ref");
   const storage = planRustLocalBindingStorage(declaration, name, declarationCarrier, rustType, planned, locationStorage, context);
   if (storage === undefined) return undefined;
-  if (storage.kind === "store") return [storage.statement];
+  if (storage.kind === "store") return [...initializerPlan?.statements ?? [], storage.statement];
   rustType = storage.type;
   const init = storage.value;
   if (initializer !== undefined && init === undefined) {
@@ -158,7 +160,7 @@ function planVariableDeclaration(
   const selfTypedCallable = locationStorage === undefined && initializerOperation?.kind === "closure" &&
     rustCallableProtocol(declarationCarrier) !== undefined &&
     rustTargetTypeRefEquals(initializerOperation.resultCarrier, declarationCarrier);
-  return [{
+  return [...initializerPlan?.statements ?? [], {
     kind: "let",
     name,
     mutable,

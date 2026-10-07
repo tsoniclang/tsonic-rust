@@ -10,3 +10,9 @@ export function rustUnparenthesizedExpression(ast: AstReader, expression: Node):
   }
   return operand;
 }
+
+export function rustMemberAccessReceiver(ast: AstReader, expression: Node | undefined): Node | undefined {
+  return expression !== undefined &&
+    (ast.is.IsPropertyAccessExpression(expression) || ast.is.IsElementAccessExpression(expression))
+    ? Node_Expression(ast, expression) : undefined;
+}

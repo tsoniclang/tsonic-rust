@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustTypeDefinitionRegistry } from "../../../../dist/analysis/project-types/type-definitions.js";
@@ -51,7 +52,7 @@ test("native error union planning preserves nested paths, original payloads and 
   const input = context();
   const value = { kind: "path", path: "original" };
   const planned = planRustProgramErrorConstruction(conversion, value, undefined, input, boundary);
-  assert.deepEqual(input.diagnostics, []);
+  assertNoTargetDiagnostics(input.diagnostics);
   assert.equal(planned.kind, "match");
   assert.equal(planned.expression, value);
   assert.deepEqual(planned.arms.map(arm => arm.expression.path), ["rt::TsonicError::from", "rt::TsonicError::from", "rt::TsonicError::Failure"]);

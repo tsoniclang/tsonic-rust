@@ -3,7 +3,8 @@ import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import type { RustExpr } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import { cloneExpression, cloneField } from "./model.js";
+import { cloneRustExpression as cloneExpression } from "../../../target-ast/expressions.js";
+import { cloneField } from "./model.js";
 import { rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "../project-objects.js";
 
 export function planRustReceiverAlias(

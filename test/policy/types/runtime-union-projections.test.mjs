@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { selectRustFlowReadProjection } from "../../../dist/policy/types/value-carrier-reconciliation.js";
@@ -32,7 +33,7 @@ test("runtime union projections retain exact variants, absence and ownership", (
           } }, sourceFile, diagnostics: [] };
           const input = { kind: "path", path: "selected" };
           const planned = planRustFlowReadProjection(node, input, selected.fact, context);
-          assert.deepEqual(context.diagnostics, []);
+          assertNoTargetDiagnostics(context.diagnostics);
           assert.equal(planned.kind, "match");
           assert.deepEqual(planned.expression, owns ? input : { kind: "reference", expr: input });
           const pattern = optional ? planned.arms[0].pattern.elements[0] : planned.arms[0].pattern;

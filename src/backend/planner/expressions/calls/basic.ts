@@ -7,7 +7,6 @@ import { diagnosticInput } from "../../program/plan-context.js";
 import { effectiveMemberResultCarrier, planOptionalChainExpression } from "../special.js";
 import { isDenseDataArray } from "../../../../target-model/metadata/closed-data.js";
 import {
-  KindPropertyAccessExpression,
   Node_Expression,
 } from "@tsonic/target-api/source";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
@@ -34,6 +33,8 @@ import { planRustBorrowedElementRead } from "../borrowed-element-reads.js";
 import { planRustNativeControl } from "../native-controls.js";
 import { planRustValueProjection } from "../flow-reads.js";
 import { planRustClosedTypeTest } from "../type-tests.js";
+import { rustMemberAccessReceiver } from "../../../../target-model/syntax/expressions.js";
+import { planRustComputedMemberExpression } from "../computed-members.js";
 
 export function planCallExpression(node: Node, context: RustPlanContext, resultUse: RustExpressionResultUse = "value"): RustExpr | undefined {
   const borrowed = context.input.program.borrowedElementReads.forExpression(node);
@@ -43,7 +44,11 @@ export function planCallExpression(node: Node, context: RustPlanContext, resultU
     node,
     context,
     "method",
-    (innerContext) => planCallExpressionInner(node, innerContext, resultUse),
+    innerContext => {
+      const callee = Node_Expression(innerContext.input.program.source.ast, node);
+      return callee === undefined ? undefined : planRustComputedMemberExpression(callee, innerContext,
+        selectedContext => planCallExpressionInner(node, selectedContext, resultUse));
+    },
   );
 }
 
@@ -163,9 +168,7 @@ function planCallExpressionInner(node: Node, context: RustPlanContext, resultUse
       ));
       return undefined;
     }
-    const receiverNode = callee !== undefined && ast.kindName(callee) === KindPropertyAccessExpression
-      ? Node_Expression(context.input.program.source.ast, callee)
-      : undefined;
+    const receiverNode = rustMemberAccessReceiver(ast, callee);
     const providerArgumentNodes = [...context.input.program.source.ast.arguments(node)];
     if (providerArgumentNodes.length !== fact.abi.sourceArguments.length) {
       context.diagnostics.push(missingFactDiagnostic(

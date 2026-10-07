@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { acmeTestingPackage, compileRust } from "../../helpers/rust-session.mjs";
@@ -24,6 +25,6 @@ export function main(): void {
   check(identity(3) === 3 && identity("text") === "text" && identity(undefined) === undefined);
 }
 ` } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("absorbed-broad-unions", result.artifacts, { run: true });
 });

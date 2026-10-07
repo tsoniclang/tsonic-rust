@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { artifactText, compileRust } from "../../helpers/rust-session.mjs";
@@ -9,7 +10,7 @@ function compile(name, source, options = {}) {
     packages: [dispatchProviderPackage(options)], target: { id: "rust", options: { outputType: "bin" } },
     files: { "index.ts": source },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject(`typed-dispatch-${name}`, result.artifacts, { run: true });
   return result;
 }

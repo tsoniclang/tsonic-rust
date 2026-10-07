@@ -53,7 +53,7 @@ import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js
 import { rustRuntimeCarrierKey, rustSelectedCallKey } from "../../target-model/facts/selections.js";
 import { resolveRustContextualParameterAbi, rustSourceParameterContractCarrier } from "../../policy/ownership/source-callable-abi.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { resolveParameterAbi, tryFlowMarkerCall } from "../declarations/types-and-bindings.js";
+import { closeRustBindingStorage, resolveParameterAbi, tryFlowMarkerCall } from "../declarations/types-and-bindings.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustSelectedTargetSignature, TargetTypeRef } from "../../target-model/types/model.js";
@@ -116,7 +116,8 @@ export function resolveIdentifierCarrier(
     }
     if (declarationKind === KindParameter || declarationKind === KindVariableDeclaration ||
       declarationKind === KindBindingElement) {
-      const annotated = resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, declaration));
+      const annotated = closeRustBindingStorage(walk, declaration,
+        resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, declaration)));
       if (annotated !== undefined) {
         setCarrierFact(walk, declaration, annotated);
         return setCarrierFact(walk, identifier, annotated);
@@ -124,8 +125,8 @@ export function resolveIdentifierCarrier(
       const initializer = Node_Initializer(walk.context.ast, declaration);
       if (sourceBindingCapturedBeforeInitialization(declaration, ast, walk.context.source.navigation)) {
         const context = rustResolutionContext(walk, declaration);
-        const selected = resolveRustTargetTypeRef(context.currentSemantics.declarations.declaredValueType(declaration),
-          context, walk.operationOptions);
+        const selected = closeRustBindingStorage(walk, declaration,
+          resolveRustTargetTypeRef(context.currentSemantics.declarations.declaredValueType(declaration), context, walk.operationOptions));
         if (selected !== undefined) {
           setCarrierFact(walk, declaration, selected);
           return setCarrierFact(walk, identifier, selected);

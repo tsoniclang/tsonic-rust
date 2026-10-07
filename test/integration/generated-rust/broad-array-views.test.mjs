@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
@@ -7,7 +8,7 @@ import { broadArrayViewSource, broadArrayCategoryWriteSource } from "../../../..
 test("checked broad array views retain their native backing and element identity", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
     files: { "index.ts": broadArrayViewSource + '\nexport function main(): void { if (!run()) throw new Error("broad array identity"); }' } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
   assert.doesNotMatch(source, /\.collect\(|\.values\(\)\.into_iter\(\)\.map\(/);
   assert.match(source, /js_value_from_array\(/);
@@ -20,7 +21,7 @@ test("checked broad array views retain their native backing and element identity
 test("category-only indexed writes preserve the checked broad native backing", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
     files: { "index.ts": broadArrayCategoryWriteSource + '\nexport function main(): void { if (!run()) throw new Error("array category write"); }' } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
   assert.match(source, /set_number\(/u);
   assert.doesNotMatch(source, /\.collect\(|\.values\(\)\.into_iter\(\)\.map\(/u);

@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { artifactText, compileRust, nodejsCapability } from "../../helpers/rust-session.mjs";
@@ -24,7 +25,7 @@ export function main(): void {
 }
 ` },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   assert.doesNotMatch(output, /JsValue::|from_closed|into_iter\(\).*collect|Any|downcast/u);
   validateGeneratedProject("native-binary-union-conversions", result.artifacts, { run: true });

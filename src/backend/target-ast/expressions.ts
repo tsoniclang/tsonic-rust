@@ -1,5 +1,9 @@
 import type { RustExpr } from "./nodes.js";
 
+export function cloneRustExpression(expression: RustExpr): RustExpr {
+  return { kind: "method-call", receiver: expression, receiverMode: "ref", method: "clone", args: [] };
+}
+
 export function negateRustBooleanExpression(expression: RustExpr): RustExpr {
   if (expression.kind === "bool-literal") {
     return { kind: "bool-literal", value: !expression.value };

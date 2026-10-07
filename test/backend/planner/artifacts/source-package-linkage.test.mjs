@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -36,7 +37,7 @@ test("binary source-package generic dispatch closes across the exact component g
     files: { ...closedGenericDispatchPackageFiles, "index.ts": `${closedGenericDispatchPackageFiles["index.ts"]}
 export function main(): void { if (!run()) throw new Error("package generic dispatch"); }` },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const manifests = result.artifacts.filter(artifact => artifact.path.endsWith("Cargo.toml"));
   assert.ok(manifests.length > 1, "source packages must retain their separate Cargo components");
   assert.equal(validateGeneratedProject("package-generic-dispatch", result.artifacts, { run: true }).status, 0);
@@ -164,7 +165,7 @@ test("source-package components become one exact generated Cargo workspace", () 
     component("root", ["domain"], undefined, true),
   ], diagnostics);
 
-  assert.deepEqual(diagnostics, []);
+  assertNoTargetDiagnostics(diagnostics);
   assert.notEqual(plan, undefined);
   assert.deepEqual(plan.rootManifest.workspace.members, [
     "crates/acme_domain",
@@ -253,7 +254,7 @@ export function increment(value: int32): int32 {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const library = artifactText(result, "src/lib.rs");
   const implementation = artifactText(result, "src/index.rs");
   assert.match(library, /#\[doc\(hidden\)\]\s+pub mod index;/u);
@@ -299,7 +300,7 @@ class InternalModel {
     entryPoint: "model.ts",
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/model.rs");
   assert.match(source, /#\[doc\(hidden\)\][\s\S]*pub trait ModelDispatch/u);
   assert.match(source, /#\[doc\(hidden\)\][\s\S]*pub struct ModelState \{\s+pub value: i32,/u);
@@ -349,7 +350,7 @@ export class Derived extends Base implements Readable {
     entryPoint: "index.ts",
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /#\[doc\(hidden\)\][\s\S]*pub trait ReadableDispatch/u);
   assert.match(source, /pub struct Readable \{\s+#\[doc\(hidden\)\]\s+pub identity: rt::ObjectIdentity,\s+#\[doc\(hidden\)\]\s+pub dispatch:/u);
@@ -392,7 +393,7 @@ export const normalize = (value: int32): int32 => value;
     files: engineFiles,
     target: { id: "rust", options: { outputType: "lib", crateName: "acme_engine" } },
   }).result;
-  assert.deepEqual(engine.diagnostics, []);
+  assertNoTargetDiagnostics(engine.diagnostics);
 
   const dependencyRoot = "/src/node_modules/@acme/engine";
   const consumerFiles = {
@@ -434,7 +435,7 @@ export class Consumer extends EngineBase {
     },
     sourcePackages: sourcePackageGraph(dependencyRoot),
   }).result;
-  assert.deepEqual(consumer.diagnostics, []);
+  assertNoTargetDiagnostics(consumer.diagnostics);
   assert.equal(consumer.artifacts.some((artifact) => artifact.path === "Cargo.toml"), false);
   assert.equal(consumer.artifacts.some((artifact) => artifact.path.startsWith("crates/")), false);
 
@@ -509,7 +510,7 @@ export function main(): void {
 `,
     },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   assert.equal(validateGeneratedProject("source-package-caught-errors", result.artifacts, { run: true }).status, 0);
 });
 
@@ -543,7 +544,7 @@ test("cross-package error planning preserves each component-owned Result ABI", (
     },
   }), components);
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   assert.notEqual(result.plan, undefined);
   assert.deepEqual(
     resolveRustSourcePackageErrorBoundary(result.plan, "root", "dependency"),

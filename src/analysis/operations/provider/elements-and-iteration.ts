@@ -26,6 +26,7 @@ import {
   KindSatisfiesExpression,
   Node_Expression,
   Node_Type,
+  sourceParameterIsProperty,
   VariableDeclarationList_Declarations,
 } from "@tsonic/target-api/source";
 import {
@@ -43,6 +44,7 @@ import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
 import { selectRustNativeIndex } from "../../../policy/operations/native-indices.js";
 import { rustProjectObjectIndexSignature } from "../../project-types/object-layout.js";
 import { rustRuntimeCarrierKey } from "../../../target-model/facts/selections.js";
+import { rustTargetOperationFactKey } from "../../facts/operations/keys.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectedValueCarrier } from "../selected-values.js";
 import { canRequireSourceClone } from "./clone-requirements.js";
@@ -66,7 +68,7 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { selectRustNumberArrayUnionMember } from "./number-array-unions.js";
 import { selectedRustForInKeys } from "./for-in-keys.js";
 import { selectRustCheckedPropertyAccess } from "./properties.js";
-import { rustComputedMemberFactKey } from "../../facts/operations/keys.js";
+import { recordRustComputedMemberEvaluation } from "../computed-members.js";
 import { resolveRustIndexedField } from "../../../policy/types/resolution/indexed-fields.js";
 import { selectRustRecordElement } from "./records.js";
 import { rustRecordCarrierValue } from "../../../target-model/types/carriers/records.js";
@@ -107,9 +109,10 @@ export function selectRustCheckedElementAccess(
     request.sourceSelectedElementIndex === undefined) {
     const declarationKind = request.sourceSelectedDeclaration === undefined ? undefined :
       context.ast.kindName(request.sourceSelectedDeclaration);
-    if (request.sourceSelectedDeclaration !== undefined && declarationKind !== undefined && ["KindPropertyDeclaration", "KindPropertySignature",
+    if (request.sourceSelectedDeclaration !== undefined && declarationKind !== undefined && (["KindPropertyDeclaration", "KindPropertySignature",
       "KindPropertyAssignment", "KindShorthandPropertyAssignment", "KindGetAccessor", "KindSetAccessor",
-      "KindMethodDeclaration", "KindMethodSignature"].includes(declarationKind) &&
+      "KindMethodDeclaration", "KindMethodSignature"].includes(declarationKind) ||
+      sourceParameterIsProperty(context.ast, request.sourceSelectedDeclaration)) &&
       context.currentSemantics.declarations.symbolDeclarations(request.sourceSelectedSymbol)
         .includes(request.sourceSelectedDeclaration)) {
       const declarations = declarationKind === "KindGetAccessor" || declarationKind === "KindSetAccessor"
@@ -123,13 +126,15 @@ export function selectRustCheckedElementAccess(
         ...(selectedMember?.setters.length === 1 ? { sourceSelectedWriteDeclaration: selectedMember.setters[0]! } : {}),
       }, context, options);
       if (result.kind === "accept") {
-        const kind = context.ast.kindName(request.argument);
-        context.facts.set(request.expression, rustComputedMemberFactKey, {
-          receiver: request.receiver, key: request.argument,
-          accessMode: request.accessMode,
-          evaluateKey: kind !== "KindStringLiteral" && kind !== "KindNumericLiteral" &&
-            kind !== "KindNoSubstitutionTemplateLiteral",
-        }, [{ message: "rust exact checker-selected computed member and key evaluation" }]);
+        const selected = context.facts.resolve(request.expression, rustTargetOperationFactKey);
+        if (selected === undefined) return rejectSelectedOperation(request.expression, context,
+          "RUST_COMPUTED_MEMBER_OPERATION_NOT_CLOSED",
+          "Computed project member requires its exact sealed target operation.");
+        const evaluateReceiver = selected.kind === "source-static-field" ? selected.classReceiver !== undefined
+          : selected.kind !== "source-accessor" || selected.receiver.kind !== "static" ||
+            request.sourceReceiverValueDeclaration !== options.projectTypes.definitionContainingDeclaration(request.sourceSelectedDeclaration)?.declaration;
+        recordRustComputedMemberEvaluation(context.ast, context.facts, request.expression,
+          request.receiver, request.argument, request.accessMode, evaluateReceiver);
       }
       return result;
     }

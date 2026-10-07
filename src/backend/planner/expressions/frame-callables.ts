@@ -9,6 +9,8 @@ import { projectRustFrameOwnerData, rustFrameOwnerReference } from "../program/f
 import { planRustCaptureValue } from "./typed-locations.js";
 import { rustValueBlock } from "../../target-ast/value-block.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
+import { planRustReceiverFieldOwners, planRustReceiverOwners, validateRustCapturedReceiverFields,
+  validateRustCapturedReceivers } from "./receiver-captures.js";
 
 function planFrameEntry(
   node: Node, carrier: TargetTypeRef, context: RustPlanContext,
@@ -29,11 +31,21 @@ function planFrameEntry(
     : projectRustFrameOwnerData(owner, data => ({ kind: "method-call",
       receiver: { kind: "field", receiver: data, name: types.definition.counterName }, method: "allocate", args: [] }));
   if (allocated === undefined) return undefined;
+  if (!validateRustCapturedReceiverFields(node, implementation.capture.receiverFields, context) ||
+    !validateRustCapturedReceivers(node, implementation.capture.receivers, context)) return undefined;
   const values = implementation.captures.map(capture => {
     const name = context.input.program.names.nameForDeclaration(capture.declaration);
-    return name === undefined ? undefined : planRustCaptureValue(capture.reference, name, capture.storage, false, context);
+    const move = context.input.program.valueLifetimes.canMoveCapture(node, capture.declaration);
+    return name === undefined ? undefined : planRustCaptureValue(capture.reference, name, capture.storage, move, context);
   });
   if (values.some(value => value === undefined)) return undefined;
+  const fields = planRustReceiverFieldOwners(implementation.receiverFields, context, context,
+    { staticStorage: false, offset: values.length });
+  const receivers = fields === undefined ? undefined : planRustReceiverOwners(node, implementation.receivers, context, fields.context,
+    { staticStorage: false, offset: values.length + implementation.receiverFields.length });
+  if (fields === undefined || receivers === undefined) return undefined;
+  const receiverBindings = [...fields.bindings, ...receivers.bindings];
+  values.push(...receiverBindings.map(binding => ({ kind: "path" as const, path: binding.name })));
   const module = context.moduleNameByFileName.get(types.definition.ownerFileName);
   const state: RustExpr | undefined = (values.length === 0 && types.definition.environmentParameters.length === 0) || module === undefined ? undefined : {
     kind: "struct-literal", path: `crate::${module}::${implementation.stateName}`,
@@ -43,7 +55,7 @@ function planFrameEntry(
   const payload = state === undefined ? [] : [implementation.copy ? state
     : { kind: "call" as const, path: "alloc::rc::Rc::new", args: [state] }];
   context.usedAliases?.add("rt");
-  return { bindings: [{ name: identity, value: allocated }],
+  return { bindings: [{ name: identity, value: allocated }, ...receiverBindings],
     entry: { kind: "call", path: `${types.entryType.path}::${implementation.variantName}`,
       args: [{ kind: "path", path: identity }, ...payload] } };
 }

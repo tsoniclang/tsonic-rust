@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
@@ -9,7 +10,7 @@ test("closed array predicates retain native union payloads and evaluate once", {
     ...closedArrayPredicateFiles,
     "index.ts": closedArrayPredicateFiles["index.ts"] + '\nexport function main(): void { if (!run()) throw new Error("array predicates"); }',
   } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
   assert.doesNotMatch(source, /js_value_from_array|js_value_from_source_union/u);
   for (const name of ["bump", "update"]) {

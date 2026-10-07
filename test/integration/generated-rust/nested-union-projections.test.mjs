@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
@@ -10,7 +11,7 @@ for (const surfaces of [[], ["js"]]) {
       ...nestedUnionProjectionFiles,
       "index.ts": nestedUnionProjectionFiles["index.ts"] + '\nexport function main(): void { if (!run()) throw new Error("nested union projections"); }',
     } });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     const source = result.artifacts.find(artifact => artifact.path === "src/index.rs").text;
     const start = source.indexOf("fn read(");
     const end = source.indexOf("fn readOptional(");

@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -110,7 +111,7 @@ test("inherited native initialization consumes one selected owned message withou
   } } });
   const input = context(abi);
   const planned = planRustExternalProjectInitialization(base, signature, declaration, undefined, input);
-  assert.deepEqual(input.diagnostics, []);
+  assertNoTargetDiagnostics(input.diagnostics);
   assert.deepEqual(planned, [{ kind: "string-literal", value: "Error" },
     { kind: "method-call", receiver: { kind: "path", path: "message" }, method: "unwrap_or_default", args: [] },
     { kind: "none" }]);

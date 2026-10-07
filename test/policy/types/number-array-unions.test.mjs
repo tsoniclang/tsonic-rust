@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust, artifactText, acmeTestingPackage } from "../../helpers/rust-session.mjs";
@@ -30,7 +31,7 @@ test("typed and ordinary numeric arrays cross files without copying their input 
       import { check } from "@acme/testing"; export function main(): void { check(run()); }`,
   },
     target: { id: "rust", options: { outputType: "bin", crateName: "number_array_unions" } } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   assert.match(artifactText(result, "src/shapes.rs"), /NumberArrayLike\s+for Union2/u);
   assert.match(artifactText(result, "src/arrays.rs"), /number_array_from/u);
   const run = validateGeneratedProject("number-array-unions", result.artifacts, { run: true });
@@ -55,7 +56,7 @@ for (const initialized of ["new Array<number>(3)", "[1, 2]"]) {
           }`,
       },
     });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject("dense-array-union-copy", result.artifacts, { run: true });
   });
 }

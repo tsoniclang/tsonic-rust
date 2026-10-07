@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { acmeTestingPackage, artifactText, compileRust } from "../../helpers/rust-session.mjs";
@@ -56,7 +57,7 @@ test("private generated class unions retain exact constructed and callable liven
       export function main(): void { check(read(new First()) === 1 && read(new Second()) === 2); }
     `,
   } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   assert.match(artifactText(result, "src/shapes.rs"), /enum Union2/u);
   assert.doesNotMatch(artifactText(result, "src/shapes.rs"), /allow\(dead_code/u);
   assert.doesNotMatch(artifactText(result, "src/index.rs"), /retains an unused authored declaration/u);
@@ -138,7 +139,7 @@ export function main(): void { check(run()); }
 `,
     },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const native = validateGeneratedProject("generic-class-union", result.artifacts, { run: true });
   assert.equal(native.status, 0, JSON.stringify(native));
 });
@@ -189,7 +190,7 @@ export function main(): void {
 `,
     },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   assert.match(artifactText(result, "src/shapes.rs"), /pub enum Union2<Payload0, Payload1>/u);
   assert.match(artifactText(result, "src/backing.rs"), /match &union_receiver/u);
   assert.doesNotMatch(artifactText(result, "src/backing.rs"), /#\[allow\(dead_code, reason = "retains an unused authored declaration"\)\]\s+pub fn change/u);

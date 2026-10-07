@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
@@ -21,6 +22,6 @@ export async function main(): Promise<void> {
   if (await forward(ref(value)) !== 28) throw new Error("borrowed inference");
 }
 ` } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("source-call-lifetime-inference", result.artifacts, { run: true });
 });

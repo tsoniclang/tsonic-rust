@@ -2,6 +2,25 @@ import type { Node } from "@tsonic/tsts";
 import type { RustSourcePolicyContext } from "../model/context.js";
 import type { RustSourceGenericParameterContract } from "../../target-model/lifetimes/index.js";
 
+export function rustProjectGenericContractCorrespondence(
+  selectedDeclaration: Node,
+  implementationDeclaration: Node,
+  context: Pick<RustSourcePolicyContext, "ast" | "sourceLifetimes">,
+): { readonly selected: readonly RustSourceGenericParameterContract[];
+  readonly implementation: readonly RustSourceGenericParameterContract[] } | undefined {
+  const contractFor = (declaration: Node): readonly RustSourceGenericParameterContract[] | undefined => {
+    const syntax = context.ast.typeParameters(declaration);
+    const contract = syntax.length === 0 ? Object.freeze([]) : context.sourceLifetimes.contractFor(declaration)?.parameters;
+    return contract !== undefined && contract.length === syntax.length && contract.every((parameter, index) =>
+      parameter.declaration === syntax[index]) ? contract : undefined;
+  };
+  const selected = contractFor(selectedDeclaration);
+  const implementation = selectedDeclaration === implementationDeclaration ? selected : contractFor(implementationDeclaration);
+  return selected === undefined || implementation === undefined || selected.length !== implementation.length ||
+    selected.some((parameter, index) => parameter.kind !== implementation[index]?.kind)
+    ? undefined : Object.freeze({ selected, implementation });
+}
+
 export function rustProjectGenericParameters(
   declaration: Node,
   context: Pick<RustSourcePolicyContext, "ast" | "sourceLifetimes" | "semanticsFor">,

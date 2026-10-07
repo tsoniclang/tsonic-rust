@@ -48,7 +48,7 @@ import { rustOptionDefaultValue } from "./option-default.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustBlock, RustExpr, RustStmt } from "../../target-ast/nodes.js";
+import type { RustBlock, RustExpr, RustStmt, RustType } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustReceiverIndependentMethodFactKey } from "../../../analysis/facts/operations/keys.js";
@@ -372,7 +372,7 @@ export function planRustCallableExpressionBody(
     capturedBindings,
   };
   const bindingStatements: RustStmt[] = [];
-  let closureParams: { name: string; mutable: boolean; byRefCopy?: boolean }[];
+  let closureParams: { name: string; mutable: boolean; byRefCopy?: boolean; type?: RustType }[];
   let closureMove = nativeClosureProtocol !== undefined &&
     (captureFact.captures.length > 0 || captureFact.receiverFields.length > 0 || captureFact.receivers.length > 0);
   if (callableProtocol === undefined) {
@@ -396,10 +396,12 @@ export function planRustCallableExpressionBody(
     const tupleName = leadingParameterPlans.length + sourceParameterPlans.length === 0
       ? `_${allocatedTupleName}`
       : allocatedTupleName;
+    const tupleType = rustTypeFromCarrierInContext({ kind: "tuple", elements: callableProtocol.parameters }, context);
+    if (tupleType === undefined) return undefined;
     closureParams = [
       ...(ownedStateName === undefined ? [] : [{ name: ownedStateName, mutable: false }]),
       ...(recursiveName === undefined ? [] : [{ name: recursiveName, mutable: false }]),
-      { name: tupleName, mutable: false },
+      { name: tupleName, mutable: false, type: tupleType },
     ];
     closureMove = true;
     for (const [index, parameter] of leadingParameterPlans.entries()) {

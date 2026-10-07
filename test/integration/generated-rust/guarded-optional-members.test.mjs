@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
@@ -8,7 +9,7 @@ for (const surfaces of [[], ["js"]]) {
   test(`guarded optional members retain native payloads (${surfaces[0] ?? "native"})`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
       files: { "index.ts": guardedOptionalMemberSource + '\nexport function main(): void { if (!run()) throw new Error("guarded optional members"); }' } });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     const generated = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
     assert.match(generated, /\bi64\b/u);
     assert.doesNotMatch(generated, /BigInt|exact\s+as\s+f64/u);

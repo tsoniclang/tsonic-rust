@@ -7,7 +7,7 @@ import { diagnosticInput, rustCurrentErrorBoundary, rustErrorType } from "../../
 import { missingFactDiagnostic } from "../../diagnostics.js";
 import { rustGeneratedTypeParameterContext } from "../../names/type-parameters.js";
 import { rustFrameCallableTypes } from "../../types/frame-callables.js";
-import { rustCallableCaptureStorageType } from "../../types/capture-storage.js";
+import { rustCallablePayloadContext, rustCallablePayloadTypes } from "../../expressions/capture-payloads.js";
 import { rustFrameBindingContext, rustFrameBindingType } from "../../bindings/frame-storage.js";
 import { planNativeModuleFunction } from "./functions.js";
 import { genericCallableCopyStateItems } from "./generic-storage.js";
@@ -47,7 +47,8 @@ function definitionMarker(generics: RustGenerics): RustType | undefined {
 }
 
 function entryHasPayload(implementation: RustFrameCallableImplementation, generics: RustGenerics): boolean {
-  return implementation.captures.length !== 0 || definitionMarker(generics) !== undefined;
+  return implementation.captures.length !== 0 || implementation.receiverFields.length !== 0 ||
+    implementation.receivers.length !== 0 || definitionMarker(generics) !== undefined;
 }
 
 function stateType(implementation: RustFrameCallableImplementation, generics: RustGenerics): RustType {
@@ -116,8 +117,8 @@ function planFrameEntry(
     const suspended = context.input.program.facts.getFact(implementation.declaration, rustAsyncFunctionFactKey) !== undefined ||
       context.input.program.facts.getFact(implementation.declaration, rustGeneratorFactKey) !== undefined;
     const state = stateType(implementation, generics);
-    const captures = implementation.captures.map(capture => rustCallableCaptureStorageType(capture, capture.carrier, context));
-    if (captures.some(type => type === undefined)) return undefined;
+    const captures = rustCallablePayloadTypes(implementation, context);
+    if (captures === undefined) return undefined;
     const marker = definitionMarker(generics);
     if (captures.length !== 0 || marker !== undefined) {
       items.push({ kind: "struct", name: implementation.stateName, visibility: "public", generics,
@@ -131,13 +132,8 @@ function planFrameEntry(
     const owner: RustLiveFrameOwner = { kind: "live", expression: { kind: "path", path: frameName }, borrowed: !suspended,
       data: definition.storage.kind === "standalone" ? { kind: "direct" }
         : { kind: "object", mutable: definition.storage.mutable, name: allocateRustSyntheticName(names, "frame_data") } };
-    const helperContext = rustFrameBindingContext(definition, owner, { ...context,
-      capturedBindings: implementation.captures.map((capture, index) => ({
-        declaration: capture.declaration, valueCarrier: capture.carrier, storage: capture.storage, borrowed: "shared" as const,
-        expression: { kind: "reference" as const, expr: { kind: "field" as const,
-          receiver: { kind: "path" as const, path: stateName }, name: `capture_${index}` } },
-      })),
-    });
+    const helperContext = rustFrameBindingContext(definition, owner,
+      rustCallablePayloadContext(implementation, { kind: "path", path: stateName }, context));
     const helper = planNativeModuleFunction(implementation.declaration, implementation.declaration,
       implementation.functionName, true, helperContext);
     if (helper?.kind !== "function" || helper.isAsync === true) return undefined;

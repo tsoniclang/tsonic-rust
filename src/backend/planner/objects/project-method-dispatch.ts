@@ -1,4 +1,5 @@
 import { rustValueBlock } from "../../target-ast/value-block.js";
+import { cloneRustExpression } from "../../target-ast/expressions.js";
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustExpr } from "../../target-ast/nodes.js";
@@ -32,16 +33,12 @@ export function planRustVirtualProjectMethodCall(
   );
   return rustValueBlock([{ name: receiverName, value: receiver }], {
       kind: "method-call",
-      receiver: {
-        kind: "method-call",
-        receiver: {
+      receiver: cloneRustExpression({
           kind: "field",
           receiver: { kind: "path", path: receiverName },
           name: rustProjectObjectDispatchField,
-        },
-        method: "clone",
-        args: [],
-      },
+      }),
+      receiverMode: "value",
       method: slot,
       args,
     });
@@ -69,11 +66,6 @@ export function planRustExactProjectMethodCall(
     owner: { kind: "named", path: "Self" },
     trait,
     method: slot,
-    args: [{
-      kind: "method-call",
-      receiver: root,
-      method: "clone",
-      args: [],
-    }, ...args],
+    args: [cloneRustExpression(root), ...args],
   };
 }

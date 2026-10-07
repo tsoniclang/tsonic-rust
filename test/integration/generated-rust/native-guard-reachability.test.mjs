@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust, nodejsCapability } from "../../helpers/rust-session.mjs";
@@ -9,7 +10,7 @@ for (const surfaces of [[], ["js"]]) {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: {
       "index.ts": nativeGuardReachabilitySource + '\nexport function main(): void { if (!run()) throw new Error("native guard reachability"); }',
     } });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject("native-guard-reachability", result.artifacts, { run: true });
   });
 }
@@ -19,6 +20,6 @@ test("exact native header provider omits the impossible number and array paths",
     target: { id: "rust", options: { outputType: "bin" } }, files: {
       "index.ts": nativeHeaderReachabilitySource + '\nexport function main(): void { if (!run()) throw new Error("native header reachability"); }',
     } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("native-header-reachability", result.artifacts, { run: true });
 });

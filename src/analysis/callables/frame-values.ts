@@ -26,6 +26,8 @@ export interface RustFrameCallableImplementation {
   readonly functionName: string;
   readonly stateName: string;
   readonly captures: RustClosureCaptureFact["captures"];
+  readonly receiverFields: RustClosureCaptureFact["receiverFields"];
+  readonly receivers: RustClosureCaptureFact["receivers"];
   readonly copy: boolean;
 }
 
@@ -145,8 +147,11 @@ export function createRustFrameCallablePlan(input: {
       }
       const identity = createHash("sha256").update(`${owner.fileName}:${input.ast.pos(declaration)}:${input.ast.end(declaration)}`).digest("hex").slice(0, 16);
       const entryCaptures = Object.freeze(capture.captures.filter(selected => !frameDeclarations.has(selected.declaration)));
-      const implementation = Object.freeze({ declaration, carrier, capture, captures: entryCaptures,
-        copy: entryCaptures.every(selected => selected.storage === "value" && isRustCopyCarrier(selected.carrier)),
+      const receiverFields = Object.freeze(capture.receiverFields.filter(selected => !frameDeclarations.has(selected.declaration)));
+      const receivers = Object.freeze(capture.receivers.filter(selected => selected.owner !== classDefinition?.declaration));
+      const implementation = Object.freeze({ declaration, carrier, capture, captures: entryCaptures, receiverFields, receivers,
+        copy: receivers.length === 0 && receiverFields.every(selected => selected.storage.kind === "copy") &&
+          entryCaptures.every(selected => selected.storage === "value" && isRustCopyCarrier(selected.carrier)),
         variantName: `Entry_${identity}`,
         functionName: allocateRustGeneratedName(usedNames, `tsonic_frame_entry_${prefix}_${identity}`),
         stateName: allocateRustGeneratedName(usedNames, `TsonicFrameState_${prefix}_${identity}`) });

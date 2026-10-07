@@ -37,6 +37,7 @@ import { planRustSequenceValue } from "./sequence-conversions.js";
 import { planRustUnionFold } from "./union-folds.js";
 import { planRustProgramErrorConstruction } from "./program-errors.js";
 import { planRustProgramErrorClosedValue } from "./program-error-values.js";
+import { planRustCallableInputProducer } from "./callable-conversions.js";
 
 export function applyRustValueConversion(
   context: RustPlanContext,
@@ -79,9 +80,12 @@ export function applyRustValueConversion(
       return undefined;
     }
   }
-  const nonConsumingSource = !sourceIsSharedReference && contract.sourceMode === "ref" && node !== undefined
-    ? planRustNonConsumingValue(node, expression, context)
-    : expression;
+  const producer = conversion.kind === "callable-input"
+    ? planRustCallableInputProducer(expression, contract.source, context, node) : expression;
+  if (producer === undefined) return undefined;
+  const nonConsumingSource = !sourceIsSharedReference && contract.sourceMode === "ref" && node !== undefined && producer === expression
+    ? planRustNonConsumingValue(node, producer, context)
+    : producer;
   const source = contract.sourceMode === "ref" && !sourceIsSharedReference
     ? applyRustArgumentMode(context, nonConsumingSource, "ref", node)
     : nonConsumingSource;

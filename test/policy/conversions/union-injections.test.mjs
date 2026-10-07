@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
@@ -137,7 +138,7 @@ test("exact union payload admission is generic and constructs nested native vari
   assert.match(planned.path, /Outer::Nested$/u);
   assert.match(planned.args[0].path, /Inner::Complete$/u);
   assert.equal(planned.args[0].args[0], expression);
-  assert.deepEqual(context.diagnostics, []);
+  assertNoTargetDiagnostics(context.diagnostics);
   assert.doesNotMatch(JSON.stringify(planned), /clone|map|Box|Rc|RefCell|as_mut|cast|Promise/u);
 });
 

@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createCompilerSessionFromFiles } from "@tsonic/tsts";
@@ -53,7 +54,7 @@ function run(value: string | Pattern | string[]): void {
   if (value instanceof Pattern) observe(value);
 }
 ` }, compilerOptions: { strict: true, target: "es2022", module: "esnext" } }).checkSource();
-  assert.deepEqual(checked.diagnostics, []);
+  assertNoTargetDiagnostics(checked.diagnostics);
   const source = createTargetSourceProgram(checked);
   const file = checked.getSourceFile("/src/index.ts");
   const reads = [];
@@ -112,7 +113,7 @@ test("literal guards retain exact native integer widths and broad unknown payloa
       if (value === "route") observe(value);
     }
   ` }, compilerOptions: { strict: true, target: "es2022", module: "esnext" } }).checkSource();
-  assert.deepEqual(checked.diagnostics, []);
+  assertNoTargetDiagnostics(checked.diagnostics);
   const source = createTargetSourceProgram(checked);
   const reads = [];
   const visit = node => {

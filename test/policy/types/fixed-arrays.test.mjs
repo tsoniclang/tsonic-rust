@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { providerVirtualDeclarationFactKey, sourcePrimitiveFactKey } from "@tsonic/tsts";
@@ -164,7 +165,7 @@ test("fixed-array destructuring retains exact remainder carriers and native slic
         names: { nameForDeclaration: node => node === first ? "first" : "rest" },
       } },
     }, () => assert.fail("fixed-array rest must not reconstruct a source expression"));
-    assert.deepEqual(diagnostics, []);
+    assertNoTargetDiagnostics(diagnostics);
     assert.deepEqual(statements?.[0]?.init, {
       kind: "index", receiver: source, index: { kind: "int-literal", text: "0" },
     });
@@ -231,7 +232,7 @@ test("fixed-array literal cardinality rejects exact mismatches without extent ex
   const zero = rustFixedArrayTargetType(element, integer(0n));
   assert.deepEqual(resolveArrayLiteralCarrier({ context: { ast: { elements: () => [] }, diagnostics, facts } },
     expression, {}, zero), zero);
-  assert.deepEqual(diagnostics, []);
+  assertNoTargetDiagnostics(diagnostics);
   assert.deepEqual(facts.getRuntimeCarrierFact(expression)?.carrier, zero);
 });
 
@@ -303,7 +304,7 @@ test("numeric shared arrays preserve cross-file carriers, length, indexing and n
       `,
     },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /\[i32; 3\]/u);
   assert.match(output, /values\.len\(\) != 3/u);
@@ -323,7 +324,7 @@ test("large fixed-array value types and finite indexes emit exact native extents
     export function left(values: FixedArray<int32, 9007199254740992n>): int32 { return values[0]; }
     export function right(values: FixedArray<int32, 9007199254740993n>): int32 { return values[0]; }
   ` } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /pub fn left\(values: \[i32; 9007199254740992\]\)/u);
   assert.match(output, /pub fn right\(values: \[i32; 9007199254740993\]\)/u);
@@ -338,7 +339,7 @@ test("fixed-array ordinals preserve exact native integers beyond floating precis
       return values[9007199254740993];
     }
   ` } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /values\[9007199254740993\]/u);
   assert.doesNotMatch(output, /values\[9007199254740992\]|i32_to_usize|as f64/u);
@@ -394,7 +395,7 @@ for (const length of ["2n", "9007199254740993n"]) {
         function inferred(values: FixedArray<int32, ${length}>) { return values; }
         export function length(values: FixedArray<int32, ${length}>) { return ${expression}; }
       ` } });
-      assert.deepEqual(result.diagnostics, []);
+      assertNoTargetDiagnostics(result.diagnostics);
       const output = artifactText(result, "src/index.rs");
       assert.match(output, /pub fn length\(values: \[i32; \d+\]\) -> usize/u);
       assert.match(output, /\.len\(\)/u);
@@ -408,7 +409,7 @@ test("numeric fixed-array length beyond int32 is not artificially narrowed", () 
     import type { FixedArray, int32, nativeUint } from "@tsonic/core/types.js";
     export function length(values: FixedArray<int32, 2147483648>): nativeUint { return values.length; }
   ` } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /-> usize/u);
   assert.match(output, /\.len\(\)/u);

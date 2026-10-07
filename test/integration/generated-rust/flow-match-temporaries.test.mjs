@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import { rustValueBlock } from "../../../dist/backend/target-ast/value-block.js";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -27,7 +28,7 @@ for (const edition of ["2021", "2024"]) {
     const probe = digit => ({ kind: "call", path: "probe", args: [trace, { kind: "int-literal", text: String(digit) }] });
     const projection = planRustFlowReadProjection(node, rustValueBlock([{ name: "_guard", value: probe(1) }], { kind: "method-call", receiver: probe(2), method: "value", args: [] }), { kind: "option-value", sourceCarrier, selectedCarrier }, context);
     assert.ok(projection);
-    assert.deepEqual(context.diagnostics, []);
+    assertNoTargetDiagnostics(context.diagnostics);
     const generated = printRustSourceFile({
       headerComment: "Native temporary destruction proof.",
       items: [{ kind: "function", generics: emptyRustGenerics, visibility: "private", name: "project",

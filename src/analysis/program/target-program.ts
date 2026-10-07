@@ -44,7 +44,7 @@ import {
 import {
   analyzeRustCountedLoopRepresentations,
 } from "../control-flow/counted-loop-representations.js";
-import { rustJsAsyncExecutor, rustJsEventLoopEpilogue, rustJsTimerDispatchContextId } from "../../providers/builtins/js-dispatch.js";
+import { rustJsAsyncExecutor, rustJsEventLoopEpilogue, rustJsTimerDispatchContextId } from "../../providers/model/js-dispatch.js";
 import { analyzeRustSourceModuleConstructions } from "../source-modules/index.js";
 import { analyzeRustFoundation } from "../foundation/plan.js";
 import { rustFoundationForCarrier } from "../foundation/requirements.js";
@@ -55,6 +55,8 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustClosureCaptureFactKey, rustTargetOperationFactKey, rustBindingStorageFactKey,
   rustSourceCallEffectsFactKey, rustSourceAccessorEffectsFactKey } from "../facts/keys.js";
 import { rustTargetOperationIsFallible } from "../facts/target-operation.js";
+import { analyzeRustErrorTransport } from "./error-transport.js";
+import { analyzeRustBorrowedInitializers } from "../storage/borrowed-initializers.js";
 
 export function analyzeRustTargetProgram(
   request: RustTargetAnalysisRequest,
@@ -252,6 +254,11 @@ export function analyzeRustTargetProgram(
     structuralShapes: context.structuralShapes,
   });
   if (borrowStability.kind === "rejected") return rejectedTargetStage(borrowStability.diagnostics);
+  const typeDefinitions = context.typeDefinitions.seal();
+  const projectTypes = context.projectTypes.seal();
+  const errorTransport = analyzeRustErrorTransport({ ast: context.ast, projectTypes, typeDefinitions,
+    sourcePackageComponents: sourcePackageComponents.plan, errorStorageDemands: context.errorStorageDemands });
+  if (errorTransport.kind === "rejected") return rejectedTargetStage(errorTransport.diagnostics);
   const program: RustTargetProgram = Object.freeze({
     captureStorage: analyzeRustCaptureStorage({ ast: context.ast, sourceFiles: context.sourceFiles, facts }),
     lexicalFunctions,
@@ -271,8 +278,9 @@ export function analyzeRustTargetProgram(
     sourceFiles: context.sourceFiles,
     facts,
     typeFamilies: context.typeFamilies.seal(),
-    typeDefinitions: context.typeDefinitions.seal(),
-    projectTypes: context.projectTypes.seal(),
+    typeDefinitions,
+    projectTypes,
+    errorTransport: errorTransport.value,
     objectRepresentations,
     projectMethodDispatch: context.projectMethodDispatch.seal(),
     projectConstructions: analyzeRustProjectConstructions({ ast: context.ast, facts,
@@ -295,6 +303,7 @@ export function analyzeRustTargetProgram(
     declarationGenericRequirements: declarationGenericRequirements.index,
     valueLifetimes,
     borrowedElementReads,
+    borrowedInitializers: analyzeRustBorrowedInitializers(context.ast, context.sourceFiles, facts),
     borrowStability: borrowStability.plan,
     structuralShapes: context.structuralShapes.seal(),
     frozenDataWrites: context.frozenDataWrites.seal(),

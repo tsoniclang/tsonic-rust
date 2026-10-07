@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { optionalCallableConversionSource } from "../../../../tsonic/test/fixtures/optional-callable-conversions.mjs";
@@ -9,7 +10,7 @@ for (const surfaces of [[], ["js"]]) {
   test(`stored optional, default and discarded callable conversions preserve evaluation in ${lane}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
       files: { "index.ts": optionalCallableConversionSource + '\nexport function main(): void { if (!run()) throw new Error("optional callable conversion"); }' } });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject(`optional-callable-conversions-${lane}`, result.artifacts, { run: true });
   });
 }

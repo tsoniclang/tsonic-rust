@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { cloneRustExpression } from "../../../target-ast/expressions.js";
 import {
   Node_Initializer,
   Node_Type,
@@ -536,10 +537,6 @@ export function rustRcType(inner: RustType): RustType {
   };
 }
 
-export function cloneExpression(expression: RustExpr): RustExpr {
-  return { kind: "method-call", receiver: expression, method: "clone", args: [] };
-}
-
 export function cloneField(receiver: RustExpr, name: string): RustExpr {
-  return cloneExpression({ kind: "field", receiver, name });
+  return cloneRustExpression({ kind: "field", receiver, name });
 }

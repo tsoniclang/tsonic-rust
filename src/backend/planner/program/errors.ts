@@ -23,7 +23,7 @@ import { planRustRetainedErrorAdmission } from "./retained-errors.js";
 import { planRustErrorProjectionTransport, planRustSourceErrorProjectionDelegates } from "./error-projections.js";
 import { planRustClosedThrowAdmission } from "./closed-throws.js";
 import { planRustNativeValueProjections } from "./native-value-projections.js";
-import { selectRustErrorVariants } from "./error-variant-selection.js";
+import { planRustErrorVariants } from "./error-variants.js";
 
 const programErrorName = "TsonicError";
 const programResultName = "TsonicResult";
@@ -164,7 +164,7 @@ export function planRustProgramErrorModule(
     return undefined;
   }
 
-  const selectedVariants = selectRustErrorVariants(input.program, domain);
+  const selectedVariants = planRustErrorVariants(input.program, domain);
   if (selectedVariants === undefined) {
     diagnostics.push({ code: "RUST_CLOSED_ERROR_DEMAND_MISSING", category: "error", source: "tsonic-rust",
       message: "Program Error transport requires its exact sealed variant inventory." });

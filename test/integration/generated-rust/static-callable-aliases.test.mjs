@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
@@ -10,7 +11,7 @@ test("static intrinsic aliases retain exact JS API calls without runtime wrapper
         ...staticCallableAliasFiles,
         "index.ts": staticCallableAliasFiles["index.ts"] + '\nexport function main(): void { if (!run()) throw new Error("static intrinsic aliases"); }',
       } });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     const source = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
     assert.doesNotMatch(source, /js_value_from_array|js_value_from_source_union|let (?:initial|alias|minimum|predicate|selected)\b[^\n]*Callable|static (?:initial|alias|minimum|predicate)\b/u);
     validateGeneratedProject("static-callable-aliases", result.artifacts, { run: true });
@@ -31,7 +32,7 @@ test("generic object methods do not retain compile-only intrinsic captures", { t
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } }, files: {
     "index.ts": staticCallableAliasObjectFiles["index.ts"] + '\nexport function main(): void { if (!run()) throw new Error("intrinsic alias capture"); }',
   } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
   assert.doesNotMatch(source, /capture_\d+\s*:|let (?:predicate|minimum)\b/u);
   validateGeneratedProject("static-callable-alias-object", result.artifacts, { run: true });

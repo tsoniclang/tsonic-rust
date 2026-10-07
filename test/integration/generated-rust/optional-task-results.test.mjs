@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
@@ -44,6 +45,6 @@ test("void-bearing promise returns retain one native absence and precise complet
     }
     export async function main(): Promise<void> { if (!await run()) throw new Error("optional promise completion"); }
   ` } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("optional-task-results", result.artifacts, { run: true });
 });

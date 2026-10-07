@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { acmeTestingPackage, analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
@@ -25,7 +26,7 @@ test("inherited native rest slots forward the selected array without reassembly"
   const files = { "index.ts": `import { check } from "@acme/testing";\n${source}\nexport function main(): void { check(run()); }` };
   const { result } = compileRust({ surfaces: ["js"], packages: [acmeTestingPackage()], files,
     target: { id: "rust", options: { outputType: "bin" } } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("inherited-rest-methods", result.artifacts, { run: true });
 });
 

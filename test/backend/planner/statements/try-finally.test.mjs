@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -93,7 +94,7 @@ export async function main(): Promise<void> {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /rt::Completion</u);
   assert.match(source, /rt::Completion::Continue/u);
@@ -120,7 +121,7 @@ export function fails(): int32 {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /pub fn fails\(\) -> Result<i32, rt::TsonicError>/u);
   assert.match(source, /rt::finish_finally/u);

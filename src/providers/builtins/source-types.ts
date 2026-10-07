@@ -17,7 +17,7 @@ import type {
   RustProviderTypeRow,
 } from "../packages/model.js";
 import { rustNativeScalarTargetId } from "../../target-model/types/index.js";
-import { rustJsTimerDispatchContext } from "./js-dispatch.js";
+import { rustJsTimerDispatchContext } from "../model/js-dispatch.js";
 
 const nativePointerType = pointerType(
   "tsonic-source-core",

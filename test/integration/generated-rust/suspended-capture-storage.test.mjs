@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust, artifactText } from "../../helpers/rust-session.mjs";
@@ -27,7 +28,7 @@ async function run(): Promise<boolean> {
 }
 export async function main(): Promise<void> { if (!await run()) throw new Error("retained storage"); }
 ` } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /rt::Location<js_abi::JsPromise<'static,/u);
   assert.doesNotMatch(source, /transmute|\.then\(|\.then_async\(/u);
@@ -45,7 +46,7 @@ export function escape<L extends Life>(value: Ref<int32, L>): () => Promise<int3
   return async (): Promise<int32> => await processing;
 }
 ` } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const project = writeGeneratedProject("suspended-capture-borrow-rejected", result.artifacts);
   runCargo(project, ["generate-lockfile", "--offline"]);
   assert.throws(() => runCargo(project, ["check", "--all-targets", "--locked", "--offline"]),

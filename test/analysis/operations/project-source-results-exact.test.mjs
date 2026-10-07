@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Node_Expression } from "@tsonic/target-api/source";
@@ -67,7 +68,7 @@ export function main(): void {
   assert.equal(rustTargetTypeRefEquals(projected[1].fact.resultCarrier, rustStringTargetType()), true);
   assert.equal(projected[0].fact.resultProjection.variant, projected[2].fact.resultProjection.variant);
   const { result } = compileRust(options);
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   assert.ok(result.artifacts.some(artifact => artifact.path === "src/index.rs"));
 });
 
@@ -258,7 +259,7 @@ for (const fixture of projectSourceResultContracts) {
       target: { id: "rust", options: { outputType: "bin", crateName: fixture.crateName } },
       files: { "index.ts": fixture.source },
     });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     assert.ok(result.artifacts.some(artifact => artifact.path === "src/main.rs"));
   });
 }

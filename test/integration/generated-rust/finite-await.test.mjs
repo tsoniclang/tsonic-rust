@@ -1,3 +1,4 @@
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import { localFiniteAwaitBranches } from "../../../../tsonic/test/fixtures/local-finite-await-branches.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -28,7 +29,7 @@ export async function main(): Promise<void> {
   if (!rejected) throw new Error("native await lost rejection");
 }
 ` } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /match value/u);
   assert.match(source, /into_result\(\)\.await\?/u);
@@ -39,7 +40,7 @@ export async function main(): Promise<void> {
 test("local finite await branches execute exact native values, futures and absence", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"],
     target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": localFiniteAwaitBranches } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /match value/u);
   assert.match(source, /into_result\(\)\.await\?/u);
@@ -62,7 +63,7 @@ export async function main(): Promise<void> {
   if (!await counter.verify()) throw new Error("await evaluated its input incorrectly");
 }
 ` } });
-    assert.deepEqual(result.diagnostics, []);
+    assertNoTargetDiagnostics(result.diagnostics);
     const source = artifactText(result, "src/index.rs");
     assert.doesNotMatch(source, /next\([^)]*\)\.await/u);
     assert.doesNotMatch(source, /Box::pin|dyn Future|Any/u);
