@@ -404,6 +404,10 @@ export function resolveRustTargetTypeSyntax(
   }
   if (kind === "KindUnionType") {
     const sourceType = semantics?.types.expressionType(node);
+    if (sourceType !== undefined && semantics !== undefined &&
+      (semantics.types.isAny(sourceType) || semantics.types.isUnknown(sourceType))) {
+      return resolveRustAuthoredBroadSourceValueTargetType(node, context, options.jsEnabled);
+    }
     const children = denseDefined(ast.children(node));
     if (children === undefined) {
       return undefined;
