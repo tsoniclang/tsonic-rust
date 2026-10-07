@@ -42,7 +42,6 @@ import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustRetainedEr
 import { rustWritableErrorRecoveryOriginMatches } from "../../target-model/conversions/program-error.js";
 import { rustSourceUsePreservesAbsence } from "./absence-use.js";
 import { resolveRustNativeFlowCarrier } from "../../policy/types/resolution/native-flow-refinement.js";
-import { rustUnionLeaves } from "../../target-model/types/union-relations.js";
 
 export function applyFlowReadLane(
   walk: RustFactWalk,
@@ -265,8 +264,7 @@ function resolveSelectedFlowReadCarrier(
       }
     }
   }
-  const sourceLeaves = rustUnionLeaves(dispatchCarrier, walk.context.typeDefinitions);
-  if (guarded !== undefined && guarded.length > 1 && sourceLeaves !== undefined && guarded.length < sourceLeaves.length) {
+  if (guarded !== undefined && guarded.length > 1) {
     const selected = resolveRustNativeFlowCarrier(selectedType, guarded, resolution, walk.operationOptions);
     const carrier = selected === undefined || !includesAbsence ? selected : rustSourceOptionalTargetType(selected);
     if (carrier !== undefined && selectRustFlowReadProjection(
