@@ -72,6 +72,8 @@ export interface JsLaneBindings {
 
 export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindings): TargetTypeRef | undefined {
   switch (reference.ref) {
+    case "callback-unit":
+      return rustCallableTargetType([], rustUnitTargetType());
     case "cb-array-from-map": {
       const source = bindings.selectedMethodTypeArguments?.[0];
       const result = bindings.authoredMethodTypeArguments?.[1] ?? rustInferCarrier;

@@ -86,6 +86,7 @@ export type JsLane =
   | "regexp-string-iterator";
 
 export type JsCarrierRef =
+  | { readonly ref: "callback-unit" }
   | { readonly ref: "cb-array-from-map"; readonly arity: 0 | 1 | 2 }
   | { readonly ref: "cb-array-predicate"; readonly arity: 0 | 1 | 2 | 3 }
   | { readonly ref: "cb-array-map"; readonly arity: 0 | 1 | 2 | 3 }

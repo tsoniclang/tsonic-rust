@@ -16,6 +16,7 @@ test("timer operations retain one exact root and a native admission error bounda
       assert.deepEqual(selected.fact.dispatchInputs, [input]);
       assert.equal(selected.fact.isFallible, true);
       assert.equal(selected.fact.errorBoundary, "provider-native");
+      assert.deepEqual(selected.parameterCarriers[0], callback, "the native scheduler owns its callback completion ABI");
       assert.equal(selected.resultCarrier.name, "uint64", "native timer identity does not round through floating point");
     }
   }
