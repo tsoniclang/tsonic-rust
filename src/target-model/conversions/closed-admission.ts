@@ -3,7 +3,7 @@ import type { RustValueConversion } from "../operations/model.js";
 import type { RustTypeDefinitions } from "../types/source-union-definitions.js";
 import { rustTargetTypeRefEquals } from "../types/equality.js";
 import { rustClosedValueRetainsError } from "../types/carriers/closed-values.js";
-import { rustJsRecordValueAdmission } from "./closed-record.js";
+import { rustJsRecordValueAdmission, rustJsSharedObjectValueAdmission } from "./closed-record.js";
 import { rustNumberBoxingConversionId } from "./number-boxing.js";
 import {
   isRustAbsenceCarrier, rustCarrierSupportsClone, rustCarrierSupportsTrait,
@@ -41,7 +41,8 @@ export function rustClosedValueAdmissionConversion(
   if (rustTargetTypeRefEquals(source, rustJsSymbolTargetType())) return rustSymbolToJsValueConversion;
   return rustTargetTypeRefEquals(source, rustProgramErrorTargetType()) ||
     rustClosedValueRetainsError(source, definitions) || rustTargetTypeRefEquals(source, rustEmptyObjectTargetType()) ||
-    rustJsRecordValueAdmission(source) || rustTsValueAdmission(source, definitions)?.kind === "project-object" ||
+    rustJsRecordValueAdmission(source) || rustJsSharedObjectValueAdmission(source, definitions) ||
+    rustTsValueAdmission(source, definitions)?.kind === "project-object" ||
     rustCarrierSupportsClone(source, definitions) &&
     rustCarrierSupportsTrait(source, rustJsClosedValueCarrierTraitPath, undefined, undefined, definitions)
     ? Object.freeze({ kind: "js-value-from-closed-carrier", source }) : undefined;

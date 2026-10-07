@@ -4,7 +4,7 @@ import { rustNativeRepresentationMatches } from "./native-representation.js";
 import { rustCallableInputMatches } from "./callable-input.js";
 import { rustUnionPayloadAdmission } from "./union-injection.js";
 import { rustProgramErrorConversionMatches, type RustProgramErrorRoute } from "./program-error.js";
-import { rustJsRecordValueAdmission } from "./closed-record.js";
+import { rustJsRecordValueAdmission, rustJsSharedObjectValueAdmission } from "./closed-record.js";
 import { rustClosedValueRetainsError } from "../types/carriers/closed-values.js";
 import {
   isRustTargetTypeRef,
@@ -280,7 +280,8 @@ export function rustValueConversionContract(
       return { category: "projection", lowering: "call", path: "js_abi::JsValue::from_error",
         sourceMode: "value", source: value.source, target: jsValueCarrier, fallible: false };
     }
-    if (rustTargetTypeRefEquals(value.source, rustEmptyObjectTargetType()) || rustJsRecordValueAdmission(value.source)) {
+    if (rustTargetTypeRefEquals(value.source, rustEmptyObjectTargetType()) || rustJsRecordValueAdmission(value.source) ||
+      rustJsSharedObjectValueAdmission(value.source, definitions)) {
       return { category: "projection", lowering: "call", path: "js_abi::JsValue::from",
         sourceMode: "value", source: value.source, target: jsValueCarrier, fallible: false };
     }

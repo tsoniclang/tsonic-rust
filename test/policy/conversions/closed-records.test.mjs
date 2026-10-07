@@ -4,12 +4,52 @@ import test from "node:test";
 import { rustJsValueTargetType, rustOptionTargetType, rustStringTargetType,
   rustSourcePrimitiveTargetType, rustTsValueTargetType } from "../../../dist/target-model/types/index.js";
 import { rustRecordTargetType } from "../../../dist/target-model/types/carriers/records.js";
-import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
+import { rustStructuralObjectTargetType } from "../../../dist/target-model/types/carriers/source-types.js";
+import { rustJsSharedObjectValueAdmission } from "../../../dist/target-model/conversions/closed-record.js";
+import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
+import { selectRustSourceValueConversion, selectRustJsonValueConversion } from "../../../dist/policy/conversions/selection.js";
 import { rustValueConversionContract } from "../../../dist/target-model/conversions/contracts.js";
 import { substituteRustValueConversion } from "../../../dist/target-model/conversions/substitution.js";
 import { finalizeRustProviderOperationAbi, validateRustFinalizedOperationAbi } from "../../../dist/analysis/facts/finalized-operation-abi.js";
 import { lowerRustValueConversion } from "../../../dist/backend/planner/expressions/value-conversions.js";
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../helpers/fake-compile-input.mjs";
+
+test("shared native structural objects retain their owner while explicit JSON selects field projection", () => {
+  const target = rustJsValueTargetType();
+  const source = rustStructuralObjectTargetType("/src/index.ts", [
+    { sourceName: "count", presence: "required", readonly: false, type: rustSourcePrimitiveTargetType("uint64") },
+  ]);
+  const conversion = selectRustSourceValueConversion(source, target);
+  assert.deepEqual(conversion, { kind: "js-value-from-closed-carrier", source });
+  assert.deepEqual(rustValueConversionContract(conversion), { category: "projection", lowering: "call",
+    path: "js_abi::JsValue::from", sourceMode: "value", source, target, fallible: false });
+  assert.equal(selectRustJsonValueConversion(source).kind, "js-value-from-structural-object",
+    "explicit serialization, not ordinary admission, owns the checked field projection");
+  for (const optional of [rustOptionTargetType(source), { ...rustOptionTargetType(source), sourceAbsence: true }]) {
+    const selected = selectRustSourceValueConversion(optional, target);
+    assert.equal(selected.kind, "closed-value-from-option");
+    assert.deepEqual(selected.elementConversion, conversion);
+  }
+});
+
+test("shared native structural admission cannot erase generic or borrowed storage obligations", () => {
+  const field = type => ({ sourceName: "value", presence: "required", readonly: false, type });
+  const scalar = rustSourcePrimitiveTargetType("uint64");
+  const source = rustStructuralObjectTargetType("/src/index.ts", [field(scalar)]);
+  assert.equal(rustJsSharedObjectValueAdmission(source, emptyRustTypeDefinitions), true);
+  for (const changed of [
+    rustStructuralObjectTargetType("/src/index.ts", [field(scalar)], "value"),
+    rustStructuralObjectTargetType("/src/index.ts", [field({ kind: "type-parameter", identity: "T", name: "T" })]),
+    rustStructuralObjectTargetType("/src/index.ts", [field({ kind: "reference", referent: scalar, mutable: false,
+      lifetime: { kind: "named", identity: "scope", name: "scope" } })]),
+    { kind: "reference", referent: source, mutable: false },
+    { ...source, value: { ...source.value, representation: "unowned" } },
+  ]) {
+    assert.equal(rustJsSharedObjectValueAdmission(changed, emptyRustTypeDefinitions), false,
+      "the existing clone/static/native carrier owner remains authoritative");
+    assert.equal(rustValueConversionContract({ kind: "js-value-from-closed-carrier", source: changed }) === undefined, true);
+  }
+});
 
 test("closed record admission keeps the exact native backing and one source absence", () => {
   const target = rustJsValueTargetType();
