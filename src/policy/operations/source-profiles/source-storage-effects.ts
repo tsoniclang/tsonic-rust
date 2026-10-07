@@ -1,6 +1,7 @@
 import type { SourceStorageEffects } from "@tsonic/target-api/analysis";
+import { createSourceGlobalCallStorageEffects } from "@tsonic/target-api/analysis";
 import type { TargetSourceProgram } from "@tsonic/target-api/source";
-import { createJsSourceCallStorageEffects } from "@tsonic/js-source-profile";
+import { selectJsSourceCallStorageEffect } from "@tsonic/js-source-profile";
 import { resolveSelectedSourceProfileMember } from "../../evidence/selected-source.js";
 import type { RustSourceProfileRegistry } from "../../types/source-profile.js";
 
@@ -13,12 +14,12 @@ export function createRustSourceProfileStorageEffects(
     facts: { get: (subject, key) => source.sourceFacts.getFact(subject, key) },
     semanticsFor: source.semantics.forNode,
   };
-  return createJsSourceCallStorageEffects(source, (node, call) => {
+  return createSourceGlobalCallStorageEffects(source, (node, call) => {
     const semantics = source.semantics.forNode(node);
     const declaration = semantics.declarations.signatureDeclaration(call.selectedSignature);
     const identity = resolveSelectedSourceProfileMember(context, declaration, sourceProfiles);
     if (identity === undefined) return undefined;
     return identity.profile === "js" || identity.memberName === "constructor" || identity.memberName === "call"
-      ? identity : undefined;
+      ? selectJsSourceCallStorageEffect(identity, call) : undefined;
   });
 }
