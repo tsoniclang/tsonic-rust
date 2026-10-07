@@ -17,6 +17,7 @@ function selfReference({ generic = false, optional = true } = {}) {
   const parameters = generic ? [{ kind: "type", declaration: parameter, identity: "/self.ts:Value", targetName: "Value" }] : [];
   const carrier = rustSourceTypeCarrier("/self.ts", "Fluent", "object");
   const types = {
+    isNonPrimitive: () => false,
     isTypeReference: type => type === apparent,
     apparentType: type => type === selectedType ? apparent : type,
     effectiveTypeArguments: type => type === apparent ? generic ? [argumentType] : [] : [],
@@ -44,6 +45,7 @@ function selfReference({ generic = false, optional = true } = {}) {
       kind: () => undefined,
       kindName: node => node === declaration ? "KindInterfaceDeclaration" : node === method ? "KindMethodSignature" : undefined,
       is: { IsClassDeclaration: () => false, IsClassExpression: () => false,
+        IsTypeAliasDeclaration: () => false,
         IsInterfaceDeclaration: node => node === declaration },
     },
   };

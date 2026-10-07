@@ -15,8 +15,11 @@ test("recursive constructor contracts terminate at the exact already visited typ
   const semantics = { types: {
     contextualValueSelection: () => ({ kind: "selected", type }),
     expressionType: () => type,
-    constructSignatures: () => { reads += 1; return [signature]; },
-    returnType: () => type,
+    signatureInfos: (_, kind) => {
+      assert.equal(kind, "construct");
+      reads += 1;
+      return [{ signature, parameters: [], returnType: type }];
+    },
   } };
   const contracts = collectRustImplicitInterfaceContracts({ context: {
     ast: { kindName: () => "KindIdentifier", forEachChild() {} },

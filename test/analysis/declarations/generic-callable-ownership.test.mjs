@@ -13,12 +13,13 @@ import { rustReceiverIndependentMethodFactKey } from "../../../dist/analysis/fac
 import { rustSourceTypeCarrier, rustStructuralObjectTargetType } from "../../../dist/target-model/types/carriers/source-types.js";
 import { rustObjectReferenceViewKey } from "../../../dist/analysis/facts/object-reference-views.js";
 import { rustBindingProjectionFactKey } from "../../../dist/analysis/facts/keys.js";
+import { fakeAstReader } from "../../helpers/fake-compile-input.mjs";
 
 const parameter = { kind: "type-parameter", identity: "Value", name: "Value" };
 function input() {
   const files = ["first", "second"].map(name => ({ name: `/${name}.ts`, nodes: [] }));
   const closures = files.map((file, index) => {
-    const node = { file, position: index + 1 };
+    const node = { file, position: index + 1, kindName: "KindArrowFunction" };
     node.carrier = rustGenericCallableTargetType([parameter], [parameter], parameter, {
       fileName: file.name, declarationIdentity: `${file.name}:1`,
     });
@@ -26,11 +27,13 @@ function input() {
     return node;
   });
   const ast = {
+    ...fakeAstReader(),
     forEachChild: (node, visit) => { for (const child of node.nodes ?? []) visit(child); },
     getSourceFile: node => node.file,
     getFileName: file => file.name,
     pos: node => node.position,
     end: node => node.position + 1,
+    parent: node => node.file,
     as: { AsBinaryExpression: node => node.binary },
   };
   const facts = { getFact: (node, key) => {

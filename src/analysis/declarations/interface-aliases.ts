@@ -52,7 +52,8 @@ export function recordRustInterfaceRepresentationAliases(
     if (declaredType !== undefined && declarations !== undefined && declarations.length > 0 &&
       declarations.every(member => ast.kindName(member) === "KindInterfaceDeclaration") &&
       semantics.types.constructSignatures(declaredType).length !== 0) {
-      const carrier = resolveRustTargetTypeRef(declaredType, rustResolutionContext(walk, declaration), walk.operationOptions);
+      const carrier = resolveRustTargetTypeRef(declaredType,
+        { ...rustResolutionContext(walk, declaration), callableRepresentation: "signature" }, walk.operationOptions);
       if (carrier === undefined || rustSourceTypeCarrierValue(carrier) !== undefined) {
         appendRustDiagnostic(walk, "RUST_CONSTRUCTOR_INTERFACE_NOT_CLOSED",
           "An interface representation requires its complete checked callable, construction and member contract.", declaration, []);
@@ -78,10 +79,11 @@ export function recordRustInterfaceRepresentationAliases(
       if (!visit(edge.target.declaration)) return false;
       if (facts.getFact(edge.target.declaration, rustTypeOnlyDeclarationFactKey)?.reason !== "representation-alias") return true;
     }
-    const initialCarrier = resolveRustTargetTypeRef(edge.selectedType, rustResolutionContext(walk, edge.heritage), walk.operationOptions);
+    const logicalContext = { ...rustResolutionContext(walk, edge.heritage), callableRepresentation: "signature" as const };
+    const initialCarrier = resolveRustTargetTypeRef(edge.selectedType, logicalContext, walk.operationOptions);
     if (initialCarrier === undefined || rustSourceTypeCarrierValue(initialCarrier) !== undefined) return true;
     if (!visitCarrierDependencies(initialCarrier, new Set())) return false;
-    const carrier = resolveRustTargetTypeRef(edge.selectedType, rustResolutionContext(walk, edge.heritage), walk.operationOptions);
+    const carrier = resolveRustTargetTypeRef(edge.selectedType, logicalContext, walk.operationOptions);
     if (carrier === undefined || rustSourceTypeCarrierValue(carrier) !== undefined) return false;
     for (const merged of declarations) {
       if (!walk.sourceTypes.registerRepresentationAlias(merged, carrier) ||

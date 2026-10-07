@@ -215,7 +215,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     resolveSelectedType(authoredTypeNode, selectedType, heritage) {
       return resolveRustTargetTypeRef(
         authoredTypeNode ?? selectedType,
-        rustResolutionContext(walk, heritage),
+        { ...rustResolutionContext(walk, heritage), callableRepresentation: "signature" },
         operationOptions,
       );
     },

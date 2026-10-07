@@ -28,6 +28,41 @@ const block = (...statements) => ({ statements });
 const branch = (then, otherwise) => ({ kind: "if", condition: path("flag"), then, else: otherwise });
 const declaration = { kind: "let", name: "result", type: { kind: "primitive", name: "i32" }, mutable: true };
 
+test("terminal binding normalization preserves temporary drop boundaries without library-name assumptions", () => {
+  const acquired = { kind: "method-call", receiver: path("owner"), method: "acquire", args: [] };
+  const expressions = [
+    { kind: "dereference", pointer: acquired },
+    { kind: "field", receiver: acquired, name: "value" },
+    { kind: "method-call", receiver: acquired, method: "read", args: [] },
+    { kind: "call", path: "observe", args: [{ kind: "reference", expr: acquired }] },
+  ];
+  for (const initializer of expressions) {
+    const retained = finalizeRustBlockLiveness(block(
+      { kind: "let", name: "result", mutable: false, init: initializer },
+      { kind: "tail", expr: path("result") },
+    ));
+    assert.equal(retained.statements.length, 2, initializer.kind);
+    assert.deepEqual(retained.statements[0].init, initializer);
+    assert.deepEqual(finalizeRustBlockLiveness(retained), retained);
+    const returned = finalizeRustBlockLiveness(block(
+      { kind: "let", name: "result", mutable: false, init: initializer },
+      { kind: "return", expr: path("result") },
+    ));
+    assert.equal(returned.statements.length, 1, "explicit returns retain their statement temporary scope");
+    assert.deepEqual(returned.statements[0].expr, initializer);
+  }
+  for (const initializer of [literal(4), path("input"),
+    { kind: "call", path: "copy", args: [path("input")] },
+    { kind: "method-call", receiver: path("input"), method: "clone", args: [] }]) {
+    const folded = finalizeRustBlockLiveness(block(
+      { kind: "let", name: "result", mutable: false, init: initializer },
+      { kind: "tail", expr: path("result") },
+    ));
+    assert.equal(folded.statements.length, 1, initializer.kind);
+    assert.deepEqual(folded.statements[0].expr, initializer);
+  }
+});
+
 function normalize(conditional, following = []) {
   return finalizeRustBlockLiveness(block(declaration, conditional, ...following, {
     kind: "return", expr: path("result"),

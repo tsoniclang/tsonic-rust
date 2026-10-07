@@ -108,7 +108,8 @@ function fixture() {
       destination: member(symbols[index], declarations[index]),
     })).reverse(),
   };
-  const context = { ast: { kindName: () => "KindPropertySignature", typeNode: () => undefined },
+  const context = { ast: { kindName: () => "KindPropertySignature", typeNode: () => undefined,
+    is: { IsMethodDeclaration: () => false } },
     currentSemantics: { types: { aliasApplication: () => undefined, structuralMembers(source, destination) {
     assert.equal(source, selectedType);
     assert.equal(destination, templateType);

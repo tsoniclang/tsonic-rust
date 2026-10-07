@@ -52,13 +52,34 @@ function foldTrivialTerminalBinding(
   if (binding?.kind !== "let" || binding.init === undefined || binding.mutable ||
     binding.type !== undefined || (binding.attrs?.length ?? 0) > 0 ||
     terminal === undefined || (terminal.kind !== "tail" && terminal.kind !== "return") ||
-    terminal.expr?.kind !== "path" || terminal.expr.path !== binding.name) {
+    terminal.expr?.kind !== "path" || terminal.expr.path !== binding.name ||
+    terminal.kind === "tail" && binding.init.kind !== "closure" && binding.init.kind !== "closure-block" &&
+      binding.init.kind !== "async-block" && !rustExpressionChildren(binding.init).every(stableTerminalOperand)) {
     return statements;
   }
   return [
     ...statements.slice(0, bindingIndex),
     { ...terminal, expr: binding.init },
   ];
+}
+
+function stableTerminalOperand(expression: RustExpr): boolean {
+  switch (expression.kind) {
+    case "path":
+    case "int-literal":
+    case "float-literal":
+    case "bool-literal":
+    case "char-literal":
+    case "str-literal":
+    case "none":
+      return true;
+    case "field":
+    case "reference":
+    case "dereference":
+      return rustExpressionChildren(expression).every(stableTerminalOperand);
+    default:
+      return false;
+  }
 }
 
 function finalizeRustNestedStatementLiveness(

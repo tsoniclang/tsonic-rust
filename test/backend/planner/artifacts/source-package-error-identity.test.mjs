@@ -18,14 +18,15 @@ function classify(dependencies, errors) {
       components: names.map(name => ({ id: name, dependencies: dependencies[name] })),
     },
     sourceFiles: names.map(name => ({ fileName: `/${name}/index.ts` })),
-    ast: { getFileName: source => source.fileName, forEachChild() {} },
+    ast: { getFileName: source => source.fileName, kindName: () => "KindSourceFile", forEachChild() {} },
     callableValues: { generic: { definitions: [], definitionFor: () => undefined } },
-    errorStorageDemands: { nativeConstructors: [], storageFor: () => ({ kind: "readonly" }) },
-    facts: { getFact: () => undefined },
+    errorStorageDemands: { nativeConstructors: [], retainedBoundaries: [], storageFor: () => ({ kind: "readonly" }) },
+    facts: { get: () => undefined, getFact: () => undefined },
     projectTypes: { programErrorDefinitions: definitions, programErrorVariant: definition => definition.sourceName },
   };
   const classified = analyzeRustSourcePackageComponents(context, "bin");
   assert.equal(classified.kind, "resolved");
+  context.sourcePackageComponents = classified.plan;
   const components = classified.plan.components.map(component => ({
     ...component, sourceFileNames: new Set(component.sourceFileNames),
     crateName: component.root ? undefined : `${component.componentId}_crate`, programModuleName: "program",

@@ -29,6 +29,8 @@ import {
   rustSourcePrimitiveTargetType,
   rustOptionTargetType,
   rustTupleTargetType,
+  rustAbsenceTargetType,
+  rustCallableTargetType,
 } from "../../../dist/target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustSpreadElementCarrier } from "../../../dist/target-model/operations/rest-assembly.js";
@@ -75,6 +77,41 @@ test("binding defaults select the projected native context once before sealing n
         assert.equal(projection !== undefined, admitsDefault, "rejected defaults cannot publish projection facts");
         if (admitsDefault) assert.equal(rustTargetTypeRefEquals(projection.bindingCarrier, value), true);
       }
+    }
+  }
+});
+
+test("pure-absence binding defaults infer one present initializer without an absence context", () => {
+  const pattern = {}, binding = {}, name = {}, initializer = {};
+  const ast = {
+    kindName: node => node === pattern ? "KindArrayBindingPattern"
+      : node === binding ? "KindBindingElement" : "KindIdentifier",
+    elements: node => node === pattern ? [binding] : [],
+    name: node => node === binding ? name : undefined,
+    is: { IsBindingElement: node => node === binding, IsVariableDeclaration: () => false,
+      IsParameterDeclaration: () => false, IsPropertyDeclaration: () => false },
+    as: { AsBindingElement: () => ({ Initializer: initializer }) },
+  };
+  for (const value of [rustSourcePrimitiveTargetType("int64"),
+    rustCallableTargetType([], rustSourcePrimitiveTargetType("int32"))]) {
+    for (const admitsDefault of [true, false]) {
+      const facts = createRustPlanBuilder({ getFact: () => undefined });
+      let resolutions = 0;
+      const recorded = recordRustBindingPatternFacts(pattern, rustTupleTargetType([rustAbsenceTargetType()]), {
+        ast, facts, setCarrier: () => {},
+        resolveCarrier: () => assert.fail("the exact initializer must resolve only once"),
+        resolveExpressionCarrier: (selected, expected) => {
+          resolutions++;
+          assert.equal(selected === initializer, true);
+          assert.equal(expected === undefined, true, "absence has no contextual payload");
+          return admitsDefault ? value : undefined;
+        },
+      });
+      assert.equal(recorded, admitsDefault);
+      assert.equal(resolutions, 1);
+      const projection = facts.getFact(binding, rustBindingProjectionFactKey);
+      assert.equal(projection !== undefined, admitsDefault);
+      if (admitsDefault) assert.equal(rustTargetTypeRefEquals(projection.bindingCarrier, value), true);
     }
   }
 });

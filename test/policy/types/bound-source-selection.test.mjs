@@ -29,6 +29,7 @@ function fixture() {
         unionOrIntersectionTypes: type => type.members,
         couldContainTypeVariables: type => type.kind === "parameter" || type.open === true,
         stringLiteralValue: () => undefined,
+        booleanLiteralValue: () => undefined,
       },
     },
   };

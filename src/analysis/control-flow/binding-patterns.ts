@@ -42,6 +42,7 @@ import { rustProjectObjectLayout } from "../project-types/object-layout.js";
 import { rustBindingNormalizationContract } from "../../target-model/types/binding-normalization.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { rustOptionalStorageValue } from "../../target-model/types/projections.js";
+import { isRustAbsenceCarrier } from "../../target-model/types/carriers/native.js";
 
 export interface RustBindingPatternFactContext {
   readonly ast: AstReader;
@@ -105,7 +106,7 @@ export function recordRustBindingPatternFacts(
     const defaultExpected = rustOptionElementCarrier(selected.projectedCarrier) ??
       rustOptionalStorageValue(selected.projectedCarrier) ?? selected.projectedCarrier;
     const defaultCarrier = initializer === undefined ? undefined
-      : context.resolveExpressionCarrier(initializer, defaultExpected);
+      : context.resolveExpressionCarrier(initializer, isRustAbsenceCarrier(defaultExpected) ? undefined : defaultExpected);
     if (initializer !== undefined && defaultCarrier === undefined) return false;
     const normalized = rustBindingNormalizationContract(
       selected.projectedCarrier, defaultCarrier, selected.checkedArrayElement);

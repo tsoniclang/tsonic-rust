@@ -87,6 +87,9 @@ function construction(expression, issues = []) {
   const selected = context();
   selected.syntheticNames = { reserved: new Set(), nextSuffixByBase: new Map() };
   selected.input.program.frozenDataWrites = { capturesFieldIdentity: () => false };
+  selected.input.program.callableValues = { frames: {
+    definitionForOwner: () => undefined, bindingFor: () => undefined,
+  } };
   selected.input.program.facts.getFact = () => undefined;
   selected.input.program.objectRepresentations.receiverCaptures = {
     fixedSelfForReference: reference => references.includes(reference) ? field : undefined,

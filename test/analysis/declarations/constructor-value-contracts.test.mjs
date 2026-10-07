@@ -22,7 +22,7 @@ test("constructor-only shapes retain parameters through traversal, substitution 
   const declaration = {};
   const signature = {};
   const shape = { sourceType: {}, storage: "structural-object", carrier, fields: [],
-    construction: { declaration, signature, carrier: construction } };
+    construction: { declaration, signatureInfo: { signature, parameters: [], returnType: {} }, carrier: construction } };
   assert.equal(registry.registerStructuralObject(shape), true);
   const plan = createRustStructuralShapePlan(registry.structuralObjects(), [], () => "source", []);
   assert.deepEqual(plan.definitions[0].genericParameters, [{ kind: "type", identity: "Value", name: "Value" }]);
@@ -44,12 +44,13 @@ test("constructor carrier validation rejects malformed callables and competing v
 test("constructor source registry preserves exact selected declaration and signature identity", () => {
   for (const mutation of [
     shape => ({ ...shape, construction: { ...shape.construction, declaration: {} } }),
-    shape => ({ ...shape, construction: { ...shape.construction, signature: {} } }),
+    shape => ({ ...shape, construction: { ...shape.construction,
+      signatureInfo: { ...shape.construction.signatureInfo, signature: {} } } }),
     shape => ({ ...shape, construction: { ...shape.construction, carrier: rustCallableTargetType([], parameter) } }),
   ]) {
     const registry = createRustSourceTypeRegistry();
     const shape = { sourceType: {}, storage: "structural-object", carrier, fields: [],
-      construction: { declaration: {}, signature: {}, carrier: construction } };
+      construction: { declaration: {}, signatureInfo: { signature: {}, parameters: [], returnType: {} }, carrier: construction } };
     assert.equal(registry.registerStructuralObject(shape), true);
     assert.equal(registry.registerStructuralObject(shape), true);
     assert.equal(registry.registerStructuralObject(mutation(shape)), false);

@@ -86,6 +86,10 @@ function structuralFieldSelection({ callable = false, sourceParameter = type => 
   const sourceTypes = { structuralInstantiations: () => [{ template, instance: carrier }], typeFamilies: { get: () => undefined } };
   const walk = { sourceTypes, operationOptions: { projectTypes, sourceTypes, receiverFieldAliases: { aliasFor: () => undefined } },
     context: { ast, projectTypes, typeDefinitions: emptyRustTypeDefinitions, semanticsFor: () => semantics,
+      sourceStorage: {
+        storageSubjectFor: () => ({ kind: "unresolved", reason: "The fixture has no runtime value subject." }),
+        subject: () => ({ kind: "unresolved", reason: "The fixture has no runtime value subject." }),
+      },
       facts: { getRuntimeCarrierFact: () => ({ carrier: sourceCarrier }) },
       classValues: { instanceViewRequests() { assert.fail("selection must not depend on earlier requests"); } } } };
   const selectedSource = source(nativeText);

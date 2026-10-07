@@ -41,7 +41,7 @@ export function resolveRustConstructSignature(
   const carrier = resolveRustCallableEvidence({
     parameters: selected.parameters.map(parameter => sourceCallableParameterEvidence(parameter, context.ast)),
     result: { selectedType: result, declaration, ...(typeNode === undefined ? {} : { authoredTypeNode: typeNode }) },
-  }, context, options, resolving);
+  }, { ...context, callableRepresentation: "signature" }, options, resolving);
   return carrier === undefined || rustCallableProtocol(carrier) === undefined ? undefined :
     Object.freeze({ declaration, signatureInfo: selected, carrier });
 }

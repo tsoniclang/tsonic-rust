@@ -21,13 +21,15 @@ export function maskNativeMethodLiterals(sources) {
     const text = Buffer.from(files.get(name), "utf8");
     const visit = node => {
       if (ast.is.IsObjectLiteralExpression(node)) {
-        const properties = ast.properties(node).filter(property => property !== undefined && ast.is.IsPropertyAssignment(property));
+        const properties = ast.properties(node).filter(property => property !== undefined &&
+          (ast.is.IsPropertyAssignment(property) || ast.is.IsShorthandPropertyAssignment(property)));
         const value = key => {
           const property = properties.find(property => {
             const name = ast.name(property);
             return name !== undefined && (ast.is.IsIdentifier(name) || ast.is.IsStringLiteral(name)) && ast.text(name) === key;
           });
-          return property === undefined ? undefined : ast.as.AsPropertyAssignment(property).Initializer;
+          return property === undefined ? undefined : ast.is.IsShorthandPropertyAssignment(property)
+            ? ast.name(property) : ast.as.AsPropertyAssignment(property).Initializer;
         };
         const kind = value("kind");
         const method = value("method");
