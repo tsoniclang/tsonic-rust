@@ -67,7 +67,7 @@ import { selectRustConditionalNumericCarrier } from "../conditional-numeric-carr
 import { resolveRustProviderIndexedAccess } from "./indexed-access.js";
 import { resolveRustSourceDeclarationArguments } from "./generic-arguments.js";
 import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
-import { rustSourceStorageComponentContext } from "./source-storage-projection.js";
+import { rustSourceStorageComponentContext, rustSourceStorageContext } from "./source-storage-projection.js";
 import { resolveRustSelectedSourceCallResult } from "./call-results.js";
 
 export function resolveRustTargetTypeRef(
@@ -79,10 +79,7 @@ export function resolveRustTargetTypeRef(
     return undefined;
   }
   const subjectNode = asNode(subject, context);
-  if (subjectNode !== undefined && context.sourceStorageSubject === undefined) {
-    const selection = context.sourceStorage.storageSubjectFor(subjectNode);
-    context = { ...context, sourceStorageSubject: selection.kind === "resolved" ? selection.subject : undefined };
-  }
+  context = rustSourceStorageContext(context, subjectNode);
   const subjectFile = subjectNode === undefined ? undefined : context.ast.getSourceFile(subjectNode);
   if (subjectFile !== undefined && context.source.semantics.includes(subjectFile) &&
     subjectFile !== context.currentSemantics.sourceFile) {
@@ -531,7 +528,7 @@ export function resolveRustTargetTypeSyntax(
     : resolveOwnedSourceProfileTypeNameForDeclaration(referencedDeclaration, context, options.sourceProfiles);
   if (sourceProfileName !== undefined) {
     return resolveSourceProfileCarrierFromArguments(sourceProfileName, typeArguments as TargetTypeRef[], options,
-      context.sourceStorageSubject?.node ?? node, context.sourceStorageSubject?.projection);
+      context.sourceStorageSubject?.node, context.sourceStorageSubject?.projection);
   }
   const sourceType = resolveProjectSourceCarrier(
     selectedTypeSymbol,

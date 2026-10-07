@@ -229,6 +229,28 @@ test("body type names reuse signature aliases through nested blocks without chan
   assert.deepEqual(finalizeRustSourceStyle(result), result);
 });
 
+test("typed closure signatures reuse the owning alias with exact scope and generic arguments", () => {
+  for (const kind of ["closure", "closure-block"]) {
+    const body = { kind: "path", path: "values" };
+    const closure = { kind, move: true, params: [{ name: "values", type: nested, mutable: false }],
+      body: kind === "closure" ? body : { statements: [{ kind: "tail", expr: body }] } };
+    const source = { ...makeFunction("read"), params: [], returnType: undefined,
+      body: { statements: [{ kind: "let", name: "callback", mutable: false, init: closure }] } };
+    const result = finalizeRustSourceStyle({ items: [source] });
+    const aliases = result.items.filter(item => item.kind === "type-alias");
+    assert.equal(aliases.length, 1);
+    assert.deepEqual(aliases[0].target, nested);
+    assert.deepEqual(aliases[0].generics.parameters, [{ kind: "type", name: "Item", bounds: [] }]);
+    assert.equal(aliases[0].visibility, "private");
+    const emitted = result.items.find(item => item.kind === "function").body.statements[0].init;
+    assert.deepEqual(emitted.params[0].type, { kind: "named", path: aliases[0].name,
+      genericArguments: [{ kind: "type", type: { kind: "named", path: "Item" } }] });
+    assert.equal(emitted.move, true);
+    assert.deepEqual(emitted.body, closure.body);
+    assert.deepEqual(finalizeRustSourceStyle(result), result);
+  }
+});
+
 test("method-local Self does not escape its native impl through a module alias", () => {
   const type = named("Vec", [named("Option", [named("Vec", [named("Option", [named("Self")])])])]);
   const source = { ...makeFunction("read"), params: [{ name: "value", type }], returnType: undefined };

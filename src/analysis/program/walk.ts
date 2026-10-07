@@ -1,3 +1,4 @@
+import { rustSourceStorageContext } from "../../policy/types/resolution/source-storage-projection.js";
 import {
   BinaryExpression_Left,
   BinaryExpression_Right,
@@ -93,12 +94,12 @@ export function rustResolutionContext(
   const semantics = walk.context.semanticsFor(node);
   const selection = kind === undefined ? walk.context.sourceStorage.storageSubjectFor(node)
     : walk.context.sourceStorage.subject(node, kind);
-  return {
+  return rustSourceStorageContext({
     ...walk.context,
     currentSourceFile: semantics.sourceFile,
     currentSemantics: semantics,
     sourceStorageSubject: selection.kind === "resolved" ? selection.subject : undefined,
-  };
+  });
 }
 
 export function appendRustDiagnostic(

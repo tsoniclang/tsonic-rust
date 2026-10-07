@@ -1,6 +1,7 @@
 import { type RustAttribute } from "../attributes.js";
 import type {
   RustBlock,
+  RustClosureParameter,
   RustExpr,
   RustImplFunction,
   RustItem,
@@ -442,13 +443,18 @@ function finalizeRustExpressionStyle(expression: RustExpr): RustExpr {
     case "evaluate-then": return result.effect.kind === "tuple-literal" && result.effect.elements.length === 0
       ? result.value : result;
     case "closure": return collapseRustForwardingClosure({ ...result,
-      params: result.params.map(parameter => closureParameter(parameter,
+      params: result.params.map(parameter => closureParameter(nameClosureParameter(parameter),
         rustExpressionReferencesPath(result.body, parameter.name))) });
     case "closure-block": return { ...result,
-      params: result.params.map(parameter => closureParameter(parameter,
+      params: result.params.map(parameter => closureParameter(nameClosureParameter(parameter),
         rustBlockReferencesPath(result.body, parameter.name))) };
     default: return result;
   }
+}
+
+function nameClosureParameter(parameter: RustClosureParameter): RustClosureParameter {
+  return parameter.type === undefined || nameType === undefined ? parameter
+    : { ...parameter, type: nameType(parameter.type, parameter.name) };
 }
 
 }
