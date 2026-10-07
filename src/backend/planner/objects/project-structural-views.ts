@@ -19,7 +19,7 @@ import { rustDirectProjectFieldStoragePath } from "./project-storage.js";
 import { readRustCapturedField, rustCapturedFieldStorage, writeRustCapturedFieldFromStorage } from "./captured-fields.js";
 import { checkRustDataWrite } from "./data-writes.js";
 import { planRustSourceAccessorCall } from "../expressions/properties.js";
-import { applyRustFallibleResultExpression } from "../types/fallible-shape.js";
+import { applyFallibleShape, applyRustFallibleResultExpression } from "../types/fallible-shape.js";
 import { rustStructuralDispatchType } from "./project-structural-types.js";
 
 export function planRustProjectStructuralConversion(
@@ -93,8 +93,9 @@ export function planRustProjectStructuralImplementations(declaration: Node, cont
         const value = applyRustCallableValueAdapter(invocation, callable.resultAdapter, callable.declaration, local);
         if (value === undefined) return undefined;
         functions.push({ kind: "function", name: field.targetName, visibility: "private", generics: emptyRustGenerics, selfParam: rustSelfParameter("rc"),
-          params, returnType: result, errorType: rustErrorType(boundary), body: { statements: [...arguments_.statements,
-            { kind: "tail", expr: applyRustFallibleResultExpression(value, { errorType: rustErrorType(boundary) }) }] } });
+          params, returnType: result, errorType: rustErrorType(boundary), body: applyFallibleShape({ statements: [...arguments_.statements,
+            { kind: "tail", expr: value }] }, { fallible: true, hasReturnValue: result.kind !== "unit",
+            errorType: rustErrorType(boundary), inferErrorTypeFromReturnType: true }) });
         continue;
       }
       const source = member.field;
@@ -130,9 +131,10 @@ export function planRustProjectStructuralImplementations(declaration: Node, cont
           if (value === undefined) return undefined;
           functions.push({ kind: "function", name: role === "read" ? property.getterTargetName : property.setterTargetName!, visibility: "private",
             generics: emptyRustGenerics, selfParam: rustSelfParameter("rc"), params: role === "read" ? [] : [{ name: "value", type }],
-            returnType: role === "read" ? type : { kind: "unit" }, errorType: rustErrorType(boundary), body: { statements: [
-              { kind: "tail", expr: applyRustFallibleResultExpression(value, { errorType: rustErrorType(boundary) }) },
-            ] } });
+            returnType: role === "read" ? type : { kind: "unit" }, errorType: rustErrorType(boundary), body: applyFallibleShape({ statements: [
+              { kind: "tail", expr: value },
+            ] }, { fallible: true, hasReturnValue: role === "read" && type.kind !== "unit",
+              errorType: rustErrorType(boundary), inferErrorTypeFromReturnType: true }) });
         }
         continue;
       }

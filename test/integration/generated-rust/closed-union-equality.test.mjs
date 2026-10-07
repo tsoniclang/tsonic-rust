@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
-import { closedUnionEqualitySource } from "../../../../tsonic/test/fixtures/closed-union-equality.mjs";
+import { borrowedComparisonMutationSource, closedUnionEqualitySource } from "../../../../tsonic/test/fixtures/closed-union-equality.mjs";
 
 test("closed union equality borrows exact payloads and preserves identity", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
@@ -25,3 +25,12 @@ test("closed union comparison preserves imported alias and callable identities",
   assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("cross-file-union-equality", result.artifacts, { run: true });
 });
+
+for (const surfaces of [[], ["js"]]) {
+  test(`borrowed comparisons preserve the first value and release its owner before RHS mutation (${surfaces[0] ?? "native"})`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
+      files: { "index.ts": borrowedComparisonMutationSource + '\nexport function main(): void { if (!run()) throw new Error("borrowed comparison mutation"); }' } });
+    assertNoTargetDiagnostics(result.diagnostics);
+    validateGeneratedProject(`borrowed-comparison-mutation-${surfaces[0] ?? "native"}`, result.artifacts, { run: true });
+  });
+}

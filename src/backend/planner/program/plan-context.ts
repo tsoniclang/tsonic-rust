@@ -195,7 +195,7 @@ export function rustErrorBoundaryForProjectMember(
 }
 
 export function rustCurrentErrorBoundary(
-  context: RustPlanContext,
+  context: Pick<RustPlanContext, "sourcePackageErrors" | "sourcePackageComponentId">,
 ): RustSourcePackageErrorBoundary | undefined {
   return resolveRustSourcePackageErrorBoundary(
     context.sourcePackageErrors,

@@ -41,6 +41,7 @@ import { rustLifetimeToAst } from "../types/lifetime-syntax.js";
 import { rustStructuralShapeGenerics, rustStructuralShapeContext } from "./structural-generics.js";
 import { planRustNumberArrayUnionImplementation } from "./number-array-unions.js";
 import { planRustConstructorShape } from "./constructor-shapes.js";
+import type { RustSourcePackageErrorPlan } from "../program/source-package-errors.js";
 
 export function planRustStructuralShapeModule(
   input: RustPlanningContext,
@@ -51,6 +52,7 @@ export function planRustStructuralShapeModule(
   crateName: string | undefined,
   structuralShapesModuleName: string,
   rootComponentId: string,
+  sourcePackageErrors: RustSourcePackageErrorPlan,
   programModuleName: string | undefined,
   publicShapeNames: ReadonlySet<string>,
   diagnostics: TargetDiagnostic[],
@@ -64,6 +66,8 @@ export function planRustStructuralShapeModule(
   const usedAliases = new Set<string>();
   const context = {
     input,
+    sourcePackageErrors,
+    sourcePackageComponentId: rootComponentId,
     moduleName: structuralShapesModuleName,
     moduleNameByFileName,
     externalCrateNameByFileName,

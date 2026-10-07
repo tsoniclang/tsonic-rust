@@ -3,7 +3,8 @@ import type {
   RustTargetGenericArgument,
   TargetTypeRef,
 } from "../../../target-model/types/model.js";
-import { registerAliasFromPath } from "../program/plan-context.js";
+import { registerAliasFromPath, rustCurrentErrorBoundary, rustErrorType } from "../program/plan-context.js";
+import type { RustSourcePackageErrorPlan } from "../program/source-package-errors.js";
 import { rustTypeIsLegalInPosition, rustTypeContainsImplTrait, collectAliasesFromRustType } from "./type-observations.js";
 import type {
   RustCallGenericArgument,
@@ -51,6 +52,7 @@ import {
   rustFutureTargetId,
   rustJsPromiseTargetId,
   rustUnitTargetType,
+  rustProgramErrorTargetId,
 } from "../../../target-model/types/index.js";
 
 export const rustStrRefType: RustType = {
@@ -63,6 +65,7 @@ interface RustSourceTypeRendering {
   readonly typeParameterNames?: ReadonlyMap<string, string>;
   readonly pathFor: (value: { readonly fileName: string; readonly typeName: string }) => string | undefined;
   readonly additionalArgumentsFor: (carrier: TargetTypeRef) => readonly RustGenericArgument[];
+  readonly programErrorType?: () => RustType | undefined;
 }
 
 export function rustTypeFromCarrier(
@@ -135,6 +138,10 @@ export function rustTypeFromCarrier(
         };
   }
   if (carrier.kind === "target-named") {
+    if (carrier.id === rustProgramErrorTargetId) {
+      return carrier.genericArguments === undefined || carrier.genericArguments.length === 0
+        ? resolveSourceTypePath?.programErrorType?.() : undefined;
+    }
     const path = rustBuiltInCarrierRenderPaths[carrier.id];
     if (path === undefined) {
       return undefined;
@@ -486,6 +493,8 @@ export function isFloatCarrier(carrier: TargetTypeRef | undefined): boolean {
 }
 
 export interface RustTypeRenderingContext {
+    readonly sourcePackageErrors: RustSourcePackageErrorPlan;
+    readonly sourcePackageComponentId: string;
     readonly typeParameterNames?: ReadonlyMap<string, string>;
     readonly moduleName: string;
     readonly moduleNameByFileName: ReadonlyMap<string, string>;
@@ -599,7 +608,11 @@ export function rustTypeFromCarrierInContext(
   const rendered = rustTypeFromCarrier(
     selectedCarrier,
     { typeParameterNames: context.typeParameterNames,
-      pathFor: resolveSourceTypePath, additionalArgumentsFor: type => rustOptionalStorageTypeArguments(type, context) },
+      pathFor: resolveSourceTypePath, additionalArgumentsFor: type => rustOptionalStorageTypeArguments(type, context),
+      programErrorType: () => {
+        const boundary = context.sourcePackageErrors === undefined ? undefined : rustCurrentErrorBoundary(context);
+        return boundary === undefined ? undefined : rustErrorType(boundary);
+      } },
     resolveStructuralShape,
   );
   if (position === "inferred-call" && rendered !== undefined && rustTypeContainsImplTrait(rendered)) {

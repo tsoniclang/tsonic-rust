@@ -67,6 +67,7 @@ import type { RustGenericCallablePlan } from "../callables/generic-values.js";
 import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
 import type { RustProjectStructuralView } from "../objects/project-structural-views.js";
 import { rustSourceCallCallableStorageCarrier } from "../facts/target-operation.js";
+import { bindRustStructuralReceiverParameters } from "./structural-receiver-requirements.js";
 
 interface ClassifyCallableInput {
   readonly valueLifetimes: RustValueLifetimePlan;
@@ -689,6 +690,22 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
             }
             const receiver = operation.target.form === "constructor" ? operation.target.typeCarrier
               : selected?.sourceSelectedOwnerCarrier ?? selected?.sourceSelectedReceiverCarrier;
+            const receiverDeclaration = ast.parent(selectedDeclaration);
+            if (operation.target.form === "structural-method" && callee.capturedTypeParameters.length !== 0 &&
+              receiverDeclaration !== undefined && ast.is.IsObjectLiteralExpression(receiverDeclaration)) {
+              const template = facts.getRuntimeCarrierFact(receiverDeclaration)?.carrier;
+              const bindings = template === undefined || receiver === undefined ? undefined
+                : bindRustStructuralReceiverParameters(template, receiver,
+                  new Set(callee.capturedTypeParameters.map(parameter => parameter.identity)));
+              if (bindings === undefined) return "A structural call lost its exact captured receiver type bindings.";
+              for (const [identity, carrier] of bindings) {
+                const existing = substitutions.get(identity);
+                if (existing !== undefined && !rustTargetTypeRefEquals(existing, carrier)) {
+                  return "A structural call has conflicting captured receiver type bindings.";
+                }
+                substitutions.set(identity, carrier);
+              }
+            }
             const instantiate = (carrier: TargetTypeRef): TargetTypeRef | undefined => {
               const instantiated = substituteRustTargetTypeParameters(carrier, substitutions);
               return receiver === undefined || input.projectTypes.definitionContainingDeclaration(selectedDeclaration) === undefined

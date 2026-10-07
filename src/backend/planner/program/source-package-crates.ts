@@ -95,6 +95,7 @@ export function planRustSourcePackageCrateContent(
     component.crateName,
     component.structuralShapesModuleName,
     component.componentId,
+    sourcePackageErrors,
     errorDomain.errorDomain === "project" ? component.programModuleName : undefined,
     structuralShapeNames,
     diagnostics,
@@ -106,6 +107,7 @@ export function planRustSourcePackageCrateContent(
     diagnostics,
   );
   const dispatchRoots = planRustDispatchContextRoots({
+    sourcePackageErrors, sourcePackageComponentId: component.componentId,
     input, moduleName: component.programModuleName, moduleNameByFileName,
     externalCrateNameByFileName, externalItemPathByIdentity, externalStructuralShapeModuleByFileName,
     structuralShapesModuleName: component.structuralShapesModuleName,

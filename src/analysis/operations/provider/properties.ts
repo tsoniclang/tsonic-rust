@@ -243,6 +243,15 @@ export function selectRustCheckedPropertyAccess(
   if (projectMethodProperty !== undefined) {
     return projectMethodProperty;
   }
+  const externalProjectField = selectExternalProjectFieldAccess(
+    request,
+    selectedReceiverCarrier,
+    context,
+    options,
+  );
+  if (externalProjectField !== undefined) {
+    return externalProjectField;
+  }
   if (selectedDeclarationIsCallable(request.sourceSelectedDeclaration, context)) {
     return acceptDeclarationOperation("property");
   }
@@ -321,16 +330,6 @@ export function selectRustCheckedPropertyAccess(
         sourceResultType: request.sourceResultType,
       });
     }
-  }
-
-  const externalProjectField = selectExternalProjectFieldAccess(
-    request,
-    selectedReceiverCarrier,
-    context,
-    options,
-  );
-  if (externalProjectField !== undefined) {
-    return externalProjectField;
   }
 
   const jsIdentity = sourceProfileMembers?.profile === "js" ? sourceProfileMembers.members[0] : undefined;
