@@ -1,5 +1,5 @@
 import { providerVirtualDeclarationFactKey, type Node } from "@tsonic/tsts";
-import { sourceIndexedPropertyTypeEvidence } from "@tsonic/target-api/source";
+import { sourceIndexedTypeEvidence } from "@tsonic/target-api/source";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { resolveProviderTypeIdentity, providerCarrierFromRelations, instantiateProviderTargetType } from "./providers.js";
@@ -13,11 +13,11 @@ import type { RustTargetGenericArgument } from "../../../target-model/types/mode
 export function resolveRustProviderIndexedAccess(
   node: Node, context: RustTargetTypeResolutionContext, options: RustTargetTypeResolutionOptions,
 ): TargetTypeRef | undefined {
-  const evidence = sourceIndexedPropertyTypeEvidence(context.ast, context.currentSemantics, node);
+  const evidence = sourceIndexedTypeEvidence(context.ast, context.currentSemantics, node);
   if (evidence === undefined) return undefined;
-  if (!evidence.properties.some(member => member.subjects.some(subject =>
+  if (!evidence.members.some(member => member.subjects.some(subject =>
     context.facts.get(subject, providerVirtualDeclarationFactKey) !== undefined))) return undefined;
-  const identities = evidence.properties.map(member => resolveProviderTypeIdentity(member.subjects, context));
+  const identities = evidence.members.map(member => resolveProviderTypeIdentity(member.subjects, context));
   const rejected: TargetTypeRef = { kind: "opaque", id: "provider-indexed-type-evidence-unavailable" };
   const owner = resolveRustTargetTypeRef(evidence.owner, context, options);
   const named = rustNamedTypeCarrierValue(owner);
@@ -26,7 +26,8 @@ export function resolveRustProviderIndexedAccess(
   for (const [index, identity] of identities.entries()) {
     if (identity === undefined) return rejected;
     const typeRow = providerCarrierFromRelations(identity, options);
-    const operation = selectRustProviderOperation(options.providerRows, identity, "property");
+    const member = evidence.members[index]!.selection;
+    const operation = selectRustProviderOperation(options.providerRows, identity, member.kind === "index" ? "indexer" : "property");
     if (typeRow === undefined || operation.kind !== "selected") return rejected;
     const parameters = typeRow.genericParameters ?? [];
     const substitutions = inferRustTargetGenericBindings(typeRow.targetCarrier, owner, {
@@ -58,7 +59,7 @@ export function resolveRustProviderIndexedAccess(
     if (operation.row.receiverCarrier !== undefined &&
       !rustTargetTypeRefEquals(instantiate(operation.row.receiverCarrier), owner)) return rejected;
     const selected = instantiate(operation.row.resultCarrier);
-    const carrier = evidence.properties[index]!.property.optional
+    const carrier = member.kind === "property" && member.property.optional
       ? rustSourceOptionalTargetType(rustOptionElementCarrier(selected) ?? selected) : selected;
     if (result !== undefined && !rustTargetTypeRefEquals(result, carrier)) return rejected;
     result = carrier;
