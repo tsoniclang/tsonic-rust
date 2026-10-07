@@ -13,6 +13,7 @@ import { resolveSelectedSourceProfileMember } from "../../../dist/policy/evidenc
 import { createRustAnalysisContext } from "../../../dist/analysis/program/context.js";
 import { analyzeRustRuntimeReferences, analyzeRustDispatchContextCatalog } from "../../../dist/analysis/runtime/index.js";
 import { compileRust } from "../../helpers/rust-session.mjs";
+import { nativeStorageOperationAuthoritySource, nativeStorageOperationFactSource, nativeStorageVirtualOperationSource } from "../../../../tsonic/test/fixtures/native-storage-operation-authority.mjs";
 
 function fixture(body = `
   const original = { count: 3 };
@@ -115,7 +116,8 @@ test("external constructors with global Error signatures cannot prove fresh nati
       const storage = createSourceStorageQuery(current.source, [current.file], undefined, current.effects);
       assert.equal(storage.failureReason() === undefined, true);
       for (const name of ["constructed", "called"]) {
-        const { invocation } = current.selected(name);
+        const { invocation, call } = current.selected(name);
+        assert.equal(current.effects.call(invocation, call) === undefined, true, "unknown same-signature callees publish no allocation claim");
         const subject = storage.subjectFor(invocation);
         assert.equal(subject.kind, "resolved", name);
         const domain = storage.closedOriginsFor(subject.subject);
@@ -124,6 +126,32 @@ test("external constructors with global Error signatures cannot prove fresh nati
       }
     }
   }
+});
+
+test("native alias and preservation effects require actual owned operation identity", () => {
+  const current = fixture(nativeStorageOperationAuthoritySource);
+  const storage = createSourceStorageQuery(current.source, [current.file], undefined, current.effects);
+  const complete = new Set(["owned", "ownedAlias"]);
+  for (const name of ["owned", "ownedAlias", "externalMember", "externalFunction"]) {
+    const { invocation, call } = current.selected(name);
+    const effect = current.effects.call(invocation, call);
+    assert.equal(effect?.resultAlias === call.sourceArguments[0].expression, complete.has(name),
+      `${name} proves implementation identity, not merely the signature`);
+    assert.equal(effect !== undefined, complete.has(name), `${name} cannot publish unchecked preservation either`);
+    const subject = storage.subjectFor(invocation);
+    assert.equal(subject.kind, "resolved", name);
+    const domain = storage.closedOriginsFor(subject.subject);
+    assert.equal(domain.kind, complete.has(name) ? "complete" : "open", name);
+  }
+  const retained = current.variables.get("externalPreserved");
+  assert.equal(retained !== undefined, true, "the actual selected holder member is checked");
+  const selected = storage.subjectFor(retained);
+  assert.equal(selected.kind, "resolved");
+  const domain = storage.closedOriginsFor(selected.subject);
+  assert.equal(domain.kind, "open", "an unknown same-signature operation can mutate the exposed member");
+  assert.equal(domain.boundaries.some(boundary => boundary.kind === "opaque-write"), true,
+    "the actual unknown invocation retains its member-write witness");
+  assert.equal(storage.failureReason(), undefined, "one finite proof graph");
 });
 
 test("immutable aliases to the owned global Error retain exact native allocation identity", () => {
@@ -203,24 +231,12 @@ test("disabled or ambiguous source-profile provenance cannot invent an effect", 
   }).call(invocation, call) === undefined, true);
 });
 
-function virtualSource(current, identity) {
+function virtualSource(current, identity, bindingIdentity) {
   const { invocation, call } = current.selected("frozen");
-  const declaration = current.source.semantics.forNode(invocation).declarations.signatureDeclaration(call.selectedSignature);
-  assert.equal(declaration !== undefined, true, "exact selected virtual declaration");
-  const facts = current.source.sourceFacts;
-  return Object.freeze({
-    ...current.source,
-    sourceFacts: Object.freeze({
-      getFact: (subject, key) => subject === declaration && key === providerVirtualDeclarationFactKey
-        ? identity : facts.getFact(subject, key),
-      getFacts: subject => facts.getFacts(subject),
-      getVirtualDeclarationDocument: name => facts.getVirtualDeclarationDocument(name),
-    }),
-  });
+  return nativeStorageOperationFactSource(current.source, call, identity, bindingIdentity);
 }
 
-const virtualFreezeBody = `interface RemoteConstructor { freeze<Value>(value: Value): Readonly<Value>; }
-  declare const remote: RemoteConstructor; const original = {}; const frozen = remote.freeze(original);`;
+const virtualFreezeBody = nativeStorageVirtualOperationSource;
 const virtualIdentity = Object.freeze({
   providerId: jsSourceSemanticsIdentity.providerId, providerVersion: "1",
   providerModuleId: "test.selected-js", moduleSpecifier: "@test/selected-js",
@@ -238,10 +254,25 @@ test("exact JavaScript-owned virtual declarations carry effects independently of
     { ...virtualIdentity, memberKey: undefined },
     { ...virtualIdentity, memberName: "assign" },
   ]) {
-    const source = virtualSource(current, identity);
+    const source = virtualSource(current, identity, { ...identity, exportName: "Object", memberName: undefined,
+      memberKey: undefined, memberId: undefined, signatureId: undefined });
     const effect = createRustSourceProfileStorageEffects(source, current.profiles).call(invocation, call);
     assert.equal(effect !== undefined, true, "canonical provider property key does not require a redundant label");
     assert.equal(effect.resultAlias === call.sourceArguments[0].expression, true);
+  }
+});
+
+test("a virtual native member signature alone cannot certify a foreign runtime binding", () => {
+  const current = fixture(virtualFreezeBody);
+  const { invocation, call } = current.selected("frozen");
+  for (const binding of [undefined,
+    { ...virtualIdentity, exportName: "Other", memberName: undefined, memberKey: undefined },
+    { ...virtualIdentity, exportName: "Object", memberName: undefined, memberKey: undefined, providerModuleId: "other-module" },
+    { ...virtualIdentity, exportName: "Object", memberName: undefined, memberKey: undefined, providerId: "foreign-provider" },
+  ]) {
+    const source = virtualSource(current, virtualIdentity, binding);
+    assert.equal(createRustSourceProfileStorageEffects(source, current.profiles).call(invocation, call) === undefined, true,
+      "exact operation and actual binding must share the owned provider contract");
   }
 });
 
