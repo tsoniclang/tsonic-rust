@@ -4,7 +4,7 @@ import { createCompilerSessionFromFiles } from "@tsonic/tsts";
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { createSourceStorageQuery, defaultSourceStorageLimits } from "@tsonic/target-api/analysis";
 import { collectTargetSourceProfileContributions } from "../../../../tsonic/packages/host/dist/target/source-profile.js";
-import { errorOriginDomainSource, errorRecoveryDomainSource } from "../../../../tsonic/test/fixtures/error-origin-domains.mjs";
+import { errorConstructorFootprintSource, errorOriginDomainSource, errorRecoveryDomainSource } from "../../../../tsonic/test/fixtures/error-origin-domains.mjs";
 import { createRustErrorStorageDemandQuery } from "../../../dist/analysis/objects/error-storage-demands.js";
 import { createRustSourceProfileRegistry } from "../../../dist/analysis/facts/source-profile-registry.js";
 import { createRustSourceProfileStorageEffects } from "../../../dist/policy/operations/source-profiles/source-storage-effects.js";
@@ -70,6 +70,36 @@ for (const jsEnabled of [false, true]) {
         assert.equal(result.artifacts.some(artifact => artifact.path.endsWith(".rs") &&
           artifact.text.includes("WritableErrorObject::set_error_message")), true, "exact native setter retained");
       }
+    });
+  }
+  for (const [footprint, expected] of [["mutating", "invalidated"], ["readonly", "preserved"], ["deferred", "preserved"],
+    ["receiver", "preserved"], ["bound", "invalidated"]]) {
+    test(`Rust ${profileName} native Error allocation preserves exact ${footprint} inherited initialization`, () => {
+      const profile = collectTargetSourceProfileContributions({ project: {}, projectRoot: "/src", projectDirectory: "/src",
+        target: { id: "rust", options: {} }, targetPackId: jsEnabled ? "js" : "rust", selectedCapabilities: [], selectedSurfaces: [],
+        targetContributions: jsEnabled ? rustJsSurfaceSourceProfileContributions() : rustNativeSourceProfileContributions() });
+      assert.equal(profile.diagnostics.length === 0, true);
+      const checked = createCompilerSessionFromFiles({ currentDirectory: "/src", files: new Map([
+        ["/src/index.ts", errorConstructorFootprintSource(footprint)], ...profile.files.map(file => [file.path, file.text]),
+      ]), compilerOptions: { strict: true, noLib: true, skipLibCheck: true, module: "esnext", moduleResolution: "bundler" } }).checkSource();
+      assert.equal(checked.diagnostics.length === 0, true);
+      const source = createTargetSourceProgram(checked);
+      const file = source.sourceFiles.find(file => source.ast.getFileName(file) === "/src/index.ts");
+      const profiles = createRustSourceProfileRegistry(source.sourceFiles, source.ast, jsEnabled);
+      const demand = createRustErrorStorageDemandQuery(source, profiles, createSourceStorageQuery(source, [file], defaultSourceStorageLimits,
+        createRustSourceProfileStorageEffects(source, profiles)), () => ({ kind: "ordinary" }));
+      const declarations = new Map();
+      const visit = node => {
+        if (source.ast.is.IsVariableDeclaration(node)) declarations.set(source.ast.text(source.ast.name(node)), node);
+        source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+      };
+      visit(file);
+      const owner = declarations.get("original");
+      const expression = source.ast.as.AsVariableDeclaration(declarations.get("created"))?.Initializer;
+      assert.equal(owner !== undefined && expression !== undefined, true);
+      assert.equal(demand.isNativeConstructor(expression), true, "the inherited constructor selects the owned native Error protocol");
+      assert.equal(demand.closedStorageOriginsFor(expression).kind === "complete", true, "fresh result ownership is complete but is not a purity proof");
+      assert.equal(demand.invalidationFor(owner, expression, new Set()).kind, expected);
     });
   }
 }
