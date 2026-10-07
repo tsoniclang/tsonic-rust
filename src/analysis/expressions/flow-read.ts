@@ -119,9 +119,9 @@ export function applyFlowReadLane(
   }
   if ((isRustProgramErrorCarrier(sourceCarrier) || isRustClosedValueCarrier(sourceCarrier)) &&
     (isRustWritableSourceErrorCarrier(selectedCarrier) || isRustWritableRetainedErrorCarrier(selectedCarrier))) {
-    const origins = walk.context.errorStorageDemands.storageOriginsFor(expression);
-    if (origins.kind !== "resolved" || origins.origins.some(origin => {
-      const carrier = resolveRustTargetTypeRef(origin.type, rustResolutionContext(walk, origin.node), walk.operationOptions);
+    const origins = walk.context.errorStorageDemands.closedStorageOriginsFor(expression);
+    if (origins.kind !== "complete" || origins.origins.length === 0 || origins.origins.some(origin => {
+      const carrier = resolveRustTargetTypeRef(origin.type, rustResolutionContext(walk, origin.subject.node), walk.operationOptions);
       return carrier === undefined || !rustWritableErrorRecoveryOriginMatches(carrier, walk.context.typeDefinitions);
     })) {
       appendRustDiagnostic(walk, "RUST_ERROR_WRITABLE_ORIGIN_MISSING",
