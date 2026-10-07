@@ -81,6 +81,7 @@ import { createRustErrorStorageDemandQuery } from "../objects/error-storage-dema
 import { createSourceStorageQuery, type SourceErrorStorageDemandQueries, type SourceStorageQueries } from "@tsonic/target-api/analysis";
 import { createRustRetainedErrorDemandSelection } from "../objects/retained-error-demands.js";
 import { createRustSourceProfileRegistry } from "../facts/source-profile-registry.js";
+import { createRustSourceProfileStorageEffects } from "../../policy/operations/source-profiles/source-storage-effects.js";
 import { createRustCallableOwnershipRegistry, type RustCallableOwnershipRegistry } from "../callables/ownership-plan.js";
 
 export interface RustAnalysisContext extends RustSourcePolicyContext {
@@ -146,6 +147,10 @@ export function createRustAnalysisContext(
     navigation: input.source.navigation,
     safetyApplications,
   });
+  const sourceProfiles = createRustSourceProfileRegistry(input.source.sourceFiles, ast, jsEnabled);
+  const sourceStorage = createSourceStorageQuery(input.source, sourceFiles, undefined,
+    createRustSourceProfileStorageEffects(input.source, sourceProfiles));
+  const sourceStorageFailure = sourceStorage.failureReason();
   const typeDefinitions = createRustTypeDefinitionRegistry(jsEnabled ? rustJsValueTargetType() : rustTsValueTargetType());
   const facts = createRustPlanBuilder(input.source.sourceFacts, typeDefinitions);
   const names = createRustNamePlan({
@@ -165,14 +170,12 @@ export function createRustAnalysisContext(
     semanticsFor: input.source.semantics.forNode,
   });
   const memoryBindings = createTsonicMemoryBindingIndex(input.source);
-  const sourceStorage = createSourceStorageQuery(input.source, sourceFiles);
-  const sourceStorageFailure = sourceStorage.failureReason();
   return Object.freeze({
     callableRepresentation: "storage" as const,
     sourceStorage,
     callableOwnership: createRustCallableOwnershipRegistry(),
     errorStorageDemands: createRustErrorStorageDemandQuery(input.source,
-      createRustSourceProfileRegistry(input.source.sourceFiles, ast, jsEnabled), sourceStorage,
+      sourceProfiles, sourceStorage,
       createRustRetainedErrorDemandSelection(input.source, facts, providerSemantics.operations)),
     typeDefinitions,
     typeFamilies: createRustSourceTypeFamilyRegistry(),

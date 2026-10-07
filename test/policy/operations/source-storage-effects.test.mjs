@@ -1,0 +1,282 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { createCompilerSessionFromFiles, formatDiagnostics, providerVirtualDeclarationFactKey } from "@tsonic/tsts";
+import { createTargetSourceProgram } from "@tsonic/target-api/source";
+import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
+import { jsSourceSemanticsIdentity } from "@tsonic/js-source-profile";
+import { collectTargetSourceProfileContributions } from "../../../../tsonic/packages/host/dist/target/source-profile.js";
+import { createRustSourceProfileRegistry } from "../../../dist/analysis/facts/source-profile-registry.js";
+import { rustJsSurfaceSourceProfileContributions } from "../../../dist/source/profiles/declarations.js";
+import { createRustSourceProfileStorageEffects } from "../../../dist/policy/operations/source-profiles/source-storage-effects.js";
+import { rustPolicyNode } from "../../../dist/policy/model/context.js";
+import { resolveSelectedSourceProfileMember } from "../../../dist/policy/evidence/selected-source.js";
+import { createRustAnalysisContext } from "../../../dist/analysis/program/context.js";
+import { analyzeRustRuntimeReferences, analyzeRustDispatchContextCatalog } from "../../../dist/analysis/runtime/index.js";
+import { compileRust } from "../../helpers/rust-session.mjs";
+
+function fixture(body = `
+  const original = { count: 3 };
+  const frozen = Object.freeze(original);
+  const observed = Object.isFrozen(original);
+  const freeze = Object.freeze;
+  const alias = freeze(original);
+`) {
+  const profile = collectTargetSourceProfileContributions({
+    project: {}, projectRoot: "/src", projectDirectory: "/src",
+    target: { id: "rust", options: {} }, targetPackId: "js",
+    selectedCapabilities: [], selectedSurfaces: [],
+    targetContributions: rustJsSurfaceSourceProfileContributions(),
+  });
+  assert.equal(profile.diagnostics.length, 0, "exact JavaScript source profile");
+  const checked = createCompilerSessionFromFiles({
+    currentDirectory: "/src",
+    files: new Map([["/src/index.ts", `export {};\n${body}`], ...profile.files.map(file => [file.path, file.text])]),
+    compilerOptions: { noLib: true, strict: true, skipLibCheck: true,
+      module: "esnext", moduleResolution: "bundler", target: "es2022" },
+  }).checkSource();
+  assert.equal(formatDiagnostics(checked.diagnostics.filter(value => value !== undefined), "/src"), "");
+  const source = createTargetSourceProgram(checked);
+  const file = checked.getSourceFile("/src/index.ts");
+  assert.equal(file !== undefined, true, "checked authored source");
+  const variables = new Map();
+  const visit = node => {
+    if (source.ast.is.IsVariableDeclaration(node)) {
+      variables.set(source.ast.text(source.ast.name(node)), source.ast.as.AsVariableDeclaration(node).Initializer);
+    }
+    source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  visit(file);
+  const profiles = createRustSourceProfileRegistry(source.sourceFiles, source.ast, true);
+  const effects = createRustSourceProfileStorageEffects(source, profiles);
+  const selected = name => {
+    const invocation = variables.get(name);
+    assert.equal(invocation !== undefined, true, name);
+    const call = source.semantics.forNode(invocation).operations.call(invocation);
+    assert.equal(call !== undefined, true, `${name} has exact checked call selection`);
+    return { invocation, call };
+  };
+  return { source, file, variables, profiles, effects, selected };
+}
+
+test("freeze retains the exact selected argument and publishes immutable source-only effects", () => {
+  const current = fixture();
+  const { invocation, call } = current.selected("frozen");
+  const effect = current.effects.call(invocation, call);
+  assert.equal(effect !== undefined, true);
+  assert.equal(effect.resultAlias === call.sourceArguments[0].expression, true);
+  assert.equal(effect.preservedInputs.length, 1);
+  assert.equal(effect.preservedInputs[0] === effect.resultAlias, true);
+  assert.equal(Object.isFrozen(current.effects) && Object.isFrozen(effect) && Object.isFrozen(effect.preservedInputs), true);
+});
+
+test("isFrozen preserves its input without manufacturing a result alias", () => {
+  const current = fixture();
+  const { invocation, call } = current.selected("observed");
+  const effect = current.effects.call(invocation, call);
+  assert.equal(effect !== undefined, true);
+  assert.equal(effect.resultAlias === undefined, true);
+  assert.equal(effect.preservedInputs.length, 1);
+  assert.equal(effect.preservedInputs[0] === call.sourceArguments[0].expression, true);
+});
+
+test("selected immutable callable aliases retain declaration identity rather than callee spelling", () => {
+  const current = fixture();
+  const { invocation, call } = current.selected("alias");
+  const effect = current.effects.call(invocation, call);
+  assert.equal(effect !== undefined, true);
+  assert.equal(effect.resultAlias === call.sourceArguments[0].expression, true);
+});
+
+test("local Object and ObjectConstructor lookalikes cannot contribute JavaScript storage policy", () => {
+  for (const body of [
+    `const original = {}; const Object = { freeze(value: object) { return value; } };
+      const frozen = Object.freeze(original);`,
+    `interface ObjectConstructor { freeze(value: object): object; }
+      declare const local: ObjectConstructor; const original = {}; const frozen = local.freeze(original);`,
+  ]) {
+    const current = fixture(body);
+    const { invocation, call } = current.selected("frozen");
+    assert.equal(current.effects.call(invocation, call) === undefined, true, "unowned same-name declaration");
+  }
+});
+
+test("disabled or ambiguous source-profile provenance cannot invent an effect", () => {
+  const current = fixture();
+  const { invocation, call } = current.selected("frozen");
+  const disabled = createRustSourceProfileRegistry(current.source.sourceFiles, current.source.ast, false);
+  assert.equal(createRustSourceProfileStorageEffects(current.source, disabled).call(invocation, call) === undefined, true);
+  assert.equal(createRustSourceProfileStorageEffects(current.source, {
+    profileForNode: () => undefined,
+  }).call(invocation, call) === undefined, true);
+});
+
+function virtualSource(current, identity) {
+  const { invocation, call } = current.selected("frozen");
+  const declaration = current.source.semantics.forNode(invocation).declarations.signatureDeclaration(call.selectedSignature);
+  assert.equal(declaration !== undefined, true, "exact selected virtual declaration");
+  const facts = current.source.sourceFacts;
+  return Object.freeze({
+    ...current.source,
+    sourceFacts: Object.freeze({
+      getFact: (subject, key) => subject === declaration && key === providerVirtualDeclarationFactKey
+        ? identity : facts.getFact(subject, key),
+      getFacts: subject => facts.getFacts(subject),
+      getVirtualDeclarationDocument: name => facts.getVirtualDeclarationDocument(name),
+    }),
+  });
+}
+
+const virtualFreezeBody = `interface RemoteConstructor { freeze<Value>(value: Value): Readonly<Value>; }
+  declare const remote: RemoteConstructor; const original = {}; const frozen = remote.freeze(original);`;
+const virtualIdentity = Object.freeze({
+  providerId: jsSourceSemanticsIdentity.providerId, providerVersion: "1",
+  providerModuleId: "test.selected-js", moduleSpecifier: "@test/selected-js",
+  artifactFileName: "/src/selected-js.d.ts", exportName: "ObjectConstructor",
+  memberName: "freeze", memberKey: { kind: "property-key", name: "freeze" },
+});
+
+test("exact JavaScript-owned virtual declarations carry effects independently of source-profile paths", () => {
+  const current = fixture(virtualFreezeBody);
+  const { invocation, call } = current.selected("frozen");
+  assert.equal(current.effects.call(invocation, call) === undefined, true, "no unowned inference");
+  for (const identity of [
+    virtualIdentity,
+    { ...virtualIdentity, memberName: undefined },
+    { ...virtualIdentity, memberKey: undefined },
+    { ...virtualIdentity, memberName: "assign" },
+  ]) {
+    const source = virtualSource(current, identity);
+    const effect = createRustSourceProfileStorageEffects(source, current.profiles).call(invocation, call);
+    assert.equal(effect !== undefined, true, "canonical provider property key does not require a redundant label");
+    assert.equal(effect.resultAlias === call.sourceArguments[0].expression, true);
+  }
+});
+
+test("foreign or incomplete virtual owners and unknown JavaScript members fail closed", () => {
+  const current = fixture(virtualFreezeBody);
+  const { invocation, call } = current.selected("frozen");
+  for (const [label, identity] of [
+    ["foreign provider", { ...virtualIdentity, providerId: "not-the-javascript-owner" }],
+    ["missing owner", { ...virtualIdentity, exportName: undefined }],
+    ["missing member", { ...virtualIdentity, memberName: undefined, memberKey: undefined }],
+    ["other type", { ...virtualIdentity, exportName: "OtherConstructor" }],
+    ["other operation", { ...virtualIdentity, memberName: "assign", memberKey: { kind: "property-key", name: "assign" } }],
+  ]) {
+    const source = virtualSource(current, identity);
+    assert.equal(createRustSourceProfileStorageEffects(source, current.profiles).call(invocation, call) === undefined, true, label);
+  }
+});
+
+test("provider member keys cannot be replaced by a misleading optional member label", () => {
+  const current = fixture(virtualFreezeBody);
+  const { invocation, call } = current.selected("frozen");
+  for (const memberKey of [
+    { kind: "property-key", name: "assign" },
+    { kind: "well-known-symbol", name: "iterator" },
+  ]) {
+    const source = virtualSource(current, { ...virtualIdentity, memberKey });
+    const declaration = source.semantics.forNode(invocation).declarations.signatureDeclaration(call.selectedSignature);
+    const identity = resolveSelectedSourceProfileMember({
+      ast: source.ast,
+      facts: { get: source.sourceFacts.getFact },
+      semanticsFor: source.semantics.forNode,
+    }, declaration, current.profiles);
+    assert.equal(identity?.memberName, memberKey.kind === "property-key" ? "assign" : "@@iterator");
+    assert.equal(createRustSourceProfileStorageEffects(source, current.profiles).call(invocation, call) === undefined, true);
+  }
+});
+
+test("unresolved signatures stop before semantic identity lookup", () => {
+  const current = fixture();
+  const { invocation, call } = current.selected("frozen");
+  let reads = 0;
+  const source = { ...current.source, semantics: { ...current.source.semantics,
+    forNode(node) { reads += 1; return current.source.semantics.forNode(node); },
+  } };
+  const effects = createRustSourceProfileStorageEffects(source, current.profiles);
+  assert.equal(effects.call(invocation, { ...call, sourceSelectedSignatureKind: "untyped" }) === undefined, true);
+  assert.equal(reads, 0);
+});
+
+test("the shared materializer rejects unknown spread rest duplicate and missing parameter bindings", () => {
+  const current = fixture();
+  const { invocation, call } = current.selected("frozen");
+  const binding = call.sourceArgumentBindings[0];
+  for (const [label, changed] of [
+    ["no binding", { sourceArgumentBindings: [] }],
+    ["unknown parameter", { sourceArgumentBindings: [{ ...binding, sourceParameterIndex: 1 }] }],
+    ["spread argument", { sourceArgumentBindings: [{ ...binding, sourceForm: "spread" }] }],
+    ["rest parameter", { sourceArgumentBindings: [{ ...binding, sourceParameterForm: "rest" }] }],
+    ["duplicate parameter", { sourceArgumentBindings: [binding, binding] }],
+    ["missing argument", { sourceArguments: [] }],
+    ["fractional index", { sourceArgumentBindings: [{ ...binding, sourceArgumentIndex: 0.5 }] }],
+    ["negative index", { sourceArgumentBindings: [{ ...binding, sourceArgumentIndex: -1 }] }],
+  ]) {
+    assert.equal(current.effects.call(invocation, { ...call, ...changed }) === undefined, true, label);
+  }
+});
+
+test("a genuinely checked tuple-spread call does not manufacture scalar storage evidence", () => {
+  const current = fixture("const original = {}; const frozen = Object.freeze(...([original] as const));");
+  const { invocation, call } = current.selected("frozen");
+  assert.equal(call.sourceArgumentBindings.some(binding => binding.sourceForm !== "value"), true);
+  assert.equal(current.effects.call(invocation, call) === undefined, true);
+});
+
+test("shared source storage carries freeze origins but not isFrozen result aliases", () => {
+  const current = fixture();
+  const storage = createSourceStorageQuery(current.source, [current.file], undefined, current.effects);
+  assert.equal(storage.failureReason() === undefined, true);
+  for (const name of ["frozen", "alias", "observed"]) {
+    const invocation = current.variables.get(name);
+    const subject = storage.subjectFor(invocation);
+    assert.equal(subject.kind, "resolved", name);
+    const origins = storage.originsFor(subject.subject);
+    assert.equal(origins.kind, "resolved", name);
+    assert.equal(origins.origins.length, 1, name);
+    assert.equal(origins.origins[0].subject.node === (name === "observed"
+      ? invocation : current.variables.get("original")), true, name);
+  }
+});
+
+test("the canonical node reader accepts a source-only context without target representations", () => {
+  const current = fixture();
+  const node = current.variables.get("original");
+  assert.equal(rustPolicyNode({ ast: current.source.ast }, node) === node, true);
+  assert.equal(rustPolicyNode({ ast: current.source.ast }, undefined) === undefined, true);
+});
+
+test("the real Rust target session wires the same freeze alias query into its context", () => {
+  let context;
+  const { result } = compileRust({ surfaces: ["js"], files: {
+    "index.ts": "export function run(): number { const original = { count: 3 }; const frozen = Object.freeze(original); return frozen.count; }",
+  }, compileTarget(request) {
+    const runtime = analyzeRustRuntimeReferences(request.input.runtimeReferences, request.configuration.foundation);
+    assert.equal(runtime.kind, "resolved");
+    const dispatch = analyzeRustDispatchContextCatalog(request.providerSemantics.dispatchContexts, runtime.plan.activeCrates);
+    assert.equal(dispatch.kind, "resolved");
+    context = createRustAnalysisContext(request.input, request.providerSemantics,
+      request.jsEnabled, request.rootPublishesLibrary, dispatch.plan);
+    return { kind: "resolved", value: { artifacts: [] }, diagnostics: [] };
+  } });
+  assert.equal(result.diagnostics.length, 0, result.diagnostics.map(value => value.message).join("\n"));
+  assert.equal(context !== undefined, true, "target session invokes real context construction");
+  let original;
+  let frozen;
+  const visit = node => {
+    if (context.ast.is.IsVariableDeclaration(node)) {
+      const name = context.ast.text(context.ast.name(node));
+      if (name === "original") original = context.ast.as.AsVariableDeclaration(node).Initializer;
+      if (name === "frozen") frozen = context.ast.as.AsVariableDeclaration(node).Initializer;
+    }
+    context.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  context.sourceFiles.forEach(visit);
+  assert.equal(original !== undefined && frozen !== undefined, true);
+  const subject = context.sourceStorage.subjectFor(frozen);
+  assert.equal(subject.kind, "resolved");
+  const origins = context.sourceStorage.originsFor(subject.subject);
+  assert.equal(origins.kind, "resolved");
+  assert.equal(origins.origins.length, 1);
+  assert.equal(origins.origins[0].subject.node === original, true);
+});
