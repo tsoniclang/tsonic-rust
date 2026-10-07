@@ -280,7 +280,7 @@ export async function roundtrip(dir: string, file: string): Promise<int32> {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn roundtrip\(dir: String, file: String\) -> js_abi::JsPromise<'static, i32> \{/u);
+  assert.match(text, /pub fn roundtrip\(dir: String, file: String\) -> js_abi::JsPromise<'static, i32, rt::TsonicError> \{/u);
   assert.match(text, /js_abi::JsPromise::from_fallible_factory\(move \|\| async move \{/u);
   assert.match(text, /tsonic_rust_node::fs_promises::mkdir_async\(&dir\)\.await\?/u);
   assert.match(text, /tsonic_rust_node::fs_promises::read_file_string_async\(&file, "utf8"\)\.await\?/u);
@@ -357,9 +357,10 @@ export function closeStreams(inputPath: string, outputPath: string): void {
   });
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /tsonic_rust_node::fs::create_read_stream\(inputPath\)\?/u);
-  assert.match(text, /tsonic_rust_node::fs::create_write_stream\(outputPath\)\?/u);
-  assert.match(text, /readable\.close\(\)/u);
+  assert.match(text, /pub fn closeStreams\(inputPath: &str, outputPath: &str\)/u);
+  assert.match(text, /tsonic_rust_node::fs::create_read_stream\(dispatch_root, inputPath\)/u);
+  assert.match(text, /tsonic_rust_node::fs::create_write_stream\(dispatch_root_2, outputPath\)/u);
+  assert.match(text, /readable\.close\(\)\?/u);
   assert.match(text, /writable\.close\(\)\?/u);
   validateGeneratedProject("r9-node-stream-constructors", result.artifacts);
 });

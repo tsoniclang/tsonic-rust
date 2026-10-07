@@ -191,10 +191,11 @@ export function invalid(path: string): void {
   assert.equal([...diagnostics.matchAll(/TS2769/gu)].length, 2);
 });
 
-test("borrowed provider strings materialize ownership only in owned contexts", async () => {
+test("borrowed provider strings materialize ownership only in owned contexts", { timeout: 300_000 }, async () => {
   const { result } = compileRust({
     surfaces: ["js"],
     capabilities: [await nodejsCapability()],
+    target: { id: "rust", options: { outputType: "bin" } },
     files: {
       "index.ts": `
 import { sep } from "node:path";
@@ -210,6 +211,14 @@ export function endsWithSeparator(value: string): boolean {
 export function appendSeparator(value: string): string {
   return value + sep;
 }
+
+export function main(): void {
+  const separator = ownedSeparator();
+  const appended = appendSeparator("path");
+  if (separator !== sep || appended !== "path" + separator || !endsWithSeparator(appended) || endsWithSeparator("path")) {
+    throw new Error("borrowed separator contract");
+  }
+}
 `,
     },
   });
@@ -218,8 +227,9 @@ export function appendSeparator(value: string): string {
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn ownedSeparator\(\) -> String \{[\s\S]*String::from\(tsonic_rust_node::path::sep\(\)\)/u);
   assert.match(text, /ends_with_at_end\(value, tsonic_rust_node::path::sep\(\)\)/u);
-  assert.match(text, /format!\("\{\}\{\}", value, tsonic_rust_node::path::sep\(\)\)/u);
+  assert.match(text, /\[\s*core::convert::AsRef::<str>::as_ref\(&value\),\s*core::convert::AsRef::<str>::as_ref\(&tsonic_rust_node::path::sep\(\)\),\s*\]\s*\.concat\(\)/u);
   assert.doesNotMatch(text, /sep\(\)\.to_string\(\)/u);
+  validateGeneratedProject("node-borrowed-provider-strings", result.artifacts, { run: true });
 });
 
 test("node assert.ok overloads lower through exact selected signatures", async () => {
@@ -253,10 +263,11 @@ export function verify(value: boolean): void {
   );
 });
 
-test("node util.format lowers fixed and variadic arguments through one value-slice ABI", async () => {
+test("node util.format lowers fixed and variadic arguments through one value-slice ABI", { timeout: 300_000 }, async () => {
   const { result } = compileRust({
     surfaces: ["js"],
     capabilities: [await nodejsCapability()],
+    target: { id: "rust", options: { outputType: "bin" } },
     files: {
       "index.ts": `
 import { format } from "node:util";
@@ -264,6 +275,10 @@ import { format } from "node:util";
 export function render(label: string, count: number, ok: boolean): string {
   const output = format("%s:%d:%s", label, count, ok);
   return output + label + format("%s");
+}
+
+export function main(): void {
+  if (render("count", 3, true) !== "count:3:truecount%s") throw new Error("native format contract");
 }
 `,
     },
@@ -278,8 +293,9 @@ export function render(label: string, count: number, ok: boolean): string {
   assert.match(text, /tsonic_rust_node::util::format\("%s", &\[\]\)/u);
   assert.match(
     text,
-    /format!\(\s*"\{\}\{\}\{\}",\s*output,\s*label,\s*tsonic_rust_node::util::format\("%s", &\[\]\)\?,?\s*\)/su,
+    /\[\s*core::convert::AsRef::<str>::as_ref\(&output\),\s*core::convert::AsRef::<str>::as_ref\(&label\),\s*core::convert::AsRef::<str>::as_ref\(&tsonic_rust_node::util::format\("%s", &\[\]\)\?\),\s*\]\s*\.concat\(\)/u,
   );
+  validateGeneratedProject("node-util-native-format", result.artifacts, { run: true });
 });
 
 test("filesystem watchers lower through exact selected provider evidence", async () => {
@@ -344,6 +360,8 @@ export function main(): void {
   check(format("%s") === "%s");
   const parsed = JSON.parse('{"ok":true}');
   check(format("%j", parsed) === '{"ok":true}');
+  check(format("%j", JSON.parse('{"fresh":true}')) === '{"fresh":true}');
+  check(format("%j %j", parsed, parsed) === '{"ok":true} {"ok":true}');
   JSON.stringify(parsed);
 }
 `,
@@ -353,7 +371,8 @@ export function main(): void {
   assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /JsValue::from\(label\.clone\(\)\)/u);
-  assert.match(text, /clone_js_value\(&parsed\)/u);
+  assert.match(text, /tsonic_rust_node::util::format\("%j", core::slice::from_ref\(&parsed\)\)\?/u);
+  assert.match(text, /js_abi::json_stringify\(&parsed\)\?/u);
   const run = validateGeneratedProject("node-provider-bin", result.artifacts, { run: true });
   assert.equal(run.status, 0);
 });
@@ -397,7 +416,7 @@ export function main(): void {
 
   assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /tsonic_rust_node::http::create_server_optional\(Some\(aliasedHandle\)\)/u);
+  assert.match(source, /tsonic_rust_node::http::create_server_optional\(dispatch_root_2, Some\(aliasedHandle\)\)/u);
   assert.match(source, /fn handle\([^)]*\) -> Result<\(\), rt::TsonicError>/u);
   assert.match(source, /response\.set_status_code\(/u);
   assert.match(source, /response\.set_header\(/u);
@@ -429,8 +448,9 @@ export function register(
 
   assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /handler: rt::Callable<[\s\S]*?rt::TsonicResult<\(\)>,?\s*>/u);
-  assert.match(source, /tsonic_rust_node::http::create_server_optional\(Some\(handler\)\)/u);
+  assert.match(source, /pub type RegisterHandler = rt::Callable<\s*\(\s*tsonic_rust_node::http::IncomingMessage<rt::TsonicError>,\s*tsonic_rust_node::http::ServerResponse<rt::TsonicError>,\s*\),\s*rt::TsonicResult<\(\)>,\s*>/u);
+  assert.match(source, /pub fn register\(handler: RegisterHandler\)/u);
+  assert.match(source, /tsonic_rust_node::http::create_server_optional\(dispatch_root, Some\(handler\)\)/u);
   assert.doesNotMatch(source, /handler\.clone\(\)/u);
   validateGeneratedProject("node-retained-callback", result.artifacts);
 });

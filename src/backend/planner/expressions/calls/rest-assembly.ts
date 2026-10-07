@@ -3,6 +3,19 @@ import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { rustVecRestAssembly } from "../../../../target-model/operations/rest-assembly.js";
 import type { RustExpr } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
+import type { Node } from "@tsonic/tsts";
+import { createRustSharedReferenceArgument } from "../input-shaping.js";
+import { planRustNonConsumingValue } from "../typed-locations.js";
+
+export function planRustBorrowedSingletonSlice(
+  node: Node,
+  value: RustExpr,
+  context: RustPlanContext,
+): RustExpr {
+  return { kind: "call", path: "core::slice::from_ref", args: [
+    createRustSharedReferenceArgument(context, planRustNonConsumingValue(node, value, context), node),
+  ] };
+}
 
 export function planRustRestAssembly(
   segments: readonly { readonly value: RustExpr; readonly sequence: boolean }[],

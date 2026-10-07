@@ -18,7 +18,7 @@ import { applyRustProviderEvaluationScope, planRustProviderEvaluationScope } fro
 import { diagnosticInput, registerAliasFromPath, rustActiveErrorType } from "../program/plan-context.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planExpression } from "./entry.js";
-import { planRustNonConsumingValue } from "./typed-locations.js";
+import { planRustNonConsumingValue, rustExpressionReadsStorage } from "./typed-locations.js";
 import { rustBinaryOperatorTraitPath } from "../../../target-model/syntax/tokens.js";
 import { rustBottomExpression } from "../types/fallible-shape.js";
 import { rustValueCarrierTransitionTarget } from "../../../analysis/facts/value-carrier-queries.js";
@@ -50,8 +50,8 @@ import {
 } from "./input-shaping.js";
 import { invokeRustStructuralObjectMethod } from "../objects/project-storage.js";
 import { applyFinalizedValueConversion } from "./value-conversions.js";
-import { planRustRestAssembly } from "./calls/rest-assembly.js";
-import { rustCarrierHasCloneContract } from "../types/generic-requirements.js";
+import { planRustBorrowedSingletonSlice, planRustRestAssembly } from "./calls/rest-assembly.js";
+import { rustCarrierHasCloneContract, rustCarrierHasCopyContract } from "../types/generic-requirements.js";
 import { planRustDispatchContextInputScope } from "../project/dispatch-contexts.js";
 import type { RustDispatchContextInputScope } from "../project/dispatch-contexts.js";
 
@@ -652,6 +652,15 @@ export function planFinalizedTargetInput(
       );
       if (planned === undefined) {
         return undefined;
+      }
+      const singletonSource = element.source.kind === "receiver"
+        ? receiverNode : argumentNodes[element.source.sourceIndex];
+      if (isRustFinalizedSliceInput(input) && input.elements.length === 1 &&
+        element.mode === "value" && element.conversion.kind === "identity" &&
+        rustTargetTypeRefEquals(element.sourceCarrier, input.elementCarrier) &&
+        !rustCarrierHasCopyContract(input.elementCarrier, context) &&
+        singletonSource !== undefined && rustExpressionReadsStorage(singletonSource, context)) {
+        return planRustBorrowedSingletonSlice(singletonSource, planned, context);
       }
       const asTargetElement = element.parameterCarrier.kind === "reference" &&
         element.parameterCarrier.referent.kind === "target-named" &&
