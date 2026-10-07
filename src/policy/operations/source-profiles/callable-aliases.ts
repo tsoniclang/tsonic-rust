@@ -24,7 +24,7 @@ function acceptsSourceProfileAlias(
     context, alias.selectedDeclaration, profiles,
   ) === undefined) return false;
   if (alias.property === undefined) return context.ast.is.IsFunctionDeclaration(alias.selectedDeclaration);
-  const receiver = alias.property.receiver.declaration;
+  const receiver = alias.receiverDeclaration;
   const profile = profiles.profileForNode(alias.selectedDeclaration, context.ast);
   return receiver !== undefined && context.ast.is.IsVariableDeclaration(receiver) &&
     context.ast.as.AsVariableDeclaration(receiver)?.Initializer === undefined &&
