@@ -34,6 +34,24 @@ const unit = { kind: "tuple", elements: [] };
 const usize = { kind: "source-primitive", name: "native-uint" };
 const typeArgument = (type) => ({ kind: "type", type });
 
+test("identical closed-value inputs retain native ownership without redundant conversions", () => {
+  for (const form of ["call-value-array", "call-value-slice"]) {
+    const options = { operationKind: "method", form: { form, path: "acme::consume",
+      leadingArguments: [], elementCarrier: jsValue }, sourceArgumentCarriers: [jsValue],
+      resultCarrier: unit, isAsync: false, isFallible: false };
+    const exact = finalizeRustProviderOperationAbi(options);
+    assert.equal(exact !== undefined, true, form);
+    assert.equal(validateRustFinalizedOperationAbi(exact), true, form);
+    assert.equal(exact.targetArguments[0].elements[0].conversion.kind, "identity", form);
+    const converted = finalizeRustProviderOperationAbi({ ...options, sourceArgumentCarriers: [string] });
+    assert.equal(converted !== undefined, true, form);
+    assert.equal(validateRustFinalizedOperationAbi(converted), true, form);
+    assert.equal(converted.targetArguments[0].elements[0].conversion.kind, "semantic", form);
+    assert.equal(finalizeRustProviderOperationAbi({ ...options, sourceArgumentCarriers: [providerError] }) === undefined,
+      true, form);
+  }
+});
+
 test("source optional results normalize absence without changing explicit native Option storage", () => {
   const optional = rustSourceOptionalTargetType(int32);
   const nativeOptional = rustOptionTargetType(int32);
@@ -739,7 +757,7 @@ test("variadic value slices convert each source value exactly and always pass on
     preserved.targetArguments[1].elements.map((element) => element.conversion.kind === "semantic"
       ? element.conversion.conversion.id
       : element.conversion.kind),
-    ["js-value-from-string", "js-value-clone"],
+    ["js-value-from-string", "identity"],
   );
   assert.equal(unsupported, undefined);
   assert.equal(compileTimeElement, undefined);

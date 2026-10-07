@@ -45,8 +45,8 @@ export function createInputFactory(
     if (sourceCarrier === undefined) {
       return undefined;
     }
-    const conversion = selectRustSourceValueConversion(sourceCarrier, targetCarrier, definitions);
     const identical = rustTargetTypeRefEquals(sourceCarrier, targetCarrier);
+    const conversion = identical ? undefined : selectRustSourceValueConversion(sourceCarrier, targetCarrier, definitions);
     return !identical && conversion === undefined
       ? undefined
       : sourceInput({ kind: "argument", sourceIndex }, sourceCarrier, mode, conversion, definitions);

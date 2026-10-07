@@ -23,6 +23,7 @@ import { selectJsSurfaceMemberWrite } from "../../../policy/operations/source-pr
 import {
   ElementAccessExpression_ArgumentExpression,
   KindBigIntLiteral,
+  sourceSequenceInputIsEmpty,
 } from "@tsonic/target-api/source";
 import { finalizeRustProviderOperationAbi } from "../../facts/finalized-operation-abi.js";
 import { providerFormRequiresSourceReceiver } from "./calls/instantiation.js";
@@ -592,6 +593,7 @@ export function selectedSourceValueCarrier(
 ): TargetTypeRef | undefined {
   if (context.ast.is.IsSpreadElement(value.expression)) {
     const operand = context.ast.as.AsSpreadElement(value.expression)?.Expression;
+    if (operand !== undefined && sourceSequenceInputIsEmpty(context.ast, operand)) return { kind: "tuple", elements: [] };
     return operand === undefined
       ? undefined
       : rustEffectiveValueCarrier(context.facts, operand) ??

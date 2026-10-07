@@ -21,6 +21,8 @@ export function rustSourceUsePreservesAbsence(expression: Node, context: {
     }
     if (kind !== "KindBinaryExpression") return false;
     const operator = BinaryExpression_OperatorToken(context.ast, parent);
+    if (operator !== undefined && context.ast.kindName(operator) === "KindQuestionQuestionToken")
+      return BinaryExpression_Left(context.ast, parent) === receiver;
     if (operator === undefined || !["KindEqualsEqualsToken", "KindExclamationEqualsToken",
       "KindEqualsEqualsEqualsToken", "KindExclamationEqualsEqualsToken"].includes(context.ast.kindName(operator))) return false;
     const left = BinaryExpression_Left(context.ast, parent);

@@ -5,6 +5,7 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import { rustNativeCallableResultMatches } from "../../ownership/callable-result-contract.js";
 import { selectRustParameterEntryConversion } from "../../ownership/parameter-entry-conversion.js";
+import { rustTargetGenericReferences } from "../../../target-model/types/carriers/generic-references.js";
 
 export function resolveRustCallableInputCarrier(
   subject: SourceStorageSubject,
@@ -16,7 +17,8 @@ export function resolveRustCallableInputCarrier(
   if (logical === undefined) return undefined;
   const origins = context.sourceStorage.closedOriginsFor(subject);
   if (origins.kind === "unresolved") return undefined;
-  if (origins.kind === "open") return rustCallableInputTargetType(logical.parameters, logical.result);
+  if (origins.kind === "open" || rustTargetGenericReferences(logicalCarrier).typeIdentities.length > 0)
+    return rustCallableInputTargetType(logical.parameters, logical.result);
   let selected: typeof logical | undefined;
   for (const origin of origins.origins) {
     const declaration = origin.subject.node;

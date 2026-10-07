@@ -9,7 +9,7 @@ import { recordRustFlowReadProjection, rustEffectiveValueCarrier } from "../fact
 import { rustPolicyNode } from "../../policy/model/context.js";
 import { selectRustGuardedValueCarrier } from "./native-flow-refinement.js";
 import { rustSourceUsePreservesAbsence } from "../expressions/absence-use.js";
-import { rustSourceOptionalElementCarrier } from "../../target-model/types/carriers/optional.js";
+import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 
 export function selectedValueCarrier(
   expression: ExtensionFactSubject,
@@ -20,7 +20,7 @@ export function selectedValueCarrier(
   const stored = resolveRustTargetTypeRef(expression, context, options);
   const reference = rustPolicyNode(context, expression);
   if (stored !== undefined && reference !== undefined &&
-    rustSourceOptionalElementCarrier(stored) !== undefined && rustSourceUsePreservesAbsence(reference, context)) return stored;
+    rustOptionElementCarrier(stored) !== undefined && rustSourceUsePreservesAbsence(reference, context)) return stored;
   const effective = rustEffectiveValueCarrier(context.facts, expression);
   if (effective !== undefined &&
     (stored === undefined || !rustTargetTypeRefEquals(effective, stored))) {

@@ -9,7 +9,8 @@ import { rustStructuralObjectTargetType } from "../../dist/target-model/types/ca
 test("closed JS values expose their implemented default without inventing defaults for opaque native values", () => {
   assert.equal(rustCarrierSupportsTrait(rustJsValueTargetType(), "core::default::Default"), true);
   assert.equal(rustCarrierSupportsTrait(rustJsValueTargetType(), "core::clone::Clone"), true);
-  assert.equal(rustCarrierSupportsTrait(rustTsValueTargetType(), "core::default::Default"), false);
+  assert.equal(rustCarrierSupportsTrait(rustTsValueTargetType(), "core::default::Default"), true);
+  assert.equal(rustCarrierSupportsTrait({ kind: "target-named", id: "acme.Opaque" }, "core::default::Default"), false);
 });
 
 test("native Copy composition retains exact sealed leaf proofs through aggregate storage", () => {

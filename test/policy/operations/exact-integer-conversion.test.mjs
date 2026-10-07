@@ -38,8 +38,14 @@ test("explicit integer assertions select one closed conversion for every native 
       assert.deepEqual(contract.target, primitive(target));
     }
   }
-  for (const source of ["bool", "char", "float32", "float64"]) {
+  for (const source of ["bool", "char"]) {
     assert.equal(selectRustSourceAssertionConversion(primitive(source), primitive("native-uint")), undefined);
+  }
+  for (const source of ["float32", "float64"]) {
+    const conversion = selectRustSourceAssertionConversion(primitive(source), primitive("native-uint"));
+    assert.equal(conversion?.kind, "exact-integer");
+    assert.equal(rustValueConversionContract(conversion)?.fallible, true);
+    assert.equal(selectRustSourceValueConversion(primitive(source), primitive("native-uint")), undefined);
   }
 });
 

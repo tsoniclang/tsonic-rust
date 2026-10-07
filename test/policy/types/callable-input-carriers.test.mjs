@@ -62,6 +62,22 @@ test("closed invocation inputs admit exact authored entry conversion without wea
   assert.equal(selectedFor({ kind: "reference", mutable: true, referent: byte }) === undefined, true);
 });
 
+test("quantified invocation inputs retain their declaration protocol instead of specializing observed callers", () => {
+  const element = { kind: "type-parameter", identity: "visit:E", name: "E" };
+  const unit = { kind: "tuple", elements: [] };
+  const declared = rustCallableTargetType([element], unit);
+  for (const kind of ["complete", "open", "unresolved"]) {
+    const selected = resolveRustCallableInputCarrier(subject, declared, {
+      sourceStorage: { closedOriginsFor: () => ({ kind, origins: [{ subject }], boundaries: [] }) },
+    }, { callableSignatureCarrier: () => assert.fail("a quantified declaration cannot acquire a concrete caller ABI") });
+    assert.equal(selected === undefined, kind === "unresolved");
+    if (selected !== undefined) {
+      assert.equal(rustCallableInputProtocol(selected)?.parameters[0] === element, true);
+      assert.equal(rustCallableInputProtocol(selected)?.result === unit, true);
+    }
+  }
+});
+
 test("closed invocation inputs retain the producer's exact borrowed protocol without a value adapter", () => {
   const selected = select([rustCallableTargetType([borrowed], value), rustCallableTargetType([borrowed], value)]);
   assert.equal(rustCallableInputProtocol(selected)?.parameters[0] === borrowed, true);

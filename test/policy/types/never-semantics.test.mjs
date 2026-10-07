@@ -82,10 +82,10 @@ export async function chooseAliasedAsync(flag: boolean): Promise<int32> {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /fn stop\([^)]*message: String\) -> Result<\(\), rt::TsonicError>/u);
-  assert.match(source, /\.stop\(String::from\("sync"\)\)\?/u);
+  assert.match(source, /fn stop\([^)]*message: &str\) -> Result<\(\), rt::TsonicError>/u);
+  assert.match(source, /\.stop\("sync"\)\?/u);
   assert.match(source, /unreachable!/u);
-  assert.match(source, /fn stopAsync\(\) -> js_abi::JsPromise<'static, \(\)>/u);
+  assert.match(source, /fn stopAsync\(\) -> js_abi::JsPromise<'static, \(\), rt::TsonicError>/u);
   assert.match(source, /stopAsync\(\)\.into_result\(\)\.await\?/u);
   validateGeneratedProject("never-fallible", result.artifacts);
 });

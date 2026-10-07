@@ -380,7 +380,7 @@ export function categories(text: string, count: int32, wide: int64, enabled: boo
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /let _ = text;\s+String::from\("string"\)/u);
+  assert.match(source, /let _ = &text;\s+String::from\("string"\)/u);
   assert.match(source, /String::from\("number"\)/u);
   assert.match(source, /String::from\("bigint"\)/u);
   assert.match(source, /String::from\("boolean"\)/u);
@@ -556,17 +556,21 @@ export function main(): void {
   }
   check(caught);
   let unchanged = 9n;
+  caught = false;
   try {
     unchanged /= 0n;
   } catch (error) {
     caught = true;
   }
+  check(caught);
   check(unchanged === 9n);
+  caught = false;
   try {
     accessor.current /= 0n;
   } catch (error) {
     caught = true;
   }
+  check(caught);
   check(accessor.current === 2n);
   check(accessor.writes === 1);
 }

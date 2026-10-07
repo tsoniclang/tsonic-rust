@@ -92,6 +92,8 @@ export function main(): void {
   const generic = filled(2, second);
   check(generic[0] === second && generic[1] === second);
   const empty = new Array<number>(0);
+  const absent = new Array<object>(3);
+  check(absent.length === 3 && absent[0] === undefined && absent[2] === null);
   const items = new Array<number>(3, 4);
   const single = Array.of<number>(3);
   const called = Array<number>(2);
@@ -111,7 +113,7 @@ export function main(): void {
 
 test("length construction cannot fabricate reference identities or unconstrained values", () => {
   for (const declaration of [
-    "export function values(): object[] { return new Array<object>(3); }",
+    "class Token { value = 1; } export function values(): Token[] { return new Array<Token>(3); }",
     "export function values<T>(): T[] { return new Array<T>(3); }",
   ]) {
     const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": declaration } });

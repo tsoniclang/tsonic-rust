@@ -9,7 +9,7 @@ import {
   applyFallibleShape,
   applyRustFallibleResultExpression,
 } from "../../../dist/backend/planner/types/fallible-shape.js";
-import { rustBlockTerminates } from "../../../dist/backend/planner/declarations/callables/functions.js";
+import { rustBlockTerminates } from "../../../dist/backend/target-ast/normalization/block-flow.js";
 import { rustTypeFromCarrier } from "../../../dist/backend/planner/types/render.js";
 import {
   requireProviderArgumentPassingFacts,
@@ -424,8 +424,7 @@ export function singleton(value: int32): [int32] {
 });
 
 test("empty classes retain reference identity through an empty object state", () => {
-  const { result } = compileRust({
-    files: {
+  const files = {
       "index.ts": `
 export class Empty {
   constructor() {}
@@ -434,15 +433,29 @@ export class Empty {
 export function make(): Empty {
   return new Empty();
 }
+
 `,
-    },
-  });
+  };
+  const { result } = compileRust({ files });
 
   assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub struct Empty \{\n    #\[doc\(hidden\)\]\n    pub identity: rt::ObjectIdentity,\n    #\[doc\(hidden\)\]\n    pub dispatch: alloc::rc::Rc<dyn EmptyDispatch \+ 'static>,\n\}/u);
-  assert.match(text, /let root = alloc::rc::Rc::new\(EmptyRoot \{/u);
+  assert.match(text, /dispatch: alloc::rc::Rc::new\(EmptyRoot \{/u);
   validateGeneratedProject("backend-empty-class", result.artifacts);
+  const executable = compileRust({
+    target: { id: "rust", options: { outputType: "bin", crateName: "empty_class_identity" } },
+    files: { "index.ts": `${files["index.ts"]}
+export function main(): void {
+  const original = make();
+  const alias = original;
+  const different = make();
+  if (original !== alias || original === different) throw new Error("empty class identity was lost");
+}` },
+  }).result;
+  assertNoTargetDiagnostics(executable.diagnostics);
+  const native = validateGeneratedProject("backend-empty-class-identity", executable.artifacts, { run: true });
+  assert.equal(native.status, 0, JSON.stringify(native));
 });
 
 test("duplicate TypeScript enum discriminants retain every alias without allocation", () => {

@@ -61,7 +61,7 @@ export function applyFlowReadLane(
     parent = walk.context.ast.parent(receiver);
   }
   const parentKind = parent === undefined ? undefined : walk.context.ast.kindName(parent);
-  if (rustSourceOptionalElementCarrier(sourceCarrier) !== undefined &&
+  if (rustOptionElementCarrier(sourceCarrier) !== undefined &&
     rustSourceUsePreservesAbsence(expression, walk.context)) return sourceCarrier;
   if (parent !== undefined && walk.context.ast.as.AsCallExpression(parent)?.QuestionDotToken !== undefined &&
     Node_Expression(walk.context.ast, parent) === receiver) return sourceCarrier;

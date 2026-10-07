@@ -170,6 +170,7 @@ export function same(): boolean {
   assert.match(text, /js_abi::object_is\(\[[\s\S]*?JsValue::from\(js_abi::NUMBER_NAN\),[\s\S]*?JsValue::from\(js_abi::NUMBER_NAN\),[\s\S]*?\]\)/u);
   assert.match(text, /!js_abi::object_is\(\[[\s\S]*?JsValue::from\(0\.0\),[\s\S]*?JsValue::from\(-0\.0\),?[\s\S]*?\]\)/u);
   assert.match(text, /js_abi::object_is\(\[[\s\S]*?JsValue::from\(String::from\("same"\)\),[\s\S]*?JsValue::from\(String::from\("same"\)\),[\s\S]*?\]\)/u);
+  assert.doesNotMatch(text, /clone_js_value/u);
 });
 
 test("console calls lower closed primitive and object values", () => {
@@ -201,7 +202,8 @@ export function write(label: string, count: int32, ok: boolean): void {
   });
   assertNoTargetDiagnostics(object.result.diagnostics);
   const objectText = artifactText(object.result, "src/index.rs");
-  assert.match(objectText, /js_abi::console_log\(&\[\{[\s\S]*?js_value_from_optional_pairs\(vec!\[[\s\S]*?Some\(\([\s\S]*?"ok",[\s\S]*?JsValue::from\([\s\S]*?state\.ok[\s\S]*?\)\),[\s\S]*?\]\)[\s\S]*?\}\]\);/u);
+  assert.match(objectText, /js_abi::console_log\(&\[js_abi::JsValue::from\(\{[\s\S]*?record_ok = true;[\s\S]*?rt::ObjectHandle::new\(crate::shapes::OkShape \{ ok: record_ok \}\)[\s\S]*?\}\)\]\);/u);
+  assert.doesNotMatch(objectText, /clone_js_value|js_value_from_optional_pairs/u);
 });
 
 test("string padding emits fallible runtime calls for explicit and default fillers", () => {

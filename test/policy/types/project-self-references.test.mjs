@@ -21,6 +21,11 @@ function selfReference({ generic = false, optional = true } = {}) {
     isTypeReference: type => type === apparent,
     apparentType: type => type === selectedType ? apparent : type,
     effectiveTypeArguments: type => type === apparent ? generic ? [argumentType] : [] : [],
+    typeArgumentBindings: type => {
+      const arguments_ = types.effectiveTypeArguments(type);
+      return arguments_?.map((argumentType, index) => ({ scope: "local", declaration: parameters[index]?.declaration, argumentType }));
+    },
+    aliasApplication: () => undefined,
     typeReferenceTarget: () => undefined,
     propertyInfos: () => optional ? [{ optional: true, symbol: method }] : [],
     indexInfos: () => [],
@@ -45,6 +50,7 @@ function selfReference({ generic = false, optional = true } = {}) {
       kind: () => undefined,
       kindName: node => node === declaration ? "KindInterfaceDeclaration" : node === method ? "KindMethodSignature" : undefined,
       is: { IsClassDeclaration: () => false, IsClassExpression: () => false,
+        IsTypeParameterDeclaration: () => false,
         IsTypeAliasDeclaration: () => false,
         IsInterfaceDeclaration: node => node === declaration },
     },
@@ -85,12 +91,12 @@ test("constrained self rejects missing, recursive and inconsistent generic evide
     const fixture = selfReference({ generic: true });
     mutate(fixture);
     assert.equal(resolveProjectSourceCarrier(fixture.symbol, { values: [] }, fixture.context,
-      fixture.options, fixture.declaration, fixture.selectedType), undefined);
+      fixture.options, fixture.declaration, fixture.selectedType) === undefined, true);
   }
   const recursive = selfReference({ generic: true });
   recursive.types.effectiveTypeArguments = () => [recursive.apparent];
   assert.equal(resolveProjectSourceCarrier(recursive.symbol, { values: [] }, recursive.context,
-    recursive.options, recursive.declaration, recursive.selectedType, new Set([recursive.apparent])), undefined);
+    recursive.options, recursive.declaration, recursive.selectedType, new Set([recursive.apparent])) === undefined, true);
 });
 
 test("an unrelated apparent symbol cannot replace the selected declaration or its arguments", () => {

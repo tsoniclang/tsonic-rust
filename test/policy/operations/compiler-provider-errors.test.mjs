@@ -76,8 +76,8 @@ export function main(): void {
   });
   assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /JsError::has_same_identity/u);
-  assert.match(source, /JsError::has_distinct_identity/u);
+  assert.match(source, /ErrorObject::error_identity_key\(error_value\)\s*==\s*rt::ErrorObject::error_identity_key\(compared_value\)/u);
+  assert.match(source, /ErrorObject::error_identity_key\(error_value_2\)\s*!=\s*rt::ErrorObject::error_identity_key\(compared_value_2\)/u);
   assert.doesNotMatch(source, /JsValue|\.error_value\(/u);
   assert.doesNotMatch(source, /\.message\(\)\.to_owned\(\)\s*==/u);
   assert.equal(validateGeneratedProject("native-error-values", result.artifacts, { run: true }).status, 0);
@@ -142,7 +142,9 @@ export function main(): void {
     assertNoTargetDiagnostics(result.diagnostics);
     const source = artifactText(result, "src/index.rs");
     assert.match(source, /Option<String>/u);
-    assert.match(source, /\.borrowed_stack\(\)/u);
+    assert.match(source, /ErrorObject::error_stack\(&error\)/u);
+    assert.match(source, /rt::capture_error_stack\(&error\)/u);
+    assert.doesNotMatch(source, /error\("failure 😀"\)[\s\S]*?capture_error_stack\(&error\)[\s\S]*?capture_error_stack\(&error\)/u);
     assert.equal(validateGeneratedProject(`error-creation-stack-${surfaces.length}`, result.artifacts, { run: true }).status, 0);
   });
 }
@@ -171,6 +173,6 @@ test("readonly closed Error narrowing never manufactures writable native storage
   const { result } = compileRust({ surfaces: ["js"], files: { "index.ts":
     `export function change(error: unknown): void { if (error instanceof Error) error.message = "changed"; }` } });
   assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.some(({ code }) => code === "RUST_BUILTIN_ERROR_MUTATION_UNSUPPORTED"),
+  assert.ok(result.diagnostics.some(({ code }) => code === "RUST_ERROR_WRITABLE_ORIGIN_MISSING"),
     JSON.stringify(result.diagnostics));
 });

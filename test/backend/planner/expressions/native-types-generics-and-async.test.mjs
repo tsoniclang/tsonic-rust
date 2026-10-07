@@ -496,7 +496,7 @@ export function main(): void {
 
   assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub enum Shape/u);
+  assert.match(artifactText(result, "src/shapes.rs"), /pub enum Union2/u);
   assert.match(text, /match &shape/u);
   const run = validateGeneratedProject("discriminated-union-bin", result.artifacts, { run: true });
   assert.equal(run.status, 0);

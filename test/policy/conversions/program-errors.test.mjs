@@ -4,6 +4,7 @@ import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project
 import { selectRustProgramErrorConversion } from "../../../dist/target-model/conversions/program-error.js";
 import { rustJsErrorTargetType, rustProgramErrorTargetType, rustOptionTargetType, rustSourcePrimitiveTargetType,
   rustSourceTypeCarrier, rustSourceUnionTargetType } from "../../../dist/target-model/types/index.js";
+import { rustSourceErrorTargetType } from "../../../dist/target-model/types/carriers/source-error.js";
 import { rustUnionLeaves } from "../../../dist/target-model/types/union-relations.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustProgramErrorConversionMatches } from "../../../dist/target-model/conversions/program-error.js";
@@ -44,20 +45,31 @@ test("closed native error routes retain every exact nested carrier and immutable
   }
 });
 
-test("closed native error selection rejects missing registration, unknown arms, absence and cycles", () => {
+test("source Error recovery rejects missing registration, unknown arms, absence and cycles", () => {
   const definitions = definitionsFor();
+  const recovery = rustSourceErrorTargetType();
   for (const rejected of [native, project]) {
     const missing = { ...definitions, programErrorOrigin: carrier =>
       rustTargetTypeRefEquals(carrier, rejected) ? undefined : definitions.programErrorOrigin(carrier) };
-    assert.equal(selectRustProgramErrorConversion(outer, undefined, missing), undefined);
+    assert.equal(selectRustProgramErrorConversion(outer, recovery, missing) === undefined, true);
   }
   assert.equal(selectRustProgramErrorConversion(outer), undefined);
   for (const carrier of [rustSourcePrimitiveTargetType("uint64"), rustOptionTargetType(builtin),
     rustSourceTypeCarrier("/other.ts", "Error", "object"), { ...native, id: "native.Unrelated" }]) {
-    assert.equal(selectRustProgramErrorConversion(carrier, undefined, definitions), undefined);
+    assert.equal(selectRustProgramErrorConversion(carrier, recovery, definitions) === undefined, true);
   }
   const cycle = { programErrorOrigin: () => undefined, sourceUnionVariants: carrier => carrier === outer ? [{ name: "Recursive", carrier: outer }] : undefined };
   assert.equal(selectRustProgramErrorConversion(outer, undefined, cycle), undefined);
+});
+
+test("general throwing values retain an exact closed admission without acquiring Error recovery", () => {
+  const definitions = definitionsFor();
+  const source = rustSourcePrimitiveTargetType("uint64");
+  const conversion = selectRustProgramErrorConversion(source, undefined, definitions);
+  assert.equal(conversion?.route.kind, "closed-admission");
+  assert.equal(rustProgramErrorConversionMatches(conversion, source, rustProgramErrorTargetType(), definitions), true);
+  assert.equal(selectRustProgramErrorConversion(source, rustSourceErrorTargetType(), definitions) === undefined, true);
+  assert.equal(selectRustProgramErrorConversion(rustOptionTargetType(builtin), undefined, definitions) === undefined, true);
 });
 
 test("error-route facts reject incomplete, reordered, stale, malformed and superseded evidence", () => {

@@ -70,8 +70,8 @@ export function retainRustSelectedSourceCallResultStorage(
 ): boolean {
   const template = selected.member.returnType;
   if (template === undefined || !retainRustSelectedCallableResultTemplate(selected, context, options)) return false;
-  const storageContext = bindRustSelectedCallTypeArguments(
-    selected.sourceSelectedMethodTypeArguments ?? [], arguments_, context);
+  const storageContext = arguments_.length === 0 && (selected.member.genericParameters?.length ?? 0) === 0 ? context
+    : bindRustSelectedCallTypeArguments(selected.sourceSelectedMethodTypeArguments ?? [], arguments_, context);
   return storageContext !== undefined && (selected.sourceReturnType === undefined ||
     retainRustStructuralInstantiation(selected.sourceReturnType, template, result,
       storageContext, options, new Set(), selected.sourceDeclaration === undefined
