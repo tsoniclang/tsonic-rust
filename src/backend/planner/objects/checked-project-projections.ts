@@ -66,14 +66,41 @@ export function planCheckedNativeProjectionImplementation(
 ): RustImplFunction {
   const statements: RustBlock["statements"][number][] = [];
   for (const [index, type] of types.entries()) {
-    statements.push({ kind: "expr", expr: { kind: "if-let", pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: "selected" }] }, expression: { kind: "method-call", receiver: { kind: "path", path: "output" },
-        method: "downcast_mut", genericArguments: [{ kind: "type", type }], args: [] }, whenTrue: { kind: "block", body: { statements: [{ kind: "assign", operator: "=",
-        target: { kind: "dereference", pointer: { kind: "path", path: "selected" } },
-        value: { kind: "call", path: "Some", args: [{ kind: "path", path: "self" }] } },
-      ...(index === types.length - 1 ? [] : [{ kind: "return" as const }])] } } } });
+    statements.push({ kind: "expr", expr: checkedNativeProjectionAssignment(
+      { kind: "path", path: "output" }, type, { kind: "path", path: "self" }, index !== types.length - 1,
+    ) });
   }
   return { ...checkedProjectProjectionSignature(slot), visibility: "private",
     body: { statements } };
+}
+
+export function planCheckedNativeValueProjection(
+  value: RustExpr, concreteType: RustType, resultType: RustType,
+): RustExpr {
+  const option = (type: RustType): RustType => ({ kind: "named", path: "Option",
+    genericArguments: [{ kind: "type", type }] });
+  return rustValueBlock([
+    { name: "output", mutable: true, type: option(resultType), value: { kind: "none" } },
+    { value: checkedNativeProjectionAssignment(
+      { kind: "reference", mutable: true, expr: { kind: "path", path: "output" } }, option(concreteType),
+      { kind: "method-call", receiver: value, method: "clone", args: [] }, false,
+    ) },
+  ], { kind: "path", path: "output" });
+}
+
+function checkedNativeProjectionAssignment(
+  output: RustExpr, type: RustType, value: RustExpr, returnAfter: boolean,
+): RustExpr {
+  return { kind: "if-let", pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: "selected" }] },
+    expression: { kind: "associated-call", owner: { kind: "trait-object",
+      principal: { trait: { kind: "named", path: "core::any::Any" } }, autoTraits: [] },
+      method: "downcast_mut", genericArguments: [{ kind: "type", type }], args: [output] },
+    whenTrue: { kind: "block", body: { statements: [
+      { kind: "assign", operator: "=", target: { kind: "dereference", pointer: { kind: "path", path: "selected" } },
+        value: { kind: "call", path: "Some", args: [value] } },
+      ...(returnAfter ? [{ kind: "return" as const }] : []),
+    ] } },
+  };
 }
 
 export function planCheckedProjectProjectionCall(

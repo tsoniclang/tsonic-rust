@@ -53,6 +53,7 @@ test("terminal binding normalization preserves temporary drop boundaries without
   }
   for (const initializer of [literal(4), path("input"),
     { kind: "call", path: "copy", args: [path("input")] },
+    { kind: "call", path: "consume", args: [{ kind: "closure", params: [], body: acquired }] },
     { kind: "method-call", receiver: path("input"), method: "clone", args: [] }]) {
     const folded = finalizeRustBlockLiveness(block(
       { kind: "let", name: "result", mutable: false, init: initializer },

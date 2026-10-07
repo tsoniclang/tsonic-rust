@@ -13,7 +13,6 @@ import { diagnosticInput } from "../../program/plan-context.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
 import { planExpression } from "../entry.js";
 import { planRustNonConsumingValue } from "../typed-locations.js";
-import { applyRustArgumentMode } from "../input-shaping.js";
 import { planRustSequenceAppend } from "../sequence-conversions.js";
 import { lowerNestedRustValueConversion } from "../value-conversions.js";
 import { rustCarrierHasCloneContract } from "../../types/generic-requirements.js";
@@ -48,13 +47,14 @@ export function planRustBorrowedSequenceAppend(
       rustRestSequenceElements(selected.presentCarrier)?.elements.some(element => !rustCarrierHasCloneContract(element, context))) {
       return reject("Borrowed sequence selection lost its exact native presence, storage or element conversion.");
     }
-    const planned = planExpression(selected.expression, context, "value", "shared-place");
+    const planned = planExpression(selected.expression, context, "value",
+      selected.optional || contract.collection === "js-array" || selected.presentCarrier.kind === "reference"
+        ? "shared-receiver" : "shared-reference");
     if (planned === undefined || context.syntheticNames === undefined) return undefined;
     const value = planRustNonConsumingValue(selected.expression, planned, context);
     const consume = (source: RustExpr): RustExpr | undefined => planRustSequenceAppend(contract, source,
       destination, context, node, (conversion, element) => lowerNestedRustValueConversion(conversion, element, context, node));
-    if (!selected.optional) return consume(contract.collection === "js-array" || selected.presentCarrier.kind === "reference"
-      ? value : applyRustArgumentMode(context, value, "ref", selected.expression));
+    if (!selected.optional) return consume(value);
     const name = allocateRustSyntheticName(context.syntheticNames, "sequence");
     const consumed = consume({ kind: "path", path: name });
     const otherwise = branch(index + 1);

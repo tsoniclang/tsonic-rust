@@ -47,7 +47,7 @@ const emptyDispatchInputScope: RustDispatchContextInputScope = Object.freeze({
 });
 
 export function rustDispatchContextRootName(index: number): string {
-  return `__tsonic_dispatch_${index + 1}`;
+  return `dispatch_root_${index + 1}`;
 }
 
 export function planRustDispatchContextInputScope(

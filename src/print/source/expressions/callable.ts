@@ -45,7 +45,8 @@ export function printRustMethodCallTarget(
 export function printRustAssociatedOwner(owner: RustType): string {
   if (owner.kind !== "named" || owner.genericArguments === undefined ||
     owner.genericArguments.length === 0) {
-    return printRustType(owner);
+    const type = printRustType(owner);
+    return owner.kind === "named" || owner.kind === "primitive" ? type : `<${type}>`;
   }
   return `${owner.path}::<${owner.genericArguments.map(printRustGenericArgument).join(", ")}>`;
 }

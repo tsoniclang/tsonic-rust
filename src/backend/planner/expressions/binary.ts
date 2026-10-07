@@ -514,8 +514,11 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
     const scoped = planRustScopedStringComparison(leftNode, rightNode, fact, context);
     if (scoped !== undefined) return scoped;
   }
-  const left = leftNode === undefined ? undefined : planExpression(leftNode, context);
-  const right = rightNode === undefined ? undefined : planExpression(rightNode, context);
+  const borrowedComparison = fact.kind === "operator-token" && (fact.operator === "==" || fact.operator === "!=");
+  const left = leftNode === undefined ? undefined : planExpression(leftNode, context, "value",
+    borrowedComparison && fact.leftConversion === undefined ? "shared-place" : "value");
+  const right = rightNode === undefined ? undefined : planExpression(rightNode, context, "value",
+    borrowedComparison && fact.rightConversion === undefined ? "shared-place" : "value");
   if (leftNode === undefined || rightNode === undefined || left === undefined || right === undefined) {
     return undefined;
   }

@@ -10,6 +10,7 @@ import { mapRustTargetTypes } from "../../../target-model/types/carriers/substit
 import { isRustProgramErrorCarrier, rustNamedTargetType } from "../../../target-model/types/index.js";
 import { rustTypeFromCarrier } from "../types/render.js";
 import type { RustDispatchContextGroupInput } from "../../../target-model/operations/dispatch-contexts.js";
+import { allocateRustSyntheticName, createRustSyntheticNameState, type RustSyntheticNameState } from "../names/synthetic.js";
 
 export interface RustBinaryHookCallPlan {
   call(args: readonly RustExpr[]): RustExpr;
@@ -28,6 +29,11 @@ export function planRustBinaryHookCallPlan(
   const byId = new Map(components.map(component => [component.componentId, component]));
   const root = components.find(component => component.root);
   if (root === undefined) return invalid("Binary context groups have no exact root component.");
+  const names: RustSyntheticNameState = { reserved: new Set(), nextSuffixByBase: new Map() };
+  for (const file of input.program.sourceFiles) {
+    const selected = createRustSyntheticNameState(input.program.source.ast, file, []);
+    for (const name of selected.reserved) names.reserved.add(name);
+  }
   const bindings = new Map<string, RustDispatchContextBinding>();
   const groupArgs = new Map<number, RustExpr>();
   for (const group of groups) {
@@ -54,7 +60,7 @@ export function planRustBinaryHookCallPlan(
           if (rootIndex === undefined || rootIndex < 0) return invalid("Binary context access has no exact demanded physical root.");
           const crateName = component.root ? input.program.configuration.crateName : component.crateName;
           if (crateName === undefined) return invalid("Binary context access has no exact native crate identity.");
-          binding = { name: `__tsonic_hook_context_${bindings.size + 1}`,
+          binding = { name: allocateRustSyntheticName(names, "hook_context"),
             path: `${crateName}::${component.programModuleName}::${rustDispatchContextRootName(rootIndex)}` };
           bindings.set(key, binding);
         }
@@ -72,15 +78,16 @@ export function planRustBinaryHookCallPlan(
     if (args.length !== (hook.phase === "async-execution" ? 1 : 0)) {
       throw new Error("Binary hook inputs disagree with its sealed native lifecycle ABI.");
     }
+    const argumentNames = args.map(() => allocateRustSyntheticName(names, "hook_argument"));
     const evaluated: RustStmt[] = args.map((argument, index) => ({
-      kind: "let", name: `__tsonic_hook_argument_${index + 1}`, mutable: false, init: argument,
+      kind: "let", name: argumentNames[index]!, mutable: false, init: argument,
     }));
     let argumentIndex = 0;
     const finalArgs = Array.from({ length: args.length + groups.length }, (_, index): RustExpr => {
       const group = groupArgs.get(index);
       if (group !== undefined) return group;
-      argumentIndex += 1;
-      return { kind: "path", path: `__tsonic_hook_argument_${argumentIndex}` };
+      const name = argumentNames[argumentIndex++]!;
+      return { kind: "path", path: name };
     });
     const expression = applyRustDispatchContextBindings({ kind: "call", path: hook.path, args: finalArgs }, [...bindings.values()]);
     return evaluated.length === 0 ? expression : {

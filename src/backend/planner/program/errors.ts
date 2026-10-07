@@ -171,7 +171,7 @@ export function planRustProgramErrorModule(
     return undefined;
   }
   const nativeProjectVariants = exactProjectVariants.map(variant => ({
-    name: variant.variant, representation: input.program.objectRepresentations.representationFor(variant.definition),
+    name: variant.variant, type: variant.type, representation: input.program.objectRepresentations.representationFor(variant.definition),
   }));
   if (nativeProjectVariants.some(variant => variant.representation === undefined)) {
     diagnostics.push({ code: "RUST_PROGRAM_ERROR_REPRESENTATION_MISSING", category: "error", source: "tsonic-rust",
@@ -237,7 +237,7 @@ export function planRustProgramErrorModule(
     ...planRustClosedThrowAdmission(closedVariants),
     planRustNativeValueProjections([...closedVariants.map(variant => variant.name),
       ...externalVariants.map(variant => variant.variant)], nativeProjectVariants.map(variant => ({
-      name: variant.name, representation: variant.representation!,
+      name: variant.name, type: variant.type, representation: variant.representation!,
     }))),
     displayImplementation(programErrorType, emptyRustGenerics, [
       ...exactProjectVariants.map(({ variant, definition }) => ({

@@ -34,6 +34,40 @@ test("structural storage unifies exact component contracts without erasing other
   assert.equal(plan.sharesStorage(shapes[0].carrier, primitive("int32")), false);
 });
 
+test("physical structural templates unify lifted generic terms while retaining exact logical selections", () => {
+  const parameter = name => ({ kind: "type-parameter", identity: name, name });
+  const projected = (owner, name) => ({ kind: "associated-type", owner,
+    trait: { kind: "trait-ref", id: "native::Family", path: "native::Family", genericArguments: [], associatedConstraints: [] }, name });
+  const shape = (type, file = "/source.ts", properties = {}) => rustStructuralObjectTargetType(file, [
+    { sourceName: "value", type, presence: "required", readonly: false, ...properties },
+  ]);
+  const first = shape(projected(parameter("Owner"), "Output"));
+  const second = shape(projected(parameter("Other"), "Output"));
+  const differentProjection = shape(projected(parameter("Owner"), "Alternate"));
+  const direct = shape(parameter("Value"));
+  const distinct = [shape(parameter("Value"), "/external.ts"), shape(parameter("Value"), "/source.ts", { readonly: true }),
+    shape({ kind: "source-primitive", name: "int32" }), shape({ kind: "source-primitive", name: "uint32" })];
+  const carriers = [first, second, differentProjection, direct, ...distinct];
+  for (const values of [carriers, [...carriers].reverse()]) {
+    const plan = createRustStructuralShapePlan(values.map(carrier => ({ carrier })), [],
+      file => file === "/external.ts" ? "external" : "source", []);
+    assert.equal(plan.definitions.length, 5);
+    const selected = carriers.map(carrier => plan.definitionForCarrier(carrier));
+    for (const definition of selected.slice(0, 4)) {
+      assert.equal(definition.targetName, selected[0].targetName);
+      assert.equal(definition.genericArguments.length, 1);
+    }
+    for (const [index, definition] of selected.entries()) assert.equal(definition.carrier, carriers[index]);
+    assert.deepEqual(selected[0].genericArguments, [{ kind: "type", type: projected(parameter("Owner"), "Output") }]);
+    assert.deepEqual(selected[2].genericArguments, [{ kind: "type", type: projected(parameter("Owner"), "Alternate") }]);
+    assert.equal(plan.sharesStorage(first, second), false);
+    assert.equal(plan.sharesStorage(first, differentProjection), false);
+    assert.equal(plan.sharesStorage(first, shape(projected(parameter("Owner"), "Output"))), true);
+    for (const other of distinct) assert.equal(plan.sharesStorage(first, other), false);
+    assert.ok(Object.isFrozen(selected[0]) && Object.isFrozen(selected[0].genericArguments));
+  }
+});
+
 test("structural templates retain method storage under exact native binder renaming", () => {
   const parameter = name => ({ kind: "type-parameter", identity: name, name });
   const origin = { fileName: "/source.ts", declarationIdentity: "identity" };

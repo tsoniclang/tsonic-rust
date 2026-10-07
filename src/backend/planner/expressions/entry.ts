@@ -62,7 +62,7 @@ import { rustNativeFutureCallableResult } from "../../../target-model/types/carr
 import { cloneRustExpression } from "../../target-ast/expressions.js";
 
 export type RustExpressionResultUse = "value" | "discarded";
-type RustExpressionAccess = "value" | "shared-reference" | "shared-place";
+type RustExpressionAccess = "value" | "shared-reference" | "shared-place" | "shared-receiver";
 
 export function planExpression(
   node: Node,
@@ -144,8 +144,12 @@ function planProjectedExpression(
     (rustContextualRuntimeConversionContract(contextualConversion.conversion,
       context.input.program.typeDefinitions)?.sourceMode === "ref" ||
       contextualConversion.conversion.kind === "project-union-map" && !context.input.program.valueLifetimes.canMove(node));
-  const finish = (value: RustExpr): RustExpr => access !== "shared-reference" || borrowFlow ? value
-    : createRustSharedReferenceArgument(context, planRustNonConsumingValue(node, value, context), node);
+  let borrowedFlowApplied = false;
+  const finish = (value: RustExpr): RustExpr => access === "shared-receiver" ? planRustNonConsumingValue(node, value, context)
+    : access === "shared-place"
+    ? borrowedFlowApplied ? { kind: "dereference", pointer: value } : planRustNonConsumingValue(node, value, context)
+    : access !== "shared-reference" || borrowFlow ? value
+      : createRustSharedReferenceArgument(context, planRustNonConsumingValue(node, value, context), node);
   let currentCarrier = override?.carrier ??
     flowRead?.sourceCarrier ??
     upcast?.sourceCarrier ??
@@ -176,6 +180,7 @@ function planProjectedExpression(
         return undefined;
       }
       flowSelected = selected;
+      borrowedFlowApplied = borrowFlow;
       currentCarrier = flowRead.selectedCarrier;
     } else if (!rustTargetTypeRefEquals(currentCarrier, flowRead.selectedCarrier)) {
       context.diagnostics.push(missingFactDiagnostic(

@@ -153,13 +153,23 @@ export function createRustStructuralShapePlan(
   unions: readonly RustSourceUnion[] = [],
   receiverIndependentMethods: ReadonlySet<string> = new Set(),
 ): RustStructuralShapePlan {
+  const selections = new Map<TargetTypeRef, ReturnType<typeof rustStructuralGenericCarrier>>();
+  const physicalSelection = (carrier: TargetTypeRef): ReturnType<typeof rustStructuralGenericCarrier> => {
+    const existing = selections.get(carrier);
+    if (existing !== undefined) return existing;
+    const selected = rustStructuralGenericCarrier(carrier);
+    selections.set(carrier, selected);
+    return selected;
+  };
+  const physicalKey = (carrier: TargetTypeRef): string =>
+    structuralStorageKey(physicalSelection(carrier).carrier, componentForFile);
   const uniqueByKey = new Map<string, Map<string, TargetTypeRef>>();
   for (const shape of shapes) {
     const structural = rustStructuralObjectCarrierValue(shape.carrier);
     if (structural === undefined) {
       continue;
     }
-    const key = structuralStorageKey(shape.carrier, componentForFile);
+    const key = physicalKey(shape.carrier);
     const instances = uniqueByKey.get(key) ?? new Map<string, TargetTypeRef>();
     uniqueByKey.set(key, instances);
     const instanceKey = closedMetadataKey(shape.carrier);
@@ -172,8 +182,8 @@ export function createRustStructuralShapePlan(
   }
   const parents = new Map<string, Set<string>>();
   for (const { template, instance } of instantiations) {
-    const templateKey = structuralStorageKey(template, componentForFile);
-    const instanceKey = structuralStorageKey(instance, componentForFile);
+    const templateKey = physicalKey(template);
+    const instanceKey = physicalKey(instance);
     if (templateKey === instanceKey) continue;
     const selected = parents.get(instanceKey) ?? new Set<string>();
     selected.add(templateKey);
@@ -214,10 +224,10 @@ export function createRustStructuralShapePlan(
       const sourceCarriers = Object.freeze([...instances]
         .sort(([left], [right]) => left.localeCompare(right, "en"))
         .map(([, carrier]) => carrier));
-      const selection = rustStructuralGenericCarrier([...uniqueByKey.get(key)!]
+      const selection = physicalSelection([...uniqueByKey.get(key)!]
         .sort(([left], [right]) => left.localeCompare(right, "en"))[0]![1]);
       const carrier = selection.carrier;
-      nestedCarriers.push(...selection.nestedCarriers);
+      for (const source of sourceCarriers) nestedCarriers.push(...physicalSelection(source).nestedCarriers);
       const structural = rustStructuralObjectCarrierValue(carrier);
       if (structural === undefined) {
         throw new Error("Rust structural shape plan contains a non-structural carrier.");

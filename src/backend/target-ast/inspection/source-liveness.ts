@@ -53,14 +53,23 @@ function foldTrivialTerminalBinding(
     binding.type !== undefined || (binding.attrs?.length ?? 0) > 0 ||
     terminal === undefined || (terminal.kind !== "tail" && terminal.kind !== "return") ||
     terminal.expr?.kind !== "path" || terminal.expr.path !== binding.name ||
-    terminal.kind === "tail" && binding.init.kind !== "closure" && binding.init.kind !== "closure-block" &&
-      binding.init.kind !== "async-block" && !rustExpressionChildren(binding.init).every(stableTerminalOperand)) {
+    terminal.kind === "tail" && !stableTerminalInputs(binding.init)) {
     return statements;
   }
   return [
     ...statements.slice(0, bindingIndex),
     { ...terminal, expr: binding.init },
   ];
+}
+
+function stableTerminalInputs(expression: RustExpr): boolean {
+  const deferred = (value: RustExpr): boolean => value.kind === "closure" || value.kind === "closure-block" || value.kind === "async-block";
+  if (deferred(expression)) return true;
+  if (expression.kind === "call" || expression.kind === "associated-call" || expression.kind === "method-call") {
+    return (expression.kind !== "method-call" || stableTerminalOperand(expression.receiver)) &&
+      expression.args.every(argument => deferred(argument) || stableTerminalOperand(argument));
+  }
+  return rustExpressionChildren(expression).every(stableTerminalOperand);
 }
 
 function stableTerminalOperand(expression: RustExpr): boolean {

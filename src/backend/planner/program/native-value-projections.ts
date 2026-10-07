@@ -3,10 +3,11 @@ import type { RustObjectRepresentation } from "../../../analysis/project-types/o
 import { rustSelfParameter } from "../declarations/callables/self-parameter.js";
 import { rustStructuralViewIntoRoot } from "../objects/project-structural-roots.js";
 import { rustValueBlock } from "../../target-ast/value-block.js";
+import { planCheckedNativeValueProjection } from "../objects/checked-project-projections.js";
 
 export function planRustNativeValueProjections(
   delegatedVariants: readonly string[],
-  projectVariants: readonly { readonly name: string; readonly representation: RustObjectRepresentation }[],
+  projectVariants: readonly { readonly name: string; readonly type: RustType; readonly representation: RustObjectRepresentation }[],
 ): RustItem {
   const payload: RustType = { kind: "named", path: "Payload" };
   return { kind: "impl", generics: emptyRustGenerics, target: { kind: "named", path: "TsonicError" },
@@ -30,9 +31,7 @@ export function planRustNativeValueProjections(
               kind: "call", path: "tsonic_rust_runtime::ObjectIdentityCarrier::project_native",
               args: [root!, { kind: "reference", mutable: true, expr: { kind: "path", path: "selected" } }],
             }, value: { kind: "path", path: "selected" } })
-            : { kind: "method-call", receiver: { kind: "associated-call", owner: { kind: "trait-object",
-              principal: { trait: { kind: "named", path: "core::any::Any" } }, autoTraits: [] }, method: "downcast_ref",
-              genericArguments: [{ kind: "type", type: payload }], args: [value] }, method: "cloned", args: [] } });
+            : planCheckedNativeValueProjection(value, variant.type, payload) });
       }
       arms.push({ pattern: { kind: "wildcard" }, expression: { kind: "none" } });
       return { kind: "function", name, visibility: "public",

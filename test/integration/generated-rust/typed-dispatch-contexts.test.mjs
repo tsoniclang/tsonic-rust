@@ -80,7 +80,7 @@ test("composed contexts share one physical root and retain reentrant work for th
   const support = result.artifacts.filter(artifact => artifact.path.endsWith(".rs"))
     .map(artifact => artifact.text).join("\n");
   assert.match(support, /acme_dispatch::Parent<tsonic_rust_runtime::TsonicError>/u);
-  assert.doesNotMatch(support, /static __tsonic_dispatch_2|static \w+: acme_dispatch::Dispatch</u);
+  assert.doesNotMatch(support, /__tsonic_dispatch_|static dispatch_root_2|static \w+: acme_dispatch::Dispatch</u);
   assert.match(artifactText(result, "src/index.rs"), /dispatch_root(?:_\d+)?\.child\(\)/u);
 });
 
