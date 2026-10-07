@@ -18,6 +18,7 @@ for (const surfaces of [[], ["js"]]) {
     assertNoTargetDiagnostics(result.diagnostics);
     const output = artifactText(result, "src/index.rs");
     assert.doesNotMatch(output, /\.to_vec\(|\.collect\(|Box<dyn|Vec\s*<\s*Vec\s*<|option_coalesce/u);
+    assert.match(output, /native: Option<&\[String\]>/u);
     assert.match(output, /if let Some\(sequence_\d+\) = headers\.get_values\(&key\)\?\.as_ref\(\)/u);
     assert.match(output, /array\.extend_from_slice\(sequence_\d+\)/u);
     const joined = output.slice(output.indexOf("pub fn joinFromHeaders"), output.indexOf("pub fn chooseLazy"));
@@ -32,14 +33,13 @@ for (const surfaces of [[], ["js"]]) {
       : 'assert_eq!(result.get(0), Some("authored".to_owned())); result.set(0, "changed".to_owned()); assert_eq!(authored.get(0), Some("authored".to_owned()));';
     const nativeCheck = surfaces.length === 0 ? 'assert_eq!(result, ["native", "tail"]);'
       : 'assert_eq!(result.get(0), Some("native".to_owned()));';
-    const nativeValues = surfaces.length === 0 ? 'vec!["native".to_owned(), "tail".to_owned()]'
-      : 'JsArray::from_dense(vec!["native".to_owned(), "tail".to_owned()])';
+    const nativeValues = 'vec!["native".to_owned(), "tail".to_owned()]';
     const hand = surfaces.length === 0
       ? "let mut result = Vec::new(); if let Some(source) = authored.as_ref() { result.extend_from_slice(source); } else if let Some(source) = native.as_ref() { result.extend_from_slice(source); } result"
-      : "let mut result = Vec::new(); if let Some(source) = authored.as_ref() { source.with_values(|values| result.extend_from_slice(values)); } else if let Some(source) = native.as_ref() { source.with_values(|values| result.extend_from_slice(values)); } JsArray::from_dense(result)";
-    const snapshotCall = surfaces.length === 0 ? "index::snapshot(&backing)" : "index::snapshot(native.clone())";
+      : "let mut result = Vec::new(); if let Some(source) = authored.as_ref() { source.with_values(|values| result.extend_from_slice(values)); } else if let Some(source) = native.as_ref() { result.extend_from_slice(source); } JsArray::from_dense(result)";
+    const snapshotCall = surfaces.length === 0 ? "index::snapshot(&backing)" : "index::snapshot(snapshot_values.clone())";
     const snapshotHand = surfaces.length === 0 ? "{ let mut result = Vec::new(); result.extend_from_slice(&backing); result }"
-      : "{ let mut result = Vec::new(); native.with_values(|values| result.extend_from_slice(values)); JsArray::from_dense(result) }";
+      : "{ let mut result = Vec::new(); snapshot_values.with_values(|values| result.extend_from_slice(values)); JsArray::from_dense(result) }";
     const fallbackValues = surfaces.length === 0 ? 'vec!["fallback".to_owned()]' : 'JsArray::from_dense(vec!["fallback".to_owned()])';
     const mixedValues = surfaces.length === 0 ? 'assert_eq!(mixed, ["before", "fallback", "after"]);'
       : 'assert_eq!(mixed.get(0), Some("before".to_owned())); assert_eq!(mixed.get(1), Some("fallback".to_owned())); assert_eq!(mixed.get(2), Some("after".to_owned()));';
@@ -47,26 +47,27 @@ for (const surfaces of [[], ["js"]]) {
 use borrowed_nullish_sequences as index;
 ${surfaces.length === 0 ? "" : "use tsonic_rust_js::JsArray;"}
 
-fn handwritten(authored: Option<${authored}>, native: Option<${authored}>) -> ${authored} { ${hand} }
+fn handwritten(authored: Option<${authored}>, native: Option<&[String]>) -> ${authored} { ${hand} }
 
 #[test]
 fn native_selection_aliasing_and_cost() {
     let authored = ${values};
     let native = ${nativeValues};
-    let ${surfaces.length === 0 ? "mut " : ""}result = index::choose(Some(authored.clone()), Some(native.clone()));
+    let ${surfaces.length === 0 ? "mut " : ""}result = index::choose(Some(authored.clone()), Some(&native));
     ${check}
-    let result = index::choose(None, Some(native.clone()));
+    let result = index::choose(None, Some(&native));
     ${nativeCheck}
     assert_eq!(index::choose(None, None).len(), 0);
     for selected in [Some(authored.clone()), None] {
         for _ in 0..1000 {
-            let (generated, generated_cost) = measure(|| index::choose(selected.clone(), Some(native.clone())));
-            let (handwritten, handwritten_cost) = measure(|| handwritten(selected.clone(), Some(native.clone())));
+            let (generated, generated_cost) = measure(|| index::choose(selected.clone(), Some(&native)));
+            let (handwritten, handwritten_cost) = measure(|| handwritten(selected.clone(), Some(&native)));
             assert_eq!(generated.len(), handwritten.len());
             assert_eq!(generated_cost, handwritten_cost);
         }
     }
     let backing = ${surfaces.length === 0 ? 'vec!["native".to_owned(), "tail".to_owned()]' : '["native".to_owned(), "tail".to_owned()]'};
+    ${surfaces.length === 0 ? "" : "let snapshot_values = JsArray::from_dense(backing.to_vec());"}
     for _ in 0..1000 {
         let (generated, generated_cost) = measure(|| ${snapshotCall});
         let (handwritten, handwritten_cost) = measure(|| ${snapshotHand});
@@ -82,14 +83,14 @@ fn native_selection_aliasing_and_cost() {
     assert_eq!(index::guardedFirstFromHeaderHolder(headers.clone(), "missing".to_owned()).unwrap(), None);
     assert_eq!(index::joinFromHeaders(headers, "missing".to_owned()).unwrap(), "");
     let eager = tsonic_rust_runtime::Callable::new(|()| panic!("Eager fallback."));
-    assert_eq!(index::chooseLazy(Some(authored), Some(native), eager).unwrap().len(), 4);
+    assert_eq!(index::chooseLazy(Some(authored), Some(&native), &eager).unwrap().len(), 4);
     let calls = std::rc::Rc::new(std::cell::Cell::new(0));
     let called = calls.clone();
     let lazy = tsonic_rust_runtime::Callable::new(move |()| {
         called.set(called.get() + 1);
         Ok(${fallbackValues})
     });
-    let mixed = index::chooseLazy(None, None, lazy).unwrap();
+    let mixed = index::chooseLazy(None, None, &lazy).unwrap();
     ${mixedValues}
     assert_eq!(calls.get(), 1);
 }

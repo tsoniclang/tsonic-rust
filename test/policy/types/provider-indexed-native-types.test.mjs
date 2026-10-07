@@ -19,10 +19,13 @@ function fixture(options = {}) {
   const generic = rustNamedTargetType("native.box", "native::Box", options.physicalArguments ? [physical, genericArgument] : [genericArgument]);
   const owner = { providerId: "fixture", providerVersion: "1", providerModuleId: "native", moduleSpecifier: "@fixture/native", exportId: "box", exportName: "Box" };
   const facts = new Map();
-  const rows = selected.evidence.properties.map((member, index) => {
-    const identity = { ...owner, memberId: `field-${index}` };
-    if (!options.missingFact || index === 0) for (const subject of member.subjects) facts.set(subject, identity);
-    return { ...identity, operationKind: "property", target: { form: "receiver-field", name: `field_${index}` },
+  const rows = selected.evidence.members.map((member, index) => {
+    const identity = { ...owner, memberId: `field-${index}`,
+      ...(member.selection.kind === "index" ? { signatureId: `index-${index}` } : {}) };
+    if (!options.missingFact || index === 0) for (const subject of member.subjects) facts.set(subject, options.wrongSignature
+      ? { ...identity, signatureId: "wrong-signature" } : identity);
+    return { ...identity, operationKind: member.selection.kind === "index" && !options.wrongKind ? "indexer" : "property",
+      target: { form: "receiver-field", name: `field_${index}` },
       resultCarrier: options.conflicting && index === 1
         ? { kind: "source-primitive", name: "int64" } : options.nativeOptional
           ? rustOptionTargetType(memberCarrier)
@@ -31,6 +34,7 @@ function fixture(options = {}) {
   const get = (subject, key) => key === providerVirtualDeclarationFactKey && !options.unowned ? facts.get(subject) : undefined;
   const context = {
     ast: selected.source.ast, source: selected.source, currentSemantics: selected.semantics,
+    sourceStorage: { storageSubjectFor: () => ({ kind: "unresolved" }) },
     semantics: file => selected.source.semantics.forFile(file), semanticsFor: () => selected.semantics,
     facts: { get, resolve: get, getRuntimeCarrierFact: node => node === selected.evidence.owner ? { carrier: options.missingGeneric
       ? rustNamedTargetType("native.box", "native::Box") : carrier } : undefined },
@@ -47,6 +51,7 @@ test("provider indexed type policy closes native generics and optional propertie
   assert.deepEqual(fixture({ keys: '"optional"' }), rustSourceOptionalTargetType(integer));
   assert.deepEqual(fixture({ keys: '"optional"', nativeOptional: true }), rustSourceOptionalTargetType(integer));
   assert.deepEqual(fixture({ nativeOptional: true }), rustOptionTargetType(integer));
+  assert.deepEqual(fixture({ keys: "string", nativeOptional: true }), rustOptionTargetType(integer));
   assert.deepEqual(fixture({ physicalArguments: true }), integer);
   assert.deepEqual(fixture({ noSourceParameters: true }), integer);
   assert.deepEqual(fixture({ noSourceParameters: true, physicalArguments: true }), integer);
@@ -59,5 +64,8 @@ test("provider indexed type policy rejects incomplete, ambiguous and mismatched 
     { keys: '"value" | "other"', conflicting: true }, { keys: '"value" | "other"', missingFact: true },
     { physicalArguments: true, wrongPhysical: true },
     { noSourceParameters: true, physicalArguments: true, wrongPhysical: true },
+    { keys: "string", missingRelation: true }, { keys: "string", duplicate: true },
+    { keys: "string", wrongOwner: true }, { keys: "string", missingGeneric: true },
+    { keys: "string", wrongSignature: true }, { keys: "string", wrongKind: true },
   ]) assert.deepEqual(fixture(options), { kind: "opaque", id: "provider-indexed-type-evidence-unavailable" }, JSON.stringify(options));
 });
