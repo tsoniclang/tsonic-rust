@@ -19,7 +19,9 @@ export function createRustSourceProfileStorageEffects(
       const semantics = source.semantics.forNode(node);
       const declaration = semantics.declarations.signatureDeclaration(call.selectedSignature);
       const identity = resolveSelectedSourceProfileMember(context, declaration, sourceProfiles);
-      return identity?.profile === "js" ? jsSourceCallStorageEffect(identity, call) : undefined;
+      if (identity === undefined) return undefined;
+      const effect = jsSourceCallStorageEffect(identity, call);
+      return identity.profile === "js" || effect?.resultAllocation !== undefined ? effect : undefined;
     },
   } satisfies SourceStorageEffects);
 }

@@ -6,7 +6,7 @@ import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { jsSourceSemanticsIdentity } from "@tsonic/js-source-profile";
 import { collectTargetSourceProfileContributions } from "../../../../tsonic/packages/host/dist/target/source-profile.js";
 import { createRustSourceProfileRegistry } from "../../../dist/analysis/facts/source-profile-registry.js";
-import { rustJsSurfaceSourceProfileContributions } from "../../../dist/source/profiles/declarations.js";
+import { rustJsSurfaceSourceProfileContributions, rustNativeSourceProfileContributions } from "../../../dist/source/profiles/declarations.js";
 import { createRustSourceProfileStorageEffects } from "../../../dist/policy/operations/source-profiles/source-storage-effects.js";
 import { rustPolicyNode } from "../../../dist/policy/model/context.js";
 import { resolveSelectedSourceProfileMember } from "../../../dist/policy/evidence/selected-source.js";
@@ -20,14 +20,14 @@ function fixture(body = `
   const observed = Object.isFrozen(original);
   const freeze = Object.freeze;
   const alias = freeze(original);
-`) {
+`, jsEnabled = true) {
   const profile = collectTargetSourceProfileContributions({
     project: {}, projectRoot: "/src", projectDirectory: "/src",
-    target: { id: "rust", options: {} }, targetPackId: "js",
+    target: { id: "rust", options: {} }, targetPackId: jsEnabled ? "js" : "rust",
     selectedCapabilities: [], selectedSurfaces: [],
-    targetContributions: rustJsSurfaceSourceProfileContributions(),
+    targetContributions: jsEnabled ? rustJsSurfaceSourceProfileContributions() : rustNativeSourceProfileContributions(),
   });
-  assert.equal(profile.diagnostics.length, 0, "exact JavaScript source profile");
+  assert.equal(profile.diagnostics.length, 0, "exact selected source profile");
   const checked = createCompilerSessionFromFiles({
     currentDirectory: "/src",
     files: new Map([["/src/index.ts", `export {};\n${body}`], ...profile.files.map(file => [file.path, file.text])]),
@@ -46,7 +46,7 @@ function fixture(body = `
     source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   visit(file);
-  const profiles = createRustSourceProfileRegistry(source.sourceFiles, source.ast, true);
+  const profiles = createRustSourceProfileRegistry(source.sourceFiles, source.ast, jsEnabled);
   const effects = createRustSourceProfileStorageEffects(source, profiles);
   const selected = name => {
     const invocation = variables.get(name);
@@ -57,6 +57,99 @@ function fixture(body = `
   };
   return { source, file, variables, profiles, effects, selected };
 }
+
+test("native Error construction and calls contribute exact fresh allocation without aliases", () => {
+  const current = fixture(`
+    const constructed = new Error("native");
+    const called = Error("native");
+    const observed = Error.captureStackTrace(constructed);
+  `, false);
+  const storage = createSourceStorageQuery(current.source, [current.file], undefined, current.effects);
+  assert.equal(storage.failureReason() === undefined, true, "exact native allocation contribution is accepted");
+  for (const name of ["constructed", "called"]) {
+    const { invocation, call } = current.selected(name);
+    const declaration = current.source.semantics.forNode(invocation).declarations.signatureDeclaration(call.selectedSignature);
+    assert.equal(current.profiles.profileForNode(declaration, current.source.ast), "native");
+    const effect = current.effects.call(invocation, call);
+    assert.equal(effect !== undefined, true, name);
+    assert.equal(effect.resultAllocation === invocation, true, name);
+    assert.equal(effect.resultAlias === undefined, true, name);
+    assert.equal(effect.preservedInputs.length, 0, name);
+    assert.equal(Object.isFrozen(effect) && Object.isFrozen(effect.preservedInputs), true);
+    const subject = storage.subjectFor(invocation);
+    assert.equal(subject.kind, "resolved", name);
+    const origins = storage.originsFor(subject.subject);
+    assert.equal(origins.kind, "resolved", name);
+    assert.equal(origins.origins.length, 1, name);
+    assert.equal(origins.origins[0].subject.node === invocation, true, name);
+  }
+  const { invocation, call } = current.selected("observed");
+  assert.equal(current.effects.call(invocation, call) === undefined, true, "native member without allocation evidence");
+});
+
+test("local Error and ErrorConstructor names never manufacture native allocation evidence", () => {
+  for (const jsEnabled of [false, true]) {
+    for (const body of [
+      `class Error { constructor(message?: string) {} } const constructed = new Error("local");`,
+      `interface ErrorConstructor { new (message?: string): object; (message?: string): object; }
+        declare const Error: ErrorConstructor;
+        const constructed = new Error("local"); const called = Error("local");`,
+    ]) {
+      const current = fixture(body, jsEnabled);
+      for (const name of ["constructed", ...(current.variables.has("called") ? ["called"] : [])]) {
+        const { invocation, call } = current.selected(name);
+        assert.equal(current.effects.call(invocation, call) === undefined, true, "unowned same-name declaration");
+      }
+    }
+  }
+});
+
+test("external constructors with global Error signatures cannot prove fresh native allocations", () => {
+  for (const jsEnabled of [false, true]) {
+    for (const type of ["ErrorConstructor", "typeof Error"]) {
+      const current = fixture(`
+        declare const external: ${type};
+        const constructed = new external("external");
+        const called = external("external");
+      `, jsEnabled);
+      const storage = createSourceStorageQuery(current.source, [current.file], undefined, current.effects);
+      assert.equal(storage.failureReason() === undefined, true);
+      for (const name of ["constructed", "called"]) {
+        const { invocation } = current.selected(name);
+        const subject = storage.subjectFor(invocation);
+        assert.equal(subject.kind, "resolved", name);
+        const domain = storage.closedOriginsFor(subject.subject);
+        assert.equal(domain.kind, "open", "signature ownership is not runtime producer ownership");
+        assert.equal(domain.boundaries.length > 0, true, "exact unknown callee boundary is retained");
+      }
+    }
+  }
+});
+
+test("immutable aliases to the owned global Error retain exact native allocation identity", () => {
+  for (const jsEnabled of [false, true]) {
+    const current = fixture(`
+      const Original = Error;
+      const Selected = Original;
+      const constructed = new Selected("owned");
+      const called = Selected("owned");
+    `, jsEnabled);
+    const storage = createSourceStorageQuery(current.source, [current.file], undefined, current.effects);
+    assert.equal(storage.failureReason() === undefined, true);
+    for (const name of ["constructed", "called"]) {
+      const { invocation, call } = current.selected(name);
+      const effect = current.effects.call(invocation, call);
+      assert.equal(effect !== undefined, true, name);
+      assert.equal(effect.resultAllocation === invocation, true, name);
+      const subject = storage.subjectFor(invocation);
+      assert.equal(subject.kind, "resolved", name);
+      const domain = storage.closedOriginsFor(subject.subject);
+      assert.equal(domain.kind, "complete", name);
+      assert.equal(domain.origins.length, 1, name);
+      assert.equal(domain.origins[0].subject.node === invocation, true, name);
+    }
+  }
+});
 
 test("freeze retains the exact selected argument and publishes immutable source-only effects", () => {
   const current = fixture();
