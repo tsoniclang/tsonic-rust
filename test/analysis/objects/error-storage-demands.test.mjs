@@ -3,9 +3,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createCompilerSessionFromFiles, formatDiagnostics } from "@tsonic/tsts";
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
+import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { collectTargetSourceProfileContributions } from "../../../../tsonic/packages/host/dist/target/source-profile.js";
 import { createRustErrorStorageDemandQuery } from "../../../dist/analysis/objects/error-storage-demands.js";
 import { createRustSourceProfileRegistry } from "../../../dist/analysis/facts/source-profile-registry.js";
+import { createRustSourceProfileStorageEffects } from "../../../dist/policy/operations/source-profiles/source-storage-effects.js";
 import { rustNativeSourceProfileContributions, rustJsSurfaceSourceProfileContributions } from "../../../dist/source/profiles/declarations.js";
 import { liveErrorBaseWriteSource, liveErrorStorageFiles } from "../../../../tsonic/test/fixtures/live-error-storage.mjs";
 import { implicitErrorInterfaceSource } from "../../../../tsonic/test/fixtures/implicit-error-interfaces.mjs";
@@ -24,7 +26,9 @@ function analyzed(files, jsEnabled) {
   const source = createTargetSourceProgram(checked);
   const projectFiles = source.sourceFiles.filter(file => Object.keys(files).some(name => source.ast.getFileName(file) === `/src/${name}`));
   const profiles = createRustSourceProfileRegistry(source.sourceFiles, source.ast, jsEnabled);
-  return { source, projectFiles, demand: createRustErrorStorageDemandQuery(source, profiles, projectFiles, () => ({ kind: "ordinary" })) };
+  const storage = createSourceStorageQuery(source, projectFiles, undefined, createRustSourceProfileStorageEffects(source, profiles));
+  assert.equal(storage.failureReason() === undefined, true, "production source storage is complete");
+  return { source, projectFiles, demand: createRustErrorStorageDemandQuery(source, profiles, storage, () => ({ kind: "ordinary" })) };
 }
 
 function declarations(source, projectFiles) {
