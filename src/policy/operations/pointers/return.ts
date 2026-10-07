@@ -5,7 +5,7 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import {
   rustSourceLocationTargetType,
-  rustOptionTargetType,
+  rustSourceOptionalTargetType,
   rustAbsenceTargetType,
 } from "../../../target-model/types/index.js";
 import { resolveRustExactNullishValueCarrier } from "../../types/resolution/target.js";
@@ -57,7 +57,7 @@ export function selectRustPointerReturnContract(
   }
   const carrier = rustSourceLocationTargetType(first);
   return Object.freeze({
-    returnCarrier: nullish.length === 0 ? carrier : rustOptionTargetType(carrier),
+    returnCarrier: nullish.length === 0 ? carrier : rustSourceOptionalTargetType(carrier),
     undefinedReturn: nullish.length > 0,
     fallthroughUndefined: nullish.length > 0 && evidence.completion.canFallThrough,
   });

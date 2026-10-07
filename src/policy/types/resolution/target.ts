@@ -22,7 +22,7 @@ import {
 } from "../../../target-model/types/index.js";
 import { denseDefined, resolveProjectSourceCarrier } from "./project.js";
 import { rustSourceStorageComponentContext } from "./source-storage-projection.js";
-import { bindRustSourceAliasArguments } from "./generic-arguments.js";
+import { bindRustSourceAliasArguments, resolveRustSelectedTypeArguments } from "./generic-arguments.js";
 import { instantiateTargetType, providerCarrierFromRelations, resolveOwnedSourceProfileTypeName, resolveProviderTypeIdentity, resolveSourceProfileCarrier } from "./providers.js";
 import { isRustStructuralObjectFieldDeclaration, isRustErasedNominalMember } from "../source-shapes.js";
 import { resolveBoundSourceTypeParameter, resolveCallableType, resolveSourcePrimitive, resolveSourceTypeParameter, resolveUnion } from "./callables.js";
@@ -86,10 +86,9 @@ export function resolveRustTargetType(
       const carrier = options.sourceTypes.carrierForDeclaration(declaration, context.ast);
       return rustSourceUnionCarrierValue(rustOptionElementCarrier(carrier) ?? carrier) !== undefined;
     })) return undefined;
-    const arguments_ = context.currentSemantics.types.effectiveTypeArguments(type)?.map(argument =>
-      resolveRustTargetType(argument, context, options, resolving)) ?? [];
-    return arguments_.some(argument => argument === undefined) ? undefined : resolveProjectSourceCarrier(symbol,
-      {values: arguments_.map(argument => ({kind: "type" as const, type: argument!}))}, context, options,
+    const arguments_ = resolveRustSelectedTypeArguments(type, context, options, resolving);
+    return arguments_ === undefined ? undefined : resolveProjectSourceCarrier(symbol,
+      {values: arguments_.map(argument => ({kind: "type" as const, type: argument}))}, context, options,
       undefined, type, resolving, true);
   }
   const fixedArray = selectTsonicFixedArrayFromSource(
@@ -176,11 +175,8 @@ export function resolveRustTargetType(
       }
     }
 
-    const sourceTypeArguments = context.currentSemantics.types.effectiveTypeArguments(type);
-    const resolvedSourceTypeArguments = sourceTypeArguments?.map((argument) =>
-      resolveRustTargetType(argument, context, options, resolving));
-    const sourceType = resolvedSourceTypeArguments === undefined ||
-        resolvedSourceTypeArguments.some((argument) => argument === undefined)
+    const resolvedSourceTypeArguments = resolveRustSelectedTypeArguments(type, context, options, resolving);
+    const sourceType = resolvedSourceTypeArguments === undefined
       ? undefined
       : resolveProjectSourceCarrier(
           symbol,

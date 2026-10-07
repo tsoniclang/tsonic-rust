@@ -1,7 +1,7 @@
 import { rustValueBlock } from "../../target-ast/value-block.js";
 import type { RustProjectTypeDefinition } from "../../../analysis/project-types/type-policy.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustBlock, RustExpr, RustGenerics, RustImplFunction, RustTraitFunction, RustType } from "../../target-ast/nodes.js";
+import type { RustBlock, RustExpr, RustFunctionParam, RustGenerics, RustImplFunction, RustTraitFunction, RustType } from "../../target-ast/nodes.js";
 import { rustSelfParameter } from "../declarations/callables/self-parameter.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustProjectDispatchObjectType } from "./polymorphism/names.js";
@@ -19,10 +19,14 @@ export function checkedProjectProjectionSignature(slot: string): RustTraitFuncti
     name: slot,
     generics: rustCheckedNativeProjectionGenerics,
     selfParam: rustSelfParameter("rc"),
-    params: [{ name: "output", type: { kind: "reference", mutable: true,
-      referent: { kind: "trait-object", principal: { trait: { kind: "named", path: "core::any::Any" } },
-        autoTraits: [] } } }],
+    params: [rustCheckedNativeProjectionOutputParameter()],
   };
+}
+
+export function rustCheckedNativeProjectionOutputParameter(): RustFunctionParam {
+  return { name: "output", type: { kind: "reference", mutable: true,
+    referent: { kind: "trait-object", principal: { trait: { kind: "named", path: "core::any::Any" } },
+      autoTraits: [] } } };
 }
 
 export function checkedProjectProjectionResultType(

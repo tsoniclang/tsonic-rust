@@ -137,6 +137,30 @@ export function selectedRustSourceDeclarationArgument(
   return arguments_.length === 1 ? arguments_[0] : undefined;
 }
 
+export function resolveRustSelectedTypeArguments(
+  type: Type,
+  context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
+  resolving: Set<object>,
+): readonly TargetTypeRef[] | undefined {
+  const arguments_ = context.currentSemantics.types.effectiveTypeArguments(type);
+  if (arguments_ === undefined) return undefined;
+  const bindings = context.currentSemantics.types.typeArgumentBindings(type)
+    ?.filter(binding => binding.scope === "local");
+  if (bindings !== undefined && (bindings.length !== arguments_.length ||
+    new Set(bindings.map(binding => binding.declaration)).size !== bindings.length ||
+    bindings.some((binding, index) => binding.argumentType !== arguments_[index]))) return undefined;
+  const carriers = arguments_.map((argument, index) => {
+    const declaration = bindings?.[index]?.declaration;
+    const selected = declaration === undefined ? undefined
+      : context.sourceTypeParameterSubstitutions?.get(declaration);
+    return selected?.sourceType === argument ? selected.carrier
+      : resolveRustTargetType(argument, context, options, resolving);
+  });
+  return carriers.some(carrier => carrier === undefined)
+    ? undefined : Object.freeze(carriers as readonly TargetTypeRef[]);
+}
+
 export function resolveRustSourceDeclarationArguments(
   argumentNodes: readonly Node[],
   contract: import("../../../target-model/lifetimes/index.js").RustSourceGenericContract,

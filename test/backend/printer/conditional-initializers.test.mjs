@@ -35,6 +35,8 @@ test("terminal binding normalization preserves temporary drop boundaries without
     { kind: "field", receiver: acquired, name: "value" },
     { kind: "method-call", receiver: acquired, method: "read", args: [] },
     { kind: "call", path: "observe", args: [{ kind: "reference", expr: acquired }] },
+    { kind: "call", path: "observe", args: [{ kind: "reference", expr: { kind: "closure", params: [], body: acquired } }] },
+    { kind: "method-call", receiver: { kind: "closure", params: [], body: acquired }, method: "invoke", args: [] },
   ];
   for (const initializer of expressions) {
     const retained = finalizeRustBlockLiveness(block(

@@ -8,7 +8,7 @@ import {
 } from "@tsonic/target-api/source";
 import { rustModuleBindingFactKey } from "../facts/keys.js";
 import { rustCompileTimeSourceKey } from "../../target-model/facts/source-declarations.js";
-import { resolveTypeNodeCarrier } from "../control-flow/statements.js";
+import { resolveTypeNodeCarrier } from "../declarations/types-and-bindings.js";
 import { setCarrierFact } from "../operations/project-calls.js";
 import type { RustFactWalk } from "./walk.js";
 

@@ -11,6 +11,7 @@ import {
   Node_Name,
   Node_Type,
   sourceTypeSyntaxRoot,
+  sourceBindingCapturedBeforeInitialization,
 } from "@tsonic/target-api/source";
 import {
   rustMutatedBindingFactKey,
@@ -40,12 +41,36 @@ import { rustSourceUnionMemberDeclarationIsOwned } from "../../policy/evidence/s
 import { rustSourceUnionValueTypes } from "../../policy/types/resolution/source-unions.js";
 import { closeRustSuspendedStorage } from "../../policy/types/suspended-storage.js";
 import { rustEnclosingStorageContract } from "../../policy/ownership/suspended-storage.js";
+import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
+
+export function resolveTypeNodeCarrier(walk: RustFactWalk, typeNode: Node | undefined): TargetTypeRef | undefined {
+  if (typeNode === undefined) return undefined;
+  const existing = walk.context.facts.get(typeNode, rustRuntimeCarrierKey) ??
+    walk.context.facts.resolve(typeNode, rustRuntimeCarrierKey);
+  if (existing !== undefined) return existing.carrier;
+  const carrier = resolveRustTargetTypeRef(typeNode, rustResolutionContext(walk, typeNode), walk.operationOptions);
+  return carrier === undefined ? undefined : setCarrierFact(walk, typeNode, carrier);
+}
 
 export function closeRustBindingStorage(
   walk: RustFactWalk, declaration: Node, carrier: TargetTypeRef | undefined,
 ): TargetTypeRef | undefined {
   return carrier === undefined ? undefined : closeRustSuspendedStorage(carrier, [],
     rustEnclosingStorageContract(declaration, walk.context.ast, walk.context.sourceLifetimes), "field");
+}
+
+export function resolveRustDeclaredBindingStorage(
+  walk: RustFactWalk,
+  declaration: Node,
+): TargetTypeRef | undefined {
+  const context = rustResolutionContext(walk, declaration);
+  const authored = Node_Type(walk.context.ast, declaration);
+  const selected = authored === undefined && sourceBindingCapturedBeforeInitialization(
+    declaration, walk.context.ast, walk.context.source.navigation,
+  ) ? context.currentSemantics.declarations.declaredValueType(declaration) : undefined;
+  const carrier = authored === undefined ? resolveRustTargetTypeRef(selected, context, walk.operationOptions)
+    : resolveTypeNodeCarrier(walk, authored);
+  return closeRustBindingStorage(walk, declaration, carrier);
 }
 
 export function reserveTypeAliasUnion(walk: RustFactWalk, declaration: Node): void {

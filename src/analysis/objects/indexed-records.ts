@@ -8,7 +8,7 @@ import { isRustIntegerCarrier, isRustStringCarrier } from "../../target-model/ty
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
 import { rustProjectObjectLayout } from "../project-types/object-layout.js";
-import { resolveTypeNodeCarrier } from "../control-flow/statements.js";
+import { resolveTypeNodeCarrier } from "../declarations/types-and-bindings.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
 

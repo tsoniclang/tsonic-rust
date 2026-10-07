@@ -31,7 +31,7 @@ import { resolveObjectLiteralMethodCarrier, resolveProjectMethodPropertyCarrier,
 import { resolveRustIndexedRecordContract, resolveRustIndexedRecordLiteral } from "../objects/indexed-records.js";
 import { selectRustUnionVariantByCheckedType } from "./union-context.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
-import { resolveTypeNodeCarrier } from "../control-flow/statements.js";
+import { resolveTypeNodeCarrier } from "../declarations/types-and-bindings.js";
 import { rustProjectInstanceContracts } from "../project-types/type-policy.js";
 import { rustProjectObjectLayout } from "../project-types/object-layout.js";
 import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";

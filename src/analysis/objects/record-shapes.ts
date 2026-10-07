@@ -11,7 +11,7 @@ import {
 import { requireDenseSourceNodes } from "../expressions/records.js";
 import { resolveParameterAbi } from "../declarations/types-and-bindings.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
-import { resolveTypeNodeCarrier } from "../control-flow/statements.js";
+import { resolveTypeNodeCarrier } from "../declarations/types-and-bindings.js";
 import { rustGeneratorFactKey, rustSourceCallableReturnFactKey, rustSourceParameterAbiFactKey } from "../facts/keys.js";
 import { rustProjectObjectLayout } from "../project-types/object-layout.js";
 import { rustResolutionContext } from "../program/walk.js";

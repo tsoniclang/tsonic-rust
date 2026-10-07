@@ -21,7 +21,8 @@ import { selectRustCapturedFieldStorage } from "../../policy/ownership/captured-
 import { rustCapturedFieldStorageFactKey } from "../facts/receiver-captures.js";
 import { recordCallableReturnFact, recordCallableSuspensionFacts } from "../callables/signatures.js";
 import { recordCallableDefaultParameterFacts, recordParameterAbiFacts } from "./types-and-bindings.js";
-import { recordStatementFacts, resolveTypeNodeCarrier } from "../control-flow/statements.js";
+import { recordStatementFacts } from "../control-flow/statements.js";
+import { resolveTypeNodeCarrier } from "./types-and-bindings.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";

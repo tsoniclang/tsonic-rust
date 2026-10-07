@@ -49,6 +49,7 @@ import { selectRustRecordObjectCall } from "./records.js";
 import { selectRustSourceCallResult } from "../../../policy/types/resolution/call-results.js";
 import { resolveRustTypeComponentEvidence } from "../../../policy/types/resolution/source-evidence.js";
 import { bindRustSelectedCallTypeArguments } from "../../../policy/types/resolution/generic-arguments.js";
+import { bindRustSelectedReceiverContext } from "./member-carriers.js";
 
 export function mapSelectedJsSpecialCall(
   request: RustCheckedCallSelectionInput,
@@ -658,9 +659,15 @@ export function acceptProjectSourceCall(
       "The selected union methods require exact native parameter contracts and a lossless closed common result.");
   }
   returnType = unionContract?.result ?? returnType;
+  const receiverContext = construction ? context : bindRustSelectedReceiverContext(
+    request.source.sourceReceiver?.type, receiverCarrier, context, options);
+  if (receiverContext === undefined) {
+    return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_RECEIVER_GENERIC_ARGUMENT_NOT_PROVEN",
+      "The selected project-source receiver requires exact declaration-bound native generic arguments.");
+  }
   const sourceResult = selectRustSourceCallResult(options.projectTypes, returnType, () => {
     const result = context.currentSemantics.operations.callResult(request.source);
-    const bound = bindRustSelectedCallTypeArguments(selectedTypeArguments, templateGenericArguments, context);
+    const bound = bindRustSelectedCallTypeArguments(selectedTypeArguments, templateGenericArguments, receiverContext);
     const carrier = result === undefined || bound === undefined ? undefined
       : resolveRustTypeComponentEvidence({ selectedType: result.selectedReturnType,
           declaration: selectedCallableDeclaration, ...(result.authoredTypeNode === undefined ? {} : { authoredTypeNode: result.authoredTypeNode }) },

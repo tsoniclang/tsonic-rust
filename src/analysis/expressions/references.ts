@@ -9,7 +9,6 @@ import {
   KindVariableDeclaration,
   Node_Expression,
   Node_Initializer,
-  Node_Type,
   asSourceNode,
   sourceDeclarationIsModuleScoped,
   sourceBindingCapturedBeforeInitialization,
@@ -39,7 +38,7 @@ import { applySelectedProjectSourceCall, applySelectedSourceCallArguments, recor
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { prepareRustDeferredCheckedCall } from "../operations/provider/index.js";
 import { readRustSourceNativePointerOperation, readRustSourceSafetyBuilder, readRustSourceUnsafeContext } from "../../policy/safety/source-explicit-safety.js";
-import { recordExportAssignmentFacts, resolveTypeNodeCarrier } from "../control-flow/statements.js";
+import { recordExportAssignmentFacts } from "../control-flow/statements.js";
 import { resolveExpressionCarrier } from "./carriers.js";
 import { selectRustFlowReadProjection } from "../../policy/types/value-carrier-reconciliation.js";
 import { recordRustFlowReadProjection } from "../facts/value-carrier-queries.js";
@@ -53,7 +52,7 @@ import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js
 import { rustRuntimeCarrierKey, rustSelectedCallKey } from "../../target-model/facts/selections.js";
 import { resolveRustContextualParameterAbi, rustSourceParameterContractCarrier } from "../../policy/ownership/source-callable-abi.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { closeRustBindingStorage, resolveParameterAbi, tryFlowMarkerCall } from "../declarations/types-and-bindings.js";
+import { resolveRustDeclaredBindingStorage, resolveParameterAbi, tryFlowMarkerCall } from "../declarations/types-and-bindings.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustSelectedTargetSignature, TargetTypeRef } from "../../target-model/types/model.js";
@@ -116,22 +115,12 @@ export function resolveIdentifierCarrier(
     }
     if (declarationKind === KindParameter || declarationKind === KindVariableDeclaration ||
       declarationKind === KindBindingElement) {
-      const annotated = closeRustBindingStorage(walk, declaration,
-        resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, declaration)));
+      const annotated = resolveRustDeclaredBindingStorage(walk, declaration);
       if (annotated !== undefined) {
         setCarrierFact(walk, declaration, annotated);
         return setCarrierFact(walk, identifier, annotated);
       }
       const initializer = Node_Initializer(walk.context.ast, declaration);
-      if (sourceBindingCapturedBeforeInitialization(declaration, ast, walk.context.source.navigation)) {
-        const context = rustResolutionContext(walk, declaration);
-        const selected = closeRustBindingStorage(walk, declaration,
-          resolveRustTargetTypeRef(context.currentSemantics.declarations.declaredValueType(declaration), context, walk.operationOptions));
-        if (selected !== undefined) {
-          setCarrierFact(walk, declaration, selected);
-          return setCarrierFact(walk, identifier, selected);
-        }
-      }
       if (initializer !== undefined) {
         const initializerCarrier = resolveExpressionCarrier(
           walk,

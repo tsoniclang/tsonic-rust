@@ -1,11 +1,39 @@
 import type { Node, Type } from "@tsonic/tsts";
 import type { RustOperationPolicyContext } from "../../../policy/operations/contracts.js";
 import type { RustOperationsProviderOptions } from "./model.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustTargetGenericArgument, TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetTypeChildren } from "../../../target-model/types/carriers/children.js";
 import { mapRustTargetTypes } from "../../../target-model/types/carriers/substitution.js";
 import { rustTypeFamilyNormalizer } from "../../../policy/types/type-family-normalization.js";
 import { resolveRustTypeFamilyApplication } from "../../../policy/types/resolution/type-families.js";
+import { bindRustSourceDeclarationArguments } from "../../../policy/types/resolution/generic-arguments.js";
+import type { RustTargetTypeResolutionContext } from "../../../policy/types/resolution/model.js";
+import { rustSourceTypeCarrierValue } from "../../../target-model/types/carriers/source-types.js";
+
+export function bindRustSelectedReceiverContext(
+  receiverType: Type | undefined,
+  receiver: TargetTypeRef | undefined,
+  context: RustOperationPolicyContext,
+  options: RustOperationsProviderOptions,
+): RustTargetTypeResolutionContext | undefined {
+  const definition = options.projectTypes.definitionForCarrier(receiver);
+  if (definition === undefined) return context;
+  const contract = context.sourceLifetimes.contractFor(definition.declaration);
+  if (contract === undefined) return definition.genericParameters.length === 0 ? context : undefined;
+  if (contract.parameters.length === 0) return context;
+  const arguments_ = rustSourceTypeCarrierValue(receiver)?.genericArguments;
+  if (receiverType === undefined || arguments_ === undefined ||
+    arguments_.length !== definition.genericParameters.length) return undefined;
+  const selected: RustTargetGenericArgument[] = [];
+  for (const parameter of contract.parameters) {
+    const matches = definition.genericParameters.flatMap((candidate, index) =>
+      candidate.declaration === parameter.declaration && candidate.kind === parameter.kind ? [index] : []);
+    const argument = matches.length !== 1 ? undefined : arguments_[matches[0]!];
+    if (argument === undefined || argument.kind !== parameter.kind) return undefined;
+    selected.push(argument);
+  }
+  return bindRustSourceDeclarationArguments(definition.declaration, receiverType, selected, context);
+}
 
 export function instantiateRustSelectedMemberCarrier(
   declaration: Node,

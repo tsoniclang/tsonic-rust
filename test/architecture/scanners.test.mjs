@@ -852,7 +852,8 @@ test("malformed compiler collection slots fail closed instead of disappearing", 
     .join("\n");
   assert.match(expressions, /Fixed-array literal contains a missing or omitted element slot/u);
   assert.match(expressions, /Callable expression contains an undefined parameter slot/u);
-  assert.match(declarations, /planStatementSequence\(bodyStatements, body, bodyContext\)/u);
+  assert.match(declarations, /planBlockLike\(bodyNode, bodyContext\)/u);
+  assert.match(statements, /planStatementSequence\(children, node, construction\?\.context \?\? context\)/u);
   assert.match(statements, /Source block contains an undefined statement slot/u);
   assert.match(declarations, /Enum declaration contains an undefined member slot/u);
   assert.match(declarations, /Interface declaration contains an undefined member slot/u);

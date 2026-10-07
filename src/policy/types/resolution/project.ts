@@ -22,7 +22,7 @@ import { rustClassConstructorTargetType } from "../../../target-model/types/carr
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { Node_Type, sourceCallableInterface } from "@tsonic/target-api/source";
 import { resolveCallableType } from "./callables.js";
-import { bindRustSourceDeclarationArguments, resolveRustSourceDeclarationArguments } from "./generic-arguments.js";
+import { bindRustSourceDeclarationArguments, resolveRustSelectedTypeArguments, resolveRustSourceDeclarationArguments } from "./generic-arguments.js";
 import { rustGenericCallableSignaturesMatch } from "../../../target-model/conversions/generic-callable.js";
 import { resolveRustAuthoredTargetType } from "./tuples.js";
 
@@ -51,11 +51,8 @@ export function resolveProjectSourceCarrier(
       context.ast.is.IsClassDeclaration(declaration) || context.ast.is.IsClassExpression(declaration) || context.ast.is.IsInterfaceDeclaration(declaration))) {
     const apparent = context.currentSemantics.types.apparentType(selectedType);
     if (apparent !== undefined && apparent !== selectedType && context.currentSemantics.declarations.typeSymbol(apparent) === symbol) {
-      const sourceArguments = context.currentSemantics.types.effectiveTypeArguments(apparent);
-      if (sourceArguments === undefined) return undefined;
-      const arguments_ = sourceArguments.map(argument =>
-        resolveRustTargetType(argument, context, options, resolving));
-      if (arguments_.some(argument => argument === undefined)) return undefined;
+      const arguments_ = resolveRustSelectedTypeArguments(apparent, context, options, resolving);
+      if (arguments_ === undefined) return undefined;
       return resolveProjectSourceCarrier(
         symbol,
         { values: Object.freeze((arguments_ as readonly TargetTypeRef[]).map(type =>

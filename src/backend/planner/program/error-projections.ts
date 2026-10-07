@@ -1,6 +1,7 @@
 import { emptyRustGenerics, type RustExpr, type RustImplFunction, type RustItem } from "../../target-ast/nodes.js";
 import { rustTypeEquals } from "../../target-ast/inspection/type-equality.js";
 import type { RustErrorTransportPlan } from "./error-transport.js";
+import { rustCheckedNativeProjectionOutputParameter } from "../objects/checked-project-projections.js";
 
 export function planRustErrorProjectionTransport(plan: RustErrorTransportPlan): readonly RustItem[] {
   const types = [plan.fullTransportType, plan.sourceErrorType, plan.writableSourceErrorType];
@@ -42,9 +43,7 @@ export function planRustSourceErrorProjectionDelegates(): readonly RustItem[] {
 function projectionFunction(owned: boolean, value: RustExpr): RustImplFunction {
   return { kind: "function", name: owned ? "into_project_error" : "project_error", visibility: "public",
     generics: emptyRustGenerics, selfParam: owned ? { kind: "value" } : { kind: "reference", mutable: false },
-    params: [{ name: "output", type: { kind: "reference", mutable: true, referent: {
-      kind: "trait-object", principal: { trait: { kind: "named", path: "core::any::Any" } }, autoTraits: [],
-    } } }],
+    params: [rustCheckedNativeProjectionOutputParameter()],
     body: { statements: [{ kind: "tail", expr: value }] },
   };
 }

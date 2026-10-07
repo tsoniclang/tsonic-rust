@@ -20,7 +20,7 @@ test("provider selection without dispatch demand initializes and emits no root",
     import { constructions } from "@acme/dispatch";
     export function main(): void { if (constructions() !== 0) throw new Error("unexpected root"); }
   `);
-  assert.doesNotMatch(result.artifacts.map(artifact => artifact.text).join("\n"), /__tsonic_dispatch_/u);
+  assert.doesNotMatch(result.artifacts.map(artifact => artifact.text).join("\n"), /__tsonic_dispatch_|static dispatch_root_\d/u);
 });
 
 test("lazy runtime-domain roots preserve Error identity and uninvoked tasks", { timeout: 300_000 }, () => {
