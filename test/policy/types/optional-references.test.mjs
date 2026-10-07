@@ -7,19 +7,21 @@ import { rustOptionTargetType, rustSourcePrimitiveTargetType, rustFutureTargetTy
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../helpers/fake-compile-input.mjs";
 
+const projectTypes = { definitionForCarrier: () => undefined };
+
 test("optional exclusive-reference projection is a native reborrow, never a Clone promise", () => {
   const node = fakeStatement({ kindName: "Identifier", pos: 0, end: 8 });
   const sourceFile = fakeSourceFile({ text: "selected", statements: [node] });
   const selectedCarrier = { kind: "reference", mutable: true, referent: rustSourcePrimitiveTargetType("int32") };
   const sourceCarrier = rustOptionTargetType(selectedCarrier);
-  const selected = selectRustFlowReadProjection(sourceCarrier, selectedCarrier, {});
+  const selected = selectRustFlowReadProjection(sourceCarrier, selectedCarrier, projectTypes);
   assert.equal(selected.kind, "projection");
   assert.equal(selected.fact.kind, "option-reference");
   for (const canMove of [false, true]) {
     const context = { input: { program: {
       source: { ast: fakeAstReader([sourceFile]) },
       facts: { getRuntimeCarrierFact: () => ({ carrier: sourceCarrier }) },
-      valueLifetimes: { canMove: () => canMove }, configuration: { edition: "2024" },
+      valueLifetimes: { canMove: () => canMove }, projectTypes, configuration: { edition: "2024" },
     } }, sourceFile, diagnostics: [] };
     const expression = { kind: "path", path: "selected" };
     const projected = planRustFlowReadProjection(node, expression, selected.fact, context);
@@ -43,14 +45,14 @@ test("optional non-Clone payloads may move or borrow but cannot acquire a clone 
   const sourceFile = fakeSourceFile({ text: "selected", statements: [node] });
   const selectedCarrier = rustFutureTargetType(rustUnitTargetType());
   const sourceCarrier = rustOptionTargetType(selectedCarrier);
-  const selected = selectRustFlowReadProjection(sourceCarrier, selectedCarrier, {});
+  const selected = selectRustFlowReadProjection(sourceCarrier, selectedCarrier, projectTypes);
   assert.equal(selected.kind, "projection");
   assert.equal(selected.fact.kind, "option-value");
   for (const [canMove, borrowed] of [[true, false], [false, true], [false, false]]) {
     const context = { input: { program: {
       source: { ast: fakeAstReader([sourceFile]) },
       facts: { getRuntimeCarrierFact: () => ({ carrier: sourceCarrier }) },
-      valueLifetimes: { canMove: () => canMove }, typeDefinitions: emptyRustTypeDefinitions,
+      valueLifetimes: { canMove: () => canMove }, projectTypes, typeDefinitions: emptyRustTypeDefinitions,
       configuration: { edition: "2024" },
     } }, sourceFile, diagnostics: [] };
     const projected = planRustFlowReadProjection(node, { kind: "path", path: "selected" },

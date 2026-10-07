@@ -117,6 +117,38 @@ test("plain callback storage does not invent a cyclic owning activation", () => 
   assert.equal(selected.kind, "ordinary");
 });
 
+test("observed frame callers cannot close an exported ordinary callback parameter", () => {
+  const current = fixture(lexicalSource + `
+    export function invoke(callback: (count: number) => number): number { return callback(0); }
+    function local(): number { return invoke(escaped(1)); }
+  `);
+  const registry = createRustCallableOwnershipRegistry();
+  registry.initialize(current.input);
+  const parameter = current.named("callback", "KindParameter")[0];
+  const subject = current.storage.storageSubjectFor(parameter);
+  assert.equal(subject.kind, "resolved");
+  assert.equal(current.storage.closedOriginsFor(subject.subject).kind, "open");
+  assert.equal(registry.storageFor(subject.subject).kind, "unresolved", "unknown contributors cannot acquire the observed private frame");
+});
+
+test("an exported writable callback field cannot claim a closed native dispatch component", () => {
+  const current = fixture(fieldSource.replace("class Value", "export class Value"));
+  const slot = current.named("recurse", "KindPropertyDeclaration")[0];
+  const queries = current.analyze();
+  assert.equal(queries.failureReason() === undefined, true);
+  const subject = current.storage.storageSubjectFor(slot);
+  assert.equal(subject.kind, "resolved");
+  const domain = current.storage.closedOriginsFor(subject.subject);
+  assert.equal(domain.kind, "open");
+  assert.equal(domain.boundaries.some(boundary => boundary.kind === "external-write"), true,
+    "the exact exported field admits unknown external replacements");
+  assert.equal(queries.componentForSlot(slot) === undefined, true);
+  const registry = createRustCallableOwnershipRegistry();
+  registry.initialize(current.input);
+  assert.equal(registry.storageFor(subject.subject).kind === "frame", false,
+    "an unknown replacement cannot acquire one observed native activation family");
+});
+
 test("an unwritten self-recursive callback retains ordinary storage through creation, binding and return", () => {
   const current = fixture(`
 export function create(): (count: number, seed: number) => number {

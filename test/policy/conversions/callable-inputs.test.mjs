@@ -5,7 +5,7 @@ import { selectRustCallableConversion, rustCallableConversionMatches } from "../
 import { rustValueConversionContract } from "../../../dist/target-model/conversions/contracts.js";
 import { substituteRustValueConversion } from "../../../dist/target-model/conversions/substitution.js";
 import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
-import { rustCallableTargetType, rustCallableInputTargetType, rustCallableInputProtocol } from "../../../dist/target-model/types/index.js";
+import { rustCallableTargetType, rustCallableInputTargetType, rustCallableInputProtocol, rustStringTargetType } from "../../../dist/target-model/types/index.js";
 import { rustFrameCallableTargetType } from "../../../dist/target-model/types/carriers/frame-callables.js";
 import { rebindRustCallableCarrier } from "../../../dist/target-model/types/carriers/callable-rebinding.js";
 
@@ -50,4 +50,42 @@ test("signature rebinding and generic substitution preserve the invocation-only 
   assert.equal(rustCallableInputProtocol(rebound) !== undefined, true);
   assert.equal(rustCallableInputProtocol(rebound).parameters[0].name, "float64");
   assert.equal(rustCallableInputProtocol(rebound).result.name, "int64");
+});
+
+test("invocation-only callable adaptation reuses exact shared borrowing without retaining its source", () => {
+  const value = rustStringTargetType();
+  const borrowed = { kind: "reference", referent: value, mutable: false };
+  const target = rustCallableInputTargetType([value], integer);
+  for (const source of [rustCallableTargetType([borrowed], integer), rustCallableInputTargetType([borrowed], integer)]) {
+    const selected = selectRustCallableConversion(source, target, selectRustSourceValueConversion);
+    assert.equal(selected !== undefined, true);
+    assert.equal(selected.parameters[0].kind, "borrow");
+    assert.equal(rustCallableConversionMatches(selected, source, target), true);
+    assert.equal(Object.isFrozen(selected) && Object.isFrozen(selected.parameters[0]), true);
+    for (const changed of [
+      { ...selected, extra: true }, { ...selected, parameters: [{ kind: "identity" }] },
+      { ...selected, parameters: [{ kind: "borrow", unchecked: true }] },
+      { ...selected, result: { kind: "borrow" } }, { ...selected, source: target },
+      { ...selected, parameters: [] },
+    ]) assert.equal(rustCallableConversionMatches(changed, source, target), false);
+  }
+  const source = rustCallableInputTargetType([borrowed], integer);
+  const escaping = rustCallableTargetType([value], integer);
+  assert.equal(selectRustCallableConversion(source, escaping, selectRustSourceValueConversion) === undefined, true);
+});
+
+test("invocation-only adapters reject mutable, escaping-lifetime and incompatible parameter evidence", () => {
+  const value = rustStringTargetType();
+  const target = rustCallableInputTargetType([value], integer);
+  for (const parameter of [
+    { kind: "reference", referent: value, mutable: true },
+    { kind: "reference", referent: value, mutable: false, lifetime: { kind: "static" } },
+    { kind: "reference", referent: value, mutable: false, lifetime: { kind: "placeholder" } },
+    { kind: "reference", referent: integer, mutable: false },
+  ]) assert.equal(selectRustCallableConversion(rustCallableTargetType([parameter], integer), target,
+    selectRustSourceValueConversion) === undefined, true);
+  assert.equal(selectRustCallableConversion(rustCallableTargetType([value, value], integer), target,
+    selectRustSourceValueConversion) === undefined, true);
+  assert.equal(selectRustCallableConversion(rustCallableTargetType([value], value), target,
+    selectRustSourceValueConversion) === undefined, true);
 });

@@ -375,6 +375,13 @@ export function createRustCallableOwnershipComponentQueries(input: {
     const owners = storageDeclarations.map(ownerForSlot);
     const owner = owners[0];
     let reason = members.map(member => problems.get(member.declaration)).find(value => value !== undefined);
+    for (const declaration of storageDeclarations) {
+      if (!account()) return result();
+      const subject = storage.storageSubjectFor(declaration);
+      const domain = subject.kind === "resolved" ? storage.closedOriginsFor(subject.subject) : subject;
+      if (domain.kind !== "complete") reason ??= domain.kind === "unresolved" ? domain.reason
+        : "A cyclic callable storage domain has unknown physical activation contributors.";
+    }
     if (owner === undefined || owners.some(current => current === undefined || current.kind !== owner.kind ||
       current.declaration !== owner.declaration || current.scope !== owner.scope))
       reason ??= "A cyclic callable component requires one exact lexical activation or one class-instance owner.";

@@ -8,7 +8,6 @@ import type {
   ProviderMemberKey,
   ReadonlySourceFactResolver,
   Symbol,
-  TypeIndexInfo,
   Type,
 } from "@tsonic/tsts";
 import type { RustSourcePolicyContext } from "../model/context.js";
@@ -303,25 +302,7 @@ export function resolveSelectedSourceProfilePropertyMembers(
   return declarations === undefined ? undefined : resolveSelectedSourceProfileMembers(context, declarations, sourceProfiles);
 }
 
-export function resolveSelectedSourceProfileIndexMembers(
-  context: RustSourcePolicyContext,
-  selectedIndexes: readonly TypeIndexInfo[],
-  sourceProfiles: RustSourceProfileRegistry,
-): RustSelectedSourceMemberSet | undefined {
-  if (selectedIndexes.length === 0) return undefined;
-  const declarations = new Set<Node>();
-  for (const index of selectedIndexes) {
-    const components = index.declaration === undefined ? index.components : [index.declaration];
-    if (components.length === 0) return undefined;
-    for (const declaration of components) {
-      if (declaration === undefined) return undefined;
-      declarations.add(declaration);
-    }
-  }
-  return resolveSelectedSourceProfileMembers(context, [...declarations], sourceProfiles);
-}
-
-function resolveSelectedSourceProfileMembers(
+export function resolveSelectedSourceProfileMembers(
   context: RustSourcePolicyContext,
   declarations: readonly Node[],
   sourceProfiles: RustSourceProfileRegistry,

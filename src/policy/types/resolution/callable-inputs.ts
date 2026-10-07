@@ -12,8 +12,10 @@ export function resolveRustCallableInputCarrier(
   options: RustTargetTypeResolutionOptions,
 ): TargetTypeRef | undefined {
   const logical = rustCallableProtocol(logicalCarrier);
-  const origins = context.sourceStorage.originsFor(subject);
-  if (logical === undefined || origins.kind !== "resolved") return undefined;
+  if (logical === undefined) return undefined;
+  const origins = context.sourceStorage.closedOriginsFor(subject);
+  if (origins.kind === "unresolved") return undefined;
+  if (origins.kind === "open") return rustCallableInputTargetType(logical.parameters, logical.result);
   let selected: typeof logical | undefined;
   for (const origin of origins.origins) {
     const declaration = origin.subject.node;
@@ -26,10 +28,12 @@ export function resolveRustCallableInputCarrier(
       protocol.parameters.some((parameter, index) => !rustTargetTypeRefEquals(parameter, logical.parameters[index]) &&
         !(parameter.kind === "reference" && !parameter.mutable &&
           rustTargetTypeRefEquals(parameter.referent, logical.parameters[index])))) return undefined;
-    if (selected !== undefined && (!rustTargetTypeRefEquals(protocol.result, selected.result) ||
-      protocol.parameters.some((parameter, index) =>
-        !rustTargetTypeRefEquals(parameter, selected!.parameters[index])))) return undefined;
-    selected = protocol;
+    if (selected === undefined) selected = protocol;
+    else {
+      if (!rustTargetTypeRefEquals(protocol.result, selected.result)) return undefined;
+      selected = { result: selected.result, parameters: selected.parameters.map((parameter, index) =>
+        rustTargetTypeRefEquals(parameter, protocol.parameters[index]) ? parameter : logical.parameters[index]!) };
+    }
   }
   return rustCallableInputTargetType((selected ?? logical).parameters, (selected ?? logical).result);
 }

@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { rustCallableConversionMatches, type RustCallableConversion, type RustCallableValueConversion } from "../../../target-model/conversions/callable.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
-import { rustCallableProtocol, rustClosureProtocol } from "../../../target-model/types/index.js";
+import { rustCallableInputProtocol, rustCallableProtocol, rustClosureProtocol } from "../../../target-model/types/index.js";
 import { rustTypeEquals } from "../../target-ast/inspection/type-equality.js";
 import type { RustExpr, RustStmt, RustType } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
@@ -15,6 +15,7 @@ import { planRustSourceCallableValue } from "./source-callable-value.js";
 import { planRustAbsentValue } from "./optional-storage.js";
 import { lowerRustValueConversion } from "./value-conversions.js";
 import { rustModuleCallableStorageFactKey } from "../../../analysis/callables/module-values.js";
+import { planRustNonConsumingValue } from "./typed-locations.js";
 
 export function planRustCallableInputProducer(
   expression: RustExpr, source: import("../../../target-model/types/model.js").TargetTypeRef, context: RustPlanContext,
@@ -55,12 +56,13 @@ function planSelectedRustCallableConversion(
   if (!rustCallableConversionMatches(conversion, conversion.source, conversion.target, definitions)) return undefined;
   const source = rustCallableProtocol(conversion.source)!;
   const native = conversion.target.kind === "closure";
+  const input = rustCallableInputProtocol(conversion.target) !== undefined;
   const target = rustCallableProtocol(conversion.target) ?? rustClosureProtocol(conversion.target);
   if (target === undefined) return undefined;
   const sourceType = rustCallableConstructionType(conversion.source, context);
   const targetType = rustCallableConstructionType(conversion.target, context);
   const argumentsType = rustTypeFromCarrierInContext({ kind: "tuple", elements: target.parameters }, context);
-  if (sourceType === undefined || !native && targetType === undefined || argumentsType === undefined) return undefined;
+  if (sourceType === undefined || !native && !input && targetType === undefined || argumentsType === undefined) return undefined;
   const names = context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []);
   const callable = allocateRustSyntheticName(names, "callable");
   const argumentsName = allocateRustSyntheticName(names, source.parameters.length === 0 ? "_arguments" : "arguments");
@@ -81,7 +83,8 @@ function planSelectedRustCallableConversion(
   const tuple: RustExpr = { kind: "tuple-literal", elements: arguments_ };
   const invocation: RustExpr = producer.inline
     ? { kind: "invoke", callee: { kind: "path", path: callable }, args: [tuple] }
-    : { kind: "method-call", receiver: { kind: "path", path: callable }, method: "call", args: [tuple] };
+    : { kind: "method-call", receiver: { kind: "path", path: callable },
+        method: rustCallableInputProtocol(conversion.source) === undefined ? "call" : "invoke", args: [tuple] };
   const resultName = allocateRustSyntheticName(names,
     conversion.result.kind === "absence" || conversion.result.kind === "discard" ? "_result" : "result");
   const result = conversion.result.kind === "absence" ? planRustAbsentValue(target.result, context)
@@ -100,11 +103,15 @@ function planSelectedRustCallableConversion(
   const closure: RustExpr = {
     kind: "closure", move: true, params: native ? nativeParameters : [{ name: argumentsName, byRefCopy: false, type: argumentsType }], body,
   };
-  return { kind: "block", body: { statements: [...producer.statements, {
-    kind: "let", mutable: false, name: callable, init: producer.value,
-  }, { kind: "tail", expr: native ? closure : {
+  const value = input && !producer.inline
+    ? { kind: "reference" as const, expr: planRustNonConsumingValue(node, producer.value, context) }
+    : producer.value;
+  const adapted: RustExpr = { kind: "block", body: { statements: [...producer.statements, {
+    kind: "let", mutable: false, name: callable, init: value,
+  }, { kind: "tail", expr: native || input ? closure : {
     kind: "associated-call", owner: targetType!, method: "new", args: [closure],
   } }] } };
+  return input ? { kind: "reference", expr: adapted } : adapted;
 
   function lowerValue(selected: RustCallableValueConversion, value: RustExpr): RustExpr | undefined {
     if (selected.kind === "identity") return value;

@@ -89,7 +89,7 @@ export function createRustCallableOwnershipPlan(
     storageFor(subject: SourceStorageSubject): RustCallableStorageOwnership {
       const failure = components.failureReason() ?? storage.failureReason();
       if (failure !== undefined) return unresolved(failure);
-      const origins = storage.originsFor(subject);
+      const origins = storage.closedOriginsFor(subject);
       if (origins.kind === "unresolved") return unresolved(origins.reason);
       let selected: RustCallableActivation | undefined;
       let ordinaryOrigins = false;
@@ -107,6 +107,7 @@ export function createRustCallableOwnershipPlan(
       }
       if (selected === undefined) return components.isCyclicSlot(subject.node)
         ? unresolved("Cyclic callback storage has no exact contributing callback creation.") : ordinary;
+      if (origins.kind !== "complete") return unresolved("An open callable storage domain cannot select one physical activation family.");
       return ordinaryOrigins ? unresolved("Callable storage mixes an owning frame with an independent callable origin.")
         : Object.freeze({ kind: "frame", activation: selected });
     },

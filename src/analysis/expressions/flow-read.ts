@@ -222,14 +222,19 @@ function resolveSelectedFlowReadCarrier(
       : undefined;
   const declaredReadType = access?.selectedSymbol === undefined ? undefined :
     semantics.types.typeOfSymbol(access.selectedSymbol);
-  if (declaredReadType !== undefined && semantics.types.isIdentical(declaredReadType, selectedType)) {
-    return sourceCarrier;
-  }
   const selectedTypes = semantics.types.isUnion(selectedType)
     ? semantics.types.unionOrIntersectionTypes(selectedType) : [selectedType];
   if (selectedTypes.some(type => type === undefined)) return undefined;
   const includesAbsence = selectedTypes.some(type => type !== undefined &&
     (semantics.types.isNullish(type) || semantics.types.isVoidLike(type)));
+  const presentReadType = access?.optionalChain === true && includesAbsence
+    ? semantics.types.nonNullableType(selectedType) : undefined;
+  if (declaredReadType !== undefined &&
+    (semantics.types.isIdentical(declaredReadType, selectedType) ||
+      presentReadType !== undefined && rustSourceOptionalElementCarrier(sourceCarrier) !== undefined &&
+      semantics.types.isIdentical(declaredReadType, presentReadType))) {
+    return sourceCarrier;
+  }
   const dispatchCarrier = rustOptionElementCarrier(sourceCarrier) ?? sourceCarrier;
   const resolution = rustResolutionContext(walk, expression);
   const guarded = selectRustGuardedValueMembers(expression, dispatchCarrier, resolution, walk.operationOptions);

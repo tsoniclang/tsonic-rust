@@ -9,13 +9,13 @@ const borrowed = { kind: "reference", mutable: false, referent: value };
 const logical = rustCallableTargetType([value], value);
 const subject = { kind: "value", node: {}, projection: [] };
 
-function select(carriers, resolved = true) {
+function select(carriers, kind = "complete") {
   const declarations = carriers.map(() => ({}));
   return resolveRustCallableInputCarrier(subject, logical, {
-    sourceStorage: { originsFor: selected => {
+    sourceStorage: { closedOriginsFor: selected => {
       assert.equal(selected === subject, true);
-      return resolved ? { kind: "resolved", origins: declarations.map(node =>
-        ({ subject: { kind: "value", node, projection: [] } })) } : { kind: "unresolved", reason: "missing exact flow" };
+      return kind === "unresolved" ? { kind, reason: "missing exact flow" } : { kind, origins: declarations.map(node =>
+        ({ subject: { kind: "value", node, projection: [] } })), ...(kind === "open" ? { boundaries: [{}] } : {}) };
     } },
   }, { callableSignatureCarrier: declaration => carriers[declarations.indexOf(declaration)] });
 }
@@ -26,7 +26,7 @@ test("invocation-only inputs preserve one exact native numeric result until an e
   const origin = {};
   const declared = rustCallableTargetType([value], float);
   const selected = resolveRustCallableInputCarrier(subject, declared, {
-    sourceStorage: { originsFor: () => ({ kind: "resolved", origins: [
+    sourceStorage: { closedOriginsFor: () => ({ kind: "complete", origins: [
       { subject: { kind: "value", node: origin, projection: [] } },
     ] }) },
   }, { callableSignatureCarrier: () => rustCallableTargetType([borrowed], native) });
@@ -35,7 +35,7 @@ test("invocation-only inputs preserve one exact native numeric result until an e
   for (const results of [[native, float], [float, native]]) {
     let index = 0;
     const rejected = resolveRustCallableInputCarrier(subject, declared, {
-      sourceStorage: { originsFor: () => ({ kind: "resolved", origins: results.map(() =>
+      sourceStorage: { closedOriginsFor: () => ({ kind: "complete", origins: results.map(() =>
         ({ subject: { kind: "value", node: {}, projection: [] } })) }) },
     }, { callableSignatureCarrier: () => rustCallableTargetType([borrowed], results[index++]) });
     assert.equal(rejected === undefined, true, "different native result ABIs cannot be combined");
@@ -55,14 +55,26 @@ test("closed invocation inputs reject conflicting physical protocols and missing
   const mutable = { ...borrowed, mutable: true };
   const integer = { kind: "source-primitive", name: "int32" };
   for (const carriers of [
-    [rustCallableTargetType([borrowed], value), logical],
     [rustCallableTargetType([mutable], value)],
     [rustCallableTargetType([], value)],
     [rustCallableTargetType([borrowed], integer)],
-    [undefined, rustCallableTargetType([borrowed], value)],
-    [rustCallableTargetType([borrowed], value), undefined],
   ]) assert.equal(select(carriers) === undefined, true, "no ABI widening or borrowed-value erasure");
-  assert.equal(select([logical], false) === undefined, true, "unresolved exact transport cannot prove an input ABI");
+  assert.equal(select([logical], "unresolved") === undefined, true, "unresolved exact transport cannot prove an input ABI");
+});
+
+test("open and mixed compatible invocation domains retain the declared native ownership contract", () => {
+  const borrowedCallable = rustCallableTargetType([borrowed], value);
+  for (const carriers of [[borrowedCallable, logical], [logical, borrowedCallable],
+    [undefined, borrowedCallable], [borrowedCallable, undefined]]) {
+    const selected = rustCallableInputProtocol(select(carriers));
+    assert.equal(selected?.parameters[0] === value, true, "owned input permits an exact borrow at invocation, not ABI specialization");
+    assert.equal(selected?.result === value, true);
+  }
+  for (const carriers of [[], [borrowedCallable], [logical]]) {
+    const selected = rustCallableInputProtocol(select(carriers, "open"));
+    assert.equal(selected?.parameters[0] === value, true, "adding observed callers cannot narrow an exported parameter");
+    assert.equal(selected?.result === value, true);
+  }
 });
 
 test("finalized invocation input facts retain exact borrowed argument modes without relaxing native reference contracts", () => {

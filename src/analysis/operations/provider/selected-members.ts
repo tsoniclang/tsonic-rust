@@ -1,7 +1,8 @@
-import type { Node, Type, TypeIndexInfo, TypeIndexedAccessSelection } from "@tsonic/tsts";
+import type { Node, Type, TypeIndexedAccessSelection } from "@tsonic/tsts";
+import { selectedSourceIndexedDeclarations } from "@tsonic/target-api/source";
 import type { RustOperationPolicyContext } from "../../../policy/operations/contracts.js";
 import type { RustOperationsProviderOptions } from "./model.js";
-import { resolveSelectedSourceProfileIndexMembers } from "../../../policy/evidence/selected-source.js";
+import { resolveSelectedSourceProfileMembers } from "../../../policy/evidence/selected-source.js";
 import { selectRustGuardedSourceValueTypes } from "../native-flow-refinement.js";
 
 export function selectRustSourceProfileIndexMembers(
@@ -19,13 +20,16 @@ export function selectRustSourceProfileIndexMembers(
   const types = selectRustGuardedSourceValueTypes(request.receiver, request.sourceReceiverType, context, options) ??
     [request.sourceReceiverType];
   if (types.length === 0) return undefined;
-  const indexes: TypeIndexInfo[] = [];
+  const declarations = new Set<Node>();
+  let readonly = false;
   for (const type of types) {
     const selected = type === request.sourceReceiverType && selectedIndex !== undefined ? selectedIndex :
       context.semanticsFor(request.expression).types.selectIndexedAccess(type, request.sourceArgumentType);
-    if (selected?.kind !== "resolved" || selected.members.length !== 1 || selected.members[0]?.kind !== "index") return undefined;
-    indexes.push(selected.members[0].index);
+    const evidence = selectedSourceIndexedDeclarations(context.semanticsFor(request.expression), selected);
+    if (evidence === undefined) return undefined;
+    readonly ||= evidence.readonly;
+    for (const declaration of evidence.declarations) declarations.add(declaration);
   }
-  const selected = resolveSelectedSourceProfileIndexMembers(context, indexes, options.sourceProfiles);
-  return selected === undefined ? undefined : { ...selected, readonly: indexes.some(index => index.readonly) };
+  const selected = resolveSelectedSourceProfileMembers(context, [...declarations], options.sourceProfiles);
+  return selected === undefined ? undefined : { ...selected, readonly };
 }
