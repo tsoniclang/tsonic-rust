@@ -1,4 +1,4 @@
-import { rustDeriveAttributes, rustHiddenAttribute } from "../../../target-ast/attributes.js";
+import { rustHiddenAttribute } from "../../../target-ast/attributes.js";
 import { planRustAuthoredStructScope } from "../../declarations/scoped-types.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustItem, RustStructField, RustType } from "../../../target-ast/nodes.js";
@@ -12,7 +12,6 @@ import {
 } from "../../program/plan-context.js";
 import {
   rustGeneratedExactStorageDeadCodeDisposition,
-  rustGeneratedProjectInterfaceFieldDeadCodeDisposition,
   rustGeneratedProjectInternalFieldDeadCodeDisposition,
   rustProjectInterfaceDeadCodeDisposition,
 } from "../../liveness/directives.js";
@@ -195,6 +194,9 @@ export function planPolymorphicClassDeclaration(
       "rust.backend.state-construction", "Physical native state has no exact aggregate assembly contract."));
     return undefined;
   }
+  const identityImplementations = projectIdentityImplementations(definition, wrapperType, representation, context);
+  const wrapperDispatchDeadCode = rustGeneratedExactStorageDeadCodeDisposition(publiclyReachable ||
+    rustPlannedImplementationsReferenceSelfField(identityImplementations, rustProjectObjectDispatchField));
   return [
     trait,
     stateConstruction,
@@ -262,7 +264,7 @@ export function planPolymorphicClassDeclaration(
       kind: "struct",
       name: definition.targetName,
       visibility: wrapperVisibility,
-      attrs: [...(programErrorVariant === undefined ? [] : [rustHiddenAttribute]), ...rustDeriveAttributes(["Clone"])],
+      ...(programErrorVariant === undefined ? {} : { attrs: [rustHiddenAttribute] }),
       generics,
       fields: [
         {
@@ -277,21 +279,15 @@ export function planPolymorphicClassDeclaration(
           visibility: implementationVisibility,
           ...(() => {
             const attrs = publiclyReachable ? [rustHiddenAttribute] : [];
-            const deadCode = rustGeneratedProjectInternalFieldDeadCodeDisposition(
-              context,
-              declaration,
-              "wrapper-dispatch",
-              implementationVisibility === "public",
-            );
             return {
               ...(attrs.length === 0 ? {} : { attrs }),
-              ...(deadCode === undefined ? {} : { deadCode }),
+              ...(wrapperDispatchDeadCode === undefined ? {} : { deadCode: wrapperDispatchDeadCode }),
             };
           })(),
         },
       ],
     }, context),
-    ...projectIdentityImplementations(definition, wrapperType, representation, context),
+    ...identityImplementations,
     ...(constructor.construct === undefined ? [] : [{
       kind: "struct" as const,
       name: rustProjectRootName(definition),
@@ -476,6 +472,9 @@ export function planPolymorphicInterfaceDeclaration(
     declaration,
     publiclyReachable,
   );
+  const identityImplementations = projectIdentityImplementations(definition, wrapperType, representation, context);
+  const wrapperDispatchDeadCode = rustGeneratedExactStorageDeadCodeDisposition(publiclyReachable ||
+    rustPlannedImplementationsReferenceSelfField(identityImplementations, rustProjectObjectDispatchField));
   return [
     trait,
     {
@@ -483,7 +482,6 @@ export function planPolymorphicInterfaceDeclaration(
       name: definition.targetName,
       visibility: wrapperVisibility,
       ...(wrapperDeadCode === undefined ? {} : { deadCode: wrapperDeadCode }),
-      attrs: rustDeriveAttributes(["Clone"]),
       generics,
       fields: [
         {
@@ -498,21 +496,14 @@ export function planPolymorphicInterfaceDeclaration(
           visibility: implementationVisibility,
           ...(() => {
             const attrs = publiclyReachable ? [rustHiddenAttribute] : [];
-            const deadCode = rustGeneratedProjectInterfaceFieldDeadCodeDisposition(
-              context,
-              declaration,
-              "wrapper-dispatch",
-              publiclyReachable,
-              implementationVisibility === "public",
-            );
             return {
               ...(attrs.length === 0 ? {} : { attrs }),
-              ...(deadCode === undefined ? {} : { deadCode }),
+              ...(wrapperDispatchDeadCode === undefined ? {} : { deadCode: wrapperDispatchDeadCode }),
             };
           })(),
         },
       ],
     },
-    ...projectIdentityImplementations(definition, wrapperType, representation, context),
+    ...identityImplementations,
   ];
 }

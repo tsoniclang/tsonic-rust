@@ -164,7 +164,7 @@ export function rustGeneratedUnionVariantDeadCodeDisposition(
 ): RustDeadCodeDisposition | undefined {
   return publiclyReachable ||
     !carriers.some(carrier => context.input.liveness.isStructuralShapeUsed(carrier)) ||
-    carriers.some(carrier => context.input.liveness.isUnionVariantUsed(carrier, variantName))
+    carriers.some(carrier => context.input.liveness.isUnionVariantConstructed(carrier, variantName))
     ? undefined : "generated-unconstructed-variant";
 }
 

@@ -8,6 +8,7 @@ import { allocateRustSyntheticName, createRustSyntheticNameState } from "../name
 import { planRustOptionBranch } from "./option-branch.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { planRustOptionalStorageOperation } from "./optional-storage.js";
+import { rustExpressionUsesTryInCurrentRegion } from "../types/fallible-shape.js";
 
 export function rustOptionDefaultValue(
   option: RustExpr,
@@ -21,7 +22,7 @@ export function rustOptionDefaultValue(
   const present = (expression: RustExpr): RustExpr => !retainStorage ? expression
     : value === undefined ? { kind: "call", path: "Some", args: [expression] }
       : planRustOptionalStorageOperation(carrier, "present", [expression], context);
-  if (rustExpressionExitsCallable(fallback)) {
+  if (rustExpressionExitsCallable(fallback) || rustExpressionUsesTryInCurrentRegion(fallback)) {
     const names = context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, context.sourceFile, []);
     const presentName = allocateRustSyntheticName(names, "present_value");
     return planRustOptionBranch(option, carrier, presentName, present({ kind: "path", path: presentName }), fallback, context);

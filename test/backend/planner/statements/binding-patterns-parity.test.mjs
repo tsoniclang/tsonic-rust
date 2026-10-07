@@ -142,6 +142,38 @@ export function main(): void {
   assert.equal(validateGeneratedProject("binding-object-rest", result.artifacts, { run: true }).status, 0);
 });
 
+for (const surfaces of [[], ["js"]]) {
+  const profile = surfaces[0] ?? "native";
+  test(`contextual integer defaults execute only on absence in ${profile}`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: {
+      "index.ts": `
+import type { int32, int64 } from "@tsonic/core/types.js";
+class Calls { count: int32 = 0; }
+function supply(calls: Calls): int32 { calls.count++; return 9; }
+function failure(): int32 { throw new Error("fallback failure"); }
+export function main(): void {
+  const calls = new Calls();
+  const empty: int32[] = [];
+  const present: int32[] = [3];
+  const [missing = supply(calls)] = empty;
+  const [value = supply(calls)] = present;
+  const [notCalled = failure()] = present;
+  let failed = false;
+  try { const [throws = failure()] = empty; void throws; } catch { failed = true; }
+  const wide: int64[] = [];
+  const [exact = 9007199254740993n] = wide;
+  if (missing !== 9 || value !== 3 || notCalled !== 3 || !failed || calls.count !== 1 || exact !== 9007199254740993n)
+    throw new Error("native binding default");
+}
+`,
+    } });
+    assertNoTargetDiagnostics(result.diagnostics);
+    const source = artifactText(result, "src/index.rs");
+    assert.doesNotMatch(source, /f64_to_i(?:32|64)/u);
+    validateGeneratedProject(`binding-contextual-integer-default-${profile}`, result.artifacts, { run: true });
+  });
+}
+
 test("function and class parameters bind through exact projected carriers", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     files: {

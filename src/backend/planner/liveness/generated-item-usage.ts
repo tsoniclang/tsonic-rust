@@ -91,6 +91,7 @@ export interface RustGeneratedItemUsage {
   isStructuralShapeUsed(carrier: TargetTypeRef): boolean;
   isVariantUsed(declaration: Node, variantName: string): boolean;
   isUnionVariantUsed(carrier: TargetTypeRef, variantName: string): boolean;
+  isUnionVariantConstructed(carrier: TargetTypeRef, variantName: string): boolean;
 }
 
 type RustOperationAbi = Extract<
@@ -135,6 +136,7 @@ export function analyzeRustGeneratedItemUsage(input: {
   const structuralFieldReads = new Set<string>();
   const structuralFieldWrites = new Set<string>();
   const variantsByCarrier = new Map<string, Set<string>>();
+  const constructedVariantsByCarrier = new Map<string, Set<string>>();
   const usedProjectTypes = new WeakSet<Node>();
   const constructedProjectTypes = new WeakSet<Node>();
   const reifiedProjectTypes = new WeakSet<Node>();
@@ -252,6 +254,10 @@ export function analyzeRustGeneratedItemUsage(input: {
   };
   const markVariantConstructed = (carrier: TargetTypeRef, variantName: string): void => {
     markVariantUsed(carrier, variantName);
+    const key = variantOwnerKey(carrier);
+    const variants = constructedVariantsByCarrier.get(key) ?? new Set<string>();
+    variants.add(variantName);
+    constructedVariantsByCarrier.set(key, variants);
     if (rustSourceUnionCarrierValue(carrier)?.origin === "generated") {
       constructedStructuralShapes.add(closedMetadataKey(carrier));
     }
@@ -852,5 +858,7 @@ export function analyzeRustGeneratedItemUsage(input: {
       variantsByCarrier.get(carriersByDeclaration.get(declaration) ?? "")?.has(variantName) === true,
     isUnionVariantUsed: (carrier: TargetTypeRef, variantName: string) =>
       variantsByCarrier.get(variantOwnerKey(carrier))?.has(variantName) === true,
+    isUnionVariantConstructed: (carrier: TargetTypeRef, variantName: string) =>
+      constructedVariantsByCarrier.get(variantOwnerKey(carrier))?.has(variantName) === true,
   });
 }

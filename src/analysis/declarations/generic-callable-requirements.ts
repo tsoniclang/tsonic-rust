@@ -23,7 +23,7 @@ import { rustTargetTypeParameterIdentities } from "../../target-model/types/carr
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
 import { createRustProjectProjectionRequirementCollector } from "./project-projection-requirements.js";
 import type { RustValueLifetimePlan } from "../program/value-lifetimes.js";
-import { ElementAccessExpression_ArgumentExpression, KindBinaryExpression, KindExpressionStatement, Node_Expression } from "@tsonic/target-api/source";
+import { ElementAccessExpression_ArgumentExpression, KindBinaryExpression, KindExpressionStatement, Node_Expression, sourceParameterIsProperty } from "@tsonic/target-api/source";
 import { rustValueCarrierBeforeOptionProjection } from "../facts/value-carrier-queries.js";
 import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
@@ -374,7 +374,11 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
     if (carrier !== undefined && input.readsValue(node) && !isRustDeclarationPathUse(node, ast, facts)) {
       const error = collectType(carrier);
       if (error !== undefined) return error;
-      if (ast.kindName(node) === "KindPropertyDeclaration" && (carrier.kind === "associated-type" ||
+      const propertyDeclaration = ast.kindName(node) === "KindPropertyDeclaration" || sourceParameterIsProperty(ast, node);
+      const owner = propertyDeclaration ? input.projectTypes.definitionContainingDeclaration(node) : undefined;
+      const ownedDispatchRead = owner !== undefined && input.projectTypes.isPolymorphic(owner) &&
+        input.objectRepresentations.aliasFor(node) === undefined;
+      if (propertyDeclaration && (ownedDispatchRead || carrier.kind === "associated-type" ||
         carrier.kind === "type-parameter" && carrier.optionalStorageValue !== undefined)) {
         const fieldError = addUse(node, carrier, ["clone"]);
         if (fieldError !== undefined) return fieldError;

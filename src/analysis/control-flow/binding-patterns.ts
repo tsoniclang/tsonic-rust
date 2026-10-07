@@ -17,7 +17,6 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import {
   rustBindingProjectionFactKey,
-  type RustBindingNormalization,
   type RustBindingProjection,
 } from "../facts/keys.js";
 import {
@@ -41,6 +40,8 @@ import type {
 import { isRustStructuralObjectFieldDeclaration } from "../../policy/types/source-shapes.js";
 import { rustProjectObjectLayout } from "../project-types/object-layout.js";
 import { rustBindingNormalizationContract } from "../../target-model/types/binding-normalization.js";
+import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
+import { rustOptionalStorageValue } from "../../target-model/types/projections.js";
 
 export interface RustBindingPatternFactContext {
   readonly ast: AstReader;
@@ -89,33 +90,34 @@ export function recordRustBindingPatternFacts(
       return false;
     }
     const initializer = Node_Initializer(context.ast, element);
-    const defaultCarrier = initializer === undefined ? undefined : context.resolveExpressionCarrier(
-      initializer, context.resolveCarrier(initializer) ?? context.resolveCarrier(name));
-    if (initializer !== undefined && defaultCarrier === undefined) return false;
     const selected = kind === KindArrayBindingPattern
-      ? selectArrayProjection(sourceCarrier, index, BindingElement_IsRest(context.ast, element), defaultCarrier)
+      ? selectArrayProjection(sourceCarrier, index, BindingElement_IsRest(context.ast, element), initializer !== undefined)
       : selectObjectProjection(
           element,
           sourceCarrier,
-          defaultCarrier,
+          initializer !== undefined,
           objectExtractedNames!,
           context,
         );
     if (selected === undefined) {
       return false;
     }
-    const bindingCarrier = selected.bindingCarrier;
-    if (initializer !== undefined &&
-      context.resolveExpressionCarrier(initializer, bindingCarrier) === undefined) {
-      return false;
-    }
+    const defaultExpected = rustOptionElementCarrier(selected.projectedCarrier) ??
+      rustOptionalStorageValue(selected.projectedCarrier) ?? selected.projectedCarrier;
+    const defaultCarrier = initializer === undefined ? undefined
+      : context.resolveExpressionCarrier(initializer, defaultExpected);
+    if (initializer !== undefined && defaultCarrier === undefined) return false;
+    const normalized = rustBindingNormalizationContract(
+      selected.projectedCarrier, defaultCarrier, selected.checkedArrayElement);
+    if (normalized === undefined) return false;
+    const { bindingCarrier } = normalized;
     context.facts.set(element, rustBindingProjectionFactKey, {
       sourceCarrier,
       projectedCarrier: selected.projectedCarrier,
-      storageCarrier: selected.storageCarrier,
+      storageCarrier: normalized.storageCarrier,
       bindingCarrier,
       projection: selected.projection,
-      normalization: selected.normalization,
+      normalization: normalized.normalization,
     }, [{ message: "rust finalized binding projection" }]);
     context.setCarrier(element, bindingCarrier);
     context.setCarrier(name, bindingCarrier);
@@ -130,19 +132,16 @@ export function recordRustBindingPatternFacts(
 
 interface SelectedBindingProjection {
   readonly projectedCarrier: TargetTypeRef;
-  readonly storageCarrier: TargetTypeRef;
-  readonly bindingCarrier: TargetTypeRef;
   readonly projection: RustBindingProjection;
-  readonly normalization: RustBindingNormalization;
+  readonly checkedArrayElement?: TargetTypeRef;
 }
 
 function selectArrayProjection(
   sourceCarrier: TargetTypeRef,
   index: number,
   rest: boolean,
-  defaultCarrier: TargetTypeRef | undefined,
+  hasDefault: boolean,
 ): SelectedBindingProjection | undefined {
-  const hasDefault = defaultCarrier !== undefined;
   if (rest) {
     if (hasDefault) {
       return undefined;
@@ -159,7 +158,7 @@ function selectArrayProjection(
     const bindingCarrier = bindingCarrierForArrayRest(sourceCarrier, index);
     return projection === undefined || bindingCarrier === undefined
       ? undefined
-      : { projectedCarrier: bindingCarrier, storageCarrier: bindingCarrier, bindingCarrier, projection, normalization: "identity" };
+      : { projectedCarrier: bindingCarrier, projection };
   }
 
   let projectedCarrier: TargetTypeRef | undefined;
@@ -188,16 +187,15 @@ function selectArrayProjection(
       projection = { kind: "js-array-element", index };
     }
   }
-  const selected = projectedCarrier === undefined ? undefined : rustBindingNormalizationContract(
-    projectedCarrier, defaultCarrier, projection?.kind === "js-array-element" ? rustJsArrayLikeElementTargetType(sourceCarrier) : undefined);
-  return projectedCarrier === undefined || projection === undefined || selected === undefined ? undefined
-    : { projectedCarrier, ...selected, projection };
+  return projectedCarrier === undefined || projection === undefined ? undefined
+    : { projectedCarrier, projection, ...(projection.kind === "js-array-element"
+      ? { checkedArrayElement: rustJsArrayLikeElementTargetType(sourceCarrier)! } : {}) };
 }
 
 function selectObjectProjection(
   element: Node,
   sourceCarrier: TargetTypeRef,
-  defaultCarrier: TargetTypeRef | undefined,
+  hasDefault: boolean,
   extractedSourceNames: ReadonlySet<string>,
   context: RustBindingPatternFactContext,
 ): SelectedBindingProjection | undefined {
@@ -207,7 +205,7 @@ function selectObjectProjection(
   }
   const name = Node_Name(context.ast, element);
   if (BindingElement_IsRest(context.ast, element)) {
-    if (defaultCarrier !== undefined || name === undefined || context.ast.kindName(name) !== KindIdentifier) {
+    if (hasDefault || name === undefined || context.ast.kindName(name) !== KindIdentifier) {
       return undefined;
     }
     const remaining = sourceShape.fields.filter((field) =>
@@ -243,8 +241,6 @@ function selectObjectProjection(
       ? undefined
       : {
           projectedCarrier: bindingCarrier,
-          storageCarrier: bindingCarrier,
-          bindingCarrier,
           projection: {
             kind: "object-rest",
             storage: sourceShape.storage,
@@ -258,7 +254,6 @@ function selectObjectProjection(
               };
             }[],
           },
-          normalization: "identity",
         };
   }
   const propertyName = BindingElement_PropertyName(context.ast, element) ?? name;
@@ -272,20 +267,16 @@ function selectObjectProjection(
     return undefined;
   }
   const projectedCarrier = field?.carrier;
-  const selected = projectedCarrier === undefined ? undefined : rustBindingNormalizationContract(projectedCarrier, defaultCarrier);
-  return field === undefined || projectedCarrier === undefined || selected === undefined
+  return field === undefined || projectedCarrier === undefined
     ? undefined
     : {
         projectedCarrier,
-        storageCarrier: selected.storageCarrier,
-        bindingCarrier: selected.bindingCarrier,
         projection: {
           kind: "object-field",
           storage: sourceShape.storage,
           storageIndex: field.storageIndex,
           ...(field.accessor === undefined ? {} : { accessor: field.accessor }),
         },
-        normalization: selected.normalization,
       };
 }
 

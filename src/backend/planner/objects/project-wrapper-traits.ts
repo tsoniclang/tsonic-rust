@@ -3,6 +3,27 @@ import { rustProjectObjectStateField } from "./project-objects.js";
 import { emptyRustGenerics } from "../../target-ast/nodes.js";
 import type { RustExpr, RustGenerics, RustImplFunction, RustItem, RustType } from "../../target-ast/nodes.js";
 
+export function rustProjectCloneImplementation(
+  target: RustType,
+  generics: RustGenerics,
+  fields: readonly string[],
+): RustItem {
+  return {
+    kind: "impl", target, generics, trait: { kind: "named", path: "Clone" },
+    members: [{ kind: "function",
+      name: "clone", visibility: "private", generics: emptyRustGenerics,
+      selfParam: rustSelfParameter("ref"), params: [], returnType: { kind: "named", path: "Self" },
+      body: { statements: [{ kind: "tail", expr: {
+        kind: "struct-literal", path: "Self", fields: fields.map(name => ({
+          name, value: { kind: "method-call", receiver: {
+            kind: "field", receiver: { kind: "path", path: "self" }, name,
+          }, method: "clone", args: [] },
+        })),
+      } }] },
+    }],
+  };
+}
+
 export function rustProjectWrapperTraits(
   target: RustType,
   name: string,
@@ -16,16 +37,7 @@ export function rustProjectWrapperTraits(
     kind: "impl", target, generics, trait: { kind: "named", path: trait }, members: [method],
   });
   return [
-    implementation("Clone", { kind: "function",
-      name: "clone", visibility: "private", generics: emptyRustGenerics,
-      selfParam: rustSelfParameter("ref"), params: [], returnType: { kind: "named", path: "Self" },
-      body: { statements: [{ kind: "tail", expr: {
-        kind: "struct-literal", path: "Self", fields: [{
-          name: rustProjectObjectStateField,
-          value: { kind: "method-call", receiver: field("self"), method: "clone", args: [] },
-        }],
-      } }] },
-    }),
+    rustProjectCloneImplementation(target, generics, [rustProjectObjectStateField]),
     implementation("core::fmt::Debug", { kind: "function",
       name: "fmt", visibility: "private", generics: emptyRustGenerics,
       selfParam: rustSelfParameter("ref"), params: [{ name: "formatter", type: {

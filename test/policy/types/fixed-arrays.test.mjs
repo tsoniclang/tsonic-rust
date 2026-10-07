@@ -24,6 +24,11 @@ import {
   rustFixedArrayTargetType,
   rustTargetConstInteger,
   rustTargetConstSafeInteger,
+  rustVecTargetType,
+  rustJsArrayTargetType,
+  rustSourcePrimitiveTargetType,
+  rustOptionTargetType,
+  rustTupleTargetType,
 } from "../../../dist/target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustSpreadElementCarrier } from "../../../dist/target-model/operations/rest-assembly.js";
@@ -35,6 +40,44 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 const element = Object.freeze({ kind: "source-primitive", name: "uint32" });
 const integer = value => ({ kind: "integer", value: value.toString() });
+
+test("binding defaults select the projected native context once before sealing normalization", () => {
+  const pattern = {}, binding = {}, name = {}, initializer = {};
+  const ast = {
+    kindName: node => node === pattern ? "KindArrayBindingPattern"
+      : node === binding ? "KindBindingElement" : "KindIdentifier",
+    elements: node => node === pattern ? [binding] : [],
+    name: node => node === binding ? name : undefined,
+    is: { IsBindingElement: node => node === binding, IsVariableDeclaration: () => false,
+      IsParameterDeclaration: () => false, IsPropertyDeclaration: () => false },
+    as: { AsBindingElement: () => ({ Initializer: initializer }) },
+  };
+  for (const width of ["int32", "uint32", "int64", "uint64"]) {
+    const value = rustSourcePrimitiveTargetType(width);
+    for (const sourceCarrier of [rustVecTargetType(value), rustJsArrayTargetType(value),
+      rustFixedArrayTargetType(value, 1), rustTupleTargetType([rustOptionTargetType(value)])]) {
+      for (const admitsDefault of [true, false]) {
+        const facts = createRustPlanBuilder({ getFact: () => undefined });
+        let resolutions = 0;
+        const recorded = recordRustBindingPatternFacts(pattern, sourceCarrier, {
+          ast, facts, setCarrier: () => {},
+          resolveCarrier: () => assert.fail("binding defaults must not select an uncontextualized initializer type"),
+          resolveExpressionCarrier: (selected, expected) => {
+            resolutions++;
+            assert.equal(selected === initializer, true, "exact initializer");
+            assert.equal(rustTargetTypeRefEquals(expected, value), true, `${width} native projected context`);
+            return admitsDefault ? value : undefined;
+          },
+        });
+        assert.equal(recorded, admitsDefault);
+        assert.equal(resolutions, 1, "one contextual initializer resolution");
+        const projection = facts.getFact(binding, rustBindingProjectionFactKey);
+        assert.equal(projection !== undefined, admitsDefault, "rejected defaults cannot publish projection facts");
+        if (admitsDefault) assert.equal(rustTargetTypeRefEquals(projection.bindingCarrier, value), true);
+      }
+    }
+  }
+});
 
 function fixedArraySourceFixture() {
   const elementSourceType = Object.freeze({});
@@ -74,6 +117,7 @@ function fixedArraySourceFixture() {
         symbolDeclarations: () => [],
       },
       types: {
+        isNonPrimitive: () => false,
         isTypeReference: type => argumentsByType.has(type),
         typeReferenceTarget: () => undefined,
         typeArguments: type => argumentsByType.get(type) ?? [],
