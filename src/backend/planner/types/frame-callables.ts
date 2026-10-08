@@ -53,6 +53,7 @@ export function rustFrameCallableTypes(
   }
   if (frameType === undefined) return undefined;
   const entryType: RustType = { kind: "named", path: `${prefix}::${entry.targetName}`, genericArguments };
-  return { definition, entry, frameType, entryType, rootType: { kind: "named", path: "rt::FrameCallable",
+  return { definition, entry, frameType, entryType, rootType: { kind: "named",
+    path: entry.hasIndependent ? "rt::FrameCallableFamily" : "rt::FrameCallable",
     genericArguments: [{ kind: "type", type: frameType }, { kind: "type", type: entryType }] } };
 }

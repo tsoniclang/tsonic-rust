@@ -21,6 +21,7 @@ import { checkRustDataWrite } from "./data-writes.js";
 import { planRustSourceAccessorCall } from "../expressions/properties.js";
 import { applyFallibleShape, applyRustFallibleResultExpression } from "../types/fallible-shape.js";
 import { rustStructuralDispatchType } from "./project-structural-types.js";
+import { planRustStructuralFrameField } from "./project-structural-frame-fields.js";
 
 export function planRustProjectStructuralConversion(
   expression: RustExpr, sourceCarrier: TargetTypeRef, targetCarrier: TargetTypeRef, context: RustPlanContext,
@@ -139,6 +140,13 @@ export function planRustProjectStructuralImplementations(declaration: Node, cont
         continue;
       }
       if (source !== undefined && source.dispatch === undefined) {
+        if (context.input.program.callableValues.frames.bindingFor(member.declaration)?.entry !== undefined) {
+          if (type === undefined) return undefined;
+          const planned = planRustStructuralFrameField(declaration, member, field, type, local);
+          if (planned === undefined) return undefined;
+          functions.push(...planned);
+          continue;
+        }
         const path = rustDirectProjectFieldStoragePath(view.sourceCarrier, source.storageIndex, context);
         if (path === undefined || type === undefined || field.property === undefined) return undefined;
         const captured = rustCapturedFieldStorage(member.declaration, local);

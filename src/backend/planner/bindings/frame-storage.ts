@@ -11,7 +11,7 @@ import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustFrameCallableTypes } from "../types/frame-callables.js";
 import { requireRustLocationValueCarrier, rustCarrierHasCopyContract } from "../types/generic-requirements.js";
 import { rustCallableCaptureStorageType } from "../types/capture-storage.js";
-import { planRustFrameCallableEntry } from "../expressions/frame-callables.js";
+import { planRustFrameCallableEntry, publishRustFrameCallable } from "../expressions/frame-callables.js";
 import { planRustNonConsumingValue } from "../expressions/typed-locations.js";
 import { rustSourceBindingFactKey } from "../../../analysis/facts/keys.js";
 import { rustBindingStorageOperations, rustInlineBindingStoragePath, rustInlineBindingStorageType } from "../expressions/binding-storage.js";
@@ -113,7 +113,8 @@ export function planRustFrameBindingInput(
       "rust.backend.frame-entry-input", "An internal frame slot requires exact same-activation input ownership."));
     return undefined;
   }
-  if (context.input.program.callableValues.frames.implementationFor(node) !== undefined)
+  const implementation = context.input.program.callableValues.frames.implementationFor(node);
+  if (implementation !== undefined && !implementation.independent)
     return planRustFrameCallableEntry(node, binding.carrier, context);
   const declaration = context.input.program.facts.getFact(node, rustSourceBindingFactKey)?.sourceDeclaration;
   const sourceBinding = declaration === undefined ? undefined : types.definition.bindings.find(selected =>
@@ -123,6 +124,8 @@ export function planRustFrameBindingInput(
     data => frameBindingPayload(sourceBinding, { kind: "field", receiver: data, name: sourceBinding.fieldName }, context).read);
   const value = planValue();
   if (value === undefined) return undefined;
+  if (types.entry.hasIndependent) return { kind: "method-call",
+    receiver: planRustNonConsumingValue(node, value, context), method: "into_entry", args: [] };
   const borrowed: RustExpr = { kind: "method-call", receiver: planRustNonConsumingValue(node, value, context), method: "entry", args: [] };
   return binding.entry?.copy === true ? { kind: "dereference", pointer: borrowed }
     : { kind: "method-call", receiver: borrowed, method: "clone", args: [] };
@@ -130,10 +133,14 @@ export function planRustFrameBindingInput(
 
 export function rustFrameBindingLocation(
   binding: RustFrameCallableBinding, owner: RustLiveFrameOwner, context: RustPlanContext,
+  ownedPublication?: { readonly entryName: string },
 ): RustValueFieldLocation {
   const select = (data: RustExpr) => frameBindingPayload(binding, { kind: "field", receiver: data, name: binding.fieldName }, context);
   const read = projectRustFrameOwnerData(owner, data => select(data).read);
   const types = binding.entry === undefined ? undefined : rustFrameCallableTypes(binding.carrier, context);
+  if (binding.entry !== undefined && types === undefined) context.diagnostics.push(missingFactDiagnostic(
+    diagnosticInput(context, binding.declaration), "rust.backend.frame-binding-publication",
+    "A native frame binding requires its exact sealed entry and owning publication carrier."));
   return {
     bindings: [],
     address: (member, addressContext) => {
@@ -155,9 +162,7 @@ export function rustFrameBindingLocation(
           args: [{ kind: "reference", expr: { kind: "dereference", pointer: selected } }] }, method: "clone", args: [] }));
       return value === undefined ? undefined : { kind: "fallible", value };
     },
-    read: binding.entry === undefined ? read : { kind: "call", path: "rt::FrameCallable::from_frame", args: [
-      { kind: "call", path: "alloc::rc::Rc::clone", args: [rustFrameOwnerReference(owner)] }, read,
-    ] },
+    read: types === undefined ? read : publishRustFrameCallable(types, owner, read, ownedPublication),
     ...(binding.entry === undefined ? { withRead: (project: (value: RustExpr) => RustExpr | undefined) =>
       projectRustFrameOwnerData(owner, data => {
         const { cell, operations } = select(data);

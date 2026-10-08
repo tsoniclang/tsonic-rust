@@ -30,6 +30,7 @@ export interface RustFrameCallableImplementation {
   readonly receiverFields: RustClosureCaptureFact["receiverFields"];
   readonly receivers: RustClosureCaptureFact["receivers"];
   readonly copy: boolean;
+  readonly independent: boolean;
 }
 
 export interface RustFrameCallableEntryDefinition {
@@ -39,6 +40,7 @@ export interface RustFrameCallableEntryDefinition {
   readonly implementations: readonly RustFrameCallableImplementation[];
   readonly copy: boolean;
   readonly environmentIndexes: readonly number[];
+  readonly hasIndependent: boolean;
 }
 
 export interface RustFrameCallableBinding {
@@ -152,7 +154,12 @@ export function createRustFrameCallablePlan(input: {
       const entryCaptures = Object.freeze(capture.captures.filter(selected => !frameDeclarations.has(selected.declaration)));
       const receiverFields = Object.freeze(capture.receiverFields.filter(selected => !frameDeclarations.has(selected.declaration)));
       const receivers = Object.freeze(capture.receivers.filter(selected => selected.owner !== classDefinition?.declaration));
-      const implementation = Object.freeze({ declaration, carrier, capture, captures: entryCaptures, receiverFields, receivers,
+      const independent = input.ownership.isIndependentCallable(declaration);
+      if (independent && (capture.captures.length !== 0 || capture.receiverFields.length !== 0 || capture.receivers.length !== 0)) {
+        issue(declaration, "An independent frame alternative requires its exact capture-free environment.");
+        continue;
+      }
+      const implementation = Object.freeze({ declaration, carrier, capture, captures: entryCaptures, receiverFields, receivers, independent,
         copy: receivers.length === 0 && receiverFields.every(selected => selected.storage.kind === "copy") &&
           entryCaptures.every(selected => selected.storage === "value" && isRustCopyCarrier(selected.carrier)),
         variantName: `Entry_${identity}`,
@@ -168,7 +175,8 @@ export function createRustFrameCallablePlan(input: {
     const entries = Object.freeze([...groups].map(([key, group], index) => Object.freeze({
       key, targetName: allocateRustGeneratedName(usedNames, `TsonicFrameEntry_${prefix}_${index}`),
       signature: group.signature, implementations: Object.freeze(group.implementations),
-      copy: group.implementations.every(implementation => implementation.copy),
+      copy: group.implementations.every(implementation => implementation.copy && !implementation.independent),
+      hasIndependent: group.implementations.some(implementation => implementation.independent),
       environmentIndexes: Object.freeze(rustFrameCallableValue(group.implementations[0]!.carrier)!.environment
         .map(parameter => parameter.kind === "type-parameter"
           ? environmentParameters.findIndex(candidate => candidate.identity === parameter.identity) : -1)),
@@ -258,6 +266,13 @@ export function createRustFrameCallablePlan(input: {
   };
   const isSameActivationInput = (expression: Node, definition: RustFrameCallableDefinition, receiver?: Node): boolean => {
     if (!definitions.includes(definition)) return false;
+    const subject = input.sourceStorage.subject(expression, "value");
+    const origins = subject.kind === "resolved" ? input.sourceStorage.closedOriginsFor(subject.subject) : subject;
+    if (origins.kind === "complete" && origins.origins.length !== 0 && origins.origins.every(origin => {
+      if (origin.subject.kind !== "value" || origin.subject.projection.length !== 0) return false;
+      const implementation = implementations.get(origin.subject.node);
+      return implementation?.independent === true && definition.entries.some(entry => entry.implementations.includes(implementation));
+    })) return true;
     if (definition.activation.kind === "class" && receiver !== undefined &&
       input.ownership.instanceReceiverOwner(receiver) !== definition.activation.ownerDeclaration) return false;
     const creations = input.sourceStorage.localCallableCreationsFor(expression);

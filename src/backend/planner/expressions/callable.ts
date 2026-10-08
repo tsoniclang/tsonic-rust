@@ -55,7 +55,7 @@ import { rustReceiverIndependentMethodFactKey } from "../../../analysis/facts/op
 import { rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
 import { rustFrameCallableValue } from "../../../target-model/types/carriers/frame-callables.js";
 import { rustCallableInputProtocol } from "../../../target-model/types/carriers/callables.js";
-import { planRustFrameCallableValue } from "./frame-callables.js";
+import { planRustFrameCallableValue, rustIndependentFrameConstruction } from "./frame-callables.js";
 import { planRustGenericCallableValue } from "./generic-callables.js";
 import { planRustGeneratorBody } from "../declarations/callables/generator-body.js";
 import { wrapRustJsPromiseBody } from "../declarations/callables/async-promise.js";
@@ -107,7 +107,8 @@ export function planRustCallableExpressionBody(
   if (!validateRustRecursiveReceiverField(node, captureFact, closureFact.resultCarrier, context)) return undefined;
   if (resultUse === "discarded") return { kind: "tuple-literal", elements: [] };
   const independent = context.input.program.facts.getFact(node, rustReceiverIndependentMethodFactKey);
-  const constructionCarrier = independent?.carrier ?? closureFact.resultCarrier;
+  const frameAlternative = rustIndependentFrameConstruction(node, closureFact.resultCarrier, context);
+  const constructionCarrier = frameAlternative?.carrier ?? independent?.carrier ?? closureFact.resultCarrier;
   if (rustFrameCallableValue(constructionCarrier) !== undefined)
     return planRustFrameCallableValue(node, constructionCarrier, context);
   if (rustGenericCallableValue(constructionCarrier) !== undefined) {
@@ -600,8 +601,9 @@ export function planRustCallableExpressionBody(
     method: recursiveName === undefined ? "new" : "recursive",
     args: [closure],
   };
-  return finishRuntimeCallableExpression(
+  const result = finishRuntimeCallableExpression(
     callable,
     captureBindings,
   );
+  return frameAlternative === undefined ? result : frameAlternative.wrap(result);
 }

@@ -51,6 +51,7 @@ export function createRustCallableOwnershipRegistry(): RustCallableOwnershipRegi
     componentForSlot: (declaration: Node) => requireCurrent().componentForSlot(declaration),
     isCyclicCallable: (declaration: Node) => requireCurrent().isCyclicCallable(declaration),
     isCyclicSlot: (declaration: Node) => requireCurrent().isCyclicSlot(declaration),
+    isIndependentCallable: (declaration: Node) => requireCurrent().isIndependentCallable(declaration),
     instanceReceiverOwner: (receiver: Node) => requireCurrent().instanceReceiverOwner(receiver),
     storageFor: (subject: SourceStorageSubject) => requireCurrent().storageFor(subject),
   });

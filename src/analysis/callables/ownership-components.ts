@@ -58,6 +58,7 @@ export interface RustCallableOwnershipComponentQueries {
   componentForSlot(declaration: Node): RustCallableOwnershipComponent | undefined;
   isCyclicCallable(declaration: Node): boolean;
   isCyclicSlot(declaration: Node): boolean;
+  isIndependentCallable(declaration: Node): boolean;
   instanceReceiverOwner(receiver: Node): Node | undefined;
 }
 
@@ -94,6 +95,7 @@ export function createRustCallableOwnershipComponentQueries(input: {
   const components: RustCallableOwnershipComponent[] = [];
   const cyclicCallables = new Set<Node>();
   const cyclicSlots = new Set<Node>();
+  const independentCallables = new Set<Node>();
   const reject = (reason: string): void => { failure ??= reason; };
   const account = (cost = 1): boolean => {
     if (failure !== undefined) return false;
@@ -322,6 +324,11 @@ export function createRustCallableOwnershipComponentQueries(input: {
     }
   }
   if (failure !== undefined || storage.failureReason() !== undefined) return result();
+  for (const declaration of callables.keys()) {
+    if (!account()) return result();
+    if (!problems.has(declaration) && (captures.get(declaration)?.length ?? 0) === 0)
+      independentCallables.add(declaration);
+  }
   const cyclic = graphComponents(vertices, neighbours);
   if (cyclic === undefined) return result();
   const cycleSlots = new Set<Vertex>();
@@ -387,6 +394,7 @@ export function createRustCallableOwnershipComponentQueries(input: {
       reason ??= "A cyclic callable component requires one exact lexical activation or one class-instance owner.";
     if (owner !== undefined) for (const declaration of declarations) {
       if (!account()) return result();
+      if (independentCallables.has(declaration)) continue;
       if (owner.kind === "lexical") {
         if (sourceEnclosingCallable(ast.parent(declaration), boundedAst) !== owner.declaration ||
           !within(declaration, owner.scope)) reason ??= "A callable origin belongs to a different lexical activation.";
@@ -440,12 +448,17 @@ export function createRustCallableOwnershipComponentQueries(input: {
         const receiver = unwrap(info?.receiver.expression);
         const parent = ast.parent(node);
         const binary = parent === undefined ? undefined : ast.as.AsBinaryExpression(parent);
-        if (receiver === undefined || receiverOwner(receiver) !== owner || binary?.Left !== node ||
+        if (receiver === undefined || binary?.Left !== node ||
           parent === undefined || ast.operatorKindName(parent) !== "KindEqualsToken") {
           issue(declaration, "A cyclic callable field has a foreign-instance, accessor or unresolved write relationship.");
           continue;
         }
         const value = unwrap(binary.Right);
+        if (value !== undefined && independentSupplier(value)) continue;
+        if (receiverOwner(receiver) !== owner) {
+          issue(declaration, "A cyclic callable field has a foreign-instance retaining write relationship.");
+          continue;
+        }
         if (value !== undefined) recordSupplier(declaration, value, owner);
       }
       return Object.freeze({ kind: "class", declaration: owner, scope: owner });
@@ -458,6 +471,7 @@ export function createRustCallableOwnershipComponentQueries(input: {
 
   function recordSupplier(slot: Node, expression: Node, owner: Node): void {
     if (!account()) return;
+    if (independentSupplier(expression)) return;
     const creations = storage.localCallableCreationsFor(expression);
     if (creations.kind !== "resolved" || creations.nodes.length === 0 ||
       creations.nodes.some(node => !sourceNodes.has(node) || !isCallable(node) || classOwner(node) !== owner)) {
@@ -470,6 +484,15 @@ export function createRustCallableOwnershipComponentQueries(input: {
       owners.add(owner);
       supplied.set(node, owners);
     }
+  }
+
+  function independentSupplier(expression: Node): boolean {
+    if (!account()) return false;
+    const subject = storage.subject(expression, "value");
+    const origins = subject.kind === "resolved" ? storage.closedOriginsFor(subject.subject) : subject;
+    return origins.kind === "complete" && origins.origins.length !== 0 && origins.origins.every(origin =>
+      account() && origin.subject.kind === "value" && origin.subject.projection.length === 0 &&
+      independentCallables.has(origin.subject.node));
   }
 
   function within(node: Node, scope: Node): boolean {
@@ -499,6 +522,7 @@ export function createRustCallableOwnershipComponentQueries(input: {
         ? slotComponents.get(canonicalSlots.get(declaration) ?? declaration) : undefined,
       isCyclicCallable: (declaration: Node) => failure === undefined && cyclicCallables.has(declaration),
       isCyclicSlot: (declaration: Node) => failure === undefined && cyclicSlots.has(canonicalSlots.get(declaration) ?? declaration),
+      isIndependentCallable: (declaration: Node) => failure === undefined && independentCallables.has(declaration),
       instanceReceiverOwner: (receiver: Node) => failure === undefined ? receiverOwners.get(receiver) : undefined });
   }
 }

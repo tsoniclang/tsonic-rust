@@ -374,11 +374,16 @@ export function resolveStructuralObjectType(
     const authoredTypeNodes = propertyTypeNodes.length !== 0 || authoredTypeRoot === undefined
       ? propertyTypeNodes
       : sourceTransformedTypeFactEvidenceNodes(context.ast, semantics, authoredTypeRoot, property.type);
-    const authoredCarriers = authoredTypeNodes.map((node) =>
+    const memberContexts = ordinaryDeclarations.length === 0 ? [context] : ordinaryDeclarations.flatMap(declaration => {
+      const selection = context.sourceStorage.subject(declaration, "value");
+      return selection.kind !== "resolved" ? [] : [{ ...context, sourceStorageSubject: selection.subject }];
+    });
+    if (ordinaryDeclarations.length !== 0 && memberContexts.length !== ordinaryDeclarations.length) return undefined;
+    const authoredCarriers = memberContexts.flatMap(memberContext => authoredTypeNodes.map((node) =>
       resolveRustTypeComponentEvidence({
         authoredTypeNode: node,
         selectedType: property.type,
-      }, context, options, resolving));
+      }, memberContext, options, resolving)));
     const authoredCarrier = authoredCarriers.length > 0 &&
         authoredCarriers.every((carrier) =>
           carrier !== undefined && rustTargetTypeRefEquals(carrier, authoredCarriers[0]))
@@ -396,8 +401,11 @@ export function resolveStructuralObjectType(
     const inferredCarrier = initializerCarriers.length > 0 && initializerCarriers.every(carrier =>
       isRustNumericCarrier(carrier) && rustTargetTypeRefEquals(carrier, initializerCarriers[0]))
       ? initializerCarriers[0] : undefined;
+    const inferredCarriers = authoredTypeNodes.length === 0 && inferredCarrier === undefined
+      ? memberContexts.map(memberContext => resolveRustTargetType(property.type, memberContext, options, resolving)) : [];
     const selectedFieldCarrier = authoredTypeNodes.length === 0
-      ? inferredCarrier ?? resolveRustTargetType(property.type, context, options, resolving)
+      ? inferredCarrier ?? (inferredCarriers.length > 0 && inferredCarriers.every(carrier =>
+        carrier !== undefined && rustTargetTypeRefEquals(carrier, inferredCarriers[0])) ? inferredCarriers[0] : undefined)
       : authoredCarrier;
     const fieldCarrier = selectedFieldCarrier === undefined
       ? undefined

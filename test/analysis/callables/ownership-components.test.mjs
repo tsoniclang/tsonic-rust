@@ -87,6 +87,30 @@ class Value {
     "ordinary constructor parameter has no invented field relation");
 });
 
+test("capture-free replacements share a protocol without acquiring the class activation", () => {
+  const current = fixture(`
+class Value {
+  recurse = (count: number): number => count === 0 ? 1 : this.recurse(count - 1);
+}
+export function run(): number {
+  const value = new Value();
+  const before = value.recurse;
+  value.recurse = (): number => 99;
+  const view: { recurse: (count: number) => number } = value;
+  view["recurse"] = (): number => 23;
+  return before(2);
+}
+`);
+  const queries = current.analyze();
+  const component = onlyComponent(queries);
+  assert.equal(component.kind, "class");
+  assert.equal(component.callableDeclarations.length, 3, "all exact checked callback creations contribute");
+  assert.equal(component.callableDeclarations.filter(node => queries.isIndependentCallable(node)).length, 2,
+    "only the two complete capture-free environments are independent");
+  assert.equal(component.callableDeclarations.filter(node => queries.isCyclicCallable(node)).length, 1,
+    "the recursive creation still retains its exact instance");
+});
+
 test("owning activation selection is initialized once before source ABI consumers", () => {
   const current = fixture(lexicalSource);
   const registry = createRustCallableOwnershipRegistry();

@@ -18,6 +18,8 @@ import { rustDeclarationAssociatedPredicates } from "../../types/associated-boun
 import { closedMetadataKey } from "../../../../target-model/metadata/closed-data.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
 import type { RustLiveFrameOwner } from "../../program/frame-owners.js";
+import { planRustFrameCallableFamilyItems } from "./frame-family-implementations.js";
+import { rustRetainedFrameCounterName } from "../../../../analysis/callables/frame-counter-storage.js";
 
 function shared(type: RustType): RustType {
   return { kind: "named", path: "alloc::rc::Rc", genericArguments: [{ kind: "type", type }] };
@@ -63,7 +65,9 @@ function entryClone(
   return [{ kind: "impl", trait: { kind: "named", path: "Clone" }, target, generics, members: [{
     kind: "function", name: "clone", visibility: "private", selfParam: rustSelfParameter("ref"), generics: emptyRustGenerics,
     params: [], returnType: { kind: "named", path: "Self" }, body: { statements: [{ kind: "tail", expr: {
-      kind: "match", expression: { kind: "path", path: "self" }, arms: entry.implementations.map(implementation => ({
+      kind: "match", expression: { kind: "path", path: "self" }, arms: [
+        ...entry.implementations.filter(implementation => !implementation.independent).map((implementation):
+          Extract<RustExpr, { readonly kind: "match" }>["arms"][number] => ({
         pattern: { kind: "tuple-variant", path: `Self::${implementation.variantName}`, elements: [
           { kind: "binding", name: "identity" }, ...(!entryHasPayload(implementation, generics) ? [] : [{ kind: "binding" as const, name: "state" }]),
         ] },
@@ -73,7 +77,12 @@ function entryClone(
             ? { kind: "dereference" as const, pointer: { kind: "path" as const, path: "state" } }
             : { kind: "method-call" as const, receiver: { kind: "path" as const, path: "state" }, method: "clone", args: [] }]),
         ] },
-      })),
+      })), ...(entry.hasIndependent ? [{
+        pattern: { kind: "tuple-variant" as const, path: "Self::Independent", elements: [{ kind: "binding" as const, name: "value" }] },
+        expression: { kind: "call" as const, path: "Self::Independent", args: [
+          { kind: "method-call" as const, receiver: { kind: "path" as const, path: "value" }, method: "clone", args: [] },
+        ] },
+      }] : [])],
     } }] },
   }] }];
 }
@@ -89,11 +98,17 @@ function entryEquality(entry: RustFrameCallableEntryDefinition, target: RustType
     params: [{ name: "other", type: { kind: "reference", referent: { kind: "named", path: "Self" }, mutable: false } }],
     returnType: { kind: "primitive", name: "bool" }, body: { statements: [{ kind: "tail", expr: {
       kind: "match", expression: { kind: "tuple-literal", elements: [{ kind: "path", path: "self" }, { kind: "path", path: "other" }] },
-      arms: [...entry.implementations.map(implementation => ({
+      arms: [...entry.implementations.filter(implementation => !implementation.independent).map(implementation => ({
         pattern: { kind: "tuple" as const, elements: [pattern(implementation, "left"), pattern(implementation, "right")] },
         expression: { kind: "binary" as const, operator: "==" as const,
           left: { kind: "path" as const, path: "left" }, right: { kind: "path" as const, path: "right" } },
-      })), ...(entry.implementations.length <= 1 ? [] : [{
+      })), ...(entry.hasIndependent ? [{
+        pattern: { kind: "tuple" as const, elements: ["left", "right"].map(name => ({
+          kind: "tuple-variant" as const, path: "Self::Independent", elements: [{ kind: "binding" as const, name }],
+        })) },
+        expression: { kind: "binary" as const, operator: "==" as const,
+          left: { kind: "path" as const, path: "left" }, right: { kind: "path" as const, path: "right" } },
+      }] : []), ...(entry.implementations.length <= 1 && !entry.hasIndependent ? [] : [{
         pattern: { kind: "wildcard" as const }, expression: { kind: "bool-literal" as const, value: false },
       }])],
     } }] },
@@ -114,6 +129,7 @@ function planFrameEntry(
   let argumentTypes: readonly RustType[] | undefined;
   let resultType: RustType | undefined;
   for (const implementation of entry.implementations) {
+    if (implementation.independent) continue;
     const suspended = context.input.program.facts.getFact(implementation.declaration, rustAsyncFunctionFactKey) !== undefined ||
       context.input.program.facts.getFact(implementation.declaration, rustGeneratorFactKey) !== undefined;
     const state = stateType(implementation, generics);
@@ -169,6 +185,15 @@ function planFrameEntry(
     ] }, expression: fallible ? call : { kind: "call", path: "Ok", args: [call] } });
   }
   if (argumentTypes === undefined || resultType === undefined) return undefined;
+  const independentType: RustType = { kind: "named", path: "rt::Callable", genericArguments: [
+    { kind: "type", type: { kind: "tuple", elements: argumentTypes } }, { kind: "type", type: resultType },
+  ] };
+  if (entry.hasIndependent) {
+    variants.push({ name: "Independent", fields: [independentType] });
+    arms.push({ pattern: { kind: "tuple-variant", path: "Self::Independent", elements: [{ kind: "binding", name: "value" }] },
+      expression: { kind: "method-call", receiver: { kind: "path", path: "value" }, method: "call",
+        args: [{ kind: "path", path: "arguments" }] } });
+  }
   items.push({ kind: "enum", name: entry.targetName, visibility: "public", generics, variants },
     ...entryClone(entry, types.entryType, generics), ...entryEquality(entry, types.entryType, generics),
     { kind: "impl", generics, trait: { kind: "named", path: "rt::FrameCallableEntry",
@@ -181,6 +206,7 @@ function planFrameEntry(
         returnType: { kind: "named", path: "Self::Result" },
         body: { statements: [{ kind: "tail", expr: { kind: "match", expression: { kind: "path", path: "self" }, arms } }] } },
     ] });
+  if (entry.hasIndependent) items.push(...planRustFrameCallableFamilyItems(types, independentType, generics));
   return items;
 }
 
@@ -203,9 +229,10 @@ export function planRustFrameCallableItems(context: RustPlanContext): readonly R
     context.usedAliases?.add("rt");
     const generics = definitionGenerics(definition, local);
     const marker = definitionMarker(generics);
+    const counterName = rustRetainedFrameCounterName(definition, context.input.program);
     if (definition.storage.kind === "standalone") result.push({ kind: "struct", name: definition.targetName, visibility: "public",
       generics, fields: [
-        { name: definition.counterName, type: { kind: "named", path: "rt::FrameEntryCounter" }, visibility: "public" },
+        ...(counterName === undefined ? [] : [{ name: counterName, type: { kind: "named" as const, path: "rt::FrameEntryCounter" }, visibility: "public" as const }]),
         ...fields as { readonly name: string; readonly type: RustType; readonly visibility: "public" }[],
         ...(marker === undefined ? [] : [{ name: "marker", type: marker, visibility: "public" as const }]),
       ] });

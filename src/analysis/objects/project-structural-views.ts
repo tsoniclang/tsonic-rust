@@ -8,6 +8,7 @@ import type { RustProjectAccessorSelection } from "../operations/provider/projec
 import type { RustCallableValueAdapter } from "../facts/callable-adapters.js";
 import { generalizeRustProjectStructuralView } from "./project-structural-views-generics.js";
 import { selectRustProjectStructuralViewFields, selectRustProjectStructuralViewSources } from "./project-structural-views-members.js";
+import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 
 export interface RustProjectStructuralView {
   readonly declaration: Node;
@@ -39,7 +40,8 @@ export function selectRustProjectStructuralView(
   if (view === undefined || !walk.context.classValues.recordInstanceView(view)) return false;
   return fields.every(field => walk.sourceTypes.registerStructuralFieldImplementation({
     carrier: targetCarrier, storageIndex: field.storageIndex, kind: "dispatch",
-  }) && (field.accessor === undefined || walk.sourceTypes.registerStructuralFieldImplementation({
+  }) && (field.accessor === undefined && rustFrameCallableValue(field.field?.resultCarrier) === undefined ||
+    walk.sourceTypes.registerStructuralFieldImplementation({
     carrier: targetCarrier, storageIndex: field.storageIndex, kind: "accessor",
   })));
 }
