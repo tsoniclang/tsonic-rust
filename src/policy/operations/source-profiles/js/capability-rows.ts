@@ -564,6 +564,7 @@ const jsonRows: readonly JsOperationRowData[] = ([
   })),
 ] satisfies readonly JsOperationRowData[]).map((row) => ({
   ...row,
+  errorBoundary: "target-runtime" as const,
   valueProjections: [{ sourceIndex: 0, kind: "json" }] as const,
 }));
 

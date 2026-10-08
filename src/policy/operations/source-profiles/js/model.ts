@@ -232,6 +232,7 @@ export interface JsOperationRowData {
   readonly callback?: RustCallbackOperationTemplate;
   readonly selectedMethodTypeArgumentArity?: number;
   readonly fallible?: boolean;
+  readonly errorBoundary?: "target-runtime";
   readonly dispatchInputs?: readonly RustDispatchContextInput[];
   readonly asynchronous?: true;
   readonly returnedFuture?: {
@@ -272,6 +273,11 @@ export function defineJsOperationRows(rows: readonly JsOperationRowData[]): read
   const identities = new Set<string>();
   const variantsByOperation = new Map<string, string[]>();
   for (const row of rows) {
+    const errorBoundary = Object.getOwnPropertyDescriptor(row, "errorBoundary");
+    if (errorBoundary !== undefined && (!("value" in errorBoundary) ||
+      errorBoundary.value !== "target-runtime" || row.fallible !== true || row.shape.op !== "operation")) {
+      throw new Error(`JavaScript operation row '${row.owner}.${row.member}' has an invalid native error boundary.`);
+    }
     if (row.dispatchInputs !== undefined && (
       row.shape.op !== "operation" || !isDenseDataArray(row.dispatchInputs) ||
       row.dispatchInputs.some(input => !isRustDispatchContextInput(input) ||

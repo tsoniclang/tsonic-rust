@@ -561,8 +561,8 @@ function selectJsSurfaceOperationForDemand(
         ? {}
         : { returnedFuture: row.returnedFuture }),
       ...(row.shape.evaluation === undefined ? {} : { evaluation: row.shape.evaluation }),
-      errorBoundary: row.fallible === true ? "provider-native" : "none",
-      ...(row.fallible === true ? { errorCarrier: rustJsErrorTargetType() } : {}),
+      errorBoundary: row.fallible === true ? row.errorBoundary ?? "provider-native" : "none",
+      ...(row.fallible === true && row.errorBoundary === undefined ? { errorCarrier: rustJsErrorTargetType() } : {}),
       ...(resultConversion === undefined
         ? {}
         : { resultConversion }),
