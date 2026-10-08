@@ -38,6 +38,7 @@ import { mapRustTargetTypes } from "../../target-model/types/carriers/substituti
 import { rustTypeFamilyNormalizer } from "../../policy/types/type-family-normalization.js";
 import type { RustGenericCallablePlan } from "../callables/generic-values.js";
 import type { RustProjectStructuralView } from "../objects/project-structural-views.js";
+import { rustStructuralViewRequirementUses } from "./structural-view-requirements.js";
 
 export type RustGenericRequirement = "clone" | "default" | "static" | "source-numeric" | "number-predicate";
 
@@ -60,6 +61,7 @@ export interface RustDeclarationGenericRequirementIndex {
   projectionImplementationsFor(definition: RustProjectTypeDefinition): readonly RustProjectProjectionImplementation[];
   contractFor(declaration: Node): RustDeclarationGenericRequirementContract | undefined;
   contractForCarrier(carrier: TargetTypeRef): RustShapeGenericRequirementContract | undefined;
+  contractForStructuralView(view: RustProjectStructuralView): RustShapeGenericRequirementContract | undefined;
   supportsClone(declaration: Node, carrier: TargetTypeRef): boolean;
   hasUse(
     declaration: Node,
@@ -97,6 +99,12 @@ export function analyzeRustDeclarationGenericRequirements(
   const ast = source.ast;
   const diagnostics: TargetDiagnostic[] = [];
   const storageReads = new WeakMap<Node, ReadonlySet<Node>>();
+  const viewsByDeclaration = new WeakMap<Node, RustProjectStructuralView[]>();
+  for (const view of structuralViews) {
+    const selected = viewsByDeclaration.get(view.declaration) ?? [];
+    selected.push(view);
+    viewsByDeclaration.set(view.declaration, selected);
+  }
   const isStoredValue = (node: Node): boolean => {
     const owner = source.navigation.sourceReferenceFor(node)?.declaration;
     if (owner === undefined) return false;
@@ -170,7 +178,7 @@ export function analyzeRustDeclarationGenericRequirements(
         objectRepresentations,
         genericCallables,
         structuralShapes: shapes,
-        structuralViews,
+        structuralViewsFor: (declaration: Node) => viewsByDeclaration.get(declaration) ?? [],
         valueLifetimes,
         isStoredValue,
         readsValue(node) {
@@ -234,6 +242,9 @@ export function analyzeRustDeclarationGenericRequirements(
       return contractByDeclaration.get(declaration);
     },
     contractForCarrier(carrier: TargetTypeRef) { return shapeContracts.get(closedMetadataKey(carrier)); },
+    contractForStructuralView(view: RustProjectStructuralView) {
+      return viewContracts.get(closedMetadataKey([view.sourceCarrier, view.targetCarrier]));
+    },
     supportsClone(declaration: Node, carrier: TargetTypeRef) {
       const contract = contractByDeclaration.get(declaration);
       if (contract === undefined) return false;
@@ -260,6 +271,7 @@ export function analyzeRustDeclarationGenericRequirements(
     },
   });
   const shapeContracts = new Map<string, RustShapeGenericRequirementContract>();
+  const viewContracts = new Map<string, RustShapeGenericRequirementContract>();
   for (const carrier of [...shapes.definitions.map(definition => definition.carrier),
     ...shapes.unionDefinitions.flatMap(definition => definition.sourceCarriers),
     ...typeFamilies.implementations().map(implementation => ({ kind: "tuple" as const, elements: [implementation.owner, implementation.output] }))]) {
@@ -268,6 +280,16 @@ export function analyzeRustDeclarationGenericRequirements(
       "RUST_SHAPE_GENERIC_CONTRACT_NOT_PROVEN", "A structural source carrier has no exact generic or associated-output requirements.",
     )]) };
     shapeContracts.set(closedMetadataKey(carrier), contract);
+  }
+  for (const view of structuralViews) {
+    const uses = rustStructuralViewRequirementUses(view);
+    const contract = analyzeRustShapeGenericRequirements({ kind: "tuple", elements: [view.sourceCarrier, view.targetCarrier] },
+      projectTypes, typeFamilies, index.contractFor, definitions, uses);
+    if (contract === undefined) return { kind: "rejected", diagnostics: Object.freeze([diagnostic(
+      "RUST_STRUCTURAL_VIEW_GENERIC_CONTRACT_NOT_PROVEN",
+      "A selected structural implementation has no exact generic or associated-output requirements.", view.declaration,
+    )]) };
+    viewContracts.set(closedMetadataKey([view.sourceCarrier, view.targetCarrier]), contract);
   }
   return { kind: "resolved", index };
 }

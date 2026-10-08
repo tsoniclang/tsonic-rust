@@ -20,6 +20,7 @@ export function analyzeRustShapeGenericRequirements(
   families: RustSourceTypeFamilyRegistry,
   contractFor: (declaration: Node) => RustDeclarationGenericRequirementContract | undefined,
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
+  uses: readonly { readonly carrier: TargetTypeRef; readonly requirements: readonly RustGenericRequirement[] }[] = [],
 ): RustShapeGenericRequirementContract | undefined {
   const bindings = rustTargetGenericReferences(carrier).typeParameters;
   const names = bindings.map(parameter => parameter.identity);
@@ -65,7 +66,8 @@ export function analyzeRustShapeGenericRequirements(
     }
     return rustTargetTypeChildren(type).every(visit);
   };
-  if (!visit(carrier)) return undefined;
+  if (!visit(carrier) || !uses.every(use => associated.collect(use.carrier) &&
+    classify(use.carrier, use.requirements))) return undefined;
   return Object.freeze({
     typeParameters: Object.freeze(bindings.map(parameter => Object.freeze({ identity: parameter.identity, name: parameter.name,
       requirements: Object.freeze([...parameters.get(parameter.identity)!].sort()) }))),

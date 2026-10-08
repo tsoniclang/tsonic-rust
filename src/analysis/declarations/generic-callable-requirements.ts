@@ -67,6 +67,8 @@ import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.j
 import type { RustProjectStructuralView } from "../objects/project-structural-views.js";
 import { rustSourceCallCallableStorageCarrier } from "../facts/target-operation.js";
 import { bindRustStructuralReceiverParameters } from "./structural-receiver-requirements.js";
+import { rustProjectViewBindings } from "../objects/view-implementations.js";
+import { rustStructuralViewRequirementUses } from "./structural-view-requirements.js";
 
 interface ClassifyCallableInput {
   readonly valueLifetimes: RustValueLifetimePlan;
@@ -83,7 +85,7 @@ interface ClassifyCallableInput {
   readonly objectRepresentations: RustObjectRepresentationPlan;
   readonly genericCallables: RustGenericCallablePlan;
   readonly structuralShapes: RustStructuralShapePlan;
-  readonly structuralViews: readonly RustProjectStructuralView[];
+  readonly structuralViewsFor: (declaration: Node) => readonly RustProjectStructuralView[];
   readonly idByDeclaration: WeakMap<Node, string>;
   readonly implementationDeclaration: (declaration: Node) => Node;
   readonly contractFor: (declaration: Node) => RequirementContractState | undefined;
@@ -321,8 +323,7 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
         const inheritedError = collectType(inherited);
         if (inheritedError !== undefined) return inheritedError;
       }
-      for (const view of input.structuralViews) {
-        if (view.declaration !== declaration) continue;
+      for (const view of input.structuralViewsFor(declaration)) {
         const viewError = collectType(view.targetCarrier);
         if (viewError !== undefined) return viewError;
       }
@@ -403,6 +404,17 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       for (const field of objectView.kind === "structural" ? objectView.fields : []) {
         const fieldError = addUse(node, field.source.resultCarrier, ["clone", "static"]);
         if (fieldError !== undefined) return fieldError;
+      }
+      if (objectView.kind === "project") {
+        for (const view of input.structuralViewsFor(objectView.declaration)) {
+          const bindings = rustProjectViewBindings(view, objectView.sourceCarrier, objectView.targetCarrier);
+          if (bindings === undefined) continue;
+          for (const use of rustStructuralViewRequirementUses(view, bindings)) {
+            const fieldError = addUse(node, use.carrier, use.requirements);
+            if (fieldError !== undefined) return fieldError;
+          }
+          break;
+        }
       }
     }
     if (location?.storage === "location") {

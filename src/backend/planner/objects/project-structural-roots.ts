@@ -8,6 +8,10 @@ import { rustProjectRootType, rustProjectStateType } from "./polymorphism/names.
 import { planRustProjectRepresentationGenerics } from "./polymorphism/names.js";
 import type { RustGenerics } from "../../target-ast/nodes.js";
 import { rustProjectImplementationContext, rustProjectImplementationGenerics } from "./polymorphism/implementation-generics.js";
+import type { RustProjectStructuralView } from "../../../analysis/objects/project-structural-views.js";
+import { rustGenericRequirementBounds, rustGenericsWithAssociatedBounds } from "../types/generic-bounds.js";
+import { rustAssociatedPredicates } from "../types/associated-bounds.js";
+import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 
 export function rustStructuralViewImplementationContext(
   carrier: TargetTypeRef, representation: RustObjectRepresentation, context: RustPlanContext,
@@ -16,10 +20,20 @@ export function rustStructuralViewImplementationContext(
 }
 
 export function rustStructuralViewImplementationGenerics(
-  carrier: TargetTypeRef, representation: RustObjectRepresentation, context: RustPlanContext,
+  view: RustProjectStructuralView, representation: RustObjectRepresentation, context: RustPlanContext,
 ): RustGenerics | undefined {
   const selected = planRustProjectRepresentationGenerics(representation, context);
-  return rustProjectImplementationGenerics(carrier, selected, context);
+  const generics = rustProjectImplementationGenerics(view.sourceCarrier, selected, context);
+  const requirements = context.input.program.declarationGenericRequirements.contractForStructuralView(view);
+  if (generics === undefined || requirements === undefined) return undefined;
+  const byName = new Map(requirements.typeParameters.map(parameter => [
+    context.typeParameterNames?.get(parameter.identity) ?? parameter.name, parameter.requirements,
+  ]));
+  return rustGenericsWithAssociatedBounds(generics.parameters.map(parameter => parameter.kind !== "type" ? parameter : {
+    ...parameter, bounds: [...new Map([...parameter.bounds, ...rustGenericRequirementBounds(byName.get(parameter.name) ?? [])]
+      .map(bound => [closedMetadataKey(bound), bound])).values()],
+  }), [...new Map([...generics.wherePredicates, ...rustAssociatedPredicates(requirements.associatedTypes, context)]
+    .map(predicate => [closedMetadataKey(predicate), predicate])).values()]);
 }
 
 export function rustStructuralViewRootType(
