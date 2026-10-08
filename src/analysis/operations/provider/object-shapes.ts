@@ -9,7 +9,7 @@ import {
   selectRustOptionalCallResult,
 } from "./calls/instantiation.js";
 import { asNode } from "../../../policy/evidence/selected-source.js";
-import { rustOptionElementCarrier } from "../../../target-model/types/index.js";
+import { rustOptionElementCarrier, rustOptionTargetType } from "../../../target-model/types/index.js";
 import { Node_Type } from "@tsonic/target-api/source";
 import { rejectSelectedOperation } from "./result.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
@@ -675,8 +675,11 @@ export function acceptProjectSourceCall(
       : resolveRustTypeComponentEvidence({ selectedType: result.selectedReturnType,
           declaration: selectedCallableDeclaration, ...(result.authoredTypeNode === undefined ? {} : { authoredTypeNode: result.authoredTypeNode }) },
         bound, options, new Set());
-    return carrier === undefined || ownerCarrier === undefined ? carrier
+    const selectedCarrier = carrier === undefined || ownerCarrier === undefined ? carrier
       : options.projectTypes.instantiateMemberCarrier(selectedCallableDeclaration, ownerCarrier, carrier);
+    return result?.authoredTypeNode === undefined && rustOptionElementCarrier(returnType) !== undefined &&
+        selectedCarrier !== undefined && rustOptionElementCarrier(selectedCarrier) === undefined
+      ? rustOptionTargetType(selectedCarrier) : selectedCarrier;
   }, context.typeDefinitions);
   if (sourceResult === undefined) {
     return rejectSelectedOperation(request.source.call, context, "RUST_SOURCE_CALL_RESULT_PROJECTION_MISSING",

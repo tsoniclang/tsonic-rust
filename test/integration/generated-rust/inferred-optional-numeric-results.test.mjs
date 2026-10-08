@@ -20,6 +20,7 @@ for (const surfaces of [[], ["js"]]) {
       assert.match(counts, new RegExp(`fn ${name}\\([^)]*\\) -> Option<f64>`, "u"));
     }
     assert.match(index, /fn local\([^)]*\) -> Option<usize>/u);
+    assert.match(index, /fn forwardText\([^)]*\) -> Option<String>/u);
     assert.doesNotMatch(index, /usize_to_f64|i64_to_f64|BigInt/u);
     validateGeneratedProject(`inferred-optional-numeric-${lane}`, result.artifacts.map(artifact =>
       artifact.path !== "src/index.rs" ? artifact : { ...artifact, text: `${artifact.text}
