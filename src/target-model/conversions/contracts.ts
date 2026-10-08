@@ -96,7 +96,7 @@ export type RustValueConversionContract = RustValueConversionContractBase & Rust
   | { readonly lowering: "project-closed-value"; readonly ownerPath: "rt::TsValue" | "js_abi::JsValue" }
   | { readonly lowering: "js-array-backing"; readonly element: TargetTypeRef; readonly method: "cast" | "cast_array" }
   | { readonly lowering: "source-optional"; readonly element: TargetTypeRef }
-  | { readonly lowering: "union-project" }
+  | { readonly lowering: "union-project"; readonly path: readonly RustUnionPathStep[] }
   | { readonly lowering: "union-map"; readonly coverage: "source" | "target"; readonly arms: readonly RustUnionArmMapping[] }
   | { readonly lowering: "exact-integer" }
   | {
@@ -626,9 +626,10 @@ export function rustValueConversionContract(
     };
   }
   if (value.kind === "union-project") {
-    return rustUnionProjectionContract(value.source, value.target, definitions) === undefined ? undefined : {
+    const projection = rustUnionProjectionContract(value.source, value.target, definitions);
+    return projection === undefined ? undefined : {
       category: "projection", lowering: "union-project", sourceMode: "value", source: value.source,
-      target: value.target, fallible: false,
+      target: value.target, path: projection.path, fallible: false,
     };
   }
   if (value.kind === "raw-pointer-mut-to-const") {

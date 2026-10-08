@@ -237,9 +237,11 @@ test("nominal union liveness reuses exact upcast fields and retains every nested
     }
     for (const step of arm.source) {
       assert.equal(usage.isUnionVariantConstructed(step.union, step.variant.name), false, "a match reads its input variant");
+      assert.equal(usage.isUnionVariantPayloadRead(step.union, step.variant.name), true, "mapping consumes its input payload");
     }
     for (const step of arm.target) {
       assert.equal(usage.isUnionVariantConstructed(step.union, step.variant.name), true, "a mapping constructs its output variant");
+      assert.equal(usage.isUnionVariantPayloadRead(step.union, step.variant.name), false, "construction is not a payload read");
     }
   }
   for (const definition of classes) {
@@ -254,6 +256,7 @@ test("nominal union liveness reuses exact upcast fields and retains every nested
   assert.equal(usage.isProjectTypeUsed(unused), false);
   assert.equal(usage.isUnionVariantUsed(target, "Missing"), false);
   assert.equal(usage.isUnionVariantConstructed(target, "Missing"), false);
+  assert.equal(usage.isUnionVariantPayloadRead(target, "Missing"), false);
 });
 
 test("dispatcher fuses finalized narrowing and heritage without intermediate enum or identity clones", () => {

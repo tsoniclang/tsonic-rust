@@ -136,13 +136,13 @@ export function rustAuthoredVariantDeadCodeDisposition(
   context: RustLivenessPlanningContext,
   declaration: Node,
   variantName: string,
+  hasPayload = false,
 ): RustDeadCodeDisposition | undefined {
   const liveness = context.input.liveness;
-  return liveness.isExternallyReachable(declaration) ||
-      liveness.requiresSuppression(declaration) ||
-      liveness.isVariantUsed(declaration, variantName)
-    ? undefined
-    : "authored-unused-variant";
+  if (liveness.isExternallyReachable(declaration) || liveness.requiresSuppression(declaration)) return undefined;
+  if (!liveness.isVariantUsed(declaration, variantName)) return "authored-unused-variant";
+  return hasPayload && !liveness.isVariantPayloadRead(declaration, variantName)
+    ? "authored-unread-field" : undefined;
 }
 
 export function rustGeneratedEnumDiscriminantDeadCodeDisposition(
@@ -162,10 +162,12 @@ export function rustGeneratedUnionVariantDeadCodeDisposition(
   variantName: string,
   publiclyReachable: boolean,
 ): RustDeadCodeDisposition | undefined {
-  return publiclyReachable ||
-    !carriers.some(carrier => context.input.liveness.isStructuralShapeUsed(carrier)) ||
-    carriers.some(carrier => context.input.liveness.isUnionVariantConstructed(carrier, variantName))
-    ? undefined : "generated-unconstructed-variant";
+  if (publiclyReachable || !carriers.some(carrier => context.input.liveness.isStructuralShapeUsed(carrier))) return undefined;
+  if (!carriers.some(carrier => context.input.liveness.isUnionVariantConstructed(carrier, variantName))) {
+    return "generated-unconstructed-variant";
+  }
+  return carriers.some(carrier => context.input.liveness.isUnionVariantPayloadRead(carrier, variantName))
+    ? undefined : "authored-unread-field";
 }
 
 export function rustStructuralShapeDeadCodeDisposition(

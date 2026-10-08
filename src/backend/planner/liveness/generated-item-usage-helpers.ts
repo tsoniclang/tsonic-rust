@@ -155,7 +155,9 @@ export function visitConversionContract(
     case "js-argument-vector-callback":
     case "owned-string-from-borrowed-str":
     case "copy-from-reference":
+      return;
     case "union-project":
+      for (const step of contract.path) usage.variantRead(step.union, step.variant.name);
       return;
     case "option-some":
       if (contract.element !== null) visitConversionContract(contract.element, usage);

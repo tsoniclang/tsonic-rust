@@ -96,6 +96,7 @@ export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): 
         context,
         node,
         variant.name,
+        fact.kind === "runtime",
       );
       return {
         name: variant.name,

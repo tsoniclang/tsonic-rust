@@ -4,6 +4,7 @@ import test from "node:test";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
 import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
 import { rustValueConversionContract } from "../../../dist/target-model/conversions/contracts.js";
+import { visitConversionContract } from "../../../dist/backend/planner/liveness/generated-item-usage-helpers.js";
 import { rustUnionPayloadAdmission } from "../../../dist/target-model/conversions/union-injection.js";
 import { rustUnionInjectionPath } from "../../../dist/target-model/types/union-relations.js";
 import {
@@ -72,6 +73,28 @@ test("native Error payload conversion composes through the one Option and union 
   assert.equal(selectRustSourceValueConversion(rustMutableJsErrorTargetType(), rustWritableSourceErrorTargetType())?.kind, "program-error");
   const ambiguous = unionDefinitions([[target, [{ name: "Native", carrier: source }, { name: "View", carrier: payload }]]]);
   assert.equal(selectRustSourceValueConversion(source, target, ambiguous), undefined);
+});
+
+test("exact nested union projections publish every read payload to liveness", () => {
+  const payload = rustStringTargetType();
+  const inner = rustSourceUnionTargetType("/src/index.ts", "Inner");
+  const outer = rustSourceUnionTargetType("/src/index.ts", "Outer");
+  const definitions = unionDefinitions([
+    [inner, [{ name: "Text", carrier: payload }]],
+    [outer, [{ name: "Nested", carrier: inner }, { name: "Number", carrier: rustSourcePrimitiveTargetType("int32") }]],
+  ]);
+  const contract = rustValueConversionContract({ kind: "union-project", source: outer, target: payload }, definitions);
+  assert.equal(contract?.lowering, "union-project");
+  assert.equal(Object.isFrozen(contract.path), true);
+  const reads = [];
+  visitConversionContract(contract, {
+    variantRead: (carrier, name) => reads.push({ carrier, name }),
+    variantConstructed: () => assert.fail("projection does not construct a variant"),
+    structuralFieldRead: () => assert.fail("projection does not read a structural field"),
+    closedObjectUsed: () => assert.fail("projection does not use closed object dispatch"),
+  });
+  assert.deepEqual(reads, [{ carrier: outer, name: "Nested" }, { carrier: inner, name: "Text" }]);
+  assert.equal(rustValueConversionContract({ kind: "union-project", source: outer, target: rustSourcePrimitiveTargetType("uint64") }, definitions), undefined);
 });
 
 function unionDefinitions(rows) {

@@ -28,3 +28,9 @@ export type RustClosedTypeTestPlan =
       readonly variant: RustRuntimeUnionVariant;
       readonly test: RustClosedTypeTestPlan;
     }[] };
+
+export function rustClosedTypeTestConstant(test: RustClosedTypeTestPlan): boolean | undefined {
+  return test.kind === "constant" ? test.value
+    : test.kind === "project" && test.plan.lowering.kind === "constant" ? test.plan.lowering.value
+    : undefined;
+}

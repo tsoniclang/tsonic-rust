@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { rustClosedTypeTestConstant } from "../../../target-model/operations/type-tests.js";
 import { BinaryExpression_Left, BinaryExpression_OperatorToken } from "@tsonic/target-api/source";
 import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
@@ -82,13 +83,12 @@ function planTest(
   }
   const arms: Extract<RustExpr, { readonly kind: "match" }>["arms"][number][] = [];
   for (const arm of test.arms) {
-    const constant = arm.test.kind === "constant" ? arm.test :
-      arm.test.kind === "project" && arm.test.plan.lowering.kind === "constant" ? arm.test.plan.lowering : undefined;
+    const constant = rustClosedTypeTestConstant(arm.test);
     const name = allocateRustSyntheticName(context.syntheticNames, "instance");
     const pattern = planRustUnionPattern([{ union: carrier, variant: arm.variant }],
       constant === undefined ? { kind: "binding", name } : { kind: "wildcard" }, context);
     const value = constant === undefined ? planTest(node, { kind: "path", path: name }, arm.carrier, arm.test, predicate, context)
-      : { kind: "bool-literal" as const, value: constant.value };
+      : { kind: "bool-literal" as const, value: constant };
     if (pattern === undefined || value === undefined) return undefined;
     arms.push({ pattern, expression: value });
   }
