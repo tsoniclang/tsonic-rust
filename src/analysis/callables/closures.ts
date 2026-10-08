@@ -122,6 +122,12 @@ export function resolveFunctionExpressionCarrier(
     rustCallableProtocol(selectedExpected) === undefined)) {
     return undefined;
   }
+  const selectedGeneric = rustGenericCallableValue(selectedExpected);
+  if ((genericParameters?.length ?? 0) > 0 && selectedGeneric === undefined &&
+    (selectedExpected.kind !== "closure" || options?.selectedMethodDeclaration === undefined ||
+      !ast.is.IsMethodDeclaration(expression) || rustGenericCallableValue(sourceSelected) === undefined)) {
+    return undefined;
+  }
   const callable = rustGenericCallableProtocol(selectedExpected, genericParameters) ?? rustCallableProtocol(selectedExpected);
   const closure = rustClosureProtocol(selectedExpected);
   const selectedParameters = selectedExpected.kind === "function-pointer"
@@ -338,14 +344,13 @@ export function resolveFunctionExpressionCarrier(
   if (captures === undefined) {
     return undefined;
   }
-  const selectedGeneric = rustGenericCallableValue(selectedExpected);
   const constructionCarrier = rustCallableInputProtocol(selectedExpected) === undefined
     ? selectedExpected : rustCallableTargetType(selectedParameters, selectedResult);
   const logicalCarrier = rebindRustCallableCarrier(constructionCarrier, finalizedParameterCarriers, valueResult,
-    { typeParameters: genericParameters ?? [], ...(selectedGeneric === undefined ? {} : {
+    selectedGeneric === undefined ? {} : { typeParameters: genericParameters ?? [],
       environment: [...selectedGeneric.environment, ...captures.captures.map(capture => capture.carrier),
         ...captures.receiverFields.map(capture => capture.carrier), ...captures.receivers.map(capture => capture.carrier)],
-    }) });
+    });
   const closureCarrier = resolveRustCallableStorageCarrier(logicalCarrier,
     rustResolutionContext(walk, expression, "value"), walk.operationOptions, new Set());
   if (closureCarrier === undefined) return undefined;

@@ -145,6 +145,7 @@ export function main(): void {
 `, "rust_object_method_generics");
 
   assert.deepEqual(result.diagnostics, []);
+  assert.doesNotMatch(artifactText(result, "src/index.rs"), /GenericCallable|call_generic/u);
   assert.equal(
     validateGeneratedProject("object-method-generics", result.artifacts, { run: true }).status,
     0,
