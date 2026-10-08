@@ -150,8 +150,9 @@ export function main(): void {
   );
 });
 
-test("discriminated object unions consume exact selected narrowing evidence", () => {
+test("discriminated object unions consume exact selected narrowing evidence", { timeout: 300_000 }, () => {
   const { result } = compileRust({
+    target: { id: "rust", options: { outputType: "bin" } },
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
@@ -170,25 +171,32 @@ export function area(shape: Shape): int32 {
   }
   return shape.size * shape.size;
 }
+
+export function main(): void {
+  const square: Shape = { kind: "square", size: 4 };
+  if (area(make()) !== 3 || area(square) !== 16) throw new Error("selected union fields");
+}
 `,
     },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.code).join(", "));
   const text = artifactText(result, "src/index.rs");
   const shapes = artifactText(result, "src/shapes.rs");
-  assert.match(text, /pub enum Shape \{\n    Variant0\(rt::ObjectHandle<crate::shapes::KindRadiusShape>\),\n    Variant1\(rt::ObjectHandle<crate::shapes::KindSizeShape>\),\n\}/u);
+  assert.match(shapes, /pub enum Union2<Payload0, Payload1> \{\s*Variant0\(Payload0\),\s*Variant1\(Payload1\),\s*\}/u);
   assert.match(shapes, /pub struct KindRadiusShape \{\s*pub kind: String,\s*pub radius: i32,/u);
   assert.match(shapes, /pub struct KindSizeShape \{\s*pub kind: String,\s*pub size: i32,/u);
   assert.match(
     text,
-    /Shape::Variant0\(\{\s*let record_kind = String::from\("circle"\);\s*let record_radius = 1;\s*rt::ObjectHandle::new\(crate::shapes::KindRadiusShape \{\s*kind: record_kind,\s*radius: record_radius,/u,
+    /crate::shapes::Union2::Variant1\(\{\s*let record_kind = String::from\("circle"\);\s*let record_radius = 1;\s*rt::ObjectHandle::new\(crate::shapes::KindRadiusShape \{\s*kind: record_kind,\s*radius: record_radius,/u,
   );
   assert.match(text, /match &shape/u);
-  assert.match(text, /unreachable!\("TSTS-selected source refinement excluded this union variant"\)/u);
+  assert.match(text, /unreachable!\("The selected native union variant is absent"\)/u);
+  validateGeneratedProject("selected-discriminated-fields", result.artifacts, { run: true });
 });
 
-test("object union construction selects target-distinct same-key variants from exact discriminant types", () => {
+test("object union construction selects target-distinct same-key variants from exact discriminant types", { timeout: 300_000 }, () => {
   const { result } = compileRust({
+    target: { id: "rust", options: { outputType: "bin" } },
     files: {
       "index.ts": `
 import type { int32, uint8 } from "@tsonic/core/types.js";
@@ -200,19 +208,28 @@ export type Event =
 export function added(value: int32): Event {
   return { kind: "added", value };
 }
+
+export function main(): void {
+  const signed = added(-3);
+  const unsigned: Event = { kind: "removed", value: 255 };
+  if (signed.kind !== "added" || signed.value !== -3 || unsigned.kind !== "removed" || unsigned.value !== 255) {
+    throw new Error("selected discriminant widths");
+  }
+}
 `,
     },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.code).join(", "));
   const text = artifactText(result, "src/index.rs");
   const shapes = artifactText(result, "src/shapes.rs");
   assert.match(shapes, /pub struct KindValueShape \{\s*pub kind: String,\s*pub value: i32,/u);
   assert.match(shapes, /pub struct KindValueShape2 \{\s*pub kind: String,\s*pub value: u8,/u);
   assert.match(
     text,
-    /Event::Variant0\(\{\s*let record_kind = String::from\("added"\);\s*let record_value = value;\s*rt::ObjectHandle::new\(crate::shapes::KindValueShape \{\s*kind: record_kind,\s*value: record_value,/u,
+    /crate::shapes::Union2::Variant0\(\{\s*let record_kind = String::from\("added"\);\s*let record_value = value;\s*rt::ObjectHandle::new\(crate::shapes::KindValueShape \{\s*kind: record_kind,\s*value: record_value,/u,
   );
-  assert.doesNotMatch(text, /Event::Variant1\(rt::ObjectHandle::new\(crate::shapes::KindValueShape2/u);
+  assert.doesNotMatch(text, /crate::shapes::Union2::Variant1\(rt::ObjectHandle::new\(crate::shapes::KindValueShape2/u);
+  validateGeneratedProject("selected-discriminant-widths", result.artifacts, { run: true });
 });
 
 test("fixed-array indexing accepts only exact in-range integer literal indexes", async () => {

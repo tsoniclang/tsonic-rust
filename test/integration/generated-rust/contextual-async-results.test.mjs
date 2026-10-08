@@ -6,6 +6,7 @@ import { contextualAsyncCostSource, contextualAsyncResultSource, inlineContextua
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
+import { verifyNativeBorrowedPromiseBoundary } from "../../helpers/native-promise-lifetimes.mjs";
 
 test("native JS async bodies retain contextual union completion, captures, aliases and rejection", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
@@ -111,11 +112,12 @@ export function escape<Region extends Life>(value: Ref<int32, Region>): () => Pr
   return async () => await pending;
 }
 ` } });
-  assert.equal(result.diagnostics.length, 0, "borrowed async source reaches exact native lifetime checking");
-  const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
-  assert.doesNotMatch(output, /transmute|unreachable_unchecked|\.then\(|\.then_async\(/u);
-  const project = writeGeneratedProject("contextual-async-borrow-rejected", result.artifacts);
-  runCargo(project, ["generate-lockfile", "--offline"]);
-  assert.throws(() => runCargo(project, ["check", "--all-targets", "--locked", "--offline"]),
-    /(?:borrowed data escapes|lifetime may not live long enough)/u);
+  assert.deepEqual(result.diagnostics.map(row => row.code).sort(), [
+    "RUST_FUTURE_VALUE_CARRIER_CONFLICT", "RUST_FUTURE_VALUE_CARRIER_CONFLICT",
+    "RUST_FUTURE_VALUE_CARRIER_CONFLICT", "RUST_FUTURE_VALUE_CARRIER_CONFLICT", "RUST_INITIALIZER_CARRIER_MISMATCH",
+  ]);
+  assert.equal(result.artifacts.length, 0, "invalid lifetime transport publishes no native output");
+  const control = compileRust({ surfaces: ["js"], files: { "index.ts": ordinaryAsyncResultSource } }).result;
+  assert.equal(control.diagnostics.length, 0);
+  verifyNativeBorrowedPromiseBoundary("contextual-async-borrow-rejected", control.artifacts, true);
 });

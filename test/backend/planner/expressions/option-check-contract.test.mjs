@@ -109,7 +109,9 @@ export function read(values: (string | undefined)[]): string {
     externalItemPathByIdentity: new Map(), externalStructuralShapeModuleByFileName: new Map(),
   });
   const valid = context(program.facts);
-  assert.ok(planBinaryExpression(node, valid));
+  const planned = planBinaryExpression(node, valid);
+  assert.equal(planned?.kind, "match");
+  assert.deepEqual(planned?.arms.map(arm => arm.pattern.kind), ["tuple-variant", "path"]);
   assertNoTargetDiagnostics(valid.diagnostics);
   const mutations = [
     ...[undefined, 0, -1, 2, 3, 0.5, NaN, Infinity].map(leftOptionDepth => ({ leftOptionDepth })),

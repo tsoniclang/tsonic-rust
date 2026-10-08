@@ -90,6 +90,7 @@ test("util.inspect accepts closed JsValue conversions and rejects open object ca
   const capability = await nodejsCapability();
   const good = compileRust({
     surfaces: ["js"],
+    target: { id: "rust", options: { outputType: "bin" } },
     capabilities: [capability],
     files: {
       "index.ts": `
@@ -108,6 +109,20 @@ export function empty(): string {
   const token = {};
   return inspect(token);
 }
+
+export function objectValue(value: object): string { return inspect(value); }
+export function objectArray(value: object[]): string { return inspect(value); }
+export function objectRecord(value: { token: object }): string { return inspect(value); }
+
+export function main(): void {
+  if (f("7") !== "7" || !primitive("Ada").includes("Ada") || empty() !== "[object Object]") {
+    throw new Error("closed inspection");
+  }
+  const token = {};
+  const values: object[] = [token];
+  if (objectValue(token) !== "[object Object]" || !objectArray(values).includes("[object Object]") ||
+      objectRecord({ token }) !== "[Native object]") throw new Error("closed native carrier inspection");
+}
 `,
     },
   });
@@ -115,7 +130,8 @@ export function empty(): string {
   const text = artifactText(good.result, "src/index.rs");
   assert.match(text, /tsonic_rust_node::util::inspect\(&value\)/u);
   assert.match(text, /tsonic_rust_node::util::inspect\(&js_abi::JsValue::from\(name\)\)/u);
-  assert.match(text, /tsonic_rust_node::util::inspect\(&js_abi::js_value_from_closed\(&token\)\)/u);
+  assert.match(text, /tsonic_rust_node::util::inspect\(&js_abi::JsValue::from\(token\)\)/u);
+  validateGeneratedProject("closed-inspection", good.result.artifacts, { run: true });
 
   for (const sourceType of ["object", "object[]", "{ token: object }"]) {
     const badOptions = {
@@ -125,7 +141,7 @@ export function empty(): string {
       "index.ts": `
 import { inspect } from "node:util";
 
-export function f(value: ${sourceType}): string {
+export function f<T extends object>(value: ${sourceType.replaceAll("object", "T")}): string {
   return inspect(value);
 }
 `,

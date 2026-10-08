@@ -10,7 +10,10 @@ import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/
 import { Node_Expression, Node_Initializer } from "@tsonic/target-api/source";
 import { rustTargetGenericReferences } from "../../../dist/target-model/types/carriers/generic-references.js";
 import { recursiveCallbackProtocolCases } from "../../../../tsonic/test/fixtures/recursive-callback-protocols.mjs";
-import { awaitOperandCallableSource } from "../../../../tsonic/test/fixtures/await-operand-callables.mjs";
+import { awaitOperandCallableSource, nativeAwaitOperandCallableSource } from "../../../../tsonic/test/fixtures/await-operand-callables.mjs";
+import { dispatchProviderPackage } from "../../helpers/rust-session/provider-dispatch-contexts.mjs";
+import { rustAsyncFunctionFactKey, rustSourceParameterAbiFactKey } from "../../../dist/analysis/facts/keys.js";
+import { rustLifetimesEqual } from "../../../dist/target-model/lifetimes/index.js";
 
 const source = `
 export function escaped(seed: number): (count: number) => number {
@@ -24,10 +27,36 @@ export function ordinary(seed: number): (count: number) => number {
 }
 `;
 
+test("suspended functions name every captured callable input loan independently of its result", () => {
+  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+export async function combine(first: () => int32, pending: () => int32 | Promise<void>,
+  last: () => int32, consume: (first: int32, second: int32 | void, last: int32) => int32): Promise<int32> {
+  return consume(first(), await pending(), last());
+}
+` } });
+  const { ast } = program.source;
+  const declaration = program.sourceFiles.flatMap(file => ast.statements(file)).find(node =>
+    node !== undefined && ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === "combine");
+  assert.equal(declaration !== undefined, true, "exact authored suspended function");
+  const inputs = ast.parameters(declaration).map(node => program.facts.getFact(node, rustSourceParameterAbiFactKey));
+  assert.equal(inputs.length, 4);
+  for (const input of inputs) {
+    assert.equal(input?.parameterCarrier.kind === "reference", true, "native borrowed callback, not an owned wrapper");
+    assert.equal(input.inputLifetime !== undefined, true, "ordinary and suspended callback results both retain the input loan");
+    assert.equal(rustLifetimesEqual(input.inputLifetime, inputs[0].inputLifetime), true, "one exact enclosing input region");
+  }
+  const selected = program.facts.getFact(declaration, rustAsyncFunctionFactKey);
+  assert.equal(selected?.kind === "js-promise", true, "one exact selected async operation");
+  const storage = selected.storage;
+  assert.equal(storage?.kind === "lifetime", true, "suspended storage cannot invent a static capture");
+  assert.equal(rustLifetimesEqual(storage.lifetime, inputs[0].inputLifetime), true, "stored frame keeps the selected loan");
+});
+
 for (const jsEnabled of [false, true]) {
   test(`${jsEnabled ? "JS" : "native"} awaited executors retain selected callback environments and exact frame bindings`, () => {
     const { program } = analyzeRust({ surfaces: jsEnabled ? ["js"] : [],
-      files: { "index.ts": awaitOperandCallableSource },
+      files: { "index.ts": jsEnabled ? awaitOperandCallableSource : nativeAwaitOperandCallableSource },
     });
     const frames = program.callableValues.frames;
     assert.equal(frames.issues.length, 0, "all awaited callback entries and bindings close");
@@ -44,7 +73,8 @@ for (const jsEnabled of [false, true]) {
   });
 
   test(`${jsEnabled ? "JS" : "native"} contextual provider inputs retain the selected recursive activation`, () => {
-    const { program } = analyzeRust({ surfaces: jsEnabled ? ["js"] : [], files: { "index.ts": `
+    const { program } = analyzeRust({ surfaces: jsEnabled ? ["js"] : [],
+      packages: jsEnabled ? [] : [dispatchProviderPackage()], files: { "index.ts": jsEnabled ? `
 import type { int32 } from "@tsonic/core/types.js";
 export function run(): int32 {
   let total: int32 = 0;
@@ -52,6 +82,17 @@ export function run(): int32 {
   const detach = (): void => { if (total < 0) receive(0); };
   const values: int32[] = [1, 2];
   values.forEach(receive);
+  return total;
+}
+` : `
+import type { int32 } from "@tsonic/core/types.js";
+import { enqueue, poll } from "@acme/dispatch";
+export function run(): int32 {
+  let total: int32 = 0;
+  const receive = (): void => { total += 3; detach(); };
+  const detach = (): void => { if (total < 0) receive(); };
+  enqueue(receive);
+  poll();
   return total;
 }
 ` } });

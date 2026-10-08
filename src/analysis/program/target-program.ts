@@ -24,6 +24,7 @@ import { analyzeRustValueLifetimes } from "./value-lifetimes.js";
 import { analyzeRustLocalStorageAliases } from "../storage/local-aliases.js";
 import { analyzeRustProjectConstructions } from "../project-types/construction-plan.js";
 import { rustCallArgumentIsOwned } from "../facts/parameter-passing.js";
+import { rustRetainedCallableStorage } from "../facts/callable-results.js";
 import { analyzeRustBorrowedElementReads } from "./borrowed-element-reads.js";
 import { analyzeRustBorrowStability } from "./borrow-stability.js";
 import {
@@ -197,7 +198,8 @@ export function analyzeRustTargetProgram(
     },
     ownsCaptureEnvironment: closure => {
       const selection = lexicalFunctions.forDeclaration(closure);
-      return selection?.kind === "resolved" && selection.valueObserved;
+      return selection?.kind === "resolved" && (selection.valueObserved || selection.singleInvocation &&
+        rustRetainedCallableStorage(facts, closure) !== undefined);
     },
     isOnceCallable: (closure) => {
       const carrier = facts.getRuntimeCarrierFact(closure)?.carrier;

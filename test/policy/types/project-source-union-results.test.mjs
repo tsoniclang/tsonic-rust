@@ -3,7 +3,7 @@ import test from "node:test";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
 import { selectRustSourceCallResult } from "../../../dist/policy/types/resolution/call-results.js";
 import { rustSourceCallResultProjectionMatches } from "../../../dist/analysis/facts/source-call-results.js";
-import { rustOptionTargetType, rustSourcePrimitiveTargetType, rustSourceUnionTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
+import { rustOptionTargetType, rustSourceOptionalTargetType, rustJsPromiseTargetTypeWithLifetime, rustSourcePrimitiveTargetType, rustSourceUnionTargetType, rustStringTargetType, rustUnitTargetType } from "../../../dist/target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 
 const integer = rustSourcePrimitiveTargetType("uint64");
@@ -21,6 +21,21 @@ const projectTypes = {
     ? { kind: "related", targetType: nominal } : { kind: "unrelated" },
   downcastRoute: () => route,
 };
+
+test("optional native results keep exact lifetimes when selected syntax leaves them unspecified", () => {
+  for (const output of [integer, rustUnitTargetType()]) {
+    const native = rustSourceOptionalTargetType(rustJsPromiseTargetTypeWithLifetime(output, { kind: "static" }));
+    const selected = rustSourceOptionalTargetType(rustJsPromiseTargetTypeWithLifetime(output, { kind: "placeholder" }));
+    assert.deepEqual(selectRustSourceCallResult(projectTypes, native, () => selected), { nativeType: native, selectedType: native });
+    for (const wrong of [
+      rustSourceOptionalTargetType(rustJsPromiseTargetTypeWithLifetime(text, { kind: "placeholder" })),
+      rustSourceOptionalTargetType(rustJsPromiseTargetTypeWithLifetime(output, { kind: "parameter", identity: "fixture.borrowed", name: "borrowed" })),
+      rustSourceOptionalTargetType(rustJsPromiseTargetTypeWithLifetime(output, { kind: "placeholder" }, unrelated)),
+    ]) assert.equal(selectRustSourceCallResult(projectTypes, native, () => wrong), undefined);
+    const borrowed = rustSourceOptionalTargetType(rustJsPromiseTargetTypeWithLifetime(output, { kind: "parameter", identity: "fixture.borrowed", name: "borrowed" }));
+    assert.equal(selectRustSourceCallResult(projectTypes, borrowed, () => native), undefined);
+  }
+});
 
 function definitionsFor(entries) {
   const registry = createRustTypeDefinitionRegistry();

@@ -67,10 +67,18 @@ function stableTerminalInputs(expression: RustExpr): boolean {
     const last = expression.body.statements[expression.body.statements.length - 1];
     return expression.label === undefined && (expression.body.innerAttrs?.length ?? 0) === 0 &&
       last?.kind === "tail" && (last.attrs?.length ?? 0) === 0 && stableTerminalInputs(last.expr) &&
-      expression.body.statements.slice(0, -1).every(statement => statement.kind === "let" &&
-        !statement.mutable && statement.type === undefined && (statement.attrs?.length ?? 0) === 0 &&
-        statement.init !== undefined && stableTerminalInputs(statement.init));
+      expression.body.statements.slice(0, -1).every(statement =>
+        (statement.kind === "let" || statement.kind === "expr") && (statement.attrs?.length ?? 0) === 0 &&
+        (statement.kind === "let" && !statement.mutable && statement.type === undefined &&
+          statement.init !== undefined && stableTerminalInputs(statement.init) ||
+          statement.kind === "expr" && stableTerminalInputs(statement.expr)));
   }
+  if (expression.kind === "match") return stableTerminalOperand(expression.expression) &&
+    expression.arms.every(arm => stableTerminalInputs(arm.expression));
+  if (expression.kind === "conditional") return stableTerminalOperand(expression.condition) &&
+    stableTerminalInputs(expression.whenTrue) && stableTerminalInputs(expression.whenFalse);
+  if (expression.kind === "evaluate-then") return stableTerminalInputs(expression.effect) &&
+    stableTerminalInputs(expression.value);
   const deferred = (value: RustExpr): boolean => value.kind === "closure" || value.kind === "closure-block" || value.kind === "async-block";
   if (deferred(expression)) return true;
   if (expression.kind === "call" || expression.kind === "associated-call" || expression.kind === "method-call") {

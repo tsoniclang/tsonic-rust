@@ -5,12 +5,14 @@ import type { RustClosureCaptureFact } from "../facts/operations/keys.js";
 import { rustBindingStorageFactKey, rustClosureCaptureFactKey } from "../facts/keys.js";
 import { rustCapturedBindingStorage } from "./capture-storage.js";
 import { appendRustDiagnostic } from "../program/walk.js";
+import { rustRetainedCallableStorage } from "../facts/callable-results.js";
 
 export function recordRustLexicalValueEnvironments(walk: RustFactWalk, lexical: RustLexicalFunctionQueries): void {
   const { ast, source, facts } = walk.context;
   const visit = (node: Node): void => {
     const selection = lexical.forDeclaration(node);
-    if (selection?.kind === "resolved" && selection.valueObserved) {
+    const retained = rustRetainedCallableStorage(facts, node) !== undefined;
+    if (selection?.kind === "resolved" && (selection.valueObserved || retained)) {
       const captures: RustClosureCaptureFact["captures"][number][] = [];
       const exclusivelyObserved = source.navigation.declarationUseSummary(node).uses.every(use => {
         if (use.kind !== "direct-call") return true;
@@ -22,7 +24,7 @@ export function recordRustLexicalValueEnvironments(walk: RustFactWalk, lexical: 
       for (const capture of selection.captures) {
         const carrier = facts.getRuntimeCarrierFact(capture.declaration)?.carrier ?? facts.getRuntimeCarrierFact(capture.reference)?.carrier;
         const storage = rustCapturedBindingStorage(walk, capture.declaration, capture.reference, node, carrier,
-          exclusivelyObserved, undefined, selection.captureRoots);
+          exclusivelyObserved && !retained, undefined, selection.captureRoots);
         if (carrier === undefined || storage === undefined) {
           appendRustDiagnostic(walk, "RUST_LEXICAL_CAPTURE_NOT_CLOSED", "A lexical value requires its exact retained native capture contract.",
             capture.reference, ["target.capability=rust.lexical-function.environment"]);

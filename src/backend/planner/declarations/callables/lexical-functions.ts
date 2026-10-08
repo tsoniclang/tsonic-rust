@@ -1,9 +1,12 @@
 import type { Node } from "@tsonic/tsts";
 import { rustBindingStorageFactKey } from "../../../../analysis/facts/keys.js";
+import { rustRetainedCallableStorage } from "../../../../analysis/facts/callable-results.js";
+import type { RustLexicalFunctionCapture, RustLexicalFunctionSelection } from "../../../../analysis/callables/lexical-functions.js";
+import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustExpr, RustType } from "../../../target-ast/nodes.js";
 import { rustInlineBindingStorageType } from "../../expressions/binding-storage.js";
 import { planExpressionBeforeValueProjections } from "../../expressions/entry.js";
-import { planRustNonConsumingValue } from "../../expressions/typed-locations.js";
+import { planRustCaptureValue, planRustNonConsumingValue } from "../../expressions/typed-locations.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { diagnosticInput, type RustPlanContext } from "../../program/plan-context.js";
@@ -31,9 +34,7 @@ export function planRustLexicalFunctionEnvironment(declaration: Node, context: R
       ? { kind: "named", path: "rt::Location", genericArguments: [{ kind: "type", type: valueType }] }
       : storage === undefined ? valueType : rustInlineBindingStorageType(storage.storage, valueType);
     const name = allocateRustSyntheticName(context.syntheticNames, "capture");
-    const owned = storage === undefined && !capture.mutable &&
-      (rustCarrierHasCopyContract(carrier, context) ||
-        !selection.valueObserved && context.input.program.valueLifetimes.canMoveCapture(declaration, capture.declaration));
+    const owned = lexicalCaptureIsOwned(declaration, selection, capture, carrier, storage === undefined, context);
     parameters.push({ name, type: owned ? physicalType : { kind: "reference", referent: physicalType,
       mutable: storage === undefined && capture.mutable } });
     capturedBindings.push({ declaration: capture.declaration, expression: { kind: "path", path: name },
@@ -55,13 +56,14 @@ export function planRustLexicalFunctionArguments(declaration: Node, context: Rus
     const mutable = storage === undefined && capture.mutable;
     const carrier = context.input.program.facts.getRuntimeCarrierFact(capture.declaration)?.carrier ??
       context.input.program.facts.getRuntimeCarrierFact(capture.reference)?.carrier;
-    const owned = storage === undefined && !capture.mutable &&
-      (carrier !== undefined && rustCarrierHasCopyContract(carrier, context) ||
-        !selection.valueObserved && context.input.program.valueLifetimes.canMoveCapture(declaration, capture.declaration));
+    if (carrier === undefined) return undefined;
+    const owned = lexicalCaptureIsOwned(declaration, selection, capture, carrier, storage === undefined, context);
     if (owned) {
-      const value = planExpressionBeforeValueProjections(capture.reference, context, "value");
-      if (value === undefined) return undefined;
-      arguments_.push(value);
+      const name = context.input.program.names.nameForDeclaration(capture.declaration);
+      if (name === undefined) return undefined;
+      const move = !selection.valueObserved && selection.singleInvocation &&
+        context.input.program.valueLifetimes.canMoveCapture(declaration, capture.declaration);
+      arguments_.push(planRustCaptureValue(capture.reference, name, storage?.storage ?? "value", move, context));
       continue;
     }
     if (captured?.borrowed !== undefined) {
@@ -89,4 +91,17 @@ export function planRustLexicalFunctionArguments(declaration: Node, context: Rus
       ...(mutable ? { mutable: true } : {}) });
   }
   return arguments_;
+}
+
+function lexicalCaptureIsOwned(
+  declaration: Node,
+  selection: Extract<RustLexicalFunctionSelection, { readonly kind: "resolved" }>,
+  capture: RustLexicalFunctionCapture,
+  carrier: TargetTypeRef,
+  plainStorage: boolean,
+  context: RustPlanContext,
+): boolean {
+  return rustRetainedCallableStorage(context.input.program.facts, declaration) !== undefined ||
+    plainStorage && !capture.mutable && (rustCarrierHasCopyContract(carrier, context) ||
+      !selection.valueObserved && context.input.program.valueLifetimes.canMoveCapture(declaration, capture.declaration));
 }

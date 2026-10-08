@@ -18,7 +18,7 @@ export function resolveRustCallableInputCarrier(
   if (logical === undefined) return undefined;
   const borrowed = (protocol: typeof logical): TargetTypeRef => {
     const signature = rustTargetGenericReferences({ kind: "tuple", elements: [...protocol.parameters, protocol.result] });
-    const lifetime = signature.hasUnnameableLifetime || !signature.elisionInputs.some(input => input.kind === "static")
+    const lifetime = signature.hasUnnameableLifetime
       ? undefined : rustSourceInputLifetime(subject.node, context);
     return rustCallableInputTargetType(protocol.parameters, protocol.result, lifetime);
   };

@@ -9,10 +9,13 @@ const value = { kind: "target-named", id: "rust.std.String" };
 const borrowed = { kind: "reference", mutable: false, referent: value };
 const logical = rustCallableTargetType([value], value);
 const subject = { kind: "value", node: {}, projection: [] };
+const ordinaryContext = { ast: { parent: () => undefined,
+  is: { IsParameterDeclaration: () => false } } };
 
 function select(carriers, kind = "complete") {
   const declarations = carriers.map(() => ({}));
   return resolveRustCallableInputCarrier(subject, logical, {
+    ...ordinaryContext,
     sourceStorage: { closedOriginsFor: selected => {
       assert.equal(selected === subject, true);
       return kind === "unresolved" ? { kind, reason: "missing exact flow" } : { kind, origins: declarations.map(node =>
@@ -27,6 +30,7 @@ test("invocation-only inputs preserve one exact native numeric result until an e
   const origin = {};
   const declared = rustCallableTargetType([value], float);
   const selected = resolveRustCallableInputCarrier(subject, declared, {
+    ...ordinaryContext,
     sourceStorage: { closedOriginsFor: () => ({ kind: "complete", origins: [
       { subject: { kind: "value", node: origin, projection: [] } },
     ] }) },
@@ -36,6 +40,7 @@ test("invocation-only inputs preserve one exact native numeric result until an e
   for (const results of [[native, float], [float, native]]) {
     let index = 0;
     const rejected = resolveRustCallableInputCarrier(subject, declared, {
+      ...ordinaryContext,
       sourceStorage: { closedOriginsFor: () => ({ kind: "complete", origins: results.map(() =>
         ({ subject: { kind: "value", node: {}, projection: [] } })) }) },
     }, { callableSignatureCarrier: () => rustCallableTargetType([borrowed], results[index++]) });
@@ -47,6 +52,7 @@ test("closed invocation inputs admit exact authored entry conversion without wea
   const primitive = name => ({ kind: "source-primitive", name });
   const float = primitive("float64");
   const selectedFor = input => resolveRustCallableInputCarrier(subject, rustCallableTargetType([input], float), {
+    ...ordinaryContext,
     typeDefinitions: emptyRustTypeDefinitions,
     sourceStorage: { closedOriginsFor: () => ({ kind: "complete", origins: [
       { subject: { kind: "value", node: {}, projection: [] } },
@@ -68,6 +74,7 @@ test("quantified invocation inputs retain their declaration protocol instead of 
   const declared = rustCallableTargetType([element], unit);
   for (const kind of ["complete", "open", "unresolved"]) {
     const selected = resolveRustCallableInputCarrier(subject, declared, {
+      ...ordinaryContext,
       sourceStorage: { closedOriginsFor: () => ({ kind, origins: [{ subject }], boundaries: [] }) },
     }, { callableSignatureCarrier: () => assert.fail("a quantified declaration cannot acquire a concrete caller ABI") });
     assert.equal(selected === undefined, kind === "unresolved");

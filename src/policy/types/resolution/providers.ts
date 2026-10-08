@@ -70,6 +70,7 @@ import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
 import type { RustSourcePolicyContext } from "../../model/context.js";
 import type { SourceStorageProjection } from "@tsonic/target-api/analysis";
 import { rustSourceStorageComponentContext } from "./source-storage-projection.js";
+import { sourceArrayElementType } from "@tsonic/target-api/source";
 
 const regExpIdentity = jsRegExpSourceProfileIdentity;
 const regExpResultCarrierByOwner = new Map<string, () => TargetTypeRef>([
@@ -360,13 +361,14 @@ export function resolveSourceProfileCarrier(
   if (regExpResultCarrier !== undefined) {
     return regExpResultCarrier();
   }
+  if (name === "Array" || name === "ReadonlyArray") {
+    return resolveRustSourceArrayCarrier(type, context, options, resolving);
+  }
   const arguments_ = context.currentSemantics.types.effectiveTypeArguments(type);
   if (arguments_ === undefined) {
     return undefined;
   }
-  const argumentContext = name === "Array" || name === "ReadonlyArray"
-    ? rustSourceStorageComponentContext(context, { kind: "array-element" }) : context;
-  const targetArguments = arguments_.map((argument) => resolveRustTargetType(argument, argumentContext, options, resolving));
+  const targetArguments = arguments_.map((argument) => resolveRustTargetType(argument, context, options, resolving));
   if (options.jsEnabled && name === regExpIdentity.owners.regExpStringIterator) {
     const [element] = targetArguments;
     return targetArguments.length === 1 && element !== undefined &&
@@ -385,7 +387,7 @@ export function resolveSourceProfileCarrier(
     ? resolveSourceProfileCarrierFromArguments(name, targetArguments as TargetTypeRef[], options,
       context.sourceStorageSubject?.node, context.sourceStorageSubject?.projection)
     : undefined;
-  if (direct !== undefined && name !== "Array" && name !== "ReadonlyArray") {
+  if (direct !== undefined) {
     return direct;
   }
   if (name === "Promise" || name === "PromiseLike") {
@@ -413,15 +415,6 @@ export function resolveSourceProfileCarrier(
       ? undefined
       : rustIteratorResultTargetType({ yieldType, returnType });
   }
-  if (name === "Array" || name === "ReadonlyArray") {
-    const elementType = arguments_[0];
-    const element = resolveRustTargetType(elementType, argumentContext, options, resolving);
-    return element === undefined
-      ? undefined
-      : options.jsEnabled
-        ? rustJsArrayTargetType(element)
-        : rustVecTargetType(element);
-  }
   if (options.jsEnabled && (name === "Map" || name === "ReadonlyMap")) {
     const key = resolveRustTargetType(arguments_[0], context, options, resolving);
     const value = resolveRustTargetType(arguments_[1], context, options, resolving);
@@ -440,6 +433,20 @@ export function resolveSourceProfileCarrier(
     return value === undefined ? undefined : rustJsWeakSetTargetType(value);
   }
   return undefined;
+}
+
+export function resolveRustSourceArrayCarrier(
+  type: Type,
+  context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
+  resolving: Set<object>,
+): TargetTypeRef | undefined {
+  const elementType = sourceArrayElementType(type, context.currentSemantics);
+  if (elementType === undefined) return undefined;
+  const element = resolveRustTargetType(elementType,
+    rustSourceStorageComponentContext(context, { kind: "array-element" }), options, resolving);
+  return element === undefined ? undefined
+    : options.jsEnabled ? rustJsArrayTargetType(element) : rustVecTargetType(element);
 }
 
 export function resolveSourceProfileCarrierFromArguments(

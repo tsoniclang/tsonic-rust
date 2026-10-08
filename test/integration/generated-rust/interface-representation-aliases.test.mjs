@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { interfaceRepresentationAliasSource } from "../../../../tsonic/test/fixtures/interface-representation-aliases.mjs";
+import { interfaceRepresentationAliasFiles, interfaceRepresentationAliasNativeValueFiles, interfaceRepresentationAliasJsProofSource, interfaceRepresentationAliasSource } from "../../../../tsonic/test/fixtures/interface-representation-aliases.mjs";
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
@@ -9,26 +9,25 @@ for (const surfaces of [undefined, ["js"]]) {
     const { result } = compileRust({ surfaces,
       target: { id: "rust", options: { outputType: "bin", crateName: "interface_aliases" } },
       files: { "index.ts": `${interfaceRepresentationAliasSource}
+${surfaces === undefined ? "" : interfaceRepresentationAliasJsProofSource}
 export function main(): void {
   if (!run()) throw new Error("interface representation alias");
-  ${surfaces === undefined ? "" : `
-  const tokens: MoreTokens = [{}, {}];
-  if (tokens.length !== 2) throw new Error("array facade length");
-  const originalTokens = [{}, {}];
-  const tokenAlias: MoreTokens = originalTokens;
-  const replacement = {};
-  originalTokens[0] = replacement;
-  if (tokenAlias[0] !== replacement) throw new Error("identity facade live alias");
-  Object.freeze(replacement);
-  if (!Object.isFrozen(tokenAlias[0])) throw new Error("identity facade frozen alias");
-  const original = [2, 3];
-  const alias: Values<number> = original;
-  original[0] = 7;
-  if (sum(alias) !== 10) throw new Error("array facade live alias");`}
+  ${surfaces === undefined ? "" : 'if (!runJsAliases()) throw new Error("array facade live and frozen alias");'}
 }` },
     });
     assert.deepEqual(result.diagnostics, []);
     assert.equal(validateGeneratedProject("interface-representation-aliases", result.artifacts, { run: true }).status, 0);
+  });
+
+  test(`cross-file generic array facades retain nested ${surfaces === undefined ? "native value storage" : "shared backing"}`, { timeout: 300_000 }, () => {
+    const files = surfaces === undefined ? interfaceRepresentationAliasNativeValueFiles : interfaceRepresentationAliasFiles;
+    const { result } = compileRust({ surfaces,
+      target: { id: "rust", options: { outputType: "bin", crateName: "cross_file_facades" } },
+      files: { ...files, "index.ts": `${files["index.ts"]}
+export function main(): void { if (!run()) throw new Error("cross-file facade backing"); }` },
+    });
+    assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.code).join(", "));
+    validateGeneratedProject("cross-file-interface-facades", result.artifacts, { run: true });
   });
 }
 

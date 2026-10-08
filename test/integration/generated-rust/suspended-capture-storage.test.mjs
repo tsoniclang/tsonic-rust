@@ -2,7 +2,8 @@ import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagn
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust, artifactText } from "../../helpers/rust-session.mjs";
-import { validateGeneratedProject, writeGeneratedProject, runCargo } from "../../helpers/cargo-projects.mjs";
+import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
+import { verifyNativeBorrowedPromiseBoundary } from "../../helpers/native-promise-lifetimes.mjs";
 
 test("retained async callbacks observe mutable Promise storage without lifetime adapters", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } }, files: {
@@ -46,9 +47,14 @@ export function escape<L extends Life>(value: Ref<int32, L>): () => Promise<int3
   return async (): Promise<int32> => await processing;
 }
 ` } });
-  assertNoTargetDiagnostics(result.diagnostics);
-  const project = writeGeneratedProject("suspended-capture-borrow-rejected", result.artifacts);
-  runCargo(project, ["generate-lockfile", "--offline"]);
-  assert.throws(() => runCargo(project, ["check", "--all-targets", "--locked", "--offline"]),
-    /(?:borrowed data escapes|lifetime may not live long enough)/u);
+  assert.deepEqual(result.diagnostics.map(row => row.code).sort(), [
+    "RUST_FUTURE_VALUE_CARRIER_CONFLICT", "RUST_FUTURE_VALUE_CARRIER_CONFLICT",
+    "RUST_FUTURE_VALUE_CARRIER_CONFLICT", "RUST_FUTURE_VALUE_CARRIER_CONFLICT", "RUST_INITIALIZER_CARRIER_MISMATCH",
+  ]);
+  assert.equal(result.artifacts.length, 0, "invalid lifetime transport publishes no native output");
+  const control = compileRust({ surfaces: ["js"], files: { "index.ts": `
+export async function read(): Promise<number> { return 17; }
+` } }).result;
+  assertNoTargetDiagnostics(control.diagnostics);
+  verifyNativeBorrowedPromiseBoundary("suspended-capture-borrow-rejected", control.artifacts, false);
 });

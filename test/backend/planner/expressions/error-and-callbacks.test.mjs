@@ -246,7 +246,7 @@ export function load(path: string): string {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn load\(path: &str\) -> Result<String, rt::TsonicError> \{/u);
-  assert.match(text, /tsonic_rust_node::fs::read_file_sync_string\(path, "utf8"\)/u);
+  assert.match(text, /tsonic_rust_node::fs::read_file_sync_string\(\s*core::convert::AsRef::<str>::as_ref\(path\),\s*core::convert::AsRef::<str>::as_ref\("utf8"\),?\s*\)/u);
   assert.doesNotMatch(text, /Ok\(tsonic_rust_node::fs::read_file_sync_string/u);
 });
 
@@ -307,9 +307,9 @@ export function inspectJson(): boolean {
   assert.match(text, /let value: js_abi::JsValue = match js_abi::json_parse\("\{\\"tag\\":\\"tsonic\\"\}"\) \{\s*Ok\(value\) => value,\s*Err\(error\) => break 'try_body Err\(rt::TsonicError::from\(error\)\),/u);
   assert.match(
     text,
-    /let rendered: String = rt::option_coalesce\(\s*match js_abi::json_stringify\(&value\) \{\s*Ok\(value\) => value,\s*Err\(error\) => break 'try_body Err\(rt::TsonicError::from\(error\)\),\s*\},\s*core::convert::identity,\s*\|\| String::from\(""\),\s*\);/u,
+    /let rendered: String = match js_abi::json_stringify\(&value\) \{\s*Ok\(value\) => value,\s*Err\(error\) => break 'try_body Err\(error\),\s*\}\s*\.unwrap_or_default\(\);/u,
   );
-  assert.match(text, /ok = js_string::includes_from_start\(&rendered, "tsonic"\);/u);
+  assert.match(text, /ok = js_string::includes_from_start\(\s*core::convert::AsRef::<str>::as_ref\(&rendered\),\s*"tsonic",?\s*\);/u);
 });
 
 test("awaited fallible project-source calls apply try after await", () => {
@@ -692,7 +692,7 @@ export function main(): void {
   const source = artifactText(result, "src/index.rs");
   assert.match(
     source,
-    /js_string::replace_all\(value, "a", "b"\)\.map_err\(rt::TsonicError::from\)/u,
+    /js_string::replace_all\(core::convert::AsRef::<str>::as_ref\(value\), "a", "b"\)\s*\.map_err\(rt::TsonicError::from\)/u,
   );
   assert.equal(validateGeneratedProject("concise-program-error", result.artifacts, { run: true }).status, 0);
 });

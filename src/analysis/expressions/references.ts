@@ -73,6 +73,7 @@ import { readRustNativeControl, resolveRustNativeControl } from "./native-contro
 import { rustSourceCallArgumentCarriers, rustSourceCallResultWithInputLifetimes } from "../facts/source-call-lifetimes.js";
 import { retainRustSelectedSourceCallResultStorage } from "../../policy/types/resolution/call-results.js";
 import { callableRestElement } from "../callables/adapters.js";
+import { rustCallableInvocationResult } from "../facts/callable-results.js";
 
 export function resolveIdentifierCarrier(
   walk: RustFactWalk,
@@ -140,8 +141,9 @@ export function resolveIdentifierCarrier(
         ? undefined
         : walk.context.facts.get(parameter, rustSourceParameterAbiFactKey) ??
           walk.context.facts.resolve(parameter, rustSourceParameterAbiFactKey));
-      const returnCarrier = walk.context.facts.get(declaration, rustSourceCallableReturnFactKey)?.returnCarrier ??
-        walk.context.facts.resolve(declaration, rustSourceCallableReturnFactKey)?.returnCarrier;
+      const returnFact = walk.context.facts.get(declaration, rustSourceCallableReturnFactKey) ??
+        walk.context.facts.resolve(declaration, rustSourceCallableReturnFactKey);
+      const returnCarrier = returnFact === undefined ? undefined : rustCallableInvocationResult(walk.context.facts, declaration);
       const name = ast.name(declaration);
       const targetName = walk.context.names.functionNameForDeclaration(declaration);
       if (name !== undefined && parameterAbis.every((abi) => abi !== undefined) &&

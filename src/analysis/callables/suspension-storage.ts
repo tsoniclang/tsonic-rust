@@ -1,12 +1,16 @@
 import type { Node } from "@tsonic/tsts";
 import { rustSourceParameterAbiFactKey } from "../facts/keys.js";
 import type { RustSuspendedCallableStorage } from "../facts/keys.js";
-import { selectRustCallableStorageLifetime } from "../../policy/ownership/suspended-storage.js";
+import { rustEnclosingStorageContract, selectRustCallableStorageLifetime } from "../../policy/ownership/suspended-storage.js";
+import { sourceLexicalEnvironment } from "@tsonic/target-api/source";
+import { rustCompileTimeSourceKey } from "../../target-model/facts/source-declarations.js";
+import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustSuspendedOwnedReceiver } from "../facts/callables-and-resources.js";
 import { rustCapturedFieldStorageFactKey } from "../facts/receiver-captures.js";
 import { rustCallableInputLifetimeParameters } from "../facts/source-input-lifetimes.js";
+import { resolveExpressionCarrier } from "../expressions/carriers.js";
 
 export type RustSuspendedCallableStorageResolution =
   | {
@@ -95,10 +99,24 @@ export function resolveRustSuspendedCallableStorage(
     }
     carriers.push(carrier);
   }
-  const sourceContract = walk.context.sourceLifetimes.contractFor(declaration);
+  const lexical = sourceLexicalEnvironment(declaration, [body], ast, walk.context.source.navigation,
+    (use, referencedDeclaration) => walk.context.facts.get(use.reference, rustCompileTimeSourceKey) !== true &&
+      walk.context.runtimeValueUses.isRuntimeReference(referencedDeclaration, use.reference));
+  if (lexical.kind === "unresolved") return { kind: "rejected", reason: lexical.reason };
+  for (const capture of lexical.captures) {
+    const reference = capture.references[0];
+    const sourceFile = reference === undefined ? undefined : ast.getSourceFile(reference);
+    const carrier = walk.context.facts.get(capture.declaration, rustRuntimeCarrierKey)?.carrier ??
+      (reference === undefined || sourceFile === undefined ? undefined
+        : resolveExpressionCarrier(walk, reference, sourceFile, undefined));
+    if (carrier === undefined) return { kind: "rejected",
+      reason: "A suspended callable's lexical capture has no exact native storage carrier." };
+    carriers.push(carrier);
+  }
+  const sourceContract = rustEnclosingStorageContract(declaration, ast, walk.context.sourceLifetimes);
   const inferred = rustCallableInputLifetimeParameters(declaration, ast, walk.context.facts);
   const contract = inferred.length === 0 ? sourceContract : { declaration,
-    parameters: [...sourceContract?.parameters ?? [], ...inferred] };
+    parameters: [...sourceContract.parameters, ...inferred] };
   const inputCarriers = exactParameters.map(parameter =>
     walk.context.facts.get(parameter, rustSourceParameterAbiFactKey)?.parameterCarrier);
   const lifetime = inputCarriers.some(carrier => carrier === undefined) ? undefined

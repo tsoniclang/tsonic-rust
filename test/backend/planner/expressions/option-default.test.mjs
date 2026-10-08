@@ -7,12 +7,18 @@ import { fakeAstReader, fakeSourceFile } from "../../../helpers/fake-compile-inp
 const option = { kind: "path", path: "input" };
 const scalar = { kind: "int-literal", text: "11" };
 const carrier = { kind: "source-primitive", name: "int32" };
+const context = { syntheticNames: createRustSyntheticNameState(fakeAstReader(), fakeSourceFile(), []) };
 
 test("constant native defaults and nested tuples do not manufacture a lazy closure", () => {
   for (const fallback of [scalar, { kind: "char-literal", value: "a" },
     { kind: "str-literal", value: "text" }, { kind: "tuple-literal", elements: [] },
     { kind: "tuple-literal", elements: [scalar, { kind: "tuple-literal", elements: [scalar] }] }]) {
-    const selected = rustOptionDefaultValue(option, fallback, carrier, {});
+    const selected = rustOptionDefaultValue(option, fallback, carrier, context);
+    if (fallback.kind === "tuple-literal" && fallback.elements.length === 0) {
+      assert.equal(selected.method, "unwrap_or_default");
+      assert.deepEqual(selected.args, []);
+      continue;
+    }
     assert.equal(selected.method, "unwrap_or", fallback.kind);
     assert.equal(selected.receiver === option, true, fallback.kind);
     assert.equal(selected.args[0] === fallback, true, fallback.kind);
@@ -23,10 +29,9 @@ test("effectful or allocating defaults remain lazy, including inside tuples", ()
   for (const effect of [{ kind: "call", path: "next", args: [] },
     { kind: "string-literal", value: "owned" }, { kind: "vec-literal", elements: [scalar] }]) {
     for (const fallback of [effect, { kind: "tuple-literal", elements: [scalar, effect] }]) {
-      const selected = rustOptionDefaultValue(option, fallback, carrier, {});
-      assert.equal(selected.method, "unwrap_or_else", effect.kind);
-      assert.equal(selected.args[0].kind, "closure", effect.kind);
-      assert.equal(selected.args[0].body === fallback, true, effect.kind);
+      const selected = rustOptionDefaultValue(option, fallback, carrier, context);
+      assert.equal(selected.kind, "match", effect.kind);
+      assert.equal(selected.arms[1].expression === fallback, true, effect.kind);
     }
   }
 });
@@ -34,7 +39,8 @@ test("effectful or allocating defaults remain lazy, including inside tuples", ()
 test("fallible defaults remain lazy in the owning completion region without an infallible closure", () => {
   const context = { syntheticNames: createRustSyntheticNameState(fakeAstReader(), fakeSourceFile(), []) };
   const effect = { kind: "try", expr: { kind: "call", path: "supply", args: [] } };
-  for (const fallback of [effect, { kind: "tuple-literal", elements: [scalar, effect] },
+  for (const fallback of [effect, { kind: "await", expr: { kind: "path", path: "pending" } },
+    { kind: "tuple-literal", elements: [scalar, effect] },
     { kind: "return-expression", expr: scalar }]) {
     const selected = rustOptionDefaultValue(option, fallback, carrier, context);
     assert.equal(selected.kind, "match", fallback.kind);
@@ -46,5 +52,6 @@ test("fallible defaults remain lazy in the owning completion region without an i
   }
   const nested = { kind: "closure", params: [], body: effect };
   const selected = rustOptionDefaultValue(option, nested, carrier, context);
-  assert.equal(selected.method, "unwrap_or_else", "a returned closure owns its own fallible execution");
+  assert.equal(selected.kind, "match", "a returned closure owns its own fallible execution");
+  assert.equal(selected.arms[1].expression === nested, true);
 });

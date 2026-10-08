@@ -184,7 +184,7 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /rt::option_coalesce\([\s\S]*get_number/u);
+  assert.match(source, /match[^;]*get_number[\s\S]*Some\(present_value\) => present_value,\s*None => String::from\("fallback"\)/u);
   assert.equal(validateGeneratedProject("indexed-nullish-proof", result.artifacts, { run: true }).status, 0);
 });
 

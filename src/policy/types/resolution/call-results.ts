@@ -2,6 +2,7 @@ import type { RustSelectedTargetSignature, RustTargetGenericArgument, TargetType
 import type { RustFlowReadProjectionFact } from "../../../target-model/types/value-projections.js";
 import type { RustProjectTypePolicy } from "../../../target-model/types/project-types.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustNativeRepresentationMatches } from "../../../target-model/conversions/native-representation.js";
 import { selectRustProjectProjection } from "../project-projections.js";
 import { selectRustFlowReadProjection } from "../value-carrier-reconciliation.js";
 import { isRustJsValueCarrier, rustOptionElementCarrier, rustTargetGenericBindingsForArguments, substituteRustTargetGenerics } from "../../../target-model/types/index.js";
@@ -97,7 +98,7 @@ export function selectRustSourceCallResult(
     rustUnionAlternatives(nativePayload, definitions) !== undefined) {
     const selectedType = selected();
     if (selectedType === undefined) return undefined;
-    if (rustTargetTypeRefEquals(nativeType, selectedType)) return direct;
+    if (rustNativeRepresentationMatches(nativeType, selectedType)) return direct;
     const projection = selectRustFlowReadProjection(nativeType, selectedType, projectTypes, definitions);
     return projection.kind !== "projection" ? undefined : Object.freeze({
       nativeType, selectedType, projection: Object.freeze(projection.fact),

@@ -5,6 +5,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { planRustOptionalStorageOperation } from "./optional-storage.js";
+import { rustLiteralIsNativeDefault, rustLiteralMayEvaluateEagerly } from "../../target-ast/inspection/literal-defaults.js";
 
 export function planRustOptionBranch(
   option: RustExpr,
@@ -15,6 +16,14 @@ export function planRustOptionBranch(
   context: RustPlanContext,
 ): RustExpr {
   if (rustOptionalStorageValue(carrier) === undefined) {
+    if (present.kind === "path" && present.path === presentName) {
+      if (rustLiteralIsNativeDefault(absent)) {
+        return { kind: "method-call", receiver: option, method: "unwrap_or_default", args: [] };
+      }
+      if (rustLiteralMayEvaluateEagerly(absent)) {
+        return { kind: "method-call", receiver: option, method: "unwrap_or", args: [absent] };
+      }
+    }
     return { kind: "match", expression: option, arms: [
       { pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: presentName }] }, expression: present },
       { pattern: { kind: "path", path: "None" }, expression: absent },

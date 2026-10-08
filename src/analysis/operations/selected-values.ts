@@ -9,7 +9,7 @@ import { recordRustFlowReadProjection, rustEffectiveValueCarrier } from "../fact
 import { rustPolicyNode } from "../../policy/model/context.js";
 import { selectRustGuardedValueCarrier } from "./native-flow-refinement.js";
 import { rustSourceAbsenceReadCarrier, rustSourceAbsenceUse } from "../expressions/absence-use.js";
-import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
+import { rustOptionElementCarrier, rustSourceOptionalElementCarrier } from "../../target-model/types/carriers/optional.js";
 
 export function selectedValueCarrier(
   expression: ExtensionFactSubject,
@@ -23,6 +23,20 @@ export function selectedValueCarrier(
   if (stored !== undefined && reference !== undefined &&
     rustOptionElementCarrier(stored) !== undefined && absenceUse === "comparison") return stored;
   const effective = rustSourceAbsenceReadCarrier(stored, rustEffectiveValueCarrier(context.facts, expression), absenceUse);
+  const present = rustSourceOptionalElementCarrier(effective);
+  if (absenceUse === undefined && effective !== undefined && present !== undefined && reference !== undefined) {
+    const types = context.semanticsFor(reference).types;
+    const type = types.expressionType(reference);
+    const members = type === undefined ? [] : types.isUnion(type) ? types.unionOrIntersectionTypes(type) : [type];
+    if (members.length > 0 && members.every(member => !types.isAny(member) && !types.isUnknown(member) &&
+      !types.isNullish(member) && !types.isVoidLike(member) && !types.couldContainTypeVariables(member))) {
+      const projection = selectRustFlowReadProjection(effective, present, options.projectTypes, context.typeDefinitions);
+      if (projection.kind === "projection") {
+        recordRustFlowReadProjection(context.facts, expression, projection.fact);
+        return present;
+      }
+    }
+  }
   if (effective !== undefined &&
     (stored === undefined || !rustTargetTypeRefEquals(effective, stored))) {
     return effective;

@@ -2,6 +2,16 @@ import type { Node } from "@tsonic/tsts";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustAsyncFunctionFactKey, rustGeneratorFactKey, rustSourceCallableReturnFactKey } from "./callables-and-resources.js";
+import type { RustSuspendedCallableStorage } from "./callables-and-resources.js";
+
+export function rustRetainedCallableStorage(
+  facts: RustPlanQueries, declaration: Node,
+): RustSuspendedCallableStorage | undefined {
+  const generator = facts.getFact(declaration, rustGeneratorFactKey);
+  if (generator !== undefined) return generator.storage;
+  const asynchronous = facts.getFact(declaration, rustAsyncFunctionFactKey);
+  return asynchronous?.kind === "js-promise" ? asynchronous.storage : undefined;
+}
 
 export function rustCallableInvocationResult(
   facts: RustPlanQueries, declaration: Node | undefined,

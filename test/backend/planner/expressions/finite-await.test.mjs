@@ -7,6 +7,7 @@ import { rustAwaitValueFactKey } from "../../../../dist/analysis/facts/await-val
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
 import { planRustAwaitExpression } from "../../../../dist/backend/planner/expressions/await.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
+import { rustRuntimeErrorTypeIdentity } from "../../../../dist/backend/planner/program/source-package-errors.js";
 
 function awaitProgram(source) {
   const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": source } });
@@ -28,6 +29,9 @@ function contextFor(program, node, facts = program.facts) {
     sourceFile: ast.getSourceFile(node), moduleName: "index", structuralShapesModuleName: "shapes",
     moduleNameByFileName: new Map([["/src/index.ts", "index"]]), externalCrateNameByFileName: new Map(),
     externalItemPathByIdentity: new Map(), externalStructuralShapeModuleByFileName: new Map(),
+    sourcePackageComponentId: "test", sourcePackageErrors: { domainsByComponentId: new Map([["test", {
+      componentId: "test", errorDomain: "runtime", errorTypeIdentity: rustRuntimeErrorTypeIdentity,
+    }]]) },
     usedAliases: new Set(), syntheticNames: createRustSyntheticNameState(ast, node, []),
     fallibleBoundary: { componentId: "test", errorDomain: "runtime",
       errorTypePath: "rt::TsonicError", errorTypeIdentity: "tsonic-rust-runtime:TsonicError" } };
@@ -73,6 +77,19 @@ export async function finish(value: Promise<void> | null | undefined): Promise<v
   assert.equal(result.arms[1].pattern.path, "None");
   assert.deepEqual(result.arms[1].expression, { kind: "tuple-literal", elements: [] });
   assert.doesNotMatch(JSON.stringify(result), /Undefined|Null|clone|Box|poll/u);
+});
+
+test("finite await union rendering rejects a missing exact package error identity", () => {
+  const { program, node } = awaitProgram(`
+import type { uint64 } from "@tsonic/core/types.js";
+export async function read(value: uint64 | Promise<uint64>): Promise<uint64> { return await value; }
+`);
+  const selected = contextFor(program, node);
+  selected.sourcePackageErrors.domainsByComponentId.clear();
+  assert.equal(planRustAwaitExpression(node, selected, () => ({ kind: "path", path: "value" })) === undefined, true);
+  assert.equal(selected.diagnostics.length, 1);
+  assert.equal(selected.diagnostics[0].code, "RUST_MISSING_TARGET_FACT");
+  assert.equal(selected.diagnostics[0].evidence.includes("target.capability=rust.backend.await-union"), true);
 });
 
 test("await planner rejects missing or mutated branch and effect contracts before operand planning", () => {

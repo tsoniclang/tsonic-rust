@@ -8,18 +8,15 @@ import { rustUnparenthesizedExpression } from "../../../target-model/syntax/expr
 import type { RustExpr } from "../../target-ast/nodes.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
-import { diagnosticInput, rustActiveErrorType } from "../program/plan-context.js";
+import { diagnosticInput } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { applyRustFallibleResultExpression, rustExpressionUsesTryInCurrentRegion } from "../types/fallible-shape.js";
-import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planExpression, planExpressionBeforeOptionProjection, planExpressionBeforeValueProjections } from "./entry.js";
 import { rustValueCarrierBeforeOptionProjection } from "../../../analysis/facts/value-carrier-queries.js";
 import { effectivePlannedExpressionCarrier, requireExpressionCarrier, selectedOperationMatches } from "./fundamentals.js";
 import { applyRustValueConversion } from "./value-conversions.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { rustOptionalStorageValue, rustOptionalStorageNestingDepth } from "../../../target-model/types/projections.js";
-import { rustExpressionExitsCallable } from "../../target-ast/inspection/callable-exits.js";
+import { rustOptionalStorageNestingDepth } from "../../../target-model/types/projections.js";
 import { planRustOptionBranch } from "./option-branch.js";
 
 export function planNullishCoalescing(
@@ -85,23 +82,6 @@ export function planNullishCoalescing(
   for (let depth = 1; depth < fact.rightOptionDepth; depth++) {
     right = { kind: "method-call", receiver: right, method: "flatten", args: [] };
   }
-  context.usedAliases?.add("rt");
-  const fallbackIsFallible = rustExpressionUsesTryInCurrentRegion(right);
-  const activeErrorType = rustActiveErrorType(context);
-  if (fallbackIsFallible && activeErrorType === undefined) {
-    return undefined;
-  }
-  const fallback: RustExpr = !fallbackIsFallible && right.kind === "call" && right.args.length === 0
-    ? { kind: "path", path: right.path }
-    : {
-        kind: "closure",
-        params: [],
-        body: fallbackIsFallible
-          ? applyRustFallibleResultExpression(right, {
-              errorType: activeErrorType!,
-            })
-          : right,
-      };
   const presentValueName = allocateRustSyntheticName(
     context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []),
     "present_value",
@@ -109,71 +89,9 @@ export function planNullishCoalescing(
   const convertedPresent = fact.leftConversion === undefined ? undefined : applyRustValueConversion(context,
     { kind: "path", path: presentValueName }, fact.leftConversion, node, false);
   if (fact.leftConversion !== undefined && convertedPresent === undefined) return undefined;
-  if (rustExpressionExitsCallable(right)) {
-    const carrier = context.input.program.facts.getRuntimeCarrierFact(leftNode)?.carrier;
-    if (carrier === undefined) return undefined;
-    const value: RustExpr = convertedPresent ?? { kind: "path", path: presentValueName };
-    return planRustOptionBranch(left, carrier, presentValueName,
-      fact.rightOptionDepth > 0 ? { kind: "call", path: "Some", args: [value] } : value, right, context);
-  }
-  const present: RustExpr = convertedPresent !== undefined
-    ? { kind: "closure", params: [{ name: presentValueName, byRefCopy: false }],
-        body: fallbackIsFallible ? { kind: "call", path: "Ok", args: [convertedPresent] } : convertedPresent }
-    : fallbackIsFallible && fact.rightOptionDepth === 0
-    ? { kind: "path", path: "Ok" }
-    : fallbackIsFallible
-      ? {
-          kind: "closure",
-          params: [{ name: presentValueName, byRefCopy: false }],
-          body: {
-            kind: "call",
-            path: "Ok",
-            args: [fact.rightOptionDepth > 0
-              ? { kind: "call", path: "Some", args: [{ kind: "path", path: presentValueName }] }
-              : { kind: "path", path: presentValueName }],
-          },
-        }
-      : {
-          kind: "path",
-          path: fact.rightOptionDepth > 0 ? "Some" : "core::convert::identity",
-        };
-  const coalescedValueType = fallbackIsFallible ? rustTypeFromCarrierInContext(fact.resultCarrier, context) : undefined;
-  if (fallbackIsFallible && coalescedValueType === undefined) return undefined;
   const leftCarrier = context.input.program.facts.getRuntimeCarrierFact(leftNode)?.carrier;
-  const projected = rustOptionalStorageValue(leftCarrier);
-  const projectedValueType = projected === undefined ? undefined : rustTypeFromCarrierInContext(projected, context);
-  const projectedStorageType = projected === undefined ? undefined : rustTypeFromCarrierInContext(leftCarrier, context);
-  if (projected !== undefined && (projectedValueType === undefined || projectedStorageType === undefined)) return undefined;
-  const coalesced: RustExpr = {
-    kind: "call",
-    path: projected === undefined ? "rt::option_coalesce" : "rt::optional_storage_coalesce",
-    ...(projected !== undefined ? { genericArguments: [
-      { kind: "type" as const, type: projectedValueType! },
-      { kind: "type" as const, type: projectedStorageType! },
-      { kind: "type" as const, type: fallbackIsFallible ? { kind: "named" as const, path: "core::result::Result", genericArguments: [
-        { kind: "type" as const, type: coalescedValueType! }, { kind: "type" as const, type: activeErrorType! },
-      ] } : { kind: "infer" as const } },
-    ] } : fallbackIsFallible ? { genericArguments: [
-      { kind: "type" as const, type: { kind: "infer" as const } },
-      { kind: "type" as const, type: { kind: "named" as const, path: "core::result::Result", genericArguments: [
-        { kind: "type" as const, type: coalescedValueType! },
-        { kind: "type" as const, type: activeErrorType! },
-      ] } },
-    ] } : {}),
-    args: [
-      left,
-      present,
-      fallback,
-    ],
-  };
-  if (!fallbackIsFallible) {
-    return coalesced;
-  }
-  context.usedAliases?.add("rt");
-  return {
-    kind: "try",
-    expr: coalesced,
-    resultErrorType: activeErrorType!,
-    operandErrorType: activeErrorType!,
-  };
+  if (leftCarrier === undefined) return undefined;
+  const value: RustExpr = convertedPresent ?? { kind: "path", path: presentValueName };
+  return planRustOptionBranch(left, leftCarrier, presentValueName,
+    fact.rightOptionDepth > 0 ? { kind: "call", path: "Some", args: [value] } : value, right, context);
 }

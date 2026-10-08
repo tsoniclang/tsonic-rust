@@ -160,7 +160,7 @@ export function some_value(): int32 {
   assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn value_or_zero\(value: Option<i32>\) -> i32 \{/u);
-  assert.match(text, /rt::option_coalesce\(value, core::convert::identity, \|\| 0\)/u);
+  assert.match(text, /value\.unwrap_or_default\(\)/u);
   assert.match(text, /value_or_zero\(Some\(5\)\)/u);
   assert.match(text, /value_or_zero\(Option::<i32>::None\)/u);
 });
@@ -216,7 +216,7 @@ export function main(): void {
 
   assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /rt::option_coalesce\(left, Some, \|\| right\)/u);
+  assert.match(text, /match left \{\s*Some\(present_value\) => Some\(present_value\),\s*None => right,\s*\}/u);
   assert.equal(validateGeneratedProject("nullish-lazy-proof", result.artifacts, { run: true }).status, 0);
 });
 
