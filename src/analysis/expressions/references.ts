@@ -36,6 +36,7 @@ import { appendRustDiagnostic, rustOperationContext, rustResolutionContext } fro
 import { applySelectedProjectSourceCall, applySelectedSourceCallArguments, recordTargetOperation, setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { prepareRustDeferredCheckedCall } from "../operations/provider/index.js";
+import { recordRustComputedCallEvaluation } from "../operations/computed-members.js";
 import { readRustSourceNativePointerOperation, readRustSourceSafetyBuilder, readRustSourceUnsafeContext } from "../../policy/safety/source-explicit-safety.js";
 import { recordExportAssignmentFacts } from "../control-flow/statements.js";
 import { resolveExpressionCarrier } from "./carriers.js";
@@ -757,6 +758,10 @@ function applySelectedRuntimeCallableCall(
     return undefined;
   }
   const finalResultCarrier = optionalCall?.resultCarrier ?? resultCarrier;
+  const computedKey = recordRustComputedCallEvaluation(walk.context.ast, walk.context.facts,
+    walk.context.semanticsFor(expression).operations.call(expression), callee, true);
+  if (computedKey !== undefined &&
+    resolveExpressionCarrier(walk, computedKey, sourceFile, undefined) === undefined) return undefined;
   const structuralMethod = selectedSignature.sourceStructuralMethod;
   if (structuralMethod !== undefined && (
     selectedSignature.sourceSelectedReceiverCarrier === undefined ||

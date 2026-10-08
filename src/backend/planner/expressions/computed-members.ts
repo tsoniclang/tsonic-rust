@@ -10,6 +10,7 @@ import { effectivePlannedExpressionCarrier } from "./fundamentals.js";
 import { planRustValueFieldLocation, rustSourceFieldHasValueReceiver } from "../objects/value-fields.js";
 import { planRustSharedReceiver } from "./typed-locations.js";
 import { planRustSourceAccessorReceiver, rustSourceAccessorHasValueReceiver } from "../objects/accessor-receivers.js";
+import { rustCarrierHasCopyContract } from "../types/generic-requirements.js";
 
 export interface RustComputedMemberEvaluation {
   readonly bindings: readonly { readonly name: string; readonly value: RustExpr; readonly mutable?: boolean }[];
@@ -41,11 +42,13 @@ export function prepareRustComputedMemberEvaluation(
   const key = planExpression(fact.key, context, "discarded");
   const keyCarrier = effectivePlannedExpressionCarrier(fact.key, context);
   if (key === undefined || keyCarrier === undefined) return undefined;
-  const evaluatedKey = planRustSharedReceiver(fact.key, key, context);
+  const copyKey = rustCarrierHasCopyContract(keyCarrier, context);
+  const evaluatedKey = copyKey ? key : planRustSharedReceiver(fact.key, key, context);
   const keyName = allocateRustSyntheticName(context.syntheticNames, "_member_key");
   const overrides = new Map(context.expressionOverrides ?? []);
   overrides.set(fact.key, {
-    expression: { kind: "path", path: keyName }, carrier: keyCarrier, valueForm: "shared-reference",
+    expression: { kind: "path", path: keyName }, carrier: keyCarrier,
+    valueForm: copyKey ? "value" : "shared-reference",
   });
   if (!fact.evaluateReceiver) return {
     bindings: [{ name: keyName, value: evaluatedKey }],

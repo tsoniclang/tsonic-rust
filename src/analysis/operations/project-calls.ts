@@ -49,7 +49,7 @@ import { rustClassConstructorInstance } from "../../target-model/types/carriers/
 import { retainRustSelectedCallableResultTemplate, retainRustSelectedSourceCallResultStorage, selectRustSourceCallResult } from "../../policy/types/resolution/call-results.js";
 import { rustSourceCallArgumentCarriers, rustSourceCallResultWithInputLifetimes } from "../facts/source-call-lifetimes.js";
 import { rustMemberAccessReceiver } from "../../target-model/syntax/expressions.js";
-import { recordRustComputedMemberEvaluation } from "./computed-members.js";
+import { recordRustComputedCallEvaluation } from "./computed-members.js";
 
 export function applySelectedProjectSourceCall(
   walk: RustFactWalk,
@@ -626,14 +626,11 @@ export function applySelectedProjectSourceCall(
     return undefined;
   }
   const finalResultCarrier = optionalCall?.resultCarrier ?? resultCarrier;
-  const calleeAccess = walk.context.semanticsFor(expression).operations.call(expression)?.sourceCalleeAccess;
-  if (calleeAccess?.kind === "element" && calleeAccess.expression === callee) {
-    const evaluateReceiver = target.form !== "function" && target.form !== "static-method" ||
-      target.classReceiver !== undefined;
-    recordRustComputedMemberEvaluation(ast, walk.context.facts, calleeAccess.expression,
-      calleeAccess.receiver.expression, calleeAccess.argument.expression, "read", evaluateReceiver);
-    if (resolveExpressionCarrier(walk, calleeAccess.argument.expression, sourceFile, undefined) === undefined) return undefined;
-  }
+  const computedKey = recordRustComputedCallEvaluation(ast, walk.context.facts,
+    walk.context.semanticsFor(expression).operations.call(expression), callee,
+    target.form !== "function" && target.form !== "static-method" || target.classReceiver !== undefined);
+  if (computedKey !== undefined &&
+    resolveExpressionCarrier(walk, computedKey, sourceFile, undefined) === undefined) return undefined;
   recordTargetOperation(
     walk,
     expression,

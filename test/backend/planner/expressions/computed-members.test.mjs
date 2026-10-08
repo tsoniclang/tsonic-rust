@@ -4,11 +4,15 @@ import { analyzeRust } from "../../../helpers/rust-session.mjs";
 import { prepareRustComputedMemberEvaluation } from "../../../../dist/backend/planner/expressions/computed-members.js";
 import { rustComputedMemberFactKey, rustTargetOperationFactKey } from "../../../../dist/analysis/facts/operations/keys.js";
 
-for (const mutation of ["missing", "receiver", "key"]) {
-  test(`computed source call rejects ${mutation} evaluation evidence`, () => {
+for (const [form, source] of [
+  ["method", `class Value { read(): number { return 3; } }
+export function main(): number { return new Value()["read"](); }`],
+  ["callable", `export function main(): number {
+const callbacks: (() => number)[] = [() => 3]; return callbacks[0](); }`],
+]) for (const mutation of ["missing", "receiver", "key"]) {
+  test(`computed ${form} source call rejects ${mutation} evaluation evidence`, () => {
     const { program } = analyzeRust({ files: { "index.ts": `
-class Value { read(): number { return 3; } }
-export function main(): number { return new Value()["read"](); }
+${source}
 ` } });
     const { ast } = program.source;
     let selected;

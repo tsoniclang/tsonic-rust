@@ -17,7 +17,7 @@ import { planRustNonConsumingValue, planRustValueRead } from "./typed-locations.
 import { planRustSourceIndexRead } from "../objects/indexed-records.js";
 import { requireProviderArgumentPassingFacts } from "./calls/arguments.js";
 import { rustOptionalChainFactKey } from "../../../analysis/facts/keys.js";
-import { rustComputedMemberFactKey } from "../../../analysis/facts/operations/keys.js";
+import { planRustComputedMemberExpression } from "./computed-members.js";
 import { planPropertyAccess } from "./properties.js";
 import { planRustIndexedFieldRead } from "./indexed-fields.js";
 import { rustCarrierHasCopyContract } from "../types/generic-requirements.js";
@@ -26,14 +26,15 @@ import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 
 export function planElementAccess(node: Node, context: RustPlanContext): RustExpr | undefined {
-  if (context.input.program.facts.getFact(node, rustComputedMemberFactKey) !== undefined) {
+  if (context.input.program.facts.getSelectedTargetElementAccess(node)?.operationKind === "property") {
     return planPropertyAccess(node, context);
   }
   return planOptionalChainExpression(
     node,
     context,
     "indexer",
-    (innerContext) => planElementAccessInner(node, innerContext),
+    (innerContext) => planRustComputedMemberExpression(node, innerContext,
+      selectedContext => planElementAccessInner(node, selectedContext)),
   );
 }
 
