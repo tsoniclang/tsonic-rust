@@ -69,6 +69,8 @@ import { rustSourceCallCallableStorageCarrier } from "../facts/target-operation.
 import { bindRustStructuralReceiverParameters } from "./structural-receiver-requirements.js";
 import { rustProjectViewBindings } from "../objects/view-implementations.js";
 import { rustStructuralViewRequirementUses } from "./structural-view-requirements.js";
+import { rustProjectCallableAdaptersKey } from "../facts/project-callable-adapters.js";
+import { rustCallableRestCloneSources } from "../callables/adapter-requirements.js";
 
 interface ClassifyCallableInput {
   readonly valueLifetimes: RustValueLifetimePlan;
@@ -174,6 +176,12 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
     }
     return undefined;
   };
+  for (const adapter of facts.getFact(declaration, rustProjectCallableAdaptersKey) ?? []) {
+    for (const carrier of rustCallableRestCloneSources(adapter.parameterAdapters)) {
+      const error = addUse(declaration, carrier, ["clone"]);
+      if (error !== undefined) return { kind: "rejected", reason: error };
+    }
+  }
   const generator = facts.getFact(declaration, rustGeneratorFactKey);
   if (generator !== undefined) {
     if (generator.storage.kind === "static" && generator.ownedReceiver !== undefined) {
