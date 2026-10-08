@@ -14,6 +14,7 @@ import {
   rustCurrentErrorBoundary,
   rustErrorBoundaryForProjectMember,
   rustErrorType,
+  rustSourceItemIsPubliclyReachable,
 } from "../../program/plan-context.js";
 import { rustAuthoredDeadCodeDisposition } from "../../liveness/directives.js";
 import { isRustNeverCarrier, isRustUnitCarrier } from "../../../../target-model/types/index.js";
@@ -499,7 +500,11 @@ export function planProjectStaticFunctionItems(
       ? rustProjectGenerics(definition, context, environment.genericParameterIndexes) : emptyRustGenerics;
     for (const method of planned) {
       if (method.selfParam !== undefined) return undefined;
-      items.push({ ...method, kind: "function", name: specialized ? method.name : name, generics: {
+      const targetName = specialized ? method.name : name;
+      const publiclyReachable = context.input.program.source.ast.hasModifierKind(definition.declaration, "export") ||
+        rustSourceItemIsPubliclyReachable(context, targetName);
+      items.push({ ...method, kind: "function", name: targetName,
+        visibility: method.visibility === "public" && !publiclyReachable ? "crate" : method.visibility, generics: {
         parameters: [...method.generics.parameters, ...captured.parameters],
         wherePredicates: [...method.generics.wherePredicates, ...captured.wherePredicates],
       } });

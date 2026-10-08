@@ -188,7 +188,12 @@ export function planPolymorphicClassDeclaration(
       rustProjectObjectStateField,
     ),
   );
-  const stateConstruction = planRustStateConstruction(ownLayer, baseStateType, implementationContext);
+  const implementationBase = implementationLayers[implementationLayers.length - 2];
+  const implementationBaseState = implementationBase === undefined ? undefined
+    : rustProjectStateType(implementationBase.carrier, implementationContext);
+  if (implementationBase !== undefined && implementationBaseState === undefined) return undefined;
+  const stateConstruction = planRustStateConstruction(implementationLayers[implementationLayers.length - 1]!,
+    implementationBaseState, implementationContext);
   if (stateConstruction === undefined) {
     context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, declaration),
       "rust.backend.state-construction", "Physical native state has no exact aggregate assembly contract."));

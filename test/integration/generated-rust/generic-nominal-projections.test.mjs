@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { genericAncestorProjectionSource } from "../../../../tsonic/test/fixtures/generic-ancestor-projection.mjs";
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
@@ -80,30 +81,11 @@ test("generic nominal recovery preserves exact instances across a forward-only p
 test("checked generic nominal recovery includes the exact ancestor view of a more-derived root", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     surfaces: ["js"], target: { id: "rust", options: { outputType: "bin", crateName: "generic_ancestor_projection" } },
-    files: { "index.ts": `
-      abstract class Base { abstract kind(): number; }
-      class Box<Value> extends Base {
-        value: Value;
-        constructor(value: Value) { super(); this.value = value; }
-        kind(): number { return 1; }
-        static accepts<Value>(value: Base): value is Box<Value> { return value.kind() === 1; }
-      }
-      class Child<Value> extends Box<Value> { extra = 2; }
-      class Other extends Base { kind(): number { return 0; } }
-      function read<Value>(value: Base, absent: Value): Value {
-        if (Box.accepts<Value>(value)) return value.value;
-        return absent;
-      }
-      export function main(): void {
-        const child = new Child<string>("retained");
-        const base: Base = child;
-        if (read<string>(base, "absent") !== "retained") throw new Error("ancestor");
-        child.value = "changed";
-        if (read<string>(base, "absent") !== "changed" || child.extra !== 2) throw new Error("identity");
-        if (read<string>(new Other(), "absent") !== "absent") throw new Error("unrelated");
-      }
-    ` },
+    files: { "index.ts": genericAncestorProjectionSource },
   });
   assert.deepEqual(result.diagnostics, []);
+  const generated = result.artifacts.filter(artifact => artifact.path.endsWith(".rs"))
+    .map(artifact => artifact.text).join("\n");
+  assert.match(generated, /pub\(crate\) fn box_accepts<Value>/u);
   validateGeneratedProject("generic_ancestor_projection", result.artifacts, { run: true });
 });
