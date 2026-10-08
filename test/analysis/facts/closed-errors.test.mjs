@@ -20,18 +20,18 @@ test("native admission seals the existing native closed payload family", () => {
 test("typed admission seals the selected profile's exact closed payload carrier", () => {
   for (const carrier of [rustTsValueTargetType(), rustJsValueTargetType()]) {
     const definitions = { ...emptyRustTypeDefinitions, closedValueCarrier: carrier };
-    const { file, ast, facts } = scenario(rustSourcePrimitiveTargetType("uint64"));
+    const { file, ast, facts } = scenario(rustSourcePrimitiveTargetType("uint64"), operation => operation, definitions);
     assert.deepEqual(rustClosedErrorTransportDemand(file, ast, facts, definitions, projectTypes),
       { thrownCarriers: [carrier], retained: true });
   }
 });
 
-function scenario(source, mutate = operation => operation) {
+function scenario(source, mutate = operation => operation, definitions = emptyRustTypeDefinitions) {
   const expression = { kind: "KindIdentifier", children: [] };
   const statement = { kind: "KindThrowStatement", expression, children: [expression] };
   const file = { kind: "KindSourceFile", children: [statement] };
   const operation = mutate({ kind: "throw-op", operationId: "tsonic.rust.error.throw",
-    error: { kind: "conversion", expression, conversion: selectRustProgramErrorConversion(source) } });
+    error: { kind: "conversion", expression, conversion: selectRustProgramErrorConversion(source, undefined, definitions) } });
   const facts = { get: (node, key) => node === statement && key === rustTargetOperationFactKey ? operation
     : node === expression && key === rustRuntimeCarrierKey ? { carrier: source } : undefined };
   facts.getFact = facts.get;

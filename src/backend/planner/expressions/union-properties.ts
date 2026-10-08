@@ -40,7 +40,10 @@ export function planRustUnionProperty(
       const expressionOverrides = new Map(context.expressionOverrides);
       expressionOverrides.set(receiverNode, { expression: payload, carrier, valueForm: "shared-reference" });
       const selectedContext = { ...context, expressionOverrides };
-      const expression = planProviderOperationExpression(selectedContext, operation, receiverNode, [], node, { resultUse: "value" });
+      const expression = planProviderOperationExpression(selectedContext, operation, receiverNode, [], node, {
+        resultUse: "value",
+        overrides: { sourceValues: new Map([[receiverNode, payload]]), inputs: new Map() },
+      });
       return expression === undefined ? undefined : finishProviderOperationExpression(selectedContext, operation, expression, node);
     });
 }
