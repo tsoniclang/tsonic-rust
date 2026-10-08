@@ -6,7 +6,7 @@ import {
   rustStructuralObjectCarrierValue,
 } from "../../../target-model/types/index.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
-import { rustTargetRuntimeErrorType } from "../types/error-boundary.js";
+import { applyRustErrorBoundary, rustTargetRuntimeErrorType } from "../types/error-boundary.js";
 import {
   diagnosticInput,
   registerAliasFromPath,
@@ -109,12 +109,17 @@ export function applyRustValueConversion(
     ));
     return undefined;
   }
-  return {
-    kind: "try",
-    expr: converted,
-    resultErrorType: activeErrorType,
-    operandErrorType: rustTargetRuntimeErrorType,
-  };
+  const providerErrorType = contract.errorBoundary === "provider-native"
+    ? rustTypeFromCarrierInContext(contract.errorCarrier, context) : undefined;
+  if (contract.errorBoundary === "provider-native" && providerErrorType === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node ?? context.sourceFile),
+      "rust.backend.value-conversion-error",
+      "Fallible target value conversion requires its exact native error carrier.",
+    ));
+    return undefined;
+  }
+  return applyRustErrorBoundary(converted, contract.errorBoundary, activeErrorType, providerErrorType);
 }
 
 export function lowerRustValueConversion(

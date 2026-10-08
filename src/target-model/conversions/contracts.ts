@@ -83,10 +83,14 @@ interface RustValueConversionContractBase {
   readonly sourceMode: "value" | "ref";
   readonly source: TargetTypeRef;
   readonly target: TargetTypeRef;
-  readonly fallible: boolean;
 }
 
-export type RustValueConversionContract = RustValueConversionContractBase & (
+type RustValueConversionEffect =
+  | { readonly fallible: false }
+  | { readonly fallible: true; readonly errorBoundary: "target-runtime" }
+  | { readonly fallible: true; readonly errorBoundary: "provider-native"; readonly errorCarrier: TargetTypeRef };
+
+export type RustValueConversionContract = RustValueConversionContractBase & RustValueConversionEffect & (
   | { readonly lowering: "program-error"; readonly route: RustProgramErrorRoute }
   | { readonly lowering: "program-error-closed-value" }
   | { readonly lowering: "project-closed-value"; readonly ownerPath: "rt::TsValue" | "js_abi::JsValue" }
@@ -206,7 +210,7 @@ export function rustValueConversionContract(
     return isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) &&
       rustExactIntegerConversionMatches(value.source, value.target, value)
       ? { category: "checked-range", lowering: "exact-integer", sourceMode: "value",
-          source: value.source, target: value.target, fallible: true }
+          source: value.source, target: value.target, fallible: true, errorBoundary: "target-runtime" }
       : undefined;
   }
   if (value.kind === "native-representation") {
@@ -335,6 +339,7 @@ export function rustValueConversionContract(
       (!rustTargetTypeRefEquals(value.source, jsValueCarrier) && !isRustJsArrayValueCarrier(value.source))
       ? undefined : { category: "projection", lowering: "js-array-backing", sourceMode: "ref",
         source: value.source, target: rustJsArrayTargetType(value.element), fallible: true,
+        errorBoundary: "provider-native", errorCarrier: rustJsErrorTargetType(),
         element: value.element, method: isRustJsValueCarrier(value.source) ? "cast_array" : "cast" };
   }
   if (value.kind === "js-value-from-array") {
@@ -549,7 +554,7 @@ export function rustValueConversionContract(
           source: value.source,
           target: rustOptionTargetType(value.element),
           element: element!,
-          fallible: element?.fallible ?? false,
+          ...conversionEffect(element),
         }
       : undefined;
   }
@@ -564,7 +569,7 @@ export function rustValueConversionContract(
           source: rustOptionTargetType(element.source),
           target: rustOptionTargetType(element.target),
           element,
-          fallible: element.fallible,
+          ...conversionEffect(element),
         };
   }
   if (value.kind === "bottom-coercion") {
@@ -779,7 +784,15 @@ function contract(
   target: TargetTypeRef,
   fallible: boolean,
 ): RustValueConversionContract {
-  return { category, lowering: "call", path, sourceMode, source, target, fallible };
+  return { category, lowering: "call", path, sourceMode, source, target,
+    ...(fallible ? { fallible: true, errorBoundary: "target-runtime" } as const : { fallible: false } as const) };
+}
+
+function conversionEffect(value: RustValueConversionContract | null | undefined): RustValueConversionEffect {
+  if (value?.fallible !== true) return { fallible: false };
+  return value.errorBoundary === "target-runtime"
+    ? { fallible: true, errorBoundary: value.errorBoundary }
+    : { fallible: true, errorBoundary: value.errorBoundary, errorCarrier: value.errorCarrier };
 }
 
 export function rustValueConversionIsFallible(value: RustValueConversion | undefined, definitions: RustTypeDefinitions = emptyRustTypeDefinitions): boolean {

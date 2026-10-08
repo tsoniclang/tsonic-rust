@@ -5,7 +5,7 @@ import { rustValueConversionContract } from "../../../dist/target-model/conversi
 import { rustContextualRuntimeConversionContract } from "../../../dist/target-model/conversions/contextual.js";
 import { substituteRustValueConversion } from "../../../dist/target-model/conversions/substitution.js";
 import { finalizeRustProviderOperationAbi, validateRustFinalizedOperationAbi } from "../../../dist/analysis/facts/finalized-operation-abi.js";
-import { rustJsArrayTargetType, rustJsArrayValueTargetType, rustJsValueTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
+import { rustJsArrayTargetType, rustJsArrayValueTargetType, rustJsValueTargetType, rustJsErrorTargetType, rustOptionTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
 
 const broad = rustJsValueTargetType();
 const category = rustJsArrayValueTargetType();
@@ -20,7 +20,8 @@ test("native array recovery selects only the exact backing owner and checked eff
     const contract = rustValueConversionContract(conversion);
     assert.deepEqual(contract, {
       category: "projection", lowering: "js-array-backing", sourceMode: "ref", source, target,
-      fallible: true, element, method: source === broad ? "cast_array" : "cast",
+      fallible: true, errorBoundary: "provider-native", errorCarrier: rustJsErrorTargetType(),
+      element, method: source === broad ? "cast_array" : "cast",
     });
     assert.deepEqual(rustContextualRuntimeConversionContract(conversion), contract);
     for (const changed of [
@@ -32,6 +33,33 @@ test("native array recovery selects only the exact backing owner and checked eff
     ]) assert.equal(rustValueConversionContract(changed), undefined);
   }
   assert.equal(selectRustSourceValueConversion(string, rustJsArrayTargetType(string)), undefined);
+});
+
+test("optional conversions retain their exact native failure boundary", () => {
+  for (const source of [broad, category]) {
+    const target = rustJsArrayTargetType(string);
+    const conversion = selectRustSourceValueConversion(source, target);
+    for (const outer of [
+      { kind: "option-some", source, element: target, elementConversion: conversion },
+      { kind: "option-map", elementConversion: conversion },
+    ]) {
+      const contract = rustValueConversionContract(outer);
+      assert.equal(contract.fallible, true);
+      assert.equal(contract.errorBoundary, "provider-native");
+      assert.deepEqual(contract.errorCarrier, rustJsErrorTargetType());
+      assert.deepEqual(contract.target, rustOptionTargetType(target));
+      assert.equal(contract.element.fallible, true);
+      assert.equal(rustValueConversionContract({ ...outer, elementConversion: { ...conversion, errorCarrier: integer } }), undefined);
+    }
+  }
+  const integerConversion = { kind: "exact-integer", source: { kind: "source-primitive", name: "float64" }, target: integer };
+  const runtime = rustValueConversionContract(integerConversion);
+  const optionalRuntime = rustValueConversionContract({ kind: "option-map", elementConversion: integerConversion });
+  for (const contract of [runtime, optionalRuntime]) {
+    assert.equal(contract.fallible, true);
+    assert.equal(contract.errorBoundary, "target-runtime");
+    assert.equal(contract.errorCarrier, undefined);
+  }
 });
 
 test("array admission retains one static projection instead of materializing native elements", () => {

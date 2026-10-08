@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
-import { broadArrayViewSource, broadArrayCategoryWriteSource } from "../../../../tsonic/test/fixtures/broad-array-views.mjs";
+import { broadArrayViewSource, broadArrayCategoryWriteSource, broadArrayFailureSource } from "../../../../tsonic/test/fixtures/broad-array-views.mjs";
 
 test("checked broad array views retain their native backing and element identity", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
@@ -26,6 +26,13 @@ test("category-only indexed writes preserve the checked broad native backing", {
   assert.match(source, /set_number\(/u);
   assert.doesNotMatch(source, /\.collect\(|\.values\(\)\.into_iter\(\)\.map\(/u);
   validateGeneratedProject("broad-array-category-write", result.artifacts, { run: true });
+});
+
+test("typed broad-array recovery retains the native cast failure through catch", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
+    files: { "index.ts": broadArrayFailureSource + '\nexport function main(): void { if (!run()) throw new Error("native cast failure"); }' } });
+  assertNoTargetDiagnostics(result.diagnostics);
+  validateGeneratedProject("broad-array-failure", result.artifacts, { run: true });
 });
 
 for (const expression of ["value.push(8)", "value.at(1)", "value.map(item => item)"]) {
