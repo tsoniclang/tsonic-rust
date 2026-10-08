@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { appendFileSync } from "node:fs";
+import { join } from "node:path";
 import { artifactText, compileRust } from "../../helpers/rust-session.mjs";
-import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
+import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { authoredGenericBinderFiles } from "../../../../tsonic/test/fixtures/authored-generic-binders.mjs";
 
 test("authored generic binders retain independent identities across modules and records", { timeout: 300_000 }, () => {
@@ -86,8 +88,93 @@ test("generic storage requirements preserve single uses, repetitions and finaliz
   assert.match(output, /fn finalized<T: Clone>\(value: T\)/u);
   assert.doesNotMatch(output.slice(output.indexOf("fn single"), output.indexOf("fn repeated")), /value\.clone\(\)/u);
   assert.match(output.slice(output.indexOf("fn repeated"), output.indexOf("fn finalized")), /value\.clone\(\)/u);
-  assert.equal([...output.slice(output.indexOf("fn finalized")).matchAll(/value\.clone\(\)/gu)].length, 2);
+  assert.equal([...output.slice(output.indexOf("fn finalized")).matchAll(/value\.clone\(\)/gu)].length, 1,
+    "the returned value copies once; the finalizer consumes the original last use");
   validateGeneratedProject("generic-storage-observations", result.artifacts);
+  const directory = writeGeneratedProject("generic-storage-copy-drop-cost", result.artifacts);
+  appendFileSync(join(directory, "src/index.rs"), `
+#[cfg(test)]
+mod generic_storage_cost {
+    use super::*;
+    use std::cell::Cell;
+    use std::rc::Rc;
+
+    struct Value {
+        identity: usize,
+        clones: Rc<Cell<usize>>,
+        drops: Rc<Cell<usize>>,
+        original_drops: Rc<Cell<usize>>,
+    }
+
+    impl Clone for Value {
+        fn clone(&self) -> Self {
+            self.clones.set(self.clones.get() + 1);
+            Self {
+                identity: 2,
+                clones: self.clones.clone(),
+                drops: self.drops.clone(),
+                original_drops: self.original_drops.clone(),
+            }
+        }
+    }
+
+    impl Drop for Value {
+        fn drop(&mut self) {
+            self.drops.set(self.drops.get() + 1);
+            if self.identity == 1 {
+                self.original_drops.set(self.original_drops.get() + 1);
+            }
+        }
+    }
+
+    #[test]
+    fn finalizer_consumes_the_original_after_the_required_return_copy() {
+        for _ in 0..128 {
+            let clones = Rc::new(Cell::new(0));
+            let drops = Rc::new(Cell::new(0));
+            let original_drops = Rc::new(Cell::new(0));
+            let output = finalized(Value {
+                identity: 1,
+                clones: clones.clone(),
+                drops: drops.clone(),
+                original_drops: original_drops.clone(),
+            });
+            assert_eq!(clones.get(), 1);
+            assert_eq!(drops.get(), 1);
+            assert_eq!(original_drops.get(), 1);
+            assert_eq!(output.with(|entry| entry.value.identity), 2);
+            drop(output);
+            assert_eq!(drops.get(), 2);
+        }
+    }
+
+    #[test]
+    fn single_use_has_no_clone_requirement() {
+        struct NonClone;
+        drop(single(NonClone));
+    }
+
+    #[test]
+    fn repetitions_copy_each_iteration_and_drop_the_original_once() {
+        let clones = Rc::new(Cell::new(0));
+        let drops = Rc::new(Cell::new(0));
+        let original_drops = Rc::new(Cell::new(0));
+        repeated(Value {
+            identity: 1,
+            clones: clones.clone(),
+            drops: drops.clone(),
+            original_drops: original_drops.clone(),
+        }, 7);
+        assert_eq!(clones.get(), 7);
+        assert_eq!(drops.get(), 8);
+        assert_eq!(original_drops.get(), 1);
+    }
+}
+`);
+  runCargo(directory, ["generate-lockfile", "--offline"]);
+  runCargo(directory, ["fmt", "--all"]);
+  runCargo(directory, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
+  runCargo(directory, ["test", "--locked", "--offline"]);
 });
 
 test("polymorphic structural factory storage rejects without publishing partial artifacts", () => {

@@ -15,7 +15,7 @@ for (const surfaces of [[], ["js"]]) test(`recursive field transport retains a l
     assertNoTargetDiagnostics(result.diagnostics);
     const source = artifactText(result, "src/index.rs");
     assert.equal(source.includes("construction_frame"), true, "the frame exists before the checked callback transport");
-    assert.equal(source.includes("FrameCallable::from_frame"), true, "owning publication retains its exact activation");
+    assert.equal(/rt::FrameCallable::<[^;]+>::from_frame\(/u.test(source), true, "owning publication retains its exact activation and entry type");
     assert.equal(source.includes("transmute"), false);
     validateGeneratedProject(`recursive-field-construction-${surfaces[0] ?? "native"}`, result.artifacts, { run: true });
     const directory = writeGeneratedProject(`recursive-field-construction-cost-${surfaces[0] ?? "native"}`, result.artifacts);

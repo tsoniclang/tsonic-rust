@@ -1,8 +1,12 @@
 import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { appendFileSync } from "node:fs";
+import { join } from "node:path";
 import { artifactText, compileRust } from "../../helpers/rust-session.mjs";
-import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
+import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
+import { assertCheckedNativeProjection } from "../../helpers/checked-native-projection.mjs";
+import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
 
 test("closed nominal union widening preserves live identity and virtual dispatch", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"],
@@ -39,6 +43,34 @@ export function main(): void {
   });
   assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
-  assert.doesNotMatch(source, /Any|downcast|into_any|from_closed|reflect/u);
+  assertCheckedNativeProjection(source);
   validateGeneratedProject("project-union-upcasts", result.artifacts, { run: true });
+  const directory = writeGeneratedProject("project-union-upcast-cost", result.artifacts);
+  appendFileSync(join(directory, "src/index.rs"), `
+#[cfg(test)]
+mod union_upcast_cost {
+    use super::*;
+    ${nativeOwnershipCostSupport}
+    #[test]
+    fn widening_moves_the_existing_native_identity_without_allocating() {
+        for _ in 0..128 {
+            let original = Derived::new();
+            let input = crate::shapes::Union2::Variant1(original.clone());
+            let (output, cost) = measure(|| widen(std::hint::black_box(input)));
+            assert_eq!(cost, Cost::default());
+            match output {
+                crate::shapes::Union2::Variant1(value) => {
+                    assert_eq!(value.identity, original.identity);
+                    assert_eq!(value.dispatch.read_base_value(), 3);
+                }
+                crate::shapes::Union2::Variant0(_) => panic!("nominal arm lost"),
+            }
+        }
+    }
+}
+`);
+  runCargo(directory, ["generate-lockfile", "--offline"]);
+  runCargo(directory, ["fmt", "--all"]);
+  runCargo(directory, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
+  runCargo(directory, ["test", "--locked", "--offline"]);
 });

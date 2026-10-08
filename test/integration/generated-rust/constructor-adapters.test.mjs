@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
+import { assertCheckedNativeProjection } from "../../helpers/checked-native-projection.mjs";
 
 test("constructor values retain selected generics, class aliases and live static fields", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"],
@@ -147,7 +148,7 @@ test("constructor predicates retain closed base-interface narrowing and native d
   assert.doesNotMatch(emitted, /Callable.*accepts|accepts.*Callable/);
   assert.match(emitted, /identity: upcast_value\.identity,/);
   assert.match(emitted, /TryFrom</);
-  assert.doesNotMatch(emitted, /\bAny\b|transmute|downcast_ref/);
+  assertCheckedNativeProjection(emitted);
   const native = validateGeneratedProject("constructor-predicates", result.artifacts, { run: true });
   assert.equal(native.status, 0, native.stdout + native.stderr);
 });
