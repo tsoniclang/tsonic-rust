@@ -90,11 +90,11 @@ export function createRustCallableOwnershipPlan(
     storageFor(subject: SourceStorageSubject): RustCallableStorageOwnership {
       const failure = components.failureReason() ?? storage.failureReason();
       if (failure !== undefined) return unresolved(failure);
-      const origins = storage.closedOriginsFor(subject);
+      const origins = storage.storageProducersFor(subject);
       if (origins.kind === "unresolved") return unresolved(origins.reason);
       let selected: RustCallableActivation | undefined;
       let ordinaryOrigins = false;
-      for (const origin of origins.origins) {
+      for (const origin of origins.producers) {
         const declaration = origin.subject.node;
         const component = origin.subject.kind === "value" && origin.subject.projection.length === 0
           ? components.componentForCallable(declaration) : undefined;

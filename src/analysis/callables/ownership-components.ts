@@ -385,7 +385,7 @@ export function createRustCallableOwnershipComponentQueries(input: {
     for (const declaration of storageDeclarations) {
       if (!account()) return result();
       const subject = storage.storageSubjectFor(declaration);
-      const domain = subject.kind === "resolved" ? storage.closedOriginsFor(subject.subject) : subject;
+      const domain = subject.kind === "resolved" ? storage.storageProducersFor(subject.subject) : subject;
       if (domain.kind !== "complete") reason ??= domain.kind === "unresolved" ? domain.reason
         : "A cyclic callable storage domain has unknown physical activation contributors.";
     }
