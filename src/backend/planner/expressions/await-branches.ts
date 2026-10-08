@@ -48,7 +48,7 @@ export function planRustAwaitBranches(
         output = applyRustErrorBoundary(output, future.errorBoundary, activeErrorType,
           rustTypeFromCarrierInContext(future.errorCarrier, context));
       }
-      const converted = applyFinalizedValueConversion(context, output, future.awaitedConversion, node, "operation-result");
+      const converted = applyFinalizedValueConversion(context, output, future.awaitedConversion, node);
       if (converted === undefined) return undefined;
       output = isRustNeverCarrier(future.outputCarrier)
         ? future.awaiting === "fallible" ? rustBottomAfterEffect(converted, "fallible never await returned")
@@ -57,7 +57,7 @@ export function planRustAwaitBranches(
     }
     return selected.completion.kind === "absence"
       ? { kind: "evaluate-then", effect: output, discard: "unit", value: absent() }
-      : applyFinalizedValueConversion(context, output, selected.completion.conversion, node, "operation-result");
+      : applyFinalizedValueConversion(context, output, selected.completion.conversion, node);
   };
   const plan = (selection: RustAwaitSelection<RustAwaitValueLeafFact>, value: RustExpr): RustExpr | undefined => {
     if (selection.kind === "leaf") return leaf(selection.value, value);

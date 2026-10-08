@@ -236,13 +236,6 @@ function materializeProviderOperationForm(
       fixedArgumentModes: [...form.fixedArgumentModes],
     };
   }
-  if (form.form === "free-call") {
-    return {
-      ...form,
-      path: expandProviderPath(form.path, aliases),
-      ...(argConversions === undefined ? {} : { argConversions }),
-    };
-  }
   if (form.form === "call-value-slice" || form.form === "call-value-array" ||
     form.form === "receiver-value-array") {
     return {
@@ -272,7 +265,7 @@ function materializeProviderOperationForm(
       })),
     };
   }
-  if (form.form === "call-str-slice" || form.form === "free-call-str-slice" || form.form === "path" ||
+  if (form.form === "call-str-slice" || form.form === "path" ||
     form.form === "reference-path" || form.form === "struct-variant" ||
     form.form === "expression-macro" || form.form === "static") {
     return { ...form, path: expandProviderPath(form.path, aliases) };
@@ -301,9 +294,10 @@ function materializeProviderOperationForm(
   if (form.form === "index" && form.indexConversion !== undefined) {
     return form;
   }
-  if (form.form === "receiver-method") {
+  if (form.form === "receiver-method" || form.form === "free-call" || form.form === "free-call-str-slice") {
     return {
       ...form,
+      ...(form.form === "receiver-method" ? {} : { path: expandProviderPath(form.path, aliases) }),
       ...(argConversions === undefined ? {} : { argConversions }),
       ...(form.receiverConversion === undefined ? {} : {
         receiverConversion: materializeProviderValueConversion(form.receiverConversion, carrierPaths, carrierTraits),

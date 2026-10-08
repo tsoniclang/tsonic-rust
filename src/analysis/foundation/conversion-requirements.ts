@@ -268,7 +268,6 @@ function rustFoundationForProviderOperationForm(
     case "expression-macro":
     case "call-c-variadic":
     case "call-str-slice":
-    case "free-call-str-slice":
     case "path":
     case "reference-path":
     case "static":
@@ -301,7 +300,12 @@ function rustFoundationForProviderOperationForm(
       break;
     case "free-call":
       require(rustFoundationForPath(form.path));
+      requireConversion(form.receiverConversion);
       form.argConversions?.forEach(requireConversion);
+      break;
+    case "free-call-str-slice":
+      require(rustFoundationForPath(form.path));
+      requireConversion(form.receiverConversion);
       break;
     case "binary-operator":
       require(rustFoundationForPath(form.trait));

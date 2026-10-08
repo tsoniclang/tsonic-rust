@@ -548,7 +548,7 @@ export function planRustCallableExpressionBody(
       return undefined;
     }
     const converted = applyFinalizedValueConversion(callableClosureContext, tail.expr,
-      conversion, node, "operation-result");
+      conversion, node);
     if (converted === undefined) return undefined;
     finalizedBlock = { statements: [...finalizedBlock.statements.slice(0, -1), { kind: "tail", expr: converted }] };
   }

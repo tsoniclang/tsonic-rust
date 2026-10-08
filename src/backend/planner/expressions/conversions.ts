@@ -54,6 +54,7 @@ import { planRustBorrowedSingletonSlice, planRustRestAssembly } from "./calls/re
 import { rustCarrierHasCloneContract, rustCarrierHasCopyContract } from "../types/generic-requirements.js";
 import { planRustDispatchContextInputScope } from "../project/dispatch-contexts.js";
 import type { RustDispatchContextInputScope } from "../project/dispatch-contexts.js";
+import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 
 function providerConstantExpression(argument: RustProviderConstantArgument, context: RustPlanContext): RustExpr | undefined {
   switch (argument.kind) {
@@ -598,7 +599,6 @@ export function finishProviderOperationExpression(
     raw,
     fact.abi.result.conversion,
     node,
-    "operation-result",
   );
   return converted === undefined || !isRustNeverCarrier(fact.abi.result.carrier)
     ? converted
@@ -749,9 +749,12 @@ export function planFinalizedSourceInput(
     return inputOverride;
   }
   const sourceValueOverride = overrides?.sourceValues.get(sourceNode);
+  const firstConversion = input.conversion.kind === "sequence" ? input.conversion.steps[0]! : input.conversion;
+  const sharedConversion = firstConversion.kind === "semantic" &&
+    rustValueConversionContract(firstConversion.conversion, context.input.program.typeDefinitions)?.sourceMode === "ref";
   const sharedInput = sourceValueOverride === undefined &&
     (expressionOverride === undefined || expressionOverride.valueForm === "shared-reference") &&
-    input.conversion.kind === "identity" && input.mode === "ref";
+    (input.conversion.kind === "identity" && input.mode === "ref" || sharedConversion);
   const plannedExpression = sourceValueOverride ??
     planExpression(sourceNode, context, "value", sharedInput
       ? position === "target-receiver" ? "shared-receiver" : "shared-reference" : "value");
@@ -776,8 +779,8 @@ export function planFinalizedSourceInput(
     ));
     return undefined;
   }
-  if (sharedInput) return rawExpression;
-  const converted = applyFinalizedValueConversion(context, rawExpression, input.conversion, sourceNode, "source-input");
+  if (sharedInput && input.conversion.kind === "identity") return rawExpression;
+  const converted = applyFinalizedValueConversion(context, rawExpression, input.conversion, sourceNode, sharedInput);
   return converted === undefined
     ? undefined
     : position === "target-receiver"

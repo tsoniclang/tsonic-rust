@@ -37,7 +37,6 @@ import {
   rustSourcePrimitiveTargetType,
   rustBorrowedStrTargetType,
   rustStringTargetType,
-  rustStrTargetType,
   rustStructuralObjectCarrierValue,
   rustJsArrayLikeElementTargetType,
   isRustJsArrayCarrier,
@@ -734,7 +733,7 @@ export function rustValueConversionContract(
         lowering: "borrowed-str-from-owned-string",
         sourceMode: "ref",
         source: stringCarrier,
-        target: { kind: "reference", referent: rustStrTargetType(), mutable: false },
+        target: rustBorrowedStrTargetType(),
         fallible: false,
       };
     case "borrowed-str-from-optional-string":

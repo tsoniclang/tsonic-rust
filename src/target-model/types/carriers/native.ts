@@ -32,7 +32,7 @@ export function rustStrTargetType(): TargetTypeRef {
 export function rustBorrowedStrTargetType(): TargetTypeRef {
   return {
     kind: "reference",
-    referent: rustStringTargetType(),
+    referent: rustStrTargetType(),
     mutable: false,
   };
 }

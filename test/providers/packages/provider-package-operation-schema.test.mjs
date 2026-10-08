@@ -5,6 +5,8 @@ import {
   rustInt32ToFloat64ValueConversion,
   rustCallableTargetType,
   rustClosureTargetType,
+  rustStringTargetType,
+  rustStringToBorrowedStrValueConversion,
 } from "../../../dist/public/provider.js";
 import {
   collectRustProviderOperationRows,
@@ -17,6 +19,33 @@ import { rustNamedTypeCarrierValue } from "../../../dist/target-model/types/inde
 import { captureRustProviderContributions } from "../../helpers/provider-contributions.mjs";
 
 const int32Carrier = { kind: "source-primitive", name: "int32" };
+
+test("free-call receiver conversions survive immutable provider publication and reject malformed metadata", () => {
+  for (const form of ["free-call", "free-call-str-slice"]) {
+    const target = { form, path: "acme_validation::read", receiverMode: "value",
+      receiverConversion: { ...rustStringToBorrowedStrValueConversion } };
+    const operation = { exportId: "@acme/validation::run", operationKind: "method", target,
+      receiverCarrier: rustStringTargetType(), resultCarrier: int32Carrier };
+    const provider = createRustProviderPackage(definition({ operations: [operation] }));
+    target.receiverConversion.id = "guessed";
+    const published = provider.createTargetContributions()[0].definition;
+    const row = collectRustProviderSemanticsFromDefinitions([published]).operations[0];
+    assert.deepEqual(row.target.receiverConversion, rustStringToBorrowedStrValueConversion, form);
+    assert.equal(Object.isFrozen(row.target.receiverConversion), true, form);
+    let accessorReads = 0;
+    for (const [label, conversion] of [
+      ["unknown id", { kind: "semantic-conversion", id: "guessed" }],
+      ["extra key", { ...rustStringToBorrowedStrValueConversion, extra: true }],
+      ["missing kind", { id: rustStringToBorrowedStrValueConversion.id }],
+      ["executable data", Object.defineProperty({}, "kind", { enumerable: true,
+        get() { accessorReads += 1; return "semantic-conversion"; } })],
+    ]) {
+      assert.throws(() => createRustProviderPackage(definition({ operations: [{ ...operation,
+        target: { ...target, receiverConversion: conversion } }] })), undefined, `${form}: ${label}`);
+    }
+    assert.equal(accessorReads, 0, form);
+  }
+});
 
 test("native failures incorporated into source results have exact closed immutable evidence", () => {
   const native = { kind: "target-named", id: "acme.NativeError" };

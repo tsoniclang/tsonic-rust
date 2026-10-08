@@ -27,6 +27,7 @@ import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustValueConversion } from "../../../analysis/facts/keys.js";
 import type { RustFinalizedValueConversion } from "../../../analysis/facts/finalized-operation-abi.js";
+import { finalizedConversionIsValid } from "../../../analysis/facts/finalized-operation/conversions.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { lowerRustExactIntegerConversion } from "./exact-integer.js";
 import { planRustUnionMapping, planRustUnionProjection } from "./union-mappings.js";
@@ -144,9 +145,7 @@ export function lowerRustValueConversion(
     case "owned-string-from-borrowed-str":
       return { kind: "owned-string-from-borrowed-str", expression: source };
     case "borrowed-str-from-owned-string":
-      return source.kind === "reference"
-        ? { kind: "method-call", receiver: source.expr, method: "as_str", args: [] }
-        : source;
+      return { kind: "call", path: "core::convert::AsRef::<str>::as_ref", args: [source] };
     case "borrowed-str-from-optional-string":
       return { kind: "method-call", receiver: {
         kind: "method-call", receiver: source.kind === "reference" ? source.expr : source, method: "as_deref", args: [],
@@ -612,12 +611,18 @@ export function applyFinalizedValueConversion(
   expression: RustExpr,
   conversion: RustFinalizedValueConversion,
   node: Node,
-  position: "source-input" | "operation-result",
+  sourceIsSharedReference = false,
 ): RustExpr | undefined {
+  if (!finalizedConversionIsValid(conversion, context.input.program.typeDefinitions)) {
+    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+      "rust.backend.finalized-conversion", "Finalized value lowering requires exact source, destination and conversion evidence."));
+    return undefined;
+  }
   if (conversion.kind === "sequence") {
     let result: RustExpr | undefined = expression;
-    for (const step of conversion.steps) {
-      result = applyFinalizedValueConversion(context, result, step, node, position);
+    for (let index = 0; index < conversion.steps.length; index += 1) {
+      result = applyFinalizedValueConversion(context, result, conversion.steps[index]!, node,
+        sourceIsSharedReference && index === 0);
       if (result === undefined) return undefined;
     }
     return result;
@@ -629,6 +634,7 @@ export function applyFinalizedValueConversion(
         expression,
         conversion.conversion,
         node,
-        position === "source-input",
+        false,
+        sourceIsSharedReference,
       );
 }

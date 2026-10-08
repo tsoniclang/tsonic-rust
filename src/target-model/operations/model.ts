@@ -309,6 +309,7 @@ export type RustProviderOperationForm =
       readonly form: "free-call-str-slice";
       readonly path: string;
       readonly receiverMode: RustArgumentMode;
+      readonly receiverConversion?: RustValueConversion;
     }
   | {
       readonly form: "call-value-slice";
@@ -396,6 +397,7 @@ export type RustProviderOperationForm =
       readonly form: "free-call";
       readonly path: string;
       readonly receiverMode: RustArgumentMode;
+      readonly receiverConversion?: RustValueConversion;
       readonly argModes?: readonly RustArgumentMode[];
       readonly argConversions?: readonly (RustValueConversion | undefined)[];
       readonly trailingArguments?: readonly RustProviderConstantArgument[];

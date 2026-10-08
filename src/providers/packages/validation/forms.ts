@@ -127,10 +127,13 @@ export function validateOperationForm(
       }
       return;
     case "free-call-str-slice":
-      requireExactKeys(record, ["form", "path", "receiverMode"], `${label}.target`, fail);
+      requireExactKeys(record, ["form", "path", "receiverMode", "receiverConversion"], `${label}.target`, fail);
       requireRustPath(form.path, `${label}.target.path`, fail);
       if (form.receiverMode !== "value" && form.receiverMode !== "ref" && form.receiverMode !== "mut-ref") {
         fail(`${label}.target.receiverMode contains unsupported mode '${String(form.receiverMode)}'`);
+      }
+      if (form.receiverConversion !== undefined) {
+        validateValueConversion(form.receiverConversion, definition, `${label}.target.receiverConversion`, undefined, undefined, fail);
       }
       return;
     case "call-value-slice":
@@ -212,10 +215,13 @@ export function validateOperationForm(
       }
       return;
     case "free-call":
-      requireExactKeys(record, ["form", "path", "receiverMode", "argModes", "argConversions", "trailingArguments", "argOrder"], `${label}.target`, fail);
+      requireExactKeys(record, ["form", "path", "receiverMode", "receiverConversion", "argModes", "argConversions", "trailingArguments", "argOrder"], `${label}.target`, fail);
       requireRustPath(form.path, `${label}.target.path`, fail);
       if (form.receiverMode !== "value" && form.receiverMode !== "ref" && form.receiverMode !== "mut-ref") {
         fail(`${label}.target.receiverMode contains unsupported mode '${String(form.receiverMode)}'`);
+      }
+      if (form.receiverConversion !== undefined) {
+        validateValueConversion(form.receiverConversion, definition, `${label}.target.receiverConversion`, undefined, undefined, fail);
       }
       validateArgumentMetadata(form, definition, label, parameterCarriers, fail);
       validateTrailingArguments(form.trailingArguments, definition, label, fail);

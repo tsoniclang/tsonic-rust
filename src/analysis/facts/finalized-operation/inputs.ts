@@ -154,7 +154,7 @@ export function finalizeTargetInputs(
           };
     }
     case "free-call": {
-      const receiver = input.receiver(form.receiverMode);
+      const receiver = input.receiver(form.receiverMode, form.receiverConversion);
       const args = mappedArguments(form.argOrder, form.argModes, form.argConversions);
       return receiver === undefined || args === undefined ? undefined : {
         targetReceiver: none,
@@ -310,7 +310,7 @@ export function finalizeTargetInputs(
       };
     }
     case "free-call-str-slice": {
-      const receiver = input.receiver(form.receiverMode);
+      const receiver = input.receiver(form.receiverMode, form.receiverConversion);
       const elements = indexes.map((index) => input.argument(index, "ref"));
       if (receiver === undefined || elements.some((entry) => entry === undefined)) {
         return undefined;

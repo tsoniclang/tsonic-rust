@@ -5,12 +5,47 @@ import { finalizeProviderOperationFact } from "../../../dist/analysis/operations
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { rustNamedTargetType, rustStringTargetType } from "../../../dist/target-model/types/carriers/native.js";
 import { rustStringToBorrowedStrValueConversion } from "../../../dist/public/provider.js";
+import { rustBorrowedStrTargetType } from "../../../dist/target-model/types/index.js";
 
 const bool = { kind: "source-primitive", name: "bool" };
 const integer = { kind: "source-primitive", name: "int32" };
 const base = rustNamedTargetType("fixture.Base", "fixture::Base");
 const project = { target: base, path: "fixture::as_base" };
 const derived = rustNamedTargetType("fixture.Derived", "fixture::Derived", [], [], undefined, [project]);
+
+test("free-call receiver conversion retains the exact native borrowed-str ABI and rejects mutations", () => {
+  const string = rustStringTargetType();
+  const borrowed = rustBorrowedStrTargetType();
+  for (const form of ["free-call", "free-call-str-slice"]) {
+    const selected = { operationKind: "method", form: { form, path: "fixture::read",
+      receiverMode: "value", receiverConversion: rustStringToBorrowedStrValueConversion },
+      sourceReceiverCarrier: string, sourceArgumentCarriers: [], resultCarrier: bool,
+      isAsync: false, isFallible: false };
+    const abi = finalizeRustProviderOperationAbi(selected);
+    assert.equal(abi !== undefined, true, form);
+    assert.equal(validateRustFinalizedOperationAbi(abi), true, form);
+    const input = abi.targetArguments[0];
+    assert.deepEqual(input.parameterCarrier, borrowed);
+    assert.deepEqual(input.conversion.conversion, rustStringToBorrowedStrValueConversion);
+    assert.deepEqual(input.sourceCarrier, string);
+    assert.equal(input.mode, "value");
+    for (const [label, mutation] of [
+      ["wrong source", { sourceReceiverCarrier: integer }],
+      ["malformed conversion", { form: { ...selected.form, receiverConversion: { kind: "guessed" } } }],
+      ["unknown conversion key", { form: { ...selected.form, receiverConversion: {
+        ...rustStringToBorrowedStrValueConversion, extra: true } } }],
+      ["unknown form key", { form: { ...selected.form, extra: true } }],
+    ]) assert.equal(finalizeRustProviderOperationAbi({ ...selected, ...mutation }) === undefined, true, label);
+    for (const [label, mutation] of [
+      ["forged source", { sourceCarrier: integer }],
+      ["wrong reference domain", { parameterCarrier: { kind: "reference", referent: string, mutable: false } }],
+      ["missing conversion", { conversion: { kind: "identity", sourceCarrier: string,
+        targetCarrier: string, fallible: false } }],
+      ["wrong effect", { conversion: { ...input.conversion, fallible: true } }],
+    ]) assert.equal(validateRustFinalizedOperationAbi({ ...abi,
+      targetArguments: [{ ...input, ...mutation }, ...abi.targetArguments.slice(1)] }), false, label);
+  }
+});
 
 function options(form, sourceArgumentCarriers = []) {
   return { operationKind: "method", form, sourceReceiverCarrier: derived,

@@ -148,7 +148,8 @@ test("optional payload lowering preserves borrowing and propagates native conver
   const borrowedContract = rustValueConversionContract(borrowed);
   assert.equal(borrowedContract.element.sourceMode, "ref");
   const borrowedValue = lowerRustValueConversion(borrowedContract, value, context, node);
-  assert.deepEqual(borrowedValue, { kind: "call", path: "Some", args: [{ kind: "method-call", receiver: value, method: "as_str", args: [] }] });
+  assert.deepEqual(borrowedValue, { kind: "call", path: "Some", args: [{ kind: "call",
+    path: "core::convert::AsRef::<str>::as_ref", args: [{ kind: "reference", expr: value }] }] });
   const source = rustSourcePrimitiveTargetType("uint64");
   const element = rustSourcePrimitiveTargetType("int64");
   assert.equal(selectRustSourceValueConversion(source, rustOptionTargetType(element)), undefined,

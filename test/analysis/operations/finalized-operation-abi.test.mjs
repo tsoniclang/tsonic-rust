@@ -347,7 +347,7 @@ test("operation-form writability is one exhaustive structural policy", () => {
 test("provider results preserve exact borrowed-string ownership conversion", () => {
   const borrowedString = {
     kind: "reference",
-    referent: string,
+    referent: rustStrTargetType(),
     mutable: false,
   };
   const abi = finalizeRustProviderOperationAbi({

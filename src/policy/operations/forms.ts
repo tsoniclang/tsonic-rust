@@ -290,8 +290,10 @@ export function rustProviderOperationFormContractViolation(
         ? undefined
         : "C-variadic call form must contain one path, exact fixed argument modes, and only runtime source arguments";
     case "free-call-str-slice":
-      return hasExactKeys(form, ["form", "path", "receiverMode"], ["form", "path", "receiverMode"]) &&
-          typeof form.path === "string" && rustPathPattern.test(form.path) && modes.has(form.receiverMode)
+      return hasExactKeys(form, ["form", "path", "receiverMode", "receiverConversion"], ["form", "path", "receiverMode"]) &&
+          typeof form.path === "string" && rustPathPattern.test(form.path) && modes.has(form.receiverMode) &&
+          (form.receiverConversion === undefined || isRecord(form.receiverConversion) &&
+            rustValueConversionContract(form.receiverConversion, definitions) !== undefined)
         ? undefined
         : "receiver slice-call form must contain one closed Rust path and receiver mode";
     case "call-value-slice":
@@ -484,8 +486,10 @@ export function rustProviderOperationFormContractViolation(
         : "source-module construction indexes do not identify one exact target argument";
     }
     case "free-call":
-      if (!hasExactKeys(form, ["form", "path", "receiverMode", "argModes", "argConversions", "trailingArguments", "argOrder"], ["form", "path", "receiverMode"]) ||
-        typeof form.path !== "string" || !rustPathPattern.test(form.path) || !modes.has(form.receiverMode)) {
+      if (!hasExactKeys(form, ["form", "path", "receiverMode", "receiverConversion", "argModes", "argConversions", "trailingArguments", "argOrder"], ["form", "path", "receiverMode"]) ||
+        typeof form.path !== "string" || !rustPathPattern.test(form.path) || !modes.has(form.receiverMode) ||
+        (form.receiverConversion !== undefined && (!isRecord(form.receiverConversion) ||
+          rustValueConversionContract(form.receiverConversion, definitions) === undefined))) {
         return "free-call form is malformed";
       }
       return validateArguments(form);

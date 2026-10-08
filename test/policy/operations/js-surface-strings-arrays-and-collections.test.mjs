@@ -9,6 +9,7 @@ import {
   rustSourceDiagnostics,
 } from "../../helpers/rust-session.mjs";
 import { selectJsSurfaceOperation } from "../../../dist/policy/operations/source-profiles/js/index.js";
+import { rustStringToBorrowedStrValueConversion } from "../../../dist/public/provider.js";
 import {
   rustJsArrayTargetType,
   rustSourcePrimitiveTargetType,
@@ -56,7 +57,8 @@ test("string padding selects one exact overload row from finalized carriers", ()
   assert.deepEqual(floatDefault?.fact.target, {
     form: "free-call",
     path: "js_string::pad_start",
-    receiverMode: "ref",
+    receiverMode: "value",
+    receiverConversion: rustStringToBorrowedStrValueConversion,
     argModes: ["value"],
   });
 
@@ -71,7 +73,8 @@ test("string padding selects one exact overload row from finalized carriers", ()
   assert.deepEqual(intFill?.fact.target, {
     form: "free-call",
     path: "js_string::pad_end_with",
-    receiverMode: "ref",
+    receiverMode: "value",
+    receiverConversion: rustStringToBorrowedStrValueConversion,
     argModes: ["value", "ref"],
   });
 
@@ -221,8 +224,8 @@ export function pad(): string {
   assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn pad\(\) -> Result<String, rt::TsonicError>/u);
-  assert.match(text, /js_string::pad_start_with\("7", 3\.0, "0"\)\?/u);
-  assert.match(text, /js_string::pad_end\("x", 2\.0\)\?/u);
+  assert.match(text, /js_string::pad_start_with\(\s*core::convert::AsRef::<str>::as_ref\("7"\),\s*3\.0,\s*"0",?\s*\)\?/u);
+  assert.match(text, /js_string::pad_end\(\s*core::convert::AsRef::<str>::as_ref\("x"\),\s*2\.0,?\s*\)\?/u);
 });
 
 test("JS arrays lower to one identity-preserving carrier with fact-backed iteration", () => {
@@ -444,10 +447,10 @@ export function probe(name: string): boolean {
   assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn probe\(name: &str\) -> bool \{/u);
-  assert.match(text, /js_string::to_upper_case\(name\)/u);
-  assert.match(text, /js_string::starts_with_from_start\(&upper, "A"\)/u);
-  assert.match(text, /js_string::includes_from_start\(&upper, "B"\)/u);
-  assert.match(text, /js_string::js_len\(name\) != 0/u);
+  assert.match(text, /js_string::to_upper_case\(core::convert::AsRef::<str>::as_ref\(name\)\)/u);
+  assert.match(text, /js_string::starts_with_from_start\(core::convert::AsRef::<str>::as_ref\(&upper\), "A"\)/u);
+  assert.match(text, /js_string::includes_from_start\(core::convert::AsRef::<str>::as_ref\(&upper\), "B"\)/u);
+  assert.match(text, /js_string::js_len\(core::convert::AsRef::<str>::as_ref\(name\)\) != 0/u);
   assert.doesNotMatch(text, /usize_to_(?:i32|f64)/u);
 });
 
@@ -469,10 +472,10 @@ export function probe(text: string, index: int32): boolean {
   assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn probe\(text: &str, index: i32\)/u);
-  assert.match(text, /js_string::char_at\(text, 0\.0\)\?/u);
+  assert.match(text, /js_string::char_at\(core::convert::AsRef::<str>::as_ref\(text\), 0\.0\)\?/u);
   assert.match(
     text,
-    /js_string::char_at\(text, index\)\?/u,
+    /js_string::char_at\(core::convert::AsRef::<str>::as_ref\(text\), index\)\?/u,
   );
   assert.match(text, /js_abi::JsDate::new\(\)/u);
 });
@@ -501,11 +504,11 @@ export function probe(text: string, values: readonly int32[]): boolean {
   assert.match(text, /pub fn probe\(text: &str, values: js_abi::JsArray<i32>\) -> Result<bool, rt::TsonicError>/u);
   assert.match(text, /values\.slice_to\(1\.0, 3\.0\)/u);
   assert.match(text, /copied\.join\("-"\)/u);
-  assert.match(text, /js_string::slice_to\(text, 1\.0, -1\.0\)\?/u);
-  assert.match(text, /js_string::repeat\(text, 2\.0\)\?/u);
+  assert.match(text, /js_string::slice_to\(\s*core::convert::AsRef::<str>::as_ref\(text\),\s*1\.0,\s*-1\.0,?\s*\)\?/u);
+  assert.match(text, /js_string::repeat\(core::convert::AsRef::<str>::as_ref\(text\), 2\.0\)\?/u);
   assert.match(
     text,
-    /let point: u32 = rt::option_coalesce\(\n {8}js_string::code_point_at\(text, 0\.0\),\n {8}core::convert::identity,\n {8}\|\| 0_u32,\n {4}\);/u,
+    /let point: u32 = rt::option_coalesce\(\n {8}js_string::code_point_at\(core::convert::AsRef::<str>::as_ref\(text\), 0\.0\),\n {8}core::convert::identity,\n {8}\|\| 0_u32,\n {4}\);/u,
   );
 });
 
@@ -535,17 +538,17 @@ export function probe(text: string, index: int32): string {
 
   assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /js_string::split\(text, ",", 2\.0\)\?/u);
-  assert.match(text, /js_string::char_code_at\(text, index\)/u);
-  assert.match(text, /js_string::last_index_of\(text, "a", index\)/u);
-  assert.match(text, /js_string::substring\(text, 1\.0, 3\.0\)\?/u);
-  assert.match(text, /js_string::substr\(\s*text,\s*-2\.0,\s*1\.0,?\s*\)\?/u);
-  assert.match(text, /js_string::replace\(text, "a", "\[\$&\]"\)/u);
-  assert.match(text, /js_string::replace_all\(&js_string::replace\(text, "a", "\[\$&\]"\), "b", "B"\)\?/u);
-  assert.match(text, /js_string::concat\(text, &\["-", section\.as_str\(\)\]\)/u);
+  assert.match(text, /js_string::split\(core::convert::AsRef::<str>::as_ref\(text\), ",", 2\.0\)\?/u);
+  assert.match(text, /js_string::char_code_at\(core::convert::AsRef::<str>::as_ref\(text\), index\)/u);
+  assert.match(text, /js_string::last_index_of\(core::convert::AsRef::<str>::as_ref\(text\), "a", index\)/u);
+  assert.match(text, /js_string::substring\(\s*core::convert::AsRef::<str>::as_ref\(text\),\s*1\.0,\s*3\.0,?\s*\)\?/u);
+  assert.match(text, /js_string::substr\(\s*core::convert::AsRef::<str>::as_ref\(text\),\s*-2\.0,\s*1\.0,?\s*\)\?/u);
+  assert.match(text, /js_string::replace\(\s*core::convert::AsRef::<str>::as_ref\(text\),\s*"a",\s*"\[\$&\]",?\s*\)/u);
+  assert.match(text, /js_string::replace_all\(\s*core::convert::AsRef::<str>::as_ref\(&js_string::replace\(\s*core::convert::AsRef::<str>::as_ref\(text\),\s*"a",\s*"\[\$&\]",?\s*\)\),\s*"b",\s*"B",?\s*\)\?/u);
+  assert.match(text, /js_string::concat\(\s*core::convert::AsRef::<str>::as_ref\(text\),\s*&\["-", section\.as_str\(\)\],?\s*\)/u);
   assert.match(text, /js_string::from_char_code::<f64>\(&\[65\.0, 66\.0\]\)\?/u);
   assert.match(text, /js_string::from_code_point::<f64>\(&\[128512\.0\]\)\?/u);
-  assert.match(text, /js_string::trim_start\(text\)/u);
+  assert.match(text, /js_string::trim_start\(core::convert::AsRef::<str>::as_ref\(text\)\)/u);
   assert.match(text, /js_string::identity/u);
 });
 

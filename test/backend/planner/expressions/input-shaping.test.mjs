@@ -97,14 +97,17 @@ test("explicit native str conversion creates a view without copying or reevaluat
     { kind: "path", path: "value" },
     { kind: "call", path: "next_value", args: [] },
   ]) {
-    assert.deepEqual(lowerRustValueConversion(contract, { kind: "reference", expr: expression }, {}, undefined), {
-      kind: "method-call", receiver: expression, method: "as_str", args: [],
+    const source = { kind: "reference", expr: expression };
+    assert.deepEqual(lowerRustValueConversion(contract, source, {}, undefined), {
+      kind: "call", path: "core::convert::AsRef::<str>::as_ref", args: [source],
     });
   }
   for (const borrowed of [
     { kind: "str-literal", value: "value" },
     { kind: "path", path: "borrowed_parameter" },
   ]) {
-    assert.equal(lowerRustValueConversion(contract, borrowed, {}, undefined), borrowed);
+    assert.deepEqual(lowerRustValueConversion(contract, borrowed, {}, undefined), {
+      kind: "call", path: "core::convert::AsRef::<str>::as_ref", args: [borrowed],
+    });
   }
 });

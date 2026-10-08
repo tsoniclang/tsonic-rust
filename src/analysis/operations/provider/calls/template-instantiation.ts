@@ -525,10 +525,11 @@ export function substituteProviderOperationForm(
       };
     case "call":
     case "free-call":
+    case "free-call-str-slice":
     case "receiver-method":
       return {
         ...form,
-        ...(form.form !== "receiver-method" || form.receiverConversion === undefined ? {} : {
+        ...(form.form === "call" || form.receiverConversion === undefined ? {} : {
           receiverConversion: substituteRustValueConversion(
             form.receiverConversion,
             substitutions.types,
@@ -536,7 +537,7 @@ export function substituteProviderOperationForm(
             substitutions.consts,
           ),
         }),
-        ...(form.argConversions === undefined ? {} : {
+        ...(!("argConversions" in form) || form.argConversions === undefined ? {} : {
           argConversions: form.argConversions.map((conversion) =>
             conversion === undefined
               ? undefined

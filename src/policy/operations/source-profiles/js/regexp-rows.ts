@@ -13,6 +13,7 @@ import type {
   RustProviderOperationForm,
 } from "../../../../target-model/operations/model.js";
 import type { JsCarrierRef, JsOperationRowData } from "./model.js";
+import { rustStringToBorrowedStrValueConversion } from "../../../../target-model/conversions/model.js";
 
 const identity = jsRegExpSourceProfileIdentity;
 const owners = identity.owners;
@@ -26,6 +27,7 @@ type StringLane = "native" | "exact";
 
 interface StringLanePolicy {
   readonly lane: StringLane;
+  readonly receiverInput: Pick<Extract<RustProviderOperationForm, { readonly form: "free-call" }>, "receiverMode" | "receiverConversion">;
   readonly sourceOwner: string;
   readonly carrierId: string;
   readonly value: Extract<JsCarrierRef, { readonly ref: "string" | "js-string" }>;
@@ -55,6 +57,7 @@ interface StringLanePolicy {
 
 const native: StringLanePolicy = {
   lane: "native",
+  receiverInput: { receiverMode: "value", receiverConversion: rustStringToBorrowedStrValueConversion },
   sourceOwner: owners.string,
   carrierId: rustStringTargetId,
   value: { ref: "string" },
@@ -84,6 +87,7 @@ const native: StringLanePolicy = {
 
 const exact: StringLanePolicy = {
   lane: "exact",
+  receiverInput: { receiverMode: "ref" },
   sourceOwner: jsSourceSemanticsIdentity.typeExport,
   carrierId: rustJsStringTargetId,
   value: { ref: "js-string" },
@@ -212,13 +216,13 @@ function stringRegExpRows(policy: StringLanePolicy): readonly JsOperationRowData
   const nativeLane = policy.lane === "native";
   const lane = policy.lane === "native" ? "string" : "js-string";
   const suffix = policy.pathSuffix;
-  const call = (path: string, argModes: readonly ("value" | "ref" | "mut-ref")[]): Extract<RustProviderOperationForm, { readonly form: "free-call" }> => ({ form: "free-call", path: `js_abi::${path}${suffix}`, receiverMode: "ref", argModes });
+  const call = (path: string, argModes: readonly ("value" | "ref" | "mut-ref")[]): Extract<RustProviderOperationForm, { readonly form: "free-call" }> => ({ form: "free-call", path: `js_abi::${path}${suffix}`, ...policy.receiverInput, argModes });
   const callbackTarget: RustProviderOperationForm = {
     form: "free-call",
     path: nativeLane
       ? "js_abi::string_try_replace_regexp_native_with"
       : "js_abi::string_try_replace_regexp_with",
-    receiverMode: "ref",
+    ...policy.receiverInput,
     argModes: ["ref", "value"],
   };
   const replaceCallbackTarget = policy.lane === "native"
@@ -229,7 +233,7 @@ function stringRegExpRows(policy: StringLanePolicy): readonly JsOperationRowData
     path: nativeLane
       ? "js_abi::string_try_replace_all_regexp_native_with"
       : "js_abi::string_try_replace_all_regexp_with",
-    receiverMode: "ref",
+    ...policy.receiverInput,
     argModes: ["ref", "value"],
   };
   const replaceAllCallbackTarget = policy.lane === "native"
@@ -252,14 +256,14 @@ function directStringCallbackRows(policy: StringLanePolicy): readonly JsOperatio
   const lane = policy.lane === "native" ? "string" : "js-string";
   const module = policy.lane === "native" ? "js_string" : "js_exact_string";
   const baseFallible = policy.lane === "native";
-  const replaceTarget: RustProviderOperationForm = { form: "free-call", path: `${module}::replace_with`, receiverMode: "ref", argModes: ["ref", "value"] };
-  const replaceAllTarget: RustProviderOperationForm = { form: "free-call", path: `${module}::replace_all_with`, receiverMode: "ref", argModes: ["ref", "value"] };
-  const fallibleReplaceTarget: RustProviderOperationForm = { form: "free-call", path: `${module}::try_replace_with`, receiverMode: "ref", argModes: ["ref", "value"] };
-  const fallibleReplaceAllTarget: RustProviderOperationForm = { form: "free-call", path: `${module}::try_replace_all_with`, receiverMode: "ref", argModes: ["ref", "value"] };
+  const replaceTarget: RustProviderOperationForm = { form: "free-call", path: `${module}::replace_with`, ...policy.receiverInput, argModes: ["ref", "value"] };
+  const replaceAllTarget: RustProviderOperationForm = { form: "free-call", path: `${module}::replace_all_with`, ...policy.receiverInput, argModes: ["ref", "value"] };
+  const fallibleReplaceTarget: RustProviderOperationForm = { form: "free-call", path: `${module}::try_replace_with`, ...policy.receiverInput, argModes: ["ref", "value"] };
+  const fallibleReplaceAllTarget: RustProviderOperationForm = { form: "free-call", path: `${module}::try_replace_all_with`, ...policy.receiverInput, argModes: ["ref", "value"] };
   return [
-    { owner: policy.sourceOwner, member: stringMembers.replace, operationKind: "call", lane, variant: `${policy.lane}-string`, firstArgCarrierId: policy.carrierId, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: `${module}::replace`, receiverMode: "ref", argModes: ["ref", "ref"] }, result: policy.value, params: [policy.value, policy.value] } },
+    { owner: policy.sourceOwner, member: stringMembers.replace, operationKind: "call", lane, variant: `${policy.lane}-string`, firstArgCarrierId: policy.carrierId, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: `${module}::replace`, ...policy.receiverInput, argModes: ["ref", "ref"] }, result: policy.value, params: [policy.value, policy.value] } },
     { owner: policy.sourceOwner, member: stringMembers.replace, operationKind: "call", lane, variant: `${policy.lane}-string-callback`, firstArgCarrierId: policy.carrierId, ...(baseFallible ? { fallible: true as const } : {}), callback: callback(policy.lane, fallibleReplaceTarget), shape: { op: "operation", operationKind: "method", target: replaceTarget, result: policy.value, params: [policy.value, { ref: "argument", index: 1 }] } },
-    { owner: policy.sourceOwner, member: stringMembers.replaceAll, operationKind: "call", lane, variant: `${policy.lane}-string`, firstArgCarrierId: policy.carrierId, ...(baseFallible ? { fallible: true as const } : {}), shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: `${module}::replace_all`, receiverMode: "ref", argModes: ["ref", "ref"] }, result: policy.value, params: [policy.value, policy.value] } },
+    { owner: policy.sourceOwner, member: stringMembers.replaceAll, operationKind: "call", lane, variant: `${policy.lane}-string`, firstArgCarrierId: policy.carrierId, ...(baseFallible ? { fallible: true as const } : {}), shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: `${module}::replace_all`, ...policy.receiverInput, argModes: ["ref", "ref"] }, result: policy.value, params: [policy.value, policy.value] } },
     { owner: policy.sourceOwner, member: stringMembers.replaceAll, operationKind: "call", lane, variant: `${policy.lane}-string-callback`, firstArgCarrierId: policy.carrierId, ...(baseFallible ? { fallible: true as const } : {}), callback: callback(policy.lane, fallibleReplaceAllTarget), shape: { op: "operation", operationKind: "method", target: replaceAllTarget, result: policy.value, params: [policy.value, { ref: "argument", index: 1 }] } },
   ];
 }
@@ -288,6 +292,6 @@ export const regexpOperationRows: readonly JsOperationRowData[] = Object.freeze(
   ] as const).map(([member, name]): JsOperationRowData => ({ owner: owners.regExp, member, operationKind: "property", lane: "regexp", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name }, result: { ref: "bool" } } })),
   { owner: owners.regExp, member: members.lastIndex, operationKind: "property", lane: "regexp", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "last_index" }, result: { ref: "float64" } } },
   { owner: owners.regExp, member: members.lastIndex, operationKind: "property-set", lane: "regexp", shape: { op: "set", target: { form: "receiver-method", name: "set_last_index" }, params: [{ ref: "float64" }] } },
-  { owner: owners.string, member: stringMembers.match, operationKind: "call", lane: "string", firstArgCarrierId: rustStringTargetId, fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::regexp_match_string_native", receiverMode: "ref", argModes: ["ref"] }, result: native.optionMatchArray, sourceResult: native.matchArray, sourceAbsence: "null", params: [native.value] } },
-  { owner: owners.string, member: stringMembers.search, operationKind: "call", lane: "string", firstArgCarrierId: rustStringTargetId, fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::regexp_search_string_native", receiverMode: "ref", argModes: ["ref"] }, result: { ref: "native-int" }, params: [native.value] } },
+  { owner: owners.string, member: stringMembers.match, operationKind: "call", lane: "string", firstArgCarrierId: rustStringTargetId, fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::regexp_match_string_native", receiverMode: "value", receiverConversion: rustStringToBorrowedStrValueConversion, argModes: ["ref"] }, result: native.optionMatchArray, sourceResult: native.matchArray, sourceAbsence: "null", params: [native.value] } },
+  { owner: owners.string, member: stringMembers.search, operationKind: "call", lane: "string", firstArgCarrierId: rustStringTargetId, fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::regexp_search_string_native", receiverMode: "value", receiverConversion: rustStringToBorrowedStrValueConversion, argModes: ["ref"] }, result: { ref: "native-int" }, params: [native.value] } },
 ]);

@@ -142,21 +142,21 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
     if (!requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.logical-value-result")) return undefined;
     if (fact.branch === "left") {
       const selected = planExpression(left, context);
-      return selected === undefined ? undefined : applyFinalizedValueConversion(context, selected, fact.leftConversion!, left, "operation-result");
+      return selected === undefined ? undefined : applyFinalizedValueConversion(context, selected, fact.leftConversion!, left);
     }
     if (fact.branch === "right") {
       const preceding = planRustDiscardedValue(left, context);
       const selected = planExpression(right, context);
-      const converted = selected === undefined ? undefined : applyFinalizedValueConversion(context, selected, fact.rightConversion!, right, "operation-result");
+      const converted = selected === undefined ? undefined : applyFinalizedValueConversion(context, selected, fact.rightConversion!, right);
       return preceding === undefined || converted === undefined ? undefined :
         { kind: "evaluate-then", effect: preceding.expression, discard: preceding.discard, value: converted };
     }
     const condition = planExpression(left, context);
     const selected = planExpression(right, context);
     const constant = applyFinalizedValueConversion(context, { kind: "bool-literal", value: fact.operator === "or" },
-      fact.leftConversion!, left, "operation-result");
+      fact.leftConversion!, left);
     const converted = selected === undefined ? undefined : applyFinalizedValueConversion(context, selected,
-      fact.rightConversion!, right, "operation-result");
+      fact.rightConversion!, right);
     return condition === undefined || constant === undefined || converted === undefined ? undefined
       : { kind: "conditional", condition, whenTrue: fact.operator === "and" ? converted : constant,
           whenFalse: fact.operator === "and" ? constant : converted };
