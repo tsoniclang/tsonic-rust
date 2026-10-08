@@ -67,6 +67,17 @@ test("selected receiver generic closure rejects missing, duplicate, foreign and 
   }
 });
 
+test("selected receiver binds exact captured outer generics without manufacturing a local generic contract", () => {
+  const input = receiverFixture();
+  input.context.sourceLifetimes.contractFor = () => undefined;
+  input.bindings.forEach(binding => { binding.scope = "outer"; });
+  const bound = bindRustSelectedReceiverContext(input.type, input.receiver, input.context, input.options);
+  assert.equal(bound?.sourceTypeParameterSubstitutions.get(input.parameters[0])?.carrier === input.integer, true);
+  assert.equal(bound?.sourceTypeParameterSubstitutions.get(input.parameters[1])?.carrier === input.selected, true);
+  input.bindings[0].declaration = {};
+  assert.equal(bindRustSelectedReceiverContext(input.type, input.receiver, input.context, input.options) === undefined, true);
+});
+
 test("semantic generic arguments retain exact ordinal native bindings despite checker-erased equal types", () => {
   const input = fixture();
   const result = resolveRustSelectedTypeArguments(input.type, input.context, {}, new Set());

@@ -5,6 +5,7 @@ import { rustSourceTypeParameters } from "../../../target-model/names/type-param
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import { resolveRustTargetType } from "./target.js";
 import { resolveRustAuthoredTargetType } from "./tuples.js";
+import type { RustSourceGenericParameterContract } from "../../../target-model/lifetimes/index.js";
 
 export function rustSelectedCallTypeParameters(
   sourceArguments: NonNullable<RustSelectedTargetSignature["sourceSelectedMethodTypeArguments"]>,
@@ -109,7 +110,17 @@ export function bindRustSourceDeclarationArguments(
   context: RustTargetTypeResolutionContext,
 ): RustTargetTypeResolutionContext | undefined {
   const parameters = context.sourceLifetimes.contractFor(declaration)?.parameters ?? [];
+  return bindRustSourceGenericArguments(parameters, selectedType, arguments_, context);
+}
+
+export function bindRustSourceGenericArguments(
+  parameters: readonly RustSourceGenericParameterContract[],
+  selectedType: Type,
+  arguments_: readonly RustTargetGenericArgument[],
+  context: RustTargetTypeResolutionContext,
+): RustTargetTypeResolutionContext | undefined {
   if (parameters.length !== arguments_.length ||
+    new Set(parameters.map(parameter => parameter.declaration)).size !== parameters.length ||
     parameters.some((parameter, index) => parameter.kind !== arguments_[index]?.kind)) return undefined;
   if (parameters.length === 0) return context;
   const substitutions = new Map(context.sourceTypeParameterSubstitutions);
