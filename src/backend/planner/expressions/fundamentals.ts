@@ -391,7 +391,11 @@ export function providerSelectedCallMatches(
     });
 }
 
-export function planSourceConversion(node: Node, context: RustPlanContext): RustExpr | undefined {
+export function planSourceConversion(
+  node: Node,
+  context: RustPlanContext,
+  access: import("./entry.js").RustExpressionAccess = "value",
+): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
   if (fact === undefined || fact.kind !== "source-conversion") {
     context.diagnostics.push(missingFactDiagnostic(
@@ -426,7 +430,7 @@ export function planSourceConversion(node: Node, context: RustPlanContext): Rust
   const borrowed = fact.conversion !== undefined &&
     rustValueConversionContract(fact.conversion, context.input.program.typeDefinitions)?.sourceMode === "ref";
   const planned = operand === undefined ? undefined : planExpression(operand, context, "value",
-    borrowed ? "shared-reference" : "value");
+    borrowed ? "shared-reference" : fact.conversion === undefined && access !== "value" ? "shared-place" : "value");
   if (planned === undefined || fact.conversion === undefined) {
     return planned;
   }

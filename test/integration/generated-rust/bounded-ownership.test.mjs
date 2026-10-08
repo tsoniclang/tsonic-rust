@@ -132,8 +132,10 @@ export function main(): void {
   if (size(ref(value)) !== 7) throw new Error("mutable load");
 }
 `);
-  assert.match(output, /js_len\(value\)/u);
+  assert.match(output, /fn size\(value: &str\)/u);
+  assert.match(output, /js_len\(core::convert::AsRef::<str>::as_ref\(value\)\)/u);
   assert.doesNotMatch(output, /js_len\(&\*value\)/u);
+  assert.doesNotMatch(functionSection(output, "size", "change"), /clone\(|String::from|to_owned\(/u);
   assert.match(output, /fn change\(value: &mut String\)/u);
   assert.match(output, /change\(&mut value\)/u);
   assert.doesNotMatch(output, /&mut value\.clone\(\)/u);

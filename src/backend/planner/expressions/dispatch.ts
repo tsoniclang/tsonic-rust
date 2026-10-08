@@ -81,7 +81,7 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { sourceCharCodeUnit } from "../../../target-model/syntax/literals.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/nodes.js";
-import type { RustExpressionResultUse } from "./entry.js";
+import type { RustExpressionAccess, RustExpressionResultUse } from "./entry.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { planRustSourceCallableValue } from "./source-callable-value.js";
 import { planRustDiscardedValue } from "./discarded-values.js";
@@ -90,6 +90,7 @@ export function planExpressionInner(
   node: Node,
   context: RustPlanContext,
   resultUse: RustExpressionResultUse,
+  access: RustExpressionAccess = "value",
 ): RustExpr | undefined {
   const { ast } = context.input.program.source;
   const kind = ast.kindName(node);
@@ -240,15 +241,17 @@ export function planExpressionInner(
         node,
         path,
         context,
+        access,
       );
     }
     case KindParenthesizedExpression: {
       const inner = Node_Expression(context.input.program.source.ast, node);
-      return inner === undefined ? undefined : planExpression(inner, context, resultUse);
+      return inner === undefined ? undefined : planExpression(inner, context, resultUse,
+        access === "value" ? "value" : "shared-place");
     }
     case "KindAsExpression":
     case "KindTypeAssertionExpression": {
-      return planSourceConversion(node, context);
+      return planSourceConversion(node, context, access);
     }
     case KindSatisfiesExpression: {
       const fact = rustOperationFact(node, context);
@@ -264,7 +267,7 @@ export function planExpressionInner(
       if (!requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.identity-expression")) {
         return undefined;
       }
-      return planExpression(inner, context);
+      return planExpression(inner, context, resultUse, access === "value" ? "value" : "shared-place");
     }
     case KindNonNullExpression: {
       const fact = rustOperationFact(node, context);

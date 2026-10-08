@@ -111,3 +111,25 @@ test("explicit native str conversion creates a view without copying or reevaluat
     });
   }
 });
+
+test("typed shared identity inputs use native deref coercion without changing semantic views", () => {
+  const pointer = { kind: "path", path: "guard" };
+  const expression = { kind: "dereference", pointer };
+  const selected = context(undefined, { expression, carrier: stringCarrier, valueForm: "storage" });
+  assert.deepEqual(applyFinalizedRustArgumentMode(selected, sourceNode, expression, input, false), {
+    kind: "reference", expr: pointer,
+  });
+  for (const other of [
+    { ...input, conversion: { kind: "semantic", conversion: rustStringToBorrowedStrValueConversion } },
+    { ...input, mode: "mut-ref" },
+    { ...input, parameterCarrier: { kind: "reference", referent: { kind: "primitive", name: "bool" }, mutable: false } },
+    { ...input, parameterCarrier: { ...input.parameterCarrier, mutable: true } },
+  ]) {
+    const planned = applyFinalizedRustArgumentMode(selected, sourceNode, expression, other, false);
+    assert.equal(planned.kind === "reference" && planned.expr === pointer, false);
+  }
+  const copied = { ...expression };
+  assert.deepEqual(applyFinalizedRustArgumentMode(selected, sourceNode, copied, input, false), {
+    kind: "reference", expr: copied,
+  });
+});

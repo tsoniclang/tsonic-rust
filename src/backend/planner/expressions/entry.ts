@@ -62,7 +62,7 @@ import { rustNativeFutureCallableResult } from "../../../target-model/types/carr
 import { cloneRustExpression } from "../../target-ast/expressions.js";
 
 export type RustExpressionResultUse = "value" | "discarded";
-type RustExpressionAccess = "value" | "shared-reference" | "shared-place" | "shared-receiver";
+export type RustExpressionAccess = "value" | "shared-reference" | "shared-place" | "shared-receiver";
 
 export function planExpression(
   node: Node,
@@ -107,7 +107,7 @@ function planProjectedExpression(
     const effect = planExpressionBeforeValueProjections(node, context, "discarded");
     return effect === undefined ? undefined : { kind: "evaluate-then", effect, discard: "value", value: selected };
   }
-  const planned = planExpressionBeforeValueProjections(node, context, resultUse);
+  const planned = planExpressionBeforeValueProjections(node, context, resultUse, access);
   if (planned === undefined || resultUse === "discarded") {
     return planned;
   }
@@ -326,11 +326,12 @@ export function planExpressionBeforeValueProjections(
   node: Node,
   context: RustPlanContext,
   resultUse: RustExpressionResultUse,
+  access: RustExpressionAccess = "value",
 ): RustExpr | undefined {
   const override = context.expressionOverrides?.get(node);
   if (override === undefined || override.valueForm !== "storage" ||
-    isRustCopyCarrier(override.carrier)) {
-    return override?.expression ?? planRawExpression(node, context, resultUse);
+    isRustCopyCarrier(override.carrier) || access !== "value") {
+    return override?.expression ?? planRawExpression(node, context, resultUse, access);
   }
   if (!rustCarrierSupportsClone(override.carrier, context.input.program.typeDefinitions)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -347,6 +348,7 @@ export function planRawExpression(
   node: Node,
   context: RustPlanContext,
   resultUse: RustExpressionResultUse,
+  access: RustExpressionAccess = "value",
 ): RustExpr | undefined {
   const diagnosticCount = context.diagnostics.length;
   const explicitSafety = tryPlanRustExplicitSafetyExpression(
@@ -375,7 +377,7 @@ export function planRawExpression(
     });
     planned = undefined;
   } else {
-    planned = planExpressionInner(node, context, resultUse);
+    planned = planExpressionInner(node, context, resultUse, access);
   }
   if (planned === undefined) {
     if (context.diagnostics.length === diagnosticCount) {

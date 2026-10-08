@@ -7,7 +7,8 @@ import { rustSourceBindingFactKey, rustTargetOperationFactKey } from "../facts/k
 import { isRustStringCarrier } from "../../target-model/types/index.js";
 import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 import type { RustBorrowedElementRead } from "./borrowed-element-reads.js";
-import { rustBorrowedElementRead, rustBorrowedStringInputs, rustBorrowPureOperation } from "./borrowed-element-purity.js";
+import { rustBorrowedElementRead, rustBorrowPureOperation } from "./borrowed-element-purity.js";
+import { rustBorrowedStringInputs } from "../facts/provider-borrows.js";
 import type { RustTargetProgram } from "./model.js";
 
 export interface RustBorrowedElementLocal extends RustBorrowedElementRead {

@@ -69,6 +69,7 @@ import { resolveRustSourceDeclarationArguments } from "./generic-arguments.js";
 import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
 import { rustSourceStorageComponentContext, rustSourceStorageContext } from "./source-storage-projection.js";
 import { resolveRustSelectedSourceCallResult } from "./call-results.js";
+import { resolveRustContextualLiteralCarrier } from "./contextual-literals.js";
 
 export function resolveRustTargetTypeRef(
   subject: ExtensionFactSubject | undefined,
@@ -157,6 +158,12 @@ export function resolveRustTargetTypeRef(
       ["int8", "uint8", "int16", "uint16", "int32", "uint32", "int64", "uint64", "int128", "uint128", "native-int", "native-uint"].includes(bound.name)) {
       return bound;
     }
+  }
+  if (node !== undefined && context.ast.is.IsArrayLiteralExpression(node) && context.ast.elements(node).length === 0) {
+    const selected = context.semanticsFor(node).types.contextualValueSelection(node);
+    const expected = selected.kind === "selected" ? resolveRustTargetTypeRef(selected.type, context, options) : undefined;
+    const contextual = expected === undefined ? undefined : resolveRustContextualLiteralCarrier(context, node, expected);
+    if (contextual !== undefined) return contextual;
   }
   const existing = context.facts.getRuntimeCarrierFact(node)?.carrier;
   if (existing !== undefined) {

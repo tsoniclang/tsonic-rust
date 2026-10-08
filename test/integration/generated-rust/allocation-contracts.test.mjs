@@ -1,6 +1,7 @@
 import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { capturedStringOwnershipSource } from "../../../../tsonic/test/fixtures/captured-string-ownership.mjs";
 import { compileRust, artifactText, analyzeRust } from "../../helpers/rust-session.mjs";
 import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
@@ -166,7 +167,8 @@ export function main(): void {
   });
   assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
-  assert.match(output, /format!\("\{\}\{\}", first, second\)/u);
+  assert.match(output, /\.concat\(\)/u);
+  assert.doesNotMatch(output, /format!|first\.clone\(\)/u);
   assert.match(output, /combined\(borrowed\(&value\), value\.clone\(\)\)/u);
   assert.match(output, /fn copied[\s\S]*?String::from\(value\)/u);
   assert.match(output, /fn empty[\s\S]*?String::from\(value\)/u);
@@ -235,7 +237,12 @@ fn owned_results_and_borrowed_observations_match_handwritten_costs() {
             assert_eq!(generated_cost, native_cost);
         }
         let (joined, joined_cost) = measure(|| index::joined(input.as_str(), other.as_str()));
-        let (native_joined, native_joined_cost) = measure(|| format!("{}{}", input.as_str(), other.as_str()));
+        let (native_joined, native_joined_cost) = measure(|| {
+            let mut output = String::with_capacity(input.len() + other.len());
+            output.push_str(input.as_str());
+            output.push_str(other.as_str());
+            output
+        });
         assert_eq!(joined, native_joined);
         assert_eq!(joined_cost, native_joined_cost);
         let (observations, observation_cost) = measure(|| (
@@ -255,6 +262,106 @@ fn owned_results_and_borrowed_observations_match_handwritten_costs() {
   runCargo(root, ["check", "--all-targets", "--locked", "--offline"]);
   runCargo(root, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
   runCargo(root, ["test", "--release", "--locked", "--offline"]);
+});
+
+test("terminal owned string captures match handwritten shared closure frame and invocation costs", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: {
+    outputType: "lib", crateName: "terminal_capture_cost",
+  } }, files: { "index.ts": `
+export function retained(value: string): () => string { return () => value; }
+` } });
+  assertNoTargetDiagnostics(result.diagnostics);
+  const output = artifactText(result, "src/index.rs");
+  assert.match(output, /let capture_value = value;/u);
+  assert.doesNotMatch(output, /let capture_value = value\.clone\(\)/u);
+  const root = writeGeneratedProject("terminal-capture-cost", result.artifacts);
+  mkdirSync(join(root, "tests"), { recursive: true });
+  writeFileSync(join(root, "tests/ownership.rs"), `${nativeOwnershipCostSupport}
+use terminal_capture_cost::index;
+use tsonic_rust_runtime as rt;
+
+fn handwritten(value: String) -> rt::Callable<(), rt::TsonicResult<String>> {
+    rt::Callable::new(move |()| Ok(value.clone()))
+}
+
+#[test]
+fn owned_capture_and_repeated_reads_match_handwritten_costs() {
+    for _ in 0..64 {
+        let generated_input = String::from("café😀 owned capture");
+        let native_input = generated_input.clone();
+        let (generated, generated_cost) = measure(|| index::retained(generated_input));
+        let (native, native_cost) = measure(|| handwritten(native_input));
+        assert_eq!(generated_cost, native_cost);
+        assert_eq!(generated_cost.allocations, 1);
+        assert_eq!(generated_cost.reallocations, 0);
+        for _ in 0..16 {
+            let (actual, actual_cost) = measure(|| generated.call(()).unwrap());
+            let (expected, expected_cost) = measure(|| native.call(()).unwrap());
+            assert_eq!(actual, expected);
+            assert_eq!(actual_cost, expected_cost);
+        }
+    }
+}
+`);
+  runCargo(root, ["generate-lockfile", "--offline"]);
+  runCargo(root, ["fmt", "--all"]);
+  runCargo(root, ["fmt", "--all", "--check"]);
+  runCargo(root, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
+  runCargo(root, ["test", "--release", "--locked", "--offline"]);
+});
+
+test("pure captured string append matches handwritten mutable storage costs", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: {
+    outputType: "lib", crateName: "captured_append_cost",
+  } }, files: { "index.ts": capturedStringOwnershipSource } });
+  assertNoTargetDiagnostics(result.diagnostics);
+  const output = artifactText(result, "src/index.rs");
+  assert.match(output, /borrow_mut\(\)\.push\('!'\)/u);
+  const root = writeGeneratedProject("captured-append-cost", result.artifacts);
+  runCargo(root, ["generate-lockfile", "--offline"]);
+  runCargo(root, ["fmt", "--all", "--", "--check"]);
+  mkdirSync(join(root, "tests"), { recursive: true });
+  writeFileSync(join(root, "tests/ownership.rs"), `${nativeOwnershipCostSupport}
+use captured_append_cost::index;
+use std::cell::RefCell;
+use tsonic_rust_runtime as rt;
+
+fn handwritten(value: String) -> rt::Callable<(), rt::TsonicResult<usize>> {
+    let value = RefCell::new(value);
+    rt::Callable::new(move |()| {
+        value.borrow_mut().push('!');
+        Ok(value.borrow().len())
+    })
+}
+
+#[test]
+fn exact_mutable_frame_and_append_costs() {
+    for _ in 0..32 {
+        let input = String::with_capacity(64);
+        let native_input = String::with_capacity(64);
+        let (generated, generated_cost) = measure(|| index::append(input));
+        let (native, native_cost) = measure(|| handwritten(native_input));
+        assert_eq!(generated_cost, native_cost);
+        assert_eq!(generated_cost.allocations, 1);
+        for index in 1..=1024 {
+            let (generated_result, generated_cost) = measure(|| generated.call(()).unwrap());
+            let (native_result, native_cost) = measure(|| native.call(()).unwrap());
+            assert_eq!(generated_result, index);
+            assert_eq!(generated_result, native_result);
+            assert_eq!(generated_cost, native_cost);
+            assert_eq!(generated_cost.allocations, 0);
+        }
+    }
+    let repeated = index::duplicate(String::from("x"));
+    assert_eq!(repeated.call(()).unwrap(), "xx");
+    assert_eq!(repeated.call(()).unwrap(), "xxxx");
+    let observed = index::observed(String::from("before"));
+    assert_eq!(observed.call(()).unwrap(), "before!");
+    assert_eq!(observed.call(()).unwrap(), "before!!");
+}
+`);
+  runCargo(root, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
+  runCargo(root, ["test", "--release", "--locked", "--offline", "--test", "ownership"]);
 });
 
 test("static string selection preserves exported bindings and deferred default reads", () => {

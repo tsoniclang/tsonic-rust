@@ -762,20 +762,20 @@ function inPlaceStringAppendDeclarationFor(
     return undefined;
   }
   const reference = walk.context.source.navigation.sourceReferenceFor(target);
+  const effects = walk.context.source.navigation.expressionEffects(value);
+  const pure = !effects.invokes && !effects.mutates && !effects.suspends && !effects.mayThrow;
   if (reference === undefined || reference.symbol === undefined ||
     walk.context.facts.get(reference.declaration, rustModuleBindingFactKey) !== undefined ||
     walk.context.facts.resolve(reference.declaration, rustModuleBindingFactKey) !== undefined ||
     walk.context.facts.get(reference.declaration, rustBindingStorageFactKey) !== undefined ||
     walk.context.facts.resolve(reference.declaration, rustBindingStorageFactKey) !== undefined ||
-    walk.context.source.navigation.declarationUseSummary(reference.declaration).captured ||
+    walk.context.source.navigation.declarationUseSummary(reference.declaration).captured && !pure ||
     walk.context.source.navigation.referencesWithin(reference.symbol, value).length !== 0) {
     return undefined;
   }
-  const effects = walk.context.source.navigation.expressionEffects(value);
   return {
     declaration: reference.declaration,
-    writeStrategy: !effects.invokes && !effects.mutates &&
-        !effects.suspends && !effects.mayThrow
+    writeStrategy: pure
       ? "in-place-string-append-parts"
       : "in-place-string-append-value",
   };

@@ -58,6 +58,7 @@ import { planNativeRustArrayAccess } from "./native-arrays.js";
 import { rustRecordFieldStorageType, rustRecordFieldSelector } from "../objects/record-fields.js";
 import { rustExpressionHasReferenceObjectField, planRustReferenceObjectFieldLocation } from "./object-field-locations.js";
 import { rustPreparedValueLocation } from "../objects/value-fields.js";
+import type { RustExpressionAccess } from "./entry.js";
 
 export type RustExpressionPlanner = (
   node: Node,
@@ -77,6 +78,7 @@ export function planRustIdentifierValue(
   node: Node,
   path: string,
   context: RustPlanContext,
+  access: RustExpressionAccess = "value",
 ): RustExpr {
   const prepared = rustPreparedValueLocation(node, context);
   if (prepared !== undefined) return prepared.read;
@@ -92,13 +94,18 @@ export function planRustIdentifierValue(
   if (context.input.program.facts.getFact(node, rustNativeArrayStorageKey)?.kind === "reference") {
     return cloneRustExpression(value);
   }
-  if (captured !== undefined && captured.storage !== "value") {
-    return rustBindingStorageOperations(captured.storage).read(value.kind === "reference" ? value.expr : value);
+  const bindingStorage = captured !== undefined && captured.storage !== "value" ? captured.storage
+    : storage?.storage === "local-location" ? "location"
+    : storage?.storage === "module-cell" ? undefined : storage?.storage;
+  if (bindingStorage !== undefined) {
+    const operations = rustBindingStorageOperations(bindingStorage);
+    const receiver = value.kind === "reference" ? value.expr : value;
+    return bindingStorage === "borrow-cell" && access !== "value"
+      ? { kind: "dereference", pointer: operations.borrowedRead(receiver) }
+      : operations.read(receiver);
   }
-  if (storage !== undefined) {
-    return storage.storage === "module-cell"
-      ? rustModuleCellAccess(value, "load", [])
-      : rustBindingStorageOperations(storage.storage === "local-location" ? "location" : storage.storage).read(value);
+  if (storage?.storage === "module-cell") {
+    return rustModuleCellAccess(value, "load", []);
   }
   if (captured?.borrowed !== undefined) {
     const referent = value.kind === "reference" ? value.expr : undefined;

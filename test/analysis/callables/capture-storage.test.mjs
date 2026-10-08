@@ -7,9 +7,48 @@ import { rustBindingStorageFactKey, rustMutatedBindingFactKey } from "../../../d
 import { rustArgumentPassingKey } from "../../../dist/target-model/facts/selections.js";
 import { rustTargetOperationFactKey } from "../../../dist/analysis/facts/operations/keys.js";
 import { rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
+import { rustBorrowedStrTargetType } from "../../../dist/target-model/types/index.js";
 
 const scalarCarrier = { kind: "source-primitive", name: "float64" };
 const stringCarrier = { kind: "target-named", id: "rust.std.String" };
+
+test("single captured native strings retain inline storage through exact pure borrowed observations", () => {
+  const borrowed = rustBorrowedStrTargetType();
+  const input = { source: { kind: "receiver" }, sourceCarrier: stringCarrier, mode: "value",
+    parameterCarrier: borrowed, conversion: { kind: "semantic",
+      conversion: { kind: "semantic-conversion", id: "borrowed-str-from-owned-string" },
+      sourceCarrier: stringCarrier, targetCarrier: borrowed, fallible: false } };
+  const original = { kind: "provider-operation", abi: {
+    effects: { evaluation: "pure", safety: "safe", invocation: "infallible" },
+    result: { kind: "sync", carrier: { kind: "source-primitive", name: "native-uint" } },
+    targetReceiver: { kind: "input", input }, targetArguments: [],
+  } };
+  for (const [label, operation, expected] of [
+    ["exact borrowed view", original, "borrow-cell"],
+    ["no selected operation", undefined, "location"],
+    ["observable", { ...original, abi: { ...original.abi, effects: { ...original.abi.effects, evaluation: "observable" } } }, "location"],
+    ["unsafe", { ...original, abi: { ...original.abi, effects: { ...original.abi.effects, safety: "requires-unsafe" } } }, "location"],
+    ["fallible", { ...original, abi: { ...original.abi, effects: { ...original.abi.effects, invocation: "fallible" } } }, "location"],
+    ["suspended", { ...original, abi: { ...original.abi, result: { ...original.abi.result, kind: "async" } } }, "location"],
+    ["retained result", { ...original, abi: { ...original.abi, result: { ...original.abi.result, carrier: stringCarrier } } }, "location"],
+    ["missing receiver", { ...original, abi: { ...original.abi, targetReceiver: { kind: "none" } } }, "location"],
+    ["mutable mode", { ...original, abi: { ...original.abi, targetReceiver: { kind: "input", input: { ...input, mode: "mut-ref" } } } }, "location"],
+    ["wrong view", { ...original, abi: { ...original.abi, targetReceiver: { kind: "input", input: { ...input, parameterCarrier: stringCarrier } } } }, "location"],
+  ]) {
+    const current = fixture(`export function outer(seed: string) {
+      const callback = () => { seed += "!"; return seed.length; }; return callback;
+    }`, { carrier: stringCarrier });
+    let property;
+    const visit = node => {
+      if (current.source.ast.is.IsPropertyAccessExpression(node)) property = node;
+      current.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    visit(current.owner);
+    assert.equal(property !== undefined, true, label);
+    if (operation !== undefined) current.facts.set(property, rustTargetOperationFactKey, operation);
+    assert.equal(current.select()?.storage, expected, label);
+  }
+});
 
 test("loop activation identities distinguish immutable values, live lexical storage and var bindings", () => {
   for (const [kind, body, expected] of [
@@ -240,7 +279,7 @@ test("deferred initialization cannot be reduced to inline storage", () => {
   assert.deepEqual(current.select(), { storage: "location", initialization: "deferred" });
 });
 
-test("a reassigned lexical callback retains deferred live binding storage instead of a fixed inline payload", () => {
+test("a reassigned lexical callback retains live binding storage instead of a fixed inline payload", () => {
   const current = fixture(`
     export function outer() {
       let seed: (count: number) => number = count => count === 0 ? 1 : seed(count - 1);
@@ -250,7 +289,7 @@ test("a reassigned lexical callback retains deferred live binding storage instea
     }
   `, { ownerBinding: "seed", carrier: rustCallableTargetType([scalarCarrier], scalarCarrier) });
   assert.equal(current.summary.bindingWritten, true, "exact rebinding evidence");
-  assert.deepEqual(current.select(), { storage: "location", initialization: "deferred" });
+  assert.deepEqual(current.select(), { storage: "location" });
 });
 
 test("direct lexical roots retain reachability and first-class alias guards", () => {
@@ -284,7 +323,10 @@ test("native call argument evidence must prove ownership rather than an address-
     ["borrow-mut", { kind: "source-call" }, "location"],
     [undefined, { kind: "source-call" }, "location"],
     ["by-value", undefined, "location"],
-    ["by-value", { kind: "provider-operation", abi: { target: { form: "expression-macro" } } }, "location"],
+    ["by-value", { kind: "provider-operation", abi: {
+      effects: { evaluation: "observable", safety: "safe", invocation: "infallible" },
+      target: { form: "expression-macro" },
+    } }, "location"],
   ]) {
     const current = fixture(`
       function observe(value: number): number { return value; }

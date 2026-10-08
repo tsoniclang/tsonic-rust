@@ -4,10 +4,11 @@ import type { SourceDeclarationUse } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isRustCopyCarrier, rustCarrierSupportsClone } from "../../target-model/types/index.js";
-import { rustBindingStorageFactKey, rustMutatedBindingFactKey } from "../facts/keys.js";
+import { rustBindingStorageFactKey, rustMutatedBindingFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
 import type { RustClosureCaptureFact } from "../facts/keys.js";
 import { rustCallArgumentIsOwned } from "../facts/parameter-passing.js";
 import { rustSourceValueWrapperContains } from "../../policy/ownership/source-value-wrappers.js";
+import { rustBorrowedStringInputs } from "../facts/provider-borrows.js";
 
 export type RustCaptureStorage = Pick<RustClosureCaptureFact["captures"][number], "storage" | "mutable"> & {
   readonly initialization?: "deferred";
@@ -120,6 +121,11 @@ function singleOwnerDirectBinding(
         expression = parent;
         parent = ast.parent(expression);
       }
+      const operation = parent === undefined ? undefined : walk.context.facts.get(parent, rustTargetOperationFactKey);
+      if (operation?.kind === "provider-operation" && operation.abi.effects.evaluation === "pure" &&
+        operation.abi.effects.safety === "safe" && operation.abi.effects.invocation === "infallible" &&
+        operation.abi.result.kind === "sync" && isRustCopyCarrier(operation.abi.result.carrier) &&
+        rustBorrowedStringInputs(parent!, operation, ast).includes(expression)) return true;
       if (parent !== undefined && (ast.is.IsCallExpression(parent) || ast.is.IsNewExpression(parent))) {
         if (!rustCallArgumentIsOwned(expression, ast, walk.context.facts)) return false;
       } else if (parent !== undefined && ast.is.IsArrowFunction(parent) && ast.body(parent) === expression) {

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { selectRustBorrowedIterationBinding } from "../../../dist/analysis/program/borrowed-iteration-bindings.js";
 import { rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
-import { rustStringTargetType, rustVecTargetType } from "../../../dist/target-model/types/index.js";
+import { rustBorrowedStrTargetType, rustStringTargetType, rustVecTargetType } from "../../../dist/target-model/types/index.js";
 
 function fixture() {
   const callable = { kind: "KindFunctionDeclaration" };
@@ -141,4 +141,30 @@ test("borrowed loop provider uses require exact compiler-selected pure shared-re
     read.operation = operation;
     assert.equal(input.select(), undefined);
   }
+  const sourceInput = original.abi.targetReceiver.input;
+  const borrowed = rustBorrowedStrTargetType();
+  const semantic = { ...sourceInput, mode: "value", parameterCarrier: borrowed, conversion: {
+    kind: "semantic", conversion: { kind: "semantic-conversion", id: "borrowed-str-from-owned-string" },
+    sourceCarrier: input.string, targetCarrier: borrowed, fallible: false,
+  } };
+  const selectInput = selected => {
+    read.operation = { ...original, abi: { ...original.abi, targetReceiver: { kind: "input", input: selected } } };
+    return input.select();
+  };
+  assert.ok(selectInput(semantic), "exact native borrowed string conversion");
+  for (const selected of [
+    { ...semantic, mode: "ref" },
+    { ...semantic, mode: "mut-ref" },
+    { ...semantic, parameterCarrier: input.string },
+    { ...semantic, conversion: { ...semantic.conversion, fallible: true } },
+    { ...semantic, conversion: { ...semantic.conversion, sourceCarrier: borrowed } },
+    { ...semantic, conversion: { ...semantic.conversion, targetCarrier: input.string } },
+    { ...semantic, conversion: { ...semantic.conversion, conversion: {
+      kind: "semantic-conversion", id: "owned-string-from-borrowed-str",
+    } } },
+    { ...semantic, conversion: { ...semantic.conversion, conversion: {
+      kind: "semantic-conversion", id: "borrowed-str-from-optional-string",
+    } } },
+    { ...semantic, conversion: { kind: "sequence", steps: [semantic.conversion] } },
+  ]) assert.equal(selectInput(selected), undefined, "nonborrow or inconsistent native input remains rejected");
 });

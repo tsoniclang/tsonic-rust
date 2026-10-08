@@ -25,6 +25,7 @@ import {
   planRustPromotedStorageLocation,
   planRustPromotedStorageWrite,
   planRustModuleBindingStore,
+  rustLocationStorageForReference,
 } from "../expressions/typed-locations.js";
 import {
   rustTargetOperationFactKey,
@@ -723,6 +724,14 @@ export function planRustAssignmentWrite(
     return planRustDirectOperatorCallAssignment(left, target, value, fact, context);
   }
   if (operator === "+=" && isRustStringCarrier(fact.resultCarrier)) {
+    if (fact.writeStrategy === "in-place-string-append-parts" &&
+      rustLocationStorageForReference(left, context)?.storage === "borrow-cell") {
+      const location = planRustPromotedStorageLocation(left, context, planExpression, false);
+      if (location.kind !== "promoted" || location.expression === undefined) return undefined;
+      const receiver = location.expression.kind === "reference" ? location.expression.expr : location.expression;
+      return planInPlaceStringAppend({ kind: "method-call", receiver,
+        method: "borrow_mut", args: [] }, planRustNonConsumingValue(valueNode, value, context), true);
+    }
     if (target !== undefined && (fact.writeStrategy === "in-place-string-append-parts" ||
       fact.writeStrategy === "in-place-string-append-value")) {
       return planInPlaceStringAppend(

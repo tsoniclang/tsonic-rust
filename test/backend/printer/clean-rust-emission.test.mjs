@@ -110,7 +110,8 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /struct Marker<T: Clone> \{/u);
+  assert.match(source, /struct Marker<T> \{/u);
+  assert.doesNotMatch(source, /Marker<T: Clone>/u);
   assert.doesNotMatch(source, /T: Clone \+ 'static/u);
   assert.match(source, /_type_marker: core::marker::PhantomData<\(T,\)>/u);
   assert.match(source, /pub\(crate\) label: String,/u);
@@ -118,7 +119,20 @@ export function main(): void {
   assert.match(source, /_type_marker: core::marker::PhantomData/u);
   assert.match(source, /Marker::<i32>::new\(String::from\("ready"\)\)/u);
   assert.doesNotMatch(source, /Marker::new::<i32>/u);
-  validateGeneratedProject("clean-generic-state", result.artifacts);
+  validateGeneratedProject("clean-generic-state", result.artifacts.map(artifact =>
+    artifact.path !== "src/index.rs" ? artifact : { ...artifact, text: artifact.text + `
+#[cfg(test)]
+mod native_contract {
+    use super::Marker;
+    use std::sync::atomic::AtomicU64;
+
+    #[test]
+    fn phantom_state_constructs_without_a_clone_payload_bound() {
+        let marker = Marker::<AtomicU64>::new(String::from("ready"));
+        assert_eq!(marker.label, "ready");
+    }
+}
+` }));
 });
 
 test("structural shapes have one exact readable crate-wide identity", { timeout: 300_000 }, () => {

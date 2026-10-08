@@ -91,6 +91,14 @@ export function applyFinalizedRustArgumentMode(
   if (sourceReferenceReborrowMatches(context, sourceNode, input)) {
     return expression;
   }
+  const override = context.expressionOverrides?.get(sourceNode);
+  if (input.mode === "ref" && input.conversion.kind === "identity" &&
+    input.parameterCarrier.kind === "reference" && !input.parameterCarrier.mutable &&
+    rustTargetTypeRefEquals(input.parameterCarrier.referent, input.sourceCarrier) &&
+    override?.valueForm === "storage" && expression === override.expression &&
+    expression.kind === "dereference") {
+    return { kind: "reference", expr: expression.pointer };
+  }
   if (sourceIsSharedReference && input.mode === "ref") {
     return createRustSharedReferenceArgument(context, expression, sourceNode);
   }
@@ -141,12 +149,9 @@ export function createRustSharedReferenceArgument(
     return borrowedString;
   }
   const override = node === undefined ? undefined : context.expressionOverrides?.get(node);
-  if (override?.valueForm === "storage" && isRustStringCarrier(override.carrier) && argument.kind === "dereference") {
-    return { kind: "reference", expr: argument.pointer };
-  }
   if (override?.valueForm === "shared-reference") {
     return isRustStringCarrier(override.carrier)
-      ? { kind: "method-call", receiver: argument, method: "as_str", args: [] }
+      ? { kind: "method-call", receiver: argument.kind === "reference" ? argument.expr : argument, method: "as_str", args: [] }
       : argument;
   }
   const sourceParameterAbi = node === undefined
