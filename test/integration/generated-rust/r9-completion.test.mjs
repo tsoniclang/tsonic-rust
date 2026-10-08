@@ -118,7 +118,7 @@ test("stream scheduler operations lower through exact provider rows", async () =
     });
     assert.deepEqual(result.diagnostics, []);
     assert.match(artifactText(result, "src/index.rs"), new RegExp(
-      `tsonic_rust_node::fs::${item.target}\\(&?"x"\\)\\?`,
+      `dispatch_root_1\\.with\\(\\|dispatch_root\\| \\{\\s*tsonic_rust_node::fs::${item.target}\\(\\s*dispatch_root,\\s*core::convert::AsRef::<str>::as_ref\\("x"\\),?\\s*\\)\\s*\\}\\)\\?`,
       "u",
     ));
   }

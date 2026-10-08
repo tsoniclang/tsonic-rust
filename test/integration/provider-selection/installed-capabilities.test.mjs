@@ -234,7 +234,8 @@ export function main(): void {
   });
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /acme_telemetry::create_meter\("requests"\)\?/u);
+  assert.match(text, /match acme_telemetry::create_meter\("requests"\) \{\s*Ok\(value\) => value,\s*Err\(error\) => break 'try_body Err\(error\),\s*\}/u);
+  assert.doesNotMatch(text, /create_meter\("requests"\)\?/u);
   const run = validateGeneratedProject("telemetry-proof-bin", result.artifacts, { run: true });
   assert.equal(run.status, 0);
 });
@@ -325,7 +326,8 @@ export function main(): void {
     },
   });
   assert.deepEqual(result.diagnostics, []);
-  assert.match(artifactText(result, "src/index.rs"), /sink\.path\(\)\?/u);
+  assert.match(artifactText(result, "src/index.rs"), /match sink\.path\(\) \{\s*Ok\(value\) => value,\s*Err\(error\) => break 'try_body Err\(error\),\s*\}/u);
+  assert.doesNotMatch(artifactText(result, "src/index.rs"), /sink\.path\(\)\?/u);
   // Row metadata is emitted verbatim: no recasing of capability API names.
   assert.match(artifactText(result, "src/index.rs"), /acme_logsink::openSinkNamed\("app"\)/u);
   const run = validateGeneratedProject("logsink-proof-bin", result.artifacts, { run: true });

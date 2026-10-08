@@ -27,7 +27,8 @@ test("Promise.resolve preserves exact values, absence, evaluation and existing p
     ` },
   });
   assertNoTargetDiagnostics(result.diagnostics);
-  assert.match(artifactText(result, "src/index.rs"), /JsPromise::resolved/);
+  assert.match(artifactText(result, "src/index.rs"), /js_abi::JsPromise::<'static, \(\), rt::TsonicError>::resolved\(\(\)\)/u);
+  assert.match(artifactText(result, "src/index.rs"), /js_abi::JsPromise::<'static, u64, rt::TsonicError>::resolved\(wide\)/u);
   assert.match(artifactText(result, "src/index.rs"), /std::convert::identity/);
   validateGeneratedProject("promise-resolution", result.artifacts, { run: true });
 });

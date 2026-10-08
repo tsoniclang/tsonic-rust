@@ -50,7 +50,8 @@ export function main(): void {
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn manifest_has\(path: &str, needle: String\) -> Result<bool, rt::TsonicError>/u);
   assert.match(text, /let xs: \[i32; 3\] = \[10, 20, 30\];/u);
-  assert.match(text, /tsonic_rust_node::crypto::random_bytes\(16\)\?/u);
+  assert.match(text, /match tsonic_rust_node::crypto::random_bytes\(16_usize\) \{\s*Ok\(value\) => value,\s*Err\(error\) => break 'try_body Err\(rt::TsonicError::from\(error\)\),\s*\}/u);
+  assert.doesNotMatch(text, /random_bytes\(16_usize\)\?/u);
   const run = validateGeneratedProject("r8-proof-bin", result.artifacts, { run: true });
   assert.equal(run.status, 0);
 });

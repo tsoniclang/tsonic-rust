@@ -30,10 +30,10 @@ test("utility transformations preserve modifiers, overload selection, variadic p
     assert.match(source, new RegExp(`\\b${functionName}\\b`, "u"));
   }
   assert.match(source, /fn optionalSummary\(values: \(i32, Option<String>\)\)/u);
-  assert.match(source, /fn restSummary\(values: &mut \[bool\]\)/u);
-  assert.match(source, /restSummary\(&mut \[false\]\)/u);
-  assert.match(source, /restSummary\(&mut \[true, false\]\)/u);
-  assert.doesNotMatch(source, /restSummary\(&mut vec!/u);
+  assert.match(source, /fn restSummary\(values: &\[bool\]\)/u);
+  assert.match(source, /restSummary\(&\[false\]\)/u);
+  assert.match(source, /restSummary\(&\[true, false\]\)/u);
+  assert.doesNotMatch(source, /restSummary\(&mut |restSummary\(&vec!/u);
   assert.match(source, /fn overloadSummary\(values: \(String, Option<String>\)\)/u);
   assert.match(
     artifactText(result, "src/shapes.rs"),

@@ -16,8 +16,12 @@ test("native JS async bodies retain contextual union completion, captures, alias
   assert.doesNotMatch(output, /JsPromise<'static, \(\), rt::TsonicError>[\s\S]{0,100}\.map\(/u);
   const module = result.artifacts.find(artifact => artifact.path === "src/index.rs")?.text;
   assert.equal(typeof module, "string");
-  assert.match(module, /#\[derive\(Clone\)\]\n(?:#\[[^\n]+\]\n)*pub\(crate\) enum HandlerResult/u,
+  const shapes = result.artifacts.find(artifact => artifact.path === "src/shapes.rs")?.text;
+  assert.equal(typeof shapes, "string");
+  assert.match(shapes, /#\[derive\(Clone\)\]\n(?:#\[[^\n]+\]\n)*pub\(crate\) enum Union2<Payload0, Payload1> \{\s*Variant0\(Payload0\),\s*Variant1\(Payload1\),\s*\}/u,
     "runtime unions require only their selected Clone contract, not unsolicited payload traits");
+  assert.doesNotMatch(shapes, /derive\([^\n]*(?:Debug|PartialEq)/u);
+  assert.match(module, /crate::shapes::Union2<\s*js_abi::JsPromise<'static, Option<Reply>, rt::TsonicError>,\s*Reply,?\s*>/u);
   assert.match(module, /JsPromise<'static, Option<Reply>, rt::TsonicError>/u,
     "stored async payloads retain their owning lifetime and exact native output");
   validateGeneratedProject("contextual-async-results", result.artifacts, { run: true });

@@ -66,7 +66,8 @@ for (const surface of ["native", "js"]) {
     const { result } = compileRust(options);
     assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\\n"));
     const source = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
-    assert.equal(/trait RoutingHostDispatch<Value: 'static \+ Clone>/u.test(source), true, "exact native dispatch bounds");
+    assert.equal(/trait RoutingHostDispatch<Value: 'static>: rt::ObjectIdentityCarrier/u.test(source), true, "exact native dispatch bounds");
+    assert.equal(/RoutingHostDispatch<Value: 'static \+ Clone>/u.test(source), false, "dispatch does not manufacture a payload Clone requirement");
     for (const member of ["head", "options", "use_2", "param_2"]) {
       assert.equal(source.includes(`dispatch_routing_host_${member}`), true, `${member}: exact dispatch slot`);
     }
