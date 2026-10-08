@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import { rustBindingStorageFactKey } from "../../../../analysis/facts/keys.js";
 import type { RustExpr, RustType } from "../../../target-ast/nodes.js";
 import { rustInlineBindingStorageType } from "../../expressions/binding-storage.js";
-import { planExpression } from "../../expressions/entry.js";
+import { planExpressionBeforeValueProjections } from "../../expressions/entry.js";
 import { planRustNonConsumingValue } from "../../expressions/typed-locations.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
@@ -59,7 +59,7 @@ export function planRustLexicalFunctionArguments(declaration: Node, context: Rus
       (carrier !== undefined && rustCarrierHasCopyContract(carrier, context) ||
         !selection.valueObserved && context.input.program.valueLifetimes.canMoveCapture(declaration, capture.declaration));
     if (owned) {
-      const value = planExpression(capture.reference, context);
+      const value = planExpressionBeforeValueProjections(capture.reference, context, "value");
       if (value === undefined) return undefined;
       arguments_.push(value);
       continue;
@@ -83,7 +83,7 @@ export function planRustLexicalFunctionArguments(declaration: Node, context: Rus
       arguments_.push({ kind: "reference", expr: raw });
       continue;
     }
-    const value = planExpression(capture.reference, context);
+    const value = planExpressionBeforeValueProjections(capture.reference, context, "value");
     if (value === undefined) return undefined;
     arguments_.push({ kind: "reference", expr: planRustNonConsumingValue(capture.reference, value, context),
       ...(mutable ? { mutable: true } : {}) });

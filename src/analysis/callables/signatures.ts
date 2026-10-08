@@ -107,6 +107,8 @@ export function recordNestedCallableTypeSignatureFacts(walk: RustFactWalk, sourc
       recordCallableTypeSignatureFacts(walk, node);
     } else if (kind === KindFunctionDeclaration && !sourceDeclarationIsModuleScoped(node, ast)) {
       recordFunctionSignatureFacts(walk, node);
+    } else if (kind === KindVariableDeclaration && !sourceDeclarationIsModuleScoped(node, ast)) {
+      recordCallableValueSignatureForDeclaration(walk, node);
     }
     ast.forEachChild(node, visit);
   };
