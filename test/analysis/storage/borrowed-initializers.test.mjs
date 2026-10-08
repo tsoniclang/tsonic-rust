@@ -5,6 +5,7 @@ import { borrowedNullishSequencesSource } from "../../../../tsonic/test/fixtures
 import { createTsonicPlugin } from "../../../../rust-nodejs/dist/index.js";
 import { analyzeRustBorrowedInitializers } from "../../../dist/analysis/storage/borrowed-initializers.js";
 import { rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
+import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 
 for (const surfaces of [[], ["js"]]) {
   test(`native method elision retains the exact initializer receiver (${surfaces[0] ?? "native"})`, () => {
@@ -24,7 +25,11 @@ for (const surfaces of [[], ["js"]]) {
       assert.equal(selection !== undefined, true, "each actual native view has its checked receiver lifetime owner");
       assert.equal(selection.receiver === ast.as.AsElementAccessExpression(initializer).Expression, true,
         "the exact receiver survives nested fields without name matching");
-      assert.equal(selection.carrier.kind, "target-named");
+      const operation = program.facts.getFact(initializer, rustTargetOperationFactKey);
+      assert.equal(operation?.kind, "provider-operation");
+      assert.equal(operation.abi.targetReceiver.kind, "input");
+      assert.equal(rustTargetTypeRefEquals(selection.carrier, operation.abi.targetReceiver.input.sourceCarrier), true,
+        "the exact finalized native receiver carrier is retained without replacing its metadata representation");
       assert.equal(Object.isFrozen(selection), true);
     }
     assert.equal(Object.isFrozen(program.borrowedInitializers), true);
