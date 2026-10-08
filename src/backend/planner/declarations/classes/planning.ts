@@ -557,11 +557,11 @@ function planConstructor(
   if (frame !== undefined && frameLayout === undefined) return undefined;
   const construction = planRustConstructionBody(constructionPlan, fields,
     context.input.program.projectTypes.openCarrier(definition), classType,
-    (values, identity, frameCounter) => {
+    (values, identity, frameCounter, retainedFrame) => {
       return createRustProjectObject(className, stateName,
       fields.filter(field => frameLayout?.ownsField(field.declaration) !== true)
         .map(field => ({ name: field.targetName, value: values.get(field.declaration)! })).concat(
-        frameCounter === undefined ? [] : frameLayout?.materialize(values, frameCounter) ?? [],
+        frameCounter === undefined ? [] : frameLayout?.materialize(values, frameCounter, retainedFrame) ?? [],
         methodProperties.map(property => ({ name: property.targetName, value: { kind: "none" as const } })),
         stateMarker === undefined ? [] : [{ name: stateMarker.name, value: stateMarker.value }],
         representation.kind !== "value" || !environment?.instancesUseEnvironment ? [] : [{

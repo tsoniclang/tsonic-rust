@@ -24,7 +24,23 @@ export function rustClassFrameFieldLocation(
 export interface RustClassFrameLayout {
   readonly fields: readonly RustStructField[];
   ownsField(declaration: Node): boolean;
-  materialize(values: ReadonlyMap<Node, RustExpr>, counter: RustExpr): readonly { readonly name: string; readonly value: RustExpr }[];
+  materialize(values: ReadonlyMap<Node, RustExpr>, counter: RustExpr, retained?: RustExpr): readonly { readonly name: string; readonly value: RustExpr }[];
+}
+
+export function createRustClassFrameValue(
+  definition: RustFrameCallableDefinition, values: ReadonlyMap<Node, RustExpr>, counter: RustExpr, context: RustPlanContext,
+): RustExpr | undefined {
+  const carrier = definition.entries[0]?.implementations[0]?.carrier;
+  const types = carrier === undefined ? undefined : rustFrameCallableTypes(carrier, context);
+  if (definition.storage.kind !== "standalone" || types?.frameType.kind !== "named" ||
+    definition.bindings.some(binding => !values.has(binding.declaration))) return undefined;
+  return { kind: "call", path: "alloc::rc::Rc::new", args: [{
+    kind: "struct-literal", path: types.frameType.path, fields: [
+      { name: definition.counterName, value: counter },
+      ...definition.bindings.map(binding => ({ name: binding.fieldName, value: values.get(binding.declaration)! })),
+      ...(definition.environmentParameters.length === 0 ? [] : [{ name: "marker", value: { kind: "path" as const, path: "core::marker::PhantomData" } }]),
+    ],
+  }] };
 }
 
 export function rustClassFrameLayout(
@@ -40,18 +56,12 @@ export function rustClassFrameLayout(
   };
   const instanceFieldName = definition.storage.instanceFieldName;
   if (instanceFieldName === undefined || types.frameType.kind !== "named") return undefined;
-  const framePath = types.frameType.path;
   return {
     fields: [{ name: instanceFieldName, type: { kind: "named", path: "alloc::rc::Rc",
       genericArguments: [{ kind: "type", type: types.frameType }] }, visibility }],
     ownsField: declaration => definition.bindings.some(binding => binding.declaration === declaration),
-    materialize: (values, counter) => [{ name: instanceFieldName, value: { kind: "call", path: "alloc::rc::Rc::new", args: [{
-      kind: "struct-literal", path: framePath, fields: [
-        { name: definition.counterName, value: counter },
-        ...definition.bindings.map(binding => ({ name: binding.fieldName, value: values.get(binding.declaration)! })),
-        ...(definition.environmentParameters.length === 0 ? [] : [{ name: "marker", value: { kind: "path" as const, path: "core::marker::PhantomData" } }]),
-      ],
-    }] } }],
+    materialize: (values, counter, retained) => [{ name: instanceFieldName,
+      value: retained ?? createRustClassFrameValue(definition, values, counter, context)! }],
   };
 }
 

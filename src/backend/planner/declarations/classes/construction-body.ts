@@ -11,7 +11,10 @@ import { Node_Expression } from "@tsonic/target-api/source";
 import { planRustAbsentValue } from "../../expressions/optional-storage.js";
 import { rustConstructionFieldStorage } from "../../objects/construction-field-storage.js";
 import { planRustValueFieldInput } from "../../objects/value-fields.js";
-import { rustClassFrameOwner } from "../../objects/frame-storage.js";
+import { createRustClassFrameValue, rustClassFrameOwner } from "../../objects/frame-storage.js";
+import { rustFrameBindingLocation } from "../../bindings/frame-storage.js";
+import { rustFrameCallableTypes } from "../../types/frame-callables.js";
+import type { RustLiveFrameOwner } from "../../program/frame-owners.js";
 
 export interface RustConstructionStorageField {
   readonly declaration: Node;
@@ -39,7 +42,7 @@ export function planRustConstructionBody(
   fields: readonly RustConstructionStorageField[],
   carrier: TargetTypeRef,
   type: RustType,
-  materialize: (values: ReadonlyMap<Node, RustExpr>, identity?: RustExpr, frameCounter?: RustExpr) => RustExpr,
+  materialize: (values: ReadonlyMap<Node, RustExpr>, identity?: RustExpr, frameCounter?: RustExpr, retainedFrame?: RustExpr) => RustExpr,
   context: RustPlanContext,
 ): RustConstructionBody | undefined {
   for (const issue of plan.issues) context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -86,8 +89,41 @@ export function planRustConstructionBody(
   }
   const rootName = allocateRustSyntheticName(context.syntheticNames, "constructed");
   const root: RustExpr = { kind: "path", path: rootName };
+  const exposure = frame?.storage.kind === "standalone" ? frame.constructionExposure : undefined;
+  const exposurePoint = exposure === undefined ? undefined : plan.pointFor(exposure.expression);
+  const frameCarrier = frame?.entries[0]?.implementations[0]?.carrier;
+  const frameType = frameCarrier === undefined ? undefined : rustFrameCallableTypes(frameCarrier, context)?.frameType;
+  const retainedFrame: RustExpr | undefined = exposure === undefined ? undefined
+    : { kind: "path", path: allocateRustSyntheticName(context.syntheticNames, "construction_frame") };
+  if (retainedFrame?.kind === "path") {
+    if (frameType === undefined || exposurePoint === undefined ||
+      plan.fields.find(field => field.declaration === exposure!.declaration)?.initializer !== exposure!.expression || frame?.bindings.some(binding =>
+      binding.initialization !== "deferred" && !exposurePoint.initializedFields.includes(binding.declaration))) {
+      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, exposure!.expression),
+        "rust.backend.frame-construction-readiness", "A retained constructor callback requires initialized native frame storage."));
+      return undefined;
+    }
+  }
+  const retainedOwner: RustLiveFrameOwner | undefined = retainedFrame === undefined ? undefined
+    : { kind: "live", expression: retainedFrame, borrowed: false, data: { kind: "direct" } };
+  const retainsFrameAt = (node: Node): boolean => {
+    if (exposure === undefined) return false;
+    if (plan.pointFor(node)?.initializedFields.includes(exposure.declaration)) return true;
+    const visited = new Set<Node>();
+    for (let current: Node | undefined = node; current !== undefined && !visited.has(current);
+      current = context.input.program.source.ast.parent(current)) {
+      if (current === exposure.expression) return true;
+      visited.add(current);
+    }
+    return false;
+  };
+  const retainedLocation = (declaration: Node, selectedContext: RustPlanContext) => {
+    const binding = frame?.bindings.find(binding => binding.declaration === declaration);
+    return binding === undefined || retainedOwner === undefined ? undefined
+      : rustFrameBindingLocation(binding, retainedOwner, selectedContext);
+  };
   if (plan.publishesReceiver) declarations.push({ kind: "let", name: rootName, mutable: true, type });
-  const publication = (): readonly RustStmt[] => [{ kind: "assign", target: root, operator: "=", value: materialize(values, identity, frameCounter) }];
+  const publication = (): readonly RustStmt[] => [{ kind: "assign", target: root, operator: "=", value: materialize(values, identity, frameCounter, retainedFrame) }];
   const overrideNodes = new Set(plan.expressions.flatMap(expression => expression.receiver === undefined
     ? [expression.node] : [expression.node, expression.receiver]));
   const prepare: RustConstructionBody["prepare"] = (node, selectedContext) => {
@@ -95,7 +131,8 @@ export function planRustConstructionBody(
     if (point === undefined) return undefined;
     if (frame !== undefined && frameCounter !== undefined) {
       const frameOwners = new Map(selectedContext.frameOwners);
-      const owner = point.published || point.publishBefore ? rustClassFrameOwner(frame, root, selectedContext)
+      const owner = retainedOwner !== undefined && retainsFrameAt(node) ? retainedOwner
+        : point.published || point.publishBefore ? rustClassFrameOwner(frame, root, selectedContext)
         : { kind: "construction" as const, counter: frameCounter };
       if (owner === undefined) return undefined;
       frameOwners.set(frame, owner);
@@ -122,7 +159,8 @@ export function planRustConstructionBody(
         const slot = slots.find(field => field.declaration === expression.declaration);
         if (slot === undefined) return reject("Sealed construction field has no matching physical local slot.");
         const storage = rustConstructionFieldStorage(slot.declaration, slot.carrier, selectedContext, plan);
-        const location = storage.location(slot.expression);
+        const location = retainsFrameAt(node) ? retainedLocation(slot.declaration, selectedContext) ?? storage.location(slot.expression)
+          : storage.location(slot.expression);
         if (location === undefined) {
           if (expression.kind === "capture") return reject("A captured native field lost its exact physical owner contract.");
           overrides.set(expression.node, { expression: slot.expression, carrier: slot.carrier, valueForm: "storage" });
@@ -150,8 +188,15 @@ export function planRustConstructionBody(
         overrides.set(receiverNode, { expression: receiver, carrier: substituted, valueForm: "storage" });
       }
     }
+    const allocated = exposure?.expression !== node || frame === undefined || frameCounter === undefined || retainedFrame?.kind !== "path"
+      ? undefined : createRustClassFrameValue(frame, values, frameCounter, selectedContext);
+    if (exposure?.expression === node && retainedFrame !== undefined && allocated === undefined)
+      return reject("A retained constructor frame lost its exact physical storage fields.");
     return { context: { ...selectedContext, expressionOverrides: overrides, valueFieldLocations: locations, capturedFieldOwners, capturedFieldIdentities },
-      before: point.publishBefore ? publication() : [],
+      before: [...(allocated === undefined || retainedFrame?.kind !== "path" || frameType === undefined ? [] : [{ kind: "let" as const,
+        name: retainedFrame.path, mutable: false, init: allocated,
+        type: { kind: "named" as const, path: "alloc::rc::Rc", genericArguments: [{ kind: "type" as const, type: frameType }] } }]),
+        ...(point.publishBefore ? publication() : [])],
       finish(statements) {
         const planned = point.publishMissingElse ? statements.map(statement => statement.kind === "if"
           ? { ...statement, else: { statements: publication() } } : statement) : statements;
@@ -194,7 +239,9 @@ export function planRustConstructionBody(
     input(declaration, node, inputContext, planValue) {
       const slot = slots.find(field => field.declaration === physicalDeclaration(declaration));
       if (slot === undefined) return undefined;
-      const location = rustConstructionFieldStorage(slot.declaration, slot.carrier, inputContext, plan).location(slot.expression);
+      const location = retainsFrameAt(node) ? retainedLocation(slot.declaration, inputContext)
+        ?? rustConstructionFieldStorage(slot.declaration, slot.carrier, inputContext, plan).location(slot.expression)
+        : rustConstructionFieldStorage(slot.declaration, slot.carrier, inputContext, plan).location(slot.expression);
       return location === undefined ? planValue() : planRustValueFieldInput(location, node, inputContext, planValue);
     },
     initialize(declaration, value) {
@@ -202,6 +249,12 @@ export function planRustConstructionBody(
       const slot = slots.find(field => field.declaration === physical);
       if (slot?.expression.kind !== "path") return undefined;
       const storage = rustConstructionFieldStorage(physical, slot.carrier, context, plan);
+      const initializer = plan.fields.find(field => field.declaration === declaration)?.initializer;
+      const location = initializer !== undefined && retainsFrameAt(initializer) ? retainedLocation(physical, context) : undefined;
+      if (location !== undefined) {
+        const initialized = physical !== declaration ? location.write(value, context) : location.initialize?.(value, context);
+        return initialized === undefined ? undefined : [{ kind: "expr", expr: initialized }];
+      }
       if (physical !== declaration) {
         const update = storage.location(slot.expression)?.write(value, context);
         return update === undefined ? undefined : [{ kind: "expr", expr: update }];
@@ -225,6 +278,6 @@ export function planRustConstructionBody(
     },
     finish: () => !plan.completesNormally ? []
       : plan.publishesReceiver ? [...(final?.published ? [] : publication()), { kind: "tail", expr: root }]
-      : [{ kind: "tail", expr: materialize(values, identity, frameCounter) }],
+      : [{ kind: "tail", expr: materialize(values, identity, frameCounter, retainedFrame) }],
   };
 }

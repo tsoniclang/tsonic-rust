@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { AstReader, Node } from "@tsonic/tsts";
+import type { SourceStorageQueries } from "@tsonic/target-api/analysis";
 import { Node_Expression, Node_Initializer, sourceBindingScope, type SourceProgramNavigation } from "@tsonic/target-api/source";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -60,6 +61,7 @@ export interface RustFrameCallableDefinition {
   readonly entries: readonly RustFrameCallableEntryDefinition[];
   readonly bindings: readonly RustFrameCallableBinding[];
   readonly environmentParameters: readonly Extract<TargetTypeRef, { readonly kind: "type-parameter" }>[];
+  readonly constructionExposure?: { readonly declaration: Node; readonly expression: Node };
 }
 
 export interface RustFrameCallablePlan {
@@ -77,6 +79,7 @@ export function createRustFrameCallablePlan(input: {
   readonly ast: AstReader;
   readonly facts: RustPlanQueries;
   readonly ownership: RustCallableOwnershipPlan;
+  readonly sourceStorage: SourceStorageQueries;
   readonly usedNames: ReadonlySet<string>;
   readonly navigation: SourceProgramNavigation;
   readonly projectTypes: RustProjectTypePolicy;
@@ -216,13 +219,32 @@ export function createRustFrameCallablePlan(input: {
           issue(capture.reference, "A native frame capture differs from its selected activation binding carrier.");
       }
     }
+    const constructionExposure = classLayout?.fields.flatMap(field => {
+      const expression = Node_Initializer(input.ast, field.declaration);
+      if (expression === undefined) return [];
+      let direct: Node | undefined = expression;
+      const visited = new Set<Node>();
+      while (direct !== undefined && !visited.has(direct) && (input.ast.is.IsParenthesizedExpression(direct) ||
+        input.ast.is.IsSatisfiesExpression(direct) || input.ast.is.IsNonNullExpression(direct))) {
+        visited.add(direct);
+        direct = Node_Expression(input.ast, direct);
+      }
+      if (direct !== undefined && implementations.has(direct)) return [];
+      const creations = input.sourceStorage.localCallableCreationsFor(expression);
+      return creations.kind !== "resolved" || creations.nodes.length === 0 ||
+        !creations.nodes.every(node => {
+          const implementation = implementations.get(node);
+          return implementation !== undefined && entries.some(entry => entry.implementations.includes(implementation));
+        }) ? [] : [Object.freeze({ declaration: field.declaration, expression })];
+    })[0];
     const definition = Object.freeze({ activation, owner, ownerFileName: owner.fileName,
       storage: standalone ? Object.freeze({ kind: "standalone" as const,
         ...(classDefinition === undefined ? {} : { instanceFieldName: allocateRustGeneratedName(usedNames, `tsonic_frame_${prefix}`) }) })
         : Object.freeze({ kind: "object" as const, mutable: representation!.mutable }),
       counterName: classDefinition === undefined ? "counter" : allocateRustGeneratedName(usedNames, `tsonic_frame_counter_${prefix}`),
       targetName: allocateRustGeneratedName(usedNames, `TsonicCallableFrame_${prefix}`),
-      entries, bindings: Object.freeze(frameBindings), environmentParameters });
+      entries, bindings: Object.freeze(frameBindings), environmentParameters,
+      ...(constructionExposure === undefined ? {} : { constructionExposure }) });
     definitions.push(definition);
     byOwner.set(ownerKey(owner), definition);
     byDeclaration.set(activation.ownerDeclaration, definition);
@@ -238,6 +260,11 @@ export function createRustFrameCallablePlan(input: {
     if (!definitions.includes(definition)) return false;
     if (definition.activation.kind === "class" && receiver !== undefined &&
       input.ownership.instanceReceiverOwner(receiver) !== definition.activation.ownerDeclaration) return false;
+    const creations = input.sourceStorage.localCallableCreationsFor(expression);
+    if (creations.kind === "resolved" && creations.nodes.length !== 0) return creations.nodes.every(node => {
+      const implementation = implementations.get(node);
+      return implementation !== undefined && definition.entries.some(entry => entry.implementations.includes(implementation));
+    });
     const visited = new Set<Node>();
     let current: Node | undefined = expression;
     while (current !== undefined && !visited.has(current)) {

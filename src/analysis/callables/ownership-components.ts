@@ -458,13 +458,18 @@ export function createRustCallableOwnershipComponentQueries(input: {
 
   function recordSupplier(slot: Node, expression: Node, owner: Node): void {
     if (!account()) return;
-    if (!isCallable(expression) || classOwner(expression) !== owner) {
+    const creations = storage.localCallableCreationsFor(expression);
+    if (creations.kind !== "resolved" || creations.nodes.length === 0 ||
+      creations.nodes.some(node => !sourceNodes.has(node) || !isCallable(node) || classOwner(node) !== owner)) {
       issue(slot, "A cyclic callable field assignment requires an exact local callback creation, not declaration-level alias transport.");
       return;
     }
-    const owners = supplied.get(expression) ?? new Set<Node>();
-    owners.add(owner);
-    supplied.set(expression, owners);
+    for (const node of creations.nodes) {
+      if (!account()) return;
+      const owners = supplied.get(node) ?? new Set<Node>();
+      owners.add(owner);
+      supplied.set(node, owners);
+    }
   }
 
   function within(node: Node, scope: Node): boolean {
