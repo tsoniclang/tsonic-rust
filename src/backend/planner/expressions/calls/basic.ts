@@ -235,7 +235,7 @@ function planRustDefaultValueCall(
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.default-value-selected-signature",
-      "defaultvalue<T>() conflicts with its finalized zero-argument Rust Default contract.",
+      "Native default initialization conflicts with its finalized zero-argument Rust Default contract.",
     ));
     return undefined;
   }

@@ -8,7 +8,6 @@ import { acceptDeclarationOperation, acceptRustMemberOperation, acceptRustOperat
 import { finalizeProviderOperationFromSubjects, mapProviderCheckedOperation } from "./conversions.js";
 import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
 import { isProjectAccessorDeclaration, selectRustFixedArrayLengthProperty, selectStructuralSourceProperty } from "./structural-properties.js";
-import { Node_Type } from "@tsonic/target-api/source";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
 import { resolveRustProjectAccessor } from "./project-accessors.js";
 import { resolveRustProjectField } from "./project-fields.js";
@@ -389,9 +388,7 @@ export function selectRustCheckedPropertyAccess(
           "Project static-field access requires exact TSTS-selected receiver value evidence for the declaring class.",
         );
       }
-      const sourceFieldType = Node_Type(context.ast, declaration) ??
-        (request.optionalChain === true ? undefined : request.sourceResultType);
-      const resultCarrier = resolveRustTargetTypeRef(sourceFieldType, context, options);
+      const resultCarrier = resolveRustTargetTypeRef(declaration, context, options);
       if (resultCarrier === undefined) {
         return rejectSelectedOperation(
           request.expression,

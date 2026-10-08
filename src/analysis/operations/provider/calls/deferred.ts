@@ -1,6 +1,6 @@
 import { acceptRustPolicy } from "../../../../policy/operations/contracts.js";
 import { acceptSelectedCall, mapSelectedTargetTypeArguments, selectRustOptionalCallResult } from "./instantiation.js";
-import { defaultValueFactKey, flowStateFactKey } from "@tsonic/tsts";
+import { defaultValueFactKey, fieldFactKey, flowStateFactKey } from "@tsonic/tsts";
 import { finalizeRustCallbackOperation, replaceRustInferCarrier, rustCallbackProtocol } from "../callbacks.js";
 import { rustSelectedCallTypeParameters } from "../../../../policy/types/resolution/generic-arguments.js";
 import {
@@ -283,8 +283,8 @@ export function mapRustSourceMarkerCall(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> {
-  if (markerName === "default-value") {
-    return mapRustDefaultValueCall(request, provider, context, options);
+  if (markerName === "default-value" || markerName === "field") {
+    return mapRustDefaultValueCall(request, provider, markerName, context, options);
   }
   if (markerName === "js-string") {
     if (provider.exportName === undefined) {
@@ -402,12 +402,14 @@ export function mapRustSourceMarkerCall(
 function mapRustDefaultValueCall(
   request: RustCheckedCallSelectionInput,
   provider: ProviderDeclarationIdentity,
+  marker: "default-value" | "field",
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> {
   const sourceArguments = selectedCallArgumentNodes(request);
-  const sourceFact = context.facts.resolve(request.source.call, defaultValueFactKey) ??
-    context.facts.get(request.source.call, defaultValueFactKey);
+  const sourceFact = marker === "field"
+    ? context.facts.resolve(request.source.call, fieldFactKey) ?? context.facts.get(request.source.call, fieldFactKey)
+    : context.facts.resolve(request.source.call, defaultValueFactKey) ?? context.facts.get(request.source.call, defaultValueFactKey);
   const resultCarrier = resolveRustTargetTypeRef(sourceFact?.type, context, options);
   const sourceTypeArguments = request.source.sourceSelectedMethodTypeArguments;
   const sourceParameters = rustSelectedCallTypeParameters(sourceTypeArguments ?? [], context);
@@ -420,7 +422,7 @@ function mapRustDefaultValueCall(
       request.source.call,
       context,
       "RUST_DEFAULT_VALUE_EVIDENCE_NOT_PROVEN",
-      "defaultvalue<T>() requires one exact source-core type fact, one matching selected type argument, no arguments, and one matching Rust result carrier.",
+      "Native default initialization requires one exact source-core type fact, one matching selected type argument, no arguments, and one matching Rust result carrier.",
     );
   }
   const operationId = "tsonic.rust.default-value";
@@ -447,7 +449,7 @@ function mapRustDefaultValueCall(
   };
   const member: RustTargetMember = {
     id: operationId,
-    sourceName: "defaultvalue",
+    sourceName: provider.exportName ?? marker,
     targetName: "Default::default",
     kind: "method",
     static: true,
@@ -483,7 +485,7 @@ function mapRustDefaultValueCall(
     sourceSelectedSignatureParameters: request.source.sourceSelectedSignatureParameters,
     sourceSelectedMethodTypeArguments: sourceTypeArguments,
   };
-  const evidence = [{ message: "rust selected source-core defaultvalue<T>()" }];
+  const evidence = [{ message: `rust selected source-core native default initialization (${marker})` }];
   context.facts.set(request.source.call, rustTargetOperationFactKey, fact, evidence);
   context.facts.set(request.source.call, rustSelectedOperationKey, operation, evidence);
   context.facts.set(request.source.call, rustSelectedCallKey, selectedSignature, evidence);

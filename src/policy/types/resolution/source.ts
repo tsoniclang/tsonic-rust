@@ -93,6 +93,8 @@ export function resolveRustTargetTypeRef(
     const pointee = resolveRustTargetTypeRef(typeNode ?? binding.pointeeType, context, options);
     return pointee === undefined ? undefined : rustSourceLocationTargetType(pointee);
   }
+  const sourceField = context.facts.resolve(subject, fieldFactKey) ?? context.facts.get(subject, fieldFactKey);
+  if (sourceField !== undefined) return resolveRustTargetTypeRef(sourceField.type, context, options);
   const valueStruct = context.facts.resolve(subject, structFactKey) ?? context.facts.get(subject, structFactKey);
   if (valueStruct !== undefined) {
     const node = asNode(subject, context);
