@@ -33,6 +33,7 @@ import {
 } from "@tsonic/target-api/source";
 import { rustRuntimeUnionProjection } from "../../target-model/types/carriers/runtime-unions.js";
 import { getRustTypeofRuntimeKind } from "../../target-model/types/runtime-kind.js";
+import { rustUnparenthesizedExpression } from "../../target-model/syntax/expressions.js";
 import {
   getRustGeneratorProtocol,
   isRustBigIntCarrier,
@@ -452,9 +453,11 @@ export function resolveExpressionCarrierUncached(
       const operandCarrier = operand === undefined
         ? undefined
         : resolveExpressionCarrier(walk, operand, sourceFile, undefined);
-      const result = operand === undefined || operandCarrier === undefined
+      const physicalCarrier = operand === undefined || operandCarrier === undefined
+        ? undefined : walk.context.facts.getRuntimeCarrierFact(rustUnparenthesizedExpression(walk.context.ast, operand))?.carrier;
+      const result = physicalCarrier === undefined
         ? undefined
-        : getRustTypeofRuntimeKind(operandCarrier, walk.context.typeDefinitions);
+        : getRustTypeofRuntimeKind(physicalCarrier, walk.context.typeDefinitions);
       if (result === undefined) {
         appendRustDiagnostic(
           walk,

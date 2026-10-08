@@ -344,6 +344,15 @@ export function analyzeRustGeneratedItemUsage(input: {
     markProjectTypeConstructed(upcast.targetCarrier);
   };
   const visitProjectProjectionFacts = (node: Node): void => {
+    let operand = node;
+    let parent = input.ast.parent(operand);
+    while (parent !== undefined && input.ast.is.IsParenthesizedExpression(parent) &&
+      Node_Expression(input.ast, parent) === operand) {
+      operand = parent;
+      parent = input.ast.parent(operand);
+    }
+    if (parent !== undefined && input.ast.is.IsTypeOfExpression(parent) &&
+      Node_Expression(input.ast, parent) === operand) return;
     const binding = input.facts.getFact(node, rustBindingProjectionFactKey);
     if (binding?.projection.kind === "object-rest") {
       markStructuralShapeConstructed(binding.bindingCarrier);

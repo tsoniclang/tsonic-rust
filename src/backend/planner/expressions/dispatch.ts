@@ -68,7 +68,7 @@ import { planBinaryExpression } from "./binary.js";
 import { planAssignmentExpression } from "./assignment.js";
 import { planCallExpression } from "./calls/basic.js";
 import { planCallableExpression } from "./callable.js";
-import { planExpression } from "./entry.js";
+import { planExpression, planExpressionBeforeValueProjections } from "./entry.js";
 import { planNewExpression, planRegExpCreate } from "./special.js";
 import { planPropertyAccess } from "./properties.js";
 import { planRecordLiteral } from "./records.js";
@@ -85,6 +85,8 @@ import type { RustExpressionAccess, RustExpressionResultUse } from "./entry.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { planRustSourceCallableValue } from "./source-callable-value.js";
 import { planRustDiscardedValue } from "./discarded-values.js";
+import { createRustSharedReferenceArgument } from "./input-shaping.js";
+import { rustUnparenthesizedExpression } from "../../../target-model/syntax/expressions.js";
 
 export function planExpressionInner(
   node: Node,
@@ -342,7 +344,9 @@ export function planExpressionInner(
     }
     case KindTypeOfExpression: {
       const fact = rustOperationFact(node, context);
-      const operandNode = Node_Expression(context.input.program.source.ast, node);
+      const sourceOperand = Node_Expression(context.input.program.source.ast, node);
+      const operandNode = sourceOperand === undefined ? undefined
+        : rustUnparenthesizedExpression(context.input.program.source.ast, sourceOperand);
       if (fact?.kind !== "typeof" || operandNode === undefined ||
         !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.typeof-carrier")) {
         context.diagnostics.push(missingFactDiagnostic(
@@ -353,10 +357,11 @@ export function planExpressionInner(
         return undefined;
       }
       if (typeof fact.result !== "string") {
-        const operand = planExpression(operandNode, context, "value", "shared-reference");
-        const carrier = rustEffectiveValueCarrier(context.input.program.facts, operandNode);
+        const operand = planExpressionBeforeValueProjections(operandNode, context, "value", "shared-reference");
+        const carrier = context.input.program.facts.getRuntimeCarrierFact(operandNode)?.carrier;
         const planned = operand === undefined ? undefined
-          : planRustRuntimeCategory(operand, fact.result, context, true);
+          : planRustRuntimeCategory(createRustSharedReferenceArgument(context,
+            planRustNonConsumingValue(operandNode, operand, context), operandNode), fact.result, context, true);
         if (carrier === undefined || !rustTargetTypeRefEquals(carrier, fact.result.sourceCarrier) || planned === undefined) {
           context.diagnostics.push(missingFactDiagnostic(
             diagnosticInput(context, node), "rust.backend.runtime-union-typeof",
