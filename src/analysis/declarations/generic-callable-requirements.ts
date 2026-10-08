@@ -35,7 +35,6 @@ import {
   getRustGeneratorProtocol,
   isRustCopyCarrier,
   rustClosureProtocol,
-  rustJsPromiseTargetId,
   rustSourceTypeCarrierValue,
   rustTargetGenericTypeArguments,
 } from "../../target-model/types/index.js";
@@ -58,7 +57,7 @@ import {
   rustTypedLocationPlanKey,
   rustYieldFactKey,
 } from "../facts/keys.js";
-import { rustAwaitValueFactKey } from "../facts/await-values.js";
+import { rustAwaitValueFactKey, rustAwaitValueRequirements } from "../facts/await-values.js";
 import { rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 
 import type { RustGenericRequirement } from "./generic-requirements.js";
@@ -556,8 +555,9 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       const awaiting = facts.getFact(node, rustAwaitValueFactKey);
       if (awaiting !== undefined) {
         for (const leaf of rustAwaitSelectionLeaves(awaiting.selection)) {
-          if (leaf.carrier.kind !== "target-named" || leaf.carrier.id !== rustJsPromiseTargetId || leaf.future === undefined) continue;
-          const error = addUse(node, leaf.future.outputCarrier, ["clone"]);
+          const requirements = rustAwaitValueRequirements(leaf);
+          if (leaf.future === undefined || requirements.length === 0) continue;
+          const error = addUse(node, leaf.future.outputCarrier, requirements);
           if (error !== undefined) return error;
         }
       }

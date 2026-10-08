@@ -246,6 +246,7 @@ export function applySelectedProjectSourceCall(
       valueCarrier,
       parameterCarrier,
       mode,
+      ...(parameterAbi.inputLifetime === undefined ? {} : { inputLifetime: parameterAbi.inputLifetime }),
       inputs: inputs as NonNullable<(typeof inputs)[number]>[],
     });
   }
@@ -591,7 +592,7 @@ export function applySelectedProjectSourceCall(
   }
   const argumentCarriers = rustSourceCallArgumentCarriers(expression, ast, walk.context.facts);
   const instantiateResult = (carrier: TargetTypeRef): TargetTypeRef => rustSourceCallResultWithInputLifetimes(
-    carrier, parameters.map(parameter => parameter.parameterCarrier), bindings, argumentCarriers);
+    carrier, parameters.map(parameter => parameter.parameterCarrier), bindings, argumentCarriers, parameters);
   const nativeResultCarrier = instantiateResult(genericResultCarrier);
   const sourceResult = selectRustSourceCallResult(walk.operationOptions.projectTypes, nativeResultCarrier, () => {
     const selected = selectedSignature.sourceResultProjection?.selectedCarrier;

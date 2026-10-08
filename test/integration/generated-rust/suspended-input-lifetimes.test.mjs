@@ -4,7 +4,7 @@ import test from "node:test";
 import { compileRust, artifactText } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
-test("retained async callables bind native input lifetimes without changing capture storage", { timeout: 300_000 }, () => {
+test("retained async callables preserve exact owning inputs without changing capture storage", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } }, files: {
     "index.ts": `
 async function failure(): Promise<void> { throw new Error("failed"); }
@@ -32,10 +32,10 @@ export async function main(): Promise<void> { if (!await run()) throw new Error(
 ` } });
   assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /impl<'input>/u);
-  assert.match(source, /impl<'input, Value:/u);
-  assert.match(source, /JsPromise<'input, \(\), rt::TsonicError>/u);
-  assert.match(source, /JsPromise<'input, String, rt::TsonicError>/u);
-  assert.doesNotMatch(source, /transmute|\.then\(|\.then_async\(/u);
+  assert.equal(/impl<Value: Clone \+ 'static>/u.test(source), true, "owning captured generic payload");
+  assert.equal(/JsPromise<'static, \(\), rt::TsonicError>/u.test(source), true, "exact owning input promise");
+  assert.equal(/JsPromise<'static, String, rt::TsonicError>/u.test(source), true, "exact owning string result");
+  assert.equal(/impl<'input|transmute|\.then\(|\.then_async\(/u.test(source), false,
+    "closed owning inputs introduce no fictitious loan or continuation adapter");
   validateGeneratedProject("suspended-input-lifetimes", result.artifacts, { run: true });
 });

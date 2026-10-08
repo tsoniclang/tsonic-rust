@@ -6,6 +6,7 @@ import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions }
 import { rustNativeCallableResultMatches } from "../../ownership/callable-result-contract.js";
 import { selectRustParameterEntryConversion } from "../../ownership/parameter-entry-conversion.js";
 import { rustTargetGenericReferences } from "../../../target-model/types/carriers/generic-references.js";
+import { rustSourceInputLifetime } from "../../ownership/source-input-lifetimes.js";
 
 export function resolveRustCallableInputCarrier(
   subject: SourceStorageSubject,
@@ -15,10 +16,16 @@ export function resolveRustCallableInputCarrier(
 ): TargetTypeRef | undefined {
   const logical = rustCallableProtocol(logicalCarrier);
   if (logical === undefined) return undefined;
+  const borrowed = (protocol: typeof logical): TargetTypeRef => {
+    const signature = rustTargetGenericReferences({ kind: "tuple", elements: [...protocol.parameters, protocol.result] });
+    const lifetime = signature.hasUnnameableLifetime || !signature.elisionInputs.some(input => input.kind === "static")
+      ? undefined : rustSourceInputLifetime(subject.node, context);
+    return rustCallableInputTargetType(protocol.parameters, protocol.result, lifetime);
+  };
   const origins = context.sourceStorage.closedOriginsFor(subject);
   if (origins.kind === "unresolved") return undefined;
   if (origins.kind === "open" || rustTargetGenericReferences(logicalCarrier).typeIdentities.length > 0)
-    return rustCallableInputTargetType(logical.parameters, logical.result);
+    return borrowed(logical);
   let selected: typeof logical | undefined;
   for (const origin of origins.origins) {
     const declaration = origin.subject.node;
@@ -43,5 +50,5 @@ export function resolveRustCallableInputCarrier(
         rustTargetTypeRefEquals(parameter, adapted.parameters[index]) ? parameter : logical.parameters[index]!) };
     }
   }
-  return rustCallableInputTargetType((selected ?? logical).parameters, (selected ?? logical).result);
+  return borrowed(selected ?? logical);
 }

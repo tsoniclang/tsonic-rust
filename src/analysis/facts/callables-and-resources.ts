@@ -190,6 +190,7 @@ export interface RustSourceParameterAbiFact {
   readonly valueCarrier: TargetTypeRef;
   readonly parameterCarrier: TargetTypeRef;
   readonly mode: RustArgumentMode;
+  readonly inputLifetime?: Extract<RustLifetimeRef, { readonly kind: "parameter" }>;
   readonly entryConversion?: import("../../target-model/operations/model.js").RustValueConversion;
 }
 

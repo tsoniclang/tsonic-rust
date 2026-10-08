@@ -31,6 +31,8 @@ import {
   rustSourceOptionalTargetType,
   rustOptionElementCarrier,
   rustCallableProtocol,
+  rustCallableInputProtocol,
+  rustCallableTargetType,
   rustClosureProtocol,
 } from "../../target-model/types/index.js";
 import { recordBindingPatternFacts, recordCallableDefaultParameterFacts, setParameterAbiFact } from "../declarations/types-and-bindings.js";
@@ -325,7 +327,9 @@ export function resolveFunctionExpressionCarrier(
     return undefined;
   }
   const selectedGeneric = rustGenericCallableValue(selectedExpected);
-  const logicalCarrier = rebindRustCallableCarrier(selectedExpected, finalizedParameterCarriers, valueResult,
+  const constructionCarrier = rustCallableInputProtocol(selectedExpected) === undefined
+    ? selectedExpected : rustCallableTargetType(selectedParameters, selectedResult);
+  const logicalCarrier = rebindRustCallableCarrier(constructionCarrier, finalizedParameterCarriers, valueResult,
     { typeParameters: genericParameters ?? [], ...(selectedGeneric === undefined ? {} : {
       environment: [...selectedGeneric.environment, ...captures.captures.map(capture => capture.carrier),
         ...captures.receiverFields.map(capture => capture.carrier), ...captures.receivers.map(capture => capture.carrier)],

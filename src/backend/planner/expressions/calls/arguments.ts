@@ -471,7 +471,7 @@ export function sourceCallSelectedMemberMatches(
     substitutions.types, substitutions.lifetimes, substitutions.consts, normalize));
   const instantiateResult = (carrier: TargetTypeRef): TargetTypeRef => rustSourceCallResultWithInputLifetimes(
     substituteRustTargetGenerics(carrier, substitutions.types, substitutions.lifetimes, substitutions.consts, normalize),
-    parameterCarriers, selected.sourceArgumentBindings, argumentCarriers);
+    parameterCarriers, selected.sourceArgumentBindings, argumentCarriers, fact.parameters);
   const expectedKind = fact.target.form === "constructor" ? "constructor" : "method";
   const expectedTargetName = fact.target.form === "constructor"
     ? fact.target.name

@@ -567,6 +567,7 @@ export function planRustCallableExpressionBody(
       params: closureParams.map((parameter) => ({
         name: parameter.name,
         byRefCopy: parameter.byRefCopy === true,
+        ...(parameter.type === undefined ? {} : { type: parameter.type }),
       })),
       ...(closureMove ? { move: true } : {}),
       body: onlyStatement.expr,

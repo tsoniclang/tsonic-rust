@@ -66,10 +66,12 @@ export function isRustCallableCarrier(
 export function rustCallableInputTargetType(
   parameters: readonly TargetTypeRef[],
   result: TargetTypeRef,
+  lifetime?: RustLifetimeRef,
 ): TargetTypeRef {
   return {
     kind: "reference",
     mutable: false,
+    ...(lifetime === undefined ? {} : { lifetime }),
     referent: {
       kind: "target-named",
       id: rustCallableInputTargetId,

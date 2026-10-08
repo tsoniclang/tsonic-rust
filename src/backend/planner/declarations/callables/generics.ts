@@ -19,6 +19,7 @@ import { rustDeclarationAssociatedPredicates } from "../../types/associated-boun
 import { rustTypeParameterBounds } from "../../types/generic-bounds.js";
 import { rustOptionalStorageParameters } from "../../types/type-projections.js";
 import { allocateRustGeneratedName } from "../../../../target-model/names/generated.js";
+import { rustCallableInputLifetimeParameters } from "../../../../analysis/facts/source-input-lifetimes.js";
 
 export interface RustCallableGenericPlan {
   readonly context: RustPlanContext;
@@ -67,6 +68,8 @@ export function planRustCallableGenerics(
   specialization?: ReadonlyMap<string, TargetTypeRef>,
   capturedParameters: readonly RustSourceGenericParameterContract[] = [],
 ): RustCallableGenericPlan | undefined {
+  capturedParameters = [...capturedParameters, ...rustCallableInputLifetimeParameters(
+    declaration, context.input.program.source.ast, context.input.program.facts)];
   const sourceParameters = context.input.program.source.ast.typeParameters(declaration);
   if (sourceParameters.some((parameter) => parameter === undefined)) {
     context.diagnostics.push(missingFactDiagnostic(

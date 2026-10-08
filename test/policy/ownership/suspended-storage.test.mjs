@@ -8,6 +8,8 @@ import { rustTargetGenericReferences } from "../../../dist/target-model/types/ca
 import { rustJsPromiseTargetTypeWithLifetime, rustUnitTargetType, rustAbsenceTargetType,
   rustSourcePrimitiveTargetType, rustJsErrorTargetType } from "../../../dist/target-model/types/index.js";
 import { sourceCallSelectedMemberMatches } from "../../../dist/backend/planner/expressions/calls/arguments.js";
+import { rustSourceCallResultWithInputLifetimes } from "../../../dist/analysis/facts/source-call-lifetimes.js";
+import { rustCallableInputTargetType, rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
 
 const inferred = { kind: "placeholder" };
 const owned = { kind: "static" };
@@ -93,4 +95,47 @@ test("sealed source-call validation independently rechecks actual argument lifet
   assert.equal(matches(fact, input), false);
   assert.equal(matches(fact, promise(owned), { ...selected, sourceArgumentBindings: [] }), false);
   assert.equal(matches({ ...fact, resultCarrier: promise(owned, rustSourcePrimitiveTargetType("uint64")) }, promise(owned)), false);
+});
+
+test("named suspended callback input borrows never inherit the callback result's static lifetime", () => {
+  const number = rustSourcePrimitiveTargetType("float64");
+  const parameter = rustCallableInputTargetType([number], promise(owned, number), borrowed);
+  const callback = rustCallableTargetType([number], promise(owned, number));
+  const binding = { sourceArgumentIndex: 0, sourceParameterIndex: 0, sourceForm: "value", sourceParameterForm: "required" };
+  const instantiate = (actual, bindings = [binding], physical = [{ inputLifetime: borrowed }]) =>
+    rustSourceCallResultWithInputLifetimes(promise(borrowed, number), [parameter], bindings, [actual], physical);
+  assert.deepEqual(instantiate(callback), promise(inferred, number));
+  assert.deepEqual(instantiate(parameter), promise(borrowed, number));
+  assert.deepEqual(instantiate({ ...parameter, lifetime: owned }), promise(owned, number));
+  assert.deepEqual(instantiate(rustCallableTargetType([number], promise(owned))), promise(borrowed, number));
+  assert.deepEqual(instantiate(undefined), promise(borrowed, number));
+  assert.deepEqual(instantiate(callback, []), promise(borrowed, number));
+  assert.deepEqual(instantiate(callback, [binding, binding]), promise(borrowed, number));
+  assert.deepEqual(instantiate(callback, [binding], []), promise(borrowed, number));
+  assert.deepEqual(instantiate(callback, [binding], [{ inputLifetime: { ...borrowed, identity: "foreign" } }]), promise(borrowed, number));
+});
+
+test("sealed callback input results reject deleted, foreign and payload-mutated lifetime evidence", () => {
+  const number = rustSourcePrimitiveTargetType("float64");
+  const parameter = rustCallableInputTargetType([number], promise(owned, number), borrowed);
+  const callback = rustCallableTargetType([number], promise(owned, number));
+  const binding = { sourceArgumentIndex: 0, sourceParameterIndex: 0, sourceForm: "value", sourceParameterForm: "required" };
+  const member = { id: "project::invoke", targetName: "invoke", kind: "method",
+    parameters: [{ type: parameter, passingMode: "value" }], returnType: promise(borrowed, number) };
+  const selected = { member, sourceArgumentBindings: [binding] };
+  const physical = { form: "required", valueCarrier: parameter, parameterCarrier: parameter, mode: "value",
+    inputLifetime: borrowed, inputs: [{ ...binding, carrier: parameter }] };
+  const fact = { kind: "source-call", operationId: member.id,
+    target: { form: "function", name: "invoke", selectedTargetName: "invoke", fileName: "/index.ts" },
+    parameters: [physical], resultCarrier: promise(inferred, number) };
+  const matches = (candidate, actual = callback, signature = selected) =>
+    sourceCallSelectedMemberMatches(candidate, signature, member.returnType, type => type, undefined, [actual]);
+  assert.equal(matches(fact), true);
+  const { inputLifetime, ...deleted } = physical;
+  assert.equal(matches({ ...fact, parameters: [deleted] }), false);
+  assert.equal(matches({ ...fact, parameters: [{ ...physical, inputLifetime: { ...inputLifetime, identity: "foreign" } }] }), false);
+  assert.equal(matches({ ...fact, resultCarrier: promise(owned, number) }), false);
+  assert.equal(matches({ ...fact, resultCarrier: promise(inferred) }), false);
+  assert.equal(matches(fact, rustCallableTargetType([number], promise(owned))), false);
+  assert.equal(matches(fact, callback, { ...selected, sourceArgumentBindings: [] }), false);
 });

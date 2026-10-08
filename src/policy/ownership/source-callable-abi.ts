@@ -46,6 +46,9 @@ import { selectJsSurfaceOperation } from "../operations/source-profiles/js/index
 import { rustProviderArgumentBorrowsString } from "./provider-argument-borrow.js";
 import { rustSourceErrorConstructorOperation, selectRustSourceErrorConstructor } from "../operations/source-profiles/error-source-profile.js";
 import { rustSourceValueWrapperContains } from "./source-value-wrappers.js";
+import { rustSourceInputLifetime } from "./source-input-lifetimes.js";
+import { rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
+import type { RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 
 export interface RustSourceCallableAbiResolver {
   canUseSharedBorrow(
@@ -66,6 +69,7 @@ export interface RustSourceParameterAbi {
   readonly valueCarrier: TargetTypeRef;
   readonly parameterCarrier: TargetTypeRef;
   readonly mode: RustArgumentMode;
+  readonly inputLifetime?: Extract<RustLifetimeRef, { readonly kind: "parameter" }>;
   readonly entryConversion?: RustValueConversion;
 }
 
@@ -213,8 +217,9 @@ export function createRustSourceCallableAbiResolver(input: {
         cache.set(parameter, null);
         return undefined;
       }
-      cache.set(parameter, abi);
-      return abi;
+      const named = retainRustSourceInputLifetime(parameter, abi, context);
+      cache.set(parameter, named);
+      return named;
     },
   };
 }
@@ -297,12 +302,23 @@ export function resolveRustContextualParameterAbi(
   if (mode === undefined) {
     return undefined;
   }
-  return {
+  return retainRustSourceInputLifetime(parameter, {
     form,
     valueCarrier: selectedValueCarrier,
     parameterCarrier: selectedParameterCarrier,
     mode,
-  };
+  }, context);
+}
+
+function retainRustSourceInputLifetime(
+  parameter: Node,
+  abi: RustSourceParameterAbi,
+  context: RustTargetTypeResolutionContext,
+): RustSourceParameterAbi {
+  const lifetime = abi.parameterCarrier.kind === "reference" && rustCallableInputProtocol(abi.parameterCarrier) !== undefined
+    ? rustSourceInputLifetime(parameter, context) : undefined;
+  return lifetime !== undefined && abi.parameterCarrier.kind === "reference" &&
+    rustLifetimesEqual(lifetime, abi.parameterCarrier.lifetime) ? { ...abi, inputLifetime: lifetime } : abi;
 }
 
 function rustParameterModeForCarriers(

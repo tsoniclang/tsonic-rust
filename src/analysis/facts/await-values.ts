@@ -12,6 +12,7 @@ import type { RustFinalizedValueConversion } from "./finalized-operation/model.j
 import type { RustFutureValueFact } from "./keys.js";
 import { finalizedConversionIsValid, finalizeValueConversion } from "./finalized-operation/conversions.js";
 import { rustFutureValueMatchesCarrier } from "./future-values.js";
+import { rustJsPromiseTargetId } from "../../target-model/types/carriers/source-types.js";
 
 export interface RustAwaitValueLeafFact {
   readonly carrier: TargetTypeRef;
@@ -27,6 +28,12 @@ export interface RustAwaitValueFact {
 }
 
 export const rustAwaitValueFactKey: RustPlanKey<RustAwaitValueFact> = defineRustPlanKey("awaitValue", closedMetadataEquals);
+
+export function rustAwaitValueRequirements(leaf: RustAwaitValueLeafFact): readonly ("clone" | "static")[] {
+  if (leaf.future === undefined || leaf.carrier.kind !== "target-named" || leaf.carrier.id !== rustJsPromiseTargetId) return [];
+  const lifetime = leaf.carrier.genericArguments?.[0];
+  return lifetime?.kind === "lifetime" && lifetime.lifetime.kind === "static" ? ["clone", "static"] : ["clone"];
+}
 
 function admitsAbsentCompletion(carrier: TargetTypeRef): boolean {
   return isRustUnitCarrier(carrier) || rustOptionElementCarrier(carrier) !== undefined || rustOptionalStorageValue(carrier) !== undefined;

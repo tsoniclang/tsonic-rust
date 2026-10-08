@@ -6,6 +6,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustSuspendedOwnedReceiver } from "../facts/callables-and-resources.js";
 import { rustCapturedFieldStorageFactKey } from "../facts/receiver-captures.js";
+import { rustCallableInputLifetimeParameters } from "../facts/source-input-lifetimes.js";
 
 export type RustSuspendedCallableStorageResolution =
   | {
@@ -94,7 +95,10 @@ export function resolveRustSuspendedCallableStorage(
     }
     carriers.push(carrier);
   }
-  const contract = walk.context.sourceLifetimes.contractFor(declaration);
+  const sourceContract = walk.context.sourceLifetimes.contractFor(declaration);
+  const inferred = rustCallableInputLifetimeParameters(declaration, ast, walk.context.facts);
+  const contract = inferred.length === 0 ? sourceContract : { declaration,
+    parameters: [...sourceContract?.parameters ?? [], ...inferred] };
   const inputCarriers = exactParameters.map(parameter =>
     walk.context.facts.get(parameter, rustSourceParameterAbiFactKey)?.parameterCarrier);
   const lifetime = inputCarriers.some(carrier => carrier === undefined) ? undefined

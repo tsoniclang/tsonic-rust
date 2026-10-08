@@ -9,6 +9,9 @@ import { rustSpreadElementCarrier } from "../../target-model/operations/rest-ass
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import { KindSpreadElement, Node_Expression } from "@tsonic/target-api/source";
+import type { RustSourceCallParameterPlan } from "../../target-model/operations/model.js";
+import { rustCallableInputMatches } from "../../target-model/conversions/callable-input.js";
+import { rustPlaceholderLifetime } from "../../target-model/lifetimes/index.js";
 
 export function rustSourceCallArgumentCarriers(
   call: Node, ast: AstReader, facts: Pick<RustPlanQueries, "getRuntimeCarrierFact">,
@@ -24,6 +27,7 @@ export function rustSourceCallResultWithInputLifetimes(
   parameters: readonly TargetTypeRef[],
   bindings: RustSelectedTargetSignature["sourceArgumentBindings"],
   arguments_: readonly (TargetTypeRef | undefined)[],
+  physicalParameters: readonly Pick<RustSourceCallParameterPlan, "inputLifetime">[] = [],
 ): TargetTypeRef {
   const inputs = (bindings ?? []).flatMap(binding => {
     const argument = arguments_[binding.sourceArgumentIndex];
@@ -34,7 +38,17 @@ export function rustSourceCallResultWithInputLifetimes(
       : argument;
     return carrier === undefined ? [] : [{ parameterIndex: binding.sourceParameterIndex, carrier }];
   });
-  return instantiateRustElidedCallResult(result, parameters, inputs);
+  const inferred = new Map<string, RustLifetimeRef>();
+  for (const [index, physical] of physicalParameters.entries()) {
+    const lifetime = physical.inputLifetime;
+    const parameter = parameters[index];
+    if (lifetime === undefined || parameter?.kind !== "reference" || !rustLifetimesEqual(parameter.lifetime, lifetime)) continue;
+    const actual = inputs.filter(input => input.parameterIndex === index);
+    if (actual.length !== 1 || !rustCallableInputMatches(actual[0]!.carrier, parameter)) continue;
+    const carrier = actual[0]!.carrier;
+    inferred.set(rustLifetimeKey(lifetime), carrier.kind === "reference" ? carrier.lifetime ?? rustPlaceholderLifetime : rustPlaceholderLifetime);
+  }
+  return instantiateRustElidedCallResult(substituteRustTargetGenerics(result, new Map(), inferred), parameters, inputs);
 }
 
 export function rustSourceCallGenericLifetimeArguments(

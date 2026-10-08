@@ -1,5 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustAwaitValueFact, RustAwaitValueLeafFact } from "../../../analysis/facts/await-values.js";
+import { rustAwaitValueRequirements } from "../../../analysis/facts/await-values.js";
 import type { RustAwaitSelection } from "../../../target-model/types/await.js";
 import { rustJsPromiseTargetId, isRustNeverCarrier, isRustUnitCarrier } from "../../../target-model/types/index.js";
 import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
@@ -27,7 +28,8 @@ export function planRustAwaitBranches(
     let output = value;
     if (future !== undefined) {
       const promise = selected.carrier.kind === "target-named" && selected.carrier.id === rustJsPromiseTargetId;
-      if (promise && !requireRustCarrierRequirements(future.outputCarrier, ["clone"], node, context)) return undefined;
+      const requirements = rustAwaitValueRequirements(selected);
+      if (requirements.length > 0 && !requireRustCarrierRequirements(future.outputCarrier, requirements, node, context)) return undefined;
       output = { kind: "await", expr: promise
         ? { kind: "method-call", receiver: value, method: future.awaiting === "fallible" ? "into_result" : "into_value", args: [] }
         : value };

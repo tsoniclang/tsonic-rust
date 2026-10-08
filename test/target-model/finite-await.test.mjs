@@ -3,8 +3,8 @@ import test from "node:test";
 import { rustAwaitSelection, rustAwaitSelectionLeaves, rustAwaitSelectionResultCarrier } from "../../dist/target-model/types/await.js";
 import { rustAbsenceTargetType, rustFutureTargetType, rustJsPromiseTargetType,
   rustOptionTargetType, rustSourceOptionalTargetType, rustSourcePrimitiveTargetType,
-  rustSourceUnionTargetType, rustUnitTargetType } from "../../dist/target-model/types/index.js";
-import { finalizeRustAwaitValueFact, rustAwaitValueMatchesCarrier } from "../../dist/analysis/facts/await-values.js";
+  rustSourceUnionTargetType, rustUnitTargetType, rustJsPromiseTargetTypeWithLifetime } from "../../dist/target-model/types/index.js";
+import { finalizeRustAwaitValueFact, rustAwaitValueMatchesCarrier, rustAwaitValueRequirements } from "../../dist/analysis/facts/await-values.js";
 import { rustFutureValueForSourceStorage, rustFutureValuesForSourceStorage } from "../../dist/analysis/facts/future-values.js";
 import { selectRustSourceValueConversion } from "../../dist/policy/conversions/selection.js";
 import { rustTargetTypeRefEquals } from "../../dist/target-model/types/equality.js";
@@ -20,6 +20,23 @@ const select = (source, target) => selectRustSourceValueConversion(source, targe
 const factFor = (carrier, result, resolve = rustFutureValueForSourceStorage, owner = definitions) =>
   finalizeRustAwaitValueFact(carrier, result, resolve,
     (source, target) => selectRustSourceValueConversion(source, target, owner), owner);
+
+test("await requirements retain the exact promise lifetime without constraining native futures or values", () => {
+  const staticPromise = rustJsPromiseTargetTypeWithLifetime(integer, { kind: "static" });
+  const namedPromise = rustJsPromiseTargetTypeWithLifetime(integer, { kind: "parameter", identity: "await/input", name: "input" });
+  for (const [carrier, expected] of [[staticPromise, ["clone", "static"]], [namedPromise, ["clone"]],
+    [promise, ["clone"]], [integer, []]]) {
+    const fact = factFor(carrier, integer);
+    assert.equal(fact !== undefined, true, "validated await fact");
+    assert.deepEqual(rustAwaitValueRequirements(fact.selection.value), expected);
+  }
+  const native = rustFutureTargetType(integer);
+  const future = { outputCarrier: integer, awaitedConversion: { kind: "identity", sourceCarrier: integer,
+    targetCarrier: integer, fallible: false }, awaiting: "infallible", errorBoundary: "none" };
+  const fact = factFor(native, integer, () => future);
+  assert.equal(fact !== undefined, true, "validated native future fact");
+  assert.deepEqual(rustAwaitValueRequirements(fact.selection.value), []);
+});
 
 test("finite await selects exact value/future native branches and preserves native integer output", () => {
   const selection = rustAwaitSelection(union, definitions);
