@@ -29,7 +29,9 @@ export function prepareRustComputedMemberEvaluation(
     : context.input.program.facts.getFact(parent, rustTargetOperationFactKey);
   if (fact !== undefined && (element === undefined || fact.receiver !== element.Expression ||
     fact.key !== element.ArgumentExpression) ||
-    fact === undefined && element !== undefined && call?.kind === "source-call") {
+    fact === undefined && element !== undefined && call?.kind === "source-call" &&
+      parent !== undefined && ast.is.IsCallExpression(parent) &&
+      ast.as.AsCallExpression(parent)?.Expression === node) {
     context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
       "rust.backend.computed-member-evaluation",
       "Computed source member requires its exact sealed receiver and key evaluation."));

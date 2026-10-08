@@ -48,6 +48,28 @@ ${source}
   });
 }
 
+test("an indexed source-call argument is not mistaken for the computed callee", () => {
+  const { program } = analyzeRust({ files: { "index.ts": `
+function accept(value: number): number { return value; }
+export function main(): number { const values: number[] = [3]; return accept(values[0]); }
+` } });
+  const { ast } = program.source;
+  let selected;
+  const visit = node => {
+    if (ast.is.IsElementAccessExpression(node)) selected = node;
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(selected !== undefined, true, "one exact indexed argument");
+  const parent = ast.parent(selected);
+  assert.equal(program.facts.getFact(parent, rustTargetOperationFactKey)?.kind, "source-call");
+  assert.equal(program.facts.getFact(selected, rustComputedMemberFactKey) === undefined, true);
+  const context = { input: { program }, diagnostics: [] };
+  const evaluation = prepareRustComputedMemberEvaluation(selected, context);
+  assert.equal(evaluation?.context === context && evaluation.bindings.length === 0, true);
+  assert.equal(context.diagnostics.length, 0);
+});
+
 test("computed member fact identity retains both evaluation decisions", () => {
   const receiver = {};
   const key = {};
