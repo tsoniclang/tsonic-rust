@@ -43,7 +43,6 @@ import type { RustProjectTypePolicy } from "../../../analysis/project-types/type
 import {
   rustValueConversionContract,
 } from "../../../target-model/conversions/contracts.js";
-import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import type { RustValueConversion } from "../../../target-model/operations/model.js";
 import type { RustCallableConversion } from "../../../target-model/conversions/callable.js";
 import type { RustClosedTypeTestPlan } from "../../../target-model/operations/type-tests.js";
@@ -58,6 +57,7 @@ import {
   isRustPreconstructionThisOperation,
   isRustArrayFieldContentAssignment,
   markBinaryProjectIdentityUsed,
+  rustStructuralUsageKey,
   structuralFieldKey,
   visitConversionContract,
 } from "./generated-item-usage-helpers.js";
@@ -122,11 +122,7 @@ export function analyzeRustGeneratedItemUsage(input: {
   readonly structuralShapes: RustStructuralShapePlan;
   readonly navigation: TargetPlanningSourceNavigation;
 }): RustGeneratedItemUsage {
-  const variantOwnerKey = (carrier: TargetTypeRef): string => {
-    const union = input.structuralShapes.unionForCarrier(carrier);
-    return union === undefined ? closedMetadataKey(carrier) :
-      closedMetadataKey({ componentId: union.componentId, targetName: union.targetName });
-  };
+  const storageOwnerKey = (carrier: TargetTypeRef): string => rustStructuralUsageKey(carrier, input.structuralShapes);
   const carriersByDeclaration = new Map<Node, string>();
   for (const declaration of input.declarations) {
     const kind = input.ast.kindName(declaration);
@@ -137,7 +133,7 @@ export function analyzeRustGeneratedItemUsage(input: {
     }
     const carrier = input.facts.getRuntimeCarrierFact(declaration)?.carrier;
     if (carrier === undefined) continue;
-    carriersByDeclaration.set(declaration, variantOwnerKey(carrier));
+    carriersByDeclaration.set(declaration, storageOwnerKey(carrier));
   }
 
   const structuralFieldReads = new Set<string>();
@@ -243,33 +239,35 @@ export function analyzeRustGeneratedItemUsage(input: {
   };
   const markStructuralFieldRead = (carrier: TargetTypeRef, storageIndex: number): void => {
     if (Number.isSafeInteger(storageIndex) && storageIndex >= 0) {
-      accessedStructuralShapes.add(closedMetadataKey(carrier));
-      structuralFieldReads.add(structuralFieldKey(carrier, storageIndex));
+      const key = storageOwnerKey(carrier);
+      accessedStructuralShapes.add(key);
+      structuralFieldReads.add(structuralFieldKey(key, storageIndex));
     }
   };
   const markStructuralFieldWritten = (carrier: TargetTypeRef, storageIndex: number): void => {
     if (Number.isSafeInteger(storageIndex) && storageIndex >= 0) {
-      accessedStructuralShapes.add(closedMetadataKey(carrier));
-      structuralFieldWrites.add(structuralFieldKey(carrier, storageIndex));
+      const key = storageOwnerKey(carrier);
+      accessedStructuralShapes.add(key);
+      structuralFieldWrites.add(structuralFieldKey(key, storageIndex));
     }
   };
   const markVariantRead = (carrier: TargetTypeRef, variantName: string): void => {
-    const key = variantOwnerKey(carrier);
+    const key = storageOwnerKey(carrier);
     const variants = readVariantsByCarrier.get(key) ?? new Set<string>();
     variants.add(variantName);
     readVariantsByCarrier.set(key, variants);
   };
   const markVariantConstructed = (carrier: TargetTypeRef, variantName: string): void => {
-    const key = variantOwnerKey(carrier);
+    const key = storageOwnerKey(carrier);
     const variants = constructedVariantsByCarrier.get(key) ?? new Set<string>();
     variants.add(variantName);
     constructedVariantsByCarrier.set(key, variants);
     if (rustSourceUnionCarrierValue(carrier)?.origin === "generated") {
-      constructedStructuralShapes.add(closedMetadataKey(carrier));
+      constructedStructuralShapes.add(key);
     }
   };
   const markStructuralShapeConstructed = (carrier: TargetTypeRef | undefined): void => {
-    if (carrier !== undefined) constructedStructuralShapes.add(closedMetadataKey(carrier));
+    if (carrier !== undefined) constructedStructuralShapes.add(storageOwnerKey(carrier));
   };
   const markProjectIdentityUsed = (carrier: TargetTypeRef | undefined): void => {
     const selected = carrier !== undefined &&
@@ -898,24 +896,24 @@ export function analyzeRustGeneratedItemUsage(input: {
       usedDowncasts.get(source)?.has(target) === true,
     isCheckedProjectionUsed: (source: Node) => usedCheckedProjections.has(source),
     isStructuralFieldRead: (carrier: TargetTypeRef, storageIndex: number) =>
-      structuralFieldReads.has(structuralFieldKey(carrier, storageIndex)),
+      structuralFieldReads.has(structuralFieldKey(storageOwnerKey(carrier), storageIndex)),
     isStructuralFieldWritten: (carrier: TargetTypeRef, storageIndex: number) =>
-      structuralFieldWrites.has(structuralFieldKey(carrier, storageIndex)),
+      structuralFieldWrites.has(structuralFieldKey(storageOwnerKey(carrier), storageIndex)),
     isStructuralShapeConstructed: (carrier: TargetTypeRef) =>
-      constructedStructuralShapes.has(closedMetadataKey(carrier)),
+      constructedStructuralShapes.has(storageOwnerKey(carrier)),
     isStructuralShapeUsed: (carrier: TargetTypeRef) =>
-      constructedStructuralShapes.has(closedMetadataKey(carrier)) || accessedStructuralShapes.has(closedMetadataKey(carrier)),
+      constructedStructuralShapes.has(storageOwnerKey(carrier)) || accessedStructuralShapes.has(storageOwnerKey(carrier)),
     isVariantUsed: (declaration: Node, variantName: string) =>
       readVariantsByCarrier.get(carriersByDeclaration.get(declaration) ?? "")?.has(variantName) === true ||
       constructedVariantsByCarrier.get(carriersByDeclaration.get(declaration) ?? "")?.has(variantName) === true,
     isUnionVariantUsed: (carrier: TargetTypeRef, variantName: string) =>
-      readVariantsByCarrier.get(variantOwnerKey(carrier))?.has(variantName) === true ||
-      constructedVariantsByCarrier.get(variantOwnerKey(carrier))?.has(variantName) === true,
+      readVariantsByCarrier.get(storageOwnerKey(carrier))?.has(variantName) === true ||
+      constructedVariantsByCarrier.get(storageOwnerKey(carrier))?.has(variantName) === true,
     isUnionVariantConstructed: (carrier: TargetTypeRef, variantName: string) =>
-      constructedVariantsByCarrier.get(variantOwnerKey(carrier))?.has(variantName) === true,
+      constructedVariantsByCarrier.get(storageOwnerKey(carrier))?.has(variantName) === true,
     isVariantPayloadRead: (declaration: Node, variantName: string) =>
       readVariantsByCarrier.get(carriersByDeclaration.get(declaration) ?? "")?.has(variantName) === true,
     isUnionVariantPayloadRead: (carrier: TargetTypeRef, variantName: string) =>
-      readVariantsByCarrier.get(variantOwnerKey(carrier))?.has(variantName) === true,
+      readVariantsByCarrier.get(storageOwnerKey(carrier))?.has(variantName) === true,
   });
 }

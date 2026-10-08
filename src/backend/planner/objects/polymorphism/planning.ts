@@ -167,6 +167,7 @@ export function planPolymorphicClassDeclaration(
   }
   const implementationVisibility = rustProjectImplementationVisibility(publiclyReachable);
   const wrapperVisibility = exported || publiclyReachable ? "public" as const : "crate" as const;
+  const wrapperDeadCode = rustProjectInterfaceDeadCodeDisposition(context, declaration, publiclyReachable);
   const defaultImplementation = constructor.construct === undefined ? undefined : rustDefaultImplementation(
     implementationType,
     implementationGenerics,
@@ -270,6 +271,7 @@ export function planPolymorphicClassDeclaration(
       name: definition.targetName,
       visibility: wrapperVisibility,
       ...(programErrorVariant === undefined ? {} : { attrs: [rustHiddenAttribute] }),
+      ...(wrapperDeadCode === undefined ? {} : { deadCode: wrapperDeadCode }),
       generics,
       fields: [
         {

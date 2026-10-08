@@ -12,6 +12,7 @@ import type {
 import type { RustPlanQueries } from "../../../target-model/facts/selections.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustStructuralShapePlan } from "../../../analysis/objects/structural-shape-plan.js";
 import { rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
 import { isRustAssignmentOperator } from "../../../target-model/syntax/tokens.js";
 
@@ -87,8 +88,14 @@ function isInsideRustPreconstruction(ast: AstReader, node: Node): boolean {
   return false;
 }
 
-export function structuralFieldKey(carrier: TargetTypeRef, storageIndex: number): string {
-  return `${closedMetadataKey(carrier)}#${storageIndex}`;
+export function rustStructuralUsageKey(carrier: TargetTypeRef, shapes: RustStructuralShapePlan): string {
+  const owner = shapes.unionForCarrier(carrier) ?? shapes.definitionForCarrier(carrier);
+  return owner === undefined ? closedMetadataKey(carrier)
+    : closedMetadataKey({ componentId: owner.componentId, targetName: owner.targetName });
+}
+
+export function structuralFieldKey(ownerKey: string, storageIndex: number): string {
+  return `${ownerKey}#${storageIndex}`;
 }
 
 export function visitConversionContract(
