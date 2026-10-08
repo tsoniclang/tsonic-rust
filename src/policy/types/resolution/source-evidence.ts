@@ -110,7 +110,14 @@ export function resolveRustCallableStorageCarrier(
     parameter.Initializer === undefined && parameter.QuestionToken === undefined &&
     uses !== undefined && uses.uses.length > 0 &&
     uses.uses.every(use => use.kind === "direct-call" && !use.captured && !use.throughMember)) {
-    return resolveRustCallableInputCarrier(subject!, carrier!, context, options);
+    const semantics = context.semanticsFor(parameterNode!);
+    const declared = semantics.declarations.declaredValueType(parameterNode!);
+    const declaredCarrier = declared === undefined ? undefined : resolveRustTargetType(declared,
+      { ...context, currentSemantics: semantics, sourceStorageSubject: undefined,
+        callableRepresentation: "signature" }, options, new Set());
+    if (rustTargetTypeRefEquals(declaredCarrier, carrier)) {
+      return resolveRustCallableInputCarrier(subject!, carrier!, context, options);
+    }
   }
   return carrier === undefined || subject === undefined ? carrier : options.callableStorageCarrier(subject, carrier,
     (owner, excludedCaptures) => resolveRustCallableEnvironment(owner, context, options, resolving, excludedCaptures),

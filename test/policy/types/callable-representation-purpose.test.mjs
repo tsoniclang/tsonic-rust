@@ -4,6 +4,29 @@ import { sourcePrimitiveFactKey } from "@tsonic/tsts";
 import { resolveRustCallableEvidence } from "../../../dist/policy/types/resolution/source-evidence.js";
 import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
 import { resolveRustConstructSignature } from "../../../dist/policy/types/resolution/constructors.js";
+import { analyzeRust } from "../../helpers/rust-session.mjs";
+import { rustCallableInputProtocol } from "../../../dist/target-model/types/carriers/callables.js";
+import { rustSourceParameterAbiFactKey } from "../../../dist/analysis/facts/keys.js";
+
+for (const surfaces of [[], ["js"]]) {
+  test(`only the complete declared parameter can select invocation-only storage in ${surfaces[0] ?? "native"}`, () => {
+    const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+      function direct(value: () => number): number { return value(); }
+      function union(value: string | (() => number)): number { return (value as () => number)(); }
+      export function main(): void { direct(() => 1); union(() => 2); }
+    ` } });
+    const parameters = [];
+    const visit = node => {
+      if (program.source.ast.is.IsParameterDeclaration(node)) parameters.push(node);
+      program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    program.sourceFiles.forEach(visit);
+    assert.equal(parameters.length, 2);
+    const borrowed = parameters.map(parameter => rustCallableInputProtocol(
+      program.facts.getFact(parameter, rustSourceParameterAbiFactKey)?.parameterCarrier) !== undefined);
+    assert.deepEqual(borrowed, [true, false], "a narrowed union arm cannot replace the entire formal parameter ABI");
+  });
+}
 
 function fixture(purpose) {
   const resultType = Object.freeze({});
