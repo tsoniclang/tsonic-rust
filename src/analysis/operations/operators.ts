@@ -378,9 +378,6 @@ export function resolvePostCheckBinaryCarrier(
     ? rustStrictEqualityOperandCarrier(walk.context.facts, operands.rightNode)
     : right;
   const optionNullishRelationship = selectedOptionNullishRelationship(
-    walk,
-    operands.leftNode,
-    operands.rightNode,
     leftComparisonCarrier,
     rightComparisonCarrier,
   );
