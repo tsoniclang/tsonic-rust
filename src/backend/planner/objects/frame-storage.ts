@@ -18,8 +18,10 @@ export function rustClassFrameFieldLocation(
   const definition = context.input.program.projectTypes.definitionForCarrier(receiverCarrier);
   const frame = definition === undefined ? undefined : context.input.program.callableValues.frames.definitionForOwner(definition.declaration);
   if (binding === undefined || frame === undefined || !frame.bindings.includes(binding)) return undefined;
+  const selectedCarrier = context.input.program.projectTypes.instantiateMemberCarrier(declaration, receiverCarrier, binding.carrier);
+  if (selectedCarrier === undefined) return undefined;
   const owner = rustClassFrameOwner(frame, receiver, context, sourceReceiver);
-  return owner === undefined ? undefined : rustFrameBindingLocation(binding, owner, context);
+  return owner === undefined ? undefined : rustFrameBindingLocation({ ...binding, carrier: selectedCarrier }, owner, context);
 }
 
 export interface RustClassFrameLayout {

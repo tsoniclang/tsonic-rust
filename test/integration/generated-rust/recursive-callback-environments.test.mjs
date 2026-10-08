@@ -5,31 +5,14 @@ import { join } from "node:path";
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { runCargo, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
-
-const source = `
-class Holder<T> {
-  constructor(readonly seed: T) {}
-  recurse = (count: number): number => count === 0 ? 1 : this.recurse(count - 1);
-  rebind(): void { this.recurse = (count: number): number => count === 0 ? 2 : this.recurse(count - 1); }
-}
-export function escaped<U>(seed: U): (count: number) => number {
-  const value = new Holder(seed);
-  const original = value.recurse;
-  value.rebind();
-  return original;
-}
-export function main(): void {
-  const callback = escaped(7);
-  if (callback(0) !== 1 || callback(8) !== 2) throw new Error("class callback generic environment");
-}
-`;
+import { recursiveCallbackEnvironmentSource } from "../../../../tsonic/test/fixtures/recursive-callback-environments.mjs";
 
 for (const surfaces of [[], ["js"]]) {
   const profile = surfaces[0] ?? "native";
   test(`class callback factories preserve native non-Clone borrowed inputs without retaining unused fields in ${profile}`,
     { timeout: 300_000 }, () => {
       const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
-        files: { "index.ts": source } });
+        files: { "index.ts": recursiveCallbackEnvironmentSource } });
       assert.equal(result.diagnostics.length, 0,
         result.diagnostics.slice(0, 4).map(row => row.message.slice(0, 256)).join("\n"));
       const directory = writeGeneratedProject(`recursive-callback-environment-${profile}`, result.artifacts);
