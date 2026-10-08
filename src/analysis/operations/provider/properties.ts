@@ -37,6 +37,7 @@ import { selectRustRecordProperty } from "./records.js";
 import { selectRustUnionProperty } from "../union-properties.js";
 import { selectRustGuardedSourceValueTypes } from "../native-flow-refinement.js";
 import { selectJsSurfaceMemberRead } from "../../../policy/operations/source-profiles/js/member-reads.js";
+import { resolveRustIndexedProperty } from "../../../policy/types/resolution/indexed-fields.js";
 
 export function checkedPropertySelectionInput(
   context: RustOperationPolicyContext,
@@ -224,6 +225,22 @@ export function selectRustCheckedPropertyAccess(
   if (numericArrayMember !== undefined) return numericArrayMember;
   const record = selectRustRecordProperty(request, selectedReceiverCarrier, context, options);
   if (record !== undefined) return record;
+  if (selectedReceiverCarrier?.kind === "type-parameter" && request.sourceReceiverType !== undefined &&
+    request.sourceSelectedSymbol !== undefined && request.accessMode !== "delete") {
+    const name = context.currentSemantics.types.propertyInfos(request.sourceReceiverType)
+      .find(property => property.symbol === request.sourceSelectedSymbol ||
+        property.rootSymbols.includes(request.sourceSelectedSymbol!))?.name;
+    const field = name === undefined ? undefined : resolveRustIndexedProperty(request.sourceReceiverType,
+      name, context, options, selectedReceiverCarrier, request.sourceSelectedSymbol);
+    if (field !== undefined) return acceptRustMemberOperation(request, "property", {
+      kind: "source-indexed-field", operationId: sourceOperationId(context, request.expression, "indexed-field"),
+      receiverCarrier: selectedReceiverCarrier, keyCarrier: field.key,
+      projection: field.projection, resultCarrier: field.result, accessMode: request.accessMode,
+    }, context, options, { sourceExpression: request.expression, sourceReceiver: request.receiver,
+      sourceSelectedSymbol: request.sourceSelectedSymbol,
+      ...(request.sourceSelectedDeclaration === undefined ? {} : { sourceSelectedDeclaration: request.sourceSelectedDeclaration }),
+      sourceResultType: request.sourceResultType });
+  }
   const structuralProperty = selectStructuralSourceProperty(
     request,
     selectedReceiverCarrier,

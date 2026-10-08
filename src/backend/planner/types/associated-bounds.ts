@@ -29,7 +29,15 @@ export function rustAssociatedPredicates(
   for (const selected of requirements) {
     const projection = selected.carrier;
     const owner = rustTypeFromCarrierInContext(projection.owner, context);
-    const trait = rustTypeFromCarrierInContext(projection.trait, context);
+    const selectedTrait = rustTypeFromCarrierInContext(projection.trait, context);
+    const output = selected.output === undefined ? undefined : rustTypeFromCarrierInContext(selected.output, context);
+    if (selected.output !== undefined && (output === undefined || selectedTrait?.kind !== "named")) {
+      throw new Error("A sealed field constraint lost its exact associated output equality.");
+    }
+    const trait = output === undefined || selectedTrait?.kind !== "named" ? selectedTrait : {
+      ...selectedTrait, genericArguments: [...selectedTrait.genericArguments ?? [],
+        { kind: "associated-equality" as const, name: projection.name, genericArguments: [], type: output }],
+    };
     const type = rustTypeFromCarrierInContext(projection, context);
     if (owner === undefined || trait === undefined || type === undefined) {
       throw new Error("A sealed dependent type obligation has no native syntax.");

@@ -2,6 +2,7 @@ import { rustValueBlock } from "../../target-ast/value-block.js";
 import { cloneRustExpression as cloneExpression } from "../../target-ast/expressions.js";
 import type { Node } from "@tsonic/tsts";
 import { rustCapturedFieldStorage } from "./captured-fields.js";
+import { planRustProjectFieldDispatchRole, planRustProjectFieldDispatchRoles } from "./project-field-dispatch.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { planRustNativeMemoryCall } from "../expressions/native-memory.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -22,8 +23,10 @@ import {
   mutateRustProjectObjectField,
   mutateRustStructuralObjectField,
   readRustProjectObjectField,
+  readRustProjectDispatchedField,
   readRustStructuralObjectField,
   writeRustProjectObjectField,
+  writeRustProjectDispatchedField,
   writeRustStructuralObjectField,
 } from "./project-objects.js";
 import {
@@ -211,6 +214,12 @@ export function readRustStoredObjectField(
         )
       : readRustStructuralObjectField(receiver, path, resultCarrier, rustCarrierHasCopyContract(resultCarrier, context));
   }
+  const dispatch = rustStoredProjectFieldDispatch(receiverCarrier, storageIndex, context);
+  if (dispatch !== undefined) {
+    const role = planRustProjectFieldDispatchRole(dispatch.plan, "read", context);
+    return role === undefined || projection.length !== 0 ? undefined
+      : readRustProjectDispatchedField(receiver, dispatch.read, role);
+  }
   const path = rustDirectProjectFieldStoragePath(receiverCarrier, storageIndex, context);
   const representation = rustProjectObjectRepresentation(receiverCarrier, context);
   const declaration = rustStoredProjectFieldDeclaration(receiverCarrier, storageIndex, context);
@@ -237,6 +246,16 @@ function rustStoredProjectFieldDeclaration(carrier: TargetTypeRef, storageIndex:
   return definition === undefined ? undefined
     : rustProjectObjectLayout(definition.declaration, context.input.program.source.ast)?.fields.find(field =>
       field.storageIndex + (context.input.program.projectTypes.externalBaseForDefinition(definition)?.fields.length ?? 0) === storageIndex)?.declaration;
+}
+
+function rustStoredProjectFieldDispatch(carrier: TargetTypeRef, storageIndex: number, context: RustPlanContext) {
+  const definition = context.input.program.projectTypes.definitionForCarrier(carrier);
+  if (definition === undefined || !context.input.program.projectTypes.isPolymorphic(definition)) return undefined;
+  const declaration = rustStoredProjectFieldDeclaration(carrier, storageIndex, context);
+  const plan = declaration === undefined ? undefined : context.input.program.projectFieldDispatch.planFor(declaration);
+  const read = declaration === undefined ? undefined : context.input.program.projectTypes.memberSlotName(declaration, "read");
+  const write = declaration === undefined ? undefined : context.input.program.projectTypes.memberSlotName(declaration, "write");
+  return plan === undefined || read === undefined || write === undefined ? undefined : { plan, read, write };
 }
 
 export function readRustStructuralObjectMethodStorage(
@@ -413,6 +432,13 @@ function writeRustStoredObjectFieldStorage(
           context,
         )
       : writeRustStructuralObjectField(receiver, path, operator, value);
+  }
+  const dispatch = rustStoredProjectFieldDispatch(receiverCarrier, storageIndex, context);
+  if (dispatch !== undefined) {
+    const roles = planRustProjectFieldDispatchRoles(dispatch.plan, context);
+    if (roles?.write === undefined || projection.length !== 0 || context.syntheticNames === undefined) return undefined;
+    return writeRustProjectDispatchedField(receiver, allocateRustSyntheticName(context.syntheticNames, "field_owner"),
+      dispatch.read, dispatch.write, operator, value, { read: roles.read, write: roles.write });
   }
   const path = rustDirectProjectFieldStoragePath(receiverCarrier, storageIndex, context);
   const representation = rustProjectObjectRepresentation(receiverCarrier, context);

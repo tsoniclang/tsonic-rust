@@ -37,6 +37,7 @@ export function fakeAstReader(sourceFiles = []) {
       IsForOfStatement: () => false,
       IsIfStatement: () => false,
       IsVoidExpression: () => false,
+      IsTypeOfExpression: (node) => node.kindName === "KindTypeOfExpression",
       IsArrayBindingPattern: () => false,
       IsArrayLiteralExpression: () => false,
       IsArrayTypeNode: () => false,

@@ -148,7 +148,7 @@ export function selectRustCheckedElementAccess(
     }
     return acceptRustMemberOperation(request, "indexer", {
       kind: "source-indexed-field", operationId: sourceOperationId(context, request.expression, "indexed-field"),
-      receiverCarrier: selectedReceiverCarrier, keyCarrier: selected.key, resultCarrier: selected.result,
+      receiverCarrier: selectedReceiverCarrier, keyCarrier: selected.key, projection: selected.result, resultCarrier: selected.result,
       accessMode: request.accessMode,
     }, context, options, elementProvenance(request));
   }

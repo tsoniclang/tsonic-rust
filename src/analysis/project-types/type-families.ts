@@ -11,7 +11,7 @@ import { inferRustTargetTypeParameterBindings, rustTargetTypePatternsAreNominall
 import { substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
 import { rustNamedTypeCarrierValue, rustSourceTypeCarrierValue } from "../../target-model/types/index.js";
 import { rustTypeFamilyNormalizer } from "../../policy/types/type-family-normalization.js";
-import { rustIndexedFieldTrait } from "../../target-model/types/carriers/indexed-fields.js";
+import { rustIndexedFieldKey, rustIndexedFieldTrait } from "../../target-model/types/carriers/indexed-fields.js";
 
 interface ImplementationBucket {
   readonly closed: Map<string, RustSourceTypeFamilyImplementation>;
@@ -66,6 +66,15 @@ export function createRustSourceTypeFamilyRegistry(): RustSourceTypeFamilyRegist
       if (existing !== undefined) return existing === name;
       fieldKeys.set(identity, name);
       return true;
+    },
+    fieldKeyName(key: TargetTypeRef) {
+      const value = rustNamedTypeCarrierValue(key);
+      const argument = value?.genericArguments[0];
+      if (value?.id !== "rust.source.field-key" || value.genericArguments.length !== 1 ||
+        argument?.kind !== "const" || argument.value.kind !== "integer" || !/^(?:0|[1-9][0-9]{0,38})$/u.test(argument.value.value)) return undefined;
+      const identity = BigInt(argument.value.value).toString(16).padStart(32, "0");
+      return /^[0-9a-f]{32}$/u.test(identity) && rustTargetTypeRefEquals(key,
+        rustIndexedFieldKey(identity)) ? fieldKeys.get(identity) : undefined;
     },
     register(family: RustSourceTypeFamily) {
       assertWritable();

@@ -177,13 +177,11 @@ mod generic_storage_cost {
   runCargo(directory, ["test", "--locked", "--offline"]);
 });
 
-test("polymorphic structural factory storage rejects without publishing partial artifacts", () => {
-  const { result } = compileRust({ surfaces: ["js"], files: authoredGenericBinderFiles });
-  assert.deepEqual(result.diagnostics.map(diagnostic => diagnostic.code), [
-    "RUST_SOURCE_CALL_RESULT_STORAGE_MISSING",
-    "RUST_SOURCE_CALL_RESULT_STORAGE_MISSING",
-    ...Array.from({ length: 6 }, () => "RUST_STRUCTURAL_METHOD_CONTRACT_INVALID"),
-  ]);
-  assert.ok(result.diagnostics.every(diagnostic => diagnostic.category === "error"));
-  assert.deepEqual(result.artifacts, []);
+test("polymorphic structural factories retain exact constrained field evidence", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
+    files: { ...authoredGenericBinderFiles, "index.ts": authoredGenericBinderFiles["index.ts"] +
+      '\nexport function main(): void { if (!run()) throw new Error("generic constrained factory"); }' } });
+  assert.equal(result.diagnostics.length === 0, true,
+    result.diagnostics.slice(0, 4).map(({ code, message }) => `${code}: ${message}`).join("\n"));
+  validateGeneratedProject("generic-constrained-factory", result.artifacts, { run: true });
 });

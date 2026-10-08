@@ -4,8 +4,9 @@ import type { RustSourceProfileRegistry } from "../source-profile.js";
 import type { RustSourceTypeRegistry } from "../source-type-registry.js";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
 import type { SourceStorageProjection, SourceStorageSubject } from "@tsonic/target-api/analysis";
-import type { Node, SourceFile, Type } from "@tsonic/tsts";
+import type { Node, SourceFile, Type, TypePropertyInfo } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustSourceTypeFamilyImplementation } from "../../../target-model/types/type-families.js";
 
 export interface RustTargetTypeResolutionOptions {
   readonly jsEnabled: boolean;
@@ -22,6 +23,10 @@ export interface RustTargetTypeResolutionOptions {
     instanceFor: (declaration: Node) => TargetTypeRef | undefined,
   ) => TargetTypeRef | undefined;
   readonly projectCarrierSupportsObjectIdentity: (carrier: TargetTypeRef) => boolean;
+  readonly projectFieldProjection: (property: TypePropertyInfo, owner: TargetTypeRef, ownerType: Type) => {
+    readonly output: TargetTypeRef;
+    readonly field: NonNullable<RustSourceTypeFamilyImplementation["field"]>;
+  } | undefined;
   readonly resolveProjectUnionCarrier: (
     memberCarriers: readonly TargetTypeRef[],
   ) => TargetTypeRef | undefined;

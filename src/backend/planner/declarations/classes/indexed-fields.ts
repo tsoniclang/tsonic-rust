@@ -50,8 +50,7 @@ export function planRustIndexedFieldImplementation(
       syntheticNames: createRustSyntheticNameState(context.input.program.source.ast, context.sourceFile,
         ["owner", "_key", "value"]),
     };
-    const receiver = handle ? { kind: "path" as const, path: "owner" }
-      : { kind: "dereference" as const, pointer: { kind: "path" as const, path: "owner" } };
+    const receiver = { kind: "path" as const, path: "owner" };
     const value = access === "read" ? readRustStoredObjectField(field.storage, implementation.owner,
       receiver, field.storageIndex, implementation.output, bodyContext, [], handle)
       : writeRustStoredObjectField(field.storage, implementation.owner, receiver, field.storageIndex,

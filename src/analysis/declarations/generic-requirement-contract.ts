@@ -49,6 +49,7 @@ export function requirementContractsEqual(
     left.associatedTypes.every((requirement, index) => {
       const other = right.associatedTypes[index];
       return other !== undefined && rustTargetTypeRefEquals(requirement.carrier, other.carrier) &&
+        rustTargetTypeRefEquals(requirement.output, other.output) &&
         stringListsEqual(requirement.fieldAccess ?? [], other.fieldAccess ?? []) &&
         stringListsEqual(requirement.requirements, other.requirements);
     }) &&

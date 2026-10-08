@@ -10,7 +10,7 @@ import { resolveRustTypeFamilyApplication } from "../../policy/types/resolution/
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustTypeFamilyNormalizer } from "../../policy/types/type-family-normalization.js";
-import { resolveRustIndexedField } from "../../policy/types/resolution/indexed-fields.js";
+import { resolveRustIndexedField, resolveRustIndexedProperty } from "../../policy/types/resolution/indexed-fields.js";
 import { rustIndexedFieldTrait } from "../../target-model/types/carriers/indexed-fields.js";
 
 interface FamilyDemandContext {
@@ -97,11 +97,15 @@ export function realizeRustSourceTypeFamilyDemands(walk: RustFactWalk, files: re
       };
       const ownerType = sourceType(carrier.owner);
       const keyType = argument?.kind === "type" ? sourceType(argument.type) : undefined;
+      const keyName = argument?.kind === "type" ? walk.context.typeFamilies.fieldKeyName(argument.type) : undefined;
       const selected = substituteRustTargetTypeParameters(carrier, demand.carriers);
       if (!rustTargetTypeRefEquals(mapRustTargetTypes(selected, normalize), selected)) return;
-      if (ownerType === undefined || keyType === undefined ||
-        resolveRustIndexedField(ownerType, keyType, rustResolutionContext(walk, node),
-          walk.operationOptions, new Set(), owner) === undefined) {
+      const context = rustResolutionContext(walk, node);
+      const field = ownerType === undefined ? undefined : keyName !== undefined
+        ? resolveRustIndexedProperty(ownerType, keyName, context, walk.operationOptions, owner)
+        : keyType === undefined ? undefined : resolveRustIndexedField(ownerType, keyType, context,
+          walk.operationOptions, new Set(), owner);
+      if (field === undefined) {
         reject(node, "An indexed field demand lost its exact source owner/key correspondence.");
       }
       return;
@@ -178,6 +182,8 @@ export function realizeRustSourceTypeFamilyDemands(walk: RustFactWalk, files: re
       if (node !== task.declaration && createsGenericScope(ast.kindName(node))) return;
       const carrier = facts.getRuntimeCarrierFact(node)?.carrier;
       if (carrier !== undefined) visitCarrier(carrier, node, task.context);
+      const field = facts.getFact(node, rustTargetOperationFactKey);
+      if (field?.kind === "source-indexed-field") visitCarrier(field.projection, node, task.context);
       const parameter = facts.getFact(node, rustSourceParameterAbiFactKey)?.parameterCarrier;
       if (parameter !== undefined) visitCarrier(parameter, node, task.context);
       visitCall(node, task.context);

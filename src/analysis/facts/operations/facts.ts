@@ -335,7 +335,8 @@ export type RustTargetOperationFact =
       readonly operationId: string;
       readonly receiverCarrier: TargetTypeRef;
       readonly keyCarrier: TargetTypeRef;
-      readonly resultCarrier: Extract<TargetTypeRef, { readonly kind: "associated-type" }>;
+      readonly projection: Extract<TargetTypeRef, { readonly kind: "associated-type" }>;
+      readonly resultCarrier: TargetTypeRef;
       readonly accessMode: "read" | "write" | "read-write";
     }
   | {

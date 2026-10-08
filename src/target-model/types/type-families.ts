@@ -31,6 +31,7 @@ export interface RustSourceTypeFamilyImplementation {
 
 export interface RustSourceTypeFamilyRegistry {
   registerFieldKey(identity: string, name: string): boolean;
+  fieldKeyName(key: TargetTypeRef): string | undefined;
   register(family: RustSourceTypeFamily): boolean;
   get(identity: string): RustSourceTypeFamily | undefined;
   families(): readonly RustSourceTypeFamily[];

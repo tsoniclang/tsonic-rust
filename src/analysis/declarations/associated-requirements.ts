@@ -9,6 +9,7 @@ export interface RustAssociatedTypeRequirement {
   readonly carrier: Extract<TargetTypeRef, { readonly kind: "associated-type" }>;
   readonly requirements: readonly RustGenericRequirement[];
   readonly fieldAccess?: readonly ("read" | "write")[];
+  readonly output?: TargetTypeRef;
 }
 
 export function createRustAssociatedRequirementCollector(
@@ -17,11 +18,11 @@ export function createRustAssociatedRequirementCollector(
   classify: (carrier: TargetTypeRef, requirements: readonly RustGenericRequirement[]) => boolean,
 ): {
   require(carrier: Extract<TargetTypeRef, { readonly kind: "associated-type" }>, requirement?: RustGenericRequirement): boolean;
-  requireField(carrier: Extract<TargetTypeRef, { readonly kind: "associated-type" }>, access: readonly ("read" | "write")[]): boolean;
+  requireField(carrier: Extract<TargetTypeRef, { readonly kind: "associated-type" }>, access: readonly ("read" | "write")[], output?: TargetTypeRef): boolean;
   collect(carrier: TargetTypeRef): boolean;
   seal(): readonly RustAssociatedTypeRequirement[];
 } {
-  const entries: { carrier: Extract<TargetTypeRef, { readonly kind: "associated-type" }>; requirements: Set<RustGenericRequirement>; fieldAccess: Set<"read" | "write"> }[] = [];
+  const entries: { carrier: Extract<TargetTypeRef, { readonly kind: "associated-type" }>; requirements: Set<RustGenericRequirement>; fieldAccess: Set<"read" | "write">; output?: TargetTypeRef }[] = [];
   const require = (carrier: Extract<TargetTypeRef, { readonly kind: "associated-type" }>, requirement?: RustGenericRequirement): boolean => {
     if (carrier.trait === undefined || families.get(carrier.trait.id) === undefined) return false;
     const references = rustTargetTypeParameterIdentities(carrier);
@@ -45,18 +46,25 @@ export function createRustAssociatedRequirementCollector(
   };
   return {
     require,
-    requireField(carrier, access) {
+    requireField(carrier, access, output) {
       if (carrier.trait === undefined || families.get(carrier.trait.id)?.kind !== "indexed" || !require(carrier)) return false;
       const entry = entries.find(candidate => rustTargetTypeRefEquals(candidate.carrier, carrier));
       if (entry === undefined) {
-        const field = families.implementation(carrier.trait, carrier.owner)?.field;
-        return field !== undefined && (!access.includes("write") || field.sharedWrite);
+        const implementation = families.implementation(carrier.trait, carrier.owner);
+        const field = implementation?.field;
+        return field !== undefined && (!access.includes("write") || field.sharedWrite) &&
+          (output === undefined || rustTargetTypeRefEquals(output, implementation?.output));
+      }
+      if (output !== undefined && !rustTargetTypeRefEquals(output, carrier)) {
+        if (entry.output !== undefined && !rustTargetTypeRefEquals(entry.output, output)) return false;
+        entry.output = output;
       }
       for (const mode of access) entry.fieldAccess.add(mode);
       return true;
     },
     collect,
     seal: () => Object.freeze(entries.map(entry => Object.freeze({ carrier: entry.carrier,
+      ...(entry.output === undefined ? {} : { output: entry.output }),
       ...(entry.fieldAccess.size === 0 ? {} : { fieldAccess: Object.freeze([...entry.fieldAccess].sort()) }),
       requirements: Object.freeze([...entry.requirements].sort()) }))),
   };

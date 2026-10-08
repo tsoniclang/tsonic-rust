@@ -320,4 +320,28 @@ test("inline native field reads do not invent shared-write capability", () => {
   const projection = rustIndexedFieldProjection(signed, key);
   assert.equal(collector.requireField(projection, ["read"]), true);
   assert.equal(collector.requireField(projection, ["write"]), false);
+  assert.equal(collector.requireField(projection, ["read"], unsigned), true);
+  assert.equal(collector.requireField(projection, ["read"], signed), false);
+});
+
+test("constrained field obligations preserve one exact native output equality", () => {
+  const registry = createRustSourceTypeFamilyRegistry();
+  registry.register({ kind: "indexed", trait: rustIndexedFieldTrait });
+  const identity = "00000000000000000000000000000001";
+  const key = rustIndexedFieldKey(identity);
+  assert.equal(registry.registerFieldKey(identity, "score"), true);
+  assert.equal(registry.fieldKeyName(key), "score");
+  assert.equal(registry.fieldKeyName(rustIndexedFieldKey("00000000000000000000000000000002")), undefined);
+  assert.equal(registry.fieldKeyName({ ...key, id: "foreign-field-key" }), undefined);
+  assert.equal(registry.fieldKeyName({ ...key, genericArguments: [{ kind: "const", value: { kind: "integer", value: "invalid" } }] }), undefined);
+  assert.equal(registry.fieldKeyName({ ...key, genericArguments: [{ kind: "const", value: { kind: "integer", value: "340282366920938463463374607431768211456" } }] }), undefined);
+  const projection = rustIndexedFieldProjection(parameter, key);
+  const collector = createRustAssociatedRequirementCollector(new Set(["T"]), registry, () => true);
+  assert.equal(collector.requireField(projection, ["read"], unsigned), true);
+  assert.equal(collector.requireField(projection, ["read"], signed), false);
+  assert.equal(collector.requireField(projection, ["read"], unsigned), true);
+  const contract = collector.seal();
+  assert.deepEqual(contract[0].output, unsigned);
+  assert.deepEqual(contract[0].fieldAccess, ["read"]);
+  assert.equal(Object.isFrozen(contract[0]), true);
 });

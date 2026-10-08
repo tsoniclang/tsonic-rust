@@ -9,7 +9,7 @@ export const rustIndexedFieldTrait: RustTargetTraitRef = Object.freeze({
   associatedConstraints: Object.freeze([]),
 });
 
-export function rustIndexedFieldProjection(owner: TargetTypeRef, key: TargetTypeRef): TargetTypeRef {
+export function rustIndexedFieldProjection(owner: TargetTypeRef, key: TargetTypeRef): Extract<TargetTypeRef, { readonly kind: "associated-type" }> {
   return {
     kind: "associated-type", owner, name: "Output",
     trait: { ...rustIndexedFieldTrait, genericArguments: [{ kind: "type", type: key }] },

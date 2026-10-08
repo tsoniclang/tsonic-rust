@@ -1,5 +1,6 @@
 import { appendMalformedSourceAstDiagnostic, recordClassBodyFacts, recordClassSignatureFacts, recordInterfaceFacts, recordMethodSelfModeFacts } from "../declarations/project-types.js";
-import { appendRustDiagnostic, rustResolutionContext } from "./walk.js";
+import { appendRustDiagnostic, rustResolutionContext, rustOperationContext } from "./walk.js";
+import { resolveRustProjectField } from "../operations/provider/project-fields.js";
 import { createRustModuleBindingPolicy } from "./module-bindings.js";
 import { recordRustModuleCallableStorage } from "../callables/module-values.js";
 import { recordRustModuleValueDeclarations } from "./module-declarations.js";
@@ -155,6 +156,20 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
       const definition = context.projectTypes.definitionForCarrier(carrier);
       const representation = context.objectRepresentations.representationFor(definition);
       return representation !== undefined && representation.kind !== "value";
+    },
+    projectFieldProjection(property, owner, ownerType) {
+      const definition = context.projectTypes.definitionForCarrier(owner);
+      const declarations = definition === undefined ? []
+        : context.semanticsFor(definition.declaration).declarations.symbolDeclarations(property.symbol);
+      if (declarations.length !== 1) return undefined;
+      const declaration = declarations[0]!;
+      const selected = resolveRustProjectField(declaration, owner, ownerType,
+        rustOperationContext(walk, declaration), operationOptions);
+      return selected === undefined ? undefined : {
+        output: selected.resultCarrier,
+        field: { storage: selected.storage, storageIndex: selected.storageIndex, readonly: property.readonly,
+          sharedWrite: !property.readonly && operationOptions.projectCarrierSupportsObjectIdentity(owner) },
+      };
     },
     projectMethodDispatch: context.projectMethodDispatch,
     projectMethodProperties: context.projectMethodProperties,

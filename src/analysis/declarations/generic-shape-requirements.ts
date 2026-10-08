@@ -61,7 +61,8 @@ export function analyzeRustShapeGenericRequirements(
         const projection = substituteRustTargetTypeParameters(requirement.carrier, substitutions);
         if (!associated.collect(projection) || !classify(projection, requirement.requirements)) return false;
         if (requirement.fieldAccess !== undefined && (projection.kind !== "associated-type" ||
-          !associated.requireField(projection, requirement.fieldAccess))) return false;
+          !associated.requireField(projection, requirement.fieldAccess, requirement.output === undefined ? undefined :
+            substituteRustTargetTypeParameters(requirement.output, substitutions)))) return false;
       }
     }
     return rustTargetTypeChildren(type).every(visit);

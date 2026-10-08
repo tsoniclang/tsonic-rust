@@ -1,5 +1,8 @@
 import { createHash } from "node:crypto";
-import type { Type } from "@tsonic/tsts";
+import type { Symbol, Type, TypePropertyInfo } from "@tsonic/tsts";
+import { sourcePropertyTypeEvidenceNodes } from "@tsonic/target-api/source";
+import { resolveRustTypeComponentEvidence } from "./source-evidence.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustIndexedFieldKey, rustIndexedFieldProjection, rustIndexedFieldTrait } from "../../../target-model/types/carriers/indexed-fields.js";
 import { rustSourceTypeCarrierValue, rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
@@ -31,21 +34,67 @@ export function resolveRustIndexedField(
   }
   const member = selection.members.length === 1 ? selection.members[0] : undefined;
   if (member?.kind !== "property" || !context.currentSemantics.types.isStringLike(keyType)) return undefined;
-  const registration = options.sourceTypes.structuralFieldProjectionForSymbol(member.property.symbol, owner);
-  if (registration === undefined || registration.field.method === true) return undefined;
-  const { shape, field } = registration;
-  const identity = createHash("sha256").update(member.property.name, "utf8").digest("hex").slice(0, 32);
-  const key = rustIndexedFieldKey(identity);
-  if (!options.sourceTypes.typeFamilies.registerFieldKey(identity, member.property.name)) return undefined;
-  const sourceFileName = rustStructuralObjectCarrierValue(owner)?.ownerFileName ?? rustSourceTypeCarrierValue(owner)?.fileName;
-  if (sourceFileName === undefined || !options.sourceTypes.typeFamilies.registerImplementation({
-    family, arguments: [{ kind: "type", type: key }], owner,
-    output: field.resultCarrier, sourceFileName,
-    field: { storage: shape.storage, storageIndex: field.storageIndex, readonly: field.readonly,
-      sharedWrite: !field.readonly && (shape.storage === "structural-object"
+  return registerRustIndexedProperty(owner, member.property, ownerType, options);
+}
+
+export function resolveRustIndexedProperty(
+  ownerType: Type,
+  name: string,
+  context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
+  owner: TargetTypeRef,
+  selectedSymbol?: Symbol,
+): { readonly key: TargetTypeRef; readonly projection: Extract<TargetTypeRef, { readonly kind: "associated-type" }>; readonly result: TargetTypeRef } | undefined {
+  const properties = context.currentSemantics.types.propertyInfos(ownerType).filter(property =>
+    property.name === name && (selectedSymbol === undefined || property.symbol === selectedSymbol ||
+      property.rootSymbols.includes(selectedSymbol)));
+  if (properties.length !== 1) return undefined;
+  const property = properties[0]!;
+  if (owner.kind !== "type-parameter") {
+    const selected = registerRustIndexedProperty(owner, property, ownerType, options);
+    return selected === undefined ? undefined : {
+      ...selected, projection: rustIndexedFieldProjection(owner, selected.key),
+    };
+  }
+  const evidence = sourcePropertyTypeEvidenceNodes(context.ast, context.currentSemantics, property);
+  const carriers = evidence.length === 0 ? [resolveRustTargetType(property.type, context, options, new Set())]
+    : evidence.map(authoredTypeNode => resolveRustTypeComponentEvidence({ authoredTypeNode,
+      selectedType: property.type }, context, options, new Set()));
+  const result = carriers[0];
+  if (result === undefined || carriers.some(carrier => !rustTargetTypeRefEquals(carrier, result))) return undefined;
+  const key = registerRustIndexedPropertyKey(property.name, options);
+  return key === undefined ? undefined : { key, projection: rustIndexedFieldProjection(owner, key), result };
+}
+
+function registerRustIndexedPropertyKey(name: string, options: RustTargetTypeResolutionOptions): TargetTypeRef | undefined {
+  const identity = createHash("sha256").update(name, "utf8").digest("hex").slice(0, 32);
+  return options.sourceTypes.typeFamilies.register({ kind: "indexed", trait: rustIndexedFieldTrait }) &&
+    options.sourceTypes.typeFamilies.registerFieldKey(identity, name) ? rustIndexedFieldKey(identity) : undefined;
+}
+
+function registerRustIndexedProperty(
+  owner: TargetTypeRef, property: TypePropertyInfo, ownerType: Type,
+  options: RustTargetTypeResolutionOptions,
+): RustIndexedFieldSelection | undefined {
+  const registration = options.sourceTypes.structuralFieldProjectionForSymbol(property.symbol, owner);
+  if (registration?.field.method === true) return undefined;
+  const selected = registration === undefined ? options.projectFieldProjection(property, owner, ownerType) : {
+    output: registration.field.resultCarrier,
+    field: { storage: registration.shape.storage, storageIndex: registration.field.storageIndex,
+      readonly: registration.field.readonly,
+      sharedWrite: !registration.field.readonly && (registration.shape.storage === "structural-object"
         ? rustStructuralObjectCarrierValue(owner)?.representation === "reference"
         : options.projectCarrierSupportsObjectIdentity(owner)),
     },
+  };
+  if (selected === undefined) return undefined;
+  const family = { kind: "indexed" as const, trait: rustIndexedFieldTrait };
+  const key = registerRustIndexedPropertyKey(property.name, options);
+  if (key === undefined) return undefined;
+  const sourceFileName = rustStructuralObjectCarrierValue(owner)?.ownerFileName ?? rustSourceTypeCarrierValue(owner)?.fileName;
+  if (sourceFileName === undefined || !options.sourceTypes.typeFamilies.registerImplementation({
+    family, arguments: [{ kind: "type", type: key }], owner,
+    output: selected.output, sourceFileName, field: selected.field,
   })) return undefined;
-  return { key, result: field.resultCarrier };
+  return { key, result: selected.output };
 }

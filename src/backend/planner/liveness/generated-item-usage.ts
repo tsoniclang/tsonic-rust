@@ -1,4 +1,5 @@
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
+import type { RustSourceTypeFamilyPlan } from "../../../target-model/types/type-families.js";
 import type { RustStructuralShapePlan } from "../../../analysis/objects/structural-shape-plan.js";
 import { rustRecordFinalFieldContributions, rustRecordSpreadRetainsField, rustRecordSpreadReadIsObservable } from "../objects/record-contributions.js";
 import { rustObjectReferenceViewKey } from "../../../analysis/facts/object-reference-views.js";
@@ -116,6 +117,7 @@ export function analyzeRustGeneratedItemUsage(input: {
   readonly sourceCallableSpecializations: RustSourceCallableSpecializationPlan;
   readonly declarationGenericRequirements: RustDeclarationGenericRequirementIndex;
   readonly typeDefinitions: RustTypeDefinitions;
+  readonly typeFamilies: RustSourceTypeFamilyPlan;
   readonly objectRepresentations: RustObjectRepresentationPlan;
   readonly projectMethodProperties: RustProjectMethodPropertyPlan;
   readonly projectFieldDispatch: RustProjectFieldDispatchQueries;
@@ -856,6 +858,31 @@ export function analyzeRustGeneratedItemUsage(input: {
         if (child !== undefined) pending.push({ node: child, insideTypeAlias });
       });
     }
+  }
+
+  for (const implementation of input.typeFamilies.implementations) {
+    const field = implementation.field;
+    if (field === undefined) continue;
+    const definition = input.projectTypes.definitionForCarrier(implementation.owner);
+    const declaration = definition === undefined ? undefined
+      : rustProjectObjectLayout(definition.declaration, input.ast)?.fields.find(candidate =>
+        candidate.storageIndex + (input.projectTypes.externalBaseForDefinition(definition)?.fields.length ?? 0) === field.storageIndex)?.declaration;
+    const subject = definition?.declaration ?? input.sourceFiles[0];
+    if (subject === undefined) throw new Error("An emitted indexed field has no owning source file.");
+    const dispatched = definition !== undefined && declaration !== undefined && input.projectTypes.isPolymorphic(definition);
+    const read = dispatched ? input.projectTypes.memberSlotName(declaration, "read") : undefined;
+    const write = dispatched ? input.projectTypes.memberSlotName(declaration, "write") : undefined;
+    if (dispatched && (read === undefined || write === undefined)) {
+      throw new Error("An emitted indexed field lost its exact native dispatch slots.");
+    }
+    visitFact(subject, {
+      kind: "source-field", operationId: "indexed-field-implementation", declaration,
+      receiverCarrier: implementation.owner, storage: field.storage, storageIndex: field.storageIndex,
+      resultCarrier: implementation.output, valueSemantics: { kind: "stored" },
+      accessMode: field.sharedWrite ? "read-write" : "read",
+      ...(read === undefined || write === undefined ? {}
+        : { dispatch: { read, write, ownerCarrier: implementation.owner } }),
+    });
   }
 
   for (const definition of input.projectTypes.definitions) {

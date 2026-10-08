@@ -30,8 +30,8 @@ export function planRustIndexedFieldLocation(
     context.input.program.facts.getFact(binding.sourceDeclaration, rustMutatedBindingFactKey) === undefined &&
     rustLocationStorageForReference(receiverNode!, context) === undefined;
   const receiver = stable ? direct : plannedReceiver;
-  const key = keyNode === undefined ? undefined : planExpression(keyNode, context);
-  if (receiver === undefined || key === undefined || keyNode === undefined) return undefined;
+  const key = keyNode === undefined ? rustIndexedPropertyKey(fact, context) : planExpression(keyNode, context);
+  if (receiver === undefined || key === undefined) return undefined;
   const receiverName = allocateRustSyntheticName(context.syntheticNames, "field_owner");
   const keyName = allocateRustSyntheticName(context.syntheticNames, "field_key");
   const owner: RustExpr = stable ? receiver : { kind: "path", path: receiverName };
@@ -41,7 +41,7 @@ export function planRustIndexedFieldLocation(
   return {
     bindings: [
       ...(stable ? [] : [{ name: receiverName, value: receiver }]),
-      { name: keyName, value: planRustSharedReceiver(keyNode, key, context) },
+      { name: keyName, value: keyNode === undefined ? { kind: "reference", expr: key } : planRustSharedReceiver(keyNode, key, context) },
     ], read,
     write: value => access !== "write" ? undefined : planRustIndexedFieldCall(fact,
       { kind: "reference", expr: owner }, keyReference, value, context),
@@ -53,10 +53,16 @@ export function planRustIndexedFieldRead(node: Node, fact: RustIndexedFieldOpera
   const receiverNode = Node_Expression(ast, node);
   const keyNode = ElementAccessExpression_ArgumentExpression(ast, node);
   const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
-  const key = keyNode === undefined ? undefined : planExpression(keyNode, context);
-  if (receiverNode === undefined || receiver === undefined || keyNode === undefined || key === undefined) return undefined;
+  const key = keyNode === undefined ? rustIndexedPropertyKey(fact, context) : planExpression(keyNode, context);
+  if (receiverNode === undefined || receiver === undefined || key === undefined) return undefined;
   return planRustIndexedFieldCall(fact, planRustSharedReceiver(receiverNode, receiver, context),
-    planRustSharedReceiver(keyNode, key, context), undefined, context);
+    keyNode === undefined ? { kind: "reference", expr: key } : planRustSharedReceiver(keyNode, key, context), undefined, context);
+}
+
+function rustIndexedPropertyKey(fact: RustIndexedFieldOperation, context: RustPlanContext): RustExpr | undefined {
+  const type = rustTypeFromCarrierInContext(fact.keyCarrier, context);
+  return type?.kind !== "named" ? undefined : { kind: "path", path: type.path,
+    genericArguments: type.genericArguments?.filter(argument => argument.kind === "type" || argument.kind === "const") };
 }
 
 export function planRustIndexedFieldCall(

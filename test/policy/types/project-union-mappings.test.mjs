@@ -229,7 +229,8 @@ test("nominal union liveness reuses exact upcast fields and retains every nested
       definitionForCarrier: carrier => classes.find(definition => rustTargetTypeRefEquals(definition.carrier, carrier)) },
     classValues: { instanceViews: [], instanceViewFor: () => undefined }, declarationGenericRequirements: { projectionImplementationsFor: () => [] },
     typeDefinitions: definitions,
-    structuralShapes: { unionForCarrier: () => undefined },
+    typeFamilies: { implementations: [] },
+    structuralShapes: { unionForCarrier: () => undefined, definitionForCarrier: () => undefined },
   });
   for (const arm of conversion.arms) {
     for (const step of [...arm.source, ...arm.target]) {
