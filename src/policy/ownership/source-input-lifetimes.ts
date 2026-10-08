@@ -13,14 +13,13 @@ export function rustSourceInputLifetime(
   if (!ast.is.IsParameterDeclaration(parameter) || owner === undefined ||
     !ast.is.IsFunctionDeclaration(owner) ||
     !ast.hasModifierKind(owner, "async") && context.semanticsFor(owner).operations.generator(owner) === undefined) return undefined;
-  const identity = sourceNodeIdentity(ast, parameter);
-  const index = ast.parameters(owner).indexOf(parameter);
-  if (identity === undefined || index < 0) return undefined;
+  const identity = sourceNodeIdentity(ast, owner);
+  if (identity === undefined || !ast.parameters(owner).includes(parameter)) return undefined;
   const names = new Set<string>();
   for (let enclosing: Node | undefined = owner; enclosing !== undefined; enclosing = ast.parent(enclosing)) {
     for (const selected of context.sourceLifetimes.contractFor(enclosing)?.parameters ?? [])
       if (selected.kind === "lifetime") names.add(selected.lifetime.name);
   }
   return Object.freeze({ kind: "parameter", identity: `source-input-borrow\0${identity}`,
-    name: allocateRustGeneratedName(names, `input${index}`) });
+    name: allocateRustGeneratedName(names, "input") });
 }

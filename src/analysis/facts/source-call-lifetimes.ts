@@ -46,7 +46,11 @@ export function rustSourceCallResultWithInputLifetimes(
     const actual = inputs.filter(input => input.parameterIndex === index);
     if (actual.length !== 1 || !rustCallableInputMatches(actual[0]!.carrier, parameter)) continue;
     const carrier = actual[0]!.carrier;
-    inferred.set(rustLifetimeKey(lifetime), carrier.kind === "reference" ? carrier.lifetime ?? rustPlaceholderLifetime : rustPlaceholderLifetime);
+    const identity = rustLifetimeKey(lifetime);
+    const candidate = carrier.kind === "reference" ? carrier.lifetime ?? rustPlaceholderLifetime : rustPlaceholderLifetime;
+    const previous = inferred.get(identity);
+    inferred.set(identity, previous === undefined || rustLifetimesEqual(previous, candidate) || previous.kind === "static"
+      ? candidate : candidate.kind === "static" ? previous : rustPlaceholderLifetime);
   }
   return instantiateRustElidedCallResult(substituteRustTargetGenerics(result, new Map(), inferred), parameters, inputs);
 }

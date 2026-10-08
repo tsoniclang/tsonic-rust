@@ -139,3 +139,21 @@ test("sealed callback input results reject deleted, foreign and payload-mutated 
   assert.equal(matches(fact, rustCallableTargetType([number], promise(owned))), false);
   assert.equal(matches(fact, callback, { ...selected, sourceArgumentBindings: [] }), false);
 });
+
+test("shared suspended callback input loans account for every actual reference in either order", () => {
+  const number = rustSourcePrimitiveTargetType("float64");
+  const parameter = rustCallableInputTargetType([], promise(owned, number), borrowed);
+  const other = { kind: "parameter", identity: "scope::other", name: "other" };
+  const actual = lifetime => ({ ...parameter, lifetime });
+  const callback = rustCallableTargetType([], promise(owned, number));
+  const bindings = [0, 1].map(index => ({ sourceArgumentIndex: index, sourceParameterIndex: index,
+    sourceForm: "value", sourceParameterForm: "required" }));
+  const instantiate = inputs => rustSourceCallResultWithInputLifetimes(promise(borrowed, number),
+    [parameter, parameter], bindings, inputs, [{ inputLifetime: borrowed }, { inputLifetime: borrowed }]);
+  for (const [left, right, expected] of [[actual(owned), actual(borrowed), borrowed],
+    [actual(borrowed), actual(borrowed), borrowed], [actual(owned), actual(owned), owned],
+    [actual(borrowed), actual(other), inferred], [callback, actual(borrowed), inferred]]) {
+    assert.deepEqual(instantiate([left, right]), promise(expected, number));
+    assert.deepEqual(instantiate([right, left]), promise(expected, number));
+  }
+});

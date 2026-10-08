@@ -22,6 +22,12 @@ test("physical callback lifetimes come only from matching sealed parameter ABI e
   assert.equal(Object.isFrozen(contract), true);
   assert.equal(Object.isFrozen(contract[0]), true);
   assert.deepEqual(contract[0].outlives, []);
+  const otherParameter = {};
+  const sharedAst = { parameters: () => [parameter, otherParameter] };
+  const sharedFacts = { getFact: (node, key) => (node === parameter || node === otherParameter) &&
+    key === rustSourceParameterAbiFactKey ? selected : undefined };
+  assert.equal(rustCallableInputLifetimeParameters(owner, sharedAst, sharedFacts).length, 1,
+    "one shared physical lifetime contributes one native generic binder");
   for (const mutation of [undefined, { parameterCarrier: carrier },
     { parameterCarrier: integer, inputLifetime: lifetime },
     { parameterCarrier: { ...carrier, referent: integer }, inputLifetime: lifetime },
