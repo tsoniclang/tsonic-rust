@@ -37,7 +37,7 @@ export function drive(): int32 {
 }
 `;
 
-test("classes lower to reference-backed object wrappers with fact-backed members", () => {
+test("classes lower to reference-backed object wrappers with fact-backed members", { timeout: 300_000 }, () => {
   const { result } = compileRust({ files: { "index.ts": counterSource } });
 
   assert.deepEqual(result.diagnostics, []);
@@ -58,18 +58,19 @@ test("classes lower to reference-backed object wrappers with fact-backed members
   assert.doesNotMatch(text, /derive\([^\n]*Copy/u);
   assert.match(text, /impl Counter \{/u);
   assert.match(text, /let field_value: i32 = value;/u);
-  assert.match(text, /pub fn initialize_state\(value: i32\) -> CounterState/u);
-  assert.match(text, /state: rt::ObjectState::new\(state\)/u);
+  assert.match(text, /impl CounterState \{\s*#\[doc\(hidden\)\]\s*#\[inline\(always\)\]\s*pub fn new\(value: i32\) -> CounterState/u);
+  assert.match(text, /state: rt::ObjectState::new\(CounterState::new\(field_value\)\)/u);
   assert.match(text, /fn exact_counter_add/u);
   assert.match(
     text,
-    /let mut current = receiver\.dispatch\.read_counter_value\(\);\s+let value_2 = delta;\s+\{\s+current \+= value_2;\s+\{\s+let dispatch_receiver = receiver;\s+dispatch_receiver\.dispatch\.write_counter_value\(current\)/u,
+    /let mut current = receiver\.dispatch\.read_counter_value\(\);\s+let value_2 = delta;\s+\{\s+current \+= value_2;\s+\{\s+let dispatch_receiver = &receiver;\s+dispatch_receiver\.dispatch\.write_counter_value\(current\)/u,
   );
   assert.match(text, /fn exact_counter_current/u);
   assert.match(text, /let counter: Counter = Counter::new\(10\);/u);
   assert.match(text, /dispatch_counter_add\(5\)/u);
   assert.match(text, /dispatch_counter_current\(\)/u);
   assert.doesNotMatch(text, /counter\.(?:add|current)\(/u);
+  validateGeneratedProject("counter-state-construction", result.artifacts);
 });
 
 test("value-class mutation propagates through exact this-receiver calls", { timeout: 300_000 }, () => {
@@ -450,7 +451,7 @@ export class Initialized {
   assert.match(text, /let field_second: i32 = field_first;/u);
   assert.match(
     text,
-    /second: field_second/u,
+    /state: rt::ObjectState::new\(InitializedState::new\(field_first, field_second\)\)/u,
   );
 });
 

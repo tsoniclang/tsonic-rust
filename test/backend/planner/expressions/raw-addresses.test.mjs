@@ -76,7 +76,7 @@ export function main(): void {
   });
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
-  assert.match(output, /usize as u128/u);
+  assert.match(output, /rt::conversions::checked_integer::<u64>\(12usize\)\? as u128/u);
   assert.doesNotMatch(output, /as f64/u);
   validateGeneratedProject("layout-query-raw-offsets", result.artifacts, { run: true });
 });

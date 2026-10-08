@@ -31,7 +31,7 @@ export function preserve(
   validateGeneratedProject("callable-native-pointer", result.artifacts);
 });
 
-test("ordinary callable parameters use one fallible first-class callable ABI", { timeout: 300_000 }, () => {
+test("ordinary callable parameters borrow one fallible implementation ABI", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName: "callable_value" } },
@@ -54,8 +54,8 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /rt::Callable<\(i32,\), rt::TsonicResult<i32>>/u);
-  assert.match(source, /action\.call\(\(value,\)\)/u);
+  assert.match(source, /action: &impl rt::CallableImplementation<\(i32,\), rt::TsonicResult<i32>>/u);
+  assert.match(source, /action\.invoke\(\(value,\)\)/u);
   validateGeneratedProject("callable-value", result.artifacts, { run: true });
 });
 
@@ -95,9 +95,10 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /fn invoke\([^)]*Callable<\(i32,\), rt::TsonicResult<i32>>[^)]*\) -> Result<i32, rt::TsonicError>/u);
-  assert.match(source, /action\.call\(\(value,\)\)/u);
-  assert.match(source, /rt::Callable::<\(i32,\), rt::TsonicResult<i32>>::new/u);
+  assert.match(source, /fn invoke\(\s*action: &impl rt::CallableImplementation<\(i32,\), rt::TsonicResult<i32>>,\s*value: i32,\s*\) -> Result<i32, rt::TsonicError>/u);
+  assert.match(source, /action\.invoke\(\(value,\)\)/u);
+  assert.match(source, /invoke\(\s*&\{\s*\|callable_arguments: \(i32,\)\| risky\(callable_arguments\.0\)\s*\}/u);
+  assert.doesNotMatch(source, /rt::Callable(?:::)?[^\n]*::new/u);
   validateGeneratedProject("callable-throw", result.artifacts, { run: true });
 });
 

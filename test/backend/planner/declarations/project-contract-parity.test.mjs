@@ -113,8 +113,8 @@ export function main(): void {
   const source = artifactText(result, "src/index.rs");
   assert.equal(source.match(/fn combine\s*\(/gu)?.length ?? 0, 1);
   assert.equal(source.match(/fn total\s*\(/gu)?.length ?? 0, 1);
-  assert.match(source, /let field_copied: String = base_state\.label\.clone\(\);/u);
-  assert.match(source, /let field_second: i32 = base_state\.first \+ 2;/u);
+  assert.match(source, /let field_copied: String = field_label\.clone\(\);/u);
+  assert.match(source, /let field_second: i32 = field_first \+ 2;/u);
   assert.match(source, /fn letter\(\) -> u16 \{\s*65\s*\}/u);
   assert.match(source, /fn signedMaximum\(\) -> i128/u);
   assert.match(source, /fn signedMinimum\(\) -> i128/u);
@@ -188,7 +188,7 @@ export function main(): void {
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /let mut field_total: i32 = initial;/u);
   assert.match(source, /field_total \+= index;/u);
-  assert.match(source, /let doubled: i32 = base_state\.value \* 2;/u);
+  assert.match(source, /let doubled: i32 = field_value \* 2;/u);
 
   const run = validateGeneratedProject("constructor-control-flow", result.artifacts, { run: true });
   assert.equal(run.status, 0);
@@ -248,9 +248,10 @@ export class Invalid {
   });
 
   assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.some(({ code, message }) =>
-    code === "RUST_UNSUPPORTED_AST" &&
-    message.includes("already-initialized field selected by finalized TSTS property evidence")));
+  assert.deepEqual(result.diagnostics.map(({ code, message }) => ({ code, message })), [{
+    code: "RUST_UNSUPPORTED_AST",
+    message: "A native receiver cannot be published before every physical field has been definitely initialized. Node kind: KindCallExpression.",
+  }]);
 });
 
 test("neutral UTF-16 char does not silently use integer stringification", () => {

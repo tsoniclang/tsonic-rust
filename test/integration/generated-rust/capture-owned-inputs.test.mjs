@@ -97,7 +97,7 @@ function verifyNativeCaptureOwnership(edition) {
   assert.match(output, /core::cell::Cell::new/u);
   assert.match(output, /core::cell::RefCell::new/u);
   assert.doesNotMatch(output, /Location::allocate|capture_seed\w* = seed\.clone\(\)/u);
-  assert.match(output, /let borrowed = capture_seed\.borrow\(\);\s*borrowed\.clone\(\)/u);
+  assert.match(output, /let owner = &capture_seed;\s*let borrowed = owner\.borrow\(\);\s*borrowed\.clone\(\)/u);
   assert.doesNotMatch(output, /let_and_return/u);
   const root = writeGeneratedProject(`capture-owned-inputs-${edition}`, result.artifacts);
   mkdirSync(join(root, "tests"), { recursive: true });

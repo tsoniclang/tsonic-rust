@@ -7,6 +7,7 @@ import type {
 } from "../../target-model/facts/selections.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { isRustOptionCarrier, rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
+import { rustCompilerOwnedContextualConversionMatches, type RustContextualValueConversion } from "../../target-model/conversions/contextual.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type {
   RustAppliedValueCarrierReconciliation,
@@ -114,6 +115,18 @@ export function rustEffectiveValueCarrier(
 ): TargetTypeRef | undefined {
   return facts.getFact(subject, rustOptionProjectionFactKey)?.resultCarrier ??
     rustValueCarrierBeforeOptionProjection(facts, subject);
+}
+
+export function rustValueReferenceReborrow(
+  facts: RustPlanQueries,
+  subject: ExtensionFactSubject | undefined,
+  definitions: RustTypeDefinitions,
+): Extract<RustContextualValueConversion, { readonly kind: "reference-reborrow" }> | undefined {
+  const fact = facts.getFact(subject, rustContextualValueConversionFactKey);
+  const conversion = fact?.conversion;
+  return fact !== undefined && conversion?.kind === "reference-reborrow" &&
+    rustCompilerOwnedContextualConversionMatches(fact.sourceCarrier, fact.targetCarrier, conversion, definitions)
+    ? conversion : undefined;
 }
 
 export function rustStrictEqualityOperandCarrier(

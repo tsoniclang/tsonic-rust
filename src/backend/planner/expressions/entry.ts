@@ -45,7 +45,7 @@ import { rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "
 import { rustSelectedAccessorRequiresUnsafe, rustSelectedCallRequiresUnsafe, tryPlanRustExplicitSafetyExpression } from "../safety/explicit-safety.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext, rustUnionTypePathInContext } from "../types/render.js";
-import { rustValueCarrierBeforeContextualConversion, rustProjectUpcastSourceMatches } from "../../../analysis/facts/value-carrier-queries.js";
+import { rustValueCarrierBeforeContextualConversion, rustProjectUpcastSourceMatches, rustValueReferenceReborrow } from "../../../analysis/facts/value-carrier-queries.js";
 import { rustCompilerOwnedContextualConversionMatches, rustContextualRuntimeConversionContract } from "../../../target-model/conversions/contextual.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import { tryPlanRustNativePointerOperation } from "./native-pointers.js";
@@ -145,10 +145,13 @@ function planProjectedExpression(
       context.input.program.typeDefinitions)?.sourceMode === "ref" ||
       contextualConversion.conversion.kind === "project-union-map" && !context.input.program.valueLifetimes.canMove(node));
   let borrowedFlowApplied = false;
+  const referenceReborrow = rustValueReferenceReborrow(context.input.program.facts, node,
+    context.input.program.typeDefinitions);
   const finish = (value: RustExpr): RustExpr => access === "shared-receiver" ? planRustNonConsumingValue(node, value, context)
     : access === "shared-place"
     ? borrowedFlowApplied ? { kind: "dereference", pointer: value } : planRustNonConsumingValue(node, value, context)
-    : access !== "shared-reference" || borrowFlow ? value
+    : access !== "shared-reference" || borrowFlow || projection === undefined &&
+      referenceReborrow !== undefined && rustTargetTypeRefEquals(referenceReborrow.target, currentCarrier) ? value
       : createRustSharedReferenceArgument(context, planRustNonConsumingValue(node, value, context), node);
   let currentCarrier = override?.carrier ??
     flowRead?.sourceCarrier ??

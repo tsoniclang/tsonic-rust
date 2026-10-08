@@ -1,14 +1,13 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustFinalizedSourceInput } from "../../../analysis/facts/finalized-operation-abi.js";
 import {
-  rustContextualValueConversionFactKey,
   rustSourceParameterAbiFactKey,
   type RustArgumentMode,
   type RustSourceParameterAbiFact,
 } from "../../../analysis/facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { isRustStringCarrier } from "../../../target-model/types/index.js";
-import { rustCompilerOwnedContextualConversionMatches } from "../../../target-model/conversions/contextual.js";
+import { rustValueReferenceReborrow } from "../../../analysis/facts/value-carrier-queries.js";
 import { rustBorrowedStringView } from "../../target-ast/expressions.js";
 import type { RustExpr } from "../../target-ast/nodes.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
@@ -112,17 +111,9 @@ function sourceReferenceReborrowMatches(
   sourceNode: Node,
   input: RustFinalizedSourceInput,
 ): boolean {
-  const fact = context.input.program.facts.getFact(
-    sourceNode,
-    rustContextualValueConversionFactKey,
-  );
-  const conversion = fact?.conversion;
-  return fact !== undefined && conversion?.kind === "reference-reborrow" &&
-    rustCompilerOwnedContextualConversionMatches(
-      fact.sourceCarrier,
-      fact.targetCarrier,
-      fact.conversion, context.input.program.typeDefinitions,
-    ) &&
+  const conversion = rustValueReferenceReborrow(context.input.program.facts, sourceNode,
+    context.input.program.typeDefinitions);
+  return conversion !== undefined &&
     rustTargetTypeRefEquals(conversion.target, input.sourceCarrier) &&
     (input.mode === "ref" || input.mode === "mut-ref" && conversion.source.mutable);
 }

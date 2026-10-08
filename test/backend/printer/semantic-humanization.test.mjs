@@ -117,7 +117,7 @@ export const retained = [selected];
   assert.match(output, /pub static SELECTED_CALLABLE/u);
   assert.match(output, /pub fn selected/u);
   assert.doesNotMatch(output, /#\[doc\(hidden\)\]\npub(?:\(crate\))? fn selected/u);
-  assert.match(output, /invoke\(SELECTED_CALLABLE\.with\(\|module_binding\| module_binding\.load\(\)\)\)/u);
+  assert.match(output, /invoke\(&SELECTED_CALLABLE\.with\(\|module_binding\| module_binding\.load\(\)\)\)/u);
   validateGeneratedProject("observed-module-callable", result.artifacts);
 });
 

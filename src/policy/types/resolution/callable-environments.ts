@@ -6,6 +6,7 @@ import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions }
 import { resolveRustTargetType } from "./target.js";
 import { rustSourceTypeParameter } from "../../../target-model/names/type-parameters.js";
 import { substituteRustTargetTypeParameters } from "../../../target-model/types/carriers/substitution.js";
+import { rustCompileTimeSourceKey } from "../../../target-model/facts/source-declarations.js";
 
 export function resolveRustCallableEnvironment(
   declaration: Node | undefined,
@@ -23,7 +24,8 @@ export function resolveRustCallableEnvironment(
   const lexical = sourceLexicalEnvironment(declaration, roots, context.ast, context.source.navigation);
   if (lexical.kind === "unresolved") return undefined;
   const parameters = new Map<string, Extract<TargetTypeRef, { readonly kind: "type-parameter" }>>();
-  for (const reference of [...lexical.captures.filter(capture => !excludedCaptures.has(capture.declaration))
+  for (const reference of [...lexical.captures.filter(capture => !excludedCaptures.has(capture.declaration) &&
+    context.facts.getFact(capture.declaration, rustCompileTimeSourceKey) !== true)
     .flatMap(capture => capture.references.slice(0, 1)),
     ...lexical.receivers.filter(receiver => !excludedCaptures.has(receiver.owner))
       .flatMap(receiver => receiver.references.slice(0, 1))]) {

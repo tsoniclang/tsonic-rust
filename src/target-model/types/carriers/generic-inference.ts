@@ -1,4 +1,7 @@
-import { isDenseDataArray } from "../../metadata/closed-data.js";
+import { isDenseDataArray, closedMetadataEquals } from "../../metadata/closed-data.js";
+import { rustGenericCallableValue } from "./generic-callables.js";
+import { rustFrameCallableValue } from "./frame-callables.js";
+import type { RustCallableSignatureBinding } from "./callable-signatures.js";
 import { rustClassConstructorContract, rustClassConstructorFreeArguments } from "./class-constructors.js";
 import {
   rustFixedArrayCarrierValue,
@@ -105,6 +108,16 @@ export function inferRustTargetGenericBindings(
   return match(pattern, actual, emptyLifetimeInferenceContext)
     ? Object.freeze({ types, lifetimes, consts })
     : undefined;
+
+  function matchCallableEnvironment(
+    left: RustCallableSignatureBinding,
+    right: RustCallableSignatureBinding,
+    context: LifetimeInferenceContext,
+  ): boolean {
+    return closedMetadataEquals(left.signature, right.signature) &&
+      left.environment.length === right.environment.length &&
+      left.environment.every((argument, index) => match(argument, right.environment[index]!, context));
+  }
 
   function matchLifetime(
     left: RustLifetimeRef | undefined,
@@ -343,6 +356,23 @@ export function inferRustTargetGenericBindings(
             matchGenericArguments(rustClassConstructorFreeArguments(left)!, rustClassConstructorFreeArguments(right)!,
               (pattern, actual) => match(pattern, actual, lifetimeContext),
               (pattern, actual) => matchLifetime(pattern, actual, lifetimeContext), matchConst);
+        }
+        const leftCallable = rustGenericCallableValue(left);
+        const rightCallable = rustGenericCallableValue(right);
+        if (leftCallable !== undefined || rightCallable !== undefined) {
+          return leftCallable !== undefined && rightCallable !== undefined &&
+            closedMetadataEquals(leftCallable.origin, rightCallable.origin) &&
+            matchCallableEnvironment(leftCallable, rightCallable, lifetimeContext);
+        }
+        const leftFrame = rustFrameCallableValue(left);
+        const rightFrame = rustFrameCallableValue(right);
+        if (leftFrame !== undefined || rightFrame !== undefined) {
+          return leftFrame !== undefined && rightFrame !== undefined &&
+            leftFrame.owner.kind === rightFrame.owner.kind &&
+            closedMetadataEquals(leftFrame.owner.origin, rightFrame.owner.origin) &&
+            (leftFrame.owner.kind !== "class" || rightFrame.owner.kind === "class" &&
+              match(leftFrame.owner.instance, rightFrame.owner.instance, lifetimeContext)) &&
+            matchCallableEnvironment(leftFrame, rightFrame, lifetimeContext);
         }
         const leftSource = rustSourceTypeCarrierValue(left);
         const rightSource = rustSourceTypeCarrierValue(right);

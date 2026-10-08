@@ -172,7 +172,8 @@ export function isNotEmpty(text: string): boolean {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /format!\("\{\}\{\}", String::from\("hello "\), name\)/u);
+  assert.match(text, /\["hello ", core::convert::AsRef::<str>::as_ref\(&name\)\]\.concat\(\)/u);
+  assert.doesNotMatch(text, /format!|String::from\("hello "\)/u);
   assert.match(text, /text\.is_empty\(\)/u);
   assert.match(text, /!text\.is_empty\(\)/u);
   assert.doesNotMatch(text, /(?:==|!=) ""/u);
@@ -244,9 +245,9 @@ export function explicitUnitReturn(): void {
   assert.match(text, /value\s*\.partial_cmp\(&10\.0\)\s*\.is_none_or\(\|ordering\| ordering == core::cmp::Ordering::Greater\)/u);
   assert.match(text, /value\s*\.partial_cmp\(&10\.0\)\s*\.is_none_or\(\|ordering\| ordering != core::cmp::Ordering::Greater\)/u);
   assert.match(text, /value\s*\.partial_cmp\(&10\.0\)\s*\.is_none_or\(\|ordering\| ordering == core::cmp::Ordering::Less\)/u);
-  assert.match(text, /format!\("\{\}\{\}\{\}", left, String::from\("\/"\), right\)/u);
+  assert.match(text, /\[\s*core::convert::AsRef::<str>::as_ref\(&left\),\s*"\/",\s*core::convert::AsRef::<str>::as_ref\(&right\),\s*\]\s*\.concat\(\)/u);
   assert.match(text, /pub fn explicitUnitReturn\(\) \{\}/u);
-  assert.doesNotMatch(text, /format!\([^\n]*format!/u);
+  assert.doesNotMatch(text, /format!|String::from\("\/"\)/u);
 });
 
 test("module imports and exports lower to crate-qualified calls", () => {
