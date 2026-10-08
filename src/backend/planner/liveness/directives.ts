@@ -4,7 +4,7 @@ import type { RustDeadCodeDisposition } from "../../target-ast/nodes.js";
 import type {
   RustDispatchMemberRole,
   RustGeneratedProjectFieldRole,
-} from "./generated-item-usage.js";
+} from "./generated-item-usage-model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 interface RustLivenessPlanningContext {

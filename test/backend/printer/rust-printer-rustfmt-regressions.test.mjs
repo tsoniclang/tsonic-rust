@@ -23,7 +23,7 @@ test("rustfmt-stable calls, closures, conditionals, and borrowed fallible chains
           type: { kind: "string" },
           init: {
             kind: "call",
-            path: "rt::option_coalesce",
+            path: "fixture::coalesce",
             args: [{
               kind: "method-call",
               receiver: { kind: "path", path: "label" },
@@ -69,7 +69,7 @@ test("rustfmt-stable calls, closures, conditionals, and borrowed fallible chains
               expression: { kind: "str-literal", value: ":" },
             }, {
               kind: "call",
-              path: "rt::option_coalesce",
+              path: "fixture::coalesce",
               args: [{
                 kind: "field",
                 receiver: {
@@ -142,7 +142,7 @@ test("rustfmt-stable calls, closures, conditionals, and borrowed fallible chains
           kind: "expr",
           expr: {
             kind: "call",
-            path: "rt::option_coalesce",
+            path: "fixture::coalesce",
             args: [{
               kind: "method-call",
               receiver: { kind: "path", path: "value" },
@@ -227,7 +227,7 @@ test("rustfmt-stable calls, closures, conditionals, and borrowed fallible chains
 
   assert.match(
     source,
-    /let field_label: String = rt::option_coalesce\(label\.clone\(\), std::convert::identity, \|\| \{\n {8}String::from\("none"\)\n {4}\}\);/u,
+    /let field_label: String = fixture::coalesce\(label\.clone\(\), std::convert::identity, \|\| \{\n {8}String::from\("none"\)\n {4}\}\);/u,
   );
   assert.match(
     source,
@@ -235,13 +235,13 @@ test("rustfmt-stable calls, closures, conditionals, and borrowed fallible chains
   );
   assert.match(
     source,
-    /rt::option_coalesce\(\n {12}values\.clone\(\)\.1,\n {12}std::convert::identity,\n {12}\|\| String::from\("none"\),\n {8}\)\)/u,
+    /fixture::coalesce\(\n {12}values\.clone\(\)\.1,\n {12}std::convert::identity,\n {12}\|\| String::from\("none"\),\n {8}\)\)/u,
   );
   assert.match(source, /rt::source_string\(&callable\.call\(\(\n/u);
   assert.doesNotMatch(source, /rt::source_string\(&callable\n {8}\.call/u);
   assert.match(
     source,
-    /rt::option_coalesce\(value\.with\(\|state\| state\.id\), Ok, \|\| \{\n {8}tsonic_rust_runtime::conversions::f64_to_i32\(0\.0\)\n {4}\}\);/u,
+    /fixture::coalesce\(value\.with\(\|state\| state\.id\), Ok, \|\| \{\n {8}tsonic_rust_runtime::conversions::f64_to_i32\(0\.0\)\n {4}\}\);/u,
   );
   assert.match(
     source,

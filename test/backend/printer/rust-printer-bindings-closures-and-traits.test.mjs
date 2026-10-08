@@ -121,7 +121,7 @@ test("typed let bindings keep expanded ordinary calls attached", () => {
           type: { kind: "primitive", name: "f64" },
           init: {
             kind: "call",
-            path: "rt::option_coalesce",
+            path: "fixture::coalesce",
             args: [{
               kind: "call",
               path: "js_string::code_point_at",
@@ -145,7 +145,7 @@ test("typed let bindings keep expanded ordinary calls attached", () => {
 
   assert.match(
     source,
-    /let point: f64 = rt::option_coalesce\(\n {8}js_string::code_point_at\(&text, 0\.0\),\n {8}std::convert::identity,\n {8}\|\| 0\.0,\n {4}\);/u,
+    /let point: f64 = fixture::coalesce\(\n {8}js_string::code_point_at\(&text, 0\.0\),\n {8}std::convert::identity,\n {8}\|\| 0\.0,\n {4}\);/u,
   );
 });
 

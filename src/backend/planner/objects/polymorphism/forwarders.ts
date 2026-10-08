@@ -23,6 +23,7 @@ import { rustSourceTypeCarrierValue } from "../../../../target-model/types/index
 import { emptyRustGenerics } from "../../../target-ast/nodes.js";
 import { rustSelfParameter } from "../../declarations/callables/self-parameter.js";
 import { planRootCallableForwarder } from "./callable-adapters.js";
+import { rustProjectThisReferences } from "./this-references.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustEffectiveExpressionOverride, RustPlanContext } from "../../program/plan-context.js";
 import type { RustExpr, RustImplFunction, RustType } from "../../../target-ast/nodes.js";
@@ -482,28 +483,15 @@ function projectThisOverrides(
   if (wrapperPath === undefined || dispatchType === undefined) {
     return { overrides };
   }
-  const visit = (node: Node): void => {
-    const kind = context.input.program.source.ast.kindName(node);
-    if (kind === "KindThisExpression" || kind === "KindThisKeyword") {
-      const selected = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
-      const selectedDefinition = context.input.program.projectTypes.definitionForCarrier(selected);
-      const ownerDefinition = context.input.program.projectTypes.definitionForCarrier(ownerCarrier);
-      if (selectedDefinition === ownerDefinition) {
-        overrides.set(node, {
-          carrier: ownerCarrier,
-          valueForm: "value",
-          expression: cloneExpression({ kind: "path", path: bindingName }),
-        });
-      }
-      return;
-    }
-    context.input.program.source.ast.forEachChild(node, (child) => {
-      if (child !== undefined) {
-        visit(child);
-      }
+  const program = context.input.program;
+  for (const node of rustProjectThisReferences(method, ownerCarrier, program.source.ast,
+    program.facts, program.projectTypes)) {
+    overrides.set(node, {
+      carrier: ownerCarrier,
+      valueForm: "value",
+      expression: cloneExpression({ kind: "path", path: bindingName }),
     });
-  };
-  visit(method);
+  }
   return overrides.size === 0
     ? { overrides }
     : {

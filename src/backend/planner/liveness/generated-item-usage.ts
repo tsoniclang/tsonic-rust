@@ -1,14 +1,7 @@
-import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
-import type { RustSourceTypeFamilyPlan } from "../../../target-model/types/type-families.js";
-import type { RustStructuralShapePlan } from "../../../analysis/objects/structural-shape-plan.js";
 import { rustRecordFinalFieldContributions, rustRecordSpreadRetainsField, rustRecordSpreadReadIsObservable } from "../objects/record-contributions.js";
 import { rustObjectReferenceViewKey } from "../../../analysis/facts/object-reference-views.js";
 import { rustPropertyProjectionFactKey } from "../../../analysis/facts/property-projections.js";
-import type { RustClassValuePlan } from "../../../analysis/objects/class-values.js";
-import type { RustSourceCallableSpecializationPlan } from "../../../analysis/callables/specializations.js";
-import type { RustDeclarationGenericRequirementIndex } from "../../../analysis/declarations/generic-requirements.js";
-import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
-import type { TargetPlanningSourceNavigation } from "@tsonic/target-api/analysis";
+import type { Node } from "@tsonic/tsts";
 import { Node_Expression } from "@tsonic/target-api/source";
 import {
   rustFlowReadProjectionFactKey,
@@ -35,12 +28,8 @@ import type {
   RustFinalizedTargetInput,
   RustFinalizedValueConversion,
 } from "../../../analysis/facts/finalized-operation-abi.js";
-import type { RustProjectMethodPropertyPlan } from "../../../analysis/project-types/method-properties.js";
-import type { RustProjectFieldDispatchQueries } from "../../../analysis/project-types/field-dispatch.js";
-import type { RustObjectRepresentationPlan } from "../../../analysis/project-types/object-representation.js";
 import { rustProjectObjectLayout } from "../../../analysis/project-types/object-layout.js";
 import type { RustProjectTypeDefinition } from "../../../analysis/project-types/type-policy.js";
-import type { RustProjectTypePolicy } from "../../../analysis/project-types/type-policy.js";
 import {
   rustValueConversionContract,
 } from "../../../target-model/conversions/contracts.js";
@@ -48,12 +37,12 @@ import type { RustValueConversion } from "../../../target-model/operations/model
 import type { RustCallableConversion } from "../../../target-model/conversions/callable.js";
 import type { RustClosedTypeTestPlan } from "../../../target-model/operations/type-tests.js";
 import { rustClosedTypeTestConstant } from "../../../target-model/operations/type-tests.js";
-import type { RustPlanQueries } from "../../../target-model/facts/selections.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustProjectProjectionSelection } from "../../../target-model/types/project-projections.js";
 import type { RustProjectUpcastFact } from "../../../target-model/types/value-projections.js";
 import { rustOptionElementCarrier, rustSourceUnionCarrierValue, rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
 import { rustTargetTypeChildren } from "../../../target-model/types/carriers/children.js";
+import { rustProjectRootThisCarrier } from "../objects/polymorphism/this-references.js";
 import {
   isRustPreconstructionThisOperation,
   isRustArrayFieldContentAssignment,
@@ -63,67 +52,15 @@ import {
   visitConversionContract,
 } from "./generated-item-usage-helpers.js";
 
-export type RustDispatchMemberRole =
-  | "read"
-  | "write"
-  | "capture"
-  | "content"
-  | "method-virtual"
-  | "method-exact";
+import type {
+  RustDispatchMemberRole,
+  RustGeneratedItemUsage,
+  RustGeneratedItemUsageInput,
+  RustGeneratedOperationAbi,
+  RustGeneratedProjectFieldRole,
+} from "./generated-item-usage-model.js";
 
-export type RustGeneratedProjectFieldRole =
-  | "wrapper-identity"
-  | "wrapper-dispatch"
-  | "wrapper-state"
-  | "base-state"
-  | "index-storage";
-
-export interface RustGeneratedItemUsage {
-  isProjectTypeUsed(declaration: Node): boolean;
-  isProjectTypeConstructed(declaration: Node): boolean;
-  isProjectTypeReified(declaration: Node): boolean;
-  isProjectConstructorInvoked(declaration: Node): boolean;
-  isAuthoredFieldRead(declaration: Node): boolean;
-  isProjectGeneratedFieldUsed(
-    declaration: Node,
-    role: RustGeneratedProjectFieldRole,
-  ): boolean;
-  isDispatchMemberUsed(declaration: Node, role: RustDispatchMemberRole): boolean;
-  isDowncastUsed(source: Node, target: Node): boolean;
-  isCheckedProjectionUsed(source: Node): boolean;
-  isStructuralFieldRead(carrier: TargetTypeRef, storageIndex: number): boolean;
-  isStructuralFieldWritten(carrier: TargetTypeRef, storageIndex: number): boolean;
-  isStructuralShapeConstructed(carrier: TargetTypeRef): boolean;
-  isStructuralShapeUsed(carrier: TargetTypeRef): boolean;
-  isVariantUsed(declaration: Node, variantName: string): boolean;
-  isUnionVariantUsed(carrier: TargetTypeRef, variantName: string): boolean;
-  isUnionVariantConstructed(carrier: TargetTypeRef, variantName: string): boolean;
-  isVariantPayloadRead(declaration: Node, variantName: string): boolean;
-  isUnionVariantPayloadRead(carrier: TargetTypeRef, variantName: string): boolean;
-}
-
-type RustOperationAbi = Extract<
-  RustTargetOperationFact,
-  { readonly kind: "provider-operation" | "runtime-set" }
->["abi"];
-
-export function analyzeRustGeneratedItemUsage(input: {
-  readonly ast: AstReader;
-  readonly sourceFiles: readonly SourceFile[];
-  readonly declarations: readonly Node[];
-  readonly facts: RustPlanQueries;
-  readonly projectTypes: RustProjectTypePolicy;
-  readonly classValues: RustClassValuePlan;
-  readonly sourceCallableSpecializations: RustSourceCallableSpecializationPlan;
-  readonly declarationGenericRequirements: RustDeclarationGenericRequirementIndex;
-  readonly typeDefinitions: RustTypeDefinitions;
-  readonly typeFamilies: RustSourceTypeFamilyPlan;
-  readonly objectRepresentations: RustObjectRepresentationPlan;
-  readonly projectMethodProperties: RustProjectMethodPropertyPlan;
-  readonly projectFieldDispatch: RustProjectFieldDispatchQueries;
-  readonly structuralShapes: RustStructuralShapePlan;
-  readonly navigation: TargetPlanningSourceNavigation;
-}): RustGeneratedItemUsage {
+export function analyzeRustGeneratedItemUsage(input: RustGeneratedItemUsageInput): RustGeneratedItemUsage {
   const storageOwnerKey = (carrier: TargetTypeRef): string => rustStructuralUsageKey(carrier, input.structuralShapes);
   const carriersByDeclaration = new Map<Node, string>();
   for (const declaration of input.declarations) {
@@ -522,7 +459,7 @@ export function analyzeRustGeneratedItemUsage(input: {
       targetInput.elements.forEach((element) => visitTargetInput(element.input));
     }
   };
-  const visitAbi = (abi: RustOperationAbi): void => {
+  const visitAbi = (abi: RustGeneratedOperationAbi): void => {
     if (abi.target.form === "arg-structural-method" &&
       abi.targetReceiver.kind === "input") {
       markStructuralFieldRead(
@@ -858,6 +795,11 @@ export function analyzeRustGeneratedItemUsage(input: {
         if (child !== undefined) pending.push({ node: child, insideTypeAlias });
       });
     }
+  }
+
+  for (const declaration of input.declarations) {
+    const carrier = rustProjectRootThisCarrier(declaration, input.ast, input.facts, input.projectTypes);
+    if (carrier !== undefined) markProjectTypeConstructed(carrier);
   }
 
   for (const implementation of input.typeFamilies.implementations) {

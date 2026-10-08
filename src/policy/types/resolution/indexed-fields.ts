@@ -39,15 +39,14 @@ export function resolveRustIndexedField(
 
 export function resolveRustIndexedProperty(
   ownerType: Type,
-  name: string,
+  selected: string | Symbol,
   context: RustTargetTypeResolutionContext,
   options: RustTargetTypeResolutionOptions,
   owner: TargetTypeRef,
-  selectedSymbol?: Symbol,
 ): { readonly key: TargetTypeRef; readonly projection: Extract<TargetTypeRef, { readonly kind: "associated-type" }>; readonly result: TargetTypeRef } | undefined {
   const properties = context.currentSemantics.types.propertyInfos(ownerType).filter(property =>
-    property.name === name && (selectedSymbol === undefined || property.symbol === selectedSymbol ||
-      property.rootSymbols.includes(selectedSymbol)));
+    typeof selected === "string" ? property.name === selected :
+      property.symbol === selected || property.rootSymbols.includes(selected));
   if (properties.length !== 1) return undefined;
   const property = properties[0]!;
   if (owner.kind !== "type-parameter") {

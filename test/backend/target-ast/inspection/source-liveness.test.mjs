@@ -54,3 +54,25 @@ test("terminal folding retains bindings required by temporary receiver, label an
   assert.equal(finalizeRustBlockLiveness(typed).statements.length, 2,
     "explicit type selection remains mandatory");
 });
+
+test("native absence predicates fold terminal defaults only with stable operands", () => {
+  const selected = { kind: "associated-call", owner: { kind: "named", path: "Stored" },
+    trait: { kind: "named", path: "OptionalStorage" }, method: "is_absent",
+    args: [{ kind: "reference", expr: input }] };
+  const owned = { kind: "call", path: "ClosedValue::from", args: [
+    { kind: "call", path: "String::from", args: [{ kind: "str-literal", value: "fallback" }] },
+  ] };
+  const expression = { kind: "conditional", condition: selected, whenTrue: owned, whenFalse: increment };
+  const normalized = finalizeRustBlockLiveness(block(expression));
+  assert.equal(normalized.statements.length, 1);
+  assert.equal(JSON.stringify(normalized.statements[0].expr) === JSON.stringify(expression), true,
+    "exact predicate and lazy branch effects are retained");
+  const guard = { kind: "method-call", receiver: owner, method: "borrow", args: [] };
+  const guarded = { ...expression, condition: { ...selected, args: [{ kind: "reference", expr: guard }] } };
+  assert.equal(finalizeRustBlockLiveness(block(guarded)).statements.length, 2,
+    "a temporary predicate argument retains its original drop scope");
+  const borrowed = { kind: "call", path: "read", args: [{ kind: "reference", expr: guard }] };
+  const temporary = { ...expression, whenTrue: { kind: "call", path: "retain", args: [borrowed] } };
+  assert.equal(finalizeRustBlockLiveness(block(temporary)).statements.length, 2,
+    "nested calls must not conceal a borrowed temporary argument");
+});

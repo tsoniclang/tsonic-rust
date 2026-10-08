@@ -12,9 +12,8 @@ import {
 import { rustBinaryEntryDeclaration } from "../program/entry-point.js";
 import type {
   RustDispatchMemberRole,
-  RustGeneratedItemUsage,
   RustGeneratedProjectFieldRole,
-} from "./generated-item-usage.js";
+} from "./generated-item-usage-model.js";
 
 export interface RustPlannerLiveness {
   isExternallyReachable(declaration: Node): boolean;
@@ -555,5 +554,3 @@ function deadComponentRoots(
   return new Set(components.flatMap((component, index) =>
     incoming[index] === 0 && component[0] !== undefined ? [component[0]] : []));
 }
-
-export type { RustGeneratedItemUsage };

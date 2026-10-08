@@ -227,11 +227,8 @@ export function selectRustCheckedPropertyAccess(
   if (record !== undefined) return record;
   if (selectedReceiverCarrier?.kind === "type-parameter" && request.sourceReceiverType !== undefined &&
     request.sourceSelectedSymbol !== undefined && request.accessMode !== "delete") {
-    const name = context.currentSemantics.types.propertyInfos(request.sourceReceiverType)
-      .find(property => property.symbol === request.sourceSelectedSymbol ||
-        property.rootSymbols.includes(request.sourceSelectedSymbol!))?.name;
-    const field = name === undefined ? undefined : resolveRustIndexedProperty(request.sourceReceiverType,
-      name, context, options, selectedReceiverCarrier, request.sourceSelectedSymbol);
+    const field = resolveRustIndexedProperty(request.sourceReceiverType,
+      request.sourceSelectedSymbol, context, options, selectedReceiverCarrier);
     if (field !== undefined) return acceptRustMemberOperation(request, "property", {
       kind: "source-indexed-field", operationId: sourceOperationId(context, request.expression, "indexed-field"),
       receiverCarrier: selectedReceiverCarrier, keyCarrier: field.key,

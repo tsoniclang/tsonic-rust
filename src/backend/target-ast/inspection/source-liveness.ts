@@ -75,7 +75,7 @@ function stableTerminalInputs(expression: RustExpr): boolean {
   }
   if (expression.kind === "match") return stableTerminalOperand(expression.expression) &&
     expression.arms.every(arm => stableTerminalInputs(arm.expression));
-  if (expression.kind === "conditional") return stableTerminalOperand(expression.condition) &&
+  if (expression.kind === "conditional") return stableTerminalInputs(expression.condition) &&
     stableTerminalInputs(expression.whenTrue) && stableTerminalInputs(expression.whenFalse);
   if (expression.kind === "evaluate-then") return stableTerminalInputs(expression.effect) &&
     stableTerminalInputs(expression.value);
@@ -83,7 +83,7 @@ function stableTerminalInputs(expression: RustExpr): boolean {
   if (deferred(expression)) return true;
   if (expression.kind === "call" || expression.kind === "associated-call" || expression.kind === "method-call") {
     return (expression.kind !== "method-call" || stableTerminalOperand(expression.receiver)) &&
-      expression.args.every(argument => deferred(argument) || stableTerminalOperand(argument));
+      expression.args.every(argument => stableTerminalInputs(argument));
   }
   return rustExpressionChildren(expression).every(stableTerminalOperand);
 }

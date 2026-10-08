@@ -4,7 +4,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import { nativePropertyProjectionSource, nativePropertyProjectionCostSource } from "../../../../tsonic/test/fixtures/native-property-projections.mjs";
-import { compileRust } from "../../helpers/rust-session.mjs";
+import { artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
 
@@ -19,6 +19,11 @@ test("native property projections preserve selected generic inherited getters an
   });
   assertNoTargetDiagnostics(result.diagnostics);
   assert.equal(result.artifacts.length > 0, true, "complete native artifacts are required");
+  const source = artifactText(result, "src/index.rs");
+  assert.equal(/let project_this = GenericOptions \{/u.test(source), true,
+    "the inherited getter retains its exact native owning wrapper");
+  assert.equal(/#\[expect\(dead_code, reason = "retains an unconstructed generated instance"\)\]\s*pub\(crate\) struct GenericOptions</u.test(source), false,
+    "a constructed native receiver must not claim a dead-code expectation");
   validateGeneratedProject("property-projections", result.artifacts, { run: true });
 });
 

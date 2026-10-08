@@ -220,5 +220,4 @@ const runtimeCoreExports = new Set([
   "native_shift_left",
   "native_shift_right",
   "native_unsigned_shift_right",
-  "option_coalesce",
 ]);

@@ -376,7 +376,7 @@ test("long calls on the left of comparisons expand before the operator", () => {
               operator: "==",
               left: {
                 kind: "call",
-                path: "rt::option_coalesce",
+                path: "fixture::coalesce",
                 args: [
                   {
                     kind: "try",
@@ -416,7 +416,7 @@ test("long calls on the left of comparisons expand before the operator", () => {
 
   assert.match(
     source,
-    /rt::option_coalesce\(\n {12}length\(Some\(String::from\("rust"\)\)\)\?,\n {12}std::convert::identity,\n {12}\|\| -1,\n {8}\) == 4,/u,
+    /fixture::coalesce\(\n {12}length\(Some\(String::from\("rust"\)\)\)\?,\n {12}std::convert::identity,\n {12}\|\| -1,\n {8}\) == 4,/u,
   );
 });
 
@@ -440,7 +440,7 @@ test("trailing closures expand to preserve comparison attachment", () => {
               operator: "==",
               left: {
                 kind: "call",
-                path: "rt::option_coalesce",
+                path: "fixture::coalesce",
                 args: [
                   {
                     kind: "method-call",
@@ -470,7 +470,7 @@ test("trailing closures expand to preserve comparison attachment", () => {
 
   assert.match(
     source,
-    /rt::option_coalesce\(parts\.get_number\(0\.0\), std::convert::identity, \|\| \{\n {12}String::from\(""\)\n {8}\}\) == "a",/u,
+    /fixture::coalesce\(parts\.get_number\(0\.0\), std::convert::identity, \|\| \{\n {12}String::from\(""\)\n {8}\}\) == "a",/u,
   );
 });
 
@@ -495,7 +495,7 @@ test("logical-chain operands keep fitted closures before nested comparison conti
               operator: "==",
               left: {
                 kind: "call",
-                path: "rt::option_coalesce",
+                path: "fixture::coalesce",
                 args: [
                   {
                     kind: "method-call",
@@ -525,7 +525,7 @@ test("logical-chain operands keep fitted closures before nested comparison conti
 
   assert.match(
     source,
-    /true && rt::option_coalesce\(parts\.get_number\(0\.0\), std::convert::identity, \|\| \{\n {8}String::from\(""\)\n {4}\}\) == "a";/u,
+    /true && fixture::coalesce\(parts\.get_number\(0\.0\), std::convert::identity, \|\| \{\n {8}String::from\(""\)\n {4}\}\) == "a";/u,
   );
 });
 
@@ -549,7 +549,7 @@ test("unary expressions expand long nested calls before outer attachment", () =>
               operator: "!",
               operand: {
                 kind: "call",
-                path: "rt::option_coalesce",
+                path: "fixture::coalesce",
                 args: [
                   { kind: "call", path: "includes", args: [{ kind: "path", path: "None" }] },
                   { kind: "path", path: "std::convert::identity" },
@@ -569,7 +569,7 @@ test("unary expressions expand long nested calls before outer attachment", () =>
 
   assert.match(
     source,
-    /acme_testing::check\(!rt::option_coalesce\(\n {8}includes\(None\),\n {8}std::convert::identity,\n {8}\|\| false,\n {4}\)\);/u,
+    /acme_testing::check\(!fixture::coalesce\(\n {8}includes\(None\),\n {8}std::convert::identity,\n {8}\|\| false,\n {4}\)\);/u,
   );
 });
 
@@ -1001,7 +1001,7 @@ test("expanded call arguments keep fitting optional closure chains attached", ()
           mutable: false,
           init: {
             kind: "call",
-            path: "rt::option_coalesce",
+            path: "fixture::coalesce",
             args: [{
               kind: "method-call",
               receiver: {
