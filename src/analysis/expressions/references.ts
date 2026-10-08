@@ -26,7 +26,6 @@ import {
 import {
   rustOptionElementCarrier,
   rustCallableProtocol,
-  rustCallableInputProtocol,
   rustCallableTargetType,
   rustNativeCallableProtocol,
   rustSourcePrimitiveTargetType,
@@ -52,7 +51,7 @@ import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js
 import { rustRuntimeCarrierKey, rustSelectedCallKey } from "../../target-model/facts/selections.js";
 import { resolveRustContextualParameterAbi, rustSourceParameterContractCarrier } from "../../policy/ownership/source-callable-abi.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { resolveRustDeclaredBindingStorage, resolveParameterAbi, tryFlowMarkerCall } from "../declarations/types-and-bindings.js";
+import { resolveRustDeclaredBindingStorage, tryFlowMarkerCall } from "../declarations/types-and-bindings.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustSelectedTargetSignature, TargetTypeRef } from "../../target-model/types/model.js";
@@ -643,10 +642,8 @@ function applySelectedRuntimeCallableCall(
       selected.parameterIndex === sourceParameterIndexes[index]);
     const declaration = asSourceNode(sourceParameter?.parameterDeclaration, walk.context.ast);
     const sourceAbi = declaration === undefined ? undefined
-      : rustCallableInputProtocol(carrier) !== undefined
-        ? resolveRustContextualParameterAbi(declaration, parameterCarrier,
-            rustResolutionContext(walk, declaration), walk.operationOptions)
-        : carrier.kind === "closure" ? resolveParameterAbi(walk, declaration) : undefined;
+      : resolveRustContextualParameterAbi(declaration, parameterCarrier,
+          rustResolutionContext(walk, declaration), walk.operationOptions);
     const borrowedAbi = sourceAbi !== undefined && form === "required" &&
       sourceAbi.mode !== "value" &&
       rustTargetTypeRefEquals(sourceAbi.parameterCarrier, parameterCarrier)
