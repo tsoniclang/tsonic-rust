@@ -46,7 +46,7 @@ export function probe(): string {
   assert.match(text, /h\.update_str_owned\("abc"\)\?/u);
   assert.match(text, /h\.digest_string\("hex"\)\?/u);
   assert.match(text, /rt::conversions::u32_to_i32\(tsonic_rust_node::process::pid\(\)\)\?/u);
-  assert.match(text, /rt::option_coalesce\(\s*tsonic_rust_node::process::environment\(\)\.get\("PATH"\),\s*core::convert::identity,/u);
+  assert.match(text, /tsonic_rust_node::process::environment\(\)\s*\.get\("PATH"\)\s*\.unwrap_or_default\(\)/u);
 });
 
 test("portable Node boundaries lower through exact selected provider evidence", async () => {
@@ -358,8 +358,8 @@ export function closeStreams(inputPath: string, outputPath: string): void {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn closeStreams\(inputPath: &str, outputPath: &str\)/u);
-  assert.match(text, /tsonic_rust_node::fs::create_read_stream\(dispatch_root, inputPath\)/u);
-  assert.match(text, /tsonic_rust_node::fs::create_write_stream\(dispatch_root_2, outputPath\)/u);
+  assert.match(text, /tsonic_rust_node::fs::create_read_stream\(\s*dispatch_root,\s*core::convert::AsRef::<str>::as_ref\(inputPath\),?\s*\)/u);
+  assert.match(text, /tsonic_rust_node::fs::create_write_stream\(\s*dispatch_root_2,\s*core::convert::AsRef::<str>::as_ref\(outputPath\),?\s*\)/u);
   assert.match(text, /readable\.close\(\)\?/u);
   assert.match(text, /writable\.close\(\)\?/u);
   validateGeneratedProject("r9-node-stream-constructors", result.artifacts);

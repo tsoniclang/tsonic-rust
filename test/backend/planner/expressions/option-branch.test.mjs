@@ -3,6 +3,50 @@ import test from "node:test";
 import { planRustOptionBranch } from "../../../../dist/backend/planner/expressions/option-branch.js";
 import { rustOptionTargetType } from "../../../../dist/target-model/types/carriers/optional.js";
 
+test("a native Option identity branch retains one unchanged input evaluation", () => {
+  const option = { kind: "call", path: "produce", args: [] };
+  const value = { kind: "path", path: "present" };
+  const present = { kind: "call", path: "Some", args: [value] };
+  const absent = { kind: "none" };
+  const carrier = rustOptionTargetType({ kind: "source-primitive", name: "int32" });
+  assert.equal(planRustOptionBranch(option, carrier, "present", present, absent, {}) === option, true,
+    "no second evaluation, wrapper, branch, conversion or mapping closure");
+  const owner = { kind: "named", path: "Option", genericArguments: [
+    { kind: "type", type: { kind: "primitive", name: "i32" } },
+  ] };
+  const typedAbsence = { kind: "associated-value", owner, name: "None" };
+  assert.equal(planRustOptionBranch(option, carrier, "present", present, typedAbsence, {}) === option, true,
+    "the exact selected native absence needs no identity match");
+  for (const changed of [
+    { ...typedAbsence, name: "Other" },
+    { ...typedAbsence, trait: { kind: "named", path: "OtherTrait" } },
+    { ...typedAbsence, owner: { kind: "named", path: "OtherOption", genericArguments: owner.genericArguments } },
+    { ...typedAbsence, owner: { ...owner, genericArguments: [
+      { kind: "type", type: { kind: "primitive", name: "i64" } },
+    ] } },
+  ]) {
+    const selected = planRustOptionBranch(option, carrier, "present", present, changed, {});
+    assert.equal(selected.kind, "match", "an unrelated selected absence is not identity");
+    assert.equal(selected.arms[1].expression === changed, true);
+  }
+  for (const changed of [
+    { ...present, path: "convert" },
+    { ...present, args: [{ kind: "path", path: "other" }] },
+    { ...present, args: [{ kind: "call", path: "convert", args: [value] }] },
+    { ...present, args: [value, value] },
+    { ...present, genericArguments: [{ kind: "type", type: { kind: "primitive", name: "i64" } }] },
+  ]) {
+    const selected = planRustOptionBranch(option, carrier, "present", changed, absent, {});
+    assert.equal(selected.kind, "match", "a different present operation is not identity");
+    assert.equal(selected.arms[0].expression === changed, true, "retain every conversion or effect");
+    assert.equal(selected.arms[1].expression === absent, true);
+  }
+  const effect = { kind: "call", path: "on_absent", args: [] };
+  const selected = planRustOptionBranch(option, carrier, "present", present, effect, {});
+  assert.equal(selected.kind, "match");
+  assert.equal(selected.arms[1].expression === effect, true, "the absent effect remains lazy");
+});
+
 test("an identity Option branch uses the native empty String default without allocating a fallback", () => {
   const option = { kind: "path", path: "input" };
   const present = { kind: "path", path: "present" };

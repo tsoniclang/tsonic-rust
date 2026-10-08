@@ -541,7 +541,7 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /value\.unwrap_or_else\(\|\| fallback\(base\)\)/u);
+  assert.match(source, /match value \{\s*Some\(present_value\) => present_value,\s*None => fallback\(base\),\s*\}/u);
   assert.doesNotMatch(source, /unnecessary_lazy_evaluations|let_and_return/u);
   validateGeneratedProject("callable-complete", result.artifacts, { run: true });
 });

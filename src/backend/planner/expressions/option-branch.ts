@@ -6,6 +6,9 @@ import { rustOptionalStorageValue } from "../../../target-model/types/projection
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { planRustOptionalStorageOperation } from "./optional-storage.js";
 import { rustLiteralIsNativeDefault, rustLiteralMayEvaluateEagerly } from "../../target-ast/inspection/literal-defaults.js";
+import { rustTypeEquals } from "../../target-ast/inspection/type-equality.js";
+import { rustTypeFromCarrierInContext } from "../types/render.js";
+import { isRustOptionCarrier } from "../../../target-model/types/index.js";
 
 export function planRustOptionBranch(
   option: RustExpr,
@@ -16,6 +19,11 @@ export function planRustOptionBranch(
   context: RustPlanContext,
 ): RustExpr {
   if (rustOptionalStorageValue(carrier) === undefined) {
+    if (isRustOptionCarrier(carrier) && present.kind === "call" && present.path === "Some" &&
+      (present.genericArguments?.length ?? 0) === 0 && present.args.length === 1 &&
+      present.args[0]?.kind === "path" && present.args[0].path === presentName &&
+      (absent.kind === "none" || absent.kind === "associated-value" && absent.name === "None" &&
+        absent.trait === undefined && rustTypeEquals(absent.owner, rustTypeFromCarrierInContext(carrier, context)))) return option;
     if (present.kind === "path" && present.path === presentName) {
       if (rustLiteralIsNativeDefault(absent)) {
         return { kind: "method-call", receiver: option, method: "unwrap_or_default", args: [] };

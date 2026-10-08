@@ -508,7 +508,7 @@ export function probe(text: string, values: readonly int32[]): boolean {
   assert.match(text, /js_string::repeat\(core::convert::AsRef::<str>::as_ref\(text\), 2\.0\)\?/u);
   assert.match(
     text,
-    /let point: u32 = rt::option_coalesce\(\n {8}js_string::code_point_at\(core::convert::AsRef::<str>::as_ref\(text\), 0\.0\),\n {8}core::convert::identity,\n {8}\|\| 0_u32,\n {4}\);/u,
+    /let point: u32 =\s*js_string::code_point_at\(\s*core::convert::AsRef::<str>::as_ref\(text\),\s*0\.0,?\s*\)\s*\.unwrap_or\(0_u32\);/u,
   );
 });
 
