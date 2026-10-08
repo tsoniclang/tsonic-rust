@@ -1,4 +1,4 @@
-import { isRustJsArrayCarrier, rustStringTargetType } from "../../../target-model/types/index.js";
+import { isRustJsArrayCarrier, isRustNumericCarrier, rustStringTargetType } from "../../../target-model/types/index.js";
 import { acceptRustPolicy } from "../../../policy/operations/contracts.js";
 import {
   checkedCallIsConstruction,
@@ -667,6 +667,9 @@ export function acceptProjectSourceCall(
   }
   const sourceResult = selectRustSourceCallResult(options.projectTypes, returnType, () => {
     const result = context.currentSemantics.operations.callResult(request.source);
+    if (result !== undefined && result.authoredTypeNode === undefined &&
+      selectedCallableDeclaration === callableDeclaration &&
+      isRustNumericCarrier(rustOptionElementCarrier(returnType) ?? returnType)) return returnType;
     const bound = bindRustSelectedCallTypeArguments(selectedTypeArguments, templateGenericArguments, receiverContext);
     const carrier = result === undefined || bound === undefined ? undefined
       : resolveRustTypeComponentEvidence({ selectedType: result.selectedReturnType,
