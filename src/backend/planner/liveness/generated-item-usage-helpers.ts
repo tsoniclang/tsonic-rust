@@ -138,6 +138,9 @@ export function visitConversionContract(
       usage.structuralFieldRead(contract.source, contract.storageIndex);
       visitConversionContract(contract.resultConversion, usage);
       return;
+    case "js-value-from-properties":
+      for (const field of contract.fields) visitConversionContract(field.conversion, usage);
+      return;
     case "js-value-from-structural-object":
       for (const field of contract.fields) {
         usage.structuralFieldRead(contract.source, field.storageIndex);

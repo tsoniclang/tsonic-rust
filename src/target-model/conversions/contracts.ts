@@ -172,6 +172,15 @@ export type RustValueConversionContract = RustValueConversionContractBase & (
       readonly resultConversion: RustValueConversionContract;
     }
   | {
+      readonly lowering: "js-value-from-properties";
+      readonly fields: readonly {
+        readonly sourceName: string;
+        readonly sourceCarrier: TargetTypeRef;
+        readonly presence: "required" | "optional";
+        readonly conversion: RustValueConversionContract;
+      }[];
+    }
+  | {
       readonly lowering: "js-value-from-structural-object";
       readonly fields: readonly {
         readonly sourceName: string;
@@ -312,7 +321,7 @@ export function rustValueConversionContract(
       : {
           category: "projection",
           lowering: "closed-value-from-option",
-          sourceMode: "value",
+          sourceMode: elementConversion.sourceMode,
           source: value.source,
           target: elementConversion.target,
           element: value.element,
@@ -380,7 +389,7 @@ export function rustValueConversionContract(
       : {
           category: "projection",
           lowering: "union-fold",
-          sourceMode: "value",
+          sourceMode: arms.every(arm => arm?.conversion.sourceMode === "ref") ? "ref" : "value",
           source: value.source,
           target: value.target,
           arms: arms as NonNullable<typeof arms[number]>[],
@@ -419,6 +428,18 @@ export function rustValueConversionContract(
           resultConversion,
           fallible: false,
         };
+  }
+  if (value.kind === "js-value-from-properties") {
+    const fields = value.fields.map(field => {
+      const conversion = rustValueConversionContract(field.conversion, definitions);
+      return conversion === undefined || conversion.fallible ||
+        !rustTargetTypeRefEquals(conversion.source, field.sourceCarrier) ||
+        !rustTargetTypeRefEquals(conversion.target, jsValueCarrier)
+        ? undefined : { ...field, conversion };
+    });
+    return fields.some(field => field === undefined) || new Set(value.fields.map(field => field.sourceName)).size !== value.fields.length
+      ? undefined : { category: "projection", lowering: "js-value-from-properties", sourceMode: "ref",
+        source: value.source, target: jsValueCarrier, fields: fields as NonNullable<typeof fields[number]>[], fallible: false };
   }
   if (value.kind === "js-value-from-structural-object") {
     const structural = rustStructuralObjectCarrierValue(value.source);
@@ -811,6 +832,8 @@ export function rustValueConversionIdentity(value: RustValueConversion): string 
               ? `union-fold.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}.${value.arms.map(arm => `${JSON.stringify({ carrier: arm.carrier, path: arm.path })}:${rustValueConversionIdentity(arm.conversion)}`).join("|")}`
             : value.kind === "js-value-from-structural-to-json"
               ? `js-value-from-structural-to-json.${JSON.stringify(value.source)}.${value.storageIndex}.${value.passesPropertyKey}.${rustValueConversionIdentity(value.resultConversion)}`
+            : value.kind === "js-value-from-properties"
+              ? `js-value-from-properties.${JSON.stringify(value.source)}.${value.fields.map(field => `${field.sourceName}:${field.presence}:${JSON.stringify(field.sourceCarrier)}:${rustValueConversionIdentity(field.conversion)}`).join("|")}`
             : value.kind === "js-value-from-structural-object"
               ? `js-value-from-structural-object.${JSON.stringify(value.source)}.${value.fields.map((field) => `${field.sourceName}:${rustValueConversionIdentity(field.conversion)}`).join("|")}`
             : value.kind === "option-some"

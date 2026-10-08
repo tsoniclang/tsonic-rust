@@ -30,6 +30,7 @@ import { closedMetadataKey } from "../../../../target-model/metadata/closed-data
 import { mapRustSourceMarkerCall } from "./deferred.js";
 import { providerIdentityText, providerOperationFact, rejectSelectedOperation } from "../result.js";
 import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution.js";
+import { createRustPropertyProjectionSelector } from "../../../conversions/property-projections.js";
 import { rustModuleBindingFactKey, rustOptionalChainFactKey } from "../../../facts/keys.js";
 import { rustOptionElementCarrier } from "../../../../target-model/types/index.js";
 import { rustRuntimeCarrierKey, rustSelectedCallKey } from "../../../../target-model/facts/selections.js";
@@ -280,6 +281,7 @@ export function selectRustCheckedCall(
         typeArgumentCarriers,
         argumentCarriers,
         soleArgumentNumberKind: selectedSoleArgumentNumberKind(request, context),
+        propertyProjection: createRustPropertyProjectionSelector(request, context, options, argumentCarriers),
         carrierSupportsProjectIdentity: options.projectCarrierSupportsObjectIdentity,
       }, context.typeDefinitions);
       if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {

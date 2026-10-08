@@ -117,6 +117,15 @@ function isValueProjectionConversion(value: Record<string, unknown>): boolean {
       typeof value.passesPropertyKey === "boolean" &&
       isNonOptionValueConversion(value.resultConversion);
   }
+  if (value.kind === "js-value-from-properties") {
+    return hasExactKeys(value, ["kind", "source", "fields"]) && isRustTargetTypeRef(value.source) &&
+      Array.isArray(value.fields) && value.fields.every(field => isRecord(field) &&
+        hasExactKeys(field, ["sourceName", "sourceCarrier", "presence", "conversion"]) &&
+        typeof field.sourceName === "string" && field.sourceName.length > 0 &&
+        isRustTargetTypeRef(field.sourceCarrier) &&
+        (field.presence === "required" || field.presence === "optional") &&
+        isNonOptionValueConversion(field.conversion));
+  }
   if (value.kind !== "js-value-from-structural-object") {
     return false;
   }

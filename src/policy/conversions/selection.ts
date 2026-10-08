@@ -274,9 +274,10 @@ export function selectRustProjectedValueConversion(
   source: TargetTypeRef,
   projection: "json" | "properties",
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
+  properties?: (source: TargetTypeRef) => RustValueConversion | undefined,
 ): RustValueConversion | undefined {
   if (projection !== "json" && projection !== "properties") return undefined;
-  return selectProjectedValueConversion(source, projection, projection === "json", [], definitions);
+  return selectProjectedValueConversion(source, projection, projection === "json", [], definitions, properties);
 }
 
 function selectProjectedValueConversion(
@@ -285,6 +286,7 @@ function selectProjectedValueConversion(
   applySelectedToJson: boolean,
   ancestors: readonly TargetTypeRef[],
   definitions: RustTypeDefinitions,
+  properties?: (source: TargetTypeRef) => RustValueConversion | undefined,
 ): RustValueConversion | undefined {
   if (ancestors.some((ancestor) => rustTargetTypeRefEquals(ancestor, source))) {
     return undefined;
@@ -333,6 +335,7 @@ function selectProjectedValueConversion(
       applySelectedToJson,
       nextAncestors,
       definitions,
+      properties,
     );
     return elementConversion === undefined ||
         elementConversion.kind === "option-map" ||
@@ -355,6 +358,7 @@ function selectProjectedValueConversion(
       projection === "json",
       nextAncestors,
       definitions,
+      properties,
     );
     return elementConversion === undefined ||
         elementConversion.kind === "option-map" ||
@@ -370,7 +374,12 @@ function selectProjectedValueConversion(
   const unionLeaves = rustUnionLeaves(source, definitions);
   if (unionLeaves !== undefined) {
     return selectUnionFold(source, jsValueCarrier, unionLeaves, carrier =>
-      selectProjectedValueConversion(carrier, projection, applySelectedToJson, nextAncestors, definitions));
+      selectProjectedValueConversion(carrier, projection, applySelectedToJson, nextAncestors, definitions, properties));
+  }
+  if (projection === "properties") {
+    return isRustAbsenceCarrier(source)
+      ? selectRustSourceValueConversion(source, jsValueCarrier, definitions)
+      : properties?.(source);
   }
   if (structural !== undefined) {
     const fields = selectStructuralObjectConversionFields(

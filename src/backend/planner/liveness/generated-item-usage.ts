@@ -2,6 +2,7 @@ import type { RustTypeDefinitions } from "../../../target-model/types/source-uni
 import type { RustStructuralShapePlan } from "../../../analysis/objects/structural-shape-plan.js";
 import { rustRecordFinalFieldContributions, rustRecordSpreadRetainsField, rustRecordSpreadReadIsObservable } from "../objects/record-contributions.js";
 import { rustObjectReferenceViewKey } from "../../../analysis/facts/object-reference-views.js";
+import { rustPropertyProjectionFactKey } from "../../../analysis/facts/property-projections.js";
 import type { RustClassValuePlan } from "../../../analysis/objects/class-values.js";
 import type { RustSourceCallableSpecializationPlan } from "../../../analysis/callables/specializations.js";
 import type { RustDeclarationGenericRequirementIndex } from "../../../analysis/declarations/generic-requirements.js";
@@ -470,7 +471,7 @@ export function analyzeRustGeneratedItemUsage(input: {
       abi.result.kind === "sync" ? abi.result.conversion : abi.result.awaitedConversion,
     );
   };
-  const visitFact = (node: Node, fact: RustTargetOperationFact): void => {
+  const visitFact = (node: Node, fact: RustTargetOperationFact, selectedReceiver?: TargetTypeRef): void => {
     switch (fact.kind) {
       case "operator-token":
       case "operator-call":
@@ -666,8 +667,8 @@ export function analyzeRustGeneratedItemUsage(input: {
           }
         } else {
           const expression = Node_Expression(input.ast, node);
-          const receiverCarrier = fact.receiver.kind === "static" ? fact.receiver.typeCarrier :
-            expression === undefined ? undefined : input.facts.getRuntimeCarrierFact(expression)?.carrier;
+          const receiverCarrier = selectedReceiver ?? (fact.receiver.kind === "static" ? fact.receiver.typeCarrier :
+            expression === undefined ? undefined : input.facts.getRuntimeCarrierFact(expression)?.carrier);
           if (receiverCarrier !== undefined) {
             if (fact.accessMode !== "write") markProjectMemberUsed(receiverCarrier, fact.read?.declaration, "read");
             if (fact.accessMode !== "read") markProjectMemberUsed(receiverCarrier, fact.write?.declaration, "write");
@@ -753,6 +754,12 @@ export function analyzeRustGeneratedItemUsage(input: {
         markProjectTypeUsed(input.facts.getRuntimeCarrierFact(node)?.carrier);
       }
       const fact = input.facts.getFact(node, rustTargetOperationFactKey);
+      const propertyProjection = input.facts.getFact(node, rustPropertyProjectionFactKey);
+      for (const projection of propertyProjection?.cases ?? []) {
+        for (const read of projection.reads) {
+          visitFact(node, { ...read, operationId: "selected-property-projection", accessMode: "read" }, projection.source);
+        }
+      }
       const classValue = input.facts.getFact(node, rustClassValueFactKey);
       if (classValue !== undefined) {
         markStructuralShapeConstructed(classValue.carrier);

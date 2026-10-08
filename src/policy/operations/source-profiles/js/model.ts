@@ -34,6 +34,7 @@ export function jsValueProjectionsAreValid(
 }
 
 export interface JsOperationRequest {
+  readonly propertyProjection?: (argumentIndex: number) => RustValueConversion | undefined;
   readonly storageContract?: RustSourceGenericContract;
   readonly ownerName: string;
   readonly memberName: string;

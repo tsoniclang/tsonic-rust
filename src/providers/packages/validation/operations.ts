@@ -444,7 +444,7 @@ function valueConversionCarriers(
       ...valueConversionCarriers(conversion.resultConversion),
     ];
   }
-  if (conversion.kind === "js-value-from-structural-object") {
+  if (conversion.kind === "js-value-from-structural-object" || conversion.kind === "js-value-from-properties") {
     return [
       conversion.source,
       ...conversion.fields.flatMap((field) => [

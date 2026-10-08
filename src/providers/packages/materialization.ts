@@ -638,11 +638,10 @@ function materializeProviderValueConversion(
           carrierTraits,
         ) as typeof conversion.resultConversion,
       };
-    case "js-value-from-structural-object":
-      return {
-        ...conversion,
-        source: materializeProviderCarrier(conversion.source, carrierPaths, carrierTraits),
-        fields: conversion.fields.map((field) => ({
+    case "js-value-from-properties":
+    case "js-value-from-structural-object": {
+      const source = materializeProviderCarrier(conversion.source, carrierPaths, carrierTraits);
+      const mapField = <Field extends (typeof conversion.fields)[number]>(field: Field) => ({
           ...field,
           sourceCarrier: materializeProviderCarrier(
             field.sourceCarrier,
@@ -654,8 +653,11 @@ function materializeProviderValueConversion(
             carrierPaths,
             carrierTraits,
           ) as typeof field.conversion,
-        })),
-      };
+        });
+      return conversion.kind === "js-value-from-properties"
+        ? { ...conversion, source, fields: conversion.fields.map(mapField) }
+        : { ...conversion, source, fields: conversion.fields.map(mapField) };
+    }
     case "option-some":
       return { ...conversion,
         source: materializeProviderCarrier(conversion.source, carrierPaths, carrierTraits),

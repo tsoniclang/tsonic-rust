@@ -54,6 +54,7 @@ import { rustContextualValueConversionIsFallible } from "../../target-model/conv
 import { selectedDeclarationIsProjectSource } from "../expressions/references.js";
 import { selectRustResourceManagement } from "./management.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
+import { rustPropertyProjectionGetters } from "../conversions/property-projections.js";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustPreparedDeferredCheckedCall } from "../operations/provider/index.js";
 import type { RustTargetOperationFact } from "../facts/keys.js";
@@ -384,14 +385,16 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
       rustContextualValueConversionIsFallible(contextualConversion?.conversion, walk.context.typeDefinitions);
   };
   const selectedAccessorDeclarations = (node: Node): readonly Node[] => {
+    const projected = rustPropertyProjectionGetters(node, walk.context);
     const operation = walk.context.facts.get(node, rustTargetOperationFactKey) ??
       walk.context.facts.resolve(node, rustTargetOperationFactKey);
     if (operation?.kind !== "source-accessor") {
-      return [];
+      return projected;
     }
     const selected = walk.context.facts.get(node, rustSelectedOperationKey) ??
       walk.context.facts.resolve(node, rustSelectedOperationKey);
     return [
+      ...projected,
       asSourceNode(
         selected?.provenance?.sourceSelectedReadDeclaration,
         walk.context.ast,

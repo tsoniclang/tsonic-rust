@@ -12,6 +12,7 @@ import { rustEnclosingStorageContract } from "../../../../policy/ownership/suspe
 import type { RustCheckedCallSelectionInput, RustOperationPolicyContext } from "../../../../policy/operations/contracts.js";
 import type { RustOperationsProviderOptions } from "../model.js";
 import type { JsOperationRequest } from "../../../../policy/operations/source-profiles/js/model.js";
+import { createRustPropertyProjectionSelector } from "../../../conversions/property-projections.js";
 
 export function createRustJsCallRequest(
   request: RustCheckedCallSelectionInput,
@@ -42,6 +43,7 @@ export function createRustJsCallRequest(
     ? undefined
     : resolveRustTargetTypeRef(request.source.sourceResultType, context, options);
   return {
+    propertyProjection: createRustPropertyProjectionSelector(request, context, options, argumentCarriers),
     storageContract: rustEnclosingStorageContract(request.source.call, context.ast, context.sourceLifetimes),
     ownerName: selectedSourceMember.ownerName,
     memberName: selectedSourceMember.memberName,

@@ -28,16 +28,24 @@ test("explicit property projection reads checked fields without selecting JSON b
       type: rustCallableTargetType([], result) },
     { sourceName: "useGrouping", presence: "required", readonly: false, type: rustSourcePrimitiveTargetType("bool") },
   ]);
-  const properties = selectRustProjectedValueConversion(source, "properties");
-  assert.equal(properties.kind, "js-value-from-structural-object");
+  const demand = carrier => ({ kind: "js-value-from-properties", source: carrier, fields: [
+    { sourceName: "maximumFractionDigits", presence: "optional", sourceCarrier: rustSourcePrimitiveTargetType("uint64"),
+      conversion: selectRustSourceValueConversion(rustSourcePrimitiveTargetType("uint64"), rustJsValueTargetType()) },
+    { sourceName: "useGrouping", presence: "required", sourceCarrier: rustSourcePrimitiveTargetType("bool"),
+      conversion: selectRustSourceValueConversion(rustSourcePrimitiveTargetType("bool"), rustJsValueTargetType()) },
+  ] });
+  assert.equal(selectRustProjectedValueConversion(source, "properties") === undefined, true, "implicit all-properties admission is removed");
+  const properties = selectRustProjectedValueConversion(source, "properties", emptyRustTypeDefinitions, demand);
+  assert.equal(properties.kind, "js-value-from-properties");
   assert.deepEqual(properties.fields.map(field => field.sourceName), ["maximumFractionDigits", "useGrouping"]);
   assert.equal(selectRustProjectedValueConversion(source, "json").kind, "js-value-from-structural-to-json");
   assert.equal(selectRustSourceValueConversion(source, rustJsValueTargetType()).kind, "js-value-from-closed-carrier");
   for (const kind of ["json", "properties"]) {
-    assert.ok(rustValueConversionContract(selectRustProjectedValueConversion(source, kind)));
-    const optional = selectRustProjectedValueConversion(rustOptionTargetType(source), kind);
+    assert.ok(rustValueConversionContract(selectRustProjectedValueConversion(source, kind, emptyRustTypeDefinitions, demand)));
+    const optional = selectRustProjectedValueConversion(rustOptionTargetType(source), kind, emptyRustTypeDefinitions, demand);
     assert.equal(optional.kind, "closed-value-from-option");
-    assert.equal(optional.elementConversion.kind, kind === "json" ? "js-value-from-structural-to-json" : "js-value-from-structural-object");
+    assert.equal(optional.elementConversion.kind, kind === "json" ? "js-value-from-structural-to-json" : "js-value-from-properties");
+    if (kind === "properties") assert.equal(rustValueConversionContract(optional).sourceMode, "ref");
   }
   assert.equal(selectRustProjectedValueConversion(source, "unknown") === undefined, true);
 });
@@ -48,6 +56,10 @@ test("value projection metadata rejects malformed and conflicting selections wit
   ]);
   const scalar = rustSourcePrimitiveTargetType("int32");
   const valid = [{ sourceIndex: 0, kind: "properties" }];
+  const demand = () => ({ kind: "js-value-from-properties", source, fields: [
+    { sourceName: "count", sourceCarrier: rustSourcePrimitiveTargetType("uint64"), presence: "required",
+      conversion: selectRustSourceValueConversion(rustSourcePrimitiveTargetType("uint64"), rustJsValueTargetType()) },
+  ] });
   let reads = 0;
   const accessor = { kind: "properties" };
   Object.defineProperty(accessor, "sourceIndex", { enumerable: true, get() { reads += 1; return 0; } });
@@ -64,14 +76,16 @@ test("value projection metadata rejects malformed and conflicting selections wit
   assert.equal(jsValueProjectionsAreValid(valid, 1, [0]), false);
   for (const form of ["call", "free-call"]) {
     const target = { form, path: "accept", argOrder: [1, 0], argModes: ["value", "ref"] };
-    const selected = materializeJsValueProjections(target, valid, [source, scalar]);
+    assert.equal(materializeJsValueProjections(target, valid, [source, scalar], emptyRustTypeDefinitions) === undefined, true,
+      "exact selected parameter demand is mandatory");
+    const selected = materializeJsValueProjections(target, valid, [source, scalar], emptyRustTypeDefinitions, demand);
     assert.equal(selected.argConversions[0], undefined);
-    assert.equal(selected.argConversions[1].kind, "js-value-from-structural-object");
+    assert.equal(selected.argConversions[1].kind, "js-value-from-properties");
     for (const mutation of [
       { ...target, argOrder: [1] }, { ...target, argOrder: [0, 0] },
       { ...target, argOrder: [-1, 0] }, { ...target, argConversions: [undefined, selected.argConversions[1]] },
       { ...target, form: "receiver-method", name: "accept" },
-    ]) assert.equal(materializeJsValueProjections(mutation, valid, [source, scalar]) === undefined, true);
+    ]) assert.equal(materializeJsValueProjections(mutation, valid, [source, scalar], emptyRustTypeDefinitions, demand) === undefined, true);
   }
 });
 

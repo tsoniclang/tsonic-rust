@@ -5,7 +5,7 @@ import {
 } from "../../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { selectRustProjectedValueConversion } from "../../../conversions/selection.js";
-import type { RustProviderOperationForm } from "../../../../target-model/operations/model.js";
+import type { RustProviderOperationForm, RustValueConversion } from "../../../../target-model/operations/model.js";
 import { jsValueProjectionsAreValid, type JsOperationTarget, type JsValueProjection } from "./model.js";
 import { resolveCarrierRef, type JsLaneBindings } from "./carrier-references.js";
 import type {
@@ -90,6 +90,7 @@ export function materializeJsValueProjections(
   projections: readonly JsValueProjection[] | undefined,
   sourceCarriers: readonly (TargetTypeRef | undefined)[],
   definitions: RustTypeDefinitions,
+  propertyProjection?: (argumentIndex: number) => RustValueConversion | undefined,
 ): RustProviderOperationForm | undefined {
   if (projections === undefined) {
     return target;
@@ -116,7 +117,7 @@ export function materializeJsValueProjections(
     return existing !== undefined || source === undefined ||
         jsonValueArgumentNeedsNoConversion(source, mode)
       ? undefined
-      : selectRustProjectedValueConversion(source, selected.get(sourceIndex)!, definitions);
+      : selectJsValueProjection(source, sourceIndex, selected.get(sourceIndex)!, definitions, propertyProjection);
   });
   if (conversions.some((conversion, targetIndex) =>
     selected.has(order[targetIndex]!) && (target.argConversions?.[targetIndex] !== undefined ||
@@ -129,6 +130,16 @@ export function materializeJsValueProjections(
   return { ...target, argConversions: conversions };
 }
 
+export function selectJsValueProjection(
+  source: TargetTypeRef,
+  sourceIndex: number,
+  projection: "json" | "properties",
+  definitions: RustTypeDefinitions,
+  propertyProjection?: (argumentIndex: number) => RustValueConversion | undefined,
+): RustValueConversion | undefined {
+  return projection === "properties" ? propertyProjection?.(sourceIndex)
+    : selectRustProjectedValueConversion(source, "json", definitions);
+}
 
 function jsonValueArgumentNeedsNoConversion(
   source: TargetTypeRef | undefined,

@@ -19,8 +19,7 @@ import {
 import { resolveCarrierRef } from "./carrier-references.js";
 import { selectJsArrayConstruction } from "./array-construction.js";
 import { selectRustJsPromiseConstructor } from "./promises.js";
-import { materializeJsValueProjections } from "./materialization.js";
-import { selectRustProjectedValueConversion } from "../../../conversions/selection.js";
+import { materializeJsValueProjections, selectJsValueProjection } from "./materialization.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { jsValueProjectionsAreValid, type JsCarrierRef, type JsOperationSelection, type JsValueProjection } from "./model.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
@@ -168,6 +167,7 @@ const jsConstructorRows = defineJsConstructorRows([
 ]);
 
 export interface JsConstructorRequest {
+  readonly propertyProjection?: (argumentIndex: number) => import("../../../../target-model/operations/model.js").RustValueConversion | undefined;
   readonly className: string;
   readonly typeArgumentCarriers: readonly (TargetTypeRef | undefined)[];
   readonly argumentCarriers: readonly (TargetTypeRef | undefined)[];
@@ -256,7 +256,7 @@ export function selectJsSurfaceConstructor(request: JsConstructorRequest, defini
       const actual = request.argumentCarriers[index];
       const projection = row.valueProjections?.find(projection => projection.sourceIndex === index);
       return projection !== undefined
-        ? actual === undefined || selectRustProjectedValueConversion(actual, projection.kind, definitions) === undefined
+        ? actual === undefined || selectJsValueProjection(actual, index, projection.kind, definitions, request.propertyProjection) === undefined
         : carrier === undefined || actual === undefined ||
           !rustTargetTypeRefEquals(carrier, actual);
     })) {
@@ -272,7 +272,7 @@ export function selectJsSurfaceConstructor(request: JsConstructorRequest, defini
           : { trailingArguments: row.trailingArguments }),
       },
       row.valueProjections,
-      request.argumentCarriers, definitions,
+      request.argumentCarriers, definitions, request.propertyProjection,
     );
     if (target === undefined) {
       return [];
@@ -309,6 +309,7 @@ export function selectJsSurfaceConstructor(request: JsConstructorRequest, defini
 }
 
 export function selectJsSurfaceConstructorBySourceOwner(request: {
+  readonly propertyProjection?: (argumentIndex: number) => import("../../../../target-model/operations/model.js").RustValueConversion | undefined;
   readonly sourceOwnerName: string;
   readonly typeArgumentCarriers: readonly (TargetTypeRef | undefined)[];
   readonly argumentCarriers: readonly (TargetTypeRef | undefined)[];
@@ -328,6 +329,7 @@ export function selectJsSurfaceConstructorBySourceOwner(request: {
         className: row.className,
         typeArgumentCarriers: request.typeArgumentCarriers,
         argumentCarriers: request.argumentCarriers,
+        propertyProjection: request.propertyProjection,
         ...(request.carrierSupportsProjectIdentity === undefined
           ? {}
           : { carrierSupportsProjectIdentity: request.carrierSupportsProjectIdentity }),

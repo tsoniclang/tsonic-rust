@@ -632,6 +632,16 @@ export function finishRustSourceAccessorCall(
     ));
     return undefined;
   }
+  return finishRustSourceAccessorEffect(node, selectedDeclaration, expression, context, effect);
+}
+
+export function finishRustSourceAccessorEffect(
+  node: Node,
+  selectedDeclaration: Node,
+  expression: RustExpr,
+  context: RustPlanContext,
+  effect: "infallible" | "fallible",
+): RustExpr | undefined {
   if (effect === "infallible") {
     return expression;
   }

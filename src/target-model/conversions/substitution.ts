@@ -177,16 +177,15 @@ export function substituteRustValueConversion(
           constSubstitutions,
         ) as typeof value.resultConversion,
       });
-    case "js-value-from-structural-object":
-      return Object.freeze({
-        ...value,
-        source: substituteRustTargetGenerics(
+    case "js-value-from-properties":
+    case "js-value-from-structural-object": {
+      const source = substituteRustTargetGenerics(
           value.source,
           substitutions,
           lifetimeSubstitutions,
           constSubstitutions,
-        ),
-        fields: Object.freeze(value.fields.map((field) => Object.freeze({
+        );
+      const mapField = <Field extends (typeof value.fields)[number]>(field: Field): Field => Object.freeze<Field>({
           ...field,
           sourceCarrier: substituteRustTargetGenerics(
             field.sourceCarrier,
@@ -200,8 +199,11 @@ export function substituteRustValueConversion(
             lifetimeSubstitutions,
             constSubstitutions,
           ) as typeof field.conversion,
-        }))),
-      });
+        });
+      return value.kind === "js-value-from-properties"
+        ? Object.freeze({ ...value, source, fields: Object.freeze(value.fields.map(mapField)) })
+        : Object.freeze({ ...value, source, fields: Object.freeze(value.fields.map(mapField)) });
+    }
     case "option-some":
       return Object.freeze({ ...value,
         source: substituteRustTargetGenerics(value.source, substitutions, lifetimeSubstitutions, constSubstitutions),

@@ -65,10 +65,9 @@ import { selectJsArrayConstruction } from "./array-construction.js";
 import { selectRustJsPromiseContinuation } from "./promises.js";
 import { jsArgumentCarrierMatchScore } from "./argument-matching.js";
 import { jsOperationRows } from "./rows.js";
-import { selectRustProjectedValueConversion } from "../../../conversions/selection.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { rustNamedTypeCarrierValue } from "../../../../target-model/types/carriers/native.js";
-import { materializeJsOperationTarget, materializeJsValueProjections, materializeTarget, materializeVariadicTarget } from "./materialization.js";
+import { materializeJsOperationTarget, materializeJsValueProjections, materializeTarget, materializeVariadicTarget, selectJsValueProjection } from "./materialization.js";
 import type { JsLane, JsOperationRequest, JsOperationRowData, JsOperationSelection } from "./model.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { resolveCarrierRef, type JsLaneBindings } from "./carrier-references.js";
@@ -380,7 +379,7 @@ function selectJsSurfaceOperationForDemand(
       }
       const projection = candidate.valueProjections?.find(projection => projection.sourceIndex === index);
       if (projection !== undefined) {
-        return actual !== undefined && selectRustProjectedValueConversion(actual, projection.kind, definitions) !== undefined
+        return actual !== undefined && selectJsValueProjection(actual, index, projection.kind, definitions, request.propertyProjection) !== undefined
           ? 1
           : undefined;
       }
@@ -447,7 +446,7 @@ function selectJsSurfaceOperationForDemand(
     : materializeJsValueProjections(
         authoredTarget,
         row.valueProjections,
-        request.argumentCarriers ?? [], definitions,
+        request.argumentCarriers ?? [], definitions, request.propertyProjection,
       );
   if (target === undefined) {
     return undefined;

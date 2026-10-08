@@ -16,10 +16,12 @@ test("Intl exact integer, optional precision and grouping contracts execute in R
       import { check } from "@acme/testing";
       import type { int32, int64, uint64, int128, uint128 } from "@tsonic/core/types.js";
       let optionReads: int32 = 0;
+      let unrelatedOptionReads: int32 = 0;
       let optionSuppliers: int32 = 0;
       interface GroupingOptions { readonly useGrouping: boolean; }
       class UngroupedOptions implements GroupingOptions {
         get useGrouping(): boolean { optionReads += 1; return false; }
+        get unrelated(): boolean { unrelatedOptionReads += 1; return true; }
         toJSON(): { useGrouping: boolean } { return { useGrouping: true }; }
       }
       class GroupedOptions { readonly useGrouping: boolean = true; }
@@ -51,13 +53,14 @@ test("Intl exact integer, optional precision and grouping contracts execute in R
         check(JSON.stringify(namedOptions) === '{"useGrouping":true}');
         const nativeOptions = supplyOptions();
         const aliasOptions: GroupingOptions = nativeOptions;
+        check(new Intl.NumberFormat("en", nativeOptions).format(signed) === "9007199254740993");
         check(interfaceOptions(signed, aliasOptions) === "9007199254740993");
         check(optionalOptions(signed, aliasOptions) === "9007199254740993");
         check(optionalOptions(signed, undefined) === "9,007,199,254,740,993");
         check(unionOptions(signed, nativeOptions) === "9007199254740993");
         check(unionOptions(signed, new GroupedOptions()) === "9,007,199,254,740,993");
         check(signed.toLocaleString("en", supplyOptions()) === "9007199254740993");
-        check(optionSuppliers === 2 && optionReads === 4);
+        check(optionSuppliers === 2 && optionReads === 5 && unrelatedOptionReads === 0);
         const absentDigits = plain.resolvedOptions().maximumSignificantDigits;
         const absentCurrency = plain.resolvedOptions().currency;
         check(absentDigits === undefined && absentCurrency === undefined);

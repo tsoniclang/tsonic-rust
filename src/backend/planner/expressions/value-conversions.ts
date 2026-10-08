@@ -40,6 +40,8 @@ import { planRustUnionFold } from "./union-folds.js";
 import { planRustProgramErrorConstruction } from "./program-errors.js";
 import { planRustProgramErrorClosedValue } from "./program-error-values.js";
 import { planRustCallableInputProducer } from "./callable-conversions.js";
+import { planRustPropertyValueProjection } from "./property-value-projection.js";
+import { planRustOptionBranch } from "./option-branch.js";
 
 export function applyRustValueConversion(
   context: RustPlanContext,
@@ -154,7 +156,8 @@ export function lowerRustValueConversion(
       return { kind: "dereference", pointer: source };
     case "closed-value-from-option": {
       const valueName = allocateConversionName(context, node, "present_value");
-      const converted = lowerNestedRustValueConversion(
+      const convert = contract.sourceMode === "ref" ? lowerRustValueConversion : lowerNestedRustValueConversion;
+      const converted = convert(
         contract.elementConversion,
         { kind: "path", path: valueName },
         context,
@@ -162,21 +165,8 @@ export function lowerRustValueConversion(
       );
       return converted === undefined
         ? undefined
-        : {
-            kind: "method-call",
-            receiver: {
-              kind: "method-call",
-              receiver: source,
-              method: "map",
-              args: [{
-                kind: "closure",
-                params: [{ name: valueName, byRefCopy: false }],
-                body: converted,
-              }],
-            },
-            method: "unwrap_or",
-            args: [planRustAbsentValue(contract.target, context)],
-          };
+        : planRustOptionBranch(source, contract.source, valueName, converted,
+          planRustAbsentValue(contract.target, context), context);
     }
     case "js-value-from-array":
       return planRustArrayValueConversion(contract, source, context, node,
@@ -188,7 +178,8 @@ export function lowerRustValueConversion(
     }
     case "union-fold":
       return planRustUnionFold(source, contract.arms, context, node,
-        (arm, payload) => lowerNestedRustValueConversion(arm.conversion, payload, context, node));
+        (arm, payload) => (contract.sourceMode === "ref" ? lowerRustValueConversion : lowerNestedRustValueConversion)
+          (arm.conversion, payload, context, node));
     case "js-value-from-structural-to-json":
       return lowerStructuralToJsonValueConversion(
         contract,
@@ -196,6 +187,9 @@ export function lowerRustValueConversion(
         context,
         node,
       );
+    case "js-value-from-properties":
+      return planRustPropertyValueProjection(contract, source, context, node,
+        (conversion, value) => lowerNestedRustValueConversion(conversion, value, context, node));
     case "js-value-from-structural-object":
       return lowerStructuralObjectJsValueConversion(
         contract,

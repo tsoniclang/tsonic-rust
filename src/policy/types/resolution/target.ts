@@ -32,6 +32,7 @@ import {
   sourcePropertyTypeEvidenceNodes,
   sourceTransformedTypeFactEvidenceNodes,
   ObjectLiteralProperty_Value,
+  sourceTypeIsAuthoredEmptyObject,
 } from "@tsonic/target-api/source";
 import { structFactKey } from "@tsonic/tsts";
 import type { Node, StructFact, Symbol, Type } from "@tsonic/tsts";
@@ -322,7 +323,8 @@ export function resolveStructuralObjectType(
     return undefined;
   }
   if (properties.length === 0 && bases.length === 0 && representation === "reference" && construction === undefined) {
-    if (semantics.types.couldContainTypeVariables(type)) return undefined;
+    if (semantics.types.couldContainTypeVariables(type) &&
+      !sourceTypeIsAuthoredEmptyObject(type, context.ast, semantics, context.source.navigation)) return undefined;
     return semantics.declarations.typeSymbol(type) === undefined
       ? rustObjectIdentityTargetType()
       : rustEmptyObjectTargetType();

@@ -243,6 +243,16 @@ export type RustNonOptionValueConversion =
       readonly resultConversion: RustNonOptionValueConversion;
     }
   | {
+      readonly kind: "js-value-from-properties";
+      readonly source: TargetTypeRef;
+      readonly fields: readonly {
+        readonly sourceName: string;
+        readonly sourceCarrier: TargetTypeRef;
+        readonly presence: "required" | "optional";
+        readonly conversion: RustNonOptionValueConversion;
+      }[];
+    }
+  | {
       readonly kind: "js-value-from-structural-object";
       readonly source: TargetTypeRef;
       readonly fields: readonly {
