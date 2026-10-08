@@ -59,6 +59,7 @@ import { rustCompileTimeSourceKey } from "../../target-model/facts/source-declar
 import { rustCallableInvocationResult } from "../facts/callable-results.js";
 import { resolveRustCallableStorageCarrier } from "../../policy/types/resolution/source-evidence.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
+import { selectRustCallableConversion } from "../../target-model/conversions/callable.js";
 
 export function resolveFunctionExpressionSignature(
   walk: RustFactWalk,
@@ -202,7 +203,7 @@ export function resolveFunctionExpressionCarrier(
       (sourceParameterCarrier !== undefined &&
         !rustTargetTypeRefEquals(parameterAbi.valueCarrier, parameterAbi.form === "default"
           ? rustOptionElementCarrier(sourceParameterCarrier) : sourceParameterCarrier)) ||
-      !rustTargetTypeRefEquals(
+      rustCallableInputProtocol(selectedExpected) === undefined && !rustTargetTypeRefEquals(
         parameterAbi.parameterCarrier,
         targetParameterCarrier,
       )) {
@@ -220,6 +221,17 @@ export function resolveFunctionExpressionCarrier(
     }
     parameterAbis.push(parameterAbi);
     byRefCopyParams.push(false);
+  }
+  if (rustCallableInputProtocol(selectedExpected) !== undefined) {
+    const physical = rustCallableTargetType([
+      ...leadingParameters.map(parameter => parameter.carrier),
+      ...parameterAbis.map(abi => abi.parameterCarrier),
+      ...targetParameterCarriers.slice(parameters.length),
+    ], selectedResult);
+    if (!rustTargetTypeRefEquals(physical, rustCallableTargetType(selectedParameters, selectedResult)) &&
+      selectRustCallableConversion(physical, selectedExpected,
+        (source, target) => selectRustSourceValueConversion(source, target, walk.context.typeDefinitions),
+        walk.context.typeDefinitions) === undefined) return undefined;
   }
   const body = ast.body(expression);
   if (body === undefined) {

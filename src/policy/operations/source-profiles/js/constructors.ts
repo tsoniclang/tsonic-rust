@@ -19,10 +19,10 @@ import {
 import { resolveCarrierRef } from "./carrier-references.js";
 import { selectJsArrayConstruction } from "./array-construction.js";
 import { selectRustJsPromiseConstructor } from "./promises.js";
-import { materializeJsonValueConversions } from "./materialization.js";
-import { selectRustJsonValueConversion } from "../../../conversions/selection.js";
+import { materializeJsValueProjections } from "./materialization.js";
+import { selectRustProjectedValueConversion } from "../../../conversions/selection.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
-import type { JsCarrierRef, JsOperationSelection } from "./model.js";
+import { jsValueProjectionsAreValid, type JsCarrierRef, type JsOperationSelection, type JsValueProjection } from "./model.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustJsTypedArrayName } from "../../../../target-model/types/index.js";
 
@@ -53,7 +53,7 @@ interface JsConstructorRowData {
   readonly inputShape?: "js-array-of-element" | "fixed-array-of-element";
   readonly trailingArguments?: readonly ({ readonly kind: "float64"; readonly value: number } | { readonly kind: "none" })[];
   readonly requiresObjectIdentityTypeArgument?: number;
-  readonly jsonValueSourceArgumentIndexes?: readonly number[];
+  readonly valueProjections?: readonly JsValueProjection[];
   readonly variant?: string;
 }
 
@@ -72,16 +72,11 @@ function defineJsConstructorRows(
       throw new Error("Duplicate JavaScript constructor row '" + identity + "'.");
     }
     identities.add(identity);
-    if (row.jsonValueSourceArgumentIndexes !== undefined && (
-      new Set(row.jsonValueSourceArgumentIndexes).size !==
-        row.jsonValueSourceArgumentIndexes.length ||
-      row.jsonValueSourceArgumentIndexes.some((index) =>
-        !Number.isSafeInteger(index) || index < 0 ||
-        index >= row.argumentCount || index >= (row.params?.length ?? 0))
-    )) {
+    if (row.valueProjections !== undefined &&
+      !jsValueProjectionsAreValid(row.valueProjections, Math.min(row.argumentCount, row.params?.length ?? 0))) {
       throw new Error(
         "JavaScript constructor row '" + identity +
-          "' has an invalid JSON-value source projection.",
+          "' has an invalid value projection.",
       );
     }
   }
@@ -127,8 +122,8 @@ function intlConstructorRows(
     { className, sourceOwnerName, typeArgumentCount: 0, argumentCount: 0, path: `${path}::new`, result },
     { className, sourceOwnerName, typeArgumentCount: 0, argumentCount: 1, path: `${path}::with_locale`, result, fallible: true, params: [{ ref: "string" }], argModes: ["ref"], variant: "locale" },
     { className, sourceOwnerName, typeArgumentCount: 0, argumentCount: 1, path: `${path}::with_locales`, result, fallible: true, params: [{ ref: "string-array" }], argModes: ["ref"], variant: "locales" },
-    { className, sourceOwnerName, typeArgumentCount: 0, argumentCount: 2, path: `${path}::with_locale_options`, result, fallible: true, params: [{ ref: "string" }, { ref: "jsvalue" }], argModes: ["ref", "ref"], jsonValueSourceArgumentIndexes: [1], variant: "locale-options" },
-    { className, sourceOwnerName, typeArgumentCount: 0, argumentCount: 2, path: `${path}::with_locales_options`, result, fallible: true, params: [{ ref: "string-array" }, { ref: "jsvalue" }], argModes: ["ref", "ref"], jsonValueSourceArgumentIndexes: [1], variant: "locales-options" },
+    { className, sourceOwnerName, typeArgumentCount: 0, argumentCount: 2, path: `${path}::with_locale_options`, result, fallible: true, params: [{ ref: "string" }, { ref: "jsvalue" }], argModes: ["ref", "ref"], valueProjections: [{ sourceIndex: 1, kind: "properties" }], variant: "locale-options" },
+    { className, sourceOwnerName, typeArgumentCount: 0, argumentCount: 2, path: `${path}::with_locales_options`, result, fallible: true, params: [{ ref: "string-array" }, { ref: "jsvalue" }], argModes: ["ref", "ref"], valueProjections: [{ sourceIndex: 1, kind: "properties" }], variant: "locales-options" },
   ];
 }
 
@@ -259,14 +254,15 @@ export function selectJsSurfaceConstructor(request: JsConstructorRequest, defini
     }
     if (parameterCarriers.some((carrier, index) => {
       const actual = request.argumentCarriers[index];
-      return row.jsonValueSourceArgumentIndexes?.includes(index) === true
-        ? actual === undefined || selectRustJsonValueConversion(actual, definitions) === undefined
+      const projection = row.valueProjections?.find(projection => projection.sourceIndex === index);
+      return projection !== undefined
+        ? actual === undefined || selectRustProjectedValueConversion(actual, projection.kind, definitions) === undefined
         : carrier === undefined || actual === undefined ||
           !rustTargetTypeRefEquals(carrier, actual);
     })) {
       return [];
     }
-    const target = materializeJsonValueConversions(
+    const target = materializeJsValueProjections(
       {
         form: "call",
         path: row.path,
@@ -275,7 +271,7 @@ export function selectJsSurfaceConstructor(request: JsConstructorRequest, defini
           ? {}
           : { trailingArguments: row.trailingArguments }),
       },
-      row.jsonValueSourceArgumentIndexes,
+      row.valueProjections,
       request.argumentCarriers, definitions,
     );
     if (target === undefined) {
@@ -285,7 +281,7 @@ export function selectJsSurfaceConstructor(request: JsConstructorRequest, defini
       row,
       target,
       parameterCarriers: parameterCarriers.map((carrier, index) =>
-        row.jsonValueSourceArgumentIndexes?.includes(index) === true
+        row.valueProjections?.some(projection => projection.sourceIndex === index) === true
           ? request.argumentCarriers[index]
           : carrier),
     }];

@@ -65,10 +65,10 @@ import { selectJsArrayConstruction } from "./array-construction.js";
 import { selectRustJsPromiseContinuation } from "./promises.js";
 import { jsArgumentCarrierMatchScore } from "./argument-matching.js";
 import { jsOperationRows } from "./rows.js";
-import { selectRustJsonValueConversion } from "../../../conversions/selection.js";
+import { selectRustProjectedValueConversion } from "../../../conversions/selection.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { rustNamedTypeCarrierValue } from "../../../../target-model/types/carriers/native.js";
-import { materializeJsOperationTarget, materializeJsonValueConversions, materializeTarget, materializeVariadicTarget } from "./materialization.js";
+import { materializeJsOperationTarget, materializeJsValueProjections, materializeTarget, materializeVariadicTarget } from "./materialization.js";
 import type { JsLane, JsOperationRequest, JsOperationRowData, JsOperationSelection } from "./model.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { resolveCarrierRef, type JsLaneBindings } from "./carrier-references.js";
@@ -378,8 +378,9 @@ function selectJsSurfaceOperationForDemand(
           expectedCallable.parameters.length !== actualCallable.parameters.length ? undefined
           : jsArgumentCarrierMatchScore(expectedCallable.result, actualCallable.result, index, request.argumentMatchScore);
       }
-      if (candidate.jsonValueSourceArgumentIndexes?.includes(index) === true) {
-        return actual !== undefined && selectRustJsonValueConversion(actual, definitions) !== undefined
+      const projection = candidate.valueProjections?.find(projection => projection.sourceIndex === index);
+      if (projection !== undefined) {
+        return actual !== undefined && selectRustProjectedValueConversion(actual, projection.kind, definitions) !== undefined
           ? 1
           : undefined;
       }
@@ -443,9 +444,9 @@ function selectJsSurfaceOperationForDemand(
         };
   const target = authoredTarget === undefined
     ? undefined
-    : materializeJsonValueConversions(
+    : materializeJsValueProjections(
         authoredTarget,
-        row.jsonValueSourceArgumentIndexes,
+        row.valueProjections,
         request.argumentCarriers ?? [], definitions,
       );
   if (target === undefined) {
@@ -454,7 +455,7 @@ function selectJsSurfaceOperationForDemand(
   const selectedParameterCarriers = row.variadic === true
     ? undefined
     : parameterCarriers.map((carrier, index) =>
-        row.jsonValueSourceArgumentIndexes?.includes(index) === true
+        row.valueProjections?.some(projection => projection.sourceIndex === index) === true
           ? request.argumentCarriers?.[index]
           : carrier);
   const evaluationOnlySourceArgumentIndexes = new Set(

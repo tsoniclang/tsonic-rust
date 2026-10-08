@@ -8,6 +8,35 @@ import { jsNumericPropertySource } from "../../../../tsonic/test/fixtures/js-num
 import { flowClassReadSource } from "../../../../tsonic/test/fixtures/flow-class-reads.mjs";
 import { referenceDefaultSource } from "../../../../tsonic/test/fixtures/reference-defaults.mjs";
 
+test("native singleton slice inputs borrow existing values without changing authored temporaries", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "singleton_borrows" } },
+    files: { "index.ts": `
+      import { check } from "@acme/testing";
+      function matchesText(values: readonly string[], expected: string): boolean { return values[0] === expected; }
+      function matchesArray(values: readonly number[][]): boolean { return values[0][0] === 1 && values[0][1] === 2; }
+      function produce(): string { return "temporary"; }
+      export function main(): void {
+        const text = "retained";
+        const items = [1, 2];
+        check(matchesText([text], "retained"));
+        check(matchesArray([items]));
+        check(matchesText([produce()], "temporary"));
+        check(matchesText(["literal"], "literal"));
+        check(matchesText([text, "tail"], "retained"));
+        check(text === "retained" && items[0] === 1 && items[1] === 2);
+      }
+    ` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  const source = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
+  assert.match(source, /matchesText\(core::slice::from_ref\(&text\),/u);
+  assert.match(source, /matchesArray\(core::slice::from_ref\(&items\)\)/u);
+  assert.doesNotMatch(source, /from_ref\([^\n]*(?:produce|literal)/u);
+  assert.doesNotMatch(source, /&\[(?:text|items)\.clone\(\)\]/u);
+  validateGeneratedProject("singleton-borrows", result.artifacts, { run: true });
+});
+
 for (const [name, source] of [["bigint_operators", bigintOperatorSource], ["js_numeric_properties", jsNumericPropertySource]]) {
   test(`${name} preserves the shared source contract`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces: ["js"], packages: [acmeTestingPackage()],
@@ -44,6 +73,11 @@ for (const surfaces of [[], ["js"]]) {
       files: { "index.ts": `${flowClassReadSource}\nimport { check } from "@acme/testing"; export function main(): void { check(run()); }` },
     });
     assert.deepEqual(result.diagnostics, []);
+    if (surfaces.length === 0) {
+      const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
+      assert.match(output, /fromElement\(core::slice::from_ref\(&base\)\)/u);
+      assert.doesNotMatch(output, /fromElement\(&\[base\.clone\(\)\]\)/u);
+    }
     validateGeneratedProject(`flow-class-reads-${profile}`, result.artifacts, { run: true });
   });
   test(`direct array callbacks preserve caller mutations across repeated calls (${profile})`, { timeout: 300_000 }, () => {

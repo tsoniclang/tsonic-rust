@@ -270,15 +270,18 @@ export function selectRustSourceAssertionConversion(
   return conversion ?? selectRustExactIntegerConversion(source, target);
 }
 
-export function selectRustJsonValueConversion(
+export function selectRustProjectedValueConversion(
   source: TargetTypeRef,
+  projection: "json" | "properties",
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): RustValueConversion | undefined {
-  return selectJsonValueConversion(source, true, [], definitions);
+  if (projection !== "json" && projection !== "properties") return undefined;
+  return selectProjectedValueConversion(source, projection, projection === "json", [], definitions);
 }
 
-function selectJsonValueConversion(
+function selectProjectedValueConversion(
   source: TargetTypeRef,
+  projection: "json" | "properties",
   applySelectedToJson: boolean,
   ancestors: readonly TargetTypeRef[],
   definitions: RustTypeDefinitions,
@@ -303,7 +306,7 @@ function selectJsonValueConversion(
     const resultConversion = callable === undefined ||
         rustTargetTypeRefEquals(callable.result, source)
       ? undefined
-      : selectJsonValueConversion(callable.result, false, nextAncestors, definitions);
+      : selectProjectedValueConversion(callable.result, projection, false, nextAncestors, definitions);
     if (callable === undefined || !validParameters || resultConversion === undefined ||
         resultConversion.kind === "option-map" ||
         resultConversion.kind === "option-some" ||
@@ -324,8 +327,9 @@ function selectJsonValueConversion(
   }
   const optionElement = rustOptionElementCarrier(source);
   if (optionElement !== undefined) {
-    const elementConversion = selectJsonValueConversion(
+    const elementConversion = selectProjectedValueConversion(
       optionElement,
+      projection,
       applySelectedToJson,
       nextAncestors,
       definitions,
@@ -345,9 +349,10 @@ function selectJsonValueConversion(
     ? rustJsArrayLikeElementTargetType(source)
     : undefined;
   if (arrayElement !== undefined && rustCarrierSupportsClone(arrayElement, definitions)) {
-    const elementConversion = selectJsonValueConversion(
+    const elementConversion = selectProjectedValueConversion(
       arrayElement,
-      true,
+      projection,
+      projection === "json",
       nextAncestors,
       definitions,
     );
@@ -365,12 +370,12 @@ function selectJsonValueConversion(
   const unionLeaves = rustUnionLeaves(source, definitions);
   if (unionLeaves !== undefined) {
     return selectUnionFold(source, jsValueCarrier, unionLeaves, carrier =>
-      selectJsonValueConversion(carrier, applySelectedToJson, nextAncestors, definitions));
+      selectProjectedValueConversion(carrier, projection, applySelectedToJson, nextAncestors, definitions));
   }
   if (structural !== undefined) {
     const fields = selectStructuralObjectConversionFields(
       structural,
-      (sourceCarrier) => selectJsonValueConversion(sourceCarrier, true, nextAncestors, definitions),
+      (sourceCarrier) => selectProjectedValueConversion(sourceCarrier, projection, projection === "json", nextAncestors, definitions),
     );
     return fields === undefined ? undefined : Object.freeze({
       kind: "js-value-from-structural-object" as const,

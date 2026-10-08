@@ -451,15 +451,14 @@ function acceptRuntimeCallableCall(
     if (selection.kind === "reject") return selection;
   }
   const optionalInvocation = context.ast.as.AsCallExpression(request.source.call)?.QuestionDotToken !== undefined;
-  const selectedCarrier = optionalInvocation
-    ? resolveRustTargetTypeRef(request.source.sourceCallee.type, context, options) : undefined;
-  const calleeCarrier = optionalInvocation
-    ? rustOptionElementCarrier(selectedCarrier) ?? selectedCarrier : selectedValueCarrier(
+  const selectedCarrier = selectedValueCarrier(
     request.source.sourceCallee.expression,
     request.source.sourceCallee.type,
     context,
     options,
   );
+  const calleeCarrier = optionalInvocation
+    ? rustOptionElementCarrier(selectedCarrier) ?? selectedCarrier : selectedCarrier;
   return acceptRuntimeCallableCarrierCall(
     request,
     calleeCarrier,

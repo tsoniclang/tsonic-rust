@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { isRustBoolCarrier, isRustStringCarrier } from "../../../target-model/types/index.js";
-import { negateRustBooleanExpression } from "../../target-ast/expressions.js";
+import { negateRustBooleanExpression, rustBooleanLiteralComparison } from "../../target-ast/expressions.js";
 import { effectivePlannedExpressionCarrier, rustPartialOrderingTest } from "./fundamentals.js";
 
 export function planEmptyStringComparison(
@@ -191,17 +191,11 @@ export function planBooleanLiteralComparison(
   if (operator !== "==" && operator !== "!=") {
     return undefined;
   }
-  const literal = left.kind === "bool-literal"
-    ? { value: left.value, other: right, otherNode: rightNode }
-    : right.kind === "bool-literal"
-      ? { value: right.value, other: left, otherNode: leftNode }
-      : undefined;
-  if (literal === undefined || literal.otherNode === undefined ||
-    !isRustBoolCarrier(effectivePlannedExpressionCarrier(literal.otherNode, context))) {
+  const otherNode = left.kind === "bool-literal" ? rightNode
+    : right.kind === "bool-literal" ? leftNode : undefined;
+  if (otherNode === undefined ||
+    !isRustBoolCarrier(effectivePlannedExpressionCarrier(otherNode, context))) {
     return undefined;
   }
-  const negated = operator === "==" ? !literal.value : literal.value;
-  return negated
-    ? negateRustBooleanExpression(literal.other)
-    : literal.other;
+  return rustBooleanLiteralComparison(operator, left, right);
 }

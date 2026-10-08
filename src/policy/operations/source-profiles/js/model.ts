@@ -11,8 +11,27 @@ import type { RustJsTypedArrayName } from "../../../../target-model/types/index.
 import { rustProviderOperationFormDeclaresWritableInput } from "../../forms.js";
 import type { RustDispatchContextInput } from "../../../../target-model/operations/dispatch-contexts.js";
 import { isRustDispatchContextInput } from "../../dispatch-contexts.js";
-import { isDenseDataArray } from "../../../../target-model/metadata/closed-data.js";
+import { isClosedMetadata, isDenseDataArray } from "../../../../target-model/metadata/closed-data.js";
 import type { RustSourceGenericContract } from "../../../../target-model/lifetimes/index.js";
+
+export interface JsValueProjection {
+  readonly sourceIndex: number;
+  readonly kind: "json" | "properties";
+}
+
+export function jsValueProjectionsAreValid(
+  projections: readonly JsValueProjection[],
+  parameterCount: number,
+  omitted: readonly number[] = [],
+): boolean {
+  return isClosedMetadata(projections) && isDenseDataArray(projections) &&
+    projections.every(projection => projection !== null && typeof projection === "object" &&
+      Object.keys(projection).length === 2 && Object.keys(projection).includes("sourceIndex") && Object.keys(projection).includes("kind")) &&
+    new Set(projections.map(projection => projection.sourceIndex)).size === projections.length &&
+    projections.every(projection => Number.isSafeInteger(projection.sourceIndex) && projection.sourceIndex >= 0 &&
+      projection.sourceIndex < parameterCount && !omitted.includes(projection.sourceIndex) &&
+      (projection.kind === "json" || projection.kind === "properties"));
+}
 
 export interface JsOperationRequest {
   readonly storageContract?: RustSourceGenericContract;
@@ -220,7 +239,7 @@ export interface JsOperationRowData {
     readonly errorBoundary: "none" | "source-program";
   };
   readonly evaluationOnlySourceArgumentIndexes?: readonly number[];
-  readonly jsonValueSourceArgumentIndexes?: readonly number[];
+  readonly valueProjections?: readonly JsValueProjection[];
   readonly variadic?: true;
   readonly numericRest?: true;
   readonly firstArgCarrierId?: string;
@@ -275,17 +294,13 @@ export function defineJsOperationRows(rows: readonly JsOperationRowData[]): read
         `Pure JavaScript operation row '${row.owner}.${row.member}' cannot construct identity, invoke a source callback, or declare writable source inputs.`,
       );
     }
-    if (row.jsonValueSourceArgumentIndexes !== undefined && (
+    if (row.valueProjections !== undefined && (
       row.shape.op !== "operation" || row.variadic === true ||
-      new Set(row.jsonValueSourceArgumentIndexes).size !==
-        row.jsonValueSourceArgumentIndexes.length ||
-      row.jsonValueSourceArgumentIndexes.some((index) =>
-        !Number.isSafeInteger(index) || index < 0 ||
-        index >= (row.shape.params?.length ?? 0) ||
-        row.evaluationOnlySourceArgumentIndexes?.includes(index) === true)
+      !jsValueProjectionsAreValid(row.valueProjections, row.shape.params?.length ?? 0,
+        row.evaluationOnlySourceArgumentIndexes)
     )) {
       throw new Error(
-        `JavaScript operation row '${row.owner}.${row.member}' has an invalid JSON-value source projection.`,
+        `JavaScript operation row '${row.owner}.${row.member}' has an invalid value projection.`,
       );
     }
     const operation = [

@@ -4,6 +4,15 @@ export function cloneRustExpression(expression: RustExpr): RustExpr {
   return { kind: "method-call", receiver: expression, receiverMode: "ref", method: "clone", args: [] };
 }
 
+export function rustBooleanLiteralComparison(operator: string, left: RustExpr, right: RustExpr): RustExpr | undefined {
+  if (operator !== "==" && operator !== "!=") return undefined;
+  const literal = left.kind === "bool-literal" ? { value: left.value, other: right }
+    : right.kind === "bool-literal" ? { value: right.value, other: left } : undefined;
+  if (literal === undefined) return undefined;
+  return (operator === "==" ? !literal.value : literal.value)
+    ? negateRustBooleanExpression(literal.other) : literal.other;
+}
+
 export function negateRustBooleanExpression(expression: RustExpr): RustExpr {
   if (expression.kind === "bool-literal") {
     return { kind: "bool-literal", value: !expression.value };

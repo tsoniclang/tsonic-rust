@@ -295,7 +295,7 @@ function planProjectedExpression(
     return finish(contextuallyConverted);
   }
   if (projection?.kind === "none") {
-    const optionType = rustTypeFromCarrierInContext(projection.resultCarrier, context);
+    const optionType = rustTypeFromCarrierInContext(projection.resultCarrier, context, "absence");
     const anonymous = rustNativeFutureCallableResult(projection.resultCarrier)?.optional === true;
     if (optionType === undefined && !anonymous || rustOptionElementCarrier(projection.resultCarrier) === undefined) {
       context.diagnostics.push(missingFactDiagnostic(

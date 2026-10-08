@@ -2,6 +2,7 @@ import { rustValueBlock } from "../../../../dist/backend/target-ast/value-block.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  rustBooleanLiteralComparison,
   negateRustBooleanExpression,
   rustExpressionContainsStatementBlock,
 } from "../../../../dist/backend/target-ast/expressions.js";
@@ -37,6 +38,32 @@ test("boolean negation preserves ordinary selected methods regardless of spellin
     assert.equal(conjunction.operator, "||");
     assert.equal(conjunction.left.operand, expression);
     assert.deepEqual(conjunction.right, { kind: "bool-literal", value: false });
+  }
+});
+
+test("native Boolean literal comparisons share exact truth and effect identity", () => {
+  for (const operator of ["==", "!="]) {
+    for (const left of [false, true]) {
+      for (const right of [false, true]) {
+        assert.deepEqual(rustBooleanLiteralComparison(operator,
+          { kind: "bool-literal", value: left }, { kind: "bool-literal", value: right }),
+        { kind: "bool-literal", value: operator === "==" ? left === right : left !== right });
+      }
+    }
+    const effect = { kind: "call", path: "observe", args: [] };
+    for (const value of [false, true]) {
+      for (const operands of [[{ kind: "bool-literal", value }, effect], [effect, { kind: "bool-literal", value }]]) {
+        const result = rustBooleanLiteralComparison(operator, ...operands);
+        const negated = operator === "==" ? !value : value;
+        assert.equal((negated ? result.operand : result) === effect, true, "the selected effect remains exactly once");
+      }
+    }
+  }
+  const first = { kind: "call", path: "first", args: [] };
+  const second = { kind: "call", path: "second", args: [] };
+  assert.equal(rustBooleanLiteralComparison("==", first, second), undefined);
+  for (const operator of ["<", "+", "&&", "||"]) {
+    assert.equal(rustBooleanLiteralComparison(operator, { kind: "bool-literal", value: true }, first), undefined);
   }
 });
 

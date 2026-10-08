@@ -200,7 +200,7 @@ const intlRows: readonly JsOperationRowData[] = [
     { variant: "options", path: "integer_to_locale_string_with_options", params: [{ ref: "string" }, { ref: "jsvalue" }], modes: ["ref", "ref"] },
     { variant: "locales", path: "integer_to_locale_string_with_locales", params: [{ ref: "string-array" }], modes: ["ref"] },
     { variant: "locales-options", path: "integer_to_locale_string_with_locales_options", params: [{ ref: "string-array" }, { ref: "jsvalue" }], modes: ["ref", "ref"] },
-  ].flatMap((entry) => (["number", "bigint"] as const).map((lane): JsOperationRowData => ({ owner: "BigInt", member: "toLocaleString", operationKind: "call", lane, variant: `${lane}-${entry.variant}`, fallible: entry.variant !== "default" && entry.variant !== "undefined", requirements: lane === "number" ? [{ carrier: { ref: "receiver" }, capability: "integer" }] : [], shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: `js_abi::${entry.path}`, receiverMode: lane === "number" ? "value" : "ref", argModes: entry.modes as ("value" | "ref")[] }, result: { ref: "string" }, params: entry.params as import("./model.js").JsCarrierRef[] } }))),
+  ].flatMap((entry) => (["number", "bigint"] as const).map((lane): JsOperationRowData => ({ owner: "BigInt", member: "toLocaleString", operationKind: "call", lane, variant: `${lane}-${entry.variant}`, fallible: entry.variant !== "default" && entry.variant !== "undefined", requirements: lane === "number" ? [{ carrier: { ref: "receiver" }, capability: "integer" }] : [], ...(entry.variant.endsWith("options") ? { valueProjections: [{ sourceIndex: 1, kind: "properties" }] as const } : {}), shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: `js_abi::${entry.path}`, receiverMode: lane === "number" ? "value" : "ref", argModes: entry.modes as ("value" | "ref")[] }, result: { ref: "string" }, params: entry.params as import("./model.js").JsCarrierRef[] } }))),
 ];
 
 const consoleVariadicRows = [
@@ -564,7 +564,7 @@ const jsonRows: readonly JsOperationRowData[] = ([
   })),
 ] satisfies readonly JsOperationRowData[]).map((row) => ({
   ...row,
-  jsonValueSourceArgumentIndexes: [0],
+  valueProjections: [{ sourceIndex: 0, kind: "json" }] as const,
 }));
 
 export const jsCapabilityOperationRows: readonly JsOperationRowData[] = [

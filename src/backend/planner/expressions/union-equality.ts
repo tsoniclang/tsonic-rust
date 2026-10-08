@@ -4,6 +4,7 @@ import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustUnionEqualityArm } from "../../../target-model/operations/binary.js";
 import { isRustUnitCarrier } from "../../../target-model/types/carriers/js.js";
+import { isRustBoolCarrier } from "../../../target-model/types/index.js";
 import { rustSourceOptionalElementCarrier } from "../../../target-model/types/carriers/optional.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { diagnosticInput } from "../program/plan-context.js";
@@ -18,7 +19,7 @@ import { lowerNestedRustValueConversion } from "./value-conversions.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import type { RustValueConversion } from "../../../target-model/operations/model.js";
 import { planRustOperatorCallExpression } from "./binary.js";
-import { negateRustBooleanExpression } from "../../target-ast/expressions.js";
+import { negateRustBooleanExpression, rustBooleanLiteralComparison } from "../../target-ast/expressions.js";
 
 export function planRustUnionEquality(
   node: Node,
@@ -77,7 +78,9 @@ export function planRustUnionEquality(
       const convertedLeft = convert(leftValue, arm.operation.leftConversion);
       const convertedRight = convert(rightValue, arm.operation.rightConversion);
       if (convertedLeft === undefined || convertedRight === undefined) return undefined;
-      comparison = { kind: "binary", operator: "==", left: convertedLeft, right: convertedRight };
+      comparison = (isRustBoolCarrier(arm.left.carrier) && isRustBoolCarrier(arm.right.carrier)
+        ? rustBooleanLiteralComparison("==", convertedLeft, convertedRight) : undefined) ??
+        { kind: "binary", operator: "==", left: convertedLeft, right: convertedRight };
     }
     if (comparison === undefined) return undefined;
     arms.push({ pattern: { kind: "tuple", elements: [leftPattern, rightPattern] }, expression: comparison });

@@ -2,6 +2,7 @@ import { rustValueBlock } from "../../target-ast/value-block.js";
 import {
   rustOptionTargetType,
   rustCallableProtocol,
+  rustProgramErrorTargetType,
   rustStructuralObjectCarrierValue,
 } from "../../../target-model/types/index.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
@@ -411,9 +412,21 @@ function lowerStructuralToJsonValueConversion(
     ));
     return undefined;
   }
+  const invocationErrorType = plannedField.nativeMethod === true
+    ? rustTypeFromCarrierInContext(rustProgramErrorTargetType(), context)
+    : rustTargetRuntimeErrorType;
+  if (invocationErrorType === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node ?? context.sourceFile),
+      "rust.backend.js-value-to-json-error",
+      "Selected toJSON projection requires its exact native method error boundary.",
+    ));
+    return undefined;
+  }
   const converted = lowerNestedRustValueConversion(
     contract.resultConversion,
-    invocation,
+    { kind: "try", expr: invocation, resultErrorType: rustTargetRuntimeErrorType,
+      operandErrorType: invocationErrorType },
     context,
     node,
   );

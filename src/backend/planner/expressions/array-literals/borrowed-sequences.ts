@@ -18,11 +18,20 @@ import { lowerNestedRustValueConversion } from "../value-conversions.js";
 import { rustCarrierHasCloneContract } from "../../types/generic-requirements.js";
 import { rustVecTargetType } from "../../../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
+import { hasExactObjectKeys, isDenseDataArray, isMetadataRecord } from "../../../../target-model/metadata/closed-data.js";
 
 export function planRustBorrowedSequenceAppend(
   node: Node, fact: RustBorrowedSequenceInput, destination: RustExpr,
   elementCarrier: TargetTypeRef, context: RustPlanContext,
 ): RustExpr | undefined {
+  if (!isMetadataRecord(fact) || !hasExactObjectKeys(fact, ["expression", "controlNodes", "inputs"]) ||
+    !isDenseDataArray(fact.inputs) || !isDenseDataArray(fact.controlNodes) ||
+    fact.inputs.some(input => !isMetadataRecord(input) ||
+      !(hasExactObjectKeys(input, ["kind", "expression"]) && input.kind === "empty" ||
+        hasExactObjectKeys(input, ["kind", "expression", "carrier", "presentCarrier", "optional", "conversion"]) &&
+          input.kind === "sequence" && typeof input.optional === "boolean"))) {
+    return reject("Borrowed sequence input requires its exact finalized dense data shape.");
+  }
   const choice = sourceSequenceInputChoice(context.input.program.source.ast, fact.expression);
   if (choice === undefined || choice.inputs.length !== fact.inputs.length ||
     choice.inputs.some((expression, index) => expression !== fact.inputs[index]?.expression) ||

@@ -7,12 +7,73 @@ import { rustRecordTargetType } from "../../../dist/target-model/types/carriers/
 import { rustStructuralObjectTargetType } from "../../../dist/target-model/types/carriers/source-types.js";
 import { rustJsSharedObjectValueAdmission } from "../../../dist/target-model/conversions/closed-record.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
-import { selectRustSourceValueConversion, selectRustJsonValueConversion } from "../../../dist/policy/conversions/selection.js";
+import { selectRustSourceValueConversion, selectRustProjectedValueConversion } from "../../../dist/policy/conversions/selection.js";
 import { rustValueConversionContract } from "../../../dist/target-model/conversions/contracts.js";
 import { substituteRustValueConversion } from "../../../dist/target-model/conversions/substitution.js";
 import { finalizeRustProviderOperationAbi, validateRustFinalizedOperationAbi } from "../../../dist/analysis/facts/finalized-operation-abi.js";
 import { lowerRustValueConversion } from "../../../dist/backend/planner/expressions/value-conversions.js";
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../helpers/fake-compile-input.mjs";
+import { jsValueProjectionsAreValid } from "../../../dist/policy/operations/source-profiles/js/model.js";
+import { materializeJsValueProjections } from "../../../dist/policy/operations/source-profiles/js/materialization.js";
+import { rustCallableTargetType } from "../../../dist/target-model/types/index.js";
+
+test("explicit property projection reads checked fields without selecting JSON behavior", () => {
+  const result = rustStructuralObjectTargetType("/src/index.ts", [
+    { sourceName: "useGrouping", presence: "required", readonly: false, type: rustSourcePrimitiveTargetType("bool") },
+  ]);
+  const source = rustStructuralObjectTargetType("/src/index.ts", [
+    { sourceName: "maximumFractionDigits", presence: "optional", readonly: false,
+      type: rustOptionTargetType(rustSourcePrimitiveTargetType("uint64")) },
+    { sourceName: "toJSON", method: true, presence: "required", readonly: false,
+      type: rustCallableTargetType([], result) },
+    { sourceName: "useGrouping", presence: "required", readonly: false, type: rustSourcePrimitiveTargetType("bool") },
+  ]);
+  const properties = selectRustProjectedValueConversion(source, "properties");
+  assert.equal(properties.kind, "js-value-from-structural-object");
+  assert.deepEqual(properties.fields.map(field => field.sourceName), ["maximumFractionDigits", "useGrouping"]);
+  assert.equal(selectRustProjectedValueConversion(source, "json").kind, "js-value-from-structural-to-json");
+  assert.equal(selectRustSourceValueConversion(source, rustJsValueTargetType()).kind, "js-value-from-closed-carrier");
+  for (const kind of ["json", "properties"]) {
+    assert.ok(rustValueConversionContract(selectRustProjectedValueConversion(source, kind)));
+    const optional = selectRustProjectedValueConversion(rustOptionTargetType(source), kind);
+    assert.equal(optional.kind, "closed-value-from-option");
+    assert.equal(optional.elementConversion.kind, kind === "json" ? "js-value-from-structural-to-json" : "js-value-from-structural-object");
+  }
+  assert.equal(selectRustProjectedValueConversion(source, "unknown") === undefined, true);
+});
+
+test("value projection metadata rejects malformed and conflicting selections without executing accessors", () => {
+  const source = rustStructuralObjectTargetType("/src/index.ts", [
+    { sourceName: "count", presence: "required", readonly: false, type: rustSourcePrimitiveTargetType("uint64") },
+  ]);
+  const scalar = rustSourcePrimitiveTargetType("int32");
+  const valid = [{ sourceIndex: 0, kind: "properties" }];
+  let reads = 0;
+  const accessor = { kind: "properties" };
+  Object.defineProperty(accessor, "sourceIndex", { enumerable: true, get() { reads += 1; return 0; } });
+  for (const projections of [
+    [{ sourceIndex: -1, kind: "properties" }], [{ sourceIndex: 0.5, kind: "properties" }],
+    [{ sourceIndex: Infinity, kind: "properties" }], [{ sourceIndex: 1, kind: "properties" }],
+    [{ sourceIndex: 0, kind: "unknown" }], [...valid, ...valid], [null], [accessor],
+    [{ ...valid[0], extra: true }], Array(1),
+  ]) {
+    assert.equal(jsValueProjectionsAreValid(projections, 1), false);
+    assert.equal(materializeJsValueProjections({ form: "call", path: "accept" }, projections, [source]) === undefined, true);
+  }
+  assert.equal(reads, 0);
+  assert.equal(jsValueProjectionsAreValid(valid, 1, [0]), false);
+  for (const form of ["call", "free-call"]) {
+    const target = { form, path: "accept", argOrder: [1, 0], argModes: ["value", "ref"] };
+    const selected = materializeJsValueProjections(target, valid, [source, scalar]);
+    assert.equal(selected.argConversions[0], undefined);
+    assert.equal(selected.argConversions[1].kind, "js-value-from-structural-object");
+    for (const mutation of [
+      { ...target, argOrder: [1] }, { ...target, argOrder: [0, 0] },
+      { ...target, argOrder: [-1, 0] }, { ...target, argConversions: [undefined, selected.argConversions[1]] },
+      { ...target, form: "receiver-method", name: "accept" },
+    ]) assert.equal(materializeJsValueProjections(mutation, valid, [source, scalar]) === undefined, true);
+  }
+});
 
 test("shared native structural objects retain their owner while explicit JSON selects field projection", () => {
   const target = rustJsValueTargetType();
@@ -23,7 +84,7 @@ test("shared native structural objects retain their owner while explicit JSON se
   assert.deepEqual(conversion, { kind: "js-value-from-closed-carrier", source });
   assert.deepEqual(rustValueConversionContract(conversion), { category: "projection", lowering: "call",
     path: "js_abi::JsValue::from", sourceMode: "value", source, target, fallible: false });
-  assert.equal(selectRustJsonValueConversion(source).kind, "js-value-from-structural-object",
+  assert.equal(selectRustProjectedValueConversion(source, "json").kind, "js-value-from-structural-object",
     "explicit serialization, not ordinary admission, owns the checked field projection");
   for (const optional of [rustOptionTargetType(source), { ...rustOptionTargetType(source), sourceAbsence: true }]) {
     const selected = selectRustSourceValueConversion(optional, target);

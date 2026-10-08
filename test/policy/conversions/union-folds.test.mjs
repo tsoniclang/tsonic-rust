@@ -8,7 +8,7 @@ import { rustJsIntlGroupingTargetId, rustJsNumericTargetId } from "../../../dist
 import { rustUnionLeaves } from "../../../dist/target-model/types/union-relations.js";
 import { rustValueConversionContract, rustValueConversionIdentity } from "../../../dist/target-model/conversions/contracts.js";
 import { substituteRustValueConversion } from "../../../dist/target-model/conversions/substitution.js";
-import { selectRustSourceValueConversion, selectRustJsonValueConversion } from "../../../dist/policy/conversions/selection.js";
+import { selectRustSourceValueConversion, selectRustProjectedValueConversion } from "../../../dist/policy/conversions/selection.js";
 import { finalizeRustProviderOperationAbi, validateRustFinalizedOperationAbi } from "../../../dist/analysis/facts/finalized-operation-abi.js";
 import { validateValueConversion } from "../../../dist/providers/packages/validation/carriers.js";
 import { materializeProviderOperationRow } from "../../../dist/providers/packages/materialization.js";
@@ -30,7 +30,7 @@ test("union folds share exact generated/runtime paths and retain native integer 
   ] }, true), true);
   const definitions = registry.seal();
   for (const source of [runtime, grouping, inner, outer]) {
-    for (const select of [selectRustSourceValueConversion, (source, _target, definitions) => selectRustJsonValueConversion(source, definitions)]) {
+    for (const select of [selectRustSourceValueConversion, (source, _target, definitions) => selectRustProjectedValueConversion(source, "json", definitions)]) {
       const conversion = select(source, rustJsValueTargetType(), definitions);
       assert.equal(conversion.kind, "union-fold");
       assert.deepEqual(conversion.arms.map(({ carrier, path }) => ({ carrier, path })), rustUnionLeaves(source, definitions));

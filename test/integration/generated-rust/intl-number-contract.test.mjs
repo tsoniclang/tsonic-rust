@@ -14,7 +14,25 @@ test("Intl exact integer, optional precision and grouping contracts execute in R
     target: { id: "rust", options: { outputType: "bin", crateName: "intl_contract" } },
     files: { "index.ts": `
       import { check } from "@acme/testing";
-      import type { int64, uint64, int128, uint128 } from "@tsonic/core/types.js";
+      import type { int32, int64, uint64, int128, uint128 } from "@tsonic/core/types.js";
+      let optionReads: int32 = 0;
+      let optionSuppliers: int32 = 0;
+      interface GroupingOptions { readonly useGrouping: boolean; }
+      class UngroupedOptions implements GroupingOptions {
+        get useGrouping(): boolean { optionReads += 1; return false; }
+        toJSON(): { useGrouping: boolean } { return { useGrouping: true }; }
+      }
+      class GroupedOptions { readonly useGrouping: boolean = true; }
+      function supplyOptions(): UngroupedOptions { optionSuppliers += 1; return new UngroupedOptions(); }
+      function interfaceOptions(value: int64, options: GroupingOptions): string {
+        return value.toLocaleString("en", options);
+      }
+      function optionalOptions(value: int64, options: GroupingOptions | undefined): string {
+        return value.toLocaleString("en", options);
+      }
+      function unionOptions(value: int64, options: UngroupedOptions | GroupedOptions): string {
+        return value.toLocaleString("en", options);
+      }
       export function main(): void {
         const signed: int64 = 9007199254740993n;
         const unsigned: uint64 = 18446744073709551615n;
@@ -27,6 +45,19 @@ test("Intl exact integer, optional precision and grouping contracts execute in R
         const digits = options.maximumSignificantDigits;
         check(digits !== undefined && digits === 3);
         const plain = new Intl.NumberFormat("en", { useGrouping: false });
+        const namedOptions = { useGrouping: false, toJSON() { return { useGrouping: true }; } };
+        check(signed.toLocaleString("en", namedOptions) === "9007199254740993");
+        check(new Intl.NumberFormat("en", namedOptions).format(signed) === "9007199254740993");
+        check(JSON.stringify(namedOptions) === '{"useGrouping":true}');
+        const nativeOptions = supplyOptions();
+        const aliasOptions: GroupingOptions = nativeOptions;
+        check(interfaceOptions(signed, aliasOptions) === "9007199254740993");
+        check(optionalOptions(signed, aliasOptions) === "9007199254740993");
+        check(optionalOptions(signed, undefined) === "9,007,199,254,740,993");
+        check(unionOptions(signed, nativeOptions) === "9007199254740993");
+        check(unionOptions(signed, new GroupedOptions()) === "9,007,199,254,740,993");
+        check(signed.toLocaleString("en", supplyOptions()) === "9007199254740993");
+        check(optionSuppliers === 2 && optionReads === 4);
         const absentDigits = plain.resolvedOptions().maximumSignificantDigits;
         const absentCurrency = plain.resolvedOptions().currency;
         check(absentDigits === undefined && absentCurrency === undefined);

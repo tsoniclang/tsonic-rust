@@ -28,7 +28,7 @@ import {
   planRustCallArguments,
 } from "../input-shaping.js";
 import { planExpression } from "../entry.js";
-import { planRustNonConsumingValue } from "../typed-locations.js";
+import { planRustNonConsumingValue, rustExpressionReadsStorage } from "../typed-locations.js";
 import { rustArgumentPassingMode } from "../../../../analysis/facts/parameter-passing.js";
 import { rustFinalizedCarrierTransitionMatches } from "../../../../analysis/facts/target-operation.js";
 import {
@@ -41,7 +41,7 @@ import {
 } from "../../../../target-model/types/equality.js";
 import { rustValueCarrierTransitionTarget } from "../../../../analysis/facts/value-carrier-queries.js";
 import { rustSpreadElementCarrier } from "../../../../target-model/operations/rest-assembly.js";
-import { planRustRestAssembly } from "./rest-assembly.js";
+import { planRustBorrowedSingletonSlice, planRustRestAssembly } from "./rest-assembly.js";
 import { validateRustFinalizedOperationAbi } from "../../../../analysis/facts/finalized-operation-abi.js";
 import type { Node } from "@tsonic/tsts";
 import { planRustAbsentValue } from "../optional-storage.js";
@@ -328,6 +328,23 @@ function shapeRustSourceCallInput(
   }
   const mutable = parameter.mode === "mut-ref";
   const sourceParameterAbi = context.input.program.facts.getFact(argumentNode, rustSourceParameterAbiFactKey);
+  const ast = context.input.program.source.ast;
+  if (!mutable && selectedInput.kind === "vec-literal" && selectedInput.elements.length === 1 &&
+    rustSliceElementCarrier(parameter.parameterCarrier) !== undefined && ast.is.IsArrayLiteralExpression(argumentNode)) {
+    const element = ast.elements(argumentNode)[0];
+    const construction = context.input.program.facts.getFact(argumentNode, rustTargetOperationFactKey);
+    const value = selectedInput.elements[0]!;
+    const elementAbi = element === undefined ? undefined
+      : context.input.program.facts.getFact(element, rustSourceParameterAbiFactKey);
+    if (element !== undefined && construction?.kind === "array-literal" && construction.lane === "native" &&
+      construction.contributions.length === 1 && construction.contributions[0]?.kind === "value" &&
+      rustExpressionReadsStorage(element, context) &&
+      (value.kind === "path" || value.kind === "method-call" && value.method === "clone" && value.args.length === 0) &&
+      (elementAbi === undefined || elementAbi.parameterCarrier.kind === "reference" &&
+        rustTargetTypeRefEquals(elementAbi.parameterCarrier.referent, construction.elementCarrier))) {
+      return planRustBorrowedSingletonSlice(element, value, context);
+    }
+  }
   const nonConsumingInput = planRustNonConsumingValue(argumentNode, selectedInput, context);
   return sourceParameterAbi?.mode === parameter.mode &&
       rustTargetTypeRefEquals(sourceParameterAbi.parameterCarrier, parameter.parameterCarrier)

@@ -66,6 +66,42 @@ test("terminal binding normalization preserves temporary drop boundaries without
   }
 });
 
+test("stable explicit initializer blocks retain their own scope when a terminal binding is folded", () => {
+  const initializer = { kind: "block", body: block(
+    { kind: "let", name: "capture", mutable: false, init: path("input") },
+    { kind: "tail", expr: { kind: "call", path: "construct", args: [
+      { kind: "closure", params: [], move: true, body: path("capture") },
+    ] } },
+  ) };
+  const folded = finalizeRustBlockLiveness(block(
+    { kind: "let", name: "result", mutable: false, init: initializer },
+    { kind: "tail", expr: path("result") },
+  ));
+  assert.equal(folded.statements.length, 1);
+  assert.equal(folded.statements[0].expr.kind, "block");
+  assert.equal(printRustExpr(folded.statements[0].expr), printRustExpr(initializer));
+  assert.equal(folded.statements[0].expr.body.statements[0].init === initializer.body.statements[0].init, true);
+  assert.deepEqual(finalizeRustBlockLiveness(folded), folded);
+  const changed = [
+    { ...initializer, label: "region" },
+    { ...initializer, body: { ...initializer.body, innerAttrs: [rustWordAttribute("scope")] } },
+    ...[
+      { ...initializer.body.statements[0], mutable: true },
+      { ...initializer.body.statements[0], type: { kind: "primitive", name: "i32" } },
+      { ...initializer.body.statements[0], attrs: [rustWordAttribute("binding")] },
+      { ...initializer.body.statements[0], init: { kind: "method-call",
+        receiver: { kind: "call", path: "acquire", args: [] }, method: "read", args: [] } },
+    ].map(statement => ({ ...initializer, body: block(statement, initializer.body.statements[1]) })),
+  ];
+  for (const unsafe of changed) {
+    const retained = finalizeRustBlockLiveness(block(
+      { kind: "let", name: "result", mutable: false, init: unsafe },
+      { kind: "tail", expr: path("result") },
+    ));
+    assert.equal(retained.statements.length, 2);
+  }
+});
+
 function normalize(conditional, following = []) {
   return finalizeRustBlockLiveness(block(declaration, conditional, ...following, {
     kind: "return", expr: path("result"),

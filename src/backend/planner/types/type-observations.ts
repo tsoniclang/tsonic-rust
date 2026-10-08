@@ -5,9 +5,28 @@ export function rustTypeIsLegalInPosition(
   position: "general" | "parameter" | "return",
 ): boolean {
   if (type === undefined) return true;
-  const containsImplTrait = rustTypeContainsImplTrait(type);
-  return !containsImplTrait || position !== "general" &&
-    (type.kind === "impl-trait" || type.kind === "reference" && type.referent.kind === "impl-trait");
+  if (!rustTypeContainsImplTrait(type)) return true;
+  if (position === "general") return false;
+  switch (type.kind) {
+    case "impl-trait":
+      return !type.bounds.some(rustTypeBoundContainsImplTrait) &&
+        !rustGenericArgumentsContainImplTrait(type.captures);
+    case "named":
+      return (type.genericArguments ?? []).every(argument => argument.kind === "type"
+        ? rustTypeIsLegalInPosition(argument.type, position)
+        : !rustGenericArgumentsContainImplTrait([argument]));
+    case "reference":
+      return rustTypeIsLegalInPosition(type.referent, position);
+    case "raw-pointer":
+      return rustTypeIsLegalInPosition(type.pointee, position);
+    case "fixed-array":
+    case "slice":
+      return rustTypeIsLegalInPosition(type.element, position);
+    case "tuple":
+      return type.elements.every(element => rustTypeIsLegalInPosition(element, position));
+    default:
+      return false;
+  }
 }
 
 export function rustTypeContainsImplTrait(type: RustType): boolean {

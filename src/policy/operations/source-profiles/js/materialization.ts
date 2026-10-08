@@ -4,9 +4,9 @@ import {
   rustJsValueTargetType,
 } from "../../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
-import { selectRustJsonValueConversion } from "../../../conversions/selection.js";
+import { selectRustProjectedValueConversion } from "../../../conversions/selection.js";
 import type { RustProviderOperationForm } from "../../../../target-model/operations/model.js";
-import type { JsOperationTarget } from "./model.js";
+import { jsValueProjectionsAreValid, type JsOperationTarget, type JsValueProjection } from "./model.js";
 import { resolveCarrierRef, type JsLaneBindings } from "./carrier-references.js";
 import type {
   RustTargetGenericArgument,
@@ -85,21 +85,25 @@ export function materializeVariadicTarget(
         leadingArguments: leadingArguments as typeof target.leadingArguments };
 }
 
-export function materializeJsonValueConversions(
+export function materializeJsValueProjections(
   target: RustProviderOperationForm,
-  sourceIndexes: readonly number[] | undefined,
+  projections: readonly JsValueProjection[] | undefined,
   sourceCarriers: readonly (TargetTypeRef | undefined)[],
   definitions: RustTypeDefinitions,
 ): RustProviderOperationForm | undefined {
-  if (sourceIndexes === undefined) {
+  if (projections === undefined) {
     return target;
   }
-  if (target.form !== "call") {
+  if ((target.form !== "call" && target.form !== "free-call") ||
+    !jsValueProjectionsAreValid(projections, sourceCarriers.length)) {
     return undefined;
   }
   const order = target.argOrder ?? sourceCarriers.map((_carrier, index) => index);
-  const selected = new Set(sourceIndexes);
-  if (sourceIndexes.some((sourceIndex) => !order.includes(sourceIndex))) {
+  if (!jsValueProjectionsAreValid(order.map(sourceIndex => ({ sourceIndex, kind: "properties" })), sourceCarriers.length)) {
+    return undefined;
+  }
+  const selected = new Map(projections.map(projection => [projection.sourceIndex, projection.kind]));
+  if (projections.some(projection => !order.includes(projection.sourceIndex))) {
     return undefined;
   }
   const conversions = order.map((sourceIndex, targetIndex) => {
@@ -112,15 +116,14 @@ export function materializeJsonValueConversions(
     return existing !== undefined || source === undefined ||
         jsonValueArgumentNeedsNoConversion(source, mode)
       ? undefined
-      : selectRustJsonValueConversion(source, definitions);
+      : selectRustProjectedValueConversion(source, selected.get(sourceIndex)!, definitions);
   });
   if (conversions.some((conversion, targetIndex) =>
-    selected.has(order[targetIndex]!) && conversion === undefined &&
-      target.argConversions?.[targetIndex] === undefined &&
-      !jsonValueArgumentNeedsNoConversion(
+    selected.has(order[targetIndex]!) && (target.argConversions?.[targetIndex] !== undefined ||
+      conversion === undefined && !jsonValueArgumentNeedsNoConversion(
         sourceCarriers[order[targetIndex]!],
         target.argModes?.[targetIndex] ?? "value",
-      ))) {
+      )))) {
     return undefined;
   }
   return { ...target, argConversions: conversions };

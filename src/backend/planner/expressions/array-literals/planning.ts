@@ -14,7 +14,7 @@ import { rustJsArrayTargetType, rustOptionElementCarrier, rustVecTargetType } fr
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { rustEffectiveValueCarrier } from "../../../../analysis/facts/value-carrier-queries.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
-import { isDenseDataArray } from "../../../../target-model/metadata/closed-data.js";
+import { hasExactObjectKeys, isDenseDataArray, isMetadataRecord } from "../../../../target-model/metadata/closed-data.js";
 import type { RustBorrowedSequenceInput } from "../../../../analysis/facts/operations/borrowed-sequences.js";
 import { planRustBorrowedSequenceAppend } from "./borrowed-sequences.js";
 
@@ -57,13 +57,20 @@ export function planArrayLiteral(node: Node, context: RustPlanContext): RustExpr
   const contributions: Contribution[] = [];
   for (const [index, source] of sources.entries()) {
     const contribution = fact.contributions[index]!;
+    if (!isMetadataRecord(contribution) ||
+      !(hasExactObjectKeys(contribution, ["kind", "input"]) && contribution.kind === "spread" ||
+        hasExactObjectKeys(contribution, ["kind", "carrier"]) && contribution.kind === "value")) {
+      return reject(node, context, "Array contributions require their exact finalized data shape.");
+    }
     const spread = source !== undefined && context.input.program.source.ast.is.IsSpreadElement(source);
     const expression = spread ? Node_Expression(context.input.program.source.ast, source!) : source;
     if (expression === undefined || spread !== (contribution.kind === "spread")) {
       return reject(node, context, "Array contribution does not match its exact finalized source expression.");
     }
     if (contribution.kind === "spread") {
-      if (expression !== contribution.input.expression) return reject(node, context, "Borrowed spread must retain its exact source expression.");
+      if (!isMetadataRecord(contribution.input) ||
+        !hasExactObjectKeys(contribution.input, ["expression", "controlNodes", "inputs"]) ||
+        expression !== contribution.input.expression) return reject(node, context, "Borrowed spread must retain its exact source expression.");
       contributions.push({ kind: "spread", input: contribution.input });
       continue;
     }

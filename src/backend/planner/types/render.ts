@@ -36,6 +36,7 @@ import { rustClassEnvironmentHandleType } from "../objects/class-environment-typ
 import { rustLifetimeToAst } from "./lifetime-syntax.js";
 import { rustOptionalStorageTypeArguments } from "./type-projections.js";
 import { bindRustCallableInputLifetimes } from "../../../target-model/types/carriers/callable-input-lifetimes.js";
+import { rustCallableInputAbsenceWitness } from "../../../target-model/types/carriers/callable-input-witness.js";
 import {
   rustBuiltInCarrierRenderPaths,
   rustCallableTargetId,
@@ -525,9 +526,9 @@ export interface RustTypeRenderingContext {
 export function rustTypeFromCarrierInContext(
   carrier: TargetTypeRef | undefined,
   context: RustTypeRenderingContext,
-  position: "general" | "parameter" | "return" | "inferred-call" = "general",
+  position: "general" | "parameter" | "return" | "inferred-call" | "absence" = "general",
 ): RustType | undefined {
-  const selectedCarrier = carrier === undefined ||
+  const instantiatedCarrier = carrier === undefined ||
       context.typeParameterSubstitutions === undefined &&
       context.lifetimeSubstitutions === undefined
     ? carrier
@@ -536,6 +537,8 @@ export function rustTypeFromCarrierInContext(
         context.typeParameterSubstitutions ?? new Map(),
         context.lifetimeSubstitutions ?? new Map(),
       );
+  const selectedCarrier = position === "absence" && instantiatedCarrier !== undefined
+    ? rustCallableInputAbsenceWitness(instantiatedCarrier) : instantiatedCarrier;
   const resolveSourceTypePath = (value: { readonly fileName: string; readonly typeName: string }): string | undefined => {
     const moduleName = context.moduleNameByFileName.get(value.fileName);
     if (moduleName === undefined) {
@@ -618,7 +621,7 @@ export function rustTypeFromCarrierInContext(
   if (position === "inferred-call" && rendered !== undefined && rustTypeContainsImplTrait(rendered)) {
     return { kind: "infer" };
   }
-  if (!rustTypeIsLegalInPosition(rendered, position === "inferred-call" ? "general" : position)) {
+  if (!rustTypeIsLegalInPosition(rendered, position === "inferred-call" || position === "absence" ? "general" : position)) {
     return undefined;
   }
   collectAliasesFromRustType(rendered, (path) => {

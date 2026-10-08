@@ -63,6 +63,14 @@ function foldTrivialTerminalBinding(
 }
 
 function stableTerminalInputs(expression: RustExpr): boolean {
+  if (expression.kind === "block") {
+    const last = expression.body.statements[expression.body.statements.length - 1];
+    return expression.label === undefined && (expression.body.innerAttrs?.length ?? 0) === 0 &&
+      last?.kind === "tail" && (last.attrs?.length ?? 0) === 0 && stableTerminalInputs(last.expr) &&
+      expression.body.statements.slice(0, -1).every(statement => statement.kind === "let" &&
+        !statement.mutable && statement.type === undefined && (statement.attrs?.length ?? 0) === 0 &&
+        statement.init !== undefined && stableTerminalInputs(statement.init));
+  }
   const deferred = (value: RustExpr): boolean => value.kind === "closure" || value.kind === "closure-block" || value.kind === "async-block";
   if (deferred(expression)) return true;
   if (expression.kind === "call" || expression.kind === "associated-call" || expression.kind === "method-call") {

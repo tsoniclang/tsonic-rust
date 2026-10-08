@@ -35,6 +35,11 @@ export function copy(values: int32[]): int32[] { return [...values]; }
   const valid = context(fact);
   assert.ok(planArrayLiteral(node, valid));
   assertNoTargetDiagnostics(valid.diagnostics);
+  const input = fact.contributions[0].input;
+  const sequence = input.inputs[0];
+  const withInput = selected => ({ ...fact, contributions: [{ kind: "spread", input: selected }] });
+  const withSequence = selected => withInput({ ...input, inputs: [selected] });
+  let accessorReads = 0;
   const mutations = [
     { ...fact, contributions: undefined }, { ...fact, contributions: [] },
     { ...fact, contributions: new Array(1) },
@@ -45,10 +50,25 @@ export function copy(values: int32[]): int32[] { return [...values]; }
       elementTarget: rustSourcePrimitiveTargetType("int64") } }] },
     { ...fact, elementCarrier: rustSourcePrimitiveTargetType("int64") },
     { ...fact, lane: "native" }, { ...fact, length: 2 },
+    { ...fact, contributions: [undefined] },
+    { ...fact, contributions: [{ kind: "spread", input: undefined }] },
+    { ...fact, contributions: [{ get kind() { accessorReads += 1; return "spread"; }, input }] },
+    withInput({ ...input, expression: node }),
+    withInput({ ...input, inputs: undefined }), withInput({ ...input, inputs: new Array(1) }),
+    withInput({ ...input, inputs: [undefined] }), withInput({ ...input, controlNodes: [node] }),
+    withSequence({ ...sequence, expression: node }),
+    withSequence({ ...sequence, carrier: rustSourcePrimitiveTargetType("int64") }),
+    withSequence({ ...sequence, presentCarrier: rustSourcePrimitiveTargetType("int64") }),
+    withSequence({ ...sequence, optional: !sequence.optional }),
+    withSequence({ ...sequence, conversion: undefined }),
+    withSequence({ ...sequence, conversion: { ...sequence.conversion,
+      elementTarget: rustSourcePrimitiveTargetType("int64") } }),
+    withSequence({ ...sequence, get conversion() { accessorReads += 1; return sequence.conversion; } }),
   ];
-  for (const mutation of mutations) {
+  for (const [index, mutation] of mutations.entries()) {
     const selected = context(mutation);
-    assert.equal(planArrayLiteral(node, selected), undefined);
+    assert.equal(planArrayLiteral(node, selected) === undefined, true, `mutation ${index}`);
     assert.ok(selected.diagnostics.some(diagnostic => diagnostic.code === "RUST_MISSING_TARGET_FACT"));
   }
+  assert.equal(accessorReads, 0);
 });
