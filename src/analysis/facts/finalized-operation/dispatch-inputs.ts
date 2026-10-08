@@ -25,11 +25,11 @@ export function insertRustDispatchContextInputs(
     }
     const parameterCarrier = carrierAfterMode(input.carrier, input.mode);
     if (parameterCarrier === undefined) return undefined;
-    targetArguments.push(Object.freeze({
-      source: Object.freeze({ kind: "dispatch-context" as const, contextId: input.contextId, view: input.view }),
+    targetArguments.push({
+      source: { kind: "dispatch-context", contextId: input.contextId, view: input.view },
       carrier: input.carrier, mode: input.mode,
-      parameterCarrier: input.mode === "ref" ? Object.freeze(parameterCarrier) : parameterCarrier,
-    }));
+      parameterCarrier,
+    });
   }
   return { targetReceiver: mapping.targetReceiver, targetArguments };
 }

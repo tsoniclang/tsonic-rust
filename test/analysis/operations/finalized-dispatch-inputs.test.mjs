@@ -63,6 +63,31 @@ test("native dispatch inputs interleave with, but never manufacture, authored so
   assert.throws(() => { abi.targetArguments[1].source.contextId = "other"; }, TypeError);
 });
 
+test("finalized operations publish one immutable snapshot independent of caller aliases", () => {
+  for (const dispatchInputs of [[], [rootInput]]) {
+    const carrier = { ...integer };
+    const form = { ...base.form };
+    const abi = finalizeRustProviderOperationAbi({ ...base, form,
+      sourceArgumentCarriers: [carrier, carrier], resultCarrier: carrier, dispatchInputs });
+    assert.equal(abi !== undefined, true);
+    const verifyFrozen = value => {
+      if (value === null || typeof value !== "object") return;
+      assert.equal(Object.isFrozen(value), true);
+      for (const nested of Object.values(value)) verifyFrozen(nested);
+    };
+    verifyFrozen(abi);
+    carrier.name = "int64";
+    form.path = "acme_dispatch::different";
+    assert.equal(abi.sourceArguments[0].carrier.name, "int32");
+    assert.equal(abi.result.carrier.name, "int32");
+    assert.equal(abi.target.path, "acme_dispatch::accept");
+    assert.equal(validateRustFinalizedOperationAbi(abi), true);
+    assert.throws(() => { abi.sourceArguments[0].carrier.name = "int64"; }, TypeError);
+    assert.throws(() => { abi.effects.evaluation = "pure"; }, TypeError);
+    assert.throws(() => { abi.target.path = "acme_dispatch::different"; }, TypeError);
+  }
+});
+
 test("native roots borrow once while weak handles have independent owned or borrowed modes", () => {
   for (const mode of ["value", "ref"]) {
     const handle = catalog.resolveInput({ ...request, view: "handle", mode, targetArgumentIndex: 0 });

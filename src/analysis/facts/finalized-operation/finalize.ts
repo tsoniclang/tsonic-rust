@@ -8,7 +8,7 @@ import {
   isRustFinalizedTaggedArrayInput,
   rustFinalizedTargetInputMayMutateSource,
 } from "./conversions.js";
-import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
+import { isDenseDataArray, snapshotClosedMetadata } from "../../../target-model/metadata/closed-data.js";
 import { isRustFallibleErrorBoundary } from "../../../target-model/operations/error-boundary.js";
 import { rustRestSequenceForm } from "../../../target-model/operations/rest-assembly.js";
 import {
@@ -22,8 +22,6 @@ import type { FinalizeRustProviderOperationAbiOptions, RustFinalizedOperationAbi
 import type { RustFinalizedOperationKind } from "../../../target-model/operations/model.js";
 import { insertRustDispatchContextInputs } from "./dispatch-inputs.js";
 import { isRustNativeErrorCarriers } from "../../../target-model/operations/native-error-carriers.js";
-
-const emptyDispatchInputs = Object.freeze([]);
 
 export function finalizeRustProviderOperationAbi<OperationKind extends RustFinalizedOperationKind>(
   options: FinalizeRustProviderOperationAbiOptions<OperationKind>,
@@ -110,7 +108,7 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
     input,
     options.sourceArgumentCarriers.length, definitions,
   );
-  const dispatchInputs = options.dispatchInputs === undefined ? emptyDispatchInputs : options.dispatchInputs;
+  const dispatchInputs = options.dispatchInputs === undefined ? [] : options.dispatchInputs;
   const mapping = sourceMapping === undefined ? undefined
     : insertRustDispatchContextInputs(sourceMapping, dispatchInputs, options.form);
   if (mapping === undefined) {
@@ -171,7 +169,7 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
     sourceArguments,
     targetReceiver: mapping.targetReceiver,
     targetArguments: mapping.targetArguments,
-    dispatchInputs: dispatchInputs.length === 0 ? emptyDispatchInputs : Object.freeze([...dispatchInputs]),
+    dispatchInputs,
     targetGenericArguments: options.targetGenericArguments ?? [],
     result,
     effects: {
@@ -194,7 +192,7 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
       ...(options.nativeErrorCarriers === undefined ? {} : { nativeErrorCarriers: options.nativeErrorCarriers }),
     },
   };
-  return validateRustFinalizedOperationAbi(abi, definitions) ? abi : undefined;
+  return validateRustFinalizedOperationAbi(abi, definitions) ? snapshotClosedMetadata(abi) : undefined;
 }
 
 function mappingUsesSourceReceiver(
