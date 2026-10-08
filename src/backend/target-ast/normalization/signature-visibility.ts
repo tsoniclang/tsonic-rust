@@ -71,19 +71,28 @@ function exposeScopedRustTypes(items: readonly RustItem[], publicTypes: Readonly
       return { ...item, visibility: names.size === 0 ? item.visibility : "public" as const,
         body: { ...item.body, items: exposeScopedRustTypes(item.body.items, names) } };
     }
-    return (item.kind === "struct" || item.kind === "enum" || item.kind === "trait" ||
-        item.kind === "type-alias") && publicTypes.has(item.name) &&
-        item.visibility !== "public"
-      ? { ...item, visibility: "public",
-          ...(item.kind === "trait" ? {
-            members: item.members.map(member => {
-              if (member.kind !== "function") return member;
-              const { deadCode, ...method } = member;
-              return method;
-            }),
-          } : {}),
-        }
-      : item;
+    if ((item.kind !== "struct" && item.kind !== "enum" && item.kind !== "trait" &&
+      item.kind !== "type-alias") || !publicTypes.has(item.name) || item.visibility === "public") return item;
+    const { deadCode, ...exposed } = item;
+    return { ...exposed, visibility: "public",
+      ...(item.kind === "struct" ? {
+        fields: item.fields.map(field => {
+          if (field.visibility !== "public") return field;
+          const { deadCode, ...exposedField } = field;
+          return exposedField;
+        }),
+      } : {}),
+      ...(item.kind === "enum" ? {
+        variants: item.variants.map(({ deadCode, ...variant }) => variant),
+      } : {}),
+      ...(item.kind === "trait" ? {
+        members: item.members.map(member => {
+          if (member.kind !== "function") return member;
+          const { deadCode, ...method } = member;
+          return method;
+        }),
+      } : {}),
+    };
   });
 }
 

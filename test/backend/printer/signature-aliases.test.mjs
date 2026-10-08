@@ -4,6 +4,7 @@ import test from "node:test";
 import { nameRustSignatureTypes as nameSignatureScope } from "../../../dist/backend/target-ast/normalization/signature-aliases.js";
 import { emptyRustGenerics } from "../../../dist/backend/target-ast/nodes.js";
 import { finalizeRustSourceStyle } from "../../../dist/backend/target-ast/normalization/source-style.js";
+import { closePublicRustTypeVisibility } from "../../../dist/backend/target-ast/normalization/signature-visibility.js";
 
 function nameRustSignatureTypes(items) {
   const scope = nameSignatureScope(items);
@@ -18,6 +19,36 @@ const makeFunction = (name, visibility = "private") => ({ kind: "function", name
   generics: { parameters: [{ kind: "type", name: "Item", bounds: [{ kind: "trait", path: "Clone" }] }], wherePredicates: [] },
   params: [{ name: "values", type: nested, mutable: false }], returnType: nested,
   body: { statements: [{ kind: "tail", expr: { kind: "path", path: "values" } }] },
+});
+
+test("public signature closure removes only obsolete reachability dispositions", () => {
+  const exposed = { kind: "struct", name: "Envelope", visibility: "public", generics: emptyRustGenerics,
+    fields: [{ name: "value", visibility: "public", type: named("Variants") }] };
+  const variants = { kind: "enum", name: "Variants", visibility: "crate", generics: emptyRustGenerics,
+    deadCode: "generated-unconstructed-shape", variants: [
+      { name: "First", fields: [named("Payload")], deadCode: "generated-unconstructed-variant" },
+      { name: "Second", fields: [], deadCode: "authored-unused-variant" },
+    ] };
+  const payload = { kind: "struct", name: "Payload", visibility: "crate", generics: emptyRustGenerics,
+    deadCode: "generated-unconstructed-shape", fields: [
+      { name: "publicValue", visibility: "public", type: named("u64"), deadCode: "authored-unread-field" },
+      { name: "privateValue", visibility: "private", type: named("u64"), deadCode: "authored-unread-field" },
+    ] };
+  const retained = { ...variants, name: "Internal", variants: variants.variants.map(variant => ({ ...variant, fields: [] })) };
+  const scopedPublic = { ...exposed, name: "UnusedPublic", deadCode: "authored-declaration", fields: [] };
+  const before = [exposed, variants, payload, retained, scopedPublic];
+  const result = closePublicRustTypeVisibility(before);
+  assert.equal(result[1].visibility, "public");
+  assert.equal(Object.hasOwn(result[1], "deadCode"), false);
+  assert.equal(result[1].variants.every(variant => !Object.hasOwn(variant, "deadCode")), true);
+  assert.equal(result[2].visibility, "public");
+  assert.equal(Object.hasOwn(result[2], "deadCode"), false);
+  assert.equal(Object.hasOwn(result[2].fields[0], "deadCode"), false);
+  assert.equal(result[2].fields[1], payload.fields[1], "private field reachability is not widened");
+  assert.equal(result[3], retained, "private variant diagnostics remain exact");
+  assert.equal(result[4], scopedPublic, "existing visibility retains its exact enclosing module reachability policy");
+  assert.equal(variants.deadCode, "generated-unconstructed-shape", "input AST is not mutated");
+  assert.deepEqual(closePublicRustTypeVisibility(result), result, "one idempotent public closure");
 });
 
 test("native lifetime arguments stay exact in factored aliases", () => {
