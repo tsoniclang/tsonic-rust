@@ -54,6 +54,9 @@ import {
   enterRustProjectObjectMutableState,
 } from "../objects/project-objects.js";
 import { rustErrorFieldBorrowNeedsSnapshot, rustErrorFieldHasGuardedBorrow } from "../expressions/error-field-borrows.js";
+import { rustProviderInputBorrowMode } from "../../../analysis/facts/provider-borrows.js";
+import { rustNativeStoragePathsDisjoint, rustNativeStorageProjections, rustNativeStorageRoot,
+  type RustNativeStorageProjection } from "../../../analysis/facts/native-storage-paths.js";
 
 export interface RustFinalizedInputPlanOverrides {
   readonly sourceValues: ReadonlyMap<Node, RustExpr>;
@@ -379,7 +382,7 @@ function providerInputStabilizationKeys(
     )) {
       keys.add(slot.key);
     }
-    if (!inputs.some((input) => input.mode !== "value")) {
+    if (!inputs.some((input) => rustProviderInputBorrowMode(input) !== undefined)) {
       continue;
     }
     for (let laterIndex = index + 1; laterIndex < sourceSlots.length; laterIndex += 1) {
@@ -388,12 +391,13 @@ function providerInputStabilizationKeys(
         continue;
       }
       if (inputs.some((input) =>
-        input.mode === "ref" &&
+        rustProviderInputBorrowMode(input) === "ref" &&
         !rustErrorFieldHasGuardedBorrow(slot.node, context) &&
-        !providerInputUsesExistingBorrow(input, slot.node, context))) {
+        !providerInputUsesExistingBorrow(input, slot.node, context) &&
+        !context.input.program.borrowStability.canBorrowAcross(slot.node, later.node))) {
         keys.add(slot.key);
       }
-      if (inputs.some((input) => input.mode === "mut-ref")) {
+      if (inputs.some((input) => rustProviderInputBorrowMode(input) === "mut-ref")) {
         const mutable = mutableInputs.get(slot.key);
         if (mutable?.kind === "owned") {
           keys.add(slot.key);
@@ -522,7 +526,8 @@ function collectMutableInputs(
         const projectField = providerMutableProjectField(node, context);
         const direct = projectField === undefined && providerMutableInputIsDirect(node, context);
         const rootDeclaration = projectField?.rootDeclaration ??
-          (direct ? providerDirectMutableRoot(node, context) : undefined);
+          (direct ? rustNativeStorageRoot(node, { ast: context.input.program.source.ast,
+            facts: context.input.program.facts, navigation: context.input.program.sourceNavigation }) : undefined);
         mutableInputs.set(
           key,
           projectField !== undefined
@@ -574,7 +579,7 @@ function mutableRootsAreDisjoint(
   if (mutableInputs.size <= 1) {
     return true;
   }
-  const selected: { readonly root: Node; readonly projections: readonly string[] }[] = [];
+  const selected: { readonly root: Node; readonly projections: readonly RustNativeStorageProjection[] }[] = [];
   for (const mutable of mutableInputs.values()) {
     const root = mutable.kind === "promoted"
       ? mutable.rootDeclaration
@@ -593,7 +598,8 @@ function mutableRootsAreDisjoint(
     if (root === undefined) {
       continue;
     }
-    const projections = providerMutableStorageProjections(mutable.node, root, context);
+    const projections = rustNativeStorageProjections(mutable.node, root, { ast: context.input.program.source.ast,
+      facts: context.input.program.facts, navigation: context.input.program.sourceNavigation });
     if (projections === undefined) {
       context.diagnostics.push(unsupportedConstructDiagnostic(
         diagnosticInput(context, mutable.node),
@@ -603,7 +609,7 @@ function mutableRootsAreDisjoint(
       return false;
     }
     for (const previous of selected) {
-      if (previous.root === root && !providerProjectionPathsAreDisjoint(
+      if (previous.root === root && !rustNativeStoragePathsDisjoint(
         previous.projections,
         projections,
       )) {
@@ -618,55 +624,6 @@ function mutableRootsAreDisjoint(
     selected.push({ root, projections });
   }
   return true;
-}
-
-function providerMutableStorageProjections(
-  node: Node,
-  rootDeclaration: Node,
-  context: RustPlanContext,
-): readonly string[] | undefined {
-  const { ast } = context.input.program.source;
-  const projections: string[] = [];
-  let selected = node;
-  while (true) {
-    const kind = ast.kindName(selected);
-    if (kind === "KindParenthesizedExpression") {
-      const inner = Node_Expression(ast, selected);
-      if (inner === undefined) return undefined;
-      selected = inner;
-      continue;
-    }
-    if (kind === "KindIdentifier") {
-      const declaration = context.input.program.sourceNavigation.sourceReferenceFor(selected)?.declaration;
-      return declaration === rootDeclaration ? Object.freeze(projections) : undefined;
-    }
-    if (kind === "KindThisExpression" || kind === "KindThisKeyword") {
-      return ast.getSourceFile(selected) === rootDeclaration
-        ? Object.freeze(projections)
-        : undefined;
-    }
-    if (kind !== "KindPropertyAccessExpression") return undefined;
-    const operation = context.input.program.facts.getFact(selected, rustTargetOperationFactKey);
-    if (operation?.kind !== "source-field" || operation.valueSemantics.kind !== "stored" ||
-      operation.dispatch !== undefined) {
-      return undefined;
-    }
-    projections.unshift(`${operation.operationId}\0${operation.storageIndex}`);
-    const receiver = Node_Expression(ast, selected);
-    if (receiver === undefined) return undefined;
-    selected = receiver;
-  }
-}
-
-function providerProjectionPathsAreDisjoint(
-  left: readonly string[],
-  right: readonly string[],
-): boolean {
-  const commonLength = Math.min(left.length, right.length);
-  for (let index = 0; index < commonLength; index += 1) {
-    if (left[index] !== right[index]) return true;
-  }
-  return false;
 }
 
 function providerMutableInputIsDirect(
@@ -717,7 +674,8 @@ function providerMutableProjectField(
     receiverNode === undefined) {
     return undefined;
   }
-  const rootDeclaration = providerDirectMutableRoot(receiverNode, context);
+  const rootDeclaration = rustNativeStorageRoot(receiverNode, { ast: context.input.program.source.ast,
+    facts: context.input.program.facts, navigation: context.input.program.sourceNavigation });
   return {
     receiverNode,
     storagePath,
@@ -781,24 +739,6 @@ function mergeSourceExpressionEffects(
     suspends: left.suspends || right.suspends,
     mayThrow: left.mayThrow || right.mayThrow,
   };
-}
-
-function providerDirectMutableRoot(
-  node: Node,
-  context: RustPlanContext,
-): Node | undefined {
-  const { ast } = context.input.program.source;
-  if (ast.is.IsIdentifier(node)) {
-    return context.input.program.sourceNavigation.sourceReferenceFor(node)?.declaration;
-  }
-  const kind = ast.kindName(node);
-  if (kind === "KindThisExpression" || kind === "KindThisKeyword") {
-    return ast.getSourceFile(node);
-  }
-  const receiver = Node_Expression(ast, node);
-  return receiver === undefined || receiver === node
-    ? undefined
-    : providerDirectMutableRoot(receiver, context);
 }
 
 function providerMutableLocationNode(

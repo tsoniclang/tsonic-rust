@@ -3,9 +3,12 @@ import test from "node:test";
 import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression } from "@tsonic/target-api/source";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustBorrowStability } from "../../../dist/analysis/program/borrow-stability.js";
+import { fakeAstReader } from "../../helpers/fake-compile-input.mjs";
+import { providerEvaluationOrderSource } from "../../../../tsonic/test/fixtures/provider-evaluation-order.mjs";
 import { rustBindingStorageFactKey, rustContextualValueConversionFactKey, rustSourceBindingFactKey,
   rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
 import { rustCapturedFieldStorageFactKey } from "../../../dist/analysis/facts/receiver-captures.js";
+import { rustProviderInputBorrowMode } from "../../../dist/analysis/facts/provider-borrows.js";
 import { borrowedScalarFieldWritesSource, ordinaryScalarFieldWritesSource, ownedFieldSnapshotSource } from "../../../../tsonic/test/fixtures/borrowed-scalar-field-writes.mjs";
 import { receiverFieldCaptureEdges } from "../../../../tsonic/test/fixtures/receiver-field-capture-edges.mjs";
 
@@ -21,7 +24,7 @@ function allNodes(ast, files) {
 }
 
 function analysisInput(program, facts = program.facts) {
-  return { ast: program.source.ast, sourceFiles: program.sourceFiles, facts,
+  return { ast: program.source.ast, sourceFiles: program.sourceFiles, facts, navigation: program.sourceNavigation,
     projectTypes: program.projectTypes, objectRepresentations: program.objectRepresentations,
     structuralShapes: program.structuralShapes, frozenDataWrites: program.frozenDataWrites };
 }
@@ -199,7 +202,8 @@ export function indexed(values: string[]): number { return values[0].length; }
 test("borrow stability budgets are finite, bounded and reject cycles without AST diagnostics", () => {
   const root = { children: [{ children: [] }] };
   const input = {
-    sourceFiles: [root], ast: { is: { IsBinaryExpression: () => false },
+    sourceFiles: [root], ast: { ...fakeAstReader(), is: { ...fakeAstReader().is,
+      IsPrefixUnaryExpression: () => false, IsPostfixUnaryExpression: () => false },
       forEachChild: (node, visit) => node.children.forEach(visit) },
     facts: { getRuntimeCarrierFact: () => undefined, getFact: () => undefined },
   };
@@ -214,4 +218,86 @@ test("borrow stability budgets are finite, bounded and reject cycles without AST
   }
   root.children.push(root);
   assert.equal(analyzeRustBorrowStability(input, 8).kind, "rejected", "cycle");
+});
+
+test("native field borrowing consumes exact disjoint scalar writes but rejects opaque calls and stale field facts", () => {
+  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": providerEvaluationOrderSource } });
+  const ast = program.source.ast;
+  const count = allNodes(ast, program.sourceFiles).length;
+  assert.equal(analyzeRustBorrowStability(analysisInput(program), count).kind, "rejected",
+    "native write correspondence consumes the same finite aggregate accounting budget");
+  assert.equal(analyzeRustBorrowStability(analysisInput(program), count + 128).kind, "resolved");
+  const methods = allNodes(ast, program.sourceFiles).filter(node => ast.is.IsMethodDeclaration(node));
+  for (const name of ["next", "combined", "observed", "mutated"]) {
+    const method = methods.find(node => ast.text(ast.name(node)) === name);
+    const index = allNodes(ast, [method]).find(node => ast.is.IsElementAccessExpression(node));
+    const receiver = Node_Expression(ast, index);
+    const operand = ast.as.AsElementAccessExpression(index)?.ArgumentExpression;
+    assert.equal(program.borrowStability.canBorrowAcross(receiver, operand), name !== "mutated", name);
+    if (name !== "next") continue;
+    assert.equal(program.borrowStability.canBorrowAcross(receiver, {}), false, "foreign node");
+    assert.equal(program.borrowStability.canBorrowAcross(ast.as.AsPostfixUnaryExpression(operand)?.Operand, operand), false,
+      "the exact same physical field is never treated as disjoint");
+    const field = program.facts.getFact(receiver, rustTargetOperationFactKey);
+    for (const replacement of [undefined, { ...field, storageIndex: -1 },
+      { ...field, valueSemantics: { kind: "accessor", writable: true } },
+      { ...field, dispatch: { read: "read", write: "write", ownerCarrier: field.receiverCarrier } }]) {
+      const facts = { ...program.facts, getFact(node, key) {
+        return node === receiver && key === rustTargetOperationFactKey ? replacement : program.facts.getFact(node, key);
+      } };
+      const selected = analyzeRustBorrowStability(analysisInput(program, facts));
+      assert.equal(selected.kind, "resolved");
+      assert.equal(selected.plan.canBorrowAcross(receiver, operand), false);
+    }
+  }
+});
+
+test("borrowed conversion effects require exact finalized input and pure native observation contracts", () => {
+  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": providerEvaluationOrderSource } });
+  const ast = program.source.ast;
+  const method = allNodes(ast, program.sourceFiles).find(node => ast.is.IsMethodDeclaration(node) &&
+    ast.text(ast.name(node)) === "observed");
+  assert.equal(method !== undefined, true);
+  const nodes = allNodes(ast, [method]);
+  const index = nodes.find(node => ast.is.IsElementAccessExpression(node));
+  const receiver = Node_Expression(ast, index);
+  const operand = ast.as.AsElementAccessExpression(index).ArgumentExpression;
+  const observation = nodes.find(node => program.facts.getFact(node, rustTargetOperationFactKey)?.kind === "provider-operation" &&
+    ast.is.IsPropertyAccessExpression(node));
+  assert.equal(observation !== undefined, true);
+  const operation = program.facts.getFact(observation, rustTargetOperationFactKey);
+  const inputs = operation.abi.targetReceiver.kind === "input"
+    ? [operation.abi.targetReceiver.input, ...operation.abi.targetArguments] : operation.abi.targetArguments;
+  const input = inputs.find(selected => selected.conversion?.kind === "semantic");
+  assert.equal(input !== undefined, true);
+  assert.equal(rustProviderInputBorrowMode(input), "ref");
+  assert.equal(program.borrowStability.canBorrowAcross(receiver, operand), true);
+  for (const replacement of [
+    { ...input, mode: "mut-ref" },
+    { ...input, parameterCarrier: { kind: "source-primitive", name: "float64" } },
+    { ...input, sourceCarrier: { kind: "source-primitive", name: "int32" } },
+    { ...input, conversion: { ...input.conversion, fallible: true } },
+    { ...input, conversion: { ...input.conversion, sourceCarrier: { kind: "source-primitive", name: "int32" } } },
+    { ...input, conversion: { ...input.conversion, targetCarrier: { kind: "source-primitive", name: "int32" } } },
+  ]) {
+    assert.equal(rustProviderInputBorrowMode(replacement) === undefined, true, "inexact native borrow is not inferred");
+  }
+  for (const changes of [
+    { effects: { ...operation.abi.effects, evaluation: "observable" } },
+    { effects: { ...operation.abi.effects, safety: "requires-unsafe" } },
+    { effects: { ...operation.abi.effects, invocation: "fallible" } },
+    { result: { ...operation.abi.result, kind: "async" } },
+    { sourceArguments: [{ form: "value", sourceIndex: 0 }] },
+    { targetReceiver: operation.abi.targetReceiver.kind === "input"
+      ? { kind: "input", input: { ...operation.abi.targetReceiver.input, mode: "mut-ref" } }
+      : { kind: "none" }, targetArguments: operation.abi.targetArguments.map(selected => ({ ...selected, mode: "mut-ref" })) },
+  ]) {
+    const facts = { ...program.facts, getFact(node, key) {
+      return node === observation && key === rustTargetOperationFactKey
+        ? { ...operation, abi: { ...operation.abi, ...changes } } : program.facts.getFact(node, key);
+    } };
+    const result = analyzeRustBorrowStability(analysisInput(program, facts));
+    assert.equal(result.kind, "resolved");
+    assert.equal(result.plan.canBorrowAcross(receiver, operand), false, "unknown observation never extends the source borrow");
+  }
 });

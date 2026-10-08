@@ -264,7 +264,7 @@ export function analyzeRustTargetProgram(
   }
   const borrowedElementReads = analyzeRustBorrowedElementReads(context.ast, context.sourceFiles, facts, context.source.navigation);
   const borrowStability = analyzeRustBorrowStability({
-    ast: context.ast, sourceFiles: context.sourceFiles, facts,
+    ast: context.ast, sourceFiles: context.sourceFiles, facts, navigation: context.source.navigation,
     projectTypes: context.projectTypes, objectRepresentations, frozenDataWrites: context.frozenDataWrites,
     structuralShapes: context.structuralShapes,
   });

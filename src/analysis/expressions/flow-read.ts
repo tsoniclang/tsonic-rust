@@ -40,7 +40,7 @@ import { selectRustGuardedValueMembers } from "../operations/native-flow-refinem
 import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustRetainedErrorCarrier,
   isRustWritableSourceErrorCarrier, isRustWritableRetainedErrorCarrier, rustRetainedErrorTargetType } from "../../target-model/types/carriers/source-error.js";
 import { rustWritableErrorRecoveryOriginMatches } from "../../target-model/conversions/program-error.js";
-import { rustSourceUsePreservesAbsence } from "./absence-use.js";
+import { rustSourceAbsenceReadCarrier, rustSourceAbsenceUse } from "./absence-use.js";
 import { resolveRustNativeFlowCarrier } from "../../policy/types/resolution/native-flow-refinement.js";
 
 export function applyFlowReadLane(
@@ -61,8 +61,8 @@ export function applyFlowReadLane(
     parent = walk.context.ast.parent(receiver);
   }
   const parentKind = parent === undefined ? undefined : walk.context.ast.kindName(parent);
-  if (rustOptionElementCarrier(sourceCarrier) !== undefined &&
-    rustSourceUsePreservesAbsence(expression, walk.context)) return sourceCarrier;
+  const absenceUse = rustSourceAbsenceUse(expression, walk.context);
+  if (rustOptionElementCarrier(sourceCarrier) !== undefined && absenceUse === "comparison") return sourceCarrier;
   if (parent !== undefined && walk.context.ast.as.AsCallExpression(parent)?.QuestionDotToken !== undefined &&
     Node_Expression(walk.context.ast, parent) === receiver) return sourceCarrier;
   const access = parent === undefined ? undefined
@@ -100,13 +100,13 @@ export function applyFlowReadLane(
   if (selectedSource === undefined) {
     return sourceCarrier;
   }
-  const selectedCarrier = resolveSelectedFlowReadCarrier(
+  const selectedCarrier = rustSourceAbsenceReadCarrier(sourceCarrier, resolveSelectedFlowReadCarrier(
     walk,
     expression,
     selectedSource.declaration,
     selectedSource.type,
     sourceCarrier,
-  );
+  ), absenceUse);
   if (selectedCarrier === undefined) {
     appendRustDiagnostic(
       walk,

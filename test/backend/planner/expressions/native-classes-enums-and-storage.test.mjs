@@ -114,7 +114,7 @@ export function main(): void {
   assert.equal(run.status, 0, run.stderr || run.stdout);
 });
 
-test("provider evaluation snapshots borrowed receivers before later source mutation", { timeout: 300_000 }, () => {
+test("provider evaluation borrows native fields across disjoint index mutation without copying", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     packages: [acmeTestingPackage()],
     surfaces: ["js"],
@@ -148,8 +148,9 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /let operation_input_0 = self\.text\.clone\(\);/u);
-  assert.match(text, /js_string::char_at\(\s*&operation_input_0,/u);
+  assert.doesNotMatch(text, /self\.text\.clone\(\)|operation_input_0/u);
+  assert.match(text, /js_string::char_at\(core::convert::AsRef::<str>::as_ref\(&self\.text\),/u);
+  assert.match(text, /self\.index = update_next;/u);
   const run = validateGeneratedProject("provider-evaluation-order", result.artifacts, { run: true });
   assert.equal(run.status, 0, run.stderr || run.stdout);
 });

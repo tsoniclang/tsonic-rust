@@ -4,8 +4,21 @@ import type { RustTargetOperationFact } from "./keys.js";
 import { isRustStringCarrier } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
+import type { RustFinalizedSourceInput } from "./finalized-operation-abi.js";
 
 type ProviderOperation = Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>;
+
+export function rustProviderInputBorrowMode(input: RustFinalizedSourceInput): "ref" | "mut-ref" | undefined {
+  if (input.conversion.kind === "identity") return input.mode === "value" ? undefined : input.mode;
+  if (input.conversion.kind !== "semantic" || input.mode !== "value") return undefined;
+  const contract = rustValueConversionContract(input.conversion.conversion);
+  return contract?.category === "ownership" && contract.sourceMode === "ref" &&
+    !contract.fallible && !input.conversion.fallible &&
+    rustTargetTypeRefEquals(contract.source, input.sourceCarrier) &&
+    rustTargetTypeRefEquals(contract.source, input.conversion.sourceCarrier) &&
+    rustTargetTypeRefEquals(contract.target, input.conversion.targetCarrier) &&
+    rustTargetTypeRefEquals(contract.target, input.parameterCarrier) ? contract.sourceMode : undefined;
+}
 
 export function rustBorrowedStringInputs(node: Node, operation: ProviderOperation, ast: AstReader): readonly Node[] {
   const inputs = operation.abi.targetReceiver.kind === "input"
@@ -15,17 +28,7 @@ export function rustBorrowedStringInputs(node: Node, operation: ProviderOperatio
   if (argumentsList === undefined) return output;
   for (const input of inputs) {
     if (!("sourceCarrier" in input) || !isRustStringCarrier(input.sourceCarrier)) continue;
-    if (input.conversion.kind === "identity") {
-      if (input.mode !== "ref") continue;
-    } else if (input.conversion.kind === "semantic") {
-      const contract = rustValueConversionContract(input.conversion.conversion);
-      if (input.mode !== "value" || contract?.category !== "ownership" || contract.sourceMode !== "ref" ||
-        contract.fallible || input.conversion.fallible ||
-        !rustTargetTypeRefEquals(contract.source, input.sourceCarrier) ||
-        !rustTargetTypeRefEquals(contract.source, input.conversion.sourceCarrier) ||
-        !rustTargetTypeRefEquals(contract.target, input.conversion.targetCarrier) ||
-        !rustTargetTypeRefEquals(contract.target, input.parameterCarrier)) continue;
-    } else continue;
+    if (rustProviderInputBorrowMode(input) !== "ref") continue;
     const callee = Node_Expression(ast, node);
     const source = input.source.kind === "argument" ? argumentsList[input.source.sourceIndex]
       : input.source.kind === "receiver" ? ast.is.IsCallExpression(node)

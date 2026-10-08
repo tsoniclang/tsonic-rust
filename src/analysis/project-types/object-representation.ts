@@ -332,7 +332,7 @@ function collectMutatingProjectMethods(input: {
   }
   const calls = new Map<Node, Set<Node>>();
   for (const definition of input.projectTypes.definitions) {
-    for (const member of input.ast.members(definition.declaration)) {
+    for (const member of sourceObjectMemberDeclarations(input.ast, definition.declaration)) {
       if (member === undefined || input.ast.hasModifierKind(member, "static")) {
         continue;
       }

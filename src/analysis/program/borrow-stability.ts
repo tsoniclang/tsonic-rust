@@ -11,6 +11,8 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustTargetProgram } from "./model.js";
 import { rustBorrowPrimitiveCopyValue, rustBorrowPureCopyValue, rustBorrowValueIsUnprojected } from "./borrowed-element-purity.js";
 import { rustCapturedFieldStorageFactKey, validatedRustCapturedFieldStorageFact } from "../facts/receiver-captures.js";
+import { rustNativeStoragePathsDisjoint, rustNativeStorageProjections, rustNativeStorageRoot } from "../facts/native-storage-paths.js";
+import { rustNativeCopyWriteTargets, rustNoNativeCopyWrites } from "./borrow-stability-effects.js";
 
 type StoredField = Extract<RustTargetOperationFact, { readonly kind: "source-field" }>;
 
@@ -27,6 +29,7 @@ export interface RustBorrowedFieldWrite {
 export interface RustBorrowStabilityPlan {
   isPureCopyValue(node: Node): boolean;
   borrowedWriteFor(node: Node): RustBorrowedFieldWrite | undefined;
+  canBorrowAcross(source: Node, later: Node): boolean;
 }
 
 interface RustBorrowStabilityInput {
@@ -37,6 +40,7 @@ interface RustBorrowStabilityInput {
   readonly objectRepresentations: RustTargetProgram["objectRepresentations"];
   readonly frozenDataWrites: RustTargetProgram["frozenDataWrites"];
   readonly structuralShapes: RustTargetProgram["structuralShapes"];
+  readonly navigation: RustTargetProgram["sourceNavigation"];
 }
 
 export type AnalyzeRustBorrowStabilityResult =
@@ -63,12 +67,27 @@ export function analyzeRustBorrowStability(
   const active = new WeakSet<Node>();
   const pure = new WeakSet<Node>();
   const writes = new WeakMap<Node, RustBorrowedFieldWrite>();
+  const nativeWrites = new WeakMap<Node, readonly Node[]>();
+  const directField = (node: Node): boolean => {
+    const field = ordinaryStoredField(node, input);
+    if (field === undefined || field.storage !== "project-object") return false;
+    const receiver = Node_Expression(input.ast, node);
+    return rustTargetTypeRefEquals(field.resultCarrier, input.facts.getRuntimeCarrierFact(node)?.carrier) &&
+      receiver !== undefined && rustTargetTypeRefEquals(field.receiverCarrier, input.facts.getRuntimeCarrierFact(receiver)?.carrier) &&
+      input.objectRepresentations.representationFor(input.projectTypes.definitionForCarrier(field.receiverCarrier))?.kind === "value" &&
+      (field.declaration === undefined || !input.objectRepresentations.receiverCaptures.isCaptured(field.declaration));
+  };
   let reservations = 0;
   let exhausted = false;
   const reserve = (node: Node): void => {
     if (exhausted) return;
     if (++reservations > maximumNodes) { exhausted = true; return; }
     pending.push({ node, complete: false });
+  };
+  const reserveTargets = (count: number): boolean => {
+    reservations += count;
+    if (reservations > maximumNodes) exhausted = true;
+    return !exhausted;
   };
   input.sourceFiles.forEach(reserve);
   while (pending.length !== 0 && !exhausted) {
@@ -79,6 +98,11 @@ export function analyzeRustBorrowStability(
       if (rustBorrowPureCopyValue(entry.node, input.ast, input.facts, child => pure.has(child))) pure.add(entry.node);
       const selected = selectBorrowedWrite(entry.node, pure, input);
       if (selected !== undefined) writes.set(entry.node, selected);
+      if (!pure.has(entry.node)) {
+        const targets = rustNativeCopyWriteTargets(entry.node, input,
+          node => pure.has(node) ? rustNoNativeCopyWrites : nativeWrites.get(node), directField, reserveTargets);
+        if (targets !== undefined) nativeWrites.set(entry.node, targets);
+      }
     } else {
       if (active.has(entry.node)) return rejected("Rust borrow stability encountered a cyclic source-node graph.");
       if (visited.has(entry.node)) continue;
@@ -91,6 +115,19 @@ export function analyzeRustBorrowStability(
   return { kind: "resolved", plan: Object.freeze({
     isPureCopyValue: (node: Node) => pure.has(node),
     borrowedWriteFor: (node: Node) => writes.get(node),
+    canBorrowAcross(source: Node, later: Node): boolean {
+      if (!directField(source)) return false;
+      const field = input.facts.getFact(source, rustTargetOperationFactKey);
+      if (field?.kind !== "source-field" || field.accessMode !== "read") return false;
+      const root = rustNativeStorageRoot(source, input);
+      const path = root === undefined ? undefined : rustNativeStorageProjections(source, root, input);
+      const targets = pure.has(later) ? rustNoNativeCopyWrites : nativeWrites.get(later);
+      return root !== undefined && path !== undefined && targets !== undefined && targets.every(target => {
+        const targetRoot = rustNativeStorageRoot(target, input);
+        const targetPath = targetRoot === root ? rustNativeStorageProjections(target, root, input) : undefined;
+        return targetPath !== undefined && rustNativeStoragePathsDisjoint(path, targetPath);
+      });
+    },
   }) };
 }
 

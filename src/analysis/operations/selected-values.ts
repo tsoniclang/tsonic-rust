@@ -8,7 +8,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { recordRustFlowReadProjection, rustEffectiveValueCarrier } from "../facts/value-carrier-queries.js";
 import { rustPolicyNode } from "../../policy/model/context.js";
 import { selectRustGuardedValueCarrier } from "./native-flow-refinement.js";
-import { rustSourceUsePreservesAbsence } from "../expressions/absence-use.js";
+import { rustSourceAbsenceReadCarrier, rustSourceAbsenceUse } from "../expressions/absence-use.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 
 export function selectedValueCarrier(
@@ -19,17 +19,18 @@ export function selectedValueCarrier(
 ): TargetTypeRef | undefined {
   const stored = resolveRustTargetTypeRef(expression, context, options);
   const reference = rustPolicyNode(context, expression);
+  const absenceUse = reference === undefined ? undefined : rustSourceAbsenceUse(reference, context);
   if (stored !== undefined && reference !== undefined &&
-    rustOptionElementCarrier(stored) !== undefined && rustSourceUsePreservesAbsence(reference, context)) return stored;
-  const effective = rustEffectiveValueCarrier(context.facts, expression);
+    rustOptionElementCarrier(stored) !== undefined && absenceUse === "comparison") return stored;
+  const effective = rustSourceAbsenceReadCarrier(stored, rustEffectiveValueCarrier(context.facts, expression), absenceUse);
   if (effective !== undefined &&
     (stored === undefined || !rustTargetTypeRefEquals(effective, stored))) {
     return effective;
   }
   const guarded = stored === undefined || reference === undefined ? undefined
     : selectRustGuardedValueCarrier(reference, stored, context, options);
-  if (guarded !== undefined) return guarded;
-  const selected = resolveRustTargetTypeRef(selectedType, context, options);
+  if (guarded !== undefined) return rustSourceAbsenceReadCarrier(stored, guarded, absenceUse);
+  const selected = rustSourceAbsenceReadCarrier(stored, resolveRustTargetTypeRef(selectedType, context, options), absenceUse);
   if (stored === undefined || selected === undefined || rustTargetTypeRefEquals(stored, selected)) {
     return selected ?? stored;
   }
