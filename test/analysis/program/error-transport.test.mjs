@@ -8,13 +8,13 @@ import { rustJsValueTargetType, rustTsValueTargetType, rustSourceTypeCarrier } f
 
 function input(thrownCarriers = [rustTsValueTargetType()], retained = true) {
   const root = { componentId: "root", errorDomain: "project", errorOwnerComponentId: "root",
-    closedErrorDemand: { thrownCarriers, retained } };
+    closedErrorDemand: { thrownCarriers, retained, sourceView: false } };
   const dependency = { componentId: "dependency", errorDomain: "project", errorOwnerComponentId: "dependency",
-    closedErrorDemand: { thrownCarriers: [], retained: true } };
+    closedErrorDemand: { thrownCarriers: [], retained: true, sourceView: false } };
   const forwarding = { componentId: "forwarding", errorDomain: "project", errorOwnerComponentId: "dependency",
-    closedErrorDemand: { thrownCarriers: [], retained: false } };
+    closedErrorDemand: { thrownCarriers: [], retained: false, sourceView: false } };
   const native = { componentId: "native", errorDomain: "runtime", errorOwnerComponentId: undefined,
-    closedErrorDemand: { thrownCarriers: [], retained: false } };
+    closedErrorDemand: { thrownCarriers: [], retained: false, sourceView: false } };
   const components = [root, dependency, forwarding, native];
   return {
     ast: { getSourceFile: boundary => boundary.file, getFileName: file => file.name },

@@ -7,8 +7,10 @@ import { planRustProgramErrorModule } from "../../../../dist/backend/planner/pro
 import { sourcePackageCallbackErrorFiles, sourcePackageCallbackErrorGraph } from "../../../../../tsonic/test/fixtures/source-package-callback-errors.mjs";
 import { compileRust } from "../../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
+import { rustRuntimeCarrierKey } from "../../../../dist/target-model/facts/selections.js";
+import { rustSourceErrorTargetType } from "../../../../dist/target-model/types/carriers/source-error.js";
 
-function classify(dependencies, errors) {
+function classify(dependencies, errors, views = []) {
   const names = Object.keys(dependencies);
   const definitions = errors.map(name => ({ fileName: `/${name}/index.ts`, sourceName: `${name}Failure`, declaration: {} }));
   const context = {
@@ -21,7 +23,8 @@ function classify(dependencies, errors) {
     ast: { getFileName: source => source.fileName, kindName: () => "KindSourceFile", forEachChild() {} },
     callableValues: { generic: { definitions: [], definitionFor: () => undefined } },
     errorStorageDemands: { nativeConstructors: [], retainedBoundaries: [], storageFor: () => ({ kind: "readonly" }) },
-    facts: { get: () => undefined, getFact: () => undefined },
+    facts: { get: (node, key) => key === rustRuntimeCarrierKey && views.includes(node.fileName.split("/")[1])
+      ? { carrier: rustSourceErrorTargetType() } : undefined, getFact: () => undefined },
     projectTypes: { programErrorDefinitions: definitions, programErrorVariant: definition => definition.sourceName },
   };
   const classified = analyzeRustSourcePackageComponents(context, "bin");
@@ -70,6 +73,38 @@ test("error ownership mutations reject before any program-error AST is emitted",
     const result = planRustSourcePackageErrors({ program: context }, mutated);
     assert.equal(result.plan, undefined);
     assert.ok(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_SOURCE_PACKAGE_ERROR_OWNER_CONFLICT"));
+  }
+});
+
+test("native Error-view declarations have one exact owner and reject absent or malformed sealed demand", () => {
+  const { context, components } = classify({ leaf: [], root: ["leaf"] }, [], ["leaf"]);
+  assert.equal(components.every(component => component.errorOwnerComponentId === "leaf"), true);
+  assert.equal(context.sourcePackageComponents.forComponent("leaf").closedErrorDemand.sourceView, true);
+  const accepted = planRustSourcePackageErrors({ program: context }, components);
+  assertNoTargetDiagnostics(accepted.diagnostics);
+  assert.equal(accepted.plan.domainsByComponentId.get("root").forwardModulePath, "leaf_crate::program");
+  for (const replacement of [undefined, { retained: false, thrownCarriers: [] },
+    { retained: false, thrownCarriers: [], sourceView: "false" }]) {
+    const mutated = { ...context, sourcePackageComponents: {
+      ...context.sourcePackageComponents,
+      forComponent: identity => identity !== "leaf" ? context.sourcePackageComponents.forComponent(identity)
+        : replacement === undefined ? undefined : { closedErrorDemand: replacement },
+    } };
+    const rejected = planRustSourcePackageErrors({ program: mutated }, components);
+    assert.equal(rejected.plan === undefined, true);
+    assert.equal(rejected.diagnostics.some(diagnostic => diagnostic.code === "RUST_SOURCE_PACKAGE_ERROR_OWNER_CONFLICT"), true);
+  }
+  for (const domain of ["runtime", "forwarding"]) {
+    const fixture = classify({ leaf: [], root: ["leaf"] }, [], domain === "runtime" ? [] : ["leaf"]);
+    const selected = fixture.context.sourcePackageComponents.forComponent("root");
+    const mutated = { ...fixture.context, sourcePackageComponents: {
+      ...fixture.context.sourcePackageComponents,
+      forComponent: identity => identity !== "root" ? fixture.context.sourcePackageComponents.forComponent(identity)
+        : { ...selected, closedErrorDemand: { ...selected.closedErrorDemand, sourceView: true } },
+    } };
+    const rejected = planRustSourcePackageErrors({ program: mutated }, fixture.components);
+    assert.equal(rejected.plan === undefined, true, domain);
+    assert.equal(rejected.diagnostics.some(diagnostic => diagnostic.code === "RUST_SOURCE_PACKAGE_ERROR_OWNER_CONFLICT"), true, domain);
   }
 });
 

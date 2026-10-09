@@ -537,6 +537,10 @@ test("cross-package error planning preserves each component-owned Result ABI", (
     errorOwnerComponentId: "dependency",
   }];
   const result = planRustSourcePackageErrors(planningContext({
+    sourcePackageComponents: sourcePackageClassifications("root", components.map(component => ({
+      ...component, sourceFileNames: [...component.sourceFileNames],
+      closedErrorDemand: { thrownCarriers: [], retained: false, sourceView: false },
+    }))),
     projectTypes: {
       programErrorDefinitions: [engineError],
       programErrorVariant: (definition) =>

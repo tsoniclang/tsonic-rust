@@ -196,7 +196,7 @@ export function analyzeRustSourcePackageComponents(
   }
 
   const errorComponents = new Set<string>();
-  const closedErrorsByComponent = new Map<string, { thrownCarriers: TargetTypeRef[]; retained: boolean }>();
+  const closedErrorsByComponent = new Map<string, { thrownCarriers: TargetTypeRef[]; retained: boolean; sourceView: boolean }>();
   for (const sourceFile of context.sourceFiles) {
     const demand = rustClosedErrorTransportDemand(sourceFile, context.ast, context.facts, context.typeDefinitions, context.projectTypes);
     const componentId = componentIdByFileName.get(normalizePath(context.ast.getFileName(sourceFile)));
@@ -204,13 +204,14 @@ export function analyzeRustSourcePackageComponents(
       "Closed Error demand exceeds its bounded exact source-tree contract.");
     if (componentId === undefined) return rejected("RUST_CLOSED_ERROR_SOURCE_PACKAGE_MISSING",
       "Closed Error demand has no exact source-package component identity.");
-    const previous = closedErrorsByComponent.get(componentId) ?? { thrownCarriers: [], retained: false };
+    const previous = closedErrorsByComponent.get(componentId) ?? { thrownCarriers: [], retained: false, sourceView: false };
     previous.retained ||= demand.retained;
+    previous.sourceView ||= demand.sourceView;
     for (const carrier of demand.thrownCarriers) {
       if (!previous.thrownCarriers.some(candidate => rustTargetTypeRefEquals(candidate, carrier))) previous.thrownCarriers.push(carrier);
     }
     closedErrorsByComponent.set(componentId, previous);
-    if (demand.retained) errorComponents.add(componentId);
+    if (demand.retained || demand.sourceView) errorComponents.add(componentId);
   }
   for (const boundary of context.errorStorageDemands.retainedBoundaries) {
     const file = context.ast.getSourceFile(boundary);
@@ -273,6 +274,7 @@ export function analyzeRustSourcePackageComponents(
           : "runtime",
         errorOwnerComponentId: errorOwners.get(componentId),
         closedErrorDemand: Object.freeze({ retained: closedErrorsByComponent.get(componentId)?.retained ?? false,
+          sourceView: closedErrorsByComponent.get(componentId)?.sourceView ?? false,
           thrownCarriers: Object.freeze(closedErrorsByComponent.get(componentId)?.thrownCarriers ?? []) }),
         root,
       });

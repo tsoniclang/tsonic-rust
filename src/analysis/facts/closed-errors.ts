@@ -8,13 +8,17 @@ import type { RustProjectTypePolicy } from "../../target-model/types/project-typ
 import { isRustClosedValueCarrier } from "../../target-model/types/carriers/closed-value-kind.js";
 import { isRustSourceErrorCarrier, isRustRetainedErrorCarrier } from "../../target-model/types/carriers/source-error.js";
 import { rustProgramErrorConversionMatches, type RustProgramErrorRoute } from "../../target-model/conversions/program-error.js";
-import { rustContextualValueConversionFactKey, rustFlowReadProjectionFactKey, rustTargetOperationFactKey } from "./keys.js";
+import { rustContextualValueConversionFactKey, rustFlowReadProjectionFactKey, rustTargetOperationFactKey,
+  rustSourceCallableReturnFactKey, rustSourceParameterAbiFactKey } from "./keys.js";
+import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
+import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustEffectiveValueCarrier, rustValueCarrierBeforeContextualConversion } from "./value-carrier-queries.js";
 import { rustFlowReadProjectionMatches } from "./flow-read-projections.js";
 
 export interface RustClosedErrorTransportDemand {
   readonly thrownCarriers: readonly TargetTypeRef[];
   readonly retained: boolean;
+  readonly sourceView: boolean;
 }
 
 export function rustClosedErrorTransportDemand(
@@ -23,6 +27,7 @@ export function rustClosedErrorTransportDemand(
 ): RustClosedErrorTransportDemand | undefined {
   const carriers: TargetTypeRef[] = [];
   let retained = false;
+  let sourceView = false;
   const collect = (carrier: TargetTypeRef, route: RustProgramErrorRoute): void => {
     if (route.kind === "closed-admission") carrier = definitions.closedValueCarrier;
     if ((route.kind === "closed" || route.kind === "closed-admission") &&
@@ -38,6 +43,24 @@ export function rustClosedErrorTransportDemand(
   const seen = new Set<Node>();
   const pending = [{ node: sourceFile as Node, depth: 0 }];
   let rows = 1;
+  const inspected = new Set<TargetTypeRef>();
+  const inspect = (carrier: TargetTypeRef): boolean => {
+    if (inspected.has(carrier)) return true;
+    if (++rows > 1_048_576) return false;
+    const pendingTypes = [{ carrier, depth: 0 }];
+    while (pendingTypes.length !== 0) {
+      const current = pendingTypes.pop()!;
+      if (current.depth > 2048) return false;
+      if (inspected.has(current.carrier)) continue;
+      inspected.add(current.carrier);
+      sourceView ||= isRustSourceErrorCarrier(current.carrier);
+      for (const child of rustTargetTypeChildren(current.carrier)) {
+        if (++rows > 1_048_576) return false;
+        pendingTypes.push({ carrier: child, depth: current.depth + 1 });
+      }
+    }
+    return true;
+  };
   while (pending.length !== 0) {
     const entry = pending.pop()!;
     const node = entry.node;
@@ -52,6 +75,13 @@ export function rustClosedErrorTransportDemand(
       }
     }
     const projection = facts.get(node, rustFlowReadProjectionFactKey);
+    for (const carrier of [facts.get(node, rustRuntimeCarrierKey)?.carrier,
+      facts.get(node, rustSourceCallableReturnFactKey)?.returnCarrier,
+      facts.get(node, rustSourceParameterAbiFactKey)?.parameterCarrier,
+      projection !== undefined && rustFlowReadProjectionMatches(projection, projectTypes, definitions)
+        ? projection.selectedCarrier : undefined]) {
+      if (carrier !== undefined && !inspect(carrier)) return undefined;
+    }
     if (projection?.kind === "builtin-error" && isRustClosedValueCarrier(projection.sourceCarrier) &&
       (isRustSourceErrorCarrier(projection.selectedCarrier) || isRustRetainedErrorCarrier(projection.selectedCarrier)) &&
       rustFlowReadProjectionMatches(projection, projectTypes, definitions)) {
@@ -73,5 +103,5 @@ export function rustClosedErrorTransportDemand(
     });
     if (malformed) return undefined;
   }
-  return Object.freeze({ thrownCarriers: Object.freeze(carriers), retained });
+  return Object.freeze({ thrownCarriers: Object.freeze(carriers), retained, sourceView });
 }

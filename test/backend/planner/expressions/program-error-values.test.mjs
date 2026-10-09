@@ -21,7 +21,7 @@ function context(errorDomain, thrownCarriers = [], retained = false, external = 
       projectTypes: { programErrorDefinitions: [], sourceErrorDefinitions: [], programErrorVariant: () => undefined },
       typeDefinitions: emptyRustTypeDefinitions,
       errorStorageDemands: { retainedBoundaries: [] },
-      sourcePackageComponents: { forComponent: () => ({ closedErrorDemand: { thrownCarriers, retained } }) },
+      sourcePackageComponents: { forComponent: () => ({ closedErrorDemand: { thrownCarriers, retained, sourceView: false } }) },
       source: { ast: { kindName: node => node.kind, pos: () => 0, end: () => 0,
         getFileName: () => "/src/index.ts", getSourceText: () => "" } },
     } },
@@ -151,7 +151,7 @@ test("external transport projection moves its exact nested payload without a wra
   input.sourcePackageErrors.domainsByComponentId.set("dependency", dependency);
   input.sourcePackageErrors.dependencyErrorsByComponentId.set("dependency", []);
   input.input.program.sourcePackageComponents.forComponent = component => ({
-    closedErrorDemand: { thrownCarriers: component === "dependency" ? [target] : [], retained: component === "dependency" },
+    closedErrorDemand: { thrownCarriers: component === "dependency" ? [target] : [], retained: component === "dependency", sourceView: false },
   });
   const source = { kind: "path", path: "original" };
   seal(input);
@@ -172,7 +172,7 @@ test("external transport projection moves its exact nested payload without a wra
 test("sealed transport inventory rejects unsupported carriers and duplicate native variant identities", () => {
   for (const mutate of [
     input => { input.input.program.sourcePackageComponents.forComponent = () => ({
-      closedErrorDemand: { thrownCarriers: [{ kind: "target-named", id: "foreign.closed" }], retained: true },
+      closedErrorDemand: { thrownCarriers: [{ kind: "target-named", id: "foreign.closed" }], retained: true, sourceView: false },
     }); },
     input => {
       const external = { componentId: "dependency", errorOwnerComponentId: "dependency", crateName: "dependency_crate",

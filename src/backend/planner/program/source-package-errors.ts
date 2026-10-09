@@ -166,17 +166,19 @@ export function planRustSourcePackageErrors(
     const owner = component.errorOwnerComponentId;
     const forwarding = owner === undefined || owner === component.componentId
       ? undefined : externalByOwner.get(owner);
-    const validDomain = component.errorDomain === "runtime"
-      ? owner === undefined && definitions.length === 0 && externalErrors.length === 0
+    const demand = input.program.sourcePackageComponents.forComponent(component.componentId)?.closedErrorDemand;
+    const validDemand = demand !== undefined && typeof demand.sourceView === "boolean" && typeof demand.retained === "boolean";
+    const validDomain = validDemand && (component.errorDomain === "runtime"
+      ? owner === undefined && definitions.length === 0 && externalErrors.length === 0 && !demand.sourceView && !demand.retained
       : owner !== undefined && (owner === component.componentId
         ? definitions.length > 0 || externalErrors.length > 1 ||
-          input.program.sourcePackageComponents.forComponent(component.componentId)?.closedErrorDemand.retained ||
+          demand.retained || demand.sourceView ||
           input.program.errorStorageDemands.retainedBoundaries.some(boundary =>
           component.sourceFileNames.has(input.program.source.ast.getFileName(input.program.source.ast.getSourceFile(boundary)!))) ||
           input.program.errorStorageDemands.nativeConstructors.some(constructor =>
           input.program.errorStorageDemands.storageFor(constructor).kind === "writable" &&
           component.sourceFileNames.has(input.program.source.ast.getFileName(input.program.source.ast.getSourceFile(constructor)!)))
-        : forwarding !== undefined && definitions.length === 0 && externalErrors.length === 1);
+        : forwarding !== undefined && definitions.length === 0 && externalErrors.length === 1 && !demand.sourceView && !demand.retained));
     if (!validDomain) {
       diagnostics.push(errorPlanDiagnostic("RUST_SOURCE_PACKAGE_ERROR_OWNER_CONFLICT",
         `Source-package component '${component.componentId}' disagrees with its sealed error-domain ownership.`));
