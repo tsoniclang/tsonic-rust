@@ -71,7 +71,18 @@ test("native Error payload conversion composes through the one Option and union 
   assert.equal(selectRustSourceValueConversion(source, rustWritableSourceErrorTargetType()), undefined);
   assert.equal(selectRustSourceValueConversion(payload, rustWritableSourceErrorTargetType()), undefined);
   assert.equal(selectRustSourceValueConversion(rustMutableJsErrorTargetType(), rustWritableSourceErrorTargetType())?.kind, "program-error");
-  const ambiguous = unionDefinitions([[target, [{ name: "Native", carrier: source }, { name: "View", carrier: payload }]]]);
+  for (const variants of [
+    [{ name: "Native", carrier: source }, { name: "View", carrier: payload }],
+    [{ name: "View", carrier: payload }, { name: "Native", carrier: source }],
+  ]) {
+    const exact = selectRustSourceValueConversion(source, target, unionDefinitions([[target, variants]]));
+    assert.equal(exact?.kind, "source-union-variant");
+    assert.equal(exact.variantName, "Native");
+    assert.equal(exact.payloadConversion, null);
+  }
+  const ambiguous = unionDefinitions([[target, [
+    { name: "FirstView", carrier: payload }, { name: "SecondView", carrier: payload },
+  ]]]);
   assert.equal(selectRustSourceValueConversion(source, target, ambiguous), undefined);
 });
 
@@ -95,6 +106,37 @@ test("exact nested union projections publish every read payload to liveness", ()
   });
   assert.deepEqual(reads, [{ carrier: outer, name: "Nested" }, { carrier: inner, name: "Text" }]);
   assert.equal(rustValueConversionContract({ kind: "union-project", source: outer, target: rustSourcePrimitiveTargetType("uint64") }, definitions), undefined);
+});
+
+test("registered native errors retain their exact union payload before error-view admission", () => {
+  const source = { kind: "target-named", id: "native.Failure" };
+  const payload = rustSourceErrorTargetType();
+  const target = rustSourceUnionTargetType("/src/index.ts", "NativeFailure");
+  for (const reversed of [false, true]) {
+    const registry = createRustTypeDefinitionRegistry();
+    assert.equal(registry.registerProgramErrorOrigin(source, { kind: "provider" }), true);
+    const variants = [{ name: "Native", carrier: source }, { name: "View", carrier: payload }];
+    assert.equal(registry.registerSourceUnion({ carrier: target,
+      variants: reversed ? variants.toReversed() : variants }, true), true);
+    const definitions = registry.seal();
+    for (const [actual, expected, kind] of [
+      [source, target, "source-union-variant"],
+      [source, rustOptionTargetType(target), "option-some"],
+      [rustOptionTargetType(source), rustOptionTargetType(target), "option-map"],
+    ]) {
+      const selected = selectRustSourceValueConversion(actual, expected, definitions);
+      assert.equal(selected?.kind, kind);
+      const injection = kind === "source-union-variant" ? selected : selected.elementConversion;
+      assert.equal(injection.variantName, "Native");
+      assert.equal(injection.payloadConversion, null);
+      const contract = rustValueConversionContract(selected, definitions);
+      assert.ok(contract);
+      assert.deepEqual(contract.source, actual);
+      assert.deepEqual(contract.target, expected);
+      assert.equal(contract.fallible, false);
+      assert.equal(rustValueConversionContract({ ...injection, variantName: "View" }, definitions), undefined);
+    }
+  }
 });
 
 function unionDefinitions(rows) {

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { dirname } from "node:path";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { compileRustTarget } from "../../../dist/backend/compile.js";
 import {
   formatRustCompileOutput,
@@ -42,6 +43,47 @@ test("formatting is deterministic for every supported edition", () => {
     const first = formatRustCompileOutput(output, edition);
     const second = formatRustCompileOutput(output, edition);
     assert.deepEqual(second, first);
+    assert.deepEqual(formatRustCompileOutput(first, edition), first);
+  }
+});
+
+test("nested fallible tuple and match calls reach native formatter stability", () => {
+  const invocation = `capture_reject.call((rt::TsonicError::from(match error {
+    Some(flow_value) => flow_value,
+    None => unreachable!("checked flow selected a missing optional value"),
+  }),))?;`;
+  for (const edition of ["2021", "2024"]) {
+    for (const depth of [6, 8, 10, 12]) {
+      const text = `fn run() {${"if error.is_some() {".repeat(depth)}${invocation}${"}".repeat(depth)}}\n`;
+      const formatted = formatRustCompileOutput({ artifacts: [rustSource("src/lib.rs", text)] }, edition);
+      assert.deepEqual(formatRustCompileOutput(formatted, edition), formatted,
+        `edition ${edition} at depth ${depth} is idempotent`);
+      assert.match(formatted.artifacts[0].text, /Some\(flow_value\) => flow_value/u);
+      assert.match(formatted.artifacts[0].text, /None =>\s*(?:\{\s*)?unreachable!\(/u);
+    }
+  }
+});
+
+test("a nonconverging formatter fails closed at the bounded pass limit", () => {
+  const root = mkdtempSync(resolve(".temp", "nonconverging-rustfmt-"));
+  const executable = resolve(root, "rustfmt.mjs");
+  writeFileSync(executable, `#!/usr/bin/env node
+import { appendFileSync } from "node:fs";
+for (const path of process.argv.slice(process.argv.indexOf("--") + 1)) appendFileSync(path, "\\n");
+`);
+  chmodSync(executable, 0o700);
+  const previous = process.env.RUSTFMT;
+  process.env.RUSTFMT = executable;
+  const source = rustSource("src/lib.rs", "fn run() {}\n");
+  const output = Object.freeze({ artifacts: Object.freeze([source]) });
+  try {
+    assert.throws(() => formatRustCompileOutput(output, "2024"),
+      error => error instanceof RustFormattingError && /did not stabilize within 4 passes/u.test(error.message));
+    assert.equal(output.artifacts[0], source);
+    assert.equal(source.text, "fn run() {}\n");
+  } finally {
+    restoreEnvironment("RUSTFMT", previous);
+    rmSync(root, { recursive: true, force: true });
   }
 });
 

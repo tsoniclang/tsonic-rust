@@ -66,6 +66,11 @@ export function resolveRustDeclaredBindingStorage(
 ): TargetTypeRef | undefined {
   const context = rustResolutionContext(walk, declaration);
   const authored = Node_Type(walk.context.ast, declaration);
+  const finalized = authored === undefined
+    ? walk.context.facts.get(declaration, rustRuntimeCarrierKey) ??
+      walk.context.facts.resolve(declaration, rustRuntimeCarrierKey)
+    : undefined;
+  if (finalized !== undefined) return finalized.carrier;
   const selected = authored === undefined && sourceBindingCapturedBeforeInitialization(
     declaration, walk.context.ast, walk.context.source.navigation,
   ) ? context.currentSemantics.declarations.declaredValueType(declaration) : undefined;

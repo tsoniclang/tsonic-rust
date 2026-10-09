@@ -25,6 +25,7 @@ const rustfmtBatchPathBytes = 64 * 1024;
 const rustfmtOutputLimit = 1024 * 1024;
 const rustfmtDiagnosticLimit = 64 * 1024;
 const rustfmtTimeoutMilliseconds = 120_000;
+const rustfmtMaximumPasses = 4;
 
 export class RustFormattingError extends Error {
   constructor(message: string) {
@@ -54,7 +55,7 @@ export function formatRustCompileOutput(
   try {
     const stagedSources = prepareRustSources(stageRoot, sources);
     for (const batch of createRustfmtBatches(stagedSources)) {
-      runRustfmt(stageRoot, edition, batch.map((source) => source.relativePath));
+      formatRustfmtBatch(stageRoot, edition, batch);
     }
     const formattedByPath = new Map(stagedSources.map((source) => [
       source.artifactPath,
@@ -186,10 +187,34 @@ function createRustfmtBatches(
   return Object.freeze(batches.map((entry) => Object.freeze(entry)));
 }
 
+function formatRustfmtBatch(
+  stageRoot: string,
+  edition: RustOutputPlan["edition"],
+  sources: readonly StagedRustSource[],
+): void {
+  const sourcePaths = sources.map((source) => source.relativePath);
+  const deadline = performance.now() + rustfmtTimeoutMilliseconds;
+  let previous = sources.map((source) => source.text);
+  for (let pass = 0; pass < rustfmtMaximumPasses; pass++) {
+    const remaining = Math.floor(deadline - performance.now());
+    if (remaining <= 0) {
+      throw new RustFormattingError("Rust formatter exceeded its batch time limit.");
+    }
+    runRustfmt(stageRoot, edition, sourcePaths, remaining);
+    const current = sources.map((source) => readFileSync(source.absolutePath, "utf8"));
+    if (current.every((text, index) => text === previous[index])) return;
+    previous = current;
+  }
+  throw new RustFormattingError(
+    `Rust formatter did not stabilize within ${rustfmtMaximumPasses} passes.`,
+  );
+}
+
 function runRustfmt(
   stageRoot: string,
   edition: RustOutputPlan["edition"],
   sourcePaths: readonly string[],
+  timeoutMilliseconds: number,
 ): void {
   const executable = process.env.RUSTFMT?.trim() || "rustfmt";
   const result = spawnSync(executable, [
@@ -207,7 +232,7 @@ function runRustfmt(
     cwd: stageRoot,
     encoding: "utf8",
     maxBuffer: rustfmtOutputLimit,
-    timeout: rustfmtTimeoutMilliseconds,
+    timeout: timeoutMilliseconds,
     windowsHide: true,
   });
   if (result.error !== undefined) {
