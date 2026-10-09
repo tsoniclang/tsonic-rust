@@ -962,6 +962,10 @@ test("Rust dead-code obligations are planner-local and normalized before output 
     join(sourceRoot, "backend/planner/liveness/generated-item-usage.ts"),
     "utf8",
   );
+  const generatedState = readFileSync(
+    join(sourceRoot, "backend/planner/liveness/generated-item-usage-state.ts"),
+    "utf8",
+  );
   const targetProgram = readFileSync(
     join(sourceRoot, "analysis/program/model.ts"),
     "utf8",
@@ -999,12 +1003,14 @@ test("Rust dead-code obligations are planner-local and normalized before output 
   assert.match(livenessPlan, /publishesImplementationAbi/u);
   assert.match(livenessPlan, /rustBinaryEntryDeclaration\(program\)/u);
   assert.match(generatedUsage, /rustTargetOperationFactKey/u);
-  assert.match(generatedUsage, /isStructuralFieldRead/u);
-  assert.match(generatedUsage, /isStructuralFieldWritten/u);
-  assert.match(generatedUsage, /isProjectTypeConstructed/u);
-  assert.match(generatedUsage, /isProjectGeneratedFieldUsed/u);
-  assert.match(generatedUsage, /isStructuralShapeConstructed/u);
-  assert.match(generatedUsage, /isVariantUsed/u);
+  assert.equal(generatedUsage.match(/createRustGeneratedItemUsageState\(input\)/gu)?.length, 1);
+  for (const query of ["isStructuralFieldRead", "isStructuralFieldWritten", "isProjectTypeConstructed",
+    "isProjectGeneratedFieldUsed", "isStructuralShapeConstructed", "isVariantUsed"]) {
+    const declaration = new RegExp(`\\b${query}:`, "u");
+    assert.match(generatedState, declaration);
+    assert.doesNotMatch(generatedUsage, declaration);
+  }
+  assert.doesNotMatch(generatedState, /sourceNavigation|declarationUseSummary|referencesToDeclaration|forEachChild/u);
   assert.doesNotMatch(targetProgram, /deadCode|liveness/u);
   assert.match(planningContext, /liveness: createRustPlannerLiveness\(program\)/u);
   assert.match(directives, /context\.input\.liveness\.requiresSuppression/u);
