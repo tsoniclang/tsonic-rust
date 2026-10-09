@@ -3,9 +3,17 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
-import { conflictingNativeCallableSource, nativeModuleCallableFiles } from "../../../../tsonic/test/fixtures/native-module-callables.mjs";
+import { conflictingNativeCallableSource, nativeModuleCallableFiles, relocatedModuleCallableFiles } from "../../../../tsonic/test/fixtures/native-module-callables.mjs";
 
 for (const surfaces of [[], ["js"]]) {
+  test(`relocated callable bodies retain exact module owners on ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: {
+      ...relocatedModuleCallableFiles,
+      "index.ts": relocatedModuleCallableFiles["index.ts"] + '\nexport function main(): void { if (!run()) throw new Error("relocated module owner"); }',
+    } });
+    assertNoTargetDiagnostics(result.diagnostics);
+    validateGeneratedProject("relocated-module-callables", result.artifacts, { run: true });
+  });
   test(`private native callable adapters do not retain module initialization on ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: {
       "index.ts": `const original = (): number => 9;
