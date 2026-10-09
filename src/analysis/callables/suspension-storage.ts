@@ -103,10 +103,27 @@ export function resolveRustSuspendedCallableStorage(
     (use, referencedDeclaration) => walk.context.facts.get(use.reference, rustCompileTimeSourceKey) !== true &&
       walk.context.runtimeValueUses.isRuntimeReference(referencedDeclaration, use.reference));
   if (lexical.kind === "unresolved") return { kind: "rejected", reason: lexical.reason };
-  for (const capture of lexical.captures) {
+  const subject = walk.context.sourceStorage.subject(declaration, "value");
+  if (subject.kind === "unresolved") return { kind: "rejected", reason: subject.reason };
+  const ownership = walk.context.callableOwnership.storageFor(subject.subject);
+  if (ownership.kind === "unresolved") return { kind: "rejected", reason: ownership.reason };
+  if (ownership.kind === "frame" && ownership.activation.kind === "class") {
+    const definition = walk.context.projectTypes.definitionForDeclaration(ownership.activation.ownerDeclaration);
+    const instance = definition === undefined ? undefined : walk.context.projectTypes.openCarrier(definition);
+    if (instance === undefined) return { kind: "rejected",
+      reason: "A suspended class activation has no exact native instance storage carrier." };
+    carriers.push(instance);
+  }
+  const captures = ownership.kind === "frame" ? ownership.activation.externalCaptures
+    : lexical.captures.map(capture => ({ ...capture, kind: "lexical" as const }));
+  for (const capture of captures) {
     const reference = capture.references[0];
     const sourceFile = reference === undefined ? undefined : ast.getSourceFile(reference);
-    const carrier = walk.context.facts.get(capture.declaration, rustRuntimeCarrierKey)?.carrier ??
+    const stored = capture.kind === "field"
+      ? walk.context.facts.get(capture.declaration, rustCapturedFieldStorageFactKey)?.valueCarrier
+      : capture.kind === "receiver" ? undefined
+      : walk.context.facts.get(capture.declaration, rustRuntimeCarrierKey)?.carrier;
+    const carrier = stored ??
       (reference === undefined || sourceFile === undefined ? undefined
         : resolveExpressionCarrier(walk, reference, sourceFile, undefined));
     if (carrier === undefined) return { kind: "rejected",
