@@ -501,6 +501,16 @@ export type RustTargetOperationFact =
       readonly resultCarrier: TargetTypeRef;
     }
   | {
+      readonly kind: "closed-record-literal";
+      readonly operationId: string;
+      readonly resultCarrier: TargetTypeRef;
+      readonly fields: readonly {
+        readonly property: Node;
+        readonly expression: Node;
+        readonly sourceName: string;
+      }[];
+    }
+  | {
       readonly kind: "record-literal";
       readonly operationId: string;
       readonly storage: "project-object" | "structural-object";
@@ -831,6 +841,7 @@ export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact):
     case "source-call":
     case "source-enum-member":
     case "provider-record-literal":
+    case "closed-record-literal":
     case "record-literal":
     case "record-index-literal":
     case "tuple-literal":

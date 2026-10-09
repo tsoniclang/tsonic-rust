@@ -48,6 +48,7 @@ import { projectRecordMemberImplementation, selectedProjectMethodContracts } fro
 import { resolveProviderRecordLiteral } from "./provider-records.js";
 import { rustGenericCallableProtocol } from "../../target-model/types/carriers/generic-callables.js";
 import { rustTypeParameterFromSourceContract } from "../../target-model/names/type-parameters.js";
+import { resolveRustClosedRecordLiteral } from "./closed-records.js";
 
 export function requireDenseSourceNodes(
   walk: RustFactWalk,
@@ -152,6 +153,8 @@ export function resolveRecordLiteralCarrier(
   if (selectedExpected === undefined) {
     return undefined;
   }
+  const closed = resolveRustClosedRecordLiteral(walk, expression, sourceFile, selectedExpected, properties);
+  if (closed.kind === "selected") return closed.carrier;
   let contextualReconciliation: import("../../policy/types/value-carrier-reconciliation.js").RustAppliedValueCarrierReconciliation | undefined;
   if ((expected !== undefined || contextualSelection.kind === "selected") && rustSourceTypeCarrierValue(selectedExpected)?.shape !== "object" &&
     rustSourceUnionCarrierValue(selectedExpected) === undefined &&

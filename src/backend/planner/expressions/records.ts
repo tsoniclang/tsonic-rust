@@ -44,9 +44,11 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustReceiverIndependentMethodFactKey } from "../../../analysis/facts/operations/keys.js";
+import { planRustClosedRecordLiteral } from "./closed-records.js";
 
 export function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
+  if (fact?.kind === "closed-record-literal") return planRustClosedRecordLiteral(node, fact, context);
   if (fact?.kind === "empty-object-literal") {
     if (fact.resultCarrier.kind !== "target-named" || fact.resultCarrier.id !== rustEmptyObjectTargetId ||
       context.input.program.source.ast.properties(node).length !== 0 ||

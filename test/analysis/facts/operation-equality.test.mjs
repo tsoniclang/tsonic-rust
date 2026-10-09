@@ -33,6 +33,7 @@ function copyMetadata(value, replace = undefined) {
 }
 
 const facts = [
+  { kind: "closed-record-literal", fields: [{ property: first, expression: second, sourceName: "value" }] },
   { kind: "template-string", substitutions: [{ expression: first, carrier: text }] },
   { kind: "switch", discriminantCarrier: text, clauses: [
     { clause: first, expression: second, carrier: text }, { clause: second },

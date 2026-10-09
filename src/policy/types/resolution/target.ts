@@ -407,7 +407,8 @@ export function resolveStructuralObjectType(
       isRustNumericCarrier(carrier) && rustTargetTypeRefEquals(carrier, initializerCarriers[0]))
       ? initializerCarriers[0] : undefined;
     const inferredCarriers = authoredTypeNodes.length === 0 && inferredCarrier === undefined
-      ? memberContexts.map(memberContext => resolveRustTargetType(property.type, memberContext, options, resolving)) : [];
+      ? memberContexts.map(memberContext => resolveRustTargetType(property.type, memberContext, options, resolving,
+          memberContext.sourceStorageSubject?.node)) : [];
     const selectedFieldCarrier = authoredTypeNodes.length === 0
       ? inferredCarrier ?? (inferredCarriers.length > 0 && inferredCarriers.every(carrier =>
         carrier !== undefined && rustTargetTypeRefEquals(carrier, inferredCarriers[0])) ? inferredCarriers[0] : undefined)

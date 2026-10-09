@@ -67,6 +67,7 @@ function projectOperationMetadata(fact: RustTargetOperationFact, references: Nod
       return fact;
     }
     case "provider-record-literal":
+    case "closed-record-literal":
       return { ...fact, fields: fact.fields.map(field => ({ ...field,
         property: reference(field.property), expression: reference(field.expression) })) };
     case "record-literal":
