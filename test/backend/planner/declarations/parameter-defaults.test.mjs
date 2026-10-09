@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
 import { rustSourceParameterAbiFactKey } from "../../../../dist/analysis/facts/keys.js";
-import { planRustCallableParameters } from "../../../../dist/backend/planner/declarations/callables/parameters.js";
+import { planRustCallableParameters, planRustCallableParameterPrelude } from "../../../../dist/backend/planner/declarations/callables/parameters.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
+import { rustOptionTargetType } from "../../../../dist/target-model/types/carriers/optional.js";
 
 test("destructured defaults consume the sealed initialized value and reject conflicting input evidence", () => {
   const { program } = analyzeRust({ files: { "index.ts": `
@@ -44,5 +45,25 @@ test("destructured defaults consume the sealed initialized value and reject conf
     assert.equal(invalid.selected === undefined, true, "conflicting exact binding input rejects");
     assert.equal(invalid.diagnostics.length, 1);
     assert.equal(invalid.diagnostics[0].evidence.includes("target.capability=rust.backend.binding-parameter-abi"), true);
+  }
+});
+
+test("an absent default preserves the native parameter and independently required mutability", () => {
+  const carrier = rustOptionTargetType({ kind: "source-primitive", name: "int64" });
+  const initializer = {};
+  for (const mutable of [false, true]) {
+    let evaluations = 0;
+    const context = { syntheticNames: { reserved: new Set(), nextSuffixByBase: new Map() } };
+    const selected = planRustCallableParameterPrelude({ params: [], prelude: [{
+      kind: "default", initializer, name: "value", mutable, carrier, valueCarrier: carrier,
+    }] }, context, node => {
+      evaluations++;
+      assert.equal(node === initializer, true, "exact original initializer");
+      return { kind: "none" };
+    });
+    assert.equal(evaluations, 1);
+    assert.deepEqual(selected, mutable ? [{ kind: "let", name: "value", mutable: true,
+      init: { kind: "path", path: "value" } }] : [],
+    "no redundant native alias, while an actual mutability transition remains intact");
   }
 });

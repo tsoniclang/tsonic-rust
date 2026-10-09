@@ -12,7 +12,7 @@ export function rustOptionDefaultValue(
   fallback: RustExpr,
   carrier: TargetTypeRef,
   context: RustPlanContext,
-  resultCarrier?: TargetTypeRef,
+  resultCarrier: TargetTypeRef,
 ): RustExpr {
   const value = rustOptionalStorageValue(carrier);
   const retainStorage = rustTargetTypeRefEquals(resultCarrier, carrier) && !rustTargetTypeRefEquals(value, carrier);

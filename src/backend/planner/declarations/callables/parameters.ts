@@ -46,6 +46,7 @@ type RustParameterPrelude =
       readonly name: string;
       readonly mutable: boolean;
       readonly carrier: TargetTypeRef;
+      readonly valueCarrier: TargetTypeRef;
     }
   | {
       readonly kind: "binding";
@@ -170,6 +171,7 @@ export function planRustCallableParameters(
         name: parameterName,
         mutable,
         carrier: parameterCarrier!,
+        valueCarrier: abi.valueCarrier,
       });
     }
     if (pattern !== undefined && sourceCarrier !== undefined) {
@@ -224,11 +226,13 @@ export function planRustCallableParameterPrelude(
       if (initializer === undefined) {
         return undefined;
       }
+      const value = rustOptionDefaultValue({ kind: "path", path: entry.name }, initializer, entry.carrier, context, entry.valueCarrier);
+      if (!entry.mutable && value.kind === "path" && value.path === entry.name) continue;
       statements.push({
         kind: "let",
         name: entry.name,
         mutable: entry.mutable,
-        init: rustOptionDefaultValue({ kind: "path", path: entry.name }, initializer, entry.carrier, context),
+        init: value,
       });
       continue;
     }
