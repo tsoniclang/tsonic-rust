@@ -1,7 +1,7 @@
 import type { JsOperationRequest, JsOperationSelection } from "./model.js";
 import type { RustTypeDefinitions } from "../../../../target-model/types/source-union-definitions.js";
 import { isRustNumberArrayUnion } from "../../../../target-model/types/carriers/array-unions.js";
-import { rustJsArrayTargetType, rustOptionTargetType, rustSourcePrimitiveTargetType, rustAbsenceTargetType } from "../../../../target-model/types/index.js";
+import { rustJsArrayTargetType, rustSourceOptionalTargetType, rustSourcePrimitiveTargetType, rustAbsenceTargetType } from "../../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { selectRustSourceValueConversion } from "../../../conversions/selection.js";
 
@@ -31,7 +31,7 @@ export function selectRustNumberArrayUnionOperation(request: JsOperationRequest,
   if (request.memberName !== "index" || request.operationKind !== "indexer" || request.argumentCarriers?.length !== 1 || argument === undefined) return undefined;
   const conversion = rustTargetTypeRefEquals(argument, number) ? undefined : selectRustSourceValueConversion(argument, number, definitions);
   if (!rustTargetTypeRefEquals(argument, number) && conversion === undefined) return undefined;
-  const resultCarrier = rustOptionTargetType(number);
+  const resultCarrier = rustSourceOptionalTargetType(number);
   return { resultCarrier, parameterCarriers: [argument], fact: {
     kind: "provider-operation", operationId: "rust.js.number-array-union.index", operationKind: "indexer",
     target: { form: "free-call", path: "js_abi::number_array_get", receiverMode: "ref", argModes: ["value"],

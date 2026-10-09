@@ -707,6 +707,7 @@ export function analyzeRustGeneratedItemUsage(input: RustGeneratedItemUsageInput
         }
         return;
       case "array-literal":
+        markProjectTypeReified(fact.elementCarrier);
         for (const contribution of fact.contributions) {
           if (contribution.kind === "spread") for (const input of contribution.input.inputs) {
             if (input.kind === "sequence") visitConversion(input.conversion);
@@ -776,7 +777,9 @@ export function analyzeRustGeneratedItemUsage(input: RustGeneratedItemUsageInput
         const view = input.classValues.viewFor(classValue.declaration, classValue.sourceCarrier, classValue.carrier);
         if (view?.construction !== undefined) markProjectConstructorInvoked(view.construction.ownerCarrier);
         for (const callable of [view?.construction, ...(view?.fields.map(field => field.callable) ?? [])]) {
-          if (callable !== undefined) visitCallableAdapter(callable.resultAdapter);
+          if (callable === undefined) continue;
+          markProjectTypeReified(callable.carrier);
+          visitCallableAdapter(callable.resultAdapter);
         }
       }
       const memoryBinding = input.facts.getFact(node, rustMemoryBindingPlanKey);

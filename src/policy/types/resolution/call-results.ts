@@ -9,7 +9,7 @@ import { isRustJsValueCarrier, rustOptionElementCarrier, rustTargetGenericBindin
 import { rustUnionAlternatives } from "../../../target-model/types/union-relations.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { rustTypeFamilyNormalizer } from "../type-family-normalization.js";
-import { bindRustSelectedCallTypeArguments, rustSelectedCallTypeParameters } from "./generic-arguments.js";
+import { bindRustCallableTypeParameters, bindRustSelectedCallTypeArguments, rustSelectedCallTypeParameters } from "./generic-arguments.js";
 import { retainRustStructuralInstantiation } from "./structural-instantiations.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
@@ -24,19 +24,24 @@ export function retainRustSelectedCallableResultTemplate(
   const parameters = rustSelectedCallTypeParameters(sourceArguments, context);
   const template = rustGenericCallableProtocol(selected.sourceCallableCarrier);
   const rebound = parameters === undefined ? undefined : rustGenericCallableProtocol(selected.sourceCallableCarrier, parameters);
-  const storageContext = parameters === undefined ? undefined : bindRustSelectedCallTypeArguments(sourceArguments,
-    parameters.map(type => ({ kind: "type" as const, type })), context);
+  const declaration = selected.sourceDeclaration;
+  const storageContext = parameters === undefined || declaration === undefined ? undefined
+    : bindRustCallableTypeParameters(declaration, parameters, context);
+  const sourceSignature = declaration === undefined ? undefined
+    : storageContext?.currentSemantics.types.declarationSignatureInfo(declaration);
+  const sourceReturn = sourceSignature?.returnType;
   const selectedParameters = selected.member.parameters ?? [];
   const selectedGenerics = selected.member.genericParameters ?? [];
   if (parameters === undefined || template === undefined || rebound === undefined || storageContext === undefined || selected.sourceReturnType === undefined ||
+    sourceSignature === undefined || sourceReturn === undefined ||
+    storageContext.currentSemantics.declarations.signatureDeclaration(sourceSignature.signature) !== declaration ||
     !rustTargetTypeRefEquals(rebound.result, selected.member.returnType) ||
     rebound.parameters.length !== selectedParameters.length ||
     rebound.parameters.some((parameter, index) => !rustTargetTypeRefEquals(parameter, selectedParameters[index]?.type)) ||
     parameters.length !== selectedGenerics.length || selectedGenerics.some((parameter, index) =>
       parameter.kind !== "type" || parameter.targetIdentity !== parameters[index]?.identity)) return false;
-  return retainRustStructuralInstantiation(selected.sourceReturnType, template.result, rebound.result,
-    storageContext, options, new Set(), selected.sourceDeclaration === undefined
-      ? undefined : context.ast.typeNode(selected.sourceDeclaration));
+  return retainRustStructuralInstantiation(sourceReturn, template.result, rebound.result,
+    storageContext, options, new Set(), context.ast.typeNode(declaration));
 }
 
 export function resolveRustSelectedSourceCallResult(

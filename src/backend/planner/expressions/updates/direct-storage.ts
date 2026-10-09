@@ -42,7 +42,7 @@ import type {
   RustFinalizedInputPlanOverrides,
 } from "../../project/provider-evaluation-scope.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import { rustCapturedBinding, type RustExpressionPlanner } from "../typed-locations.js";
+import { rustCapturedBinding, rustLocationStorageForReference, type RustExpressionPlanner } from "../typed-locations.js";
 
 export type RustProviderOperationExpressionPlanner = (
   context: RustPlanContext,
@@ -76,6 +76,7 @@ export function planRustDirectStorageCore(
         : captured.expression.kind === "reference" ? captured.expression.expr
         : { kind: "dereference", pointer: captured.expression };
     }
+    if (rustLocationStorageForReference(operand, context) !== undefined) return undefined;
     const binding = context.input.program.facts.getFact(operand, rustSourceBindingFactKey);
     const path = binding === undefined ? undefined : rustSourceBindingPath(context, binding);
     return path !== undefined && isValidRustIdentifier(path)

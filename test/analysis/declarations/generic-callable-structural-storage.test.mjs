@@ -102,6 +102,10 @@ function invocationFixture() {
   const integer = { kind: "source-primitive", name: "int64" };
   const resultType = {};
   const argumentType = {};
+  const signature = {};
+  input.semantics.types.declarationSignatureInfo = selected => selected === input.declaration
+    ? { signature, returnType: input.sourceType } : undefined;
+  input.semantics.declarations.signatureDeclaration = selected => selected === signature ? input.declaration : undefined;
   const resultProperty = { ...input.correspondence.members[0].source.property, type: argumentType };
   const selectedCorrespondence = { ...input.correspondence,
     source: { ...input.correspondence.source, type: resultType },
@@ -110,6 +114,7 @@ function invocationFixture() {
     } }],
   };
   input.semantics.types.structuralMembers = (source, destination) => {
+    if (source === input.sourceType && destination === input.sourceType) return input.correspondence;
     assert.equal(source === resultType && (destination === input.sourceType || destination === resultType), true,
       "instantiated checker result and retained structural template have exact owners");
     return { ...selectedCorrespondence, destination: { ...selectedCorrespondence.destination, type: destination },
@@ -117,20 +122,22 @@ function invocationFixture() {
         ? { ...member, destination: member.source } : member) };
   };
   const selected = {
+    sourceDeclaration: input.declaration,
     sourceCallableCarrier: input.carrier,
     member: { parameters: [], returnType: template, genericParameters: [{ kind: "type", targetIdentity: parameter.identity }] },
     sourceReturnType: resultType,
     sourceSelectedMethodTypeArguments: [{ typeParameter: input.parameterType, selectedType: argumentType }],
     targetGenericArguments: [{ kind: "type", type: integer }],
   };
-  return { ...input, correspondence: selectedCorrespondence, selected, parameter, integer, resultType };
+  return { ...input, templateCorrespondence: input.correspondence,
+    correspondence: selectedCorrespondence, selected, parameter, integer, resultType };
 }
 
 test("stored callable invocation retains the native rebound template and its closed structural result", () => {
   const input = invocationFixture();
   const options = { sourceTypes: input.sourceTypes };
   assert.equal(retainRustSelectedCallableResultTemplate(input.selected, input.context, options), true);
-  const template = input.sourceTypes.structuralObjectForType(input.resultType, input.selected.member.returnType);
+  const template = input.sourceTypes.structuralObjectForType(input.sourceType, input.selected.member.returnType);
   assert.equal(template !== undefined, true, "selected native invocation binder has exact field correspondence");
   assert.equal(rustTargetTypeRefEquals(template.fields[0].resultCarrier, input.parameter), true);
   const result = resolveRustSelectedSourceCallResult(input.selected, input.context, options);
@@ -147,8 +154,11 @@ test("stored callable invocation rejects foreign native binders, signatures and 
     input => { input.selected.member.parameters = [{ type: input.integer }]; },
     input => { input.selected.member.returnType = input.integer; },
     input => { input.selected.sourceReturnType = undefined; },
+    input => { input.selected.sourceDeclaration = undefined; },
+    input => { input.semantics.types.declarationSignatureInfo = () => undefined; },
+    input => { input.semantics.declarations.signatureDeclaration = () => ({}); },
     input => { input.context.currentSemantics.declarations.primarySymbolDeclaration = () => ({}); },
-    input => { input.correspondence.members = []; },
+    input => { input.templateCorrespondence.members = []; },
   ]) {
     const input = invocationFixture();
     const originalCount = input.sourceTypes.structuralInstantiations().length;
@@ -175,6 +185,7 @@ test("finalized runtime result rejects missing and foreign native argument ident
   for (const mutate of [
     input => { input.selected.targetGenericArguments = []; },
     input => { input.selected.sourceSelectedMethodTypeArguments[0].typeParameter = {}; },
+    input => { input.correspondence.members = []; },
   ]) {
     const input = invocationFixture();
     const result = rustStructuralObjectTargetType("/factory.ts", [{

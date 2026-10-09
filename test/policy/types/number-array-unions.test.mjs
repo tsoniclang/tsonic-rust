@@ -34,6 +34,8 @@ test("typed and ordinary numeric arrays cross files without copying their input 
   assertNoTargetDiagnostics(result.diagnostics);
   assert.match(artifactText(result, "src/shapes.rs"), /NumberArrayLike\s+for Union2/u);
   assert.match(artifactText(result, "src/arrays.rs"), /number_array_from/u);
+  assert.match(artifactText(result, "src/arrays.rs"), /fallback\(\)/u);
+  assert.doesNotMatch(artifactText(result, "src/arrays.rs"), /checked flow selected missing optional/u);
   const run = validateGeneratedProject("number-array-unions", result.artifacts, { run: true });
   assert.equal(run.status, 0, JSON.stringify(run));
 });

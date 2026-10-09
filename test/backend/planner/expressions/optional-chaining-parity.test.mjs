@@ -225,7 +225,7 @@ export function main(): void {
   assert.match(source, /value\s*\.as_ref\(\)\s*\.map\(\s*\|optional_receiver/u);
   assert.match(
     source,
-    /js_string::includes_from_start\(optional_receiver, &needle\(\)\)/u,
+    /js_string::includes_from_start\(\s*core::convert::AsRef::<str>::as_ref\(optional_receiver\),\s*&needle\(\),?\s*\)/u,
   );
   assert.doesNotMatch(source, /optional_receiver\.clone\(\)/u);
   validateGeneratedProject("optional-js-method", result.artifacts, { run: true });

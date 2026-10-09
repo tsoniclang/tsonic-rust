@@ -32,10 +32,15 @@ export function planRustOptionBranch(
         return { kind: "method-call", receiver: option, method: "unwrap_or", args: [absent] };
       }
     }
-    return { kind: "match", expression: option, arms: [
+    const inputName = option.kind === "block" ? allocateRustSyntheticName(
+      context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, context.sourceFile, []),
+      "optional_input",
+    ) : undefined;
+    const branch: RustExpr = { kind: "match", expression: inputName === undefined ? option : { kind: "path", path: inputName }, arms: [
       { pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: presentName }] }, expression: present },
       { pattern: { kind: "path", path: "None" }, expression: absent },
     ] };
+    return inputName === undefined ? branch : rustValueBlock([{ name: inputName, value: option }], branch);
   }
   const names = context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, context.sourceFile, []);
   const storedName = allocateRustSyntheticName(names, "optional_storage");

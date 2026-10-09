@@ -226,7 +226,7 @@ export function main(): void {
   assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn ownedSeparator\(\) -> String \{[\s\S]*String::from\(tsonic_rust_node::path::sep\(\)\)/u);
-  assert.match(text, /ends_with_at_end\(value, tsonic_rust_node::path::sep\(\)\)/u);
+  assert.match(text, /ends_with_at_end\(\s*core::convert::AsRef::<str>::as_ref\(value\),\s*tsonic_rust_node::path::sep\(\),?\s*\)/u);
   assert.match(text, /\[\s*core::convert::AsRef::<str>::as_ref\(&value\),\s*core::convert::AsRef::<str>::as_ref\(&tsonic_rust_node::path::sep\(\)\),\s*\]\s*\.concat\(\)/u);
   assert.doesNotMatch(text, /sep\(\)\.to_string\(\)/u);
   validateGeneratedProject("node-borrowed-provider-strings", result.artifacts, { run: true });

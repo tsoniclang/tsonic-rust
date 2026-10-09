@@ -45,7 +45,8 @@ function selfReference({ generic = false, optional = true } = {}) {
     source: { navigation: { isProjectDeclaration: node => node === declaration },
       sourceFacts: { getFact: () => undefined } },
     sourceLifetimes: { contractFor: () => ({ parameters }) },
-    facts: { get: (subject, key) => subject === argumentSymbol && key === sourcePrimitiveFactKey ? { kind: "uint32" } : undefined },
+    facts: { get: (subject, key) => subject === argumentSymbol && key === sourcePrimitiveFactKey ? { kind: "uint32" } : undefined,
+      getFact: () => undefined },
     ast: {
       kind: () => undefined,
       kindName: node => node === declaration ? "KindInterfaceDeclaration" : node === method ? "KindMethodSignature" : undefined,

@@ -449,7 +449,7 @@ export function resolveRustTargetTypeSyntax(
     return resolveRustTargetType(sourceType, context, options, resolving);
   }
 
-  if (kind !== "KindTypeReference" || semantics === undefined) {
+  if (kind !== "KindTypeReference" && kind !== "KindExpressionWithTypeArguments" || semantics === undefined) {
     return undefined;
   }
   const selectedType = semantics.types.expressionType(node);
@@ -473,7 +473,8 @@ export function resolveRustTargetTypeSyntax(
   if (typeArgumentNodes === undefined) {
     return undefined;
   }
-  const typeName = TypeReferenceNode_TypeName(ast, node);
+  const typeName = kind === "KindExpressionWithTypeArguments"
+    ? ast.as.AsExpressionWithTypeArguments(node)?.Expression : TypeReferenceNode_TypeName(ast, node);
   const referencedDeclaration = typeName === undefined
     ? undefined
     : context.source.navigation.sourceReferenceFor(typeName)?.declaration;

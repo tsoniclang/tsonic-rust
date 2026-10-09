@@ -115,7 +115,7 @@ export function resolveRustCallableStorageCarrier(
     const declaredCarrier = declared === undefined ? undefined : resolveRustTargetType(declared,
       { ...context, currentSemantics: semantics, sourceStorageSubject: undefined,
         callableRepresentation: "signature" }, options, new Set());
-    if (rustTargetTypeRefEquals(declaredCarrier, carrier)) {
+    if (rustTargetTypeRefEquals(rustOptionElementCarrier(declaredCarrier) ?? declaredCarrier, carrier)) {
       return resolveRustCallableInputCarrier(subject!, carrier!, context, options);
     }
   }

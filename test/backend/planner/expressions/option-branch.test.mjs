@@ -3,6 +3,29 @@ import test from "node:test";
 import { planRustOptionBranch } from "../../../../dist/backend/planner/expressions/option-branch.js";
 import { rustOptionTargetType } from "../../../../dist/target-model/types/carriers/optional.js";
 
+test("a complex optional scrutinee is evaluated once within its branch lifetime", () => {
+  const option = { kind: "block", body: { statements: [{ kind: "tail", expr: { kind: "call", path: "produce", args: [] } }] } };
+  const present = { kind: "path", path: "present" };
+  const absent = { kind: "call", path: "fallback", args: [] };
+  const state = { reserved: new Set(["optional_input"]), nextSuffixByBase: new Map() };
+  const context = { syntheticNames: state };
+  const result = planRustOptionBranch(option, rustOptionTargetType({ kind: "source-primitive", name: "int32" }), "present", present, absent, context);
+  assert.equal(result.kind, "block");
+  const [binding, tail] = result.body.statements;
+  assert.equal(binding.kind, "let");
+  assert.equal(binding.name, "optional_input_2", "one canonical collision-safe allocator");
+  assert.equal(binding.init === option, true, "evaluate the complete original input exactly once");
+  assert.equal(tail.kind, "tail");
+  assert.equal(tail.expr.kind, "match");
+  assert.deepEqual(tail.expr.expression, { kind: "path", path: binding.name });
+  assert.equal(tail.expr.arms[0].expression === present, true);
+  assert.equal(tail.expr.arms[1].expression === absent, true, "no eager fallback execution");
+  const direct = { kind: "path", path: "input" };
+  const branch = planRustOptionBranch(direct, rustOptionTargetType({ kind: "source-primitive", name: "int32" }), "present", present, absent, context);
+  assert.equal(branch.kind, "match");
+  assert.equal(branch.expression === direct, true, "simple native input requires no temporary");
+});
+
 test("a native Option identity branch retains one unchanged input evaluation", () => {
   const option = { kind: "call", path: "produce", args: [] };
   const value = { kind: "path", path: "present" };

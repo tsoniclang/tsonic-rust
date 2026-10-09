@@ -504,6 +504,8 @@ export function recordCallableReturnFact(
 ): boolean {
   const generator = walk.context.facts.get(declaration, rustGeneratorFactKey);
   const asynchronous = walk.context.facts.get(declaration, rustAsyncFunctionFactKey);
+  if (asynchronous === undefined && walk.context.ast.hasModifierKind(declaration, "async") ||
+    generator === undefined && walk.context.semanticsFor(declaration).operations.generator(declaration) !== undefined) return false;
   const sourceReturn = selectedSourceCallableReturn(walk, declaration);
   const baseline = selectedCarrier ?? generator?.resultCarrier ?? asynchronous?.outputCarrier ??
     resolveRustTargetTypeRef(

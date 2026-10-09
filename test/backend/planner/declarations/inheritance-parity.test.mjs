@@ -112,6 +112,7 @@ export function main(): void {
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /impl core::fmt::Debug for TemplateNode/u);
   assert.match(source, /formatter\.write_str\("TemplateNode"\)/u);
+  assert.doesNotMatch(source, /#\[expect\(dead_code, reason = "retains an unconstructed generated instance"\)\]\s*pub struct TemplateNode/u);
   const run = validateGeneratedProject("polymorphic-debug", result.artifacts, { run: true });
   assert.equal(run.status, 0, run.stderr || run.stdout);
 });

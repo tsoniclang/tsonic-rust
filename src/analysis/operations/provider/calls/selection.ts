@@ -648,7 +648,8 @@ function acceptRuntimeCallableCarrierCall(
     ...(sourceStructuralMethod === undefined
       ? {}
       : { sourceStructuralMethod }),
-    ...(sourceDeclaration === undefined ? {} : { sourceDeclaration }),
+    ...((sourceDeclaration ?? request.sourceSelectedDeclaration) === undefined ? {}
+      : { sourceDeclaration: sourceDeclaration ?? request.sourceSelectedDeclaration }),
     ...(request.source.selectedSignature === undefined
       ? {}
       : { sourceSignature: request.source.selectedSignature }),

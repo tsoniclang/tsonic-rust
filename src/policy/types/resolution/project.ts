@@ -77,7 +77,7 @@ export function resolveProjectSourceCarrier(
       if (edge !== undefined) {
         if (context.currentSemantics.types.isArrayLike(selectedType)) return resolveRustSourceArrayCarrier(selectedType, context, options, resolving);
         const selectedContext = bindRustSourceDeclarationArguments(declaration, selectedType, genericArguments.values, context);
-        return selectedContext === undefined ? undefined : resolveRustTargetType(edge.selectedType,
+        return selectedContext === undefined ? undefined : resolveRustAuthoredTargetType(edge.heritage,
           { ...selectedContext, currentSemantics: context.semanticsFor(edge.heritage) }, options, resolving);
       }
     }

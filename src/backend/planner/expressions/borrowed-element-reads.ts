@@ -21,7 +21,7 @@ export function planRustBorrowedElementRead(
   if (bindings === undefined) return undefined;
   const overrides = new Map(context.expressionOverrides ?? []);
   overrides.set(read.receiver, {
-    expression: { kind: "reference", expr: { kind: "path", path: elementName } },
+    expression: { kind: "reference", expr: { kind: "dereference", pointer: { kind: "path", path: elementName } } },
     carrier: rustStringTargetType(), valueForm: "shared-reference",
   });
   const body = planRead(node, { ...context, expressionOverrides: overrides });
