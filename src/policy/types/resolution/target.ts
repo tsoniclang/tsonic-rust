@@ -35,7 +35,7 @@ import {
   sourceTypeIsAuthoredEmptyObject,
 } from "@tsonic/target-api/source";
 import { structFactKey } from "@tsonic/tsts";
-import type { Node, StructFact, Symbol, Type } from "@tsonic/tsts";
+import type { Node, StructFact, Type } from "@tsonic/tsts";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
@@ -51,6 +51,7 @@ import { resolveRustIndexedField } from "./indexed-fields.js";
 import { resolveRustConstructType } from "./constructors.js";
 import { resolveRustIndexedRecordType } from "./records.js";
 import { rustSourcePropertyTargetType } from "../../../target-model/types/projections.js";
+import type { RustSourceObjectField } from "../source-type-registry.js";
 
 export function resolveRustFixedArrayTargetType(
   fixedArray: TsonicFixedArrayFact,
@@ -329,7 +330,9 @@ export function resolveStructuralObjectType(
       ? rustObjectIdentityTargetType()
       : rustEmptyObjectTargetType();
   }
-  const selected = properties.map((property) => {
+  if (declaredFields !== undefined && properties.length !== declaredFields.size) return undefined;
+  const selected: (Omit<RustSourceObjectField, "storageIndex"> & { readonly bound?: true })[] = [];
+  for (const property of properties) {
     const declaredField = declaredFields?.get(property.name);
     if (declaredFields !== undefined && (declaredField === undefined || property.optional)) return undefined;
     const declarations = denseDefined([...new Set([
@@ -421,13 +424,12 @@ export function resolveStructuralObjectType(
       ? true as const
       : undefined;
     if (representation === "value" && (getters.length !== 0 || setters.length !== 0 || methods.length !== 0)) return undefined;
-    return fieldCarrier === undefined
+    if (fieldCarrier === undefined
         || getters.length > 1 || setters.length > 1 ||
         getters.length === 0 && setters.length > 0 ||
         getters.length > 0 && (ordinaryDeclarations.length > 0 || methods.length > 0) ||
-        methods.length > 1 || methods.length > 0 && ordinaryDeclarations.length > 0
-      ? undefined
-      : {
+        methods.length > 1 || methods.length > 0 && ordinaryDeclarations.length > 0) return undefined;
+    selected.push({
           declarations: Object.freeze(projectDeclarations),
           symbols: Object.freeze([...new Set([
             property.symbol,
@@ -442,26 +444,9 @@ export function resolveStructuralObjectType(
             ? { bound: true as const } : {}),
           ...(accessor === undefined ? {} : { accessor }),
           ...(method === undefined ? {} : { method }),
-        };
-  });
-  if (selected.some((field) => field === undefined) || declaredFields !== undefined && properties.length !== declaredFields.size) {
-    return undefined;
+        });
   }
-  const fields = [...(selected as readonly {
-    readonly declarations: readonly Node[];
-    readonly symbols: readonly Symbol[];
-    readonly sourceName: string;
-    readonly sourceType: Type;
-    readonly resultCarrier: TargetTypeRef;
-    readonly presence: "required" | "optional";
-    readonly readonly: boolean;
-    readonly bound?: true;
-    readonly accessor?: {
-      readonly getter: true;
-      readonly setter: boolean;
-    };
-    readonly method?: true;
-  }[])]
+  const fields = selected
     .sort((left, right) => left.sourceName.localeCompare(right.sourceName))
     .map((field, storageIndex) => ({ ...field, storageIndex }));
   if (new Set(fields.map((field) => field.sourceName)).size !== fields.length) {
