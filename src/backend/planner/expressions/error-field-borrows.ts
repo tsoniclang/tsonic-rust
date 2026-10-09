@@ -49,7 +49,7 @@ export function rustErrorFieldBorrowNeedsSnapshot(
     const result = context.input.program.errorStorageDemands.invalidationFor(owner, expression, pureInvocations);
     if (result.kind === "unresolved") context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, expression),
       "rust.backend.error-borrow-effect", result.reason));
-    return result.kind === "invalidated";
+    return result.kind === "invalidated" || result.kind === "unproven";
   });
 }
 

@@ -20,6 +20,8 @@ function scenario(carrier, property = "message") {
     queries.push({ subject, expression, pure });
     return invalidations.get(expression) ?? { kind: "preserved" };
   } }, source: { ast: {
+    getFileName: () => "error-field.ts", getSourceText: () => "failure.message",
+    pos: () => 0, end: () => 15, kindName: () => "PropertyAccessExpression",
     is: { ...Object.fromEntries([
       "IsTypeQueryNode", "IsKeywordTypeNode", "IsTypeReferenceNode", "IsUnionTypeNode",
       "IsIntersectionTypeNode", "IsConditionalTypeNode", "IsInferTypeNode", "IsArrayTypeNode",
@@ -80,6 +82,22 @@ test("native captured stacks release their guard before exact recapture", () => 
   invalidations.set(capture, { kind: "invalidated" });
   assert.equal(rustErrorFieldHasGuardedBorrow(read, context), true);
   assert.equal(rustErrorFieldBorrowNeedsSnapshot(read, [capture], context), true);
+});
+
+test("valid uncertain effects release guarded fields while actual analysis failures still reject", () => {
+  for (const property of ["name", "message", "stack"]) {
+    const { read, invalidations, context, expression } = scenario(rustSourceErrorTargetType(), property);
+    const opaque = {};
+    invalidations.set(opaque, { kind: "unproven", reason: "exact checked native receiver has an open admission domain" });
+    const snapshot = rustErrorFieldComparisonView(read, expression, opaque, context);
+    assert.equal(snapshot.kind === "block", true, property);
+    assert.equal(snapshot.body.statements[0].init === expression, true, "owned read precedes the opaque invocation");
+    assert.deepEqual(context.diagnostics, []);
+    invalidations.set(opaque, { kind: "unresolved", reason: "exact storage analysis exhausted its finite budget" });
+    assert.equal(rustErrorFieldBorrowNeedsSnapshot(read, [opaque], context), false);
+    assert.equal(context.diagnostics.length === 1 && context.diagnostics[0].message.includes("finite budget"), true,
+      "missing or exhausted evidence never becomes a conservative runtime fallback");
+  }
 });
 
 test("read-only callbacks and unrelated writes remain zero-copy instead of all-invocation snapshots", () => {

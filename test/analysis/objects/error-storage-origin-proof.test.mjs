@@ -53,8 +53,8 @@ for (const jsEnabled of [false, true]) {
     assert.equal(demand.closedStorageOriginsFor(external).kind === "open", true, "signature identity does not own an external constructor value");
     const construct = source.ast.statements(file).find(node => source.ast.is.IsFunctionDeclaration(node) &&
       source.ast.text(source.ast.name(node)) === "construct");
-    assert.equal(demand.invalidationFor(source.ast.parameters(construct)[1], external, new Set()).kind === "unresolved", true,
-      "a native prototype signature cannot certify purity of an external constructor value");
+    assert.equal(demand.invalidationFor(source.ast.parameters(construct)[1], external, new Set()).kind === "unproven", true,
+      "a valid external constructor is not evidence that a guarded Error read is preserved");
     assert.equal(demand.closedStorageOriginsFor(unowned).kind === "open", true, "ambient external values are not owned global constructors");
   });
   }
