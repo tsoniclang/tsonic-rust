@@ -6,7 +6,6 @@ import {
   type RustSourceParameterAbiFact,
 } from "../../../analysis/facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { isRustStringCarrier } from "../../../target-model/types/index.js";
 import { rustValueReferenceReborrow } from "../../../analysis/facts/value-carrier-queries.js";
 import { rustBorrowedStringView } from "../../target-ast/expressions.js";
 import type { RustExpr } from "../../target-ast/nodes.js";
@@ -141,9 +140,7 @@ export function createRustSharedReferenceArgument(
   }
   const override = node === undefined ? undefined : context.expressionOverrides?.get(node);
   if (override?.valueForm === "shared-reference") {
-    return isRustStringCarrier(override.carrier)
-      ? { kind: "method-call", receiver: argument.kind === "reference" ? argument.expr : argument, method: "as_str", args: [] }
-      : argument;
+    return argument;
   }
   const sourceParameterAbi = node === undefined
     ? undefined

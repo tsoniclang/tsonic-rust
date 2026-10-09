@@ -8,6 +8,7 @@ import { planExpression } from "./entry.js";
 import { planRustSharedReceiver } from "./typed-locations.js";
 import { rustStringTargetType } from "../../../target-model/types/index.js";
 import type { RustBorrowedElementLocal } from "../../../analysis/program/borrowed-element-locals.js";
+import { rustBorrowedStringAppend } from "../../../analysis/program/borrowed-element-purity.js";
 
 export function planRustBorrowedElementRead(
   node: Node,
@@ -20,9 +21,11 @@ export function planRustBorrowedElementRead(
   const bindings = borrowedElementBindings(read, elementName, context);
   if (bindings === undefined) return undefined;
   const overrides = new Map(context.expressionOverrides ?? []);
+  const append = rustBorrowedStringAppend(node, context.input.program.source.ast, context.input.program.facts);
   overrides.set(read.receiver, {
-    expression: { kind: "reference", expr: { kind: "dereference", pointer: { kind: "path", path: elementName } } },
-    carrier: rustStringTargetType(), valueForm: "shared-reference",
+    expression: append ? { kind: "reference", expr: { kind: "path", path: elementName } }
+      : { kind: "dereference", pointer: { kind: "path", path: elementName } },
+    carrier: rustStringTargetType(), valueForm: append ? "shared-reference" : "storage",
   });
   const body = planRead(node, { ...context, expressionOverrides: overrides });
   return body === undefined ? undefined : rustValueBlock(bindings, body);

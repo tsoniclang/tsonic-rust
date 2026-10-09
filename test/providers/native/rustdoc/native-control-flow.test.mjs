@@ -64,11 +64,11 @@ fn early_error_does_not_run_following_statements() {
     assert_eq!(writes, 3);
     assert_eq!(fallback(Err(14), Some(15)), Ok(15));
     assert_eq!(fallback(Err(14), None), Err(14));
-    assert_eq!(optionalCall(Err(16), None).unwrap(), Ok(0));
+    assert_eq!(optionalCall(Err(16), None::<&tsonic_rust_runtime::Callable<(i32,), tsonic_rust_runtime::TsonicResult<i32>>>).unwrap(), Ok(0));
     let unreachable_callback = tsonic_rust_runtime::Callable::new(|(_value,)| panic!("native error must return before callback"));
-    assert_eq!(optionalCall(Err(17), Some(unreachable_callback)).unwrap(), Err(17));
+    assert_eq!(optionalCall(Err(17), Some(&unreachable_callback)).unwrap(), Err(17));
     let increment = tsonic_rust_runtime::Callable::new(|(value,)| Ok(value + 1));
-    assert_eq!(optionalCall(Ok(18), Some(increment)).unwrap(), Ok(19));
+    assert_eq!(optionalCall(Ok(18), Some(&increment)).unwrap(), Ok(19));
 }
 #[test]
 fn generic_ownership_and_drop_are_native() {

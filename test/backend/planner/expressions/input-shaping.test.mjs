@@ -83,9 +83,10 @@ test("already borrowed native parameters and optional receiver views retain thei
   const parameter = { mode: "ref", parameterCarrier: input.parameterCarrier };
   assert.equal(applyFinalizedRustArgumentMode(context(parameter), sourceNode, expression, input, false), expression);
   const override = { expression, carrier: stringCarrier, valueForm: "shared-reference" };
-  assert.deepEqual(applyFinalizedRustArgumentMode(context(undefined, override), sourceNode, expression, input, true), {
-    kind: "method-call", receiver: expression, method: "as_str", args: [],
-  });
+  assert.equal(applyFinalizedRustArgumentMode(context(undefined, override), sourceNode, expression, input, true), expression);
+  const borrowed = { kind: "reference", expr: expression };
+  assert.equal(applyFinalizedRustArgumentMode(context(undefined, { ...override, expression: borrowed }),
+    sourceNode, borrowed, input, true), borrowed);
   assert.equal(applyFinalizedRustArgumentMode(context(), sourceNode, expression, { ...input, mode: "value" }, false), expression);
 });
 

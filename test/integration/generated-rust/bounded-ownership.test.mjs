@@ -109,6 +109,9 @@ export function main(): void {
   assert.match(sum, /core::mem::drop\(line\)/u);
   const release = functionSection(output, "release", "mutate");
   assert.match(release, /core::mem::drop\(field\)/u);
+  assert.match(release, /number_parse_int_radix\(&field,/u);
+  assert.doesNotMatch(release, /number_parse_int_radix\(&\*field,/u);
+  assert.doesNotMatch(release, /field\.clone\(\)|field\.as_str\(\)/u);
   const effect = functionSection(output, "effect", "advance");
   assert.doesNotMatch(effect, /borrow_number_element/u);
   const loop = functionSection(output, "stepLoop", "main");

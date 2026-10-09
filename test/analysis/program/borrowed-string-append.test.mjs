@@ -86,6 +86,44 @@ test("a merely available borrowed operation cannot establish counted-loop purity
   assert.equal(counted.representationFor(loop) === undefined, true);
 });
 
+test("local String guards retain exact readonly uses and end before mutation", () => {
+  const { source, program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+export function inspect(values: string[]): number {
+  const field = values[0];
+  if (field === "") return 0;
+  const length = field.length;
+  const amount = parseInt(field, 10);
+  values[0] = "99";
+  return length + amount;
+}
+export function retained(values: string[]): string {
+  const field = values[0];
+  values[0] = "changed";
+  return field;
+}
+` } });
+  const inspectNodes = functionNodes(source, program, "inspect");
+  const selected = inspectNodes.map(node => program.borrowedElementReads.forStatement(node))
+    .find(local => local !== undefined);
+  assert.equal(selected !== undefined, true, "one exact borrowed local is selected");
+  assert.equal(Object.isFrozen(selected), true);
+  assert.equal(Object.isFrozen(selected.references), true);
+  assert.equal(selected.references.length, 3);
+  assert.equal(new Set(selected.references).size, 3);
+  for (const reference of selected.references) {
+    assert.equal(source.ast.text(reference), "field");
+  }
+  let lastStatement = selected.references[2];
+  while (lastStatement !== undefined && !source.ast.is.IsVariableStatement(lastStatement)) {
+    lastStatement = source.ast.parent(lastStatement);
+  }
+  assert.equal(selected.lastStatement === lastStatement, true, "borrow ends at the final pure input before mutation");
+  for (const node of functionNodes(source, program, "retained")) {
+    assert.equal(program.borrowedElementReads.forStatement(node) === undefined, true,
+      "owned snapshot across a write must not become a guard");
+  }
+});
+
 test("borrowed append requires the sealed in-place write strategy and exact pure read", () => {
   const { source, program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": sourceText } });
   const { append, element } = selectedNodes(source, program, "combine");

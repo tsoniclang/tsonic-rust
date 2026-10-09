@@ -247,7 +247,7 @@ export function run(): string {
     assert.equal(demand.invalidationFor(owner, calls.get("read"), new Set()).kind, "preserved");
     assert.equal(demand.invalidationFor(owner, calls.get("writer"), new Set()).kind, "invalidated");
     assert.equal(demand.invalidationFor(owner, writer, new Set()).kind, "preserved");
-    assert.equal(demand.invalidationFor(owner, calls.get("opaque"), new Set()).kind, "unresolved");
+    assert.equal(demand.invalidationFor(owner, calls.get("opaque"), new Set()).kind, "unproven");
     assert.equal(demand.invalidationFor(owner, calls.get("invoke"), new Set()).kind, "invalidated");
     assert.equal(demand.invalidationFor(owner, calls.get("opaque"), new Set([calls.get("opaque")])).kind, "preserved");
   });
