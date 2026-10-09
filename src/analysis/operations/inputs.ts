@@ -62,6 +62,7 @@ import { rustRawLocationPlanKey } from "../../target-model/operations/native-mem
 import { rustMemoryBindingPlanKey } from "../../target-model/operations/memory-bindings.js";
 import { rustBorrowedSequenceElementCandidates, selectRustBorrowedSequenceInput } from "./borrowed-sequences.js";
 import { rustMemberAccessReceiver } from "../../target-model/syntax/expressions.js";
+import { resolveRustArrayElementStorage } from "../expressions/array-storage.js";
 
 export function recordSelectedOperationInputs(
   walk: RustFactWalk,
@@ -336,6 +337,7 @@ export function resolveArrayLiteralCarrier(
   }
   if (expectedElement === undefined) {
     expectedElement = inferArrayLiteralElement(walk, expression, sourceFile, presentElements, selected);
+    if (expectedElement !== undefined) expectedElement = resolveRustArrayElementStorage(walk, expression, expectedElement);
   }
   if (expectedElement === undefined) {
     return undefined;

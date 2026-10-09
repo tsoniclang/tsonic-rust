@@ -1,6 +1,6 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import type { RustLifetimeIndex, RustSourceGenericParameterContract } from "../../target-model/lifetimes/index.js";
-import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
+import type { RustLifetimeIndex, RustSourceGenericParameterContract } from "../../../target-model/lifetimes/index.js";
+import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
 
 export function resolveRustEnclosingGenericParameters(
   declaration: Node,
@@ -20,6 +20,8 @@ export function resolveRustEnclosingGenericParameters(
     for (const parameter of lifetimes.contractFor(owner)?.parameters ?? []) {
       if (++rows > 65_536) return undefined;
       const identity = parameter.kind === "type" ? parameter.identity : rustLifetimeKey(parameter.lifetime);
+      const existing = available.get(identity);
+      if (existing !== undefined && existing.declaration !== parameter.declaration) return undefined;
       if (!available.has(identity)) available.set(identity, parameter);
     }
     for (const identity of requested) {

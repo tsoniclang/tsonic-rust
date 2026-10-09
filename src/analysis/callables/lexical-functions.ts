@@ -9,7 +9,7 @@ import { rustFinalizedTargetInputMayMutateSource } from "../facts/finalized-oper
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import type { RustLifetimeIndex, RustSourceGenericParameterContract } from "../../target-model/lifetimes/index.js";
 import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
-import { resolveRustEnclosingGenericParameters } from "../declarations/generic-environment.js";
+import { resolveRustEnclosingGenericParameters } from "../../policy/types/resolution/generic-environment.js";
 import { rustCompileTimeSourceKey } from "../../target-model/facts/source-declarations.js";
 import type { RustRuntimeValueUsePlan } from "../program/runtime-value-uses.js";
 

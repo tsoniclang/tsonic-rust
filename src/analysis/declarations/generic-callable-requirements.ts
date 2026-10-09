@@ -5,7 +5,8 @@ import { rustObjectReferenceViewKey } from "../facts/object-reference-views.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
-import { rustCallableInputProtocol } from "../../target-model/types/carriers/callables.js";
+import { bindRustExactTypeParameters } from "../../target-model/types/carriers/generic-inference.js";
+import { rustCallableInputProtocol, rustCallableProtocol, rustNativeCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustTypeParameterFromSourceContract } from "../../target-model/names/type-parameters.js";
 import type { AstReader, Node } from "@tsonic/tsts";
 import { rustGenericNumericOperandsKey } from "../facts/generic-numeric.js";
@@ -63,6 +64,7 @@ import { rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 import type { RustGenericRequirement } from "./generic-requirements.js";
 import { normalizeRustGenericRequirements } from "./generic-requirement-contract.js";
 import type { RustGenericCallablePlan } from "../callables/generic-values.js";
+import type { RustFrameCallablePlan } from "../callables/frame-values.js";
 import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
 import type { RustProjectStructuralView } from "../objects/project-structural-views.js";
 import { rustSourceCallCallableStorageCarrier } from "../facts/target-operation.js";
@@ -86,6 +88,7 @@ interface ClassifyCallableInput {
   readonly projectTypes: RustProjectTypePolicy;
   readonly objectRepresentations: RustObjectRepresentationPlan;
   readonly genericCallables: RustGenericCallablePlan;
+  readonly frameCallables: RustFrameCallablePlan;
   readonly structuralShapes: RustStructuralShapePlan;
   readonly structuralViewsFor: (declaration: Node) => readonly RustProjectStructuralView[];
   readonly idByDeclaration: WeakMap<Node, string>;
@@ -664,17 +667,27 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       const callableCarrier = rustSourceCallCallableStorageCarrier(operation, input.structuralShapes);
       const genericCallable = rustGenericCallableValue(callableCarrier);
       const genericDefinition = callableCarrier === undefined ? undefined : input.genericCallables.definitionFor(callableCarrier);
+      const frameEntry = callableCarrier === undefined ? undefined : input.frameCallables.entryFor(callableCarrier);
       if (genericCallable !== undefined && genericDefinition === undefined) {
         return "A quantified call has no exact sealed implementation family for its generic obligations.";
       }
-      const callees = genericDefinition === undefined
-        ? selected?.sourceDeclaration === undefined ? [] : [{ declaration: input.implementationDeclaration(selected.sourceDeclaration) }]
-        : genericDefinition.implementations;
+      if (rustFrameCallableValue(callableCarrier) !== undefined && frameEntry === undefined) {
+        return "A frame call has no exact sealed implementation entry for its generic obligations.";
+      }
+      const physical = frameEntry === undefined && genericDefinition === undefined && operation.target.form === "callable"
+        ? rustCallableProtocol(callableCarrier) ?? rustNativeCallableProtocol(callableCarrier) : undefined;
+      if (physical !== undefined && callableCarrier !== undefined) {
+        const error = collectType(callableCarrier);
+        if (error !== undefined) return error;
+      }
+      const callees = frameEntry?.implementations ?? (genericDefinition === undefined
+        ? physical !== undefined || selected?.sourceDeclaration === undefined ? [] : [{ declaration: input.implementationDeclaration(selected.sourceDeclaration) }]
+        : genericDefinition.implementations);
       for (const implementation of callees) {
         const selectedDeclaration = implementation.declaration;
         const calleeId = input.idByDeclaration.get(selectedDeclaration);
-        if (genericDefinition !== undefined && calleeId === undefined) {
-          return "A quantified implementation has no exact source generic-contract owner.";
+        if ((genericDefinition !== undefined || frameEntry !== undefined) && calleeId === undefined) {
+          return "A sealed callable implementation has no exact source generic-contract owner.";
         }
         const selectedClass = operation.target.form === "constructor"
           ? input.projectTypes.definitionForCarrier(operation.target.typeCarrier)
@@ -700,6 +713,12 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
             }
             const substitutions = new Map(callee.typeParameters.map((parameter, index) =>
               [parameter.identity, targetTypeArguments[index]!] as const));
+            if (frameEntry !== undefined && "carrier" in implementation && callableCarrier !== undefined) {
+              const bindings = bindRustExactTypeParameters(implementation.carrier, callableCarrier,
+                new Set(callee.capturedTypeParameters.map(parameter => parameter.identity)));
+              if (bindings === undefined) return "A frame invocation lost its exact captured generic environment binding.";
+              for (const [identity, carrier] of bindings) substitutions.set(identity, carrier);
+            }
             if (genericCallable !== undefined && genericDefinition !== undefined && "substitutions" in implementation) {
               for (const [identity, parameter] of implementation.substitutions) {
                 const index = parameter.kind === "type-parameter"
@@ -709,8 +728,10 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
                 substitutions.set(identity, argument);
               }
             }
+            const frame = rustFrameCallableValue(callableCarrier);
             const receiver = operation.target.form === "constructor" ? operation.target.typeCarrier
-              : selected?.sourceSelectedOwnerCarrier ?? selected?.sourceSelectedReceiverCarrier;
+              : selected?.sourceSelectedOwnerCarrier ?? selected?.sourceSelectedReceiverCarrier ??
+                (frame?.owner.kind === "class" ? frame.owner.instance : undefined);
             const receiverDeclaration = ast.parent(selectedDeclaration);
             if (operation.target.form === "structural-method" && callee.capturedTypeParameters.length !== 0 &&
               receiverDeclaration !== undefined && ast.is.IsObjectLiteralExpression(receiverDeclaration)) {

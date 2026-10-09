@@ -11,7 +11,6 @@ export {
   rustAsyncFunctionFactKey,
   rustGeneratorFactKey,
   rustResourceManagementFactKey,
-  rustSourceCallableReturnFactKey,
   rustSourceParameterAbiFactKey,
   rustTypeAliasDeclarationFactKey,
   rustYieldFactKey,
@@ -22,11 +21,12 @@ export type {
   RustSuspendedCallableStorage,
   RustResourceDisposalTarget,
   RustResourceManagementFact,
-  RustSourceCallableReturnFact,
   RustSourceParameterAbiFact,
   RustTypeAliasDeclarationFact,
   RustYieldFact,
 } from "./callables-and-resources.js";
+export { rustSourceCallableReturnFactKey } from "../../target-model/facts/source-declarations.js";
+export type { RustSourceCallableReturnFact } from "../../target-model/facts/source-declarations.js";
 export {
   rustFallibleFactKey,
   rustFutureValueFactKey,

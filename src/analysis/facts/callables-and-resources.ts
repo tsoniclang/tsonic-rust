@@ -196,18 +196,3 @@ export interface RustSourceParameterAbiFact {
 
 export const rustSourceParameterAbiFactKey: RustPlanKey<RustSourceParameterAbiFact> =
   defineRustPlanKey("sourceParameterAbi", closedMetadataEquals);
-
-export interface RustSourceCallableReturnFact {
-  readonly returnCarrier: TargetTypeRef;
-  readonly implementationCompletion?: "absence" | "diverging";
-  readonly canFallThrough?: boolean;
-  readonly undefinedReturn?: boolean;
-  readonly fallthroughUndefined?: boolean;
-}
-
-export const rustSourceCallableReturnFactKey: RustPlanKey<RustSourceCallableReturnFact> =
-  defineRustPlanKey("sourceCallableReturn", (left, right) =>
-    rustTargetTypeRefEquals(left.returnCarrier, right.returnCarrier) &&
-    left.implementationCompletion === right.implementationCompletion &&
-    left.undefinedReturn === right.undefinedReturn && left.fallthroughUndefined === right.fallthroughUndefined &&
-    left.canFallThrough === right.canFallThrough);

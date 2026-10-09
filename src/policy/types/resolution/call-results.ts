@@ -9,7 +9,8 @@ import { isRustJsValueCarrier, rustOptionElementCarrier, rustTargetGenericBindin
 import { rustUnionAlternatives } from "../../../target-model/types/union-relations.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { rustTypeFamilyNormalizer } from "../type-family-normalization.js";
-import { bindRustCallableTypeParameters, bindRustSelectedCallTypeArguments, rustSelectedCallTypeParameters } from "./generic-arguments.js";
+import { bindRustCallableResultTypeParameters, bindRustCallableTypeParameters, bindRustSelectedCallTypeArguments, rustSelectedCallTypeParameters } from "./generic-arguments.js";
+import { rustSourceCallableReturnFactKey } from "../../../target-model/facts/source-declarations.js";
 import { retainRustStructuralInstantiation } from "./structural-instantiations.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
@@ -19,7 +20,8 @@ export function retainRustSelectedCallableResultTemplate(
   context: RustTargetTypeResolutionContext,
   options: RustTargetTypeResolutionOptions,
 ): boolean {
-  if (rustGenericCallableValue(selected.sourceCallableCarrier) === undefined) return true;
+  const callable = rustGenericCallableValue(selected.sourceCallableCarrier);
+  if (callable === undefined) return true;
   const sourceArguments = selected.sourceSelectedMethodTypeArguments ?? [];
   const parameters = rustSelectedCallTypeParameters(sourceArguments, context);
   const template = rustGenericCallableProtocol(selected.sourceCallableCarrier);
@@ -32,7 +34,7 @@ export function retainRustSelectedCallableResultTemplate(
   const sourceReturn = sourceSignature?.returnType;
   const selectedParameters = selected.member.parameters ?? [];
   const selectedGenerics = selected.member.genericParameters ?? [];
-  if (parameters === undefined || template === undefined || rebound === undefined || storageContext === undefined || selected.sourceReturnType === undefined ||
+  if (parameters === undefined || template === undefined || rebound === undefined || declaration === undefined || storageContext === undefined || selected.sourceReturnType === undefined ||
     sourceSignature === undefined || sourceReturn === undefined ||
     storageContext.currentSemantics.declarations.signatureDeclaration(sourceSignature.signature) !== declaration ||
     !rustTargetTypeRefEquals(rebound.result, selected.member.returnType) ||
@@ -40,8 +42,12 @@ export function retainRustSelectedCallableResultTemplate(
     rebound.parameters.some((parameter, index) => !rustTargetTypeRefEquals(parameter, selectedParameters[index]?.type)) ||
     parameters.length !== selectedGenerics.length || selectedGenerics.some((parameter, index) =>
       parameter.kind !== "type" || parameter.targetIdentity !== parameters[index]?.identity)) return false;
-  return retainRustStructuralInstantiation(sourceReturn, template.result, rebound.result,
-    storageContext, options, new Set(), context.ast.typeNode(declaration));
+  const captured = callable.environment.length !== 0;
+  const sourceTemplate = captured ? context.facts.getFact(declaration, rustSourceCallableReturnFactKey)?.returnCarrier : template.result;
+  const selectedContext = sourceTemplate === undefined ? undefined : captured
+    ? bindRustCallableResultTypeParameters(declaration, sourceTemplate, rebound.result, storageContext) : storageContext;
+  return sourceTemplate !== undefined && selectedContext !== undefined && retainRustStructuralInstantiation(sourceReturn, sourceTemplate, rebound.result,
+    selectedContext, options, new Set(), context.ast.typeNode(declaration));
 }
 
 export function resolveRustSelectedSourceCallResult(

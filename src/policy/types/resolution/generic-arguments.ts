@@ -6,6 +6,10 @@ import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions }
 import { resolveRustTargetType } from "./target.js";
 import { resolveRustAuthoredTargetType } from "./tuples.js";
 import type { RustSourceGenericParameterContract } from "../../../target-model/lifetimes/index.js";
+import { bindRustExactTypeParameters } from "../../../target-model/types/carriers/generic-inference.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustTargetTypeParameterIdentities } from "../../../target-model/types/carriers/generic-references.js";
+import { resolveRustEnclosingGenericParameters } from "./generic-environment.js";
 
 export function rustSelectedCallTypeParameters(
   sourceArguments: NonNullable<RustSelectedTargetSignature["sourceSelectedMethodTypeArguments"]>,
@@ -53,18 +57,46 @@ export function bindRustCallableTypeParameters(
     parameters.some(parameter => parameter.kind !== "type") ||
     new Set(targetParameters.map(parameter => parameter.identity)).size !== targetParameters.length) return undefined;
   if (parameters.length === 0) return context;
-  const semantics = context.semanticsFor(declaration);
+  return bindRustSourceTypeParameterArguments(parameters.map((parameter, index) => ({
+    declaration: parameter.declaration, carrier: targetParameters[index]!,
+  })), { ...context, currentSemantics: context.semanticsFor(declaration) });
+}
+
+export function bindRustCallableResultTypeParameters(
+  declaration: Node,
+  template: TargetTypeRef,
+  result: TargetTypeRef,
+  context: RustTargetTypeResolutionContext,
+): RustTargetTypeResolutionContext | undefined {
+  const selected = resolveRustEnclosingGenericParameters(declaration,
+    rustTargetTypeParameterIdentities(template), context.ast, context.sourceLifetimes);
+  if (selected === undefined) return undefined;
+  const parameters = new Map(selected.flatMap(parameter => parameter.kind === "type"
+    ? [[parameter.identity, parameter.declaration] as const] : []));
+  const bindings = bindRustExactTypeParameters(template, result, new Set(parameters.keys()));
+  return bindings === undefined ? undefined : bindRustSourceTypeParameterArguments([...bindings].map(([identity, carrier]) => ({
+    declaration: parameters.get(identity)!, carrier,
+  })), context);
+}
+
+function bindRustSourceTypeParameterArguments(
+  parameters: readonly { readonly declaration: Node; readonly carrier: TargetTypeRef }[],
+  context: RustTargetTypeResolutionContext,
+): RustTargetTypeResolutionContext | undefined {
   const substitutions = new Map(context.sourceTypeParameterSubstitutions);
   const declarations = new Set<Node>();
-  for (const [index, parameter] of parameters.entries()) {
+  for (const parameter of parameters) {
+    const semantics = context.semanticsFor(parameter.declaration);
     const sourceType = semantics.declarations.declaredType(parameter.declaration);
     const symbol = sourceType === undefined ? undefined : semantics.declarations.typeSymbol(sourceType);
     if (sourceType === undefined || symbol === undefined || declarations.has(parameter.declaration) ||
       semantics.declarations.primarySymbolDeclaration(symbol) !== parameter.declaration) return undefined;
     declarations.add(parameter.declaration);
-    substitutions.set(parameter.declaration, { sourceType, carrier: targetParameters[index]! });
+    const existing = substitutions.get(parameter.declaration);
+    if (existing !== undefined && !rustTargetTypeRefEquals(existing.carrier, parameter.carrier)) return undefined;
+    substitutions.set(parameter.declaration, { sourceType, carrier: parameter.carrier });
   }
-  return { ...context, currentSemantics: semantics, sourceTypeParameterSubstitutions: substitutions };
+  return { ...context, sourceTypeParameterSubstitutions: substitutions };
 }
 
 export function bindRustSourceAliasArguments(

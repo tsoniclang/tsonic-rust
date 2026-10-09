@@ -3,7 +3,8 @@ import test from "node:test";
 import { rustGenericCallableTargetType, rustGenericCallableValue } from "../../dist/target-model/types/carriers/generic-callables.js";
 import { rustFrameCallableTargetType } from "../../dist/target-model/types/carriers/frame-callables.js";
 import { rustSourceTypeCarrier } from "../../dist/target-model/types/carriers/source-types.js";
-import { inferRustTargetTypeParameterBindings } from "../../dist/target-model/types/carriers/generic-inference.js";
+import { bindRustExactTypeParameters, inferRustTargetTypeParameterBindings } from "../../dist/target-model/types/carriers/generic-inference.js";
+import { rustSourceOptionalTargetType } from "../../dist/target-model/types/projections.js";
 import { substituteRustTargetTypeParameters } from "../../dist/target-model/types/carriers/substitution.js";
 
 const parameter = identity => ({ kind: "type-parameter", identity, name: "Value" });
@@ -48,4 +49,29 @@ test("lexical and class frame inference preserves exact activation and environme
   const otherInstance = rustSourceTypeCarrier(origin.fileName, "Other", "object", [{ kind: "type", type: integer }]);
   const otherMember = rustFrameCallableTargetType([integer], integer, { kind: "class", origin, instance: otherInstance });
   assert.equal(inferRustTargetTypeParameterBindings(member, otherMember, selected), undefined);
+});
+
+test("exact callable obligations retain optional shape and repeated captured identities", () => {
+  const optional = rustSourceOptionalTargetType(free);
+  const pattern = { kind: "tuple", elements: [free, optional] };
+  const actual = { kind: "tuple", elements: [integer, rustSourceOptionalTargetType(integer)] };
+  assert.deepEqual(bindRustExactTypeParameters(pattern, actual, selected), new Map([[free.identity, integer]]));
+  for (const [label, candidate] of [
+    ["absence shape", { kind: "tuple", elements: [integer, integer] }],
+    ["conflicting repeated carrier", { kind: "tuple", elements: [integer, rustSourceOptionalTargetType(boolean)] }],
+    ["missing result", { kind: "tuple", elements: [integer] }],
+  ]) assert.equal(bindRustExactTypeParameters(pattern, candidate, selected) === undefined, true, label);
+  assert.equal(bindRustExactTypeParameters(pattern, actual, new Set([bound.identity])) === undefined, true);
+});
+
+test("exact frame obligation bindings cannot change nominal owner, width or mutability", () => {
+  const instance = rustSourceTypeCarrier(origin.fileName, "Owner", "object", [{ kind: "type", type: free }]);
+  const member = rustFrameCallableTargetType([free], free, { kind: "class", origin, instance });
+  assert.deepEqual(bindRustExactTypeParameters(member, concrete(member), selected), new Map([[free.identity, integer]]));
+  const shared = { kind: "reference", referent: integer, mutable: false };
+  assert.equal(bindRustExactTypeParameters(shared, { ...shared, mutable: true }, new Set()) === undefined, true);
+  assert.equal(bindRustExactTypeParameters(integer, { ...integer, name: "int64" }, new Set()) === undefined, true);
+  const other = rustFrameCallableTargetType([integer], integer, { kind: "class", origin,
+    instance: rustSourceTypeCarrier(origin.fileName, "Other", "object", [{ kind: "type", type: integer }]) });
+  assert.equal(bindRustExactTypeParameters(member, other, selected) === undefined, true);
 });

@@ -20,6 +20,7 @@ import type {
 } from "../model.js";
 import { rustLifetimeKey, rustLifetimesEqual } from "../../lifetimes/index.js";
 import { isRustAbsenceCarrier } from "./native.js";
+import { substituteRustTargetTypeParameters } from "./substitution.js";
 import { rustSourceOptionalElementCarrier } from "./optional.js";
 import type { RustLifetimeRef } from "../../lifetimes/index.js";
 
@@ -33,6 +34,16 @@ export function inferRustTargetTypeParameterBindings(
     lifetimeIdentities: new Set(),
     constIdentities: new Set(),
   })?.types;
+}
+
+export function bindRustExactTypeParameters(
+  pattern: TargetTypeRef,
+  actual: TargetTypeRef,
+  parameters: ReadonlySet<string>,
+): ReadonlyMap<string, TargetTypeRef> | undefined {
+  const bindings = inferRustTargetTypeParameterBindings(pattern, actual, parameters);
+  return bindings === undefined || !rustTargetTypeRefEquals(substituteRustTargetTypeParameters(pattern, bindings), actual)
+    ? undefined : bindings;
 }
 
 export function rustTargetTypePatternsAreNominallyDisjoint(

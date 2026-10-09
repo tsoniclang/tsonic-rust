@@ -48,7 +48,8 @@ function callableFixture() {
   const context = {
     sourceLifetimes: { contractFor: selected => selected === declaration ? { parameters } : undefined },
     semanticsFor: selected => {
-      assert.equal(selected === declaration, true, "selected declaration owns its binder queries");
+      assert.equal(selected === declaration || selected === innerDeclaration, true,
+        "only the selected callable and its exact checked parameter own binder queries");
       return semantics;
     },
     sourceTypeParameterSubstitutions: new Map([[outerDeclaration, { sourceType: outerType, carrier: outerCarrier }]]),

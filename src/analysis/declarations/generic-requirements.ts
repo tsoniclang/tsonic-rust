@@ -37,6 +37,7 @@ import { normalizeRustGenericRequirements } from "./generic-requirement-contract
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 import { rustTypeFamilyNormalizer } from "../../policy/types/type-family-normalization.js";
 import type { RustGenericCallablePlan } from "../callables/generic-values.js";
+import type { RustFrameCallablePlan } from "../callables/frame-values.js";
 import type { RustProjectStructuralView } from "../objects/project-structural-views.js";
 import { rustStructuralViewRequirementUses } from "./structural-view-requirements.js";
 
@@ -95,6 +96,7 @@ export function analyzeRustDeclarationGenericRequirements(
   objectRepresentations: RustObjectRepresentationPlan,
   genericCallables: RustGenericCallablePlan,
   structuralViews: readonly RustProjectStructuralView[],
+  frameCallables: RustFrameCallablePlan,
 ): AnalyzeRustDeclarationGenericRequirementsResult {
   const ast = source.ast;
   const diagnostics: TargetDiagnostic[] = [];
@@ -177,6 +179,7 @@ export function analyzeRustDeclarationGenericRequirements(
         projectTypes,
         objectRepresentations,
         genericCallables,
+        frameCallables,
         structuralShapes: shapes,
         structuralViewsFor: (declaration: Node) => viewsByDeclaration.get(declaration) ?? [],
         valueLifetimes,

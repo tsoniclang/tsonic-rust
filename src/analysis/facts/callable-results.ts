@@ -1,7 +1,8 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustAsyncFunctionFactKey, rustGeneratorFactKey, rustSourceCallableReturnFactKey } from "./callables-and-resources.js";
+import { rustAsyncFunctionFactKey, rustGeneratorFactKey } from "./callables-and-resources.js";
+import { rustSourceCallableReturnFactKey } from "../../target-model/facts/source-declarations.js";
 import type { RustSuspendedCallableStorage } from "./callables-and-resources.js";
 
 export function rustRetainedCallableStorage(

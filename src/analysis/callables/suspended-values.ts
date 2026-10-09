@@ -12,7 +12,7 @@ import type { RustSourceCallableSpecializationIssue } from "./specializations.js
 import type { RustLifetimeIndex, RustSourceGenericParameterContract } from "../../target-model/lifetimes/index.js";
 import { rustLifetimeKey, rustStaticLifetime, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { bindRustElidedCallableInput, substituteElidedLifetime } from "../../target-model/types/carriers/lifetime-elision.js";
-import { resolveRustEnclosingGenericParameters } from "../declarations/generic-environment.js";
+import { resolveRustEnclosingGenericParameters } from "../../policy/types/resolution/generic-environment.js";
 
 export interface RustSuspendedCallableImplementation {
   readonly declaration: Node;

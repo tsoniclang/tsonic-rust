@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolveRustEnclosingGenericParameters } from "../../../dist/analysis/declarations/generic-environment.js";
+import { resolveRustEnclosingGenericParameters } from "../../../dist/policy/types/resolution/generic-environment.js";
 import { rustLifetimeKey } from "../../../dist/target-model/lifetimes/index.js";
 
 test("enclosing generic selection uses exact declaration identity, not shadowed names", () => {
@@ -47,4 +47,13 @@ test("enclosing generic selection rejects cyclic and excessively deep ancestry",
   const ast = { parent: value => owners[owners.indexOf(value) + 1] };
   const lifetimes = { contractFor: value => value === owners[129] ? { parameters: [{ kind: "type", identity: "deep" }] } : undefined };
   assert.equal(resolveRustEnclosingGenericParameters(owners[0], ["deep"], ast, lifetimes), undefined);
+});
+
+test("enclosing generic selection rejects one identity claimed by distinct source declarations", () => {
+  const outer = {}, inner = {};
+  const ast = { parent: value => value === inner ? outer : undefined };
+  const lifetimes = { contractFor: owner => ({ parameters: [
+    { kind: "type", declaration: owner, identity: "duplicate:T", targetName: "T" },
+  ] }) };
+  assert.equal(resolveRustEnclosingGenericParameters(inner, ["duplicate:T", "missing"], ast, lifetimes) === undefined, true);
 });
