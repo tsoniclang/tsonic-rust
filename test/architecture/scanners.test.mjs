@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 import { rustLintAttributes } from "../../dist/backend/target-ast/normalization/lint-policy.js";
 import { maskNativeMethodLiterals } from "./native-method-syntax.mjs";
 
@@ -33,7 +33,9 @@ const sourceFiles = collectFiles(sourceRoot, ".ts").map((path) => ({
 }));
 
 test("project layouts are published by analysis, never reconstructed by planners", () => {
-  for (const file of sourceFiles.filter(file => file.path.startsWith(join(sourceRoot, "backend/planner") + "/"))) {
+  const planners = sourceFiles.filter(file => file.path.startsWith(join(sourceRoot, "backend/planner") + sep));
+  assert.equal(planners.length > 0, true, "the layout-owner gate must inspect actual planner files on every platform");
+  for (const file of planners) {
     assert.doesNotMatch(file.text, /\brustProjectObjectLayout\b/u, file.path);
   }
 });
