@@ -4,10 +4,8 @@ import { planRustOptionalStorageOperation } from "./optional-storage.js";
 import { planRustUnionEquality } from "./union-equality.js";
 import {
   isRustBoolCarrier,
-  isRustStringCarrier,
   isRustUnitCarrier,
   isRustNeverCarrier,
-  isRustOptionCarrier,
   rustOptionElementCarrier,
   rustSourcePrimitiveTargetType,
 } from "../../../target-model/types/index.js";
@@ -30,7 +28,7 @@ import { planEmptyStringComparison, planRustRangeContainment, planBooleanLiteral
 import { foldRustIntegerComparison } from "../../target-ast/integer-comparisons.js";
 import { planRustNativeZeroComparison } from "./native-zero-comparisons.js";
 import { planRustNativeIntegerIdentity } from "./native-integer-identities.js";
-import { planExpression, planExpressionBeforeOptionProjection, planExpressionBeforeValueProjections } from "./entry.js";
+import { planExpression, planExpressionBeforeValueProjections } from "./entry.js";
 import { planRustDiscardedValue } from "./discarded-values.js";
 import type { RustExpressionResultUse } from "./entry.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
@@ -38,18 +36,15 @@ import { planRustScopedStringComparison } from "./scoped-comparisons.js";
 import { planNullishAssignment } from "./nullish-assignment.js";
 import { planCompoundAssignmentExpression } from "./compound-assignment.js";
 import { planRustProgramErrorEquality, planRustProgramErrorTypeTest } from "./error-operations.js";
-import { rustErrorFieldComparisonView, rustErrorFieldOptionalView, rustErrorFieldIsOptionalRead,
-  rustErrorFieldOptionalComparisonView, rustErrorFieldStringComparisonView } from "./error-field-borrows.js";
+import { rustErrorFieldComparisonView, rustErrorFieldOptionalView } from "./error-field-borrows.js";
+import { planRustOptionEquality } from "./option-equality.js";
 import { planRustClosedTypeTest } from "./type-tests.js";
 import {
   planRustProjectTypeTest,
   planRustProjectTypeTestSelection,
 } from "../objects/project-downcasts.js";
-import { rustOptionProjectionFactKey } from "../../../analysis/facts/keys.js";
 import { rustTargetOperationText } from "../../../analysis/facts/target-operation.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { rustOptionNestingDepth } from "../../../target-model/types/carriers/optional.js";
-import { rustValueCarrierBeforeOptionProjection, rustStrictEqualityOperandCarrier } from "../../../analysis/facts/value-carrier-queries.js";
 import { finalizedConversionIsValid } from "../../../analysis/facts/finalized-operation/conversions.js";
 import { hasExactObjectKeys, isClosedMetadata } from "../../../target-model/metadata/closed-data.js";
 import type { Node } from "@tsonic/tsts";
@@ -345,132 +340,7 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
         value: check({ kind: "path", path: optionName }),
       });
   }
-  if (fact !== undefined && fact.kind === "option-equality") {
-    const leftNode = BinaryExpression_Left(context.input.program.source.ast, node);
-    const rightNode = BinaryExpression_Right(context.input.program.source.ast, node);
-    const left = leftNode === undefined
-      ? undefined
-      : planStrictEqualityOperand(leftNode, context);
-    const right = rightNode === undefined
-      ? undefined
-      : planStrictEqualityOperand(rightNode, context);
-    const boolCarrier = rustSourcePrimitiveTargetType("bool");
-    const leftCarrier = rustStrictEqualityOperandCarrier(context.input.program.facts, leftNode);
-    const rightCarrier = rustStrictEqualityOperandCarrier(context.input.program.facts, rightNode);
-    const selectedOperation = context.input.program.facts.getSelectedTargetOperator(node);
-    if (leftNode === undefined || rightNode === undefined || left === undefined || right === undefined ||
-      !rustTargetTypeRefEquals(leftCarrier, fact.optionCarrier) ||
-      !rustTargetTypeRefEquals(rightCarrier, fact.optionCarrier) ||
-      !requireExpressionCarrier(node, boolCarrier, context, "rust.backend.option-equality-carrier") ||
-      !selectedOperationMatches(
-        selectedOperation,
-        fact.operationId,
-        "operator",
-        boolCarrier,
-        rustTargetOperationText(fact),
-      )) {
-      const diagnostic = missingFactDiagnostic(
-        diagnosticInput(context, node),
-        "rust.backend.option-equality",
-        "Option equality conflicts with its exact finalized operand carrier or selected operation.",
-      );
-      context.diagnostics.push({
-        ...diagnostic,
-        evidence: [
-          ...(diagnostic.evidence ?? []),
-          `carrier.expected=${JSON.stringify(fact.optionCarrier)}`,
-          `carrier.left=${JSON.stringify(leftCarrier)}`,
-          `carrier.right=${JSON.stringify(rightCarrier)}`,
-          `operation.selected.id=${selectedOperation?.operationId ?? "missing"}`,
-          `operation.selected.kind=${selectedOperation?.operationKind ?? "missing"}`,
-          `operation.selected.target=${selectedOperation?.targetOperation ?? "missing"}`,
-        ],
-      });
-      return undefined;
-    }
-    const borrowedStack = rustErrorFieldIsOptionalRead(leftNode, context) || rustErrorFieldIsOptionalRead(rightNode, context);
-    return {
-      kind: "binary",
-      operator: fact.negated ? "!=" : "==",
-      left: borrowedStack ? rustErrorFieldOptionalComparisonView(leftNode, left, rightNode, context)
-        : planRustNonConsumingValue(leftNode, left, context),
-      right: borrowedStack ? rustErrorFieldOptionalComparisonView(rightNode, right, undefined, context)
-        : planRustNonConsumingValue(rightNode, right, context),
-    };
-  }
-  if (fact !== undefined && fact.kind === "option-value-equality") {
-    const leftNode = BinaryExpression_Left(context.input.program.source.ast, node);
-    const rightNode = BinaryExpression_Right(context.input.program.source.ast, node);
-    const optionNode = fact.optionOperand === "left" ? leftNode : rightNode;
-    const valueNode = fact.optionOperand === "left" ? rightNode : leftNode;
-    const option = optionNode === undefined
-      ? undefined
-      : planStrictEqualityOperand(optionNode, context);
-    const value = valueNode === undefined ? undefined : planExpression(valueNode, context);
-    const valueProjection = valueNode === undefined
-      ? undefined
-      : context.input.program.facts.getFact(valueNode, rustOptionProjectionFactKey);
-    const optionCarrier = optionNode === undefined
-      ? undefined
-      : rustStrictEqualityOperandCarrier(context.input.program.facts, optionNode);
-    const valueCarrier = valueNode === undefined
-      ? undefined
-      : rustValueCarrierBeforeOptionProjection(context.input.program.facts, valueNode);
-    const nestingDepth = rustOptionNestingDepth(fact.optionCarrier, fact.valueCarrier);
-    const remainingDepth = rustOptionNestingDepth(fact.optionCarrier, valueProjection?.resultCarrier ?? fact.valueCarrier);
-    if (optionNode === undefined || valueNode === undefined || option === undefined || value === undefined ||
-      !rustTargetTypeRefEquals(optionCarrier, fact.optionCarrier) ||
-      !rustTargetTypeRefEquals(valueCarrier, fact.valueCarrier) ||
-      nestingDepth === undefined || nestingDepth === 0 || remainingDepth === undefined ||
-      !requireExpressionCarrier(
-        node,
-        rustSourcePrimitiveTargetType("bool"),
-        context,
-        "rust.backend.option-value-equality-carrier",
-      ) ||
-      !selectedOperationMatches(
-        context.input.program.facts.getSelectedTargetOperator(node),
-        fact.operationId,
-        "operator",
-        rustSourcePrimitiveTargetType("bool"),
-        rustTargetOperationText(fact),
-      ) ||
-      (valueProjection !== undefined &&
-        (valueProjection.kind !== "some" ||
-          !rustTargetTypeRefEquals(valueProjection.sourceCarrier, fact.valueCarrier) ||
-          !rustTargetTypeRefEquals(rustOptionElementCarrier(valueProjection.resultCarrier), fact.valueCarrier)))) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, node),
-        "rust.backend.option-value-equality",
-        "Option/value equality conflicts with its exact finalized operand carriers and projection.",
-      ));
-      return undefined;
-    }
-    let comparableValue: RustExpr = value;
-    if (nestingDepth === 1 && remainingDepth === 1 && isRustStringCarrier(fact.valueCarrier) &&
-      rustErrorFieldIsOptionalRead(optionNode, context)) {
-      const borrowedOption = rustErrorFieldOptionalComparisonView(optionNode, option,
-        fact.optionOperand === "left" ? valueNode : undefined, context);
-      const borrowedValue: RustExpr = { kind: "call", path: "Some", args: [rustErrorFieldStringComparisonView(
-        valueNode, value, fact.optionOperand === "right" ? optionNode : undefined, context)] };
-      return { kind: "binary", operator: fact.negated ? "!=" : "==",
-        left: fact.optionOperand === "left" ? borrowedOption : borrowedValue,
-        right: fact.optionOperand === "left" ? borrowedValue : borrowedOption };
-    }
-    for (let depth = 0; depth < remainingDepth; depth += 1) {
-      comparableValue = { kind: "call", path: "Some", args: [comparableValue] };
-    }
-    return {
-      kind: "binary",
-      operator: fact.negated ? "!=" : "==",
-      left: fact.optionOperand === "left"
-        ? planRustNonConsumingValue(optionNode, option, context)
-        : comparableValue,
-      right: fact.optionOperand === "left"
-        ? comparableValue
-        : planRustNonConsumingValue(optionNode, option, context),
-    };
-  }
+  if (fact?.kind === "option-equality") return planRustOptionEquality(node, fact, context);
   if (fact !== undefined && fact.kind === "constant-equality") {
     const leftNode = BinaryExpression_Left(context.input.program.source.ast, node);
     const rightNode = BinaryExpression_Right(context.input.program.source.ast, node);
@@ -696,11 +566,4 @@ export function planRustOperatorCallExpression(
         operandErrorType: rustTargetRuntimeErrorType,
       }
     : call;
-}
-
-
-function planStrictEqualityOperand(node: Node, context: RustPlanContext): RustExpr | undefined {
-  return isRustOptionCarrier(expressionCarrier(node, context))
-    ? planExpressionBeforeValueProjections(node, context, "value")
-    : planExpressionBeforeOptionProjection(node, context);
 }

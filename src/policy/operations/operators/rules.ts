@@ -57,6 +57,7 @@ import {
   sameRustPrimitiveCarrier,
 } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { isRustStringViewCarrier } from "../../../target-model/types/carriers/native.js";
 import { isRustMutableJsErrorCarrier } from "../../../target-model/types/carriers/source-error.js";
 import { rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
 import { rustClassConstructorInstance } from "../../../target-model/types/carriers/class-constructors.js";
@@ -356,14 +357,14 @@ export function selectRustBinaryOperator(
   }
   const comparison = comparisonTokens[operatorKindName];
   if (comparison !== undefined) {
-    if (isRustStringCarrier(left) && isRustStringCarrier(right)) {
+    if (isRustStringViewCarrier(left) && isRustStringViewCarrier(right)) {
       return {
         kind: "operator-call",
         rustOperator: comparison,
         resultCarrier: boolCarrier,
         path: sourceStringComparisonPathByOperator[comparison]!,
         fallible: false,
-        operandModes: ["ref", "ref"],
+        operandModes: [isRustStringCarrier(left) ? "ref" : "value", isRustStringCarrier(right) ? "ref" : "value"],
       };
     }
     const promotion = selectRustNumericComparisonPromotion(left, right);
@@ -442,7 +443,7 @@ export function selectRustBinaryOperator(
       numericPromotion !== undefined ||
       (isRustBigIntCarrier(left) && isRustBigIntCarrier(right)) ||
       (isRustBoolCarrier(left) && isRustBoolCarrier(right)) ||
-      (isRustStringCarrier(left) && isRustStringCarrier(right)) ||
+      (isRustStringViewCarrier(left) && isRustStringViewCarrier(right)) ||
       (isRustJsStrictEqualityCarrier(left) && rustTargetTypeRefEquals(left, right)) ||
       (rustTargetTypeRefEquals(left, right) &&
         rustCarrierSupportsTrait(left, "core::cmp::PartialEq")) ||

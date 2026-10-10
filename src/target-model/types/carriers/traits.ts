@@ -1,7 +1,7 @@
 import { isRustBigIntCarrier, isRustJsStringCarrier, isRustStringCarrier, isRustUnitCarrier } from "./js.js";
 import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, rustMutableJsErrorTargetId, rustSourceErrorTargetId, rustWritableSourceErrorTargetId,
   rustRetainedErrorTargetId, rustWritableRetainedErrorTargetId, isRustRetainedErrorCarrier } from "./source-error.js";
-import { isRustAbsenceCarrier } from "./native.js";
+import { isRustAbsenceCarrier, isRustStringViewCarrier } from "./native.js";
 import { rustJsArrayValueTargetId } from "./array-values.js";
 import { isRustIntegerCarrier, isRustNumericCarrier, rustFutureTargetId, rustPrimitiveTypeName } from "./primitives.js";
 import { rustRawPointerTargetId } from "./source-types.js";
@@ -585,7 +585,7 @@ const rustUnconditionallyDefaultTargetIds: ReadonlySet<string> = new Set([
 export function isRustSourceStringConvertibleCarrier(carrier: TargetTypeRef | undefined): boolean {
   const optional = rustOptionElementCarrier(carrier);
   if (optional !== undefined) return isRustSourceStringConvertibleCarrier(optional);
-  return isRustStringCarrier(carrier) || isRustUnitCarrier(carrier) ||
+  return isRustStringViewCarrier(carrier) || isRustUnitCarrier(carrier) ||
     isRustAbsenceCarrier(carrier) ||
     isRustBigIntCarrier(carrier) ||
     (carrier?.kind === "target-named" && (carrier.id === rustProgramErrorTargetId || carrier.id === rustSourceErrorTargetId ||
@@ -597,7 +597,7 @@ export function isRustSourceNumberConvertibleCarrier(carrier: TargetTypeRef | un
   const optional = rustOptionElementCarrier(carrier);
   if (optional !== undefined) return isRustSourceNumberConvertibleCarrier(optional);
   return carrier?.kind === "source-primitive" && carrier.name === "bool" ||
-    isRustNumericCarrier(carrier) || isRustStringCarrier(carrier) || isRustBigIntCarrier(carrier) ||
+    isRustNumericCarrier(carrier) || isRustStringViewCarrier(carrier) || isRustBigIntCarrier(carrier) ||
     isRustUnitCarrier(carrier) || isRustAbsenceCarrier(carrier) ||
     carrier?.kind === "target-named" && (carrier.id === rustJsValueTargetId || carrier.id === rustJsNumericTargetId);
 }

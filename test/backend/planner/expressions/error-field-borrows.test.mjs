@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rustErrorFieldBorrowNeedsSnapshot, rustErrorFieldComparisonView, rustErrorFieldHasGuardedBorrow,
-  rustErrorFieldOptionalView, rustErrorFieldSharedView, rustErrorFieldOptionalComparisonView,
-  rustErrorFieldStringComparisonView } from "../../../../dist/backend/planner/expressions/error-field-borrows.js";
+  rustErrorFieldOptionalView, rustErrorFieldSharedView } from "../../../../dist/backend/planner/expressions/error-field-borrows.js";
 import { rustTargetOperationFactKey } from "../../../../dist/analysis/facts/keys.js";
-import { rustJsErrorTargetType, rustStringTargetType } from "../../../../dist/target-model/types/index.js";
+import { rustJsErrorTargetType, rustStringTargetType, rustOptionTargetType } from "../../../../dist/target-model/types/index.js";
+import { planRustStringComparisonView } from "../../../../dist/backend/planner/expressions/string-comparison-views.js";
 import { rustSourceErrorTargetType } from "../../../../dist/target-model/types/carriers/source-error.js";
 
 function scenario(carrier, property = "message") {
@@ -148,7 +148,7 @@ test("optional stack equality borrows the original guard without a String snapsh
   const { read, context } = scenario(rustSourceErrorTargetType(), "stack");
   const borrowed = { kind: "method-call", receiver: { kind: "path", path: "error" }, method: "stack", args: [] };
   const owned = { kind: "method-call", receiver: borrowed, method: "map", args: [{ kind: "path", path: "String::from" }] };
-  assert.deepEqual(rustErrorFieldOptionalComparisonView(read, owned, {}, context), {
+  assert.deepEqual(planRustStringComparisonView(read, owned, rustOptionTargetType(rustStringTargetType()), {}, context), {
     kind: "method-call", receiver: borrowed, method: "as_deref", args: [],
   });
 });
@@ -158,17 +158,17 @@ test("optional stack equality consumes its guard before a same-owner mutation or
   const owned = { kind: "method-call", receiver: { kind: "path", path: "stack_guard" }, method: "map", args: [{ kind: "path", path: "String::from" }] };
   const capture = {};
   invalidations.set(capture, { kind: "invalidated" });
-  assert.deepEqual(rustErrorFieldOptionalComparisonView(read, owned, capture, context), {
+  assert.deepEqual(planRustStringComparisonView(read, owned, rustOptionTargetType(rustStringTargetType()), capture, context), {
     kind: "method-call", receiver: owned, method: "as_deref", args: [],
   });
 });
 
 test("stack/string equality uses borrowed literals and native str guarded views", () => {
   const { read, context, expression } = scenario(rustSourceErrorTargetType());
-  assert.deepEqual(rustErrorFieldStringComparisonView(read, expression, undefined, context), {
+  assert.deepEqual(planRustStringComparisonView(read, expression, rustStringTargetType(), undefined, context), {
     kind: "reference", expr: { kind: "dereference", pointer: expression.expression },
   });
-  assert.deepEqual(rustErrorFieldStringComparisonView({}, { kind: "string-literal", value: "stack" }, undefined, context), {
+  assert.deepEqual(planRustStringComparisonView({}, { kind: "string-literal", value: "stack" }, rustStringTargetType(), undefined, context), {
     kind: "str-literal", value: "stack",
   });
 });

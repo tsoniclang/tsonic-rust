@@ -152,7 +152,8 @@ export function lowerRustValueConversion(
     case "owned-string-from-borrowed-str":
       return { kind: "owned-string-from-borrowed-str", expression: source };
     case "borrowed-str-from-owned-string":
-      return { kind: "call", path: "core::convert::AsRef::<str>::as_ref", args: [source] };
+      return source.kind === "str-literal" ? source
+        : { kind: "call", path: "core::convert::AsRef::<str>::as_ref", args: [source] };
     case "borrowed-str-from-optional-string":
       return { kind: "method-call", receiver: {
         kind: "method-call", receiver: source.kind === "reference" ? source.expr : source, method: "as_deref", args: [],
@@ -335,7 +336,10 @@ export function lowerRustValueConversion(
       if (converted === undefined) {
         return undefined;
       }
-      const directMapper: RustExpr | undefined = converted.kind === "call" &&
+      const directMapper: RustExpr | undefined = converted.kind === "owned-string-from-borrowed-str" &&
+          converted.expression.kind === "path" && converted.expression.path === valueName
+        ? { kind: "path", path: "String::from" }
+        : converted.kind === "call" &&
           converted.args.length === 1 && converted.args[0]?.kind === "path" &&
           converted.args[0].path === valueName
         ? { kind: "path", path: converted.path }

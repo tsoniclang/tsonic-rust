@@ -15,6 +15,8 @@ import type {
   TargetTypeRef,
 } from "../../../target-model/types/model.js";
 
+import type { RustOptionEqualityContract } from "../../../target-model/operations/option-equality.js";
+
 export type RustTargetOperationFact =
   | {
       readonly kind: "sequence";
@@ -251,20 +253,11 @@ export type RustTargetOperationFact =
       readonly nullishCarrier: TargetTypeRef;
       readonly nullishDepths: readonly number[];
     }
-  | {
+  | (RustOptionEqualityContract & {
       readonly kind: "option-equality";
       readonly operationId: string;
       readonly negated: boolean;
-      readonly optionCarrier: TargetTypeRef;
-    }
-  | {
-      readonly kind: "option-value-equality";
-      readonly operationId: string;
-      readonly negated: boolean;
-      readonly optionOperand: "left" | "right";
-      readonly optionCarrier: TargetTypeRef;
-      readonly valueCarrier: TargetTypeRef;
-    }
+    })
   | {
       readonly kind: "constant-equality";
       readonly operationId: string;
@@ -869,7 +862,6 @@ export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact):
       return fact.elementCarrier;
     case "option-check":
     case "option-equality":
-    case "option-value-equality":
       return { kind: "source-primitive", name: "bool" };
     default:
       return undefined;

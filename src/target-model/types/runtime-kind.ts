@@ -4,10 +4,11 @@ import { closedMetadataKey } from "../metadata/closed-data.js";
 import { rustRuntimeUnionContract } from "./carriers/runtime-unions.js";
 import {
   isRustAbsenceCarrier, isRustBigIntCarrier, isRustCallableCarrier,
-  isRustNumericCarrier, isRustStringCarrier, isRustUnitCarrier, isRustJsValueCarrier, rustJsSymbolTargetId,
+  isRustNumericCarrier, isRustUnitCarrier, isRustJsValueCarrier, rustJsSymbolTargetId,
   rustOptionElementCarrier, rustSourceTypeCarrierValue,
   rustTsValueTargetId,
 } from "./index.js";
+import { isRustStringViewCarrier } from "./carriers/native.js";
 
 export type RustTypeofResult =
   | "boolean" | "number" | "bigint" | "string" | "symbol" | "function" | "object" | "undefined"
@@ -52,7 +53,7 @@ export function getRustTypeofRuntimeKind(
     if (carrier.name === "int64" || carrier.name === "uint64") return "bigint";
     return isRustNumericCarrier(carrier) ? "number" : undefined;
   }
-  if (isRustStringCarrier(carrier)) return "string";
+  if (isRustStringViewCarrier(carrier)) return "string";
   if (carrier.kind === "target-named" && carrier.id === rustJsSymbolTargetId) return "symbol";
   if (isRustBigIntCarrier(carrier)) return "bigint";
   if (isRustUnitCarrier(carrier)) return "undefined";

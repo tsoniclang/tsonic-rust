@@ -24,6 +24,7 @@ import {
   rustOptionElementCarrier,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
+  rustBorrowedStrTargetType,
   rustStructuralObjectCarrierValue,
   rustCallableProtocol,
   rustTargetGenericReferences,
@@ -43,6 +44,8 @@ import {
   rustUint64ToFloat64ValueConversion,
   rustUint8ToInt32ValueConversion,
   rustUsizeToInt32ValueConversion,
+  rustBorrowedStrToStringValueConversion,
+  rustStringToBorrowedStrValueConversion,
 } from "../../target-model/conversions/model.js";
 
 const int32Carrier = rustSourcePrimitiveTargetType("int32");
@@ -60,6 +63,12 @@ export function selectRustSourceValueConversion(
   if (ancestors.some(ancestor => rustTargetTypeRefEquals(ancestor.source, source) &&
     rustTargetTypeRefEquals(ancestor.target, target))) return undefined;
   const nextAncestors = [...ancestors, {source, target}];
+  if (rustTargetTypeRefEquals(source, rustBorrowedStrTargetType()) && rustTargetTypeRefEquals(target, stringCarrier)) {
+    return rustBorrowedStrToStringValueConversion;
+  }
+  if (rustTargetTypeRefEquals(source, stringCarrier) && rustTargetTypeRefEquals(target, rustBorrowedStrTargetType())) {
+    return rustStringToBorrowedStrValueConversion;
+  }
   if (!rustTargetTypeRefEquals(source, target) && rustCallableInputMatches(source, target)) {
     return { kind: "callable-input", source, target };
   }

@@ -471,7 +471,6 @@ export function analyzeRustGeneratedItemUsage(input: RustGeneratedItemUsageInput
       case "non-null-expression":
       case "option-check":
       case "option-equality":
-      case "option-value-equality":
       case "constant-equality":
       case "program-error-type-test":
       case "builtin-error-property":

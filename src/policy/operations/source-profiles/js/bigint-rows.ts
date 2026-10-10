@@ -24,8 +24,8 @@ export const bigintOperationRows: readonly JsOperationRowData[] = [
     variant: "string",
     shape: {
       op: "operation", operationKind: "method",
-      target: { form: "call", path: "js_abi::number_from_string", argModes: ["ref"] },
-      params: [{ ref: "string" }], result: { ref: "float64" },
+      target: { form: "call", path: "js_abi::number_from_string", argModes: ["value"] },
+      params: [{ ref: "borrowed-str" }], result: { ref: "float64" },
     },
   },
   {

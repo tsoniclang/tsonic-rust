@@ -28,7 +28,6 @@ import {
   rustJsStringTargetId,
   rustStringTargetId,
   isRustNumericCarrier,
-  isRustStringCarrier,
   rustJsDateTargetId,
   rustJsArrayBufferTargetId,
   rustJsDataViewTargetId,
@@ -66,6 +65,7 @@ import { selectRustJsPromiseContinuation } from "./promises.js";
 import { jsArgumentCarrierMatchScore } from "./argument-matching.js";
 import { jsOperationRows } from "./rows.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
+import { isRustStringViewCarrier } from "../../../../target-model/types/carriers/native.js";
 import { rustNamedTypeCarrierValue } from "../../../../target-model/types/carriers/native.js";
 import { materializeJsOperationTarget, materializeJsValueProjections, materializeTarget, materializeVariadicTarget, selectJsValueProjection } from "./materialization.js";
 import type { JsLane, JsOperationRequest, JsOperationRowData, JsOperationSelection } from "./model.js";
@@ -176,7 +176,7 @@ function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readon
       return { lane: "regexp-string-iterator", bindings: { receiver: carrier } };
     }
   }
-  if (isRustStringCarrier(carrier)) {
+  if (isRustStringViewCarrier(carrier)) {
     return { lane: "string", bindings: { receiver: carrier } };
   }
   if (carrier?.kind === "target-named" && carrier.id === rustJsStringTargetId) {

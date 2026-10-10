@@ -1,6 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rustBorrowedStringView, rustStringConcat, rustStringConcatenationParts } from "../../../dist/backend/target-ast/expressions.js";
+
+test("native borrowed string views preserve exact preceding evaluation without allocating the static result", () => {
+  const effect = { kind: "call", path: "next_value", args: [] };
+  for (const discard of ["unit", "value"]) {
+    const value = { kind: "string-literal", value: "string" };
+    const expression = { kind: "evaluate-then", effect, discard, value };
+    const borrowed = rustBorrowedStringView(expression);
+    assert.equal(borrowed.effect === effect, true);
+    assert.equal(borrowed.discard, discard);
+    assert.deepEqual(borrowed.value, { kind: "str-literal", value: "string" });
+    assert.equal(expression.value === value, true);
+    const owned = { kind: "evaluate-then", effect, discard, value: { kind: "path", path: "owned_text" } };
+    assert.equal(rustBorrowedStringView(owned) === owned, true);
+  }
+});
 import { printRustExpr } from "../../../dist/print/source/expressions/core.js";
 
 test("native concatenation borrows exact strings and retains dynamic argument order", () => {

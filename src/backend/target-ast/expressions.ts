@@ -88,6 +88,10 @@ export function rustStringConcat(parts: readonly RustExpr[]): RustExpr {
 }
 
 export function rustBorrowedStringView(expression: RustExpr): RustExpr {
+  if (expression.kind === "evaluate-then") {
+    const value = rustBorrowedStringView(expression.value);
+    return value === expression.value ? expression : { ...expression, value };
+  }
   return expression.kind === "string-literal" ? { kind: "str-literal", value: expression.value }
     : expression.kind === "owned-string-from-borrowed-str"
     ? expression.expression

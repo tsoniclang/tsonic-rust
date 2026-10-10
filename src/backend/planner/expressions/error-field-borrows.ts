@@ -67,30 +67,6 @@ export function rustErrorFieldOptionalView(node: Node, expression: RustExpr, con
     expression.args[0]?.kind === "path" && expression.args[0].path === "String::from" ? expression.receiver : expression;
 }
 
-export function rustErrorFieldIsOptionalRead(node: Node, context: RustPlanContext): boolean {
-  const operation = context.input.program.facts.getFact(errorReadNode(node, context), rustTargetOperationFactKey);
-  return operation?.kind === "builtin-error-property" && operation.property === "stack";
-}
-
-export function rustErrorFieldOptionalComparisonView(
-  node: Node, expression: RustExpr, laterExpression: Node | undefined, context: RustPlanContext,
-): RustExpr {
-  const value = laterExpression !== undefined && rustErrorFieldBorrowNeedsSnapshot(node, [laterExpression], context)
-    ? expression : rustErrorFieldOptionalView(node, expression, context);
-  return { kind: "method-call", receiver: value, method: "as_deref", args: [] };
-}
-
-export function rustErrorFieldStringComparisonView(
-  node: Node, expression: RustExpr, laterExpression: Node | undefined, context: RustPlanContext,
-): RustExpr {
-  const value = rustErrorFieldComparisonView(node, expression, laterExpression, context);
-  if (value.kind === "string-literal") return { kind: "str-literal", value: value.value };
-  if (value.kind === "str-literal") return value;
-  const guarded = rustErrorFieldSharedView(node, expression, context);
-  return guarded !== undefined && expression.kind === "owned-string-from-borrowed-str" && value === expression.expression ? guarded
-    : { kind: "method-call", receiver: value, method: "as_str", args: [] };
-}
-
 export function rustErrorFieldComparisonView(
   node: Node | undefined,
   expression: RustExpr,

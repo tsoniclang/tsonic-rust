@@ -37,6 +37,12 @@ export function rustBorrowedStrTargetType(): TargetTypeRef {
   };
 }
 
+export function isRustStringViewCarrier(carrier: TargetTypeRef | undefined): boolean {
+  return (carrier?.kind === "target-named" && carrier.id === rustStringTargetId ||
+    carrier?.kind === "reference" && !carrier.mutable && rustTargetTypeRefEquals(carrier.referent, rustStrTargetType())) &&
+    isRustTargetTypeRef(carrier);
+}
+
 export function rustBigIntTargetType(): TargetTypeRef {
   return { kind: "target-named", id: rustBigIntTargetId };
 }

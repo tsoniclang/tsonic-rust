@@ -4,6 +4,7 @@ import {
   rustJsValueTargetType,
 } from "../../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
+import { rustValueConversionContract } from "../../../../target-model/conversions/contracts.js";
 import { selectRustProjectedValueConversion } from "../../../conversions/selection.js";
 import type { RustProviderOperationForm, RustValueConversion } from "../../../../target-model/operations/model.js";
 import { jsValueProjectionsAreValid, type JsOperationTarget, type JsValueProjection } from "./model.js";
@@ -18,6 +19,11 @@ export function materializeJsOperationTarget(
   target: JsOperationTarget,
   bindings: JsLaneBindings,
 ): RustProviderOperationForm | undefined {
+  if ("receiverConversion" in target && target.receiverConversion !== undefined && bindings.receiver !== undefined &&
+    rustTargetTypeRefEquals(bindings.receiver, rustValueConversionContract(target.receiverConversion)?.target)) {
+    const { receiverConversion: _conversion, ...selected } = target;
+    return selected;
+  }
   if (target.form !== "associated-call") return target;
   const owner = resolveCarrierRef(target.owner, bindings);
   return owner === undefined ? undefined : { ...target, owner };

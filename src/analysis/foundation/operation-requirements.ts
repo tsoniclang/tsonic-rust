@@ -156,11 +156,9 @@ export function rustFoundationForTargetOperationFact(
       requireCarrier(fact.nullishCarrier);
       break;
     case "option-equality":
-      requireCarrier(fact.optionCarrier);
-      break;
-    case "option-value-equality":
-      requireCarrier(fact.optionCarrier);
-      requireCarrier(fact.valueCarrier);
+      requireCarrier(fact.leftCarrier);
+      requireCarrier(fact.rightCarrier);
+      requireCarrier(fact.comparisonCarrier);
       break;
     case "project-type-test":
       requireCarrier(fact.sourceCarrier);

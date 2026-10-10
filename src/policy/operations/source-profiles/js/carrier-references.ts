@@ -43,6 +43,7 @@ import {
   rustSourceOptionalTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
+  rustBorrowedStrTargetType,
   rustUnitTargetType,
 } from "../../../../target-model/types/index.js";
 import { rustInferCarrier } from "./rows.js";
@@ -243,6 +244,8 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
       return rustUnitTargetType();
     case "string":
       return rustStringTargetType();
+    case "borrowed-str":
+      return rustBorrowedStrTargetType();
     case "js-string":
       return rustJsStringTargetType();
     case "absence":

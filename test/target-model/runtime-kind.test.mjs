@@ -7,6 +7,7 @@ import { planRustRuntimeCategory } from "../../dist/backend/planner/expressions/
 import { rustClosedValueCategoryProjection } from "../../dist/target-model/types/carriers/closed-values.js";
 import { rustUnionLeaves, rustUnionProjectionContract } from "../../dist/target-model/types/union-relations.js";
 import { rustJsArrayValueTargetType } from "../../dist/target-model/types/carriers/array-values.js";
+import { rustBorrowedStrTargetType } from "../../dist/target-model/types/carriers/native.js";
 
 test("closed runtime values expose exact categories without claiming exhaustive union arms", () => {
   const source = rustJsValueTargetType();
@@ -43,7 +44,8 @@ test("closed runtime values expose exact categories without claiming exhaustive 
 });
 
 test("optional runtime categories preserve their exact present kind and reject forged nested facts", () => {
-  for (const [value, kind] of [[rustStringTargetType(), "string"], [rustSourcePrimitiveTargetType("uint64"), "bigint"]]) {
+  for (const [value, kind] of [[rustStringTargetType(), "string"], [rustBorrowedStrTargetType(), "string"],
+    [rustSourcePrimitiveTargetType("uint64"), "bigint"]]) {
     const sourceCarrier = rustOptionTargetType(value);
     const selected = getRustTypeofRuntimeKind(sourceCarrier, emptyRustTypeDefinitions);
     assert.deepEqual(selected, { kind: "optional", sourceCarrier, value: kind });

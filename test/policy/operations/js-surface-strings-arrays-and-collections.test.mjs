@@ -10,6 +10,9 @@ import {
 } from "../../helpers/rust-session.mjs";
 import { selectJsSurfaceOperation } from "../../../dist/policy/operations/source-profiles/js/index.js";
 import { rustStringToBorrowedStrValueConversion } from "../../../dist/public/provider.js";
+import { rustBorrowedStrTargetType } from "../../../dist/target-model/types/carriers/native.js";
+import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
+import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import {
   rustJsArrayTargetType,
   rustSourcePrimitiveTargetType,
@@ -67,7 +70,7 @@ test("string padding selects one exact overload row from finalized carriers", ()
     memberName: "padEnd",
     operationKind: "call",
     receiverCarrier: stringCarrier,
-    argumentCarriers: [int32Carrier, stringCarrier],
+    argumentCarriers: [int32Carrier, rustBorrowedStrTargetType()],
   });
   assert.equal(intFill?.fact.operationId, "tsonic.rust.js.String.padEnd.call.native-fill");
   assert.deepEqual(intFill?.fact.target, {
@@ -75,8 +78,21 @@ test("string padding selects one exact overload row from finalized carriers", ()
     path: "js_string::pad_end_with",
     receiverMode: "value",
     receiverConversion: rustStringToBorrowedStrValueConversion,
-    argModes: ["value", "ref"],
+    argModes: ["value", "value"],
   });
+
+  const ownedFill = selectJsSurfaceOperation({
+    ownerName: "String",
+    memberName: "padEnd",
+    operationKind: "call",
+    receiverCarrier: stringCarrier,
+    argumentCarriers: [int32Carrier, stringCarrier],
+    argumentMatchScore: (expected, actual) =>
+      selectRustSourceValueConversion(actual, expected, emptyRustTypeDefinitions) === undefined ? undefined : 1,
+  });
+  assert.equal(ownedFill?.fact.operationId, intFill.fact.operationId);
+  assert.deepEqual(ownedFill?.parameterCarriers, [int32Carrier, rustBorrowedStrTargetType()]);
+  assert.deepEqual(ownedFill?.parameterCarriers, intFill.parameterCarriers);
 
   assert.equal(selectJsSurfaceOperation({
     ownerName: "String",
@@ -205,8 +221,8 @@ export function write(label: string, count: int32, ok: boolean): void {
   });
   assertNoTargetDiagnostics(object.result.diagnostics);
   const objectText = artifactText(object.result, "src/index.rs");
-  assert.match(objectText, /js_abi::console_log\(&\[js_abi::JsValue::from\(\{[\s\S]*?record_ok = true;[\s\S]*?rt::ObjectHandle::new\(crate::shapes::OkShape \{ ok: record_ok \}\)[\s\S]*?\}\)\]\);/u);
-  assert.doesNotMatch(objectText, /clone_js_value|js_value_from_optional_pairs/u);
+  assert.match(objectText, /js_abi::console_log\(&\[js_abi::JsValue::object\(js_abi::JsObject::from_pairs\(\[\(\s*"ok",\s*js_abi::JsValue::from\(true\),?\s*\)\]\)\)\]\);/u);
+  assert.doesNotMatch(objectText, /ObjectHandle::new|clone_js_value|js_value_from_optional_pairs/u);
 });
 
 test("string padding emits fallible runtime calls for explicit and default fillers", () => {
@@ -224,8 +240,9 @@ export function pad(): string {
   assertNoTargetDiagnostics(result.diagnostics);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn pad\(\) -> Result<String, rt::TsonicError>/u);
-  assert.match(text, /js_string::pad_start_with\(\s*core::convert::AsRef::<str>::as_ref\("7"\),\s*3\.0,\s*"0",?\s*\)\?/u);
-  assert.match(text, /js_string::pad_end\(\s*core::convert::AsRef::<str>::as_ref\("x"\),\s*2\.0,?\s*\)\?/u);
+  assert.match(text, /js_string::pad_start_with\(\s*"7",\s*3\.0,\s*"0",?\s*\)\?/u);
+  assert.match(text, /js_string::pad_end\(\s*"x",\s*2\.0,?\s*\)\?/u);
+  assert.doesNotMatch(text, /AsRef::<str>::as_ref\("(?:7|x)"\)/u);
 });
 
 test("JS arrays lower to one identity-preserving carrier with fact-backed iteration", () => {

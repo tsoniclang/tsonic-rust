@@ -171,6 +171,7 @@ export type JsCarrierRef =
   | { readonly ref: "array-entry-result" }
   | { readonly ref: "option-of-float64" | "option-of-uint16" | "option-of-uint32" | "option-of-native-uint" }
   | { readonly ref: "string" }
+  | { readonly ref: "borrowed-str" }
   | { readonly ref: "js-string" }
   | { readonly ref: "absence" }
   | { readonly ref: "element" }

@@ -25,6 +25,7 @@ import { selectRustGenericNumericOperation } from "./generic-numeric.js";
 import { selectRustGuardedIntegerOperation } from "../../policy/operations/numeric/guarded.js";
 import { selectRustProgramErrorEquality } from "./error-equality.js";
 import { selectRustUnionEquality } from "../../policy/operations/operators/union-equality.js";
+import { rustOptionEqualityContract } from "../../target-model/operations/option-equality.js";
 import { rustUnionAlternatives } from "../../target-model/types/union-relations.js";
 import { rustSourceOptionalElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { recordRustCompoundWrite, selectRustCompoundWrite } from "./provider/compound-writes.js";
@@ -396,15 +397,8 @@ export function resolvePostCheckBinaryCarrier(
     : optionNullishOperand === "right"
       ? leftComparisonCarrier
       : undefined;
-  const leftOptionDepth = strictEquality && isRustOptionCarrier(leftComparisonCarrier)
-    ? rustOptionNestingDepth(leftComparisonCarrier, rightComparisonCarrier) : undefined;
-  const rightOptionDepth = strictEquality && isRustOptionCarrier(rightComparisonCarrier)
-    ? rustOptionNestingDepth(rightComparisonCarrier, leftComparisonCarrier) : undefined;
-  const optionValueOperand = leftOptionDepth !== undefined && leftOptionDepth > 0
-    ? "left" as const
-    : rightOptionDepth !== undefined && rightOptionDepth > 0
-      ? "right" as const
-      : undefined;
+  const optionEquality = strictEquality
+    ? rustOptionEqualityContract(leftComparisonCarrier, rightComparisonCarrier) : undefined;
   const errorEquality = strictEquality
     ? selectRustProgramErrorEquality(walk, left, right, operatorKind === KindExclamationEqualsEqualsToken)
     : undefined;
@@ -567,35 +561,14 @@ export function resolvePostCheckBinaryCarrier(
       resultCarrier: rustSourcePrimitiveTargetType("bool"),
       value: operatorKind === KindExclamationEqualsEqualsToken,
     };
-  } else if ((operatorKind === KindEqualsEqualsEqualsToken ||
-      operatorKind === KindExclamationEqualsEqualsToken) &&
-    isRustOptionCarrier(leftComparisonCarrier) && isRustOptionCarrier(rightComparisonCarrier) &&
-    leftComparisonCarrier !== undefined && rightComparisonCarrier !== undefined &&
-    rustTargetTypeRefEquals(leftComparisonCarrier, rightComparisonCarrier)) {
+  } else if (strictEquality && optionEquality !== undefined) {
     fact = {
       kind: "option-equality",
       operationId: operatorKind === KindExclamationEqualsEqualsToken
         ? "tsonic.rust.option.not-equal"
         : "tsonic.rust.option.equal",
       negated: operatorKind === KindExclamationEqualsEqualsToken,
-      optionCarrier: leftComparisonCarrier,
-    };
-  } else if ((operatorKind === KindEqualsEqualsEqualsToken ||
-      operatorKind === KindExclamationEqualsEqualsToken) && optionValueOperand !== undefined) {
-    const optionCarrier = optionValueOperand === "left" ? leftComparisonCarrier : rightComparisonCarrier;
-    const valueCarrier = optionValueOperand === "left" ? rightComparisonCarrier : leftComparisonCarrier;
-    if (optionCarrier === undefined || valueCarrier === undefined) {
-      return undefined;
-    }
-    fact = {
-      kind: "option-value-equality",
-      operationId: operatorKind === KindExclamationEqualsEqualsToken
-        ? "tsonic.rust.option.value-not-equal"
-        : "tsonic.rust.option.value-equal",
-      negated: operatorKind === KindExclamationEqualsEqualsToken,
-      optionOperand: optionValueOperand,
-      optionCarrier,
-      valueCarrier,
+      ...optionEquality,
     };
   } else if (operatorKind === KindEqualsToken &&
     (selectedLeftOperation === undefined || rustTargetOperationSupportsAssignment(selectedLeftFact, walk.context.typeDefinitions)) &&
