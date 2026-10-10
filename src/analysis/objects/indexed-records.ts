@@ -7,7 +7,6 @@ import { rustRecordCarrierValue, type RustIndexedRecordStorage } from "../../tar
 import { isRustIntegerCarrier, isRustStringCarrier } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
-import { rustProjectObjectLayout } from "../project-types/object-layout.js";
 import { resolveTypeNodeCarrier } from "../declarations/types-and-bindings.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
@@ -22,7 +21,7 @@ export function resolveRustIndexedRecordContract(walk: RustFactWalk, carrier: Ta
   const record = rustRecordCarrierValue(carrier);
   if (record !== undefined) return { ...record, storage: { kind: "record" } };
   const definition = walk.context.projectTypes.definitionForCarrier(carrier);
-  const layout = definition?.kind === "interface" ? rustProjectObjectLayout(definition.declaration, walk.context.ast) : undefined;
+  const layout = definition?.kind === "interface" ? walk.context.projectTypes.objectLayoutForDefinition(definition) : undefined;
   if (definition === undefined || layout?.indexSignatures.length !== 1 || layout.fields.length !== 0 ||
     walk.context.projectTypes.isPolymorphic(definition)) return undefined;
   const index = layout.indexSignatures[0]!;

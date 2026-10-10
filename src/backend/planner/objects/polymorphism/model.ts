@@ -11,7 +11,6 @@ import {
   rustGeneratorFactKey,
   rustSourceCallEffectsFactKey,
 } from "../../../../analysis/facts/keys.js";
-import { rustProjectObjectLayout } from "../../../../analysis/project-types/object-layout.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
 import {
   isRustUnitCarrier,
@@ -125,7 +124,7 @@ export function projectOwnFields(
   receiverCarrier: TargetTypeRef,
   context: RustPlanContext,
 ): readonly ProjectFieldPlan[] | undefined {
-  const layout = rustProjectObjectLayout(definition.declaration, context.input.program.source.ast);
+  const layout = context.input.program.projectTypes.objectLayoutForDefinition(definition);
   if (layout === undefined || layout.kind !== definition.kind) {
     return undefined;
   }

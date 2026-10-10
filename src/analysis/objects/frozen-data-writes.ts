@@ -6,7 +6,6 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
 import type { RustProjectTypeDefinition, RustProjectTypePolicy } from "../project-types/type-policy.js";
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
-import { rustProjectObjectLayout } from "../project-types/object-layout.js";
 import type { RustStructuralShapePlan } from "./structural-shape-plan.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 
@@ -48,7 +47,7 @@ export function createRustFrozenDataWriteRegistry(): RustFrozenDataWriteRegistry
       const retained = input.jsEnabled ? analyzeRustFrozenReceiverCaptures({ ...input, captures }) : undefined;
       if (input.jsEnabled) for (const definition of input.projectTypes.definitions) {
         const representation = input.representations.representationFor(definition);
-        const layout = rustProjectObjectLayout(definition.declaration, input.ast);
+        const layout = input.projectTypes.objectLayoutForDefinition(definition);
         if (layout === undefined || representation === undefined || representation.kind === "value") continue;
         const mode = representation.kind === "shared-immutable" || representation.kind === "shared-mutable" ? "state" : "identity";
         const offset = input.projectTypes.externalBaseForDefinition(definition)?.fields.length ?? 0;

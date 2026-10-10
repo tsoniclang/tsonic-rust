@@ -33,6 +33,8 @@ import { rustTargetGenericReferences } from "../../../target-model/types/carrier
 import { rustJsErrorTargetType } from "../../../target-model/types/carriers/js.js";
 import { rustSourceErrorTargetType } from "../../../target-model/types/carriers/source-error.js";
 import type { SourceDeclaredHeritageResult } from "@tsonic/target-api/source";
+import { rustProjectObjectLayout } from "../object-layout.js";
+import type { RustProjectObjectLayout } from "../../../target-model/types/project-types.js";
 
 export function createRustProjectTypePolicy(
   host: RustProjectTypePolicyHost,
@@ -409,10 +411,13 @@ export function createRustProjectTypePolicy(
     RustProjectTypeDefinition,
     ReadonlyMap<Node, string>
   >();
+  const objectLayoutsByDefinition = new WeakMap<RustProjectTypeDefinition, RustProjectObjectLayout>();
   const baseStateFieldNamesByDefinition = new WeakMap<RustProjectTypeDefinition, string>();
   const stateMarkerFieldNamesByDefinition = new WeakMap<RustProjectTypeDefinition, string>();
   for (const definition of definitions) {
     const names = new Map<Node, string>();
+    const layout = rustProjectObjectLayout(definition.declaration, host.ast);
+    if (layout !== undefined) objectLayoutsByDefinition.set(definition, layout);
     const externalBase = externalBaseByDeclaration.get(definition.declaration);
     const usedNames = projectMemberNames(definition.declaration, host.ast, host.names);
     for (const field of externalBase?.fields ?? []) usedNames.add(rustTargetIdentifier(field.sourceName));
@@ -851,6 +856,9 @@ export function createRustProjectTypePolicy(
     },
     fieldStorageName(definition, declaration) {
       return fieldStorageNamesByDefinition.get(definition)?.get(declaration);
+    },
+    objectLayoutForDefinition(definition) {
+      return objectLayoutsByDefinition.get(definition);
     },
     baseStateFieldName(definition) {
       const name = baseStateFieldNamesByDefinition.get(definition);

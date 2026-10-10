@@ -15,7 +15,6 @@ import { rustBindingStorageFactKey, rustClosureCaptureFactKey, rustTargetOperati
 import type { RustCallableActivation, RustCallableOwnershipPlan } from "./ownership-plan.js";
 import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
-import { rustProjectObjectLayout } from "../project-types/object-layout.js";
 import { validatedRustCapturedFieldStorageFact } from "../facts/receiver-captures.js";
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
 
@@ -110,7 +109,7 @@ export function createRustFrameCallablePlan(input: {
     }
     const frameDeclarations = new Set(activation.slotDeclarations);
     const classDefinition = activation.kind !== "class" ? undefined : input.projectTypes.definitionForDeclaration(activation.ownerDeclaration);
-    const classLayout = classDefinition === undefined ? undefined : rustProjectObjectLayout(classDefinition.declaration, input.ast);
+    const classLayout = classDefinition === undefined ? undefined : input.projectTypes.objectLayoutForDefinition(classDefinition);
     if (activation.kind === "class" && (classDefinition?.kind !== "class" || classLayout?.kind !== "class")) {
       issue(activation.ownerDeclaration, "A class activation requires its exact native project owner and field layout.");
       continue;

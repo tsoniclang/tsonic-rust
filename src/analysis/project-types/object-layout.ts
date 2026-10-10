@@ -1,25 +1,7 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import { sourceClassFieldIsTypeOnly, sourceMemberOwner, sourceObjectMemberDeclarations, sourceParameterIsProperty } from "@tsonic/target-api/source";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
-
-export interface RustProjectObjectField {
-  readonly declaration: Node;
-  readonly sourceName: string;
-  readonly storageIndex: number;
-  readonly presence: "required" | "optional";
-}
-
-export interface RustProjectObjectIndexSignature {
-  readonly declaration: Node;
-  readonly keyParameter: Node;
-}
-
-export interface RustProjectObjectLayout {
-  readonly declaration: Node;
-  readonly kind: "class" | "interface";
-  readonly fields: readonly RustProjectObjectField[];
-  readonly indexSignatures: readonly RustProjectObjectIndexSignature[];
-}
+import type { RustProjectObjectField, RustProjectObjectIndexSignature, RustProjectObjectLayout } from "../../target-model/types/project-types.js";
 
 export interface RustProjectStaticFieldStorage {
   readonly declaration: Node;
@@ -60,7 +42,7 @@ export function rustProjectObjectLayout(
       if (keyParameter === undefined) {
         return undefined;
       }
-      indexSignatures.push({ declaration: member, keyParameter });
+      indexSignatures.push(Object.freeze({ declaration: member, keyParameter }));
       continue;
     }
     if (!isField) {
@@ -82,15 +64,15 @@ export function rustProjectObjectLayout(
       return undefined;
     }
     seen.add(sourceName);
-    fields.push({ declaration: member, sourceName, storageIndex: fields.length,
-      presence: ast.questionToken(member) === undefined ? "required" : "optional" });
+    fields.push(Object.freeze({ declaration: member, sourceName, storageIndex: fields.length,
+      presence: ast.questionToken(member) === undefined ? "required" : "optional" }));
   }
-  return {
+  return Object.freeze({
     declaration,
     kind: objectKind,
     fields: Object.freeze(fields),
     indexSignatures: Object.freeze(indexSignatures),
-  };
+  });
 }
 
 export function rustProjectObjectField(

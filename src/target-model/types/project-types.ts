@@ -20,6 +20,25 @@ export interface RustProjectTypeIssue {
   readonly message: string;
 }
 
+export interface RustProjectObjectField {
+  readonly declaration: Node;
+  readonly sourceName: string;
+  readonly storageIndex: number;
+  readonly presence: "required" | "optional";
+}
+
+export interface RustProjectObjectIndexSignature {
+  readonly declaration: Node;
+  readonly keyParameter: Node;
+}
+
+export interface RustProjectObjectLayout {
+  readonly declaration: Node;
+  readonly kind: "class" | "interface";
+  readonly fields: readonly RustProjectObjectField[];
+  readonly indexSignatures: readonly RustProjectObjectIndexSignature[];
+}
+
 export type RustProjectMemberSlotRole =
   | "read"
   | "write"
@@ -142,6 +161,7 @@ export interface RustProjectTypePolicy {
     definition: RustProjectTypeDefinition,
     declaration: Node,
   ): string | undefined;
+  objectLayoutForDefinition(definition: RustProjectTypeDefinition): RustProjectObjectLayout | undefined;
   baseStateFieldName(definition: RustProjectTypeDefinition): string;
   stateMarkerFieldName(definition: RustProjectTypeDefinition): string;
   memberSlotName(

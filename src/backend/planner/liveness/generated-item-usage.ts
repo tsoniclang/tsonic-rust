@@ -27,7 +27,6 @@ import type {
   RustFinalizedTargetInput,
   RustFinalizedValueConversion,
 } from "../../../analysis/facts/finalized-operation-abi.js";
-import { rustProjectObjectLayout } from "../../../analysis/project-types/object-layout.js";
 import {
   rustValueConversionContract,
 } from "../../../target-model/conversions/contracts.js";
@@ -558,7 +557,7 @@ export function analyzeRustGeneratedItemUsage(input: RustGeneratedItemUsageInput
     if (field === undefined) continue;
     const definition = input.projectTypes.definitionForCarrier(implementation.owner);
     const declaration = definition === undefined ? undefined
-      : rustProjectObjectLayout(definition.declaration, input.ast)?.fields.find(candidate =>
+      : input.projectTypes.objectLayoutForDefinition(definition)?.fields.find(candidate =>
         candidate.storageIndex + (input.projectTypes.externalBaseForDefinition(definition)?.fields.length ?? 0) === field.storageIndex)?.declaration;
     const subject = definition?.declaration ?? input.sourceFiles[0];
     if (subject === undefined) throw new Error("An emitted indexed field has no owning source file.");

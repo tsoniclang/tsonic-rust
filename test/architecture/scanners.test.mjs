@@ -32,6 +32,12 @@ const sourceFiles = collectFiles(sourceRoot, ".ts").map((path) => ({
   text: readFileSync(path, "utf8"),
 }));
 
+test("project layouts are published by analysis, never reconstructed by planners", () => {
+  for (const file of sourceFiles.filter(file => file.path.startsWith(join(sourceRoot, "backend/planner") + "/"))) {
+    assert.doesNotMatch(file.text, /\brustProjectObjectLayout\b/u, file.path);
+  }
+});
+
 function sourceSection(text, startMarker, endMarker) {
   const start = text.indexOf(startMarker);
   const end = text.indexOf(endMarker, start + startMarker.length);

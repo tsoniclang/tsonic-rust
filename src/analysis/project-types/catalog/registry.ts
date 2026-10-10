@@ -120,6 +120,9 @@ export function createRustProjectTypePolicyRegistry(): RustProjectTypePolicyRegi
     fieldStorageName(definition, declaration) {
       return requireCurrent().fieldStorageName(definition, declaration);
     },
+    objectLayoutForDefinition(definition) {
+      return requireCurrent().objectLayoutForDefinition(definition);
+    },
     baseStateFieldName(definition) {
       return requireCurrent().baseStateFieldName(definition);
     },

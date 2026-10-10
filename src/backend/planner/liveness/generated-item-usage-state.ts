@@ -1,6 +1,5 @@
 import type { Node } from "@tsonic/tsts";
 import { rustTypeAliasDeclarationFactKey } from "../../../analysis/facts/keys.js";
-import { rustProjectObjectLayout } from "../../../analysis/project-types/object-layout.js";
 import type { RustProjectTypeDefinition } from "../../../analysis/project-types/type-policy.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustProjectProjectionSelection } from "../../../target-model/types/project-projections.js";
@@ -238,7 +237,7 @@ export function createRustGeneratedItemUsageState(input: RustGeneratedItemUsageI
     const contracts = input.projectTypes.contractsForClass(concrete);
     if (contracts === undefined) continue;
     for (const contract of contracts) {
-      const layout = rustProjectObjectLayout(contract.declaration, input.ast);
+      const layout = input.projectTypes.objectLayoutForDefinition(contract);
       const contractFields = [
         ...(input.projectTypes.externalBaseForDefinition(contract)?.fields ?? []).map((field) => ({
           declaration: field.declaration,

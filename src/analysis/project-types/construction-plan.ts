@@ -7,7 +7,6 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isRustOptionCarrier, isRustAbsenceCarrier } from "../../target-model/types/index.js";
 import { rustInheritedProjectConstructor, type RustProjectConstructorSignature, type RustProjectTypeDefinition,
   type RustProjectTypePolicy } from "./type-policy.js";
-import { rustProjectObjectLayout } from "./object-layout.js";
 import type { RustReceiverFieldAliasQueries } from "./receiver-field-aliases.js";
 import type { RustReceiverFieldCaptureQueries } from "./receiver-captures.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -113,7 +112,7 @@ export function analyzeRustProjectConstructions(input: RustConstructionAnalysisI
           declaration: field.declaration, owner, carrier: field.carrier,
           absenceDefault: false, externallyInitialized: true,
         }));
-        for (const field of rustProjectObjectLayout(owner.declaration, input.ast)?.fields ?? []) {
+        for (const field of input.projectTypes.objectLayoutForDefinition(owner)?.fields ?? []) {
           if (input.ast.hasModifierKind(field.declaration, "abstract") ||
             input.receiverFieldAliases.aliasFor(field.declaration) !== undefined) continue;
           const carrier = input.facts.getRuntimeCarrierFact(field.declaration)?.carrier;

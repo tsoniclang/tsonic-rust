@@ -7,7 +7,6 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { planRustNativeMemoryCall } from "../expressions/native-memory.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { RustAssignmentOperator } from "../../../target-model/syntax/tokens.js";
-import { rustProjectObjectLayout } from "../../../analysis/project-types/object-layout.js";
 import type { RustExpr, RustCallGenericArgument } from "../../target-ast/nodes.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
 import type { RustPlanContext } from "../program/plan-context.js";
@@ -152,7 +151,7 @@ export function rustDirectProjectFieldStoragePath(
     return undefined;
   }
   const external = context.input.program.projectTypes.externalBaseForDefinition(definition)?.fields ?? [];
-  const layout = rustProjectObjectLayout(definition.declaration, context.input.program.source.ast);
+  const layout = context.input.program.projectTypes.objectLayoutForDefinition(definition);
   const declaration = storageIndex < external.length
     ? external.find((field) => field.storageIndex === storageIndex)?.declaration
     : layout?.fields.find((field) =>
@@ -244,7 +243,7 @@ export function rustStoredObjectFieldSupportsBorrowedRead(
 function rustStoredProjectFieldDeclaration(carrier: TargetTypeRef, storageIndex: number, context: RustPlanContext): Node | undefined {
   const definition = context.input.program.projectTypes.definitionForCarrier(carrier);
   return definition === undefined ? undefined
-    : rustProjectObjectLayout(definition.declaration, context.input.program.source.ast)?.fields.find(field =>
+    : context.input.program.projectTypes.objectLayoutForDefinition(definition)?.fields.find(field =>
       field.storageIndex + (context.input.program.projectTypes.externalBaseForDefinition(definition)?.fields.length ?? 0) === storageIndex)?.declaration;
 }
 

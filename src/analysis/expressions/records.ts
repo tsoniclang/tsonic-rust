@@ -33,7 +33,6 @@ import { selectRustUnionVariantByCheckedType } from "./union-context.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { resolveTypeNodeCarrier } from "../declarations/types-and-bindings.js";
 import { rustProjectInstanceContracts } from "../project-types/type-policy.js";
-import { rustProjectObjectLayout } from "../project-types/object-layout.js";
 import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectSourceObjectLiteralAccessors } from "@tsonic/target-api/source";
@@ -268,7 +267,7 @@ export function resolveRecordLiteralCarrier(
       return undefined;
     }
     const contractFields = contracts.flatMap((contract) => {
-      const layout = rustProjectObjectLayout(contract.definition.declaration, ast);
+      const layout = walk.context.projectTypes.objectLayoutForDefinition(contract.definition);
       if (layout?.kind !== "interface") {
         return [undefined];
       }

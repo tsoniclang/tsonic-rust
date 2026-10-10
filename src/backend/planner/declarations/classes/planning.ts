@@ -34,7 +34,6 @@ import type { ProjectMethodPropertyPlan } from "../../objects/polymorphism/model
 import { rustDeclarationRequiresUnsafe, rustSafetyAttributesForDeclaration } from "../../safety/explicit-safety.js";
 import { rustDefaultImplementation } from "../default-implementation.js";
 import { rustFallibleFactKey } from "../../../../analysis/facts/keys.js";
-import { rustProjectObjectLayout } from "../../../../analysis/project-types/object-layout.js";
 import { rustProjectGenerics, rustProjectStateType, rustProjectStateMarker } from "../../objects/polymorphism/names.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { structAttributes } from "../struct-attributes.js";
@@ -153,7 +152,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   const generics = rustProjectGenerics(definition, context);
   const stateMarker = rustProjectStateMarker(definition, context);
 
-  const layout = rustProjectObjectLayout(node, ast);
+  const layout = context.input.program.projectTypes.objectLayoutForDefinition(definition);
   if (layout?.kind !== "class") {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),

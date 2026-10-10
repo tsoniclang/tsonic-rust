@@ -1,7 +1,6 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import { Node_Initializer, type SourceProgramNavigation, type SourceProgramSemantics } from "@tsonic/target-api/source";
 import type { RustProjectTypeDefinition, RustProjectTypePolicy } from "./type-policy.js";
-import { rustProjectObjectLayout } from "./object-layout.js";
 
 export interface RustReceiverFieldAlias {
   readonly declaration: Node;
@@ -23,7 +22,7 @@ export function analyzeRustReceiverFieldAliases(input: {
   const aliases: RustReceiverFieldAlias[] = [];
   for (const owner of input.projectTypes.definitions) {
     if (owner.kind !== "class") continue;
-    for (const field of rustProjectObjectLayout(owner.declaration, input.ast)?.fields ?? []) {
+    for (const field of input.projectTypes.objectLayoutForDefinition(owner)?.fields ?? []) {
       const initializer = Node_Initializer(input.ast, field.declaration);
       if (initializer === undefined || !input.ast.hasModifierKind(field.declaration, "readonly") ||
         input.ast.questionToken(field.declaration) !== undefined ||
@@ -32,7 +31,7 @@ export function analyzeRustReceiverFieldAliases(input: {
       const uses = input.navigation.declarationUseSummary(field.declaration);
       if (uses.uses.some(use => use.role === "write") ||
         (input.projectTypes.contractsForClass(owner) ?? []).some(contract =>
-          (rustProjectObjectLayout(contract.declaration, input.ast)?.fields ?? []).some(candidate => {
+          (input.projectTypes.objectLayoutForDefinition(contract)?.fields ?? []).some(candidate => {
             const implementation = input.projectTypes.memberImplementation(owner, candidate.declaration);
             return implementation.kind === "resolved" &&
               implementation.implementation.declaration === field.declaration &&

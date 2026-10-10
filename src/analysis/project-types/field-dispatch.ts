@@ -8,7 +8,6 @@ import type {
   RustProjectTypeDefinition,
   RustProjectTypePolicy,
 } from "./type-policy.js";
-import { rustProjectObjectLayout } from "./object-layout.js";
 import { rustProjectMemberIsPrivate } from "./member-privacy.js";
 import type { RustFrozenDataWritePlan } from "../objects/frozen-data-writes.js";
 import type { RustReceiverFieldAliasQueries } from "./receiver-field-aliases.js";
@@ -127,7 +126,7 @@ export function createRustProjectFieldDispatchPlanRegistry(): RustProjectFieldDi
             write: Object.freeze({ selfMode: "ref", fallible: false }),
           }));
         }
-        const layout = rustProjectObjectLayout(definition.declaration, input.ast);
+        const layout = input.projectTypes.objectLayoutForDefinition(definition);
         if (layout === undefined) {
           continue;
         }

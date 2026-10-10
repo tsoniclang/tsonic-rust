@@ -3,7 +3,6 @@ import type { Node } from "@tsonic/tsts";
 import type { RustReceiverStorageInput } from "./receiver-storage.js";
 import type { RustReceiverFieldAliasQueries } from "./receiver-field-aliases.js";
 import type { RustProjectTypeDefinition } from "./type-policy.js";
-import { rustProjectObjectLayout } from "./object-layout.js";
 import { analyzeRustConstructionReadiness, type RustConstructionReadinessField,
   type RustConstructionReadinessInput } from "./construction-readiness.js";
 
@@ -21,7 +20,7 @@ export function analyzeRustConstructionEffects(
     for (const field of input.projectTypes.externalBaseForDefinition(owner)?.fields ?? []) fields.push({
       declaration: field.declaration, absenceDefault: false, externallyInitialized: true,
     });
-    for (const field of rustProjectObjectLayout(owner.declaration, input.ast)?.fields ?? []) {
+    for (const field of input.projectTypes.objectLayoutForDefinition(owner)?.fields ?? []) {
       if (input.ast.hasModifierKind(field.declaration, "abstract") || aliases.aliasFor(field.declaration) !== undefined) continue;
       const initializer = sourceParameterIsProperty(input.ast, field.declaration)
         ? input.ast.name(field.declaration) : Node_Initializer(input.ast, field.declaration);

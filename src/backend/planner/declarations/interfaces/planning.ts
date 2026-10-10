@@ -5,7 +5,6 @@ import { rustAuthoredFieldDeadCodeDisposition, rustGeneratedProjectInterfaceFiel
 import { isRustIntegerCarrier, isRustStringCarrier, rustCarrierSupportsClone } from "../../../../target-model/types/index.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
 import { Node_Type } from "@tsonic/target-api/source";
-import { rustProjectObjectLayout } from "../../../../analysis/project-types/object-layout.js";
 import { rustProjectObjectStateField, rustProjectObjectType } from "../../objects/project-objects.js";
 import { rustProjectGenerics, rustProjectStateType, rustProjectStateMarker } from "../../objects/polymorphism/names.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
@@ -67,7 +66,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
     return undefined;
   }
   const stateMarker = rustProjectStateMarker(definition, context);
-  const layout = rustProjectObjectLayout(node, ast);
+  const layout = context.input.program.projectTypes.objectLayoutForDefinition(definition);
   if (layout?.kind !== "interface") {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
