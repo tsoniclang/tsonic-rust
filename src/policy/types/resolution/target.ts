@@ -380,7 +380,7 @@ export function resolveStructuralObjectType(
       ? propertyTypeNodes
       : sourceTransformedTypeFactEvidenceNodes(context.ast, semantics, authoredTypeRoot, property.type);
     const memberContexts = ordinaryDeclarations.length === 0 ? [context] : ordinaryDeclarations.flatMap(declaration => {
-      const selection = context.sourceStorage.subject(declaration, "value");
+      const selection = context.sourceStorage.memberSubjectFor(declaration);
       return selection.kind !== "resolved" ? [] : [{ ...context, sourceStorageSubject: selection.subject }];
     });
     if (ordinaryDeclarations.length !== 0 && memberContexts.length !== ordinaryDeclarations.length) return undefined;

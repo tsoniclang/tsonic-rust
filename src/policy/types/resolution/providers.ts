@@ -68,7 +68,7 @@ import { jsRegExpSourceProfileIdentity } from "@tsonic/js-source-profile";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
 import type { RustSourcePolicyContext } from "../../model/context.js";
-import type { SourceStorageProjection } from "@tsonic/target-api/analysis";
+import type { SourceStorageSubject } from "@tsonic/target-api/analysis";
 import { rustSourceStorageComponentContext } from "./source-storage-projection.js";
 import { sourceArrayElementType } from "@tsonic/target-api/source";
 
@@ -385,7 +385,7 @@ export function resolveSourceProfileCarrier(
   }
   const direct = targetArguments.every((argument) => argument !== undefined)
     ? resolveSourceProfileCarrierFromArguments(name, targetArguments as TargetTypeRef[], options,
-      context.sourceStorageSubject?.node, context.sourceStorageSubject?.projection)
+      context.sourceStorageSubject)
     : undefined;
   if (direct !== undefined) {
     return direct;
@@ -453,8 +453,7 @@ export function resolveSourceProfileCarrierFromArguments(
   name: string,
   arguments_: readonly TargetTypeRef[],
   options: RustTargetTypeResolutionOptions,
-  subject: Node | undefined,
-  projection?: readonly SourceStorageProjection[],
+  subject: SourceStorageSubject | undefined,
 ): TargetTypeRef | undefined {
   if (options.jsEnabled && name === "ArrayEntriesIterator" && arguments_.length === 1) {
     return rustJsArrayEntriesTargetType(arguments_[0]!);
@@ -464,7 +463,7 @@ export function resolveSourceProfileCarrierFromArguments(
   }
   if (arguments_.length === 0 && rustSourceErrorConstructors.some((entry) =>
     entry.sourceName === name && (name === "Error" || options.jsEnabled))) {
-    return options.sourceErrorCarrier(subject, projection);
+    return options.sourceErrorCarrier(subject);
   }
   if (name === "Promise" || name === "PromiseLike") {
     const [output] = arguments_;

@@ -222,7 +222,7 @@ export function analyzeRustSourcePackageComponents(
   }
   for (const constructor of context.errorStorageDemands.nativeConstructors) {
     if (context.errorStorageDemands.storageFor(constructor).kind !== "writable") continue;
-    const file = context.ast.getSourceFile(constructor);
+    const file = context.ast.getSourceFile(constructor.node);
     const componentId = file === undefined ? undefined : componentIdByFileName.get(normalizePath(context.ast.getFileName(file)));
     if (componentId === undefined) {
       diagnostics.push(componentDiagnostic("RUST_NATIVE_ERROR_SOURCE_PACKAGE_MISSING",

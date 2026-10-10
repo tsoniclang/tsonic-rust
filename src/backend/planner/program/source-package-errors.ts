@@ -177,7 +177,7 @@ export function planRustSourcePackageErrors(
           component.sourceFileNames.has(input.program.source.ast.getFileName(input.program.source.ast.getSourceFile(boundary)!))) ||
           input.program.errorStorageDemands.nativeConstructors.some(constructor =>
           input.program.errorStorageDemands.storageFor(constructor).kind === "writable" &&
-          component.sourceFileNames.has(input.program.source.ast.getFileName(input.program.source.ast.getSourceFile(constructor)!)))
+          component.sourceFileNames.has(input.program.source.ast.getFileName(input.program.source.ast.getSourceFile(constructor.node)!)))
         : forwarding !== undefined && definitions.length === 0 && externalErrors.length === 1 && !demand.sourceView && !demand.retained));
     if (!validDomain) {
       diagnostics.push(errorPlanDiagnostic("RUST_SOURCE_PACKAGE_ERROR_OWNER_CONFLICT",

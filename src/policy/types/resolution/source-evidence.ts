@@ -209,7 +209,7 @@ export function resolveRustSignatureParameterEvidence(
     ? undefined
     : context.ast.typeNode(parameter.declaration);
   const selection = parameter.declaration === undefined ? undefined
-    : context.sourceStorage.subject(parameter.declaration, "value");
+    : context.sourceStorage.subject(parameter.declaration, "input");
   const resolved = resolveRustTypeComponentEvidence(
     {
       selectedType: parameter.type,

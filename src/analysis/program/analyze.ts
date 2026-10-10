@@ -133,16 +133,16 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
       });
       return selected.kind === "selected" ? selected.carrier : undefined;
     },
-    sourceErrorCarrier(subject, projection) {
-      const demand = subject === undefined ? undefined : context.errorStorageDemands.storageFor(subject, projection);
+    sourceErrorCarrier(subject) {
+      const demand = subject === undefined ? undefined : context.errorStorageDemands.storageFor(subject);
       if (demand?.kind === "unresolved") return undefined;
       if (demand?.kind === "writable") return rustWritableSourceErrorTargetType();
-      const origins = subject === undefined ? undefined : context.errorStorageDemands.storageOriginsFor(subject, projection);
+      const origins = subject === undefined ? undefined : context.errorStorageDemands.storageOriginsFor(subject);
       if (origins?.kind === "resolved" && origins.origins.some(origin => {
         const types = context.source.semantics.forNode(origin.node).types;
         return types.isUnknown(origin.type) || types.isAny(origin.type);
       })) return rustSourceErrorTargetType();
-      return subject !== undefined && context.errorStorageDemands.receivesWritableNative(subject, projection)
+      return subject !== undefined && context.errorStorageDemands.receivesWritableNative(subject)
           ? rustSourceErrorTargetType() : context.errorStorageDemands.retainedBoundaries.length !== 0
             ? rustSourceErrorTargetType() : context.projectTypes.sourceErrorCarrier();
     },
@@ -216,7 +216,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     genericParametersFor: declaration => rustProjectGenericParameters(declaration, context),
     thrownClassDeclarations: collectRustThrownClassDeclarations(context, projectSourceFiles),
     sourceCreatedErrorOrigins: context.errorStorageDemands.nativeConstructors.filter(origin =>
-      context.errorStorageDemands.storageFor(origin).kind === "writable"),
+      context.errorStorageDemands.storageFor(origin).kind === "writable").map(origin => origin.node),
     externallyExtensible(declaration) {
       return externallyExtensibleDeclarations.has(declaration);
     },

@@ -4,6 +4,7 @@ import test from "node:test";
 import { createCompilerSessionFromFiles, formatDiagnostics } from "@tsonic/tsts";
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
+import { requiredStorageSubject } from "../../../../tsonic/test/fixtures/source-navigation.mjs";
 import { collectTargetSourceProfileContributions } from "../../../../tsonic/packages/host/dist/target/source-profile.js";
 import { createRustErrorStorageDemandQuery } from "../../../dist/analysis/objects/error-storage-demands.js";
 import { createRustSourceProfileRegistry } from "../../../dist/analysis/facts/source-profile-registry.js";
@@ -28,7 +29,7 @@ function analyzed(files, jsEnabled) {
   const profiles = createRustSourceProfileRegistry(source.sourceFiles, source.ast, jsEnabled);
   const storage = createSourceStorageQuery(source, projectFiles, undefined, createRustSourceProfileStorageEffects(source, profiles));
   assert.equal(storage.failureReason() === undefined, true, "production source storage is complete");
-  return { source, projectFiles, demand: createRustErrorStorageDemandQuery(source, profiles, storage, () => ({ kind: "ordinary" })) };
+  return { source, projectFiles, storage, demand: createRustErrorStorageDemandQuery(source, profiles, storage, () => ({ kind: "ordinary" })) };
 }
 
 function declarations(source, projectFiles) {
@@ -45,7 +46,7 @@ function declarations(source, projectFiles) {
 for (const jsEnabled of [false, true]) {
   const profile = jsEnabled ? "js" : "native";
   test(`nested generic interface Error properties retain their instantiated writable origins in ${profile}`, () => {
-    const { source, projectFiles, demand } = analyzed({ "index.ts": `
+    const { source, projectFiles, storage, demand } = analyzed({ "index.ts": `
 interface SourceBox<Value> { readonly value: Value; }
 interface SelectedBox<Value> { readonly value: Value; }
 class Stored { readonly nested: SourceBox<Error>; constructor(nested: SourceBox<Error>) { this.nested = nested; } }
@@ -66,13 +67,13 @@ export function run(): string {
     };
     projectFiles.forEach(visit);
     assert.equal(selected !== undefined, true);
-    assert.equal(demand.receivesWritableNative(selected), true);
-    const origins = demand.storageOriginsFor(selected);
+    assert.equal(demand.receivesWritableNative(requiredStorageSubject(storage, selected)), true);
+    const origins = demand.storageOriginsFor(requiredStorageSubject(storage, selected));
     assert.equal(origins.kind === "resolved", true);
-    assert.equal(origins.kind === "resolved" && origins.origins.some(origin => origin.node === demand.nativeConstructors[0]), true);
+    assert.equal(origins.kind === "resolved" && origins.origins.some(origin => origin.node === demand.nativeConstructors[0].node), true);
   });
   test(`implicit interface Error properties retain exact writable origins in ${profile}`, () => {
-    const { source, projectFiles, demand } = analyzed({ "index.ts": implicitErrorInterfaceSource(false) }, jsEnabled);
+    const { source, projectFiles, storage, demand } = analyzed({ "index.ts": implicitErrorInterfaceSource(false) }, jsEnabled);
     let selected;
     const visit = node => {
       if (source.ast.is.IsPropertySignatureDeclaration(node) && source.ast.text(source.ast.name(node)) === "error") selected = node;
@@ -80,10 +81,10 @@ export function run(): string {
     };
     projectFiles.forEach(visit);
     assert.equal(selected !== undefined, true);
-    assert.equal(demand.receivesWritableNative(selected), true);
-    const origins = demand.storageOriginsFor(selected);
+    assert.equal(demand.receivesWritableNative(requiredStorageSubject(storage, selected)), true);
+    const origins = demand.storageOriginsFor(requiredStorageSubject(storage, selected));
     assert.equal(origins.kind === "resolved", true);
-    assert.equal(origins.kind === "resolved" && origins.origins.some(origin => origin.node === demand.nativeConstructors[0]), true);
+    assert.equal(origins.kind === "resolved" && origins.origins.some(origin => origin.node === demand.nativeConstructors[0].node), true);
   });
   test(`ordinary native Error remains immutable despite mutable project Errors in ${profile}`, () => {
     const { demand } = analyzed(liveErrorStorageFiles, jsEnabled);
@@ -120,23 +121,23 @@ export function run(): string {
   });
 
   test(`native Error demand follows exact base parameter slots rather than origin-only memberWritten in ${profile}`, () => {
-    const { source, projectFiles, demand } = analyzed({ "index.ts": liveErrorBaseWriteSource }, jsEnabled);
+    const { source, projectFiles, storage, demand } = analyzed({ "index.ts": liveErrorBaseWriteSource }, jsEnabled);
     assert.equal(demand.fieldWrites.length, 3);
     assert.equal(demand.nativeConstructors.length, 1);
     const origin = demand.nativeConstructors[0];
-    assert.equal(source.navigation.expressionValueFlow(origin).memberWritten, false);
-    assert.equal(source.navigation.expressionValueFlow(origin).passedAsArgument, true);
+    assert.equal(source.navigation.expressionValueFlow(origin.node).memberWritten, false);
+    assert.equal(source.navigation.expressionValueFlow(origin.node).passedAsArgument, true);
     const parameter = declarations(source, projectFiles).find(node => source.ast.is.IsParameterDeclaration(node)
       && source.ast.text(source.ast.name(node)) === "error");
     assert.equal(parameter !== undefined, true, "selected Error parameter exists");
     assert.equal(source.navigation.declarationUseSummary(parameter).memberWritten, true);
-    assert.equal(demand.storageFor(parameter).kind, "writable");
+    assert.equal(demand.storageFor(requiredStorageSubject(storage, parameter)).kind, "writable");
     assert.equal(demand.storageFor(origin).kind, "writable");
     assert.equal(demand.storageFor(origin).writes.length, 3);
   });
 
   test(`native Error demand follows selected cross-file returns and original field storage in ${profile}`, () => {
-    const { source, projectFiles, demand } = analyzed({
+    const { source, projectFiles, storage, demand } = analyzed({
       "helpers.ts": `export function identity(value: Error): Error { return value; }
         export class Holder { constructor(public readonly error: Error) {} }
         export function write(value: Error): void { value.message = "changed"; }`,
@@ -149,7 +150,11 @@ export function run(): string {
     const parameter = declarations(source, projectFiles).find(node => source.ast.is.IsParameterDeclaration(node)
       && source.ast.text(source.ast.name(node)) === "error");
     assert.equal(parameter !== undefined, true, "selected Error field parameter exists");
-    assert.equal(demand.storageFor(parameter).kind, "writable");
+    const member = storage.memberSubjectFor(parameter);
+    assert.equal(member.kind, "resolved", "a constructor parameter-property has exact physical member storage");
+    assert.equal(demand.storageFor(member.subject).kind, "writable");
+    assert.equal(demand.storageFor(requiredStorageSubject(storage, parameter)).kind, "immutable",
+      "a later write through the field does not invent a write through the local parameter binding");
   });
 
   test(`same-spelled non-Error fields and immutable provider declarations never become native constructors in ${profile}`, () => {
@@ -187,22 +192,22 @@ export function run(): string {
   });
 
   test(`indexed Error writes retain exact component demand without inventing a native origin in ${profile}`, () => {
-    const { source, demand } = analyzed({ "index.ts": `
+    const { source, storage, demand } = analyzed({ "index.ts": `
       export function run(values: Error[]): void { values[0].message = "changed"; }` }, jsEnabled);
     assert.equal(demand.fieldWrites.length, 1);
     const receiver = source.ast.as.AsPropertyAccessExpression(demand.fieldWrites[0]).Expression;
-    assert.equal(demand.storageFor(receiver).kind, "writable");
-    assert.equal(demand.receivesWritableNative(receiver), false, "an unbound parameter is not a native physical constructor");
+    assert.equal(demand.storageFor(requiredStorageSubject(storage, receiver)).kind, "writable");
+    assert.equal(demand.receivesWritableNative(requiredStorageSubject(storage, receiver)), false, "an unbound parameter is not a native physical constructor");
   });
 
   test(`unmodeled destructured Error writes are unresolved rather than guessed origin proof in ${profile}`, () => {
-    const { source, demand } = analyzed({ "index.ts": `
+    const { source, storage, demand } = analyzed({ "index.ts": `
       export function run(record: { error: Error }): void {
         const { error } = record; error.message = "changed";
       }` }, jsEnabled);
     assert.equal(demand.fieldWrites.length, 1);
     const receiver = source.ast.as.AsPropertyAccessExpression(demand.fieldWrites[0]).Expression;
-    assert.equal(demand.storageFor(receiver).kind, "unresolved");
+    assert.equal(demand.storageFor(requiredStorageSubject(storage, receiver)).kind, "unresolved");
   });
 
   test(`native Error write demand reaches direct and selected-call throw recovery in ${profile}`, () => {
@@ -220,7 +225,7 @@ export function run(): string {
   });
 
   test(`Error field invalidation follows real aliases, callee bodies and captured writes in ${profile}`, () => {
-    const { source, projectFiles, demand } = analyzed({ "index.ts": `
+    const { source, projectFiles, storage, demand } = analyzed({ "index.ts": `
       declare function opaque(value: Error): string;
       declare function invoke(callback: () => string): string;
       export function run(): string {
@@ -252,7 +257,7 @@ export function run(): string {
     assert.equal(demand.invalidationFor(owner, calls.get("opaque"), new Set([calls.get("opaque")])).kind, "preserved");
   });
   test(`Error invalidation retains eager class regions and skips deferred work in ${profile}`, () => {
-    const { source, projectFiles, demand } = analyzed({ "index.ts": `
+    const { source, projectFiles, storage, demand } = analyzed({ "index.ts": `
       export function run(): void {
         const original = new Error("original");
         function write(): "value" { original.message = "changed"; return "value"; }
@@ -289,7 +294,7 @@ export function run(): string {
   });
 
   test(`Error invalidation follows executed defaults, accessors and instance initialization in ${profile}`, () => {
-    const { source, projectFiles, demand } = analyzed({ "index.ts": `
+    const { source, projectFiles, storage, demand } = analyzed({ "index.ts": `
       export function run(optional: string | undefined): void {
         const original = new Error("original");
         function mutate(): string { original.message = "changed"; return "changed"; }
@@ -330,7 +335,7 @@ export function run(): string {
   });
 
   test(`Error invocation footprints distinguish callable values from factory results in ${profile}`, () => {
-    const { source, projectFiles, demand } = analyzed({ "index.ts": `
+    const { source, projectFiles, storage, demand } = analyzed({ "index.ts": `
       export function run(): void {
         const original = new Error("original");
         function create(): () => string {
@@ -396,7 +401,7 @@ export function run(): string {
   });
 
   test(`Error receiver and returned backing follow exact virtual member contracts in ${profile}`, () => {
-    const { source, projectFiles, demand } = analyzed({ "index.ts": `
+    const { source, projectFiles, storage, demand } = analyzed({ "index.ts": `
       export function run(): void {
         class Mutable extends Error {
           change(): string { while (true) { this.message = "changed"; return "changed"; } }
@@ -428,7 +433,7 @@ export function run(): string {
   });
 
   test(`Error invocation bindings retain actual receiver and argument identity in ${profile}`, () => {
-    const { source, projectFiles, demand } = analyzed({ "index.ts": `
+    const { source, projectFiles, storage, demand } = analyzed({ "index.ts": `
       export function run(): void {
         class Mutable extends Error {
           change(): string { this.message = "changed"; return "changed"; }
@@ -467,7 +472,7 @@ export function run(): string {
 }
 
 test("captured stack invalidation tracks only the exact receiver and never closure construction", () => {
-  const { source, projectFiles, demand } = analyzed({ "index.ts": `
+  const { source, projectFiles, storage, demand } = analyzed({ "index.ts": `
     export function run(): void {
       const original = new Error("original"); const unrelated = new Error("other");
       Error.captureStackTrace(original); Error.captureStackTrace(unrelated);

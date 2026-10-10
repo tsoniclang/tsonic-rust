@@ -3,6 +3,7 @@ import test from "node:test";
 import { createCompilerSessionFromFiles } from "@tsonic/tsts";
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { createSourceStorageQuery, defaultSourceStorageLimits } from "@tsonic/target-api/analysis";
+import { requiredStorageSubject } from "../../../../tsonic/test/fixtures/source-navigation.mjs";
 import { collectTargetSourceProfileContributions } from "../../../../tsonic/packages/host/dist/target/source-profile.js";
 import { errorConstructorFootprintSource, errorOriginDomainSource, errorRecoveryDomainSource } from "../../../../tsonic/test/fixtures/error-origin-domains.mjs";
 import { createRustErrorStorageDemandQuery } from "../../../dist/analysis/objects/error-storage-demands.js";
@@ -26,16 +27,17 @@ for (const jsEnabled of [false, true]) {
     const source = createTargetSourceProgram(checked);
     const file = source.sourceFiles.find(file => source.ast.getFileName(file) === "/src/index.ts");
     const profiles = createRustSourceProfileRegistry(source.sourceFiles, source.ast, jsEnabled);
-    const demand = createRustErrorStorageDemandQuery(source, profiles, createSourceStorageQuery(source, [file], defaultSourceStorageLimits,
-      createRustSourceProfileStorageEffects(source, profiles)), () => ({ kind: "ordinary" }));
+    const storage = createSourceStorageQuery(source, [file], defaultSourceStorageLimits,
+      createRustSourceProfileStorageEffects(source, profiles));
+    const demand = createRustErrorStorageDemandQuery(source, profiles, storage, () => ({ kind: "ordinary" }));
     for (const [name, expectedDomain] of [["inspect", "open"], ["privateInspect", "complete"]]) {
       const declaration = source.ast.statements(file).find(node => source.ast.is.IsFunctionDeclaration(node) &&
         source.ast.text(source.ast.name(node)) === name);
       const formal = source.ast.parameters(declaration)[0];
-      const observed = demand.storageOriginsFor(formal);
+      const observed = demand.storageOriginsFor(requiredStorageSubject(storage, formal));
       assert.equal(observed.kind === "resolved" && observed.origins.length > 0 &&
         observed.origins.every(origin => demand.isNativeConstructor(origin.node)), true, `${name}: same observed native roots`);
-      assert.equal(demand.closedStorageOriginsFor(formal).kind === expectedDomain, true, `${name}: exact admitted domain`);
+      assert.equal(demand.closedStorageOriginsFor(requiredStorageSubject(storage, formal)).kind === expectedDomain, true, `${name}: exact admitted domain`);
     }
     let aliased;
     let unowned;
@@ -49,13 +51,13 @@ for (const jsEnabled of [false, true]) {
     };
     visit(file);
     assert.equal(aliased !== undefined && external !== undefined && unowned !== undefined, true);
-    assert.equal(demand.closedStorageOriginsFor(aliased).kind === "complete", true, "immutable owned global constructor alias");
-    assert.equal(demand.closedStorageOriginsFor(external).kind === "open", true, "signature identity does not own an external constructor value");
+    assert.equal(demand.closedStorageOriginsFor(requiredStorageSubject(storage, aliased)).kind === "complete", true, "immutable owned global constructor alias");
+    assert.equal(demand.closedStorageOriginsFor(requiredStorageSubject(storage, external)).kind === "open", true, "signature identity does not own an external constructor value");
     const construct = source.ast.statements(file).find(node => source.ast.is.IsFunctionDeclaration(node) &&
       source.ast.text(source.ast.name(node)) === "construct");
     assert.equal(demand.invalidationFor(source.ast.parameters(construct)[1], external, new Set()).kind === "unproven", true,
       "a valid external constructor is not evidence that a guarded Error read is preserved");
-    assert.equal(demand.closedStorageOriginsFor(unowned).kind === "open", true, "ambient external values are not owned global constructors");
+    assert.equal(demand.closedStorageOriginsFor(requiredStorageSubject(storage, unowned)).kind === "open", true, "ambient external values are not owned global constructors");
   });
   }
   for (const exported of [false, true]) {
@@ -86,8 +88,9 @@ for (const jsEnabled of [false, true]) {
       const source = createTargetSourceProgram(checked);
       const file = source.sourceFiles.find(file => source.ast.getFileName(file) === "/src/index.ts");
       const profiles = createRustSourceProfileRegistry(source.sourceFiles, source.ast, jsEnabled);
-      const demand = createRustErrorStorageDemandQuery(source, profiles, createSourceStorageQuery(source, [file], defaultSourceStorageLimits,
-        createRustSourceProfileStorageEffects(source, profiles)), () => ({ kind: "ordinary" }));
+      const storage = createSourceStorageQuery(source, [file], defaultSourceStorageLimits,
+        createRustSourceProfileStorageEffects(source, profiles));
+      const demand = createRustErrorStorageDemandQuery(source, profiles, storage, () => ({ kind: "ordinary" }));
       const declarations = new Map();
       const visit = node => {
         if (source.ast.is.IsVariableDeclaration(node)) declarations.set(source.ast.text(source.ast.name(node)), node);
@@ -98,7 +101,7 @@ for (const jsEnabled of [false, true]) {
       const expression = source.ast.as.AsVariableDeclaration(declarations.get("created"))?.Initializer;
       assert.equal(owner !== undefined && expression !== undefined, true);
       assert.equal(demand.isNativeConstructor(expression), true, "the inherited constructor selects the owned native Error protocol");
-      assert.equal(demand.closedStorageOriginsFor(expression).kind === "complete", true, "fresh result ownership is complete but is not a purity proof");
+      assert.equal(demand.closedStorageOriginsFor(requiredStorageSubject(storage, expression)).kind === "complete", true, "fresh result ownership is complete but is not a purity proof");
       assert.equal(demand.invalidationFor(owner, expression, new Set()).kind, expected);
     });
   }

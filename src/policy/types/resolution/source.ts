@@ -538,7 +538,7 @@ export function resolveRustTargetTypeSyntax(
     : resolveOwnedSourceProfileTypeNameForDeclaration(referencedDeclaration, context, options.sourceProfiles);
   if (sourceProfileName !== undefined) {
     return resolveSourceProfileCarrierFromArguments(sourceProfileName, typeArguments as TargetTypeRef[], options,
-      context.sourceStorageSubject?.node, context.sourceStorageSubject?.projection);
+      context.sourceStorageSubject);
   }
   const sourceType = resolveProjectSourceCarrier(
     selectedTypeSymbol,

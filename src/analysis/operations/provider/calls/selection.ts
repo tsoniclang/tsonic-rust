@@ -197,7 +197,12 @@ export function selectRustCheckedCall(
   }
   const errorConstructor = selectRustSourceErrorConstructor(selectedSourceMember, checkedCallIsConstruction(request, context));
   if (errorConstructor !== undefined) {
-    const selectedStorage = options.sourceErrorCarrier(request.source.call);
+    const subject = context.sourceStorage.subjectFor(request.source.call);
+    if (subject.kind === "unresolved") return rejectSelectedOperation(request.source.call, context,
+      "RUST_ERROR_STORAGE_NOT_PROVEN", subject.reason);
+    const selectedStorage = options.sourceErrorCarrier(subject.subject);
+    if (selectedStorage === undefined) return rejectSelectedOperation(request.source.call, context,
+      "RUST_ERROR_STORAGE_NOT_PROVEN", "Rust Error construction requires its exact checked storage carrier.");
     const operation = rustSourceErrorConstructorOperation(errorConstructor, selectedCallArgumentCarriers(request, context, options),
       isRustWritableSourceErrorCarrier(selectedStorage));
     if (operation === undefined) {
