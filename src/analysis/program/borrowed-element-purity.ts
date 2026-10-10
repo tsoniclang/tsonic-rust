@@ -5,12 +5,12 @@ import {
   rustFlowReadProjectionFactKey, rustOptionProjectionFactKey, rustProjectDowncastFactKey, rustProjectUpcastFactKey,
   rustSourceBindingFactKey, rustTargetOperationFactKey, type RustTargetOperationFact,
 } from "../facts/keys.js";
-import { isRustCopyCarrier, isRustStringCarrier } from "../../target-model/types/index.js";
+import { isRustCopyCarrier, isRustStringCarrier, rustOptionTargetType } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { isRustBinaryOperator } from "../../target-model/syntax/tokens.js";
 import type { RustTargetProgram } from "./model.js";
 import type { RustBorrowedElementRead } from "./borrowed-element-reads.js";
-import { rustEffectiveValueCarrier } from "../facts/value-carrier-queries.js";
+import { rustEffectiveValueCarrier, rustValueCarrierBeforeOptionProjection } from "../facts/value-carrier-queries.js";
 import { hasExactObjectKeys } from "../../target-model/metadata/closed-data.js";
 import { rustObjectReferenceViewKey } from "../facts/object-reference-views.js";
 import { rustBorrowedOperationArguments, rustProviderInputBorrowMode } from "../facts/provider-borrows.js";
@@ -18,16 +18,19 @@ import { rustBorrowedOperationArguments, rustProviderInputBorrowMode } from "../
 type ProviderOperation = Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>;
 
 export function rustBorrowValueIsUnprojected(node: Node, facts: RustTargetProgram["facts"]): boolean {
+  return rustBorrowValueIsUnconverted(node, facts) && facts.getFact(node, rustOptionProjectionFactKey) === undefined;
+}
+
+function rustBorrowValueIsUnconverted(node: Node, facts: RustTargetProgram["facts"]): boolean {
   const carrier = facts.getRuntimeCarrierFact(node)?.carrier;
-  return carrier !== undefined && rustTargetTypeRefEquals(carrier, rustEffectiveValueCarrier(facts, node)) &&
+  return carrier !== undefined && rustTargetTypeRefEquals(carrier, rustValueCarrierBeforeOptionProjection(facts, node)) &&
     facts.getTargetConversionFact(node) === undefined &&
     facts.getFact(node, rustFlowReadProjectionFactKey) === undefined &&
     facts.getFact(node, rustProjectUpcastFactKey) === undefined &&
     facts.getFact(node, rustProjectDowncastFactKey) === undefined &&
     facts.getFact(node, rustObjectReferenceViewKey) === undefined &&
     facts.getFact(node, rustCallScopedLifetimeReconciliationFactKey) === undefined &&
-    facts.getFact(node, rustContextualValueConversionFactKey) === undefined &&
-    facts.getFact(node, rustOptionProjectionFactKey) === undefined;
+    facts.getFact(node, rustContextualValueConversionFactKey) === undefined;
 }
 
 export function rustBorrowPrimitiveCopyValue(node: Node, facts: RustTargetProgram["facts"]): boolean {
@@ -62,8 +65,14 @@ export function rustBorrowPureProviderInputs(
   node: Node, ast: AstReader, facts: RustTargetProgram["facts"],
 ): readonly Node[] | undefined {
   const provider = rustBorrowPureOperation(node, facts);
+  const projection = facts.getFact(node, rustOptionProjectionFactKey);
   if (provider === undefined || provider.abi.result.kind !== "sync" ||
     provider.abi.effects.invocation !== "infallible" || provider.abi.result.conversion.kind !== "identity" ||
+    !rustBorrowValueIsUnconverted(node, facts) ||
+    projection !== undefined && (projection.kind !== "some" ||
+      !rustTargetTypeRefEquals(projection.sourceCarrier, provider.abi.result.carrier) ||
+      !rustTargetTypeRefEquals(projection.elementCarrier, provider.abi.result.carrier) ||
+      !rustTargetTypeRefEquals(projection.resultCarrier, rustOptionTargetType(provider.abi.result.carrier))) ||
     !rustTargetTypeRefEquals(provider.abi.result.carrier, facts.getRuntimeCarrierFact(node)?.carrier)) return undefined;
   const argumentsList = rustBorrowedOperationArguments(node, ast);
   if (argumentsList === undefined || argumentsList.length !== provider.abi.sourceArguments.length ||

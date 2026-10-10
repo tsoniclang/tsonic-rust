@@ -5,7 +5,7 @@ import { rustValueConversionContract } from "../../../target-model/conversions/c
 import { selectRustSourceValueConversion } from "../../../policy/conversions/selection.js";
 import { isFinalizedConversion } from "./conversion-shape.js";
 import type { RustArgumentMode, RustProviderOperationForm, RustValueConversion } from "../keys.js";
-import type { RustFinalizedArrayInput, RustFinalizedConstantInput, RustFinalizedDispatchContextInput, RustFinalizedSliceInput, RustFinalizedSourceInput, RustFinalizedTaggedArrayInput, RustFinalizedTargetInput, RustFinalizedValueConversion } from "./model.js";
+import type { RustFinalizedArrayInput, RustFinalizedConstantInput, RustFinalizedDispatchContextInput, RustFinalizedOperationAbi, RustFinalizedSliceInput, RustFinalizedSourceInput, RustFinalizedTaggedArrayInput, RustFinalizedTargetInput, RustFinalizedValueConversion } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function isRustFinalizedSourceInput(input: RustFinalizedTargetInput): input is RustFinalizedSourceInput {
@@ -30,6 +30,16 @@ export function isRustFinalizedConstantInput(input: RustFinalizedTargetInput): i
 
 export function isRustFinalizedDispatchContextInput(input: RustFinalizedTargetInput): input is RustFinalizedDispatchContextInput {
   return input.source.kind === "dispatch-context";
+}
+
+export function rustFinalizedSourceInputs(abi: RustFinalizedOperationAbi): readonly RustFinalizedSourceInput[] {
+  return [
+    ...(abi.targetReceiver.kind === "input" ? [abi.targetReceiver.input] : []),
+    ...abi.targetArguments.flatMap(input =>
+      isRustFinalizedSliceInput(input) || isRustFinalizedArrayInput(input) ? input.elements :
+        isRustFinalizedTaggedArrayInput(input) ? input.elements.map(element => element.input) :
+        isRustFinalizedConstantInput(input) || isRustFinalizedDispatchContextInput(input) ? [] : [input]),
+  ];
 }
 
 export function rustFinalizedTargetInputMayMutateSource(

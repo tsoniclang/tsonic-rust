@@ -5,6 +5,7 @@ import { isRustStringViewCarrier } from "../../target-model/types/carriers/nativ
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
 import type { RustFinalizedSourceInput } from "./finalized-operation-abi.js";
+import { rustFinalizedSourceInputs } from "./finalized-operation-abi.js";
 
 type ProviderOperation = Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>;
 
@@ -28,13 +29,12 @@ export function rustProviderInputBorrowMode(input: RustFinalizedSourceInput): "r
 }
 
 export function rustBorrowedStringInputs(node: Node, operation: ProviderOperation, ast: AstReader): readonly Node[] {
-  const inputs = operation.abi.targetReceiver.kind === "input"
-    ? [operation.abi.targetReceiver.input, ...operation.abi.targetArguments] : operation.abi.targetArguments;
+  const inputs = rustFinalizedSourceInputs(operation.abi);
   const output: Node[] = [];
   const argumentsList = rustBorrowedOperationArguments(node, ast);
   if (argumentsList === undefined) return output;
   for (const input of inputs) {
-    if (!("sourceCarrier" in input) || !isRustStringViewCarrier(input.sourceCarrier)) continue;
+    if (!isRustStringViewCarrier(input.sourceCarrier)) continue;
     if (rustProviderInputBorrowMode(input) !== "ref") continue;
     const callee = Node_Expression(ast, node);
     const source = input.source.kind === "argument" ? argumentsList[input.source.sourceIndex]

@@ -23,7 +23,7 @@ import { analyzeRustDeclarationGenericRequirements } from "../declarations/gener
 import { analyzeRustValueLifetimes } from "./value-lifetimes.js";
 import { analyzeRustLocalStorageAliases } from "../storage/local-aliases.js";
 import { analyzeRustProjectConstructions } from "../project-types/construction-plan.js";
-import { rustCallArgumentIsOwned } from "../facts/parameter-passing.js";
+import { rustCallArgumentIsOwned, rustCallArgumentMode } from "../facts/parameter-passing.js";
 import { rustRetainedCallableStorage } from "../facts/callable-results.js";
 import { analyzeRustBorrowedElementReads } from "./borrowed-element-reads.js";
 import { analyzeRustBorrowStability } from "./borrow-stability.js";
@@ -172,11 +172,11 @@ export function analyzeRustTargetProgram(
     },
     hasSharedIdentityStorage: (declaration) => isRustJsArrayCarrier(facts.getRuntimeCarrierFact(declaration)?.carrier),
     mayBorrowArgument: (argument) => !projectConstructions.ownsExternalArgument(argument) &&
-      facts.getArgumentPassingFact(argument)?.mode !== "by-value",
+      rustCallArgumentMode(argument, context.ast, facts) !== "value",
     isOwnedCallArgument: (argument) => projectConstructions.ownsExternalArgument(argument) ||
       rustCallArgumentIsOwned(argument, context.ast, facts),
     isSharedBorrowArgument: (argument) => !projectConstructions.ownsExternalArgument(argument) &&
-      facts.getArgumentPassingFact(argument)?.mode === "borrow-shared",
+      rustCallArgumentMode(argument, context.ast, facts) === "ref",
     capturesFor: (closure) => {
       const existing = facts.getFact(closure, rustClosureCaptureFactKey);
       if (existing !== undefined) return existing;

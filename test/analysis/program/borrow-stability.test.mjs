@@ -8,9 +8,10 @@ import { argumentPassingFactKey, pointerOperationFactKey } from "@tsonic/tsts";
 import { rustCompoundWriteFactKey } from "../../../dist/analysis/facts/operations/keys.js";
 import { providerEvaluationOrderSource } from "../../../../tsonic/test/fixtures/provider-evaluation-order.mjs";
 import { rustBindingStorageFactKey, rustContextualValueConversionFactKey, rustSourceBindingFactKey,
-  rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
+  rustOptionProjectionFactKey, rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
 import { rustCapturedFieldStorageFactKey } from "../../../dist/analysis/facts/receiver-captures.js";
 import { rustProviderInputBorrowMode } from "../../../dist/analysis/facts/provider-borrows.js";
+import { rustCallArgumentIsOwned, rustCallArgumentMode } from "../../../dist/analysis/facts/parameter-passing.js";
 import { borrowedScalarFieldWritesSource, ordinaryScalarFieldWritesSource, ownedFieldSnapshotSource } from "../../../../tsonic/test/fixtures/borrowed-scalar-field-writes.mjs";
 import { receiverFieldCaptureEdges } from "../../../../tsonic/test/fixtures/receiver-field-capture-edges.mjs";
 
@@ -69,6 +70,36 @@ test("native binding comparisons borrow observations and distinguish exact repla
         const result = analyzeRustBorrowStability(analysisInput(program, facts));
         assert.equal(result.kind, "resolved");
         assert.equal(result.plan.canBorrowAcross(left, right), accepted, "exact native pure-input effect contract");
+      }
+      const carrier = operation.abi.result.carrier;
+      const projection = { sourceCarrier: carrier, targetCarrier: carrier,
+        conversion: { kind: "native-representation", source: carrier, target: carrier } };
+      const projectedFacts = { ...program.facts, getFact(node, key) {
+        if (node === right && key === rustTargetOperationFactKey) return {
+          ...operation, abi: { ...operation.abi, effects: { ...operation.abi.effects, evaluation: "pure" } },
+        };
+        return node === right && key === rustContextualValueConversionFactKey ? projection : program.facts.getFact(node, key);
+      } };
+      const projected = analyzeRustBorrowStability(analysisInput(program, projectedFacts));
+      assert.equal(projected.kind, "resolved");
+      assert.equal(projected.plan.canBorrowAcross(left, right), false,
+        "pure invocation does not certify an independently projected result");
+      const lift = program.facts.getFact(right, rustOptionProjectionFactKey);
+      assert.equal(lift.kind, "some", "the real owned output retains native optional construction");
+      const distinct = { kind: "source-primitive", name: "int64" };
+      for (const replacement of [
+        { kind: "none", sourceCarrier: lift.sourceCarrier, resultCarrier: lift.resultCarrier },
+        { ...lift, sourceCarrier: distinct }, { ...lift, elementCarrier: distinct }, { ...lift, resultCarrier: carrier },
+      ]) {
+        const facts = { ...program.facts, getFact(node, key) {
+          if (node === right && key === rustTargetOperationFactKey) return {
+            ...operation, abi: { ...operation.abi, effects: { ...operation.abi.effects, evaluation: "pure" } },
+          };
+          return node === right && key === rustOptionProjectionFactKey ? replacement : program.facts.getFact(node, key);
+        } };
+        const rejected = analyzeRustBorrowStability(analysisInput(program, facts));
+        assert.equal(rejected.kind, "resolved");
+        assert.equal(rejected.plan.canBorrowAcross(left, right), false, "only exact native Some construction is a pure result lift");
       }
     }
   }
@@ -439,6 +470,38 @@ test("identity native shared references retain source borrowing without claiming
   "reference ownership is a native type rule, not a String or wrapper-name rule");
   assert.equal(rustProviderInputBorrowMode({ ...input, mode: "mut-ref" }), "mut-ref",
     "an explicit exclusive borrow retains its distinct mode");
+});
+
+test("source argument ownership follows all exact finalized native inputs rather than reference passing by value", () => {
+  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+    export function inspect(value: string): number { return parseInt(value, 10); }
+  ` } });
+  const { ast } = program.source;
+  const call = allNodes(ast, program.sourceFiles).find(node => ast.is.IsCallExpression(node) &&
+    ast.is.IsIdentifier(Node_Expression(ast, node)) && ast.text(Node_Expression(ast, node)) === "parseInt");
+  assert.equal(call !== undefined, true);
+  const argument = ast.arguments(call)[0];
+  const radix = ast.arguments(call)[1];
+  assert.equal(rustCallArgumentMode(argument, ast, program.facts), "ref");
+  assert.equal(rustCallArgumentIsOwned(argument, ast, program.facts), false);
+  assert.equal(rustCallArgumentMode(radix, ast, program.facts), "value");
+  assert.equal(rustCallArgumentMode(Node_Expression(ast, call), ast, program.facts), undefined);
+  const operation = program.facts.getFact(call, rustTargetOperationFactKey);
+  const selected = operation.abi.targetArguments[0];
+  for (const [label, targetArguments, expected] of [
+    ["missing source relationship", [operation.abi.targetArguments[1]], undefined],
+    ["repeated shared observation", [selected, selected, operation.abi.targetArguments[1]], "ref"],
+    ["mixed shared and exclusive uses", [selected, { ...selected, mode: "mut-ref" }], undefined],
+    ["nested native slice inputs", [{ source: { kind: "argument-slice", sourceIndexes: [0] },
+      elements: [selected], elementCarrier: selected.sourceCarrier, mode: "ref", parameterCarrier: selected.parameterCarrier }], "ref"],
+  ]) {
+    const facts = { ...program.facts, get(node, key) {
+      return node === call && key === rustTargetOperationFactKey
+        ? { ...operation, abi: { ...operation.abi, targetArguments } } : program.facts.get(node, key);
+    } };
+    assert.equal(rustCallArgumentMode(argument, ast, facts), expected, label);
+    assert.equal(rustCallArgumentIsOwned(argument, ast, facts), false, label);
+  }
 });
 
 test("borrowed conversion effects require exact finalized input and pure native observation contracts", () => {

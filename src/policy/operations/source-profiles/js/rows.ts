@@ -16,6 +16,7 @@ import { exactJsStringOperationRows } from "./exact-string-rows.js";
 import { jsCapabilityOperationRows } from "./capability-rows.js";
 import { regexpOperationRows } from "./regexp-rows.js";
 import { bigintOperationRows } from "./bigint-rows.js";
+import { parsingOperationRows } from "./parsing-rows.js";
 import { stringConstructionRows } from "./string-construction-rows.js";
 import type { JsOperationRowData } from "./model.js";
 import type { RustCallbackOperationTemplate, RustProviderOperationForm, RustValueConversion } from "../../../../target-model/operations/model.js";
@@ -652,6 +653,7 @@ export const jsOperationRows = defineJsOperationRows([
   ...exactJsStringOperationRows,
   ...regexpOperationRows,
   ...bigintOperationRows,
+  ...parsingOperationRows,
   { owner: "String", member: "padStart", operationKind: "call", lane: "string", variant: "native-default", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::pad_start", receiverMode: "value", receiverConversion: rustStringToBorrowedStrValueConversion, argModes: ["value"] }, result: { ref: "string" }, params: [{ ref: "numeric-argument", index: 0 }] } },
 { owner: "String", member: "padStart", operationKind: "call", lane: "string", variant: "native-fill", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::pad_start_with", receiverMode: "value", receiverConversion: rustStringToBorrowedStrValueConversion, argModes: ["value", "value"] }, result: { ref: "string" }, params: [{ ref: "numeric-argument", index: 0 }, { ref: "borrowed-str" }] } },
   { owner: "String", member: "padEnd", operationKind: "call", lane: "string", variant: "native-default", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::pad_end", receiverMode: "value", receiverConversion: rustStringToBorrowedStrValueConversion, argModes: ["value"] }, result: { ref: "string" }, params: [{ ref: "numeric-argument", index: 0 }] } },
@@ -724,9 +726,6 @@ export const jsOperationRows = defineJsOperationRows([
 
   ...nativeNumberPredicateRows("NumberConstructor", "number"),
   { owner: "NumberConstructor", member: "parseFloat", operationKind: "call", lane: "number", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::number_parse_float", argModes: ["value"] }, result: { ref: "float64" }, params: [{ ref: "borrowed-str" }] } },
-  { owner: "NumberConstructor", member: "parseInt", operationKind: "call", lane: "number", variant: "default", shape: { op: "operation", evaluation: "pure", operationKind: "method", target: { form: "call", path: "js_abi::number_parse_int", argModes: ["value"] }, result: { ref: "float64" }, params: [{ ref: "borrowed-str" }] } },
-  { owner: "NumberConstructor", member: "parseInt", operationKind: "call", lane: "number", variant: "float64-radix", shape: { op: "operation", evaluation: "pure", operationKind: "method", target: { form: "call", path: "js_abi::number_parse_int_radix", argModes: ["value", "value"] }, result: { ref: "float64" }, params: [{ ref: "borrowed-str" }, { ref: "float64" }] } },
-  { owner: "NumberConstructor", member: "parseInt", operationKind: "call", lane: "number", variant: "int32-radix", shape: { op: "operation", evaluation: "pure", operationKind: "method", target: { form: "call", path: "js_abi::number_parse_int_radix", argModes: ["value", "value"], argConversions: [undefined, rustInt32ToFloat64ValueConversion] }, result: { ref: "float64" }, params: [{ ref: "borrowed-str" }, { ref: "int32" }] } },
   ...numberPropertyRows.map(({ member, path }): JsOperationRowData => ({ owner: "NumberConstructor", member, operationKind: "property", lane: "number", shape: { op: "operation", operationKind: "property", target: { form: "path", path }, result: { ref: "float64" } } })),
 
   { owner: "Number", member: "toString", operationKind: "call", lane: "number", variant: "default", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::number_to_string", receiverMode: "value" }, result: { ref: "string" } } },
@@ -744,9 +743,6 @@ export const jsOperationRows = defineJsOperationRows([
   { owner: "Number", member: "toPrecision", operationKind: "call", lane: "number", variant: "int32-precision", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::number_to_precision_digits", receiverMode: "value", argModes: ["value"], argConversions: [rustInt32ToFloat64ValueConversion] }, result: { ref: "string" }, params: [{ ref: "int32" }] } },
 
   { owner: "Global", member: "parseFloat", operationKind: "call", lane: "global", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::number_parse_float", argModes: ["value"] }, result: { ref: "float64" }, params: [{ ref: "borrowed-str" }] } },
-  { owner: "Global", member: "parseInt", operationKind: "call", lane: "global", variant: "default", shape: { op: "operation", evaluation: "pure", operationKind: "method", target: { form: "call", path: "js_abi::number_parse_int", argModes: ["value"] }, result: { ref: "float64" }, params: [{ ref: "borrowed-str" }] } },
-  { owner: "Global", member: "parseInt", operationKind: "call", lane: "global", variant: "float64-radix", shape: { op: "operation", evaluation: "pure", operationKind: "method", target: { form: "call", path: "js_abi::number_parse_int_radix", argModes: ["value", "value"] }, result: { ref: "float64" }, params: [{ ref: "borrowed-str" }, { ref: "float64" }] } },
-  { owner: "Global", member: "parseInt", operationKind: "call", lane: "global", variant: "int32-radix", shape: { op: "operation", evaluation: "pure", operationKind: "method", target: { form: "call", path: "js_abi::number_parse_int_radix", argModes: ["value", "value"], argConversions: [undefined, rustInt32ToFloat64ValueConversion] }, result: { ref: "float64" }, params: [{ ref: "borrowed-str" }, { ref: "int32" }] } },
   { owner: "Global", member: "encodeURIComponent", operationKind: "call", lane: "global", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::encode_uri_component", argModes: ["value"] }, result: { ref: "string" }, params: [{ ref: "borrowed-str" }] } },
   { owner: "Global", member: "decodeURIComponent", operationKind: "call", lane: "global", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::decode_uri_component", argModes: ["value"] }, result: { ref: "string" }, params: [{ ref: "borrowed-str" }] } },
   ...nativeNumberPredicateRows("Global", "global"),

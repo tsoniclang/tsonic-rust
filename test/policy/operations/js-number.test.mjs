@@ -5,6 +5,7 @@ import { test } from "node:test";
 import { selectJsSurfaceOperation } from "../../../dist/policy/operations/source-profiles/js/index.js";
 import {
   rustSourcePrimitiveTargetType,
+  rustOptionTargetType,
   rustStringTargetType,
 } from "../../../dist/target-model/types/index.js";
 import {
@@ -16,6 +17,21 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 const float64 = rustSourcePrimitiveTargetType("float64");
 const int32 = rustSourcePrimitiveTargetType("int32");
+
+test("both parsing facades select the same exact optional native radix contract without accepting nonnumeric carriers", () => {
+  for (const ownerName of ["Global", "NumberConstructor"]) {
+    const request = { ownerName, memberName: "parseInt", operationKind: "call" };
+    const selected = selectJsSurfaceOperation({ ...request,
+      argumentCarriers: [rustStringTargetType(), rustOptionTargetType(float64)] });
+    assert.equal(selected?.fact.operationId, `tsonic.rust.js.${ownerName}.parseInt.call.optional-radix`);
+    assert.deepEqual(selected?.fact.target, { form: "call", path: "js_abi::number_parse_int_optional", argModes: ["value", "value"] });
+    for (const invalid of [rustStringTargetType(), rustOptionTargetType(rustStringTargetType()),
+      rustSourcePrimitiveTargetType("bool"), rustSourcePrimitiveTargetType("int64")]) {
+      assert.equal(selectJsSurfaceOperation({ ...request, argumentCarriers: [rustStringTargetType(), invalid] }), undefined);
+    }
+    assert.equal(selectJsSurfaceOperation({ ...request, argumentCarriers: [rustStringTargetType(), float64, float64] }), undefined);
+  }
+});
 
 test("generic predicate selection requires exact domain evidence and seals its native bound", () => {
   const carrier = { kind: "type-parameter", identity: "number:Value", name: "Value" };

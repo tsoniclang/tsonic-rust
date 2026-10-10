@@ -63,20 +63,6 @@ export function providerTargetRuntimeSlotKeys(
   return keys;
 }
 
-export function providerSourceInputs(
-  fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>,
-): readonly RustFinalizedSourceInput[] {
-  return [
-    ...(fact.abi.targetReceiver.kind === "input"
-      ? [fact.abi.targetReceiver.input]
-      : []),
-    ...fact.abi.targetArguments.flatMap((input) =>
-      isRustFinalizedSliceInput(input) || isRustFinalizedArrayInput(input) ? input.elements :
-        isRustFinalizedTaggedArrayInput(input) ? input.elements.map((element) => element.input) :
-        isRustFinalizedConstantInput(input) || isRustFinalizedDispatchContextInput(input) ? [] : [input]),
-  ];
-}
-
 export function providerSourceInputNode(
   input: RustFinalizedSourceInput,
   receiverNode: Node | undefined,

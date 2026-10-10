@@ -6,35 +6,8 @@ import { rustSourceParameterAbiFactKey } from "../../../dist/analysis/facts/keys
 import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
-
-const stableSource = `
-function radix(): number { return 10; }
-export function parenthesized(value: string): number { return parseInt(((value)), radix()); }
-export function typed(value: string): number {
-  const first = parseInt((value as string), radix());
-  const second = parseInt((value satisfies string), radix());
-  return first + second + parseInt(value!, radix());
-}
-export function literal(): number { return parseInt((("17" as string)), radix()); }
-`;
-
-const guardedSource = `
-export function mutated(value: string): number {
-  value = "19";
-  return parseInt((value), radix());
-}
-export function retained(value: string): () => number {
-  return () => parseInt((value), radix());
-}
-export function ordered(value: string): number {
-  const replace = (): number => { value = "29"; return 10; };
-  const first = parseInt(((value as string)), replace());
-  return first * 100 + parseInt(value, 10);
-}
-export function produced(value: string): number { return parseInt(value + "0", radix()); }
-function consume(value: unknown): number { return 1; }
-export function changed(value: string): number { return consume(value as unknown); }
-`;
+import { stableWrappedBorrowSource as stableSource, guardedWrappedBorrowSource as guardedSource,
+  producedWrappedBorrowSource } from "../../../../tsonic/test/fixtures/stable-wrapped-borrows.mjs";
 
 test("stable-value queries follow exact transparent operands without admitting mutation, captures or produced values", () => {
   const { source, program } = analyzeRust({ surfaces: ["js"],
@@ -137,6 +110,41 @@ fn transparent_arguments_add_no_copies_allocations_or_temporary_buffers() {
     assert_eq!(actual.1, Cost::default());
     assert_eq!(measure(index::literal), measure(|| handwritten("17")));
     assert_eq!(measure(index::literal).1, Cost::default());
+}
+`);
+  runCargo(root, ["generate-lockfile", "--offline"]);
+  runCargo(root, ["test", "--release", "--locked", "--offline", "--test", "ownership"]);
+});
+
+test("retaining a produced String before its native argument view adds no snapshot allocation", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"],
+    target: { id: "rust", options: { outputType: "lib", crateName: "produced_wrapped_borrows" } },
+    files: { "index.ts": stableSource + producedWrappedBorrowSource },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  const root = writeGeneratedProject("produced-wrapped-borrow-cost", result.artifacts);
+  mkdirSync(join(root, "tests"), { recursive: true });
+  writeFileSync(join(root, "tests/ownership.rs"), nativeOwnershipCostSupport + `
+use produced_wrapped_borrows::index;
+
+fn handwritten(value: String) -> f64 {
+    let mut text = String::with_capacity(value.len() + 1);
+    text.push_str(&value);
+    text.push('0');
+    text.parse::<f64>().unwrap()
+}
+
+#[test]
+fn produced_value_has_only_its_native_input_and_output_storage_cost() {
+    for _iteration in 0..10000 {
+        let actual = measure(|| index::produced(std::hint::black_box(String::from("17"))));
+        let expected = measure(|| handwritten(std::hint::black_box(String::from("17"))));
+        assert_eq!(actual, expected);
+        assert_eq!(actual.0, 170.0);
+        assert_eq!(actual.1.allocations, 2);
+        assert_eq!(actual.1.allocated_bytes, 5);
+        assert_eq!(actual.1.reallocations, 0);
+    }
 }
 `);
   runCargo(root, ["generate-lockfile", "--offline"]);

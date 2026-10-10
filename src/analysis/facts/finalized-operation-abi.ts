@@ -5,6 +5,7 @@ export {
   isRustFinalizedSliceInput,
   isRustFinalizedSourceInput,
   isRustFinalizedTaggedArrayInput,
+  rustFinalizedSourceInputs,
 } from "./finalized-operation/conversions.js";
 export { finalizeRustProviderOperationAbi } from "./finalized-operation/finalize.js";
 export type {
