@@ -1,28 +1,13 @@
 import type { Node } from "@tsonic/tsts";
-import { isRustOptionCarrier, rustOptionElementCarrier, rustOptionValueCarrier } from "../../../target-model/types/carriers/optional.js";
+import { isRustOptionCarrier } from "../../../target-model/types/carriers/optional.js";
 import { isRustStringCarrier } from "../../../target-model/types/carriers/js.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
+import { planRustOptionPayloadView } from "./option-payload-views.js";
 import { rustErrorFieldBorrowNeedsSnapshot, rustErrorFieldComparisonView, rustErrorFieldOptionalView, rustErrorFieldSharedView } from "./error-field-borrows.js";
 import { rustStringToBorrowedStrValueConversion } from "../../../target-model/conversions/model.js";
 import { applyRustValueConversion } from "./value-conversions.js";
-
-function borrowedOption(expression: RustExpr, carrier: TargetTypeRef, context: RustPlanContext): RustExpr {
-  if (!isRustStringCarrier(rustOptionValueCarrier(carrier))) return expression;
-  const element = rustOptionElementCarrier(carrier)!;
-  if (!isRustOptionCarrier(element)) return { kind: "method-call", receiver: expression, method: "as_deref", args: [] };
-  const names = context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, context.sourceFile, []);
-  const name = allocateRustSyntheticName(names, "option_value");
-  return {
-    kind: "method-call",
-    receiver: { kind: "method-call", receiver: expression, method: "as_ref", args: [] },
-    method: "map",
-    args: [{ kind: "closure", params: [{ name, byRefCopy: false }],
-      body: borrowedOption({ kind: "path", path: name }, element, context) }],
-  };
-}
 
 export function planRustStringComparisonView(
   node: Node, expression: RustExpr, carrier: TargetTypeRef, later: Node | undefined, context: RustPlanContext,
@@ -30,7 +15,7 @@ export function planRustStringComparisonView(
   if (isRustOptionCarrier(carrier)) {
     const read = later !== undefined && rustErrorFieldBorrowNeedsSnapshot(node, [later], context)
       ? expression : rustErrorFieldOptionalView(node, expression, context);
-    return borrowedOption(read, carrier, context);
+    return planRustOptionPayloadView(read, carrier, "str", context);
   }
   if (!isRustStringCarrier(carrier)) return expression;
   const value = rustErrorFieldComparisonView(node, expression, later, context);

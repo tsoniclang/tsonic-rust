@@ -155,8 +155,11 @@ export function planRustNonConsumingValue(
   node: Node,
   expression: RustExpr,
   context: RustPlanContext,
+  later?: Node,
 ): RustExpr {
   if (!rustExpressionReadsStorage(node, context)) return expression;
+  if (later !== undefined && !context.input.program.valueLifetimes.canBorrowStableValue(node) &&
+    !context.input.program.borrowStability.canBorrowAcross(node, later)) return expression;
   return expression.kind === "method-call" && expression.method === "clone" &&
       expression.args.length === 0
     ? expression.receiver
@@ -184,8 +187,9 @@ export function planRustSharedReceiver(
   node: Node,
   expression: RustExpr,
   context: RustPlanContext,
+  later?: Node,
 ): RustExpr {
-  const value = planRustNonConsumingValue(node, expression, context);
+  const value = planRustNonConsumingValue(node, expression, context, later);
   const override = context.expressionOverrides?.get(node);
   if (override?.valueForm === "shared-reference") {
     return value;

@@ -1,7 +1,10 @@
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../types/equality.js";
 import { rustBorrowedStrTargetType, isRustStringViewCarrier } from "../types/carriers/native.js";
 import { isRustOptionCarrier, rustOptionElementCarrier, rustOptionTargetType } from "../types/carriers/optional.js";
+import { isRustCopyCarrier } from "../types/carriers/traits.js";
 import type { TargetTypeRef } from "../types/model.js";
+
+export type RustOptionEqualityView = "value" | "str" | "shared";
 
 export interface RustOptionEqualityContract {
   readonly leftCarrier: TargetTypeRef;
@@ -9,7 +12,7 @@ export interface RustOptionEqualityContract {
   readonly comparisonCarrier: TargetTypeRef;
   readonly leftLiftDepth: number;
   readonly rightLiftDepth: number;
-  readonly borrowString: boolean;
+  readonly view: RustOptionEqualityView;
 }
 
 function optionPayload(carrier: TargetTypeRef): { readonly depth: number; readonly carrier: TargetTypeRef } | undefined {
@@ -33,9 +36,11 @@ export function rustOptionEqualityContract(
   if (leftPayload === undefined || rightPayload === undefined) return undefined;
   const depth = Math.max(leftPayload.depth, rightPayload.depth);
   if (depth === 0) return undefined;
-  const borrowString = isRustStringViewCarrier(leftPayload.carrier) && isRustStringViewCarrier(rightPayload.carrier);
-  if (!borrowString && !rustTargetTypeRefEquals(leftPayload.carrier, rightPayload.carrier)) return undefined;
-  let comparisonCarrier = borrowString ? rustBorrowedStrTargetType() : leftPayload.carrier;
+  const stringView = isRustStringViewCarrier(leftPayload.carrier) && isRustStringViewCarrier(rightPayload.carrier);
+  if (!stringView && !rustTargetTypeRefEquals(leftPayload.carrier, rightPayload.carrier)) return undefined;
+  const view: RustOptionEqualityView = stringView ? "str" : isRustCopyCarrier(leftPayload.carrier) ? "value" : "shared";
+  let comparisonCarrier: TargetTypeRef = view === "str" ? rustBorrowedStrTargetType()
+    : view === "shared" ? { kind: "reference", referent: leftPayload.carrier, mutable: false } : leftPayload.carrier;
   for (let index = 0; index < depth; index += 1) comparisonCarrier = rustOptionTargetType(comparisonCarrier);
   return Object.freeze({
     leftCarrier: left,
@@ -43,6 +48,6 @@ export function rustOptionEqualityContract(
     comparisonCarrier,
     leftLiftDepth: depth - leftPayload.depth,
     rightLiftDepth: depth - rightPayload.depth,
-    borrowString,
+    view,
   });
 }

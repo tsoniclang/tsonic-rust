@@ -3,7 +3,7 @@ import test from "node:test";
 import { rustOptionEqualityContract } from "../../../dist/target-model/operations/option-equality.js";
 import { isRustStringViewCarrier } from "../../../dist/target-model/types/carriers/native.js";
 import { rustBorrowedStrTargetType, rustOptionTargetType, rustSourcePrimitiveTargetType, rustStrTargetType,
-  rustStringTargetType } from "../../../dist/target-model/types/index.js";
+  rustStringTargetType, rustVecTargetType } from "../../../dist/target-model/types/index.js";
 import { selectRustBinaryOperator } from "../../../dist/policy/operations/operators/rules.js";
 import { rustStaticLifetime } from "../../../dist/target-model/lifetimes/index.js";
 
@@ -24,7 +24,7 @@ test("native optional equality retains presence depth and borrows every owned/bo
         assert.deepEqual(contract, { leftCarrier, rightCarrier,
           comparisonCarrier: optional(rustBorrowedStrTargetType(), Math.max(leftDepth, rightDepth)),
           leftLiftDepth: Math.max(0, rightDepth - leftDepth), rightLiftDepth: Math.max(0, leftDepth - rightDepth),
-          borrowString: true });
+          view: "str" });
         assert.equal(Object.isFrozen(contract), true);
       }
     }
@@ -32,7 +32,20 @@ test("native optional equality retains presence depth and borrows every owned/bo
   for (const carrier of [rustSourcePrimitiveTargetType("bool"), rustSourcePrimitiveTargetType("int64")]) {
     const contract = rustOptionEqualityContract(optional(carrier, 2), carrier);
     assert.deepEqual(contract, { leftCarrier: optional(carrier, 2), rightCarrier: carrier,
-      comparisonCarrier: optional(carrier, 2), leftLiftDepth: 0, rightLiftDepth: 2, borrowString: false });
+      comparisonCarrier: optional(carrier, 2), leftLiftDepth: 0, rightLiftDepth: 2, view: "value" });
+  }
+});
+
+test("native non-Copy optional equality borrows payloads in both orders at every presence depth", () => {
+  const carrier = rustVecTargetType(rustStringTargetType());
+  const borrowed = { kind: "reference", referent: carrier, mutable: false };
+  for (const leftDepth of [0, 1, 2, 3]) for (const rightDepth of [0, 1, 2, 3]) {
+    if (leftDepth === 0 && rightDepth === 0) continue;
+    assert.deepEqual(rustOptionEqualityContract(optional(carrier, leftDepth), optional(carrier, rightDepth)), {
+      leftCarrier: optional(carrier, leftDepth), rightCarrier: optional(carrier, rightDepth),
+      comparisonCarrier: optional(borrowed, Math.max(leftDepth, rightDepth)),
+      leftLiftDepth: Math.max(0, rightDepth - leftDepth), rightLiftDepth: Math.max(0, leftDepth - rightDepth), view: "shared",
+    });
   }
 });
 

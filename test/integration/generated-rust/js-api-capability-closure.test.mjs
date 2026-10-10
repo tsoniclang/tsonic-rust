@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { nestedArrayRestSource } from "../../../../tsonic/test/fixtures/nested-array-rest.mjs";
+import { optionalArrayComparisonSource } from "../../../../tsonic/test/fixtures/optional-array-comparisons.mjs";
 
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import {
@@ -21,6 +22,18 @@ test("native rest contracts preserve array-valued arguments and nested storage i
   });
   assert.deepEqual(result.diagnostics, []);
   validateGeneratedProject("nested-array-rest", result.artifacts, { run: true });
+});
+
+test("native optional array equality preserves identity, repeated reads and mutation snapshots", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"], packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "optional_array_comparisons" } },
+    files: { "index.ts": `${optionalArrayComparisonSource}\nimport { check } from "@acme/testing"; export function main(): void { check(run()); }` },
+  });
+  assert.equal(result.diagnostics.length, 0, "unchanged authored optional array comparisons compile");
+  const source = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
+  assert.doesNotMatch(source, /Some\((?:original|changed)\.clone\(\)\)\s*(?:==|!=)|(?:==|!=)\s*Some\((?:original|changed)\.clone\(\)\)/u);
+  validateGeneratedProject("optional-array-comparisons", result.artifacts, { run: true });
 });
 
 test("generated Rust closes identity, binary, collection, Date, and object APIs", { timeout: 300_000 }, () => {

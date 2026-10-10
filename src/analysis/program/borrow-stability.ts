@@ -13,7 +13,7 @@ import type { RustTargetProgram } from "./model.js";
 import { rustBorrowPrimitiveCopyValue, rustBorrowPureCopyValue, rustBorrowValueIsUnprojected } from "./borrowed-element-purity.js";
 import { rustCapturedFieldStorageFactKey, validatedRustCapturedFieldStorageFact } from "../facts/receiver-captures.js";
 import { rustNativeStoragePathsDisjoint, rustNativeStorageProjections, rustNativeStorageRoot } from "../facts/native-storage-paths.js";
-import { rustNativeCopyWriteTargets, rustNoNativeCopyWrites } from "./borrow-stability-effects.js";
+import { rustNativeWriteTargets, rustNoNativeWrites } from "./borrow-stability-effects.js";
 import { rustCompoundWriteFactKey } from "../facts/operations/keys.js";
 
 type StoredField = Extract<RustTargetOperationFact, { readonly kind: "source-field" }>;
@@ -125,8 +125,8 @@ export function analyzeRustBorrowStability(
       const selected = selectBorrowedWrite(entry.node, pure, input);
       if (selected !== undefined) writes.set(entry.node, selected);
       if (!pure.has(entry.node)) {
-        const targets = rustNativeCopyWriteTargets(entry.node, input,
-          node => pure.has(node) ? rustNoNativeCopyWrites : nativeWrites.get(node), directField, reserveTargets);
+        const targets = rustNativeWriteTargets(entry.node, input,
+          node => pure.has(node) ? rustNoNativeWrites : nativeWrites.get(node), directField, reserveTargets);
         if (targets !== undefined) nativeWrites.set(entry.node, targets);
       }
     } else {
@@ -143,14 +143,15 @@ export function analyzeRustBorrowStability(
     borrowedWriteFor: (node: Node) => writes.get(node),
     canBorrowLocalBinding: (reference: Node) => stableBindings.has(reference),
     canBorrowAcross(source: Node, later: Node): boolean {
-      if (!directField(source)) return false;
-      const field = input.facts.getFact(source, rustTargetOperationFactKey);
-      if (field?.kind !== "source-field" || field.accessMode !== "read") return false;
       const root = rustNativeStorageRoot(source, input);
       const path = root === undefined ? undefined : rustNativeStorageProjections(source, root, input);
-      const targets = pure.has(later) ? rustNoNativeCopyWrites : nativeWrites.get(later);
+      const binding = path?.length === 0 && input.facts.getFact(source, rustSourceBindingFactKey)?.scope === "lexical";
+      const field = input.facts.getFact(source, rustTargetOperationFactKey);
+      if (!binding && (!directField(source) || field?.kind !== "source-field" || field.accessMode !== "read")) return false;
+      const targets = pure.has(later) ? rustNoNativeWrites : nativeWrites.get(later);
       return root !== undefined && path !== undefined && targets !== undefined && targets.every(target => {
         const targetRoot = rustNativeStorageRoot(target, input);
+        if (binding && input.ast.is.IsIdentifier(target) && targetRoot !== undefined) return targetRoot !== root;
         const targetPath = targetRoot === root ? rustNativeStorageProjections(target, root, input) : undefined;
         return targetPath !== undefined && rustNativeStoragePathsDisjoint(path, targetPath);
       });

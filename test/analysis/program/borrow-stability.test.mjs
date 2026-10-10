@@ -25,6 +25,35 @@ function allNodes(ast, files) {
   return output;
 }
 
+test("native binding comparisons borrow observations and distinguish exact replacement targets", () => {
+  const { program } = analyzeRust({ files: { "index.ts": `
+    export function observed(left: string[] | undefined, right: string[]): boolean { return left === right; }
+    export function replaced(left: string[] | undefined, right: string[]): boolean { return left === (left = right); }
+    export function unrelated(left: string[] | undefined, right: string[], other: string[]): boolean {
+      return left === (right = other);
+    }
+    export function opaque(left: string[] | undefined, right: () => string[]): boolean { return left === right(); }
+  ` } });
+  const { ast } = program.source;
+  const nodes = allNodes(ast, program.sourceFiles);
+  for (const [name, expected] of [["observed", true], ["replaced", false], ["unrelated", true], ["opaque", false]]) {
+    const declaration = nodes.find(node => ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === name);
+    const comparison = allNodes(ast, [declaration]).find(node => ast.is.IsBinaryExpression(node) &&
+      program.facts.getFact(node, rustTargetOperationFactKey)?.kind === "option-equality");
+    assert.equal(comparison !== undefined, true, name);
+    const left = BinaryExpression_Left(ast, comparison);
+    const right = BinaryExpression_Right(ast, comparison);
+    assert.equal(program.borrowStability.canBorrowAcross(left, right), expected, name);
+    const binding = program.facts.getFact(left, rustSourceBindingFactKey);
+    const facts = { ...program.facts, getFact(node, key) {
+      return node === left && key === rustSourceBindingFactKey ? { ...binding, scope: "module" } : program.facts.getFact(node, key);
+    } };
+    const rejected = analyzeRustBorrowStability(analysisInput(program, facts));
+    assert.equal(rejected.kind, "resolved", name);
+    assert.equal(rejected.plan.canBorrowAcross(left, right), false, name + " foreign storage");
+  }
+});
+
 function analysisInput(program, facts = program.facts) {
   return { ast: program.source.ast, sourceFiles: program.sourceFiles, facts, navigation: program.sourceNavigation,
     projectTypes: program.projectTypes, objectRepresentations: program.objectRepresentations,
