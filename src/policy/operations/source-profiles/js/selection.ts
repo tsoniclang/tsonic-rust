@@ -243,7 +243,7 @@ function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readon
 
 function firstArgumentId(request: JsOperationRequest): string | undefined {
   const carrier = request.argumentCarriers?.[0];
-  return carrier?.kind === "target-named" ? carrier.id : undefined;
+  return isRustStringViewCarrier(carrier) ? rustStringTargetId : carrier?.kind === "target-named" ? carrier.id : undefined;
 }
 
 export function selectJsSurfaceOperation(request: JsOperationRequest, definitions: RustTypeDefinitions = emptyRustTypeDefinitions): JsOperationSelection | undefined {

@@ -318,7 +318,7 @@ const sharedArrayOperationRows = sharedArrayOwners.flatMap((owner): readonly JsO
   { owner, member: "slice", operationKind: "call", lane: "js-array", variant: "start-end", requirements: [{ carrier: { ref: "element" }, capability: "clone" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "slice_to" }, result: { ref: "element-array" }, params: [{ ref: "numeric-argument", index: 0 }, { ref: "numeric-argument", index: 1 }] } },
   { owner, member: "concat", operationKind: "call", lane: "js-array", variadic: true, requirements: [{ carrier: { ref: "element" }, capability: "clone" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-tagged-array", name: "concat", receiverMode: "ref", leadingArguments: [], elementCarrier: rustJsArrayConcatItemTargetType(rustInferCarrier), alternatives: [{ inputCarrier: rustInferCarrier, mode: "value", constructorPath: "js_abi::JsArrayConcatItem::Value" }, { inputCarrier: rustJsArrayTargetType(rustInferCarrier), mode: "value", constructorPath: "js_abi::JsArrayConcatItem::Array" }] }, result: { ref: "element-array" } } },
   { owner, member: "join", operationKind: "call", lane: "js-array", variant: "default", requirements: [{ carrier: { ref: "element" }, capability: "stringifiable" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "join_default" }, result: { ref: "string" } } },
-  { owner, member: "join", operationKind: "call", lane: "js-array", variant: "separator", requirements: [{ carrier: { ref: "element" }, capability: "stringifiable" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "join", argModes: ["ref"] }, result: { ref: "string" }, params: [{ ref: "string" }] } },
+  { owner, member: "join", operationKind: "call", lane: "js-array", variant: "separator", requirements: [{ carrier: { ref: "element" }, capability: "stringifiable" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "join", argModes: ["value"] }, result: { ref: "string" }, params: [{ ref: "borrowed-str" }] } },
 ]);
 
 export const jsOperationRows = defineJsOperationRows([
@@ -346,7 +346,7 @@ export const jsOperationRows = defineJsOperationRows([
         result: { ref: "bool" }, params: [{ ref: "argument", index: 0 }] } },
   ]),
   ...sharedArrayOperationRows,
-  { owner: "ArrayConstructor", member: "from", operationKind: "call", lane: "js-array", variant: "string", requirements: [{ carrier: { ref: "argument", index: 0 }, capability: "clone" }], shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::array_from_string", argModes: ["ref"] }, result: { ref: "string-array" }, params: [{ ref: "string" }] } },
+  { owner: "ArrayConstructor", member: "from", operationKind: "call", lane: "js-array", variant: "string", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::array_from_string", argModes: ["value"] }, result: { ref: "string-array" }, params: [{ ref: "borrowed-str" }] } },
   { owner: "ArrayConstructor", member: "from", operationKind: "call", lane: "js-array", variant: "native-array", selectedMethodTypeArgumentArity: 1, requirements: [{ carrier: { ref: "selected-method-type-argument", index: 0 }, capability: "clone" }], shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::array_from_vec", argModes: ["ref"] }, result: { ref: "selected-method-output-array", index: 0 }, params: [{ ref: "selected-method-input-array", index: 0 }] } },
   {
     owner: "ArrayConstructor", member: "from", operationKind: "call", lane: "js-array",
@@ -373,9 +373,9 @@ export const jsOperationRows = defineJsOperationRows([
     shape: {
       op: "operation",
       operationKind: "method",
-      target: { form: "call", path: `js_abi::${target}`, argModes: ["ref", "value"] },
+      target: { form: "call", path: `js_abi::${target}`, argModes: ["value", "value"] },
       result: { ref: "inferred-array" },
-      params: [{ ref: "string" }, { ref: "cb-array-from-map", arity }],
+      params: [{ ref: "borrowed-str" }, { ref: "cb-array-from-map", arity }],
     },
   })),
   ...([
@@ -626,8 +626,8 @@ export const jsOperationRows = defineJsOperationRows([
   { owner: "Set", member: "clear", operationKind: "call", lane: "set", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "clear" }, result: { ref: "unit" } } },
 
   // JSON lane (static owner; fallible rows require a fallible context).
-  { owner: "JSON", member: "parse", operationKind: "call", lane: "json", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::json_parse", argModes: ["ref"] }, result: { ref: "jsvalue" }, params: [{ ref: "string" }] } },
-  { owner: "JSON", member: "stringify", operationKind: "call", lane: "json", variant: "string-only", fallible: true, errorBoundary: "target-runtime", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::json_stringify_string", argModes: ["ref"] }, result: { ref: "string" }, params: [{ ref: "string" }] } },
+  { owner: "JSON", member: "parse", operationKind: "call", lane: "json", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::json_parse", argModes: ["value"] }, result: { ref: "jsvalue" }, params: [{ ref: "borrowed-str" }] } },
+  { owner: "JSON", member: "stringify", operationKind: "call", lane: "json", variant: "string-only", fallible: true, errorBoundary: "target-runtime", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::json_stringify_string", argModes: ["value"] }, result: { ref: "string" }, params: [{ ref: "borrowed-str" }] } },
   { owner: "JSON", member: "stringify", operationKind: "call", lane: "json", variant: "value-only", fallible: true, errorBoundary: "target-runtime", valueProjections: [{ sourceIndex: 0, kind: "json" }], shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::json_stringify", argModes: ["ref"] }, result: { ref: "option-of-string" }, params: [{ ref: "jsvalue" }] } },
 
   ...consoleRows.map(({ member, path }) => ({
@@ -723,10 +723,10 @@ export const jsOperationRows = defineJsOperationRows([
   ] as const).map(([member, path]): JsOperationRowData => ({ owner: "Math", member, operationKind: "property", lane: "math", shape: { op: "operation", evaluation: "pure", operationKind: "property", target: { form: "path", path }, result: { ref: "float64" } } })),
 
   ...nativeNumberPredicateRows("NumberConstructor", "number"),
-  { owner: "NumberConstructor", member: "parseFloat", operationKind: "call", lane: "number", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::number_parse_float", argModes: ["ref"] }, result: { ref: "float64" }, params: [{ ref: "string" }] } },
-  { owner: "NumberConstructor", member: "parseInt", operationKind: "call", lane: "number", variant: "default", shape: { op: "operation", evaluation: "pure", operationKind: "method", target: { form: "call", path: "js_abi::number_parse_int", argModes: ["ref"] }, result: { ref: "float64" }, params: [{ ref: "string" }] } },
-  { owner: "NumberConstructor", member: "parseInt", operationKind: "call", lane: "number", variant: "float64-radix", shape: { op: "operation", evaluation: "pure", operationKind: "method", target: { form: "call", path: "js_abi::number_parse_int_radix", argModes: ["ref", "value"] }, result: { ref: "float64" }, params: [{ ref: "string" }, { ref: "float64" }] } },
-  { owner: "NumberConstructor", member: "parseInt", operationKind: "call", lane: "number", variant: "int32-radix", shape: { op: "operation", evaluation: "pure", operationKind: "method", target: { form: "call", path: "js_abi::number_parse_int_radix", argModes: ["ref", "value"], argConversions: [undefined, rustInt32ToFloat64ValueConversion] }, result: { ref: "float64" }, params: [{ ref: "string" }, { ref: "int32" }] } },
+  { owner: "NumberConstructor", member: "parseFloat", operationKind: "call", lane: "number", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::number_parse_float", argModes: ["value"] }, result: { ref: "float64" }, params: [{ ref: "borrowed-str" }] } },
+  { owner: "NumberConstructor", member: "parseInt", operationKind: "call", lane: "number", variant: "default", shape: { op: "operation", evaluation: "pure", operationKind: "method", target: { form: "call", path: "js_abi::number_parse_int", argModes: ["value"] }, result: { ref: "float64" }, params: [{ ref: "borrowed-str" }] } },
+  { owner: "NumberConstructor", member: "parseInt", operationKind: "call", lane: "number", variant: "float64-radix", shape: { op: "operation", evaluation: "pure", operationKind: "method", target: { form: "call", path: "js_abi::number_parse_int_radix", argModes: ["value", "value"] }, result: { ref: "float64" }, params: [{ ref: "borrowed-str" }, { ref: "float64" }] } },
+  { owner: "NumberConstructor", member: "parseInt", operationKind: "call", lane: "number", variant: "int32-radix", shape: { op: "operation", evaluation: "pure", operationKind: "method", target: { form: "call", path: "js_abi::number_parse_int_radix", argModes: ["value", "value"], argConversions: [undefined, rustInt32ToFloat64ValueConversion] }, result: { ref: "float64" }, params: [{ ref: "borrowed-str" }, { ref: "int32" }] } },
   ...numberPropertyRows.map(({ member, path }): JsOperationRowData => ({ owner: "NumberConstructor", member, operationKind: "property", lane: "number", shape: { op: "operation", operationKind: "property", target: { form: "path", path }, result: { ref: "float64" } } })),
 
   { owner: "Number", member: "toString", operationKind: "call", lane: "number", variant: "default", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::number_to_string", receiverMode: "value" }, result: { ref: "string" } } },
@@ -743,19 +743,19 @@ export const jsOperationRows = defineJsOperationRows([
   { owner: "Number", member: "toPrecision", operationKind: "call", lane: "number", variant: "float64-precision", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::number_to_precision_digits", receiverMode: "value", argModes: ["value"] }, result: { ref: "string" }, params: [{ ref: "float64" }] } },
   { owner: "Number", member: "toPrecision", operationKind: "call", lane: "number", variant: "int32-precision", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::number_to_precision_digits", receiverMode: "value", argModes: ["value"], argConversions: [rustInt32ToFloat64ValueConversion] }, result: { ref: "string" }, params: [{ ref: "int32" }] } },
 
-  { owner: "Global", member: "parseFloat", operationKind: "call", lane: "global", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::number_parse_float", argModes: ["ref"] }, result: { ref: "float64" }, params: [{ ref: "string" }] } },
-  { owner: "Global", member: "parseInt", operationKind: "call", lane: "global", variant: "default", shape: { op: "operation", evaluation: "pure", operationKind: "method", target: { form: "call", path: "js_abi::number_parse_int", argModes: ["ref"] }, result: { ref: "float64" }, params: [{ ref: "string" }] } },
-  { owner: "Global", member: "parseInt", operationKind: "call", lane: "global", variant: "float64-radix", shape: { op: "operation", evaluation: "pure", operationKind: "method", target: { form: "call", path: "js_abi::number_parse_int_radix", argModes: ["ref", "value"] }, result: { ref: "float64" }, params: [{ ref: "string" }, { ref: "float64" }] } },
-  { owner: "Global", member: "parseInt", operationKind: "call", lane: "global", variant: "int32-radix", shape: { op: "operation", evaluation: "pure", operationKind: "method", target: { form: "call", path: "js_abi::number_parse_int_radix", argModes: ["ref", "value"], argConversions: [undefined, rustInt32ToFloat64ValueConversion] }, result: { ref: "float64" }, params: [{ ref: "string" }, { ref: "int32" }] } },
-  { owner: "Global", member: "encodeURIComponent", operationKind: "call", lane: "global", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::encode_uri_component", argModes: ["ref"] }, result: { ref: "string" }, params: [{ ref: "string" }] } },
-  { owner: "Global", member: "decodeURIComponent", operationKind: "call", lane: "global", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::decode_uri_component", argModes: ["ref"] }, result: { ref: "string" }, params: [{ ref: "string" }] } },
+  { owner: "Global", member: "parseFloat", operationKind: "call", lane: "global", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::number_parse_float", argModes: ["value"] }, result: { ref: "float64" }, params: [{ ref: "borrowed-str" }] } },
+  { owner: "Global", member: "parseInt", operationKind: "call", lane: "global", variant: "default", shape: { op: "operation", evaluation: "pure", operationKind: "method", target: { form: "call", path: "js_abi::number_parse_int", argModes: ["value"] }, result: { ref: "float64" }, params: [{ ref: "borrowed-str" }] } },
+  { owner: "Global", member: "parseInt", operationKind: "call", lane: "global", variant: "float64-radix", shape: { op: "operation", evaluation: "pure", operationKind: "method", target: { form: "call", path: "js_abi::number_parse_int_radix", argModes: ["value", "value"] }, result: { ref: "float64" }, params: [{ ref: "borrowed-str" }, { ref: "float64" }] } },
+  { owner: "Global", member: "parseInt", operationKind: "call", lane: "global", variant: "int32-radix", shape: { op: "operation", evaluation: "pure", operationKind: "method", target: { form: "call", path: "js_abi::number_parse_int_radix", argModes: ["value", "value"], argConversions: [undefined, rustInt32ToFloat64ValueConversion] }, result: { ref: "float64" }, params: [{ ref: "borrowed-str" }, { ref: "int32" }] } },
+  { owner: "Global", member: "encodeURIComponent", operationKind: "call", lane: "global", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::encode_uri_component", argModes: ["value"] }, result: { ref: "string" }, params: [{ ref: "borrowed-str" }] } },
+  { owner: "Global", member: "decodeURIComponent", operationKind: "call", lane: "global", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::decode_uri_component", argModes: ["value"] }, result: { ref: "string" }, params: [{ ref: "borrowed-str" }] } },
   ...nativeNumberPredicateRows("Global", "global"),
 
   { owner: "Boolean", member: "toString", operationKind: "call", lane: "boolean", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::boolean_to_string", receiverMode: "value" }, result: { ref: "string" } } },
   { owner: "Boolean", member: "valueOf", operationKind: "call", lane: "boolean", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::boolean_value_of", receiverMode: "value" }, result: { ref: "bool" } } },
 
   // Date lane.
-  { owner: "DateConstructor", member: "parse", operationKind: "call", lane: "date", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::JsDate::parse", argModes: ["ref"] }, result: { ref: "float64" }, params: [{ ref: "string" }] } },
+  { owner: "DateConstructor", member: "parse", operationKind: "call", lane: "date", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::JsDate::parse", argModes: ["value"] }, result: { ref: "float64" }, params: [{ ref: "borrowed-str" }] } },
   ...dateUtcRows(),
   { owner: "Date", member: "toJSON", operationKind: "call", lane: "date", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "to_json" }, result: { ref: "option-of-string" }, sourceResult: { ref: "string" }, sourceAbsence: "null" } },
   { owner: "Date", member: "valueOf", operationKind: "call", lane: "date", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "get_time" }, result: { ref: "float64" } } },

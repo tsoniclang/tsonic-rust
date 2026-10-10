@@ -12,12 +12,12 @@ export interface RustOptionEqualityContract {
   readonly borrowString: boolean;
 }
 
-function optionPayload(carrier: TargetTypeRef): { readonly depth: number; readonly carrier: TargetTypeRef } {
+function optionPayload(carrier: TargetTypeRef): { readonly depth: number; readonly carrier: TargetTypeRef } | undefined {
   let current = carrier;
   let depth = 0;
   for (;;) {
     const element = rustOptionElementCarrier(current);
-    if (element === undefined) return { depth, carrier: current };
+    if (element === undefined) return isRustOptionCarrier(current) ? undefined : { depth, carrier: current };
     current = element;
     depth += 1;
   }
@@ -30,6 +30,7 @@ export function rustOptionEqualityContract(
   if (!isRustOptionCarrier(left) && !isRustOptionCarrier(right) || !isRustTargetTypeRef(left) || !isRustTargetTypeRef(right)) return undefined;
   const leftPayload = optionPayload(left);
   const rightPayload = optionPayload(right);
+  if (leftPayload === undefined || rightPayload === undefined) return undefined;
   const depth = Math.max(leftPayload.depth, rightPayload.depth);
   if (depth === 0) return undefined;
   const borrowString = isRustStringViewCarrier(leftPayload.carrier) && isRustStringViewCarrier(rightPayload.carrier);

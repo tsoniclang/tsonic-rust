@@ -38,7 +38,8 @@ export function dynamic(pattern: string, flags: string, value: string): boolean 
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /js_abi::regexp_from_string_with_flags_native\(&pattern, &flags\)\?/u);
+  assert.match(source, /pub fn dynamic\(pattern: &str, flags: &str, value: &str\)/u);
+  assert.match(source, /js_abi::regexp_from_string_with_flags_native\(\s*core::convert::AsRef::<str>::as_ref\(pattern\),\s*core::convert::AsRef::<str>::as_ref\(flags\),\s*\)\?/u);
   assert.match(source, /js_abi::regexp_test_native\(/u);
   assert.doesNotMatch(source, /REGEXP_UNSUPPORTED|subset|validator/u);
 });

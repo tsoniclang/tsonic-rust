@@ -2,6 +2,7 @@ import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import type { JsOperationRequest } from "./model.js";
 import { rustCallableProtocol, rustClosureProtocol } from "../../../../target-model/types/index.js";
+import { isRustStringViewCarrier, rustBorrowedStrTargetType } from "../../../../target-model/types/carriers/native.js";
 export function jsArgumentCarrierMatchScore(
   expected: TargetTypeRef | undefined,
   actual: TargetTypeRef | undefined,
@@ -32,6 +33,9 @@ export function jsArgumentCarrierMatchScore(
       : (scores as number[]).reduce((total, score) => total + score, 0);
   }
   if (rustTargetTypeRefEquals(expected, actual)) {
+    return 0;
+  }
+  if (rustTargetTypeRefEquals(expected, rustBorrowedStrTargetType()) && isRustStringViewCarrier(actual)) {
     return 0;
   }
   return relationScore?.(expected, actual, index);

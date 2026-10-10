@@ -42,12 +42,13 @@ import {
 } from "@tsonic/target-api/source";
 import { resolveSelectedProviderDeclaration, resolveSelectedSourceProfileMember } from "../evidence/selected-source.js";
 import { selectRustProviderOperation } from "../operations/provider-selection.js";
-import { selectJsSurfaceOperation } from "../operations/source-profiles/js/index.js";
+import { selectJsSurfaceConstructorBySourceOwner, selectJsSurfaceOperation } from "../operations/source-profiles/js/index.js";
 import { rustProviderArgumentBorrowsString } from "./provider-argument-borrow.js";
 import { rustSourceErrorConstructorOperation, selectRustSourceErrorConstructor } from "../operations/source-profiles/error-source-profile.js";
 import { rustSourceValueWrapperContains } from "./source-value-wrappers.js";
 import { rustSourceInputLifetime } from "./source-input-lifetimes.js";
 import { rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
+import { selectRustSourceValueConversion } from "../conversions/selection.js";
 import type { RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 
 export interface RustSourceCallableAbiResolver {
@@ -435,12 +436,25 @@ function parameterCanUseSharedBorrow(
         const sourceFile = ast.getSourceFile(call);
         if (sourceFile === undefined) return false;
         const callContext = { ...context, currentSourceFile: sourceFile, currentSemantics: semantics };
-        const operation = selectJsSurfaceOperation({
+        const argumentCarriers = selected.sourceArguments.map(argument =>
+          resolveRustTargetTypeRef(argument.expression, callContext, options));
+        const typeArguments = selected.sourceSelectedMethodTypeArguments ?? [];
+        const selectedMethodTypeArgumentCarriers = typeArguments.map(argument =>
+          resolveRustTargetTypeRef(argument.explicitTypeNode ?? argument.selectedType, callContext, options));
+        const operation = ast.is.IsNewExpression(call) ? selectJsSurfaceConstructorBySourceOwner({
+          sourceOwnerName: member.ownerName,
+          typeArgumentCarriers: selectedMethodTypeArgumentCarriers,
+          argumentCarriers,
+        }, context.typeDefinitions) : selectJsSurfaceOperation({
           ownerName: member.ownerName, memberName: member.memberName, operationKind: "call",
           receiverCarrier: selected.sourceReceiver === undefined ? undefined :
             resolveRustTargetTypeRef(selected.sourceReceiver.expression, callContext, options),
-          argumentCarriers: selected.sourceArguments.map(argument =>
-            resolveRustTargetTypeRef(argument.expression, callContext, options)),
+          argumentCarriers,
+          selectedMethodTypeArgumentCarriers,
+          authoredMethodTypeArgumentCarriers: typeArguments.map(argument => argument.explicitTypeNode === undefined
+            ? undefined : resolveRustTargetTypeRef(argument.explicitTypeNode, callContext, options)),
+          argumentMatchScore: (expected, actual) => actual !== undefined &&
+            selectRustSourceValueConversion(actual, expected, context.typeDefinitions) !== undefined ? 1 : undefined,
         }, context.typeDefinitions);
         if (operation?.fact.kind !== "provider-operation" ||
           !rustProviderArgumentBorrowsString(operation.fact, argumentIndex)) return false;

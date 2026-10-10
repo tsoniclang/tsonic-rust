@@ -118,7 +118,8 @@ export function native(input: string): boolean {
   assert.match(text, /js_exact_string::char_at\(&value, 0\.0\)/u);
   assert.match(text, /\.exec\(&value\)\?/u);
   assert.match(text, /js_exact_string::to_well_formed/u);
-  assert.match(text, /js_abi::regexp_test_native\([^;]*&input\)\?/su);
+  assert.match(text, /pub fn native\(input: &str\)/u);
+  assert.match(text, /js_abi::regexp_test_native\([^;]*AsRef::<str>::as_ref\(input\),\s*\)\?/su);
   assert.match(text, /string_replace_regexp_native/u);
 });
 

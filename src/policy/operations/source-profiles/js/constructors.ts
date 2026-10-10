@@ -24,6 +24,7 @@ import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality
 import { jsValueProjectionsAreValid, type JsCarrierRef, type JsOperationSelection, type JsValueProjection } from "./model.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustJsTypedArrayName } from "../../../../target-model/types/index.js";
+import { jsArgumentCarrierMatchScore } from "./argument-matching.js";
 
 type JsConstructorResult =
   | { readonly kind: "map" }
@@ -142,19 +143,19 @@ const jsConstructorRows = defineJsConstructorRows([
   { className: "WeakSet", sourceOwnerName: "WeakSetConstructor", typeArgumentCount: 1, argumentCount: 1, path: "js_abi::JsWeakSet::from_array", result: { kind: "weak-set" }, params: [{ ref: "weak-key-array" }], argModes: ["ref"], requiresObjectIdentityTypeArgument: 0, variant: "array" },
   { className: "Date", sourceOwnerName: "DateConstructor", typeArgumentCount: 0, argumentCount: 0, path: "js_abi::JsDate::new", result: { kind: "date" } },
   { className: "Date", sourceOwnerName: "DateConstructor", typeArgumentCount: 0, argumentCount: 1, path: "js_abi::JsDate::from_millis", result: { kind: "date" }, params: [{ ref: "float64" }], variant: "millis" },
-  { className: "Date", sourceOwnerName: "DateConstructor", typeArgumentCount: 0, argumentCount: 1, path: "js_abi::JsDate::from_string", result: { kind: "date" }, params: [{ ref: "string" }], argModes: ["ref"], variant: "string" },
+  { className: "Date", sourceOwnerName: "DateConstructor", typeArgumentCount: 0, argumentCount: 1, path: "js_abi::JsDate::from_string", result: { kind: "date" }, params: [{ ref: "borrowed-str" }], argModes: ["value"], variant: "string" },
   { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 0, path: "js_abi::regexp_empty_native", result: { kind: "regexp" }, fallible: true, variant: "empty" },
-  { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 1, path: "js_abi::regexp_from_string_native", result: { kind: "regexp" }, fallible: true, params: [{ ref: "string" }], argModes: ["ref"], variant: "native" },
+  { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 1, path: "js_abi::regexp_from_string_native", result: { kind: "regexp" }, fallible: true, params: [{ ref: "borrowed-str" }], argModes: ["value"], variant: "native" },
   { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 1, path: "js_abi::regexp_from_exact", result: { kind: "regexp" }, fallible: true, params: [{ ref: "js-string" }], argModes: ["ref"], variant: "exact" },
   { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 1, path: "js_abi::regexp_from_undefined_native", result: { kind: "regexp" }, fallible: true, params: [{ ref: "absence" }], variant: "undefined" },
   { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 1, path: "js_abi::regexp_construct_from_regexp_native", result: { kind: "regexp" }, fallible: true, params: [{ ref: "regexp" }], argModes: ["ref"], variant: "regexp" },
-  { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 2, path: "js_abi::regexp_from_string_with_flags_native", result: { kind: "regexp" }, fallible: true, params: [{ ref: "string" }, { ref: "string" }], argModes: ["ref", "ref"], variant: "native-flags" },
-  { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 2, path: "js_abi::regexp_from_string_with_undefined_flags_native", result: { kind: "regexp" }, fallible: true, params: [{ ref: "string" }, { ref: "absence" }], argModes: ["ref", "value"], variant: "native-undefined-flags" },
-  { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 2, path: "js_abi::regexp_from_exact_with_flags", result: { kind: "regexp" }, fallible: true, params: [{ ref: "js-string" }, { ref: "string" }], argModes: ["ref", "ref"], variant: "exact-flags" },
+  { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 2, path: "js_abi::regexp_from_string_with_flags_native", result: { kind: "regexp" }, fallible: true, params: [{ ref: "borrowed-str" }, { ref: "borrowed-str" }], argModes: ["value", "value"], variant: "native-flags" },
+  { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 2, path: "js_abi::regexp_from_string_with_undefined_flags_native", result: { kind: "regexp" }, fallible: true, params: [{ ref: "borrowed-str" }, { ref: "absence" }], argModes: ["value", "value"], variant: "native-undefined-flags" },
+  { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 2, path: "js_abi::regexp_from_exact_with_flags", result: { kind: "regexp" }, fallible: true, params: [{ ref: "js-string" }, { ref: "borrowed-str" }], argModes: ["ref", "value"], variant: "exact-flags" },
   { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 2, path: "js_abi::regexp_from_exact_with_undefined_flags", result: { kind: "regexp" }, fallible: true, params: [{ ref: "js-string" }, { ref: "absence" }], argModes: ["ref", "value"], variant: "exact-undefined-flags" },
-  { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 2, path: "js_abi::regexp_from_undefined_with_flags_native", result: { kind: "regexp" }, fallible: true, params: [{ ref: "absence" }, { ref: "string" }], argModes: ["value", "ref"], variant: "undefined-flags" },
+  { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 2, path: "js_abi::regexp_from_undefined_with_flags_native", result: { kind: "regexp" }, fallible: true, params: [{ ref: "absence" }, { ref: "borrowed-str" }], argModes: ["value", "value"], variant: "undefined-flags" },
   { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 2, path: "js_abi::regexp_from_undefined_with_undefined_flags_native", result: { kind: "regexp" }, fallible: true, params: [{ ref: "absence" }, { ref: "absence" }], variant: "undefined-undefined-flags" },
-  { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 2, path: "js_abi::regexp_construct_from_regexp_with_flags_native", result: { kind: "regexp" }, fallible: true, params: [{ ref: "regexp" }, { ref: "string" }], argModes: ["ref", "ref"], variant: "regexp-flags" },
+  { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 2, path: "js_abi::regexp_construct_from_regexp_with_flags_native", result: { kind: "regexp" }, fallible: true, params: [{ ref: "regexp" }, { ref: "borrowed-str" }], argModes: ["ref", "value"], variant: "regexp-flags" },
   { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 2, path: "js_abi::regexp_construct_from_regexp_with_undefined_flags_native", result: { kind: "regexp" }, fallible: true, params: [{ ref: "regexp" }, { ref: "absence" }], argModes: ["ref", "value"], variant: "regexp-undefined-flags" },
   { className: "ArrayBuffer", sourceOwnerName: "ArrayBufferConstructor", typeArgumentCount: 0, argumentCount: 1, path: "js_abi::ArrayBuffer::new", result: { kind: "array-buffer" }, fallible: true, params: [{ ref: "numeric-argument", index: 0 }] },
   { className: "DataView", sourceOwnerName: "DataViewConstructor", typeArgumentCount: 0, argumentCount: 1, path: "js_abi::DataView::from_buffer", result: { kind: "data-view" }, fallible: true, params: [{ ref: "array-buffer" }] },
@@ -258,7 +259,7 @@ export function selectJsSurfaceConstructor(request: JsConstructorRequest, defini
       return projection !== undefined
         ? actual === undefined || selectJsValueProjection(actual, index, projection.kind, definitions, request.propertyProjection) === undefined
         : carrier === undefined || actual === undefined ||
-          !rustTargetTypeRefEquals(carrier, actual);
+          jsArgumentCarrierMatchScore(carrier, actual, index, undefined) === undefined;
     })) {
       return [];
     }

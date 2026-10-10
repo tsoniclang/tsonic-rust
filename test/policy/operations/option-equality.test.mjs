@@ -48,6 +48,10 @@ test("native string comparison admits shared str lifetimes without broadening ow
   }
   const malformed = optional(rustStringTargetType(), 1);
   malformed.genericArguments = [];
+  for (const depth of [0, 1, 2, 3]) {
+    const invalid = optional(malformed, depth);
+    assert.equal(rustOptionEqualityContract(invalid, invalid), undefined, `malformed option at ${depth}`);
+  }
   const cyclic = optional(rustStringTargetType(), 1);
   cyclic.genericArguments = [{ kind: "type", type: cyclic }];
   for (const carrier of [undefined, rustStrTargetType(), { ...rustBorrowedStrTargetType(), mutable: true },
