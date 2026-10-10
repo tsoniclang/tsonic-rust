@@ -1,7 +1,7 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import { ElementAccessExpression_ArgumentExpression, Node_Expression } from "@tsonic/target-api/source";
 import type { RustTargetOperationFact } from "./keys.js";
-import { isRustStringCarrier } from "../../target-model/types/index.js";
+import { isRustStringViewCarrier } from "../../target-model/types/carriers/native.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
 import type { RustFinalizedSourceInput } from "./finalized-operation-abi.js";
@@ -9,7 +9,14 @@ import type { RustFinalizedSourceInput } from "./finalized-operation-abi.js";
 type ProviderOperation = Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>;
 
 export function rustProviderInputBorrowMode(input: RustFinalizedSourceInput): "ref" | "mut-ref" | undefined {
-  if (input.conversion.kind === "identity") return input.mode === "value" ? undefined : input.mode;
+  if (input.conversion.kind === "identity") {
+    if (input.mode !== "value") return input.mode;
+    return input.sourceCarrier.kind === "reference" && !input.sourceCarrier.mutable &&
+      !input.conversion.fallible &&
+      rustTargetTypeRefEquals(input.sourceCarrier, input.conversion.sourceCarrier) &&
+      rustTargetTypeRefEquals(input.sourceCarrier, input.conversion.targetCarrier) &&
+      rustTargetTypeRefEquals(input.sourceCarrier, input.parameterCarrier) ? "ref" : undefined;
+  }
   if (input.conversion.kind !== "semantic" || input.mode !== "value") return undefined;
   const contract = rustValueConversionContract(input.conversion.conversion);
   return contract?.category === "ownership" && contract.sourceMode === "ref" &&
@@ -27,7 +34,7 @@ export function rustBorrowedStringInputs(node: Node, operation: ProviderOperatio
   const argumentsList = rustBorrowedOperationArguments(node, ast);
   if (argumentsList === undefined) return output;
   for (const input of inputs) {
-    if (!("sourceCarrier" in input) || !isRustStringCarrier(input.sourceCarrier)) continue;
+    if (!("sourceCarrier" in input) || !isRustStringViewCarrier(input.sourceCarrier)) continue;
     if (rustProviderInputBorrowMode(input) !== "ref") continue;
     const callee = Node_Expression(ast, node);
     const source = input.source.kind === "argument" ? argumentsList[input.source.sourceIndex]

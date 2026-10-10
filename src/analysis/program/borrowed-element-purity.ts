@@ -64,7 +64,6 @@ export function rustBorrowPureProviderInputs(
   const provider = rustBorrowPureOperation(node, facts);
   if (provider === undefined || provider.abi.result.kind !== "sync" ||
     provider.abi.effects.invocation !== "infallible" || provider.abi.result.conversion.kind !== "identity" ||
-    !rustBorrowPrimitiveCopyValue(node, facts) ||
     !rustTargetTypeRefEquals(provider.abi.result.carrier, facts.getRuntimeCarrierFact(node)?.carrier)) return undefined;
   const argumentsList = rustBorrowedOperationArguments(node, ast);
   if (argumentsList === undefined || argumentsList.length !== provider.abi.sourceArguments.length ||

@@ -26,17 +26,19 @@ function allNodes(ast, files) {
 }
 
 test("native binding comparisons borrow observations and distinguish exact replacement targets", () => {
-  const { program } = analyzeRust({ files: { "index.ts": `
+  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
     export function observed(left: string[] | undefined, right: string[]): boolean { return left === right; }
     export function replaced(left: string[] | undefined, right: string[]): boolean { return left === (left = right); }
     export function unrelated(left: string[] | undefined, right: string[], other: string[]): boolean {
       return left === (right = other);
     }
     export function opaque(left: string[] | undefined, right: () => string[]): boolean { return left === right(); }
+    export function observableOwnedResult(left: string | undefined, right: string): boolean { return left === right.trim(); }
   ` } });
   const { ast } = program.source;
   const nodes = allNodes(ast, program.sourceFiles);
-  for (const [name, expected] of [["observed", true], ["replaced", false], ["unrelated", true], ["opaque", false]]) {
+  for (const [name, expected] of [["observed", true], ["replaced", false], ["unrelated", true], ["opaque", false],
+    ["observableOwnedResult", false]]) {
     const declaration = nodes.find(node => ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === name);
     const comparison = allNodes(ast, [declaration]).find(node => ast.is.IsBinaryExpression(node) &&
       program.facts.getFact(node, rustTargetOperationFactKey)?.kind === "option-equality");
@@ -51,6 +53,24 @@ test("native binding comparisons borrow observations and distinguish exact repla
     const rejected = analyzeRustBorrowStability(analysisInput(program, facts));
     assert.equal(rejected.kind, "resolved", name);
     assert.equal(rejected.plan.canBorrowAcross(left, right), false, name + " foreign storage");
+    if (name === "observableOwnedResult") {
+      const operation = program.facts.getFact(right, rustTargetOperationFactKey);
+      assert.equal(operation.kind, "provider-operation");
+      assert.equal(operation.abi.effects.evaluation, "observable", "the actual source profile is never overridden in product");
+      for (const [effects, accepted] of [
+        [{ ...operation.abi.effects, evaluation: "pure" }, true],
+        [{ ...operation.abi.effects, evaluation: "pure", safety: "requires-unsafe" }, false],
+        [{ ...operation.abi.effects, evaluation: "pure", invocation: "fallible" }, false],
+      ]) {
+        const facts = { ...program.facts, getFact(node, key) {
+          return node === right && key === rustTargetOperationFactKey
+            ? { ...operation, abi: { ...operation.abi, effects } } : program.facts.getFact(node, key);
+        } };
+        const result = analyzeRustBorrowStability(analysisInput(program, facts));
+        assert.equal(result.kind, "resolved");
+        assert.equal(result.plan.canBorrowAcross(left, right), accepted, "exact native pure-input effect contract");
+      }
+    }
   }
 });
 
@@ -384,6 +404,41 @@ test("native field borrowing consumes exact disjoint scalar writes but rejects o
       assert.equal(selected.plan.canBorrowAcross(receiver, operand), false);
     }
   }
+});
+
+test("identity native shared references retain source borrowing without claiming mutable or owned input borrowing", () => {
+  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+    export function inspect(value: string): number { return parseInt(value, 10); }
+  ` } });
+  const operation = allNodes(program.source.ast, program.sourceFiles)
+    .map(node => program.facts.getFact(node, rustTargetOperationFactKey))
+    .find(fact => fact?.kind === "provider-operation" && fact.abi.targetArguments[0]?.sourceCarrier?.kind === "reference");
+  assert.equal(operation !== undefined, true, "actual selected native parsing input");
+  const input = operation.abi.targetArguments[0];
+  assert.equal(input.mode, "value");
+  assert.equal(input.conversion.kind, "identity");
+  assert.equal(input.sourceCarrier.mutable, false);
+  assert.equal(rustProviderInputBorrowMode(input), "ref", "by-value shared reference does not own its referent");
+  const distinct = { kind: "reference", mutable: false, referent: { kind: "source-primitive", name: "int64" } };
+  const mutable = { ...input.sourceCarrier, mutable: true };
+  const owned = { kind: "target-named", id: "rust.std.String" };
+  for (const [label, replacement] of [
+    ["parameter mismatch", { ...input, parameterCarrier: distinct }],
+    ["source mismatch", { ...input, sourceCarrier: distinct }],
+    ["conversion source mismatch", { ...input, conversion: { ...input.conversion, sourceCarrier: distinct } }],
+    ["conversion target mismatch", { ...input, conversion: { ...input.conversion, targetCarrier: distinct } }],
+    ["fallible conversion", { ...input, conversion: { ...input.conversion, fallible: true } }],
+    ["mutable reference move", { ...input, sourceCarrier: mutable, parameterCarrier: mutable,
+      conversion: { ...input.conversion, sourceCarrier: mutable, targetCarrier: mutable } }],
+    ["owning value", { ...input, sourceCarrier: owned, parameterCarrier: owned,
+      conversion: { ...input.conversion, sourceCarrier: owned, targetCarrier: owned } }],
+    ["malformed native carrier", { ...input, sourceCarrier: { ...input.sourceCarrier, unknown: true } }],
+  ]) assert.equal(rustProviderInputBorrowMode(replacement) === undefined, true, label);
+  assert.equal(rustProviderInputBorrowMode({ ...input, sourceCarrier: distinct, parameterCarrier: distinct,
+    conversion: { ...input.conversion, sourceCarrier: distinct, targetCarrier: distinct } }), "ref",
+  "reference ownership is a native type rule, not a String or wrapper-name rule");
+  assert.equal(rustProviderInputBorrowMode({ ...input, mode: "mut-ref" }), "mut-ref",
+    "an explicit exclusive borrow retains its distinct mode");
 });
 
 test("borrowed conversion effects require exact finalized input and pure native observation contracts", () => {
