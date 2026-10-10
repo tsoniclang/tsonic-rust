@@ -4,6 +4,8 @@ import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression } from "
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustBorrowStability } from "../../../dist/analysis/program/borrow-stability.js";
 import { fakeAstReader } from "../../helpers/fake-compile-input.mjs";
+import { argumentPassingFactKey, pointerOperationFactKey } from "@tsonic/tsts";
+import { rustCompoundWriteFactKey } from "../../../dist/analysis/facts/operations/keys.js";
 import { providerEvaluationOrderSource } from "../../../../tsonic/test/fixtures/provider-evaluation-order.mjs";
 import { rustBindingStorageFactKey, rustContextualValueConversionFactKey, rustSourceBindingFactKey,
   rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
@@ -39,6 +41,109 @@ function functionAssignment(program, name) {
   assert.equal(assignment !== undefined, true, name + " assignment");
   return assignment;
 }
+
+function indexedBindingFixture({ uses = 1_100, bindingWritten = false, scope = "lexical", passing, pointer } = {}) {
+  const declaration = {};
+  const receivers = [{ kindName: "KindIdentifier" }, { kindName: "KindIdentifier" }];
+  const updates = receivers.map(receiver => ({ kindName: "KindPostfixUnaryExpression",
+    operand: { kindName: "KindElementAccessExpression", receiver } }));
+  const root = { children: updates };
+  const useNodes = Array.from({ length: uses }, () => ({ kindName: "KindIdentifier" }));
+  let summaries = 0;
+  const reader = fakeAstReader();
+  const input = {
+    sourceFiles: [root],
+    ast: { ...reader, is: { ...reader.is,
+      IsIdentifier: node => receivers.includes(node) || useNodes.includes(node),
+      IsPostfixUnaryExpression: node => updates.includes(node),
+      IsElementAccessExpression: node => updates.some(update => update.operand === node),
+    }, as: {
+      AsPostfixUnaryExpression: node => ({ Operand: node.operand }),
+      AsElementAccessExpression: node => ({ Expression: node.receiver }),
+    }, parent: node => useNodes.includes(node) ? { kindName: "KindExpressionStatement" } : undefined,
+    forEachChild: (node, visit) => (node.children ?? (node.operand === undefined
+      ? node.receiver === undefined ? [] : [node.receiver] : [node.operand])).forEach(visit) },
+    facts: { getRuntimeCarrierFact: () => undefined, getFact(node, key) {
+      if (key === rustCompoundWriteFactKey && updates.includes(node)) return {
+        abi: { targetReceiver: { kind: "input", input: { mode: "ref", conversion: { kind: "identity" } } } },
+      };
+      if (key === rustSourceBindingFactKey && receivers.includes(node)) return { scope, sourceDeclaration: declaration };
+      if (useNodes.includes(node) && key === argumentPassingFactKey && passing !== undefined) return { mode: passing };
+      if (useNodes.includes(node) && key === pointerOperationFactKey && pointer !== undefined) return { operation: pointer };
+      return undefined;
+    } },
+    navigation: { declarationUseSummary(selected) {
+      assert.equal(selected === declaration, true, "exact lexical declaration identity");
+      summaries += 1;
+      return { bindingWritten, exported: false, uses: useNodes.map(reference => ({ reference })) };
+    } },
+  };
+  return { input, receivers, summaries: () => summaries };
+}
+
+test("indexed receiver stability has one sealed declaration proof beyond the retired per-use cutoff", () => {
+  const fixture = indexedBindingFixture();
+  const result = analyzeRustBorrowStability(fixture.input, 10_000);
+  assert.equal(result.kind, "resolved", "more than2048harmless exposure visits fit the actual aggregate bound");
+  assert.equal(fixture.summaries(), 1, "two demanded receivers share one exact declaration proof");
+  fixture.input.navigation.declarationUseSummary = () => { throw new Error("sealed lookup cannot analyze"); };
+  fixture.input.ast.parent = () => { throw new Error("sealed lookup cannot walk source syntax"); };
+  for (const receiver of fixture.receivers) assert.equal(result.plan.canBorrowLocalBinding(receiver), true);
+  assert.equal(result.plan.canBorrowLocalBinding({}), false, "foreign identity cannot obtain borrowing evidence");
+});
+
+test("indexed binding stability rejects exhaustion rather than silently materializing a receiver", () => {
+  const fixture = indexedBindingFixture();
+  const result = analyzeRustBorrowStability(fixture.input, 2_048);
+  assert.equal(result.kind, "rejected");
+  assert.equal("plan" in result, false, "an exhausted exposure proof cannot publish a partial plan");
+  assert.equal(result.diagnostics[0].code, "RUST_BORROW_STABILITY_BUDGET_INVALID");
+});
+
+test("indexed binding stability caches negative decisions and preserves exact passing and pointer exposure rules", () => {
+  for (const [name, options, expected] of [
+    ["rebinding", { bindingWritten: true }, false],
+    ["module", { scope: "module" }, false],
+    ["mutable borrow", { passing: "borrow-mut" }, false],
+    ["mutable byref", { passing: "byref" }, false],
+    ["move", { passing: "move" }, false],
+    ["address", { pointer: "address-of" }, false],
+    ["shared borrow", { passing: "borrow-shared" }, true],
+    ["readonly byref", { passing: "byref-readonly" }, true],
+    ["value passing", { passing: "by-value" }, true],
+  ]) {
+    const fixture = indexedBindingFixture({ uses: 2, ...options });
+    const result = analyzeRustBorrowStability(fixture.input, 100);
+    assert.equal(result.kind, "resolved", name);
+    for (const receiver of fixture.receivers) assert.equal(result.plan.canBorrowLocalBinding(receiver), expected, name);
+    assert.equal(fixture.summaries(), options.scope === "module" ? 0 : 1, name + " completed decision is reused");
+  }
+});
+
+test("source-checked indexed updates retain stable member writes but reject captured and direct rebinding", () => {
+  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+const moduleValues: number[] = [1];
+export function stable(values: number[]): void { values[0]++; values[0] += 2; }
+export function readonlyCapture(values: number[]): number { const read = () => values[0]; values[0]++; return read(); }
+export function rebound(values: number[]): void { values[0]++; values = [2]; }
+export function capturedWrite(values: number[]): void { const change = () => { values = [2]; }; values[0]++; change(); }
+export function moduleUpdate(): void { moduleValues[0]++; }
+` } });
+  const ast = program.source.ast;
+  const nodes = allNodes(ast, program.sourceFiles);
+  for (const [name, expected] of [["stable", true], ["readonlyCapture", true], ["rebound", false],
+    ["capturedWrite", false], ["moduleUpdate", false]]) {
+    const declaration = nodes.find(node => ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === name);
+    assert.equal(declaration !== undefined, true, name);
+    const demands = allNodes(ast, [declaration]).filter(node => program.facts.getFact(node, rustCompoundWriteFactKey) !== undefined);
+    assert.equal(demands.length > 0, true, name + " real finalized update demands");
+    for (const demand of demands) {
+      const target = ast.is.IsBinaryExpression(demand) ? BinaryExpression_Left(ast, demand) : ast.as.AsPostfixUnaryExpression(demand)?.Operand;
+      const receiver = Node_Expression(ast, target);
+      assert.equal(program.borrowStability.canBorrowLocalBinding(receiver), expected, name);
+    }
+  }
+});
 
 for (const surfaces of [[], ["js"]]) {
   const profile = surfaces[0] ?? "native";

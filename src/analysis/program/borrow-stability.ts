@@ -1,5 +1,6 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
-import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression } from "@tsonic/target-api/source";
+import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_Operand,
+  sourceBindingHasMutableExposure } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import {
   rustSourceBindingFactKey,
@@ -13,6 +14,7 @@ import { rustBorrowPrimitiveCopyValue, rustBorrowPureCopyValue, rustBorrowValueI
 import { rustCapturedFieldStorageFactKey, validatedRustCapturedFieldStorageFact } from "../facts/receiver-captures.js";
 import { rustNativeStoragePathsDisjoint, rustNativeStorageProjections, rustNativeStorageRoot } from "../facts/native-storage-paths.js";
 import { rustNativeCopyWriteTargets, rustNoNativeCopyWrites } from "./borrow-stability-effects.js";
+import { rustCompoundWriteFactKey } from "../facts/operations/keys.js";
 
 type StoredField = Extract<RustTargetOperationFact, { readonly kind: "source-field" }>;
 
@@ -30,6 +32,7 @@ export interface RustBorrowStabilityPlan {
   isPureCopyValue(node: Node): boolean;
   borrowedWriteFor(node: Node): RustBorrowedFieldWrite | undefined;
   canBorrowAcross(source: Node, later: Node): boolean;
+  canBorrowLocalBinding(reference: Node): boolean;
 }
 
 interface RustBorrowStabilityInput {
@@ -68,6 +71,8 @@ export function analyzeRustBorrowStability(
   const pure = new WeakSet<Node>();
   const writes = new WeakMap<Node, RustBorrowedFieldWrite>();
   const nativeWrites = new WeakMap<Node, readonly Node[]>();
+  const stableBindings = new WeakSet<Node>();
+  const bindingDecisions = new WeakMap<Node, boolean>();
   const directField = (node: Node): boolean => {
     const field = ordinaryStoredField(node, input);
     if (field === undefined || field.storage !== "project-object") return false;
@@ -89,12 +94,33 @@ export function analyzeRustBorrowStability(
     if (reservations > maximumNodes) exhausted = true;
     return !exhausted;
   };
+  const selectStableBinding = (node: Node): void => {
+    const write = input.facts.getFact(node, rustCompoundWriteFactKey);
+    if (write?.abi.targetReceiver.kind !== "input" || write.abi.targetReceiver.input.mode !== "ref" ||
+      write.abi.targetReceiver.input.conversion.kind !== "identity") return;
+    const target = input.ast.is.IsBinaryExpression(node) ? BinaryExpression_Left(input.ast, node) : Node_Operand(input.ast, node);
+    const receiver = target === undefined ? undefined : Node_Expression(input.ast, target);
+    if (receiver === undefined || !input.ast.is.IsIdentifier(receiver)) return;
+    const binding = input.facts.getFact(receiver, rustSourceBindingFactKey);
+    if (binding?.scope !== "lexical") return;
+    let stable = bindingDecisions.get(binding.sourceDeclaration);
+    if (stable === undefined) {
+      if (!reserveTargets(1)) return;
+      const summary = input.navigation.declarationUseSummary(binding.sourceDeclaration);
+      stable = !summary.bindingWritten && !summary.exported &&
+        !sourceBindingHasMutableExposure({ ast: input.ast, sourceFacts: input.facts }, summary, () => reserveTargets(1));
+      if (exhausted) return;
+      bindingDecisions.set(binding.sourceDeclaration, stable);
+    }
+    if (stable) stableBindings.add(receiver);
+  };
   input.sourceFiles.forEach(reserve);
   while (pending.length !== 0 && !exhausted) {
     const entry = pending.pop()!;
     if (entry.complete) {
       active.delete(entry.node);
       visited.add(entry.node);
+      selectStableBinding(entry.node);
       if (rustBorrowPureCopyValue(entry.node, input.ast, input.facts, child => pure.has(child))) pure.add(entry.node);
       const selected = selectBorrowedWrite(entry.node, pure, input);
       if (selected !== undefined) writes.set(entry.node, selected);
@@ -115,6 +141,7 @@ export function analyzeRustBorrowStability(
   return { kind: "resolved", plan: Object.freeze({
     isPureCopyValue: (node: Node) => pure.has(node),
     borrowedWriteFor: (node: Node) => writes.get(node),
+    canBorrowLocalBinding: (reference: Node) => stableBindings.has(reference),
     canBorrowAcross(source: Node, later: Node): boolean {
       if (!directField(source)) return false;
       const field = input.facts.getFact(source, rustTargetOperationFactKey);
