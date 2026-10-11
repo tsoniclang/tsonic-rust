@@ -14,6 +14,7 @@ test("provider conversions borrow disjoint fields and snapshot values before ove
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /pub fn replace\(&mut self\)/u);
   assert.match(output, /let operation_input_0 = self\.text\.clone\(\);/u);
+  assert.doesNotMatch(output, /source\.clone\(\)/u);
   for (const name of ["next", "combined", "observed"]) {
     const start = output.indexOf(`pub fn ${name}(`);
     const nextMethod = output.indexOf("\n    pub fn ", start);
@@ -29,6 +30,19 @@ test("provider conversions borrow disjoint fields and snapshot values before ove
 mod native_provider_cost {
     use super::*;
     ${nativeOwnershipCostSupport}
+
+    #[test]
+    fn existing_parameter_borrows_add_no_snapshot_allocation() {
+        for source in ["ab".repeat(4096), "zz".repeat(4096)] {
+            let (actual, actual_cost) = measure(|| borrowedProvider(&source, false).unwrap());
+            let (expected, expected_cost) = measure(|| {
+                js_string::includes_from_start(&source, &selectedNeedle(false).unwrap())
+                    && js_string::includes_from_start(&source, "a")
+            });
+            assert_eq!(actual, expected);
+            assert_eq!(actual_cost, expected_cost);
+        }
+    }
 
     #[test]
     fn disjoint_and_overlapping_reads_match_handwritten_allocation_cost() {

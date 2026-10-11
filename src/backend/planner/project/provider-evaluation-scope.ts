@@ -442,6 +442,13 @@ function providerInputUsesExistingBorrow(
     return true;
   }
   const sourceParameter = context.input.program.facts.getFact(node, rustSourceParameterAbiFactKey);
+  if (sourceParameter?.mode === "ref" && rustProviderInputBorrowMode(input) === "ref" &&
+    sourceParameter.entryConversion === undefined && sourceParameter.parameterCarrier.kind === "reference" &&
+    !sourceParameter.parameterCarrier.mutable &&
+    rustTargetTypeRefEquals(sourceParameter.valueCarrier, input.sourceCarrier) &&
+    rustTargetTypeRefEquals(sourceParameter.parameterCarrier.referent, input.sourceCarrier)) {
+    return true;
+  }
   return sourceParameter?.mode === input.mode &&
     rustTargetTypeRefEquals(sourceParameter.parameterCarrier, input.parameterCarrier);
 }
