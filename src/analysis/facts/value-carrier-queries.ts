@@ -147,7 +147,8 @@ export function rustValueCarrierTransitionTarget(
 ): TargetTypeRef | undefined {
   const raw = facts.getRuntimeCarrierFact(subject)?.carrier;
   const flow = facts.getFact(subject, rustFlowReadProjectionFactKey);
-  if (!rustTargetTypeRefEquals(source, raw) && !rustTargetTypeRefEquals(source, flow?.sourceCarrier)) return undefined;
+  if (!rustTargetTypeRefEquals(source, raw) && !rustTargetTypeRefEquals(source, flow?.sourceCarrier) &&
+    !rustTargetTypeRefEquals(source, flow?.selectedCarrier)) return undefined;
   const effective = rustEffectiveValueCarrier(facts, subject);
   return source === undefined || effective === undefined ||
       rustTargetTypeRefEquals(source, effective)

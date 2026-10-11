@@ -6,6 +6,7 @@ import {
   rustSourceBindingFactKey, rustTargetOperationFactKey, type RustTargetOperationFact,
 } from "../facts/keys.js";
 import { isRustCopyCarrier, isRustStringCarrier, rustOptionTargetType } from "../../target-model/types/index.js";
+import { isRustStringViewCarrier } from "../../target-model/types/carriers/native.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { isRustBinaryOperator } from "../../target-model/syntax/tokens.js";
 import type { RustTargetProgram } from "./model.js";
@@ -97,7 +98,7 @@ export function rustBorrowedElementRead(
   ast: AstReader,
   facts: RustTargetProgram["facts"],
 ): RustBorrowedElementRead | undefined {
-  if (!isRustStringCarrier(rustEffectiveValueCarrier(facts, receiver))) return undefined;
+  if (!isRustStringViewCarrier(rustEffectiveValueCarrier(facts, receiver))) return undefined;
   const element = ast.is.IsNonNullExpression(receiver) ? Node_Expression(ast, receiver) : receiver;
   const indexed = element === undefined ? undefined : facts.getFact(element, rustTargetOperationFactKey);
   const array = element === undefined ? undefined : Node_Expression(ast, element);

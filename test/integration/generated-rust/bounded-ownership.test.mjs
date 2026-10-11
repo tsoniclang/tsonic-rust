@@ -109,7 +109,7 @@ export function main(): void {
   assert.match(sum, /core::mem::drop\(line\)/u);
   const release = functionSection(output, "release", "mutate");
   assert.match(release, /core::mem::drop\(field\)/u);
-  assert.match(release, /number_parse_int_radix\(&field,/u);
+  assert.match(release, /number_parse_int_radix\(core::convert::AsRef::<str>::as_ref\(&\*field\),/u);
   assert.doesNotMatch(release, /number_parse_int_radix\(&\*field,/u);
   assert.doesNotMatch(release, /field\.clone\(\)|field\.as_str\(\)/u);
   const effect = functionSection(output, "effect", "advance");
@@ -180,6 +180,7 @@ test("generated terminal captures and readonly array reads match native allocati
   const { result } = compile(`
 export function retainLength(value: string): () => number { return () => value.length; }
 export function fieldValue(values: string[]): number { const field = values[0]; return parseInt(field, 10); }
+export function directFieldValue(values: string[]): number { return parseInt(values[0], 10); }
 export function pairLengths(values: readonly string[]): number {
   const first = values[0];
   const second = values[1];
@@ -268,6 +269,19 @@ fn allocation_parity() {
     let values = JsArray::from_dense(vec![String::from("123456")]);
     let reads = measure(|| { for _iteration in 0..10000 { let _value = std::hint::black_box(index::fieldValue(values.clone())); } });
     assert_eq!(reads, (0, 0));
+    let direct_reads = measure(|| {
+        for _iteration in 0..10000 {
+            assert_eq!(std::hint::black_box(index::directFieldValue(values.clone())), 123456.0);
+        }
+    });
+    let native_reads = measure(|| {
+        for _iteration in 0..10000 {
+            let field = values.borrow_number_element(0.0).unwrap();
+            assert_eq!(std::hint::black_box(tsonic_rust_js::abi::number_parse_int_radix(&field, 10.0)), 123456.0);
+        }
+    });
+    assert_eq!(direct_reads, native_reads);
+    assert_eq!(direct_reads, (0, 0));
     let pair = JsArray::from_dense(vec!["x".repeat(65536), "y".repeat(65536)]);
     let paired_reads = measure(|| {
         for _iteration in 0..10000 {
