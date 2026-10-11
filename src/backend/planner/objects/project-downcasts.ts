@@ -84,8 +84,10 @@ export function planRustProjectProjection(
     return undefined;
   }
   if (ownership === "owned") {
+    const value: RustExpr = optionalElement === undefined ? expression
+      : { kind: "method-call", receiver: expression, method: "unwrap", args: [] };
     return { kind: "method-call", receiver: { kind: "associated-call", owner: targetType,
-      method: "try_from", args: [expression] }, method: "unwrap", args: [] };
+      method: "try_from", args: [value] }, method: "unwrap", args: [] };
   }
   const valueName = allocateRustSyntheticName(
     context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []),
