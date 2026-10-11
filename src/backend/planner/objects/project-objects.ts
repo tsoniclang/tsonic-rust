@@ -28,6 +28,7 @@ export function enterRustProjectObjectMutableState(
       name: rustProjectObjectStateField,
     },
     method: "with_mut",
+    receiverMode: "ref",
     args: [{
       kind: "closure",
       params: [{ name: stateName, byRefCopy: false }],
@@ -160,6 +161,7 @@ export function withRustProjectStoredField(
       name: rustProjectObjectStateField,
     },
     method: "with",
+    receiverMode: "ref",
     args: [{
       kind: "closure",
       params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
@@ -179,6 +181,7 @@ export function readRustStructuralObjectField(
     kind: "method-call",
     receiver,
     method: "with",
+    receiverMode: "ref",
     args: [{
       kind: "closure",
       params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
@@ -224,6 +227,7 @@ export function writeRustProjectObjectField(
       name: rustProjectObjectStateField,
     },
     method: "with_mut",
+    receiverMode: "ref",
     args: [{
       kind: "closure",
       params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
@@ -264,6 +268,7 @@ export function readRustProjectPrivateField(
       name: rustProjectObjectStateField,
     },
     method: "with",
+    receiverMode: "ref",
     args: [{
       kind: "closure",
       params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
@@ -300,6 +305,7 @@ export function writeRustProjectPrivateField(
       name: rustProjectObjectStateField,
     },
     method: "with_mut",
+    receiverMode: "ref",
     args: [{
       kind: "closure",
       params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
@@ -329,6 +335,7 @@ export function readRustProjectMethodOverride(
       name: rustProjectObjectStateField,
     },
     method: "with",
+    receiverMode: "ref",
     args: [{
       kind: "closure",
       params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
@@ -367,6 +374,7 @@ export function writeRustProjectMethodOverride(
       name: rustProjectObjectStateField,
     },
     method: "with_mut",
+    receiverMode: "ref",
     args: [{
       kind: "closure",
       params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
@@ -407,6 +415,7 @@ export function readRustProjectObjectIndex(
       name: rustProjectObjectStateField,
     },
     method: "with",
+    receiverMode: "ref",
     args: [{
       kind: "closure",
       params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
@@ -439,6 +448,7 @@ export function copyRustProjectObjectIndexStorage(
       name: rustProjectObjectStateField,
     },
     method: "with",
+    receiverMode: "ref",
     args: [{
       kind: "closure",
       params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
@@ -474,6 +484,7 @@ export function writeRustProjectObjectIndex(
       name: rustProjectObjectStateField,
     },
     method: "with_mut",
+    receiverMode: "ref",
     args: [{
       kind: "closure-block",
       params: [{ name: rustProjectObjectStateBinding, mutable: false }],
@@ -536,6 +547,7 @@ export function mutateRustProjectObjectIndex(
       name: rustProjectObjectStateField,
     },
     method: "with_mut",
+    receiverMode: "ref",
     args: [{
       kind: "closure",
       params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
@@ -554,6 +566,7 @@ export function writeRustStructuralObjectField(
     kind: "method-call",
     receiver,
     method: "with_mut",
+    receiverMode: "ref",
     args: [{
       kind: "closure",
       params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
@@ -590,6 +603,7 @@ export function mutateRustProjectObjectField(
       name: rustProjectObjectStateField,
     },
     method: "with_mut",
+    receiverMode: "ref",
     args: [{
       kind: "closure",
       params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
@@ -610,6 +624,7 @@ export function mutateRustStructuralObjectField(
         kind: "method-call",
         receiver,
         method: "with_mut",
+        receiverMode: "ref",
         args: [{
           kind: "closure",
           params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],

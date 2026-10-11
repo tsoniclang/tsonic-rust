@@ -24,12 +24,12 @@ import { collectVariableDeclarations, planResourceManagedBody, resourceFactForPl
 import { rustBlockDefinitelyExits } from "../../target-ast/normalization/block-flow.js";
 import { diagnosticInput, isValidRustIdentifier } from "../program/plan-context.js";
 import {
-  expressionCarrier,
   negateRustPlannedBooleanExpression,
   planExpression,
   planExpressionBeforeValueProjections,
   planNumericLiteralWithCarrier,
 } from "../expressions/index.js";
+import { effectivePlannedExpressionCarrier } from "../expressions/fundamentals.js";
 import { isRustBoolCarrier } from "../../../target-model/types/index.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { planBlockLike } from "./core.js";
@@ -52,7 +52,7 @@ import type { RustControlTarget, RustLoopTarget, RustPlanContext } from "../prog
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 function planCondition(condition: Node, context: RustPlanContext, construct: string) {
-  const carrier: TargetTypeRef | undefined = expressionCarrier(condition, context);
+  const carrier: TargetTypeRef | undefined = effectivePlannedExpressionCarrier(condition, context);
   if (!isRustBoolCarrier(carrier)) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, condition),

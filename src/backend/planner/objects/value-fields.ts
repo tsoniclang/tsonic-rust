@@ -166,7 +166,17 @@ export function planRustValueFieldLocation(
   const visited = new Set<Node>();
   while (!visited.has(current)) {
     visited.add(current);
-    if (context.expressionOverrides?.has(current)) break;
+    const overridden = context.expressionOverrides?.get(current);
+    if (overridden !== undefined) {
+      if (current === node) {
+        if (overridden.valueForm !== "storage" || selectedField?.kind !== "source-field" ||
+          selectedField.valueSemantics.kind !== "stored" ||
+          !sourceFieldSelectedOperationMatches(node, selectedField, context)) return reject();
+        leafCarrier = selectedField.resultCarrier;
+        expectedReceiver = selectedField.resultCarrier;
+      }
+      break;
+    }
     if (ast.is.IsParenthesizedExpression(current) || ast.is.IsAsExpression(current) ||
       ast.is.IsSatisfiesExpression(current) || ast.is.IsNonNullExpression(current) || ast.is.IsTypeAssertion(current)) {
       const inner = Node_Expression(ast, current);
@@ -197,7 +207,7 @@ export function planRustValueFieldLocation(
     if (receiver === undefined) return reject();
     current = receiver;
   }
-  if (leafCarrier === undefined || names.length === 0) return reject();
+  if (leafCarrier === undefined) return reject();
   const resultCarrier = leafCarrier;
   const project = (value: RustExpr): RustExpr => names.reduce<RustExpr>((receiver, name) =>
     ({ kind: "field", receiver, name }), value);
@@ -261,6 +271,7 @@ export function planRustValueFieldLocation(
   return {
     bindings: [],
     read: read(direct),
+    withRead: apply => apply(project(direct)),
     write: value => ({ kind: "assignment", operator: "=", target: project(direct), value }),
   };
 }

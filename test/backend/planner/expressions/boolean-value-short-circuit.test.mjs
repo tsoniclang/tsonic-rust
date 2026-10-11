@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { booleanValueShortCircuitSource } from "../../../../../tsonic/test/fixtures/boolean-value-short-circuit.mjs";
 import { analyzeRust, artifactText, compileRust } from "../../../helpers/rust-session.mjs";
-import { rustTargetOperationFactKey } from "../../../../dist/analysis/facts/keys.js";
+import { rustTargetOperationFactKey, rustFlowReadProjectionFactKey } from "../../../../dist/analysis/facts/keys.js";
+import { BinaryExpression_Left } from "@tsonic/target-api/source";
 import { planBinaryExpression } from "../../../../dist/backend/planner/expressions/binary.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
@@ -33,6 +34,10 @@ import type { int32 } from "@tsonic/core/types.js";
 export function conditional(enabled: boolean, value: int32): boolean | int32 { return enabled && value; }
 export function skipped(value: int32): boolean { return false && value; }
 export function selected(value: int32): int32 { return true && value; }
+export function projected(value: boolean | undefined, other: int32): boolean | int32 {
+  if (value !== undefined) return value && other;
+  return false;
+}
 ` } });
   const { ast } = program.source;
   const operations = [];
@@ -42,11 +47,13 @@ export function selected(value: int32): int32 { return true && value; }
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   program.sourceFiles.forEach(visit);
-  assert.equal(operations.length, 3);
+  assert.equal(operations.length, 4);
   for (const { node, fact } of operations) {
-    const context = selected => ({ input: { program: { ...program,
+    const left = BinaryExpression_Left(ast, node);
+    const context = (selected, omitProjection = false) => ({ input: { program: { ...program,
       facts: { ...program.facts, getFact: (subject, key) => subject === node && key === rustTargetOperationFactKey
-        ? selected : program.facts.getFact(subject, key) } } }, diagnostics: [],
+        ? selected : omitProjection && subject === left && key === rustFlowReadProjectionFactKey
+          ? undefined : program.facts.getFact(subject, key) } } }, diagnostics: [],
       sourceFile: ast.getSourceFile(node), usedAliases: new Set(),
       syntheticNames: createRustSyntheticNameState(ast, node, []), moduleName: "index", structuralShapesModuleName: "shapes",
       moduleNameByFileName: new Map([["/src/index.ts", "index"]]), externalCrateNameByFileName: new Map(),
@@ -55,6 +62,11 @@ export function selected(value: int32): int32 { return true && value; }
     const accepted = context(fact);
     assert.equal(planBinaryExpression(node, accepted) !== undefined, true, "the unchanged sealed selection plans");
     assert.equal(accepted.diagnostics.length, 0);
+    if (program.facts.getFact(left, rustFlowReadProjectionFactKey) !== undefined) {
+      const missing = context(fact, true);
+      assert.equal(planBinaryExpression(node, missing) === undefined, true, "a physical Option cannot substitute for its selected bool");
+      assert.equal(missing.diagnostics.some(diagnostic => diagnostic.code === "RUST_MISSING_TARGET_FACT"), true);
+    }
     for (const mutation of [
       { branch: fact.branch === "conditional" ? "left" : "conditional", rightConversion: null },
       { branch: "right", leftConversion: null },

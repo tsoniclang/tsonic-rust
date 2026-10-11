@@ -126,8 +126,8 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
       (fact.operator !== "and" && fact.operator !== "or") || !isRustBoolCarrier(fact.leftCarrier) ||
       !validConversion(fact.leftConversion, fact.leftCarrier, fact.branch !== "right") ||
       !validConversion(fact.rightConversion, fact.rightCarrier, fact.branch !== "left") ||
-      !rustTargetTypeRefEquals(expressionCarrier(left, context), fact.leftCarrier) ||
-      !rustTargetTypeRefEquals(expressionCarrier(right, context), fact.rightCarrier) ||
+      !rustTargetTypeRefEquals(effectivePlannedExpressionCarrier(left, context), fact.leftCarrier) ||
+      !rustTargetTypeRefEquals(effectivePlannedExpressionCarrier(right, context), fact.rightCarrier) ||
       !selectedOperationMatches(context.input.program.facts.getSelectedTargetOperator(node), fact.operationId,
         "operator", fact.resultCarrier, fact.operationId)) {
       context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
