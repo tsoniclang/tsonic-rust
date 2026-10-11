@@ -661,6 +661,50 @@ test("external callable captures are retained without asserting they share the c
   assert.equal(queries.issues.some(issue => issue.node === parameter), true, "external origin uncertainty remains explicit");
 });
 
+test("ordinary captured data retains its capture without demanding callable provenance", () => {
+  const current = fixture(`
+    export function read(values: Map<string, number>): () => number {
+      return () => values.get("value") ?? 0;
+    }
+  `);
+  const parameter = current.named("values", "KindParameter")[0];
+  const queries = current.analyze({ storage: { ...current.storage, originsFor: subject => {
+    assert.equal(subject.node !== parameter, true, "ordinary native data is not a callable ownership slot");
+    return current.storage.originsFor(subject);
+  } } });
+  assert.equal(queries.failureReason() === undefined && queries.issues.length === 0, true);
+  assert.equal(queries.components.length, 0);
+  assert.equal(queries.isIndependentCallable(current.arrows[0]), false, "the data capture is not erased");
+});
+
+for (const type of ["unknown", "object", "{}", "(() => number) | undefined", "(() => number) | (() => string)"]) {
+  test(`potential callable captures retain origin validation for ${type}`, () => {
+    const current = fixture(`export function read(value: ${type}) { return () => value; }`);
+    const parameter = current.named("value", "KindParameter")[0];
+    let reads = 0;
+    const queries = current.analyze({ storage: { ...current.storage, originsFor: subject => {
+      if (subject.node !== parameter) return current.storage.originsFor(subject);
+      reads += 1;
+      return { kind: "unresolved", reason: "required callable provenance" };
+    } } });
+    assert.equal(reads, 1);
+    assert.equal(queries.issues.some(issue => issue.node === parameter && issue.reason === "required callable provenance"), true);
+  });
+}
+
+test("generic captured storage retains its exact unresolved callable possibilities", () => {
+  const current = fixture(`export function read<Value>(value: Value) { return () => value; }`);
+  const parameter = current.named("value", "KindParameter")[0];
+  let reads = 0;
+  const queries = current.analyze({ storage: { ...current.storage, originsFor: subject => {
+    if (subject.node !== parameter) return current.storage.originsFor(subject);
+    reads += 1;
+    return { kind: "unresolved", reason: "generic callable provenance" };
+  } } });
+  assert.equal(reads, 1);
+  assert.equal(queries.issues.some(issue => issue.node === parameter && issue.reason === "generic callable provenance"), true);
+});
+
 test("an origin outside the exact checked graph is never followed or inferred by shape", () => {
   const current = fixture(lexicalSource);
   const slot = current.named("selected", "KindVariableDeclaration")[0];

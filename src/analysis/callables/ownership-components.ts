@@ -1,4 +1,4 @@
-import type { Node } from "@tsonic/tsts";
+import type { Node, Type } from "@tsonic/tsts";
 import { targetStronglyConnectedComponents, type SourceStorageQueries } from "@tsonic/target-api/analysis";
 import {
   Node_Expression, Node_Initializer, sourceBindingScope, sourceEnclosingCallable, sourceLexicalEnvironment, sourceParameterIsProperty,
@@ -205,6 +205,28 @@ export function createRustCallableOwnershipComponentQueries(input: {
   const accessInfo = (node: Node) => ast.is.IsPropertyAccessExpression(node)
     ? semantics.forNode(node).operations.propertyAccess(node)
     : ast.is.IsElementAccessExpression(node) ? semantics.forNode(node).operations.elementAccess(node) : undefined;
+  const callableStorageType = (type: Type, types: ReturnType<typeof semantics.forNode>["types"]): boolean => {
+    const pending = [type];
+    const visited = new Set<Type>();
+    while (pending.length !== 0 && account()) {
+      const current = pending.pop()!;
+      if (visited.has(current)) continue;
+      visited.add(current);
+      if (types.isUnion(current)) {
+        const members = types.unionOrIntersectionTypes(current);
+        if (!account(members.length)) return false;
+        pending.push(...members);
+        continue;
+      }
+      if (types.isNullish(current) || types.isVoidLike(current) || types.isNever(current)) continue;
+      if (types.callSignatures(current).length !== 0 || types.isAny(current) || types.isUnknown(current) ||
+        types.isNonPrimitive(current) || types.couldContainTypeVariables(current)) return true;
+      if (types.constructSignatures(current).length === 0 && types.propertyInfos(current).length === 0 &&
+        types.indexInfos(current).length === 0 && !types.isStringLike(current) && !types.isNumberLike(current) &&
+        !types.isBooleanLike(current) && !types.isBigIntLike(current) && !types.isSymbolLike(current)) return true;
+    }
+    return false;
+  };
   const pending: Vertex[] = [];
   for (const node of sourceNodes) {
     if (!account()) return result();
@@ -236,7 +258,11 @@ export function createRustCallableOwnershipComponentQueries(input: {
     const declaration = selected.declaration;
     if (selected.kind === "slot") {
       const subject = storage.storageSubjectFor(declaration);
-      const origins = subject.kind === "resolved" ? storage.originsFor(subject.subject) : subject;
+      if (subject.kind === "unresolved") { issue(declaration, subject.reason); continue; }
+      const type = storage.typeFor(subject.subject);
+      if (type.kind === "unresolved") { issue(declaration, type.reason); continue; }
+      if (!callableStorageType(type.type, semantics.forFile(type.sourceFile).types)) continue;
+      const origins = storage.originsFor(subject.subject);
       if (origins.kind === "unresolved") { issue(declaration, origins.reason); continue; }
       for (const origin of origins.origins) {
         if (!account()) break;
