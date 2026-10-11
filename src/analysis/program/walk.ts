@@ -86,18 +86,20 @@ export interface RustFactWalk {
 
 export const boolCarrier = rustSourcePrimitiveTargetType("bool");
 
+function rustScopedContext(walk: RustFactWalk, node: Node) {
+  const semantics = walk.context.semanticsFor(node);
+  return { ...walk.context, currentSourceFile: semantics.sourceFile, currentSemantics: semantics };
+}
+
 export function rustResolutionContext(
   walk: RustFactWalk,
   node: Node,
   kind?: import("@tsonic/target-api/analysis").SourceStorageSubject["kind"],
 ): RustTargetTypeResolutionContext {
-  const semantics = walk.context.semanticsFor(node);
   const selection = kind === undefined ? walk.context.sourceStorage.storageSubjectFor(node)
     : walk.context.sourceStorage.subject(node, kind);
   return rustSourceStorageContext({
-    ...walk.context,
-    currentSourceFile: semantics.sourceFile,
-    currentSemantics: semantics,
+    ...rustScopedContext(walk, node),
     sourceStorageSubject: selection.kind === "resolved" ? selection.subject : undefined,
   });
 }
@@ -130,8 +132,7 @@ export function rustOperationContext(
   node: Node,
 ): RustOperationPolicyContext {
   return {
-    ...rustResolutionContext(walk, node),
-    facts: walk.context.facts,
+    ...rustScopedContext(walk, node),
     extensionId: rustTargetSemanticsExtensionId,
   };
 }

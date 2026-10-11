@@ -14,11 +14,13 @@ import { rustOptionElementCarrier, rustSourceOptionalElementCarrier } from "../.
 export function selectedValueCarrier(
   expression: ExtensionFactSubject,
   selectedType: ExtensionFactSubject,
-  context: RustOperationPolicyContext,
+  operationContext: RustOperationPolicyContext,
   options: RustTargetTypeResolutionOptions & { readonly projectTypes: RustProjectTypePolicy },
 ): TargetTypeRef | undefined {
+  const reference = rustPolicyNode(operationContext, expression);
+  const storage = reference === undefined ? undefined : operationContext.sourceStorage.subjectFor(reference);
+  const context = { ...operationContext, sourceStorageSubject: storage?.kind === "resolved" ? storage.subject : undefined };
   const stored = resolveRustTargetTypeRef(expression, context, options);
-  const reference = rustPolicyNode(context, expression);
   const absenceUse = reference === undefined ? undefined : rustSourceAbsenceUse(reference, context);
   if (stored !== undefined && reference !== undefined &&
     rustOptionElementCarrier(stored) !== undefined && absenceUse === "comparison") return stored;

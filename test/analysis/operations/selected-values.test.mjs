@@ -34,7 +34,7 @@ function selected(carrier, sourceType, use) {
         ? { Left: expression, Right: other, OperatorToken: operator } : undefined } },
     source: { sourceFacts: { getFact: () => undefined }, semantics: { includes: () => true },
       navigation: { referenceFor: () => undefined } },
-    sourceStorage: { storageSubjectFor: () => ({ kind: "unresolved" }) },
+    sourceStorage: { subjectFor: () => ({ kind: "unresolved" }), storageSubjectFor: () => ({ kind: "unresolved" }) },
     currentSourceFile: file,
     currentSemantics: semantics,
     semanticsFor: () => semantics,
