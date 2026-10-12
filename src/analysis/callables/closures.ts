@@ -60,6 +60,7 @@ import { rustCallableInvocationResult } from "../facts/callable-results.js";
 import { resolveRustCallableStorageCarrier } from "../../policy/types/resolution/source-evidence.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { selectRustCallableConversion } from "../../target-model/conversions/callable.js";
+import { rustRetainedValueLifetime } from "./retained-environments.js";
 
 export function resolveFunctionExpressionSignature(
   walk: RustFactWalk,
@@ -344,8 +345,14 @@ export function resolveFunctionExpressionCarrier(
   if (captures === undefined) {
     return undefined;
   }
-  const constructionCarrier = rustCallableInputProtocol(selectedExpected) === undefined
+  let constructionCarrier = rustCallableInputProtocol(selectedExpected) === undefined
     ? selectedExpected : rustCallableTargetType(selectedParameters, selectedResult);
+  if (rustCallableProtocol(constructionCarrier)?.lifetime !== undefined) {
+    const lifetime = rustRetainedValueLifetime(expression,
+      [...captures.captures, ...captures.receiverFields, ...captures.receivers].map(capture => capture.carrier), walk);
+    if (lifetime === undefined) return undefined;
+    constructionCarrier = rustCallableTargetType(selectedParameters, selectedResult, lifetime);
+  }
   const logicalCarrier = rebindRustCallableCarrier(constructionCarrier, finalizedParameterCarriers, valueResult,
     selectedGeneric === undefined ? {} : { typeParameters: genericParameters ?? [],
       environment: [...selectedGeneric.environment, ...captures.captures.map(capture => capture.carrier),

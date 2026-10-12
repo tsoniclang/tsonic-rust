@@ -37,6 +37,7 @@ import { rustGenericCallableTargetType, rustNativeFutureCallableResult } from ".
 import { rustTypeParameterFromSourceContract } from "../../../target-model/names/type-parameters.js";
 import { rustCallableOrigin } from "../callable-origins.js";
 import { closeRustSuspendedStorage } from "../suspended-storage.js";
+import { closeRustRetainedResult } from "../retained-result.js";
 import { rustSourceSelectionUsesExactBindings } from "./bound-source-selection.js";
 import { bindRustCallableEnvironment, resolveRustCallableEnvironment } from "./callable-environments.js";
 import { retainRustCallableStructuralStorage } from "./structural-instantiations.js";
@@ -154,8 +155,9 @@ function resolveRustCallableSignatureCarrier(
     options,
     resolving,
   );
-  const result = sourceResult === undefined ? undefined
-    : closeRustSuspendedStorage(sourceResult, parameters, genericContract, "callable-result");
+  const result = sourceResult === undefined ? undefined : declaration === undefined
+    ? closeRustSuspendedStorage(sourceResult, parameters, genericContract, "callable-result")
+    : closeRustRetainedResult(declaration, sourceResult, parameters, context)?.carrier;
   if (result === undefined) return undefined;
   if (genericContract !== undefined && genericContract.parameters.length > 0 &&
     genericContract.parameters.every(parameter => parameter.kind === "type")) {

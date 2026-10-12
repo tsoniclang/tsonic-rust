@@ -52,6 +52,8 @@ import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js
 import type { RustProjectTypePolicy } from "../../../../target-model/types/project-types.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../../target-model/types/source-union-definitions.js";
 import { rustSourceCallResultProjectionMatches } from "../../../../analysis/facts/source-call-results.js";
+import { rustRetainedCallSubstitutions } from "../../../../analysis/facts/retained-environments.js";
+import type { RustLifetimeRef } from "../../../../target-model/lifetimes/index.js";
 
 export function shapeRustSourceCallParameters(
   argumentNodes: readonly Node[],
@@ -242,6 +244,7 @@ export function planRustSelectedSourceCallArguments(
       context.input.program.projectTypes,
       rustSourceCallArgumentCarriers(call, context.input.program.source.ast, context.input.program.facts),
       context.input.program.typeDefinitions,
+      rustRetainedCallSubstitutions(context.input.program.facts, call),
     )) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, call),
@@ -457,6 +460,7 @@ export function sourceCallSelectedMemberMatches(
   projectTypes: RustProjectTypePolicy | undefined,
   argumentCarriers: readonly (TargetTypeRef | undefined)[] = [],
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
+  retainedLifetimes: ReadonlyMap<string, RustLifetimeRef> = new Map(),
 ): boolean {
   const member = selected.member;
   const sourceArguments = selected.sourceSelectedMethodTypeArguments ?? [];
@@ -486,9 +490,9 @@ export function sourceCallSelectedMemberMatches(
   if (substitutions === undefined || !isDenseDataArray(member.parameters)) return false;
   const parameterCarriers = member.parameters.map(parameter => substituteRustTargetGenerics(parameter.type,
     substitutions.types, substitutions.lifetimes, substitutions.consts, normalize));
-  const instantiateResult = (carrier: TargetTypeRef): TargetTypeRef => rustSourceCallResultWithInputLifetimes(
+  const instantiateResult = (carrier: TargetTypeRef): TargetTypeRef => substituteRustTargetGenerics(rustSourceCallResultWithInputLifetimes(
     substituteRustTargetGenerics(carrier, substitutions.types, substitutions.lifetimes, substitutions.consts, normalize),
-    parameterCarriers, selected.sourceArgumentBindings, argumentCarriers, fact.parameters);
+    parameterCarriers, selected.sourceArgumentBindings, argumentCarriers, fact.parameters), new Map(), retainedLifetimes);
   const expectedKind = fact.target.form === "constructor" ? "constructor" : "method";
   const expectedTargetName = fact.target.form === "constructor"
     ? fact.target.name

@@ -20,6 +20,7 @@ import { rustCallableProtocol, rustNativeCallableProtocol } from "../../target-m
 import { rustGenericCallableProtocol } from "../../target-model/types/carriers/generic-callables.js";
 import { inferRustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { rustLifetimeKey, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
+import { rustRetainedCallSubstitutions } from "../facts/retained-environments.js";
 import type { RustTargetConstArgument } from "../../target-model/types/model.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 
@@ -66,7 +67,8 @@ export function createRustSourceErrorEffectSelection(walk: RustFactWalk): RustSo
     const caller = sourceEnclosingCallable(node, walk.context.ast);
     const available = new Set(caller === undefined ? [] : [...native.inputsFor(caller), ...native.capturesFor(caller)]);
     const types = new Map(generics.types);
-    const lifetimes = new Map<string, RustLifetimeRef>(generics.lifetimes);
+    const lifetimes = new Map<string, RustLifetimeRef>([...generics.lifetimes,
+      ...rustRetainedCallSubstitutions(walk.context.facts, node)]);
     const consts = new Map<string, RustTargetConstArgument>(generics.consts);
     const bindSignature = (pattern: TargetTypeRef, actual: TargetTypeRef): boolean => {
       const formalCarrier = rustOptionElementCarrier(pattern) ?? pattern;

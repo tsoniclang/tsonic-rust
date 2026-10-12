@@ -21,6 +21,8 @@ import { rustOptionalStorageParameters } from "../../types/type-projections.js";
 import { allocateRustGeneratedName } from "../../../../target-model/names/generated.js";
 import { rustCallableInputLifetimeParameters } from "../../../../analysis/facts/source-input-lifetimes.js";
 import { planRustNativeCallableGenerics } from "./native-generics.js";
+import { planRustRetainedGenerics } from "./retained-generics.js";
+import { rustRetainedEnvironmentFactKey } from "../../../../analysis/facts/retained-environments.js";
 
 export interface RustCallableGenericPlan {
   readonly context: RustPlanContext;
@@ -70,7 +72,8 @@ export function planRustCallableGenerics(
   capturedParameters: readonly RustSourceGenericParameterContract[] = [],
 ): RustCallableGenericPlan | undefined {
   const source = planRustSourceCallableGenerics(declaration, context, specialization, capturedParameters);
-  return source === undefined ? undefined : planRustNativeCallableGenerics(declaration, source);
+  const native = source === undefined ? undefined : planRustNativeCallableGenerics(declaration, source);
+  return native === undefined ? undefined : planRustRetainedGenerics(declaration, native);
 }
 
 function planRustSourceCallableGenerics(
@@ -81,6 +84,11 @@ function planRustSourceCallableGenerics(
 ): RustCallableGenericPlan | undefined {
   capturedParameters = [...capturedParameters, ...rustCallableInputLifetimeParameters(
     declaration, context.input.program.source.ast, context.input.program.facts)];
+  const environment = context.input.program.facts.getFact(declaration, rustRetainedEnvironmentFactKey);
+  if (environment !== undefined) capturedParameters = [...capturedParameters, {
+    kind: "lifetime", declaration, sourceName: environment.lifetime.name,
+    lifetime: environment.lifetime, outlives: [],
+  }];
   const sourceParameters = context.input.program.source.ast.typeParameters(declaration);
   if (sourceParameters.some((parameter) => parameter === undefined)) {
     context.diagnostics.push(missingFactDiagnostic(

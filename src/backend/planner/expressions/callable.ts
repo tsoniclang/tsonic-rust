@@ -364,19 +364,19 @@ export function planRustCallableExpressionBody(
     },
   };
   const environment = planRustCapturedEnvironment(node, captureFact.captures, closureContext, {
-    staticStorage: nativeClosureProtocol === undefined && !borrowedInput,
+    staticStorage: callableProtocol?.lifetime?.kind === "static",
     mutableValueCapture: closureFact.resultCarrier.kind === "closure" &&
       (closureFact.resultCarrier.callTrait === "FnMut" || closureFact.resultCarrier.callTrait === "FnOnce"),
     ...(ownedStateName === undefined ? {} : { sharedStateName: ownedStateName }),
   });
   if (environment === undefined) return undefined;
   const receiverEnvironment = planRustCapturedReceiverFields(node, captureFact.receiverFields, context, closureContext, {
-    staticStorage: nativeClosureProtocol === undefined && !borrowedInput, offset: captureFact.captures.length,
+    staticStorage: callableProtocol?.lifetime?.kind === "static", offset: captureFact.captures.length,
     ...(ownedStateName === undefined ? {} : { sharedStateName: ownedStateName }),
   });
   if (receiverEnvironment === undefined) return undefined;
   const wholeEnvironment = planRustCapturedReceivers(node, captureFact.receivers, context, receiverEnvironment.context, {
-    staticStorage: nativeClosureProtocol === undefined && !borrowedInput, offset: captureFact.captures.length + captureFact.receiverFields.length,
+    staticStorage: callableProtocol?.lifetime?.kind === "static", offset: captureFact.captures.length + captureFact.receiverFields.length,
     ...(ownedStateName === undefined ? {} : { sharedStateName: ownedStateName }),
   });
   if (wholeEnvironment === undefined) return undefined;

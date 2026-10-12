@@ -11,6 +11,8 @@ import type { RustSuspendedOwnedReceiver } from "../facts/callables-and-resource
 import { rustCapturedFieldStorageFactKey } from "../facts/receiver-captures.js";
 import { rustCallableInputLifetimeParameters } from "../facts/source-input-lifetimes.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
+import { rustRetainedEnvironment, rustSuspendedCapturedParameters } from "../../policy/ownership/retained-environments.js";
+import { rustRetainedEnvironmentFactKey } from "../facts/retained-environments.js";
 
 export type RustSuspendedCallableStorageResolution =
   | {
@@ -37,8 +39,7 @@ export function resolveRustSuspendedCallableStorage(
     return { kind: "rejected", reason: "A suspended callable contains an undefined parameter slot." };
   }
   const exactParameters = parameters as readonly Node[];
-  const parameterSet = new Set(exactParameters);
-  const capturedParameterSet = new Set<Node>();
+  const capturedParameters = rustSuspendedCapturedParameters(declaration, walk.context);
   const receiverOccurrences: Node[] = [];
   const receiverCaptures = walk.context.objectRepresentations.receiverCaptures;
   const capturedFields = receiverCaptures.capturesFor(declaration);
@@ -47,22 +48,12 @@ export function resolveRustSuspendedCallableStorage(
       ast.is.IsClassDeclaration(node) || ast.is.IsClassExpression(node)) return;
     if (ast.kindName(node) === "KindThisKeyword" || ast.kindName(node) === "KindThisExpression") {
       if (capturedFields.length === 0 || !receiverCaptures.capturesReceiver(node)) receiverOccurrences.push(node);
-    } else if (ast.kindName(node) === "KindIdentifier") {
-      const selectedDeclaration = walk.context.source.navigation.sourceReferenceFor(node)?.declaration;
-      const ownerParameter = selectedDeclaration === undefined
-        ? undefined
-        : containingParameter(selectedDeclaration, parameterSet, ast);
-      if (ownerParameter !== undefined) {
-        capturedParameterSet.add(ownerParameter);
-      }
     }
     ast.forEachChild(node, (child) => {
       if (child !== undefined) visit(child);
     });
   };
   visit(body);
-  const capturedParameters = exactParameters.filter((parameter) =>
-    capturedParameterSet.has(parameter));
 
   const owner = walk.context.projectTypes.definitionContainingDeclaration(declaration);
   const representation = walk.context.objectRepresentations.representationFor(owner);
@@ -136,7 +127,12 @@ export function resolveRustSuspendedCallableStorage(
     parameters: [...sourceContract.parameters, ...inferred] };
   const inputCarriers = exactParameters.map(parameter =>
     walk.context.facts.get(parameter, rustSourceParameterAbiFactKey)?.parameterCarrier);
-  const lifetime = inputCarriers.some(carrier => carrier === undefined) ? undefined
+  const environment = rustRetainedEnvironment(declaration, inputCarriers, walk.context);
+  if (environment.kind === "unresolved") return { kind: "rejected", reason: environment.reason };
+  if (environment.kind === "selected") walk.context.facts.set(declaration, rustRetainedEnvironmentFactKey,
+    environment.environment, [{ message: "rust owned suspended environment" }]);
+  const lifetime = environment.kind === "selected" ? environment.environment.lifetime
+    : inputCarriers.some(carrier => carrier === undefined) ? undefined
     : selectRustCallableStorageLifetime(inputCarriers as readonly TargetTypeRef[], carriers, contract);
   if (lifetime === undefined) {
     return {
@@ -158,17 +154,4 @@ export function resolveRustSuspendedCallableStorage(
     storage: Object.freeze({ kind: "lifetime", lifetime }),
     ...(ownedReceiver === undefined ? {} : { ownedReceiver }),
   };
-}
-
-function containingParameter(
-  selectedDeclaration: Node,
-  parameters: ReadonlySet<Node>,
-  ast: RustFactWalk["context"]["ast"],
-): Node | undefined {
-  let current: Node | undefined = selectedDeclaration;
-  while (current !== undefined) {
-    if (parameters.has(current)) return current;
-    current = ast.parent(current);
-  }
-  return undefined;
 }

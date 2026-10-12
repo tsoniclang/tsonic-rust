@@ -64,6 +64,7 @@ import { planRustNativeInputInvocation, planRustNativeInputPropagation, rustNati
 import { rustPropagateLocalError } from "../../program/fallible-boundaries.js";
 import { rustSourceErrorEffectsFactKey } from "../../../../analysis/facts/source-error-effects.js";
 import { planRustSourceErrorPropagation } from "./source-errors.js";
+import { rustRetainedCallSubstitutions } from "../../../../analysis/facts/retained-environments.js";
 
 export function sourceCallEffectsMatch(
   fact: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>,
@@ -119,6 +120,7 @@ export function planSelectedSourceCall(
     context.input.program.projectTypes,
     rustSourceCallArgumentCarriers(node, context.input.program.source.ast, context.input.program.facts),
     context.input.program.typeDefinitions,
+    rustRetainedCallSubstitutions(context.input.program.facts, node),
   );
   if (!selectedMatches) {
     context.diagnostics.push(missingFactDiagnostic(

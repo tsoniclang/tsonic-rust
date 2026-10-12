@@ -595,14 +595,16 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
     const sourceValue = facts.getFact(node, rustSourceCallableValueFactKey);
     if (sourceValue !== undefined) {
       const captures = facts.getFact(sourceValue.sourceDeclaration, rustClosureCaptureFactKey);
+      const storage: readonly RustGenericRequirement[] = rustCallableProtocol(sourceValue.carrier)?.lifetime?.kind === "static"
+        ? ["static"] : [];
       for (const capture of captures?.receivers ?? []) {
-        const error = addUse(capture.reference, capture.carrier, ["clone", "static"], true);
+        const error = addUse(capture.reference, capture.carrier, ["clone", ...storage], true);
         if (error !== undefined) return error;
       }
       for (const capture of captures?.captures ?? []) {
         const move = capture.storage === "cell" || capture.storage === "borrow-cell" ||
           input.valueLifetimes.canMoveCapture(sourceValue.sourceDeclaration, capture.declaration);
-        const error = addUse(capture.reference, capture.carrier, [...(move ? [] : ["clone" as const]), "static"], true);
+        const error = addUse(capture.reference, capture.carrier, [...(move ? [] : ["clone" as const]), ...storage], true);
         if (error !== undefined) return error;
       }
     }
@@ -614,7 +616,8 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       const required: readonly RustGenericRequirement[] =
         rustClosureProtocol(operation.resultCarrier) === undefined && rustGenericCallableValue(operation.resultCarrier) === undefined &&
           rustFrameCallableValue(operation.resultCarrier) === undefined
-          && rustCallableInputProtocol(operation.resultCarrier) === undefined
+          && rustCallableInputProtocol(operation.resultCarrier) === undefined &&
+          rustCallableProtocol(operation.resultCarrier)?.lifetime?.kind === "static"
           ? ["clone", "static"]
           : ["clone"];
       for (const capture of captures.receivers) {

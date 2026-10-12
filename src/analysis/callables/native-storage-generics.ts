@@ -6,8 +6,9 @@ import type { RustTargetGenericBindings } from "../../target-model/types/carrier
 import { substituteRustTargetGenericArgument } from "../../target-model/types/carriers/substitution.js";
 import { rustTargetGenericBindingsForArguments } from "../../target-model/types/generic-arguments.js";
 import { rustTargetGenericArgumentEquals, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
+import { rustLifetimeKey, rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
 import { rustTargetOperationFactKey } from "../facts/keys.js";
+import { rustRetainedCallSubstitutions } from "../facts/retained-environments.js";
 
 export type RustNativeStorageGenericSelection =
   | { readonly kind: "resolved"; readonly bindings: RustTargetGenericBindings }
@@ -54,7 +55,9 @@ export function createRustNativeStorageGenericSelection(input: {
         const arguments_ = operation.targetGenericArguments ?? [];
         const own = rustTargetGenericBindingsForArguments(signature.member.genericParameters ?? [], arguments_.map(argument =>
           substituteRustTargetGenericArgument(argument, caller.bindings.types, caller.bindings.lifetimes, caller.bindings.consts)));
-        const merged = own === undefined ? undefined : mergeBindings(actual, own);
+        const merged = own === undefined ? undefined : mergeBindings(actual, { ...own,
+          lifetimes: new Map([...own.lifetimes, ...[...rustRetainedCallSubstitutions(input.facts, activation.invocation)]
+            .map(([identity, lifetime]) => [identity, caller.bindings.lifetimes.get(rustLifetimeKey(lifetime)) ?? lifetime] as const)]) });
         if (merged === undefined)
           return finish(unresolved("Native callable activation has inconsistent selected generic arguments."));
         actual = merged;

@@ -56,7 +56,8 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustGenericCallableProtocol } from "../../target-model/types/carriers/generic-callables.js";
 import { rustGenericCallableValueOwner } from "../../policy/types/callable-origins.js";
 import { rebindRustCallableCarrier } from "../../target-model/types/carriers/callable-rebinding.js";
-import { closeRustSuspendedStorage } from "../../policy/types/suspended-storage.js";
+import { closeRustRetainedResult } from "../../policy/types/retained-result.js";
+import { rustRetainedEnvironmentFactKey } from "../facts/retained-environments.js";
 import { selectRustInferredReturn } from "./inferred-return.js";
 import { rustOptionalStorageValue } from "../../target-model/types/projections.js";
 import { selectRustClosedCallableInputs } from "./contextual-inputs.js";
@@ -527,9 +528,11 @@ export function recordCallableReturnFact(
   const rawCarrier = pointer?.returnCarrier ?? rustGenericCallableValueOwner(walk.context.ast, declaration, selected);
   const parameterCarriers = walk.context.ast.parameters(declaration).map(parameter =>
     parameter === undefined ? undefined : walk.context.facts.get(parameter, rustSourceParameterAbiFactKey)?.parameterCarrier);
-  const carrier = rawCarrier === undefined ? undefined : asynchronous !== undefined || generator !== undefined
-    ? rawCarrier : closeRustSuspendedStorage(rawCarrier, parameterCarriers,
-      walk.context.sourceLifetimes.contractFor(declaration), "callable-result");
+  const retained = rawCarrier === undefined || asynchronous !== undefined || generator !== undefined ? undefined
+    : closeRustRetainedResult(declaration, rawCarrier, parameterCarriers, walk.context);
+  const carrier = asynchronous !== undefined || generator !== undefined ? rawCarrier : retained?.carrier;
+  if (retained?.environment !== undefined) walk.context.facts.set(declaration, rustRetainedEnvironmentFactKey,
+    retained.environment, [{ message: "rust returned owned environment" }]);
   if (carrier !== undefined) {
     const borrowedParameter = rustSourceBorrowedReturnParameter(declaration, rustResolutionContext(walk, declaration));
     const borrowedAbi = borrowedParameter === undefined ? undefined

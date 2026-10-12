@@ -11,7 +11,7 @@ import { missingFactDiagnostic } from "../diagnostics.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import { applyRustFallibleResultExpression } from "../types/fallible-shape.js";
 import { rustCallableConstructionType } from "./fundamentals.js";
-import { rustUnitTargetType } from "../../../target-model/types/index.js";
+import { rustUnitTargetType, rustCallableProtocol } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { planRustCapturedEnvironment } from "./capture-environments.js";
 import { planRustLexicalFunctionArguments } from "../declarations/callables/lexical-functions.js";
@@ -81,7 +81,7 @@ export function planRustSourceCallableValueConstruction(
   const captures = lexical === undefined ? [] : context.input.program.facts.getFact(value.sourceDeclaration, rustClosureCaptureFactKey)?.captures;
   if (captures === undefined) return undefined;
   const environment = planRustCapturedEnvironment(value.sourceDeclaration, captures, context,
-    { staticStorage: true, mutableValueCapture: false });
+    { staticStorage: rustCallableProtocol(value.carrier)?.lifetime?.kind === "static", mutableValueCapture: false });
   if (environment === undefined) return undefined;
   const invocationContext = { ...context, capturedBindings: environment.capturedBindings };
   const environmentArguments = planRustLexicalFunctionArguments(value.sourceDeclaration, invocationContext);
