@@ -138,6 +138,24 @@ test("nested source functions propagate captures only when invoked", () => {
   assertChannels(current.callable("active"), current.callable("inner").nativeErrors);
 });
 
+test("provider callback references remain pure evaluations without erasing invoked body effects", () => {
+  const current = fixture(`
+    export function fail(): void { throw new Error("original"); }
+    export function register(): void {
+      const callback = (): void => { throw new Error("original"); };
+      setTimeout(fail, 0);
+      setTimeout(callback, 0);
+    }
+  `);
+  const call = current.calls("setTimeout")[0];
+  const callback = current.ast.arguments(call)[0];
+  assertChannels(current.callable("fail"), [], true);
+  assert.equal(current.program.facts.getFact(callback, rustErrorEffectsFactKey) === undefined, true,
+    "evaluating a reference does not manufacture its referenced body's errors");
+  assertChannels(current.effects(current.initializer("callback")), [], true);
+  assertChannels(current.callable("register"), [], true);
+});
+
 test("call edges rebind two same-signature formals to physical caller inputs without rebranding the callee trait", () => {
   const current = fixture(`
     export function invoke(callback: () => number): number { return callback(); }
@@ -315,4 +333,18 @@ test("production package forwarding preserves errors independently of an unrelat
     for (const effect of pair.nativeErrors) assert.equal(effect.errorType.trait.id, invoke.nativeErrors[0].errorType.trait.id);
     assert.equal(pair.nativeErrors[0].identity !== pair.nativeErrors[1].identity, true);
   }
+});
+
+test("first-class value calls do not execute a function-type descriptor as a declaration", () => {
+  const current = fixture(`
+    export function retain(callback: () => number): () => number { return callback; }
+    export function run(): void {
+      const callback = retain(() => { throw new Error("original"); });
+      try { callback(); } catch {}
+    }
+  `);
+  const call = current.calls("callback")[0];
+  assert.equal(current.effects(call).localErrors, true);
+  assert.equal(current.program.facts.getFact(call, rustSourceErrorEffectsFactKey) === undefined, true,
+    "the callable ABI, not a type-only declaration edge, owns this invocation");
 });

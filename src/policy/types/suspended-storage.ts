@@ -8,7 +8,7 @@ import { rustCallableProtocol, rustCallableTargetType } from "../../target-model
 
 export function closeRustSuspendedStorage(
   result: TargetTypeRef, parameters: readonly (TargetTypeRef | undefined)[], contract: RustSourceGenericContract | undefined,
-  placement: "callable-result" | "field",
+  placement: "callable-result" | "callable-signature" | "field",
   retainedLifetime?: RustLifetimeRef,
 ): TargetTypeRef | undefined {
   let unresolved = false;

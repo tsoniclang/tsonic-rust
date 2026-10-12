@@ -45,7 +45,8 @@ export function rustRetainedEnvironment(
 export function closeRustRetainedParameter(
   parameter: Node, carrier: TargetTypeRef, context: RustSourcePolicyContext,
 ): TargetTypeRef | undefined {
-  if (!rustHasOpenOwnedStorage(carrier)) return carrier;
+  if (!hasOpenCallableEnvironment(carrier)) return carrier;
+  if (!context.ast.is.IsParameterDeclaration(parameter)) return undefined;
   const declaration = context.ast.parent(parameter);
   if (declaration === undefined || !context.ast.parameters(declaration).includes(parameter)) return undefined;
   const selected = context.retainedEnvironments.environmentFor(declaration);
@@ -57,6 +58,15 @@ export function closeRustRetainedParameter(
     return protocol === undefined ? current : protocol.lifetime?.kind === "placeholder"
       ? rustCallableTargetType(protocol.parameters, protocol.result, selected.environment.lifetime) : original;
   });
+}
+
+function hasOpenCallableEnvironment(carrier: TargetTypeRef): boolean {
+  if (carrier.kind === "reference" || carrier.kind === "pointer" ||
+    carrier.kind === "function-pointer" || carrier.kind === "closure") return false;
+  const protocol = rustCallableProtocol(carrier);
+  if (protocol !== undefined) return protocol.lifetime?.kind === "placeholder";
+  if (rustGenericCallableProtocol(carrier) !== undefined || rustNativeCallableProtocol(carrier) !== undefined) return false;
+  return rustTargetTypeChildren(carrier).some(hasOpenCallableEnvironment);
 }
 
 export function rustHasOpenOwnedStorage(carrier: TargetTypeRef): boolean {

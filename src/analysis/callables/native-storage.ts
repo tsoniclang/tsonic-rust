@@ -163,7 +163,7 @@ export function createRustNativeStoragePlan(input: {
         return rustPhysicalPayloadFor(logical, result, current, input.definitions);
       }
       const implementations = input.storage.invocationImplementationsFor(origin.node, bindings);
-      if (implementations.kind !== "resolved" || implementations.nodes.length !== 1) return undefined;
+      if (implementations.kind !== "resolved" || !implementations.exact || implementations.nodes.length !== 1) return undefined;
       const declaration = implementations.nodes[0]!;
       const activation = input.storage.bindingsForInvocation(declaration, origin.node, bindings);
       if (activation.kind === "unresolved") return fail(activation.reason);

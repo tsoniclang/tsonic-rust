@@ -31,7 +31,8 @@ function nativeArgumentMatches(source: RustTargetGenericArgument, target: RustTa
   if (source.kind === "type") return target.kind === "type" && rustNativeRepresentationMatches(source.type, target.type);
   if (source.kind === "lifetime") {
     return target.kind === "lifetime" && (rustLifetimesEqual(source.lifetime, target.lifetime) ||
-      target.lifetime.kind === "placeholder" && source.lifetime.kind !== "bound");
+      target.lifetime.kind === "placeholder" && source.lifetime.kind !== "bound" ||
+      source.lifetime.kind === "placeholder" && target.lifetime.kind === "call-scoped-elision");
   }
   return rustTargetGenericArgumentEquals(source, target);
 }

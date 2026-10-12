@@ -49,6 +49,9 @@ import { rustClassConstructorInstance } from "../../target-model/types/carriers/
 import { retainRustSelectedCallableResultTemplate, retainRustSelectedSourceCallResultStorage, selectRustSourceCallResult } from "../../policy/types/resolution/call-results.js";
 import { rustSourceCallArgumentCarriers, rustSourceCallResultWithInputLifetimes } from "../facts/source-call-lifetimes.js";
 import { rustRetainedCallLifetimes, rustRetainedCallResult } from "../callables/retained-environments.js";
+import { rustRetainedEnvironment } from "../../policy/ownership/retained-environments.js";
+import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
+import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
 import { rustRetainedCallLifetimesFactKey } from "../facts/retained-environments.js";
 import { rustMemberAccessReceiver } from "../../target-model/syntax/expressions.js";
 import { recordRustComputedCallEvaluation } from "./computed-members.js";
@@ -586,16 +589,24 @@ export function applySelectedProjectSourceCall(
       parameters = callableParameters as import("../facts/keys.js").RustSourceCallParameterPlan[];
     }
   }
-  if (!applySelectedSourceCallArguments(
-    walk,
-    callArguments as readonly Node[],
-    sourceFile,
-    parameters,
-    bindings,
-  )) {
+  const resultReferences = rustTargetGenericReferences(genericResultCarrier);
+  const environment = resultReferences.lifetimes.length === 0 ? { kind: "none" as const }
+    : rustRetainedEnvironment(selectedDeclaration, parameters.map(parameter => parameter.parameterCarrier), walk.context);
+  if (environment.kind === "unresolved") {
+    appendRustDiagnostic(walk, "RUST_RETAINED_ENVIRONMENT_NOT_EXACT", environment.reason, expression,
+      ["target.capability=rust.source-call.retained-environment"]);
     return undefined;
   }
-  const argumentCarriers = rustSourceCallArgumentCarriers(expression, ast, walk.context.facts);
+  if (environment.kind === "selected" && resultReferences.lifetimeIdentities.includes(rustLifetimeKey(environment.environment.lifetime))) {
+    const identity = rustLifetimeKey(environment.environment.lifetime);
+    for (const [index, argument] of (callArguments as readonly Node[]).entries()) {
+      const carriers = parameters.flatMap(parameter => parameter.inputs.filter(input => input.sourceArgumentIndex === index)
+        .map(input => input.carrier));
+      const expected = carriers.length !== 0 && carriers.every(carrier => rustTargetTypeRefEquals(carrier, carriers[0])) &&
+        !rustTargetGenericReferences(carriers[0]!).lifetimeIdentities.includes(identity) ? carriers[0] : undefined;
+      if (resolveExpressionCarrier(walk, argument, sourceFile, expected) === undefined) return undefined;
+    }
+  }
   const retainedLifetimes = rustRetainedCallLifetimes(walk, expression, selectedDeclaration,
     parameters.map(parameter => parameter.parameterCarrier), genericResultCarrier);
   if (retainedLifetimes === undefined) {
@@ -607,8 +618,15 @@ export function applySelectedProjectSourceCall(
   if (retainedLifetimes.size !== 0) walk.context.facts.set(expression, rustRetainedCallLifetimesFactKey,
     Object.freeze([...retainedLifetimes].map(([identity, lifetime]) => Object.freeze({ identity, lifetime }))),
     [{ message: "rust exact retained call environment" }]);
+  if (retainedLifetimes.size !== 0) parameters = parameters.map(parameter => ({ ...parameter,
+    valueCarrier: rustRetainedCallResult(parameter.valueCarrier, retainedLifetimes),
+    parameterCarrier: rustRetainedCallResult(parameter.parameterCarrier, retainedLifetimes),
+    inputs: parameter.inputs.map(input => ({ ...input, carrier: rustRetainedCallResult(input.carrier, retainedLifetimes) })),
+  }));
+  if (!applySelectedSourceCallArguments(walk, callArguments as readonly Node[], sourceFile, parameters, bindings)) return undefined;
+  const actualArgumentCarriers = rustSourceCallArgumentCarriers(expression, ast, walk.context.facts);
   const instantiateResult = (carrier: TargetTypeRef): TargetTypeRef => rustRetainedCallResult(rustSourceCallResultWithInputLifetimes(
-    carrier, parameters.map(parameter => parameter.parameterCarrier), bindings, argumentCarriers, parameters), retainedLifetimes);
+    carrier, parameters.map(parameter => parameter.parameterCarrier), bindings, actualArgumentCarriers, parameters), retainedLifetimes);
   const nativeResultCarrier = instantiateResult(genericResultCarrier);
   const sourceResult = selectRustSourceCallResult(walk.operationOptions.projectTypes, nativeResultCarrier, () => {
     const selected = selectedSignature.sourceResultProjection?.selectedCarrier;

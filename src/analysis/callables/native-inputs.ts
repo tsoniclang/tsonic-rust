@@ -77,13 +77,7 @@ export function createRustNativeCallableInputPlan(input: {
   const bindingsFor = (declaration: Node): SourceStorageBindings | undefined => {
     const existing = bindings.get(declaration);
     if (existing !== undefined) return existing ?? undefined;
-    const parent = sourceEnclosingCallable(input.ast.parent(declaration), input.ast);
-    const parentBindings = parent === undefined ? undefined : bindingsFor(parent);
-    if (parent !== undefined && parentBindings === undefined) {
-      bindings.set(declaration, null);
-      return undefined;
-    }
-    const selected = input.storage.bindingsForDeclaration(declaration, parentBindings);
+    const selected = input.storage.bindingsForLexicalOwner(declaration);
     const result = selected.kind === "resolved" ? selected.bindings : undefined;
     bindings.set(declaration, result ?? null);
     return result;

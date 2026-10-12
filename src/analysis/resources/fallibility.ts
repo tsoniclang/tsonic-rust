@@ -81,7 +81,7 @@ function collectFallibilityFacts(
   const inventory = collectRustErrorDeclarations(walk, projectSourceFiles);
   if (inventory === undefined) return;
   const { declarations, regionsByDeclaration, relatedDeclarations, projectImplementations,
-    dependenciesByDeclaration, registerCallableDeclaration } = inventory;
+    dependenciesByDeclaration, registerCallableDeclaration, isDeclaration } = inventory;
   const effectsByDeclaration = new Map<Node, RustErrorEffectsFact>();
   const effectsByRegion = new Map<Node, RustErrorEffectsFact>();
   const effectsByExpression = new Map<Node, RustErrorEffectsFact>();
@@ -196,9 +196,9 @@ function collectFallibilityFacts(
       selected?.sourceDeclaration,
       walk.context.ast,
     );
-    return declaration !== undefined && selectedDeclarationIsProjectSource(walk, declaration)
-      ? declaration
-      : undefined;
+    if (declaration === undefined || !selectedDeclarationIsProjectSource(walk, declaration)) return undefined;
+    const selectedImplementation = walk.context.source.navigation.callableImplementation(declaration);
+    return selectedImplementation.kind === "resolved" ? selectedImplementation.implementation.declaration : undefined;
   };
   const operationIsFallible = (node: Node): boolean => {
     const operation = walk.context.facts.get(node, rustTargetOperationFactKey) ??
@@ -347,7 +347,7 @@ function collectFallibilityFacts(
     const effects = collectRustErrorRegionEffects(root, ast, directEffects, (node, effects) => {
       budget.metadata(effects);
       const kind = ast.kindName(node);
-      if (kind !== KindCallExpression && kind !== KindNewExpression && kind !== "KindAwaitExpression")
+      if (!isDeclaration(node) && kind !== KindCallExpression && kind !== KindNewExpression && kind !== "KindAwaitExpression")
         effectsByRegion.set(node, effects);
     });
     if (effects === undefined) appendRustDiagnostic(walk, "RUST_ERROR_REGION_NOT_EXACT",
@@ -577,9 +577,6 @@ function collectFallibilityFacts(
     recordSelectedOperationInputs(walk, call, sourceFile, operation);
     if (callbackAnalysis.implementationFallible) {
       for (const subject of callbackAnalysis.subjects) {
-        budget.metadata(callbackAnalysis.implementationEffects);
-        walk.context.facts.set(subject, rustErrorEffectsFactKey, callbackAnalysis.implementationEffects,
-          [{ message: "rust exact callback implementation error effects" }]);
         walk.context.facts.set(subject, rustFallibleFactKey, { fallible: true }, [
           { message: "rust fallible callback ABI" },
         ]);

@@ -40,7 +40,8 @@ export function rustInjectNativeError(
   source: RustNativeErrorJoinSelection,
   error: RustExpr,
 ): RustExpr | undefined {
-  return region.kind === "native" ? region.join.inject(source, error) : undefined;
+  return region.kind === "native" ? region.join.inject(source, error)
+    : rustTypeEquals(region.errorType, source.errorType) ? error : undefined;
 }
 
 export function rustPropagateNativeError(
@@ -48,7 +49,9 @@ export function rustPropagateNativeError(
   source: RustNativeErrorJoinSelection,
   result: RustExpr,
 ): RustExpr | undefined {
-  return region.kind === "native" ? region.join.propagate(source, result) : undefined;
+  return region.kind === "native" ? region.join.propagate(source, result)
+    : rustTypeEquals(region.errorType, source.errorType)
+      ? { kind: "try", expr: result, operandErrorType: source.errorType, resultErrorType: region.errorType } : undefined;
 }
 
 export function rustPropagateMappedErrorJoin(

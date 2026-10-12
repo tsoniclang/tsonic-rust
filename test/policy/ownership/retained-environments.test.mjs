@@ -144,3 +144,25 @@ test("retained parameter closure rejects absent owner evidence instead of assign
   assert.equal(closeRustRetainedParameter(parameter, callback, policy) === undefined, true);
   assert.equal(closeRustRetainedParameter(owner, callback, policy) === undefined, true);
 });
+
+test("generic inputs and explicit callable contracts do not demand generated environment evidence", () => {
+  const context = fixture("export function identity<T>(value: T): T { return value; }");
+  const owner = context.declarations.get("identity");
+  const parameter = context.source.ast.parameters(owner)[0];
+  let queries = 0;
+  const policy = { ...context, ast: context.source.ast, retainedEnvironments: {
+    ...context.queries, environmentFor() {
+      queries += 1;
+      return { kind: "unresolved", reason: "No callable environment was requested." };
+    },
+  } };
+  const generic = { kind: "type-parameter", identity: "authored-T", name: "T" };
+  const scalar = { kind: "source-primitive", name: "float64" };
+  const callback = rustCallableTargetType([], scalar, { kind: "parameter", identity: "authored-region", name: "region" });
+  const values = [generic, { kind: "tuple", elements: [generic, callback] }, callback,
+    { kind: "function-pointer", args: [rustCallableTargetType([], scalar)], result: scalar }];
+  for (const [index, carrier] of values.entries()) {
+    assert.equal(closeRustRetainedParameter(parameter, carrier, policy) === carrier, true, String(index));
+  }
+  assert.equal(queries, 0);
+});

@@ -488,11 +488,12 @@ export function sourceCallSelectedMemberMatches(
   }
   const substitutions = rustTargetGenericBindingsForArguments(parameters, targetArguments);
   if (substitutions === undefined || !isDenseDataArray(member.parameters)) return false;
+  const lifetimes = new Map([...substitutions.lifetimes, ...retainedLifetimes]);
   const parameterCarriers = member.parameters.map(parameter => substituteRustTargetGenerics(parameter.type,
-    substitutions.types, substitutions.lifetimes, substitutions.consts, normalize));
-  const instantiateResult = (carrier: TargetTypeRef): TargetTypeRef => substituteRustTargetGenerics(rustSourceCallResultWithInputLifetimes(
-    substituteRustTargetGenerics(carrier, substitutions.types, substitutions.lifetimes, substitutions.consts, normalize),
-    parameterCarriers, selected.sourceArgumentBindings, argumentCarriers, fact.parameters), new Map(), retainedLifetimes);
+    substitutions.types, lifetimes, substitutions.consts, normalize));
+  const instantiateResult = (carrier: TargetTypeRef): TargetTypeRef => rustSourceCallResultWithInputLifetimes(
+    substituteRustTargetGenerics(carrier, substitutions.types, lifetimes, substitutions.consts, normalize),
+    parameterCarriers, selected.sourceArgumentBindings, argumentCarriers, fact.parameters);
   const expectedKind = fact.target.form === "constructor" ? "constructor" : "method";
   const expectedTargetName = fact.target.form === "constructor"
     ? fact.target.name
@@ -532,7 +533,7 @@ export function sourceCallSelectedMemberMatches(
     return callable.parameters.length === fact.parameters.length &&
       callable.parameters.every((carrier, index) => {
         carrier = substituteRustTargetGenerics(carrier, substitutions.types,
-          substitutions.lifetimes, substitutions.consts, normalize);
+          lifetimes, substitutions.consts, normalize);
         const parameter = fact.parameters[index];
         if (parameter === undefined || !rustTargetTypeRefEquals(carrier, mapRustTargetTypes(parameter.parameterCarrier, normalize))) return false;
         if (parameter.mode === "value") return true;
@@ -558,7 +559,7 @@ export function sourceCallSelectedMemberMatches(
         substituteRustTargetGenerics(
           parameter.type,
           substitutions.types,
-          substitutions.lifetimes,
+          lifetimes,
           substitutions.consts,
           normalize,
         ),

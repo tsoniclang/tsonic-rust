@@ -41,6 +41,23 @@ test("active concrete regions preserve the genuine package owner and exact error
   assert.equal(rustActiveErrorType(context) === associated, true);
 });
 
+test("an exact native package payload enters its package region without conversion or allocation", () => {
+  const region = rustPackageFallibleBoundary(owner);
+  const native = { identity: "selected:producer", errorType: rustErrorType(owner) };
+  const error = path("original");
+  assert.equal(rustInjectNativeError(region, native, error) === error, true);
+  const result = call("invoke");
+  assert.equal(rustPropagateNativeError(region, native, result).expr === result, true);
+  for (const changed of [
+    { ...native, errorType: associated },
+    { ...native, errorType: { ...native.errorType, identity: "foreign:error" } },
+    { ...native, errorType: { kind: "named", path: "rt::TsonicError" } },
+  ]) {
+    assert.equal(rustInjectNativeError(region, changed, error) === undefined, true);
+    assert.equal(rustPropagateNativeError(region, changed, result) === undefined, true);
+  }
+});
+
 test("single associated error regions have no invented package owner or local error channel", () => {
   const region = rustNativeFallibleBoundary(join([callback]));
   assert.equal(region.kind, "native");

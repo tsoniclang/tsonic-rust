@@ -10,6 +10,12 @@ import { rustCallableProtocol } from "../../target-model/types/carriers/callable
 export function closeRustRetainedResult(
   declaration: Node, result: TargetTypeRef, parameters: readonly (TargetTypeRef | undefined)[], context: RustSourcePolicyContext,
 ): { readonly carrier: TargetTypeRef; readonly environment?: RustRetainedEnvironment } | undefined {
+  if (context.ast.is.IsFunctionTypeNode(declaration) || context.ast.is.IsCallSignatureDeclaration(declaration) ||
+    context.ast.is.IsConstructSignatureDeclaration(declaration) || context.ast.is.IsMethodSignatureDeclaration(declaration)) {
+    const carrier = closeRustSuspendedStorage(result, parameters, context.sourceLifetimes.contractFor(declaration),
+      "callable-signature");
+    return carrier === undefined ? undefined : Object.freeze({ carrier });
+  }
   const retained = containsStorage(result) ? rustRetainedEnvironment(declaration, parameters, context) : { kind: "none" as const };
   if (retained.kind === "unresolved") return undefined;
   const environment = retained.kind === "selected" ? retained.environment : undefined;

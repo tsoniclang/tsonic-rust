@@ -527,7 +527,7 @@ export function planSelectedSourceCall(
       ? rustBottomAfterEffect(result, "fallible never call returned") : result;
   }
   const sourceErrors = context.input.program.facts.getFact(node, rustSourceErrorEffectsFactKey);
-  if (selectedDeclaration !== undefined) {
+  if (selectedDeclaration !== undefined && fact.target.form !== "callable") {
     const edges = sourceErrors?.edges.filter(edge => edge.kind === "invoke" && edge.declaration === selectedDeclaration) ?? [];
     if (edges.length !== 1) {
       context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),

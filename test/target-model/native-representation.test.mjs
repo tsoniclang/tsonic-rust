@@ -33,6 +33,19 @@ test("native representation transport preserves native type, error and lifetime 
     rustJsPromiseTargetTypeWithLifetime(unsigned, inferred)), false);
   assert.equal(rustNativeRepresentationMatches(rustJsPromiseTargetTypeWithLifetime(integer, inferred),
     rustJsPromiseTargetTypeWithLifetime(integer, { kind: "static" })), false);
+  const callScoped = { kind: "call-scoped-elision" };
+  assert.equal(rustNativeRepresentationMatches(rustJsPromiseTargetTypeWithLifetime(integer, inferred),
+    rustJsPromiseTargetTypeWithLifetime(integer, callScoped)), true,
+    "native inference can select an elided call lifetime without a representation adapter");
+  for (const selected of [lifetime, otherLifetime, { kind: "static" },
+    { kind: "bound", binderIdentity: "call", identity: "call:output", name: "output" }]) {
+    assert.equal(rustNativeRepresentationMatches(rustJsPromiseTargetTypeWithLifetime(integer, inferred),
+      rustJsPromiseTargetTypeWithLifetime(integer, selected)), false,
+      "native inference never manufactures an explicit or universally bound lifetime");
+  }
+  assert.equal(rustNativeRepresentationMatches(rustJsPromiseTargetTypeWithLifetime(integer, lifetime),
+    rustJsPromiseTargetTypeWithLifetime(integer, callScoped)), false,
+    "an explicit lifetime is not silently rewritten to a distinct elided lifetime");
   assert.equal(rustValueConversionContract({ ...conversion, target: { ...target, genericArguments: [] } }), undefined);
   assert.equal(rustValueConversionContract({ ...conversion, kind: "object-identity-erasure" }), undefined);
 });

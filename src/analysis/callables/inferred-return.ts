@@ -1,7 +1,7 @@
 import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_Initializer, Node_Operand, Node_Type } from "@tsonic/target-api/source";
 import type { Node } from "@tsonic/tsts";
 import { createRustCarrierProbe } from "../expressions/carrier-probe.js";
-import { rustSourceCallableReturnFactKey } from "../facts/keys.js";
+import { rustSourceCallableReturnFactKey, rustSourceParameterAbiFactKey } from "../facts/keys.js";
 import { rustOperationContext, rustResolutionContext } from "../program/walk.js";
 import type { RustFactWalk } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
@@ -83,6 +83,8 @@ export function selectRustInferredReturn(
         if (kind === "KindIdentifier") {
           const selection = walk.context.source.navigation.sourceReferenceFor(expression);
           const reference = selection?.declaration;
+          const parameter = reference === undefined ? undefined : facts.get(reference, rustSourceParameterAbiFactKey);
+          if (parameter !== undefined) return parameter.valueCarrier;
           const initializer = reference === undefined ? undefined : Node_Initializer(ast, reference);
           const referenceFile = reference === undefined ? undefined : ast.getSourceFile(reference);
           const unwritten = referenceFile !== undefined && selection?.symbol !== undefined &&

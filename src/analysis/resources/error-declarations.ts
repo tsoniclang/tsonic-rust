@@ -180,5 +180,5 @@ export function collectRustErrorDeclarations(walk: RustFactWalk, projectSourceFi
     }
   }
   return Object.freeze({ declarations, regionsByDeclaration, relatedDeclarations, projectImplementations,
-    dependenciesByDeclaration, registerCallableDeclaration });
+    dependenciesByDeclaration, registerCallableDeclaration, isDeclaration: (node: Node) => declarationSet.has(node) });
 }
