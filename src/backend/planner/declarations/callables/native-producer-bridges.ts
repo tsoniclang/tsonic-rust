@@ -11,7 +11,7 @@ import { rustAwaitSelectionLeaves } from "../../../../target-model/types/await.j
 import { closedMetadataKey } from "../../../../target-model/metadata/closed-data.js";
 import { allocateRustGeneratedName } from "../../../../target-model/names/generated.js";
 import type { RustBlock, RustFunctionParam, RustGenericArgument, RustGenericParameter,
-  RustItem, RustType, RustWherePredicate } from "../../../target-ast/nodes.js";
+  RustItem, RustImplFunction, RustType, RustWherePredicate } from "../../../target-ast/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { registerAliasFromPath } from "../../program/plan-context.js";
@@ -23,6 +23,7 @@ export function planRustNativeProducerBridge(
   context: RustPlanContext,
 ): readonly RustItem[] | undefined {
   const signature = protocol.signature;
+  const invoked = context.input.program.callableValues.nativeDispatch.requiredFor(protocol);
   if (signature.typeParameters.length !== 0) return [];
   const lifetimes = rustLifetimeBinderToAst(protocol.method.binder);
   if (lifetimes.length > 0 && protocol.boundProducerName === undefined) return undefined;
@@ -117,9 +118,9 @@ export function planRustNativeProducerBridge(
   generics: { parameters: [...lifetimes, ...genericParameters], wherePredicates: predicates },
   members: [...channels.map((name, index) => ({ kind: "type" as const, name, generics: emptyRustGenerics,
     type: named(errorTypes[index]!.name),
-  })), { kind: "function", name: "invoke", visibility: "private", generics: emptyRustGenerics,
-    selfParam: { kind: "reference", mutable: false }, params: directParameters, returnType: implResult, body: invokeBody,
-  }],
+  })), ...(invoked ? [{ kind: "function" as const, name: "invoke", visibility: "private" as const, generics: emptyRustGenerics,
+    selfParam: { kind: "reference" as const, mutable: false }, params: directParameters, returnType: implResult, body: invokeBody,
+  }] : [])],
   };
   if (lifetimes.length === 0) return [direct];
   const self: TargetTypeRef = { kind: "type-parameter", identity: `${protocol.identity}:Self`, name: "Self" };
@@ -150,9 +151,9 @@ export function planRustNativeProducerBridge(
         kind: "type" as const, name: type.name, bounds: [],
       }))] },
       members: [...channels.map(name => ({ kind: "type" as const, name, generics: emptyRustGenerics, bounds: [] })),
-        { kind: "function", name: "invoke", generics: emptyRustGenerics,
-          selfParam: { kind: "reference", mutable: false }, params: directParameters, returnType: helperResult,
-        }],
+        ...(invoked ? [{ kind: "function" as const, name: "invoke", generics: emptyRustGenerics,
+          selfParam: { kind: "reference" as const, mutable: false }, params: directParameters, returnType: helperResult,
+        }] : [])],
     },
     direct,
     { kind: "impl", trait: protocolType, target: implementationType,
@@ -163,13 +164,13 @@ export function planRustNativeProducerBridge(
       },
       members: [...channels.map(name => ({ kind: "type" as const, name, generics: methodGenerics,
         type: { kind: "qualified" as const, owner: implementationType, trait: helperType, member: name },
-      })), { kind: "function", name: "invoke", visibility: "private", generics: methodGenerics,
-        selfParam: { kind: "reference", mutable: false }, params: parameters, returnType: renderedPublicResult,
+      })), ...(invoked ? [{ kind: "function" as const, name: "invoke", visibility: "private" as const, generics: methodGenerics,
+        selfParam: { kind: "reference" as const, mutable: false }, params: parameters, returnType: renderedPublicResult,
         body: { statements: [{ kind: "tail", expr: { kind: "associated-call", owner: implementationType,
           trait: helperType, method: "invoke", args: [{ kind: "path", path: "self" },
             { kind: "tuple-literal", elements: parameters.map(parameter => ({ kind: "path", path: parameter.name })) }],
         } }] },
-      }],
+      } satisfies RustImplFunction] : [])],
     },
   ];
 

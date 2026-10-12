@@ -45,3 +45,37 @@ fn opaque_identity_retains_its_exact_implementation() { let _value = read::<i32>
   runCargo(directory, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
   runCargo(directory, ["test", "--locked", "--offline"]);
 });
+
+test("native trait aliases preserve exact associated output projections", { timeout: 300_000 }, () => {
+  const named = (path, types = []) => ({ kind: "named", path,
+    genericArguments: types.map(type => ({ kind: "type", type })) });
+  const projection = { kind: "qualified", owner: named("Self"), member: "Output" };
+  const nested = ["Vec", "Option", "Vec", "Option", "Vec"].reduce(
+    (value, path) => named(path, [value]), projection);
+  const normalized = nameRustSignatureTypes([{ kind: "trait", name: "Family", visibility: "public",
+    generics: { parameters: [], wherePredicates: [] }, members: [
+      { kind: "type", name: "Output", generics: { parameters: [], wherePredicates: [] }, bounds: [] },
+      { kind: "function", name: "read", selfParam: { kind: "reference", mutable: false },
+        generics: { parameters: [], wherePredicates: [] }, params: [], returnType: nested },
+    ] }]);
+  assert.equal(normalized.aliases.length, 1);
+  const source = `${[...normalized.aliases, ...normalized.items].map(printRustItem).join("\n")}
+pub struct Identity;
+impl Family for Identity {
+    type Output = i64;
+    fn read(&self) -> Vec<Option<Vec<Option<Vec<i64>>>>> { vec![Some(vec![Some(vec![9007199254740993])])] }
+}
+#[test]
+fn exact_projection_preserves_native_output() {
+    assert_eq!(Identity.read()[0].as_ref().unwrap()[0].as_ref().unwrap()[0], 9007199254740993);
+}
+`;
+  const directory = writeGeneratedProject("native_associated_signature_aliases", [
+    { path: "Cargo.toml", text: '[package]\nname = "native_associated_signature_aliases"\nversion = "0.1.0"\nedition = "2024"\n' },
+    { path: "src/lib.rs", text: source },
+  ]);
+  runCargo(directory, ["generate-lockfile", "--offline"]);
+  runCargo(directory, ["fmt", "--all"]);
+  runCargo(directory, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
+  runCargo(directory, ["test", "--locked", "--offline"]);
+});

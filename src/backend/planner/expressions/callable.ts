@@ -282,8 +282,7 @@ export function planRustCallableExpressionBody(
     return undefined;
   }
   const resultIsFallible = callableProtocol !== undefined || nativeClosureProtocol?.fallible === true || fallible;
-  const asynchronousCallable = asynchronous !== undefined && callableProtocol !== undefined;
-  const bodyIsFallible = suspended ? fallible || asynchronousCallable : resultIsFallible;
+  const bodyIsFallible = suspended ? fallible : resultIsFallible;
   const generatorErrorOwner = generator === undefined ? undefined : rustErrorBoundaryForDeclaration(node, context);
   const callableErrorBoundary = generator === undefined ? errorRegion.boundary
     : generatorErrorOwner === undefined ? undefined : rustPackageFallibleBoundary(generatorErrorOwner);

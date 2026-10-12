@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import { asSourceNode, sourceEnclosingCallable } from "@tsonic/target-api/source";
+import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
 import { rustAsyncFunctionFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
 import type { RustErrorEffectsFact } from "../facts/error-effects.js";
@@ -24,7 +24,7 @@ export function selectRustAwaitSourceErrors(
   selection: RustSourceErrorEffectSelection,
   budget: RustEffectsWorkBudget,
 ): readonly RustAwaitSourceErrorSelection[] | undefined {
-  const { sourceStorage: storage, ast, source, facts, callableValues, typeDefinitions: definitions } = walk.context;
+  const { sourceStorage: storage, ast, facts, callableValues, typeDefinitions: definitions } = walk.context;
   const subject = storage.subjectFor(operand);
   const owner = sourceEnclosingCallable(operand, ast);
   const bindings = owner === undefined ? storage.emptyBindings : callableValues.native.bindingsFor(owner);
@@ -40,38 +40,39 @@ export function selectRustAwaitSourceErrors(
     const invocation = producer.subject.node;
     const operation = facts.get(invocation, rustTargetOperationFactKey);
     if (operation?.kind !== "source-call" || callableValues.native.callFor(invocation) !== undefined) continue;
-    const signature = facts.getSelectedTargetCall(invocation);
-    const declaration = asSourceNode(signature?.sourceDeclaration, ast);
-    const implementation = declaration === undefined ? undefined : source.navigation.callableImplementation(declaration);
-    if (implementation?.kind !== "resolved") return undefined;
-    const target = implementation.implementation.declaration;
-    if (facts.get(target, rustAsyncFunctionFactKey) === undefined) return undefined;
-    const topology = rustAwaitSelection(operation.resultCarrier, definitions);
-    const activation = storage.bindingsForInvocation(target, invocation, producer.bindings);
-    if (topology === undefined || activation.kind !== "resolved") return undefined;
-    const effects = effectsFor(target);
-    let sourceWork = budget.metadata(operation.resultCarrier);
-    for (const error of effects.nativeErrors) sourceWork += budget.metadata(error.errorType);
-    const replacementWork = budget.metadata(operation.targetGenericArguments);
-    budget.expansion(sourceWork, replacementWork);
-    const substitutions = selection.bindingsFor(invocation, target,
-      [operation.resultCarrier, ...effects.nativeErrors.map(error => error.errorType)], activation.bindings);
-    const edge = selection.edgeFor(target, "await", effects, substitutions);
-    if (substitutions === undefined || edge === undefined) return undefined;
-    budget.metadata(edge.effects);
-    budget.metadata(edge.nativeErrors);
-    for (const leaf of rustAwaitSelectionLeaves(topology)) {
+    const implementations = storage.invocationImplementationsFor(invocation, producer.bindings);
+    if (implementations.kind !== "resolved" || !implementations.exact || implementations.nodes.length === 0) return undefined;
+    for (const target of implementations.nodes) {
       budget.step();
-      if (leaf.future === undefined) continue;
-      const carrier = substitutions.substitute(leaf.carrier);
-      if (carrier === undefined) return undefined;
-      const branch = branches.find(branch => rustTargetTypeRefEquals(branch, carrier));
-      if (branch === undefined) return undefined;
-      const value = Object.freeze({ invocation, carrier: snapshotClosedMetadata(branch), edge });
-      const previous = selected.find(previous => previous.invocation === invocation &&
-        rustTargetTypeRefEquals(previous.carrier, branch));
-      if (previous === undefined) selected.push(value);
-      else if (!rustSourceErrorEffectEdgeEquals(previous.edge, edge)) return undefined;
+      const asynchronous = facts.get(target, rustAsyncFunctionFactKey);
+      if (asynchronous === undefined) continue;
+      const topology = rustAwaitSelection(asynchronous.futureCarrier, definitions);
+      const activation = storage.bindingsForInvocation(target, invocation, producer.bindings);
+      if (topology === undefined || activation.kind !== "resolved") return undefined;
+      const effects = effectsFor(target);
+      let sourceWork = budget.metadata(asynchronous.futureCarrier);
+      for (const error of effects.nativeErrors) sourceWork += budget.metadata(error.errorType);
+      const replacementWork = budget.metadata(operation.targetGenericArguments);
+      budget.expansion(sourceWork, replacementWork);
+      const substitutions = selection.bindingsFor(invocation, target,
+        [asynchronous.futureCarrier, ...effects.nativeErrors.map(error => error.errorType)], activation.bindings);
+      const edge = selection.edgeFor(target, "await", effects, substitutions);
+      if (substitutions === undefined || edge === undefined) return undefined;
+      budget.metadata(edge.effects);
+      budget.metadata(edge.nativeErrors);
+      for (const leaf of rustAwaitSelectionLeaves(topology)) {
+        budget.step();
+        if (leaf.future === undefined) continue;
+        const carrier = substitutions.substitute(leaf.carrier);
+        if (carrier === undefined) return undefined;
+        const branch = branches.find(branch => rustTargetTypeRefEquals(branch, carrier));
+        if (branch === undefined) return undefined;
+        const value = Object.freeze({ invocation, carrier: snapshotClosedMetadata(branch), edge });
+        const previous = selected.find(previous => previous.invocation === invocation &&
+          previous.edge.declaration === target && rustTargetTypeRefEquals(previous.carrier, branch));
+        if (previous === undefined) selected.push(value);
+        else if (!rustSourceErrorEffectEdgeEquals(previous.edge, edge)) return undefined;
+      }
     }
   }
   return storage.failureReason() === undefined ? Object.freeze(selected) : undefined;

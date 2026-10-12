@@ -87,7 +87,6 @@ function planImplementation(
   const owner = allocateRustSyntheticName(names, "environment");
   const suspended = context.input.program.facts.getFact(implementation.declaration, rustAsyncFunctionFactKey) !== undefined ||
     context.input.program.facts.getFact(implementation.declaration, rustGeneratorFactKey) !== undefined;
-  if (suspended && implementation.storage !== "shared" && rustNativeFutureCallableResult(definition.signature.result) === undefined) return undefined;
   if (!validateRustCapturedReceiverFields(implementation.declaration, implementation.receiverFields, context) ||
     !validateRustCapturedReceivers(implementation.declaration, implementation.receivers, context)) return undefined;
   const bodyContext = rustCallablePayloadContext(selected, { kind: "path", path: owner }, helperContext);

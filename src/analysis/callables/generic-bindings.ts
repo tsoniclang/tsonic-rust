@@ -66,3 +66,24 @@ export function rustGenericCallableInvocationBindings(
     ...rustTypeGenericArguments(definition.signature.typeParameters)],
   [...rustTypeGenericArguments(value.environment), ...arguments_, ...methodArguments]);
 }
+
+export function rustGenericCallableMemberInvocationBindings(
+  definition: RustGenericCallablePhysicalDefinition,
+  member: RustGenericCallablePhysicalMember,
+  carrier: TargetTypeRef,
+  methodArguments: readonly RustTargetGenericArgument[],
+  input: RustGenericCallableBindingContext,
+): RustTargetGenericBindings | undefined {
+  if (!definition.members.includes(member)) return undefined;
+  const invocation = rustGenericCallableInvocationBindings(definition, carrier, methodArguments, input.physical);
+  const source = rustGenericCallableMemberBindings(definition, member, input);
+  if (invocation === undefined || source === undefined) return undefined;
+  return Object.freeze({
+    types: new Map([...source.types].map(([identity, type]) => [identity,
+      substituteRustTargetGenerics(type, invocation.types, invocation.lifetimes, invocation.consts)])),
+    lifetimes: new Map([...source.lifetimes].map(([identity, lifetime]) =>
+      [identity, invocation.lifetimes.get(rustLifetimeKey(lifetime)) ?? lifetime])),
+    consts: new Map([...source.consts].map(([identity, value]) =>
+      [identity, value.kind === "parameter" ? invocation.consts.get(value.identity) ?? value : value])),
+  });
+}

@@ -38,6 +38,7 @@ export function planRustNativeCallableProtocol(
   const result = rustNativeCallableProtocolResult(protocol, context.input.program.typeDefinitions);
   const returnType = result === undefined ? undefined : rustTypeFromCarrierInContext(result, context, "return");
   const methodGenerics = planRustNativeCallableMethodGenerics(protocol, context);
+  const invoked = context.input.program.callableValues.nativeDispatch.requiredFor(protocol);
   if (parameters.some(parameter => parameter === undefined) || returnType === undefined || methodGenerics === undefined) return undefined;
   return { kind: "trait", name: protocol.targetName, visibility: "public",
     generics: { ...emptyRustGenerics, parameters: signature.environmentParameters.map(parameter => ({
@@ -46,10 +47,10 @@ export function planRustNativeCallableProtocol(
     members: [{ kind: "type", name: "InvocationError", generics: methodGenerics, bounds: [] },
       ...(protocol.completion?.futures ?? []).map(future => ({ kind: "type" as const,
         name: `AwaitError${future.ordinal}`, generics: methodGenerics, bounds: [] })),
-      { kind: "function", name: "invoke", selfParam: { kind: "reference", mutable: false },
+      ...(invoked ? [{ kind: "function" as const, name: "invoke", selfParam: { kind: "reference" as const, mutable: false },
         generics: methodGenerics,
         params: (parameters as readonly RustType[]).map((type, index) => ({ name: `argument_${index}`, type })),
         returnType,
-      }],
+      }] : [])],
   };
 }

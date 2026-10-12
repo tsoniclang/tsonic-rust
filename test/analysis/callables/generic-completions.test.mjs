@@ -5,6 +5,7 @@ import { analyzeRustSourcePackageComponents } from "../../../dist/analysis/progr
 import { createRustGenericCallableCompletionPlan } from "../../../dist/analysis/callables/generic-completions.js";
 import { rustSourceUnionCarrierValue } from "../../../dist/target-model/types/carriers/source-types.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
+import { rustGenericCallableMemberInvocationBindings } from "../../../dist/analysis/callables/generic-bindings.js";
 
 function fixture(second) {
   const context = analyzeRustErrorEffects(`
@@ -71,6 +72,23 @@ test("completion invocation substitutes exact quantified arguments without chang
   assert.equal(variants.length, 2);
   assert.equal(variants.every(variant => rustTargetTypeRefEquals(variant.carrier.genericArguments[1].type, integer)), true);
   assert.equal(current.plan.invocationResultFor(current.definition.carrier, []) === undefined, true);
+});
+
+test("generic invocation correspondence binds actual authored parameters rather than alias parameter names", () => {
+  const current = fixture("return value;");
+  const integer = { kind: "source-primitive", name: "int64" };
+  const arguments_ = [{ kind: "type", type: integer }];
+  for (const member of current.definition.members) {
+    const contract = current.context.sourceLifetimes.contractFor(member.implementation.declaration);
+    const bindings = rustGenericCallableMemberInvocationBindings(current.definition, member,
+      current.definition.carrier, arguments_, current.input);
+    assert.equal(bindings !== undefined, true, "exact physical member and invocation");
+    assert.equal(rustTargetTypeRefEquals(bindings.types.get(contract.parameters[0].identity), integer), true);
+    assert.equal(rustGenericCallableMemberInvocationBindings(current.definition, { ...member },
+      current.definition.carrier, arguments_, current.input) === undefined, true, "copied member rejected");
+    assert.equal(rustGenericCallableMemberInvocationBindings(current.definition, member,
+      current.definition.carrier, [], current.input) === undefined, true, "missing quantified argument rejected");
+  }
 });
 
 test("completion member identity cannot be invented or replaced by the same logical signature", () => {

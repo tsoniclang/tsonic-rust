@@ -464,7 +464,8 @@ test("project-source calls trust the exact TSTS-selected declaration rather than
   assert.match(semantics, /binding\.callableDeclaration === sourceDeclaration/u);
   assert.match(semantics, /acceptProjectSourceCall\(request, nativeCallable \? binding\.callableDeclaration : sourceDeclaration/u);
   assert.match(semantics, /const calleeKind = calleeDeclaration === undefined \? undefined : context\.ast\.kindName\(calleeDeclaration\)/u);
-  assert.match(semantics, /const callableType = !nativeCallable && \(storedCallable/u);
+  assert.equal(/const callableType = !nativeCallable && !directLexical && \(storedCallable/u.test(semantics), true,
+    "source callable admission excludes selected native and direct lexical declarations");
   assert.doesNotMatch(semantics, /projectCallDeclarationsCorroborate|RUST_SELECTED_PROJECT_EVIDENCE_CONFLICT/u);
 });
 
@@ -840,7 +841,8 @@ test("backend operation facts cannot override runtime carriers or selected sourc
   for (const lane of requiredLanes) {
     assert.match(expressions, new RegExp(lane.replaceAll(".", "\\."), "u"));
   }
-  assert.match(expressions, /sourceCallEffectsMatch\(fact, sourceCallEffects\)/u);
+  assert.equal(/sourceCallEffectsMatch\(fact, sourceCallEffects,\s*context\.input\.program\.typeDefinitions, context\.input\.program\.callableValues\.native\.callFor\(node\)\)/u.test(expressions), true,
+    "source effects retain owned type definitions and exact native input evidence");
   assert.match(expressions, /providerSelectedCallMatches\(node, fact, context\)/u);
   assert.doesNotMatch(expressions, /convertedCarrier === undefined\s*\?\s*rustTargetTypeRefEquals\(sourceCarrier/u);
 });

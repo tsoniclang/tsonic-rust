@@ -31,7 +31,8 @@ import { createRustNativeCallableProducerPlan, type RustNativeCallableProducerPl
 import { createRustNativeGenericProducerPlan, type RustNativeGenericProducerPlan } from "./native-generic-producers.js";
 import { createRustNativeCapturePlan, type RustNativeCapturePlan } from "./native-captures.js";
 import { createRustGenericCallableDispatchPlan, type RustGenericCallableDispatchPlan } from "./generic-dispatch.js";
-import type { RustLexicalFunctionQueries } from "./lexical-functions.js";
+import type { RustLexicalFunctionEnvironments } from "./lexical-functions.js";
+import { createRustNativeCallableDispatchPlan, type RustNativeCallableDispatchPlan } from "./native-dispatch.js";
 import { createRustGenericCallableCompletionPlan, type RustGenericCallableCompletionInput,
   type RustGenericCallableCompletionPlan } from "./generic-completions.js";
 
@@ -45,6 +46,7 @@ export interface RustCallableValuePlan {
   readonly nativeProducers: RustNativeCallableProducerPlan;
   readonly nativeGenericProducers: RustNativeGenericProducerPlan;
   readonly genericDispatch: RustGenericCallableDispatchPlan;
+  readonly nativeDispatch: RustNativeCallableDispatchPlan;
   readonly genericCompletions: RustGenericCallableCompletionPlan;
   readonly issues: readonly RustSourceCallableSpecializationIssue[];
 }
@@ -64,7 +66,7 @@ export interface RustCallableValuePlanInput {
   readonly projectTypes: RustProjectTypePolicy;
   readonly objectRepresentations: import("../project-types/object-representation.js").RustObjectRepresentationPlan;
   readonly typeDefinitions: RustTypeDefinitions;
-  readonly lexicalFunctions: RustLexicalFunctionQueries;
+  readonly lexicalFunctions: RustLexicalFunctionEnvironments;
 }
 
 export interface RustCallableValuePlanRegistry extends RustCallableValuePlan {
@@ -106,6 +108,7 @@ export function createRustCallableValuePlanRegistry(): RustCallableValuePlanRegi
     get nativeProducers() { return requireCurrent().nativeProducers; },
     get nativeGenericProducers() { return requireCurrent().nativeGenericProducers; },
     get genericDispatch() { return requireCurrent().genericDispatch; },
+    get nativeDispatch() { return requireCurrent().nativeDispatch; },
     get genericCompletions() { return requireCompletions(); },
     get issues() { return requireCurrent().issues; },
   });
@@ -192,7 +195,7 @@ function createRustCallableValuePlan(input: RustCallableValuePlanInput,
     } });
   const nativeStorage = createRustNativeStoragePlan({ ast: input.ast, facts: input.facts,
     storage: input.sourceStorage, definitions: input.typeDefinitions, native, producers: nativeProducers, generic,
-    lexicalFunctions: input.lexicalFunctions });
+    lexicalFunctions: input.lexicalFunctions, lifetimes: input.lifetimes });
   const nativeCaptures = createRustNativeCapturePlan({ facts: input.facts, storage: input.sourceStorage, nativeStorage });
   generic.initializePhysical({ ast: input.ast, storage: input.sourceStorage, captures: nativeCaptures, native,
     boundSubjectFor: (subject, carrier, bindings) => nativeStorage.boundSubjectFor(subject, carrier, bindings) });
@@ -217,7 +220,8 @@ function createRustCallableValuePlan(input: RustCallableValuePlanInput,
     facts: input.facts, generic, native, nativeStorage });
   const genericDispatch = createRustGenericCallableDispatchPlan({ ...input,
     nodes: input.sourceStorage.nodes, generic, nativeStorage, nativeGenericProducers });
+  const nativeDispatch = createRustNativeCallableDispatchPlan({ ...input, native });
   return Object.freeze({ generic, suspended, frames, native, nativeStorage, nativeCaptures, nativeProducers, nativeGenericProducers,
-    genericDispatch, get genericCompletions() { return completions(); },
+    genericDispatch, nativeDispatch, get genericCompletions() { return completions(); },
     issues: Object.freeze([...generic.issues, ...suspended.issues, ...frames.issues]) });
 }

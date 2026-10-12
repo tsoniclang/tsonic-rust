@@ -1,7 +1,23 @@
 import type { AstReader, Node } from "@tsonic/tsts";
+import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import { rustSourceParameterAbiFactKey } from "./callables-and-resources.js";
 import { rustLifetimeKey, rustLifetimesEqual, type RustSourceGenericParameterContract } from "../../target-model/lifetimes/index.js";
+import { rustRetainedEnvironmentFactKey } from "./retained-environments.js";
+
+export function rustCallableImplicitLifetimeParameters(
+  declaration: Node,
+  ast: AstReader,
+  facts: RustPlanQueries,
+): readonly RustSourceGenericParameterContract[] {
+  if (sourceEnclosingCallable(declaration, ast) !== declaration) return Object.freeze([]);
+  const parameters = rustCallableInputLifetimeParameters(declaration, ast, facts);
+  const environment = facts.getFact(declaration, rustRetainedEnvironmentFactKey);
+  return environment === undefined ? parameters : Object.freeze([...parameters, Object.freeze({
+    kind: "lifetime" as const, declaration, sourceName: environment.lifetime.name,
+    lifetime: environment.lifetime, outlives: Object.freeze([]),
+  })]);
+}
 
 export function rustCallableInputLifetimeParameters(
   declaration: Node,

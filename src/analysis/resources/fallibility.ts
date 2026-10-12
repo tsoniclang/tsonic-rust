@@ -30,7 +30,8 @@ import { rustStructuralFieldIsFallible } from "../objects/structural-shape-plan.
 import { finalizeRustPreparedCheckedCall } from "../operations/provider/index.js";
 import { rustCallbackProtocol } from "../operations/provider/callbacks.js";
 import { recordSelectedOperationInputs } from "../operations/inputs.js";
-import { rustAwaitCarrier, rustCallableProtocol } from "../../target-model/types/index.js";
+import { rustCallableProtocol } from "../../target-model/types/index.js";
+import { rustNativeCallableCompletion } from "../../target-model/types/callable-completions.js";
 import { rustSourceCallCallableStorageCarrier } from "../facts/target-operation.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustGenericCallableInvocationFactKey, type RustGenericCallableInvocationFact } from "../facts/generic-callable-effects.js";
@@ -129,12 +130,14 @@ function collectFallibilityFacts(
   const genericAwaitIsFallible = (declaration: Node): boolean =>
     walk.context.facts.get(declaration, rustSourceCallableReturnFactKey)?.implementationCompletion === undefined &&
       (walk.context.facts.get(declaration, rustAsyncFunctionFactKey) === undefined || isFallible(declaration));
+  const hasCompletion = (carrier: import("../../target-model/types/model.js").TargetTypeRef | undefined): boolean =>
+    carrier !== undefined && rustNativeCallableCompletion(carrier, walk.context.typeDefinitions) !== undefined;
   const genericInvocation = (node: Node): RustGenericCallableInvocationFact | undefined => {
     const selected = selectRustGenericCallableInvocation(node, walk.context, declaration => {
       const result = walk.context.facts.get(declaration, rustAsyncFunctionFactKey)?.futureCarrier ??
         walk.context.facts.get(declaration, rustSourceCallableReturnFactKey)?.returnCarrier;
       return { invocation: genericInvocationIsFallible(declaration) ? "fallible" : "infallible",
-        awaiting: rustAwaitCarrier(result) === undefined ? "not-applicable"
+        awaiting: !hasCompletion(result) ? "not-applicable"
           : genericAwaitIsFallible(declaration) ? "fallible" : "infallible" };
     });
     if (selected === undefined || !selectSourceErrors.register([...selected.invocation, ...selected.awaiting])) {
@@ -527,7 +530,7 @@ function collectFallibilityFacts(
       walk.context.facts.get(declaration, rustSourceCallableReturnFactKey)?.returnCarrier;
     walk.context.facts.set(declaration, rustSourceCallEffectsFactKey, {
       invocation: genericInvocationIsFallible(declaration) ? "fallible" : "infallible",
-      awaiting: rustAwaitCarrier(result) === undefined ? "not-applicable"
+      awaiting: !hasCompletion(result) ? "not-applicable"
         : genericAwaitIsFallible(declaration) ? "fallible" : "infallible",
     }, [{ message: "rust finalized callable declaration invocation and return effects" }]);
   }
@@ -682,7 +685,7 @@ function collectFallibilityFacts(
             rustGenericCallableValue(rustSourceCallCallableStorageCarrier(operation, walk.context.structuralShapes)) !== undefined;
           const invocation = generic ? genericInvocation(node) : undefined;
           if (nativeInput === undefined && (nativeCallable || runtimeCallable || invocation !== undefined || declaration !== undefined)) {
-            const isAsync = rustAwaitCarrier(operation.resultCarrier) !== undefined;
+            const isAsync = hasCompletion(operation.resultCarrier);
             const unionBranches = operation.target.form === "union-method"
               ? operation.target.variants.map(variant => ({
                 invocation: genericInvocationIsFallible(variant.declaration) ? "fallible" as const : "infallible" as const,

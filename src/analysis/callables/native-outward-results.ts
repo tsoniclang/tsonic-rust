@@ -8,7 +8,8 @@ import { rustJsPromiseTargetTypeWithLifetime } from "../../target-model/types/ca
 import { rustJsPromiseTargetId } from "../../target-model/types/carriers/source-types.js";
 import { rustNamedTargetType } from "../../target-model/types/carriers/native.js";
 import { rustTypeGenericArguments } from "../../target-model/types/generic-arguments.js";
-import { rustAsyncFunctionFactKey, rustErrorEffectsFactKey, rustSourceCallableReturnFactKey } from "../facts/keys.js";
+import { rustAsyncFunctionFactKey, rustErrorEffectsFactKey, rustSourceCallableReturnFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustErrorEffectsAreFallible } from "../facts/error-effects.js";
 import type { RustNativeCallableProducerPlan } from "./native-producers.js";
 
@@ -40,8 +41,16 @@ export function createRustNativeOutwardResults(input: {
         if (asynchronous.kind === "js-promise") {
           const lifetime = asynchronous.futureCarrier.kind === "target-named"
             ? asynchronous.futureCarrier.genericArguments?.[0] : undefined;
-          return lifetime?.kind !== "lifetime" ? undefined
-            : rustJsPromiseTargetTypeWithLifetime(physical, lifetime.lifetime, error);
+          if (lifetime?.kind !== "lifetime") return undefined;
+          const result = rustJsPromiseTargetTypeWithLifetime(physical, lifetime.lifetime, error);
+          const operation = input.facts.getFact(declaration, rustTargetOperationFactKey);
+          const conversion = operation?.kind === "closure" ? operation.invocationResult : undefined;
+          if (conversion === undefined) return result;
+          if (!rustTargetTypeRefEquals(conversion.sourceCarrier, asynchronous.futureCarrier)) return undefined;
+          const completion = rustNativeCallableCompletion(conversion.targetCarrier, input.definitions);
+          return completion === undefined ? undefined : instantiateRustNativeCompletion(completion,
+            future => rustTargetTypeRefEquals(future.carrier, asynchronous.futureCarrier) ? result : undefined,
+            input.definitions);
         }
         const effects = input.facts.getFact(declaration, rustErrorEffectsFactKey);
         if (effects === undefined) return undefined;

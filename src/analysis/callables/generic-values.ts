@@ -158,7 +158,8 @@ export function createRustGenericCallablePlan(
           stateName: allocateRustGeneratedName(usedNames, `CallableEnvironment${implementationIdentity.slice(0, 12)}`),
           functionName: allocateRustGeneratedName(usedNames, `call_generic_${implementationIdentity.slice(0, 12)}`),
           storage: !identityFamilies.has(identity) &&
-            (facts.getFact(node, rustAsyncFunctionFactKey) === undefined || rustNativeFutureCallableResult(value.signature.result) !== undefined) &&
+            (facts.getFact(node, rustAsyncFunctionFactKey) === undefined || rustNativeFutureCallableResult(value.signature.result) !== undefined ||
+              captures.length === 0 && receiverFields.length === 0 && receivers.length === 0) &&
             facts.getFact(node, rustGeneratorFactKey) === undefined &&
             receiverFields.length === 0 && receivers.length === 0 && captures.every(selected => selected.storage === "value" && isRustCopyCarrier(selected.storageCarrier))
               ? "value" as const : "shared" as const,

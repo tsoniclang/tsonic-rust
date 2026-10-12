@@ -242,6 +242,32 @@ test("signature aliases reserve associated-type binders without lifting their lo
   assert.deepEqual(nameRustSignatureTypes(result), result);
 });
 
+test("signature aliases abstract exact Self projections without lifting Self or their local binders", () => {
+  const projection = { kind: "qualified", owner: named("Self"), member: "Output", genericArguments: [
+    { kind: "lifetime", lifetime: { kind: "named", name: "borrow" } },
+  ] };
+  const payload = named("Vec", [named("Option", [named("Vec", [named("Option", [named("Vec", [projection])])])])]);
+  const method = { kind: "function", name: "read", selfParam: { kind: "reference", mutable: false },
+    generics: { parameters: [{ kind: "lifetime", name: "borrow", outlives: [] }], wherePredicates: [] },
+    params: [{ name: "values", type: payload }], returnType: payload };
+  const trait = { kind: "trait", name: "Family", visibility: "public", generics: emptyRustGenerics,
+    members: [{ kind: "type", name: "Output", bounds: [], generics: method.generics }, method] };
+  const result = nameSignatureScope([trait, { kind: "struct", name: "Output", visibility: "public",
+    generics: emptyRustGenerics, fields: [] }]);
+  assert.equal(result.aliases.length, 1);
+  const alias = result.aliases[0];
+  assert.deepEqual(alias.generics.parameters, [{ kind: "type", name: "Output2", bounds: [] }]);
+  assert.deepEqual(alias.target, named("Vec", [named("Option", [named("Vec", [named("Option", [named("Vec", [
+    { kind: "named", path: "Output2" },
+  ])])])])]));
+  const selected = result.items[0].members[1];
+  assert.deepEqual(selected.generics, method.generics);
+  assert.deepEqual(selected.returnType.genericArguments, [{ kind: "type", type: projection }]);
+  assert.deepEqual(selected.params[0].type, selected.returnType);
+  assert.deepEqual(result.items[0].members[0], trait.members[0]);
+  assert.deepEqual(nameSignatureScope([...result.aliases, ...result.items]).aliases, []);
+});
+
 test("borrowed and opaque boundaries remain in the function instead of escaping into aliases", () => {
   const boundary = { kind: "reference", mutable: true, referent: { kind: "slice", element: nested } };
   const opaque = { kind: "impl-trait", outlives: [], bounds: [{ kind: "callable", trait: "Fn",

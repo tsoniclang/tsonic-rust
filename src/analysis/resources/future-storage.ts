@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { SourceStorageBindings, SourceStorageProducer, SourceStorageSubject } from "@tsonic/target-api/analysis";
-import { asSourceNode, sourceEnclosingCallable } from "@tsonic/target-api/source";
+import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
 import { rustAsyncFunctionFactKey, rustFutureValueFactKey, rustSourceCallEffectsFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
 import type { RustFutureValueFact } from "../facts/keys.js";
@@ -14,6 +14,7 @@ import { finalizedConversionIsValid } from "../facts/finalized-operation/convers
 import { substituteRustValueConversion } from "../../target-model/conversions/substitution.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustAwaitCarrier } from "../../target-model/types/index.js";
+import { rustErrorEffectsFactKey, rustErrorEffectsAreFallible } from "../facts/error-effects.js";
 
 export function rustFutureValueForStoredBranch(
   walk: RustFactWalk,
@@ -130,13 +131,22 @@ function futureForProducer(walk: RustFactWalk, producer: Node, branch: TargetTyp
   const effects = facts.get(producer, rustSourceCallEffectsFactKey);
   const native = rustNativeFutureValueForSourceCallBranch(operation, effects, branch, definitions);
   if (native !== undefined) return native;
+  let infallible = false;
   if (operation?.kind === "source-call") {
-    const declaration = asSourceNode(facts.getSelectedTargetCall(producer)?.sourceDeclaration, walk.context.ast);
-    const implementation = declaration === undefined ? undefined : walk.context.source.navigation.callableImplementation(declaration);
-    if (implementation?.kind !== "resolved" ||
-      facts.get(implementation.implementation.declaration, rustAsyncFunctionFactKey) === undefined) return undefined;
+    const owner = sourceEnclosingCallable(producer, walk.context.ast);
+    const bindings = owner === undefined ? walk.context.sourceStorage.emptyBindings : walk.context.callableValues.native.bindingsFor(owner);
+    if (bindings === undefined) return undefined;
+    const implementations = walk.context.sourceStorage.invocationImplementationsFor(producer, bindings);
+    if (implementations.kind !== "resolved" || !implementations.exact ||
+      !implementations.nodes.some(declaration => facts.get(declaration, rustAsyncFunctionFactKey) !== undefined)) return undefined;
+    infallible = implementations.nodes.every(declaration => {
+      const effects = facts.get(declaration, rustErrorEffectsFactKey);
+      return facts.get(declaration, rustAsyncFunctionFactKey) !== undefined && effects !== undefined && !rustErrorEffectsAreFallible(effects);
+    });
   }
   const selected = facts.get(producer, rustFutureValueFactKey) ??
-    rustFutureValueForOperation(operation, effects, definitions);
-  return selected !== undefined && rustFutureValueMatchesCarrier(selected, branch, definitions) ? selected : undefined;
+    rustFutureValueForOperation(operation, effects, definitions, branch);
+  if (selected === undefined || !rustFutureValueMatchesCarrier(selected, branch, definitions)) return undefined;
+  return selected.errorBoundary === "source-program" && infallible
+    ? { ...selected, awaiting: "infallible", errorBoundary: "none" } : selected;
 }

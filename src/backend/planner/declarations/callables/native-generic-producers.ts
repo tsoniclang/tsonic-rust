@@ -42,6 +42,7 @@ function planImplementation(
   context: RustPlanContext,
 ): RustItem | undefined {
   const signature = protocol.signature;
+  const invoked = context.input.program.callableValues.nativeDispatch.requiredFor(protocol);
   const methodGenerics = planRustNativeCallableMethodGenerics(protocol, context);
   const errors = planRustGenericCallableErrors(definition, context);
   const target = rustTypeFromCarrierInContext(definition.carrier, context);
@@ -91,9 +92,10 @@ function planImplementation(
     members: [{ kind: "type", name: "InvocationError", generics: methodGenerics, type: invocationError ?? infallible },
       ...(protocol.completion?.futures ?? []).map(future => ({ kind: "type" as const, name: `AwaitError${future.ordinal}`,
         generics: methodGenerics, type: errors.awaiting.errorType ?? infallible })),
-      { kind: "function", name: "invoke", visibility: "private", selfParam: { kind: "reference", mutable: false },
+      ...(invoked ? [{ kind: "function" as const, name: "invoke", visibility: "private" as const,
+        selfParam: { kind: "reference" as const, mutable: false },
         generics: methodGenerics, params: parameters.map((type, index) => ({ name: `argument_${index}`, type: type! })),
-        returnType, body: { statements } },
+        returnType, body: { statements } }] : []),
     ],
   };
 }

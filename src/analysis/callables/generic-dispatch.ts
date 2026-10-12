@@ -13,7 +13,7 @@ interface RustGenericCallableInvocationInput {
   readonly ast: AstReader;
   readonly facts: RustPlanQueries;
   readonly generic: RustGenericCallablePlan;
-  readonly nativeStorage: RustNativeStoragePlan;
+  readonly nativeStorage: Pick<RustNativeStoragePlan, "valueFor">;
 }
 
 export interface RustGenericCallableDispatchPlan {

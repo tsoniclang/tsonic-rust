@@ -69,7 +69,8 @@ export function bindRustCallableResultTypeParameters(
   context: RustTargetTypeResolutionContext,
 ): RustTargetTypeResolutionContext | undefined {
   const selected = resolveRustEnclosingGenericParameters(declaration,
-    rustTargetTypeParameterIdentities(template), context.ast, context.sourceLifetimes);
+    rustTargetTypeParameterIdentities(template), context.ast,
+    owner => context.sourceLifetimes.contractFor(owner)?.parameters ?? []);
   if (selected === undefined) return undefined;
   const parameters = new Map(selected.flatMap(parameter => parameter.kind === "type"
     ? [[parameter.identity, parameter.declaration] as const] : []));

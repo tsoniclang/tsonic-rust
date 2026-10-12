@@ -117,8 +117,17 @@ export function recordRustAsyncBodyFacts(
       declaration, ["target.capability=rust.async.contextual-promise-output"]);
     return;
   }
+  const declaredSelection = closedContext === undefined ? undefined : rustAwaitSelection(closedContext, walk.context.typeDefinitions);
+  const declaredPromises = declaredSelection === undefined ? [] : rustAwaitSelectionLeaves(declaredSelection)
+    .flatMap(leaf => {
+      const promise = leaf.future?.futureCarrier;
+      const lifetime = promise?.kind === "target-named" ? promise.genericArguments?.[0] : undefined;
+      return promise?.kind === "target-named" && promise.id === rustJsPromiseTargetId && lifetime?.kind === "lifetime" &&
+        rustTargetTypeRefEquals(rustJsPromiseOutputTargetType(promise), selected.outputCarrier) ? [lifetime.lifetime] : [];
+    });
+  const requiredLifetime = declaredPromises.length === 1 && declaredPromises[0]?.kind === "static" ? declaredPromises[0] : undefined;
   const storage = resolveRustSuspendedCallableStorage(walk, declaration,
-    [selected.outputCarrier, selected.errorCarrier], ownedReceiver);
+    [selected.outputCarrier, selected.errorCarrier], ownedReceiver, requiredLifetime);
   if (storage.kind === "rejected") {
     appendRustDiagnostic(walk, "RUST_ASYNC_PROMISE_STORAGE_LIFETIME_NOT_PROVEN", storage.reason,
       declaration, ["target.capability=rust.async.js-promise-storage-lifetime"]);

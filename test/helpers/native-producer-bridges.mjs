@@ -20,6 +20,7 @@ export function nativeProducerFixture({
       typeDefinitions: definitions,
       callableValues: { native: { protocolForSourceItem: (fileName, name) =>
         fileName === protocol.ownerFileName && name === protocol.targetName ? protocol : undefined },
+        nativeDispatch: { requiredFor: candidate => candidate === protocol },
         nativeGenericProducers: { unresolved: [], forProtocol: () => [] } },
       names: { nameForSourceType: (_fileName, name) => name },
       structuralShapes: { unionForCarrier: value => {

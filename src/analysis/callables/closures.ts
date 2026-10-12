@@ -61,6 +61,7 @@ import { resolveRustCallableStorageCarrier } from "../../policy/types/resolution
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { selectRustCallableConversion } from "../../target-model/conversions/callable.js";
 import { rustRetainedValueLifetime } from "./retained-environments.js";
+import { selectRustClosedCallableContext } from "./contextual-inputs.js";
 
 export function resolveFunctionExpressionSignature(
   walk: RustFactWalk,
@@ -116,7 +117,7 @@ export function resolveFunctionExpressionCarrier(
     ? resolveFunctionExpressionSignature(walk, expression, options?.sourceCarrier) : undefined;
   const sourceSelected = options?.sourceCarrier ?? inferred?.sourceCarrier;
   const resolvedSourceCallable = inferred?.protocol;
-  const selectedExpected = expected ?? inferred?.carrier;
+  const selectedExpected = selectRustClosedCallableContext(walk, expression, expected ?? inferred?.carrier);
   if (selectedExpected === undefined || (selectedExpected.kind !== "function-pointer" &&
     rustClosureProtocol(selectedExpected) === undefined &&
     rustGenericCallableProtocol(selectedExpected, genericParameters) === undefined &&

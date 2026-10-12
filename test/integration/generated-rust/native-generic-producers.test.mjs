@@ -29,7 +29,8 @@ test("generic callback inputs retain one pure family through aliases, returns an
       if (forward(alias) !== 7 || alias<string>("native") !== "native" || first !== alias) throw new Error("identity");
     }
   `);
-  assert.match(generated, /impl NativeCallable_[a-f\d]+ for crate::index::GenericCallable/u);
+  assert.equal(/impl crate::index::NativeCallable_[a-f\d]+ for crate::index::GenericCallable/u.test(generated), true,
+    "selected native protocol retains its exact owning module");
   assert.match(generated, /type InvocationError<CallType0> = core::convert::Infallible/u);
   assert.doesNotMatch(generated, /fn call<[^}]*?-> Result/u);
   assert.doesNotMatch(generated, /Box<|dyn |Rc<[^\n]*GenericCallable/u);

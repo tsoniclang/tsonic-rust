@@ -24,7 +24,7 @@ function fixture(text, options = {}) {
   const storage = createSourceStorageQuery(source, program.sourceFiles);
   const generic = createRustGenericCallablePlan(source.ast, program.sourceFiles, program.facts, program.names, source.navigation);
   const input = { ast: source.ast, storage, facts: program.facts, definitions: program.typeDefinitions,
-    generic, lexicalFunctions: program.lexicalFunctions };
+    generic, lexicalFunctions: program.lexicalFunctions, lifetimes: program.sourceLifetimes };
   const native = createRustNativeCallableInputPlan({ ...input, sourcePackages: program.host.sourcePackages, usedNames: new Set() });
   const producers = createRustNativeCallableProducerPlan({ ...input, native, nodes: storage.nodes,
     returnCarrierFor: declaration => {
@@ -48,6 +48,18 @@ function fixture(text, options = {}) {
   };
   return { program, source, storage, input, native, plan, declaration, initializer, exactSubject };
 }
+
+test("closed native generic queries validate ownership without manufacturing unused activations", () => {
+  const current = fixture("export function closed(): number { return 7; }");
+  const declaration = current.declaration("closed");
+  const selected = current.plan.genericBindingsFor(declaration, current.storage.emptyBindings);
+  assert.equal(selected.kind, "resolved");
+  assert.equal(selected.bindings.types.size + selected.bindings.lifetimes.size + selected.bindings.consts.size, 0);
+  assert.equal(current.plan.genericBindingsFor(declaration, { ...current.storage.emptyBindings }).kind, "unresolved",
+    "an empty-looking fabricated scope cannot acquire ownership");
+  assert.equal(current.plan.genericBindingsFor({ ...declaration }, current.storage.emptyBindings).kind, "unresolved",
+    "an equal-looking declaration cannot acquire source identity");
+});
 
 function selected(value, implementation, label) {
   assert.equal(value.kind === "selected", true, value.reason ?? label);

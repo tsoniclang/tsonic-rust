@@ -5,6 +5,8 @@ import { rustPascalCaseIdentifier } from "../../../target-model/names/identifier
 interface ClosedTypeSummary {
   readonly weight: number;
   readonly names: ReadonlySet<string>;
+  readonly type: RustType;
+  readonly projections: readonly { readonly name: string; readonly type: RustType }[];
 }
 
 export interface RustNamedSignatureScope {
@@ -34,7 +36,7 @@ export function nameRustSignatureTypes(
       if (type.kind === "slice") return { ...type, element: nameType(type.element, `${role}Element`, visibility, scope) };
       if (type.kind === "impl-trait") return { ...type,
         bounds: type.bounds.map(bound => nameBound(bound, role, visibility, scope)) };
-      const summary = summarizeClosedType(type);
+      const summary = summarizeClosedType(type, new Set([...reserved, ...scope.map(parameter => parameter.name)]));
       if (summary === undefined || summary.weight < 160 || summary.names.has("Self")) return type;
       const selectedParameters = scope.filter(parameter => summary.names.has(parameter.name));
       const parameters = [...selectedParameters.filter(parameter => parameter.kind === "lifetime"),
@@ -43,11 +45,14 @@ export function nameRustSignatureTypes(
           ? { kind: "type", name: parameter.name, bounds: [] }
           : parameter.kind === "const" ? { kind: "const", name: parameter.name, type: parameter.type }
             : { ...parameter, outlives: [] });
+      parameters.push(...summary.projections.map(projection => ({ kind: "type" as const,
+        name: projection.name, bounds: [] })));
       const arguments_: RustGenericArgument[] = parameters.map(parameter => parameter.kind === "type"
-        ? { kind: "type", type: { kind: "named", path: parameter.name } }
+        ? { kind: "type", type: summary.projections.find(projection => projection.name === parameter.name)?.type
+          ?? { kind: "named", path: parameter.name } }
         : parameter.kind === "const" ? { kind: "const", value: { kind: "path", path: parameter.name } }
           : { kind: "lifetime", lifetime: { kind: "named", name: parameter.name } });
-      let alias = aliases.find(candidate => rustTypeEquals(candidate.target, type) &&
+      let alias = aliases.find(candidate => rustTypeEquals(candidate.target, summary.type) &&
         candidate.generics.parameters.length === parameters.length &&
         candidate.generics.parameters.every((parameter, index) => {
           const expected = parameters[index];
@@ -61,7 +66,7 @@ export function nameRustSignatureTypes(
         while (reserved.has(name)) name = `${base}${suffix++}`;
         reserved.add(name);
         alias = { kind: "type-alias", name, visibility,
-          generics: { parameters, wherePredicates: [] }, target: type };
+          generics: { parameters, wherePredicates: [] }, target: summary.type };
         aliases.push(alias);
       } else if (visibility === "public" && alias.visibility !== "public") {
         const index = aliases.indexOf(alias);
@@ -125,43 +130,76 @@ export function nameRustSignatureTypes(
   return { aliases, items: result };
 }
 
-function summarizeClosedType(type: RustType): ClosedTypeSummary | undefined {
+function summarizeClosedType(type: RustType, reserved: Set<string>): ClosedTypeSummary | undefined {
   const names = new Set<string>();
+  const projections: { readonly name: string; readonly type: RustType }[] = [];
   let weight = 0;
-  const arguments_ = (values: readonly RustGenericArgument[] | undefined, depth: number): boolean =>
-    (values ?? []).every(value => {
-      if (value.kind === "type") return visit(value.type, depth);
-      if (value.kind === "const") {
+  const arguments_ = (values: readonly RustGenericArgument[] | undefined, depth: number): readonly RustGenericArgument[] | undefined => {
+    const result: RustGenericArgument[] = [];
+    for (const value of values ?? []) {
+      if (value.kind === "type") {
+        const selected = visit(value.type, depth);
+        if (selected === undefined) return undefined;
+        result.push({ ...value, type: selected });
+      }
+      else if (value.kind === "const") {
         if (value.value.kind === "path") names.add(value.value.path);
-        return true;
+        result.push(value);
       }
-      if (value.kind === "lifetime" && value.lifetime.kind === "static") return true;
-      if (value.kind === "lifetime" && value.lifetime.kind === "named") {
+      else if (value.kind === "lifetime" && value.lifetime.kind === "static") result.push(value);
+      else if (value.kind === "lifetime" && value.lifetime.kind === "named") {
         names.add(value.lifetime.name);
-        return true;
+        result.push(value);
       }
-      return false;
-    });
-  const visit = (value: RustType, depth: number): boolean => {
+      else return undefined;
+    }
+    return result;
+  };
+  const visit = (value: RustType, depth: number): RustType | undefined => {
     weight += depth * 10;
     switch (value.kind) {
-      case "named":
+      case "named": {
         names.add(value.path);
-        return arguments_(value.genericArguments, depth + 1);
-      case "qualified":
-        return visit(value.owner, depth + 1) && (value.trait === undefined || visit(value.trait, depth + 1)) &&
-          arguments_(value.genericArguments, depth + 1);
-      case "tuple":
-        return value.elements.every(element => visit(element, depth + 1));
-      case "fixed-array":
+        const selected = arguments_(value.genericArguments, depth + 1);
+        return selected === undefined ? undefined : { ...value,
+          ...(value.genericArguments === undefined ? {} : { genericArguments: selected }) };
+      }
+      case "qualified": {
+        if (value.owner.kind === "named" && value.owner.path === "Self") {
+          let projection = projections.find(candidate => rustTypeEquals(candidate.type, value));
+          if (projection === undefined) {
+            let name = value.member;
+            let suffix = 2;
+            while (reserved.has(name)) name = `${value.member}${suffix++}`;
+            reserved.add(name);
+            projection = { name, type: value };
+            projections.push(projection);
+          }
+          return { kind: "named", path: projection.name };
+        }
+        const owner = visit(value.owner, depth + 1);
+        const trait = value.trait === undefined ? undefined : visit(value.trait, depth + 1);
+        const selected = arguments_(value.genericArguments, depth + 1);
+        return owner === undefined || value.trait !== undefined && trait === undefined || selected === undefined
+          ? undefined : { ...value, owner, ...(trait === undefined ? {} : { trait }),
+            ...(value.genericArguments === undefined ? {} : { genericArguments: selected }) };
+      }
+      case "tuple": {
+        const elements = value.elements.map(element => visit(element, depth + 1));
+        return elements.some(element => element === undefined) ? undefined
+          : { ...value, elements: elements as readonly RustType[] };
+      }
+      case "fixed-array": {
         if (value.length.kind === "path") names.add(value.length.path);
-        return visit(value.element, depth + 1);
+        const element = visit(value.element, depth + 1);
+        return element === undefined ? undefined : { ...value, element };
+      }
       case "primitive":
       case "string":
       case "str":
       case "unit":
       case "never":
-        return true;
+        return value;
       case "infer":
       case "impl-trait":
       case "trait-object":
@@ -170,8 +208,9 @@ function summarizeClosedType(type: RustType): ClosedTypeSummary | undefined {
       case "slice":
       case "function-pointer":
       case "callable-trait":
-        return false;
+        return undefined;
     }
   };
-  return visit(type, 1) ? { weight, names } : undefined;
+  const selected = visit(type, 1);
+  return selected === undefined ? undefined : { weight, names, type: selected, projections };
 }

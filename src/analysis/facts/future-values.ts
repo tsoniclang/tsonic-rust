@@ -18,6 +18,7 @@ export function rustFutureValueForOperation(
   operation: RustTargetOperationFact | undefined,
   sourceCallEffects?: RustSourceCallEffectsFact,
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
+  sourceBranch?: TargetTypeRef,
 ): RustFutureValueFact | undefined {
   if (operation?.kind === "provider-operation") {
     if (!validateRustFinalizedOperationAbi(operation.abi, definitions)) {
@@ -55,12 +56,16 @@ export function rustFutureValueForOperation(
     sourceCallEffects.awaiting === "not-applicable") {
     return undefined;
   }
-  const outputCarrier = rustAwaitCarrier(operation.resultCarrier)?.outputCarrier;
+  const carrier = sourceBranch ?? operation.resultCarrier;
+  if (!rustTargetTypeRefEquals(carrier, operation.resultCarrier) &&
+    !rustNativeCallableCompletion(operation.resultCarrier, definitions)?.futures.some(future =>
+      rustTargetTypeRefEquals(future.carrier, carrier))) return undefined;
+  const outputCarrier = rustAwaitCarrier(carrier)?.outputCarrier;
   if (outputCarrier === undefined) {
     return undefined;
   }
   if (sourceCallEffects.nativeInput !== undefined) return rustNativeFutureValueForSourceCallBranch(
-    operation, sourceCallEffects, operation.resultCarrier, definitions);
+    operation, sourceCallEffects, carrier, definitions);
   return {
     outputCarrier,
     awaitedConversion: {

@@ -3,7 +3,8 @@ import type { SourceStorageBindings, SourceStorageBindingsSelection, SourceStora
 import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
-import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { instantiateRustSourceUnionPayloads } from "../../target-model/types/source-union-definitions.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -29,12 +30,16 @@ import { rustContextualValueConversionFactKey, rustSourceCallableReturnFactKey, 
 import { rustEffectiveValueCarrier, rustValueCarrierBeforeContextualConversion } from "../facts/value-carrier-queries.js";
 import { rustNativeCallablePhysicalSource, rustNativeCallableInputPhysicalSignature } from "./native-conversions.js";
 import { rustNativeCallableInvocationArguments } from "./native-invocations.js";
-import { createRustNativeStorageGenericSelection } from "./native-storage-generics.js";
+import { createRustNativeStorageGenericSelection, selectRustNativeStorageGenericBindings,
+  rustNativeStorageProjectionSteps, rustNativeStorageProjectionDepth, type RustNativeStorageGenericSelection } from "./native-storage-generics.js";
 import { createRustNativeFutureInputPlan, type RustNativeFutureEnvironmentSelection } from "./native-future-inputs.js";
 import type { RustNativeCallableInput, RustNativeCallableInputPlan } from "./native-inputs.js";
 import type { RustNativeCallableProducerPlan } from "./native-producers.js";
 import type { RustGenericCallablePlan } from "./generic-values.js";
-import type { RustLexicalFunctionQueries } from "./lexical-functions.js";
+import type { RustLexicalFunctionEnvironments } from "./lexical-functions.js";
+import { selectRustGenericCallableInvocationStorage } from "./generic-dispatch.js";
+import { rustGenericCallableMemberInvocationBindings } from "./generic-bindings.js";
+import { Node_Expression } from "@tsonic/target-api/source";
 
 export type RustNativeStorageSelection =
   | { readonly kind: "identity"; readonly carrier: TargetTypeRef }
@@ -42,6 +47,7 @@ export type RustNativeStorageSelection =
   | { readonly kind: "unresolved"; readonly reason: string };
 
 export interface RustNativeStoragePlan {
+  genericBindingsFor(declaration: Node, bindings: SourceStorageBindings): RustNativeStorageGenericSelection;
   futureEnvironmentFor(declaration: Node): RustNativeFutureEnvironmentSelection;
   parameterFor(parameter: Node, carrier: TargetTypeRef): RustNativeStorageSelection;
   returnFor(declaration: Node): RustNativeStorageSelection;
@@ -63,7 +69,8 @@ export function createRustNativeStoragePlan(input: {
   readonly native: RustNativeCallableInputPlan;
   readonly producers: RustNativeCallableProducerPlan;
   readonly generic: RustGenericCallablePlan;
-  readonly lexicalFunctions: RustLexicalFunctionQueries;
+  readonly lifetimes: RustLifetimeIndex;
+  readonly lexicalFunctions: RustLexicalFunctionEnvironments;
 }): RustNativeStoragePlan {
   const nodes = new Set(input.storage.nodes);
   const inputs = new Map(input.native.inputs.map(value => [value.subject, value]));
@@ -83,6 +90,27 @@ export function createRustNativeStoragePlan(input: {
     ? input.storage.emptyBindings : nodes.has(owner) ? input.native.bindingsFor(owner) : undefined;
   const ownerFor = (node: Node): Node | undefined => sourceEnclosingCallable(node, input.ast);
   const futures = createRustNativeFutureInputPlan({ ...input, bindingsFor });
+  const genericInvocationBindingsFor = (declaration: Node, invocation: Node, bindings: SourceStorageBindings,
+    arguments_: readonly RustTargetGenericArgument[]): RustNativeStorageGenericSelection | undefined => {
+    const callee = Node_Expression(input.ast, invocation);
+    const logical = callee === undefined ? undefined : rustEffectiveValueCarrier(input.facts, callee);
+    if (logical === undefined || input.generic.definitionFor(logical) === undefined) return undefined;
+    const selected = selectRustGenericCallableInvocationStorage(invocation, { ...input, nativeStorage: {
+      valueFor(node) {
+        const carrier = rustEffectiveValueCarrier(input.facts, node);
+        const subject = input.storage.subjectFor(node);
+        return carrier === undefined || subject.kind === "unresolved" ? unresolved("A generic activation lost its exact callee subject.")
+          : select(subject.subject, carrier, bindings);
+      },
+    } });
+    const member = selected?.definition.members.find(member => member.implementation.declaration === declaration);
+    const bound = selected === undefined || member === undefined ? undefined : rustGenericCallableMemberInvocationBindings(
+      selected.definition, member, selected.carrier, arguments_, {
+        ast: input.ast, sourceLifetimes: input.lifetimes, physical: input.generic.physical,
+      });
+    return bound === undefined ? unresolved("A generic activation lost its exact implementation-to-invocation correspondence.")
+      : Object.freeze({ kind: "resolved", bindings: bound });
+  };
   const invocationBindingsFor = (implementation: Node, invocation: Node, owner?: Node): SourceStorageBindingsSelection => {
     if (!nodes.has(implementation) || !nodes.has(invocation))
       return unresolved("Native invocation storage requires its exact owned invocation and implementation.");
@@ -101,16 +129,16 @@ export function createRustNativeStoragePlan(input: {
     const checked = input.storage.typeFor(subject);
     if (checked.kind === "unresolved") return checked;
     if (!isRustTargetTypeRef(carrier)) return unresolved("Native callable storage requires a valid selected carrier.");
-    let remaining = 4096;
+    let remaining = rustNativeStorageProjectionSteps;
     let reason: string | undefined;
     const selectedInputs = new Set<RustNativeCallableInput>();
     const fail = (message: string): undefined => { reason ??= message; return undefined; };
     const step = (depth: number): boolean => {
-      if (remaining-- > 0 && depth <= 128) return true;
+      if (remaining-- > 0 && depth <= rustNativeStorageProjectionDepth) return true;
       fail("Native callable storage exceeds its bounded carrier projection budget.");
       return false;
     };
-    const genericsFor = createRustNativeStorageGenericSelection({ ...input, step });
+    const genericsFor = createRustNativeStorageGenericSelection({ ...input, step, genericInvocationBindingsFor });
     const containsCallable = (type: TargetTypeRef, depth: number, visited = new Set<TargetTypeRef>()): boolean | undefined => {
       if (!step(depth)) return undefined;
       if (visited.has(type)) return false;
@@ -352,6 +380,10 @@ export function createRustNativeStoragePlan(input: {
         : Object.freeze({ kind: "selected", carrier: physical, inputs: Object.freeze([...selectedInputs]) });
   };
   return Object.freeze({
+    genericBindingsFor(declaration: Node, bindings: SourceStorageBindings): RustNativeStorageGenericSelection {
+      return nodes.has(declaration) ? selectRustNativeStorageGenericBindings({ ...input, genericInvocationBindingsFor }, declaration, bindings)
+        : unresolved("Native generic activation requires its exact owned declaration.");
+    },
     futureEnvironmentFor: futures.forDeclaration,
     parameterFor(parameter: Node, carrier: TargetTypeRef): RustNativeStorageSelection {
       const owner = input.ast.parent(parameter);

@@ -589,15 +589,16 @@ export function applySelectedProjectSourceCall(
       parameters = callableParameters as import("../facts/keys.js").RustSourceCallParameterPlan[];
     }
   }
-  const resultReferences = rustTargetGenericReferences(genericResultCarrier);
-  const environment = resultReferences.lifetimes.length === 0 ? { kind: "none" as const }
+  const invocationReferences = rustTargetGenericReferences({ kind: "tuple",
+    elements: [...parameters.map(parameter => parameter.parameterCarrier), genericResultCarrier] });
+  const environment = invocationReferences.lifetimes.length === 0 ? { kind: "none" as const }
     : rustRetainedEnvironment(selectedDeclaration, parameters.map(parameter => parameter.parameterCarrier), walk.context);
   if (environment.kind === "unresolved") {
     appendRustDiagnostic(walk, "RUST_RETAINED_ENVIRONMENT_NOT_EXACT", environment.reason, expression,
       ["target.capability=rust.source-call.retained-environment"]);
     return undefined;
   }
-  if (environment.kind === "selected" && resultReferences.lifetimeIdentities.includes(rustLifetimeKey(environment.environment.lifetime))) {
+  if (environment.kind === "selected" && invocationReferences.lifetimeIdentities.includes(rustLifetimeKey(environment.environment.lifetime))) {
     const identity = rustLifetimeKey(environment.environment.lifetime);
     for (const [index, argument] of (callArguments as readonly Node[]).entries()) {
       const carriers = parameters.flatMap(parameter => parameter.inputs.filter(input => input.sourceArgumentIndex === index)

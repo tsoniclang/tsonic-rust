@@ -61,14 +61,17 @@ export function createRustSourceErrorEffectSelection(walk: RustFactWalk): RustSo
   const bindingsFor: RustSourceErrorEffectSelection["bindingsFor"] = (node, declaration, carriers, storageBindings) => {
     const signature = walk.context.facts.getSelectedTargetCall(node);
     const operation = walk.context.facts.get(node, rustTargetOperationFactKey);
-    const generics = rustTargetGenericBindingsForArguments(signature?.member.genericParameters ?? [],
+    const activation = storageBindings === undefined ? undefined
+      : walk.context.callableValues.nativeStorage.genericBindingsFor(declaration, storageBindings);
+    if (activation?.kind === "unresolved") return undefined;
+    const generics = activation?.bindings ?? rustTargetGenericBindingsForArguments(signature?.member.genericParameters ?? [],
       operation?.kind === "source-call" ? operation.targetGenericArguments ?? [] : []);
     if (generics === undefined) return undefined;
     const caller = sourceEnclosingCallable(node, walk.context.ast);
     const available = new Set(caller === undefined ? [] : [...native.inputsFor(caller), ...native.capturesFor(caller)]);
     const types = new Map(generics.types);
-    const lifetimes = new Map<string, RustLifetimeRef>([...generics.lifetimes,
-      ...rustRetainedCallSubstitutions(walk.context.facts, node)]);
+    const lifetimes = new Map<string, RustLifetimeRef>(activation === undefined ? [...generics.lifetimes,
+      ...rustRetainedCallSubstitutions(walk.context.facts, node)] : generics.lifetimes);
     const consts = new Map<string, RustTargetConstArgument>(generics.consts);
     const bindSignature = (pattern: TargetTypeRef, actual: TargetTypeRef): boolean => {
       const formalCarrier = rustOptionElementCarrier(pattern) ?? pattern;

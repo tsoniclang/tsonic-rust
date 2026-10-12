@@ -6,7 +6,6 @@ import {
   isRustUnitCarrier,
   rustCallableProtocol,
   rustCallableInputProtocol,
-  rustAwaitCarrier,
   rustSourceTypeCarrierValue,
   rustTargetGenericTypeArguments,
   substituteRustTargetGenericArgument,
@@ -34,7 +33,8 @@ import {
   sourceCallSelectedMemberMatches,
 } from "./arguments.js";
 import { planRustNonConsumingValue, planRustPromotedStorageLocation } from "../typed-locations.js";
-import { rustBottomAfterEffect, rustBottomExpression } from "../../types/fallible-shape.js";
+import { rustBottomAfterEffect, rustBottomExpression, rustEliminateInfallibleResult } from "../../types/fallible-shape.js";
+import { rustNativeCallableOperand } from "../../../../analysis/callables/native-conversions.js";
 import {
   planRustExactProjectMethodCall,
   planRustVirtualProjectMethodCall,
@@ -65,10 +65,14 @@ import { rustPropagateLocalError } from "../../program/fallible-boundaries.js";
 import { rustSourceErrorEffectsFactKey } from "../../../../analysis/facts/source-error-effects.js";
 import { planRustSourceErrorPropagation } from "./source-errors.js";
 import { rustRetainedCallSubstitutions } from "../../../../analysis/facts/retained-environments.js";
+import { rustValueCarrierBeforeContextualConversion } from "../../../../analysis/facts/value-carrier-queries.js";
+import { rustNativeCallableCompletion } from "../../../../target-model/types/callable-completions.js";
+import type { RustTypeDefinitions } from "../../../../target-model/types/source-union-definitions.js";
 
 export function sourceCallEffectsMatch(
   fact: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>,
   effects: import("../../../../analysis/facts/keys.js").RustSourceCallEffectsFact | undefined,
+  definitions: RustTypeDefinitions,
   nativeInput?: import("../../../../analysis/callables/native-inputs.js").RustNativeCallableCall,
 ): boolean {
   if (effects === undefined ||
@@ -79,7 +83,7 @@ export function sourceCallEffectsMatch(
   if (nativeInput !== undefined || effects.nativeInput !== undefined) {
     return fact.target.form === "callable" && nativeInput !== undefined && rustNativeInputEffectsMatch(nativeInput, effects);
   }
-  const isAsync = rustAwaitCarrier(fact.resultCarrier) !== undefined;
+  const isAsync = rustNativeCallableCompletion(fact.resultCarrier, definitions) !== undefined;
   if (fact.target.form === "union-method") {
     if (effects.unionBranches?.length !== fact.target.variants.length ||
       !effects.unionBranches.every(branch => branch !== undefined &&
@@ -517,6 +521,18 @@ export function planSelectedSourceCall(
     const result = planRustNativeInputPropagation(node, nativeInput, planned, context);
     return result === undefined ? undefined : isRustNeverCarrier(fact.resultCarrier)
       ? rustBottomAfterEffect(result, "fallible never call returned") : result;
+  }
+  if (fact.target.form === "callable" && rustCallableProtocol(fact.target.carrier) !== undefined && callee !== undefined) {
+    const source = rustValueCarrierBeforeContextualConversion(context.input.program.facts, callee);
+    const physical = source === undefined ? undefined : rustNativeCallableOperand(source, callee, {
+      facts: context.input.program.facts, storage: context.input.program.callableValues.nativeStorage,
+      producers: context.input.program.callableValues.nativeProducers, definitions: context.input.program.typeDefinitions,
+    });
+    const error = physical === undefined ? undefined : rustTypeFromCarrierInContext(physical.signature.error, context);
+    if (error?.kind === "named" && error.path === "core::convert::Infallible" && context.syntheticNames !== undefined) {
+      return rustEliminateInfallibleResult(planned, allocateRustSyntheticName(context.syntheticNames, "call_value"),
+        allocateRustSyntheticName(context.syntheticNames, "call_error"));
+    }
   }
   if (effects.invocation === "infallible") {
     return isRustNeverCarrier(fact.resultCarrier) ? rustBottomExpression(planned) : planned;

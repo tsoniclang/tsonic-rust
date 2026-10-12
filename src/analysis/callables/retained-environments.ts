@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { SourceStorageSubject } from "@tsonic/target-api/analysis";
 import { sourceEnclosingCallable, sourceNodeIdentity } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
-import { rustSourceParameterAbiFactKey } from "../facts/keys.js";
+import { rustSourceParameterAbiFactKey, rustClosureCaptureFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
 import { rustRetainedEnvironmentFactKey } from "../facts/retained-environments.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustHasOpenOwnedStorage, rustRetainedEnvironment } from "../../policy/ownership/retained-environments.js";
@@ -17,7 +17,7 @@ export function rustRetainedCallLifetimes(
   walk: RustFactWalk, invocation: Node, declaration: Node, parameters: readonly TargetTypeRef[], result: TargetTypeRef,
 ): ReadonlyMap<string, RustLifetimeRef> | undefined {
   const { ast, facts, sourceStorage: storage } = walk.context;
-  const references = rustTargetGenericReferences(result);
+  const references = rustTargetGenericReferences({ kind: "tuple", elements: [...parameters, result] });
   if (references.lifetimes.length === 0) return new Map();
   const selected = rustRetainedEnvironment(declaration, parameters, walk.context);
   if (selected.kind === "unresolved") return undefined;
@@ -39,6 +39,14 @@ export function rustRetainedCallLifetimes(
   const carriers: TargetTypeRef[] = [];
   const projected = new Map<SourceStorageSubject, TargetTypeRef | undefined>();
   const carrierFor = (subject: SourceStorageSubject): TargetTypeRef | undefined => {
+    if (subject.kind === "value" && subject.projection.length === 0 &&
+      facts.get(subject.node, rustTargetOperationFactKey)?.kind === "closure") {
+      const captures = facts.get(subject.node, rustClosureCaptureFactKey);
+      if (captures === undefined) return undefined;
+      const carriers = [...captures.captures, ...captures.receiverFields, ...captures.receivers].map(capture => capture.carrier);
+      const lifetime = rustRetainedValueLifetime(subject.node, carriers, walk);
+      return lifetime === undefined ? undefined : reference(lifetime);
+    }
     const root = subject.kind === "input"
       ? facts.get(subject.node, rustSourceParameterAbiFactKey)?.parameterCarrier
       : facts.getRuntimeCarrierFact(subject.node)?.carrier;

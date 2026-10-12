@@ -13,6 +13,10 @@ import { resolveRustEnclosingGenericParameters } from "../../policy/types/resolu
 import { rustCompileTimeSourceKey } from "../../target-model/facts/source-declarations.js";
 import type { RustRuntimeValueUsePlan } from "../program/runtime-value-uses.js";
 import type { RustSourceCallableQueries } from "../../policy/ownership/source-borrowed-return.js";
+import { rustCallableImplicitLifetimeParameters } from "../facts/source-input-lifetimes.js";
+import { rustSourceParameterAbiFactKey } from "../facts/keys.js";
+import type { RustNativeStoragePlan } from "./native-storage.js";
+import type { RustNativeCallableInputPlan } from "./native-inputs.js";
 
 export interface RustLexicalFunctionCapture {
   readonly declaration: Node;
@@ -20,30 +24,44 @@ export interface RustLexicalFunctionCapture {
   readonly mutable: boolean;
 }
 
-export type RustLexicalFunctionSelection =
+export type RustLexicalFunctionEnvironmentSelection =
   | { readonly kind: "resolved"; readonly captures: readonly RustLexicalFunctionCapture[];
-      readonly genericParameters: readonly RustSourceGenericParameterContract[]; readonly valueObserved: boolean;
+      readonly valueObserved: boolean;
       readonly inlineValueReference?: Node;
       readonly singleInvocation: boolean; readonly captureRoots: readonly Node[] }
   | { readonly kind: "unresolved"; readonly reason: string };
 
-export interface RustLexicalFunctionQueries {
-  forDeclaration(declaration: Node): RustLexicalFunctionSelection | undefined;
+export type RustLexicalFunctionSelection =
+  | (Extract<RustLexicalFunctionEnvironmentSelection, { readonly kind: "resolved" }> & {
+      readonly genericParameters: readonly RustSourceGenericParameterContract[] })
+  | Extract<RustLexicalFunctionEnvironmentSelection, { readonly kind: "unresolved" }>;
+
+export interface RustLexicalFunctionEnvironments {
+  forDeclaration(declaration: Node): RustLexicalFunctionEnvironmentSelection | undefined;
   valueDeclarationsAt(statement: Node): readonly Node[];
+}
+
+export interface RustLexicalFunctionEnvironmentPlan extends RustLexicalFunctionEnvironments {
+  readonly declarations: readonly Node[];
+  genericNodesFor(declaration: Node): readonly Node[];
+  calleesFor(declaration: Node): readonly Node[];
+}
+
+export interface RustLexicalFunctionQueries extends RustLexicalFunctionEnvironments {
+  forDeclaration(declaration: Node): RustLexicalFunctionSelection | undefined;
 }
 
 const maximumLexicalFunctions = 65_536;
 const maximumLexicalCaptureRows = 262_144;
 const maximumLexicalCaptureSteps = 4_194_304;
 
-export function createRustLexicalFunctionQueries(
+export function createRustLexicalFunctionEnvironmentPlan(
   source: TargetSourceProgram,
   sourceFiles: readonly SourceFile[],
   facts: RustPlanQueries,
-  lifetimes: RustLifetimeIndex,
   runtimeValueUses: RustRuntimeValueUsePlan,
   sourceCallables: RustSourceCallableQueries,
-): RustLexicalFunctionQueries {
+): RustLexicalFunctionEnvironmentPlan {
   const { ast, navigation } = source;
   const declarations: Node[] = [];
   const pending: Node[] = [...sourceFiles];
@@ -60,8 +78,8 @@ export function createRustLexicalFunctionQueries(
   }
   const captures = new Map<Node, Map<Node, RustLexicalFunctionCapture>>();
   const declarationSet = new Set(declarations);
-  const callees = new Map<Node, Node[]>();
-  const genericIdentities = new Map<Node, Set<string>>();
+  const callees = new Map<Node, readonly Node[]>();
+  const genericNodes = new Map<Node, readonly Node[]>();
   let rows = 0;
   for (const declaration of declarations) {
     const roots = ast.is.IsArrowFunction(declaration) ? [ast.body(declaration)!,
@@ -118,42 +136,21 @@ export function createRustLexicalFunctionQueries(
       if (++rows > maximumLexicalCaptureRows) return exhausted();
     }
     captures.set(declaration, values);
-    callees.set(declaration, calls);
-    const identities = new Set<string>();
-    const nodes = new Set([...evaluated, declaration, ...ast.parameters(declaration),
+    callees.set(declaration, Object.freeze(calls));
+    const parameters = ast.parameters(declaration);
+    if (parameters.some(parameter => parameter === undefined)) return exhausted("Lexical generic collection requires every exact authored parameter.");
+    const nodes = new Set([...evaluated, declaration, ...parameters.filter(parameter => parameter !== undefined),
       ...[...values.values()].flatMap(capture => [capture.declaration, capture.reference])]);
-    for (const node of nodes) {
-      const carrier = facts.getRuntimeCarrierFact(node)?.carrier ??
-        facts.getFact(node, rustSourceCallableReturnFactKey)?.returnCarrier;
-      if (carrier === undefined) continue;
-      const references = rustTargetGenericReferences(carrier);
-      for (const identity of [...references.typeIdentities, ...references.lifetimeIdentities]) identities.add(identity);
-    }
-    genericIdentities.set(declaration, identities);
+    rows += nodes.size + calls.length;
+    if (rows > maximumLexicalCaptureRows) return exhausted();
+    genericNodes.set(declaration, Object.freeze([...nodes]));
 
     function mutate(expression: Node): void {
       const root = rustTypedLocationStorageRootReference(expression, ast, navigation);
       if (root !== undefined) mutationRoots.add(root.declaration);
     }
   }
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const declaration of declarations) {
-      for (const callee of callees.get(declaration)!) {
-        const bound = new Set((lifetimes.contractFor(callee)?.parameters ?? []).map(parameter =>
-          parameter.kind === "type" ? parameter.identity : rustLifetimeKey(parameter.lifetime)));
-        for (const identity of genericIdentities.get(callee)!) {
-          if (++steps > maximumLexicalCaptureSteps) return exhausted();
-          if (!bound.has(identity) && !genericIdentities.get(declaration)!.has(identity)) {
-            genericIdentities.get(declaration)!.add(identity);
-            changed = true;
-          }
-        }
-      }
-    }
-  }
-  const selections = new Map<Node, RustLexicalFunctionSelection>();
+  const selections = new Map<Node, RustLexicalFunctionEnvironmentSelection>();
   const valueDeclarations = new Map<Node, Node[]>();
   const singleInvocation = createSourceSingleInvocationQuery(ast, navigation);
   for (const declaration of declarations) {
@@ -179,13 +176,7 @@ export function createRustLexicalFunctionQueries(
       rootPending.push(...callees.get(current)!);
       if (++rows > maximumLexicalCaptureRows) return exhausted();
     }
-    const own = new Set((lifetimes.contractFor(declaration)?.parameters ?? []).map(parameter =>
-      parameter.kind === "type" ? parameter.identity : rustLifetimeKey(parameter.lifetime)));
-    const parameters = resolveRustEnclosingGenericParameters(declaration,
-      [...genericIdentities.get(declaration)!].filter(identity => !own.has(identity)), ast, lifetimes);
-    selections.set(declaration, Object.freeze(parameters === undefined
-      ? { kind: "unresolved", reason: "A lexical function lost its exact enclosing generic or lifetime declarations." }
-      : { kind: "resolved", captures: Object.freeze([...captures.get(declaration)!.values()]), genericParameters: parameters,
+    selections.set(declaration, Object.freeze({ kind: "resolved", captures: Object.freeze([...captures.get(declaration)!.values()]),
           valueObserved: creation.kind === "resolved",
           ...(creation.kind === "resolved" && creation.inlineReference !== undefined
             ? { inlineValueReference: creation.inlineReference } : {}),
@@ -201,16 +192,99 @@ export function createRustLexicalFunctionQueries(
     else for (const declaration of values) selections.set(declaration, Object.freeze(ordered));
   }
   return Object.freeze({ forDeclaration: (declaration: Node) => selections.get(declaration),
-    valueDeclarationsAt: (statement: Node) => scheduled.get(statement) ?? empty });
+    valueDeclarationsAt: (statement: Node) => scheduled.get(statement) ?? empty,
+    declarations: Object.freeze(declarations), genericNodesFor: (declaration: Node) => genericNodes.get(declaration) ?? empty,
+    calleesFor: (declaration: Node) => callees.get(declaration) ?? empty });
 
 
-  function exhausted(reason = "Lexical function capture analysis exceeded its finite resource budget."): RustLexicalFunctionQueries {
-    const selection: RustLexicalFunctionSelection = Object.freeze({
+  function exhausted(reason = "Lexical function capture analysis exceeded its finite resource budget."): RustLexicalFunctionEnvironmentPlan {
+    const selection: RustLexicalFunctionEnvironmentSelection = Object.freeze({
       kind: "unresolved", reason,
     });
     return Object.freeze({ forDeclaration: (declaration: Node) =>
       ast.is.IsFunctionDeclaration(declaration) && !sourceDeclarationIsModuleScoped(declaration, ast) ||
         sourceCallables.directLexicalBinding(declaration) !== undefined ? selection : undefined,
-      valueDeclarationsAt: () => Object.freeze([]) });
+      valueDeclarationsAt: () => Object.freeze([]), declarations: Object.freeze([]),
+      genericNodesFor: () => Object.freeze([]), calleesFor: () => Object.freeze([]) });
+  }
+}
+
+export function finalizeRustLexicalFunctionQueries(
+  environments: RustLexicalFunctionEnvironmentPlan,
+  source: TargetSourceProgram,
+  facts: RustPlanQueries,
+  lifetimes: RustLifetimeIndex,
+  nativeStorage: RustNativeStoragePlan,
+  native: RustNativeCallableInputPlan,
+): RustLexicalFunctionQueries {
+  const { ast } = source;
+  const identities = new Map<Node, Set<string>>();
+  const failures = new Map<Node, string>();
+  const nativeIdentities = new Set(native.inputs.map(input => input.implementation.identity));
+  const parametersFor = (owner: Node): readonly RustSourceGenericParameterContract[] =>
+    [...lifetimes.contractFor(owner)?.parameters ?? [], ...rustCallableImplicitLifetimeParameters(owner, ast, facts)];
+  let steps = 0;
+  for (const declaration of environments.declarations) {
+    const references = new Set<string>();
+    for (const node of environments.genericNodesFor(declaration)) {
+      if (++steps > maximumLexicalCaptureSteps) return exhausted();
+      const parameter = ast.is.IsParameterDeclaration(node) ? facts.getFact(node, rustSourceParameterAbiFactKey)?.parameterCarrier : undefined;
+      const carrier = parameter ?? facts.getRuntimeCarrierFact(node)?.carrier ??
+        facts.getFact(node, rustSourceCallableReturnFactKey)?.returnCarrier;
+      if (carrier === undefined) continue;
+      const selected = parameter !== undefined ? nativeStorage.parameterFor(node, parameter)
+        : facts.getFact(node, rustSourceCallableReturnFactKey) !== undefined ? nativeStorage.returnFor(node)
+        : nativeStorage.valueFor(node);
+      if (selected.kind === "unresolved") { failures.set(declaration, selected.reason); continue; }
+      const generic = rustTargetGenericReferences(selected.carrier);
+      for (const identity of [...generic.typeIdentities, ...generic.lifetimeIdentities]) {
+        if (!nativeIdentities.has(identity)) references.add(identity);
+      }
+    }
+    identities.set(declaration, references);
+  }
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const declaration of environments.declarations) {
+      for (const callee of environments.calleesFor(declaration)) {
+        const bound = new Set(parametersFor(callee).map(parameter =>
+          parameter.kind === "type" ? parameter.identity : rustLifetimeKey(parameter.lifetime)));
+        for (const identity of identities.get(callee)!) {
+          if (++steps > maximumLexicalCaptureSteps) return exhausted();
+          if (!bound.has(identity) && !identities.get(declaration)!.has(identity)) {
+            identities.get(declaration)!.add(identity);
+            changed = true;
+          }
+        }
+      }
+    }
+  }
+  const selections = new Map<Node, RustLexicalFunctionSelection>();
+  for (const declaration of environments.declarations) {
+    const environment = environments.forDeclaration(declaration);
+    if (environment === undefined) continue;
+    if (environment.kind === "unresolved") { selections.set(declaration, environment); continue; }
+    const own = new Set(parametersFor(declaration).map(parameter =>
+      parameter.kind === "type" ? parameter.identity : rustLifetimeKey(parameter.lifetime)));
+    const parameters = resolveRustEnclosingGenericParameters(declaration,
+      [...identities.get(declaration)!].filter(identity => !own.has(identity)), ast, parametersFor);
+    const failure = failures.get(declaration);
+    selections.set(declaration, failure !== undefined || parameters === undefined
+      ? Object.freeze({ kind: "unresolved", reason: failure ?? "A lexical function lost its exact enclosing generic or lifetime declarations." })
+      : Object.freeze({ ...environment, genericParameters: parameters }));
+  }
+  return Object.freeze({ forDeclaration: (declaration: Node) => selections.get(declaration) ??
+    unresolvedEnvironment(declaration), valueDeclarationsAt: environments.valueDeclarationsAt });
+
+  function unresolvedEnvironment(declaration: Node): Extract<RustLexicalFunctionSelection, { readonly kind: "unresolved" }> | undefined {
+    const environment = environments.forDeclaration(declaration);
+    return environment?.kind === "unresolved" ? environment : undefined;
+  }
+
+  function exhausted(): RustLexicalFunctionQueries {
+    const selection = Object.freeze({ kind: "unresolved" as const, reason: "Lexical physical generic selection exceeds its finite work budget." });
+    return Object.freeze({ forDeclaration: (declaration: Node) => environments.forDeclaration(declaration) === undefined ? undefined : selection,
+      valueDeclarationsAt: environments.valueDeclarationsAt });
   }
 }

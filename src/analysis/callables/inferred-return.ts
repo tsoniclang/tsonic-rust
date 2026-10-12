@@ -110,7 +110,8 @@ export function selectRustInferredReturn(
           const semantics = walk.context.semanticsFor(expression);
           const call = semantics.operations.call(expression);
           const target = call === undefined ? undefined : semantics.declarations.signatureDeclaration(call.selectedSignature);
-          if (target !== undefined && ast.body(target) !== undefined) {
+          if (target !== undefined && ast.body(target) !== undefined && !ast.hasModifierKind(target, "async") &&
+            walk.context.semanticsFor(target).operations.generator(target) === undefined) {
             const sourceResult = call === undefined ? undefined : semantics.operations.callResult(call);
             const carrier = facts.get(target, rustSourceCallableReturnFactKey)?.returnCarrier ??
               resolveRustTargetTypeRef(Node_Type(ast, target) ?? sourceResult?.selectedReturnType, context, walk.operationOptions);

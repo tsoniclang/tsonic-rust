@@ -9,6 +9,8 @@ import { rustNamedTypeCarrierValue } from "../../../dist/target-model/types/carr
 import { rustNativeCallableInputPhysicalSignature } from "../../../dist/analysis/callables/native-conversions.js";
 import { rustNativeCallableInvocationArguments } from "../../../dist/analysis/callables/native-invocations.js";
 import { rustPhysicalPayloadFor } from "../../../dist/target-model/types/physical-payloads.js";
+import { rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
+import { rustNativeCallableCompletion } from "../../../dist/target-model/types/callable-completions.js";
 
 function fixture(text, surfaces = []) {
   const context = analyzeRustErrorEffects(text, { surfaces });
@@ -55,6 +57,32 @@ test("JS outward results retain exact Promise error and lifetime independently o
   const error = rustProducerErrorReference(value.genericArguments[2].type);
   assert.equal(error?.channel, 0);
   assert.equal(current.producers.forIdentity(error.identity)?.declaration === declaration, true);
+});
+
+test("contextual async physical invocation preserves the finalized optional union topology", () => {
+  const current = fixture(`type Completion = number | Promise<number> | undefined;
+    export function make(): () => Completion { return async () => 3; }`, ["js"]);
+  const declaration = current.producers.producers.find(producer => current.context.ast.is.IsArrowFunction(producer.declaration))?.declaration;
+  assert.equal(declaration !== undefined, true, "one authored async implementation");
+  const operation = current.context.facts.get(declaration, rustTargetOperationFactKey);
+  assert.equal(operation.invocationResult !== undefined, true, "one finalized contextual conversion");
+  const result = current.producers.invocationResultFor(declaration);
+  const completion = rustNativeCallableCompletion(result, current.context.typeDefinitions);
+  assert.equal(completion?.selection.kind, "optional");
+  assert.equal(completion.selection.present.kind, "union");
+  assert.equal(completion.futures.length, 1);
+  const physical = current.producers.physicalFor(declaration, operation.resultCarrier);
+  const signature = physical === undefined ? undefined : rustCallablePhysicalSignature(physical);
+  assert.equal(rustTargetTypeRefEquals(signature?.result, result), true, "one physical invocation result owner");
+  const invalid = createRustNativeOutwardResults({ definitions: current.context.typeDefinitions,
+    producers: current.producers, returnCarrierFor: current.producers.outwardReturnFor,
+    facts: { getFact(node, key) {
+      const selected = current.context.facts.getFact(node, key);
+      return node === declaration && key === rustTargetOperationFactKey ? { ...selected,
+        invocationResult: { ...selected.invocationResult, sourceCarrier: { kind: "source-primitive", name: "int32" } } } : selected;
+    } },
+  });
+  assert.equal(invalid.invocationFor(declaration) === undefined, true, "foreign conversion sources reject");
 });
 
 test("outward carrier queries fail closed before finalized native effects and do not cache that incomplete phase", () => {

@@ -55,7 +55,7 @@ import { finalizeRustCopiedMethods } from "../objects/copied-methods.js";
 import { closeRustInheritedStructuralViews } from "../objects/inherited-structural-views.js";
 import { createRustSourceProfileCallableAliasQuery } from "../../policy/operations/source-profiles/callable-aliases.js";
 import { collectRustDeclaredProviderErrorCarriers } from "./provider-errors.js";
-import { createRustLexicalFunctionQueries, type RustLexicalFunctionQueries } from "../callables/lexical-functions.js";
+import { createRustLexicalFunctionEnvironmentPlan, finalizeRustLexicalFunctionQueries, type RustLexicalFunctionQueries } from "../callables/lexical-functions.js";
 import { recordRustLexicalValueEnvironments } from "../callables/lexical-value-environments.js";
 import { rustSourceErrorTargetType, rustWritableSourceErrorTargetType } from "../../target-model/types/carriers/source-error.js";
 import { analyzeRustReceiverStorage } from "../project-types/receiver-storage.js";
@@ -550,8 +550,8 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
   // structural storage plan produced while walking bodies.
   recordRustProjectCallableAdapterFacts(walk);
   recordRustModuleCallableStorage(walk);
-  const lexical = createRustLexicalFunctionQueries(context.source, context.sourceFiles, context.facts,
-    context.sourceLifetimes, context.runtimeValueUses, context.sourceCallables);
+  const lexical = createRustLexicalFunctionEnvironmentPlan(context.source, context.sourceFiles, context.facts,
+    context.runtimeValueUses, context.sourceCallables);
   recordRustLexicalValueEnvironments(walk, lexical);
   const callableValues = context.callableValues.initialize({ ast, sourceFiles: context.sourceFiles, facts: context.facts,
     sourcePackages: context.sourcePackages,
@@ -567,7 +567,8 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
   recordResourceManagementFacts(walk, projectSourceFiles);
   recordFutureValueFacts(walk, projectSourceFiles);
   recordRustDeferredProducerEffects(walk);
-  return lexical;
+  return finalizeRustLexicalFunctionQueries(lexical, context.source, context.facts, context.sourceLifetimes,
+    callableValues.nativeStorage, callableValues.native);
 }
 
 function collectSourcePackageBoundaries(

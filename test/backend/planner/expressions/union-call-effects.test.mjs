@@ -4,6 +4,7 @@ import { sourceCallEffectsMatch } from "../../../../dist/backend/planner/express
 import { rustJsPromiseTargetType } from "../../../../dist/target-model/types/carriers/js.js";
 import { int32Carrier } from "../../../helpers/rust-session.mjs";
 import { rustSourceOptionalTargetType } from "../../../../dist/target-model/types/index.js";
+import { emptyRustTypeDefinitions } from "../../../../dist/target-model/types/source-union-definitions.js";
 
 test("union invocation and awaiting effects are independently closed for every arm", () => {
   const synchronous = { kind: "source-call", target: { form: "union-method", variants: [{}, {}] }, resultCarrier: int32Carrier };
@@ -14,15 +15,15 @@ test("union invocation and awaiting effects are independently closed for every a
   const asyncEffects = { unionBranches: [
     { invocation: "infallible", awaiting: "infallible" }, { invocation: "infallible", awaiting: "fallible" },
   ], invocation: "infallible", awaiting: "fallible" };
-  assert.equal(sourceCallEffectsMatch(synchronous, syncEffects), true);
-  assert.equal(sourceCallEffectsMatch(asynchronous, asyncEffects), true);
+  assert.equal(sourceCallEffectsMatch(synchronous, syncEffects, emptyRustTypeDefinitions), true);
+  assert.equal(sourceCallEffectsMatch(asynchronous, asyncEffects, emptyRustTypeDefinitions), true);
   const optional = { ...asynchronous, resultCarrier: rustSourceOptionalTargetType(asynchronous.resultCarrier) };
-  assert.equal(sourceCallEffectsMatch(optional, asyncEffects), true);
-  assert.equal(sourceCallEffectsMatch(optional, syncEffects), false);
+  assert.equal(sourceCallEffectsMatch(optional, asyncEffects, emptyRustTypeDefinitions), true);
+  assert.equal(sourceCallEffectsMatch(optional, syncEffects, emptyRustTypeDefinitions), false);
   assert.equal(sourceCallEffectsMatch(asynchronous, {
     unionBranches: [{ invocation: "fallible", awaiting: "infallible" }, asyncEffects.unionBranches[1]],
     invocation: "fallible", awaiting: "fallible",
-  }), true);
+  }, emptyRustTypeDefinitions), true);
   for (const mutation of [
     undefined,
     { ...asyncEffects, unionBranches: ["fallible"] },
@@ -30,7 +31,7 @@ test("union invocation and awaiting effects are independently closed for every a
     { ...asyncEffects, invocation: "fallible" },
     { ...asyncEffects, awaiting: "infallible" },
     { ...asyncEffects, awaiting: "not-applicable" },
-  ]) assert.equal(sourceCallEffectsMatch(asynchronous, mutation), false);
-  assert.equal(sourceCallEffectsMatch(synchronous, asyncEffects), false);
-  assert.equal(sourceCallEffectsMatch(asynchronous, syncEffects), false);
+  ]) assert.equal(sourceCallEffectsMatch(asynchronous, mutation, emptyRustTypeDefinitions), false);
+  assert.equal(sourceCallEffectsMatch(synchronous, asyncEffects, emptyRustTypeDefinitions), false);
+  assert.equal(sourceCallEffectsMatch(asynchronous, syncEffects, emptyRustTypeDefinitions), false);
 });

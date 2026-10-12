@@ -113,8 +113,7 @@ export function escape<Region extends Life>(value: Ref<int32, Region>): () => Pr
 }
 ` } });
   assert.deepEqual(result.diagnostics.map(row => row.code).sort(), [
-    "RUST_FUTURE_VALUE_CARRIER_CONFLICT", "RUST_FUTURE_VALUE_CARRIER_CONFLICT",
-    "RUST_FUTURE_VALUE_CARRIER_CONFLICT", "RUST_FUTURE_VALUE_CARRIER_CONFLICT", "RUST_INITIALIZER_CARRIER_MISMATCH",
+    "RUST_AWAIT_SOURCE_ERRORS_NOT_EXACT", "RUST_ERROR_REGION_NOT_EXACT", "RUST_INITIALIZER_CARRIER_MISMATCH",
   ]);
   assert.equal(result.artifacts.length, 0, "invalid lifetime transport publishes no native output");
   const control = compileRust({ surfaces: ["js"], files: { "index.ts": ordinaryAsyncResultSource } }).result;

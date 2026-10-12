@@ -130,6 +130,19 @@ export function applyRustFallibleResultExpression(
   return applyRustResultExpression(expression, boundary, false);
 }
 
+export function rustEliminateInfallibleResult(
+  expression: RustExpr,
+  valueName: string,
+  errorName: string,
+): RustExpr {
+  return { kind: "match", expression, arms: [
+    { pattern: { kind: "tuple-variant", path: "Ok", elements: [{ kind: "binding", name: valueName }] },
+      expression: { kind: "path", path: valueName } },
+    { pattern: { kind: "tuple-variant", path: "Err", elements: [{ kind: "binding", name: errorName }] },
+      expression: { kind: "match", expression: { kind: "path", path: errorName }, arms: [] } },
+  ] };
+}
+
 function applyRustResultExpression(
   expression: RustExpr,
   boundary: Pick<RustFallibleBoundary, "errorType">,

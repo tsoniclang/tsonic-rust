@@ -1,7 +1,8 @@
 import type { Node } from "@tsonic/tsts";
 import { rustSourceParameterAbiFactKey } from "../facts/keys.js";
 import type { RustSuspendedCallableStorage } from "../facts/keys.js";
-import { rustEnclosingStorageContract, selectRustCallableStorageLifetime } from "../../policy/ownership/suspended-storage.js";
+import { rustEnclosingStorageContract, selectRustCallableStorageLifetime, selectRustSuspendedStorageLifetime } from "../../policy/ownership/suspended-storage.js";
+import { rustLifetimeOutlives, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { sourceLexicalEnvironment } from "@tsonic/target-api/source";
 import { rustCompileTimeSourceKey } from "../../target-model/facts/source-declarations.js";
 import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
@@ -28,6 +29,7 @@ export function resolveRustSuspendedCallableStorage(
   declaration: Node,
   storedCarriers: readonly TargetTypeRef[],
   ownedInputReceiver?: TargetTypeRef,
+  requiredLifetime?: RustLifetimeRef,
 ): RustSuspendedCallableStorageResolution {
   const { ast } = walk.context;
   const body = ast.body(declaration);
@@ -132,11 +134,17 @@ export function resolveRustSuspendedCallableStorage(
     walk.context.facts.get(parameter, rustSourceParameterAbiFactKey)?.parameterCarrier);
   const environment = rustRetainedEnvironment(declaration, inputCarriers, walk.context);
   if (environment.kind === "unresolved") return { kind: "rejected", reason: environment.reason };
-  if (environment.kind === "selected") walk.context.facts.set(declaration, rustRetainedEnvironmentFactKey,
+  if (requiredLifetime !== undefined) {
+    const captured = selectRustSuspendedStorageLifetime(carriers, contract);
+    if (captured === undefined || !rustLifetimeOutlives(captured, requiredLifetime, contract)) return {
+      kind: "rejected", reason: "A selected native promise lifetime requires every captured carrier to outlive its declared storage contract.",
+    };
+  }
+  if (environment.kind === "selected" && requiredLifetime === undefined) walk.context.facts.set(declaration, rustRetainedEnvironmentFactKey,
     environment.environment, [{ message: "rust owned suspended environment" }]);
-  const lifetime = environment.kind === "selected" ? environment.environment.lifetime
+  const lifetime = requiredLifetime ?? (environment.kind === "selected" ? environment.environment.lifetime
     : inputCarriers.some(carrier => carrier === undefined) ? undefined
-    : selectRustCallableStorageLifetime(inputCarriers as readonly TargetTypeRef[], carriers, contract);
+    : selectRustCallableStorageLifetime(inputCarriers as readonly TargetTypeRef[], carriers, contract));
   if (lifetime === undefined) {
     return {
       kind: "rejected",

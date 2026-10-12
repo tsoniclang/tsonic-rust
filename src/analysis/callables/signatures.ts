@@ -60,12 +60,13 @@ import { closeRustRetainedResult } from "../../policy/types/retained-result.js";
 import { rustRetainedEnvironmentFactKey } from "../facts/retained-environments.js";
 import { selectRustInferredReturn } from "./inferred-return.js";
 import { rustOptionalStorageValue } from "../../target-model/types/projections.js";
-import { selectRustClosedCallableInputs } from "./contextual-inputs.js";
+import { selectRustClosedCallableContext } from "./contextual-inputs.js";
 import { recordRustAsyncBodyFacts } from "./async-results.js";
 
 export function recordFunctionSignatureFacts(walk: RustFactWalk, declaration: Node): void {
-  recordCallableParameterSignatureFacts(walk, declaration);
-  recordCallableSuspensionFacts(walk, declaration);
+  const contextual = recordCallableParameterSignatureFacts(walk, declaration);
+  recordCallableSuspensionFacts(walk, declaration, undefined,
+    (rustCallableProtocol(contextual) ?? rustClosureProtocol(contextual))?.result);
   recordCallableReturnFact(walk, declaration);
 }
 
@@ -74,7 +75,7 @@ function recordCallableTypeSignatureFacts(walk: RustFactWalk, declaration: Node)
   recordCallableReturnFact(walk, declaration);
 }
 
-function recordCallableParameterSignatureFacts(walk: RustFactWalk, declaration: Node): void {
+function recordCallableParameterSignatureFacts(walk: RustFactWalk, declaration: Node): TargetTypeRef | undefined {
   const parameters = requireDenseSourceNodes(walk, walk.context.ast.parameters(declaration), "Function declaration contains an undefined or non-data parameter slot.");
   if (parameters === undefined) {
     return;
@@ -83,7 +84,7 @@ function recordCallableParameterSignatureFacts(walk: RustFactWalk, declaration: 
     ? resolveRustTargetTypeRef(declaration,
         { ...rustResolutionContext(walk, declaration), callableRepresentation: "signature" }, walk.operationOptions)
     : undefined;
-  const contextual = selectRustClosedCallableInputs(walk, declaration, signature);
+  const contextual = selectRustClosedCallableContext(walk, declaration, signature);
   const logical = rustCallableProtocol(signature) ?? rustClosureProtocol(signature);
   const protocol = rustCallableProtocol(contextual) ?? rustClosureProtocol(contextual);
   for (const [index, parameter] of parameters.entries()) {
@@ -92,6 +93,7 @@ function recordCallableParameterSignatureFacts(walk: RustFactWalk, declaration: 
     recordParameterAbiFacts(walk, parameter, selected === undefined || Node_Initializer(walk.context.ast, parameter) === undefined
       ? selected : rustSourceOptionalTargetType(selected));
   }
+  return contextual;
 }
 
 import { rustCompileTimeSourceKey } from "../../target-model/facts/source-declarations.js";
@@ -336,7 +338,7 @@ function recordCallableValueSignatureFacts(
       rustResolutionContext(walk, declaration),
       walk.operationOptions,
     ));
-  const selectedCarrier = selectRustClosedCallableInputs(walk, expression, valueCarrier);
+  const selectedCarrier = selectRustClosedCallableContext(walk, expression, valueCarrier);
   const ownParameters = walk.context.sourceLifetimes.contractFor(expression)?.parameters
     .flatMap(parameter => parameter.kind === "type" ? [rustTypeParameterFromSourceContract(parameter)] : []);
   const callable = rustGenericCallableProtocol(selectedCarrier, ownParameters) ?? rustCallableProtocol(selectedCarrier);

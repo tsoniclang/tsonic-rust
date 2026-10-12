@@ -18,7 +18,8 @@ export function planRustNativeCallableGenerics(
   const { nativeStorage } = source.context.input.program.callableValues;
   const environment = nativeStorage.futureEnvironmentFor(declaration);
   if (environment.kind === "unresolved") return undefined;
-  const inputs = [...new Map([...native.inputsFor(declaration), ...native.capturesFor(declaration),
+  const callableInputs = [...native.inputsFor(declaration), ...native.capturesFor(declaration)];
+  const inputs = [...new Map([...callableInputs,
     ...environment.inputs, ...environment.captures]
     .map(input => [input.implementation.identity, input] as const)).values()];
   if (inputs.length === 0) return source;
@@ -31,6 +32,8 @@ export function planRustNativeCallableGenerics(
   }
   const context: RustPlanContext = { ...source.context, typeParameterNames };
   const bounds = new Map(inputs.map(input => [input.implementation.identity, new Map<string, TargetTypeRef>()]));
+  for (const input of callableInputs)
+    bounds.get(input.implementation.identity)!.set(closedMetadataKey(input.trait), input.trait);
   const visited = new Set<TargetTypeRef>();
   const collect = (type: TargetTypeRef): void => {
     if (visited.has(type)) return;

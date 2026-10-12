@@ -13,6 +13,7 @@ import type { RustLifetimeIndex, RustSourceGenericParameterContract } from "../.
 import { rustLifetimeKey, rustStaticLifetime, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { bindRustElidedCallableInput, substituteElidedLifetime } from "../../target-model/types/carriers/lifetime-elision.js";
 import { resolveRustEnclosingGenericParameters } from "../../policy/types/resolution/generic-environment.js";
+import { rustCallableImplicitLifetimeParameters } from "../facts/source-input-lifetimes.js";
 import type { RustNativeCapturePlan } from "./native-captures.js";
 
 export interface RustSuspendedCallableImplementation {
@@ -102,7 +103,9 @@ export function createRustSuspendedCallablePlan(
     const nativeIdentities = new Set(physical.inputs.map(input => input.implementation.identity));
     const requested = [...signature.lifetimes.filter(selected => bound === undefined || selected.identity !== lifetime.identity)
       .map(rustLifetimeKey), ...signature.typeIdentities.filter(identity => !nativeIdentities.has(identity))];
-    const parameters = resolveRustEnclosingGenericParameters(declaration, requested, ast, lifetimes);
+    const parameters = resolveRustEnclosingGenericParameters(declaration, requested, ast,
+      owner => [...lifetimes.contractFor(owner)?.parameters ?? [],
+        ...rustCallableImplicitLifetimeParameters(owner, ast, facts)]);
     if (parameters === undefined || signature.constIdentities.length > 0) {
       issues.push({ subject: declaration, message: "A suspended callable state lost its exact enclosing generic parameter declarations." });
       continue;

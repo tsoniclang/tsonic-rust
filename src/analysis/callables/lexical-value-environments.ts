@@ -1,13 +1,13 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
-import type { RustLexicalFunctionQueries } from "./lexical-functions.js";
+import type { RustLexicalFunctionEnvironments } from "./lexical-functions.js";
 import type { RustClosureCaptureFact } from "../facts/operations/keys.js";
 import { rustBindingStorageFactKey, rustClosureCaptureFactKey } from "../facts/keys.js";
 import { rustCapturedBindingStorage } from "./capture-storage.js";
 import { appendRustDiagnostic } from "../program/walk.js";
 import { rustRetainedCallableStorage } from "../facts/callable-results.js";
 
-export function recordRustLexicalValueEnvironments(walk: RustFactWalk, lexical: RustLexicalFunctionQueries): void {
+export function recordRustLexicalValueEnvironments(walk: RustFactWalk, lexical: RustLexicalFunctionEnvironments): void {
   const { ast, source, facts } = walk.context;
   const visit = (node: Node): void => {
     const selection = lexical.forDeclaration(node);

@@ -19,10 +19,9 @@ import { rustDeclarationAssociatedPredicates } from "../../types/associated-boun
 import { rustTypeParameterBounds } from "../../types/generic-bounds.js";
 import { rustOptionalStorageParameters } from "../../types/type-projections.js";
 import { allocateRustGeneratedName } from "../../../../target-model/names/generated.js";
-import { rustCallableInputLifetimeParameters } from "../../../../analysis/facts/source-input-lifetimes.js";
+import { rustCallableImplicitLifetimeParameters } from "../../../../analysis/facts/source-input-lifetimes.js";
 import { planRustNativeCallableGenerics } from "./native-generics.js";
 import { planRustRetainedGenerics } from "./retained-generics.js";
-import { rustRetainedEnvironmentFactKey } from "../../../../analysis/facts/retained-environments.js";
 
 export interface RustCallableGenericPlan {
   readonly context: RustPlanContext;
@@ -82,13 +81,8 @@ function planRustSourceCallableGenerics(
   specialization?: ReadonlyMap<string, TargetTypeRef>,
   capturedParameters: readonly RustSourceGenericParameterContract[] = [],
 ): RustCallableGenericPlan | undefined {
-  capturedParameters = [...capturedParameters, ...rustCallableInputLifetimeParameters(
+  capturedParameters = [...capturedParameters, ...rustCallableImplicitLifetimeParameters(
     declaration, context.input.program.source.ast, context.input.program.facts)];
-  const environment = context.input.program.facts.getFact(declaration, rustRetainedEnvironmentFactKey);
-  if (environment !== undefined) capturedParameters = [...capturedParameters, {
-    kind: "lifetime", declaration, sourceName: environment.lifetime.name,
-    lifetime: environment.lifetime, outlives: [],
-  }];
   const sourceParameters = context.input.program.source.ast.typeParameters(declaration);
   if (sourceParameters.some((parameter) => parameter === undefined)) {
     context.diagnostics.push(missingFactDiagnostic(

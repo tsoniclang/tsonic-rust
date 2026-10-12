@@ -11,7 +11,7 @@ import { rustUnionAlternatives } from "../../target-model/types/union-relations.
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { isRustTargetTypeRef } from "../../target-model/types/equality.js";
 import { rustClosureCaptureFactKey, rustSourceParameterAbiFactKey } from "../facts/keys.js";
-import type { RustLexicalFunctionQueries } from "./lexical-functions.js";
+import type { RustLexicalFunctionEnvironments } from "./lexical-functions.js";
 
 export interface RustNativeFutureInput {
   readonly owner: Node;
@@ -35,7 +35,7 @@ export function createRustNativeFutureInputPlan(input: {
   readonly storage: SourceStorageQueries;
   readonly facts: RustPlanQueries;
   readonly definitions: RustTypeDefinitions;
-  readonly lexicalFunctions: RustLexicalFunctionQueries;
+  readonly lexicalFunctions: RustLexicalFunctionEnvironments;
   readonly bindingsFor: (declaration: Node) => SourceStorageBindings | undefined;
 }): RustNativeFutureInputPlan {
   const subjects = new Map<SourceStorageSubject, Map<string, RustNativeFutureInput>>();
