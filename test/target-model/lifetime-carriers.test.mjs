@@ -315,7 +315,7 @@ test("reference reborrow facts are exact compiler-owned carrier transitions", ()
   ), false);
 });
 
-test("opaque carriers preserve and substitute lifetime, type, and const captures", () => {
+test("opaque carriers preserve free captures and remove dependencies replaced by concrete arguments", () => {
   const lifetime = parameterLifetime("lifetime-a", "a");
   const constParameter = { kind: "parameter", identity: "const-n", name: "N" };
   const carrier = {
@@ -350,11 +350,9 @@ test("opaque carriers preserve and substitute lifetime, type, and const captures
     new Map([[constParameter.identity, { kind: "integer", value: "4" }]]),
   );
   assert.deepEqual(substituted.outlives, [{ kind: "static" }]);
-  assert.deepEqual(substituted.captures, [
-    { kind: "lifetime", lifetime: { kind: "static" } },
-    { kind: "type", type: int32 },
-    { kind: "const", value: { kind: "integer", value: "4" } },
-  ]);
+  assert.deepEqual(substituted.bounds, carrier.bounds);
+  assert.deepEqual(substituted.captures, []);
+  assert.deepEqual(substituteRustTargetGenerics(carrier, new Map(), new Map()).captures, carrier.captures);
 });
 
 test("malformed, duplicate, and wrong-kind lifetime carrier shapes fail closed", () => {

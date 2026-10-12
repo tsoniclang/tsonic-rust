@@ -59,6 +59,26 @@ export interface RustTargetGenericReferences {
 export function rustTargetGenericReferences(
   type: TargetTypeRef,
 ): RustTargetGenericReferences {
+  return collectRustTargetGenericReferences({ kind: "type", type });
+}
+
+export function rustTargetCaptureArguments(
+  arguments_: readonly RustTargetGenericArgument[],
+): readonly RustTargetGenericArgument[] {
+  const references = collectRustTargetGenericReferences({ kind: "arguments", arguments: arguments_ });
+  const lifetimes = new Map([...references.lifetimes, ...references.callScopedElisions, ...references.elisionInputs]
+    .filter(lifetime => lifetime.kind !== "static").map(lifetime => [rustLifetimeKey(lifetime), lifetime]));
+  return Object.freeze([
+    ...[...lifetimes.values()].map(lifetime => Object.freeze({ kind: "lifetime" as const, lifetime })),
+    ...references.typeParameters.map(type => Object.freeze({ kind: "type" as const, type })),
+    ...references.constParameters.map(value => Object.freeze({ kind: "const" as const, value })),
+  ]);
+}
+
+function collectRustTargetGenericReferences(
+  root: { readonly kind: "type"; readonly type: TargetTypeRef } |
+    { readonly kind: "arguments"; readonly arguments: readonly RustTargetGenericArgument[] },
+): RustTargetGenericReferences {
   const typeParameters = new Map<string, Extract<TargetTypeRef, { readonly kind: "type-parameter" }>>();
   const lifetimes = new Map<string, Extract<
     RustLifetimeRef,
@@ -74,7 +94,8 @@ export function rustTargetGenericReferences(
   const anonymousElisions: RustLifetimeRef[] = [];
   let signatureDepth = 0;
   let metadataDepth = 0;
-  visitType(type, new Set());
+  if (root.kind === "type") visitType(root.type, new Set());
+  else visitArguments(root.arguments, new Set());
   return Object.freeze({
     typeIdentities: Object.freeze([...typeParameters.keys()]),
     typeParameters: Object.freeze([...typeParameters.values()]),

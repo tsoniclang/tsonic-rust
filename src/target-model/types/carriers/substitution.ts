@@ -14,6 +14,7 @@ import { rustFrameCallableCarrier, rustFrameCallableValue } from "./frame-callab
 import { rustSourceOptionalTargetType } from "../projections.js";
 import { rustProducerErrorReference, rustProducerErrorTargetType } from "./producer-errors.js";
 import { rustNativeErrorJoinReference, rustNativeErrorJoinTargetType } from "../native-error-joins.js";
+import { rustTargetCaptureArguments } from "./generic-references.js";
 
 export function substituteRustTargetTypeParameters(
   type: TargetTypeRef,
@@ -302,13 +303,13 @@ function substituteCarrierParts(
             normalize,
           )),
         outlives: type.outlives.map(substituteLifetime),
-        captures: substituteGenericArguments(
+        captures: rustTargetCaptureArguments(substituteGenericArguments(
           type.captures,
           substitutions,
           lifetimeSubstitutions,
           constSubstitutions,
           normalize,
-        ),
+        )),
       };
     case "associated-type":
       return {
