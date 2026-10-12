@@ -11,7 +11,7 @@ import { createRustGeneratedUnionPlan } from "../../../dist/analysis/objects/gen
 
 test("numeric array unions require exact numeric arms and sealed capability selection", () => {
   const payloads = [rustJsArrayTargetType(rustSourcePrimitiveTargetType("float64")), rustJsTypedArrayTargetType("Uint8Array")];
-  const carrier = rustSourceUnionTargetType("/src/index.ts", "Union2", payloads.map(type => ({ kind: "type", type })), "generated");
+  const carrier = rustSourceUnionTargetType("/src/index.ts", "Union2", [], "generated", { kind: "physical", types: payloads });
   const definitions = createRustTypeDefinitionRegistry();
   assert.equal(isRustNumberArrayUnion(carrier, definitions), false);
   const variants = payloads.map((carrier, index) => ({ name: `Variant${index}`, carrier }));

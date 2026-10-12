@@ -226,7 +226,7 @@ test("nested generated sum instantiations retain independent payload requirement
   assert.equal(registry.register(family), true);
   const definitions = createRustTypeDefinitionRegistry();
   const union = payloads => rustSourceUnionTargetType("/nested.ts", "Union2",
-    payloads.map(type => ({ kind: "type", type })), "generated");
+    [], "generated", { kind: "physical", types: payloads });
   const definition = payloads => ({ carrier: union(payloads), variants: payloads.map((carrier, index) => ({
     name: `Variant${index}`, carrier,
   })) });

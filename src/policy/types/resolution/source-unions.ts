@@ -116,8 +116,7 @@ export function retainRustSourceUnionInstantiation(
     }
   }
   const used = new Set<Type>();
-  const instantiatedContext = { ...context, sourceTypeParameterSubstitutions: substitutions };
-  const variants = template.variants.map((variant, index) => {
+  const matched = template.variants.map((variant, index) => {
     const expected = expectedVariants[index];
     if (expected === undefined || expected.name !== variant.name) return undefined;
     const sources = templateMembers[index];
@@ -126,19 +125,10 @@ export function retainRustSourceUnionInstantiation(
       sourceBoundTypeRelationship(type, member, semantics,
         declaration => substitutions.get(declaration)?.sourceType) !== undefined));
     if (matches.length !== sources.length || matches.some(member => used.has(member))) return undefined;
-    const selectedMember = matches[0]!;
-    if (!retainRustStructuralInstantiation(selectedMember, variant.carrier, expected.carrier,
-      instantiatedContext, options, new Set([sourceType]))) return undefined;
     matches.forEach(member => used.add(member));
-    const shape = options.sourceTypes.structuralObjectForType(selectedMember, expected.carrier);
-    return {
-      name: variant.name,
-      sourceTypes: Object.freeze(matches),
-      carrier: expected.carrier,
-      ...(shape === undefined ? {} : { shape }),
-    };
+    return { variant, expected, matches };
   });
-  if (variants.some(variant => variant === undefined) || used.size !== members.length) return undefined;
+  if (matched.some(match => match === undefined) || used.size !== members.length) return undefined;
   const selectedProperties = semantics.types.propertyInfos(sourceType).map(property => ({
     symbol: property.symbol,
     declarations: Object.freeze([...new Set([
@@ -150,6 +140,25 @@ export function retainRustSourceUnionInstantiation(
     property.declarations.some(declaration => !rustSourceUnionMemberDeclarationIsOwned(declaration, context, options)))) {
     return undefined;
   }
+  const path = context.sourceUnionInstantiationPath ?? [];
+  if (path.some(selected => selected.sourceType === sourceType && rustTargetTypeRefEquals(selected.carrier, carrier))) return carrier;
+  if (path.length >= 128) return undefined;
+  const instantiatedContext = { ...context, sourceTypeParameterSubstitutions: substitutions,
+    sourceUnionInstantiationPath: [...path, { sourceType, carrier }] };
+  const variants = matched.map(match => {
+    const { variant, expected, matches } = match!;
+    const selectedMember = matches[0]!;
+    if (!retainRustStructuralInstantiation(selectedMember, variant.carrier, expected.carrier,
+      instantiatedContext, options, new Set([sourceType]))) return undefined;
+    const shape = options.sourceTypes.structuralObjectForType(selectedMember, expected.carrier);
+    return {
+      name: variant.name,
+      sourceTypes: Object.freeze(matches),
+      carrier: expected.carrier,
+      ...(shape === undefined ? {} : { shape }),
+    };
+  });
+  if (variants.some(variant => variant === undefined)) return undefined;
   return options.sourceTypes.registerSourceUnion({
     declaration: template.declaration,
     sourceType,

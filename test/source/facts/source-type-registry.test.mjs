@@ -85,7 +85,7 @@ test("collapsed semantic unions index their exact authored arm without losing cl
     const overall = collapsed ? broad : {};
     const broadCarrier = rustJsValueTargetType();
     const carrier = rustSourceUnionTargetType("/src/index.ts", "Union2",
-      [broadCarrier, int32Carrier].map(type => ({ kind: "type", type })), "generated");
+      [], "generated", { kind: "physical", types: [broadCarrier, int32Carrier] });
     const union = { sourceType: overall, carrier, selectedProperties: [], variants: [
       { name: "Variant0", carrier: broadCarrier, sourceTypes: [broad] },
       { name: "Variant1", carrier: int32Carrier, sourceTypes: [nominal] },
@@ -108,7 +108,7 @@ test("collapsed semantic unions index their exact authored arm without losing cl
   const registry = createRustSourceTypeRegistry();
   const broadCarrier = rustJsValueTargetType();
   const carrier = rustSourceUnionTargetType("/src/index.ts", "Union2",
-    [broadCarrier, int32Carrier].map(type => ({ kind: "type", type })), "generated");
+    [], "generated", { kind: "physical", types: [broadCarrier, int32Carrier] });
   const shared = {};
   assert.equal(registry.registerSourceUnion({ sourceType: shared, carrier, selectedProperties: [], variants: [
     { name: "Variant0", carrier: broadCarrier, sourceTypes: [shared] },

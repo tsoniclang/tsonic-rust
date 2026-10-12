@@ -3,13 +3,14 @@ import test from "node:test";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
+import { createRustGeneratedUnionPlan } from "../../../dist/analysis/objects/generated-union-plan.js";
 import { rustSourceUnionTargetType } from "../../../dist/target-model/types/carriers/source-types.js";
 import { rustFutureTargetType } from "../../../dist/target-model/types/carriers/primitives.js";
 import { rustUnitTargetType, rustNamedTargetType } from "../../../dist/target-model/types/carriers/native.js";
 import { rustOptionTargetType } from "../../../dist/target-model/types/carriers/optional.js";
 import { instantiateRustSourceUnionPayloads } from "../../../dist/target-model/types/source-union-definitions.js";
 import { planRustSourceUnionPayloadTemplate } from "../../../dist/backend/planner/types/source-union-payloads.js";
-import { rustTypeFromCarrier } from "../../../dist/backend/planner/types/render.js";
+import { rustTypeFromCarrier, rustTypeFromCarrierInContext } from "../../../dist/backend/planner/types/render.js";
 import { emptyRustGenerics, createRustSourceFile } from "../../../dist/backend/target-ast/nodes.js";
 import { rustDeriveAttributes } from "../../../dist/backend/target-ast/attributes.js";
 import { finalizeRustSourceStyle } from "../../../dist/backend/target-ast/normalization/source-style.js";
@@ -147,4 +148,65 @@ export function main(): void { if (!valid(choose(true, 7)) || !valid(choose(fals
   assert.equal((artifactText(result, "src/shapes.rs").match(/enum Union2<Payload0, Payload1>/gu) ?? []).length, 1);
   assert.equal(/Union2<String, i32>/u.test(artifactText(result, "src/index.rs")), true);
   validateGeneratedProject("imported-source-union-physical-payloads", result.artifacts, { run: true });
+});
+
+test("canonical authored and generated sums admit opaque futures in native signatures", { timeout: 300_000 }, () => {
+  const integer = { kind: "source-primitive", name: "int32" };
+  const opaque = { kind: "impl-trait", id: "call:Future", captures: [], outlives: [], bounds: [
+    { kind: "trait-ref", id: "native.Future", path: "core::future::Future", genericArguments: [], associatedConstraints: [
+      { kind: "equality", identity: "native.Future:Output", name: "Output", genericArguments: [], type: integer },
+    ] },
+  ] };
+  for (const origin of ["authored", "generated"]) {
+    const registry = createRustTypeDefinitionRegistry();
+    const name = origin === "generated" ? "Union2" : "Completion";
+    const payloads = [integer, rustFutureTargetType(integer)];
+    const carrier = rustSourceUnionTargetType("/src/definitions.ts", name, [], origin,
+      origin === "generated" ? { kind: "physical", types: payloads } : { kind: "source" });
+    const definition = { carrier, variants: payloads.map((carrier, index) => ({ name: `Variant${index}`, carrier })) };
+    assert.equal(registry.registerSourceUnion(definition, origin === "authored"), true);
+    const physical = instantiateRustSourceUnionPayloads(carrier, [integer, opaque], registry);
+    assert.equal(physical !== undefined, true);
+    const shapes = createRustGeneratedUnionPlan(origin === "generated" ? [definition] : [], () => "root", new Map());
+    const context = { moduleName: "main", structuralShapesModuleName: "definitions",
+      moduleNameByFileName: new Map([["/src/definitions.ts", "definitions"]]), externalCrateNameByFileName: new Map(),
+      externalStructuralShapeModuleByFileName: new Map(), input: { program: { typeDefinitions: registry.seal(),
+        names: { nameForSourceType: (_file, typeName) => typeName }, structuralShapes: shapes,
+        callableValues: { native: { protocolForSourceItem: () => undefined } } } } };
+    const plan = planRustSourceUnionPayloadTemplate(registry.sourceUnionPayloadTemplate(carrier), emptyRustGenerics, rustTypeFromCarrier);
+    assert.equal(plan !== undefined, true);
+    const declaration = printRustSourceFile(finalizeRustSourceStyle(createRustSourceFile([
+      { kind: "enum", name, visibility: "public", ...plan, attrs: rustDeriveAttributes(["Clone"]) },
+    ])));
+    const result = rustTypeFromCarrierInContext(physical, context, "return");
+    const parameter = rustTypeFromCarrierInContext(physical, context, "parameter");
+    assert.equal(result !== undefined && parameter !== undefined, true);
+    const project = writeGeneratedProject(`source-union-opaque-${origin}`, [
+      { path: "Cargo.toml", text: '[package]\nname = "source_union_opaque"\nversion = "0.0.0"\nedition = "2024"\n' },
+      { path: "src/main.rs", text: `
+pub mod definitions { ${declaration} }
+fn produce() -> ${printRustType(result)} { definitions::${name}::Variant1(async { 41_i32 }) }
+fn consume(value: ${printRustType(parameter)}) -> i32 {
+    match value {
+        definitions::${name}::Variant0(value) => value,
+        definitions::${name}::Variant1(future) => {
+            match std::pin::pin!(future).as_mut().poll(&mut std::task::Context::from_waker(std::task::Waker::noop())) {
+                std::task::Poll::Ready(value) => value,
+                std::task::Poll::Pending => panic!("unexpected suspension"),
+            }
+        }
+    }
+}
+fn main() {
+    assert_eq!(consume(produce()), 41);
+    let immediate: definitions::${name}<i32, core::future::Ready<i32>> = definitions::${name}::Variant0(43);
+    assert_eq!(consume(immediate), 43);
+}
+` },
+    ]);
+    runCargo(project, ["generate-lockfile", "--offline"]);
+    runCargo(project, ["fmt", "--all"]);
+    runCargo(project, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
+    runCargo(project, ["run", "--locked", "--offline"]);
+  }
 });

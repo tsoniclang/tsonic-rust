@@ -17,6 +17,7 @@ import type { SourceCallableTypeEvidence } from "@tsonic/target-api/source";
 import { isRustErasedNominalMember } from "../source-shapes.js";
 import { rustSourcePropertyTargetType } from "../../../target-model/types/projections.js";
 import { retainRustSourceUnionInstantiation, rustSourceUnionValueTypes } from "./source-unions.js";
+import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 
 export function retainRustStructuralInstantiation(
   sourceType: Type,
@@ -135,6 +136,7 @@ export function retainRustStructuralInstantiation(
 function containsStructuralStorage(carrier: TargetTypeRef, options: RustTargetTypeResolutionOptions): boolean | undefined {
   const pending = [carrier];
   const visited = new Set<TargetTypeRef>();
+  const unions = new Set<string>();
   let rows = 1;
   const append = (carriers: readonly TargetTypeRef[]): boolean => {
     rows += carriers.length;
@@ -147,7 +149,10 @@ function containsStructuralStorage(carrier: TargetTypeRef, options: RustTargetTy
     if (visited.has(current)) continue;
     visited.add(current);
     if (rustStructuralObjectCarrierValue(current) !== undefined) return true;
-    if (rustSourceUnionCarrierValue(current)?.origin === "generated") {
+    if (rustSourceUnionCarrierValue(current) !== undefined) {
+      const key = closedMetadataKey(current);
+      if (unions.has(key)) continue;
+      unions.add(key);
       const variants = options.sourceTypes.sourceUnionVariants(current);
       if (variants === undefined || variants.length === 0 || variants.length > 4096 ||
         !append(variants.map(variant => variant.carrier))) return undefined;

@@ -19,7 +19,7 @@ import { analyzeRustGeneratedItemUsage } from "../../../dist/backend/planner/liv
 import { rustContextualValueConversionFactKey, rustFlowReadProjectionFactKey } from "../../../dist/analysis/facts/keys.js";
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../helpers/fake-compile-input.mjs";
 
-function fixture({ siblings = false, nested = false, retainDerived = false, relationKind = "related" } = {}) {
+function fixture({ siblings = false, nested = false, retainDerived = false, relationKind = "related", includeRoot = false } = {}) {
   const fileName = "/src/index.ts";
   const base = rustSourceTypeCarrier(fileName, "Base", "object");
   const derived = rustSourceTypeCarrier(fileName, "Derived", "object");
@@ -28,14 +28,23 @@ function fixture({ siblings = false, nested = false, retainDerived = false, rela
   const source = rustSourceUnionTargetType(fileName, "Source");
   const target = rustSourceUnionTargetType(fileName, "Target");
   const inner = rustSourceUnionTargetType(fileName, "Inner");
+  const root = rustSourceUnionTargetType(fileName, "Root");
   const registry = createRustTypeDefinitionRegistry();
   const variants = (carriers) => carriers.map((carrier, index) => ({ name: `Variant${index}`, carrier }));
   assert.equal(registry.registerSourceUnion({ carrier: source, variants: variants([string, derived, ...(siblings ? [second] : [])]) }, true), true);
   if (nested) assert.equal(registry.registerSourceUnion({ carrier: inner, variants: variants([base]) }, true), true);
   assert.equal(registry.registerSourceUnion({ carrier: target,
     variants: variants([string, nested ? inner : base, ...(retainDerived ? [derived] : [])]) }, true), true);
+  if (includeRoot) assert.equal(registry.registerSourceUnion({ carrier: root, variants: [
+    { name: "Excluded", carrier: rustSourcePrimitiveTargetType("bool") },
+    { name: "Object", carrier: derived }, { name: "Text", carrier: string },
+  ] }, true), true);
   const definitions = registry.seal();
-  const classes = [base, derived, second].map(carrier => ({ carrier, kind: "class" }));
+  const classes = [base, derived, second].map(carrier => ({ carrier, kind: "class", genericParameters: [],
+    declaration: fakeStatement({ kindName: "KindClassDeclaration" }) }));
+  const genericContracts = new Map(classes.map(definition => [definition.declaration,
+    { typeParameters: [], associatedTypes: [], optionalStorage: [] }]));
+  const declarationGenericRequirements = { contractFor: declaration => genericContracts.get(declaration) };
   const projectTypes = {
     definitionForCarrier: carrier => classes.find(definition => rustTargetTypeRefEquals(definition.carrier, carrier)),
     relationship: (carrier, definition) => {
@@ -44,7 +53,8 @@ function fixture({ siblings = false, nested = false, retainDerived = false, rela
       return relationKind === "related" ? { kind: "related", targetType: base } : { kind: relationKind };
     },
   };
-  return { fileName, base, derived, second, source, target, inner, string, definitions, projectTypes };
+  return { fileName, base, derived, second, source, target, inner, root, string, definitions, projectTypes,
+    declarationGenericRequirements };
 }
 
 test("nominal union widening composes existing checked upcasts inside canonical arm correspondence", () => {
@@ -149,12 +159,13 @@ test("project union facts reject omitted proof, forged paths, getters, cycles an
 });
 
 test("canonical nominal union emission moves owned fields and borrows views without a redundant Derived clone", () => {
-  const { source, target, definitions, projectTypes, fileName } = fixture();
+  const { source, target, definitions, projectTypes, fileName, declarationGenericRequirements } = fixture();
   const conversion = selectRustProjectUnionMapping(source, target, projectTypes, definitions);
   const node = fakeStatement({ kindName: "Identifier", pos: 0, end: 5 });
   const sourceFile = fakeSourceFile({ fileName, text: "value", statements: [node] });
   const context = { input: { program: { source: { ast: fakeAstReader([sourceFile]) }, typeDefinitions: definitions,
-    projectTypes, valueLifetimes: { canMove: () => true },
+    projectTypes, valueLifetimes: { canMove: () => true }, declarationGenericRequirements,
+    callableValues: { native: { protocolForSourceItem: () => undefined } },
     names: { nameForSourceType: (_file, name) => name }, configuration: { edition: "2024" } } },
     sourceFile, diagnostics: [], moduleName: "index", moduleNameByFileName: new Map([[fileName, "index"]]),
     externalCrateNameByFileName: new Map() };
@@ -261,12 +272,8 @@ test("nominal union liveness reuses exact upcast fields and retains every nested
 });
 
 test("dispatcher fuses finalized narrowing and heritage without intermediate enum or identity clones", () => {
-  const { source, target, definitions: originalDefinitions, projectTypes, fileName, string, derived } = fixture({ nested: true });
-  const root = rustSourceUnionTargetType(fileName, "Root");
-  const definitions = { ...originalDefinitions, programErrorOrigin: () => undefined, sourceUnionVariants: carrier => rustTargetTypeRefEquals(carrier, root)
-    ? [{ name: "Excluded", carrier: rustSourcePrimitiveTargetType("bool") },
-      { name: "Object", carrier: derived }, { name: "Text", carrier: string }]
-    : originalDefinitions.sourceUnionVariants(carrier) };
+  const { source, target, root, derived, definitions, projectTypes, fileName, declarationGenericRequirements } =
+    fixture({ nested: true, includeRoot: true });
   const conversion = selectRustProjectUnionMapping(source, target, projectTypes, definitions);
   const correspondence = conversion.arms.map(({ upcast, ...mapping }) => mapping);
   const relation = rustProjectUnionUpcastRelation(projectTypes);
@@ -292,7 +299,8 @@ test("dispatcher fuses finalized narrowing and heritage without intermediate enu
       const expression = owned ? { kind: "call", path: "produce", args: [] }
         : { kind: "method-call", receiver: original, method: "clone", args: [] };
       const context = { input: { program: { source: { ast }, typeDefinitions: definitions, projectTypes,
-        valueLifetimes: { canMove: () => owned }, callableValues: { generic: { definitionFor: () => undefined } },
+        valueLifetimes: { canMove: () => owned }, declarationGenericRequirements,
+        callableValues: { generic: { definitionFor: () => undefined }, native: { protocolForSourceItem: () => undefined } },
         names: { nameForSourceType: (_file, name) => name }, configuration: { edition: "2024" },
         facts: { getFact: (subject, key) => subject !== node ? undefined
           : key === rustFlowReadProjectionFactKey ? flow

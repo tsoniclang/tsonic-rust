@@ -574,7 +574,7 @@ export function rustTypeFromCarrierInContext(
       const definition = context.input.program.callableValues.generic.definitionFor(shapeCarrier);
       const module = definition === undefined ? undefined : context.moduleNameByFileName.get(definition.ownerFileName);
       const externalCrate = definition === undefined ? undefined : context.externalCrateNameByFileName.get(definition.ownerFileName);
-      const arguments_ = genericCallable.environment.map(argument => rustTypeFromCarrierInContext(argument, context));
+      const arguments_ = genericCallable.environment.map(argument => rustTypeFromCarrier(argument, sourceRendering, resolveStructuralShape));
       if (definition === undefined || module === undefined || arguments_.some(argument => argument === undefined)) return undefined;
       return { kind: "named", path: `${externalCrate !== undefined && externalCrate !== context.crateName ? externalCrate : "crate"}::${module}::${definition.targetName}`,
         genericArguments: (arguments_ as RustType[]).map(type => ({ kind: "type", type })),
@@ -590,9 +590,8 @@ export function rustTypeFromCarrierInContext(
     const arguments_ = union?.origin === "generated" ? rustSourceUnionPayloadArguments(shapeCarrier, context.input.program.typeDefinitions) :
       context.input.program.structuralShapes.definitionForCarrier(shapeCarrier)!.genericArguments;
     if (arguments_ === undefined) return undefined;
-    const genericArguments = arguments_.map(argument =>
-      rustTargetGenericArgumentToAstInContext(argument, context));
-    if (genericArguments.some((argument) => argument === undefined)) {
+    const genericArguments = rustGenericArgumentsFromCarrier(arguments_, sourceRendering, resolveStructuralShape);
+    if (genericArguments === undefined) {
       return undefined;
     }
     const externalShapeModule = context.externalStructuralShapeModuleByFileName.get(
@@ -619,16 +618,15 @@ export function rustTypeFromCarrierInContext(
       genericArguments: typeGenericArguments([stateType]),
     };
   };
-  const rendered = rustTypeFromCarrier(
-    selectedCarrier,
-    { typeParameterNames: context.typeParameterNames, typeDefinitions: context.input.program.typeDefinitions,
-      pathFor: resolveSourceTypePath, additionalArgumentsFor: type => rustOptionalStorageTypeArguments(type, context),
-      programErrorType: () => {
-        const boundary = context.sourcePackageErrors === undefined ? undefined : rustCurrentErrorBoundary(context);
-        return boundary === undefined ? undefined : rustErrorType(boundary);
-      } },
-    resolveStructuralShape,
-  );
+  const sourceRendering: RustSourceTypeRendering = {
+    typeParameterNames: context.typeParameterNames, typeDefinitions: context.input.program.typeDefinitions,
+    pathFor: resolveSourceTypePath, additionalArgumentsFor: type => rustOptionalStorageTypeArguments(type, context),
+    programErrorType: () => {
+      const boundary = context.sourcePackageErrors === undefined ? undefined : rustCurrentErrorBoundary(context);
+      return boundary === undefined ? undefined : rustErrorType(boundary);
+    },
+  };
+  const rendered = rustTypeFromCarrier(selectedCarrier, sourceRendering, resolveStructuralShape);
   if (position === "inferred-call" && rendered !== undefined && rustTypeContainsImplTrait(rendered)) {
     return { kind: "infer" };
   }

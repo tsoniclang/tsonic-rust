@@ -160,7 +160,8 @@ for (const surfaces of [[], ["js"]]) {
       files: { ...recursiveSourceUnionFiles, "index.ts": `${recursiveSourceUnionFiles["index.ts"]}
         import { check } from "@acme/testing"; export function main(): void { check(run()); }` } });
     assertNoTargetDiagnostics(result.diagnostics);
-    assert.match(artifactText(result, "src/steps.rs"), /enum Step<Value>/u);
+    assert.equal(/enum Step<Value, Payload0>/u.test(artifactText(result, "src/steps.rs")), true,
+      "recursive native binder and independent physical payload share one canonical enum");
     assert.match(artifactText(result, "src/steps.rs"), /fn delayed<Value: Clone \+ 'static>/u);
     assert.match(artifactText(result, "src/steps.rs"), /done::<Value>\(capture_value\.clone\(\)\)/u);
     const run = validateGeneratedProject("recursive-source-unions", result.artifacts, { run: true });

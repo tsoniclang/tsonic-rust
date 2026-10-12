@@ -37,6 +37,10 @@ export interface RustTargetTypeResolutionContext extends RustSourcePolicyContext
   readonly currentSourceFile: SourceFile;
   readonly currentSemantics: SourceFileSemantics;
   readonly sourceTypeParameterSubstitutions?: ReadonlyMap<Node, RustSourceTypeArgument>;
+  readonly sourceUnionInstantiationPath?: readonly {
+    readonly sourceType: Type;
+    readonly carrier: TargetTypeRef;
+  }[];
 }
 
 export interface RustSourceTypeArgument {

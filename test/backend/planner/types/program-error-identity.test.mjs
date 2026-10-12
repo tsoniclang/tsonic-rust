@@ -4,9 +4,11 @@ import { rustTypeFromCarrier, rustTypeFromCarrierInContext } from "../../../../d
 import { rustProgramErrorTargetType, rustVecTargetType } from "../../../../dist/target-model/types/index.js";
 import { rustRuntimeErrorTypeIdentity, rustSourcePackageErrorTypeIdentity } from "../../../../dist/backend/planner/program/source-package-errors.js";
 import { rustTypeEquals } from "../../../../dist/backend/target-ast/inspection/type-equality.js";
+import { emptyRustTypeDefinitions } from "../../../../dist/target-model/types/source-union-definitions.js";
 
 function context(componentId, errorDomain) {
   return { usedAliases: new Set(), sourcePackageComponentId: componentId,
+    input: { program: { typeDefinitions: emptyRustTypeDefinitions } },
     sourcePackageErrors: { domainsByComponentId: new Map([[componentId, { componentId, errorDomain,
       errorTypeIdentity: rustSourcePackageErrorTypeIdentity(componentId, errorDomain) }]]) } };
 }
@@ -39,7 +41,9 @@ test("program error rendering fails closed without its selected domain or with m
   const scope = context("owner", "project");
   scope.sourcePackageErrors.domainsByComponentId.clear();
   assert.equal(rustTypeFromCarrierInContext(rustProgramErrorTargetType(), scope) === undefined, true);
-  assert.equal(rustTypeFromCarrierInContext(rustProgramErrorTargetType(), {}) === undefined, true);
+  assert.equal(rustTypeFromCarrierInContext(rustProgramErrorTargetType(), {
+    input: { program: { typeDefinitions: emptyRustTypeDefinitions } },
+  }) === undefined, true);
   assert.equal(rustTypeFromCarrier(rustProgramErrorTargetType()) === undefined, true);
   assert.equal(rustTypeFromCarrierInContext({ ...rustProgramErrorTargetType(),
     genericArguments: [{ kind: "type", type: rustProgramErrorTargetType() }] }, context("owner", "project")) === undefined, true);

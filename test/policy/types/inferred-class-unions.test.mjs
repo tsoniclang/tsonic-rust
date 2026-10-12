@@ -10,17 +10,17 @@ import { createRustSourceTypeRegistry } from "../../../dist/analysis/project-typ
 test("generated union definitions require complete exact payload identities and deterministic ownership", () => {
   const payloads = ["First", "Second", "Third"].map(name => rustSourceTypeCarrier("/src/backing.ts", name, "object"));
   const make = (members, fileName = "/src/backing.ts") => rustSourceUnionTargetType(fileName, `Union${members.length}`,
-    members.map(type => ({ kind: "type", type })), "generated");
+    [], "generated", { kind: "physical", types: members });
   const carrier = make(payloads);
   assert.equal(rustSourceUnionCarrierValue(carrier)?.origin, "generated");
   const absent = { ...carrier.value };
   delete absent.origin;
   const changes = [absent, { ...carrier.value, origin: "other" }, { ...carrier.value, typeName: "Union2" },
-    { ...carrier.value, genericArguments: carrier.value.genericArguments.slice(1) },
+    { ...carrier.value, payloads: { kind: "physical", types: carrier.value.payloads.types.slice(1) } },
     { ...carrier.value, variants: [] }];
   for (const value of changes) assert.equal(rustSourceUnionCarrierValue({ ...carrier, value }), undefined);
   const record = value => ({ sourceType: {}, carrier: value,
-    variants: value.value.genericArguments.map((argument, index) => ({ name: `Variant${index}`, carrier: argument.type, sourceTypes: [{}] })), selectedProperties: [] });
+    variants: value.value.payloads.types.map((type, index) => ({ name: `Variant${index}`, carrier: type, sourceTypes: [{}] })), selectedProperties: [] });
   const first = record(carrier);
   const second = record(make(payloads.slice(0, 2), "/src/other.ts"));
   const third = record(make(payloads.slice(1), "/src/another.ts"));

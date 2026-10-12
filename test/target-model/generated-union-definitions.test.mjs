@@ -11,9 +11,9 @@ const error = { kind: "target-named", id: "rust.program.TsonicError" };
 const text = rustStringTargetType();
 const integer = rustSourcePrimitiveTargetType("int64");
 const union = (members, fileName = "/src/index.ts", origin = "generated") => rustSourceUnionTargetType(
-  fileName, "Union2", members.map(type => ({ kind: "type", type })), origin);
+  fileName, "Union2", [], origin, { kind: "physical", types: members });
 const definition = carrier => ({ carrier,
-  variants: carrier.value.genericArguments.map((argument, index) => ({ name: `Variant${index}`, carrier: argument.type })) });
+  variants: carrier.value.payloads.types.map((type, index) => ({ name: `Variant${index}`, carrier: type })) });
 
 test("generated native union definitions retain generic payload applications after promise lifetime closure", () => {
   const registry = createRustTypeDefinitionRegistry();
@@ -29,7 +29,7 @@ test("generated native union definitions retain generic payload applications aft
   assert.equal(selected?.length, 2);
   selected.forEach((variant, index) => {
     assert.equal(variant.name, `Variant${index}`);
-    assert.equal(rustTargetTypeRefEquals(variant.carrier, closed.value.genericArguments[index].type), true);
+    assert.equal(rustTargetTypeRefEquals(variant.carrier, closed.value.payloads.types[index]), true);
     assert.equal(Object.isFrozen(variant), true);
   });
   const awaited = rustAwaitSelection(closed, registry);
