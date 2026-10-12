@@ -6,6 +6,7 @@ import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../dist/target-
 import { mapRustTargetTypes, substituteRustTargetTypeParameters } from "../../dist/target-model/types/carriers/substitution.js";
 import { rustTargetTypeChildren } from "../../dist/target-model/types/carriers/children.js";
 import { closedMetadataKey, snapshotClosedMetadata } from "../../dist/target-model/metadata/closed-data.js";
+import { rustNativeRepresentationMatches } from "../../dist/target-model/conversions/native-representation.js";
 
 test("program errors have one explicit logical or exact physical owner identity throughout target metadata", () => {
   const selections = [{ kind: "logical" }, { kind: "physical", domain: "runtime" },
@@ -23,13 +24,20 @@ test("program errors have one explicit logical or exact physical owner identity 
     assert.equal(rustTargetTypeRefEquals(snapshotClosedMetadata(carrier), carrier), true);
     assert.equal(rustTargetTypeRefEquals(substituteRustTargetTypeParameters(
       { kind: "type-parameter", identity: "argument", name: "Argument" }, new Map([["argument", carrier]])), carrier), true);
-    for (const [otherIndex, other] of carriers.entries()) assert.equal(rustTargetTypeRefEquals(carrier, other), index === otherIndex);
+    for (const [otherIndex, other] of carriers.entries()) {
+      assert.equal(rustTargetTypeRefEquals(carrier, other), index === otherIndex);
+      assert.equal(rustNativeRepresentationMatches(carrier, other), index === otherIndex);
+      const wrap = error => ({ kind: "target-named", id: "fixture.Result", genericArguments: [{ kind: "type", type: error }] });
+      assert.equal(rustNativeRepresentationMatches(wrap(carrier), wrap(other)), index === otherIndex);
+    }
   }
 });
 
 test("ownerless legacy program errors, malformed phases and accessor metadata are not carrier evidence", () => {
   const logical = rustProgramErrorTargetType();
   assert.equal(isRustTargetTypeRef({ kind: "target-named", id: logical.id }), false);
+  assert.equal(rustNativeRepresentationMatches({ kind: "target-named", id: logical.id }, logical), false);
+  assert.equal(rustNativeRepresentationMatches({ kind: "target-named", id: logical.id }, { kind: "target-named", id: logical.id }), false);
   for (const owner of [undefined, {}, { kind: "physical" }, { kind: "physical", domain: "project" },
     { kind: "physical", domain: "project", componentId: "" }, { kind: "logical", componentId: "other" },
     { kind: "physical", domain: "runtime", componentId: "other" }]) {

@@ -3,7 +3,7 @@ import { rustTargetGenericArgumentEquals, rustTargetTypeRefEquals } from "../typ
 import { rustLifetimesEqual } from "../lifetimes/index.js";
 import { isRustUnitCarrier } from "../types/carriers/js.js";
 import { isRustAbsenceCarrier } from "../types/carriers/native.js";
-import { rustEmptyObjectTargetId, rustObjectIdentityTargetId } from "../types/carriers/source-types.js";
+import { rustEmptyObjectTargetId, rustObjectIdentityTargetId, rustProgramErrorTargetId } from "../types/carriers/source-types.js";
 
 export function rustNativeRepresentationMatches(source: TargetTypeRef, target: TargetTypeRef): boolean {
   if (rustTargetTypeRefEquals(source, target)) return true;
@@ -16,6 +16,7 @@ export function rustNativeRepresentationMatches(source: TargetTypeRef, target: T
       source.elements.every((element, index) => rustNativeRepresentationMatches(element, target.elements[index]!));
   }
   if (source.kind !== "target-named" || target.kind !== "target-named") return false;
+  if (source.id === rustProgramErrorTargetId || target.id === rustProgramErrorTargetId) return false;
   if (source.sourceAbsence !== target.sourceAbsence) return false;
   const sourceArguments = source.genericArguments ?? [];
   const targetArguments = target.genericArguments ?? [];
