@@ -4,8 +4,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { rustCallableProtocol, rustCallableTargetType, rustNativeCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustGenericCallableProtocol } from "../../target-model/types/carriers/generic-callables.js";
-import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
-import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
+import { rustOwnedStorageChild, rustOwnedStorageChildren } from "../types/owned-storage.js";
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 
 export interface RustRetainedEnvironment {
@@ -57,7 +56,7 @@ export function closeRustRetainedParameter(
     const protocol = rustCallableProtocol(original);
     return protocol === undefined ? current : protocol.lifetime?.kind === "placeholder"
       ? rustCallableTargetType(protocol.parameters, protocol.result, selected.environment.lifetime) : original;
-  });
+  }, rustOwnedStorageChild);
 }
 
 function hasOpenCallableEnvironment(carrier: TargetTypeRef): boolean {
@@ -66,13 +65,12 @@ function hasOpenCallableEnvironment(carrier: TargetTypeRef): boolean {
   const protocol = rustCallableProtocol(carrier);
   if (protocol !== undefined) return protocol.lifetime?.kind === "placeholder";
   if (rustGenericCallableProtocol(carrier) !== undefined || rustNativeCallableProtocol(carrier) !== undefined) return false;
-  return rustTargetTypeChildren(carrier).some(hasOpenCallableEnvironment);
+  return rustOwnedStorageChildren(carrier).some(hasOpenCallableEnvironment);
 }
 
 export function rustHasOpenOwnedStorage(carrier: TargetTypeRef): boolean {
   if (carrier.kind === "reference" || carrier.kind === "pointer") return false;
   if (rustCallableProtocol(carrier) !== undefined || rustGenericCallableProtocol(carrier) !== undefined ||
     rustNativeCallableProtocol(carrier) !== undefined || carrier.kind === "type-parameter") return true;
-  return rustTargetGenericReferences(carrier).typeIdentities.length > 0 ||
-    rustTargetTypeChildren(carrier).some(rustHasOpenOwnedStorage);
+  return rustOwnedStorageChildren(carrier).some(rustHasOpenOwnedStorage);
 }

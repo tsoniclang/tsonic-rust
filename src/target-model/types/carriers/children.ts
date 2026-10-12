@@ -1,13 +1,35 @@
 import type { RustTargetGenericArgument, TargetTypeRef } from "../model.js";
 import { rustFixedArrayCarrierValue, rustNamedTypeCarrierValue } from "./native.js";
-import { rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustStructuralObjectCarrierValue } from "./source-types.js";
+import { rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustStructuralObjectCarrierValue, type RustStructuralObjectCarrierValue } from "./source-types.js";
 import { rustGenericCallableValue } from "./generic-callables.js";
 import { rustFrameCallableValue } from "./frame-callables.js";
 import { rustClassConstructorFreeArguments } from "./class-constructors.js";
 import { rustProducerErrorReference } from "./producer-errors.js";
 import { rustNativeErrorJoinReference } from "../native-error-joins.js";
 
-export function rustTargetTypeChildren(type: TargetTypeRef): readonly TargetTypeRef[] {
+export type RustTargetTypeChildRole =
+  | { readonly kind: "component" }
+  | { readonly kind: "structural-field"; readonly index: number; readonly structural: RustStructuralObjectCarrierValue }
+  | { readonly kind: "structural-construction"; readonly structural: RustStructuralObjectCarrierValue };
+
+export type RustTargetTypeChildSelector = (parent: TargetTypeRef, child: TargetTypeRef, role: RustTargetTypeChildRole) => boolean;
+
+export const rustTargetTypeComponentRole: RustTargetTypeChildRole = Object.freeze({ kind: "component" });
+
+export function rustTargetTypeChildren(type: TargetTypeRef, shouldVisitChild?: RustTargetTypeChildSelector): readonly TargetTypeRef[] {
+  const children = targetTypeChildren(type);
+  if (shouldVisitChild === undefined) return children;
+  const structural = rustStructuralObjectCarrierValue(type);
+  return children.filter((child, index) => {
+    const fieldIndex = structural === undefined ? -1 : index - structural.bases.length;
+    const role: RustTargetTypeChildRole = structural === undefined || fieldIndex < 0 ? rustTargetTypeComponentRole
+      : fieldIndex < structural.fields.length ? { kind: "structural-field", index: fieldIndex, structural }
+      : { kind: "structural-construction", structural };
+    return shouldVisitChild(type, child, role);
+  });
+}
+
+function targetTypeChildren(type: TargetTypeRef): readonly TargetTypeRef[] {
   const arguments_ = (values: readonly RustTargetGenericArgument[] | undefined): readonly TargetTypeRef[] =>
     values?.flatMap(value => value.kind === "type" ? [value.type] : []) ?? [];
   switch (type.kind) {
