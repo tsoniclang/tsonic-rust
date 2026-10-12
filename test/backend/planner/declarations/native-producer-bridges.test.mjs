@@ -75,12 +75,51 @@ test("JS completion remains the concrete Promise carrier with its selected error
   assert.doesNotMatch(printed, /impl core::future::Future|Pending0|TsonicError|TsonicResult/u);
 });
 
+test("borrowed generic environments share exact GAT bounds without imposing a static helper environment", () => {
+  const value = { kind: "type-parameter", identity: "source:Value", name: "Value" };
+  const reference = { kind: "reference", referent: value, mutable: false };
+  for (const result of [reference, rustFutureTargetType(reference)]) {
+    const fixture = nativeProducerFixture({ parameters: [reference], result });
+    const [protocol, helper, implementation, forwarding] = nativeProducerItems(fixture);
+    assert.deepEqual(helper.generics.parameters.map(parameter => parameter.name), ["input", "Arguments", "Output0"]);
+    assert.equal(implementation.generics.parameters.some(parameter => parameter.name === "EnvironmentType0"), false);
+    const predicates = [{ kind: "type", type: { kind: "named", path: "EnvironmentType0" },
+      bounds: [{ kind: "lifetime", lifetime: { kind: "named", name: "input" } }],
+    }];
+    for (const member of [...protocol.members, ...forwarding.members]) {
+      assert.deepEqual(member.generics.wherePredicates, predicates);
+    }
+    const bound = forwarding.generics.wherePredicates[0].bounds[0].reference.trait;
+    assert.equal(bound.genericArguments[1].type.kind, "tuple");
+    assert.equal(bound.genericArguments[1].type.elements[0].referent.path, "EnvironmentType0");
+    assert.equal(bound.genericArguments[2].type.referent.path, "EnvironmentType0");
+    assert.doesNotMatch(printNativeProducerItems([protocol, helper, implementation, forwarding]), /'static|Box|dyn /u);
+  }
+});
+
+test("borrowed JS completion uses its input lifetime without manufacturing a native future", () => {
+  const fixture = nativeProducerFixture({ parameters: [borrowed], result:
+    rustJsPromiseTargetTypeWithLifetime(borrowed, { kind: "placeholder" }),
+  });
+  const items = nativeProducerItems(fixture);
+  const printed = printNativeProducerItems(items);
+  assert.match(printed, /js_abi::JsPromise<'input, Output0, AwaitError0>/u);
+  assert.doesNotMatch(printed, /'static|impl core::future::Future|Pending0|Box|dyn /u);
+});
+
 test("environment parameters remain on the protocol while universal methods require their existing state owner", () => {
   const value = { kind: "type-parameter", identity: "source:Value", name: "Value" };
   const fixture = nativeProducerFixture({ parameters: [value], result: value });
-  const printed = printNativeProducerItems(nativeProducerItems(fixture));
+  const items = nativeProducerItems(fixture);
+  const printed = printNativeProducerItems(items);
   assert.match(printed, /impl<Implementation, EnvironmentType0, InvocationError>/u);
-  assert.match(printed, /CallableImplementation<\(EnvironmentType0,\), Output = Result<EnvironmentType0, InvocationError>>/u);
+  const callable = items[1].generics.wherePredicates[0].bounds[0].reference.trait;
+  assert.equal(callable.path, "rt::CallableImplementation");
+  assert.deepEqual(callable.genericArguments[0].type, { kind: "tuple", elements: [{ kind: "named", path: "EnvironmentType0" }] });
+  assert.deepEqual(callable.genericArguments[1].type, { kind: "named", path: "Result", genericArguments: [
+    { kind: "type", type: { kind: "named", path: "EnvironmentType0" } },
+    { kind: "type", type: { kind: "named", path: "InvocationError" } },
+  ] });
   const generic = nativeProducerFixture({ carrier: rustGenericCallableTargetType([value], [value], value,
     { fileName: "/index.ts", declarationIdentity: "universal" }) });
   assert.deepEqual(planRustNativeProducerBridge(generic.protocol, generic.context), []);

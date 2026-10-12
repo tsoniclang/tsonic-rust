@@ -7,13 +7,16 @@ import { rustJsPromiseTargetId } from "../../../../target-model/types/carriers/s
 import { rustNamedTargetType } from "../../../../target-model/types/carriers/native.js";
 import { rustTypeGenericArguments } from "../../../../target-model/types/generic-arguments.js";
 import { mapRustTargetTypes } from "../../../../target-model/types/carriers/substitution.js";
+import { rustAwaitSelectionLeaves } from "../../../../target-model/types/await.js";
+import { closedMetadataKey } from "../../../../target-model/metadata/closed-data.js";
 import { allocateRustGeneratedName } from "../../../../target-model/names/generated.js";
 import type { RustBlock, RustFunctionParam, RustGenericArgument, RustGenericParameter,
-  RustGenerics, RustItem, RustType, RustWherePredicate } from "../../../target-ast/nodes.js";
+  RustItem, RustType, RustWherePredicate } from "../../../target-ast/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { registerAliasFromPath } from "../../program/plan-context.js";
 import { rustLifetimeBinderToAst, rustTypeFromCarrierInContext } from "../../types/render.js";
+import { planRustNativeCallableMethodGenerics } from "./native-method-generics.js";
 
 export function planRustNativeProducerBridge(
   protocol: RustNativeCallableProtocol,
@@ -35,7 +38,20 @@ export function planRustNativeProducerBridge(
   const pending = new Map(futures.filter(future => future.carrier.kind === "target-named" &&
     future.carrier.id === rustFutureTargetId).map(future => [future.ordinal, parameter(`Pending${future.ordinal}`)]));
   const environment = signature.environmentParameters;
-  const genericTypes = [implementation, ...environment, invocationError, ...errors, ...pending.values()];
+  const argumentsParameter = parameter("Arguments");
+  const outputs = new Map<string, { readonly source: TargetTypeRef;
+    readonly parameter: Extract<TargetTypeRef, { readonly kind: "type-parameter" }> }>();
+  if (lifetimes.length > 0) {
+    const selected = protocol.completion === undefined ? [protocol.method.result] :
+      rustAwaitSelectionLeaves(protocol.completion.selection).map(leaf => leaf.future?.outputCarrier ?? leaf.carrier);
+    for (const source of selected) {
+      const identity = closedMetadataKey(source);
+      if (!outputs.has(identity)) outputs.set(identity, { source, parameter: parameter(`Output${outputs.size}`) });
+    }
+  }
+  const boundTypes = [argumentsParameter, ...[...outputs.values()].map(output => output.parameter)];
+  const genericTypes = [implementation, ...(lifetimes.length === 0 ? environment : boundTypes),
+    invocationError, ...errors, ...pending.values()];
   const genericParameters: readonly RustGenericParameter[] = genericTypes.map(type => ({
     kind: "type", name: type.name, bounds: [],
   }));
@@ -49,6 +65,7 @@ export function planRustNativeProducerBridge(
     kind: "lifetime", lifetime: parameter.lifetime,
   }));
   const environmentArguments = environment.map(type => typeArgument(named(type.name)));
+  const boundArguments = boundTypes.map(type => typeArgument(named(type.name)));
   const protocolType = named(protocol.targetName, environmentArguments);
   const implementationType = named(implementation.name);
   const parameters: RustFunctionParam[] = [];
@@ -61,8 +78,10 @@ export function planRustNativeProducerBridge(
   const errorTypes = [invocationError, ...errors];
   const concreteResult = result(invocationError, ordinal => errors[ordinal]!, undefined);
   if (concreteResult === undefined) return undefined;
+  const inputTuple: RustType = { kind: "tuple", elements: parameters.map(parameter => parameter.type) };
+  const argumentsType = lifetimes.length === 0 ? inputTuple : named(argumentsParameter.name);
   const callable = named("rt::CallableImplementation", [
-    typeArgument({ kind: "tuple", elements: parameters.map(parameter => parameter.type) }),
+    typeArgument(argumentsType),
     { kind: "associated-equality", name: "Output", genericArguments: [], type: concreteResult },
   ]);
   const predicates: RustWherePredicate[] = [{ kind: "type", type: implementationType,
@@ -71,7 +90,7 @@ export function planRustNativeProducerBridge(
   for (const future of futures) {
     const selected = pending.get(future.ordinal);
     if (selected === undefined) continue;
-    const output = rustTypeFromCarrierInContext(future.output, context);
+    const output = rustTypeFromCarrierInContext(bindOutputs(future.output), context);
     if (output === undefined) return undefined;
     predicates.push({ kind: "type", type: named(selected.name), bounds: [{ kind: "trait-type", reference: {
       trait: named("core::future::Future", [{ kind: "associated-equality", name: "Output", genericArguments: [],
@@ -84,28 +103,29 @@ export function planRustNativeProducerBridge(
   ]);
   if (implResult === undefined) return undefined;
   registerAliasFromPath(context, "rt::CallableImplementation");
+  const directParameters = lifetimes.length === 0 ? parameters : [{ name: "arguments", type: argumentsType }];
   const invokeBody: RustBlock = { statements: [{ kind: "tail", expr: {
     kind: "associated-call", owner: implementationType, trait: named("rt::CallableImplementation", [
-      typeArgument({ kind: "tuple", elements: parameters.map(parameter => parameter.type) }),
-    ]), method: "invoke", args: [{ kind: "path", path: "self" }, {
+      typeArgument(argumentsType),
+    ]), method: "invoke", args: [{ kind: "path", path: "self" }, lifetimes.length === 0 ? {
       kind: "tuple-literal", elements: parameters.map(parameter => ({ kind: "path", path: parameter.name })),
-    }],
+    } : { kind: "path", path: "arguments" }],
   } }] };
   const direct: RustItem = { kind: "impl", trait: lifetimes.length === 0 ? protocolType : named(protocol.boundProducerName!, [
-    ...lifetimeArguments, ...environmentArguments,
+    ...lifetimeArguments, ...boundArguments,
   ]), target: implementationType,
   generics: { parameters: [...lifetimes, ...genericParameters], wherePredicates: predicates },
   members: [...channels.map((name, index) => ({ kind: "type" as const, name, generics: emptyRustGenerics,
     type: named(errorTypes[index]!.name),
   })), { kind: "function", name: "invoke", visibility: "private", generics: emptyRustGenerics,
-    selfParam: { kind: "reference", mutable: false }, params: parameters, returnType: implResult, body: invokeBody,
+    selfParam: { kind: "reference", mutable: false }, params: directParameters, returnType: implResult, body: invokeBody,
   }],
   };
   if (lifetimes.length === 0) return [direct];
   const self: TargetTypeRef = { kind: "type-parameter", identity: `${protocol.identity}:Self`, name: "Self" };
   const associated = (name: string): TargetTypeRef => ({ kind: "associated-type", owner: self, name, genericArguments: [] });
   const helperResult = result(associated("InvocationError"), ordinal => associated(`AwaitError${ordinal}`), [
-    ...targetLifetimes, ...rustTypeGenericArguments([self, ...environment]),
+    ...targetLifetimes, ...rustTypeGenericArguments([self, ...boundTypes]),
   ]);
   const publicResult = rustNativeCallableProtocolResult(protocol, context.input.program.typeDefinitions);
   const renderedPublicResult = publicResult === undefined ? undefined : rustTypeFromCarrierInContext(
@@ -114,14 +134,24 @@ export function planRustNativeProducerBridge(
         argument.type.identity === self.identity ? { kind: "type", type: implementation } : argument),
     }), context, "return");
   if (helperResult === undefined || renderedPublicResult === undefined) return undefined;
-  const methodGenerics: RustGenerics = { ...emptyRustGenerics, parameters: lifetimes };
-  const helperType = named(protocol.boundProducerName!, [...lifetimeArguments, ...environmentArguments]);
+  const methodGenerics = planRustNativeCallableMethodGenerics(protocol, context);
+  if (methodGenerics === undefined) return undefined;
+  const outputTypes: RustType[] = [];
+  for (const output of outputs.values()) {
+    const type = rustTypeFromCarrierInContext(output.source, context);
+    if (type === undefined) return undefined;
+    outputTypes.push(type);
+  }
+  const helperType = named(protocol.boundProducerName!, [...lifetimeArguments,
+    typeArgument(inputTuple), ...outputTypes.map(typeArgument)]);
   return [
     { kind: "trait", name: protocol.boundProducerName!, visibility: "public",
-      generics: { ...emptyRustGenerics, parameters: [...lifetimes, ...environmentParameters] },
+      generics: { ...emptyRustGenerics, parameters: [...lifetimes, ...boundTypes.map(type => ({
+        kind: "type" as const, name: type.name, bounds: [],
+      }))] },
       members: [...channels.map(name => ({ kind: "type" as const, name, generics: emptyRustGenerics, bounds: [] })),
         { kind: "function", name: "invoke", generics: emptyRustGenerics,
-          selfParam: { kind: "reference", mutable: false }, params: parameters, returnType: helperResult,
+          selfParam: { kind: "reference", mutable: false }, params: directParameters, returnType: helperResult,
         }],
     },
     direct,
@@ -137,7 +167,7 @@ export function planRustNativeProducerBridge(
         selfParam: { kind: "reference", mutable: false }, params: parameters, returnType: renderedPublicResult,
         body: { statements: [{ kind: "tail", expr: { kind: "associated-call", owner: implementationType,
           trait: helperType, method: "invoke", args: [{ kind: "path", path: "self" },
-            ...parameters.map(parameter => ({ kind: "path" as const, path: parameter.name }))],
+            { kind: "tuple-literal", elements: parameters.map(parameter => ({ kind: "path", path: parameter.name })) }],
         } }] },
       }],
     },
@@ -164,8 +194,13 @@ export function planRustNativeProducerBridge(
         });
       }, context.input.program.typeDefinitions);
     return completion === undefined ? undefined : rustTypeFromCarrierInContext(rustNamedTargetType(
-      "rust.core.Result", "Result", rustTypeGenericArguments([completion, error]),
+      "rust.core.Result", "Result", rustTypeGenericArguments([bindOutputs(completion), error]),
     ), context, captures === undefined ? "general" : "return");
+  }
+
+  function bindOutputs(carrier: TargetTypeRef): TargetTypeRef {
+    return outputs.size === 0 ? carrier : mapRustTargetTypes(carrier, (type, source) =>
+      outputs.get(closedMetadataKey(source))?.parameter ?? type);
   }
 }
 

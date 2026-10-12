@@ -27,23 +27,30 @@ function fixtureSource() {
   const second = nativeProducerFixture({ identity: "second", parameters: [integer], result: integer });
   const value = { kind: "type-parameter", identity: "source:Value", name: "Value" };
   const environment = nativeProducerFixture({ identity: "environment", parameters: [value], result: value });
+  const reference = { kind: "reference", referent: value, mutable: false };
+  const borrowedEnvironment = nativeProducerFixture({ identity: "borrowed-environment", parameters: [reference], result: reference });
+  const pendingEnvironment = nativeProducerFixture({ identity: "pending-environment", parameters: [reference], result: rustFutureTargetType(reference) });
   const asynchronous = nativeProducerFixture({ identity: "asynchronous", parameters: [integer], result: rustFutureTargetType(integer) });
   const borrowing = nativeProducerFixture({ identity: "borrowing", parameters: [borrowed, byte], result: rustFutureTargetType(borrowed) });
   const js = nativeProducerFixture({ identity: "javascript", parameters: [integer, boolean],
     result: rustJsPromiseTargetTypeWithLifetime(integer, { kind: "static" }) });
+  const borrowedJs = nativeProducerFixture({ identity: "borrowed-javascript", parameters: [borrowed],
+    result: rustJsPromiseTargetTypeWithLifetime(borrowed, { kind: "placeholder" }) });
   const definitions = createRustTypeDefinitionRegistry();
   const payloads = [borrowed, rustFutureTargetType(borrowed), rustFutureTargetType(integer)];
-  const union = rustSourceUnionTargetType("/index.ts", "MixedCompletion", [], "generated", { kind: "physical", types: payloads });
+  const union = rustSourceUnionTargetType("/index.ts", "Union3", [], "generated", { kind: "physical", types: payloads });
   assert.equal(definitions.registerSourceUnion({ carrier: union,
     variants: payloads.map((carrier, index) => ({ name: `Variant${index}`, carrier })),
   }, false), true, "mixed completion definition registers");
   const mixed = nativeProducerFixture({ identity: "mixed", parameters: [borrowed, byte],
     result: rustSourceOptionalTargetType(union), definitions });
-  const all = [ordinary, second, environment, asynchronous, borrowing, js, mixed];
+  const all = [ordinary, second, environment, asynchronous, borrowing, js, mixed,
+    borrowedEnvironment, pendingEnvironment, borrowedJs];
   const names = all.map(fixture => fixture.protocol.targetName);
   const generated = printNativeProducerItems(all.flatMap(nativeProducerItems));
   assert.doesNotMatch(generated, /TsonicError|TsonicResult|Box|dyn |\.clone\(|async move/u);
-  const [ordinaryName, secondName, environmentName, asyncName, borrowName, jsName, mixedName] = names;
+  const [ordinaryName, secondName, environmentName, asyncName, borrowName, jsName, mixedName,
+    borrowedEnvironmentName, pendingEnvironmentName, borrowedJsName] = names;
   return `
 use tsonic_rust_runtime as rt;
 use tsonic_rust_js::abi as js_abi;
@@ -59,7 +66,7 @@ pub struct AwaitFailure<'input>(&'input str);
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct OtherAwaitFailure<'input>(&'input str);
 
-pub enum MixedCompletion<Ready, First, Second> {
+pub enum Union3<Ready, First, Second> {
     Variant0(Ready), Variant1(First), Variant2(Second),
 }
 
@@ -77,15 +84,28 @@ fn borrowing<'input>((value, branch): (&'input str, u8))
     Ok(async move { if branch == 1 { Err(AwaitFailure(value)) } else { Ok(value) } })
 }
 
-fn mixed<'input>((value, branch): (&'input str, u8)) -> Result<Option<MixedCompletion<&'input str,
+fn borrowed_environment<Value>((value,): (&Value,)) -> Result<&Value, Infallible> {
+    Ok(value)
+}
+
+fn pending_environment<Value>((value,): (&Value,))
+    -> Result<impl Future<Output = Result<&Value, Infallible>>, Infallible> {
+    Ok(async move { Ok(value) })
+}
+
+fn borrowed_javascript((value,): (&str,)) -> Result<js_abi::JsPromise<'_, &str, AwaitFailure<'_>>, Infallible> {
+    Ok(js_abi::JsPromise::resolved(value))
+}
+
+fn mixed<'input>((value, branch): (&'input str, u8)) -> Result<Option<Union3<&'input str,
     impl Future<Output = Result<&'input str, AwaitFailure<'input>>> + use<'input>,
     impl Future<Output = Result<u64, OtherAwaitFailure<'input>>> + use<'input>>>, InvocationFailure<'input>> {
     match branch {
-        0 => Ok(Some(MixedCompletion::Variant0(value))),
-        1 | 4 => Ok(Some(MixedCompletion::Variant1(async move {
+        0 => Ok(Some(Union3::Variant0(value))),
+        1 | 4 => Ok(Some(Union3::Variant1(async move {
             if branch == 4 { Err(AwaitFailure(value)) } else { Ok(value) }
         }))),
-        2 | 5 => Ok(Some(MixedCompletion::Variant2(async move {
+        2 | 5 => Ok(Some(Union3::Variant2(async move {
             if branch == 5 { Err(OtherAwaitFailure(value)) } else { Ok(64) }
         }))),
         3 => Ok(None),
@@ -114,6 +134,7 @@ fn both<Left: ${ordinaryName}, Right: ${ordinaryName}>(left: &Left, right: &Righ
 
 fn main() {
     let text = String::from("borrowed, not static");
+    let text_ref = text.as_str();
     let pure_value = pure;
     let normalized = move |(value,)| Ok::<_, Infallible>(pure_value(value));
     let runtime = rt::Callable::new(|(value,): (u64,)| Ok::<_, InvocationFailure<'static>>(value + 2));
@@ -126,6 +147,10 @@ fn main() {
         let payload = (37u64, core::marker::PhantomPinned);
         let returned = ${environmentName}::invoke(&|(value,)| Ok::<_, Infallible>(value), payload).unwrap();
         assert_eq!(returned.0, 37);
+        let returned = ${borrowedEnvironmentName}::invoke(&borrowed_environment, &text_ref).unwrap();
+        assert!(core::ptr::eq(returned, &text_ref));
+        let returned = complete(${pendingEnvironmentName}::invoke(&pending_environment, &text_ref).unwrap()).unwrap();
+        assert!(core::ptr::eq(returned, &text_ref));
         assert_eq!(complete(${asyncName}::invoke(&asynchronous, u64::MAX).unwrap()), Ok(u64::MAX));
         assert_eq!(complete(${asyncName}::invoke(&asynchronous, 0).unwrap()), Err(AwaitFailure("async")));
         let returned = complete(${borrowName}::invoke(&borrowing, &text, 0).unwrap()).unwrap();
@@ -135,9 +160,9 @@ fn main() {
         assert_eq!(error, InvocationFailure(&text));
         for branch in 0..7 {
             match ${mixedName}::invoke(&mixed, &text, branch) {
-                Ok(Some(MixedCompletion::Variant0(value))) => assert!(core::ptr::eq(value.as_ptr(), text.as_ptr())),
-                Ok(Some(MixedCompletion::Variant1(pending))) => assert_eq!(complete(pending), if branch == 4 { Err(AwaitFailure(&text)) } else { Ok(text.as_str()) }),
-                Ok(Some(MixedCompletion::Variant2(pending))) => assert_eq!(complete(pending), if branch == 5 { Err(OtherAwaitFailure(&text)) } else { Ok(64) }),
+                Ok(Some(Union3::Variant0(value))) => assert!(core::ptr::eq(value.as_ptr(), text.as_ptr())),
+                Ok(Some(Union3::Variant1(pending))) => assert_eq!(complete(pending), if branch == 4 { Err(AwaitFailure(&text)) } else { Ok(text.as_str()) }),
+                Ok(Some(Union3::Variant2(pending))) => assert_eq!(complete(pending), if branch == 5 { Err(OtherAwaitFailure(&text)) } else { Ok(64) }),
                 Ok(None) => assert_eq!(branch, 3),
                 Err(error) => assert_eq!(error, InvocationFailure(&text)),
             }
@@ -155,6 +180,14 @@ fn main() {
     assert_eq!(bridged, direct);
     assert_eq!(bridge_cost, direct_cost);
     assert_eq!(complete(${jsName}::invoke(&javascript, 9, true).unwrap().into_result()), Err(AwaitFailure("JS")));
+    let (direct, direct_cost) = measure(|| complete(borrowed_javascript((&text,)).unwrap().into_result()));
+    let (bridged, bridge_cost) = measure(|| {
+        let pending: js_abi::JsPromise<'_, &str, AwaitFailure<'_>> = ${borrowedJsName}::invoke(&borrowed_javascript, &text).unwrap();
+        complete(pending.into_result())
+    });
+    assert_eq!(direct, Ok(text.as_str()));
+    assert_eq!(bridged, direct);
+    assert_eq!(bridge_cost, direct_cost);
     println!("PASS: exact producer errors, lifetimes, optional mixed futures, JS Promise identity and zero bridge allocations");
 }
 
@@ -185,11 +218,25 @@ impl ${ordinaryName} for Conflicting {
     type InvocationError = Infallible;
     fn invoke(&self, value: u64) -> Result<u64, Infallible> { Ok(value) }
 }
+
+#[cfg(environment_escape)]
+fn invalid() -> &'static str {
+    let value = String::from("cannot escape");
+    let borrowed = value.as_str();
+    complete(${pendingEnvironmentName}::invoke(&pending_environment, &borrowed).unwrap()).unwrap()
+}
+
+#[cfg(javascript_borrow_escape)]
+fn invalid() -> &'static str {
+    let value = String::from("cannot escape");
+    complete(${borrowedJsName}::invoke(&borrowed_javascript, &value).unwrap().into_result()).unwrap()
+}
 `;
 }
 
 test("emitted producer bridges execute with exact physical channels and preserve native rejection", { timeout: 300_000 }, () => {
-  const controls = ["pure_without_normalization", "pure_future_without_normalization", "wrong_error", "borrow_escape", "overlapping_implementation"];
+  const controls = ["pure_without_normalization", "pure_future_without_normalization", "wrong_error", "borrow_escape",
+    "overlapping_implementation", "environment_escape", "javascript_borrow_escape"];
   const project = writeGeneratedProject("native-producer-bridges", [
     { path: "Cargo.toml", text: `[package]\nname = "native_producer_bridges"\nversion = "0.0.0"\nedition = "2024"\n
 [dependencies]
@@ -210,14 +257,16 @@ unexpected_cfgs = { level = "deny", check-cfg = [${controls.map(control => JSON.
   for (const [control, code] of [
     ["pure_without_normalization", "E0271"], ["pure_future_without_normalization", "E0271"],
     ["wrong_error", "E0308"], ["borrow_escape", "E0515"], ["overlapping_implementation", "E0119"],
+    ["environment_escape", "E0515"], ["javascript_borrow_escape", "E0515"],
   ]) {
-    const rejected = spawnSync("cargo", ["rustc", "--offline", "--locked", "--", "--emit=metadata", "--error-format=json", "--cfg", control], {
+    const rejected = spawnSync("cargo", ["rustc", "--offline", "--locked", "--message-format=json", "--", "--emit=metadata", "--cfg", control], {
       cwd: project, encoding: "utf8", timeout: 60_000, maxBuffer: 1_048_576,
       env: { ...process.env, CARGO_TERM_COLOR: "never" },
     });
     assert.equal(rejected.error === undefined, true, `${control}: child completed`);
     assert.notEqual(rejected.status, 0, `${control}: must reject`);
-    const diagnostics = rejected.stderr.split("\n").filter(line => line.startsWith("{")).map(line => JSON.parse(line));
+    const diagnostics = rejected.stdout.split("\n").filter(line => line.startsWith("{")).map(line => JSON.parse(line))
+      .filter(event => event.reason === "compiler-message").map(event => event.message);
     assert.equal(diagnostics.some(diagnostic => diagnostic.code?.code === code), true,
       `${control}: ${diagnostics.map(diagnostic => diagnostic.code?.code ?? diagnostic.message).join("; ")}`);
   }
