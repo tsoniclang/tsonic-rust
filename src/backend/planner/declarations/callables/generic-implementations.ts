@@ -2,11 +2,11 @@ import type { Node } from "@tsonic/tsts";
 import type { RustGenericCallableDefinition, RustGenericCallableImplementation } from "../../../../analysis/callables/generic-values.js";
 import { rustGenericCallableCarrier, rustGenericCallableProtocol, rustNativeFutureCallableResult } from "../../../../target-model/types/carriers/generic-callables.js";
 import { closedMetadataKey } from "../../../../target-model/metadata/closed-data.js";
-import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey, rustSourceCallEffectsFactKey, rustSourceCallableReturnFactKey } from "../../../../analysis/facts/keys.js";
+import { rustAsyncFunctionFactKey, rustGeneratorFactKey, rustSourceCallEffectsFactKey, rustSourceCallableReturnFactKey } from "../../../../analysis/facts/keys.js";
 import { rustGenericCallableEffectsFactKey } from "../../../../analysis/facts/generic-callable-effects.js";
 import type { RustExpr, RustFunctionParam, RustGenericParameter, RustItem, RustPattern, RustType, RustWherePredicate } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import { diagnosticInput, rustCurrentErrorBoundary, rustErrorType } from "../../program/plan-context.js";
+import { diagnosticInput } from "../../program/plan-context.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import type { RustTypeRenderingContext } from "../../types/render.js";
@@ -23,6 +23,8 @@ import { planRustGenericNativeFutureDispatch, type RustGenericNativeFutureInvoca
 import { rustCallableCaptureStorageType } from "../../types/capture-storage.js";
 import { validateRustCapturedReceiverFields, validateRustCapturedReceivers } from "../../expressions/receiver-captures.js";
 import { rustCallablePayloadContext, rustCallablePayloadTypes } from "../../expressions/capture-payloads.js";
+import { rustGenericCallableImplementationSubstitutions } from "./generic-signatures.js";
+import { planRustGenericCallableErrors } from "./generic-errors.js";
 
 export function rustGenericCallableImplementationPath(
   implementation: RustGenericCallableImplementation, name: string, context: RustTypeRenderingContext,
@@ -119,10 +121,11 @@ function planDefinition(definition: RustGenericCallableDefinition, context: Rust
     environment: definition.signature.environmentParameters,
   });
   const protocol = rustGenericCallableProtocol(signatureCarrier);
-  const boundary = rustCurrentErrorBoundary(context);
   const effects = context.input.program.facts.getFact(definition.implementations[0]!.declaration, rustGenericCallableEffectsFactKey);
-  if (protocol === undefined || effects === undefined ||
-      (effects.invocation === "fallible" || effects.awaiting === "fallible") && boundary === undefined) return undefined;
+  const errors = planRustGenericCallableErrors(definition, context);
+  if (protocol === undefined || effects === undefined || errors === undefined ||
+    (effects.invocation === "fallible") !== (errors.invocation.errorType !== undefined) ||
+    (effects.awaiting === "fallible") !== (errors.awaiting.errorType !== undefined)) return undefined;
   const nativeFuture = rustNativeFutureCallableResult(protocol.result);
   const payload = nativeFuture?.output ?? protocol.result;
   const parameterTypes = protocol.parameters.map(parameter => rustTypeFromCarrierInContext(parameter, context));
@@ -141,16 +144,9 @@ function planDefinition(definition: RustGenericCallableDefinition, context: Rust
   const nativeInvocations: RustGenericNativeFutureInvocation[] = [];
   for (const implementation of definition.implementations) {
     const contract = context.input.program.declarationGenericRequirements.contractFor(implementation.declaration);
-    const source = context.input.program.sourceLifetimes.contractFor(implementation.declaration);
-    const sourceParameters = source?.parameters ?? (context.input.program.source.ast.typeParameters(implementation.declaration).length === 0 ? [] : undefined);
     const path = rustGenericCallableImplementationPath(implementation, implementation.functionName, context);
-    if (contract === undefined || sourceParameters === undefined || path === undefined ||
-      sourceParameters.length !== definition.signature.typeParameters.length || sourceParameters.some(parameter => parameter.kind !== "type")) return undefined;
-    const substitutions = new Map(implementation.substitutions);
-    for (const [index, parameter] of sourceParameters.entries()) {
-      if (parameter.kind !== "type") return undefined;
-      substitutions.set(parameter.identity, definition.signature.typeParameters[index]!);
-    }
+    const substitutions = rustGenericCallableImplementationSubstitutions(definition, implementation, context);
+    if (contract === undefined || path === undefined || substitutions === undefined) return undefined;
     for (const parameter of [...contract.typeParameters, ...contract.capturedTypeParameters]) {
       const type = substitutions.get(parameter.identity);
       if (type === undefined) continue;
@@ -192,23 +188,22 @@ function planDefinition(definition: RustGenericCallableDefinition, context: Rust
       continue;
     }
     const methodFallible = effects.invocation === "fallible";
-    const implementationFallible = !suspended &&
-      context.input.program.facts.getFact(implementation.declaration, rustFallibleFactKey) !== undefined;
-    if (implementationFallible && !methodFallible) return undefined;
-    arms.push({ pattern,
-      expression: methodFallible && !implementationFallible ? { kind: "call", path: "Ok", args: [call] } : call,
-    });
+    const selected = errors.forImplementation(implementation);
+    if (selected === undefined) return undefined;
+    const converted = selected.invocation === undefined ? undefined : errors.invocation.propagate(selected.invocation, call);
+    if (selected.invocation !== undefined && converted?.kind !== "try") return undefined;
+    arms.push({ pattern, expression: converted?.kind === "try" ? converted.expr :
+      methodFallible ? { kind: "call", path: "Ok", args: [call] } : call });
   }
   const target: RustType = { kind: "named", path: definition.targetName, genericArguments: arguments_ };
   const generics = { parameters: environment, wherePredicates: [] };
   const methodFallible = effects.invocation === "fallible";
   const methodOutput: RustType = methodFallible
-    ? { kind: "named", path: "Result", genericArguments: [{ kind: "type", type: output }, { kind: "type", type: rustErrorType(boundary!) }] }
+    ? { kind: "named", path: "Result", genericArguments: [{ kind: "type", type: output }, { kind: "type", type: errors.invocation.errorType! }] }
     : output;
   const dispatch: RustExpr = { kind: "match", expression: { kind: "path", path: "self" }, arms };
   const native = nativeFuture === undefined ? undefined : planRustGenericNativeFutureDispatch({
-    definition, output, effects, optional: nativeFuture.optional,
-    ...(boundary === undefined ? {} : { error: rustErrorType(boundary) }),
+    definition, output, effects, errors, optional: nativeFuture.optional,
     captures: [...environment.map(parameter => ({ kind: "named" as const, path: parameter.name })),
       ...definition.signature.typeParameters.map(parameter => ({ kind: "named" as const, path: parameter.name }))],
     invocations: nativeInvocations,

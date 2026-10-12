@@ -20,7 +20,8 @@ export function nativeProducerFixture({
     input: { program: {
       typeDefinitions: definitions,
       callableValues: { native: { protocolForSourceItem: (fileName, name) =>
-        fileName === protocol.ownerFileName && name === protocol.targetName ? protocol : undefined } },
+        fileName === protocol.ownerFileName && name === protocol.targetName ? protocol : undefined },
+        nativeGenericProducers: { unresolved: [], forProtocol: () => [] } },
       names: { nameForSourceType: (_fileName, name) => name },
       structuralShapes: { unionForCarrier: value => {
         const union = rustSourceUnionCarrierValue(value);

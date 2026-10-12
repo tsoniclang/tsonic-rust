@@ -1,0 +1,86 @@
+import type { RustGenericCallableDefinition } from "../../../../analysis/callables/generic-values.js";
+import type { RustNativeCallableProtocol } from "../../../../analysis/callables/native-protocols.js";
+import { rustNativeCallableProtocolResult } from "../../../../analysis/callables/native-protocols.js";
+import { rustGenericCallableCarrier, rustNativeFutureCallableResult } from "../../../../target-model/types/carriers/generic-callables.js";
+import { mapRustTargetTypes } from "../../../../target-model/types/carriers/substitution.js";
+import type { RustExpr, RustItem, RustStmt, RustType } from "../../../target-ast/nodes.js";
+import type { RustPlanContext } from "../../program/plan-context.js";
+import { rustTypeFromCarrierInContext } from "../../types/render.js";
+import { planRustNativeCallableMethodGenerics } from "./native-method-generics.js";
+import { planRustGenericCallableErrors } from "./generic-errors.js";
+
+export function planRustNativeGenericProducerBridges(
+  protocol: RustNativeCallableProtocol,
+  context: RustPlanContext,
+): readonly RustItem[] | undefined {
+  const selections = context.input.program.callableValues.nativeGenericProducers;
+  if (selections.unresolved.some(selection => selection.input.protocol === protocol)) return undefined;
+  const items: RustItem[] = [];
+  for (const binding of selections.forProtocol(protocol)) {
+    const implementation = planImplementation(protocol, binding.definition, context);
+    if (implementation === undefined) return undefined;
+    items.push(implementation);
+  }
+  return items;
+}
+
+function planImplementation(
+  protocol: RustNativeCallableProtocol,
+  definition: RustGenericCallableDefinition,
+  context: RustPlanContext,
+): RustItem | undefined {
+  const signature = protocol.binding.signature;
+  const methodGenerics = planRustNativeCallableMethodGenerics(protocol, context);
+  const errors = planRustGenericCallableErrors(definition, context);
+  const target = rustTypeFromCarrierInContext(rustGenericCallableCarrier({ origin: definition.origin,
+    signature: definition.signature, environment: definition.signature.environmentParameters }), context);
+  const result = rustNativeCallableProtocolResult(protocol, context.input.program.typeDefinitions);
+  const returnType = result === undefined ? undefined : rustTypeFromCarrierInContext(mapRustTargetTypes(result, type => {
+    if (type.kind !== "impl-trait" || type.captures === undefined) return type;
+    return { ...type, captures: type.captures.filter(argument => argument.kind !== "type" ||
+      argument.type.kind !== "type-parameter" || argument.type.identity !== `${protocol.identity}:Self`) };
+  }), context, "return");
+  const parameters = protocol.method.parameters.map(carrier => rustTypeFromCarrierInContext(carrier, context, "parameter"));
+  if (methodGenerics === undefined || errors === undefined || target === undefined || returnType === undefined ||
+    parameters.some(parameter => parameter === undefined)) return undefined;
+  const nativeFuture = rustNativeFutureCallableResult(protocol.method.result);
+  if (protocol.completion !== undefined && nativeFuture === undefined) return undefined;
+  if (nativeFuture !== undefined && protocol.completion?.futures.length !== 1) return undefined;
+  const call: RustExpr = { kind: "method-call", receiver: { kind: "path", path: "self" }, method: "call",
+    genericArguments: signature.typeParameters.map(parameter => ({ kind: "type", type: { kind: "named", path: parameter.name } })),
+    args: parameters.map((_parameter, index) => ({ kind: "path", path: `argument_${index}` })),
+  };
+  const invocationError = errors.invocation.errorType;
+  const infallible: RustType = { kind: "named", path: "core::convert::Infallible" };
+  const statements: RustStmt[] = [];
+  let value: RustExpr = invocationError === undefined ? call : { kind: "try", expr: call,
+    operandErrorType: invocationError, resultErrorType: invocationError, nativeReturn: true };
+  if (nativeFuture !== undefined && errors.awaiting.errorType === undefined) {
+    statements.push({ kind: "let", name: "produced", mutable: false, init: value });
+    const pending: RustExpr = { kind: "async-block", move: true, body: { statements: [{ kind: "tail", expr: {
+      kind: "call", path: "Ok", args: [{ kind: "await", expr: { kind: "path", path: "future" } }],
+    } }] } };
+    value = nativeFuture.optional ? { kind: "match", expression: { kind: "path", path: "produced" }, arms: [
+      { pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: "future" }] },
+        expression: { kind: "call", path: "Some", args: [pending] } },
+      { pattern: { kind: "path", path: "None" }, expression: { kind: "path", path: "None" } },
+    ] } : { kind: "block", body: { statements: [
+      { kind: "let", name: "future", mutable: false, init: { kind: "path", path: "produced" } },
+      { kind: "tail", expr: pending },
+    ] } };
+  }
+  statements.push({ kind: "tail", expr: value.kind === "try" ? value.expr : { kind: "call", path: "Ok", args: [value] } });
+  return { kind: "impl", target,
+    trait: { kind: "named", path: protocol.targetName,
+      genericArguments: signature.environmentParameters.map(parameter => ({ kind: "type", type: { kind: "named", path: parameter.name } })) },
+    generics: { parameters: signature.environmentParameters.map(parameter => ({ kind: "type", name: parameter.name, bounds: [] })),
+      wherePredicates: [] },
+    members: [{ kind: "type", name: "InvocationError", generics: methodGenerics, type: invocationError ?? infallible },
+      ...(protocol.completion?.futures ?? []).map(future => ({ kind: "type" as const, name: `AwaitError${future.ordinal}`,
+        generics: methodGenerics, type: errors.awaiting.errorType ?? infallible })),
+      { kind: "function", name: "invoke", visibility: "private", selfParam: { kind: "reference", mutable: false },
+        generics: methodGenerics, params: parameters.map((type, index) => ({ name: `argument_${index}`, type: type! })),
+        returnType, body: { statements } },
+    ],
+  };
+}

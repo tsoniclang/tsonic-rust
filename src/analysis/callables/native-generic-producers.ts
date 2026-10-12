@@ -6,6 +6,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { closedMetadataEquals, closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustTargetGenericBindingsForArguments } from "../../target-model/types/generic-arguments.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
+import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustSourceCallEffectsFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
 import type { RustGenericCallableDefinition, RustGenericCallablePlan } from "./generic-values.js";
 import type { RustNativeCallableInput, RustNativeCallableInputPlan } from "./native-inputs.js";
@@ -76,7 +77,7 @@ export function createRustNativeGenericProducerPlan(input: {
         values.set(`${origin.implementation.identity}:${closedMetadataKey(trait)}`, Object.freeze({ owner, input: origin, trait }));
         forwarding.set(owner, values);
       }
-      if (selected.protocol.binding.signature.typeParameters.length === 0) continue;
+      const quantified = selected.protocol.binding.signature.typeParameters.length > 0;
       const concrete = input.storage.bindingsForInvocation(declaration, invocation, input.storage.emptyBindings);
       const origins = concrete.kind === "unresolved" ? concrete : input.storage.boundOriginsFor(selected.subject, concrete.bindings);
       if (origins.kind === "unresolved") {
@@ -84,7 +85,7 @@ export function createRustNativeGenericProducerPlan(input: {
         continue;
       }
       const abstractInputs = new Set<RustNativeCallableInput>();
-      if (origins.subjects.length === 0) {
+      if (origins.subjects.length === 0 && quantified) {
         for (const subject of symbolic.subjects) {
           const origin = nativeInputs.get(subject);
           if (origin !== undefined) abstractInputs.add(origin);
@@ -94,12 +95,14 @@ export function createRustNativeGenericProducerPlan(input: {
       for (const subject of origins.subjects) {
         const abstract = nativeInputs.get(subject);
         if (abstract !== undefined) {
-          abstractInputs.add(abstract);
+          if (quantified) abstractInputs.add(abstract);
           continue;
         }
         const implementation = subject.projection.length === 0 ? input.generic.implementationFor(subject.node) : undefined;
         const definition = implementation === undefined ? undefined : input.generic.definitionFor(implementation.carrier);
         if (definition === undefined) {
+          const producer = input.facts.getFact(subject.node, rustTargetOperationFactKey);
+          if (!quantified && !(producer?.kind === "closure" && rustGenericCallableValue(producer.resultCarrier) !== undefined)) continue;
           reject(invocation, selected, "An exact generic callable origin has no existing generic producer family.");
           continue;
         }
