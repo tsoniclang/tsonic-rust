@@ -59,7 +59,8 @@ function rustItemReferencesModuleAlias(item: RustItem, alias: string): boolean {
         item.superTraits?.some((type) =>
           rustTypeReferencesModuleAlias(type, alias)) === true ||
         item.members.some(member => member.kind === "type"
-          ? member.bounds.some(bound => rustTypeBoundReferencesModuleAlias(bound, alias))
+          ? rustGenericsReferenceModuleAlias(member.generics, alias) ||
+            member.bounds.some(bound => rustTypeBoundReferencesModuleAlias(bound, alias))
           : rustTraitFunctionReferencesModuleAlias(member, alias));
     case "impl":
       return rustGenericsReferenceModuleAlias(item.generics, alias) ||
@@ -67,7 +68,8 @@ function rustItemReferencesModuleAlias(item: RustItem, alias: string): boolean {
         rustTypeReferencesModuleAlias(item.target, alias) ||
         item.members.some(member => {
           switch (member.kind) {
-            case "type": return rustTypeReferencesModuleAlias(member.type, alias);
+            case "type": return rustGenericsReferenceModuleAlias(member.generics, alias) ||
+              rustTypeReferencesModuleAlias(member.type, alias);
             case "function": return rustImplFunctionReferencesModuleAlias(member, alias);
             case "const": return rustTypeReferencesModuleAlias(member.type, alias) ||
               rustExpressionReferencesModuleAlias(member.value, alias);

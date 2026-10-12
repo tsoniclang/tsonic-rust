@@ -151,7 +151,7 @@ export function planRustSourceErrorTransport(plan: RustErrorTransportPlan, writa
     ...readonlyAdmission,
     { kind: "impl", generics: emptyRustGenerics, target: view,
       trait: named("core::convert::TryFrom", fullTransport), members: [
-        { kind: "type", name: "Error", type: fullTransport },
+        { kind: "type", name: "Error", generics: emptyRustGenerics, type: fullTransport },
         nativeFunction("try_from", named("Result", view, fullTransport), { kind: "match", expression: input, arms },
           [{ name: "value", type: fullTransport }]),
       ] },

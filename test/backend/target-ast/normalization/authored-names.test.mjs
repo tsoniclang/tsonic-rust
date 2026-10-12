@@ -57,9 +57,9 @@ test("native C representation and trait implementation exemptions retain their c
   const normalized = finalizeRustSourceStyle(file([
     declaration,
     { kind: "trait", name: "Contract", visibility: "public", generics: emptyRustGenerics,
-      members: [{ kind: "type", name: "value_type", bounds: [] }, { ...callable, name: "makeValue", body: undefined }] },
+      members: [{ kind: "type", name: "value_type", generics: emptyRustGenerics, bounds: [] }, { ...callable, name: "makeValue", body: undefined }] },
     { kind: "impl", target: { kind: "named", path: "native_record" }, trait: { kind: "named", path: "Contract" },
-      generics: emptyRustGenerics, members: [{ kind: "type", name: "value_type", type: scalar }, { ...callable, name: "makeValue" }] },
+      generics: emptyRustGenerics, members: [{ kind: "type", name: "value_type", generics: emptyRustGenerics, type: scalar }, { ...callable, name: "makeValue" }] },
   ]));
   assert.deepEqual(normalized.items[0].attrs, [repr]);
   assert.deepEqual(normalized.items[1].members[0].attrs, [rustLintAttributes.nonCamelCaseType]);

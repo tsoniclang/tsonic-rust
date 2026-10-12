@@ -26,7 +26,7 @@ export function planRustTypeFamilyDeclaration(
   return [{
     kind: "trait", visibility: "public", name, generics: emptyRustGenerics,
     ...(deadCode === undefined ? {} : { deadCode }),
-    members: [{ kind: "type", name: "Output", bounds: [] }],
+    members: [{ kind: "type", name: "Output", generics: emptyRustGenerics, bounds: [] }],
   }];
 }
 
@@ -67,7 +67,7 @@ export function planRustTypeFamilyImplementations(context: RustPlanContext): rea
       continue;
     }
     items.push({ kind: "impl", trait, target: owner, generics,
-      members: [{ kind: "type", name: "Output", type: output }] });
+      members: [{ kind: "type", name: "Output", generics: emptyRustGenerics, type: output }] });
   }
   return items;
 }

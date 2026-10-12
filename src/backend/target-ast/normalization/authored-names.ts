@@ -71,9 +71,10 @@ export function finalizeRustItemNames(item: RustItem): RustItem {
     case "enum": return { ...generic(namedType(item)), variants: item.variants.map(variant => named(variant, "camel")) };
     case "type-alias": return generic(namedType(item));
     case "trait": return { ...generic(namedType(item)), members: item.members.map(member =>
-      member.kind === "type" ? named(member, "camel") : member) };
+      member.kind === "type" ? generic(named(member, "camel")) : member) };
     case "impl": return { ...generic(item), members: item.members.map(member =>
-      member.kind === "const" && item.trait === undefined ? named(member, "upper") : member) };
+      member.kind === "type" ? generic(member)
+        : member.kind === "const" && item.trait === undefined ? named(member, "upper") : member) };
     case "extern-crate":
     case "use": return item;
   }

@@ -106,9 +106,11 @@ export function printRustItem(item: RustItem): string {
         switch (member.kind) {
           case "function": return printRustTraitFunction(member);
           case "type": {
+            const memberGenerics = printRustGenerics(member.generics);
             const bounds = member.bounds.length === 0
               ? "" : `: ${member.bounds.map(printRustTypeBound).join(" + ")}`;
-            return `${printAttributes(member.attrs, 1)}    type ${member.name}${bounds};`;
+            const declaration = `    type ${member.name}${memberGenerics.parameters}${bounds}`;
+            return `${printAttributes(member.attrs, 1)}${appendRustWhereEnding(declaration, memberGenerics, 1, ";")}`;
           }
         }
       }).join("\n");
@@ -127,7 +129,11 @@ export function printRustItem(item: RustItem): string {
       const members = item.members.map(member => {
         switch (member.kind) {
           case "function": return printRustImplFunction(member, item.trait === undefined);
-          case "type": return `${printAttributes(member.attrs, 1)}    type ${member.name} = ${printRustType(member.type)};`;
+          case "type": {
+            const memberGenerics = printRustGenerics(member.generics);
+            const declaration = `    type ${member.name}${memberGenerics.parameters} = ${printRustType(member.type)}`;
+            return `${printAttributes(member.attrs, 1)}${appendRustWhereEnding(declaration, memberGenerics, 1, ";")}`;
+          }
           case "const": {
             const visibility = item.trait === undefined ? printRustVisibility(member.visibility) : "";
             return `${printAttributes(member.attrs, 1)}    ${visibility}const ${member.name}: ${printRustType(member.type)} = ${printRustExpr(member.value)};`;

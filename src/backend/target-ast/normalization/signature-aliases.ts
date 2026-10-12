@@ -21,7 +21,7 @@ export function nameRustSignatureTypes(
   const reserved = new Set(items.flatMap(item => [
     ...("name" in item ? [item.name] : []),
     ...("generics" in item ? item.generics.parameters.map(parameter => parameter.name) : []),
-    ...(item.kind === "impl" || item.kind === "trait" ? item.members.flatMap(member => member.kind === "function"
+    ...(item.kind === "impl" || item.kind === "trait" ? item.members.flatMap(member => member.kind !== "const"
       ? member.generics.parameters.map(parameter => parameter.name) : []) : []),
     ...(item.kind === "use" ? [item.alias ?? item.path.split("::").slice(-1)[0]!] : []),
   ]));

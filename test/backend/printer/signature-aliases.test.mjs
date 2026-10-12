@@ -123,7 +123,7 @@ test("generated trait signatures share exact aliases with implementations withou
   const callable = makeFunction("read");
   const { visibility: _visibility, body: _body, ...callableSignature } = callable;
   const signature = { ...callableSignature, generics: emptyRustGenerics };
-  const associated = { kind: "type", name: "Output", bounds: [] };
+  const associated = { kind: "type", name: "Output", generics: emptyRustGenerics, bounds: [] };
   const trait = { kind: "trait", name: "Reader", visibility: "public", generics: callable.generics,
     members: [signature, associated] };
   const result = nameRustSignatureTypes([callable, trait]);
@@ -174,6 +174,19 @@ test("trait aliases preserve native owner binders and reserve method-local param
   const selfType = named("Vec", [named("Option", [named("Vec", [named("Option", [named("Vec", [named("Self")])])])])]);
   const selfTrait = { ...trait, members: [{ ...method, params: [{ name: "values", type: selfType }], returnType: selfType }] };
   assert.deepEqual(nameRustSignatureTypes([selfTrait]), [selfTrait]);
+});
+
+test("signature aliases reserve associated-type binders without lifting their local scope", () => {
+  const callable = makeFunction("read");
+  const associated = { kind: "type", name: "Output", bounds: [], generics: {
+    parameters: [{ kind: "type", name: "ReadValues", bounds: [] }], wherePredicates: [],
+  } };
+  const trait = { kind: "trait", name: "Family", visibility: "public", generics: emptyRustGenerics,
+    members: [associated] };
+  const result = nameRustSignatureTypes([callable, trait]);
+  assert.equal(result.find(item => item.kind === "type-alias").name, "ReadValues2");
+  assert.equal(result.find(item => item.kind === "trait").members[0], associated);
+  assert.deepEqual(nameRustSignatureTypes(result), result);
 });
 
 test("borrowed and opaque boundaries remain in the function instead of escaping into aliases", () => {

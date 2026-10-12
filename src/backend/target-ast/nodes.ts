@@ -447,6 +447,7 @@ export interface RustTraitAssociatedType {
   readonly kind: "type";
   readonly name: string;
   readonly attrs?: readonly RustAttribute[];
+  readonly generics: RustGenerics;
   readonly bounds: readonly RustTypeBound[];
 }
 
@@ -454,6 +455,7 @@ export interface RustImplAssociatedType {
   readonly kind: "type";
   readonly name: string;
   readonly attrs?: readonly RustAttribute[];
+  readonly generics: RustGenerics;
   readonly type: RustType;
 }
 

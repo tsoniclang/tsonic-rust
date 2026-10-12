@@ -3,6 +3,7 @@ import { rustCallableProtocol, rustCallableTargetType, rustLocationTargetType } 
 import { rustStaticLifetime } from "../../../../target-model/lifetimes/index.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import type { RustBlock, RustGenericParameter, RustItem, RustType } from "../../../target-ast/nodes.js";
+import { emptyRustGenerics } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustTypeParameterFromSourceContract } from "../../../../target-model/names/type-parameters.js";
 import { rustGeneratedTypeParameterContext } from "../../names/type-parameters.js";
@@ -106,7 +107,7 @@ function planImplementation(implementation: RustSuspendedCallableImplementation,
   }, { kind: "impl", target,
     generics: rustGenericsWithAssociatedBounds(parameters, rustDeclarationAssociatedPredicates(declaration, scoped)),
     trait: { kind: "named", path: "rt::CallableImplementation", genericArguments: [{ kind: "type", type: argumentsType }] },
-    members: [{ kind: "type", name: "Output", type: resultType },
+    members: [{ kind: "type", name: "Output", generics: emptyRustGenerics, type: resultType },
     { kind: "function", name: "invoke", visibility: "private", selfParam: { kind: "reference", mutable: false },
       generics: { parameters: [], wherePredicates: [] }, params: [{ name: argumentsName, type: argumentsType }], returnType: resultType,
       body: { statements: [{ kind: "let", name: ownerName, mutable: false, init: {

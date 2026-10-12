@@ -198,8 +198,8 @@ function planFrameEntry(
     ...entryClone(entry, types.entryType, generics), ...entryEquality(entry, types.entryType, generics),
     { kind: "impl", generics, trait: { kind: "named", path: "rt::FrameCallableEntry",
       genericArguments: [{ kind: "type", type: types.frameType }] }, target: types.entryType, members: [
-      { kind: "type", name: "Arguments", type: { kind: "tuple", elements: argumentTypes } },
-      { kind: "type", name: "Result", type: resultType },
+      { kind: "type", name: "Arguments", generics: emptyRustGenerics, type: { kind: "tuple", elements: argumentTypes } },
+      { kind: "type", name: "Result", generics: emptyRustGenerics, type: resultType },
       { kind: "function", name: "invoke", visibility: "private", selfParam: rustSelfParameter("ref"), generics: emptyRustGenerics,
         params: [{ name: "frame", type: { kind: "reference", referent: shared(types.frameType), mutable: false } },
           { name: "arguments", type: { kind: "named", path: "Self::Arguments" } }],

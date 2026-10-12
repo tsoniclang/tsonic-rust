@@ -1,4 +1,4 @@
-import type { RustGenericArgument, RustItem, RustSourceFileModel, RustType, RustTypeBound } from "../nodes.js";
+import type { RustGenericArgument, RustGenerics, RustItem, RustSourceFileModel, RustType, RustTypeBound } from "../nodes.js";
 
 export function rustPublicSignatureTypeNames(model: RustSourceFileModel): readonly string[] {
   const items = closePublicRustTypeVisibility(model.items);
@@ -121,7 +121,7 @@ function publicSignatureTypes(
         ? [
             ...(item.superTraits ?? []),
             ...item.members.flatMap(member => member.kind === "type"
-              ? member.bounds.flatMap(rustTypeBoundTypes)
+              ? associatedSignatureTypes(member.generics, item.generics, member.bounds.flatMap(rustTypeBoundTypes))
               : member.kind === "function" ? [
                 ...member.params.map(parameter => parameter.type),
                 ...optionalType(member.returnType),
@@ -132,7 +132,8 @@ function publicSignatureTypes(
       return [...rustTypeNames(item.target), ...optionalType(item.trait).flatMap(rustTypeNames)]
         .some((name) => publicTypes.has(name))
         ? [
-          ...item.members.flatMap(member => member.kind === "type" ? [member.type]
+          ...item.members.flatMap(member => member.kind === "type"
+            ? associatedSignatureTypes(member.generics, item.generics, [member.type])
             : member.kind === "const" ? (member.visibility === "public" ? [member.type] : [])
             : member.kind === "function" && member.visibility === "public" ? [
               ...member.params.map(parameter => parameter.type), ...optionalType(member.returnType),
@@ -150,6 +151,26 @@ function publicSignatureTypes(
 
 function optionalType(type: RustType | undefined): readonly RustType[] {
   return type === undefined ? [] : [type];
+}
+
+function rustGenericTypes(generics: RustGenerics): readonly RustType[] {
+  return [
+    ...generics.parameters.flatMap(parameter => parameter.kind === "type"
+      ? [...parameter.bounds.flatMap(rustTypeBoundTypes), ...optionalType(parameter.defaultType)]
+      : parameter.kind === "const" ? [parameter.type] : []),
+    ...generics.wherePredicates.flatMap(predicate => predicate.kind === "type"
+      ? [predicate.type, ...predicate.bounds.flatMap(rustTypeBoundTypes)] : []),
+  ];
+}
+
+function associatedSignatureTypes(
+  generics: RustGenerics, owner: RustGenerics, types: readonly RustType[],
+): readonly RustType[] {
+  const boundNames = new Set([...owner.parameters, ...generics.parameters]
+    .filter(parameter => parameter.kind === "type").map(parameter => parameter.name));
+  return [...rustGenericTypes(generics), ...types].flatMap(rustTypeNames)
+    .filter(path => !boundNames.has(path.split("::")[0]!))
+    .map(path => ({ kind: "named", path }));
 }
 
 function rustTypeBoundTypes(bound: RustTypeBound): readonly RustType[] {
