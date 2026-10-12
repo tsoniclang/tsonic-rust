@@ -5,6 +5,7 @@ import { rustErrorEffectsFactKey, rustFallibleFactKey, rustSourceErrorEffectsFac
   rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { createRustSourceErrorEffectSelection } from "../../../dist/analysis/resources/source-error-effects.js";
+import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 import { Node_Expression, Node_Initializer, TryStatement_TryBlock, TryStatement_CatchClause,
   CatchClause_Block, TryStatement_FinallyBlock } from "@tsonic/target-api/source";
 import { sourcePackageCallbackErrorFiles, sourcePackageCallbackErrorGraph }
@@ -43,6 +44,31 @@ function assertChannels(actual, expected, localErrors = false) {
     assert.equal(rustTargetTypeRefEquals(source.errorType, selected.errorType), true, "exact native channel carrier");
   }
 }
+
+test("concrete callback errors retain exact producer declarations rather than the recipient package", () => {
+  const current = fixture(`
+    export class RootFailure extends Error { code = 7; }
+    export function invoke(callback: () => number): number { return callback(); }
+    export function main(): number {
+      const pure = invoke(() => 7);
+      const failure = invoke(() => { throw new RootFailure("retained"); });
+      return pure + failure;
+    }
+  `);
+  for (const name of ["pure", "failure"]) {
+    const invocation = current.initializer(name);
+    const producer = current.program.callableValues.nativeProducers.forDeclaration(current.ast.arguments(invocation)[0]);
+    assert.equal(producer !== undefined, true);
+    const edge = current.program.facts.getFact(invocation, rustSourceErrorEffectsFactKey).edges[0];
+    assert.equal(edge.effects.localErrors, false, "recipient has no manufactured local error channel");
+    assert.equal(edge.nativeErrors.length, 1);
+    const reference = rustProducerErrorReference(edge.nativeErrors[0].target.errorType);
+    assert.equal(reference.identity, producer.identity);
+    assert.equal(reference.fileName, producer.fileName);
+    assert.equal(reference.channel, "invoke");
+    assert.equal(current.effects(producer.declaration).localErrors, name === "failure");
+  }
+});
 
 test("pure source bodies stay pure while abstract input invocation carries its exact native error", () => {
   const current = fixture(`
