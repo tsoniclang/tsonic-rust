@@ -16,9 +16,19 @@ export function planRustNativeGenericProducerBridges(
   context: RustPlanContext,
 ): readonly RustItem[] | undefined {
   const selections = context.input.program.callableValues.nativeGenericProducers;
-  if (selections.unresolved.some(selection => selection.input.protocol === protocol)) return undefined;
+  const fileName = context.input.program.source.ast.getFileName(context.sourceFile);
+  if (protocol.ownerFileName === fileName && selections.unresolved.some(selection => selection.input.protocol === protocol)) return undefined;
   const items: RustItem[] = [];
+  const components = context.input.program.sourcePackageComponents;
   for (const binding of selections.forProtocol(protocol)) {
+    const producer = binding.definition.ownerFileName;
+    const owner = components.canReferenceFile(producer, protocol.ownerFileName) ? producer
+      : components.canReferenceFile(protocol.ownerFileName, producer) ? protocol.ownerFileName : undefined;
+    if (owner === undefined) {
+      if (protocol.ownerFileName === fileName) return undefined;
+      continue;
+    }
+    if (owner !== fileName) continue;
     const implementation = planImplementation(protocol, binding.definition, context);
     if (implementation === undefined) return undefined;
     items.push(implementation);
@@ -35,6 +45,7 @@ function planImplementation(
   const methodGenerics = planRustNativeCallableMethodGenerics(protocol, context);
   const errors = planRustGenericCallableErrors(definition, context);
   const target = rustTypeFromCarrierInContext(definition.carrier, context);
+  const trait = rustTypeFromCarrierInContext(protocol.trait, context);
   const environment = rustGenericCallableEnvironmentGenerics(
     rustGenericCallableStorageArguments(definition.signature.environmentParameters, definition.parameters), context);
   const capturePredicates = rustGenericCallableCapturePredicates(definition, context);
@@ -45,7 +56,7 @@ function planImplementation(
       argument.type.kind !== "type-parameter" || argument.type.identity !== `${protocol.identity}:Self`) };
   }), context, "return");
   const parameters = protocol.method.parameters.map(carrier => rustTypeFromCarrierInContext(carrier, context, "parameter"));
-  if (methodGenerics === undefined || errors === undefined || target === undefined || returnType === undefined ||
+  if (methodGenerics === undefined || errors === undefined || target === undefined || trait === undefined || returnType === undefined ||
     environment === undefined || capturePredicates === undefined ||
     parameters.some(parameter => parameter === undefined)) return undefined;
   const nativeFuture = rustNativeFutureCallableResult(protocol.method.result);
@@ -75,9 +86,7 @@ function planImplementation(
     ] } };
   }
   statements.push({ kind: "tail", expr: value.kind === "try" ? value.expr : { kind: "call", path: "Ok", args: [value] } });
-  return { kind: "impl", target,
-    trait: { kind: "named", path: protocol.targetName,
-      genericArguments: signature.environmentParameters.map(parameter => ({ kind: "type", type: { kind: "named", path: parameter.name } })) },
+  return { kind: "impl", target, trait,
     generics: { ...environment, wherePredicates: capturePredicates },
     members: [{ kind: "type", name: "InvocationError", generics: methodGenerics, type: invocationError ?? infallible },
       ...(protocol.completion?.futures ?? []).map(future => ({ kind: "type" as const, name: `AwaitError${future.ordinal}`,

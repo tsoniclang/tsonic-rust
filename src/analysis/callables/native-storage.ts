@@ -1,5 +1,5 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import type { SourceStorageBindings, SourceStorageBindingsSelection, SourceStorageQueries, SourceStorageSubject, SourceStorageSubjectsSelection } from "@tsonic/target-api/analysis";
+import type { SourceStorageBindings, SourceStorageBindingsSelection, SourceStorageQueries, SourceStorageSubject, SourceStorageSubjectsSelection, SourceStorageProducersSelection } from "@tsonic/target-api/analysis";
 import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
@@ -49,6 +49,7 @@ export interface RustNativeStoragePlan {
   invocationReturnFor(implementation: Node, invocation: Node, owner?: Node): RustNativeStorageSelection;
   invocationInputFor(input: RustNativeCallableInput, invocation: Node, owner?: Node): RustNativeStorageSelection;
   invocationOriginsFor(input: RustNativeCallableInput, invocation: Node, owner?: Node): SourceStorageSubjectsSelection;
+  implementationOriginsFor(input: RustNativeCallableInput): SourceStorageProducersSelection;
 }
 
 export function createRustNativeStoragePlan(input: {
@@ -366,6 +367,10 @@ export function createRustNativeStoragePlan(input: {
       if (!ownedInputs.has(selected)) return unresolved("Native invocation input requires its exact owned input identity.");
       const bindings = invocationBindingsFor(selected.owner, invocation, owner);
       return bindings.kind === "unresolved" ? bindings : input.storage.boundOriginsFor(selected.subject, bindings.bindings);
+    },
+    implementationOriginsFor(selected: RustNativeCallableInput): SourceStorageProducersSelection {
+      return ownedInputs.has(selected) ? input.storage.storageProducersFor(selected.subject, input.storage.emptyBindings)
+        : unresolved("Native implementation enumeration requires its exact owned input identity.");
     },
   });
 }

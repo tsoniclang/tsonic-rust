@@ -51,6 +51,13 @@ export function createRustNativeGenericProducerPlan(input: {
   const reject = (invocation: Node, selected: RustNativeCallableInput, reason: string): void => {
     unresolved.push(Object.freeze({ invocation, input: selected, reason }));
   };
+  const bind = (selected: RustNativeCallableInput, definition: RustGenericCallablePhysicalDefinition): void => {
+    const values = bindings.get(selected.protocol) ?? new Map<RustGenericCallablePhysicalDefinition, Set<RustNativeCallableInput>>();
+    const consumers = values.get(definition) ?? new Set<RustNativeCallableInput>();
+    consumers.add(selected);
+    values.set(definition, consumers);
+    bindings.set(selected.protocol, values);
+  };
   for (const invocation of input.nodes) {
     const operation = input.facts.getFact(invocation, rustTargetOperationFactKey);
     const signature = operation?.kind === "source-call" ? input.facts.getSelectedTargetCall(invocation) : undefined;
@@ -106,16 +113,41 @@ export function createRustNativeGenericProducerPlan(input: {
           reject(invocation, selected, "An exact generic producer family conflicts with its selected native protocol contract.");
           continue;
         }
-        const values = bindings.get(selected.protocol) ?? new Map<RustGenericCallablePhysicalDefinition, Set<RustNativeCallableInput>>();
-        const consumers = values.get(definition) ?? new Set<RustNativeCallableInput>();
-        consumers.add(selected);
-        values.set(definition, consumers);
-        bindings.set(selected.protocol, values);
+        bind(selected, definition);
       }
       if (quantified && symbolic.subjects.length === 0)
         reject(invocation, selected, "A generic producer invocation has no proven concrete or symbolic origin.");
       if (abstractInputs.size > 0) open.push(Object.freeze({ invocation, input: selected,
         inputs: Object.freeze([...abstractInputs]) }));
+    }
+  }
+  const byImplementation = new Map<Node, Set<RustGenericCallablePhysicalDefinition>>();
+  for (const definition of input.generic.physical.definitions()) for (const member of definition.members) {
+    const definitions = byImplementation.get(member.implementation.declaration) ?? new Set<RustGenericCallablePhysicalDefinition>();
+    definitions.add(definition);
+    byImplementation.set(member.implementation.declaration, definitions);
+  }
+  const reached = new Set(open.map(entry => entry.input));
+  for (const selected of reached) {
+    const origins = input.nativeStorage.implementationOriginsFor(selected);
+    if (origins.kind === "unresolved") {
+      for (const entry of open) if (entry.input === selected) reject(entry.invocation, selected, origins.reason);
+      continue;
+    }
+    const implementations = new Set(origins.producers.flatMap(producer => {
+      const implementation = producer.subject.projection.length === 0 ? input.generic.implementationFor(producer.subject.node) : undefined;
+      return implementation === undefined ? [] : [implementation];
+    }));
+    const candidates = new Set([...implementations].flatMap(implementation =>
+      [...byImplementation.get(implementation.declaration) ?? []]));
+    for (const definition of candidates) {
+      if (!definition.members.every(member => implementations.has(member.implementation))) continue;
+      if (!closedMetadataEquals(definition.signature, selected.protocol.signature)) {
+        for (const entry of open) if (entry.input === selected)
+          reject(entry.invocation, selected, "An exact forwarded generic producer conflicts with its native protocol contract.");
+        continue;
+      }
+      bind(selected, definition);
     }
   }
   const selectedBindings = new Map([...bindings].map(([protocol, values]) => [protocol, Object.freeze(

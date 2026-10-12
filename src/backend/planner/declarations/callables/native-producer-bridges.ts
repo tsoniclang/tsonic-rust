@@ -17,15 +17,13 @@ import type { RustPlanContext } from "../../program/plan-context.js";
 import { registerAliasFromPath } from "../../program/plan-context.js";
 import { rustLifetimeBinderToAst, rustTypeFromCarrierInContext } from "../../types/render.js";
 import { planRustNativeCallableMethodGenerics } from "./native-method-generics.js";
-import { planRustNativeGenericProducerBridges } from "./native-generic-producers.js";
 
 export function planRustNativeProducerBridge(
   protocol: RustNativeCallableProtocol,
   context: RustPlanContext,
 ): readonly RustItem[] | undefined {
   const signature = protocol.signature;
-  const generic = planRustNativeGenericProducerBridges(protocol, context);
-  if (generic === undefined || signature.typeParameters.length !== 0) return generic;
+  if (signature.typeParameters.length !== 0) return [];
   const lifetimes = rustLifetimeBinderToAst(protocol.method.binder);
   if (lifetimes.length > 0 && protocol.boundProducerName === undefined) return undefined;
   const names = new Set(signature.environmentParameters.map(parameter => parameter.name));
@@ -123,7 +121,7 @@ export function planRustNativeProducerBridge(
     selfParam: { kind: "reference", mutable: false }, params: directParameters, returnType: implResult, body: invokeBody,
   }],
   };
-  if (lifetimes.length === 0) return [direct, ...generic];
+  if (lifetimes.length === 0) return [direct];
   const self: TargetTypeRef = { kind: "type-parameter", identity: `${protocol.identity}:Self`, name: "Self" };
   const associated = (name: string): TargetTypeRef => ({ kind: "associated-type", owner: self, name, genericArguments: [] });
   const helperResult = result(associated("InvocationError"), ordinal => associated(`AwaitError${ordinal}`), [
@@ -173,7 +171,6 @@ export function planRustNativeProducerBridge(
         } }] },
       }],
     },
-    ...generic,
   ];
 
   function result(

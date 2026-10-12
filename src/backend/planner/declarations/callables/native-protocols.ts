@@ -8,17 +8,23 @@ import { diagnosticInput } from "../../program/plan-context.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
 import { planRustNativeProducerBridge } from "./native-producer-bridges.js";
 import { planRustNativeCallableMethodGenerics } from "./native-method-generics.js";
+import { planRustNativeGenericProducerBridges } from "./native-generic-producers.js";
 
 export function planRustNativeCallableProtocolItems(context: RustPlanContext): readonly RustItem[] {
   const fileName = context.input.program.source.ast.getFileName(context.sourceFile);
   const items: RustItem[] = [];
   for (const protocol of context.input.program.callableValues.native.protocols) {
-    if (protocol.ownerFileName !== fileName) continue;
-    const item = planRustNativeCallableProtocol(protocol, context);
-    const producers = planRustNativeProducerBridge(protocol, context);
-    if (item === undefined || producers === undefined) context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, context.sourceFile),
-      "rust.backend.native-callable-protocol", "An exact native callable input protocol could not be rendered."));
-    else items.push(item, ...producers);
+    const generic = planRustNativeGenericProducerBridges(protocol, context);
+    if (generic === undefined) context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, context.sourceFile),
+      "rust.backend.native-callable-protocol", "An exact native generic producer implementation could not be rendered."));
+    else items.push(...generic);
+    if (protocol.ownerFileName === fileName) {
+      const item = planRustNativeCallableProtocol(protocol, context);
+      const producers = planRustNativeProducerBridge(protocol, context);
+      if (item === undefined || producers === undefined) context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, context.sourceFile),
+        "rust.backend.native-callable-protocol", "An exact native callable input protocol could not be rendered."));
+      else items.push(item, ...producers);
+    }
   }
   return items;
 }

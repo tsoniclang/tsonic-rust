@@ -13,6 +13,8 @@ import { rustTargetTypeChildren } from "../../target-model/types/carriers/childr
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustClosedErrorTransportDemand, type RustClosedErrorTransportDemand } from "../facts/closed-errors.js";
+import type { RustNativeStorageSelection } from "../callables/native-storage.js";
+import { IsTypeSyntaxNode } from "@tsonic/target-api/source";
 
 export interface RustSourcePackageComponentSemantics {
   readonly componentId: string;
@@ -30,6 +32,7 @@ export interface RustSourcePackageComponentClassifications {
   readonly rootComponentId: string;
   forComponent(componentId: string): RustSourcePackageComponentSemantics | undefined;
   componentForFile(fileName: string): RustSourcePackageComponentSemantics | undefined;
+  canReferenceFile(fromFileName: string, targetFileName: string): boolean;
 }
 
 export type AnalyzeRustSourcePackageComponentsResult =
@@ -96,16 +99,6 @@ export function analyzeRustSourcePackageComponents(
     return { kind: "rejected", diagnostics: Object.freeze(diagnostics) };
   }
 
-  for (const definition of context.callableValues.generic.definitions) {
-    const components = new Set(definition.implementations.map(implementation =>
-      componentIdByFileName.get(normalizePath(implementation.sourceFileName))));
-    if (components.size !== 1 || components.has(undefined)) {
-      diagnostics.push(componentDiagnostic(
-        "RUST_GENERIC_CALLABLE_COMPONENT_NOT_CLOSED",
-        "One generic callable environment requires implementations from different source-package components; a backward native dependency cannot be invented.",
-      ));
-    }
-  }
   const dependencies = new Map<string, ReadonlySet<string>>();
   const reachable = (componentId: string): ReadonlySet<string> => {
     const previous = dependencies.get(componentId);
@@ -121,6 +114,16 @@ export function analyzeRustSourcePackageComponents(
     dependencies.set(componentId, result);
     return result;
   };
+  const { generic, nativeStorage } = context.callableValues;
+  const genericCarriers = new Map<TargetTypeRef, boolean>();
+  const containsGeneric = (carrier: TargetTypeRef): boolean => {
+    const previous = genericCarriers.get(carrier);
+    if (previous !== undefined) return previous;
+    genericCarriers.set(carrier, false);
+    const selected = generic.definitionFor(carrier) !== undefined || rustTargetTypeChildren(carrier).some(containsGeneric);
+    genericCarriers.set(carrier, selected);
+    return selected;
+  };
   for (const file of context.sourceFiles) {
     const component = componentIdByFileName.get(normalizePath(context.ast.getFileName(file)));
     if (component === undefined) continue;
@@ -129,7 +132,7 @@ export function analyzeRustSourcePackageComponents(
     const inspect = (carrier: TargetTypeRef): void => {
       if (visited.has(carrier)) return;
       visited.add(carrier);
-      const definition = context.callableValues.generic.definitionFor(carrier);
+      const definition = generic.physical.definitionFor(carrier);
       if (definition !== undefined && !inspected.has(definition.identity)) {
         inspected.add(definition.identity);
         const owner = componentIdByFileName.get(normalizePath(definition.ownerFileName));
@@ -140,16 +143,38 @@ export function analyzeRustSourcePackageComponents(
       }
       rustTargetTypeChildren(carrier).forEach(inspect);
     };
+    const inspectStorage = (node: import("@tsonic/tsts").Node, carrier: TargetTypeRef | undefined,
+      select: () => RustNativeStorageSelection): void => {
+      if (carrier === undefined) return;
+      if (!containsGeneric(carrier)) { inspect(carrier); return; }
+      const selected = select();
+      if (selected.kind === "unresolved") diagnostics.push({ ...componentDiagnostic(
+        "RUST_GENERIC_CALLABLE_COMPONENT_NOT_CLOSED",
+        `A generic callable's physical component identity is unresolved: ${selected.reason}`,
+      ), sourceNode: node });
+      else inspect(selected.carrier);
+    };
     const visit = (node: import("@tsonic/tsts").Node): void => {
+      if (IsTypeSyntaxNode(context.ast, node)) return;
       if (context.facts.getFact(node, rustTypeAliasDeclarationFactKey)?.kind === "erased") return;
-      for (const carrier of [context.facts.getFact(node, rustRuntimeCarrierKey)?.carrier,
-        context.facts.getFact(node, rustSourceCallableReturnFactKey)?.returnCarrier,
-        context.facts.getFact(node, rustSourceParameterAbiFactKey)?.parameterCarrier]) {
-        if (carrier !== undefined) inspect(carrier);
-      }
+      inspectStorage(node, context.facts.getFact(node, rustRuntimeCarrierKey)?.carrier, () => nativeStorage.valueFor(node));
+      inspectStorage(node, context.facts.getFact(node, rustSourceCallableReturnFactKey)?.returnCarrier, () => nativeStorage.returnFor(node));
+      const parameter = context.ast.is.IsParameterDeclaration(node)
+        ? context.facts.getFact(node, rustSourceParameterAbiFactKey)?.parameterCarrier : undefined;
+      inspectStorage(node, parameter, () => nativeStorage.parameterFor(node, parameter!));
       context.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
     };
     visit(file);
+  }
+  for (const definition of generic.physical.definitions()) {
+    const owner = componentIdByFileName.get(normalizePath(definition.ownerFileName));
+    if (owner === undefined || definition.implementations.some(implementation => {
+      const member = componentIdByFileName.get(normalizePath(implementation.sourceFileName));
+      return member === undefined || !reachable(owner).has(member);
+    })) diagnostics.push(componentDiagnostic(
+      "RUST_GENERIC_CALLABLE_COMPONENT_NOT_CLOSED",
+      "A physical generic callable environment has no component path to its exact producer implementation.",
+    ));
   }
   if (diagnostics.length > 0) {
     return { kind: "rejected", diagnostics: Object.freeze(diagnostics) };
@@ -293,6 +318,11 @@ export function analyzeRustSourcePackageComponents(
     },
     componentForFile(fileName: string) {
       return byFileName.get(normalizePath(fileName));
+    },
+    canReferenceFile(fromFileName: string, targetFileName: string) {
+      const from = byFileName.get(normalizePath(fromFileName));
+      const target = byFileName.get(normalizePath(targetFileName));
+      return from !== undefined && target !== undefined && reachable(from.componentId).has(target.componentId);
     },
   };
   return {

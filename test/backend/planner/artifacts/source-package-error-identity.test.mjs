@@ -1,6 +1,7 @@
 import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { fakeAstReader } from "../../../helpers/fake-compile-input.mjs";
 import { analyzeRustSourcePackageComponents } from "../../../../dist/analysis/program/source-package-components.js";
 import { planRustSourcePackageErrors, resolveRustSourcePackageErrorBoundary } from "../../../../dist/backend/planner/program/source-package-errors.js";
 import { planRustProgramErrorModule } from "../../../../dist/backend/planner/program/errors.js";
@@ -20,8 +21,9 @@ function classify(dependencies, errors, views = []) {
       components: names.map(name => ({ id: name, dependencies: dependencies[name] })),
     },
     sourceFiles: names.map(name => ({ fileName: `/${name}/index.ts` })),
-    ast: { getFileName: source => source.fileName, kindName: () => "KindSourceFile", forEachChild() {} },
-    callableValues: { generic: { definitions: [], definitionFor: () => undefined } },
+    ast: { ...fakeAstReader(), kindName: () => "KindSourceFile" },
+    callableValues: { generic: { definitions: [], definitionFor: () => undefined,
+      physical: { definitions: () => [], definitionFor: () => undefined } } },
     errorStorageDemands: { nativeConstructors: [], retainedBoundaries: [], storageFor: () => ({ kind: "readonly" }) },
     facts: { get: (node, key) => key === rustRuntimeCarrierKey && views.includes(node.fileName.split("/")[1])
       ? { carrier: rustSourceErrorTargetType() } : undefined, getFact: () => undefined },
@@ -39,6 +41,10 @@ function classify(dependencies, errors, views = []) {
 
 test("chain and diamond error forwarding preserve one sealed owner and one conversion", () => {
   const { context, components } = classify({ leaf: [], left: ["leaf"], right: ["leaf"], root: ["left", "right"] }, ["leaf"]);
+  assert.equal(context.sourcePackageComponents.canReferenceFile("/root/index.ts", "/leaf/index.ts"), true);
+  assert.equal(context.sourcePackageComponents.canReferenceFile("/leaf/index.ts", "/root/index.ts"), false);
+  assert.equal(context.sourcePackageComponents.canReferenceFile("/left/index.ts", "/right/index.ts"), false);
+  assert.equal(context.sourcePackageComponents.canReferenceFile("/foreign/index.ts", "/leaf/index.ts"), false);
   assert.ok(components.every(component => component.errorOwnerComponentId === "leaf"));
   const { plan, diagnostics } = planRustSourcePackageErrors({ program: context }, components);
   assertNoTargetDiagnostics(diagnostics);
