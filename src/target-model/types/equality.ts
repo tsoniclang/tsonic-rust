@@ -14,6 +14,8 @@ import {
   rustLifetimesEqual,
 } from "../lifetimes/index.js";
 import { rustNamedTypeCarrierValue } from "./carriers/native.js";
+import { isRustProgramErrorOwner } from "./carriers/program-errors.js";
+import { rustProgramErrorTargetId } from "./carriers/source-types.js";
 import type {
   RustLifetimeBinder,
   RustLifetimeRef,
@@ -231,6 +233,7 @@ function rustTargetTypeRefEqualsValidated(
       return right.kind === left.kind && left.name === right.name;
     case "target-named":
       return right.kind === left.kind && left.id === right.id &&
+        closedMetadataEquals(left.errorOwner, right.errorOwner) &&
         genericArgumentListsEqual(left.genericArguments, right.genericArguments, lifetimeContext);
     case "type-parameter":
       return right.kind === left.kind && left.identity === right.identity &&
@@ -353,10 +356,13 @@ function validateRustTargetTypeRef(
       case "target-named":
         return hasExactKeys(
           value,
-          ["kind", "id", "genericArguments", "sourceAbsence"],
+          ["kind", "id", "genericArguments", "sourceAbsence", "errorOwner"],
           ["kind", "id"],
         ) &&
           typeof value.id === "string" && value.id.length > 0 &&
+          (value.id === rustProgramErrorTargetId ? isRustProgramErrorOwner(value.errorOwner) &&
+            (value.genericArguments === undefined || isDenseDataArray(value.genericArguments) && value.genericArguments.length === 0)
+            : value.errorOwner === undefined) &&
           (value.sourceAbsence === undefined || value.sourceAbsence === true && value.id === "rust.std.Option" &&
             isDenseDataArray(value.genericArguments) && value.genericArguments.length === 1 &&
             isPlainRecord(value.genericArguments[0]) && value.genericArguments[0].kind === "type") &&

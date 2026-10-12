@@ -2,7 +2,9 @@ import { rustBigIntTargetId, rustJsArrayBufferTargetId, rustJsArrayConcatItemTar
 import { rustSourceOptionalTargetType } from "../projections.js";
 import { isRustAbsenceCarrier } from "./native.js";
 import { isRustClosedValueCarrier } from "./closed-value-kind.js";
-import type { TargetTypeRef } from "../model.js";
+import type { RustProgramErrorOwner, TargetTypeRef } from "../model.js";
+import { isRustProgramErrorOwner, rustProgramErrorOwner } from "./program-errors.js";
+import { snapshotClosedMetadata } from "../../metadata/closed-data.js";
 import { isRustJsArrayValueCarrier } from "./array-values.js";
 import type { RustLifetimeRef } from "../../lifetimes/index.js";
 import {
@@ -25,12 +27,13 @@ export function rustJsErrorTargetType(): TargetTypeRef {
   return { kind: "target-named", id: rustJsErrorTargetId };
 }
 
-export function rustProgramErrorTargetType(): TargetTypeRef {
-  return { kind: "target-named", id: rustProgramErrorTargetId };
+export function rustProgramErrorTargetType(owner: RustProgramErrorOwner = { kind: "logical" }): TargetTypeRef {
+  if (!isRustProgramErrorOwner(owner)) throw new Error("A program error requires its exact logical or physical owner selection.");
+  return snapshotClosedMetadata({ kind: "target-named", id: rustProgramErrorTargetId, errorOwner: owner });
 }
 
 export function isRustProgramErrorCarrier(carrier: TargetTypeRef | undefined): boolean {
-  return carrier?.kind === "target-named" && carrier.id === rustProgramErrorTargetId;
+  return rustProgramErrorOwner(carrier) !== undefined;
 }
 
 export function rustJsArrayTargetType(element: TargetTypeRef): TargetTypeRef {

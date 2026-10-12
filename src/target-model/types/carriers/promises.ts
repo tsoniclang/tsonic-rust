@@ -1,8 +1,9 @@
 import type { TargetTypeRef } from "../model.js";
 import { rustTypeGenericArguments } from "../generic-arguments.js";
-import { rustJsPromiseResolutionTargetId, rustProgramErrorTargetId } from "./source-types.js";
+import { rustJsPromiseResolutionTargetId } from "./source-types.js";
+import { rustProgramErrorTargetType } from "./js.js";
 
 export function rustJsPromiseResolutionTargetType(output: TargetTypeRef): TargetTypeRef {
   return { kind: "target-named", id: rustJsPromiseResolutionTargetId,
-    genericArguments: rustTypeGenericArguments([output, { kind: "target-named", id: rustProgramErrorTargetId }]) };
+    genericArguments: rustTypeGenericArguments([output, rustProgramErrorTargetType()]) };
 }

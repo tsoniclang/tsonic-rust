@@ -30,7 +30,7 @@ test("final ABI rejects mutated native failures, open generics and wrong ownersh
   const sparse = []; sparse.length = 1;
   const accessor = Object.defineProperty({}, "kind", { enumerable: true, get() { throw new Error("must not execute"); } });
   for (const nativeErrorCarriers of [undefined, null, [], {}, sparse, [accessor], [native, native],
-    [{ kind: "source-primitive", name: "float64" }], [{ kind: "target-named", id: "rust.program.TsonicError" }],
+    [{ kind: "source-primitive", name: "float64" }], [{ kind: "target-named", id: "rust.program.TsonicError", errorOwner: { kind: "logical" } }],
     [{ ...native, genericArguments: [{ kind: "type", type: { kind: "type-parameter", identity: "free", name: "T" } }] }],
     [{ ...native, genericArguments: [{ kind: "lifetime", lifetime: { kind: "parameter", identity: "free", name: "a" } }] }],
     [{ ...native, genericArguments: [{ kind: "const", value: { kind: "parameter", identity: "free", name: "N" } }] }]]) {

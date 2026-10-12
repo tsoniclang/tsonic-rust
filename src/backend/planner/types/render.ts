@@ -1,10 +1,13 @@
 import type {
   RustTargetConstArgument,
+  RustProgramErrorOwner,
   RustTargetGenericArgument,
   TargetTypeRef,
 } from "../../../target-model/types/model.js";
 import { registerAliasFromPath, rustCurrentErrorBoundary, rustErrorType } from "../program/plan-context.js";
 import type { RustSourcePackageErrorPlan } from "../program/source-package-errors.js";
+import { resolveRustPhysicalProgramErrorBoundary } from "../program/source-package-errors.js";
+import { rustProgramErrorOwner } from "../../../target-model/types/carriers/program-errors.js";
 import { rustTypeIsLegalInPosition, rustTypeContainsImplTrait, collectAliasesFromRustType } from "./type-observations.js";
 import type {
   RustCallGenericArgument,
@@ -73,7 +76,7 @@ interface RustSourceTypeRendering {
   readonly typeParameterNames?: ReadonlyMap<string, string>;
   readonly pathFor: (value: { readonly fileName: string; readonly typeName: string }) => string | undefined;
   readonly additionalArgumentsFor: (carrier: TargetTypeRef) => readonly RustGenericArgument[];
-  readonly programErrorType?: () => RustType | undefined;
+  readonly programErrorType?: (owner: RustProgramErrorOwner) => RustType | undefined;
   readonly producerErrorType?: (reference: RustProducerErrorReference) => RustType | undefined;
   readonly nativeErrorJoinType?: (reference: RustNativeErrorJoinReference) => RustType | undefined;
 }
@@ -157,8 +160,8 @@ export function rustTypeFromCarrier(
   }
   if (carrier.kind === "target-named") {
     if (carrier.id === rustProgramErrorTargetId) {
-      return carrier.genericArguments === undefined || carrier.genericArguments.length === 0
-        ? resolveSourceTypePath?.programErrorType?.() : undefined;
+      const owner = rustProgramErrorOwner(carrier);
+      return owner === undefined ? undefined : resolveSourceTypePath?.programErrorType?.(owner);
     }
     const path = rustBuiltInCarrierRenderPaths[carrier.id];
     if (path === undefined) {
@@ -614,8 +617,10 @@ export function rustTypeFromCarrierInContext(
   const sourceRendering: RustSourceTypeRendering = {
     typeParameterNames: context.typeParameterNames, typeDefinitions: context.input.program.typeDefinitions,
     pathFor: value => rustSourceTypePathInContext(value, context), additionalArgumentsFor: type => rustOptionalStorageTypeArguments(type, context),
-    programErrorType: () => {
-      const boundary = context.sourcePackageErrors === undefined ? undefined : rustCurrentErrorBoundary(context);
+    programErrorType: owner => {
+      const boundary = context.sourcePackageErrors === undefined ? undefined : owner.kind === "logical"
+        ? rustCurrentErrorBoundary(context)
+        : resolveRustPhysicalProgramErrorBoundary(context.sourcePackageErrors, context.sourcePackageComponentId, owner);
       return boundary === undefined ? undefined : rustErrorType(boundary);
     },
     producerErrorType: reference => {

@@ -7,6 +7,8 @@ import type {
   RustErrorDomain,
 } from "../../../target-model/operations/error-boundary.js";
 import { rustRuntimeErrorTypeIdentity } from "../../../target-model/operations/error-boundary.js";
+import type { RustProgramErrorOwner } from "../../../target-model/types/model.js";
+import { isRustProgramErrorOwner } from "../../../target-model/types/carriers/program-errors.js";
 
 export interface RustExternalSourcePackageError {
   readonly componentId: string;
@@ -245,6 +247,26 @@ export function resolveRustSourcePackageErrorBoundary(
         errorTypePath: external.typePath,
         errorTypeIdentity: ownerDomain.errorTypeIdentity,
       });
+}
+
+export function resolveRustPhysicalProgramErrorBoundary(
+  plan: RustSourcePackageErrorPlan,
+  consumerComponentId: string,
+  owner: RustProgramErrorOwner,
+): RustSourcePackageErrorBoundary | undefined {
+  if (!isRustProgramErrorOwner(owner) || owner.kind !== "physical") return undefined;
+  const consumer = plan.domainsByComponentId.get(consumerComponentId);
+  if (consumer === undefined) return undefined;
+  if (owner.domain === "runtime") return Object.freeze({ componentId: consumerComponentId,
+    errorDomain: "runtime", errorTypePath: "tsonic_rust_runtime::TsonicError",
+    errorTypeIdentity: rustRuntimeErrorTypeIdentity });
+  const actualOwner = plan.domainsByComponentId.get(owner.componentId);
+  if (actualOwner?.errorDomain !== "project" || actualOwner.errorOwnerComponentId !== owner.componentId) return undefined;
+  const visible = consumer.errorOwnerComponentId === owner.componentId ? consumerComponentId
+    : plan.dependencyErrorsByComponentId.get(consumerComponentId)
+      ?.find(dependency => dependency.errorOwnerComponentId === owner.componentId)?.componentId;
+  const boundary = visible === undefined ? undefined : resolveRustSourcePackageErrorBoundary(plan, consumerComponentId, visible);
+  return boundary?.errorTypeIdentity === actualOwner.errorTypeIdentity ? boundary : undefined;
 }
 
 export function resolveRustProgramErrorRoute(

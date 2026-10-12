@@ -20,11 +20,12 @@ import type {
 import { isRustLifetimeRef } from "../../../target-model/lifetimes/index.js";
 import { isRustUnionArmMappings, isRustUnionPath } from "../../../target-model/types/union-relations.js";
 import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
+import { rustProgramErrorOwner } from "../../../target-model/types/carriers/program-errors.js";
 
 const carrierFieldsByKind: Readonly<Record<RustTargetTypeRef["kind"], readonly string[]>> =
   Object.freeze({
     "source-primitive": ["kind", "name"],
-    "target-named": ["kind", "id", "genericArguments"],
+    "target-named": ["kind", "id", "genericArguments", "errorOwner"],
     "type-parameter": ["kind", "identity", "name"],
     array: ["kind", "element", "rank"],
     slice: ["kind", "element"],
@@ -86,6 +87,9 @@ export function validateCarrier(
       return;
     case "target-named":
       requireNonEmpty(carrier.id, `${where}.id`, fail);
+      if (rustProgramErrorOwner(carrier)?.kind === "physical") {
+        fail(`${where} uses a compiler-owned physical program error identity`);
+      }
       if (!isRustBuiltInTargetCarrierId(carrier.id) && definition.carrierPaths?.[carrier.id] === undefined) {
         fail(`${where} names target carrier '${carrier.id}' without a Rust carrier path`);
       }

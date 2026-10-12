@@ -11,7 +11,8 @@ import { rustErrorBoundaryForDeclaration, type RustPlanContext } from "./plan-co
 import type { RustProducerErrorReference } from "../../../target-model/types/carriers/producer-errors.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustContextualValueConversionFactKey } from "../../../analysis/facts/keys.js";
-import { selectRustProducerError } from "../../../analysis/callables/producer-errors.js";
+import { normalizeRustErrorType } from "../../../analysis/program/error-types.js";
+import { rustProducerErrorTargetType } from "../../../target-model/types/carriers/producer-errors.js";
 import type { RustType } from "../../target-ast/nodes.js";
 import { rustNativeErrorJoinIdentity, type RustNativeErrorJoinReference } from "../../../target-model/types/native-error-joins.js";
 import { rustCallableConversionErrorArities } from "../../../target-model/conversions/callable-physical.js";
@@ -109,14 +110,13 @@ export function createRustErrorRegionCatalog(program: RustTargetProgram): RustEr
           identity: String(index), variant: `Error${index}`, errorType,
         })) })?.errorType;
     },
-    producerErrorType(reference: RustProducerErrorReference, context: RustTypeRenderingContext,
+    producerErrorType(reference: RustProducerErrorReference, _context: RustTypeRenderingContext,
       render: (carrier: TargetTypeRef) => RustType | undefined): RustType | undefined {
-      const selected = selectRustProducerError(reference, { producers: program.callableValues.nativeProducers,
-        facts: program.facts, definitions: program.typeDefinitions });
-      if (selected === undefined) return undefined;
-      if (selected.kind === "carrier") return render(selected.carrier);
-      const region = planRustSelectedErrorRegion(selected.declaration, selected.effects, context, render);
-      return region === undefined ? undefined : region.boundary?.errorType ?? { kind: "named", path: "core::convert::Infallible" };
+      const selected = normalizeRustErrorType(rustProducerErrorTargetType(reference), {
+        producers: program.callableValues.nativeProducers, facts: program.facts, definitions: program.typeDefinitions,
+        ast, components: program.sourcePackageComponents,
+      });
+      return selected === undefined ? undefined : render(selected);
     },
   });
 }

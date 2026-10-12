@@ -58,6 +58,11 @@ export type RustTargetAssociatedConstraint =
       readonly outlives: readonly RustLifetimeRef[];
     };
 
+export type RustProgramErrorOwner =
+  | { readonly kind: "logical" }
+  | { readonly kind: "physical"; readonly domain: "runtime" }
+  | { readonly kind: "physical"; readonly domain: "project"; readonly componentId: string };
+
 export type RustTargetTypeRef =
   | { readonly kind: "source-primitive"; readonly name: SourcePrimitiveKind }
   | {
@@ -65,6 +70,7 @@ export type RustTargetTypeRef =
       readonly id: string;
       readonly genericArguments?: readonly RustTargetGenericArgument[];
       readonly sourceAbsence?: true;
+      readonly errorOwner?: RustProgramErrorOwner;
     }
   | { readonly kind: "type-parameter"; readonly identity: string; readonly name: string; readonly optionalStorageValue?: RustTargetTypeRef }
   | { readonly kind: "array"; readonly element: RustTargetTypeRef; readonly rank?: number }

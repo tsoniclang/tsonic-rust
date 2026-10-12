@@ -1,16 +1,17 @@
 import { resolve } from "node:path";
 import { createRustProviderPackage, rustCallableTargetType } from "../../../dist/public/provider.js";
+import { rustProgramErrorTargetType } from "../../../dist/target-model/types/carriers/js.js";
 
 export function dispatchContextDefinition(overrides = {}) {
   return {
     id: "acme.dispatch",
     requiredCrate: "acme_dispatch",
     rootCarrier: { kind: "target-named", id: "acme.Dispatch", genericArguments: [
-      { kind: "type", type: { kind: "target-named", id: "rust.program.TsonicError" } },
+      { kind: "type", type: structuredClone(rustProgramErrorTargetType()) },
     ] },
     construct: { form: "call", path: "runtime::Dispatch::new", const: false },
     handleCarrier: { kind: "target-named", id: "acme.DispatchHandle", genericArguments: [
-      { kind: "type", type: { kind: "target-named", id: "rust.program.TsonicError" } },
+      { kind: "type", type: structuredClone(rustProgramErrorTargetType()) },
     ] },
     handle: { form: "receiver-method", name: "handle" },
     composedContexts: [],

@@ -7,7 +7,7 @@ import { rustAwaitSelection, rustAwaitSelectionLeaves } from "../../dist/target-
 import { rustTargetTypeRefEquals } from "../../dist/target-model/types/equality.js";
 import { createRustGeneratedUnionPlan } from "../../dist/analysis/objects/generated-union-plan.js";
 
-const error = { kind: "target-named", id: "rust.program.TsonicError" };
+const error = { kind: "target-named", id: "rust.program.TsonicError", errorOwner: { kind: "logical" } };
 const text = rustStringTargetType();
 const integer = rustSourcePrimitiveTargetType("int64");
 const union = (members, fileName = "/src/index.ts", origin = "generated") => rustSourceUnionTargetType(

@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { fakeAstReader } from "../../../helpers/fake-compile-input.mjs";
 import { analyzeRustSourcePackageComponents } from "../../../../dist/analysis/program/source-package-components.js";
-import { planRustSourcePackageErrors, resolveRustSourcePackageErrorBoundary } from "../../../../dist/backend/planner/program/source-package-errors.js";
+import { planRustSourcePackageErrors, resolveRustSourcePackageErrorBoundary, resolveRustPhysicalProgramErrorBoundary } from "../../../../dist/backend/planner/program/source-package-errors.js";
+import { selectRustPhysicalProgramErrorOwner } from "../../../../dist/analysis/program/error-types.js";
 import { planRustProgramErrorModule } from "../../../../dist/backend/planner/program/errors.js";
 import { sourcePackageCallbackErrorFiles, sourcePackageCallbackErrorGraph } from "../../../../../tsonic/test/fixtures/source-package-callback-errors.mjs";
 import { compileRust } from "../../../helpers/rust-session.mjs";
@@ -70,6 +71,25 @@ test("local errors and independent dependency domains retain distinct closed uni
     assertNoTargetDiagnostics(result.diagnostics);
     assert.equal(result.plan.domainsByComponentId.get("root").forwardModulePath, undefined);
   }
+});
+
+test("physical error normalization and rendering share the actual forwarded component owner, not ambient errors", () => {
+  const { context, components } = classify({ leaf: [], left: ["leaf"], right: ["leaf"], root: ["left", "right"] }, ["leaf", "root"]);
+  const { plan, diagnostics } = planRustSourcePackageErrors({ program: context }, components);
+  assertNoTargetDiagnostics(diagnostics);
+  for (const name of ["left", "right", "leaf"]) {
+    const physical = selectRustPhysicalProgramErrorOwner(context.sourceFiles.find(file => file.fileName === `/${name}/index.ts`),
+      { ast: context.ast, components: context.sourcePackageComponents });
+    assert.deepEqual(physical, { kind: "physical", domain: "project", componentId: "leaf" });
+    const rendered = resolveRustPhysicalProgramErrorBoundary(plan, "root", physical);
+    assert.equal(rendered?.errorTypeIdentity, plan.domainsByComponentId.get("leaf").errorTypeIdentity);
+    assert.notEqual(rendered?.errorTypeIdentity, plan.domainsByComponentId.get("root").errorTypeIdentity);
+  }
+  for (const physical of [{ kind: "logical" }, { kind: "physical", domain: "project", componentId: "left" },
+    { kind: "physical", domain: "project", componentId: "foreign" }]) {
+    assert.equal(resolveRustPhysicalProgramErrorBoundary(plan, "root", physical) === undefined, true);
+  }
+  assert.equal(resolveRustPhysicalProgramErrorBoundary(plan, "leaf", { kind: "physical", domain: "project", componentId: "root" }) === undefined, true);
 });
 
 test("error ownership mutations reject before any program-error AST is emitted", () => {

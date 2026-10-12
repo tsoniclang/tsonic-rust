@@ -8,11 +8,11 @@ import {
   rustIteratorResultTargetId,
   rustLocationTargetId,
   rustInfallibleTargetId,
-  rustProgramErrorTargetId,
   rustRawPointerTargetId,
 } from "./source-types.js";
 import { rustOptionElementCarrier, rustOptionTargetType } from "./optional.js";
 import { rustUnitTargetType } from "./native.js";
+import { rustProgramErrorTargetType } from "./js.js";
 import type { TargetTypeRef } from "../model.js";
 import {
   rustLifetimeGenericArgument,
@@ -35,7 +35,7 @@ export function rustLocationTargetType(
 }
 
 export function rustSourceLocationTargetType(pointee: TargetTypeRef): TargetTypeRef {
-  return rustLocationTargetType(pointee, { kind: "target-named", id: rustProgramErrorTargetId });
+  return rustLocationTargetType(pointee, rustProgramErrorTargetType());
 }
 
 export function rustRawPointerTargetType(): TargetTypeRef {
