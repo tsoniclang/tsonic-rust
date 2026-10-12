@@ -30,6 +30,7 @@ export interface RustNativeStoragePlan {
   returnFor(declaration: Node): RustNativeStorageSelection;
   valueFor(node: Node): RustNativeStorageSelection;
   subjectFor(subject: SourceStorageSubject, carrier: TargetTypeRef, owner?: Node): RustNativeStorageSelection;
+  boundSubjectFor(subject: SourceStorageSubject, carrier: TargetTypeRef, bindings: SourceStorageBindings): RustNativeStorageSelection;
   invocationReturnFor(implementation: Node, invocation: Node, owner?: Node): RustNativeStorageSelection;
   invocationInputFor(input: RustNativeCallableInput, invocation: Node, owner?: Node): RustNativeStorageSelection;
   invocationOriginsFor(input: RustNativeCallableInput, invocation: Node, owner?: Node): SourceStorageSubjectsSelection;
@@ -190,6 +191,10 @@ export function createRustNativeStoragePlan(input: {
     subjectFor(subject: SourceStorageSubject, carrier: TargetTypeRef, owner?: Node): RustNativeStorageSelection {
       const checked = input.storage.typeFor(subject);
       return checked.kind === "unresolved" ? checked : select(subject, carrier, bindingsFor(owner ?? ownerFor(subject.node)));
+    },
+    boundSubjectFor(subject: SourceStorageSubject, carrier: TargetTypeRef, bindings: SourceStorageBindings): RustNativeStorageSelection {
+      const selected = input.storage.boundOriginsFor(subject, bindings);
+      return selected.kind === "unresolved" ? selected : select(subject, carrier, bindings);
     },
     invocationReturnFor(implementation: Node, invocation: Node, owner?: Node): RustNativeStorageSelection {
       const bindings = invocationBindingsFor(implementation, invocation, owner);

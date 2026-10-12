@@ -174,8 +174,10 @@ test("source error rebinding rejects unknown identities, mutated carriers and un
     export function invoke(callback: () => number): number { return callback(); }
     export function forward(callback: () => number): number { const output = invoke(callback); return output; }
   `);
-  const select = createRustSourceErrorEffectSelection({ context: { ast: current.ast, facts: current.program.facts,
+  const selection = createRustSourceErrorEffectSelection({ context: { ast: current.ast, facts: current.program.facts,
     callableValues: current.program.callableValues } });
+  const select = (node, declaration, kind, effects) => selection.edgeFor(declaration, kind, effects,
+    selection.bindingsFor(node, declaration, effects.nativeErrors.map(error => error.errorType)));
   const effects = current.callable("invoke");
   const declaration = current.declaration("invoke");
   const call = current.initializer("output");

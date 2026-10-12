@@ -13,7 +13,8 @@ import { rustJsPromiseTargetId } from "../../target-model/types/carriers/source-
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustAsyncFunctionFactKey, rustClosureCaptureFactKey, rustSourceCallableReturnFactKey, rustSourceParameterAbiFactKey,
-  rustTargetOperationFactKey } from "../facts/keys.js";
+  rustTargetOperationFactKey, rustDeferredProducerEffectsFactKey } from "../facts/keys.js";
+import { rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
 
 export interface RustNativeCallableProducer {
@@ -28,6 +29,7 @@ export interface RustNativeCallableProducerPlan {
   forDeclaration(declaration: Node): RustNativeCallableProducer | undefined;
   forIdentity(identity: string): RustNativeCallableProducer | undefined;
   errorFor(declaration: Node, channel: "invoke" | number): TargetTypeRef | undefined;
+  deferredErrorFor(declaration: Node, ordinal: number): TargetTypeRef | undefined;
   physicalFor(declaration: Node, carrier: TargetTypeRef): TargetTypeRef | undefined;
 }
 
@@ -82,6 +84,12 @@ export function createRustNativeCallableProducerPlan(input: {
   return Object.freeze({ producers: Object.freeze([...byDeclaration.values()]), errorFor,
     forDeclaration: (declaration: Node) => byDeclaration.get(declaration),
     forIdentity: (identity: string) => byIdentity.get(identity),
+    deferredErrorFor(declaration: Node, ordinal: number): TargetTypeRef | undefined {
+      if (!byDeclaration.has(declaration) || !Number.isSafeInteger(ordinal) || ordinal < 0) return undefined;
+      const selected = input.facts.getFact(declaration, rustDeferredProducerEffectsFactKey);
+      return selected?.kind === "no-future" ? Object.freeze({ kind: "target-named", id: rustInfallibleTargetId })
+        : selected?.errors[ordinal];
+    },
     physicalFor(declaration: Node, carrier: TargetTypeRef): TargetTypeRef | undefined {
       const producer = byDeclaration.get(declaration);
       const signature = rustCallableProtocol(carrier);

@@ -24,6 +24,7 @@ import { recordExportAssignmentFacts, recordFunctionBodyFacts, recordStatementFa
 import { recordFallibilityFacts } from "../resources/fallibility.js";
 import { recordFunctionSignatureFacts, recordNestedCallableTypeSignatureFacts, recordPredeclaredNativeFunctionBindingFacts, recordTopLevelCallableValueSignatureFacts } from "../callables/signatures.js";
 import { recordFutureValueFacts, recordResourceManagementFacts } from "../resources/suspension.js";
+import { recordRustDeferredProducerEffects } from "../resources/deferred-producer-effects.js";
 import { recordRustObjectLiteralMethodAdapterFacts } from "../objects/method-adapters.js";
 import { resolveRustExternalProjectBase } from "../../policy/types/external-project-types.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
@@ -562,6 +563,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
   recordFallibilityFacts(walk, projectSourceFiles);
   recordResourceManagementFacts(walk, projectSourceFiles);
   recordFutureValueFacts(walk, projectSourceFiles);
+  recordRustDeferredProducerEffects(walk);
   const lexical = createRustLexicalFunctionQueries(context.source, context.sourceFiles, context.facts,
     context.sourceLifetimes, context.runtimeValueUses);
   recordRustLexicalValueEnvironments(walk, lexical);

@@ -20,14 +20,20 @@ import { rustCallableProtocol } from "../../target-model/types/carriers/callable
 import { inferRustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { rustLifetimeKey, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import type { RustTargetConstArgument } from "../../target-model/types/model.js";
+import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 
-export function createRustSourceErrorEffectSelection(walk: RustFactWalk): (
-  node: Node,
-  declaration: Node,
-  kind: RustSourceErrorEffectEdge["kind"],
-  effects: RustErrorEffectsFact,
-  storageBindings?: SourceStorageBindings,
-) => RustSourceErrorEffectEdge | undefined {
+export interface RustSourceErrorBindings extends RustTargetGenericBindings {
+  substitute(carrier: TargetTypeRef): TargetTypeRef | undefined;
+}
+
+export interface RustSourceErrorEffectSelection {
+  bindingsFor(node: Node, declaration: Node, carriers: readonly TargetTypeRef[],
+    storageBindings?: SourceStorageBindings): RustSourceErrorBindings | undefined;
+  edgeFor(declaration: Node, kind: RustSourceErrorEffectEdge["kind"], effects: RustErrorEffectsFact,
+    bindings: RustSourceErrorBindings | undefined): RustSourceErrorEffectEdge | undefined;
+}
+
+export function createRustSourceErrorEffectSelection(walk: RustFactWalk): RustSourceErrorEffectSelection {
   const native = walk.context.callableValues.native;
   const inputs = new Map(native.inputs.map(input => [input.implementation.identity, input]));
   const origins = new Map<string, { readonly origin: RustNativeErrorEffect; readonly selected: RustNativeErrorEffect }>();
@@ -38,9 +44,7 @@ export function createRustSourceErrorEffectSelection(walk: RustFactWalk): (
       origins.set(source.identity, { origin: selected, selected });
     }
   }
-  return (node, declaration, kind, effects, storageBindings) => {
-    if (effects.nativeErrors.length === 0) return Object.freeze({ declaration, kind, effects,
-      nativeErrors: Object.freeze([]) });
+  const bindingsFor: RustSourceErrorEffectSelection["bindingsFor"] = (node, declaration, carriers, storageBindings) => {
     const signature = walk.context.facts.getSelectedTargetCall(node);
     const operation = walk.context.facts.get(node, rustTargetOperationFactKey);
     const generics = rustTargetGenericBindingsForArguments(signature?.member.genericParameters ?? [],
@@ -82,10 +86,8 @@ export function createRustSourceErrorEffectSelection(walk: RustFactWalk): (
     };
     const producers = new Map<string, RustNativeCallableProducer>();
     const bindings = new Set<string>();
-    for (const source of effects.nativeErrors) {
-      const origin = origins.get(source.identity);
-      if (origin === undefined || !rustTargetTypeRefEquals(origin.selected.errorType, source.errorType)) return undefined;
-      for (const identity of rustTargetGenericReferences(source.errorType).typeIdentities) {
+    for (const carrier of carriers) {
+      for (const identity of rustTargetGenericReferences(carrier).typeIdentities) {
         const input = inputs.get(identity);
         if (input === undefined || bindings.has(identity)) continue;
         bindings.add(identity);
@@ -125,11 +127,9 @@ export function createRustSourceErrorEffectSelection(walk: RustFactWalk): (
         else return undefined;
       }
     }
-    const nativeErrors: RustSourceErrorEffectEdge["nativeErrors"][number][] = [];
-    for (const source of effects.nativeErrors) {
-      const origin = origins.get(source.identity)!.origin;
+    const substitute = (carrier: TargetTypeRef): TargetTypeRef | undefined => {
       let valid = true;
-      const errorType = substituteRustTargetGenerics(source.errorType, types, lifetimes, consts, (type, original) => {
+      const selected = substituteRustTargetGenerics(carrier, types, lifetimes, consts, (type, original) => {
         if (original.kind !== "associated-type" || original.owner.kind !== "type-parameter") return type;
         const producer = producers.get(original.owner.identity);
         const input = inputs.get(original.owner.identity);
@@ -147,8 +147,21 @@ export function createRustSourceErrorEffectSelection(walk: RustFactWalk): (
         if (replacement === undefined) { valid = false; return type; }
         return substituteRustTargetGenerics(replacement, types, lifetimes, consts);
       });
-      if (!valid) return undefined;
-      if (!isRustTargetTypeRef(errorType)) return undefined;
+      return valid && isRustTargetTypeRef(selected) ? selected : undefined;
+    };
+    return Object.freeze({ types, lifetimes, consts, substitute });
+  };
+  const edgeFor: RustSourceErrorEffectSelection["edgeFor"] = (declaration, kind, effects, bindings) => {
+    if (effects.nativeErrors.length === 0) return Object.freeze({ declaration, kind, effects,
+      nativeErrors: Object.freeze([]) });
+    if (bindings === undefined) return undefined;
+    const nativeErrors: RustSourceErrorEffectEdge["nativeErrors"][number][] = [];
+    for (const source of effects.nativeErrors) {
+      const recorded = origins.get(source.identity);
+      if (recorded === undefined || !rustTargetTypeRefEquals(recorded.selected.errorType, source.errorType)) return undefined;
+      const origin = recorded.origin;
+      const errorType = bindings.substitute(source.errorType);
+      if (errorType === undefined) return undefined;
       const identity = rustTargetTypeRefEquals(errorType, source.errorType) ? source.identity
         : rustTargetTypeRefEquals(errorType, origin.errorType) ? origin.identity
           : `native-error-substitution:${closedMetadataKey({ source: origin.identity, errorType })}`;
@@ -164,4 +177,5 @@ export function createRustSourceErrorEffectSelection(walk: RustFactWalk): (
     return selectedEffects === undefined ? undefined : Object.freeze({ declaration, kind, effects: selectedEffects,
       nativeErrors: Object.freeze(nativeErrors) });
   };
+  return Object.freeze({ bindingsFor, edgeFor });
 }

@@ -27,6 +27,7 @@ import { rustContextualValueConversionFactKey } from "./value-projections.js";
 import { rustSourceParameterAbiFactKey } from "./callables-and-resources.js";
 import { rustFutureValueFactKey } from "./object-methods.js";
 import { rustAwaitValueFactKey } from "./await-values.js";
+import { rustDeferredProducerEffectsFactKey } from "./deferred-producer-effects.js";
 import { rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 import type {
   RustIterationSelection,
@@ -143,6 +144,10 @@ export function createRustPlanBuilder(
           rustFoundationForFinalizedConversion(fact.awaitedConversion, definitions));
         if (fact.errorCarrier !== undefined) minimumFoundation = maximumRustFoundation(minimumFoundation,
           rustFoundationForCarrier(fact.errorCarrier));
+      } else if (key === rustDeferredProducerEffectsFactKey) {
+        const fact = get(subject, rustDeferredProducerEffectsFactKey)!;
+        if (fact.kind === "futures") for (const error of fact.errors)
+          minimumFoundation = maximumRustFoundation(minimumFoundation, rustFoundationForCarrier(error));
       } else if (key === rustAwaitValueFactKey) {
         for (const leaf of rustAwaitSelectionLeaves(get(subject, rustAwaitValueFactKey)!.selection)) {
           if (leaf.completion.kind === "value") minimumFoundation = maximumRustFoundation(minimumFoundation,

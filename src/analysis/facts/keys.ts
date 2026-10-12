@@ -31,6 +31,8 @@ export { rustErrorEffectsFactKey } from "./error-effects.js";
 export type { RustErrorEffectsFact, RustNativeErrorEffect } from "./error-effects.js";
 export { rustSourceErrorEffectsFactKey } from "./source-error-effects.js";
 export type { RustSourceErrorEffectsFact, RustSourceErrorEffectEdge } from "./source-error-effects.js";
+export { rustDeferredProducerEffectsFactKey } from "./deferred-producer-effects.js";
+export type { RustDeferredProducerEffectsFact } from "./deferred-producer-effects.js";
 export {
   rustFallibleFactKey,
   rustFutureValueFactKey,

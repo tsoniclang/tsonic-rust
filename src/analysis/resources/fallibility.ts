@@ -411,7 +411,9 @@ function collectFallibilityFacts(
           }
           budget.expansion(carrierWork, replacementWork);
         }
-        const edge = selectSourceErrors(invocation, declaration, kind, source);
+        const bindings = source.nativeErrors.length === 0 ? undefined : selectSourceErrors.bindingsFor(
+          invocation, declaration, source.nativeErrors.map(error => error.errorType));
+        const edge = selectSourceErrors.edgeFor(declaration, kind, source, bindings);
         if (edge === undefined) {
           appendRustDiagnostic(walk, "RUST_NATIVE_ERROR_REBINDING_MISSING",
             "Selected source-call errors require exact native input and generic channel substitutions.", node,
