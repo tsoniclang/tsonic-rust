@@ -1,13 +1,16 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
-import type { SourceStorageQueries } from "@tsonic/target-api/analysis";
+import type { SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustJsArrayLikeElementTargetType } from "../../../target-model/types/carriers/js.js";
 import { rustFixedArrayCarrierValue } from "../../../target-model/types/carriers/native.js";
+import type { RustTargetTypeResolutionOptions } from "../resolution/model.js";
 
 export interface RustValueDomainCarrierHost {
   readonly sourceStorage?: SourceStorageQueries;
+  readonly sourceTypes: Pick<RustTargetTypeResolutionOptions["sourceTypes"], "structuralFieldProjectionForDeclaration">;
+  readonly projectFieldProjection: RustTargetTypeResolutionOptions["projectFieldProjection"];
   readonly types: {
     resolveNode(node: Node, sourceFile: SourceFile): TargetTypeRef | undefined;
   };
@@ -41,14 +44,44 @@ export function rustValueDomainHasTargetType(
     }
     if (origin.subject.kind !== "value") return false;
     let carrier = host.types.resolveNode(origin.subject.node, origin.sourceFile);
-    for (const component of origin.subject.projection) {
+    for (const [index, component] of origin.subject.projection.entries()) {
       carrier = component.kind === "array-element"
         ? carrier?.kind === "array" || carrier?.kind === "slice" ? carrier.element
           : rustFixedArrayCarrierValue(carrier)?.element ?? rustJsArrayLikeElementTargetType(carrier)
-        : carrier?.kind === "tuple" ? carrier.elements[component.index] : undefined;
+        : component.kind === "tuple-element"
+          ? carrier?.kind === "tuple" ? carrier.elements[component.index] : undefined
+          : carrier === undefined ? undefined
+            : projectedMemberCarrier(host, storage, origin.subject, index, component.declaration, carrier);
     }
     if (carrier === undefined || !rustTargetTypeRefEquals(carrier, expected)) return false;
     present = true;
   }
   return present && storage.failureReason() === undefined;
+}
+
+function projectedMemberCarrier(
+  host: RustValueDomainCarrierHost,
+  storage: SourceStorageQueries,
+  subject: SourceStorageSubject,
+  index: number,
+  declaration: Node,
+  owner: TargetTypeRef,
+): TargetTypeRef | undefined {
+  const structural = host.sourceTypes.structuralFieldProjectionForDeclaration(declaration, owner);
+  if (structural !== undefined) return structural.field.method === true || structural.field.accessor !== undefined
+    ? undefined : structural.field.resultCarrier;
+  const prefix = storage.subject(subject.node, subject.kind, subject.projection.slice(0, index));
+  if (prefix.kind !== "resolved") return undefined;
+  const selected = storage.typeFor(prefix.subject);
+  if (selected.kind !== "resolved") return undefined;
+  const queries = host.semantics(selected.sourceFile);
+  const ownerType = queries.types.nonNullableType(selected.type);
+  if (ownerType === undefined) return undefined;
+  const correspondence = queries.types.structuralMembers(ownerType, ownerType);
+  if (correspondence.kind !== "available") return undefined;
+  const members = correspondence.members.filter(member => member.kind === "present" &&
+    member.source.read === "property" && member.source.declarations.includes(declaration));
+  const member = members.length === 1 && members[0]?.kind === "present" ? members[0].source : undefined;
+  if (member === undefined) return undefined;
+  return host.projectFieldProjection(member.property, owner, ownerType)?.output;
 }

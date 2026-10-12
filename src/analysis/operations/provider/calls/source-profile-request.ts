@@ -84,6 +84,8 @@ export function createRustJsCallRequest(
       const argument = selectedCallArgumentNodes(request)[index];
       return argument !== undefined && rustValueDomainHasTargetType({
         sourceStorage: context.sourceStorage,
+        sourceTypes: options.sourceTypes,
+        projectFieldProjection: options.projectFieldProjection,
         semantics: sourceFile => context.semantics(sourceFile),
         types: { resolveNode: (node, sourceFile) => resolveRustTargetTypeRef(node, {
           ...context, currentSourceFile: sourceFile, currentSemantics: context.semantics(sourceFile),
