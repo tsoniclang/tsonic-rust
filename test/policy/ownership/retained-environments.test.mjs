@@ -4,9 +4,10 @@ import { createTargetSourceProgram, sourceProjectFiles } from "@tsonic/target-ap
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { createRustSession, checkRustSession } from "../../helpers/rust-session.mjs";
 import { createRustRetainedEnvironmentQueries } from "../../../dist/policy/ownership/retained-environment-queries.js";
-import { closeRustRetainedParameter, rustRetainedEnvironment } from "../../../dist/policy/ownership/retained-environments.js";
+import { closeRustRetainedParameter, rustHasOpenOwnedStorage, rustRetainedEnvironment } from "../../../dist/policy/ownership/retained-environments.js";
 import { emptyRustLifetimeIndex } from "../../../dist/target-model/lifetimes/index.js";
 import { rustCallableProtocol, rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
+import { rustStructuralObjectTargetType, rustStructuralObjectCarrierValue } from "../../../dist/target-model/types/carriers/source-types.js";
 
 function fixture(text, configure = input => input, maximumSteps) {
   const checked = checkRustSession(createRustSession({ surfaces: ["js"], files: { "index.ts": text } }));
@@ -165,4 +166,43 @@ test("generic inputs and explicit callable contracts do not demand generated env
     assert.equal(closeRustRetainedParameter(parameter, carrier, policy) === carrier, true, String(index));
   }
   assert.equal(queries, 0);
+});
+
+test("native factory signatures retain their generic types without demanding a closure environment", () => {
+  const context = fixture("export function identity<T>(value: T): T { return value; }");
+  const owner = context.declarations.get("identity");
+  const parameter = context.source.ast.parameters(owner)[0];
+  const generic = { kind: "type-parameter", identity: "authored-T", name: "T" };
+  const callback = rustCallableTargetType([generic], generic);
+  const factory = rustStructuralObjectTargetType("/src/index.ts", [{ sourceName: "accepts", type: callback,
+    presence: "required", readonly: true, method: true }], "reference", callback);
+  const policy = { ...context, ast: context.source.ast, retainedEnvironments: {
+    ...context.queries, environmentFor() { assert.fail("native dispatch signatures do not request return-storage evidence"); },
+  } };
+  assert.equal(rustHasOpenOwnedStorage(factory), false);
+  assert.equal(closeRustRetainedParameter(parameter, factory, policy) === factory, true);
+  assert.equal(rustRetainedEnvironment(owner, [factory], policy).kind, "none");
+});
+
+test("a real retained callback field closes without changing same-carrier native dispatch signatures", () => {
+  const context = fixture("export function retain(callback: () => number): () => number { return callback; }");
+  const owner = context.declarations.get("retain");
+  const parameter = context.source.ast.parameters(owner)[0];
+  const callback = rustCallableTargetType([], { kind: "source-primitive", name: "float64" });
+  const factory = rustStructuralObjectTargetType("/src/index.ts", [
+    { sourceName: "invoke", type: callback, presence: "required", readonly: true, method: true },
+    { sourceName: "stored", type: callback, presence: "required", readonly: true },
+  ], "reference", callback);
+  const policy = { ...context, ast: context.source.ast, retainedEnvironments: context.queries };
+  const environment = context.queries.environmentFor(owner);
+  const closed = closeRustRetainedParameter(parameter, factory, policy);
+  const native = rustStructuralObjectCarrierValue(closed);
+  assert.equal(rustHasOpenOwnedStorage(factory), true);
+  assert.equal(native.construction === callback, true);
+  assert.equal(native.fields[0].type === callback, true);
+  assert.equal(rustCallableProtocol(native.fields[1].type).lifetime === environment.environment.lifetime, true);
+  const unavailable = { ...policy, retainedEnvironments: {
+    ...context.queries, environmentFor: () => ({ kind: "unresolved", reason: "required owner binding missing" }),
+  } };
+  assert.equal(closeRustRetainedParameter(parameter, factory, unavailable) === undefined, true);
 });

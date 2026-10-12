@@ -5,6 +5,7 @@ import { mapRustTargetTypes } from "../../target-model/types/carriers/substituti
 import { selectRustSuspendedStorageLifetime, selectRustCallableStorageLifetime } from "../ownership/suspended-storage.js";
 import type { RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { rustCallableProtocol, rustCallableTargetType } from "../../target-model/types/carriers/callables.js";
+import { rustOwnedStorageChild } from "./owned-storage.js";
 
 export function closeRustSuspendedStorage(
   result: TargetTypeRef, parameters: readonly (TargetTypeRef | undefined)[], contract: RustSourceGenericContract | undefined,
@@ -31,6 +32,6 @@ export function closeRustSuspendedStorage(
       return carrier;
     }
     return rustJsPromiseTargetTypeWithLifetime(output, lifetime, error.type);
-  });
+  }, rustOwnedStorageChild);
   return unresolved ? undefined : selected;
 }
