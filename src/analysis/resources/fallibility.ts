@@ -1,8 +1,4 @@
 import {
-  CatchClause_Block,
-  TryStatement_CatchClause,
-  TryStatement_FinallyBlock,
-  TryStatement_TryBlock,
   KindCallExpression,
   KindElementAccessExpression,
   KindFunctionDeclaration,
@@ -12,13 +8,9 @@ import {
   KindParenthesizedExpression,
   KindPropertyAccessExpression,
   KindVariableDeclaration,
-  KindVariableStatement,
   Node_Expression,
   Node_Initializer,
-  VariableDeclarationList_Declarations,
-  VariableStatement_DeclarationList,
   asSourceNode,
-  forEachSourceImmediateEvaluationChild,
 } from "@tsonic/target-api/source";
 import {
   rustAsyncFunctionFactKey,
@@ -26,7 +18,6 @@ import {
   rustContextualValueConversionFactKey,
   rustFallibleFactKey,
   rustGeneratorFactKey,
-  rustModuleBindingFactKey,
   rustMutatedBindingFactKey,
   rustObjectLiteralMethodAdapterFactKey,
   rustSelfModeFactKey,
@@ -39,14 +30,11 @@ import { appendRustDiagnostic, rustOperationContext } from "../program/walk.js";
 import { rustStructuralFieldIsFallible } from "../objects/structural-shape-plan.js";
 import { finalizeRustPreparedCheckedCall } from "../operations/provider/index.js";
 import { rustCallbackProtocol } from "../operations/provider/callbacks.js";
-import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { recordSelectedOperationInputs } from "../operations/inputs.js";
-import { requireDenseSourceNodes } from "../expressions/records.js";
 import { rustAwaitCarrier, rustCallableProtocol } from "../../target-model/types/index.js";
 import { rustSourceCallCallableStorageCarrier } from "../facts/target-operation.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustGenericCallableEffectsFactKey } from "../facts/generic-callable-effects.js";
-import { rustInheritedProjectConstructor } from "../project-types/type-policy.js";
 import { rustOperationAbiAwaitIsFallible, rustTargetOperationIsFallible } from "../facts/target-operation.js";
 import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js";
 import { rustSelectedCallKey, rustSelectedOperationKey } from "../../target-model/facts/selections.js";
@@ -60,6 +48,14 @@ import type { RustPreparedDeferredCheckedCall } from "../operations/provider/ind
 import type { RustTargetOperationFact } from "../facts/keys.js";
 import { rustProjectCallableAdaptersKey } from "../facts/project-callable-adapters.js";
 import { rustFutureValuesForSourceStorage } from "../facts/future-values.js";
+import { rustFutureValueForStoredBranch } from "./future-storage.js";
+import { rustAwaitSelection, rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
+import { collectRustErrorRegionEffects } from "./error-regions.js";
+import { collectRustErrorDeclarations } from "./error-declarations.js";
+import { mergeRustErrorEffects, rustErrorEffectsAreFallible, rustErrorEffectsEqual, rustErrorEffectsFactKey,
+  rustLocalErrorEffects, rustPureErrorEffects, type RustErrorEffectsFact } from "../facts/error-effects.js";
+import { createRustSourceErrorEffectSelection } from "./source-error-effects.js";
+import { rustSourceErrorEffectsFactKey, type RustSourceErrorEffectEdge } from "../facts/source-error-effects.js";
 
 interface RustFutureOperationOrigin {
   readonly expression: Node;
@@ -113,176 +109,24 @@ function resolveFutureOperationOrigin(
 
 export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: readonly SourceFile[]): void {
   const { ast } = walk.context;
-  const declarations: Node[] = [];
-  const declarationSet = new Set<Node>();
-  const regionsByDeclaration = new Map<Node, Set<Node>>();
-  const relatedDeclarations = new Map<Node, Set<Node>>();
-  const projectImplementations = new Map<Node, Set<Node>>();
-  const dependenciesByDeclaration = new Map<Node, Set<Node>>();
-  const addDeclaration = (declaration: Node): void => {
-    if (!declarationSet.has(declaration)) {
-      declarationSet.add(declaration);
-      declarations.push(declaration);
-    }
-  };
-  const addRegion = (declaration: Node, region: Node | undefined): void => {
-    addDeclaration(declaration);
-    if (region === undefined) {
-      return;
-    }
-    const regions = regionsByDeclaration.get(declaration) ?? new Set<Node>();
-    regions.add(region);
-    regionsByDeclaration.set(declaration, regions);
-  };
-  const relateDeclarations = (left: Node, right: Node): void => {
-    addDeclaration(left);
-    addDeclaration(right);
-    if (left === right) {
-      return;
-    }
-    const leftRelations = relatedDeclarations.get(left) ?? new Set<Node>();
-    const rightRelations = relatedDeclarations.get(right) ?? new Set<Node>();
-    leftRelations.add(right);
-    rightRelations.add(left);
-    relatedDeclarations.set(left, leftRelations);
-    relatedDeclarations.set(right, rightRelations);
-  };
-  const addDeclarationDependency = (declaration: Node, dependency: Node): void => {
-    addDeclaration(declaration);
-    addDeclaration(dependency);
-    const dependencies = dependenciesByDeclaration.get(declaration) ?? new Set<Node>();
-    dependencies.add(dependency);
-    dependenciesByDeclaration.set(declaration, dependencies);
-  };
-  const registerCallableDeclaration = (declaration: Node): void => {
-    addRegion(declaration, ast.body(declaration));
-    const implementation = walk.context.source.navigation.callableImplementation(declaration);
-    if (implementation.kind !== "resolved") {
-      return;
-    }
-    const implementationDeclaration = implementation.implementation.declaration;
-    addRegion(implementationDeclaration, ast.body(implementationDeclaration));
-    relateDeclarations(declaration, implementationDeclaration);
-  };
-  const callableMemberKind = (node: Node): boolean => {
-    const kind = ast.kindName(node);
-    return kind === "KindMethodDeclaration" || kind === "KindMethodSignature" ||
-      kind === "KindGetAccessor" || kind === "KindSetAccessor";
-  };
-  for (const sourceFile of projectSourceFiles) {
-    for (const statement of ast.statements(sourceFile) as readonly Node[]) {
-      const kind = ast.kindName(statement);
-      if (kind === KindVariableStatement) {
-        const declarations = VariableDeclarationList_Declarations(
-          ast,
-          VariableStatement_DeclarationList(ast, statement),
-        );
-        if (declarations === undefined || !isDenseDataArray(declarations)) {
-          return;
-        }
-        for (const declaration of declarations) {
-          const binding = declaration === undefined
-            ? undefined
-            : walk.context.facts.get(declaration, rustModuleBindingFactKey) ??
-              walk.context.facts.resolve(declaration, rustModuleBindingFactKey);
-          if (binding?.storage === "native-callable") {
-            addRegion(
-              binding.callableDeclaration,
-              ast.body(binding.callableDeclaration),
-            );
-          }
-        }
-      }
-    }
+  const inventory = collectRustErrorDeclarations(walk, projectSourceFiles);
+  if (inventory === undefined) return;
+  const { declarations, regionsByDeclaration, relatedDeclarations, projectImplementations,
+    dependenciesByDeclaration, registerCallableDeclaration } = inventory;
+  const effectsByDeclaration = new Map<Node, RustErrorEffectsFact>();
+  const effectsByRegion = new Map<Node, RustErrorEffectsFact>();
+  const effectsByExpression = new Map<Node, RustErrorEffectsFact>();
+  const sourceErrorEdges = new Map<Node, RustSourceErrorEffectEdge[]>();
+  const selectSourceErrors = createRustSourceErrorEffectSelection(walk);
+  const declarationEffects = (declaration: Node): RustErrorEffectsFact => effectsByDeclaration.get(declaration) ?? rustPureErrorEffects;
+  const isFallible = (declaration: Node): boolean => rustErrorEffectsAreFallible(declarationEffects(declaration));
+  for (const nativeInput of walk.context.callableValues.native.calls) {
+    walk.context.facts.set(nativeInput.node, rustSourceCallEffectsFactKey, {
+      invocation: "fallible", awaiting: nativeInput.completion === undefined ? "not-applicable" : "fallible",
+      nativeInput: { invocationError: nativeInput.invocationError, invocationErrorSource: nativeInput.invocationErrorSource,
+        awaitErrors: nativeInput.awaitErrors, awaitErrorSources: nativeInput.awaitErrorSources },
+    }, [{ message: "rust exact abstract native callable input effects" }]);
   }
-  for (const sourceFile of projectSourceFiles) {
-    const visitCallableDeclarations = (node: Node): void => {
-      const operation = walk.context.facts.get(node, rustTargetOperationFactKey) ??
-        walk.context.facts.resolve(node, rustTargetOperationFactKey);
-      if (ast.kindName(node) === KindFunctionDeclaration || operation?.kind === "closure") {
-        registerCallableDeclaration(node);
-      }
-      if (operation?.kind === "record-literal") {
-        for (const contribution of operation.contributions) {
-          if (contribution.kind !== "method") {
-            continue;
-          }
-          addRegion(contribution.expression, ast.body(contribution.expression));
-          for (const declaration of contribution.contractDeclarations) {
-            addDeclarationDependency(declaration, contribution.expression);
-          }
-        }
-      }
-      ast.forEachChild(node, (child) => {
-        if (child !== undefined) {
-          visitCallableDeclarations(child);
-        }
-      });
-    };
-    visitCallableDeclarations(sourceFile);
-  }
-  for (const definition of walk.context.projectTypes.definitions) {
-    const members = requireDenseSourceNodes(
-      walk,
-      ast.members(definition.declaration),
-      "Project type declaration contains an undefined or non-data member slot.",
-    );
-    if (members === undefined) {
-      return;
-    }
-    if (definition.kind === "class") {
-      const constructors = members.filter(member => ast.kindName(member) === "KindConstructor");
-      const constructorSubject = constructors.find(member => ast.body(member) !== undefined) ?? definition.declaration;
-      addDeclaration(constructorSubject);
-      for (const constructor of constructors) {
-        registerCallableDeclaration(constructor);
-        relateDeclarations(constructorSubject, constructor);
-      }
-      for (const member of members) {
-        if (ast.kindName(member) === "KindPropertyDeclaration" && !ast.hasModifierKind(member, "static")) {
-          addRegion(constructorSubject, Node_Initializer(ast, member));
-        } else if (callableMemberKind(member)) {
-          registerCallableDeclaration(member);
-        }
-      }
-    }
-    for (const member of members) {
-      if (!callableMemberKind(member) || ast.hasModifierKind(member, "static")) {
-        continue;
-      }
-      registerCallableDeclaration(member);
-      for (const concrete of walk.context.projectTypes.concreteClassesFor(definition)) {
-        const implementation = walk.context.projectTypes.memberImplementation(concrete, member);
-        if (implementation.kind !== "resolved") {
-          continue;
-        }
-        const implementationDeclaration = implementation.implementation.declaration;
-        addRegion(implementationDeclaration, ast.body(implementationDeclaration));
-        relateDeclarations(member, implementationDeclaration);
-        if (ast.body(member) === undefined) {
-          const implementations = projectImplementations.get(member) ?? new Set<Node>();
-          implementations.add(implementationDeclaration);
-          projectImplementations.set(member, implementations);
-        }
-      }
-    }
-    if (definition.kind === "class") {
-      for (const signature of walk.context.projectTypes.constructorsForDefinition(definition)) {
-        const inherited = rustInheritedProjectConstructor(
-          walk.context.projectTypes,
-          definition,
-          signature,
-        );
-        if (inherited !== undefined) {
-          addDeclarationDependency(
-            definition.declaration,
-            inherited.constructor.declaration ?? inherited.base.declaration,
-          );
-        }
-      }
-    }
-  }
-  const fallible = new Set<Node>();
   const genericCallables = walk.context.callableValues.generic;
   for (const definition of genericCallables.definitions) {
     for (const implementation of definition.implementations) registerCallableDeclaration(implementation.declaration);
@@ -293,16 +137,16 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
   };
   const genericInvocationIsFallible = (declaration: Node): boolean => {
     const implementations = projectImplementations.get(declaration) ?? [declaration];
-    return [...implementations].some(implementation => fallible.has(implementation) &&
+    return [...implementations].some(implementation => isFallible(implementation) &&
       walk.context.facts.get(implementation, rustAsyncFunctionFactKey) === undefined &&
       walk.context.facts.get(implementation, rustGeneratorFactKey) === undefined);
   };
   const genericAwaitIsFallible = (declaration: Node): boolean =>
     walk.context.facts.get(declaration, rustSourceCallableReturnFactKey)?.implementationCompletion === undefined &&
-      (walk.context.facts.get(declaration, rustAsyncFunctionFactKey) === undefined || fallible.has(declaration));
+      (walk.context.facts.get(declaration, rustAsyncFunctionFactKey) === undefined || isFallible(declaration));
   for (const usage of walk.context.projectMethodProperties.usages) {
     if (usage.writable) {
-      fallible.add(usage.declaration);
+      effectsByDeclaration.set(usage.declaration, rustLocalErrorEffects);
     }
   }
   for (const expression of walk.objectLiteralMethodExpressions) {
@@ -310,13 +154,13 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
       walk.context.facts.resolve(expression, rustObjectLiteralMethodAdapterFactKey);
     for (const dispatch of adapters?.dispatches ?? []) {
       if (dispatch.adapterFallible) {
-        fallible.add(dispatch.contractMethod);
+        effectsByDeclaration.set(dispatch.contractMethod, rustLocalErrorEffects);
       }
     }
   }
   for (const definition of walk.context.projectTypes.definitions) {
     for (const adapter of walk.context.facts.get(definition.declaration, rustProjectCallableAdaptersKey) ?? []) {
-      if (adapter.adapterFallible) fallible.add(adapter.contract);
+      if (adapter.adapterFallible) effectsByDeclaration.set(adapter.contract, rustLocalErrorEffects);
     }
   }
   for (const expression of walk.objectLiteralMethodSpreadExpressions) {
@@ -330,7 +174,7 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
         continue;
       }
       for (const method of contribution.methods) {
-        fallible.add(method.contractDeclaration);
+        effectsByDeclaration.set(method.contractDeclaration, rustLocalErrorEffects);
       }
     }
   }
@@ -371,16 +215,12 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
               bindingProjection.sourceCarrier,
               field.sourceStorageIndex,
             )));
-    return rustTargetOperationIsFallible(
+    return walk.context.callableValues.native.callFor(node) === undefined && rustTargetOperationIsFallible(
       operation,
       walk.context.structuralShapes,
       walk.context.projectFieldDispatch,
       walk.context.frozenDataWrites, walk.context.typeDefinitions,
-    ) || walk.context.callableValues.native.callFor(node) !== undefined ||
-      (operation?.kind === "source-call" && operation.target.form === "union-method" &&
-        operation.target.variants.some(variant => genericInvocationIsFallible(variant.declaration))) ||
-      (operation?.kind === "source-call" &&
-        genericCallImplementations(operation)?.some(implementation => genericInvocationIsFallible(implementation.declaration)) === true) ||
+    ) ||
       bindingProjectionIsFallible ||
       rustContextualValueConversionIsFallible(contextualConversion?.conversion, walk.context.typeDefinitions);
   };
@@ -421,6 +261,7 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
   interface CallbackValueAnalysis {
     readonly fallible: boolean;
     readonly implementationFallible: boolean;
+    readonly implementationEffects: RustErrorEffectsFact;
     readonly subjects: readonly Node[];
   }
   const callbackExpressionIsFallible = (
@@ -440,10 +281,13 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
       const invocationFallible = rustCallbackProtocol(carrier)?.fallible === true;
       const body = ast.body(value);
       if (body !== undefined) {
-        const implementationFallible = expressionRegionIsFallible(body);
+        const implementationEffects = expressionRegionEffects(body);
+        if (implementationEffects === undefined) return undefined;
+        const implementationFallible = rustErrorEffectsAreFallible(implementationEffects);
         return {
           fallible: invocationFallible || implementationFallible,
           implementationFallible,
+          implementationEffects,
           subjects: [value],
         };
       }
@@ -451,15 +295,18 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
       if (declaration === undefined) {
         return undefined;
       }
-      if (fallible.has(declaration)) {
-        return { fallible: true, implementationFallible: true, subjects: [value, declaration] };
+      if (isFallible(declaration)) {
+        return { fallible: true, implementationFallible: true, implementationEffects: declarationEffects(declaration), subjects: [value, declaration] };
       }
       const declarationBody = ast.body(declaration);
       if (declarationBody !== undefined) {
-        const implementationFallible = expressionRegionIsFallible(declarationBody);
+        const implementationEffects = expressionRegionEffects(declarationBody);
+        if (implementationEffects === undefined) return undefined;
+        const implementationFallible = rustErrorEffectsAreFallible(implementationEffects);
         return {
           fallible: invocationFallible || implementationFallible,
           implementationFallible,
+          implementationEffects,
           subjects: [value, declaration],
         };
       }
@@ -469,6 +316,7 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
         : {
             fallible: invocationFallible || initialized.fallible,
             implementationFallible: initialized.implementationFallible,
+            implementationEffects: initialized.implementationEffects,
             subjects: [value, declaration, ...initialized.subjects],
           };
     } finally {
@@ -481,26 +329,46 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
       pending.prepared.template.isFallible || callbackExpressionIsFallible(pending)
     );
   };
-  function expressionRegionIsFallible(root: Node): boolean {
-    let found = false;
-    const visit = (node: Node, insideTry: boolean): void => {
-      if (found) {
-        return;
-      }
+  function expressionRegionEffects(root: Node): RustErrorEffectsFact | undefined {
+    const effects = collectRustErrorRegionEffects(root, ast, directEffects, (node, effects) => {
       const kind = ast.kindName(node);
-      if (kind === "KindThrowStatement" && !insideTry) {
-        found = true;
-        return;
-      }
-      if (kind === "KindRegularExpressionLiteral" && !insideTry) {
-        // Constant RegExp construction is fallible at runtime.
-        found = true;
-        return;
-      }
+      if (kind !== KindCallExpression && kind !== KindNewExpression && kind !== "KindAwaitExpression")
+        effectsByRegion.set(node, effects);
+    });
+    if (effects === undefined) appendRustDiagnostic(walk, "RUST_ERROR_REGION_NOT_EXACT",
+      "An evaluation region has inconsistent or unresolved exact error channels.", root,
+      ["target.capability=rust.native-error.exact-effects"]);
+    return effects;
+  }
+  function directEffects(node: Node): RustErrorEffectsFact | undefined {
+      const kind = ast.kindName(node);
+      const selected: RustErrorEffectsFact[] = [];
+      const appendDeclaration = (declaration: Node, invocation = node,
+        kind: RustSourceErrorEffectEdge["kind"] = "invoke"): boolean => {
+        const edge = selectSourceErrors(invocation, declaration, kind, declarationEffects(declaration));
+        if (edge === undefined) {
+          appendRustDiagnostic(walk, "RUST_NATIVE_ERROR_REBINDING_MISSING",
+            "Selected source-call errors require exact native input and generic channel substitutions.", node,
+            ["target.capability=rust.native-error.source-binding"]);
+          return false;
+        }
+        const edges = sourceErrorEdges.get(invocation) ?? [];
+        const index = edges.findIndex(candidate => candidate.declaration === declaration && candidate.kind === kind);
+        if (index < 0) edges.push(edge);
+        else edges[index] = edge;
+        sourceErrorEdges.set(invocation, edges);
+        selected.push(edge.effects);
+        return true;
+      };
+      if (kind === "KindThrowStatement" || kind === "KindRegularExpressionLiteral" ||
+        operationIsFallible(node) || preparedCallbackOperationIsFallible(node)) selected.push(rustLocalErrorEffects);
+      const nativeInput = walk.context.callableValues.native.callFor(node);
+      if (nativeInput !== undefined) selected.push({ localErrors: false,
+        nativeErrors: [{ identity: nativeInput.invocationErrorSource, errorType: nativeInput.invocationError }] });
       if (kind === KindVariableDeclaration &&
         (ast.variableDeclarationKind(node) === "using" ||
           ast.variableDeclarationKind(node) === "await using")) {
-        const selected = selectRustResourceManagement(
+        const disposal = selectRustResourceManagement(
           node,
           rustOperationContext(walk, node),
           walk.operationOptions,
@@ -512,41 +380,34 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
             return {
               selfMode,
               async: walk.context.facts.get(declaration, rustAsyncFunctionFactKey) !== undefined,
-              fallible: fallible.has(declaration),
+              fallible: isFallible(declaration),
             };
           },
         );
-        if (!insideTry && selected.kind === "selected" && selected.fact.disposal.fallible) {
-          found = true;
-          return;
+        if (disposal.kind === "selected" && disposal.fact.disposal.fallible) {
+          if (disposal.projectDisposerDeclarations.length === 0) selected.push(rustLocalErrorEffects);
+          for (const declaration of disposal.projectDisposerDeclarations) {
+            if (!appendDeclaration(declaration)) return undefined;
+          }
         }
       }
-      if (kind === "KindTryStatement") {
-        const tryBlock = TryStatement_TryBlock(walk.context.ast, node);
-        const catchBlock = CatchClause_Block(walk.context.ast, TryStatement_CatchClause(walk.context.ast, node));
-        const finallyBlock = TryStatement_FinallyBlock(walk.context.ast, node);
-        if (tryBlock !== undefined) {
-          visit(tryBlock, catchBlock === undefined ? insideTry : true);
-        }
-        if (catchBlock !== undefined) {
-          visit(catchBlock, insideTry);
-        }
-        if (finallyBlock !== undefined) {
-          visit(finallyBlock, insideTry);
-        }
-        return;
+      for (const declaration of selectedAccessorDeclarations(node)) {
+        if (!appendDeclaration(declaration)) return undefined;
       }
-      if (!insideTry && (operationIsFallible(node) || preparedCallbackOperationIsFallible(node))) {
-        found = true;
-        return;
-      }
-      if (!insideTry && selectedAccessorDeclarations(node).some((declaration) =>
-        fallible.has(declaration))) {
-        found = true;
-        return;
-      }
-      if (!insideTry && kind === "KindAwaitExpression") {
+      if (kind === "KindAwaitExpression") {
         const operand = Node_Expression(walk.context.ast, node);
+        const topology = operand === undefined ? undefined
+          : rustAwaitSelection(walk.context.facts.getRuntimeCarrierFact(operand)?.carrier, walk.context.typeDefinitions);
+        let exactNative = false;
+        for (const branch of topology === undefined ? [] : rustAwaitSelectionLeaves(topology)) {
+          if (operand === undefined || branch.future === undefined) continue;
+          const future = rustFutureValueForStoredBranch(walk, operand, branch.carrier);
+          if (future?.errorBoundary === "source-native") {
+            if (future.errorSource === undefined || future.errorCarrier === undefined) return undefined;
+            selected.push({ localErrors: false, nativeErrors: [{ identity: future.errorSource, errorType: future.errorCarrier }] });
+            exactNative = true;
+          } else if (future?.awaiting === "fallible") selected.push(rustLocalErrorEffects);
+        }
         const origin = operand === undefined ? undefined : resolveFutureOperationOrigin(walk, operand);
         const operandFact = origin?.operation;
         const selectedDeclaration = origin === undefined
@@ -554,52 +415,59 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
           : selectedProjectDeclaration(origin.expression);
         const selectedAsync = selectedDeclaration !== undefined &&
           walk.context.facts.get(selectedDeclaration, rustAsyncFunctionFactKey) !== undefined;
-        if ((origin === undefined && operand !== undefined &&
+        if (!exactNative && ((origin === undefined && operand !== undefined &&
             rustFutureValuesForSourceStorage(walk.context.facts.getRuntimeCarrierFact(operand)?.carrier,
               walk.context.typeDefinitions)?.some(future => future.awaiting === "fallible") === true) ||
-          (operandFact?.kind === "provider-operation" && rustOperationAbiAwaitIsFallible(operandFact.abi)) ||
-          (operandFact?.kind === "source-call" && operandFact.target.form === "union-method" &&
-            rustAwaitCarrier(operandFact.resultCarrier) !== undefined &&
-            operandFact.target.variants.some(variant => fallible.has(variant.declaration))) ||
-          (operandFact?.kind === "source-call" && rustAwaitCarrier(operandFact.resultCarrier) !== undefined &&
-            genericCallImplementations(operandFact)?.some(implementation => genericAwaitIsFallible(implementation.declaration)) === true) ||
-          (operandFact?.kind === "source-call" && selectedDeclaration !== undefined &&
-            rustAwaitCarrier(operandFact.resultCarrier) !== undefined &&
-            (!selectedAsync || fallible.has(selectedDeclaration)))) {
-          found = true;
-          return;
+          (operandFact?.kind === "provider-operation" && rustOperationAbiAwaitIsFallible(operandFact.abi)))) selected.push(rustLocalErrorEffects);
+        if (!exactNative && operandFact?.kind === "source-call" && rustAwaitCarrier(operandFact.resultCarrier) !== undefined) {
+          const declarations = operandFact.target.form === "union-method" ? operandFact.target.variants.map(variant => variant.declaration)
+            : genericCallImplementations(operandFact)?.map(implementation => implementation.declaration) ??
+              (selectedDeclaration === undefined ? [] : [selectedDeclaration]);
+          for (const declaration of declarations) {
+            if (!appendDeclaration(declaration, origin!.expression, "await")) return undefined;
+          }
+          if (declarations.length === 1 && selectedDeclaration !== undefined && !selectedAsync &&
+            !isFallible(selectedDeclaration)) selected.push(rustLocalErrorEffects);
         }
       }
-      if (!insideTry && (kind === KindCallExpression || kind === KindNewExpression)) {
+      if (nativeInput === undefined && (kind === KindCallExpression || kind === KindNewExpression)) {
+        const operation = walk.context.facts.get(node, rustTargetOperationFactKey);
         const target = selectedProjectDeclaration(node);
-        if (target !== undefined && fallible.has(target) &&
-          walk.context.facts.get(target, rustAsyncFunctionFactKey) === undefined) {
-          found = true;
-          return;
+        const declarations = operation?.kind === "source-call" && operation.target.form === "union-method"
+          ? operation.target.variants.map(variant => variant.declaration)
+          : genericCallImplementations(operation)?.map(implementation => implementation.declaration) ?? (target === undefined ? [] : [target]);
+        for (const declaration of declarations) {
+          if (walk.context.facts.get(declaration, rustAsyncFunctionFactKey) === undefined &&
+            walk.context.facts.get(declaration, rustGeneratorFactKey) === undefined && !appendDeclaration(declaration)) return undefined;
         }
       }
-      forEachSourceImmediateEvaluationChild(ast, node, child => visit(child, insideTry));
-    };
-    visit(root, false);
-    return found;
+      const effects = mergeRustErrorEffects(selected);
+      if (effects === undefined) appendRustDiagnostic(walk, "RUST_ERROR_EFFECT_CONFLICT",
+        "One native error identity has inconsistent exact carriers in this evaluation region.", node,
+        ["target.capability=rust.native-error.exact-effects"]);
+      else if (kind === KindCallExpression || kind === KindNewExpression || kind === "KindAwaitExpression")
+        effectsByExpression.set(node, effects);
+      return effects;
   }
-  const declarationIsFallible = (declaration: Node): boolean =>
-    [...(regionsByDeclaration.get(declaration) ?? [])].some(expressionRegionIsFallible) ||
-    [...(dependenciesByDeclaration.get(declaration) ?? [])].some((dependency) =>
-      fallible.has(dependency));
+  const declarationBodyEffects = (declaration: Node): RustErrorEffectsFact | undefined => {
+    const effects = [...(regionsByDeclaration.get(declaration) ?? [])].map(expressionRegionEffects);
+    if (effects.some(value => value === undefined)) return undefined;
+    const selected = mergeRustErrorEffects([declarationEffects(declaration), ...effects as RustErrorEffectsFact[],
+      ...[...(dependenciesByDeclaration.get(declaration) ?? []), ...(relatedDeclarations.get(declaration) ?? [])].map(declarationEffects)]);
+    if (selected === undefined) appendRustDiagnostic(walk, "RUST_ERROR_DECLARATION_NOT_EXACT",
+      "A declaration has incompatible exact error channels from its evaluated regions or selected dependencies.", declaration,
+      ["target.capability=rust.native-error.exact-effects"]);
+    return selected;
+  };
 
   let changed = true;
   while (changed) {
     changed = false;
     for (const declaration of declarations) {
-      if (!fallible.has(declaration) && declarationIsFallible(declaration)) {
-        fallible.add(declaration);
-        changed = true;
-      }
-    }
-    for (const [declaration, related] of relatedDeclarations) {
-      if (!fallible.has(declaration) && [...related].some((candidate) => fallible.has(candidate))) {
-        fallible.add(declaration);
+      const effects = declarationBodyEffects(declaration);
+      if (effects === undefined) return;
+      if (!rustErrorEffectsEqual(declarationEffects(declaration), effects)) {
+        effectsByDeclaration.set(declaration, effects);
         changed = true;
       }
     }
@@ -670,14 +538,19 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
     recordSelectedOperationInputs(walk, call, sourceFile, operation);
     if (callbackAnalysis.implementationFallible) {
       for (const subject of callbackAnalysis.subjects) {
+        walk.context.facts.set(subject, rustErrorEffectsFactKey, callbackAnalysis.implementationEffects,
+          [{ message: "rust exact callback implementation error effects" }]);
         walk.context.facts.set(subject, rustFallibleFactKey, { fallible: true }, [
           { message: "rust fallible callback ABI" },
         ]);
       }
     }
   }
-  for (const declaration of fallible) {
-    walk.context.facts.set(declaration, rustFallibleFactKey, { fallible: true }, [
+  for (const declaration of new Set([...declarations, ...effectsByDeclaration.keys()])) {
+    const effects = declarationEffects(declaration);
+    walk.context.facts.set(declaration, rustErrorEffectsFactKey, effects,
+      [{ message: "rust finalized exact declaration error effects" }]);
+    if (rustErrorEffectsAreFallible(effects)) walk.context.facts.set(declaration, rustFallibleFactKey, { fallible: true }, [
       { message: "rust fallible declaration" },
     ]);
   }
@@ -692,7 +565,13 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
         kind !== "KindExportDeclaration" &&
         kind !== "KindEndOfFile" ? [statement] : [];
     });
-    if (runtimeStatements.some(expressionRegionIsFallible)) {
+    const selectedEffects = runtimeStatements.map(expressionRegionEffects);
+    if (selectedEffects.some(effects => effects === undefined)) return;
+    const effects = mergeRustErrorEffects(selectedEffects as RustErrorEffectsFact[]);
+    if (effects === undefined) return;
+    walk.context.facts.set(sourceFile, rustErrorEffectsFactKey, effects,
+      [{ message: "rust finalized exact module initialization error effects" }]);
+    if (rustErrorEffectsAreFallible(effects)) {
       walk.context.facts.set(sourceFile, rustFallibleFactKey, { fallible: true }, [
         { message: "rust fallible project module initialization" },
       ]);
@@ -705,7 +584,8 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
         const operation = walk.context.facts.get(node, rustTargetOperationFactKey) ??
           walk.context.facts.resolve(node, rustTargetOperationFactKey);
         const body = ast.body(node);
-        if (operation?.kind === "closure" && body !== undefined && expressionRegionIsFallible(body)) {
+        const effects = body === undefined ? undefined : expressionRegionEffects(body);
+        if (operation?.kind === "closure" && effects !== undefined && rustErrorEffectsAreFallible(effects)) {
           if (rustGenericCallableValue(operation.resultCarrier) !== undefined || rustCallableProtocol(operation.resultCarrier) !== undefined ||
             operation.resultCarrier.kind === "closure" && operation.resultCarrier.fallible === true) {
             walk.context.facts.set(node, rustFallibleFactKey, { fallible: true }, [
@@ -738,10 +618,10 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
           walk.context.facts.set(node, rustSourceAccessorEffectsFactKey, {
             ...(operation.read === undefined || readDeclaration === undefined
               ? {}
-              : { read: fallible.has(readDeclaration) ? "fallible" : "infallible" }),
+              : { read: isFallible(readDeclaration) ? "fallible" : "infallible" }),
             ...(operation.write === undefined || writeDeclaration === undefined
               ? {}
-              : { write: fallible.has(writeDeclaration) ? "fallible" : "infallible" }),
+              : { write: isFallible(writeDeclaration) ? "fallible" : "infallible" }),
           }, [{ message: "rust finalized selected project accessor effects" }]);
         }
       } else if (kind === KindCallExpression || kind === KindNewExpression) {
@@ -765,8 +645,8 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
               "A generic invocation has no exact native implementation family for effect classification.", node,
               ["target.capability=rust.generic-callable.effects"]);
           }
-          if (nativeCallable || runtimeCallable || nativeInput !== undefined || genericImplementations !== undefined || declaration !== undefined) {
-            const isAsync = nativeInput?.completion !== undefined || rustAwaitCarrier(operation.resultCarrier) !== undefined;
+          if (nativeInput === undefined && (nativeCallable || runtimeCallable || genericImplementations !== undefined || declaration !== undefined)) {
+            const isAsync = rustAwaitCarrier(operation.resultCarrier) !== undefined;
             const unionBranches = operation.target.form === "union-method"
               ? operation.target.variants.map(variant => ({
                 invocation: genericInvocationIsFallible(variant.declaration) ? "fallible" as const : "infallible" as const,
@@ -776,11 +656,7 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
               : undefined;
             walk.context.facts.set(node, rustSourceCallEffectsFactKey, {
               ...(unionBranches === undefined ? {} : { unionBranches }),
-              ...(nativeInput === undefined ? {} : { nativeInput: {
-                invocationError: nativeInput.invocationError, awaitErrors: nativeInput.awaitErrors,
-                invocationErrorSource: nativeInput.invocationErrorSource, awaitErrorSources: nativeInput.awaitErrorSources,
-              } }),
-              invocation: nativeInput !== undefined ? "fallible" : genericImplementations !== undefined
+              invocation: genericImplementations !== undefined
                 ? genericImplementations.some(implementation => genericInvocationIsFallible(implementation.declaration)) ? "fallible" : "infallible"
                 : runtimeCallable || (unionBranches === undefined
                   ? declaration !== undefined && genericInvocationIsFallible(declaration)
@@ -788,7 +664,7 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
                 ? "fallible"
                 : "infallible",
               awaiting: isAsync
-                ? nativeInput !== undefined ? "fallible" : genericImplementations !== undefined
+                  ? genericImplementations !== undefined
                   ? genericImplementations.some(implementation => genericAwaitIsFallible(implementation.declaration)) ? "fallible" : "infallible"
                   : runtimeCallable || (unionBranches === undefined
                     ? declaration !== undefined && genericAwaitIsFallible(declaration)
@@ -805,5 +681,17 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
       });
     };
     visit(sourceFile);
+  }
+  for (const [region, effects] of effectsByRegion) {
+    walk.context.facts.set(region, rustErrorEffectsFactKey, effects,
+      [{ message: "rust finalized exact lexical region error effects" }]);
+  }
+  for (const [node, effects] of effectsByExpression) {
+    walk.context.facts.set(node, rustErrorEffectsFactKey, effects,
+      [{ message: "rust finalized exact selected invocation or await errors" }]);
+  }
+  for (const [node, edges] of sourceErrorEdges) {
+    walk.context.facts.set(node, rustSourceErrorEffectsFactKey, Object.freeze({ edges: Object.freeze(edges) }),
+      [{ message: "rust exact selected source error identity correspondence" }]);
   }
 }

@@ -1,5 +1,5 @@
 import { defineRustPlanKey } from "../../target-model/facts/keys.js";
-import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export interface RustNativeErrorEffect {
@@ -37,7 +37,7 @@ export function mergeRustErrorEffects(effects: readonly RustErrorEffectsFact[]):
     localErrors ||= selected.localErrors;
     for (const source of selected.nativeErrors) {
       const previous = nativeErrors.get(source.identity);
-      if (source.identity.length === 0 || previous !== undefined &&
+      if (source.identity.length === 0 || !isRustTargetTypeRef(source.errorType) || previous !== undefined &&
         !rustTargetTypeRefEquals(previous.errorType, source.errorType)) return undefined;
       if (previous === undefined) nativeErrors.set(source.identity, Object.freeze({ ...source }));
     }
