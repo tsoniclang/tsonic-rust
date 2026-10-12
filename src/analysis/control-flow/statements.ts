@@ -67,6 +67,7 @@ import type { RustTargetOperationFact } from "../facts/keys.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustCompileTimeSourceKey } from "../../target-model/facts/source-declarations.js";
 import { recordRustNativeGuardResult, recordRustNativeUnreachable } from "./native-control-flow.js";
+import { rustDirectLexicalCallableBinding } from "../../policy/ownership/source-lexical-callable.js";
 
 export function recordFunctionBodyFacts(walk: RustFactWalk, declaration: Node, sourceFile: SourceFile): void {
   const { ast } = walk.context;
@@ -134,10 +135,12 @@ function recordVariableDeclarationListFacts(
       ? walk.context.facts.get(declaration, rustModuleBindingFactKey) ??
         walk.context.facts.resolve(declaration, rustModuleBindingFactKey)
       : undefined;
-    if (nativeCallable?.storage === "native-callable") {
+    const initializer = Node_Initializer(walk.context.ast, declaration);
+    const lexical = initializer !== undefined && rustDirectLexicalCallableBinding(initializer, walk.context.source) === declaration;
+    if (nativeCallable?.storage === "native-callable" || lexical) {
       recordFunctionBodyFacts(
         walk,
-        nativeCallable.callableDeclaration,
+        nativeCallable?.storage === "native-callable" ? nativeCallable.callableDeclaration : initializer!,
         sourceFile,
       );
       continue;
@@ -154,7 +157,6 @@ function recordVariableDeclarationListFacts(
     if (induction !== undefined) resolveExpressionCarrier(walk, induction.bound, sourceFile, undefined);
     const selected = annotated ?? (induction === undefined ? undefined :
       resolveRustTargetTypeRef(declaration, rustResolutionContext(walk, declaration), walk.operationOptions));
-    const initializer = Node_Initializer(walk.context.ast, declaration);
     const inferredContext = initializer !== undefined && walk.context.ast.is.IsConditionalExpression(initializer) &&
       predeclared?.kind === "source-primitive" && predeclared.name === "float64"
       ? undefined : predeclared;

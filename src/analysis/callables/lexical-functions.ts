@@ -12,6 +12,7 @@ import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
 import { resolveRustEnclosingGenericParameters } from "../../policy/types/resolution/generic-environment.js";
 import { rustCompileTimeSourceKey } from "../../target-model/facts/source-declarations.js";
 import type { RustRuntimeValueUsePlan } from "../program/runtime-value-uses.js";
+import { rustDirectLexicalCallableBinding } from "../../policy/ownership/source-lexical-callable.js";
 
 export interface RustLexicalFunctionCapture {
   readonly declaration: Node;
@@ -49,7 +50,8 @@ export function createRustLexicalFunctionQueries(
   while (pending.length > 0) {
     if (++steps > maximumLexicalCaptureSteps) return exhausted();
     const node = pending.pop()!;
-    if (ast.is.IsFunctionDeclaration(node) && !sourceDeclarationIsModuleScoped(node, ast) && ast.body(node) !== undefined) {
+    if (ast.is.IsFunctionDeclaration(node) && !sourceDeclarationIsModuleScoped(node, ast) && ast.body(node) !== undefined ||
+      rustDirectLexicalCallableBinding(node, source) !== undefined) {
       declarations.push(node);
       if (declarations.length > maximumLexicalFunctions) return exhausted();
     }
@@ -61,7 +63,12 @@ export function createRustLexicalFunctionQueries(
   const genericIdentities = new Map<Node, Set<string>>();
   let rows = 0;
   for (const declaration of declarations) {
-    const selected = sourceLexicalEnvironment(declaration, [declaration], ast, navigation,
+    const roots = ast.is.IsArrowFunction(declaration) ? [ast.body(declaration)!,
+      ...ast.parameters(declaration).flatMap(parameter => {
+        const initializer = Node_Initializer(ast, parameter);
+        return initializer === undefined ? [] : [initializer];
+      })] : [declaration];
+    const selected = sourceLexicalEnvironment(declaration, roots, ast, navigation,
       (use, referencedDeclaration) => facts.getFact(use.reference, rustCompileTimeSourceKey) !== true &&
         runtimeValueUses.isRuntimeReference(referencedDeclaration, use.reference));
     if (selected.kind === "unresolved") return exhausted(selected.reason);
@@ -201,7 +208,8 @@ export function createRustLexicalFunctionQueries(
       kind: "unresolved", reason,
     });
     return Object.freeze({ forDeclaration: (declaration: Node) =>
-      ast.is.IsFunctionDeclaration(declaration) && !sourceDeclarationIsModuleScoped(declaration, ast) ? selection : undefined,
+      ast.is.IsFunctionDeclaration(declaration) && !sourceDeclarationIsModuleScoped(declaration, ast) ||
+        rustDirectLexicalCallableBinding(declaration, source) !== undefined ? selection : undefined,
       valueDeclarationsAt: () => Object.freeze([]) });
   }
 }

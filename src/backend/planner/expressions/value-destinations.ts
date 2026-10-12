@@ -3,6 +3,9 @@ import type { RustNativeStorageSelection } from "../../../analysis/callables/nat
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { diagnosticInput, type RustPlanContext } from "../program/plan-context.js";
+import type { RustExpr } from "../../target-ast/nodes.js";
+import type { planExpression } from "./entry.js";
+import { rustSourceCallableReturnFactKey } from "../../../analysis/facts/keys.js";
 
 export function rustValueDestinationContext(
   expression: Node, carrier: TargetTypeRef | undefined, context: RustPlanContext,
@@ -28,4 +31,15 @@ export function rustReturnValueContext(expression: Node, context: RustPlanContex
   const declaration = context.callableDeclaration;
   return declaration === undefined ? context : rustSelectedValueDestinationContext(expression,
     context.input.program.callableValues.nativeStorage.returnFor(declaration), context);
+}
+
+export function planRustReturnValueExpression(
+  expression: Node, context: RustPlanContext, planValue: typeof planExpression,
+): RustExpr | undefined {
+  const selected = rustReturnValueContext(expression, context);
+  if (selected === undefined) return undefined;
+  const declaration = context.callableDeclaration;
+  const borrowed = declaration !== undefined &&
+    context.input.program.facts.getFact(declaration, rustSourceCallableReturnFactKey)?.borrowedParameter !== undefined;
+  return planValue(expression, selected, "value", borrowed ? "shared-reference" : "value");
 }

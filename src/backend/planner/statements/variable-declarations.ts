@@ -34,6 +34,7 @@ import { rustCompileTimeSourceKey } from "../../../target-model/facts/source-dec
 import { planRustLocalBindingStorage } from "../bindings/local-storage.js";
 import { planRustBorrowedInitializer } from "../bindings/borrowed-initializers.js";
 import { rustSelectedValueDestinationContext } from "../expressions/value-destinations.js";
+import { planNativeModuleFunction } from "../declarations/callables/functions.js";
 
 export function planVariableStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const declarations = collectVariableDeclarations(node, context);
@@ -78,6 +79,16 @@ function planVariableDeclaration(
     return undefined;
   }
   const initializer = Node_Initializer(context.input.program.source.ast, declaration);
+  const lexical = initializer === undefined ? undefined : context.input.program.lexicalFunctions.forDeclaration(initializer);
+  if (lexical !== undefined) {
+    if (lexical.kind === "unresolved") {
+      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, declaration),
+        "rust.backend.lexical-function", lexical.reason));
+      return undefined;
+    }
+    const item = planNativeModuleFunction(declaration, initializer!, name, false, context);
+    return item === undefined ? undefined : [{ kind: "item", item }];
+  }
   const physical = context.input.program.callableValues.nativeStorage.valueFor(declaration);
   const initializerContext = initializer === undefined ? context
     : rustSelectedValueDestinationContext(initializer, physical, context);

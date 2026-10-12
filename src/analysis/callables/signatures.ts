@@ -61,6 +61,8 @@ import { selectRustInferredReturn } from "./inferred-return.js";
 import { rustOptionalStorageValue } from "../../target-model/types/projections.js";
 import { selectRustClosedCallableInputs } from "./contextual-inputs.js";
 import { recordRustAsyncBodyFacts } from "./async-results.js";
+import { rustSourceBorrowedReturnParameter } from "../../policy/ownership/source-borrowed-return.js";
+import { rustDirectLexicalCallableBinding } from "../../policy/ownership/source-lexical-callable.js";
 
 export function recordFunctionSignatureFacts(walk: RustFactWalk, declaration: Node): void {
   recordCallableParameterSignatureFacts(walk, declaration);
@@ -323,7 +325,8 @@ function recordCallableValueSignatureFacts(
 ): void {
   const { ast } = walk.context;
   const nativeCallable = walk.moduleBindings.nativeCallable(declaration);
-  if (nativeCallable?.callableDeclaration === expression && Node_Type(ast, declaration) === undefined) {
+  if (nativeCallable?.callableDeclaration === expression && Node_Type(ast, declaration) === undefined ||
+    rustDirectLexicalCallableBinding(expression, walk.context.source) === declaration) {
     recordFunctionSignatureFacts(walk, expression);
     return;
   }
@@ -528,6 +531,9 @@ export function recordCallableReturnFact(
     ? rawCarrier : closeRustSuspendedStorage(rawCarrier, parameterCarriers,
       walk.context.sourceLifetimes.contractFor(declaration), "callable-result");
   if (carrier !== undefined) {
+    const borrowedParameter = rustSourceBorrowedReturnParameter(declaration, rustResolutionContext(walk, declaration));
+    const borrowedAbi = borrowedParameter === undefined ? undefined
+      : walk.context.facts.get(borrowedParameter, rustSourceParameterAbiFactKey);
     const completion = walk.context.semanticsFor(declaration).operations.callableCompletion(declaration);
     const absence = rustOptionElementCarrier(carrier) !== undefined || rustOptionalStorageValue(carrier) !== undefined ||
       rustUnionPayloadAdmission(rustAbsenceTargetType(), carrier, walk.context.typeDefinitions) !== undefined;
@@ -535,6 +541,8 @@ export function recordCallableReturnFact(
       ? undefined : resolveRustTargetTypeRef(sourceReturn, rustResolutionContext(walk, declaration), walk.operationOptions);
     walk.context.facts.set(declaration, rustSourceCallableReturnFactKey, {
       returnCarrier: carrier,
+      ...(borrowedParameter !== undefined && borrowedAbi?.mode === "ref" && borrowedAbi.inputLifetime !== undefined &&
+        rustTargetTypeRefEquals(borrowedAbi.valueCarrier, carrier) ? { borrowedParameter } : {}),
       ...(isRustUnitCarrier(implementationResult) ? { implementationCompletion: "absence" as const }
         : isRustNeverCarrier(implementationResult) ? { implementationCompletion: "diverging" as const } : {}),
       ...(completion === undefined ? {} : { canFallThrough: completion.canFallThrough }),

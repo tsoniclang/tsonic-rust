@@ -12,6 +12,7 @@ import { KindSpreadElement, Node_Expression } from "@tsonic/target-api/source";
 import type { RustSourceCallParameterPlan } from "../../target-model/operations/model.js";
 import { rustCallableInputMatches } from "../../target-model/conversions/callable-input.js";
 import { rustPlaceholderLifetime } from "../../target-model/lifetimes/index.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 export function rustSourceCallArgumentCarriers(
   call: Node, ast: AstReader, facts: Pick<RustPlanQueries, "getRuntimeCarrierFact">,
@@ -44,8 +45,10 @@ export function rustSourceCallResultWithInputLifetimes(
     const parameter = parameters[index];
     if (lifetime === undefined || parameter?.kind !== "reference" || !rustLifetimesEqual(parameter.lifetime, lifetime)) continue;
     const actual = inputs.filter(input => input.parameterIndex === index);
-    if (actual.length !== 1 || !rustCallableInputMatches(actual[0]!.carrier, parameter)) continue;
+    if (actual.length !== 1) continue;
     const carrier = actual[0]!.carrier;
+    if (!rustCallableInputMatches(carrier, parameter) &&
+      !rustTargetTypeRefEquals(carrier.kind === "reference" ? carrier.referent : carrier, parameter.referent)) continue;
     const identity = rustLifetimeKey(lifetime);
     const candidate = carrier.kind === "reference" ? carrier.lifetime ?? rustPlaceholderLifetime : rustPlaceholderLifetime;
     const previous = inferred.get(identity);

@@ -25,7 +25,7 @@ import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagno
 import { planDoStatement, planForStatement, planIfStatement, planLabeledStatement, planWhileStatement } from "./control-flow.js";
 import { planSwitchStatement } from "./switch-statements.js";
 import { planExpression } from "../expressions/index.js";
-import { rustReturnValueContext } from "../expressions/value-destinations.js";
+import { planRustReturnValueExpression } from "../expressions/value-destinations.js";
 import { planExpressionStatement } from "./expression-statements.js";
 import { planVariableStatement } from "./variable-declarations.js";
 import { planForInStatement, planForOfStatement } from "./iteration.js";
@@ -101,12 +101,10 @@ function planStatementInner(node: Node, context: RustPlanContext): readonly Rust
       const constructionReturn = context.construction?.returnFor(node, context);
       if (constructionReturn !== undefined) return constructionReturn;
       const expression = Node_Expression(context.input.program.source.ast, node);
-      const returnContext = expression === undefined ? context : rustReturnValueContext(expression, context);
-      if (returnContext === undefined) return undefined;
       const planned = expression === undefined
         ? context.functionAbsenceReturnCarrier === undefined ? undefined
           : planRustAbsentValue(context.functionAbsenceReturnCarrier, context)
-        : planExpression(expression, returnContext);
+        : planRustReturnValueExpression(expression, context, planExpression);
       if (expression !== undefined && planned === undefined) {
         return undefined;
       }

@@ -329,8 +329,7 @@ function planRustFunctionItem(
   const plannedBody = ast.kindName(bodyNode) === "KindBlock"
     ? planBlockLike(bodyNode, bodyContext)
     : (() => {
-        const returnContext = rustReturnValueContext(bodyNode, bodyContext);
-        const expression = returnContext === undefined ? undefined : planExpression(bodyNode, returnContext);
+        const expression = planRustReturnValueExpression(bodyNode, bodyContext, planExpression);
         return expression === undefined
           ? undefined
           : { statements: [{ kind: "tail" as const, expr: expression }] };
@@ -425,4 +424,4 @@ function planRustFunctionItem(
   };
   return item;
 }
-import { rustReturnValueContext } from "../../expressions/value-destinations.js";
+import { planRustReturnValueExpression } from "../../expressions/value-destinations.js";

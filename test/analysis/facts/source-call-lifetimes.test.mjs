@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustSourceCallGenericLifetimeArguments } from "../../../dist/analysis/facts/source-call-lifetimes.js";
+import { rustSourceCallGenericLifetimeArguments, rustSourceCallResultWithInputLifetimes } from "../../../dist/analysis/facts/source-call-lifetimes.js";
 import { sourceCallSelectedMemberMatches } from "../../../dist/backend/planner/expressions/calls/arguments.js";
 import { rustLifetimeKey } from "../../../dist/target-model/lifetimes/index.js";
 
@@ -18,6 +18,21 @@ const selected = { member, sourceArgumentBindings: [binding], targetGenericArgum
   sourceSelectedMethodTypeArguments: [{ typeParameterName: "Region", typeParameter: {}, selectedType: {} }] };
 const finalize = (carriers, signature = selected) =>
   rustSourceCallGenericLifetimeArguments(signature, signature.targetGenericArguments, index => carriers[index]);
+
+test("ordinary input loans bind result lifetimes from the exact selected argument", () => {
+  const input = reference(declared);
+  const instantiate = (carrier, bindings = [binding], physical = [{ inputLifetime: declared }]) =>
+    rustSourceCallResultWithInputLifetimes(input, [input], bindings, [carrier], physical);
+  assert.deepEqual(instantiate(integer), reference({ kind: "placeholder" }));
+  assert.deepEqual(instantiate(reference(actual)), reference(actual));
+  assert.deepEqual(instantiate(reference({ kind: "static" })), reference({ kind: "static" }));
+  assert.deepEqual(instantiate({ kind: "source-primitive", name: "uint32" }), input);
+  assert.deepEqual(instantiate(undefined), input);
+  assert.deepEqual(instantiate(integer, []), input);
+  assert.deepEqual(instantiate(integer, [binding, binding]), input);
+  assert.deepEqual(instantiate(integer, [binding], []), input);
+  assert.deepEqual(instantiate(integer, [binding], [{ inputLifetime: { ...declared, identity: "foreign" } }]), input);
+});
 
 test("lifetime finalization resolves inputs only when an omitted native lifetime demands them", () => {
   let queries = 0;

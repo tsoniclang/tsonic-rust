@@ -50,6 +50,7 @@ import { retainRustSelectedCallableResultTemplate, retainRustSelectedSourceCallR
 import { rustSourceCallArgumentCarriers, rustSourceCallResultWithInputLifetimes } from "../facts/source-call-lifetimes.js";
 import { rustMemberAccessReceiver } from "../../target-model/syntax/expressions.js";
 import { recordRustComputedCallEvaluation } from "./computed-members.js";
+import { rustDirectLexicalCallableBinding } from "../../policy/ownership/source-lexical-callable.js";
 
 export function applySelectedProjectSourceCall(
   walk: RustFactWalk,
@@ -214,7 +215,7 @@ export function applySelectedProjectSourceCall(
       const carrier = parameterAbi.form === "rest" &&
           binding.sourceParameterForm === "rest-element"
         ? valueCarrier.kind === "array" ? valueCarrier.element : rustJsArrayLikeElementTargetType(valueCarrier)
-        : parameterAbi.form === "optional" || parameterAbi.form === "default"
+        : parameterAbi.form === "default" || parameterAbi.form === "optional" && mode === "value"
           ? parameterCarrier
           : valueCarrier;
       return carrier === undefined
@@ -282,7 +283,9 @@ export function applySelectedProjectSourceCall(
   const directCallableDeclaration = calleeReferenceDeclaration === selectedDeclaration ||
     (calleeImplementation?.kind === "resolved" &&
       calleeImplementation.implementation.declaration === selectedDeclaration);
-  const callableCalleeCarrier = expressionKind === KindNewExpression || directModuleFunction ||
+  const lexicalBinding = rustDirectLexicalCallableBinding(selectedDeclaration, walk.context.source);
+  const directLexical = lexicalBinding !== undefined && lexicalBinding === calleeReferenceDeclaration;
+  const callableCalleeCarrier = expressionKind === KindNewExpression || directModuleFunction || directLexical ||
     declarationKind === KindFunctionDeclaration && calleeReferenceDeclaration === selectedDeclaration
     ? undefined
     : resolveExpressionCarrier(walk, callee, sourceFile, undefined);
@@ -467,8 +470,9 @@ export function applySelectedProjectSourceCall(
         recordBindingWrite(walk, receiver, "referent");
       }
     }
-  } else if (declarationKind === KindFunctionDeclaration) {
-    const name = walk.context.names.functionNameForDeclaration(selectedDeclaration);
+  } else if (declarationKind === KindFunctionDeclaration || directLexical) {
+    const name = directLexical ? walk.context.names.nameForDeclaration(lexicalBinding)
+      : walk.context.names.functionNameForDeclaration(selectedDeclaration);
     const fileName = ast.getFileName(ast.getSourceFile(selectedDeclaration));
     if (name === undefined || fileName.length === 0) {
       return undefined;
@@ -495,7 +499,7 @@ export function applySelectedProjectSourceCall(
     return undefined;
   }
   const callDeclarations = target.form === "union-method" ? target.variants.map(variant => variant.declaration)
-    : declarationKind === KindFunctionDeclaration || declarationKind === "KindMethodDeclaration" ? [selectedDeclaration] : [];
+    : declarationKind === KindFunctionDeclaration || declarationKind === "KindMethodDeclaration" || directLexical ? [selectedDeclaration] : [];
   for (const declaration of callDeclarations) {
     const registration = walk.context.sourceCallableSpecializations.recordSourceCall({
       subject: expression,

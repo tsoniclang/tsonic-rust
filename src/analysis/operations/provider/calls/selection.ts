@@ -61,6 +61,7 @@ import type {
 import type { Node } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "../model.js";
 import type { RustSelectedTargetSignature, RustTargetMember, TargetTypeRef } from "../../../../target-model/types/model.js";
+import { rustDirectLexicalCallableBinding } from "../../../../policy/ownership/source-lexical-callable.js";
 
 export function selectRustCheckedCall(
   request: RustCheckedCallSelectionInput,
@@ -405,10 +406,12 @@ export function selectRustCheckedCall(
     const nativeCallable = binding?.storage === "native-callable" &&
       (binding.callableDeclaration === sourceDeclaration ||
         declarationKind === "KindFunctionType" || declarationKind === "KindCallSignature");
+    const lexicalBinding = rustDirectLexicalCallableBinding(sourceDeclaration, context.source);
+    const directLexical = lexicalBinding !== undefined && lexicalBinding === reference?.declaration;
     const calleeKind = calleeDeclaration === undefined ? undefined : context.ast.kindName(calleeDeclaration);
     const storedCallable = calleeKind !== undefined && ["KindVariableDeclaration", "KindParameter",
       "KindPropertyDeclaration", "KindPropertySignature", "KindPropertyAssignment", "KindShorthandPropertyAssignment"].includes(calleeKind);
-    const callableType = !nativeCallable && (storedCallable || declarationKind === "KindFunctionType" ||
+    const callableType = !nativeCallable && !directLexical && (storedCallable || declarationKind === "KindFunctionType" ||
       declarationKind === "KindCallSignature" || declarationKind === "KindArrowFunction" ||
       declarationKind === "KindFunctionExpression");
     const structuralMethod = callableType ? undefined : acceptStructuralRuntimeMethodCall(

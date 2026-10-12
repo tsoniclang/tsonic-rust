@@ -6,6 +6,7 @@ import { rustModuleBindingFactKey, rustTargetOperationFactKey } from "../facts/k
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
 import { rustInheritedProjectConstructor } from "../project-types/type-policy.js";
+import { rustDirectLexicalCallableBinding } from "../../policy/ownership/source-lexical-callable.js";
 
 export function collectRustErrorDeclarations(walk: RustFactWalk, projectSourceFiles: readonly SourceFile[]) {
   const { ast } = walk.context;
@@ -95,7 +96,8 @@ export function collectRustErrorDeclarations(walk: RustFactWalk, projectSourceFi
     const visitCallableDeclarations = (node: Node): void => {
       const operation = walk.context.facts.get(node, rustTargetOperationFactKey) ??
         walk.context.facts.resolve(node, rustTargetOperationFactKey);
-      if (ast.kindName(node) === KindFunctionDeclaration || operation?.kind === "closure") {
+      if (ast.kindName(node) === KindFunctionDeclaration || operation?.kind === "closure" ||
+        rustDirectLexicalCallableBinding(node, walk.context.source) !== undefined) {
         registerCallableDeclaration(node);
       }
       if (operation?.kind === "record-literal") {

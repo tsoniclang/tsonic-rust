@@ -8,6 +8,7 @@ import {
   substituteRustTargetGenerics,
   isRustVecCarrier,
   isRustStringCarrier,
+  isRustCopyCarrier,
   rustOptionElementCarrier,
   rustSourceOptionalTargetType,
   rustSliceElementCarrier,
@@ -50,6 +51,7 @@ import { rustSourceInputLifetime } from "./source-input-lifetimes.js";
 import { rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
 import { selectRustSourceValueConversion } from "../conversions/selection.js";
 import type { RustLifetimeRef } from "../../target-model/lifetimes/index.js";
+import { rustSourceBorrowedReturnParameter } from "./source-borrowed-return.js";
 
 export interface RustSourceCallableAbiResolver {
   canUseSharedBorrow(
@@ -316,6 +318,14 @@ function retainRustSourceInputLifetime(
   abi: RustSourceParameterAbi,
   context: RustTargetTypeResolutionContext,
 ): RustSourceParameterAbi {
+  const owner = context.ast.parent(parameter);
+  if (abi.form === "required" && abi.entryConversion === undefined && owner !== undefined &&
+    !isRustCopyCarrier(abi.valueCarrier) && rustSourceBorrowedReturnParameter(owner, context) === parameter &&
+    !parameterUsesFlowState(parameter, "moved", context)) {
+    const lifetime = rustSourceInputLifetime(parameter, context);
+    if (lifetime !== undefined) return { ...abi, mode: "ref", inputLifetime: lifetime,
+      parameterCarrier: { kind: "reference", referent: abi.valueCarrier, mutable: false, lifetime } };
+  }
   const lifetime = abi.parameterCarrier.kind === "reference" && rustCallableInputProtocol(abi.parameterCarrier) !== undefined
     ? rustSourceInputLifetime(parameter, context) : undefined;
   return lifetime !== undefined && abi.parameterCarrier.kind === "reference" &&
