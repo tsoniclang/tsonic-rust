@@ -4,7 +4,6 @@ import type { RustItem, RustType } from "../../../target-ast/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
-import { rustNativeCallableInputUsesProtocol } from "../../../../analysis/callables/native-inputs.js";
 import { diagnosticInput } from "../../program/plan-context.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
 import { rustLifetimeBinderToAst } from "../../types/render.js";
@@ -13,7 +12,7 @@ export function planRustNativeCallableProtocolItems(context: RustPlanContext): r
   const fileName = context.input.program.source.ast.getFileName(context.sourceFile);
   const items: RustItem[] = [];
   for (const input of context.input.program.callableValues.native.inputs) {
-    if (input.protocol.ownerFileName !== fileName || !rustNativeCallableInputUsesProtocol(input)) continue;
+    if (input.protocol.ownerFileName !== fileName) continue;
     const item = planRustNativeCallableProtocol(input.protocol, context);
     if (item === undefined) context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, input.subject.node),
       "rust.backend.native-callable-protocol", "An exact native callable input protocol could not be rendered."));

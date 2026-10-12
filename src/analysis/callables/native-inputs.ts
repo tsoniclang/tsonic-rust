@@ -1,5 +1,5 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import type { SourceStorageBindings, SourceStorageQueries, SourceStorageSubject, SourceStorageProjection } from "@tsonic/target-api/analysis";
+import type { SourceStorageBindings, SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
 import { sourceEnclosingCallable, sourceNodeIdentity, Node_Expression } from "@tsonic/target-api/source";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
@@ -14,9 +14,6 @@ import type { RustTypeDefinitions } from "../../target-model/types/source-union-
 import { createRustNativeCallableProtocol, type RustNativeCallableProtocol } from "./native-protocols.js";
 import { rustNativeCallableErrorType } from "./native-protocols.js";
 import { rustNativeCallableCompletion, type RustNativeCallableCompletion } from "../../target-model/types/callable-completions.js";
-import { rustOptionTargetType } from "../../target-model/types/carriers/optional.js";
-import { rustCallableInputProtocol } from "../../target-model/types/carriers/callables.js";
-import { isRustJsArrayCarrier, rustJsArrayTargetType, rustJsArrayLikeElementTargetType } from "../../target-model/types/carriers/js.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustNativeCallableInvocationArguments } from "./native-invocations.js";
 
@@ -26,10 +23,6 @@ export interface RustNativeCallableInput {
   readonly carrier: TargetTypeRef;
   readonly implementation: Extract<TargetTypeRef, { readonly kind: "type-parameter" }>;
   readonly protocol: RustNativeCallableProtocol;
-}
-
-export function rustNativeCallableInputUsesProtocol(input: RustNativeCallableInput): boolean {
-  return input.protocol.completion !== undefined || rustGenericCallableValue(rustOptionElementCarrier(input.carrier) ?? input.carrier) !== undefined;
 }
 
 export type RustNativeCallableOrigins =
@@ -57,7 +50,6 @@ export interface RustNativeCallableInputPlan {
   originsForValue(node: Node): RustNativeCallableOrigins;
   bindingsFor(declaration: Node): SourceStorageBindings | undefined;
   protocolForSourceItem(fileName: string, typeName: string): RustNativeCallableProtocol | undefined;
-  parameterCarrier(parameter: Node, carrier: TargetTypeRef): TargetTypeRef | undefined;
 }
 
 export function createRustNativeCallableInputPlan(input: {
@@ -171,7 +163,6 @@ export function createRustNativeCallableInputPlan(input: {
     const origins = callee === undefined ? undefined : values.get(callee);
     if (origins?.kind !== "resolved" || origins.inputs.length !== 1 || origins.implementations.length !== 0) continue;
     const parameter = origins.inputs[0]!;
-    if (!rustNativeCallableInputUsesProtocol(parameter)) continue;
     const methodArguments = rustNativeCallableInvocationArguments(parameter.protocol, operation);
     if (methodArguments === undefined) continue;
     const completion = rustNativeCallableCompletion(operation.resultCarrier, input.definitions);
@@ -197,52 +188,6 @@ export function createRustNativeCallableInputPlan(input: {
     protocolForSourceItem: (fileName: string, typeName: string) => {
       const protocol = protocols.get(typeName);
       return protocol?.ownerFileName === fileName ? protocol : undefined;
-    },
-    parameterCarrier(parameter: Node, carrier: TargetTypeRef): TargetTypeRef | undefined {
-      const owner = input.ast.parent(parameter);
-      const members = owner === undefined ? undefined : inputs.get(owner);
-      if (members === undefined || ![...members.keys()].some(subject => subject.node === parameter)) return carrier;
-      let remaining = 4096;
-      const visit = (current: TargetTypeRef, projection: readonly SourceStorageProjection[], depth: number): TargetTypeRef | undefined => {
-        if (remaining-- <= 0 || depth > 128) return undefined;
-        const optional = rustOptionElementCarrier(current);
-        if (optional !== undefined) {
-          const present = visit(optional, projection, depth + 1);
-          return present === undefined ? undefined : { ...rustOptionTargetType(present),
-            ...(current.kind === "target-named" && current.sourceAbsence === true ? { sourceAbsence: true } : {}) };
-        }
-        const subject = input.storage.subject(parameter, "input", projection);
-        const slot = subject.kind === "resolved" ? members.get(subject.subject) : undefined;
-        if (slot !== undefined) return rustCallableInputProtocol(current) !== undefined && current.kind === "reference"
-          ? { ...current, referent: slot.implementation } : slot.implementation;
-        if (current.kind === "reference") {
-          const referent = visit(current.referent, projection, depth + 1);
-          return referent === undefined ? undefined : { ...current, referent };
-        }
-        if (current.kind === "array" || current.kind === "slice") {
-          const element = visit(current.element, [...projection, { kind: "array-element" }], depth + 1);
-          return element === undefined ? undefined : { ...current, element };
-        }
-        if (current.kind === "tuple") {
-          const elements = current.elements.map((element, index) => visit(element,
-            [...projection, { kind: "tuple-element", index }], depth + 1));
-          return elements.some(element => element === undefined) ? undefined : { ...current, elements: elements as TargetTypeRef[] };
-        }
-        if (isRustJsArrayCarrier(current)) {
-          const element = rustJsArrayLikeElementTargetType(current);
-          const selected = element === undefined ? undefined : visit(element, [...projection, { kind: "array-element" }], depth + 1);
-          return selected === undefined ? undefined : rustJsArrayTargetType(selected);
-        }
-        const containsInput = [...members.keys()].some(input => input.node === parameter &&
-          input.projection.length > projection.length && projection.every((component, index) => {
-            const child = input.projection[index];
-            return component.kind === "array-element" ? child?.kind === "array-element"
-              : component.kind === "tuple-element" ? child?.kind === "tuple-element" && component.index === child.index
-              : child?.kind === "member" && component.declaration === child.declaration;
-          }));
-        return containsInput ? undefined : current;
-      };
-      return visit(carrier, [], 0);
     },
   });
 }

@@ -24,6 +24,7 @@ export type RustNativeStorageSelection =
   | { readonly kind: "unresolved"; readonly reason: string };
 
 export interface RustNativeStoragePlan {
+  parameterFor(parameter: Node, carrier: TargetTypeRef): RustNativeStorageSelection;
   returnFor(declaration: Node): RustNativeStorageSelection;
   valueFor(node: Node): RustNativeStorageSelection;
   subjectFor(subject: SourceStorageSubject, carrier: TargetTypeRef, owner?: Node): RustNativeStorageSelection;
@@ -150,6 +151,13 @@ export function createRustNativeStoragePlan(input: {
         : Object.freeze({ kind: "selected", carrier: physical, inputs: Object.freeze([...selectedInputs]) });
   };
   return Object.freeze({
+    parameterFor(parameter: Node, carrier: TargetTypeRef): RustNativeStorageSelection {
+      const owner = input.ast.parent(parameter);
+      if (!nodes.has(parameter) || owner === undefined || !input.ast.parameters(owner).includes(parameter))
+        return unresolved("Native parameter storage requires its exact owned formal parameter.");
+      const subject = input.storage.subject(parameter, "input");
+      return subject.kind === "unresolved" ? subject : select(subject.subject, carrier, bindingsFor(owner));
+    },
     returnFor(declaration: Node): RustNativeStorageSelection {
       if (!nodes.has(declaration)) return unresolved("Native callable return requires an owned declaration.");
       const carrier = input.facts.getFact(declaration, rustSourceCallableReturnFactKey)?.returnCarrier;

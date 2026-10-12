@@ -1,5 +1,4 @@
 import type { Node } from "@tsonic/tsts";
-import { rustNativeCallableInputUsesProtocol } from "../../../../analysis/callables/native-inputs.js";
 import { allocateRustGeneratedName } from "../../../../target-model/names/generated.js";
 import type { RustGenericParameter, RustGenerics } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
@@ -10,8 +9,8 @@ export function planRustNativeCallableGenerics(
   declaration: Node,
   source: RustCallableGenericPlan,
 ): RustCallableGenericPlan | undefined {
-  const inputs = source.context.input.program.callableValues.native.inputsFor(declaration)
-    .filter(rustNativeCallableInputUsesProtocol);
+  const native = source.context.input.program.callableValues.native;
+  const inputs = [...new Set([...native.inputsFor(declaration), ...native.capturesFor(declaration)])];
   if (inputs.length === 0) return source;
   const sourceGenerics = source.finalizeGenerics();
   const typeParameterNames = new Map(source.context.typeParameterNames);
