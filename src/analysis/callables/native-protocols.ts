@@ -14,6 +14,7 @@ import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import { bindRustCallableInputLifetimes } from "../../target-model/types/carriers/callable-input-lifetimes.js";
 import type { RustLifetimeBinder } from "../../target-model/lifetimes/index.js";
+import { rustJsPromiseTargetId } from "../../target-model/types/carriers/source-types.js";
 
 export interface RustNativeCallableProtocol {
   readonly identity: string;
@@ -52,7 +53,7 @@ export function createRustNativeCallableProtocol(input: {
   return snapshotClosedMetadata({ identity, ownerFileName: input.ownerFileName, targetName, binding, method,
     ...(completion === undefined ? {} : { completion }),
     trait: { kind: "trait-ref", id: identity, path: targetName,
-      sourceItem: { fileName: input.ownerFileName, typeName: identity },
+      sourceItem: { fileName: input.ownerFileName, typeName: targetName },
       genericArguments: rustTypeGenericArguments(binding.environment), associatedConstraints: [] },
   });
 }
@@ -77,7 +78,9 @@ export function rustNativeCallableMethodArguments(protocol: RustNativeCallablePr
     lifetime: parameter.lifetime })), ...rustTypeGenericArguments(protocol.binding.signature.typeParameters)]);
 }
 
-export function rustNativeCallableProtocolResult(protocol: RustNativeCallableProtocol): TargetTypeRef | undefined {
+export function rustNativeCallableProtocolResult(
+  protocol: RustNativeCallableProtocol,
+): TargetTypeRef | undefined {
   const self: TargetTypeRef = { kind: "type-parameter", identity: `${protocol.identity}:Self`, name: "Self" };
   const arguments_ = rustNativeCallableMethodArguments(protocol);
   const captures = [...arguments_.filter(argument => argument.kind === "lifetime"),
@@ -85,10 +88,16 @@ export function rustNativeCallableProtocolResult(protocol: RustNativeCallablePro
       ...protocol.binding.signature.typeParameters])];
   const error = (name: string): TargetTypeRef => ({ kind: "associated-type", owner: self, name, genericArguments: arguments_ });
   const completion = protocol.completion === undefined ? protocol.method.result :
-    instantiateRustNativeCompletion(protocol.completion, future => rustNativeCompletionFutureType({
-      identity: `${protocol.identity}:future:${future.ordinal}`, output: future.output,
-      error: error(`AwaitError${future.ordinal}`), captures,
-    }));
+    instantiateRustNativeCompletion(protocol.completion, future => {
+      const selectedError = error(`AwaitError${future.ordinal}`);
+      if (future.carrier.kind === "target-named" && future.carrier.id === rustJsPromiseTargetId) {
+        const arguments_ = future.carrier.genericArguments;
+        return arguments_?.length !== 3 ? undefined : { ...future.carrier,
+          genericArguments: [arguments_[0]!, arguments_[1]!, { kind: "type", type: selectedError }] };
+      }
+      return rustNativeCompletionFutureType({ identity: `${protocol.identity}:future:${future.ordinal}`,
+        output: future.output, error: selectedError, captures });
+    });
   return completion === undefined ? undefined : rustNamedTargetType(`${protocol.identity}:result`, "Result",
     rustTypeGenericArguments([completion, error("InvocationError")]));
 }

@@ -4,6 +4,7 @@ import type { RustTypeDefinitions } from "./source-union-definitions.js";
 import { emptyRustTypeDefinitions } from "./source-union-definitions.js";
 import { mapRustTargetTypes } from "./carriers/substitution.js";
 import { rustFutureTargetId } from "./carriers/primitives.js";
+import { rustJsPromiseTargetId } from "./carriers/source-types.js";
 import { rustNamedTargetType } from "./carriers/native.js";
 import { rustTypeGenericArguments } from "./generic-arguments.js";
 import { closedMetadataKey, snapshotClosedMetadata } from "../metadata/closed-data.js";
@@ -31,7 +32,7 @@ export function rustNativeCallableCompletion(
   for (const leaf of rustAwaitSelectionLeaves(selection)) {
     if (leaf.future === undefined) continue;
     const carrier = leaf.future.futureCarrier;
-    if (carrier.kind !== "target-named" || carrier.id !== rustFutureTargetId) return undefined;
+    if (carrier.kind !== "target-named" || carrier.id !== rustFutureTargetId && carrier.id !== rustJsPromiseTargetId) return undefined;
     const identity = closedMetadataKey(carrier);
     if (!futures.has(identity)) futures.set(identity, Object.freeze({ carrier,
       output: leaf.future.outputCarrier, ordinal: futures.size }));

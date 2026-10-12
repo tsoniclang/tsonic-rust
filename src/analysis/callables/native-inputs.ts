@@ -154,7 +154,7 @@ export function createRustNativeCallableInputPlan(input: {
   }
   collecting = false;
   const selectedInputs = Object.freeze([...inputs.values()].flatMap(members => [...members.values()]));
-  const protocols = new Map(selectedInputs.map(member => [member.protocol.identity, member.protocol]));
+  const protocols = new Map(selectedInputs.map(member => [member.protocol.targetName, member.protocol]));
   const calls = new Map<Node, RustNativeCallableCall>();
   for (const node of input.storage.invocations) {
     const operation = input.facts.getFact(node, rustTargetOperationFactKey);

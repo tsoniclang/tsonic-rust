@@ -5,7 +5,7 @@ import { createRustNativeCallableProtocol, rustNativeCallableErrorType, rustNati
 import { rustCallableTargetType, rustFutureTargetType, rustSourcePrimitiveTargetType }
   from "../../../dist/target-model/types/index.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
-import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
+import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 
 const integer = rustSourcePrimitiveTargetType("int32");
 const implementation = { kind: "type-parameter", identity: "input:left", name: "Left" };
@@ -22,8 +22,10 @@ test("native callable protocols keep exact input identities independent of equal
   assert.equal(left !== undefined && right !== undefined, true);
   assert.equal(left.identity === right.identity, false);
   assert.equal(left.targetName === right.targetName, false);
-  assert.equal(left.trait.sourceItem.typeName, left.identity);
+  assert.equal(left.trait.sourceItem.typeName, left.targetName);
+  assert.equal(isRustTargetTypeRef(left.trait), true);
   const error = rustNativeCallableErrorType(left, implementation, "invocation", []);
+  assert.equal(isRustTargetTypeRef(error), true);
   assert.equal(error.owner === implementation, true);
   assert.equal(error.trait === left.trait, true);
   assert.equal(error.name, "InvocationError");
