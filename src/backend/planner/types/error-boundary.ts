@@ -35,7 +35,7 @@ export function applyRustLocalErrorBoundary(
     rustErrorBoundaryOperandType(boundary, rustErrorType(owner), providerErrorType), expression);
 }
 
-function rustErrorBoundaryOperandType(
+export function rustErrorBoundaryOperandType(
   boundary: RustFallibleErrorBoundary,
   currentErrorType: RustType,
   providerErrorType?: RustType,

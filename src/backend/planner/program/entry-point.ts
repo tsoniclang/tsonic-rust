@@ -15,6 +15,7 @@ import type { RustTargetProgram } from "../../../analysis/program/model.js";
 import { isRustUnitCarrier } from "../../../target-model/types/index.js";
 
 export interface RustBinaryEntry {
+  readonly declaration: Node;
   readonly sourceFile: SourceFile;
   readonly moduleName: string;
   readonly functionName: string;
@@ -67,6 +68,7 @@ export function resolveBinaryEntry(
   if (declaration !== undefined) {
     const asyncFact = input.program.facts.getFact(declaration, rustAsyncFunctionFactKey);
     return {
+      declaration,
       sourceFile: entrySourceFile,
       moduleName,
       functionName: "main",

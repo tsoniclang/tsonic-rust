@@ -19,7 +19,8 @@ import {
   allocateRustComponentSupportModuleName,
   planRustSourceOutputIdentities,
 } from "../names/source-output-identities.js";
-import { applyRustErrorBoundary } from "../types/error-boundary.js";
+import { rustErrorBoundaryOperandType, rustTargetRuntimeErrorType } from "../types/error-boundary.js";
+import { planRustBinaryEntryError, planRustBinaryErrors, type RustBinaryErrorPlan } from "./binary-errors.js";
 import { rustTypeFromCarrier } from "../types/render.js";
 import { planRustBinaryHookCallPlan } from "./binary-hook-contexts.js";
 import type { RustBinaryHookCallPlan } from "./binary-hook-contexts.js";
@@ -39,7 +40,6 @@ import {
 } from "./source-package-initializers.js";
 import {
   planRustSourcePackageErrors,
-  rustRuntimeErrorTypeIdentity,
 } from "./source-package-errors.js";
 import { planRustSourcePackageComponents } from "./source-package-components.js";
 import {
@@ -362,6 +362,25 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     crateInitializerFunctionName,
     rootCrateErrorType,
   );
+  const lifecycleErrorType: import("../../target-ast/nodes.js").RustType = {
+    kind: "named",
+    path: rootErrorDomain.errorDomain === "runtime"
+      ? "tsonic_rust_runtime::TsonicError" : `${input.program.configuration.crateName}::${programModuleName}::TsonicError`,
+    identity: rootErrorTypeIdentity,
+  };
+  const entryErrors = entryFunction === undefined ? undefined : planRustBinaryEntryError(entryFunction.declaration,
+    allocateRustRootSupportItemName("TsonicEntryError", [...sortedTopLevelModuleNames, ...rootCrateContent.libraryItems.flatMap(item =>
+      item.kind === "use" ? [item.alias ?? item.path.slice(item.path.lastIndexOf("::") + 2)] : [])]), lifecycleErrorType,
+    { input, sourcePackageErrors, sourcePackageComponentId: facadePlan.rootComponentId,
+      crateName: input.program.configuration.crateName, moduleName: "", moduleNameByFileName, externalCrateNameByFileName,
+      externalItemPathByIdentity, externalStructuralShapeModuleByFileName, structuralShapesModuleName },
+    rootErrorDomain.errorDomain === "project" ? programModuleName : undefined);
+  if (entryFunction !== undefined && (entryErrors === undefined || entryFunction.fallible !== (entryErrors.errorType !== undefined))) {
+    diagnostics.push({ code: "RUST_BINARY_ENTRY_ERROR_MISSING", category: "error", source: "tsonic-rust",
+      message: "Binary entry requires its exact finalized native error type.", sourceNode: entryFunction.declaration,
+      evidence: ["target.capability=rust.backend.binary-entry"] });
+    return rejectedTargetStage(diagnostics);
+  }
   const rootArtifacts = materializeRustSourcePackageCrateArtifacts(
     input,
     rootCrateContent,
@@ -374,6 +393,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
         ? {}
         : { manifest: sourcePackageCargo.rootManifest }),
       additionalLibraryItems: [
+        ...entryErrors?.libraryItems ?? [],
         ...(entryFunction === undefined || binaryEntryExportName === undefined
           ? []
           : [{
@@ -431,13 +451,14 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
   if (outputType === "bin" && entryFunction !== undefined &&
     binaryEntryExportName !== undefined) {
     const crateName = input.program.configuration.crateName;
-    const mainErrorType: import("../../target-ast/nodes.js").RustType = {
-      kind: "named",
-      path: rootErrorDomain.errorDomain === "runtime"
-        ? "tsonic_rust_runtime::TsonicError"
-        : `${crateName}::${programModuleName}::TsonicError`,
-      identity: rootErrorTypeIdentity,
-    };
+    const errors = planRustBinaryErrors({ entryErrorType: entryErrors?.errorType, lifecycleErrorType,
+      lifecycleFallible: crateInitializer?.errorType !== undefined || workerEntries.entries.length > 0 ||
+        activeHooks.some(hook => hook.isFallible === true) });
+    if (errors === undefined) return rejectedTargetStage([...diagnostics, {
+      code: "RUST_BINARY_ERROR_JOIN_MISSING", category: "error", source: "tsonic-rust",
+      message: "Binary lifecycle and source entry require one exact native error join.",
+      evidence: ["target.capability=rust.backend.binary-entry"] }]);
+    const mainErrorType = errors.errorType;
     const entryCall = {
       kind: "call" as const,
       path: `${crateName}::${binaryEntryExportName}`,
@@ -453,8 +474,8 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     const executeAsync = (future: import("../../target-ast/nodes.js").RustExpr) =>
       planRustAsyncExecution(executor === undefined
         ? { kind: "call", path: "tsonic_rust_runtime::block_on", args: [future] }
-        : hookCalls.get(executor)!.call([future]), executor, mainErrorType,
-        executor === undefined ? undefined : hookErrorTypes.get(executor));
+        : hookCalls.get(executor)!.call([future]), executor, (execution, selected) => errors.lifecycle(execution,
+          rustErrorBoundaryOperandType(selected.errorBoundary, lifecycleErrorType, hookErrorTypes.get(selected))));
     const entryExecution = entryFunction.async
       ? executeAsync(entryFunction.async === "js-promise"
             ? { kind: "method-call" as const, receiver: entryCall,
@@ -472,11 +493,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
       : [{
           kind: "expr" as const,
           expr: crateInitializer.errorType !== undefined
-            ? {
-              kind: "try" as const,
-              resultErrorType: mainErrorType,
-              operandErrorType: mainErrorType,
-              expr: crateInitializer.asynchronous
+            ? errors.lifecycle(crateInitializer.asynchronous
                   ? executeAsync({
                         kind: "call" as const,
                         path: `${crateName}::${crateInitializer.functionName}`,
@@ -486,8 +503,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
                       kind: "call" as const,
                       path: `${crateName}::${crateInitializer.functionName}`,
                       args: [],
-                    },
-              }
+                    }, lifecycleErrorType)
             : crateInitializer.asynchronous
               ? executeAsync({
                     kind: "call" as const,
@@ -507,14 +523,12 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
       }
       return {
         kind: "expr" as const,
-        expr: applyRustErrorBoundary(
-          call,
-          epilogue.errorBoundary,
-          mainErrorType,
+        expr: errors.lifecycle(call, rustErrorBoundaryOperandType(
+          epilogue.errorBoundary, lifecycleErrorType,
           epilogue.errorBoundary === "provider-native"
             ? hookErrorTypes.get(epilogue)
             : undefined,
-        ),
+        )),
       };
     };
     const startupStatements = activeHooks.filter(hook => hook.phase === "before-initialization").map(planHook);
@@ -522,7 +536,8 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     const workerDispatchStatements = planRustWorkerDispatch(
       input,
       workerEntries.entries,
-      mainErrorType,
+      errors,
+      lifecycleErrorType,
       completionType,
       successfulCompletion,
       epilogueStatements,
@@ -537,12 +552,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
       workerEntries.entries.length > 0 ||
       activeHooks.some((epilogue) => epilogue.isFallible === true);
     const executedEntry = entryFunction.fallible
-        ? {
-            kind: "try" as const,
-            expr: entryExecution,
-            resultErrorType: mainErrorType,
-            operandErrorType: mainErrorType,
-          }
+        ? errors.entry(entryExecution)
         : entryExecution;
     const entryStatement: import("../../target-ast/nodes.js").RustStmt = entryFunction.nativeTermination
       ? { kind: "let", name: "entry_result", mutable: false, init: executedEntry }
@@ -581,7 +591,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     };
     artifacts.push(rustSourceArtifact(
       "src/main.rs",
-      createRustCrateRootSourceFile(input.program.configuration.foundation, [mainItem]),
+      createRustCrateRootSourceFile(input.program.configuration.foundation, [...errors.items, mainItem]),
     ));
   }
   const finalizedArtifacts = Object.freeze(artifacts.map((artifact) =>
@@ -620,7 +630,8 @@ function finalizeRustPlannedArtifact(
 function planRustWorkerDispatch(
   input: RustPlanningContext,
   entries: readonly RustWorkerEntryPlan[],
-  mainErrorType: import("../../target-ast/nodes.js").RustType,
+  errors: RustBinaryErrorPlan,
+  lifecycleErrorType: import("../../target-ast/nodes.js").RustType,
   completionType: import("../../target-ast/nodes.js").RustType,
   successfulCompletion: import("../../target-ast/nodes.js").RustExpr,
   epilogueStatements: readonly import("../../target-ast/nodes.js").RustStmt[],
@@ -628,6 +639,7 @@ function planRustWorkerDispatch(
   diagnostics: TargetDiagnostic[],
 ): readonly import("../../target-ast/nodes.js").RustStmt[] | undefined {
   if (entries.length === 0) return Object.freeze([]);
+  const mainErrorType = errors.errorType;
   const entryBySourceFile = new Map(entries.map((entry) =>
     [entry.sourceFile, entry] as const));
   const constructionsByBootstrapId = new Map<string, Set<RustWorkerEntryPlan>>();
@@ -674,11 +686,9 @@ function planRustWorkerDispatch(
       continue;
     }
     const entryName = `worker_entry_selection_${bootstrapIndex + 1}`;
-    const bootstrapCall = applyRustErrorBoundary(
+    const bootstrapCall = errors.lifecycle(
       { kind: "call", path: bootstrap.path, args: [] },
-      bootstrap.errorBoundary,
-      mainErrorType,
-      providerErrorType,
+      rustErrorBoundaryOperandType(bootstrap.errorBoundary, lifecycleErrorType, providerErrorType),
     );
     const unsupportedWorkerEntryError = {
       kind: "call" as const,
@@ -688,15 +698,7 @@ function planRustWorkerDispatch(
         value: "Worker process selected an entry absent from the closed generated dispatch table.",
       }],
     };
-    const workerEntryError = mainErrorType.kind === "named" &&
-      mainErrorType.identity === rustRuntimeErrorTypeIdentity
-      ? unsupportedWorkerEntryError
-      : {
-          kind: "method-call" as const,
-          receiver: unsupportedWorkerEntryError,
-          method: "into",
-          args: [],
-        };
+    const workerEntryError = errors.lifecycleError(unsupportedWorkerEntryError, rustTargetRuntimeErrorType);
     statements.push({
       kind: "let",
       name: entryName,
@@ -715,12 +717,7 @@ function planRustWorkerDispatch(
               : call;
             const invoke = entry.operandErrorType === undefined
               ? execution
-              : {
-                  kind: "try" as const,
-                  expr: execution,
-                  resultErrorType: mainErrorType,
-                  operandErrorType: entry.operandErrorType,
-                };
+              : errors.lifecycle(execution, entry.operandErrorType);
             return {
               kind: "if",
               condition: {

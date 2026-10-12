@@ -1,14 +1,12 @@
 import type { RustBinaryHookPlan } from "../../../analysis/runtime/hooks.js";
-import type { RustExpr, RustType } from "../../target-ast/nodes.js";
-import { applyRustErrorBoundary } from "../types/error-boundary.js";
+import type { RustExpr } from "../../target-ast/nodes.js";
 
 export function planRustAsyncExecution(
   execution: RustExpr,
   executor: RustBinaryHookPlan | undefined,
-  resultErrorType: RustType,
-  providerErrorType: RustType | undefined,
+  propagate: (execution: RustExpr, executor: Extract<RustBinaryHookPlan, { readonly isFallible: true }>) => RustExpr,
 ): RustExpr {
   return executor?.isFallible === true
-    ? applyRustErrorBoundary(execution, executor.errorBoundary, resultErrorType, providerErrorType)
+    ? propagate(execution, executor)
     : execution;
 }
