@@ -13,7 +13,6 @@ import { recursiveCallbackProtocolCases } from "../../../../tsonic/test/fixtures
 import { awaitOperandCallableSource, nativeAwaitOperandCallableSource } from "../../../../tsonic/test/fixtures/await-operand-callables.mjs";
 import { dispatchProviderPackage } from "../../helpers/rust-session/provider-dispatch-contexts.mjs";
 import { rustAsyncFunctionFactKey, rustSourceParameterAbiFactKey } from "../../../dist/analysis/facts/keys.js";
-import { rustLifetimesEqual } from "../../../dist/target-model/lifetimes/index.js";
 
 const source = `
 export function escaped(seed: number): (count: number) => number {
@@ -27,7 +26,7 @@ export function ordinary(seed: number): (count: number) => number {
 }
 `;
 
-test("suspended functions name every captured callable input loan independently of its result", () => {
+test("suspended functions own every captured callable input independently of its result", () => {
   const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
 export async function combine(first: () => int32, pending: () => int32 | Promise<void>,
@@ -42,15 +41,21 @@ export async function combine(first: () => int32, pending: () => int32 | Promise
   const inputs = ast.parameters(declaration).map(node => program.facts.getFact(node, rustSourceParameterAbiFactKey));
   assert.equal(inputs.length, 4);
   for (const input of inputs) {
-    assert.equal(input?.parameterCarrier.kind === "reference", true, "native borrowed callback, not an owned wrapper");
-    assert.equal(input.inputLifetime !== undefined, true, "ordinary and suspended callback results both retain the input loan");
-    assert.equal(rustLifetimesEqual(input.inputLifetime, inputs[0].inputLifetime), true, "one exact enclosing input region");
+    assert.equal(input?.mode, "value", "the Future owns its callback input");
+    assert.equal(input.parameterCarrier.kind === "reference", false, "no borrow of a caller's local callback storage");
+    assert.equal(input.inputLifetime === undefined, true, "no manufactured callback loan");
+    assert.equal(rustCallableProtocol(input.parameterCarrier) !== undefined, true, "exact callback protocol retained");
   }
   const selected = program.facts.getFact(declaration, rustAsyncFunctionFactKey);
   assert.equal(selected?.kind === "js-promise", true, "one exact selected async operation");
-  const storage = selected.storage;
-  assert.equal(storage?.kind === "lifetime", true, "suspended storage cannot invent a static capture");
-  assert.equal(rustLifetimesEqual(storage.lifetime, inputs[0].inputLifetime), true, "stored frame keeps the selected loan");
+  assert.equal(selected.capturedParameters.length, 4, "all owned callback inputs remain in the suspended frame");
+  assert.equal(selected.storage.kind, "static", "these logical callback signatures contain no borrowed payloads");
+  for (const [index, parameter] of ast.parameters(declaration).entries()) {
+    const physical = program.callableValues.nativeStorage.parameterFor(parameter, inputs[index].parameterCarrier);
+    const input = program.callableValues.native.inputsFor(declaration).find(input => input.subject.node === parameter);
+    assert.equal(physical.kind, "selected", physical.reason);
+    assert.equal(physical.carrier === input.implementation, true, "physical storage is the exact owned callback type");
+  }
 });
 
 for (const jsEnabled of [false, true]) {

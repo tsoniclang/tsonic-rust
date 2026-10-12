@@ -104,6 +104,7 @@ export function resolveRustCallableStorageCarrier(
     context.source.navigation.parameterUseSummary(parameterNode);
   const owner = parameterNode === undefined || parameter === undefined ? undefined : context.ast.parent(parameterNode);
   const nativeDeclaration = owner !== undefined && context.ast.is.IsFunctionDeclaration(owner) &&
+    !context.ast.hasModifierKind(owner, "async") && context.semanticsFor(owner).operations.generator(owner) === undefined &&
     context.source.navigation.declarationUseSummary(owner).uses.every(use => use.kind !== "first-class");
   const protocol = rustCallableProtocol(carrier);
   if (parameter !== undefined && carrier !== undefined) {

@@ -37,7 +37,7 @@ test("physical callback lifetimes come only from matching sealed parameter ABI e
   }
 });
 
-test("suspended callable input borrows and static promise payload requirements retain distinct exact owners", () => {
+test("owned suspended callable inputs and JS promise payload requirements retain distinct exact owners", () => {
   const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
 export async function invoke<Value>(callback: () => Promise<Value>): Promise<Value> {
   return await callback();
@@ -55,9 +55,9 @@ export async function invoke<Value>(callback: () => Promise<Value>): Promise<Val
   const parameter = ast.parameters(owner)[0];
   const abi = program.facts.getFact(parameter, rustSourceParameterAbiFactKey);
   const contract = rustCallableInputLifetimeParameters(owner, ast, program.facts);
-  assert.equal(contract.length, 1);
-  assert.equal(abi.inputLifetime.kind, "parameter");
-  assert.equal(abi.parameterCarrier.lifetime.identity, abi.inputLifetime.identity);
+  assert.equal(contract.length, 0);
+  assert.equal(abi.inputLifetime === undefined, true, "owning a callback does not borrow its caller's storage");
+  assert.equal(abi.parameterCarrier.kind === "reference", false);
   assert.equal(program.sourceLifetimes.contractFor(owner).parameters.length, 1,
     "physical lifetime binders must not change authored generic arity");
   const requirements = program.declarationGenericRequirements.contractFor(owner);
