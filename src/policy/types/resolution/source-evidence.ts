@@ -106,17 +106,19 @@ export function resolveRustCallableStorageCarrier(
   const nativeDeclaration = owner !== undefined && context.ast.is.IsFunctionDeclaration(owner) &&
     context.source.navigation.declarationUseSummary(owner).uses.every(use => use.kind !== "first-class");
   const protocol = rustCallableProtocol(carrier);
-  if (nativeDeclaration && parameter !== undefined && protocol !== undefined && parameter.DotDotDotToken === undefined &&
-    parameter.Initializer === undefined && parameter.QuestionToken === undefined &&
-    uses !== undefined && uses.uses.length > 0 &&
-    uses.uses.every(use => use.kind === "direct-call" && !use.captured && !use.throughMember)) {
+  if (parameter !== undefined && carrier !== undefined) {
     const semantics = context.semanticsFor(parameterNode!);
     const declared = semantics.declarations.declaredValueType(parameterNode!);
     const declaredCarrier = declared === undefined ? undefined : resolveRustTargetType(declared,
       { ...context, currentSemantics: semantics, sourceStorageSubject: undefined,
         callableRepresentation: "signature" }, options, new Set());
     if (rustTargetTypeRefEquals(rustOptionElementCarrier(declaredCarrier) ?? declaredCarrier, carrier)) {
-      return resolveRustCallableInputCarrier(subject!, carrier!, context, options);
+      return nativeDeclaration && protocol !== undefined && parameter.DotDotDotToken === undefined &&
+        parameter.Initializer === undefined && parameter.QuestionToken === undefined &&
+        uses !== undefined && uses.uses.length > 0 &&
+        uses.uses.every(use => use.kind === "direct-call" && !use.captured && !use.throughMember)
+        ? resolveRustCallableInputCarrier(subject!, carrier, context, options)
+        : carrier;
     }
   }
   return carrier === undefined || subject === undefined ? carrier : options.callableStorageCarrier(subject, carrier,
