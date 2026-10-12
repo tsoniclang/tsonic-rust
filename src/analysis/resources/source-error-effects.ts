@@ -9,7 +9,7 @@ import { rustTargetGenericBindingsForArguments } from "../../target-model/types/
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
+import { closedMetadataKey, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 
 export function createRustSourceErrorEffectSelection(walk: RustFactWalk): (
   node: Node,
@@ -23,7 +23,8 @@ export function createRustSourceErrorEffectSelection(walk: RustFactWalk): (
   for (const call of native.calls) {
     for (const source of [{ identity: call.invocationErrorSource, errorType: call.invocationError },
       ...call.awaitErrors.map((errorType, index) => ({ identity: call.awaitErrorSources[index]!, errorType }))]) {
-      origins.set(source.identity, { origin: source, selected: source });
+      const selected = Object.freeze({ identity: source.identity, errorType: snapshotClosedMetadata(source.errorType) });
+      origins.set(source.identity, { origin: selected, selected });
     }
   }
   return (node, declaration, kind, effects) => {
@@ -64,8 +65,7 @@ export function createRustSourceErrorEffectSelection(walk: RustFactWalk): (
           : `native-error-substitution:${closedMetadataKey({ source: origin.identity, errorType })}`;
       let target = origins.get(identity)?.selected;
       if (target === undefined) {
-        if (origins.size >= 4096) return undefined;
-        target = Object.freeze({ identity, errorType });
+        target = Object.freeze({ identity, errorType: snapshotClosedMetadata(errorType) });
         origins.set(identity, { origin, selected: target });
       } else if (!rustTargetTypeRefEquals(target.errorType, errorType)) return undefined;
       nativeErrors.push(Object.freeze({ source, target }));

@@ -1,6 +1,7 @@
 import { defineRustPlanKey } from "../../target-model/facts/keys.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 
 export interface RustNativeErrorEffect {
   readonly identity: string;
@@ -39,7 +40,8 @@ export function mergeRustErrorEffects(effects: readonly RustErrorEffectsFact[]):
       const previous = nativeErrors.get(source.identity);
       if (source.identity.length === 0 || !isRustTargetTypeRef(source.errorType) || previous !== undefined &&
         !rustTargetTypeRefEquals(previous.errorType, source.errorType)) return undefined;
-      if (previous === undefined) nativeErrors.set(source.identity, Object.freeze({ ...source }));
+      if (previous === undefined) nativeErrors.set(source.identity, Object.freeze({ identity: source.identity,
+        errorType: snapshotClosedMetadata(source.errorType) }));
     }
   }
   return nativeErrors.size === 0 ? localErrors ? rustLocalErrorEffects : rustPureErrorEffects

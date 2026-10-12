@@ -4,6 +4,7 @@ import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { rustErrorEffectsFactKey, rustFallibleFactKey, rustSourceErrorEffectsFactKey,
   rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
+import { createRustSourceErrorEffectSelection } from "../../../dist/analysis/resources/source-error-effects.js";
 import { Node_Expression, Node_Initializer, TryStatement_TryBlock, TryStatement_CatchClause,
   CatchClause_Block, TryStatement_FinallyBlock } from "@tsonic/target-api/source";
 import { sourcePackageCallbackErrorFiles, sourcePackageCallbackErrorGraph }
@@ -142,6 +143,28 @@ test("call edges rebind two same-signature formals to physical caller inputs wit
   assertChannels(current.callable("forward"), expected);
 });
 
+test("source error rebinding rejects unknown identities, mutated carriers and unselected inputs", () => {
+  const current = fixture(`
+    export function invoke(callback: () => number): number { return callback(); }
+    export function forward(callback: () => number): number { const output = invoke(callback); return output; }
+  `);
+  const select = createRustSourceErrorEffectSelection({ context: { ast: current.ast, facts: current.program.facts,
+    callableValues: current.program.callableValues } });
+  const effects = current.callable("invoke");
+  const declaration = current.declaration("invoke");
+  const call = current.initializer("output");
+  assert.equal(select(call, declaration, "invoke", effects) !== undefined, true);
+  const source = effects.nativeErrors[0];
+  for (const mutation of [
+    { ...source, identity: "foreign/source" },
+    { ...source, errorType: { ...source.errorType, name: "ForeignError" } },
+    { ...source, errorType: { ...source.errorType, trait: { ...source.errorType.trait, id: "foreign/trait" } } },
+  ]) assert.equal(select(call, declaration, "invoke", { ...effects, nativeErrors: [mutation] }) === undefined, true,
+    "identity and carrier must agree with the exact sealed native source");
+  assert.equal(select(current.calls("callback")[0], declaration, "invoke", effects) === undefined, true,
+    "an unselected invocation cannot supply another declaration's input binding");
+});
+
 test("source async invocation remains pure while exact rebound errors belong to awaiting", () => {
   const current = fixture(`
     export async function invoke(callback: () => Promise<number>): Promise<number> { return await callback(); }
@@ -156,6 +179,25 @@ test("source async invocation remains pure while exact rebound errors belong to 
   assert.equal(awaited !== undefined, true);
   assert.equal(awaited.effects.nativeErrors.length, 2);
   assertChannels(current.callable("forward"), awaited.effects.nativeErrors);
+});
+
+test("a synchronously returned input future transports its deferred error into the caller physical identity", () => {
+  const current = fixture(`
+    export function retain(callback: () => Promise<number>): Promise<number> { return callback(); }
+    export async function invoke(callback: () => Promise<number>): Promise<number> {
+      const future = retain(callback); return await future;
+    }
+  `);
+  const callee = current.program.callableValues.native.inputsFor(current.declaration("retain"))[0];
+  const caller = current.program.callableValues.native.inputsFor(current.declaration("invoke"))[0];
+  const effects = current.callable("invoke");
+  assert.equal(effects.localErrors, false);
+  assert.equal(effects.nativeErrors.length, 2, "invocation and deferred errors are independent channels");
+  assert.equal(effects.nativeErrors.every(source => source.errorType.kind === "associated-type" &&
+    source.errorType.owner.identity === caller.implementation.identity), true,
+    "no callee physical binder may escape across a selected source return");
+  assert.equal(effects.nativeErrors.every(source => source.errorType.trait.id === callee.protocol.trait.id), true,
+    "selected return transport preserves the callee protocol instead of rebranding it");
 });
 
 test("selected source generic arguments substitute callee protocol environments at the error owner", () => {
