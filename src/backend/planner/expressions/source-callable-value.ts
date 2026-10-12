@@ -1,13 +1,10 @@
 import type { RustSourceCallableValueFact } from "../../../analysis/facts/keys.js";
-import { rustClosureCaptureFactKey, rustFallibleFactKey } from "../../../analysis/facts/keys.js";
+import { rustAsyncFunctionFactKey, rustGeneratorFactKey, rustClosureCaptureFactKey, rustFallibleFactKey } from "../../../analysis/facts/keys.js";
 import type { RustExpr } from "../../target-ast/nodes.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import {
   isValidRustIdentifier,
-  rustCurrentErrorBoundary,
-  rustErrorBoundaryForProjectMember,
-  rustErrorType,
   sourceModuleItemPath,
 } from "../program/plan-context.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
@@ -57,7 +54,6 @@ export function planRustSourceCallableValueConstruction(
     ));
     return undefined;
   }
-  const callableType = rustCallableConstructionType(value.carrier, context);
   const lexical = context.input.program.lexicalFunctions.forDeclaration(value.sourceDeclaration);
   if (lexical?.kind === "unresolved") {
     context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, value.sourceDeclaration),
@@ -76,6 +72,8 @@ export function planRustSourceCallableValueConstruction(
     }
     return { kind: "path", path };
   }
+  const physical = context.input.program.callableValues.nativeProducers.physicalFor(value.sourceDeclaration, value.carrier);
+  const callableType = physical === undefined ? undefined : rustCallableConstructionType(physical, context);
   const argumentsType = rustTypeFromCarrierInContext({ kind: "tuple", elements: value.parameterCarriers }, context);
   if (callableType === undefined || argumentsType === undefined) {
     return undefined;
@@ -104,15 +102,15 @@ export function planRustSourceCallableValueConstruction(
         name: String(index),
       })), ...environmentArguments],
   };
-  const fallible = context.input.program.facts.getFact(
+  const suspended = context.input.program.facts.getFact(value.sourceDeclaration, rustAsyncFunctionFactKey) !== undefined ||
+    context.input.program.facts.getFact(value.sourceDeclaration, rustGeneratorFactKey) !== undefined;
+  const fallible = !suspended && context.input.program.facts.getFact(
     value.sourceDeclaration,
     rustFallibleFactKey,
   ) !== undefined;
-  const currentBoundary = rustCurrentErrorBoundary(context);
-  const sourceBoundary = fallible
-    ? rustErrorBoundaryForProjectMember(value.sourceDeclaration, context)
-    : undefined;
-  if (currentBoundary === undefined || fallible && sourceBoundary === undefined) {
+  const errorCarrier = context.input.program.callableValues.nativeProducers.errorFor(value.sourceDeclaration, "invoke");
+  const errorType = errorCarrier === undefined ? undefined : rustTypeFromCarrierInContext(errorCarrier, context);
+  if (errorType === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, value.sourceDeclaration),
       "rust.backend.callable-value-error-boundary",
@@ -120,19 +118,10 @@ export function planRustSourceCallableValueConstruction(
     ));
     return undefined;
   }
-  const currentErrorType = rustErrorType(currentBoundary);
-  const completed: RustExpr = fallible
-      ? {
-          kind: "try",
-          expr: invocation,
-          resultErrorType: currentErrorType,
-          operandErrorType: rustErrorType(sourceBoundary!),
-        }
-      : invocation;
-  const callableResult: RustExpr = rustTargetTypeRefEquals(value.resultCarrier, rustUnitTargetType())
-    ? { kind: "evaluate-then", effect: completed, discard: "unit",
-        value: applyRustFallibleResultExpression({ kind: "tuple-literal", elements: [] }, { errorType: currentErrorType }) }
-    : applyRustFallibleResultExpression(completed, { errorType: currentErrorType });
+  const callableResult: RustExpr = fallible ? invocation : rustTargetTypeRefEquals(value.resultCarrier, rustUnitTargetType())
+    ? { kind: "evaluate-then", effect: invocation, discard: "unit",
+        value: applyRustFallibleResultExpression({ kind: "tuple-literal", elements: [] }, { errorType }) }
+    : applyRustFallibleResultExpression(invocation, { errorType });
   const implementation: RustExpr = captures.length > 0
     ? {
         kind: "closure-block",

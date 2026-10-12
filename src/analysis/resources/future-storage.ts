@@ -7,6 +7,7 @@ import { rustFutureValueForOperation, rustFutureValueMatchesCarrier, rustNativeF
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustAwaitSelection, rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
+import { createRustSourceErrorEffectSelection } from "./source-error-effects.js";
 
 export function rustFutureValueForStoredBranch(
   walk: RustFactWalk,
@@ -33,14 +34,25 @@ export function rustFutureValueForStoredBranch(
   if (sources.kind === "open" && sources.boundaries.some(boundary => boundary.kind !== "opaque-result" ||
     select(boundary.exposure) === undefined)) return undefined;
   let selected: RustFutureValueFact | undefined;
+  const rebind = createRustSourceErrorEffectSelection(walk);
   for (const source of sources.producers) {
     if (source.subject.kind !== "value" || source.subject.projection.length !== 0) return undefined;
     const producer = source.subject.node;
-    const candidate = select(producer);
+    let candidate = select(producer);
     if (candidate === undefined) {
       const topology = rustAwaitSelection(facts.getRuntimeCarrierFact(producer)?.carrier, definitions);
       if (topology === undefined || rustAwaitSelectionLeaves(topology).some(leaf => leaf.future !== undefined)) return undefined;
       continue;
+    }
+    if (candidate.errorBoundary === "source-native") {
+      const owner = sourceEnclosingCallable(producer, ast);
+      if (owner === undefined || candidate.errorCarrier === undefined || candidate.errorSource === undefined) return undefined;
+      const edge = rebind(node, owner, "await", { localErrors: false, nativeErrors: [{
+        identity: candidate.errorSource, errorType: candidate.errorCarrier,
+      }] }, source.bindings);
+      const channel = edge?.effects.nativeErrors[0];
+      if (edge?.effects.nativeErrors.length !== 1 || channel === undefined) return undefined;
+      candidate = { ...candidate, errorCarrier: channel.errorType, errorSource: channel.identity };
     }
     if (selected !== undefined && !closedMetadataEquals(selected, candidate)) return undefined;
     selected = candidate;

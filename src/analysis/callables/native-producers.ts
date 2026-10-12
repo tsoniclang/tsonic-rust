@@ -12,7 +12,7 @@ import type { RustTypeDefinitions } from "../../target-model/types/source-union-
 import { rustJsPromiseTargetId } from "../../target-model/types/carriers/source-types.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
-import { rustClosureCaptureFactKey, rustSourceCallableReturnFactKey, rustSourceParameterAbiFactKey,
+import { rustAsyncFunctionFactKey, rustClosureCaptureFactKey, rustSourceCallableReturnFactKey, rustSourceParameterAbiFactKey,
   rustTargetOperationFactKey } from "../facts/keys.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
 
@@ -89,9 +89,11 @@ export function createRustNativeCallableProducerPlan(input: {
       if (producer === undefined || signature === undefined || error === undefined) return undefined;
       const operation = input.facts.getFact(declaration, rustTargetOperationFactKey);
       const sourceSignature = operation?.kind === "closure" ? rustCallableProtocol(operation.resultCarrier) : undefined;
+      const asynchronous = input.facts.getFact(declaration, rustAsyncFunctionFactKey);
       const expectedParameters = sourceSignature?.parameters ?? input.ast.parameters(declaration).map(parameter =>
         input.facts.getFact(parameter, rustSourceParameterAbiFactKey)?.parameterCarrier);
-      const expectedResult = sourceSignature?.result ?? input.facts.getFact(declaration, rustSourceCallableReturnFactKey)?.returnCarrier;
+      const expectedResult = sourceSignature?.result ?? asynchronous?.futureCarrier ??
+        input.facts.getFact(declaration, rustSourceCallableReturnFactKey)?.returnCarrier;
       if (expectedParameters.length !== signature.parameters.length ||
         !expectedParameters.every((parameter, index) => rustTargetTypeRefEquals(parameter, signature.parameters[index])) ||
         !rustTargetTypeRefEquals(expectedResult, signature.result)) return undefined;
@@ -102,15 +104,17 @@ export function createRustNativeCallableProducerPlan(input: {
       try { resultCarrier = input.returnCarrierFor(declaration); }
       finally { resolving.delete(key); }
       if (resultCarrier === undefined) return undefined;
-      const completion = rustNativeCallableCompletion(resultCarrier, input.definitions);
+      const completion = rustNativeCallableCompletion(asynchronous?.futureCarrier ?? resultCarrier, input.definitions);
       const output = completion === undefined ? resultCarrier : instantiateRustNativeCompletion(completion, future => {
         const selectedError = errorFor(declaration, future.ordinal);
         if (selectedError === undefined) return undefined;
+        const output = asynchronous === undefined ? future.output : resultCarrier;
         return future.carrier.kind === "target-named" && future.carrier.id === rustJsPromiseTargetId
           ? { ...future.carrier, genericArguments: future.carrier.genericArguments!.map((argument, index) =>
-            index === 2 ? { kind: "type" as const, type: selectedError } : argument) }
+            index === 2 ? { kind: "type" as const, type: selectedError }
+              : index === 1 ? { kind: "type" as const, type: output } : argument) }
           : rustNativeCompletionFutureType({ identity: `${producer.identity}:future:${future.ordinal}`,
-            output: future.output, error: selectedError, captures: producer.environment });
+            output, error: selectedError, captures: producer.environment });
       }, input.definitions);
       if (output === undefined) return undefined;
       const arguments_: TargetTypeRef = { kind: "tuple", elements: signature.parameters };

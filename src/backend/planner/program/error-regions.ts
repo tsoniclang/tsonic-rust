@@ -89,7 +89,8 @@ export function createRustErrorRegionCatalog(program: RustTargetProgram): RustEr
       const infallible: RustType = { kind: "named", path: "core::convert::Infallible" };
       if (reference.channel === "invoke" && suspended) return infallible;
       if (reference.channel !== "invoke") {
-        const result = program.facts.getFact(producer.declaration, rustSourceCallableReturnFactKey)?.returnCarrier;
+        const result = asynchronous?.futureCarrier ??
+          program.facts.getFact(producer.declaration, rustSourceCallableReturnFactKey)?.returnCarrier;
         const completion = result === undefined ? undefined : rustNativeCallableCompletion(result, program.typeDefinitions);
         if (completion?.futures[reference.channel] === undefined) return undefined;
         if (asynchronous === undefined) {
