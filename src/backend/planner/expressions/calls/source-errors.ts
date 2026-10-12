@@ -7,7 +7,7 @@ import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js"
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { planRustSelectedErrorRegion } from "../../program/error-regions.js";
 import { rustInjectLocalError, rustInjectNativeError, rustLocalErrorOwner, rustErrorType,
-  rustPropagateLocalError } from "../../program/fallible-boundaries.js";
+  rustPropagateLocalError, rustPropagateMappedErrorJoin } from "../../program/fallible-boundaries.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { diagnosticInput, type RustPlanContext } from "../../program/plan-context.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
@@ -43,8 +43,7 @@ export function planRustSourceErrorPropagation(
   if (context.syntheticNames === undefined) return reject(node, context);
   const errorName = allocateRustSyntheticName(context.syntheticNames, "source_error");
   const payloadName = allocateRustSyntheticName(context.syntheticNames, "source_error_payload");
-  const error: RustExpr = { kind: "path", path: errorName };
-  const mapped = operand.join.mapError(error, payloadName, (selected, payload) => {
+  return rustPropagateMappedErrorJoin(active, operand.join, expression, errorName, payloadName, (selected, payload) => {
     if (operand.local?.source.identity === selected.identity) {
       const owner = rustLocalErrorOwner(active);
       if (owner === undefined) return undefined;
@@ -59,12 +58,7 @@ export function planRustSourceErrorPropagation(
       : rustTypeFromCarrierInContext(channel.target.errorType, context);
     return channel === undefined || targetType === undefined ? undefined : rustInjectNativeError(active,
       { identity: channel.target.identity, errorType: targetType }, payload);
-  });
-  if (mapped === undefined) return reject(node, context);
-  const result: RustExpr = mapped === error && rustTypeEquals(operand.errorType, active.errorType) ? expression
-    : { kind: "method-call", receiver: expression, method: "map_err",
-    args: [{ kind: "closure", params: [{ name: errorName }], body: mapped }] };
-  return { kind: "try", expr: result, operandErrorType: active.errorType, resultErrorType: active.errorType };
+  }) ?? reject(node, context);
 }
 
 function reject(node: Node, context: RustPlanContext): undefined {

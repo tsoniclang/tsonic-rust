@@ -33,7 +33,8 @@ import { recordSelectedOperationInputs } from "../operations/inputs.js";
 import { rustAwaitCarrier, rustCallableProtocol } from "../../target-model/types/index.js";
 import { rustSourceCallCallableStorageCarrier } from "../facts/target-operation.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
-import { rustGenericCallableEffectsFactKey } from "../facts/generic-callable-effects.js";
+import { rustGenericCallableInvocationFactKey, type RustGenericCallableInvocationFact } from "../facts/generic-callable-effects.js";
+import { selectRustGenericCallableInvocation } from "./generic-call-errors.js";
 import { rustTargetOperationIsFallible } from "../facts/target-operation.js";
 import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js";
 import { rustSelectedCallKey, rustSelectedOperationKey } from "../../target-model/facts/selections.js";
@@ -85,6 +86,7 @@ function collectFallibilityFacts(
   const effectsByRegion = new Map<Node, RustErrorEffectsFact>();
   const effectsByExpression = new Map<Node, RustErrorEffectsFact>();
   const sourceErrorEdges = new Map<Node, RustSourceErrorEffectEdge[]>();
+  const genericInvocations = new Map<Node, RustGenericCallableInvocationFact>();
   const awaitSourceEdges = new Map<Node, readonly RustAwaitSourceErrorBranch[]>();
   for (const call of walk.context.callableValues.native.calls) {
     budget.metadata(call.invocationError);
@@ -118,10 +120,6 @@ function collectFallibilityFacts(
       registerCallableDeclaration(implementation.declaration);
     }
   }
-  const genericCallImplementations = (operation: import("../facts/keys.js").RustTargetOperationFact | undefined) => {
-    const carrier = rustSourceCallCallableStorageCarrier(operation, walk.context.structuralShapes);
-    return rustGenericCallableValue(carrier) === undefined ? undefined : genericCallables.definitionFor(carrier!)?.implementations;
-  };
   const genericInvocationIsFallible = (declaration: Node): boolean => {
     const implementations = projectImplementations.get(declaration) ?? [declaration];
     return [...implementations].some(implementation => isFallible(implementation) &&
@@ -131,6 +129,24 @@ function collectFallibilityFacts(
   const genericAwaitIsFallible = (declaration: Node): boolean =>
     walk.context.facts.get(declaration, rustSourceCallableReturnFactKey)?.implementationCompletion === undefined &&
       (walk.context.facts.get(declaration, rustAsyncFunctionFactKey) === undefined || isFallible(declaration));
+  const genericInvocation = (node: Node): RustGenericCallableInvocationFact | undefined => {
+    const selected = selectRustGenericCallableInvocation(node, walk.context, declaration => {
+      const result = walk.context.facts.get(declaration, rustAsyncFunctionFactKey)?.futureCarrier ??
+        walk.context.facts.get(declaration, rustSourceCallableReturnFactKey)?.returnCarrier;
+      return { invocation: genericInvocationIsFallible(declaration) ? "fallible" : "infallible",
+        awaiting: rustAwaitCarrier(result) === undefined ? "not-applicable"
+          : genericAwaitIsFallible(declaration) ? "fallible" : "infallible" };
+    });
+    if (selected === undefined || !selectSourceErrors.register([...selected.invocation, ...selected.awaiting])) {
+      appendRustDiagnostic(walk, "RUST_GENERIC_CALLABLE_EFFECTS_NOT_CLOSED",
+        "A generic invocation requires one exact physical family and bound producer error channels.", node,
+        ["target.capability=rust.generic-callable.effects"]);
+      return undefined;
+    }
+    budget.metadata(selected);
+    genericInvocations.set(node, selected);
+    return selected;
+  };
   for (const usage of walk.context.projectMethodProperties.usages) {
     budget.step();
     if (usage.writable) {
@@ -456,9 +472,15 @@ function collectFallibilityFacts(
       if (nativeInput === undefined && (kind === KindCallExpression || kind === KindNewExpression)) {
         const operation = walk.context.facts.get(node, rustTargetOperationFactKey);
         const target = selectedProjectDeclaration(node);
+        const generic = rustGenericCallableValue(rustSourceCallCallableStorageCarrier(operation, walk.context.structuralShapes));
+        if (generic !== undefined) {
+          const invocation = genericInvocation(node);
+          if (invocation === undefined) return undefined;
+          selected.push({ localErrors: false, nativeErrors: invocation.invocation });
+        }
         const declarations = operation?.kind === "source-call" && operation.target.form === "union-method"
           ? operation.target.variants.map(variant => variant.declaration)
-          : genericCallImplementations(operation)?.map(implementation => implementation.declaration) ?? (target === undefined ? [] : [target]);
+          : generic !== undefined || target === undefined ? [] : [target];
         for (const declaration of declarations) {
           if (walk.context.facts.get(declaration, rustAsyncFunctionFactKey) === undefined &&
             walk.context.facts.get(declaration, rustGeneratorFactKey) === undefined && !appendDeclaration(declaration)) return undefined;
@@ -508,20 +530,6 @@ function collectFallibilityFacts(
       awaiting: rustAwaitCarrier(result) === undefined ? "not-applicable"
         : genericAwaitIsFallible(declaration) ? "fallible" : "infallible",
     }, [{ message: "rust finalized callable declaration invocation and return effects" }]);
-  }
-  for (const definition of genericCallables.definitions) {
-    budget.step();
-    const effects: import("../facts/generic-callable-effects.js").RustGenericCallableEffectsFact = {
-      invocation: definition.implementations.some(implementation => genericInvocationIsFallible(implementation.declaration))
-        ? "fallible" : "infallible",
-      awaiting: rustAwaitCarrier(definition.signature.result) === undefined ? "not-applicable"
-        : definition.implementations.some(implementation => genericAwaitIsFallible(implementation.declaration)) ? "fallible" : "infallible",
-    };
-    for (const implementation of definition.implementations) {
-      budget.step();
-      walk.context.facts.set(implementation.declaration, rustGenericCallableEffectsFactKey, effects,
-        [{ message: "rust finalized generic callable implementation effects" }]);
-    }
   }
   for (const [call, pending] of walk.preparedCallbackCalls) {
     budget.step();
@@ -672,16 +680,11 @@ function collectFallibilityFacts(
                 operation.target.carrier.kind === "closure" && operation.target.carrier.fallible === true)) ||
             (operation.target.form === "structural-method" || operation.target.form === "constructor-value") &&
               rustCallableProtocol(operation.target.callableCarrier) !== undefined;
-          const genericImplementations = genericCallImplementations(operation);
           const nativeInput = walk.context.callableValues.native.callFor(node);
-          if (rustGenericCallableValue(rustSourceCallCallableStorageCarrier(operation, walk.context.structuralShapes)) !== undefined &&
-            nativeInput === undefined &&
-            (genericImplementations === undefined || genericImplementations.length === 0)) {
-            appendRustDiagnostic(walk, "RUST_GENERIC_CALLABLE_EFFECTS_NOT_CLOSED",
-              "A generic invocation has no exact native implementation family for effect classification.", node,
-              ["target.capability=rust.generic-callable.effects"]);
-          }
-          if (nativeInput === undefined && (nativeCallable || runtimeCallable || genericImplementations !== undefined || declaration !== undefined)) {
+          const generic = nativeInput === undefined &&
+            rustGenericCallableValue(rustSourceCallCallableStorageCarrier(operation, walk.context.structuralShapes)) !== undefined;
+          const invocation = generic ? genericInvocation(node) : undefined;
+          if (nativeInput === undefined && (nativeCallable || runtimeCallable || invocation !== undefined || declaration !== undefined)) {
             const isAsync = rustAwaitCarrier(operation.resultCarrier) !== undefined;
             const unionBranches = operation.target.form === "union-method"
               ? operation.target.variants.map(variant => ({
@@ -692,16 +695,14 @@ function collectFallibilityFacts(
               : undefined;
             walk.context.facts.set(node, rustSourceCallEffectsFactKey, {
               ...(unionBranches === undefined ? {} : { unionBranches }),
-              invocation: genericImplementations !== undefined
-                ? genericImplementations.some(implementation => genericInvocationIsFallible(implementation.declaration)) ? "fallible" : "infallible"
+              invocation: invocation !== undefined ? invocation.effects.invocation
                 : runtimeCallable || (unionBranches === undefined
                   ? declaration !== undefined && genericInvocationIsFallible(declaration)
                   : unionBranches.some(branch => branch.invocation === "fallible"))
                 ? "fallible"
                 : "infallible",
               awaiting: isAsync
-                  ? genericImplementations !== undefined
-                  ? genericImplementations.some(implementation => genericAwaitIsFallible(implementation.declaration)) ? "fallible" : "infallible"
+                  ? invocation !== undefined ? invocation.effects.awaiting
                   : runtimeCallable || (unionBranches === undefined
                     ? declaration !== undefined && genericAwaitIsFallible(declaration)
                     : unionBranches.some(branch => branch.awaiting === "fallible")) ? "fallible" : "infallible"
@@ -722,6 +723,11 @@ function collectFallibilityFacts(
     budget.metadata(effects);
     walk.context.facts.set(region, rustErrorEffectsFactKey, effects,
       [{ message: "rust finalized exact lexical region error effects" }]);
+  }
+  for (const [node, invocation] of genericInvocations) {
+    budget.metadata(invocation);
+    walk.context.facts.set(node, rustGenericCallableInvocationFactKey, invocation,
+      [{ message: "rust finalized physical generic invocation and exact producer error channels" }]);
   }
   for (const [node, effects] of effectsByExpression) {
     budget.metadata(effects);

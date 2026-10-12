@@ -28,6 +28,7 @@ export interface RustSourceErrorBindings extends RustTargetGenericBindings {
 }
 
 export interface RustSourceErrorEffectSelection {
+  register(errors: readonly RustNativeErrorEffect[]): boolean;
   bindingsFor(node: Node, declaration: Node, carriers: readonly TargetTypeRef[],
     storageBindings?: SourceStorageBindings): RustSourceErrorBindings | undefined;
   edgeFor(declaration: Node, kind: RustSourceErrorEffectEdge["kind"], effects: RustErrorEffectsFact,
@@ -38,12 +39,23 @@ export function createRustSourceErrorEffectSelection(walk: RustFactWalk): RustSo
   const native = walk.context.callableValues.native;
   const inputs = new Map(native.inputs.map(input => [input.implementation.identity, input]));
   const origins = new Map<string, { readonly origin: RustNativeErrorEffect; readonly selected: RustNativeErrorEffect }>();
-  for (const call of native.calls) {
-    for (const source of [{ identity: call.invocationErrorSource, errorType: call.invocationError },
-      ...call.awaitErrors.map((errorType, index) => ({ identity: call.awaitErrorSources[index]!, errorType }))]) {
+  const register = (errors: readonly RustNativeErrorEffect[]): boolean => {
+    if (mergeRustErrorEffects([{ localErrors: false, nativeErrors: errors }]) === undefined) return false;
+    for (const source of errors) {
+      const previous = origins.get(source.identity);
+      if (previous !== undefined && !rustTargetTypeRefEquals(previous.selected.errorType, source.errorType)) return false;
+    }
+    for (const source of errors) {
+      if (origins.has(source.identity)) continue;
       const selected = Object.freeze({ identity: source.identity, errorType: snapshotClosedMetadata(source.errorType) });
       origins.set(source.identity, { origin: selected, selected });
     }
+    return true;
+  };
+  for (const call of native.calls) {
+    if (!register([{ identity: call.invocationErrorSource, errorType: call.invocationError },
+      ...call.awaitErrors.map((errorType, index) => ({ identity: call.awaitErrorSources[index]!, errorType }))]))
+      throw new Error("Native input error channels require one exact identity and carrier.");
   }
   const bindingsFor: RustSourceErrorEffectSelection["bindingsFor"] = (node, declaration, carriers, storageBindings) => {
     const signature = walk.context.facts.getSelectedTargetCall(node);
@@ -202,5 +214,5 @@ export function createRustSourceErrorEffectSelection(walk: RustFactWalk): RustSo
     return selectedEffects === undefined ? undefined : Object.freeze({ declaration, kind, effects: selectedEffects,
       nativeErrors: Object.freeze(nativeErrors) });
   };
-  return Object.freeze({ bindingsFor, edgeFor });
+  return Object.freeze({ register, bindingsFor, edgeFor });
 }

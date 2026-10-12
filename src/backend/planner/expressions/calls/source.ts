@@ -19,7 +19,6 @@ import {
   isValidRustIdentifier,
   rustActiveErrorType,
   rustCurrentErrorBoundary,
-  rustErrorBoundaryForDeclaration,
   rustErrorBoundaryForProjectMember,
   rustErrorType,
   sourceModuleItemPath,
@@ -51,7 +50,9 @@ import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
 import { planRustUnionMethodCall } from "./union-methods.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../../../target-model/types/carriers/generic-callables.js";
-import { rustGenericCallableEffectsFactKey } from "../../../../analysis/facts/generic-callable-effects.js";
+import { rustGenericCallableInvocationFactKey } from "../../../../analysis/facts/generic-callable-effects.js";
+import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
+import { planRustGenericCallableErrorPropagation } from "./generic-errors.js";
 import { rustSourceCallCallableStorageCarrier } from "../../../../analysis/facts/target-operation.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { rustExpressionReferencesPath } from "../../../target-ast/inspection/source-usage.js";
@@ -492,17 +493,17 @@ export function planSelectedSourceCall(
     return undefined;
   }
   const callableCarrier = rustSourceCallCallableStorageCarrier(fact, context.input.program.structuralShapes);
+  const genericInvocation = context.input.program.facts.getFact(node, rustGenericCallableInvocationFactKey);
   if (nativeInput !== undefined && !rustNativeInputEffectsMatch(nativeInput, effects)) {
     context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
       "rust.backend.native-callable-effects", "Native invocation effects conflict with the sealed input implementation contract."));
     return undefined;
   }
   if (nativeInput === undefined && rustGenericCallableValue(callableCarrier) !== undefined) {
-    const definition = context.input.program.callableValues.generic.definitionFor(callableCarrier!);
-    if (definition === undefined || !definition.implementations.every(implementation => {
-      const selected = context.input.program.facts.getFact(implementation.declaration, rustGenericCallableEffectsFactKey);
-      return selected?.invocation === effects.invocation && selected.awaiting === effects.awaiting;
-    })) {
+    const physical = callee === undefined ? undefined : context.input.program.callableValues.nativeStorage.valueFor(callee);
+    if (genericInvocation === undefined || physical === undefined || physical.kind === "unresolved" ||
+      !rustTargetTypeRefEquals(physical.carrier, genericInvocation.carrier) ||
+      genericInvocation.effects.invocation !== effects.invocation || genericInvocation.effects.awaiting !== effects.awaiting) {
       context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node), "rust.backend.generic-callable-effects",
         "The invocation effects differ from the sealed generic implementation family."));
       return undefined;
@@ -518,6 +519,11 @@ export function planSelectedSourceCall(
   if (effects.invocation === "infallible") {
     return isRustNeverCarrier(fact.resultCarrier) ? rustBottomExpression(planned) : planned;
   }
+  if (genericInvocation !== undefined) {
+    const result = planRustGenericCallableErrorPropagation(node, genericInvocation, "invocation", planned, context);
+    return result === undefined ? undefined : isRustNeverCarrier(fact.resultCarrier)
+      ? rustBottomAfterEffect(result, "fallible never call returned") : result;
+  }
   const sourceErrors = context.input.program.facts.getFact(node, rustSourceErrorEffectsFactKey);
   if (selectedDeclaration !== undefined) {
     const edges = sourceErrors?.edges.filter(edge => edge.kind === "invoke" && edge.declaration === selectedDeclaration) ?? [];
@@ -531,12 +537,7 @@ export function planSelectedSourceCall(
       ? rustBottomAfterEffect(result, "fallible never call returned") : result;
   }
   const resultErrorType = rustActiveErrorType(context);
-  const genericDefinition = callableCarrier === undefined ? undefined
-    : context.input.program.callableValues.generic.definitionFor(callableCarrier);
-  const genericDeclaration = genericDefinition?.implementations[0]?.declaration;
-  const operandBoundary = genericDeclaration !== undefined
-    ? rustErrorBoundaryForDeclaration(genericDeclaration, context)
-    : rustCallableProtocol(callableCarrier) !== undefined || callableCarrier?.kind === "closure"
+  const operandBoundary = rustCallableProtocol(callableCarrier) !== undefined || callableCarrier?.kind === "closure"
       ? rustCurrentErrorBoundary(context)
     : selected.sourceDeclaration === undefined
       ? undefined

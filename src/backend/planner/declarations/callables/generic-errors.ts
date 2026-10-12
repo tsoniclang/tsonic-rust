@@ -4,10 +4,11 @@ import type { RustSourceCallEffectsFact } from "../../../../analysis/facts/objec
 import type { RustGenericCallableEffectsFact } from "../../../../analysis/facts/generic-callable-effects.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
-import { substituteRustTargetGenerics } from "../../../../target-model/types/carriers/substitution.js";
+import { selectRustGenericCallableErrors } from "../../../../analysis/callables/generic-errors.js";
+import type { RustNativeErrorSource } from "../../../../target-model/types/native-error-joins.js";
+import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { planRustNativeErrorJoin, type RustNativeErrorJoinPlan, type RustNativeErrorJoinSelection,
   type RustNativeErrorJoinSource } from "../../types/native-error-joins.js";
-import { rustGenericCallableMemberBindings } from "./generic-signatures.js";
 
 export interface RustGenericCallableProducerErrors {
   readonly effects: RustSourceCallEffectsFact;
@@ -26,50 +27,53 @@ export function planRustGenericCallableErrors(
   definition: RustGenericCallablePhysicalDefinition,
   context: RustPlanContext,
 ): RustGenericCallableErrorPlan | undefined {
-  const invocation: RustNativeErrorJoinSource[] = [];
-  const awaiting: RustNativeErrorJoinSource[] = [];
+  const { program } = context.input;
+  const selected = selectRustGenericCallableErrors(definition, {
+    ast: program.source.ast, sourceLifetimes: program.sourceLifetimes,
+    physical: program.callableValues.generic.physical, producers: program.callableValues.nativeProducers,
+    effectsFor: declaration => program.facts.getFact(declaration, rustSourceCallEffectsFactKey),
+  });
+  if (selected === undefined) return undefined;
   const selections = new Map<RustGenericCallablePhysicalMember, RustGenericCallableProducerErrors>();
   for (const member of definition.members) {
-    const implementation = member.implementation;
-    const effects = context.input.program.facts.getFact(implementation.declaration, rustSourceCallEffectsFactKey);
-    const substitutions = rustGenericCallableMemberBindings(definition, member, context);
-    const producer = context.input.program.callableValues.nativeProducers.forDeclaration(implementation.declaration);
-    if (effects === undefined || substitutions === undefined || producer === undefined) return undefined;
-    const selected: { invocation: RustNativeErrorJoinSelection | undefined; awaiting: RustNativeErrorJoinSelection | undefined } = {
+    const errors = selected.forMember(member);
+    if (errors === undefined) return undefined;
+    const rendered: { invocation: RustNativeErrorJoinSelection | undefined; awaiting: RustNativeErrorJoinSelection | undefined } = {
       invocation: undefined, awaiting: undefined,
     };
     for (const channel of ["invocation", "awaiting"] as const) {
-      if (effects[channel] !== "fallible") continue;
-      const error = context.input.program.callableValues.nativeProducers.errorFor(implementation.declaration,
-        channel === "invocation" ? "invoke" : 0);
-      const errorType = error === undefined ? undefined : rustTypeFromCarrierInContext(
-        substituteRustTargetGenerics(error, substitutions.types, substitutions.lifetimes, substitutions.consts), context);
+      const source = errors[channel];
+      if (source === undefined) continue;
+      const errorType = rustTypeFromCarrierInContext(source.errorType, context);
       if (errorType === undefined) return undefined;
-      const sources = channel === "invocation" ? invocation : awaiting;
-      const source = Object.freeze({ identity: `${definition.identity}:${member.variantName}:${producer.identity}:${channel}`,
-        variant: `Error${sources.length}`, errorType });
-      sources.push(source);
-      selected[channel] = source;
+      rendered[channel] = { ...source, errorType };
     }
-    selections.set(member, Object.freeze({ effects, ...selected }));
+    selections.set(member, Object.freeze({ effects: errors.effects, ...rendered }));
   }
-  const join = (sources: readonly RustNativeErrorJoinSource[]): RustNativeErrorJoinPlan | undefined => {
-    const arity = sources.length;
-    const name = arity < 2 ? `NativeErrors${arity}` : context.input.errorRegions.nameFor(definition.ownerFileName, arity);
-    const moduleName = context.moduleNameByFileName.get(definition.ownerFileName);
-    if (name === undefined || moduleName === undefined) return undefined;
-    const external = context.externalCrateNameByFileName.get(definition.ownerFileName);
-    return planRustNativeErrorJoin({ identity: `native-error-join:${definition.ownerFileName}:${arity}`,
-      name, referencePath: `${external !== undefined && external !== context.crateName ? external : "crate"}::${moduleName}::${name}`,
-      visibility: "public", sources });
-  };
-  const invocationJoin = join(invocation);
-  const awaitingJoin = join(awaiting);
+  const invocationJoin = planRustGenericCallableErrorJoin(definition.ownerFileName, selected.invocation, context);
+  const awaitingJoin = planRustGenericCallableErrorJoin(definition.ownerFileName, selected.awaiting, context);
   return invocationJoin === undefined || awaitingJoin === undefined ? undefined : Object.freeze({
-    effects: Object.freeze({ invocation: invocation.length > 0 ? "fallible" : "infallible",
-      awaiting: awaiting.length > 0 ? "fallible" : [...selections.values()].some(value => value.effects.awaiting !== "not-applicable")
-        ? "infallible" : "not-applicable" }),
+    effects: selected.effects,
     invocation: invocationJoin, awaiting: awaitingJoin,
     forMember: (member: RustGenericCallablePhysicalMember) => selections.get(member),
   });
+}
+
+export function planRustGenericCallableErrorJoin(
+  ownerFileName: string, sources: readonly RustNativeErrorSource<TargetTypeRef>[], context: RustPlanContext,
+): RustNativeErrorJoinPlan | undefined {
+  const rendered: RustNativeErrorJoinSource[] = [];
+  for (const source of sources) {
+    const errorType = rustTypeFromCarrierInContext(source.errorType, context);
+    if (errorType === undefined) return undefined;
+    rendered.push({ ...source, errorType });
+  }
+  const arity = sources.length;
+  const name = arity < 2 ? `NativeErrors${arity}` : context.input.errorRegions.nameFor(ownerFileName, arity);
+  const moduleName = context.moduleNameByFileName.get(ownerFileName);
+  if (name === undefined || moduleName === undefined) return undefined;
+  const external = context.externalCrateNameByFileName.get(ownerFileName);
+  return planRustNativeErrorJoin({ identity: `native-error-join:${ownerFileName}:${arity}`,
+    name, referencePath: `${external !== undefined && external !== context.crateName ? external : "crate"}::${moduleName}::${name}`,
+    visibility: "public", sources: rendered });
 }
