@@ -371,7 +371,7 @@ export function rustTypeFromCarrier(
             reference,
           })),
           outlives: carrier.outlives.map(rustLifetimeToAst),
-          ...(captures.length === 0 ? {} : { captures }),
+          captures,
         };
   }
   if (carrier.kind === "associated-type") {

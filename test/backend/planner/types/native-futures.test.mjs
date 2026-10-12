@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { rustNativeFutureType } from "../../../../dist/backend/planner/types/native-futures.js";
 import { printRustType } from "../../../../dist/print/source/types.js";
+import { rustTypeFromCarrier } from "../../../../dist/backend/planner/types/render.js";
+import { rustNativeCompletionFutureType } from "../../../../dist/target-model/types/callable-completions.js";
+import { rustSourcePrimitiveTargetType, rustNamedTargetType } from "../../../../dist/target-model/types/carriers/native.js";
 
 const output = { kind: "named", path: "Result", genericArguments: [
   { kind: "type", type: { kind: "reference", referent: { kind: "str" }, mutable: false,
@@ -33,4 +36,15 @@ test("an immediate native completion uses its exact nameable Ready output withou
   assert.equal(ready.kind, "named");
   assert.equal(ready.genericArguments[0].type === output, true);
   assert.equal(printRustType(ready), "core::future::Ready<Result<&'input str, <Callback as Invocation>::AwaitError>>");
+});
+
+test("canonical opaque carrier rendering preserves an explicitly empty capture set", () => {
+  const carrier = rustNativeCompletionFutureType({ identity: "source:future", captures: [],
+    output: rustSourcePrimitiveTargetType("int32"),
+    error: rustNamedTargetType("rust.core.Infallible", "core::convert::Infallible", []),
+  });
+  const rendered = rustTypeFromCarrier(carrier, () => undefined, () => undefined);
+  assert.equal(rendered !== undefined, true);
+  assert.equal(Object.hasOwn(rendered, "captures"), true, "empty captures must not become implicit lifetime capture");
+  assert.match(printRustType(rendered), / \+ use<>$/u);
 });
