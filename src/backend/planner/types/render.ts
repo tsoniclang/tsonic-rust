@@ -540,7 +540,7 @@ export interface RustTypeRenderingContext {
 export function rustTypeFromCarrierInContext(
   carrier: TargetTypeRef | undefined,
   context: RustTypeRenderingContext,
-  position: "general" | "parameter" | "return" | "inferred-call" | "absence" = "general",
+  position: "general" | "parameter" | "return" | "inferred-call" | "absence" | "pattern" = "general",
 ): RustType | undefined {
   const instantiatedCarrier = carrier === undefined ||
       context.typeParameterSubstitutions === undefined &&
@@ -648,6 +648,11 @@ export function rustTypeFromCarrierInContext(
     },
   };
   const rendered = rustTypeFromCarrier(selectedCarrier, sourceRendering, resolveStructuralShape);
+  if (position === "pattern") {
+    if (rendered?.kind !== "named" || !rustTypeIsLegalInPosition(rendered, "return")) return undefined;
+    registerAliasFromPath(context, rendered.path);
+    return { kind: "named", path: rendered.path };
+  }
   if (position === "inferred-call" && rendered !== undefined && rustTypeContainsImplTrait(rendered)) {
     return { kind: "infer" };
   }
@@ -669,7 +674,7 @@ export function rustParameterTypeFromCarrierInContext(
 
 export function rustUnionTypePathInContext(carrier: TargetTypeRef, context: RustTypeRenderingContext): string | undefined {
   if (rustSourceUnionCarrierValue(carrier) === undefined && rustRuntimeUnionContract(carrier) === undefined) return undefined;
-  const type = rustTypeFromCarrierInContext(carrier, context);
+  const type = rustTypeFromCarrierInContext(carrier, context, "pattern");
   return type?.kind === "named" ? type.path : undefined;
 }
 

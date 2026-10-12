@@ -7,7 +7,7 @@ import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
 import { diagnosticInput, type RustPlanContext } from "../program/plan-context.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
-import { rustTypeFromCarrierInContext } from "../types/render.js";
+import { rustTypeFromCarrierInContext, rustUnionTypePathInContext } from "../types/render.js";
 import { applyRustLocalErrorBoundary } from "../types/error-boundary.js";
 import { rustPropagateNativeError } from "../program/fallible-boundaries.js";
 import { rustBottomAfterEffect, rustBottomExpression } from "../types/fallible-shape.js";
@@ -79,8 +79,8 @@ export function planRustAwaitBranches(
         { pattern: { kind: "path", path: "None" }, expression: absent() },
       ] };
     }
-    const owner = rustTypeFromCarrierInContext(selection.carrier, context);
-    if (owner?.kind !== "named") {
+    const owner = rustUnionTypePathInContext(selection.carrier, context);
+    if (owner === undefined) {
       context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
         "rust.backend.await-union", "Awaited native union has no exact emitted type identity."));
       return undefined;
@@ -93,7 +93,7 @@ export function planRustAwaitBranches(
         ? { kind: "bool-literal", value: alternative.variant.value } : { kind: "path", path: name };
       const selected = plan(alternative.selection, payload);
       if (selected === undefined) return undefined;
-      const path = `${owner.path}::${alternative.variant.name}`;
+      const path = `${owner}::${alternative.variant.name}`;
       arms.push({ pattern: constant ? { kind: "path", path }
         : { kind: "tuple-variant", path, elements: [{ kind: "binding", name }] }, expression: selected });
     }

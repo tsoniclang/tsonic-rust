@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustCallTypeFromCarrierInContext, rustReturnTypeFromCarrier, rustTypeFromCarrierInContext } from "../../../../dist/backend/planner/types/render.js";
+import { rustCallTypeFromCarrierInContext, rustReturnTypeFromCarrier, rustTypeFromCarrierInContext,
+  rustUnionTypePathInContext } from "../../../../dist/backend/planner/types/render.js";
 import { rustNamedTargetType, rustVecTargetType, rustCallableInputTargetType, rustSourceOptionalTargetType,
   rustSourceUnionTargetType, rustFutureTargetType } from "../../../../dist/target-model/types/index.js";
 import { rustTypeIsLegalInPosition } from "../../../../dist/backend/planner/types/type-observations.js";
@@ -147,6 +148,8 @@ test("canonical physical union payloads retain enclosing anonymous type position
       const rendered = rustTypeFromCarrierInContext(physical, scope, position);
       assert.equal(rendered?.kind, "named", `${origin}:${position}`);
       assert.equal(rendered.genericArguments[1].type.kind, "impl-trait");
+      assert.equal(rustUnionTypePathInContext(physical, scope), rendered.path,
+        "patterns retain the canonical enum identity without emitting anonymous generic arguments");
       assert.equal(rustTypeFromCarrierInContext({ kind: "function-pointer", args: [], result: physical }, scope, position) === undefined, true,
         "enclosing function pointer still rejects opaque types");
     }
