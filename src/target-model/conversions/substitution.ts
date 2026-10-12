@@ -3,6 +3,24 @@ import type { RustLifetimeRef } from "../lifetimes/index.js";
 import type { RustValueConversion } from "../operations/model.js";
 import { substituteRustTargetGenerics } from "../types/carriers/substitution.js";
 import { mapRustProgramErrorRoute } from "./program-error.js";
+import type { RustCallableConversion, RustCallableValueConversion } from "./callable.js";
+
+export function substituteRustCallableConversion(
+  value: RustCallableConversion,
+  substitutions: ReadonlyMap<string, TargetTypeRef>,
+  lifetimeSubstitutions: ReadonlyMap<string, RustLifetimeRef> = new Map(),
+  constSubstitutions: ReadonlyMap<string, RustTargetConstArgument> = new Map(),
+): RustCallableConversion {
+  const part = (conversion: RustCallableValueConversion): RustCallableValueConversion => conversion.kind !== "value" ? conversion
+    : Object.freeze({ kind: "value", conversion: conversion.conversion.kind === "callable-adapter"
+      ? substituteRustCallableConversion(conversion.conversion, substitutions, lifetimeSubstitutions, constSubstitutions)
+      : substituteRustValueConversion(conversion.conversion, substitutions, lifetimeSubstitutions, constSubstitutions) });
+  return Object.freeze({ ...value,
+    source: substituteRustTargetGenerics(value.source, substitutions, lifetimeSubstitutions, constSubstitutions),
+    target: substituteRustTargetGenerics(value.target, substitutions, lifetimeSubstitutions, constSubstitutions),
+    parameters: Object.freeze(value.parameters.map(part)), result: part(value.result),
+  });
+}
 
 export function substituteRustValueConversion(
   value: RustValueConversion,

@@ -10,6 +10,7 @@ import { rustCallableProtocol } from "../../target-model/types/carriers/callable
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustGenericCallableSignaturesMatch } from "../../target-model/conversions/generic-callable.js";
 import { rustCallableConversionPhysical } from "../../target-model/conversions/callable-physical.js";
+import { substituteRustCallableConversion } from "../../target-model/conversions/substitution.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { rustSourceOptionalTargetType } from "../../target-model/types/projections.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
@@ -19,6 +20,7 @@ import { substituteRustTargetGenerics } from "../../target-model/types/carriers/
 import { rustContextualValueConversionFactKey, rustSourceCallableReturnFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
 import { rustEffectiveValueCarrier, rustValueCarrierBeforeContextualConversion } from "../facts/value-carrier-queries.js";
 import { rustNativeCallablePhysicalSource } from "./native-conversions.js";
+import { createRustNativeStorageGenericSelection } from "./native-storage-generics.js";
 import type { RustNativeCallableInput, RustNativeCallableInputPlan } from "./native-inputs.js";
 import type { RustNativeCallableProducerPlan } from "./native-producers.js";
 import type { RustGenericCallablePlan } from "./generic-values.js";
@@ -90,6 +92,7 @@ export function createRustNativeStoragePlan(input: {
       fail("Native callable storage exceeds its bounded carrier projection budget.");
       return false;
     };
+    const genericsFor = createRustNativeStorageGenericSelection({ ...input, step });
     const containsCallable = (type: TargetTypeRef, depth: number, visited = new Set<TargetTypeRef>()): boolean | undefined => {
       if (!step(depth)) return undefined;
       if (visited.has(type)) return false;
@@ -139,17 +142,22 @@ export function createRustNativeStoragePlan(input: {
           let candidatePhysical: TargetTypeRef | undefined;
           if (frontier.kind === "boundary") {
             const fact = input.facts.getFact(origin.node, rustContextualValueConversionFactKey);
-            const target = fact === undefined ? undefined : callableValueCarrier(fact.targetCarrier);
             if (origin.projection.length !== 0 || fact?.conversion.kind !== "callable-adapter" ||
-              !rustTargetTypeRefEquals(fact.sourceCarrier, rustValueCarrierBeforeContextualConversion(input.facts, origin.node)) ||
-              target === undefined || !sameCallableContract(current, target))
+              !rustTargetTypeRefEquals(fact.sourceCarrier, rustValueCarrierBeforeContextualConversion(input.facts, origin.node)))
               return fail("Native callable conversion storage requires its exact finalized source and destination contract.");
-            const operand = visit(fact.sourceCarrier, origin, frontier.bindings, depth + 1, false, "input");
-            const source = operand === undefined ? undefined : rustNativeCallablePhysicalSource(fact.sourceCarrier,
+            const generics = genericsFor(ownerFor(origin.node), frontier.bindings, depth + 1);
+            if (generics.kind === "unresolved") return fail(generics.reason);
+            const { types, lifetimes, consts } = generics.bindings;
+            const conversion = substituteRustCallableConversion(fact.conversion, types, lifetimes, consts);
+            const target = callableValueCarrier(conversion.target);
+            if (target === undefined || !sameCallableContract(current, target))
+              return fail("Native callable conversion storage conflicts with its selected activation signature.");
+            const operand = visit(conversion.source, origin, frontier.bindings, depth + 1, false, "input");
+            const source = operand === undefined ? undefined : rustNativeCallablePhysicalSource(conversion.source,
               { kind: "selected", carrier: operand, inputs: [...selectedInputs] }, input.definitions);
             const file = input.ast.getSourceFile(origin.node);
             candidatePhysical = source === undefined || file === undefined ? undefined
-              : rustCallableConversionPhysical(fact.conversion, source.signature, input.ast.getFileName(file), input.definitions)?.carrier;
+              : rustCallableConversionPhysical(conversion, source.signature, input.ast.getFileName(file), input.definitions)?.carrier;
             if (candidatePhysical === undefined)
               return fail("Native callable conversion storage has no exact physical adaptation contract.");
           } else {
@@ -159,7 +167,14 @@ export function createRustNativeStoragePlan(input: {
               const originCarrier = origin.projection.length === 0
                 ? input.facts.getFact(origin.node, rustRuntimeCarrierKey)?.carrier : undefined;
               if (permitsAbsence && isRustAbsenceCarrier(originCarrier)) continue;
-              candidatePhysical = origin.projection.length === 0 ? input.producers.physicalFor(origin.node, current) : undefined;
+              const generics = genericsFor(sourceEnclosingCallable(input.ast.parent(origin.node), input.ast), frontier.bindings, depth + 1);
+              if (generics.kind === "unresolved") return fail(generics.reason);
+              const { types, lifetimes, consts } = generics.bindings;
+              const boundCarrier = originCarrier === undefined ? undefined
+                : callableValueCarrier(substituteRustTargetGenerics(originCarrier, types, lifetimes, consts));
+              const produced = originCarrier === undefined || boundCarrier === undefined || !sameCallableContract(current, boundCarrier)
+                ? undefined : input.producers.physicalFor(origin.node, originCarrier);
+              candidatePhysical = produced === undefined ? undefined : substituteRustTargetGenerics(produced, types, lifetimes, consts);
             }
             if (candidatePhysical === undefined)
               return fail("Native callable storage has a producer without a sealed physical implementation.");
