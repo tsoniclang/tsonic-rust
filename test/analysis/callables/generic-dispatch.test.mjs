@@ -3,6 +3,7 @@ import test from "node:test";
 import { createRustGenericCallableDispatchPlan, selectRustGenericCallableInvocationStorage }
   from "../../../dist/analysis/callables/generic-dispatch.js";
 import { rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
+import { rustRuntimeCarrierKey } from "../../../dist/target-model/facts/selections.js";
 
 function fixture() {
   const source = Object.freeze({ fileName: "/project/index.ts" });
@@ -23,8 +24,12 @@ function fixture() {
         [`Is${kind}`, node => kind === "CallExpression" && node === invocation])),
       as: { AsCallExpression: node => node },
     },
-    facts: { getFact: (node, key) => node === invocation && key === rustTargetOperationFactKey ? operation : undefined },
-    generic: { physical: { definitionFor: selected => selected === carrier ? called : undefined } },
+    facts: { getFact: (node, key) => node === invocation && key === rustTargetOperationFactKey ? operation
+      : node === callee && key === rustRuntimeCarrierKey ? { carrier } : undefined,
+      getTargetConversionFact: () => undefined,
+      getRuntimeCarrierFact: node => node === callee ? { carrier } : undefined },
+    generic: { definitionFor: selected => selected === carrier ? called : undefined,
+      physical: { definitionFor: selected => selected === carrier ? called : undefined } },
     nativeStorage: { valueFor(node) {
       storageReads++;
       assert.equal(node === callee, true, "physical selection uses the exact callee expression");
@@ -64,6 +69,13 @@ test("generic invocation storage is exact and does not manufacture a family from
     { ...current.input, facts: { getFact: () => undefined } },
     { ...current.input, ast: { ...current.input.ast, as: { AsCallExpression: () => undefined } } },
     { ...current.input, nativeStorage: { valueFor: () => ({ kind: "unresolved", reason: "missing exact storage" }) } },
-    { ...current.input, generic: { physical: { definitionFor: () => undefined } } },
+    { ...current.input, generic: { ...current.input.generic, physical: { definitionFor: () => undefined } } },
   ]) assert.equal(selectRustGenericCallableInvocationStorage(current.invocation, changed) === undefined, true);
+});
+
+test("nongeneric source calls never request unrelated physical callable storage", () => {
+  const current = fixture();
+  const input = { ...current.input, generic: { ...current.input.generic, definitionFor: () => undefined },
+    nativeStorage: { valueFor() { throw new Error("unrelated source call must not enter physical generic analysis"); } } };
+  assert.equal(selectRustGenericCallableInvocationStorage(current.invocation, input) === undefined, true);
 });

@@ -46,6 +46,34 @@ test("fallible function and method error signatures share the existing exact ali
   assert.deepEqual(nameRustSignatureTypes([unnameable]), [unnameable]);
 });
 
+test("opaque native associated output aliases retain owner and higher-ranked binders without aliasing traits", () => {
+  const lifetime = { kind: "lifetime", lifetime: { kind: "named", name: "borrow" } };
+  const payload = { kind: "named", path: "Payload", genericArguments: [lifetime, { kind: "type", type: nested }] };
+  const binder = [{ kind: "lifetime", name: "borrow", outlives: [] }];
+  const argument = { kind: "associated-equality", name: "Output", genericArguments: [], type: payload };
+  const bound = { kind: "trait-type", reference: { binder,
+    trait: { kind: "named", path: "Family", genericArguments: [lifetime, argument] } } };
+  const output = { kind: "impl-trait", bounds: [bound], outlives: [], captures: [] };
+  const source = { ...makeFunction("read", "public"), params: [], returnType: output };
+  const result = nameSignatureScope([source]);
+  assert.equal(result.aliases.length, 1);
+  const alias = result.aliases[0];
+  assert.deepEqual(alias.target, payload);
+  assert.deepEqual(alias.generics.parameters, [...binder, { kind: "type", name: "Item", bounds: [] }]);
+  const retained = result.items[0].returnType;
+  assert.equal(retained.kind, "impl-trait");
+  assert.deepEqual(retained.outlives, output.outlives);
+  assert.deepEqual(retained.captures, output.captures);
+  assert.deepEqual(retained.bounds[0].reference.binder, binder);
+  assert.equal(retained.bounds[0].reference.trait.path, "Family");
+  assert.deepEqual(retained.bounds[0].reference.trait.genericArguments[0], lifetime);
+  assert.deepEqual(retained.bounds[0].reference.trait.genericArguments[1], { ...argument,
+    type: { kind: "named", path: alias.name, genericArguments: [
+      lifetime, { kind: "type", type: { kind: "named", path: "Item" } },
+    ] } });
+  assert.deepEqual(nameRustSignatureTypes([...result.aliases, ...result.items]), [...result.aliases, ...result.items]);
+});
+
 test("public signature closure removes only obsolete reachability dispositions", () => {
   const exposed = { kind: "struct", name: "Envelope", visibility: "public", generics: emptyRustGenerics,
     fields: [{ name: "value", visibility: "public", type: named("Variants") }] };
@@ -85,7 +113,7 @@ test("native lifetime arguments stay exact in factored aliases", () => {
     const result = nameRustSignatureTypes([source]);
     assert.deepEqual(result[0].target, type);
     assert.deepEqual(result[0].generics.parameters.map(parameter => parameter.name),
-      lifetime.kind === "static" ? ["Item"] : ["Item", "scope"]);
+      lifetime.kind === "static" ? ["Item"] : ["scope", "Item"]);
     assert.deepEqual(nameRustSignatureTypes(result), result);
   }
   const type = { ...nested, genericArguments: [{ kind: "lifetime", lifetime: { kind: "placeholder" } }, ...nested.genericArguments] };
@@ -187,12 +215,12 @@ test("trait aliases preserve native owner binders and reserve method-local param
   const selected = result.find(item => item.kind === "trait");
   assert.equal(alias.name, "ReadValues2");
   assert.deepEqual(alias.target, type);
-  assert.deepEqual(alias.generics.parameters.map(parameter => parameter.name), ["Item", "scope", "CAPACITY"]);
+  assert.deepEqual(alias.generics.parameters.map(parameter => parameter.name), ["scope", "Item", "CAPACITY"]);
   assert.deepEqual(selected.generics, generics);
   assert.deepEqual(selected.members[0].generics, method.generics);
   assert.deepEqual(selected.members[0].params[0].type.genericArguments, [
-    { kind: "type", type: { kind: "named", path: "Item" } },
     { kind: "lifetime", lifetime: { kind: "named", name: "scope" } },
+    { kind: "type", type: { kind: "named", path: "Item" } },
     { kind: "const", value: { kind: "path", path: "CAPACITY" } },
   ]);
   assert.deepEqual(nameRustSignatureTypes(result), result);

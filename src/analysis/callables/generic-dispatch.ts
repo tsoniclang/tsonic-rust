@@ -3,6 +3,7 @@ import { Node_Expression } from "@tsonic/target-api/source";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetOperationFactKey, type RustTargetOperationFact } from "../facts/keys.js";
+import { rustEffectiveValueCarrier } from "../facts/value-carrier-queries.js";
 import type { RustGenericCallablePhysicalDefinition } from "./generic-physical.js";
 import type { RustGenericCallablePlan } from "./generic-values.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
@@ -26,7 +27,9 @@ export function selectRustGenericCallableInvocationStorage(
   const operation = input.facts.getFact(node, rustTargetOperationFactKey);
   if (operation?.kind !== "source-call") return undefined;
   const callee = Node_Expression(input.ast, node);
-  const storage = callee === undefined ? undefined : input.nativeStorage.valueFor(callee);
+  const logical = rustEffectiveValueCarrier(input.facts, callee);
+  if (callee === undefined || logical === undefined || input.generic.definitionFor(logical) === undefined) return undefined;
+  const storage = input.nativeStorage.valueFor(callee);
   if (storage === undefined || storage.kind === "unresolved") return undefined;
   const definition = input.generic.physical.definitionFor(storage.carrier);
   return definition === undefined ? undefined : { operation, carrier: storage.carrier, definition };

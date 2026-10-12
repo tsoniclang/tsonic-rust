@@ -1,4 +1,4 @@
-import type { RustGenericArgument, RustGenericParameter, RustImplFunction, RustItem, RustTraitFunction, RustType, RustVisibility } from "../nodes.js";
+import type { RustGenericArgument, RustGenericParameter, RustImplFunction, RustItem, RustTraitFunction, RustType, RustTypeBound, RustVisibility } from "../nodes.js";
 import { rustTypeEquals } from "../inspection/type-equality.js";
 import { rustPascalCaseIdentifier } from "../../../target-model/names/identifiers.js";
 
@@ -28,17 +28,17 @@ export function nameRustSignatureTypes(
   const aliases: Extract<RustItem, { readonly kind: "type-alias" }>[] = [];
   const createTypeNamer = (item: { readonly name: string; readonly visibility: RustVisibility },
     availableParameters: readonly RustGenericParameter[]) => {
-    const nameType = (type: RustType, role: string, visibility = item.visibility): RustType => {
-      if (type.kind === "reference") return { ...type, referent: nameType(type.referent, role, visibility) };
-      if (type.kind === "slice") return { ...type, element: nameType(type.element, `${role}Element`, visibility) };
-      if (type.kind === "impl-trait") return { ...type, bounds: type.bounds.map(bound =>
-        bound.kind !== "callable" ? bound : { ...bound,
-          parameters: bound.parameters.map((parameter, index) => nameType(parameter, `${role}Arg${index}`, visibility)),
-          result: nameType(bound.result, `${role}Result`, visibility),
-        }) };
+    const nameType = (type: RustType, role: string, visibility = item.visibility,
+      scope = availableParameters): RustType => {
+      if (type.kind === "reference") return { ...type, referent: nameType(type.referent, role, visibility, scope) };
+      if (type.kind === "slice") return { ...type, element: nameType(type.element, `${role}Element`, visibility, scope) };
+      if (type.kind === "impl-trait") return { ...type,
+        bounds: type.bounds.map(bound => nameBound(bound, role, visibility, scope)) };
       const summary = summarizeClosedType(type);
       if (summary === undefined || summary.weight < 160 || summary.names.has("Self")) return type;
-      const parameters = availableParameters.filter(parameter => summary.names.has(parameter.name))
+      const selectedParameters = scope.filter(parameter => summary.names.has(parameter.name));
+      const parameters = [...selectedParameters.filter(parameter => parameter.kind === "lifetime"),
+        ...selectedParameters.filter(parameter => parameter.kind !== "lifetime")]
         .map((parameter): RustGenericParameter => parameter.kind === "type"
           ? { kind: "type", name: parameter.name, bounds: [] }
           : parameter.kind === "const" ? { kind: "const", name: parameter.name, type: parameter.type }
@@ -69,6 +69,32 @@ export function nameRustSignatureTypes(
         aliases[index] = alias;
       }
       return { kind: "named", path: alias.name, genericArguments: arguments_ };
+    };
+    const nameArgument = (argument: RustGenericArgument, role: string, visibility: RustVisibility,
+      scope: readonly RustGenericParameter[]): RustGenericArgument => {
+      if (argument.kind === "type") return { ...argument, type: nameType(argument.type, role, visibility, scope) };
+      if (argument.kind !== "associated-equality" && argument.kind !== "associated-bounds") return argument;
+      const genericArguments = argument.genericArguments.map((value, index) =>
+        nameArgument(value, `${role}Arg${index}`, visibility, scope));
+      return argument.kind === "associated-equality"
+        ? { ...argument, genericArguments, type: nameType(argument.type, `${role}${argument.name}`, visibility, scope) }
+        : { ...argument, genericArguments, bounds: argument.bounds.map(bound => nameBound(bound, role, visibility, scope)) };
+    };
+    const nameBound = (bound: RustTypeBound, role: string, visibility: RustVisibility,
+      scope: readonly RustGenericParameter[]): RustTypeBound => {
+      if (bound.kind === "callable") {
+        const parameters = [...scope, ...bound.binder];
+        return { ...bound,
+          parameters: bound.parameters.map((parameter, index) => nameType(parameter, `${role}Arg${index}`, visibility, parameters)),
+          result: nameType(bound.result, `${role}Result`, visibility, parameters) };
+      }
+      if (bound.kind !== "trait-type") return bound;
+      const trait = bound.reference.trait;
+      if (trait.kind !== "named" && trait.kind !== "qualified" || trait.genericArguments === undefined) return bound;
+      const parameters = [...scope, ...bound.reference.binder ?? []];
+      return { ...bound, reference: { ...bound.reference, trait: { ...trait,
+        genericArguments: trait.genericArguments.map((argument, index) =>
+          nameArgument(argument, `${role}Arg${index}`, visibility, parameters)) } } };
     };
     return nameType;
   };
