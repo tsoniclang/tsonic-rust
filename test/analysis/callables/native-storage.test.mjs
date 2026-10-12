@@ -325,7 +325,8 @@ test("physical storage validates token ownership, exact contracts and finite pro
   const otherPlan = createRustNativeStoragePlan({ ...current.input, native: foreign.native });
   assert.equal(otherPlan.returnFor(owner).kind, "unresolved", "another native plan cannot mint this graph's input identity");
   const limited = createRustNativeStoragePlan({ ...current.input, native: current.native, storage: {
-    ...current.storage, boundOriginsFor() { return { kind: "resolved", subjects: Array(4097).fill(input.subject) }; },
+    ...current.storage, boundValueFrontierFor() { return { kind: "resolved",
+      frontier: Array(4097).fill({ kind: "origin", subject: input.subject, bindings: current.storage.emptyBindings }) }; },
   } });
   const rejected = limited.returnFor(owner);
   assert.equal(rejected.kind, "unresolved");
@@ -337,6 +338,7 @@ test("non-callable storage remains an exact identity without inspecting unrelate
   let originQueries = 0;
   const plan = createRustNativeStoragePlan({ ...current.input, native: current.native, storage: {
     ...current.storage, boundOriginsFor() { originQueries += 1; throw new Error("non-callable origin scan"); },
+    boundValueFrontierFor() { originQueries += 1; throw new Error("non-callable frontier scan"); },
   } });
   const owner = current.declaration("number");
   const value = plan.valueFor(current.declaration("selected"));

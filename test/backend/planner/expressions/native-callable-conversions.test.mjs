@@ -73,7 +73,7 @@ test("unresolved physical storage cannot silently select a logical ambient-error
   const current = fixture();
   current.context.input.program = { ...current.program, callableValues: { ...current.program.callableValues,
     nativeStorage: { ...current.program.callableValues.nativeStorage,
-      valueFor: () => ({ kind: "unresolved", reason: "test missing exact source storage" }),
+      operandFor: () => ({ kind: "unresolved", reason: "test missing exact source storage" }),
     },
   } };
   assert.equal(planRustCallableInputProducer(current.expression, current.source, current.context, current.node) === undefined, true);

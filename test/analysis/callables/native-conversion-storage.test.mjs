@@ -5,9 +5,10 @@ import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { rustContextualValueConversionFactKey } from "../../../dist/analysis/facts/keys.js";
 import { rustValueCarrierBeforeContextualConversion } from "../../../dist/analysis/facts/value-carrier-queries.js";
 import { rustNativeCallableOperand, rustNativeCallablePhysicalSource } from "../../../dist/analysis/callables/native-conversions.js";
-import { rustCallableConversionPhysical } from "../../../dist/target-model/conversions/callable-physical.js";
+import { rustCallableConversionPhysical, rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
+import { rustNativeErrorJoinReference } from "../../../dist/target-model/types/native-error-joins.js";
 
 function fixture(text) {
   const { program } = analyzeRust({ surfaces: [], files: { "index.ts": text } });
@@ -181,5 +182,110 @@ test("source-produced stored and returned adapters select the canonical physical
     assert.equal(selected.kind, "selected", `${label}: ${selected.reason ?? "exact physical storage"}`);
     assert.equal(rustTargetTypeRefEquals(selected.carrier, expected.carrier), true, label);
     assert.equal(selected.inputs.length, 0, "a concrete adapter is not a formal implementation");
+  }
+});
+
+function adaptation(current, name) {
+  const node = current.initializer(name);
+  const fact = current.program.facts.getFact(node, rustContextualValueConversionFactKey);
+  assert.equal(fact?.conversion.kind, "callable-adapter", `${name}: finalized conversion`);
+  const source = current.operand(node);
+  const fileName = current.ast.getFileName(current.ast.getSourceFile(node));
+  const expected = rustCallableConversionPhysical(fact.conversion, source.signature, fileName, current.program.typeDefinitions);
+  assert.equal(expected !== undefined, true, `${name}: canonical physical contract`);
+  for (const [label, selected] of [
+    ["expression", current.input.storage.valueFor(node)],
+    ["declaration", current.input.storage.valueFor(current.declaration(name))],
+  ]) {
+    assert.equal(selected.kind, "selected", `${name} ${label}: ${selected.reason ?? "exact physical storage"}`);
+    assert.equal(rustTargetTypeRefEquals(selected.carrier, expected.carrier), true, `${name} ${label}`);
+  }
+  return { source, expected };
+}
+
+test("ordered source-produced adapters retain the preceding physical signature at every read", () => {
+  const current = fixture(`import type { int32 } from "@tsonic/core/types.js";
+    export function create(): (first: int32, second: int32) => int32 {
+      const original = (): int32 => 3;
+      const one: (first: int32) => int32 = original;
+      const two: (first: int32, second: int32) => int32 = one;
+      return two;
+    }
+  `);
+  const one = adaptation(current, "one");
+  const two = adaptation(current, "two");
+  assert.equal(one.source.signature.parameters.length, 0);
+  assert.equal(two.source.signature.parameters.length, 1);
+  assert.equal(two.expected.parameters.length, 2);
+  assert.equal(rustTargetTypeRefEquals(two.source.carrier, one.expected.carrier), true,
+    "second operand is the first adapter, never the original zero-argument producer");
+  const returned = current.input.storage.returnFor(current.declaration("create"));
+  assert.equal(returned.kind, "selected", returned.reason);
+  assert.equal(rustTargetTypeRefEquals(returned.carrier, two.expected.carrier), true);
+});
+
+test("source-produced adapter chains preserve earlier checked numeric conversion errors", () => {
+  const current = fixture(`import type { int32 } from "@tsonic/core/types.js";
+    export function create(): (value: number, unused: int32) => void {
+      const original = (value: int32): int32 => value;
+      const widened: (value: number) => number = original;
+      const discarded: (value: number, unused: int32) => void = widened;
+      return discarded;
+    }
+  `);
+  const first = adaptation(current, "widened");
+  const second = adaptation(current, "discarded");
+  assert.equal(rustNativeErrorJoinReference(first.expected.error) !== undefined, true,
+    "native numeric adaptation has its own checked failure channel");
+  assert.equal(rustTargetTypeRefEquals(second.source.carrier, first.expected.carrier), true);
+  assert.equal(rustTargetTypeRefEquals(second.expected.error, first.expected.error), true,
+    "discarding the result cannot erase the preceding argument-conversion failure");
+  assert.equal(second.expected.resultPlan.kind, "discard");
+});
+
+test("source-produced formal adapters retain their exact input dependency and associated native error", () => {
+  const current = fixture(`import type { int32 } from "@tsonic/core/types.js";
+    export function adapt<Value>(left: () => Value, right: () => Value): (first: int32, second: int32) => Value {
+      const one: (first: int32) => Value = right;
+      const two: (first: int32, second: int32) => Value = one;
+      return two;
+    }
+  `);
+  const owner = current.declaration("adapt");
+  const inputs = current.program.callableValues.native.inputsFor(owner);
+  const one = adaptation(current, "one");
+  const two = adaptation(current, "two");
+  assert.equal(one.source.input === inputs[1], true, "selected right input, not equal-signature left input");
+  assert.equal(rustTargetTypeRefEquals(two.expected.error, one.source.signature.error), true);
+  const returned = current.input.storage.returnFor(owner);
+  assert.equal(returned.kind, "selected", returned.reason);
+  assert.equal(rustTargetTypeRefEquals(returned.carrier, two.expected.carrier), true);
+  assert.equal(returned.inputs.length, 1);
+  assert.equal(returned.inputs[0] === inputs[1], true, "physical adapter preserves only its actual formal dependency");
+});
+
+test("returned adapters preserve exact invocation bindings through forwarded source calls", () => {
+  const current = fixture(`import type { int32 } from "@tsonic/core/types.js";
+    export function adapt(callback: () => int32): (first: int32) => int32 {
+      const widened: (first: int32) => int32 = callback;
+      return widened;
+    }
+    export function forward(left: () => int32, right: () => int32): (first: int32) => int32 {
+      const fromLeft = adapt(left);
+      const fromRight = adapt(right);
+      return fromRight;
+    }
+  `);
+  const inputs = current.program.callableValues.native.inputsFor(current.declaration("forward"));
+  for (const [index, name] of ["fromLeft", "fromRight"].entries()) {
+    const selected = current.input.storage.valueFor(current.declaration(name));
+    assert.equal(selected.kind, "selected", `${name}: ${selected.reason ?? "exact activated result"}`);
+    assert.equal(selected.inputs.length, 1);
+    assert.equal(selected.inputs[0] === inputs[index], true, `${name}: exact caller input dependency`);
+    const physical = rustCallablePhysicalSignature(selected.carrier);
+    assert.equal(physical !== undefined, true, name);
+    assert.equal(physical.parameters.length, 1);
+    assert.equal(rustTargetTypeRefEquals(physical.error.owner, inputs[index].implementation), true,
+      `${name}: error projection uses the activated caller input`);
   }
 });

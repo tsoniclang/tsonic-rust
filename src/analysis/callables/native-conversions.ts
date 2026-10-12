@@ -69,5 +69,5 @@ export function rustNativeCallableOperand(
       : rustNativeCallablePhysicalSource(source, { kind: "identity", carrier }, input.definitions);
   }
   if (!rustTargetTypeRefEquals(rustValueCarrierBeforeContextualConversion(input.facts, node), source)) return undefined;
-  return rustNativeCallablePhysicalSource(source, input.storage.valueFor(node), input.definitions);
+  return rustNativeCallablePhysicalSource(source, input.storage.operandFor(node), input.definitions);
 }
