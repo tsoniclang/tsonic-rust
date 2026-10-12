@@ -81,8 +81,8 @@ for (const surface of ["native", "js"]) {
 
   test(`finite sequencing retains authored lexical declarations in ${surface}`, () => {
     const source = generated(finiteCompletionSequencingSource, surface);
-    assert.match(source, /fn mutate\(/u);
-    assert.match(source, /fn first\(/u);
-    assert.match(source, /await/u);
+    assert.equal(/\bfn mutate</u.test(source), true, "the authored lexical mutator retains its native captured implementation parameter");
+    assert.equal(/\bfn first\(/u.test(source), true, "the authored scalar lexical function remains direct");
+    assert.equal(/await/u.test(source), true, "finite completion still awaits its selected branch");
   });
 }

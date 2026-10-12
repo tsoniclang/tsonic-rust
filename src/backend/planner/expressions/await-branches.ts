@@ -1,6 +1,8 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustAwaitValueFact, RustAwaitValueLeafFact } from "../../../analysis/facts/await-values.js";
 import { rustAwaitValueRequirements } from "../../../analysis/facts/await-values.js";
+import { rustAwaitSourceErrorEffectsFactKey } from "../../../analysis/facts/await-source-error-effects.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { RustAwaitSelection } from "../../../target-model/types/await.js";
 import { rustJsPromiseTargetId, isRustNeverCarrier, isRustUnitCarrier } from "../../../target-model/types/index.js";
 import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
@@ -14,6 +16,7 @@ import { rustBottomAfterEffect, rustBottomExpression } from "../types/fallible-s
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { applyFinalizedValueConversion } from "./value-conversions.js";
 import { planRustAbsentValue } from "./optional-storage.js";
+import { planRustSourceErrorPropagation } from "./calls/source-errors.js";
 
 export function planRustAwaitBranches(
   node: Node,
@@ -47,7 +50,13 @@ export function planRustAwaitBranches(
           return undefined;
         }
         const operandError = rustTypeFromCarrierInContext(future.errorCarrier, context);
-        const propagated = future.errorBoundary === "source-native"
+        const sourceBranches = future.errorBoundary === "source-program"
+          ? context.input.program.facts.getFact(node, rustAwaitSourceErrorEffectsFactKey)?.branches
+            .filter(branch => rustTargetTypeRefEquals(branch.carrier, selected.carrier)) : undefined;
+        const propagated = future.errorBoundary === "source-program"
+          ? sourceBranches?.length !== 1 ? undefined
+            : planRustSourceErrorPropagation(node, sourceBranches[0]!.edge, output, context)
+          : future.errorBoundary === "source-native"
           ? operandError === undefined || future.errorSource === undefined ? undefined
             : rustPropagateNativeError(region, { identity: future.errorSource, errorType: operandError }, output)
           : applyRustLocalErrorBoundary(output, future.errorBoundary, region, operandError);

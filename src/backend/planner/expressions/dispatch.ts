@@ -321,8 +321,9 @@ export function planExpressionInner(
         return undefined;
       }
       const condition = planExpression(conditionNode, context);
-      const whenTrue = planExpression(whenTrueNode, context);
-      const whenFalse = planExpression(whenFalseNode, context);
+      const destination = context.valueDestinations?.get(node);
+      const whenTrue = planExpression(whenTrueNode, rustValueDestinationContext(whenTrueNode, destination, context));
+      const whenFalse = planExpression(whenFalseNode, rustValueDestinationContext(whenFalseNode, destination, context));
       if (condition === undefined || whenTrue === undefined || whenFalse === undefined) {
         return undefined;
       }
@@ -556,3 +557,4 @@ export function planExpressionInner(
     }
   }
 }
+import { rustValueDestinationContext } from "./value-destinations.js";

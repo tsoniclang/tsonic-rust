@@ -33,6 +33,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { rustCompileTimeSourceKey } from "../../../target-model/facts/source-declarations.js";
 import { planRustLocalBindingStorage } from "../bindings/local-storage.js";
 import { planRustBorrowedInitializer } from "../bindings/borrowed-initializers.js";
+import { rustSelectedValueDestinationContext } from "../expressions/value-destinations.js";
 
 export function planVariableStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const declarations = collectVariableDeclarations(node, context);
@@ -77,9 +78,13 @@ function planVariableDeclaration(
     return undefined;
   }
   const initializer = Node_Initializer(context.input.program.source.ast, declaration);
+  const physical = context.input.program.callableValues.nativeStorage.valueFor(declaration);
+  const initializerContext = initializer === undefined ? context
+    : rustSelectedValueDestinationContext(initializer, physical, context);
+  if (initializerContext === undefined) return undefined;
   const nativeArray = context.input.program.facts.getFact(declaration, rustNativeArrayStorageKey);
   const locationStorage = nativeArray === undefined ? rustBindingStorageForDeclaration(declaration, context) : undefined;
-  const initializerPlan = initializer === undefined ? undefined : planRustBorrowedInitializer(initializer, context);
+  const initializerPlan = initializer === undefined ? undefined : planRustBorrowedInitializer(initializer, initializerContext);
   const sourceInitializer = initializerPlan?.value;
   if (initializer !== undefined && sourceInitializer === undefined) {
     return undefined;
@@ -115,7 +120,8 @@ function planVariableDeclaration(
     ));
     return undefined;
   }
-  let rustType: RustType | undefined = rustTypeFromCarrierInContext(declarationCarrier, context);
+  let rustType: RustType | undefined = rustTypeFromCarrierInContext(
+    physical.kind === "selected" ? physical.carrier : declarationCarrier, context);
   if (rustType === undefined && (initializer === undefined || typeNode !== undefined)) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, typeNode ?? declaration),

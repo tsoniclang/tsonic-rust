@@ -1,14 +1,16 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustAsyncFunctionFact, RustGeneratorFact } from "../../../../analysis/facts/keys.js";
-import { rustSourceCallEffectsFactKey, rustSourceCallableReturnFactKey } from "../../../../analysis/facts/keys.js";
+import { rustSourceCallableReturnFactKey } from "../../../../analysis/facts/keys.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
-import { rustNativeFutureCallableResult } from "../../../../target-model/types/carriers/generic-callables.js";
 import type { RustType } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustReturnTypeFromCarrierInContext, rustTypeFromCarrierInContext } from "../../types/render.js";
-import { rustCurrentErrorBoundary, rustErrorType } from "../../program/plan-context.js";
-import { rustNativeFutureType } from "../../types/native-futures.js";
 import { rustJsPromiseTargetTypeWithLifetime } from "../../../../target-model/types/carriers/js.js";
+import { instantiateRustNativeCompletion, rustNativeCallableCompletion, rustNativeFutureOutputType }
+  from "../../../../target-model/types/callable-completions.js";
+import { rustJsPromiseTargetId } from "../../../../target-model/types/carriers/source-types.js";
+import { rustNamedTargetType } from "../../../../target-model/types/carriers/native.js";
+import { rustTypeGenericArguments } from "../../../../target-model/types/generic-arguments.js";
 
 export function resolveRustJsPromiseReturnType(
   declaration: Node, asynchronous: Extract<RustAsyncFunctionFact, { readonly kind: "js-promise" }>, context: RustPlanContext,
@@ -23,26 +25,30 @@ export function resolveRustJsPromiseReturnType(
 export function resolveRustCallableOutwardReturnType(
   declaration: Node, carrier: TargetTypeRef | undefined, context: RustPlanContext,
 ): RustType | undefined {
-  if (carrier !== undefined) {
-    const physical = context.input.program.callableValues.nativeStorage.returnFor(declaration);
-    if (physical.kind === "selected") return rustReturnTypeFromCarrierInContext(physical.carrier, context);
-    if (physical.kind === "unresolved") return undefined;
-  }
-  const native = carrier === undefined ? undefined : rustNativeFutureCallableResult(carrier);
-  if (native === undefined) return rustReturnTypeFromCarrierInContext(carrier, context);
-  const effects = context.input.program.facts.getFact(declaration, rustSourceCallEffectsFactKey);
-  const boundary = rustCurrentErrorBoundary(context);
-  const output = rustTypeFromCarrierInContext(native.output, context);
-  if (effects === undefined || effects.awaiting === "not-applicable" || output === undefined ||
-    effects.awaiting === "fallible" && boundary === undefined) return undefined;
-  const futureOutput: RustType = effects.awaiting === "fallible"
-    ? { kind: "named", path: "Result", genericArguments: [
-        { kind: "type", type: output }, { kind: "type", type: rustErrorType(boundary!) },
-      ] } : output;
-  const completion = context.input.program.facts.getFact(declaration, rustSourceCallableReturnFactKey)?.implementationCompletion;
-  if (completion === "absence" && !native.optional) return undefined;
-  const future = rustNativeFutureType(futureOutput, { kind: completion !== undefined ? "ready" : "opaque" });
-  return native.optional ? { kind: "named", path: "Option", genericArguments: [{ kind: "type", type: future }] } : future;
+  if (carrier === undefined) return undefined;
+  const { callableValues, facts, typeDefinitions } = context.input.program;
+  const physical = callableValues.nativeStorage.returnFor(declaration);
+  if (physical.kind === "unresolved") return undefined;
+  const completion = rustNativeCallableCompletion(physical.carrier, typeDefinitions);
+  if (completion === undefined) return rustReturnTypeFromCarrierInContext(physical.carrier, context);
+  const producer = callableValues.nativeProducers.forDeclaration(declaration);
+  const sourceReturn = facts.getFact(declaration, rustSourceCallableReturnFactKey);
+  if (producer === undefined || sourceReturn === undefined) return undefined;
+  const selected = instantiateRustNativeCompletion(completion, future => {
+    const channel = callableValues.nativeProducers.deferredFor(declaration, future.ordinal);
+    if (channel === undefined) return undefined;
+    const error = channel.errorCarrier;
+    if (future.carrier.kind === "target-named" && future.carrier.id === rustJsPromiseTargetId) {
+      const lifetime = future.carrier.genericArguments?.[0];
+      return lifetime?.kind !== "lifetime" ? undefined
+        : rustJsPromiseTargetTypeWithLifetime(future.output, lifetime.lifetime, error);
+    }
+    const output = channel.awaiting === "fallible"
+      ? rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([future.output, error])) : future.output;
+    return rustNativeFutureOutputType({ identity: `${producer.identity}:return:${future.ordinal}`, output,
+      captures: producer.environment, ready: sourceReturn.implementationCompletion !== undefined });
+  }, typeDefinitions);
+  return selected === undefined ? undefined : rustReturnTypeFromCarrierInContext(selected, context);
 }
 
 export function resolveRustCallableBodyReturnType(

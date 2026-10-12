@@ -77,10 +77,21 @@ export function rustNativeCompletionFutureType(input: {
   readonly error: TargetTypeRef;
   readonly captures: readonly RustTargetGenericArgument[];
 }): TargetTypeRef {
+  return rustNativeFutureOutputType({ ...input, output: rustNamedTargetType("rust.core.Result", "Result",
+    rustTypeGenericArguments([input.output, input.error])) });
+}
+
+export function rustNativeFutureOutputType(input: {
+  readonly identity: string;
+  readonly output: TargetTypeRef;
+  readonly captures: readonly RustTargetGenericArgument[];
+  readonly ready?: boolean;
+}): TargetTypeRef {
+  if (input.ready === true) return rustNamedTargetType("rust.core.future.Ready", "core::future::Ready",
+    rustTypeGenericArguments([input.output]));
   return snapshotClosedMetadata({ kind: "impl-trait", id: input.identity,
     bounds: [{ kind: "trait-ref", id: "rust.core.Future", path: "core::future::Future",
       genericArguments: [], associatedConstraints: [{ kind: "equality", identity: "rust.core.Future.Output",
-        name: "Output", genericArguments: [], type: rustNamedTargetType("rust.core.Result", "Result",
-          rustTypeGenericArguments([input.output, input.error])) }] }],
+        name: "Output", genericArguments: [], type: input.output }] }],
     outlives: [], captures: input.captures });
 }

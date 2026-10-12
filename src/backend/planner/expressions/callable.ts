@@ -515,7 +515,8 @@ export function planRustCallableExpressionBody(
   const plannedBody = ast.kindName(bodyNode) === "KindBlock"
     ? context.planBlock(bodyNode, bodyContext)
     : (() => {
-      const expression = planExpression(bodyNode, bodyContext);
+      const returnContext = rustReturnValueContext(bodyNode, bodyContext);
+      const expression = returnContext === undefined ? undefined : planExpression(bodyNode, returnContext);
       return expression === undefined ? undefined : {
         statements: [{ kind: "tail" as const, expr: expression }],
       };
@@ -625,3 +626,4 @@ export function planRustCallableExpressionBody(
   );
   return frameAlternative === undefined ? result : frameAlternative.wrap(result);
 }
+import { rustReturnValueContext } from "./value-destinations.js";
