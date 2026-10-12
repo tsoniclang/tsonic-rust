@@ -11,7 +11,7 @@ const named = path => ({ kind: "named", path });
 const path = name => ({ kind: "path", path: name });
 const source = (identity, variant, errorType = named("BorrowedError")) => ({ identity, variant, errorType });
 const plan = (sources, options = {}) => planRustNativeErrorJoin({ identity: "region:joined-errors", name: "JoinedErrors",
-  visibility: "private", generics: emptyRustGenerics, sources, ...options });
+  visibility: "private", sources, ...options });
 const first = source("callback:first", "First");
 const second = source("callback:second", "Second");
 
@@ -45,11 +45,13 @@ test("multiple formal sources retain distinct variants when their actual error t
   assert.equal(joined.items.length, 1);
   assert.equal(joined.items[0].kind, "enum");
   assert.deepEqual(joined.items[0].variants.map(variant => variant.name), ["First", "Second"]);
-  assert.equal(rustTypeEquals(joined.items[0].variants[0].fields[0], joined.items[0].variants[1].fields[0]), true);
+  assert.equal(rustTypeEquals(joined.items[0].variants[0].fields[0], joined.items[0].variants[1].fields[0]), false);
+  assert.equal(rustTypeEquals(joined.errorType.genericArguments[0].type, joined.errorType.genericArguments[1].type), true);
   assert.equal(joined.items[0].attrs === undefined, true);
-  assert.equal(joined.items[0].generics, emptyRustGenerics);
-  assert.equal(printRustExpr(joined.inject(first, path("error"))), "JoinedErrors::First(error)");
-  assert.equal(printRustExpr(joined.inject(second, path("error"))), "JoinedErrors::Second(error)");
+  assert.deepEqual(joined.items[0].generics.parameters.map(parameter => parameter.name), ["Error0", "Error1"]);
+  assert.equal(joined.items[0].generics.wherePredicates.length, 0);
+  assert.equal(printRustExpr(joined.inject(first, path("error"))), "JoinedErrors::<BorrowedError, BorrowedError>::First(error)");
+  assert.equal(printRustExpr(joined.inject(second, path("error"))), "JoinedErrors::<BorrowedError, BorrowedError>::Second(error)");
 });
 
 test("native joins map a selected error once before an exactly typed try", () => {
@@ -61,28 +63,23 @@ test("native joins map a selected error once before an exactly typed try", () =>
     assert.equal(propagated.expr.receiver === result, true);
     assert.equal(propagated.operandErrorType === joined.errorType, true);
     assert.equal(propagated.resultErrorType === joined.errorType, true);
-    assert.equal(printRustExpr(propagated), `invoke().map_err(JoinedErrors::${selected.variant})?`);
+    assert.equal(printRustExpr(propagated), `invoke().map_err(JoinedErrors::<BorrowedError, BorrowedError>::${selected.variant})?`);
     const returned = applyRustFallibleResultExpression(propagated, { errorType: joined.errorType });
     assert.equal(returned === propagated.expr, true);
     assert.doesNotMatch(printRustExpr(returned), /from|clone|default/iu);
   }
 });
 
-test("associated errors retain native lifetime, type, const and where-clause context", () => {
+test("associated errors retain native arguments without copying unrelated declaration binders", () => {
   const lifetime = { kind: "named", name: "scope" };
-  const generics = { parameters: [
-    { kind: "lifetime", name: "scope", outlives: [] },
-    { kind: "type", name: "Producer", bounds: [{ kind: "trait", path: "Invocation" }] },
-    { kind: "const", name: "COUNT", type: { kind: "primitive", name: "usize" } },
-  ], wherePredicates: [{ kind: "type", type: named("Producer"), bounds: [{ kind: "lifetime", lifetime }] }] };
   const associated = { kind: "qualified", owner: named("Producer"), trait: named("Invocation"), member: "Error",
     genericArguments: [{ kind: "lifetime", lifetime }] };
   const local = { kind: "reference", mutable: true, referent: { kind: "fixed-array", element: { kind: "primitive", name: "u8" },
     length: { kind: "path", path: "COUNT" } }, lifetime };
-  const joined = plan([source("local", "Local", local), source("producer", "Producer", associated)], { generics });
-  assert.equal(joined.items[0].generics === generics, true);
-  assert.equal(joined.items[0].variants[1].fields[0] === associated, true);
-  assert.equal(printRustType(joined.errorType), "JoinedErrors<'scope, Producer, COUNT>");
+  const joined = plan([source("local", "Local", local), source("producer", "Producer", associated)]);
+  assert.equal(joined.errorType.genericArguments[1].type === associated, true);
+  assert.equal(joined.items[0].generics.parameters.length, 2);
+  assert.equal(printRustType(joined.errorType), "JoinedErrors<&'scope mut [u8; COUNT], <Producer as Invocation>::Error<'scope>>");
   assert.equal(printRustType(associated), "<Producer as Invocation>::Error<'scope>");
 });
 
@@ -135,17 +132,16 @@ test("ambiguous source identities, variant names and invalid declaration names r
     ["invalid variant", [source("source", "crate")], {}],
     ["inferred carrier", [source("source", "Source", { kind: "infer" })], {}],
     ["opaque enum field", [source("source", "Source", { kind: "impl-trait", bounds: [], outlives: [] })], {}],
+    ["removed source generic context", [first], { generics: emptyRustGenerics }],
     ["invalid binder", [first], { generics: { parameters: [{ kind: "type", name: "_", bounds: [] }], wherePredicates: [] } }],
     ["duplicate binder", [first], { generics: { parameters: [{ kind: "type", name: "Value", bounds: [] },
       { kind: "const", name: "r#Value", type: { kind: "primitive", name: "usize" } }], wherePredicates: [] } }],
   ]) assert.equal(plan(sources, options) === undefined, true, label);
 });
 
-test("native hygiene preserves explicitly selected raw identifiers and lifetime namespaces", () => {
-  const joined = plan([source("source", "r#type"), source("next", "Next")], { name: "r#match",
-    generics: { parameters: [{ kind: "lifetime", name: "scope", outlives: [] },
-      { kind: "type", name: "scope", bounds: [] }], wherePredicates: [] } });
+test("native hygiene preserves explicitly selected raw identifiers without external binders", () => {
+  const joined = plan([source("source", "r#type"), source("next", "Next")], { name: "r#match" });
   assert.equal(joined !== undefined, true);
   assert.equal(printRustExpr(joined.inject({ identity: "source", errorType: named("BorrowedError") }, path("error"))),
-    "r#match::<'scope, scope>::r#type(error)");
+    "r#match::<BorrowedError, BorrowedError>::r#type(error)");
 });

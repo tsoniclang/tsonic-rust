@@ -27,7 +27,7 @@ const local = source("local", "Local", borrowedError);
 const left = source("callback:left", "Left", associatedError("LeftCallback"));
 const right = source("callback:right", "Right", associatedError("RightCallback"));
 const generics = { parameters: [lifetimeParameter, producerParameter("LeftCallback"), producerParameter("RightCallback")], wherePredicates: [] };
-const join = planRustNativeErrorJoin({ identity: "native:joined", name: "JoinedErrors", visibility: "private", generics,
+const join = planRustNativeErrorJoin({ identity: "native:joined", name: "JoinedErrors", visibility: "private",
   sources: [local, left, right] });
 
 function nativeFunctions() {
@@ -48,13 +48,13 @@ function nativeFunctions() {
   const single = source("only", "Only", associatedError("Callback"));
   const singleGenerics = { parameters: [producerParameter("Callback")], wherePredicates: [] };
   const exact = planRustNativeErrorJoin({ identity: "native:single", name: "UnusedSingleError", visibility: "private",
-    generics: singleGenerics, sources: [single] });
+    sources: [single] });
   const exactRegion = rustNativeFallibleBoundary(exact);
   assert.equal(exactRegion !== undefined, true);
   const pureGenerics = { parameters: [{ kind: "type", name: "Callback", bounds: [{ kind: "callable", trait: "Fn", binder: [],
     parameters: [], result: number }] }], wherePredicates: [] };
   const pure = planRustNativeErrorJoin({ identity: "native:pure", name: "UnusedPureError", visibility: "private",
-    generics: pureGenerics, sources: [] });
+    sources: [] });
   const completion = { kind: "try-scope", bodyName: "body_flow", flowName: "flow", finallyName: "finally_flow",
     returnType: { kind: "unit" }, errorType: join.errorType, bodyErrorType: join.errorType, asynchronous: false,
     body: { statements: [{ kind: "expr", expr: rustPropagateNativeError(region, left, invoke("left")) },
@@ -82,7 +82,7 @@ function packageRegionFunctions() {
     errorTypeIdentity: "fixture:local-failure", errorTypePath: "LocalFailure" };
   const local = source("package:local", "Local", rustErrorType(owner));
   const generics = { parameters: [producerParameter("LeftCallback"), producerParameter("RightCallback")], wherePredicates: [] };
-  const joined = planRustNativeErrorJoin({ identity: "fixture:package-join", name: "PackageErrors", visibility: "private", generics,
+  const joined = planRustNativeErrorJoin({ identity: "fixture:package-join", name: "PackageErrors", visibility: "private",
     sources: [local, left, right] });
   const region = rustNativeFallibleBoundary(joined, { owner, source: local });
   assert.equal(region !== undefined, true);
@@ -114,7 +114,7 @@ function genericAssociatedFunctions() {
   const array = source("array", "Array", { kind: "reference", mutable: true, lifetime, referent: {
     kind: "fixed-array", element: number, length: { kind: "path", path: "COUNT" },
   } });
-  const joined = planRustNativeErrorJoin({ identity: "native:gat", name: "AssociatedErrors", visibility: "private", generics,
+  const joined = planRustNativeErrorJoin({ identity: "native:gat", name: "AssociatedErrors", visibility: "private",
     sources: [associated, array] });
   return [...joined.items, ...[associated, array].map((selected, index) => ({ kind: "function",
     name: index === 0 ? "inject_associated" : "inject_array", visibility: "private", generics, returnType: joined.errorType,
@@ -127,10 +127,11 @@ test("native joined errors preserve associated borrows, moves, distinct sources 
     items: [...nativeFunctions(), ...genericAssociatedFunctions()] }));
   assert.doesNotMatch(emitted, /TsonicError|TsonicResult|::from\(|\.clone\(|Default|Box|dyn |'static|UnusedPureError|UnusedSingleError/u);
   assert.match(emitted, /fn invoke_pure<Callback: Fn\(\) -> u32>\(callback: Callback\) -> u32/u);
-  assert.match(emitted, /map_err\(JoinedErrors::<'scope, LeftCallback, RightCallback>::Left\)/u);
+  assert.match(emitted, /enum JoinedErrors<Error0, Error1, Error2>/u);
+  assert.match(emitted, /map_err\(\s*JoinedErrors::<\s*BorrowedError<'scope>,\s*<LeftCallback as Invocation>::Error,\s*<RightCallback as Invocation>::Error,?\s*>::Left,?\s*\)/u);
   const packageEmitted = printRustSourceFile(finalizeRustSourceStyle({ headerComment: "exact local package routing",
     items: packageRegionFunctions() }));
-  assert.match(packageEmitted, /local\s*\.map_err\(LocalFailure::from\)\s*\.map_err\(PackageErrors::<LeftCallback, RightCallback>::Local\)\?/u);
+  assert.match(packageEmitted, /local\s*\.map_err\(LocalFailure::from\)\s*\.map_err\(\s*PackageErrors::<\s*LocalFailure,\s*<LeftCallback as Invocation>::Error,\s*<RightCallback as Invocation>::Error,?\s*>::Local,?\s*\)\?/u);
   assert.doesNotMatch(packageEmitted, /TsonicError|TsonicResult|PackageErrors[^\n]*::from|\.clone\(|Default|Box|dyn |'static/u);
   const source = `use tsonic_rust_runtime as rt;
 use core::cell::Cell;

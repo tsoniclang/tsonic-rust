@@ -7,7 +7,6 @@ import { rustActiveErrorType, rustCurrentErrorBoundary } from "../../../../dist/
 import { planRustNativeErrorJoin } from "../../../../dist/backend/planner/types/native-error-joins.js";
 import { applyRustErrorBoundary, applyRustLocalErrorBoundary, rustTargetRuntimeErrorType } from "../../../../dist/backend/planner/types/error-boundary.js";
 import { applyRustFallibleResultExpression } from "../../../../dist/backend/planner/types/fallible-shape.js";
-import { emptyRustGenerics } from "../../../../dist/backend/target-ast/nodes.js";
 import { printRustExpr } from "../../../../dist/print/source/expressions/core.js";
 import { checkRustDataWrite } from "../../../../dist/backend/planner/objects/data-writes.js";
 import { readRustProjectDispatchedField, writeRustProjectDispatchedField } from "../../../../dist/backend/planner/objects/project-objects.js";
@@ -18,10 +17,12 @@ const local = { identity: "body:local", variant: "Local", errorType: rustErrorTy
 const associated = { kind: "qualified", owner: { kind: "named", path: "Callback" },
   trait: { kind: "named", path: "Invocation" }, member: "Error" };
 const callback = { identity: "callback:first", variant: "First", errorType: associated };
+const localJoinPath = "BodyError::<rt::TsonicError, <Callback as Invocation>::Error>";
+const equalJoinPath = "BodyError::<rt::TsonicError, rt::TsonicError, rt::TsonicError>";
 const path = name => ({ kind: "path", path: name });
 const call = name => ({ kind: "call", path: name, args: [] });
 const join = sources => planRustNativeErrorJoin({ identity: "body:join", name: "BodyError", visibility: "private",
-  generics: emptyRustGenerics, sources });
+  sources });
 
 test("active concrete regions preserve the genuine package owner and exact error type", () => {
   const region = rustPackageFallibleBoundary(owner);
@@ -82,9 +83,9 @@ test("local throws enter their owned enum variant without From or copying", () =
   const original = path("original");
   const injected = rustInjectLocalError(region, original);
   assert.equal(injected.args[0] === original, true);
-  assert.equal(printRustExpr(injected), "BodyError::Local(original)");
+  assert.equal(printRustExpr(injected), `${localJoinPath}::Local(original)`);
   const propagated = rustPropagateLocalError(region, local.errorType, call("local_call"));
-  assert.equal(printRustExpr(propagated), "local_call().map_err(BodyError::Local)?");
+  assert.equal(printRustExpr(propagated), `local_call().map_err(${localJoinPath}::Local)?`);
   assert.equal(propagated.operandErrorType === region.errorType && propagated.resultErrorType === region.errorType, true);
   assert.equal(applyRustFallibleResultExpression(propagated, region) === propagated.expr, true);
 });
@@ -99,10 +100,10 @@ test("concrete operation errors convert at their package owner before entering a
   assert.equal(preserved.expr === result, true);
   assert.equal(preserved.operandErrorType === rustTargetRuntimeErrorType, true);
   const propagated = applyRustLocalErrorBoundary(result, "target-runtime", region);
-  assert.equal(printRustExpr(propagated), "operation().map_err(rt::TsonicError::from).map_err(BodyError::Local)?");
+  assert.equal(printRustExpr(propagated), `operation().map_err(rt::TsonicError::from).map_err(${localJoinPath}::Local)?`);
   assert.equal(propagated.operandErrorType === region.errorType && propagated.resultErrorType === region.errorType, true);
   assert.equal(printRustExpr(applyRustLocalErrorBoundary(result, "source-program", region)),
-    "operation().map_err(BodyError::Local)?");
+    `operation().map_err(${localJoinPath}::Local)?`);
   const provider = { kind: "named", path: "std::io::Error" };
   assert.equal(printRustExpr(applyRustLocalErrorBoundary(result, "provider-native", region, provider)), printRustExpr(propagated));
   assert.throws(() => applyRustLocalErrorBoundary(result, "provider-native", region), /exact provider error type/u);
@@ -114,7 +115,7 @@ test("native channels remain distinct when actual error types coincide, includin
   const region = rustNativeFallibleBoundary(join([local, first, second]), { owner, source: local });
   for (const selected of [first, second]) {
     const propagated = rustPropagateNativeError(region, selected, call("callback"));
-    assert.equal(printRustExpr(propagated), `callback().map_err(BodyError::${selected.variant})?`);
+    assert.equal(printRustExpr(propagated), `callback().map_err(${equalJoinPath}::${selected.variant})?`);
     assert.equal(propagated.operandErrorType === region.errorType && propagated.resultErrorType === region.errorType, true);
   }
   for (const changed of [{ ...first, identity: "foreign" }, { ...first, errorType: associated }]) {
@@ -122,7 +123,7 @@ test("native channels remain distinct when actual error types coincide, includin
     assert.equal(rustInjectNativeError(region, changed, path("error")) === undefined, true);
   }
   assert.equal(printRustExpr(rustPropagateLocalError(region, local.errorType, call("callback"))),
-    "callback().map_err(BodyError::Local)?");
+    `callback().map_err(${equalJoinPath}::Local)?`);
 });
 
 test("runtime data-write guards enter the selected local channel and fail closed without one", () => {
@@ -133,7 +134,7 @@ test("runtime data-write guards enter the selected local channel and fail closed
   const effect = call("write");
   const checked = checkRustDataWrite("receiver", receiver, effect, region);
   assert.equal(checked.value === effect, true);
-  assert.equal(printRustExpr(checked.effect), "receiver.validate_data_write().map_err(rt::TsonicError::from).map_err(BodyError::Local)?");
+  assert.equal(printRustExpr(checked.effect), `receiver.validate_data_write().map_err(rt::TsonicError::from).map_err(${localJoinPath}::Local)?`);
   const previous = checkRustDataWrite("receiver", receiver, effect, concrete);
   assert.equal(previous.effect.expr.receiver === receiver, true);
   assert.equal(previous.effect.operandErrorType === rustTargetRuntimeErrorType, true);
@@ -147,11 +148,11 @@ test("field dispatch preserves pure access and routes fallible reads and writes 
   const role = { fallible: true, selfMode: "ref", region, operandErrorType: local.errorType };
   assert.equal(readRustProjectDispatchedField(receiver, "read").kind, "method-call");
   assert.equal(printRustExpr(readRustProjectDispatchedField(receiver, "read", role)),
-    "receiver().dispatch.read().map_err(BodyError::Local)?");
+    `receiver().dispatch.read().map_err(${localJoinPath}::Local)?`);
   const write = writeRustProjectDispatchedField(receiver, "selected", "read", "write", "+=", path("value"), { read: role, write: role });
   const printed = printRustExpr(write);
   assert.equal((printed.match(/receiver\(\)/gu) ?? []).length, 1);
-  assert.equal((printed.match(/map_err\(BodyError::Local\)/gu) ?? []).length, 2);
+  assert.equal(printed.split(`map_err(${localJoinPath}::Local)`).length - 1, 2);
   assert.doesNotMatch(printed, /::from|\.clone\(/u);
   const unowned = { ...role, region: rustNativeFallibleBoundary(join([callback])) };
   assert.equal(readRustProjectDispatchedField(receiver, "read", unowned) === undefined, true);
