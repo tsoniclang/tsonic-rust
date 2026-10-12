@@ -166,7 +166,7 @@ export function planProjectMethod(
     return undefined;
   }
   const emittedReturnType = returnsJsPromise
-    ? resolveRustJsPromiseReturnType(member, asyncFact, context)
+    ? resolveRustJsPromiseReturnType(member, context)
     : returnType;
   if (returnsJsPromise && emittedReturnType === undefined) {
     context.diagnostics.push(missingFactDiagnostic(

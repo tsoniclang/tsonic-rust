@@ -238,7 +238,7 @@ function planRustFunctionItem(
     return undefined;
   }
   const emittedReturnType = returnsJsPromise
-    ? resolveRustJsPromiseReturnType(node, asyncFact, context)
+    ? resolveRustJsPromiseReturnType(node, context)
     : returnType;
   if (returnsJsPromise && emittedReturnType === undefined) {
     context.diagnostics.push(missingFactDiagnostic(

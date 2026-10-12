@@ -17,6 +17,7 @@ import { rustAsyncFunctionFactKey, rustClosureCaptureFactKey, rustSourceCallable
 import { rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";
 import type { RustDeferredProducerChannel } from "../facts/deferred-producer-effects.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
+import { createRustNativeOutwardResults } from "./native-outward-results.js";
 
 export interface RustNativeCallableProducer {
   readonly declaration: Node;
@@ -32,6 +33,8 @@ export interface RustNativeCallableProducerPlan {
   errorFor(declaration: Node, channel: "invoke" | number): TargetTypeRef | undefined;
   deferredFor(declaration: Node, ordinal: number): RustDeferredProducerChannel | undefined;
   deferredErrorFor(declaration: Node, ordinal: number): TargetTypeRef | undefined;
+  outwardReturnFor(declaration: Node): TargetTypeRef | undefined;
+  invocationResultFor(declaration: Node): TargetTypeRef | undefined;
   physicalFor(declaration: Node, carrier: TargetTypeRef): TargetTypeRef | undefined;
 }
 
@@ -94,7 +97,11 @@ export function createRustNativeCallableProducerPlan(input: {
     return ordinal < Math.max(1, completion?.futures.length ?? 0) ? noFuture : undefined;
   };
   const resolving = new Set<string>();
+  const outward = createRustNativeOutwardResults({ ...input, producers: {
+    forDeclaration: declaration => byDeclaration.get(declaration), errorFor, deferredFor,
+  } });
   return Object.freeze({ producers: Object.freeze([...byDeclaration.values()]), errorFor,
+    outwardReturnFor: outward.returnFor, invocationResultFor: outward.invocationFor,
     forDeclaration: (declaration: Node) => byDeclaration.get(declaration),
     forIdentity: (identity: string) => byIdentity.get(identity),
     deferredFor,
