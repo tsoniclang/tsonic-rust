@@ -32,7 +32,9 @@ export type { RustErrorEffectsFact, RustNativeErrorEffect } from "./error-effect
 export { rustSourceErrorEffectsFactKey } from "./source-error-effects.js";
 export type { RustSourceErrorEffectsFact, RustSourceErrorEffectEdge } from "./source-error-effects.js";
 export { rustDeferredProducerEffectsFactKey } from "./deferred-producer-effects.js";
-export type { RustDeferredProducerEffectsFact } from "./deferred-producer-effects.js";
+export type { RustDeferredProducerEffectsFact, RustDeferredProducerChannel } from "./deferred-producer-effects.js";
+export { rustAwaitSourceErrorEffectsFactKey } from "./await-source-error-effects.js";
+export type { RustAwaitSourceErrorBranch, RustAwaitSourceErrorEffectsFact } from "./await-source-error-effects.js";
 export {
   rustFallibleFactKey,
   rustFutureValueFactKey,

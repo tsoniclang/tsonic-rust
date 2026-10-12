@@ -1,8 +1,8 @@
 import type { Node } from "@tsonic/tsts";
 import type { SourceStorageBindings, SourceStorageProducer, SourceStorageSubject } from "@tsonic/target-api/analysis";
-import { sourceEnclosingCallable } from "@tsonic/target-api/source";
+import { asSourceNode, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
-import { rustFutureValueFactKey, rustSourceCallEffectsFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
+import { rustAsyncFunctionFactKey, rustFutureValueFactKey, rustSourceCallEffectsFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
 import type { RustFutureValueFact } from "../facts/keys.js";
 import { rustFutureValueForOperation, rustFutureValueMatchesCarrier, rustNativeFutureValueForSourceCallBranch } from "../facts/future-values.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -13,12 +13,14 @@ import type { RustFinalizedValueConversion } from "../facts/finalized-operation/
 import { finalizedConversionIsValid } from "../facts/finalized-operation/conversions.js";
 import { substituteRustValueConversion } from "../../target-model/conversions/substitution.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
+import { rustAwaitCarrier } from "../../target-model/types/index.js";
 
 export function rustFutureValueForStoredBranch(
   walk: RustFactWalk,
   node: Node,
   branch: TargetTypeRef,
 ): RustFutureValueFact | undefined {
+  if (rustAwaitCarrier(branch) === undefined) return undefined;
   const { sourceStorage: storage, ast } = walk.context;
   const direct = futureForProducer(walk, node, branch);
   if (direct !== undefined) return direct;
@@ -127,7 +129,14 @@ function futureForProducer(walk: RustFactWalk, producer: Node, branch: TargetTyp
   const operation = facts.get(producer, rustTargetOperationFactKey);
   const effects = facts.get(producer, rustSourceCallEffectsFactKey);
   const native = rustNativeFutureValueForSourceCallBranch(operation, effects, branch, definitions);
-  const selected = native ?? facts.get(producer, rustFutureValueFactKey) ??
+  if (native !== undefined) return native;
+  if (operation?.kind === "source-call") {
+    const declaration = asSourceNode(facts.getSelectedTargetCall(producer)?.sourceDeclaration, walk.context.ast);
+    const implementation = declaration === undefined ? undefined : walk.context.source.navigation.callableImplementation(declaration);
+    if (implementation?.kind !== "resolved" ||
+      facts.get(implementation.implementation.declaration, rustAsyncFunctionFactKey) === undefined) return undefined;
+  }
+  const selected = facts.get(producer, rustFutureValueFactKey) ??
     rustFutureValueForOperation(operation, effects, definitions);
   return selected !== undefined && rustFutureValueMatchesCarrier(selected, branch, definitions) ? selected : undefined;
 }

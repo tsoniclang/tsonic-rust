@@ -116,7 +116,9 @@ export function recordFutureValueFacts(walk: RustFactWalk, sourceFiles: readonly
         ? walk.context.facts.get(node, rustSourceCallEffectsFactKey) ??
           walk.context.facts.resolve(node, rustSourceCallEffectsFactKey)
         : undefined;
-      let fact = rustFutureValueForOperation(operation, effects, walk.context.typeDefinitions);
+      let fact = operation?.kind === "source-call"
+        ? rustFutureValueForStoredBranch(walk, node, operation.resultCarrier)
+        : rustFutureValueForOperation(operation, effects, walk.context.typeDefinitions);
       if (fact === undefined) {
         const kind = walk.context.ast.kindName(node);
         if (kind === KindParenthesizedExpression || kind === "KindAsExpression" ||

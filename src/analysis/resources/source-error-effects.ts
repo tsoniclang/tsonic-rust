@@ -6,7 +6,7 @@ import { mergeRustErrorEffects } from "../facts/error-effects.js";
 import type { RustSourceErrorEffectEdge } from "../facts/source-error-effects.js";
 import { rustTargetOperationFactKey } from "../facts/keys.js";
 import { rustTargetGenericBindingsForArguments } from "../../target-model/types/generic-arguments.js";
-import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
+import { substituteRustTargetGenerics, substituteRustTargetGenericArgument } from "../../target-model/types/carriers/substitution.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { closedMetadataKey, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
@@ -59,7 +59,8 @@ export function createRustSourceErrorEffectSelection(walk: RustFactWalk): RustSo
       const formal = rustCallableProtocol(rustOptionElementCarrier(pattern) ?? pattern);
       const supplied = rustCallableProtocol(rustOptionElementCarrier(actual) ?? actual);
       if (formal === undefined || supplied === undefined) return false;
-      const template: TargetTypeRef = { kind: "tuple", elements: [...formal.parameters, formal.result] };
+      const template = substituteRustTargetGenerics({ kind: "tuple", elements: [...formal.parameters, formal.result] },
+        types, lifetimes, consts);
       const references = rustTargetGenericReferences(template);
       const inferred = inferRustTargetGenericBindings(template,
         { kind: "tuple", elements: [...supplied.parameters, supplied.result] }, {
@@ -67,6 +68,16 @@ export function createRustSourceErrorEffectSelection(walk: RustFactWalk): RustSo
           constIdentities: new Set(references.constIdentities),
         });
       if (inferred === undefined) return false;
+      for (const [identity, carrier] of types) types.set(identity,
+        substituteRustTargetGenerics(carrier, inferred.types, inferred.lifetimes, inferred.consts));
+      for (const [identity, lifetime] of lifetimes) lifetimes.set(identity,
+        inferred.lifetimes.get(rustLifetimeKey(lifetime)) ?? lifetime);
+      for (const [identity, value] of consts) {
+        const substituted = substituteRustTargetGenericArgument({ kind: "const", value },
+          inferred.types, inferred.lifetimes, inferred.consts);
+        if (substituted.kind !== "const") return false;
+        consts.set(identity, substituted.value);
+      }
       for (const [identity, carrier] of inferred.types) {
         const previous = types.get(identity);
         if (previous !== undefined && !rustTargetTypeRefEquals(previous, carrier)) return false;
@@ -86,46 +97,52 @@ export function createRustSourceErrorEffectSelection(walk: RustFactWalk): RustSo
     };
     const producers = new Map<string, RustNativeCallableProducer>();
     const bindings = new Set<string>();
-    for (const carrier of carriers) {
-      for (const identity of rustTargetGenericReferences(carrier).typeIdentities) {
-        const input = inputs.get(identity);
-        if (input === undefined || bindings.has(identity)) continue;
-        bindings.add(identity);
-        if (storageBindings === undefined && input.owner !== declaration) {
-          if (!available.has(input)) return undefined;
-          continue;
-        }
-        const selected = storageBindings === undefined
-          ? walk.context.callableValues.nativeStorage.invocationOriginsFor(input, node, caller)
-          : walk.context.sourceStorage.boundOriginsFor(input.subject, storageBindings);
-        if (selected.kind !== "resolved") return undefined;
-        let actual: TargetTypeRef | undefined;
-        let producer: RustNativeCallableProducer | undefined;
-        for (const subject of selected.subjects) {
-          const parameter = native.inputs.find(candidate => candidate.subject === subject);
-          if (parameter !== undefined) {
-            if (producer !== undefined || actual !== undefined && !rustTargetTypeRefEquals(actual, parameter.implementation)) return undefined;
-            actual = parameter.implementation;
-            if (storageBindings !== undefined && !bindSignature(input.carrier, parameter.carrier)) return undefined;
-          } else {
-            if (rustOptionElementCarrier(input.carrier) !== undefined && subject.projection.length === 0 &&
-              isRustAbsenceCarrier(walk.context.facts.getRuntimeCarrierFact(subject.node)?.carrier)) continue;
-            const candidate = subject.projection.length === 0
-              ? walk.context.callableValues.nativeProducers.forDeclaration(subject.node) : undefined;
-            if (candidate === undefined || actual !== undefined || producer !== undefined && candidate !== producer) return undefined;
-            producer = candidate;
-            if (storageBindings !== undefined) {
-              const operation = walk.context.facts.get(subject.node, rustTargetOperationFactKey);
-              const carrier = operation?.kind === "closure" ? operation.resultCarrier
-                : walk.context.facts.getRuntimeCarrierFact(subject.node)?.carrier;
-              if (carrier === undefined || !bindSignature(input.carrier, carrier)) return undefined;
-            }
+    const references = rustTargetGenericReferences({ kind: "tuple", elements: carriers });
+    const needed = new Set(references.typeIdentities);
+    if (storageBindings !== undefined) for (const input of [...native.inputsFor(declaration), ...native.capturesFor(declaration)]) {
+      const signature = rustTargetGenericReferences(substituteRustTargetGenerics(input.carrier, types, lifetimes, consts));
+      if (signature.typeIdentities.some(identity => references.typeIdentities.includes(identity)) ||
+        signature.lifetimeIdentities.some(identity => references.lifetimeIdentities.includes(identity)) ||
+        signature.constIdentities.some(identity => references.constIdentities.includes(identity))) needed.add(input.implementation.identity);
+    }
+    for (const identity of needed) {
+      const input = inputs.get(identity);
+      if (input === undefined || bindings.has(identity)) continue;
+      bindings.add(identity);
+      if (storageBindings === undefined && input.owner !== declaration) {
+        if (!available.has(input)) return undefined;
+        continue;
+      }
+      const selected = storageBindings === undefined
+        ? walk.context.callableValues.nativeStorage.invocationOriginsFor(input, node, caller)
+        : walk.context.sourceStorage.boundOriginsFor(input.subject, storageBindings);
+      if (selected.kind !== "resolved") return undefined;
+      let actual: TargetTypeRef | undefined;
+      let producer: RustNativeCallableProducer | undefined;
+      for (const subject of selected.subjects) {
+        const parameter = native.inputs.find(candidate => candidate.subject === subject);
+        if (parameter !== undefined) {
+          if (producer !== undefined || actual !== undefined && !rustTargetTypeRefEquals(actual, parameter.implementation)) return undefined;
+          actual = parameter.implementation;
+          if (storageBindings !== undefined && !bindSignature(input.carrier, parameter.carrier)) return undefined;
+        } else {
+          if (rustOptionElementCarrier(input.carrier) !== undefined && subject.projection.length === 0 &&
+            isRustAbsenceCarrier(walk.context.facts.getRuntimeCarrierFact(subject.node)?.carrier)) continue;
+          const candidate = subject.projection.length === 0
+            ? walk.context.callableValues.nativeProducers.forDeclaration(subject.node) : undefined;
+          if (candidate === undefined || actual !== undefined || producer !== undefined && candidate !== producer) return undefined;
+          producer = candidate;
+          if (storageBindings !== undefined) {
+            const operation = walk.context.facts.get(subject.node, rustTargetOperationFactKey);
+            const carrier = operation?.kind === "closure" ? operation.resultCarrier
+              : walk.context.facts.getRuntimeCarrierFact(subject.node)?.carrier;
+            if (carrier === undefined || !bindSignature(input.carrier, carrier)) return undefined;
           }
         }
-        if (actual !== undefined) types.set(identity, actual);
-        else if (producer !== undefined) producers.set(identity, producer);
-        else return undefined;
       }
+      if (actual !== undefined) types.set(identity, actual);
+      else if (producer !== undefined) producers.set(identity, producer);
+      else return undefined;
     }
     const substitute = (carrier: TargetTypeRef): TargetTypeRef | undefined => {
       let valid = true;

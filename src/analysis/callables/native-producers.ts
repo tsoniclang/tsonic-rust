@@ -87,7 +87,11 @@ export function createRustNativeCallableProducerPlan(input: {
   const deferredFor = (declaration: Node, ordinal: number): RustDeferredProducerChannel | undefined => {
     if (!byDeclaration.has(declaration) || !Number.isSafeInteger(ordinal) || ordinal < 0) return undefined;
     const selected = input.facts.getFact(declaration, rustDeferredProducerEffectsFactKey);
-    return selected?.kind === "no-future" ? noFuture : selected?.channels[ordinal];
+    if (selected?.kind !== "no-future") return selected?.channels[ordinal];
+    const result = input.facts.getFact(declaration, rustSourceCallableReturnFactKey);
+    if (result === undefined) return undefined;
+    const completion = rustNativeCallableCompletion(result.returnCarrier, input.definitions);
+    return ordinal < Math.max(1, completion?.futures.length ?? 0) ? noFuture : undefined;
   };
   const resolving = new Set<string>();
   return Object.freeze({ producers: Object.freeze([...byDeclaration.values()]), errorFor,

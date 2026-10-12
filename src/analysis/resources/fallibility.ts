@@ -3,7 +3,6 @@ import {
   KindElementAccessExpression,
   KindFunctionDeclaration,
   KindFunctionExpression,
-  KindIdentifier,
   KindNewExpression,
   KindParenthesizedExpression,
   KindPropertyAccessExpression,
@@ -11,6 +10,7 @@ import {
   Node_Expression,
   Node_Initializer,
   asSourceNode,
+  sourceEnclosingCallable,
 } from "@tsonic/target-api/source";
 import {
   rustAsyncFunctionFactKey,
@@ -18,7 +18,6 @@ import {
   rustContextualValueConversionFactKey,
   rustFallibleFactKey,
   rustGeneratorFactKey,
-  rustMutatedBindingFactKey,
   rustObjectLiteralMethodAdapterFactKey,
   rustSelfModeFactKey,
   rustSourceAccessorEffectsFactKey,
@@ -35,7 +34,7 @@ import { rustAwaitCarrier, rustCallableProtocol } from "../../target-model/types
 import { rustSourceCallCallableStorageCarrier } from "../facts/target-operation.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustGenericCallableEffectsFactKey } from "../facts/generic-callable-effects.js";
-import { rustOperationAbiAwaitIsFallible, rustTargetOperationIsFallible } from "../facts/target-operation.js";
+import { rustTargetOperationIsFallible } from "../facts/target-operation.js";
 import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js";
 import { rustSelectedCallKey, rustSelectedOperationKey } from "../../target-model/facts/selections.js";
 import { rustContextualValueConversionIsFallible } from "../../target-model/conversions/contextual.js";
@@ -45,7 +44,6 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import { rustPropertyProjectionGetters } from "../conversions/property-projections.js";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustPreparedDeferredCheckedCall } from "../operations/provider/index.js";
-import type { RustTargetOperationFact } from "../facts/keys.js";
 import { rustProjectCallableAdaptersKey } from "../facts/project-callable-adapters.js";
 import { rustFutureValuesForSourceStorage } from "../facts/future-values.js";
 import { rustFutureValueForStoredBranch } from "./future-storage.js";
@@ -57,58 +55,9 @@ import { mergeRustErrorEffects, rustErrorEffectsAreFallible, rustErrorEffectsEqu
 import { createRustSourceErrorEffectSelection } from "./source-error-effects.js";
 import { rustSourceErrorEffectsFactKey, type RustSourceErrorEffectEdge } from "../facts/source-error-effects.js";
 import { createRustEffectsWorkBudget, defaultRustEffectsWorkLimit, type RustEffectsWorkBudget } from "./effects-work-budget.js";
-
-interface RustFutureOperationOrigin {
-  readonly expression: Node;
-  readonly operation: RustTargetOperationFact;
-}
-
-function resolveFutureOperationOrigin(
-  walk: RustFactWalk,
-  node: Node,
-  budget: RustEffectsWorkBudget,
-  resolving = new Set<Node>(),
-): RustFutureOperationOrigin | undefined {
-  budget.step();
-  if (resolving.has(node)) {
-    return undefined;
-  }
-  resolving.add(node);
-  try {
-    const operation = walk.context.facts.get(node, rustTargetOperationFactKey) ??
-      walk.context.facts.resolve(node, rustTargetOperationFactKey);
-    if ((operation?.kind === "provider-operation" && operation.abi.effects.awaiting !== "not-applicable") ||
-      (operation?.kind === "source-call" && rustAwaitCarrier(operation.resultCarrier) !== undefined)) {
-      return { expression: node, operation };
-    }
-    const kind = walk.context.ast.kindName(node);
-    if (kind === KindParenthesizedExpression || kind === "KindAsExpression" ||
-      kind === "KindTypeAssertionExpression") {
-      const operand = Node_Expression(walk.context.ast, node);
-      return operand === undefined
-        ? undefined
-        : resolveFutureOperationOrigin(walk, operand, budget, resolving);
-    }
-    if (kind === KindVariableDeclaration) {
-      if (walk.context.facts.get(node, rustMutatedBindingFactKey) !== undefined) {
-        return undefined;
-      }
-      const initializer = Node_Initializer(walk.context.ast, node);
-      return initializer === undefined
-        ? undefined
-        : resolveFutureOperationOrigin(walk, initializer, budget, resolving);
-    }
-    if (kind === KindIdentifier) {
-      const declaration = walk.context.source.navigation.sourceReferenceFor(node)?.declaration;
-      return declaration === undefined
-        ? undefined
-        : resolveFutureOperationOrigin(walk, declaration, budget, resolving);
-    }
-    return undefined;
-  } finally {
-    resolving.delete(node);
-  }
-}
+import { rustAwaitSourceErrorEffectsFactKey, type RustAwaitSourceErrorBranch } from "../facts/await-source-error-effects.js";
+import { selectRustAwaitSourceErrors } from "./await-source-effects.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 export function recordFallibilityFacts(
   walk: RustFactWalk,
@@ -136,6 +85,7 @@ function collectFallibilityFacts(
   const effectsByRegion = new Map<Node, RustErrorEffectsFact>();
   const effectsByExpression = new Map<Node, RustErrorEffectsFact>();
   const sourceErrorEdges = new Map<Node, RustSourceErrorEffectEdge[]>();
+  const awaitSourceEdges = new Map<Node, readonly RustAwaitSourceErrorBranch[]>();
   for (const call of walk.context.callableValues.native.calls) {
     budget.metadata(call.invocationError);
     budget.metadata(call.awaitErrors);
@@ -393,6 +343,17 @@ function collectFallibilityFacts(
       budget.step();
       const kind = ast.kindName(node);
       const selected: RustErrorEffectsFact[] = [];
+      const appendEdge = (invocation: Node, edge: RustSourceErrorEffectEdge): void => {
+        budget.metadata(edge.effects);
+        budget.metadata(edge.nativeErrors);
+        const edges = sourceErrorEdges.get(invocation) ?? [];
+        budget.step(edges.length + 1);
+        const index = edges.findIndex(candidate => candidate.declaration === edge.declaration && candidate.kind === edge.kind);
+        if (index < 0) edges.push(edge);
+        else edges[index] = edge;
+        sourceErrorEdges.set(invocation, edges);
+        selected.push(edge.effects);
+      };
       const appendDeclaration = (declaration: Node, invocation = node,
         kind: RustSourceErrorEffectEdge["kind"] = "invoke"): boolean => {
         const source = declarationEffects(declaration);
@@ -420,15 +381,7 @@ function collectFallibilityFacts(
             ["target.capability=rust.native-error.source-binding"]);
           return false;
         }
-        budget.metadata(edge.effects);
-        budget.metadata(edge.nativeErrors);
-        const edges = sourceErrorEdges.get(invocation) ?? [];
-        budget.step(edges.length + 1);
-        const index = edges.findIndex(candidate => candidate.declaration === declaration && candidate.kind === kind);
-        if (index < 0) edges.push(edge);
-        else edges[index] = edge;
-        sourceErrorEdges.set(invocation, edges);
-        selected.push(edge.effects);
+        appendEdge(invocation, edge);
         return true;
       };
       if (kind === "KindThrowStatement" || kind === "KindRegularExpressionLiteral" ||
@@ -469,36 +422,35 @@ function collectFallibilityFacts(
         const operand = Node_Expression(walk.context.ast, node);
         const topology = operand === undefined ? undefined
           : rustAwaitSelection(walk.context.facts.getRuntimeCarrierFact(operand)?.carrier, walk.context.typeDefinitions);
-        let exactNative = false;
-        for (const branch of topology === undefined ? [] : rustAwaitSelectionLeaves(topology)) {
+        const branches = topology === undefined ? [] : rustAwaitSelectionLeaves(topology);
+        const sourceEdges = operand === undefined || branches.every(branch => branch.future === undefined) ? []
+          : selectRustAwaitSourceErrors(walk, operand, branches.filter(branch => branch.future !== undefined)
+            .map(branch => branch.carrier), declarationEffects, selectSourceErrors, budget);
+        if (sourceEdges === undefined) {
+          appendRustDiagnostic(walk, "RUST_AWAIT_SOURCE_ERRORS_NOT_EXACT",
+            "Awaited source futures require exact producer activations and branch error correspondence.", node,
+            ["target.capability=rust.async.exact-source-errors"]);
+          return undefined;
+        }
+        awaitSourceEdges.set(node, Object.freeze(sourceEdges.map(({ carrier, edge }) => Object.freeze({ carrier, edge }))));
+        for (const branch of branches) {
           if (operand === undefined || branch.future === undefined) continue;
+          const edges = sourceEdges.filter(source => rustTargetTypeRefEquals(source.carrier, branch.carrier));
+          if (edges.length !== 0) {
+            for (const source of edges) {
+              if (sourceEnclosingCallable(source.invocation, ast) === sourceEnclosingCallable(node, ast))
+                appendEdge(source.invocation, source.edge);
+              else selected.push(source.edge.effects);
+            }
+            continue;
+          }
           const future = rustFutureValueForStoredBranch(walk, operand, branch.carrier);
           if (future?.errorBoundary === "source-native") {
             if (future.errorSource === undefined || future.errorCarrier === undefined) return undefined;
             selected.push({ localErrors: false, nativeErrors: [{ identity: future.errorSource, errorType: future.errorCarrier }] });
-            exactNative = true;
-          } else if (future?.awaiting === "fallible") selected.push(rustLocalErrorEffects);
-        }
-        const origin = operand === undefined ? undefined : resolveFutureOperationOrigin(walk, operand, budget);
-        const operandFact = origin?.operation;
-        const selectedDeclaration = origin === undefined
-          ? undefined
-          : selectedProjectDeclaration(origin.expression);
-        const selectedAsync = selectedDeclaration !== undefined &&
-          walk.context.facts.get(selectedDeclaration, rustAsyncFunctionFactKey) !== undefined;
-        if (!exactNative && ((origin === undefined && operand !== undefined &&
-            rustFutureValuesForSourceStorage(walk.context.facts.getRuntimeCarrierFact(operand)?.carrier,
-              walk.context.typeDefinitions)?.some(future => future.awaiting === "fallible") === true) ||
-          (operandFact?.kind === "provider-operation" && rustOperationAbiAwaitIsFallible(operandFact.abi)))) selected.push(rustLocalErrorEffects);
-        if (!exactNative && operandFact?.kind === "source-call" && rustAwaitCarrier(operandFact.resultCarrier) !== undefined) {
-          const declarations = operandFact.target.form === "union-method" ? operandFact.target.variants.map(variant => variant.declaration)
-            : genericCallImplementations(operandFact)?.map(implementation => implementation.declaration) ??
-              (selectedDeclaration === undefined ? [] : [selectedDeclaration]);
-          for (const declaration of declarations) {
-            if (!appendDeclaration(declaration, origin!.expression, "await")) return undefined;
-          }
-          if (declarations.length === 1 && selectedDeclaration !== undefined && !selectedAsync &&
-            !isFallible(selectedDeclaration)) selected.push(rustLocalErrorEffects);
+          } else if (future?.awaiting === "fallible" || future === undefined &&
+            rustFutureValuesForSourceStorage(branch.carrier, walk.context.typeDefinitions)
+              ?.some(future => future.awaiting === "fallible") === true) selected.push(rustLocalErrorEffects);
         }
       }
       if (nativeInput === undefined && (kind === KindCallExpression || kind === KindNewExpression)) {
@@ -785,4 +737,7 @@ function collectFallibilityFacts(
     walk.context.facts.set(node, rustSourceErrorEffectsFactKey, Object.freeze({ edges: Object.freeze(edges) }),
       [{ message: "rust exact selected source error identity correspondence" }]);
   }
+  for (const [node, branches] of awaitSourceEdges) walk.context.facts.set(node,
+    rustAwaitSourceErrorEffectsFactKey, Object.freeze({ branches }),
+    [{ message: "rust exact awaited branch and producer error correspondence" }]);
 }

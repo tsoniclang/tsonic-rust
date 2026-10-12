@@ -149,6 +149,8 @@ test("no-Future evidence is explicit, while absent facts, foreign owners and inv
     assert.equal(current.context.facts.get(current.declaration(name), rustDeferredProducerEffectsFactKey).kind, "no-future");
     assert.equal(current.error(name).id, rustInfallibleTargetId);
     assert.equal(producers.deferredFor(current.declaration(name), 0).awaiting, "infallible");
+    assert.equal(producers.deferredFor(current.declaration(name), 1) === undefined, true,
+      "a proven scalar/absent implementation has only its explicit ready completion descriptor");
   }
   assert.equal(producers.deferredErrorFor(current.declaration("asyncBody"), 0) === undefined, true,
     "the async body error remains the separate owning declaration's channel");

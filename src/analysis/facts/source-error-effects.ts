@@ -17,10 +17,8 @@ export interface RustSourceErrorEffectsFact {
   readonly edges: readonly RustSourceErrorEffectEdge[];
 }
 
-export const rustSourceErrorEffectsFactKey = defineRustPlanKey<RustSourceErrorEffectsFact>("sourceErrorEffects",
-  (left, right) => left.edges.length === right.edges.length && left.edges.every((edge, index) => {
-    const other = right.edges[index]!;
-    return edge.declaration === other.declaration && edge.kind === other.kind &&
+export function rustSourceErrorEffectEdgeEquals(edge: RustSourceErrorEffectEdge, other: RustSourceErrorEffectEdge): boolean {
+  return edge.declaration === other.declaration && edge.kind === other.kind &&
       rustErrorEffectsEqual(edge.effects, other.effects) && edge.nativeErrors.length === other.nativeErrors.length &&
       edge.nativeErrors.every((entry, ordinal) => {
         const counterpart = other.nativeErrors[ordinal]!;
@@ -28,4 +26,8 @@ export const rustSourceErrorEffectsFactKey = defineRustPlanKey<RustSourceErrorEf
           rustTargetTypeRefEquals(entry.source.errorType, counterpart.source.errorType) &&
           rustTargetTypeRefEquals(entry.target.errorType, counterpart.target.errorType);
       });
-  }));
+}
+
+export const rustSourceErrorEffectsFactKey = defineRustPlanKey<RustSourceErrorEffectsFact>("sourceErrorEffects",
+  (left, right) => left.edges.length === right.edges.length &&
+    left.edges.every((edge, index) => rustSourceErrorEffectEdgeEquals(edge, right.edges[index]!)));
