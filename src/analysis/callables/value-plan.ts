@@ -26,6 +26,7 @@ import { createRustNativeCallableInputPlan, type RustNativeCallableInputPlan } f
 import { createRustNativeStoragePlan, type RustNativeStoragePlan } from "./native-storage.js";
 import { createRustNativeCallableProducerPlan, type RustNativeCallableProducerPlan } from "./native-producers.js";
 import { createRustNativeGenericProducerPlan, type RustNativeGenericProducerPlan } from "./native-generic-producers.js";
+import { createRustNativeCapturePlan, type RustNativeCapturePlan } from "./native-captures.js";
 
 export interface RustCallableValuePlan {
   readonly generic: RustGenericCallablePlan;
@@ -33,6 +34,7 @@ export interface RustCallableValuePlan {
   readonly frames: RustFrameCallablePlan;
   readonly native: RustNativeCallableInputPlan;
   readonly nativeStorage: RustNativeStoragePlan;
+  readonly nativeCaptures: RustNativeCapturePlan;
   readonly nativeProducers: RustNativeCallableProducerPlan;
   readonly nativeGenericProducers: RustNativeGenericProducerPlan;
   readonly issues: readonly RustSourceCallableSpecializationIssue[];
@@ -77,6 +79,7 @@ export function createRustCallableValuePlanRegistry(): RustCallableValuePlanRegi
     get frames() { return requireCurrent().frames; },
     get native() { return requireCurrent().native; },
     get nativeStorage() { return requireCurrent().nativeStorage; },
+    get nativeCaptures() { return requireCurrent().nativeCaptures; },
     get nativeProducers() { return requireCurrent().nativeProducers; },
     get nativeGenericProducers() { return requireCurrent().nativeGenericProducers; },
     get issues() { return requireCurrent().issues; },
@@ -146,7 +149,6 @@ function createRustCallableValuePlan(input: RustCallableValuePlanInput): RustCal
   };
   for (const sourceFile of input.sourceFiles) visit(sourceFile);
   const generic = createRustGenericCallablePlan(input.ast, input.sourceFiles, input.facts, input.names, input.navigation, flows, input.closedSourceFiles);
-  const suspended = createRustSuspendedCallablePlan(input.ast, input.sourceFiles, input.facts, input.names, input.lifetimes);
   for (const definition of generic.definitions) {
     usedNames.add(definition.targetName);
     for (const implementation of definition.implementations) {
@@ -154,8 +156,6 @@ function createRustCallableValuePlan(input: RustCallableValuePlanInput): RustCal
       usedNames.add(implementation.stateName);
     }
   }
-  for (const implementation of suspended.implementations) usedNames.add(implementation.stateName);
-  const frames = createRustFrameCallablePlan({ ...input, usedNames });
   const native = createRustNativeCallableInputPlan({ ast: input.ast, facts: input.facts,
     storage: input.sourceStorage, definitions: input.typeDefinitions, usedNames });
   const nativeProducers = createRustNativeCallableProducerPlan({ ast: input.ast, facts: input.facts,
@@ -166,8 +166,12 @@ function createRustCallableValuePlan(input: RustCallableValuePlanInput): RustCal
     } });
   const nativeStorage = createRustNativeStoragePlan({ ast: input.ast, facts: input.facts,
     storage: input.sourceStorage, definitions: input.typeDefinitions, native, producers: nativeProducers, generic });
+  const nativeCaptures = createRustNativeCapturePlan({ facts: input.facts, storage: input.sourceStorage, nativeStorage });
+  const suspended = createRustSuspendedCallablePlan(input.ast, input.sourceFiles, input.facts, input.names, input.lifetimes, nativeCaptures);
+  for (const implementation of suspended.implementations) usedNames.add(implementation.stateName);
+  const frames = createRustFrameCallablePlan({ ...input, usedNames });
   const nativeGenericProducers = createRustNativeGenericProducerPlan({ ast: input.ast, nodes: input.sourceStorage.nodes,
     facts: input.facts, storage: input.sourceStorage, generic, native, nativeStorage });
-  return Object.freeze({ generic, suspended, frames, native, nativeStorage, nativeProducers, nativeGenericProducers,
+  return Object.freeze({ generic, suspended, frames, native, nativeStorage, nativeCaptures, nativeProducers, nativeGenericProducers,
     issues: Object.freeze([...generic.issues, ...suspended.issues, ...frames.issues]) });
 }

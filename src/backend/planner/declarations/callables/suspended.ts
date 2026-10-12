@@ -5,17 +5,14 @@ import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality
 import type { RustBlock, RustGenericParameter, RustItem, RustType } from "../../../target-ast/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import { rustTypeParameterFromSourceContract } from "../../../../target-model/names/type-parameters.js";
-import { rustGeneratedTypeParameterContext } from "../../names/type-parameters.js";
 import { diagnosticInput } from "../../program/plan-context.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
 import { createRustSyntheticNameState } from "../../names/synthetic.js";
 import { planRustCallableExpressionBody } from "../../expressions/callable.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { rustSuspendedCallableStateType } from "../../types/suspended-callables.js";
-import { rustTypeParameterBounds, rustGenericsWithAssociatedBounds } from "../../types/generic-bounds.js";
-import { rustLifetimeToAst } from "../../types/lifetime-syntax.js";
-import { rustDeclarationAssociatedPredicates } from "../../types/associated-bounds.js";
+import { rustLifetimeKey } from "../../../../target-model/lifetimes/index.js";
+import { planRustCallableGenerics } from "./generics.js";
 import { bindRustElidedCallableInput, substituteElidedLifetime } from "../../../../target-model/types/carriers/lifetime-elision.js";
 import { rustCallableCaptureStorageType } from "../../types/capture-storage.js";
 import { rustCapturedReceiverFieldType } from "../../expressions/receiver-captures.js";
@@ -36,18 +33,21 @@ export function planRustSuspendedCallableItems(context: RustPlanContext): readon
 
 function planImplementation(implementation: RustSuspendedCallableImplementation, context: RustPlanContext): readonly RustItem[] | undefined {
   const { declaration } = implementation;
-  if (implementation.storage.length !== implementation.captures.length + implementation.receiverFields.length + implementation.receivers.length ||
+  const captures = context.input.program.callableValues.nativeCaptures.forDeclaration(declaration);
+  if (captures.kind !== "resolved" ||
+    implementation.storage.length !== implementation.captures.length + implementation.receiverFields.length + implementation.receivers.length ||
     !implementation.captures.every((capture, index) => {
-      const carrier = substituteElidedLifetime(capture.carrier, rustStaticLifetime);
+      const carrier = substituteElidedLifetime(captures.captures[index]!, rustStaticLifetime);
       return rustTargetTypeRefEquals(implementation.storage[index],
         capture.storage === "location" ? rustLocationTargetType(carrier) : carrier);
-    }) || !implementation.receiverFields.every((capture, index) => rustTargetTypeRefEquals(
-      implementation.storage[implementation.captures.length + index], substituteElidedLifetime(capture.carrier, rustStaticLifetime))) ||
-    !implementation.receivers.every((capture, index) => rustTargetTypeRefEquals(
+    }) || !implementation.receiverFields.every((_capture, index) => rustTargetTypeRefEquals(
+      implementation.storage[implementation.captures.length + index], substituteElidedLifetime(captures.receiverFields[index]!, rustStaticLifetime))) ||
+    !implementation.receivers.every((_capture, index) => rustTargetTypeRefEquals(
       implementation.storage[implementation.captures.length + implementation.receiverFields.length + index],
-      substituteElidedLifetime(capture.carrier, rustStaticLifetime)))) return undefined;
-  const scoped: RustPlanContext = { ...rustGeneratedTypeParameterContext(
-    implementation.parameters.filter(parameter => parameter.kind === "type").map(rustTypeParameterFromSourceContract), [], context),
+      substituteElidedLifetime(captures.receivers[index]!, rustStaticLifetime)))) return undefined;
+  const genericPlan = planRustCallableGenerics(declaration, context, undefined, implementation.parameters);
+  if (genericPlan === undefined) return undefined;
+  const scoped: RustPlanContext = { ...genericPlan.context,
     callableDeclaration: declaration,
     syntheticNames: createRustSyntheticNameState(context.input.program.source.ast, declaration, []),
   };
@@ -68,32 +68,27 @@ function planImplementation(implementation: RustSuspendedCallableImplementation,
   const resultArgument = callableType?.kind === "named" ? callableType.genericArguments?.[1] : undefined;
   const resultType = resultArgument?.kind === "type" ? resultArgument.type : undefined;
   const target = rustSuspendedCallableStateType(implementation, scoped);
-  const storage = [...implementation.captures.map(capture => rustCallableCaptureStorageType(capture,
-    substituteElidedLifetime(capture.carrier, rustStaticLifetime), scoped)),
+  const storage = [...implementation.captures.map((capture, index) => rustCallableCaptureStorageType(capture,
+    substituteElidedLifetime(captures.captures[index]!, rustStaticLifetime), scoped)),
     ...implementation.receiverFields.map((capture, index) => {
       const type = rustTypeFromCarrierInContext(implementation.storage[implementation.captures.length + index]!, scoped);
       return type === undefined ? undefined : rustCapturedReceiverFieldType(capture, type, scoped);
     }), ...implementation.receivers.map((_capture, index) => rustTypeFromCarrierInContext(
       implementation.storage[implementation.captures.length + implementation.receiverFields.length + index]!, scoped))];
-  const requirements = context.input.program.declarationGenericRequirements.contractFor(declaration);
   if (protocol === undefined || argumentsType === undefined || resultType === undefined || target === undefined ||
-      requirements === undefined || storage.some(type => type === undefined)) return undefined;
-  const parameters: RustGenericParameter[] = [];
-  for (const parameter of implementation.parameters) {
-    if (parameter.kind === "lifetime") {
-      parameters.push({ kind: "lifetime", name: parameter.lifetime.name, outlives: parameter.outlives.map(rustLifetimeToAst) });
-    } else {
-      const required = [...requirements.typeParameters, ...requirements.capturedTypeParameters].find(selected => selected.identity === parameter.identity);
-      parameters.push({ kind: "type", name: scoped.typeParameterNames?.get(parameter.identity) ?? parameter.targetName,
-        bounds: rustTypeParameterBounds(parameter, required?.requirements ?? []) });
-    }
-  }
-  const environment = parameters.filter((_parameter, index) => {
-    const source = implementation.parameters[index]!;
-    return source.kind === "lifetime"
-      ? implementation.environment.lifetimes.some(lifetime => lifetime.identity === source.lifetime.identity)
-      : implementation.environment.typeIdentities.includes(source.identity);
-  });
+      storage.some(type => type === undefined)) return undefined;
+  const generics = genericPlan.finalizeGenerics();
+  const parameters: RustGenericParameter[] = [...generics.parameters];
+  const environment = [
+    ...implementation.environment.lifetimes.map(lifetime => {
+      const selected = scoped.lifetimeSubstitutions?.get(rustLifetimeKey(lifetime)) ?? lifetime;
+      return selected.kind === "parameter" || selected.kind === "bound"
+        ? parameters.find(parameter => parameter.kind === "lifetime" && parameter.name === selected.name) : undefined;
+    }),
+    ...implementation.environment.typeParameters.map(type => parameters.find(parameter =>
+      parameter.kind === "type" && parameter.name === scoped.typeParameterNames?.get(type.identity))),
+  ];
+  if (environment.some(parameter => parameter === undefined)) return undefined;
   if (implementation.elision !== undefined) parameters.unshift({
     kind: "lifetime", name: implementation.elision.lifetime.name, outlives: [],
   });
@@ -102,11 +97,11 @@ function planImplementation(implementation: RustSuspendedCallableImplementation,
   const state: RustType = { kind: "tuple", elements: storage as RustType[] };
   context.usedAliases?.add("rt");
   return [{ kind: "struct", name: implementation.stateName, visibility: "crate",
-    generics: { parameters: environment, wherePredicates: [] }, fields: [{ name: "state", type: state, visibility: "crate" }, {
+    generics: { parameters: environment as RustGenericParameter[], wherePredicates: [] }, fields: [{ name: "state", type: state, visibility: "crate" }, {
       name: "owner", type: { kind: "named", path: "alloc::rc::Weak", genericArguments: [{ kind: "type", type: selfType }] }, visibility: "crate",
     }],
   }, { kind: "impl", target,
-    generics: rustGenericsWithAssociatedBounds(parameters, rustDeclarationAssociatedPredicates(declaration, scoped)),
+    generics: { ...generics, parameters },
     trait: { kind: "named", path: "rt::CallableImplementation", genericArguments: [{ kind: "type", type: argumentsType }] },
     members: [{ kind: "type", name: "Output", generics: emptyRustGenerics, type: resultType },
     { kind: "function", name: "invoke", visibility: "private", selfParam: { kind: "reference", mutable: false },
