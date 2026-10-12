@@ -33,6 +33,7 @@ import { createRustNativeCapturePlan, type RustNativeCapturePlan } from "./nativ
 import { createRustGenericCallableDispatchPlan, type RustGenericCallableDispatchPlan } from "./generic-dispatch.js";
 import type { RustLexicalFunctionEnvironments } from "./lexical-functions.js";
 import { createRustNativeCallableDispatchPlan, type RustNativeCallableDispatchPlan } from "./native-dispatch.js";
+import type { RustStructuralStorageLookup } from "../facts/target-operation.js";
 import { createRustGenericCallableCompletionPlan, type RustGenericCallableCompletionInput,
   type RustGenericCallableCompletionPlan } from "./generic-completions.js";
 
@@ -67,6 +68,7 @@ export interface RustCallableValuePlanInput {
   readonly objectRepresentations: import("../project-types/object-representation.js").RustObjectRepresentationPlan;
   readonly typeDefinitions: RustTypeDefinitions;
   readonly lexicalFunctions: RustLexicalFunctionEnvironments;
+  readonly structuralShapes: RustStructuralStorageLookup;
 }
 
 export interface RustCallableValuePlanRegistry extends RustCallableValuePlan {
@@ -195,7 +197,7 @@ function createRustCallableValuePlan(input: RustCallableValuePlanInput,
     } });
   const nativeStorage = createRustNativeStoragePlan({ ast: input.ast, facts: input.facts,
     storage: input.sourceStorage, definitions: input.typeDefinitions, native, producers: nativeProducers, generic,
-    lexicalFunctions: input.lexicalFunctions, lifetimes: input.lifetimes });
+    lexicalFunctions: input.lexicalFunctions, lifetimes: input.lifetimes, structuralShapes: input.structuralShapes });
   const nativeCaptures = createRustNativeCapturePlan({ facts: input.facts, storage: input.sourceStorage, nativeStorage });
   generic.initializePhysical({ ast: input.ast, storage: input.sourceStorage, captures: nativeCaptures, native,
     boundSubjectFor: (subject, carrier, bindings) => nativeStorage.boundSubjectFor(subject, carrier, bindings) });

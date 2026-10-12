@@ -1,8 +1,8 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustFinalizedSourceInput } from "../../../analysis/facts/finalized-operation-abi.js";
 import { rustFinalizedSourceInputs } from "../../../analysis/facts/finalized-operation-abi.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 import { isRustAbsenceCarrier, isRustUnitCarrier } from "../../../target-model/types/index.js";
+import { providerSourceInputKey } from "../../../analysis/facts/provider-source-inputs.js";
 
 export function sourceRuntimeSlots(
   fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>,
@@ -36,20 +36,4 @@ export function providerTargetRuntimeSlotKeys(
   fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>,
 ): readonly string[] {
   return rustFinalizedSourceInputs(fact.abi).map(providerSourceInputKey);
-}
-
-export function providerSourceInputNode(
-  input: RustFinalizedSourceInput,
-  receiverNode: Node | undefined,
-  argumentNodes: readonly (Node | undefined)[],
-): Node | undefined {
-  return input.source.kind === "receiver"
-    ? receiverNode
-    : argumentNodes[input.source.sourceIndex];
-}
-
-export function providerSourceInputKey(input: RustFinalizedSourceInput): string {
-  return input.source.kind === "receiver"
-    ? "receiver"
-    : `argument:${input.source.sourceIndex}`;
 }

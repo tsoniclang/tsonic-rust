@@ -506,7 +506,7 @@ export function planSelectedSourceCall(
     return undefined;
   }
   if (nativeInput === undefined && rustGenericCallableValue(callableCarrier) !== undefined) {
-    const physical = callee === undefined ? undefined : context.input.program.callableValues.nativeStorage.valueFor(callee);
+    const physical = context.input.program.callableValues.nativeStorage.invocationCallableFor(node);
     if (genericInvocation === undefined || physical === undefined || physical.kind === "unresolved" ||
       !rustTargetTypeRefEquals(physical.carrier, genericInvocation.carrier) ||
       genericInvocation.effects.invocation !== effects.invocation || genericInvocation.effects.awaiting !== effects.awaiting) {

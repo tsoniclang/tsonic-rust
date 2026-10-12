@@ -24,6 +24,7 @@ function fixture(text, options = {}) {
   const storage = createSourceStorageQuery(source, program.sourceFiles);
   const generic = createRustGenericCallablePlan(source.ast, program.sourceFiles, program.facts, program.names, source.navigation);
   const input = { ast: source.ast, storage, facts: program.facts, definitions: program.typeDefinitions,
+    structuralShapes: program.structuralShapes,
     generic, lexicalFunctions: program.lexicalFunctions, lifetimes: program.sourceLifetimes };
   const native = createRustNativeCallableInputPlan({ ...input, sourcePackages: program.host.sourcePackages, usedNames: new Set() });
   const producers = createRustNativeCallableProducerPlan({ ...input, native, nodes: storage.nodes,

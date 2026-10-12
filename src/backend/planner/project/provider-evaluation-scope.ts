@@ -15,7 +15,8 @@ import {
   rustContextualValueConversionFactKey,
 } from "../../../analysis/facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { sourceRuntimeSlots, providerTargetRuntimeSlotKeys, providerSourceInputKey } from "./provider-source-inputs.js";
+import { sourceRuntimeSlots, providerTargetRuntimeSlotKeys } from "./provider-source-inputs.js";
+import { providerSourceInputKey } from "../../../analysis/facts/provider-source-inputs.js";
 import { planExpressionBeforeContextualConversion } from "../expressions/entry.js";
 import { rustContextualRuntimeConversionContract } from "../../../target-model/conversions/contextual.js";
 import { rustValueCarrierBeforeContextualConversion } from "../../../analysis/facts/value-carrier-queries.js";
@@ -94,7 +95,7 @@ export function planRustProviderEvaluationScope(
   if (mutableInputs === undefined) {
     return { kind: "failed" };
   }
-  if (!mutableRootsAreDisjoint(mutableInputs, context)) {
+  if (!mutableRootsAreDisjoint(operationNode, fact, mutableInputs, context)) {
     return { kind: "failed" };
   }
   const sourceSlots = sourceRuntimeSlots(fact, receiverNode, argumentNodes);

@@ -58,6 +58,7 @@ import { rustClosureCaptureFactKey, rustTargetOperationFactKey, rustBindingStora
 import { rustTargetOperationIsFallible } from "../facts/target-operation.js";
 import { analyzeRustErrorTransport } from "./error-transport.js";
 import { analyzeRustBorrowedInitializers } from "../storage/borrowed-initializers.js";
+import { createRustProviderMutableInputPlan } from "../storage/provider-mutable-inputs.js";
 
 export function analyzeRustTargetProgram(
   request: RustTargetAnalysisRequest,
@@ -145,6 +146,16 @@ export function analyzeRustTargetProgram(
   if (foundation.plan === undefined) {
     return rejectedTargetStage(foundation.diagnostics);
   }
+  const providerMutableInputs = createRustProviderMutableInputPlan({ ast: context.ast, facts: context.facts,
+    navigation: context.source.navigation, nodes: context.sourceStorage.nodes });
+  for (const node of context.sourceStorage.nodes) {
+    const selection = providerMutableInputs.forOperation(node);
+    if (selection?.kind === "rejected") context.diagnostics.push({ code: "RUST_PROVIDER_MUTABLE_INPUT_NOT_DISJOINT",
+      category: "error", source: "tsonic-rust", message: selection.reason,
+      sourceNode: selection.node,
+      evidence: ["target.capability=rust.native-provider.disjoint-mutable-storage"] });
+  }
+  if (context.diagnostics.length > 0) return rejectedTargetStage(context.diagnostics);
   const facts = context.facts.seal();
   const projectConstructions = analyzeRustProjectConstructions({ ast: context.ast, facts,
     typeDefinitions: context.typeDefinitions,
@@ -319,6 +330,7 @@ export function analyzeRustTargetProgram(
     borrowedElementReads,
     borrowedInitializers: analyzeRustBorrowedInitializers(context.ast, context.sourceFiles, facts),
     borrowStability: borrowStability.plan,
+    providerMutableInputs,
     structuralShapes: context.structuralShapes.seal(),
     frozenDataWrites: context.frozenDataWrites.seal(),
     classValues,

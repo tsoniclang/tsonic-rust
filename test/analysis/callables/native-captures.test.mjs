@@ -1,29 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createTargetSourceProgram } from "@tsonic/target-api/source";
-import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
-import { analyzeRust } from "../../helpers/rust-session.mjs";
-import { createRustNativeCallableInputPlan } from "../../../dist/analysis/callables/native-inputs.js";
-import { createRustNativeCallableProducerPlan } from "../../../dist/analysis/callables/native-producers.js";
-import { createRustNativeStoragePlan } from "../../../dist/analysis/callables/native-storage.js";
-import { createRustNativeCapturePlan } from "../../../dist/analysis/callables/native-captures.js";
+import { compileRust } from "../../helpers/rust-session.mjs";
+import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { rustClosureCaptureFactKey } from "../../../dist/analysis/facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 
 function fixture(text) {
-  const { program, source: checked } = analyzeRust({ surfaces: [], files: { "index.ts": text } });
-  const source = createTargetSourceProgram(checked);
-  const storage = createSourceStorageQuery(source, program.sourceFiles);
-  const input = { ast: source.ast, storage, facts: program.facts, definitions: program.typeDefinitions,
-    generic: program.callableValues.generic, lexicalFunctions: program.lexicalFunctions, lifetimes: program.sourceLifetimes };
-  const native = createRustNativeCallableInputPlan({ ...input, sourcePackages: program.host.sourcePackages, usedNames: new Set() });
-  const producers = createRustNativeCallableProducerPlan({ ...input, native, nodes: storage.nodes,
-    returnCarrierFor: declaration => {
-      const selected = nativeStorage.returnFor(declaration);
-      return selected.kind === "unresolved" ? undefined : selected.carrier;
-    } });
-  const nativeStorage = createRustNativeStoragePlan({ ...input, native, producers });
-  const plan = createRustNativeCapturePlan({ ...input, nativeStorage });
+  const program = analyzeRustErrorEffects(text, { surfaces: [] });
+  const source = program.source;
+  const storage = program.sourceStorage;
+  const native = program.callableValues.native;
+  const plan = program.callableValues.nativeCaptures;
   const closures = storage.nodes.filter(node => source.ast.is.IsArrowFunction(node));
   const declaration = name => storage.nodes.find(node => source.ast.is.IsFunctionDeclaration(node) &&
     source.ast.name(node) !== undefined && source.ast.text(source.ast.name(node)) === name);
@@ -71,15 +58,19 @@ test("native capture environment keeps ordinary captured values and excludes met
 });
 
 test("native capture environment rejects ambiguous mutation instead of choosing the first input", () => {
-  const current = fixture(`
+  const source = `
     export function make(left: () => number, right: () => number): <Value>(value: Value) => Value {
       left = right;
       return <Value>(value: Value): Value => { left(); return value; };
     }
-  `);
+  `;
+  const current = fixture(source);
   const selected = current.plan.forDeclaration(current.closures[0]);
   assert.equal(selected.kind, "unresolved");
   assert.match(selected.reason, /physical|distinct|alternative/u);
+  const { result } = compileRust({ files: { "index.ts": source } });
+  assert.equal(result.artifacts.length, 0, "ambiguous mutation never publishes native output");
+  assert.equal(result.diagnostics.length > 0, true, "the complete physical ABI also rejects the unresolved capture");
 });
 
 test("native capture environments retain exact receiver fields and whole receiver owners", () => {

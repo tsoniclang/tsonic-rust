@@ -15,6 +15,7 @@ export function selectRustGenericCallableInvocation(
   const storage = selectRustGenericCallableInvocationStorage(node, {
     ast: context.ast, facts: context.facts, generic: context.callableValues.generic,
     nativeStorage: context.callableValues.nativeStorage,
+    structuralShapes: context.structuralShapes,
   });
   if (storage === undefined) return undefined;
   const { operation, definition } = storage;

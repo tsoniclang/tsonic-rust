@@ -3,14 +3,13 @@ import { ElementAccessExpression_ArgumentExpression, Node_Expression, type Sourc
 import { rustFinalizedSourceInputs, type RustFinalizedSourceInput } from "../../../analysis/facts/finalized-operation-abi.js";
 import { rustTargetOperationFactKey, rustSourceBindingFactKey, type RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 import { rustTargetOperationIsDirectLocation } from "../../../analysis/facts/target-operation.js";
-import { rustNativeStoragePathsDisjoint, rustNativeStorageProjections, rustNativeStorageRoot,
-  type RustNativeStorageProjection } from "../../../analysis/facts/native-storage-paths.js";
+import { rustNativeStorageRoot } from "../../../analysis/facts/native-storage-paths.js";
 import type { RustExpr } from "../../target-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { diagnosticInput, isValidRustIdentifier, rustSourceBindingPath, type RustPlanContext } from "../program/plan-context.js";
 import { planRustPromotedStorageLocation, type RustExpressionPlanner } from "../expressions/typed-locations.js";
 import { rustDirectProjectFieldStoragePath, rustProjectObjectRepresentation } from "../objects/project-storage.js";
-import { providerSourceInputNode, providerSourceInputKey } from "./provider-source-inputs.js";
+import { providerSourceInputNode, providerSourceInputKey } from "../../../analysis/facts/provider-source-inputs.js";
 
 export type MutableProviderInput =
   | {
@@ -138,67 +137,21 @@ export function collectMutableInputs(
 }
 
 export function mutableRootsAreDisjoint(
+  node: Node,
+  fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>,
   mutableInputs: ReadonlyMap<string, MutableProviderInput>,
   context: RustPlanContext,
 ): boolean {
-  for (const mutable of mutableInputs.values()) {
-    if (mutable.inputs.length !== 1) {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        diagnosticInput(context, mutable.node),
-        "rust.backend.typed-location-mutable-alias",
-        "One source value cannot supply multiple mutable inputs to one Rust provider operation.",
-      ));
-      return false;
-    }
-  }
-  if (mutableInputs.size <= 1) {
-    return true;
-  }
-  const selected: { readonly root: Node; readonly projections: readonly RustNativeStorageProjection[] }[] = [];
-  for (const mutable of mutableInputs.values()) {
-    const root = mutable.kind === "promoted"
-      ? mutable.rootDeclaration
-      : mutable.kind === "direct" || mutable.kind === "project-field"
-        ? mutable.rootDeclaration
-        : undefined;
-    if ((mutable.kind === "direct" || mutable.kind === "project-field") &&
-      root === undefined && mutableInputs.size > 1) {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        diagnosticInput(context, mutable.node),
-        "rust.backend.typed-location-mutable-alias",
-        "Multiple direct mutable provider inputs require exact disjoint source storage roots.",
-      ));
-      return false;
-    }
-    if (root === undefined) {
-      continue;
-    }
-    const projections = rustNativeStorageProjections(mutable.node, root, { ast: context.input.program.source.ast,
-      facts: context.input.program.facts, navigation: context.input.program.sourceNavigation });
-    if (projections === undefined) {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        diagnosticInput(context, mutable.node),
-        "rust.backend.typed-location-mutable-alias",
-        "Mutable provider input has no exact projection path from its source storage root.",
-      ));
-      return false;
-    }
-    for (const previous of selected) {
-      if (previous.root === root && !rustNativeStoragePathsDisjoint(
-        previous.projections,
-        projections,
-      )) {
-        context.diagnostics.push(unsupportedConstructDiagnostic(
-          diagnosticInput(context, mutable.node),
-          "rust.backend.typed-location-mutable-alias",
-          "One provider operation cannot hold overlapping mutable Rust locations from the same exact source storage root.",
-        ));
-        return false;
-      }
-    }
-    selected.push({ root, projections });
-  }
-  return true;
+  if (mutableInputs.size === 0) return true;
+  const proof = context.input.program.providerMutableInputs.forOperation(node);
+  if (proof?.kind === "proved" && proof.operation === fact && proof.inputs.length === mutableInputs.size &&
+    proof.inputs.every(value => {
+      const selected = mutableInputs.get(value.key);
+      return selected?.node === value.node && selected.inputs.length === 1 && selected.inputs[0] === value.input;
+    })) return true;
+  context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+    "rust.backend.typed-location-mutable-proof", "Mutable native lowering requires its exact sealed source-storage admission proof."));
+  return false;
 }
 
 function providerMutableInputIsDirect(

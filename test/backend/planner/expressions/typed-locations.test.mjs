@@ -181,7 +181,11 @@ export function main(): void {
   });
 
   assertNoTargetDiagnostics(result.diagnostics);
-  assert.match(artifactText(result, "src/index.rs"), /value\.clone\(\)/u);
+  const output = artifactText(result, "src/index.rs");
+  assert.match(output, /fn read\([^)]*&String\) -> String/u);
+  assert.match(output, /read\(&value\)/u);
+  assert.match(output, /capture\.clone\(\)/u);
+  assert.doesNotMatch(output, /rt::Location::allocate|RefCell/u);
   validateGeneratedProject("captured-string-updates", result.artifacts, { run: true });
 });
 
@@ -213,9 +217,10 @@ export function main(): void {
 
   assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
-  assert.match(output, /rt::Location::allocate\(false\)/u);
-  assert.match(output, /rt::Location::allocate\(String::from\(""\)\)/u);
-  assert.match(output, /\.store\(/u);
+  assert.match(output, /fn write\([^)]*&mut String[^)]*&mut bool\)/u);
+  assert.match(output, /write\([^;]*&mut value, &mut ready\)/u);
+  assert.match(output, /read\(ready, &value\)/u);
+  assert.doesNotMatch(output, /rt::Location::allocate|RefCell|\.store\(/u);
   validateGeneratedProject("captured-future-writes", result.artifacts, { run: true });
 });
 
@@ -684,8 +689,8 @@ export function reject(): void {
 `,
     },
   }, [{
-    code: "RUST_UNSUPPORTED_AST",
-    message: "One provider operation cannot hold overlapping mutable Rust locations from the same exact source storage root. Node kind: KindIdentifier.",
+    code: "RUST_PROVIDER_MUTABLE_INPUT_NOT_DISJOINT",
+    message: "One provider operation cannot hold overlapping mutable Rust locations from the same exact source storage root.",
   }]);
 });
 

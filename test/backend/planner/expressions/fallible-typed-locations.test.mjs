@@ -34,6 +34,7 @@ test("inline location callbacks have an explicit Result ABI without a first-clas
   const retained = rustLocationCallbackCarrier({ kind: "KindIdentifier" }, [integer], integer, ast);
   assert.equal(rustClosureProtocol(inline).fallible, true);
   assert.equal(rustCallableProtocol(inline), undefined);
-  assert.deepEqual(rustCallableProtocol(retained), { parameters: [integer], result: integer });
+  assert.deepEqual(rustCallableProtocol(retained), { parameters: [integer], result: integer,
+    lifetime: { kind: "placeholder" } });
   assert.equal(rustTargetTypeRefEquals(inline, { ...inline, fallible: false }), false);
 });

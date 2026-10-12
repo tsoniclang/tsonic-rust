@@ -90,6 +90,7 @@ export interface RustTargetProgram {
   readonly borrowedElementReads: import("./borrowed-element-reads.js").RustBorrowedElementReads;
   readonly borrowedInitializers: import("../storage/borrowed-initializers.js").RustBorrowedInitializerQueries;
   readonly borrowStability: import("./borrow-stability.js").RustBorrowStabilityPlan;
+  readonly providerMutableInputs: import("../storage/provider-mutable-inputs.js").RustProviderMutableInputPlan;
   readonly structuralShapes: RustStructuralShapePlan;
   readonly frozenDataWrites: import("../objects/frozen-data-writes.js").RustFrozenDataWritePlan;
   readonly classValues: import("../objects/class-values.js").RustClassValuePlan;

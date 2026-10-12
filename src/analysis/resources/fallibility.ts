@@ -200,6 +200,7 @@ function collectFallibilityFacts(
       walk.context.ast,
     );
     if (declaration === undefined || !selectedDeclarationIsProjectSource(walk, declaration)) return undefined;
+    if (ast.is.IsClassDeclaration(declaration) && isDeclaration(declaration)) return declaration;
     const selectedImplementation = walk.context.source.navigation.callableImplementation(declaration);
     return selectedImplementation.kind === "resolved" ? selectedImplementation.implementation.declaration : undefined;
   };

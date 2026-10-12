@@ -14,7 +14,7 @@ function fixture() {
   const carrier = Object.freeze({ kind: "target-named", id: "callable" });
   const callee = Object.freeze({ kind: "Identifier" });
   const invocation = Object.freeze({ Expression: callee });
-  const operation = Object.freeze({ kind: "source-call" });
+  const operation = Object.freeze({ kind: "source-call", target: { form: "callable", carrier } });
   let storageReads = 0;
   const input = {
     ast: { getFileName: file => file.fileName,
@@ -30,9 +30,10 @@ function fixture() {
       getRuntimeCarrierFact: node => node === callee ? { carrier } : undefined },
     generic: { definitionFor: selected => selected === carrier ? called : undefined,
       physical: { definitionFor: selected => selected === carrier ? called : undefined } },
-    nativeStorage: { valueFor(node) {
+    structuralShapes: { field: () => undefined },
+    nativeStorage: { invocationCallableFor(node) {
       storageReads++;
-      assert.equal(node === callee, true, "physical selection uses the exact callee expression");
+      assert.equal(node === invocation, true, "physical selection uses the exact selected invocation");
       return { kind: "resolved", carrier };
     } },
     nodes: [source, invocation],
@@ -68,7 +69,7 @@ test("generic invocation storage is exact and does not manufacture a family from
   for (const changed of [
     { ...current.input, facts: { getFact: () => undefined } },
     { ...current.input, ast: { ...current.input.ast, as: { AsCallExpression: () => undefined } } },
-    { ...current.input, nativeStorage: { valueFor: () => ({ kind: "unresolved", reason: "missing exact storage" }) } },
+    { ...current.input, nativeStorage: { invocationCallableFor: () => ({ kind: "unresolved", reason: "missing exact storage" }) } },
     { ...current.input, generic: { ...current.input.generic, physical: { definitionFor: () => undefined } } },
   ]) assert.equal(selectRustGenericCallableInvocationStorage(current.invocation, changed) === undefined, true);
 });
@@ -76,6 +77,6 @@ test("generic invocation storage is exact and does not manufacture a family from
 test("nongeneric source calls never request unrelated physical callable storage", () => {
   const current = fixture();
   const input = { ...current.input, generic: { ...current.input.generic, definitionFor: () => undefined },
-    nativeStorage: { valueFor() { throw new Error("unrelated source call must not enter physical generic analysis"); } } };
+    nativeStorage: { invocationCallableFor() { throw new Error("unrelated source call must not enter physical generic analysis"); } } };
   assert.equal(selectRustGenericCallableInvocationStorage(current.invocation, input) === undefined, true);
 });

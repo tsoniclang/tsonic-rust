@@ -558,7 +558,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     names: context.names, navigation: context.source.navigation, lifetimes: context.sourceLifetimes,
     classValueAdapters: context.classValues.valueAdapters(), closedSourceFiles, ownership: callableOwnership, sourceStorage: context.sourceStorage,
     projectTypes: context.projectTypes, objectRepresentations: context.objectRepresentations,
-    typeDefinitions: context.typeDefinitions, lexicalFunctions: lexical });
+    typeDefinitions: context.typeDefinitions, lexicalFunctions: lexical, structuralShapes: context.structuralShapes });
   for (const issue of callableValues.issues) {
     appendRustDiagnostic(walk, "RUST_CALLABLE_VALUE_NOT_CLOSED", issue.message, issue.subject,
       ["target.capability=rust.callable-value.exact-implementation"]);
