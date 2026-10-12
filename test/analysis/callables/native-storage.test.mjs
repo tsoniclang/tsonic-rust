@@ -1,0 +1,296 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { analyzeRust } from "../../helpers/rust-session.mjs";
+import { createTargetSourceProgram, Node_Initializer } from "@tsonic/target-api/source";
+import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
+import { createRustNativeCallableInputPlan } from "../../../dist/analysis/callables/native-inputs.js";
+import { createRustNativeStoragePlan } from "../../../dist/analysis/callables/native-storage.js";
+import { rustRuntimeCarrierKey } from "../../../dist/target-model/facts/selections.js";
+import { rustSourceParameterAbiFactKey } from "../../../dist/analysis/facts/keys.js";
+import { rustOptionElementCarrier } from "../../../dist/target-model/types/carriers/optional.js";
+import { rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
+import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/carriers/native.js";
+import { sourcePackageCallbackErrorFiles, sourcePackageCallbackErrorGraph }
+  from "../../../../tsonic/test/fixtures/source-package-callback-errors.mjs";
+
+function fixture(text, options = {}) {
+  const { program, source: checked } = analyzeRust({ surfaces: [], files: { "index.ts": text }, ...options });
+  const source = createTargetSourceProgram(checked);
+  const storage = createSourceStorageQuery(source, program.sourceFiles);
+  const input = { ast: source.ast, storage, facts: program.facts, definitions: program.typeDefinitions };
+  const native = createRustNativeCallableInputPlan({ ...input, usedNames: new Set() });
+  const plan = createRustNativeStoragePlan({ ...input, native });
+  const declaration = name => storage.nodes.find(node => source.ast.name(node) !== undefined &&
+    source.ast.text(source.ast.name(node)) === name &&
+    (source.ast.is.IsFunctionDeclaration(node) || source.ast.is.IsVariableDeclaration(node) ||
+      source.ast.is.IsPropertySignatureDeclaration(node)));
+  const initializer = name => Node_Initializer(source.ast, declaration(name));
+  const exactSubject = (node, kind, projection) => {
+    const selected = kind === undefined ? storage.subjectFor(node) : storage.subject(node, kind, projection);
+    assert.equal(selected.kind === "resolved", true, selected.reason ?? "owned storage subject");
+    return selected.subject;
+  };
+  return { program, source, storage, input, native, plan, declaration, initializer, exactSubject };
+}
+
+function selected(value, implementation, label) {
+  assert.equal(value.kind === "selected", true, value.reason ?? label);
+  assert.equal(value.carrier === implementation, true, label);
+  assert.equal(value.inputs.length, 1, label);
+  assert.equal(value.inputs[0].implementation === implementation, true, label);
+  assert.equal(Object.isFrozen(value) && Object.isFrozen(value.inputs), true, "immutable exact selection");
+}
+
+test("physical forwarding preserves distinct equal-signature inputs through aliases and return", () => {
+  const current = fixture(`
+    export function choose(left: () => number, right: () => number): () => number {
+      const first = left; const second = right; return first;
+    }
+  `);
+  const owner = current.declaration("choose");
+  const inputs = current.native.inputsFor(owner);
+  assert.equal(inputs.length, 2);
+  assert.equal(inputs[0].implementation !== inputs[1].implementation, true);
+  for (const [index, name] of ["first", "second"].entries()) {
+    selected(current.plan.valueFor(current.declaration(name)), inputs[index].implementation, name);
+    selected(current.plan.valueFor(current.initializer(name)), inputs[index].implementation, `${name} expression`);
+  }
+  selected(current.plan.returnFor(owner), inputs[0].implementation, "annotated return retains physical input");
+});
+
+test("physical forwarding crosses package calls without a recipient error or concrete caller closure", () => {
+  const source = `
+    import { forwarded } from "@acme/forward";
+    export class RootFailure extends Error { code = 11; }
+    export function pair(left: () => number, right: () => number): () => number {
+      const first = forwarded(left); const second = forwarded(right); return second;
+    }
+  `;
+  const current = fixture(source, { surfaces: ["js"], sourcePackages: sourcePackageCallbackErrorGraph,
+    files: { ...sourcePackageCallbackErrorFiles, "index.ts": source } });
+  for (const name of ["retain", "forwarded"]) {
+    const owner = current.declaration(name);
+    selected(current.plan.returnFor(owner), current.native.inputsFor(owner)[0].implementation, `${name} local input`);
+  }
+  const owner = current.declaration("pair");
+  const inputs = current.native.inputsFor(owner);
+  for (const [index, name] of ["first", "second"].entries()) {
+    selected(current.plan.valueFor(current.declaration(name)), inputs[index].implementation, name);
+    selected(current.plan.invocationReturnFor(current.declaration("forwarded"), current.initializer(name)),
+      inputs[index].implementation, `${name} exact invocation substitution`);
+    const targetInput = current.native.inputsFor(current.declaration("forwarded"))[0];
+    selected(current.plan.invocationInputFor(targetInput, current.initializer(name)),
+      inputs[index].implementation, `${name} cross-package input substitution`);
+    assert.equal(targetInput.protocol.identity !== inputs[index].protocol.identity, true,
+      "input transport does not assert protocol identity across declarations");
+  }
+  selected(current.plan.returnFor(owner), inputs[1].implementation, "second remains independent");
+  const wrong = current.plan.invocationReturnFor(current.declaration("retain"), current.initializer("first"));
+  assert.equal(wrong.kind, "unresolved", "an unselected implementation cannot supply the call result");
+});
+
+test("invocation input forwarding binds exact callee inputs rather than caller signatures", () => {
+  const current = fixture(`
+    export function invoke(callback: () => number): number { return callback(); }
+    export function forward(left: () => number, right: () => number): number {
+      const first = invoke(left); const second = invoke(right); return first + second;
+    }
+    export function concrete(): number { const supplied = invoke(() => 7); return supplied; }
+  `);
+  const callee = current.native.inputsFor(current.declaration("invoke"))[0];
+  const inputs = current.native.inputsFor(current.declaration("forward"));
+  for (const [index, name] of ["first", "second"].entries()) {
+    const value = current.plan.invocationInputFor(callee, current.initializer(name));
+    assert.equal(value.kind, "selected", value.reason);
+    assert.equal(value.inputs.length, 1);
+    assert.equal(value.inputs[0] === inputs[index], true, "exact caller input preserved");
+    assert.equal(value.carrier.kind, "reference", "callee's nonretaining borrowed input ABI preserved");
+    assert.equal(value.carrier.referent === inputs[index].implementation, true, name);
+    assert.equal(value.carrier.mutable, callee.carrier.mutable);
+    assert.equal(value.carrier.lifetime === callee.carrier.lifetime, true);
+    assert.equal(inputs[index].protocol.identity !== callee.protocol.identity, true, "callee trait remains its own contract");
+  }
+  assert.equal(current.plan.invocationInputFor(callee, current.initializer("supplied")).kind, "unresolved",
+    "an unsealed producer cannot supply a guessed physical error channel");
+  assert.equal(current.plan.invocationInputFor(inputs[0], current.initializer("first")).kind, "unresolved",
+    "input must belong to the invocation's exact selected implementation");
+  let getterReads = 0;
+  const forged = Object.defineProperty({}, "owner", { get() { getterReads += 1; return callee.owner; } });
+  assert.equal(current.plan.invocationInputFor(forged, current.initializer("first")).kind, "unresolved");
+  assert.equal(current.plan.invocationInputFor({ ...callee }, current.initializer("first")).kind, "unresolved");
+  assert.equal(getterReads, 0, "a forged input token cannot execute accessors");
+});
+
+test("invocation input forwarding applies exact selected generic arguments without changing logical contracts", () => {
+  const current = fixture(`
+    export function retain<Value>(callback: () => Value): () => Value { return callback; }
+    export function invoke(callback: () => number): () => number { const output = retain(callback); return output; }
+  `);
+  const callee = current.native.inputsFor(current.declaration("retain"))[0];
+  const caller = current.native.inputsFor(current.declaration("invoke"))[0];
+  const logical = callee.carrier;
+  selected(current.plan.invocationInputFor(callee, current.initializer("output")), caller.implementation,
+    "instantiated selected input preserves physical caller identity");
+  selected(current.plan.invocationReturnFor(callee.owner, current.initializer("output")), caller.implementation,
+    "instantiated selected result preserves physical caller identity");
+  assert.equal(callee.carrier === logical, true, "declaration-local logical signature is not specialized in place");
+});
+
+test("physical captured forwarding retains outer inputs without mistaking a new closure for them", () => {
+  const current = fixture(`
+    export function capture(left: () => number, right: () => number): () => () => number {
+      return () => { const captured = right; return captured; };
+    }
+  `);
+  const owner = current.declaration("capture");
+  const inputs = current.native.inputsFor(owner);
+  const closure = current.storage.nodes.find(node => current.source.ast.is.IsArrowFunction(node));
+  selected(current.plan.valueFor(current.declaration("captured")), inputs[1].implementation, "captured exact outer input");
+  selected(current.plan.returnFor(closure), inputs[1].implementation, "nested return retains capture binding");
+  assert.equal(current.plan.returnFor(owner).kind, "unresolved", "new concrete producer requires sealed physical evidence");
+});
+
+test("physical member and array reads use exact projected owner identities", () => {
+  const current = fixture(`
+    interface Callback { (): number; }
+    interface Holder<Value> { readonly callback: Value; }
+    export function project(left: Holder<Callback>, right: Holder<Callback>, many: Callback[]): Callback {
+      const first = left.callback; const second = right.callback; const element = many[0]; return second;
+    }
+  `);
+  const owner = current.declaration("project");
+  const parameters = current.source.ast.parameters(owner);
+  const inputs = current.native.inputsFor(owner);
+  for (const [index, name] of ["first", "second", "element"].entries()) {
+    const input = inputs.find(value => value.subject.node === parameters[index]);
+    assert.equal(input !== undefined, true, `${name} has exact projected input`);
+    selected(current.plan.valueFor(current.declaration(name)), input.implementation, name);
+    const subject = current.exactSubject(current.initializer(name));
+    const carrier = current.program.facts.getFact(current.declaration(name), rustRuntimeCarrierKey).carrier;
+    selected(current.plan.subjectFor(subject, carrier, owner), input.implementation, `${name} public subject query`);
+    assert.equal(input.subject.projection[0].kind, index === 2 ? "array-element" : "member");
+    if (index !== 2) assert.equal(input.subject.projection[0].declaration === current.declaration("callback"), true);
+  }
+  assert.equal(inputs[0].implementation !== inputs[1].implementation, true, "field spelling is not owner identity");
+});
+
+test("physical selection preserves optional topology and borrowed parameter lifetime", () => {
+  const current = fixture(`
+    export function maybe(callback: (() => number) | undefined): (() => number) | undefined {
+      const optional = callback; return optional;
+    }
+    export function invoke(callback: () => number): number { return callback(); }
+  `);
+  const owner = current.declaration("maybe");
+  const input = current.native.inputsFor(owner)[0];
+  for (const value of [current.plan.returnFor(owner), current.plan.valueFor(current.declaration("optional"))]) {
+    assert.equal(value.kind, "selected", value.reason);
+    assert.equal(rustOptionElementCarrier(value.carrier) === input.implementation, true);
+    assert.equal(value.carrier.kind, input.carrier.kind, "native option topology retained");
+    assert.equal(value.carrier.sourceAbsence, input.carrier.sourceAbsence, "one native absence state retained");
+    assert.equal(Object.isFrozen(value.carrier.genericArguments), true);
+  }
+  const borrowedOwner = current.declaration("invoke");
+  const parameter = current.source.ast.parameters(borrowedOwner)[0];
+  const abi = current.program.facts.getFact(parameter, rustSourceParameterAbiFactKey);
+  const borrowed = current.plan.subjectFor(current.exactSubject(parameter, "input"), abi.parameterCarrier, borrowedOwner);
+  assert.equal(borrowed.kind, "selected", borrowed.reason);
+  assert.equal(borrowed.carrier.kind, abi.parameterCarrier.kind);
+  assert.equal(borrowed.carrier.referent === current.native.inputsFor(borrowedOwner)[0].implementation, true);
+  assert.equal(borrowed.carrier.lifetime === abi.parameterCarrier.lifetime, true, "exact selected loan, not a recreated lifetime");
+  assert.equal(borrowed.carrier.mutable, abi.parameterCarrier.mutable);
+});
+
+test("physical tuple and array transport reuses exact existing component inputs", () => {
+  const current = fixture(`
+    interface Callback { (): number; }
+    export function tuple(callbacks: [Callback, Callback]): [Callback, Callback] {
+      const left = callbacks[0]; const right = callbacks[1]; return callbacks;
+    }
+    export function array(callbacks: Callback[]): Callback[] {
+      const item = callbacks[0]; return callbacks;
+    }
+  `);
+  const tuple = current.declaration("tuple");
+  const members = current.native.inputsFor(tuple);
+  const pair = current.plan.returnFor(tuple);
+  assert.equal(pair.kind, "selected", pair.reason);
+  assert.equal(pair.carrier.kind, "tuple");
+  assert.equal(pair.inputs.length, 2);
+  for (const [index, element] of pair.carrier.elements.entries()) {
+    const member = members.find(input => input.subject.projection[0]?.kind === "tuple-element" &&
+      input.subject.projection[0].index === index);
+    assert.equal(member !== undefined && element === member.implementation, true, `tuple component ${index}`);
+  }
+  const array = current.declaration("array");
+  const list = current.plan.returnFor(array);
+  assert.equal(list.kind, "selected", list.reason);
+  assert.equal(list.carrier.kind, "array");
+  assert.equal(list.carrier.element === current.native.inputsFor(array)[0].implementation, true);
+});
+
+test("physical generic callable forwarding retains its quantified contract", () => {
+  const current = fixture(`
+    interface Identity { <Value>(value: Value): Value; }
+    export function retain(callback: Identity): Identity { const alias = callback; return alias; }
+  `);
+  const owner = current.declaration("retain");
+  const input = current.native.inputsFor(owner)[0];
+  assert.equal(input.protocol.binding.signature.typeParameters.length, 1);
+  selected(current.plan.returnFor(owner), input.implementation, "quantified identity preserved");
+  selected(current.plan.valueFor(current.declaration("alias")), input.implementation, "generic alias physical identity");
+});
+
+test("physical selection rejects mutation alternatives and unsealed concrete producers", () => {
+  const current = fixture(`
+    export function choose(left: () => number, right: () => number): () => number {
+      left = right; const selected = left; return selected;
+    }
+    export function create(): () => number { return () => 7; }
+    export function concrete(): () => number { const supplied = create(); return supplied; }
+  `);
+  for (const result of [current.plan.returnFor(current.declaration("choose")),
+    current.plan.valueFor(current.declaration("selected")), current.plan.returnFor(current.declaration("create")),
+    current.plan.invocationReturnFor(current.declaration("create"), current.initializer("supplied"))])
+    assert.equal(result.kind, "unresolved", "no signature-based choice, closed error guess, or silent fallback");
+});
+
+test("physical storage validates token ownership, exact contracts and finite projection budgets", () => {
+  const source = `export function identity(callback: () => number): () => number { const alias = callback; return alias; }`;
+  const current = fixture(source);
+  const foreign = fixture(source);
+  const owner = current.declaration("identity");
+  const input = current.native.inputsFor(owner)[0];
+  const subject = current.exactSubject(current.declaration("alias"));
+  let getterReads = 0;
+  const forged = Object.defineProperty({}, "node", { get() { getterReads += 1; return subject.node; } });
+  for (const candidate of [forged, { ...subject }, foreign.exactSubject(foreign.declaration("alias"))])
+    assert.equal(current.plan.subjectFor(candidate, input.carrier, owner).kind, "unresolved");
+  assert.equal(getterReads, 0, "foreign shape cannot execute a getter");
+  assert.equal(current.plan.returnFor(foreign.declaration("identity")).kind, "unresolved");
+  assert.equal(current.plan.subjectFor(subject, input.carrier, foreign.declaration("identity")).kind, "unresolved");
+  const mismatched = rustCallableTargetType([], rustSourcePrimitiveTargetType("bool"));
+  assert.equal(current.plan.subjectFor(subject, mismatched, owner).kind, "unresolved", "equal arity cannot substitute a different signature");
+  const otherPlan = createRustNativeStoragePlan({ ...current.input, native: foreign.native });
+  assert.equal(otherPlan.returnFor(owner).kind, "unresolved", "another native plan cannot mint this graph's input identity");
+  const limited = createRustNativeStoragePlan({ ...current.input, native: current.native, storage: {
+    ...current.storage, boundOriginsFor() { return { kind: "resolved", subjects: Array(4097).fill(input.subject) }; },
+  } });
+  const rejected = limited.returnFor(owner);
+  assert.equal(rejected.kind, "unresolved");
+  assert.match(rejected.reason, /budget/u);
+});
+
+test("non-callable storage remains an exact identity without inspecting unrelated origins", () => {
+  const current = fixture(`export function number(value: number): number { const selected = value; return selected; }`);
+  let originQueries = 0;
+  const plan = createRustNativeStoragePlan({ ...current.input, native: current.native, storage: {
+    ...current.storage, boundOriginsFor() { originQueries += 1; throw new Error("non-callable origin scan"); },
+  } });
+  const owner = current.declaration("number");
+  const value = plan.valueFor(current.declaration("selected"));
+  assert.equal(value.kind, "identity");
+  assert.equal(value.carrier === current.program.facts.getFact(current.declaration("selected"), rustRuntimeCarrierKey).carrier, true);
+  assert.equal(plan.returnFor(owner).kind, "identity");
+  assert.equal(originQueries, 0);
+});
