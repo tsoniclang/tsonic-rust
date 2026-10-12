@@ -28,6 +28,7 @@ import {
 import { rustSourceTypePathInContext, rustStructuralTypePathInContext } from "./paths.js";
 import { rustExplicitNamedTypeArguments } from "./generic-defaults.js";
 import { rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
+import { rustGenericCallableStorageArguments } from "../../../target-model/types/carriers/generic-callable-storage.js";
 import { rustFrameCallableValue } from "../../../target-model/types/carriers/frame-callables.js";
 import { rustFrameCallableTypes } from "./frame-callables.js";
 import { rustClassConstructorInstance } from "../../../target-model/types/carriers/class-constructors.js";
@@ -563,13 +564,16 @@ export function rustTypeFromCarrierInContext(
     if (instance !== undefined) return rustClassEnvironmentHandleType(instance, context);
     const genericCallable = rustGenericCallableValue(shapeCarrier);
     if (genericCallable !== undefined) {
-      const definition = context.input.program.callableValues.generic.definitionFor(shapeCarrier);
+      const physical = context.input.program.callableValues.generic.physical;
+      const definition = physical.definitionFor(shapeCarrier);
       const module = definition === undefined ? undefined : context.moduleNameByFileName.get(definition.ownerFileName);
       const externalCrate = definition === undefined ? undefined : context.externalCrateNameByFileName.get(definition.ownerFileName);
-      const arguments_ = genericCallable.environment.map(argument => rustTypeFromCarrier(argument, sourceRendering, resolveStructuralShape));
-      if (definition === undefined || module === undefined || arguments_.some(argument => argument === undefined)) return undefined;
+      const physicalArguments = physical.argumentsFor(shapeCarrier);
+      const arguments_ = physicalArguments === undefined ? undefined : rustGenericArgumentsFromCarrier(
+        rustGenericCallableStorageArguments(genericCallable.environment, physicalArguments), sourceRendering, resolveStructuralShape);
+      if (definition === undefined || module === undefined || arguments_ === undefined) return undefined;
       return { kind: "named", path: `${externalCrate !== undefined && externalCrate !== context.crateName ? externalCrate : "crate"}::${module}::${definition.targetName}`,
-        genericArguments: (arguments_ as RustType[]).map(type => ({ kind: "type", type })),
+        genericArguments: arguments_,
       };
     }
     const union = rustSourceUnionCarrierValue(shapeCarrier);

@@ -1,4 +1,4 @@
-import type { RustTargetGenericArgument } from "../model.js";
+import type { RustTargetGenericArgument, TargetTypeRef } from "../model.js";
 import { isRustTargetGenericArgument } from "../equality.js";
 import { hasExactObjectKeys, isDenseDataArray, closedMetadataKey } from "../../metadata/closed-data.js";
 import { isRustCallableOrigin, type RustCallableOrigin } from "./callable-signatures.js";
@@ -12,6 +12,17 @@ export interface RustGenericCallableStorage {
   readonly ownerFileName: string;
   readonly members: readonly RustGenericCallableStorageMember[];
   readonly arguments: readonly RustTargetGenericArgument[];
+}
+
+export function rustGenericCallableStorageArguments(
+  environment: readonly TargetTypeRef[],
+  physical: readonly RustTargetGenericArgument[],
+): readonly RustTargetGenericArgument[] {
+  return Object.freeze([
+    ...physical.filter(argument => argument.kind === "lifetime"),
+    ...environment.map(type => ({ kind: "type" as const, type })),
+    ...physical.filter(argument => argument.kind !== "lifetime"),
+  ]);
 }
 
 export function isRustGenericCallableStorage(value: unknown): value is RustGenericCallableStorage {

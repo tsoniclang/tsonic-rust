@@ -1,13 +1,13 @@
-import type { RustGenericCallableDefinition, RustGenericCallableImplementation } from "../../../../analysis/callables/generic-values.js";
+import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember } from "../../../../analysis/callables/generic-physical.js";
 import type { RustGenericCallableEffectsFact } from "../../../../analysis/facts/generic-callable-effects.js";
-import type { RustExpr, RustItem, RustPattern, RustType } from "../../../target-ast/nodes.js";
+import type { RustExpr, RustGenericArgument, RustItem, RustPattern, RustType } from "../../../target-ast/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/nodes.js";
 import { rustNativeFutureType } from "../../types/native-futures.js";
 import type { RustGenericCallableErrorPlan } from "./generic-errors.js";
 import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
 
 export interface RustGenericNativeFutureInvocation {
-  readonly implementation: RustGenericCallableImplementation;
+  readonly member: RustGenericCallablePhysicalMember;
   readonly pattern: RustPattern;
   readonly call: RustExpr;
   readonly effects: RustGenericCallableEffectsFact;
@@ -16,35 +16,35 @@ export interface RustGenericNativeFutureInvocation {
 }
 
 export function planRustGenericNativeFutureDispatch(input: {
-  readonly definition: RustGenericCallableDefinition;
+  readonly definition: RustGenericCallablePhysicalDefinition;
   readonly output: RustType;
   readonly errors: RustGenericCallableErrorPlan;
   readonly effects: RustGenericCallableEffectsFact;
   readonly optional: boolean;
-  readonly captures: readonly Extract<RustType, { readonly kind: "named" }>[];
+  readonly captures: readonly RustGenericArgument[];
   readonly invocations: readonly RustGenericNativeFutureInvocation[];
 }): { readonly items: readonly RustItem[]; readonly returnType: RustType; readonly body: Extract<RustItem, { readonly kind: "function" }>["body"] } | undefined {
   const { definition, effects, invocations } = input;
   const name = definition.nativeFutureDispatchName;
-  if (name === undefined || invocations.length !== definition.implementations.length ||
+  if (name === undefined || invocations.length !== definition.members.length ||
     effects.awaiting === "not-applicable" ||
     (effects.invocation === "fallible") !== (input.errors.invocation.errorType !== undefined) ||
     (effects.awaiting === "fallible") !== (input.errors.awaiting.errorType !== undefined) ||
     invocations.some(invocation => invocation.effects.awaiting === "not-applicable" || invocation.absent && !input.optional ||
       invocation.effects.invocation === "fallible" && effects.invocation !== "fallible" ||
       !invocation.absent && invocation.effects.awaiting === "fallible" && effects.awaiting !== "fallible")) return undefined;
-  const calls = new Map<RustGenericCallableImplementation, RustExpr>();
-  const awaitedValues = new Map<RustGenericCallableImplementation, RustExpr>();
+  const calls = new Map<RustGenericCallablePhysicalMember, RustExpr>();
+  const awaitedValues = new Map<RustGenericCallablePhysicalMember, RustExpr>();
   for (const invocation of invocations) {
-    const selected = input.errors.forImplementation(invocation.implementation);
+    const selected = input.errors.forMember(invocation.member);
     if (selected === undefined || selected.effects.invocation !== invocation.effects.invocation ||
       selected.effects.awaiting !== invocation.effects.awaiting) return undefined;
     const call = selected.invocation === undefined ? invocation.call : input.errors.invocation.propagate(selected.invocation, invocation.call);
     const awaited: RustExpr = { kind: "await", expr: { kind: "path", path: "future" } };
     const converted = selected.awaiting === undefined ? undefined : input.errors.awaiting.propagate(selected.awaiting, awaited);
     if (call === undefined || selected.awaiting !== undefined && converted?.kind !== "try") return undefined;
-    calls.set(invocation.implementation, call.kind === "try" ? { ...call, nativeReturn: true } : call);
-    awaitedValues.set(invocation.implementation, converted?.kind === "try" ? converted.expr :
+    calls.set(invocation.member, call.kind === "try" ? { ...call, nativeReturn: true } : call);
+    awaitedValues.set(invocation.member, converted?.kind === "try" ? converted.expr :
       effects.awaiting === "fallible" ? { kind: "call", path: "Ok", args: [awaited] } : awaited);
   }
   const futureOutput = effects.awaiting === "fallible" ? resultType(input.output, input.errors.awaiting.errorType!) : input.output;
@@ -61,18 +61,18 @@ export function planRustGenericNativeFutureDispatch(input: {
     } }] } };
   }
   const futureType = rustNativeFutureType(futureOutput, { kind: "opaque",
-    captures: input.captures.map(type => ({ kind: "type", type })) });
+    captures: input.captures });
   if (active.length === 1) {
     return { items: [], returnType: returnedType(futureType), body: { statements: [{ kind: "tail", expr: {
       kind: "match", expression: { kind: "path", path: "self" }, arms: invocations.map(invocation => {
         const call = invoked(invocation);
-        const selected = input.errors.forImplementation(invocation.implementation)!;
+        const selected = input.errors.forMember(invocation.member)!;
         const unchanged = input.errors.awaiting.errorType === undefined || selected.awaiting !== undefined &&
           rustTypeEquals(selected.awaiting.errorType, input.errors.awaiting.errorType);
         const pending = (value: RustExpr): RustExpr => unchanged ? value : { kind: "block", body: { statements: [
           { kind: "let", name: "future", mutable: false, init: value },
           { kind: "tail", expr: { kind: "async-block", move: true,
-            body: { statements: [{ kind: "tail", expr: awaitedValues.get(invocation.implementation)! }] } } },
+            body: { statements: [{ kind: "tail", expr: awaitedValues.get(invocation.member)! }] } } },
         ] } };
         const normalized: RustExpr = invocation.optional && !unchanged ? { kind: "match", expression: call, arms: [
           { pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: "future" }] },
@@ -86,7 +86,7 @@ export function planRustGenericNativeFutureDispatch(input: {
       }),
     } }] } };
   }
-  const variants = active.map((invocation, index) => ({ name: invocation.implementation.variantName,
+  const variants = active.map((invocation, index) => ({ name: invocation.member.variantName,
     fields: [{ kind: "named" as const, path: `Future${index}` }],
   }));
   const items: readonly RustItem[] = [{ kind: "enum", name, visibility: "private",
@@ -96,7 +96,7 @@ export function planRustGenericNativeFutureDispatch(input: {
   const prepare = (invocation: RustGenericNativeFutureInvocation): RustExpr => {
     const call = invoked(invocation);
     if (invocation.absent) return { kind: "evaluate-then", effect: call, discard: "value", value: { kind: "return-expression", expr: absent } };
-    const pending = (value: RustExpr): RustExpr => ({ kind: "call", path: `${name}::${invocation.implementation.variantName}`, args: [value] });
+    const pending = (value: RustExpr): RustExpr => ({ kind: "call", path: `${name}::${invocation.member.variantName}`, args: [value] });
     return invocation.optional ? { kind: "match", expression: call, arms: [
       { pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: "future" }] },
         expression: pending({ kind: "path", path: "future" }) },
@@ -106,9 +106,9 @@ export function planRustGenericNativeFutureDispatch(input: {
   const future: RustExpr = { kind: "async-block", move: true,
     body: { statements: [{ kind: "tail", expr: { kind: "match", expression: { kind: "path", path: "pending" },
       arms: active.map(invocation => {
-        return { pattern: { kind: "tuple-variant", path: `${name}::${invocation.implementation.variantName}`,
+        return { pattern: { kind: "tuple-variant", path: `${name}::${invocation.member.variantName}`,
           elements: [{ kind: "binding", name: "future" }] },
-          expression: awaitedValues.get(invocation.implementation)!,
+          expression: awaitedValues.get(invocation.member)!,
         };
       }),
     } }] },
@@ -122,7 +122,7 @@ export function planRustGenericNativeFutureDispatch(input: {
   ] } };
 
   function invoked(invocation: RustGenericNativeFutureInvocation): RustExpr {
-    return calls.get(invocation.implementation)!;
+    return calls.get(invocation.member)!;
   }
 
   function returnedType(future: RustType): RustType {

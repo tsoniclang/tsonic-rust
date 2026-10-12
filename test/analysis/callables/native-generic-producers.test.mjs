@@ -1,29 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createTargetSourceProgram } from "@tsonic/target-api/source";
-import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
-import { createRustNativeCallableInputPlan } from "../../../dist/analysis/callables/native-inputs.js";
-import { createRustNativeCallableProducerPlan } from "../../../dist/analysis/callables/native-producers.js";
-import { createRustNativeStoragePlan } from "../../../dist/analysis/callables/native-storage.js";
 import { createRustNativeGenericProducerPlan } from "../../../dist/analysis/callables/native-generic-producers.js";
 
 function fixture(text) {
-  const { program, source: checked } = analyzeRust({ surfaces: [], files: { "index.ts": text } });
-  const source = createTargetSourceProgram(checked);
-  const storage = createSourceStorageQuery(source, program.sourceFiles);
-  const input = { ast: source.ast, storage, facts: program.facts, definitions: program.typeDefinitions,
-    generic: program.callableValues.generic };
-  const native = createRustNativeCallableInputPlan({ ...input, usedNames: new Set() });
-  const producers = createRustNativeCallableProducerPlan({ ...input, native, nodes: storage.nodes,
-    returnCarrierFor: declaration => {
-      const selected = nativeStorage.returnFor(declaration);
-      return selected.kind === "unresolved" ? undefined : selected.carrier;
-    } });
-  const nativeStorage = createRustNativeStoragePlan({ ...input, native, producers });
-  const options = { ...input, nodes: storage.nodes, generic: program.callableValues.generic, native, nativeStorage };
-  const plan = createRustNativeGenericProducerPlan(options);
-  const declaration = name => storage.nodes.find(node => source.ast.is.IsFunctionDeclaration(node) &&
+  const { program } = analyzeRust({ surfaces: [], files: { "index.ts": text } });
+  const source = program.source;
+  const nodes = [];
+  const visit = node => {
+    nodes.push(node);
+    source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  for (const file of program.sourceFiles) visit(file);
+  const { native, nativeStorage, nativeGenericProducers: plan, generic } = program.callableValues;
+  const options = { ast: source.ast, facts: program.facts, nodes, generic, native, nativeStorage };
+  const declaration = name => nodes.find(node => source.ast.is.IsFunctionDeclaration(node) &&
     source.ast.name(node) !== undefined && source.ast.text(source.ast.name(node)) === name);
   return { program, source, native, options, plan, declaration };
 }
@@ -41,7 +32,8 @@ test("generic native producers enumerate exact existing families through aliases
   const protocol = current.native.inputsFor(current.declaration("invoke"))[0].protocol;
   const selected = current.plan.forProtocol(protocol);
   assert.equal(selected.length, 1);
-  assert.equal(selected[0].definition === current.program.callableValues.generic.definitions[0], true);
+  assert.equal(selected[0].definition.familyIdentity === current.program.callableValues.generic.definitions[0].identity, true);
+  assert.equal(current.program.callableValues.generic.physical.definitionFor(selected[0].definition.carrier) === selected[0].definition, true);
   assert.equal(selected[0].input.protocol === protocol, true);
   assert.equal(current.plan.unresolved.length, 0, current.plan.unresolved.map(value => value.reason).join("; "));
   assert.equal(current.plan.forProtocol(protocol) === selected, true);
@@ -109,9 +101,9 @@ test("unresolved concrete storage is explicit and cannot be replaced by equal-si
       const callback = <Value>(value: Value): Value => value; return invoke(callback);
     }
   `);
-  const plan = createRustNativeGenericProducerPlan({ ...current.options, storage: {
-    ...current.options.storage,
-    bindingsForInvocation() { return { kind: "unresolved", reason: "unavailable exact binding" }; },
+  const plan = createRustNativeGenericProducerPlan({ ...current.options, nativeStorage: {
+    ...current.options.nativeStorage,
+    invocationOriginsFor() { return { kind: "unresolved", reason: "unavailable exact binding" }; },
   } });
   assert.equal(plan.bindings.length, 0);
   assert.equal(plan.unresolved.length, 1);

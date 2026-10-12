@@ -1,13 +1,15 @@
-import type { RustGenericCallableDefinition } from "../../../../analysis/callables/generic-values.js";
+import type { RustGenericCallablePhysicalDefinition } from "../../../../analysis/callables/generic-physical.js";
 import type { RustNativeCallableProtocol } from "../../../../analysis/callables/native-protocols.js";
 import { rustNativeCallableProtocolResult } from "../../../../analysis/callables/native-protocols.js";
-import { rustGenericCallableCarrier, rustNativeFutureCallableResult } from "../../../../target-model/types/carriers/generic-callables.js";
+import { rustNativeFutureCallableResult } from "../../../../target-model/types/carriers/generic-callables.js";
+import { rustGenericCallableStorageArguments } from "../../../../target-model/types/carriers/generic-callable-storage.js";
 import { mapRustTargetTypes } from "../../../../target-model/types/carriers/substitution.js";
 import type { RustExpr, RustItem, RustStmt, RustType } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { planRustNativeCallableMethodGenerics } from "./native-method-generics.js";
 import { planRustGenericCallableErrors } from "./generic-errors.js";
+import { rustGenericCallableEnvironmentGenerics, rustGenericCallableCapturePredicates } from "./generic-signatures.js";
 
 export function planRustNativeGenericProducerBridges(
   protocol: RustNativeCallableProtocol,
@@ -26,14 +28,16 @@ export function planRustNativeGenericProducerBridges(
 
 function planImplementation(
   protocol: RustNativeCallableProtocol,
-  definition: RustGenericCallableDefinition,
+  definition: RustGenericCallablePhysicalDefinition,
   context: RustPlanContext,
 ): RustItem | undefined {
   const signature = protocol.binding.signature;
   const methodGenerics = planRustNativeCallableMethodGenerics(protocol, context);
   const errors = planRustGenericCallableErrors(definition, context);
-  const target = rustTypeFromCarrierInContext(rustGenericCallableCarrier({ origin: definition.origin,
-    signature: definition.signature, environment: definition.signature.environmentParameters }), context);
+  const target = rustTypeFromCarrierInContext(definition.carrier, context);
+  const environment = rustGenericCallableEnvironmentGenerics(
+    rustGenericCallableStorageArguments(definition.signature.environmentParameters, definition.parameters), context);
+  const capturePredicates = rustGenericCallableCapturePredicates(definition, context);
   const result = rustNativeCallableProtocolResult(protocol, context.input.program.typeDefinitions);
   const returnType = result === undefined ? undefined : rustTypeFromCarrierInContext(mapRustTargetTypes(result, type => {
     if (type.kind !== "impl-trait" || type.captures === undefined) return type;
@@ -42,6 +46,7 @@ function planImplementation(
   }), context, "return");
   const parameters = protocol.method.parameters.map(carrier => rustTypeFromCarrierInContext(carrier, context, "parameter"));
   if (methodGenerics === undefined || errors === undefined || target === undefined || returnType === undefined ||
+    environment === undefined || capturePredicates === undefined ||
     parameters.some(parameter => parameter === undefined)) return undefined;
   const nativeFuture = rustNativeFutureCallableResult(protocol.method.result);
   if (protocol.completion !== undefined && nativeFuture === undefined) return undefined;
@@ -73,8 +78,7 @@ function planImplementation(
   return { kind: "impl", target,
     trait: { kind: "named", path: protocol.targetName,
       genericArguments: signature.environmentParameters.map(parameter => ({ kind: "type", type: { kind: "named", path: parameter.name } })) },
-    generics: { parameters: signature.environmentParameters.map(parameter => ({ kind: "type", name: parameter.name, bounds: [] })),
-      wherePredicates: [] },
+    generics: { ...environment, wherePredicates: capturePredicates },
     members: [{ kind: "type", name: "InvocationError", generics: methodGenerics, type: invocationError ?? infallible },
       ...(protocol.completion?.futures ?? []).map(future => ({ kind: "type" as const, name: `AwaitError${future.ordinal}`,
         generics: methodGenerics, type: errors.awaiting.errorType ?? infallible })),

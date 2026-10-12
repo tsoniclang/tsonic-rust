@@ -1,9 +1,9 @@
-import type { RustGenericCallableDefinition } from "../../../../analysis/callables/generic-values.js";
+import type { RustGenericCallablePhysicalDefinition } from "../../../../analysis/callables/generic-physical.js";
 import { emptyRustGenerics, type RustExpr, type RustGenerics, type RustItem, type RustType } from "../../../target-ast/nodes.js";
 import { rustSelfParameter } from "./self-parameter.js";
 
 export function genericCallableStorageItems(
-  definition: RustGenericCallableDefinition,
+  definition: RustGenericCallablePhysicalDefinition,
   generics: RustGenerics,
   target: RustType,
   variants: Extract<RustItem, { readonly kind: "enum" }>["variants"],
@@ -11,11 +11,11 @@ export function genericCallableStorageItems(
   const receiver: RustExpr = { kind: "path", path: "self" };
   const clone: RustExpr = definition.copy
     ? { kind: "dereference", pointer: receiver }
-    : { kind: "match", expression: receiver, arms: definition.implementations.map(implementation => ({
-        pattern: { kind: "tuple-variant", path: `Self::${implementation.variantName}`,
+    : { kind: "match", expression: receiver, arms: definition.members.map(member => ({
+        pattern: { kind: "tuple-variant", path: `Self::${member.variantName}`,
           elements: [{ kind: "binding", name: "environment" }] },
-        expression: { kind: "call", path: `Self::${implementation.variantName}`,
-          args: [implementation.storage === "value"
+        expression: { kind: "call", path: `Self::${member.variantName}`,
+          args: [member.implementation.storage === "value"
             ? { kind: "dereference", pointer: { kind: "path", path: "environment" } }
             : { kind: "method-call", receiver: { kind: "path", path: "environment" }, method: "clone", args: [] }] },
       })) };
@@ -33,15 +33,15 @@ export function genericCallableStorageItems(
   const equality: RustExpr = { kind: "match", expression: { kind: "tuple-literal", elements: [
     receiver, { kind: "path", path: "other" },
   ] }, arms: [
-    ...definition.implementations.map(implementation => ({
+    ...definition.members.map(member => ({
       pattern: { kind: "tuple" as const, elements: ["left", "right"].map(name => ({
-        kind: "tuple-variant" as const, path: `Self::${implementation.variantName}`,
+        kind: "tuple-variant" as const, path: `Self::${member.variantName}`,
         elements: [{ kind: "binding" as const, name }],
       })) },
       expression: { kind: "call" as const, path: "alloc::rc::Rc::ptr_eq",
         args: ["left", "right"].map(path => ({ kind: "path" as const, path })) },
     })),
-    ...(definition.implementations.length > 1 ? [{ pattern: { kind: "wildcard" as const },
+    ...(definition.members.length > 1 ? [{ pattern: { kind: "wildcard" as const },
       expression: { kind: "bool-literal" as const, value: false } }] : []),
   ] };
   items.push({ kind: "impl", trait: { kind: "named", path: "PartialEq" }, target, generics, members: [{ kind: "function",

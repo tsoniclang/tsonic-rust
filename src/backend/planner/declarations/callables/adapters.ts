@@ -92,7 +92,7 @@ export function applyRustCallableValueAdapterRaw(
         return converted === undefined ? undefined : { expression: converted, fallible: false };
       }
       if (adapter.conversion.kind === "generic-callable-flow") {
-        const converted = planRustGenericCallableFlow(adapter.conversion, expression, context);
+        const converted = planRustGenericCallableFlow(node, adapter.conversion, expression, context);
         return converted === undefined ? undefined : { expression: converted, fallible: false };
       }
       if (adapter.conversion.kind === "empty-record") {

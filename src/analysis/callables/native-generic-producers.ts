@@ -1,5 +1,4 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import type { SourceStorageQueries } from "@tsonic/target-api/analysis";
 import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -8,14 +7,15 @@ import { rustTargetGenericBindingsForArguments } from "../../target-model/types/
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustSourceCallEffectsFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
-import type { RustGenericCallableDefinition, RustGenericCallablePlan } from "./generic-values.js";
+import type { RustGenericCallablePlan } from "./generic-values.js";
+import type { RustGenericCallablePhysicalDefinition } from "./generic-physical.js";
 import type { RustNativeCallableInput, RustNativeCallableInputPlan } from "./native-inputs.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
 import type { RustNativeCallableProtocol } from "./native-protocols.js";
 
 export interface RustNativeGenericProducerBinding {
   readonly input: RustNativeCallableInput;
-  readonly definition: RustGenericCallableDefinition;
+  readonly definition: RustGenericCallablePhysicalDefinition;
 }
 
 export interface RustNativeGenericProducerForwarding {
@@ -41,10 +41,9 @@ export function createRustNativeGenericProducerPlan(input: {
   readonly generic: RustGenericCallablePlan;
   readonly native: RustNativeCallableInputPlan;
   readonly nativeStorage: RustNativeStoragePlan;
-  readonly storage: SourceStorageQueries;
 }): RustNativeGenericProducerPlan {
   const nativeInputs = new Map(input.native.inputs.map(selected => [selected.subject, selected]));
-  const bindings = new Map<RustNativeCallableProtocol, Map<RustGenericCallableDefinition, RustNativeGenericProducerBinding>>();
+  const bindings = new Map<RustNativeCallableProtocol, Map<RustGenericCallablePhysicalDefinition, RustNativeGenericProducerBinding>>();
   const forwarding = new Map<Node, Map<string, RustNativeGenericProducerForwarding>>();
   const open: { readonly invocation: Node; readonly input: RustNativeCallableInput;
     readonly inputs: readonly RustNativeCallableInput[] }[] = [];
@@ -78,42 +77,41 @@ export function createRustNativeGenericProducerPlan(input: {
         forwarding.set(owner, values);
       }
       const quantified = selected.protocol.binding.signature.typeParameters.length > 0;
-      const concrete = input.storage.bindingsForInvocation(declaration, invocation, input.storage.emptyBindings);
-      const origins = concrete.kind === "unresolved" ? concrete : input.storage.boundOriginsFor(selected.subject, concrete.bindings);
-      if (origins.kind === "unresolved") {
-        reject(invocation, selected, origins.reason);
-        continue;
-      }
       const abstractInputs = new Set<RustNativeCallableInput>();
-      if (origins.subjects.length === 0 && quantified) {
-        for (const subject of symbolic.subjects) {
-          const origin = nativeInputs.get(subject);
-          if (origin !== undefined) abstractInputs.add(origin);
-        }
-        if (abstractInputs.size === 0) reject(invocation, selected, "A generic producer invocation has no proven concrete or symbolic origin.");
-      }
-      for (const subject of origins.subjects) {
+      let hasGenericProducer = false;
+      for (const subject of symbolic.subjects) {
         const abstract = nativeInputs.get(subject);
         if (abstract !== undefined) {
           if (quantified) abstractInputs.add(abstract);
           continue;
         }
         const implementation = subject.projection.length === 0 ? input.generic.implementationFor(subject.node) : undefined;
-        const definition = implementation === undefined ? undefined : input.generic.definitionFor(implementation.carrier);
-        if (definition === undefined) {
+        if (implementation === undefined) {
           const producer = input.facts.getFact(subject.node, rustTargetOperationFactKey);
           if (!quantified && !(producer?.kind === "closure" && rustGenericCallableValue(producer.resultCarrier) !== undefined)) continue;
           reject(invocation, selected, "An exact generic callable origin has no existing generic producer family.");
+          continue;
+        }
+        hasGenericProducer = true;
+      }
+      if (hasGenericProducer) {
+        const physical = input.nativeStorage.invocationInputFor(selected, invocation, owner);
+        const definition = physical.kind === "unresolved" ? undefined : input.generic.physical.definitionFor(physical.carrier);
+        if (definition === undefined) {
+          reject(invocation, selected, physical.kind === "unresolved" ? physical.reason
+            : "An exact generic producer invocation lacks a selected physical family.");
           continue;
         }
         if (!closedMetadataEquals(definition.signature, selected.protocol.binding.signature)) {
           reject(invocation, selected, "An exact generic producer family conflicts with its selected native protocol contract.");
           continue;
         }
-        const values = bindings.get(selected.protocol) ?? new Map<RustGenericCallableDefinition, RustNativeGenericProducerBinding>();
+        const values = bindings.get(selected.protocol) ?? new Map<RustGenericCallablePhysicalDefinition, RustNativeGenericProducerBinding>();
         values.set(definition, Object.freeze({ input: selected, definition }));
         bindings.set(selected.protocol, values);
       }
+      if (quantified && symbolic.subjects.length === 0)
+        reject(invocation, selected, "A generic producer invocation has no proven concrete or symbolic origin.");
       if (abstractInputs.size > 0) open.push(Object.freeze({ invocation, input: selected,
         inputs: Object.freeze([...abstractInputs]) }));
     }
@@ -128,7 +126,7 @@ export function createRustNativeGenericProducerPlan(input: {
     forwardingFor: (owner: Node) => selectedForwarding.get(owner) ?? emptyForwarding,
     errorAritiesFor(fileName: string): readonly number[] | undefined {
       const arities = new Set<number>();
-      for (const definition of input.generic.definitions) {
+      for (const definition of input.generic.physical.definitions()) {
         if (definition.ownerFileName !== fileName) continue;
         const effects = definition.implementations.map(implementation => input.facts.getFact(implementation.declaration, rustSourceCallEffectsFactKey));
         if (effects.some(effect => effect === undefined)) return undefined;

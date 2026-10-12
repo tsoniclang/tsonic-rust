@@ -450,7 +450,7 @@ function applyRustContextualValueConversion(
     return expression;
   }
   if (fact.conversion.kind === "generic-callable-flow") {
-    return planRustGenericCallableFlow(fact.conversion, expression, context);
+    return planRustGenericCallableFlow(node, fact.conversion, expression, context);
   }
   if (fact.conversion.kind === "project-union-map") {
     const owned = !sourceIsSharedReference && context.expressionOverrides?.get(node)?.valueForm !== "shared-reference" &&

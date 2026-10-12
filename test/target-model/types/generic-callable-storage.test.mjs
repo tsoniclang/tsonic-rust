@@ -5,6 +5,7 @@ import { substituteRustTargetTypeParameters } from "../../../dist/target-model/t
 import { rustTargetTypeParameterIdentities } from "../../../dist/target-model/types/carriers/generic-references.js";
 import { rustTargetTypeChildren } from "../../../dist/target-model/types/carriers/children.js";
 import { inferRustTargetGenericBindings } from "../../../dist/target-model/types/carriers/generic-inference.js";
+import { rustGenericCallableStorageArguments } from "../../../dist/target-model/types/carriers/generic-callable-storage.js";
 
 const parameter = identity => ({ kind: "type-parameter", identity, name: identity });
 const origin = { fileName: "/index.ts", declarationIdentity: "checked:origin:1" };
@@ -47,4 +48,16 @@ test("generic physical metadata rejects malformed members, duplicates, sparse ar
     { ...valid.value.physical, members: [{ ...member(0), arguments: Array(1) }] },
   ]) assert.equal(rustGenericCallableValue({ ...valid, value: { ...valid.value, physical } }) === undefined, true);
   assert.equal(accesses, 0);
+});
+
+test("generic physical argument emission orders lifetimes before authored and physical type parameters", () => {
+  const authored = parameter("Authored");
+  const physical = { kind: "type", type: parameter("Implementation") };
+  const lifetime = { kind: "lifetime", lifetime: { kind: "parameter", identity: "borrow", name: "borrow" } };
+  const constant = { kind: "const", value: { kind: "integer", value: "17" } };
+  const arguments_ = [physical, lifetime, constant];
+  const selected = rustGenericCallableStorageArguments([authored], arguments_);
+  assert.deepEqual(selected, [lifetime, { kind: "type", type: authored }, physical, constant]);
+  assert.equal(Object.isFrozen(selected), true);
+  assert.deepEqual(arguments_, [physical, lifetime, constant], "physical member argument indexes are not reordered");
 });

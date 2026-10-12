@@ -3,7 +3,8 @@ import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceStorageBindings, SourceStorageProducer, SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
 import { sourceNodeIdentity } from "@tsonic/target-api/source";
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
-import { closedMetadataKey, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
+import { closedMetadataEquals, closedMetadataKey, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
+import { rustGenericCallableSignaturesMatch } from "../../target-model/conversions/generic-callable.js";
 import { rustGenericCallableCarrier, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import type { RustGenericCallableStorageMember } from "../../target-model/types/carriers/generic-callable-storage.js";
 import { rustGenericCallableEnvironment, type RustGenericCallableEnvironment } from "./generic-environments.js";
@@ -32,6 +33,9 @@ export interface RustGenericCallablePhysicalPlan {
   environmentFor(implementation: RustGenericCallableImplementation): RustGenericCallableEnvironment | undefined;
   definitionFor(carrier: TargetTypeRef): RustGenericCallablePhysicalDefinition | undefined;
   argumentsFor(carrier: TargetTypeRef): readonly RustTargetGenericArgument[] | undefined;
+  conversionFor(source: TargetTypeRef, target: TargetTypeRef): readonly {
+    readonly source: RustGenericCallablePhysicalMember; readonly target: RustGenericCallablePhysicalMember;
+  }[] | undefined;
   carrierFor(carrier: TargetTypeRef, ownerFileName: string, producers: readonly SourceStorageProducer[]):
     { readonly carrier: TargetTypeRef; readonly inputs: readonly RustNativeCallableInput[] } | undefined;
 }
@@ -120,6 +124,7 @@ export function createRustGenericCallablePhysicalPlan(
     if (definition === undefined) {
       const suffix = createHash("sha256").update(identity).digest("hex").slice(0, 12);
       definition = Object.freeze({ ...family, identity, familyIdentity: family.identity, ownerFileName,
+        copy: selected.every(member => member.implementation.storage === "value"),
         targetName: allocateRustGeneratedName(usedNames, `GenericCallable${suffix}`),
         ...(family.nativeFutureDispatchName === undefined ? {} : {
           nativeFutureDispatchName: allocateRustGeneratedName(usedNames, `CallableFuture${suffix}`) }),
@@ -139,6 +144,25 @@ export function createRustGenericCallablePhysicalPlan(
     definitions: () => Object.freeze([...definitions.values()]), environmentFor,
     definitionFor: (carrier: TargetTypeRef) => select(carrier)?.definition,
     argumentsFor: (carrier: TargetTypeRef) => select(carrier)?.arguments,
+    conversionFor(source: TargetTypeRef, target: TargetTypeRef) {
+      if (!rustGenericCallableSignaturesMatch(source, target)) return undefined;
+      const from = select(source);
+      const into = select(target);
+      if (from === undefined || into === undefined || from.definition.familyIdentity !== into.definition.familyIdentity) return undefined;
+      const sourceValue = rustGenericCallableValue(source)!;
+      const targetValue = rustGenericCallableValue(target)!;
+      const argumentsFor = (value: typeof sourceValue, index: number): readonly RustTargetGenericArgument[] =>
+        value.physical?.members[index]!.arguments.map(argument => value.physical!.arguments[argument]!) ?? [];
+      const transitions: { readonly source: RustGenericCallablePhysicalMember; readonly target: RustGenericCallablePhysicalMember }[] = [];
+      for (const [index, member] of from.definition.members.entries()) {
+        const arguments_ = argumentsFor(sourceValue, index);
+        const candidate = into.definition.members.find((other, otherIndex) => other.implementation === member.implementation &&
+          closedMetadataEquals(arguments_, argumentsFor(targetValue, otherIndex)));
+        if (candidate === undefined) return undefined;
+        transitions.push(Object.freeze({ source: member, target: candidate }));
+      }
+      return Object.freeze(transitions);
+    },
     carrierFor(carrier: TargetTypeRef, ownerFileName: string, producers: readonly SourceStorageProducer[]) {
       const value = rustGenericCallableValue(carrier);
       const family = value === undefined ? undefined : familyFor(carrier);

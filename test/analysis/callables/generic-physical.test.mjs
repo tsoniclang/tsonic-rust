@@ -21,7 +21,7 @@ function fixture(text) {
     assert.equal(value?.physical !== undefined, true, name);
     return { carrier: selected.carrier, value, definition: program.callableValues.generic.physical.definitionFor(selected.carrier) };
   };
-  return { program, declaration, returned };
+  return { program, declaration, returned, nodes };
 }
 
 test("generic physical factories retain their own input without unrelated family captures", () => {
@@ -97,4 +97,40 @@ test("generic physical selection rejects invented members and hidden argument ar
     "a hidden physical environment cannot fall back to a logical carrier");
   assert.equal(physical.environmentFor({ ...selected.definition.members[0].implementation }) === undefined, true,
     "implementation metadata must be the owned object");
+});
+
+test("physical family conversion moves only exact producer and capture argument members", () => {
+  const current = fixture(`
+    type Identity = <Value>(value: Value) => Value;
+    function make(callback: () => number): Identity {
+      return <Value>(value: Value): Value => { callback(); return value; };
+    }
+    export function choose(left: () => number, right: () => number, select: boolean): Identity {
+      return select ? make(left) : make(right);
+    }
+  `);
+  const physical = current.program.callableValues.generic.physical;
+  const target = current.returned("choose");
+  const ast = current.program.source.ast;
+  const calls = current.nodes.filter(node => ast.is.IsCallExpression(node) && ast.arguments(node).length === 1 &&
+    ["left", "right"].includes(ast.text(ast.arguments(node)[0])));
+  assert.equal(calls.length, 2);
+  const variants = new Set();
+  const carriers = [];
+  for (const call of calls) {
+    const selected = current.program.callableValues.nativeStorage.valueFor(call);
+    assert.notEqual(selected.kind, "unresolved", selected.reason);
+    carriers.push(selected.carrier);
+    const conversion = physical.conversionFor(selected.carrier, target.carrier);
+    assert.equal(conversion !== undefined, true, ast.text(call));
+    assert.equal(conversion.length, 1);
+    assert.equal(conversion[0].source.implementation === conversion[0].target.implementation, true);
+    assert.equal(Object.isFrozen(conversion) && Object.isFrozen(conversion[0]), true);
+    variants.add(conversion[0].target.variantName);
+    assert.equal(physical.conversionFor(target.carrier, selected.carrier) === undefined, true,
+      "a joined carrier cannot discard the other captured input");
+  }
+  assert.equal(variants.size, 2, "one source closure at different input identities keeps distinct target alternatives");
+  assert.equal(physical.conversionFor(carriers[0], carriers[1]) === undefined, true,
+    "equal logical signatures do not authorize a different actual capture");
 });

@@ -11,7 +11,9 @@ import { createRustGenericCallablePlan, type RustGenericCallablePlan } from "./g
 import { createRustSuspendedCallablePlan, type RustSuspendedCallablePlan } from "./suspended-values.js";
 import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
 import { rustCallableAdapterValues } from "./adapter-values.js";
-import { rustTargetOperationFactKey, rustBindingProjectionFactKey } from "../facts/keys.js";
+import { rustTargetOperationFactKey, rustBindingProjectionFactKey, rustSourceCallableReturnFactKey } from "../facts/keys.js";
+import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
+import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustObjectReferenceViewKey } from "../facts/object-reference-views.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
@@ -171,11 +173,25 @@ function createRustCallableValuePlan(input: RustCallableValuePlanInput): RustCal
   const nativeCaptures = createRustNativeCapturePlan({ facts: input.facts, storage: input.sourceStorage, nativeStorage });
   generic.initializePhysical({ ast: input.ast, storage: input.sourceStorage, captures: nativeCaptures, native,
     boundSubjectFor: (subject, carrier, bindings) => nativeStorage.boundSubjectFor(subject, carrier, bindings) });
+  const genericCarriers = new Map<TargetTypeRef, boolean>();
+  const containsGeneric = (carrier: TargetTypeRef | undefined): boolean => {
+    if (carrier === undefined) return false;
+    const known = genericCarriers.get(carrier);
+    if (known !== undefined) return known;
+    genericCarriers.set(carrier, false);
+    const selected = rustGenericCallableValue(carrier) !== undefined || rustTargetTypeChildren(carrier).some(containsGeneric);
+    genericCarriers.set(carrier, selected);
+    return selected;
+  };
+  for (const node of input.sourceStorage.nodes) {
+    if (containsGeneric(input.facts.getFact(node, rustSourceCallableReturnFactKey)?.returnCarrier)) nativeStorage.returnFor(node);
+    if (containsGeneric(input.facts.getFact(node, rustRuntimeCarrierKey)?.carrier)) nativeStorage.valueFor(node);
+  }
   const suspended = createRustSuspendedCallablePlan(input.ast, input.sourceFiles, input.facts, input.names, input.lifetimes, nativeCaptures);
   for (const implementation of suspended.implementations) usedNames.add(implementation.stateName);
   const frames = createRustFrameCallablePlan({ ...input, usedNames });
   const nativeGenericProducers = createRustNativeGenericProducerPlan({ ast: input.ast, nodes: input.sourceStorage.nodes,
-    facts: input.facts, storage: input.sourceStorage, generic, native, nativeStorage });
+    facts: input.facts, generic, native, nativeStorage });
   return Object.freeze({ generic, suspended, frames, native, nativeStorage, nativeCaptures, nativeProducers, nativeGenericProducers,
     issues: Object.freeze([...generic.issues, ...suspended.issues, ...frames.issues]) });
 }
