@@ -267,7 +267,6 @@ export function planRustProgramErrorModule(
     ...planRustErrorProjectionTransport(transport),
     ...planRustSourceErrorProjectionDelegates(),
     finishResourceFunction(),
-    finishFinallyFunction(),
   ];
   return createRustSourceFile(items);
 }
@@ -507,45 +506,6 @@ function finishResourceFunction(): RustItem {
                   path("suppressed"),
                 ),
               ),
-            },
-          ],
-        },
-      }],
-    },
-  };
-}
-
-function finishFinallyFunction(): RustItem {
-  const completion = completionType(typeParameterT, typeParameterNormal);
-  return {
-    kind: "function",
-    name: "finish_finally",
-    visibility: "public",
-    attrs: [rustHiddenAttribute],
-    generics: completionGenerics,
-    params: [
-      { name: "body", type: resultType(completion) },
-      { name: "finally", type: resultType(completionType(typeParameterT, unitType)) },
-    ],
-    returnType: resultType(completion),
-    body: {
-      statements: [{
-        kind: "tail",
-        expr: {
-          kind: "match",
-          expression: path("finally"),
-          arms: [
-            {
-              pattern: tupleVariant("Ok", tupleVariant("Completion::Normal", { kind: "path", path: "()" })),
-              expression: path("body"),
-            },
-            ...["Return", "Break", "Continue"].map(name => ({
-              pattern: tupleVariant("Ok", tupleVariant(`Completion::${name}`, binding("value"))),
-              expression: call("Ok", call(`Completion::${name}`, path("value"))),
-            })),
-            {
-              pattern: tupleVariant("Err", binding("error")),
-              expression: call("Err", path("error")),
             },
           ],
         },

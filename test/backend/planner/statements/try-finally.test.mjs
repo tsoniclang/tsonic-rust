@@ -6,8 +6,38 @@ import {
   acmeTestingPackage,
   artifactText,
   compileRust,
+  rustSourceText,
 } from "../../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
+
+for (const surfaces of [[], ["js"]]) {
+  const lane = surfaces[0] ?? "native";
+  test(`project-owned errors use the single generic runtime finally owner in ${lane}`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: {
+      "index.ts": `class LocalFailure extends Error {
+  constructor() { super("local"); }
+}
+export function main(): void {
+  let finalized = false;
+  let caught = false;
+  try {
+    try { throw new LocalFailure(); }
+    finally { finalized = true; }
+  } catch (error) {
+    caught = error instanceof LocalFailure;
+  }
+  if (!finalized || !caught) throw new Error("project finally lost its exact error");
+}`,
+    } });
+    assertNoTargetDiagnostics(result.diagnostics);
+    const source = rustSourceText(result);
+    assert.match(source, /pub use tsonic_rust_runtime::\*/u);
+    assert.match(source, /pub fn finish_resource/u);
+    assert.match(source, /rt::finish_finally/u);
+    assert.doesNotMatch(source, /pub fn finish_finally/u);
+    validateGeneratedProject(`project-finally-owner-${lane}`, result.artifacts, { run: true });
+  });
+}
 
 test("try regions preserve exact catch/finally and abrupt-completion ordering", { timeout: 300_000 }, () => {
   const { result } = compileRust({

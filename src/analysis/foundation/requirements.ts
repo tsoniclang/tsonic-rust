@@ -210,6 +210,7 @@ export function rustFoundationForPath(path: string): RustFoundation {
 }
 
 const runtimeCoreExports = new Set([
+  "finish_finally",
   "Completion",
   "Completion::Normal",
   "Completion::Return",

@@ -17,11 +17,11 @@ test("selected static calls retain their owning carrier's native foundation", ()
   assert.equal(rustFoundationForSelectedCall({ member, sourceSelectedOwnerCarrier: rustStringTargetType() }), "alloc");
 });
 
-test("nonfallible completion is core while error and suppression helpers require alloc", () => {
+test("completion and generic finally are core while concrete errors and suppression require alloc", () => {
   for (const root of ["rt", "tsonic_rust_runtime"]) {
-    for (const member of ["Completion", "Completion::Normal", "Completion::Return", "Completion::Break", "Completion::Continue"])
+    for (const member of ["Completion", "Completion::Normal", "Completion::Return", "Completion::Break", "Completion::Continue", "finish_finally"])
       assert.equal(rustFoundationForPath(`${root}::${member}`), "core", member);
-    for (const member of ["finish_finally", "finish_resource", "TsonicResult", "TsonicError"])
+    for (const member of ["finish_resource", "TsonicResult", "TsonicError"])
       assert.equal(rustFoundationForPath(`${root}::${member}`), "alloc", member);
   }
 });

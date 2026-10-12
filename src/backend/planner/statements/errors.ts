@@ -15,6 +15,8 @@ import {
   diagnosticInput,
   registerAliasFromPath,
   rustCurrentErrorBoundary,
+  rustActiveErrorType,
+  rustErrorType,
 } from "../program/plan-context.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planBlockLike } from "./core.js";
@@ -114,6 +116,7 @@ export function planTryStatement(node: Node, context: RustPlanContext): readonly
   }
 
   const outwardFallible = context.fallibleBoundary !== undefined;
+  const errorType = rustActiveErrorType(context);
   const bodyFallible = catchBlock !== undefined || outwardFallible;
   const bodyErrorBoundary = catchBlock === undefined
     ? context.fallibleBoundary
@@ -181,7 +184,7 @@ export function planTryStatement(node: Node, context: RustPlanContext): readonly
     plannedCatch = {
       binding,
       body: terminates ? tailCompletionExits(catchBody) : catchBody,
-      fallible: outwardFallible,
+      errorType,
       terminates,
     };
   }
@@ -203,7 +206,7 @@ export function planTryStatement(node: Node, context: RustPlanContext): readonly
     const terminates = rustBlockDefinitelyExits(finallyBody);
     plannedFinally = {
       body: terminates ? tailCompletionExits(finallyBody) : finallyBody,
-      fallible: outwardFallible,
+      errorType,
       terminates,
     };
   }
@@ -225,10 +228,10 @@ export function planTryStatement(node: Node, context: RustPlanContext): readonly
       ? {}
       : { finallyName: allocateRustSyntheticName(context.syntheticNames, "finally_flow") }),
     returnType: bodyBoundary.returnType,
-    fallible: outwardFallible,
+    errorType,
     asynchronous: bodyBoundary.asynchronous,
     body: bodyTerminates ? tailCompletionExits(body) : body,
-    bodyFallible,
+    bodyErrorType: bodyErrorBoundary === undefined ? undefined : rustErrorType(bodyErrorBoundary),
     bodyTerminates,
     ...(plannedCatch === undefined ? {} : { catchClause: plannedCatch }),
     ...(plannedFinally === undefined ? {} : { finallyClause: plannedFinally }),

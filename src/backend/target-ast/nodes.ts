@@ -311,7 +311,7 @@ export type RustStmt =
       readonly flowName: string;
       readonly cleanupName: string;
       readonly returnType: RustType;
-      readonly fallible: boolean;
+      readonly errorType: RustType | undefined;
       readonly asynchronous: boolean;
       readonly body: RustBlock;
       readonly cleanup: RustBlock;
@@ -337,21 +337,21 @@ export type RustStmt =
       readonly flowName: string;
       readonly finallyName?: string;
       readonly returnType: RustType;
-      readonly fallible: boolean;
+      readonly errorType: RustType | undefined;
       readonly asynchronous: boolean;
       readonly body: RustBlock;
-      readonly bodyFallible: boolean;
+      readonly bodyErrorType: RustType | undefined;
       readonly bodyTerminates: boolean;
       readonly tail?: true;
       readonly catchClause?: {
         readonly binding: string;
         readonly body: RustBlock;
-        readonly fallible: boolean;
+        readonly errorType: RustType | undefined;
         readonly terminates: boolean;
       };
       readonly finallyClause?: {
         readonly body: RustBlock;
-        readonly fallible: boolean;
+        readonly errorType: RustType | undefined;
         readonly terminates: boolean;
       };
       readonly propagate: boolean;

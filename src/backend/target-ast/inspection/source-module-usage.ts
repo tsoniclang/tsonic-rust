@@ -283,6 +283,7 @@ function rustStatementReferencesModuleAlias(statement: RustStmt, alias: string):
           rustExpressionReferencesModuleAlias(statement.expr, alias);
     case "resource-scope":
       return alias === "rt" ||
+        rustOptionalTypeReferencesModuleAlias(statement.errorType, alias) ||
         rustTypeReferencesModuleAlias(statement.returnType, alias) ||
         rustBlockReferencesModuleAlias(statement.body, alias) ||
         rustBlockReferencesModuleAlias(statement.cleanup, alias) ||
@@ -300,6 +301,10 @@ function rustStatementReferencesModuleAlias(statement: RustStmt, alias: string):
       return rustExpressionReferencesModuleAlias(statement.error, alias);
     case "try-scope":
       return alias === "rt" ||
+        rustOptionalTypeReferencesModuleAlias(statement.errorType, alias) ||
+        rustOptionalTypeReferencesModuleAlias(statement.bodyErrorType, alias) ||
+        rustOptionalTypeReferencesModuleAlias(statement.catchClause?.errorType, alias) ||
+        rustOptionalTypeReferencesModuleAlias(statement.finallyClause?.errorType, alias) ||
         rustTypeReferencesModuleAlias(statement.returnType, alias) ||
         rustBlockReferencesModuleAlias(statement.body, alias) ||
         (statement.catchClause !== undefined &&

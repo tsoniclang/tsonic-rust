@@ -5,13 +5,14 @@ import { lowerRustCompletionScope } from "../../../../dist/backend/target-ast/no
 import { printRustBlockStatements } from "../../../../dist/print/source/blocks.js";
 
 const path = name => ({ kind: "path", path: name });
+const errorType = { kind: "named", path: "rt::TsonicError" };
 const declaration = name => ({ kind: "let", name, mutable: true, type: { kind: "string" } });
 const write = name => ({ kind: "assign", operator: "=", target: path(name), value: { kind: "call", path: "produce", args: [] } });
 const read = name => ({ kind: "expr", expr: { kind: "call", path: "observe", args: [path(name)] } });
 const region = overrides => ({ kind: "try-scope", bodyName: "body_flow", flowName: "flow",
-  returnType: { kind: "string" }, fallible: true, asynchronous: false,
-  body: { statements: [write("selected")] }, bodyFallible: true, bodyTerminates: false,
-  catchClause: { binding: "error", fallible: false, terminates: true,
+  returnType: { kind: "string" }, errorType, asynchronous: false,
+  body: { statements: [write("selected")] }, bodyErrorType: errorType, bodyTerminates: false,
+  catchClause: { binding: "error", errorType: undefined, terminates: true,
     body: { statements: [{ kind: "completion-exit", completion: "return", resultWrapped: false,
       expr: { kind: "string-literal", value: "caught" } }] } },
   propagate: false, dispatchReturn: true, dispatchTargets: [], terminates: false, ...overrides });
@@ -43,7 +44,7 @@ test("all normal branches initialize while abrupt paths need no fabricated value
     else: { statements: [{ kind: "completion-exit", completion: "return", resultWrapped: true,
       expr: { kind: "string-literal", value: "early" } }] } };
   const target = region({ body: { statements: [conditional] }, catchClause: {
-    binding: "error", fallible: false, terminates: false, body: { statements: [write("selected")] } } });
+    binding: "error", errorType: undefined, terminates: false, body: { statements: [write("selected")] } } });
   const closed = closeRustCompletionBindings({ statements: [declaration("selected"), target, read("selected")] });
   assert.equal(closed.statements[0].kind, "try-scope");
   assert.deepEqual(closed.statements[0].normalBindings.map(binding => binding.name), ["selected"]);
@@ -53,9 +54,9 @@ test("unproven writes, pre-initialization reads and intervening uses are not rel
   const candidates = [
     region({ body: { statements: [read("selected"), write("selected")] } }),
     region({ body: { statements: [{ kind: "if", condition: path("choose"), then: { statements: [write("selected")] } }] } }),
-    region({ catchClause: { binding: "error", fallible: false, terminates: false, body: { statements: [] } } }),
+    region({ catchClause: { binding: "error", errorType: undefined, terminates: false, body: { statements: [] } } }),
     region({ body: { statements: [{ ...write("selected"), value: path("selected") }] } }),
-    region({ finallyClause: { body: { statements: [read("selected")] }, fallible: false, terminates: false }, finallyName: "finally_flow" }),
+    region({ finallyClause: { body: { statements: [read("selected")] }, errorType: undefined, terminates: false }, finallyName: "finally_flow" }),
   ];
   for (const [index, target] of candidates.entries()) {
     const block = { statements: [declaration("selected"), target, read("selected")] };
@@ -78,7 +79,7 @@ test("a closure or shadow declaration cannot prove an outer initialization", () 
 
 test("nested completion outputs are closed after binding declarations enter their owner", () => {
   const inner = region({ bodyName: "inner_body", flowName: "inner_flow", propagate: true });
-  const outer = region({ body: { statements: [inner] }, catchClause: undefined, bodyFallible: false });
+  const outer = region({ body: { statements: [inner] }, catchClause: undefined, bodyErrorType: undefined });
   const closed = closeRustCompletionBindings({ statements: [declaration("selected"), outer, read("selected")] });
   assert.equal(closed.statements[0].kind, "try-scope");
   const text = printRustBlockStatements({ statements: [lowerRustCompletionScope(closed.statements[0])] }, 0);

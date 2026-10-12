@@ -14,6 +14,11 @@ const variant = (name: string, ...elements: readonly RustPattern[]): RustPattern
 const unit = (): RustExpr => ({ kind: "tuple-literal", elements: [] });
 
 export function lowerRustCompletionScope(scope: CompletionScope): RustStmt {
+  if (!("errorType" in scope) || scope.kind === "try-scope" &&
+    (!("bodyErrorType" in scope) || scope.catchClause !== undefined && !("errorType" in scope.catchClause) ||
+      scope.finallyClause !== undefined && !("errorType" in scope.finallyClause))) {
+    throw new Error("Completion regions require explicit exact error types or explicit pure contracts.");
+  }
   const normalBindings = scope.kind === "try-scope" ? scope.normalBindings ?? [] : [];
   const normalType: RustType = normalBindings.length === 0 ? { kind: "unit" }
     : { kind: "tuple", elements: normalBindings.map(declaration => declaration.type!) };
@@ -23,9 +28,10 @@ export function lowerRustCompletionScope(scope: CompletionScope): RustStmt {
     genericArguments: [{ kind: "type", type: scope.returnType }, { kind: "type", type: { kind: "unit" } }] };
   const normal = (): RustExpr => call("rt::Completion::Normal", normalBindings.length === 0 ? unit()
     : { kind: "tuple-literal", elements: normalBindings.map(declaration => path(declaration.name)) });
-  const resultType = (type: RustType): RustType => ({ kind: "named", path: "rt::TsonicResult",
-    genericArguments: [{ kind: "type", type }] });
-  const capture = (name: string, body: RustBlock, fallible: boolean, terminates: boolean, type: RustType = completionType,
+  const resultType = (type: RustType, errorType: RustType | undefined): RustType => errorType === undefined ? type
+    : { kind: "named", path: "core::result::Result",
+      genericArguments: [{ kind: "type", type }, { kind: "type", type: errorType }] };
+  const capture = (name: string, body: RustBlock, errorType: RustType | undefined, terminates: boolean, type: RustType = completionType,
     normal: RustExpr = call("rt::Completion::Normal", unit()),
     bindings: readonly Extract<RustStmt, { readonly kind: "let" }>[] = []): RustStmt => {
     const ownedBody = { ...body, statements: [
@@ -33,53 +39,64 @@ export function lowerRustCompletionScope(scope: CompletionScope): RustStmt {
       ...body.statements] };
     const region = { ...ownedBody, statements: [
       ...lowerRegion(ownedBody, scope.asynchronous ? undefined : name).statements,
-      ...(terminates ? [] : [{ kind: "tail" as const, expr: fallible ? call("Ok", normal) : normal }])] };
-    return { kind: "let", name, mutable: false, type: fallible ? resultType(type) : type,
+      ...(terminates ? [] : [{ kind: "tail" as const, expr: errorType === undefined ? normal : call("Ok", normal) }])] };
+    return { kind: "let", name, mutable: false, type: resultType(type, errorType),
       init: scope.asynchronous
         ? { kind: "await", expr: { kind: "async-block", move: false, body: applyRustTailShape(region, true) } }
         : { kind: "block", label: name, body: region } };
   };
   const statements: RustStmt[] = [];
   if (scope.kind === "try-scope") {
-    statements.push(capture(scope.bodyName, scope.body, scope.bodyFallible, scope.bodyTerminates,
+    statements.push(capture(scope.bodyName, scope.body, scope.bodyErrorType, scope.bodyTerminates,
       completionType, normal(), normalBindings));
-    let fallible = scope.bodyFallible;
     const caught = scope.catchClause;
+    if (caught !== undefined && scope.bodyErrorType === undefined) {
+      throw new Error("A catch completion requires an exact body error type.");
+    }
+    let errorType = caught === undefined ? scope.bodyErrorType : caught.errorType;
     statements.push({ kind: "let", name: scope.flowName, mutable: false,
-      type: (caught?.fallible ?? scope.bodyFallible) ? resultType(completionType) : completionType,
+      type: resultType(completionType, errorType),
       init: caught === undefined ? path(scope.bodyName) : { kind: "match", expression: path(scope.bodyName), arms: [
-        { pattern: variant("Ok", binding("completion")), expression: caught.fallible
-          ? call("Ok", path("completion")) : path("completion") },
+        { pattern: variant("Ok", binding("completion")), expression: caught.errorType === undefined
+          ? path("completion") : call("Ok", path("completion")) },
         { pattern: variant("Err", binding(caught.binding)), expression: {
-          kind: "block", body: { statements: [capture(scope.flowName, caught.body, caught.fallible, caught.terminates,
+          kind: "block", body: { statements: [capture(scope.flowName, caught.body, caught.errorType, caught.terminates,
             completionType, normal(), normalBindings),
             { kind: "tail", expr: path(scope.flowName) }] },
         } },
       ] } });
-    if (caught !== undefined) fallible = caught.fallible;
     const finalized = scope.finallyClause;
     if (finalized !== undefined) {
       if (scope.finallyName === undefined) throw new Error("Finalized completion requires its exact hygienic capture identity.");
-      statements.push(capture(scope.finallyName, finalized.body, finalized.fallible, finalized.terminates, unitCompletionType));
+      if (errorType !== undefined && finalized.errorType !== undefined && !rustTypeEquals(errorType, finalized.errorType)) {
+        throw new Error("Finally completion requires one exact joined error type.");
+      }
+      const joinedErrorType = errorType ?? finalized.errorType;
+      statements.push(capture(scope.finallyName, finalized.body, finalized.errorType, finalized.terminates, unitCompletionType));
       statements.push({ kind: "let", name: scope.flowName, mutable: false,
-        type: fallible || finalized.fallible ? resultType(completionType) : completionType,
-        init: fallible || finalized.fallible
-          ? call("rt::finish_finally", fallible ? path(scope.flowName) : call("Ok", path(scope.flowName)),
-            finalized.fallible ? path(scope.finallyName) : call("Ok", path(scope.finallyName)))
+        type: resultType(completionType, joinedErrorType),
+        init: joinedErrorType !== undefined
+          ? call("rt::finish_finally", errorType === undefined ? call("Ok", path(scope.flowName)) : path(scope.flowName),
+            finalized.errorType === undefined ? call("Ok", path(scope.finallyName)) : path(scope.finallyName))
           : { kind: "match", expression: path(scope.finallyName), arms: [
             { pattern: variant("rt::Completion::Normal", { kind: "wildcard" }), expression: path(scope.flowName) },
             ...abruptVariants(false),
           ] } });
-      fallible ||= finalized.fallible;
+      errorType = joinedErrorType;
     }
-    if (fallible) statements.push(unwrap(scope.flowName));
+    if (errorType !== undefined) {
+      if (!rustTypeEquals(errorType, scope.errorType)) {
+        throw new Error("Completion propagation requires the exact enclosing error type.");
+      }
+      statements.push(unwrap(scope.flowName, errorType));
+    }
   } else {
-    statements.push(capture(scope.flowName, scope.body, scope.fallible, scope.terminates));
-    if (scope.fallible) {
-      statements.push(capture(scope.cleanupName, scope.cleanup, true, false, { kind: "unit" }, unit()),
+    statements.push(capture(scope.flowName, scope.body, scope.errorType, scope.terminates));
+    if (scope.errorType !== undefined) {
+      statements.push(capture(scope.cleanupName, scope.cleanup, scope.errorType, false, { kind: "unit" }, unit()),
         { kind: "let", name: scope.flowName, mutable: false,
           init: { kind: "try", expr: call("rt::finish_resource", path(scope.flowName), path(scope.cleanupName)),
-            resultErrorType: runtimeError, operandErrorType: runtimeError } });
+            resultErrorType: scope.errorType, operandErrorType: scope.errorType } });
     } else if (scope.asynchronous) statements.push({ kind: "expr",
       expr: { kind: "await", expr: { kind: "async-block", move: false, body: scope.cleanup } } });
     else statements.push(...scope.cleanup.statements);
@@ -90,11 +107,9 @@ export function lowerRustCompletionScope(scope: CompletionScope): RustStmt {
     : { kind: "let", name: scope.flowName, mutable: false, type: normalType, init: { kind: "block", body: { statements } } };
 }
 
-const runtimeError: RustType = { kind: "named", path: "rt::TsonicError" };
-
-function unwrap(name: string): RustStmt {
+function unwrap(name: string, errorType: RustType): RustStmt {
   return { kind: "let", name, mutable: false, init: {
-    kind: "try", expr: path(name), resultErrorType: runtimeError, operandErrorType: runtimeError,
+    kind: "try", expr: path(name), resultErrorType: errorType, operandErrorType: errorType,
   } };
 }
 
@@ -107,10 +122,10 @@ function dispatch(scope: CompletionScope): Extract<RustStmt, { readonly kind: "e
       ? { kind: "unreachable", message: "terminating Tsonic completion scope completed normally" }
       : scope.kind === "try-scope" && (scope.normalBindings?.length ?? 0) > 0 ? path("normal") : unit(),
   }];
-  if (scope.propagate) arms.push(...abruptVariants(scope.fallible).map(arm => ({ ...arm, expression: exit(arm.expression) })));
+  if (scope.propagate) arms.push(...abruptVariants(scope.errorType !== undefined).map(arm => ({ ...arm, expression: exit(arm.expression) })));
   else {
     if (scope.dispatchReturn) arms.push({ pattern: variant("rt::Completion::Return", binding("value")),
-      expression: exit(scope.fallible ? call("Ok", path("value")) : path("value")) });
+      expression: exit(scope.errorType === undefined ? path("value") : call("Ok", path("value"))) });
     for (const target of scope.dispatchTargets) {
       const id: RustPattern = { kind: "path", path: String(target.id) };
       arms.push({ pattern: variant("rt::Completion::Break", id),

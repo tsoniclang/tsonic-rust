@@ -165,7 +165,7 @@ export function planResourceManagedBody(
     flowName: allocateRustSyntheticName(context.syntheticNames, "resource_flow"),
     cleanupName: allocateRustSyntheticName(context.syntheticNames, "resource_cleanup"),
     returnType: boundary.returnType,
-    fallible: boundary.fallible,
+    errorType: rustActiveErrorType(context),
     asynchronous: boundary.asynchronous,
     body: finalizedBody,
     cleanup,

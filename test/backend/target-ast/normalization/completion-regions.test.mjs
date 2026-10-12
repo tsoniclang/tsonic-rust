@@ -9,8 +9,8 @@ const path = name => ({ kind: "path", path: name });
 const error = { kind: "named", path: "rt::TsonicError" };
 const completion = { kind: "completion-exit", completion: "return", resultWrapped: true, expr: path("selected") };
 const region = overrides => ({ kind: "try-scope", bodyName: "body_flow", flowName: "flow",
-  returnType: { kind: "primitive", name: "i32" }, fallible: true, asynchronous: false,
-  body: { statements: [completion] }, bodyFallible: true, bodyTerminates: true,
+  returnType: { kind: "primitive", name: "i32" }, errorType: error, asynchronous: false,
+  body: { statements: [completion] }, bodyErrorType: error, bodyTerminates: true,
   propagate: false, dispatchReturn: true, dispatchTargets: [], terminates: true, ...overrides });
 const styled = statement => finalizeRustSourceStyle({ headerComment: "native completion proof", items: [{
   kind: "function", name: "run", visibility: "public", params: [], generics: emptyRustGenerics,
@@ -64,7 +64,7 @@ test("genuine callable boundaries retain their own returns while nested completi
 
 test("resource cleanup retains suppression, loop targets and ordered continue prelude", () => {
   const statement = { kind: "resource-scope", flowName: "resource_flow", cleanupName: "cleanup_flow",
-    returnType: { kind: "unit" }, fallible: true, asynchronous: false,
+    returnType: { kind: "unit" }, errorType: error, asynchronous: false,
     body: { statements: [{ kind: "completion-exit", completion: "continue", loopId: 3, resultWrapped: true }] },
     cleanup: { statements: [{ kind: "expr", expr: { kind: "try", expr: { kind: "call", path: "dispose", args: [] },
       resultErrorType: error, operandErrorType: error } }] },
