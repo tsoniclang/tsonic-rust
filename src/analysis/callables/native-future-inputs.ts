@@ -1,6 +1,6 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceStorageBindings, SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
-import { sourceNodeIdentity } from "@tsonic/target-api/source";
+import { sourceEnclosingCallable, sourceNodeIdentity } from "@tsonic/target-api/source";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -176,7 +176,11 @@ export function createRustNativeFutureInputPlan(input: {
   const environmentFor = (declaration: Node): RustNativeFutureEnvironmentSelection => {
     const previous = environments.get(declaration);
     if (previous !== undefined) return previous;
-    const reason = !nodes.has(declaration) || input.ast.body(declaration) === undefined
+    const callable = nodes.has(declaration) && (sourceEnclosingCallable(declaration, input.ast) === declaration ||
+      input.ast.is.IsMethodSignatureDeclaration(declaration) || input.ast.is.IsCallSignatureDeclaration(declaration) ||
+      input.ast.is.IsConstructSignatureDeclaration(declaration) || input.ast.is.IsFunctionTypeNode(declaration) ||
+      input.ast.is.IsConstructorTypeNode(declaration));
+    const reason = !callable
       ? "Native Future environment requires an owned callable declaration."
       : failures.get(declaration) ?? [...captures.get(declaration) ?? []].map(capture => failures.get(capture.owner))
         .find(failure => failure !== undefined);

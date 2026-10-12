@@ -5,6 +5,7 @@ import { createTargetSourceProgram, sourceEnclosingCallable } from "@tsonic/targ
 import { createSourceStorageQuery, defaultSourceStorageLimits } from "@tsonic/target-api/analysis";
 import { createRustNativeFutureInputPlan } from "../../../dist/analysis/callables/native-future-inputs.js";
 import { rustRuntimeCarrierKey } from "../../../dist/target-model/facts/selections.js";
+import { rustSourceParameterAbiFactKey } from "../../../dist/analysis/facts/keys.js";
 
 const sourceText = `import type { int32 } from "@tsonic/core/types.js";
   import type { Ref, Life } from "@tsonic/rust/types.js";
@@ -120,4 +121,41 @@ test("exhausted shared capture accounting cannot produce a successful empty Futu
   assert.equal(storage.failureReason() !== undefined, true, "bounded shared query has exhausted its actual budget");
   const plan = createRustNativeFutureInputPlan({ ...current.input, storage });
   rejected(plan.forDeclaration(current.closure), /budget|exceeds|limit/iu);
+});
+
+test("owned bodyless callable contracts retain environments without requiring an implementation body", () => {
+  const { program, source: checked } = analyzeRust({ surfaces: [], files: { "index.ts": `
+    import type { int32 } from "@tsonic/core/types.js";
+    export interface Reader { read(value: int32): int32; empty(): void; future(value: Promise<int32>): void; }
+    export abstract class Base { abstract get(value: int32): int32; }
+    export declare function provided(value: int32): int32;
+    export declare function future(value: Promise<int32>): void;
+    export function declared(value: int32): int32;
+    export function declared(value: int32): int32 { return value; }
+  ` } });
+  const ast = program.source.ast;
+  const storage = createSourceStorageQuery(createTargetSourceProgram(checked), program.sourceFiles);
+  const declarations = storage.nodes.filter(node => ast.body(node) === undefined &&
+    (ast.is.IsFunctionDeclaration(node) || ast.is.IsMethodDeclaration(node) || ast.is.IsMethodSignatureDeclaration(node)));
+  assert.equal(declarations.length, 7);
+  for (const declaration of declarations) {
+    const name = ast.text(ast.name(declaration));
+    const environment = program.callableValues.nativeStorage.futureEnvironmentFor(declaration);
+    assert.equal(environment.kind, "resolved", `${name}: ${environment.reason ?? "owned declaration"}`);
+    assert.equal(environment.captures.length, 0);
+    assert.equal(environment.inputs.length, name === "future" ? 1 : 0, name);
+    if (!ast.is.IsMethodSignatureDeclaration(declaration) && name !== "future") {
+      for (const parameter of ast.parameters(declaration)) {
+        const abi = program.facts.getFact(parameter, rustSourceParameterAbiFactKey);
+        assert.equal(abi !== undefined, true, name);
+        const physical = program.callableValues.nativeStorage.parameterFor(parameter, abi.parameterCarrier);
+        assert.equal(physical.kind, "identity", `${name}: ${physical.reason ?? "ordinary native parameter"}`);
+      }
+    }
+  }
+  rejected(program.callableValues.nativeStorage.futureEnvironmentFor(program.sourceFiles[0]), /owned callable declaration/u);
+  let reads = 0;
+  const foreign = Object.defineProperty({}, "kind", { get() { reads++; throw Error("foreign node inspected"); } });
+  rejected(program.callableValues.nativeStorage.futureEnvironmentFor(foreign), /owned callable declaration/u);
+  assert.equal(reads, 0);
 });
