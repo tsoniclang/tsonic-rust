@@ -37,11 +37,12 @@ export function rustGenericCallableValue(carrier: TargetTypeRef | undefined): Ru
   if (carrier?.kind !== "target-specific" || carrier.target !== "rust" || carrier.name !== "generic-callable") return undefined;
   const value = carrier.value;
   if (typeof value !== "object" || value === null || Array.isArray(value) ||
-    !hasExactObjectKeys(value, ["environment", "signature", "origin"], ["physical"])) return undefined;
+    !hasExactObjectKeys(value, ["environment", "signature", "origin",
+      ...(Object.prototype.hasOwnProperty.call(value, "physical") ? ["physical"] : [])])) return undefined;
   const selected = value as Partial<RustGenericCallableValue>;
   const binding = { signature: selected.signature, environment: selected.environment };
   if (!isRustCallableOrigin(selected.origin) || !isRustCallableSignatureBinding(binding) ||
-    selected.physical !== undefined && !isRustGenericCallableStorage(selected.physical) ||
+    Object.prototype.hasOwnProperty.call(value, "physical") && !isRustGenericCallableStorage(selected.physical) ||
     binding.signature.typeParameters.length === 0 && rustNativeFutureCallableResult(binding.signature.result) === undefined) return undefined;
   return selected as RustGenericCallableValue;
 }

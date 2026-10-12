@@ -373,7 +373,14 @@ export function inferRustTargetGenericBindings(
         if (leftCallable !== undefined || rightCallable !== undefined) {
           return leftCallable !== undefined && rightCallable !== undefined &&
             closedMetadataEquals(leftCallable.origin, rightCallable.origin) &&
-            matchCallableEnvironment(leftCallable, rightCallable, lifetimeContext);
+            matchCallableEnvironment(leftCallable, rightCallable, lifetimeContext) &&
+            (leftCallable.physical === undefined || rightCallable.physical === undefined
+              ? leftCallable.physical === rightCallable.physical
+              : leftCallable.physical.ownerFileName === rightCallable.physical.ownerFileName &&
+                closedMetadataEquals(leftCallable.physical.members, rightCallable.physical.members) &&
+                matchGenericArguments(leftCallable.physical.arguments, rightCallable.physical.arguments,
+                  (pattern, actual) => match(pattern, actual, lifetimeContext),
+                  (pattern, actual) => matchLifetime(pattern, actual, lifetimeContext), matchConst));
         }
         const leftFrame = rustFrameCallableValue(left);
         const rightFrame = rustFrameCallableValue(right);

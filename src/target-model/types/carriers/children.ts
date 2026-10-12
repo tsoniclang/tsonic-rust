@@ -37,7 +37,7 @@ export function rustTargetTypeChildren(type: TargetTypeRef): readonly TargetType
       if (constructorArguments !== undefined) return arguments_(constructorArguments);
       const callable = rustGenericCallableValue(type);
       if (callable !== undefined) return [...callable.environment,
-        ...(callable.physical?.members.flatMap(member => arguments_(member.arguments)) ?? [])];
+        ...arguments_(callable.physical?.arguments)];
       const frame = rustFrameCallableValue(type);
       if (frame !== undefined) return [...frame.environment, ...(frame.owner.kind === "class" ? [frame.owner.instance] : [])];
       const source = rustSourceTypeCarrierValue(type);

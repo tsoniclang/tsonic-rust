@@ -118,7 +118,9 @@ export function createRustNativeStoragePlan(input: {
             !isRustAbsenceCarrier(input.facts.getFact(producer.subject.node, rustRuntimeCarrierKey)?.carrier));
           const ownerFileName = input.ast.getFileName(input.ast.getSourceFile(selectedSubject.node));
           const physical = input.generic.physical.carrierFor(current, ownerFileName, present);
-          return physical ?? fail("A generic callable producer lacks its exact bound physical capture environment.");
+          if (physical === undefined) return fail("A generic callable producer lacks its exact bound physical capture environment.");
+          for (const selected of physical.inputs) selectedInputs.add(selected);
+          return physical.carrier;
         }
         let physical: TargetTypeRef | undefined;
         for (const origin of origins.subjects) {
