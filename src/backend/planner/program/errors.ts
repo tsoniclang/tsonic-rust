@@ -1,7 +1,7 @@
 import { rustHiddenAttribute } from "../../target-ast/attributes.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustPlanningContext } from "../context.js";
-import { rustRuntimeErrorTypeIdentity } from "./source-package-errors.js";
+import { rustRuntimeErrorTypeIdentity } from "../../../target-model/operations/error-boundary.js";
 import { rustTypeFromCarrier } from "../types/render.js";
 import { rustJsErrorTargetType, rustProgramErrorTargetType, rustTsValueTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";

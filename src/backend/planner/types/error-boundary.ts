@@ -1,6 +1,6 @@
 import type { RustFallibleErrorBoundary } from "../../../target-model/operations/error-boundary.js";
 import type { RustExpr, RustType } from "../../target-ast/nodes.js";
-import { rustRuntimeErrorTypeIdentity } from "../program/source-package-errors.js";
+import { rustRuntimeErrorTypeIdentity } from "../../../target-model/operations/error-boundary.js";
 import { rustErrorType, rustLocalErrorOwner, rustPropagateLocalError,
   type RustFallibleBoundary } from "../program/fallible-boundaries.js";
 

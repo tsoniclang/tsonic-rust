@@ -1,3 +1,12 @@
+import { rustNamedTargetType } from "../types/carriers/native.js";
+import type { TargetTypeRef } from "../types/model.js";
+
+export const rustRuntimeErrorTypeIdentity = "tsonic-rust-runtime:TsonicError";
+
+export function rustRuntimeErrorTargetType(): TargetTypeRef {
+  return rustNamedTargetType(rustRuntimeErrorTypeIdentity, "tsonic_rust_runtime::TsonicError");
+}
+
 export type RustFallibleErrorBoundary =
   | "provider-native"
   | "target-runtime"

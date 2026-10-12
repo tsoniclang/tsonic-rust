@@ -1,15 +1,13 @@
 import type { RustExpr, RustItem, RustPattern, RustType, RustVisibility } from "../../target-ast/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/nodes.js";
+import { rustDeriveAttributes } from "../../target-ast/attributes.js";
 import { rustTypeEquals } from "../../target-ast/inspection/type-equality.js";
 import { isValidRustIdentifier } from "../../../target-model/names/identifiers.js";
 import { rustTypeIsLegalInPosition } from "./type-observations.js";
 import { hasExactObjectKeys } from "../../../target-model/metadata/closed-data.js";
+import { selectRustNativeErrorJoin, type RustNativeErrorSource } from "../../../target-model/types/native-error-joins.js";
 
-export interface RustNativeErrorJoinSource {
-  readonly identity: string;
-  readonly variant: string;
-  readonly errorType: RustType;
-}
+export type RustNativeErrorJoinSource = RustNativeErrorSource<RustType>;
 
 export type RustNativeErrorJoinSelection = Pick<RustNativeErrorJoinSource, "identity" | "errorType">;
 
@@ -30,24 +28,23 @@ export function planRustNativeErrorJoin(input: {
   readonly visibility: RustVisibility;
   readonly sources: readonly RustNativeErrorJoinSource[];
 }): RustNativeErrorJoinPlan | undefined {
-  const semanticName = (name: string): string => name.startsWith("r#") ? name.slice(2) : name;
+  const selection = selectRustNativeErrorJoin(input.sources, errorType => errorType !== undefined &&
+    errorType.kind !== "infer" && rustTypeIsLegalInPosition(errorType, "general"));
   if (!hasExactObjectKeys(input, ["identity", "name", "visibility", "sources",
       ...(input.referencePath === undefined ? [] : ["referencePath"])]) ||
     input.identity.length === 0 || !isValidRustIdentifier(input.name) ||
     input.referencePath !== undefined && !input.referencePath.split("::").every(segment =>
       segment === "crate" || segment === "self" || segment === "super" || isValidRustIdentifier(segment)) ||
-    input.sources.some(source => source.identity.length === 0 || !isValidRustIdentifier(source.variant) ||
-      source.errorType === undefined || source.errorType.kind === "infer" || !rustTypeIsLegalInPosition(source.errorType, "general")) ||
-    new Set(input.sources.map(source => source.identity)).size !== input.sources.length ||
-    new Set(input.sources.map(source => semanticName(source.variant))).size !== input.sources.length) return undefined;
-  const sources = new Map(input.sources.map(source => [source.identity, Object.freeze({ ...source })]));
-  const parameters = input.sources.map((_source, index) => ({ kind: "type" as const, name: `Error${index}`, bounds: [] }));
-  const arguments_ = input.sources.map(source => ({ kind: "type" as const, type: source.errorType }));
-  const errorType: RustType | undefined = sources.size === 0 ? undefined : sources.size === 1
-    ? input.sources[0]!.errorType : { kind: "named", path: input.referencePath ?? input.name,
+    selection === undefined) return undefined;
+  const sources = new Map(selection.sources.map(source => [source.identity, source]));
+  const parameters = selection.sources.map((_source, index) => ({ kind: "type" as const, name: `Error${index}`, bounds: [] }));
+  const arguments_ = selection.sources.map(source => ({ kind: "type" as const, type: source.errorType }));
+  const errorType: RustType | undefined = selection.kind === "empty" ? undefined : selection.kind === "single"
+    ? selection.sources[0].errorType : { kind: "named", path: input.referencePath ?? input.name,
       identity: input.identity, genericArguments: arguments_ };
-  const items: readonly RustItem[] = sources.size < 2 ? Object.freeze([]) : Object.freeze([{
+  const items: readonly RustItem[] = selection.kind !== "joined" ? Object.freeze([]) : Object.freeze([{
     kind: "enum", name: input.name, visibility: input.visibility, generics: { ...emptyRustGenerics, parameters },
+    attrs: rustDeriveAttributes(["Debug"]),
     variants: Object.freeze([...sources.values()].map((source, index) => ({ name: source.variant,
       fields: [{ kind: "named" as const, path: parameters[index]!.name }] }))),
   }]);
@@ -59,7 +56,7 @@ export function planRustNativeErrorJoin(input: {
     mapError(error: RustExpr, bindingName: string,
       select: (source: RustNativeErrorJoinSelection, value: RustExpr) => RustExpr | undefined): RustExpr | undefined {
       if (errorType === undefined || !isValidRustIdentifier(bindingName)) return undefined;
-      if (sources.size === 1) return select(input.sources[0]!, error);
+      if (selection.kind === "single") return select(selection.sources[0], error);
       const value: RustExpr = { kind: "path", path: bindingName };
       const arms: { pattern: RustPattern; expression: RustExpr }[] = [];
       for (const source of sources.values()) {

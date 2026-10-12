@@ -32,6 +32,7 @@ import { rustFrameCallableValue } from "../../../target-model/types/carriers/fra
 import { rustFrameCallableTypes } from "./frame-callables.js";
 import { rustClassConstructorInstance } from "../../../target-model/types/carriers/class-constructors.js";
 import { rustProducerErrorReference, type RustProducerErrorReference } from "../../../target-model/types/carriers/producer-errors.js";
+import { rustNativeErrorJoinReference, type RustNativeErrorJoinReference } from "../../../target-model/types/native-error-joins.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { rustRuntimeUnionContract } from "../../../target-model/types/carriers/runtime-unions.js";
 import { rustClassEnvironmentHandleType } from "../objects/class-environment-types.js";
@@ -73,6 +74,7 @@ interface RustSourceTypeRendering {
   readonly additionalArgumentsFor: (carrier: TargetTypeRef) => readonly RustGenericArgument[];
   readonly programErrorType?: () => RustType | undefined;
   readonly producerErrorType?: (reference: RustProducerErrorReference) => RustType | undefined;
+  readonly nativeErrorJoinType?: (reference: RustNativeErrorJoinReference) => RustType | undefined;
 }
 
 export function rustTypeFromCarrier(
@@ -85,6 +87,8 @@ export function rustTypeFromCarrier(
   }
   const producerError = rustProducerErrorReference(carrier);
   if (producerError !== undefined) return resolveSourceTypePath?.producerErrorType?.(producerError);
+  const joinedError = rustNativeErrorJoinReference(carrier);
+  if (joinedError !== undefined) return resolveSourceTypePath?.nativeErrorJoinType?.(joinedError);
   if (carrier.kind === "trait-ref") {
     const reference = rustTraitReferenceFromCarrier(carrier, resolveSourceTypePath, resolveStructuralShape);
     return (reference?.binder?.length ?? 0) === 0 ? reference?.trait : undefined;
@@ -599,6 +603,7 @@ export function rustTypeFromCarrierInContext(
     };
   };
   const resolvingProducerErrors = new Set<string>();
+  const resolvingErrorJoins = new Set<string>();
   let producerErrorWork = 4096;
   const sourceRendering: RustSourceTypeRendering = {
     typeParameterNames: context.typeParameterNames, typeDefinitions: context.input.program.typeDefinitions,
@@ -616,6 +621,17 @@ export function rustTypeFromCarrierInContext(
           carrier => rustTypeFromCarrier(carrier, sourceRendering, resolveStructuralShape));
       } finally {
         resolvingProducerErrors.delete(key);
+      }
+    },
+    nativeErrorJoinType: reference => {
+      const key = closedMetadataKey(reference);
+      if (producerErrorWork-- <= 0 || resolvingErrorJoins.size >= 128 || resolvingErrorJoins.has(key)) return undefined;
+      resolvingErrorJoins.add(key);
+      try {
+        return context.input.errorRegions.nativeErrorJoinType(reference, context,
+          carrier => rustTypeFromCarrier(carrier, sourceRendering, resolveStructuralShape));
+      } finally {
+        resolvingErrorJoins.delete(key);
       }
     },
   };

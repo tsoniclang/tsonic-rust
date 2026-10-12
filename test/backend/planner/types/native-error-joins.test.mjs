@@ -47,8 +47,9 @@ test("multiple formal sources retain distinct variants when their actual error t
   assert.deepEqual(joined.items[0].variants.map(variant => variant.name), ["First", "Second"]);
   assert.equal(rustTypeEquals(joined.items[0].variants[0].fields[0], joined.items[0].variants[1].fields[0]), false);
   assert.equal(rustTypeEquals(joined.errorType.genericArguments[0].type, joined.errorType.genericArguments[1].type), true);
-  assert.equal(joined.items[0].attrs === undefined, true);
+  assert.deepEqual(joined.items[0].attrs, [{ kind: "list", path: "derive", arguments: [{ kind: "word", path: "Debug" }] }]);
   assert.deepEqual(joined.items[0].generics.parameters.map(parameter => parameter.name), ["Error0", "Error1"]);
+  assert.equal(joined.items[0].generics.parameters.every(parameter => parameter.bounds.length === 0), true);
   assert.equal(joined.items[0].generics.wherePredicates.length, 0);
   assert.equal(printRustExpr(joined.inject(first, path("error"))), "JoinedErrors::<BorrowedError, BorrowedError>::First(error)");
   assert.equal(printRustExpr(joined.inject(second, path("error"))), "JoinedErrors::<BorrowedError, BorrowedError>::Second(error)");

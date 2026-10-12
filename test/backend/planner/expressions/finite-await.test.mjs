@@ -8,7 +8,7 @@ import { rustAwaitValueFactKey } from "../../../../dist/analysis/facts/await-val
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
 import { planRustAwaitExpression } from "../../../../dist/backend/planner/expressions/await.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
-import { rustRuntimeErrorTypeIdentity } from "../../../../dist/backend/planner/program/source-package-errors.js";
+import { rustRuntimeErrorTypeIdentity } from "../../../../dist/target-model/operations/error-boundary.js";
 
 function awaitProgram(source) {
   const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": source } });

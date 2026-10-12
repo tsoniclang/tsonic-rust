@@ -11,6 +11,7 @@ import { rustGenericCallableValue } from "./generic-callables.js";
 import { rustFrameCallableValue } from "./frame-callables.js";
 import { rustClassConstructorFreeArguments } from "./class-constructors.js";
 import { rustProducerErrorReference } from "./producer-errors.js";
+import { rustNativeErrorJoinReference } from "../native-error-joins.js";
 import type {
   RustTargetConstArgument,
   RustTargetGenericArgument,
@@ -221,6 +222,11 @@ export function rustTargetGenericReferences(
         visitArguments(value.genericArguments, bound);
         return;
       case "target-specific": {
+        const joinedError = rustNativeErrorJoinReference(value);
+        if (joinedError !== undefined) {
+          joinedError.errors.forEach(error => visitType(error, bound));
+          return;
+        }
         const producerError = rustProducerErrorReference(value);
         if (producerError !== undefined) {
           visitArguments(producerError.genericArguments, bound);

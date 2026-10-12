@@ -13,12 +13,79 @@ import { rustNamedTargetType, rustSourcePrimitiveTargetType } from "../../../dis
 import { rustCallableTargetType, rustCallableInputTargetType } from "../../../dist/target-model/types/carriers/callables.js";
 import { selectRustCallableConversion } from "../../../dist/target-model/conversions/callable.js";
 import { printRustExpr } from "../../../dist/print/source/expressions/core.js";
+import { nativeFallibleAdapterFixture } from "../../helpers/physical-callable-adapters.mjs";
+import { finalizeRustSourceStyle } from "../../../dist/backend/target-ast/normalization/source-style.js";
+import { printRustSourceFile } from "../../helpers/printed-rust-source.mjs";
 
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const workspace = dirname(realpathSync(resolve(repository, "../tsonic")));
 const runtime = resolve(workspace, "rust-runtime/crates/tsonic_rust_runtime");
 const failure = rustNamedTargetType("fixture:ProducerFailure", "ProducerFailure", []);
 const integer = rustSourcePrimitiveTargetType("int32");
+
+test("checked adapters retain all error sources and match handwritten native allocation costs", { timeout: 300_000 }, () => {
+  const fixture = nativeFallibleAdapterFixture();
+  const expression = fixture.adapt();
+  assert.equal(expression !== undefined, true);
+  const emitted = printRustExpr(expression);
+  const file = fixture.program.source.ast.getFileName(fixture.program.source.ast.getSourceFile(fixture.node));
+  const declarations = printRustSourceFile(finalizeRustSourceStyle({ items: fixture.context.input.errorRegions.itemsFor(file) }));
+  assert.doesNotMatch(emitted, /ConsumerFailure|\.clone\(|::from\(/u);
+  const project = writeGeneratedProject("native-checked-callable-conversions", [
+    { path: "Cargo.toml", text: `[package]\nname = "native_checked_callable_conversions"\nversion = "0.0.0"\nedition = "2024"\n
+[dependencies]
+tsonic_rust_runtime = { path = ${JSON.stringify(runtime)} }
+` },
+    { path: "src/main.rs", text: `
+use tsonic_rust_runtime as rt;
+use std::sync::atomic::{AtomicUsize, Ordering};
+${nativeOwnershipCostSupport}
+mod index { ${declarations} }
+#[derive(Debug)]
+struct ProducerFailure(i32);
+static CALLS: AtomicUsize = AtomicUsize::new(0);
+fn original(value: i32) -> Result<i64, ProducerFailure> {
+    CALLS.fetch_add(1, Ordering::SeqCst);
+    match value { -1 => Err(ProducerFailure(value)), 2 => Ok(i64::MAX), other => Ok(i64::from(other)) }
+}
+type AdapterError = index::NativeErrors3<ProducerFailure, rt::TsonicError, rt::TsonicError>;
+fn classify(result: Result<i32, AdapterError>) -> (u8, i32) {
+    match result {
+        Ok(value) => (0, value),
+        Err(index::NativeErrors3::Error0(ProducerFailure(value))) => (1, value),
+        Err(index::NativeErrors3::Error1(_)) => (2, 0),
+        Err(index::NativeErrors3::Error2(_)) => (3, 0),
+    }
+}
+fn main() {
+    let (compiled, actual) = measure(|| ${emitted});
+    let (handwritten, expected) = measure(|| rt::Callable::new(|(value,): (i64,)| {
+        let parameter = rt::conversions::checked_integer::<i32>(value).map_err(AdapterError::Error1)?;
+        let result = original(parameter).map_err(AdapterError::Error0)?;
+        let output = rt::conversions::checked_integer::<i32>(result).map_err(AdapterError::Error2)?;
+        Ok::<_, AdapterError>(output)
+    }));
+    assert_eq!(actual, expected);
+    assert_eq!(actual.allocations, 1);
+    for (value, outcome, calls) in [(4, (0, 4), 1), (-1, (1, -1), 1), (i64::MAX, (2, 0), 0), (2, (3, 0), 1)] {
+        CALLS.store(0, Ordering::SeqCst);
+        let (actual, actual_cost) = measure(|| compiled.call((value,)));
+        assert_eq!(CALLS.load(Ordering::SeqCst), calls);
+        CALLS.store(0, Ordering::SeqCst);
+        let (expected, expected_cost) = measure(|| handwritten.call((value,)));
+        assert_eq!(CALLS.load(Ordering::SeqCst), calls);
+        assert_eq!(classify(actual), outcome);
+        assert_eq!(classify(expected), outcome);
+        assert_eq!(actual_cost, expected_cost);
+    }
+    println!("PASS: checked adapters preserve three exact error channels with native cost parity");
+}
+` },
+  ]);
+  runCargo(project, ["generate-lockfile", "--offline"]);
+  runCargo(project, ["rustc", "--locked", "--offline", "--", "-D", "warnings"]);
+  assert.match(runCargo(project, ["run", "--locked", "--offline", "--quiet"]).stdout, /PASS: checked adapters/u);
+});
 
 function fixtureExpressions(throwing) {
   const fixture = nativeClosureProducerFixture(throwing ? {

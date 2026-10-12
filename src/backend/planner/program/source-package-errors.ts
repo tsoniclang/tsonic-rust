@@ -6,6 +6,7 @@ import type { RustSourcePackageComponentPlan } from "./source-package-components
 import type {
   RustErrorDomain,
 } from "../../../target-model/operations/error-boundary.js";
+import { rustRuntimeErrorTypeIdentity } from "../../../target-model/operations/error-boundary.js";
 
 export interface RustExternalSourcePackageError {
   readonly componentId: string;
@@ -38,8 +39,6 @@ export interface RustSourcePackageErrorBoundary {
   readonly errorTypePath: string;
   readonly errorTypeIdentity: string;
 }
-
-export const rustRuntimeErrorTypeIdentity = "tsonic-rust-runtime:TsonicError";
 
 export function rustSourcePackageErrorTypeIdentity(
   componentId: string,

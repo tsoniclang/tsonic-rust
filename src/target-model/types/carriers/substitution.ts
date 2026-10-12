@@ -13,6 +13,7 @@ import { rustGenericCallableCarrier, rustGenericCallableValue } from "./generic-
 import { rustFrameCallableCarrier, rustFrameCallableValue } from "./frame-callables.js";
 import { rustSourceOptionalTargetType } from "../projections.js";
 import { rustProducerErrorReference, rustProducerErrorTargetType } from "./producer-errors.js";
+import { rustNativeErrorJoinReference, rustNativeErrorJoinTargetType } from "../native-error-joins.js";
 
 export function substituteRustTargetTypeParameters(
   type: TargetTypeRef,
@@ -343,6 +344,13 @@ function substituteCarrierParts(
             }),
       };
     case "target-specific": {
+      const joinedError = rustNativeErrorJoinReference(type);
+      if (joinedError !== undefined) {
+        const selected = rustNativeErrorJoinTargetType(joinedError.fileName, joinedError.errors.map(error =>
+          substituteRustTargetGenerics(error, substitutions, lifetimeSubstitutions, constSubstitutions, normalize)));
+        if (selected === undefined) throw new Error("Native error substitution exceeds its validated payload contract.");
+        return selected;
+      }
       const producerError = rustProducerErrorReference(type);
       if (producerError !== undefined) return rustProducerErrorTargetType({ ...producerError,
         genericArguments: substituteGenericArguments(producerError.genericArguments, substitutions,

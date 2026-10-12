@@ -5,7 +5,7 @@ import { rustErrorEffectsFactKey } from "../../dist/analysis/facts/error-effects
 import { rustRuntimeCarrierKey } from "../../dist/target-model/facts/selections.js";
 import { createRustErrorRegionCatalog } from "../../dist/backend/planner/program/error-regions.js";
 import { rustPackageFallibleBoundary } from "../../dist/backend/planner/program/fallible-boundaries.js";
-import { rustRuntimeErrorTypeIdentity } from "../../dist/backend/planner/program/source-package-errors.js";
+import { rustRuntimeErrorTypeIdentity } from "../../dist/target-model/operations/error-boundary.js";
 import { createRustSyntheticNameState } from "../../dist/backend/planner/names/synthetic.js";
 import { planRustCallableExpressionBody } from "../../dist/backend/planner/expressions/callable.js";
 import { printRustExpr } from "../../dist/print/source/expressions/core.js";

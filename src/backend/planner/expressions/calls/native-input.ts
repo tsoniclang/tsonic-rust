@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustSourceCallEffectsFact } from "../../../../analysis/facts/keys.js";
-import type { RustNativeCallableCall } from "../../../../analysis/callables/native-inputs.js";
+import type { RustNativeCallableCall, RustNativeCallableInput } from "../../../../analysis/callables/native-inputs.js";
 import { closedMetadataEquals } from "../../../../target-model/metadata/closed-data.js";
 import type { RustCallGenericArgument, RustExpr } from "../../../target-ast/nodes.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
@@ -27,8 +27,20 @@ export function planRustNativeInputInvocation(
   genericArguments: readonly RustCallGenericArgument[] | undefined,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  const owner = rustTypeFromCarrierInContext(call.input.implementation, context);
-  const trait = rustTypeFromCarrierInContext(call.input.protocol.trait, context);
+  return planRustNativeProtocolInvocation(call.input, callable, args, genericArguments, context);
+}
+
+export function planRustNativeProtocolInvocation(
+  input: RustNativeCallableInput,
+  callable: RustExpr,
+  args: readonly RustExpr[],
+  genericArguments: readonly RustCallGenericArgument[] | undefined,
+  context: RustPlanContext,
+): RustExpr | undefined {
+  if (!context.input.program.callableValues.native.inputs.includes(input) ||
+    args.length !== input.protocol.method.parameters.length) return undefined;
+  const owner = rustTypeFromCarrierInContext(input.implementation, context);
+  const trait = rustTypeFromCarrierInContext(input.protocol.trait, context);
   return owner === undefined || trait === undefined ? undefined : {
     kind: "associated-call", owner, trait, method: "invoke",
     args: [{ kind: "reference", expr: callable }, ...args],

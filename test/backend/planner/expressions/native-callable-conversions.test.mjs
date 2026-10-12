@@ -8,6 +8,9 @@ import { rustNamedTargetType, rustSourcePrimitiveTargetType } from "../../../../
 import { rustCallableTargetType, rustCallableInputTargetType } from "../../../../dist/target-model/types/carriers/callables.js";
 import { selectRustCallableConversion } from "../../../../dist/target-model/conversions/callable.js";
 import { printRustExpr } from "../../../../dist/print/source/expressions/core.js";
+import { nativeFallibleAdapterFixture } from "../../../helpers/physical-callable-adapters.mjs";
+import { Node_Initializer } from "@tsonic/target-api/source";
+import { planRustNativeProtocolInvocation } from "../../../../dist/backend/planner/expressions/calls/native-input.js";
 
 const failure = rustNamedTargetType("fixture:ProducerFailure", "ProducerFailure", []);
 const integer = rustSourcePrimitiveTargetType("int32");
@@ -42,7 +45,8 @@ for (const throwing of [false, true]) {
       assert.doesNotMatch(text, /ConsumerFailure|TsonicError|TsonicResult|\.clone\(/u);
       assert.equal((text.match(/rt::Callable::<[^\n]+>::new/gu) ?? []).length, retained ? 1 : 0);
       assert.match(text, new RegExp(`Ok::<_, ${throwing ? "ProducerFailure" : "core::convert::Infallible"}>`, "u"));
-      if (retained) assert.match(text, /rt::Callable::<\(i32,\), _>::new/u);
+      if (retained) assert.match(text, new RegExp(
+        `rt::Callable::<\\(i32,\\), Result<i32, ${throwing ? "ProducerFailure" : "core::convert::Infallible"}>>::new`, "u"));
     });
   }
 }
@@ -58,7 +62,7 @@ test("inline elimination preserves preparation effects and refuses decorated or 
   for (const expression of [
     { ...current.expression, method: "recursive" },
     { ...current.expression, owner: { ...current.expression.owner, path: "OtherCallable" } },
-    { ...block, body: { ...block.body, innerAttrs: [{ path: "allow", args: [{ kind: "path", path: "dead_code" }] }] } },
+    { ...block, body: { ...block.body, innerAttrs: [{ kind: "list", path: "allow", arguments: [{ kind: "word", path: "dead_code" }] }] } },
   ]) {
     assert.equal(planRustCallableInputProducer(expression, current.source, current.context, current.node) === expression,
       true, "nonmatching producer is never structurally guessed");
@@ -73,4 +77,59 @@ test("unresolved physical storage cannot silently select a logical ambient-error
     },
   } };
   assert.equal(planRustCallableInputProducer(current.expression, current.source, current.context, current.node) === undefined, true);
+});
+
+test("adapter emission requires the exact source-node callable identity", () => {
+  const current = fixture();
+  const foreign = rustCallableTargetType([integer], integer);
+  const conversion = selectRustCallableConversion(foreign, rustCallableTargetType([integer, integer], integer),
+    () => undefined, current.program.typeDefinitions);
+  assert.equal(conversion !== undefined, true);
+  assert.equal(planRustCallableConversion(conversion, current.expression, current.node, current.context) === undefined, true);
+});
+
+test("fallible adapters use the same canonical native error channels as their physical signature", () => {
+  const current = nativeFallibleAdapterFixture();
+  const converted = current.adapt();
+  assert.equal(converted !== undefined, true, "fallible adaptation plans");
+  const text = printRustExpr(converted);
+  assert.doesNotMatch(text, /ConsumerFailure|::from\(|\.clone\(/u);
+  assert.match(text, /NativeErrors3<ProducerFailure, tsonic_rust_runtime::TsonicError, tsonic_rust_runtime::TsonicError>/u);
+  assert.match(text, /checked_integer::<i32>[\s\S]+::Error1/u);
+  assert.match(text, /::Error0/u);
+  assert.match(text, /::Error2/u);
+  assert.equal((text.match(/rt::Callable::<[^\n]+>::new/gu) ?? []).length, 1);
+  const file = current.program.source.ast.getFileName(current.program.source.ast.getSourceFile(current.node));
+  assert.equal(current.context.input.errorRegions.itemsFor(file).filter(item => item.name === "NativeErrors3").length, 1);
+});
+
+test("formal callable adaptation invokes the exact selected protocol rather than a runtime dictionary", () => {
+  const current = nativeClosureProducerFixture({ source: `import type { int32 } from "@tsonic/core/types.js";
+export function adapt(callback: () => int32): () => int32 { const local = callback; return local; }
+export function create(): () => int32 { return (): int32 => { return 3; }; }
+` });
+  const { ast } = current.program.source;
+  let local;
+  const visit = node => {
+    const name = ast.name(node);
+    if (name !== undefined && ast.text(name) === "local" && ast.is.IsVariableDeclaration(node)) local = node;
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  current.program.sourceFiles.forEach(visit);
+  assert.equal(local !== undefined, true);
+  const node = Node_Initializer(ast, local);
+  const input = current.program.callableValues.native.inputs[0];
+  assert.equal(input !== undefined, true);
+  const conversion = selectRustCallableConversion(input.carrier, rustCallableInputTargetType([integer], integer),
+    () => undefined, current.program.typeDefinitions);
+  assert.equal(conversion !== undefined, true);
+  const converted = planRustCallableConversion(conversion, { kind: "path", path: "callback" }, node, current.context);
+  assert.equal(converted !== undefined, true, "formal protocol adaptation plans");
+  const text = printRustExpr(converted);
+  assert.match(text, new RegExp(`as crate::index::${input.protocol.targetName}>::invoke`, "u"));
+  assert.doesNotMatch(text, /Callable::|\.call\(|\.invoke\(|\.clone\(|TsonicError|ConsumerFailure/u);
+  assert.equal(planRustNativeProtocolInvocation({ ...input }, { kind: "path", path: "callback" }, [], undefined, current.context) === undefined,
+    true, "an equal-looking input cannot replace the selected source identity");
+  assert.equal(planRustNativeProtocolInvocation(input, { kind: "path", path: "callback" }, [{ kind: "int-literal", text: "0" }], undefined,
+    current.context) === undefined, true, "protocol argument arity remains exact");
 });

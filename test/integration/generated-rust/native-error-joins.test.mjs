@@ -10,6 +10,45 @@ import { printRustSourceFile } from "../../helpers/printed-rust-source.mjs";
 import { runCargo, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { rustRuntimeCratePath } from "../../helpers/rust-session/paths.mjs";
 
+test("native error sums derive Debug conditionally without constraining arbitrary payloads", { timeout: 300_000 }, () => {
+  const joined = planRustNativeErrorJoin({ identity: "fixture:conditional-debug", name: "NativeErrors", visibility: "public",
+    sources: [
+      { identity: "first", variant: "First", errorType: { kind: "primitive", name: "i32" } },
+      { identity: "second", variant: "Second", errorType: { kind: "primitive", name: "u32" } },
+    ],
+  });
+  assert.equal(joined !== undefined, true);
+  const emitted = printRustSourceFile(finalizeRustSourceStyle({ items: joined.items }));
+  assert.match(emitted, /#\[derive\(Debug\)\]\s+pub enum NativeErrors<Error0, Error1>/u);
+  assert.doesNotMatch(emitted, /Error[01]:|where|Clone|Box|dyn/u);
+  const project = writeGeneratedProject("native-error-debug", [
+    { path: "Cargo.toml", text: `[package]\nname = "native_error_debug"\nversion = "0.0.0"\nedition = "2024"\n[features]\ndemand-debug = []\n` },
+    { path: "src/main.rs", text: `${emitted}
+struct Silent(u32);
+fn main() -> Result<(), NativeErrors<i32, u32>> {
+    let hidden = NativeErrors::<Silent, Silent>::First(Silent(41));
+    match hidden {
+        NativeErrors::First(Silent(value)) => assert_eq!(value, 41),
+        NativeErrors::Second(_) => unreachable!(),
+    }
+    let shown = NativeErrors::<i32, u32>::Second(7);
+    assert_eq!(format!("{shown:?}"), "Second(7)");
+    #[cfg(feature = "demand-debug")]
+    {
+        let hidden = NativeErrors::<Silent, u32>::First(Silent(1));
+        std::hint::black_box(format!("{hidden:?}"));
+    }
+    Ok(())
+}
+` },
+  ]);
+  runCargo(project, ["generate-lockfile", "--offline"]);
+  runCargo(project, ["rustc", "--locked", "--offline", "--", "-D", "warnings"]);
+  runCargo(project, ["run", "--locked", "--offline"]);
+  assert.throws(() => runCargo(project, ["check", "--locked", "--offline", "--features", "demand-debug"]),
+    error => /E0277/u.test(error.message) && /Silent/u.test(error.message) && /Debug/u.test(error.message));
+});
+
 const named = (path, ...types) => ({ kind: "named", path,
   ...(types.length === 0 ? {} : { genericArguments: types.map(type => ({ kind: "type", type })) }) });
 const path = name => ({ kind: "path", path: name });

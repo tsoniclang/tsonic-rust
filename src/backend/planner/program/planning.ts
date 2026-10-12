@@ -41,6 +41,7 @@ import {
 import {
   planRustSourcePackageErrors,
 } from "./source-package-errors.js";
+import { rustRuntimeErrorTypeIdentity } from "../../../target-model/operations/error-boundary.js";
 import { planRustSourcePackageComponents } from "./source-package-components.js";
 import {
   materializeRustSourcePackageCrateArtifacts,

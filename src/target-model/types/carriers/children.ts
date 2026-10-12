@@ -5,6 +5,7 @@ import { rustGenericCallableValue } from "./generic-callables.js";
 import { rustFrameCallableValue } from "./frame-callables.js";
 import { rustClassConstructorFreeArguments } from "./class-constructors.js";
 import { rustProducerErrorReference } from "./producer-errors.js";
+import { rustNativeErrorJoinReference } from "../native-error-joins.js";
 
 export function rustTargetTypeChildren(type: TargetTypeRef): readonly TargetTypeRef[] {
   const arguments_ = (values: readonly RustTargetGenericArgument[] | undefined): readonly TargetTypeRef[] =>
@@ -28,6 +29,8 @@ export function rustTargetTypeChildren(type: TargetTypeRef): readonly TargetType
     case "trait-object": return [type.principal, ...type.autoTraits];
     case "impl-trait": return [...type.bounds, ...arguments_(type.captures)];
     case "target-specific": {
+      const joinedError = rustNativeErrorJoinReference(type);
+      if (joinedError !== undefined) return joinedError.errors;
       const producerError = rustProducerErrorReference(type);
       if (producerError !== undefined) return arguments_(producerError.genericArguments);
       const constructorArguments = rustClassConstructorFreeArguments(type);

@@ -12,14 +12,22 @@ import type { RustProducerErrorReference } from "../../../target-model/types/car
 import type { RustTargetConstArgument, TargetTypeRef } from "../../../target-model/types/model.js";
 import { substituteRustTargetGenerics } from "../../../target-model/types/carriers/substitution.js";
 import { rustLifetimeKey, type RustLifetimeRef } from "../../../target-model/lifetimes/index.js";
-import { rustAsyncFunctionFactKey, rustGeneratorFactKey, rustSourceCallableReturnFactKey, rustSourceCallEffectsFactKey } from "../../../analysis/facts/keys.js";
+import { rustAsyncFunctionFactKey, rustContextualValueConversionFactKey, rustGeneratorFactKey,
+  rustSourceCallableReturnFactKey } from "../../../analysis/facts/keys.js";
 import { rustNativeCallableCompletion } from "../../../target-model/types/callable-completions.js";
 import type { RustType } from "../../target-ast/nodes.js";
+import { rustNativeErrorJoinIdentity, type RustNativeErrorJoinReference } from "../../../target-model/types/native-error-joins.js";
+import { rustCallableConversionErrorArities } from "../../../target-model/conversions/callable-physical.js";
+import type { RustCallableConversion } from "../../../target-model/conversions/callable.js";
+import type { RustCallableValueAdapter } from "../../../analysis/facts/callable-adapters.js";
+import { rustProjectCallableAdaptersKey } from "../../../analysis/facts/project-callable-adapters.js";
 
 export interface RustErrorRegionCatalog {
   nameFor(fileName: string, arity: number): string | undefined;
   itemsFor(fileName: string): readonly RustItem[];
   producerErrorType(reference: RustProducerErrorReference, context: RustTypeRenderingContext,
+    render: (carrier: TargetTypeRef) => RustType | undefined): RustType | undefined;
+  nativeErrorJoinType(reference: RustNativeErrorJoinReference, context: RustTypeRenderingContext,
     render: (carrier: TargetTypeRef) => RustType | undefined): RustType | undefined;
 }
 
@@ -31,6 +39,16 @@ export function createRustErrorRegionCatalog(program: RustTargetProgram): RustEr
     const fileName = ast.getFileName(file);
     const usedNames = new Set<string>();
     const arities = new Set<number>();
+    const registerConversion = (conversion: RustCallableConversion): void => {
+      const selected = rustCallableConversionErrorArities(conversion, program.typeDefinitions);
+      if (selected === undefined) throw new Error("Callable error joins require an exact sealed conversion contract.");
+      for (const arity of selected) arities.add(arity);
+    };
+    const registerAdapter = (adapter: RustCallableValueAdapter, depth = 0): void => {
+      if (depth > 128) throw new Error("Callable error joins exceed their bounded adapter depth.");
+      if (adapter.kind === "conversion" && adapter.conversion.kind === "callable-adapter") registerConversion(adapter.conversion);
+      else if (adapter.kind === "option-map" || adapter.kind === "option-some") registerAdapter(adapter.element, depth + 1);
+    };
     const visit = (node: Node): void => {
       for (const name of [program.names.nameForDeclaration(node), program.names.functionNameForDeclaration(node),
         program.names.callableValueNameForDeclaration(node)]) if (name !== undefined) usedNames.add(name);
@@ -38,6 +56,16 @@ export function createRustErrorRegionCatalog(program: RustTargetProgram): RustEr
       if (effects !== undefined && effects.nativeErrors.length > 0) {
         const arity = effects.nativeErrors.length + (effects.localErrors ? 1 : 0);
         if (arity > 1) arities.add(arity);
+      }
+      const conversion = program.facts.getFact(node, rustContextualValueConversionFactKey)?.conversion;
+      if (conversion?.kind === "callable-adapter") registerConversion(conversion);
+      for (const adapter of program.facts.getFact(node, rustProjectCallableAdaptersKey) ?? []) {
+        registerAdapter(adapter.resultAdapter);
+        for (const parameter of adapter.parameterAdapters) {
+          if (parameter.kind === "runtime-value" || parameter.kind === "logical-value" || parameter.kind === "rest-element")
+            registerAdapter(parameter.adapter);
+          else if (parameter.kind === "rest") for (const segment of parameter.segments) registerAdapter(segment.adapter);
+        }
       }
       ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
     };
@@ -54,7 +82,7 @@ export function createRustErrorRegionCatalog(program: RustTargetProgram): RustEr
     const items: RustItem[] = [];
     for (const arity of [...arities].sort((left, right) => left - right)) {
       const name = allocateRustGeneratedName(usedNames, `NativeErrors${arity}`);
-      const plan = planRustNativeErrorJoin({ identity: nativeErrorJoinIdentity(fileName, arity), name,
+      const plan = planRustNativeErrorJoin({ identity: rustNativeErrorJoinIdentity(fileName, arity), name,
         visibility: "public", sources: Array.from({ length: arity }, (_value, index) => ({
           identity: String(index), variant: `Error${index}`, errorType: { kind: "named", path: `Error${index}` },
         })) });
@@ -69,6 +97,21 @@ export function createRustErrorRegionCatalog(program: RustTargetProgram): RustEr
   return Object.freeze({
     nameFor: (fileName: string, arity: number) => names.get(fileName)?.get(arity),
     itemsFor: (fileName: string) => declarations.get(fileName) ?? empty,
+    nativeErrorJoinType(reference: RustNativeErrorJoinReference, context: RustTypeRenderingContext,
+      render: (carrier: TargetTypeRef) => RustType | undefined): RustType | undefined {
+      const arity = reference.errors.length;
+      const name = names.get(reference.fileName)?.get(arity);
+      const moduleName = context.moduleNameByFileName.get(reference.fileName);
+      const external = context.externalCrateNameByFileName.get(reference.fileName);
+      if (name === undefined || moduleName === undefined) return undefined;
+      const errors = reference.errors.map(render);
+      if (errors.some(error => error === undefined)) return undefined;
+      return planRustNativeErrorJoin({ identity: rustNativeErrorJoinIdentity(reference.fileName, arity), name,
+        referencePath: `${external !== undefined && external !== context.crateName ? external : "crate"}::${moduleName}::${name}`,
+        visibility: "public", sources: (errors as RustType[]).map((errorType, index) => ({
+          identity: String(index), variant: `Error${index}`, errorType,
+        })) })?.errorType;
+    },
     producerErrorType(reference: RustProducerErrorReference, context: RustTypeRenderingContext,
       render: (carrier: TargetTypeRef) => RustType | undefined): RustType | undefined {
       const producer = program.callableValues.nativeProducers.forIdentity(reference.identity);
@@ -97,8 +140,8 @@ export function createRustErrorRegionCatalog(program: RustTargetProgram): RustEr
         const completion = result === undefined ? undefined : rustNativeCallableCompletion(result, program.typeDefinitions);
         if (completion?.futures[reference.channel] === undefined) return undefined;
         if (asynchronous === undefined) {
-          const effects = program.facts.getFact(producer.declaration, rustSourceCallEffectsFactKey);
-          return effects?.awaiting === "infallible" ? infallible : undefined;
+          const error = program.callableValues.nativeProducers.deferredErrorFor(producer.declaration, reference.channel);
+          return error === undefined ? undefined : render(substituteRustTargetGenerics(error, types, lifetimes, consts));
         }
       }
       const effects = program.facts.getFact(producer.declaration, rustErrorEffectsFactKey);
@@ -149,13 +192,9 @@ export function planRustSelectedErrorRegion(
   const local = owner === undefined ? undefined : { identity: `package:${owner.errorTypeIdentity}`,
     variant: "Error0", errorType: rustErrorType(owner) };
   const sources = [...(local === undefined ? [] : [local]), ...nativeSources as NonNullable<typeof nativeSources[number]>[]];
-  const join = planRustNativeErrorJoin({ identity: nativeErrorJoinIdentity(fileName, arity), name, referencePath,
+  const join = planRustNativeErrorJoin({ identity: rustNativeErrorJoinIdentity(fileName, arity), name, referencePath,
     visibility: "public", sources });
   const boundary = join === undefined ? undefined : rustNativeFallibleBoundary(join,
     owner === undefined || local === undefined ? undefined : { owner, source: local });
   return boundary === undefined ? undefined : Object.freeze({ boundary });
-}
-
-function nativeErrorJoinIdentity(fileName: string, arity: number): string {
-  return `native-error-join:${fileName}:${arity}`;
 }
