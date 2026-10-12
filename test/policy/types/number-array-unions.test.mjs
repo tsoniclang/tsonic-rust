@@ -19,7 +19,7 @@ test("numeric array unions require exact numeric arms and sealed capability sele
   assert.equal(isRustNumberArrayUnion(carrier, definitions.seal()), true);
   assert.equal(isRustNumberArrayPayload(rustJsArrayTargetType(rustStringTargetType())), false);
   assert.equal(isRustNumberArrayPayload(rustJsArrayTargetType(rustSourcePrimitiveTargetType("int32"))), false);
-  const union = { carrier, sourceType: {}, selectedProperties: [], variants: variants.map(variant => ({ ...variant, sourceTypes: [{}] })) };
+  const union = { carrier, variants };
   const plan = createRustGeneratedUnionPlan([union], () => "root", new Map());
   assert.equal(plan.unionDefinitions[0].numberArrayLike, true);
   assert.throws(() => createRustGeneratedUnionPlan([{ ...union, variants: union.variants.toReversed() }], () => "root", new Map()), /exact inferred union/u);

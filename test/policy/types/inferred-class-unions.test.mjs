@@ -24,7 +24,9 @@ test("generated union definitions require complete exact payload identities and 
   const first = record(carrier);
   const second = record(make(payloads.slice(0, 2), "/src/other.ts"));
   const third = record(make(payloads.slice(1), "/src/another.ts"));
-  const create = records => createRustGeneratedUnionPlan(records, () => "root", new Map([["root", new Set(["Union2"])]]));
+  const neutral = record => ({ carrier: record.carrier,
+    variants: record.variants.map(({ name, carrier }) => ({ name, carrier })) });
+  const create = records => createRustGeneratedUnionPlan(records.map(neutral), () => "root", new Map([["root", new Set(["Union2"])]]));
   const plan = create([first, second, third]);
   assert.deepEqual(plan.unionDefinitions, create([third, first, second]).unionDefinitions);
   assert.equal(plan.unionDefinitions.length, 2);
@@ -36,7 +38,7 @@ test("generated union definitions require complete exact payload identities and 
     "unregistered source identities remain rejected");
   assert.ok(Object.isFrozen(plan.unionDefinitions));
   assert.ok(Object.isFrozen(plan.unionForCarrier(carrier).sourceCarriers));
-  assert.throws(() => create([{ ...first, declaration: {} }]), /exact inferred union/u);
+  assert.throws(() => createRustGeneratedUnionPlan([{ ...neutral(first), declaration: {} }], () => "root", new Map()), /exact inferred union/u);
   const registry = createRustSourceTypeRegistry();
   assert.equal(registry.registerSourceUnion({ ...first, declaration: {} }), false);
   assert.equal(registry.registerSourceUnion(first), true);

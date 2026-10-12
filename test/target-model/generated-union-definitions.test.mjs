@@ -19,8 +19,7 @@ test("generated native union definitions retain generic payload applications aft
   const registry = createRustTypeDefinitionRegistry();
   const pending = [text, integer].map(output => rustJsPromiseTargetTypeWithLifetime(output, { kind: "placeholder" }, error));
   const original = union(pending);
-  const record = { ...definition(original), sourceType: {}, selectedProperties: [],
-    variants: definition(original).variants.map(variant => ({ ...variant, sourceTypes: [{}] })) };
+  const record = definition(original);
   const plan = createRustGeneratedUnionPlan([record], () => "root", new Map());
   assert.equal(registry.registerSourceUnion(definition(original), false), true);
   const closed = union([text, integer].map(output => rustJsPromiseTargetTypeWithLifetime(output, { kind: "static" }, error)));

@@ -532,11 +532,10 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     (fileName) => sourcePackageComponentByFile.get(fileName)!,
     nativeFields,
     sourceTypes.structuralInstantiations(),
-    sourceTypes.generatedSourceUnions(),
     finalizeRustCopiedMethods(walk, projectSourceFiles, fileName => sourcePackageComponentByFile.get(fileName)!),
   );
   context.frozenDataWrites.initialize({ jsEnabled: walk.jsEnabled, ast, projectTypes,
-    representations: context.objectRepresentations, structuralShapes: context.structuralShapes.seal(),
+    representations: context.objectRepresentations, structuralShapes: context.structuralShapes,
     sourceFiles: projectSourceFiles, facts: context.facts, views: context.classValues.instanceViewRequests(),
     typeDefinitions: context.typeDefinitions });
   context.projectFieldDispatch.initialize({
@@ -565,6 +564,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
   recordResourceManagementFacts(walk, projectSourceFiles);
   recordFutureValueFacts(walk, projectSourceFiles);
   recordRustDeferredProducerEffects(walk);
+  context.structuralShapes.initializeUnions(context.typeDefinitions.generatedUnions());
   const lexical = createRustLexicalFunctionQueries(context.source, context.sourceFiles, context.facts,
     context.sourceLifetimes, context.runtimeValueUses, context.sourceCallables);
   recordRustLexicalValueEnvironments(walk, lexical);

@@ -1,5 +1,4 @@
-import type { RustSourceUnion } from "../../policy/types/source-type-registry.js";
-import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
+import { closedMetadataKey, hasExactObjectKeys, isClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import { rustSourceUnionCarrierValue } from "../../target-model/types/carriers/source-types.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -25,18 +24,23 @@ export interface RustGeneratedUnionPlan {
 }
 
 export function createRustGeneratedUnionPlan(
-  unions: readonly RustSourceUnion[],
+  unions: readonly RustSourceUnionDefinition[],
   componentForFile: (fileName: string) => string,
   usedNamesByComponent: Map<string, Set<string>>,
 ): RustGeneratedUnionPlan {
+  if (!isClosedMetadata(unions) || !isDenseDataArray(unions))
+    throw new Error("A generated union plan requires exact immutable union definitions.");
   const groups = new Map<string, { ownerFileName: string; componentId: string; variantNames: readonly string[]; carriers: Map<string, TargetTypeRef> }>();
   const sourceDefinitions = new Map<string, RustSourceUnionDefinition>();
   for (const union of unions) {
+    if (union === null || typeof union !== "object" || !hasExactObjectKeys(union, ["carrier", "variants"]))
+      throw new Error("A generated union plan requires an exact inferred union contract.");
     const value = rustSourceUnionCarrierValue(union.carrier);
-    if (union.declaration !== undefined || value?.origin !== "generated" ||
+    if (value?.origin !== "generated" ||
       value.payloads.kind !== "physical" || !isDenseDataArray(union.variants) || union.variants.length !== value.payloads.types.length ||
       union.variants.some((variant, index) => {
-        return variant?.name !== `Variant${index}` || value.payloads.kind !== "physical" ||
+        return variant === null || typeof variant !== "object" || !hasExactObjectKeys(variant, ["name", "carrier"]) ||
+          variant.name !== `Variant${index}` || value.payloads.kind !== "physical" ||
           !rustTargetTypeRefEquals(variant.carrier, value.payloads.types[index]);
       })) {
       throw new Error("A generated union plan requires an exact inferred union contract.");

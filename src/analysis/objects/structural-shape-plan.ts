@@ -1,6 +1,7 @@
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
 import { rustPropertyStorageNames } from "../../target-model/names/property-storage.js";
-import type { RustSourceUnion, RustStructuralInstantiation } from "../../policy/types/source-type-registry.js";
+import type { RustStructuralInstantiation } from "../../policy/types/source-type-registry.js";
+import type { RustSourceUnionDefinition } from "../../target-model/types/source-union-definitions.js";
 import { createRustGeneratedUnionPlan, type RustGeneratedUnionPlan } from "./generated-union-plan.js";
 import type { RustNativeMemoryLayout, RustNativeObjectField } from "../../target-model/operations/native-memory.js";
 import { rustNativeMemoryLayoutsEqual } from "../../target-model/operations/native-memory.js";
@@ -83,41 +84,64 @@ export interface RustStructuralShapePlanRegistry extends RustStructuralShapePlan
     componentForFile: (fileName: string) => string,
     nativeFields: readonly RustNativeObjectField[],
     instantiations: readonly RustStructuralInstantiation[],
-    unions: readonly RustSourceUnion[],
     receiverIndependentMethods?: ReadonlySet<string>,
   ): RustStructuralShapePlan;
+  initializeUnions(unions: readonly RustSourceUnionDefinition[]): void;
   isInitialized(): boolean;
   seal(): RustStructuralShapePlan;
 }
 
 export function createRustStructuralShapePlanRegistry(): RustStructuralShapePlanRegistry {
   let current: RustStructuralShapePlan | undefined;
+  let unions: RustGeneratedUnionPlan | undefined;
+  let componentForFile: ((fileName: string) => string) | undefined;
   const requireCurrent = (): RustStructuralShapePlan => {
     if (current === undefined) {
       throw new Error("Rust structural shape plan was read before source analysis initialized it.");
     }
     return current;
   };
+  const requireUnions = (): RustGeneratedUnionPlan => {
+    if (unions === undefined) throw new Error("Rust generated unions must be finalized after physical value selection.");
+    return unions;
+  };
   return Object.freeze({
     initialize(
       shapes: readonly RustSourceObjectShape[],
       implementations: readonly RustStructuralFieldImplementation[],
-      componentForFile: (fileName: string) => string,
+      selectComponent: (fileName: string) => string,
       nativeFields: readonly RustNativeObjectField[],
       instantiations: readonly RustStructuralInstantiation[],
-      unions: readonly RustSourceUnion[],
       receiverIndependentMethods: ReadonlySet<string> = new Set(),
     ) {
       if (current !== undefined) {
         throw new Error("Rust structural shape plan can be initialized only once.");
       }
-      current = createRustStructuralShapePlan(shapes, implementations, componentForFile, nativeFields, instantiations, unions, receiverIndependentMethods);
+      componentForFile = selectComponent;
+      current = createRustStructuralShapePlan(shapes, implementations, selectComponent, nativeFields, instantiations, {
+        get unionDefinitions() { return requireUnions().unionDefinitions; },
+        unionForCarrier: (carrier: TargetTypeRef) => requireUnions().unionForCarrier(carrier),
+      }, receiverIndependentMethods);
       return current;
+    },
+    initializeUnions(definitions: readonly RustSourceUnionDefinition[]) {
+      const shapes = requireCurrent();
+      if (unions !== undefined || componentForFile === undefined)
+        throw new Error("Rust generated unions can be finalized only once after structural objects.");
+      const names = new Map<string, Set<string>>();
+      for (const shape of shapes.definitions) {
+        const selected = names.get(shape.componentId) ?? new Set<string>();
+        selected.add(shape.targetName);
+        if (shape.dispatchName !== undefined) selected.add(shape.dispatchName);
+        names.set(shape.componentId, selected);
+      }
+      unions = createRustGeneratedUnionPlan(definitions, componentForFile, names);
     },
     isInitialized() {
       return current !== undefined;
     },
     seal() {
+      requireUnions();
       return requireCurrent();
     },
     get definitions() {
@@ -150,7 +174,7 @@ export function createRustStructuralShapePlan(
   componentForFile: (fileName: string) => string,
   nativeFields: readonly RustNativeObjectField[],
   instantiations: readonly RustStructuralInstantiation[] = [],
-  unions: readonly RustSourceUnion[] = [],
+  unions: RustGeneratedUnionPlan = createRustGeneratedUnionPlan([], componentForFile, new Map()),
   receiverIndependentMethods: ReadonlySet<string> = new Set(),
 ): RustStructuralShapePlan {
   const selections = new Map<TargetTypeRef, ReturnType<typeof rustStructuralGenericCarrier>>();
@@ -371,7 +395,8 @@ export function createRustStructuralShapePlan(
     return instantiated;
   };
   return Object.freeze({
-    ...createRustGeneratedUnionPlan(unions, componentForFile, usedTypeNamesByComponent),
+    get unionDefinitions() { return unions.unionDefinitions; },
+    unionForCarrier: (carrier: TargetTypeRef) => unions.unionForCarrier(carrier),
     definitions: Object.freeze(definitions),
     sharesStorage(left: TargetTypeRef, right: TargetTypeRef) {
       const leftDefinition = definitionFor(left);

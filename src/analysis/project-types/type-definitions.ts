@@ -13,6 +13,7 @@ export interface RustTypeDefinitionRegistry extends RustTypeDefinitions {
   registerSourceUnion(definition: RustSourceUnionDefinition, template: boolean): boolean;
   registerProgramErrorOrigin(carrier: TargetTypeRef, origin: RustProgramErrorOrigin): boolean;
   definitionCarriers(): readonly TargetTypeRef[];
+  generatedUnions(): readonly RustSourceUnionDefinition[];
   seal(): RustTypeDefinitions;
 }
 
@@ -80,6 +81,8 @@ export function createRustTypeDefinitionRegistry(
       return true;
     },
     definitionCarriers: () => Object.freeze([...definitions.values()].flatMap(definition => definition.variants.map(variant => variant.carrier))),
+    generatedUnions: () => Object.freeze([...definitions.values()].filter(definition =>
+      rustSourceUnionCarrierValue(definition.carrier)?.origin === "generated")),
     registerSourceUnion(definition: RustSourceUnionDefinition, template: boolean) {
       if (sealed) throw new Error("Rust type definitions are sealed.");
       if (typeof template !== "boolean" || definition === null || typeof definition !== "object" || !isClosedMetadata(definition) ||
