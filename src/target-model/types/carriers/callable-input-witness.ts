@@ -3,6 +3,14 @@ import { rustCallableInputProtocol } from "./callables.js";
 import { bindRustCallableInputLifetimes } from "./callable-input-lifetimes.js";
 import { rustNamedTargetType } from "./native.js";
 import { mapRustTargetTypes } from "./substitution.js";
+import type { RustLifetimeBinder } from "../../lifetimes/index.js";
+
+export function rustCallableSignatureAbsenceWitness(
+  parameters: readonly TargetTypeRef[], result: TargetTypeRef, binder?: RustLifetimeBinder,
+): TargetTypeRef {
+  return { kind: "function-pointer", args: [{ kind: "tuple", elements: parameters }], result,
+    ...(binder === undefined || binder.parameters.length === 0 ? {} : { lifetimeBinder: binder }) };
+}
 
 export function rustCallableInputAbsenceWitness(carrier: TargetTypeRef): TargetTypeRef | undefined {
   let valid = true;
@@ -14,14 +22,10 @@ export function rustCallableInputAbsenceWitness(carrier: TargetTypeRef): TargetT
       valid = false;
       return selected;
     }
-    return { ...selected, referent: {
-      kind: "function-pointer",
-      args: [{ kind: "tuple", elements: signature.parameters }],
-      result: rustNamedTargetType("rust.runtime.TsonicResult", "rt::TsonicResult", [
+    return { ...selected, referent: rustCallableSignatureAbsenceWitness(signature.parameters,
+      rustNamedTargetType("rust.runtime.TsonicResult", "rt::TsonicResult", [
         { kind: "type", type: signature.result },
-      ]),
-      ...(signature.binder.parameters.length === 0 ? {} : { lifetimeBinder: signature.binder }),
-    } };
+      ]), signature.binder) };
   });
   return valid ? witness : undefined;
 }

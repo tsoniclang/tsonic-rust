@@ -11,6 +11,7 @@ import { rustInjectLocalError, rustInjectNativeError, rustLocalErrorOwner, rustE
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { diagnosticInput, type RustPlanContext } from "../../program/plan-context.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
+import { rustInfallibleTargetId } from "../../../../target-model/types/carriers/source-types.js";
 
 export function planRustSourceErrorPropagation(
   node: Node,
@@ -54,6 +55,8 @@ export function planRustSourceErrorPropagation(
       return rustInjectLocalError(active, imported);
     }
     const channel = channels.get(selected.identity);
+    if (channel?.target.errorType.kind === "target-named" && channel.target.errorType.id === rustInfallibleTargetId)
+      return { kind: "match", expression: payload, arms: [] };
     const targetType: RustType | undefined = channel === undefined ? undefined
       : rustTypeFromCarrierInContext(channel.target.errorType, context);
     return channel === undefined || targetType === undefined ? undefined : rustInjectNativeError(active,

@@ -5,6 +5,7 @@ import type { RustErrorEffectsFact, RustNativeErrorEffect } from "../facts/error
 import { mergeRustErrorEffects } from "../facts/error-effects.js";
 import type { RustSourceErrorEffectEdge } from "../facts/source-error-effects.js";
 import { rustTargetOperationFactKey } from "../facts/keys.js";
+import { rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";
 import { rustTargetGenericBindingsForArguments } from "../../target-model/types/generic-arguments.js";
 import { substituteRustTargetGenerics, substituteRustTargetGenericArgument } from "../../target-model/types/carriers/substitution.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
@@ -120,6 +121,7 @@ export function createRustSourceErrorEffectSelection(walk: RustFactWalk): RustSo
       return true;
     };
     const producers = new Map<string, RustNativeCallableProducer>();
+    const absentInputs = new Set<string>();
     const bindings = new Set<string>();
     const references = rustTargetGenericReferences({ kind: "tuple", elements: carriers });
     const needed = new Set(references.typeIdentities);
@@ -135,6 +137,13 @@ export function createRustSourceErrorEffectSelection(walk: RustFactWalk): RustSo
       bindings.add(identity);
       if (storageBindings === undefined && input.owner !== declaration) {
         if (!available.has(input)) return undefined;
+        continue;
+      }
+      const absenceWitness = storageBindings === undefined
+        ? walk.context.callableValues.nativeStorage.invocationWitnessFor(input, node) : undefined;
+      if (absenceWitness !== undefined) {
+        absentInputs.add(identity);
+        types.set(identity, absenceWitness);
         continue;
       }
       const selected = storageBindings === undefined
@@ -174,7 +183,7 @@ export function createRustSourceErrorEffectSelection(walk: RustFactWalk): RustSo
         if (original.kind !== "associated-type" || original.owner.kind !== "type-parameter") return type;
         const producer = producers.get(original.owner.identity);
         const input = inputs.get(original.owner.identity);
-        if (producer === undefined || input === undefined) return type;
+        if (input === undefined || producer === undefined && !absentInputs.has(original.owner.identity)) return type;
         const sourceItem = original.trait?.sourceItem;
         const protocol = sourceItem === undefined ? undefined : native.protocolForSourceItem(sourceItem.fileName, sourceItem.typeName);
         if (protocol === undefined) { valid = false; return type; }
@@ -184,8 +193,9 @@ export function createRustSourceErrorEffectSelection(walk: RustFactWalk): RustSo
             { protocol, trait: original.trait }, original.owner, channel, original.genericArguments ?? []);
           return expected !== undefined && rustTargetTypeRefEquals(expected, original);
         });
-        const replacement = channel === undefined ? undefined : walk.context.callableValues.nativeProducers.errorFor(
-          producer.declaration, channel === "invocation" ? "invoke" : channel);
+        const replacement: TargetTypeRef | undefined = channel === undefined ? undefined : absentInputs.has(original.owner.identity)
+          ? { kind: "target-named", id: rustInfallibleTargetId } : producer === undefined ? undefined
+          : walk.context.callableValues.nativeProducers.errorFor(producer.declaration, channel === "invocation" ? "invoke" : channel);
         if (replacement === undefined) { valid = false; return type; }
         return substituteRustTargetGenerics(replacement, types, lifetimes, consts);
       });

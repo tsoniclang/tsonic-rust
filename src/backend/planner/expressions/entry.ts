@@ -298,9 +298,10 @@ function planProjectedExpression(
     return finish(contextuallyConverted);
   }
   if (projection?.kind === "none") {
-    const optionType = rustTypeFromCarrierInContext(projection.resultCarrier, context, "absence");
-    const anonymous = rustNativeFutureCallableResult(projection.resultCarrier)?.optional === true;
-    if (optionType === undefined && !anonymous || rustOptionElementCarrier(projection.resultCarrier) === undefined) {
+    const resultCarrier = context.valueDestinations?.get(node) ?? projection.resultCarrier;
+    const optionType = rustTypeFromCarrierInContext(resultCarrier, context, "absence");
+    const anonymous = rustNativeFutureCallableResult(resultCarrier)?.optional === true;
+    if (optionType === undefined && !anonymous || rustOptionElementCarrier(resultCarrier) === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, node),
         "rust.backend.option-none-carrier",
@@ -311,7 +312,7 @@ function planProjectedExpression(
     const value: RustExpr = rustOptionalStorageValue(projection.resultCarrier) === undefined
       ? anonymous ? { kind: "path", path: "None" }
         : { kind: "associated-value", owner: optionType!, name: "None" }
-      : planRustOptionalStorageOperation(projection.resultCarrier, "absent", [], context);
+      : planRustOptionalStorageOperation(resultCarrier, "absent", [], context);
     if (contextuallyConverted.kind === "bottom") return contextuallyConverted;
     return finish(contextuallyConverted.kind === "none" || contextuallyConverted.kind === "path" || contextuallyConverted.kind === "associated-value"
       ? value

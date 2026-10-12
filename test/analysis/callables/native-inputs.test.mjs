@@ -72,3 +72,22 @@ test("optional narrowing preserves native callable input identity and excludes a
     assert.equal(native.callFor(calls[0].node) === calls[0], true, "the invocation is a sealed native protocol call");
   }
 });
+
+test("absence-only invocation witnesses are exact owned type evidence without a runtime callable", () => {
+  const { program, native, ast, declarations } = analyze(nullishNeverSource);
+  const input = native.inputsFor(declarations.get("invoke"))[0];
+  const nodes = [];
+  const visit = node => { nodes.push(node); ast.forEachChild(node, visit); };
+  program.sourceFiles.forEach(visit);
+  const witnesses = nodes.flatMap(node => {
+    const witness = program.callableValues.nativeStorage.invocationWitnessFor(input, node);
+    return witness === undefined ? [] : [{ node, witness }];
+  });
+  assert.equal(witnesses.length, 1, "only the proven absence invocation needs a type witness");
+  const { node, witness } = witnesses[0];
+  assert.equal(witness.kind, "function-pointer");
+  assert.equal(Object.isFrozen(witness), true);
+  assert.equal(program.callableValues.nativeStorage.invocationWitnessFor({ ...input }, node) === undefined, true);
+  assert.equal(program.callableValues.nativeStorage.invocationWitnessFor(input, {}) === undefined, true);
+  assert.equal(program.callableValues.nativeStorage.invocationWitnessFor(input, node) === witness, true);
+});

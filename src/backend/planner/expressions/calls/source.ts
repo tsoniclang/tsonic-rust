@@ -231,10 +231,17 @@ export function planSelectedSourceCall(
     }
   }
   if (selectedDeclaration !== undefined && fact.target.form !== "callable" &&
-    targetAstGenericArguments.length > 0 && callableSpecialization === undefined) {
+    callableSpecialization === undefined) {
     const native = context.input.program.callableValues.native;
     const inputs = new Set([...native.inputsFor(selectedDeclaration), ...native.capturesFor(selectedDeclaration)]);
-    for (const _input of inputs) targetAstGenericArguments.push({ kind: "type", type: { kind: "infer" } });
+    const witnesses = [...inputs].map(input => context.input.program.callableValues.nativeStorage.invocationWitnessFor(input, node));
+    if (targetAstGenericArguments.length > 0 || witnesses.some(witness => witness !== undefined)) {
+      for (const witness of witnesses) {
+        const type = witness === undefined ? { kind: "infer" as const } : rustTypeFromCarrierInContext(witness, context);
+        if (type === undefined) return undefined;
+        targetAstGenericArguments.push({ kind: "type", type });
+      }
+    }
   }
   const callGenericArguments = targetAstGenericArguments.length === 0 ||
       callableSpecialization !== undefined

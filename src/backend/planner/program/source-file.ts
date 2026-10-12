@@ -324,7 +324,8 @@ function planModuleItems(
             parameterCarriers: binding.value.parameterCarriers,
             resultCarrier: binding.value.resultCarrier,
           }, initializationContext);
-          const type = rustTypeFromCarrierInContext(binding.value.carrier, initializationContext);
+          const physical = context.input.program.callableValues.nativeProducers.physicalFor(statement, binding.value.carrier);
+          const type = rustTypeFromCarrierInContext(physical, initializationContext);
           if (value === undefined || type === undefined ||
             !rustCarrierSupportsClone(binding.value.carrier, context.input.program.typeDefinitions)) {
             context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -671,7 +672,8 @@ function planTopLevelVariableStatement(
         parameterCarriers: binding.value.parameterCarriers,
         resultCarrier: binding.value.resultCarrier,
       }, context);
-      const rustType = rustTypeFromCarrierInContext(binding.value.carrier, context);
+      const physical = context.input.program.callableValues.nativeProducers.physicalFor(binding.callableDeclaration, binding.value.carrier);
+      const rustType = rustTypeFromCarrierInContext(physical, context);
       if (value === undefined || rustType === undefined ||
         !rustCarrierSupportsClone(binding.value.carrier, context.input.program.typeDefinitions)) {
         context.diagnostics.push(unsupportedConstructDiagnostic(

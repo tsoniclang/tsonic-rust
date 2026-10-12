@@ -4,8 +4,8 @@ import { rustCallablePhysicalSignature, type RustCallablePhysicalSignature } fro
 import type { RustTargetGenericArgument, RustTargetGenericParameter, TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustNamedTypeCarrierValue } from "../../target-model/types/carriers/native.js";
-import { rustOnlyTypeGenericArguments, rustTargetGenericBindingsForArguments } from "../../target-model/types/generic-arguments.js";
+import { rustNamedTypeCarrierValue, rustNamedTargetType } from "../../target-model/types/carriers/native.js";
+import { rustOnlyTypeGenericArguments, rustTargetGenericBindingsForArguments, rustTypeGenericArguments } from "../../target-model/types/generic-arguments.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
 import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
@@ -15,6 +15,32 @@ import type { RustNativeCallableInput } from "./native-inputs.js";
 import type { RustNativeCallableProducerPlan } from "./native-producers.js";
 import type { RustNativeStoragePlan, RustNativeStorageSelection } from "./native-storage.js";
 import { rustNativeCallableProtocolResult } from "./native-protocols.js";
+import { rustCallableSignatureAbsenceWitness } from "../../target-model/types/carriers/callable-input-witness.js";
+import { instantiateRustNativeCompletion } from "../../target-model/types/callable-completions.js";
+import { rustJsPromiseTargetTypeWithLifetime } from "../../target-model/types/carriers/js.js";
+import { rustInfallibleTargetId, rustJsPromiseTargetId } from "../../target-model/types/carriers/source-types.js";
+
+export function rustNativeCallableAbsenceWitness(
+  input: RustNativeCallableInput, definitions: RustTypeDefinitions,
+): TargetTypeRef | undefined {
+  const protocol = input.protocol;
+  if (protocol.signature.typeParameters.length !== 0) return undefined;
+  const infallible: TargetTypeRef = { kind: "target-named", id: rustInfallibleTargetId };
+  const result = protocol.completion === undefined ? protocol.method.result : instantiateRustNativeCompletion(protocol.completion, future => {
+    if (future.carrier.kind === "target-named" && future.carrier.id === rustJsPromiseTargetId) {
+      const lifetime = future.carrier.genericArguments?.[0];
+      return lifetime?.kind !== "lifetime" ? undefined : rustJsPromiseTargetTypeWithLifetime(future.output, lifetime.lifetime, infallible);
+    }
+    return rustNamedTargetType("rust.core.future.Ready", "core::future::Ready", rustTypeGenericArguments([
+      rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([future.output, infallible])),
+    ]));
+  }, definitions);
+  if (result === undefined) return undefined;
+  const witness = rustCallableSignatureAbsenceWitness(protocol.method.parameters,
+    rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([result, infallible])), protocol.method.binder);
+  return snapshotClosedMetadata(substituteRustTargetGenerics(witness, new Map(protocol.signature.environmentParameters.map((parameter, index) =>
+    [parameter.identity, input.environment[index]!])), new Map()));
+}
 
 export interface RustNativeCallablePhysicalSource {
   readonly carrier: TargetTypeRef;

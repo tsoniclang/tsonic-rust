@@ -225,5 +225,5 @@ function createRustCallableValuePlan(input: RustCallableValuePlanInput,
   const nativeDispatch = createRustNativeCallableDispatchPlan({ ...input, native });
   return Object.freeze({ generic, suspended, frames, native, nativeStorage, nativeCaptures, nativeProducers, nativeGenericProducers,
     genericDispatch, nativeDispatch, get genericCompletions() { return completions(); },
-    issues: Object.freeze([...generic.issues, ...suspended.issues, ...frames.issues]) });
+    issues: Object.freeze([...generic.issues, ...nativeStorage.issues, ...suspended.issues, ...frames.issues]) });
 }

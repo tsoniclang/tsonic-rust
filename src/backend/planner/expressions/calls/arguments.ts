@@ -43,6 +43,7 @@ import { rustValueCarrierTransitionTarget } from "../../../../analysis/facts/val
 import { rustSpreadElementCarrier } from "../../../../target-model/operations/rest-assembly.js";
 import { planRustRestAssembly } from "./rest-assembly.js";
 import { planRustSourceCallArgumentValue } from "./singleton-slices.js";
+import { rustValueDestinationContext } from "../value-destinations.js";
 import { validateRustFinalizedOperationAbi } from "../../../../analysis/facts/finalized-operation-abi.js";
 import type { Node } from "@tsonic/tsts";
 import { planRustAbsentValue } from "../optional-storage.js";
@@ -202,11 +203,13 @@ export function planRustSourceCallArgumentEvaluation(
     parameter.inputs.some((input) => input.sourceForm !== "value"));
   const borrowedInputs = new Map<Node, RustExpr>();
   const planned = argumentNodes.map((argument, index) => {
+    const selectedContext = rustValueDestinationContext(argument,
+      context.input.program.callableValues.nativeStorage.invocationArgumentWitnessFor(call, argument), context);
     const source = context.input.program.source.ast.kindName(argument) === KindSpreadElement
       ? Node_Expression(context.input.program.source.ast, argument)
       : argument;
-    return source === undefined ? undefined : hasSpread ? planExpression(source, context)
-      : planRustSourceCallArgumentValue(source, index, argumentNodes, fact, context, borrowedInputs);
+    return source === undefined ? undefined : hasSpread ? planExpression(source, selectedContext)
+      : planRustSourceCallArgumentValue(source, index, argumentNodes, fact, selectedContext, borrowedInputs);
   });
   if (planned.some((argument) => argument === undefined)) {
     return undefined;
