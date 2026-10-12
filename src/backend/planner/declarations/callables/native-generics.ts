@@ -8,6 +8,7 @@ import { rustErrorEffectsFactKey } from "../../../../analysis/facts/error-effect
 import { rustTargetTypeChildren } from "../../../../target-model/types/carriers/children.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { closedMetadataKey } from "../../../../target-model/metadata/closed-data.js";
+import { rustContextualValueConversionFactKey, rustSourceCallableReturnFactKey } from "../../../../analysis/facts/keys.js";
 
 export function planRustNativeCallableGenerics(
   declaration: Node,
@@ -25,22 +26,37 @@ export function planRustNativeCallableGenerics(
   }
   const context: RustPlanContext = { ...source.context, typeParameterNames };
   const bounds = new Map(inputs.map(input => [input.implementation.identity, new Map<string, TargetTypeRef>()]));
-  const collect = (type: TargetTypeRef, visited: Set<TargetTypeRef>): void => {
+  const visited = new Set<TargetTypeRef>();
+  const collect = (type: TargetTypeRef): void => {
     if (visited.has(type)) return;
     visited.add(type);
     if (type.kind === "associated-type" && type.owner.kind === "type-parameter" && type.trait !== undefined)
       bounds.get(type.owner.identity)?.set(closedMetadataKey(type.trait), type.trait);
-    for (const child of rustTargetTypeChildren(type)) collect(child, visited);
+    for (const child of rustTargetTypeChildren(type)) collect(child);
   };
+  const { nativeStorage } = context.input.program.callableValues;
+  if (context.input.program.facts.getFact(declaration, rustSourceCallableReturnFactKey) !== undefined) {
+    const selected = nativeStorage.returnFor(declaration);
+    if (selected.kind === "unresolved") return undefined;
+    collect(selected.carrier);
+  }
+  let resolved = true;
   const visit = (node: Node): void => {
+    if (!resolved) return;
     for (const error of context.input.program.facts.getFact(node, rustErrorEffectsFactKey)?.nativeErrors ?? [])
-      collect(error.errorType, new Set());
+      collect(error.errorType);
+    if (context.input.program.facts.getFact(node, rustContextualValueConversionFactKey)?.conversion.kind === "callable-adapter") {
+      const selected = nativeStorage.valueFor(node);
+      if (selected.kind === "unresolved") { resolved = false; return; }
+      collect(selected.carrier);
+    }
     const call = native.callFor(node);
     if (call !== undefined) bounds.get(call.input.implementation.identity)?.set(
       closedMetadataKey(call.input.protocol.trait), call.input.protocol.trait);
     context.input.program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   visit(declaration);
+  if (!resolved) return undefined;
   for (const forwarding of context.input.program.callableValues.nativeGenericProducers.forwardingFor(declaration)) {
     const selected = bounds.get(forwarding.input.implementation.identity);
     if (selected === undefined) return undefined;

@@ -3,6 +3,7 @@ import test from "node:test";
 import { planRustNativeCallableGenerics } from "../../../../dist/backend/planner/declarations/callables/native-generics.js";
 import { rustCallablePayloadContext } from "../../../../dist/backend/planner/expressions/capture-payloads.js";
 import { nativeProducerFixture } from "../../../helpers/native-producer-bridges.mjs";
+import { rustContextualValueConversionFactKey, rustSourceCallableReturnFactKey } from "../../../../dist/analysis/facts/keys.js";
 
 function fixture(substitutions = new Map()) {
   const { context, protocol } = nativeProducerFixture({ result: { kind: "source-primitive", name: "float64" } });
@@ -44,6 +45,42 @@ test("unsubstituted native input still declares its own exact generic parameter"
   assert.equal(generics.parameters[0].name, "Implementation");
   assert.equal(generics.parameters[0].bounds.length, 1);
   assert.equal(generics.wherePredicates.length, 0);
+});
+
+for (const position of ["return", "conversion"]) {
+  test(`native generic bounds include associated types in physical ${position} storage without an authored call`, () => {
+    const current = fixture();
+    const program = current.source.context.input.program;
+    program.callableValues.native.callFor = () => undefined;
+    const trait = current.input.protocol.trait;
+    const carrier = { kind: "associated-type", owner: current.implementation, name: "InvocationError", trait };
+    program.callableValues.nativeStorage = {
+      returnFor: () => ({ kind: "selected", carrier, inputs: [current.input] }),
+      valueFor: () => ({ kind: "selected", carrier, inputs: [current.input] }),
+    };
+    program.facts.getFact = (node, key) => node !== current.declaration ? undefined
+      : position === "return" && key === rustSourceCallableReturnFactKey ? { returnCarrier: carrier }
+      : position === "conversion" && key === rustContextualValueConversionFactKey ? { conversion: { kind: "callable-adapter" } }
+      : undefined;
+    const selected = planRustNativeCallableGenerics(current.declaration, current.source);
+    assert.equal(selected !== undefined, true);
+    const parameters = selected.finalizeGenerics().parameters;
+    assert.equal(parameters.length, 1);
+    assert.equal(parameters[0].bounds.length, 1);
+    assert.equal(parameters[0].bounds[0].reference.trait.path, `crate::proof::${current.input.protocol.targetName}`);
+    program.callableValues.nativeStorage.returnFor = program.callableValues.nativeStorage.valueFor =
+      () => ({ kind: "unresolved", reason: "missing exact physical selection" });
+    assert.equal(planRustNativeCallableGenerics(current.declaration, current.source) === undefined, true,
+      "unresolved physical requirements cannot silently omit the native bound");
+  });
+}
+
+test("native generic bounds do not invent obligations for unused inputs", () => {
+  const current = fixture();
+  current.source.context.input.program.callableValues.native.callFor = () => undefined;
+  const selected = planRustNativeCallableGenerics(current.declaration, current.source);
+  assert.equal(selected !== undefined, true);
+  assert.equal(selected.finalizeGenerics().parameters[0].bounds.length, 0);
 });
 
 test("callable payload bindings retain exact selected physical carriers without changing capture storage", () => {
