@@ -30,7 +30,7 @@ impl Receiver {
         left: i32,
         root: &Dispatch<TError>,
         right: i32,
-        callback: impl CallableImplementation<(), Result<(), TError>> + 'static,
+        callback: impl CallableImplementation<(), Output = Result<(), TError>> + 'static,
     ) {
         self.value = left * 10 + right;
         enqueue(root.handle(), callback);
@@ -82,7 +82,7 @@ pub fn constructions() -> i32 {
 
 pub fn enqueue<TError: 'static>(
     handle: DispatchHandle<TError>,
-    callback: impl CallableImplementation<(), Result<(), TError>> + 'static,
+    callback: impl CallableImplementation<(), Output = Result<(), TError>> + 'static,
 ) {
     handle.0.enqueue(move || callback.invoke(())).unwrap();
 }

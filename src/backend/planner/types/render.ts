@@ -115,9 +115,11 @@ export function rustTypeFromCarrier(
       return argumentsType === undefined || resultType === undefined ? undefined : {
         kind: "impl-trait",
         bounds: [{ kind: "trait-type", reference: {
-          trait: { kind: "named", path: "rt::CallableImplementation", genericArguments: typeGenericArguments([
-            argumentsType, { kind: "named", path: "rt::TsonicResult", genericArguments: typeGenericArguments([resultType]) },
-          ]) },
+          trait: { kind: "named", path: "rt::CallableImplementation", genericArguments: [
+            { kind: "type", type: argumentsType },
+            { kind: "associated-equality", name: "Output", genericArguments: [],
+              type: { kind: "named", path: "rt::TsonicResult", genericArguments: typeGenericArguments([resultType]) } },
+          ] },
           binder: rustLifetimeBinderToAst(signature!.binder),
         } }],
         outlives: [],

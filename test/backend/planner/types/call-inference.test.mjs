@@ -11,6 +11,13 @@ test("borrowed invocation protocols render only in native parameter or return po
   assert.equal(rendered?.kind, "reference");
   assert.equal(rendered?.referent.kind, "impl-trait");
   assert.equal(rendered?.referent.bounds[0].reference.trait.path, "rt::CallableImplementation");
+  assert.deepEqual(rendered.referent.bounds[0].reference.trait.genericArguments, [
+    { kind: "type", type: { kind: "tuple", elements: [{ kind: "primitive", name: "usize" }] } },
+    { kind: "associated-equality", name: "Output", genericArguments: [],
+      type: { kind: "named", path: "rt::TsonicResult", genericArguments: [
+        { kind: "type", type: { kind: "primitive", name: "usize" } },
+      ] } },
+  ]);
   assert.equal(rustTypeFromCarrierInContext(borrowed, {}) === undefined, true);
   assert.equal(rustTypeFromCarrierInContext({ kind: "function-pointer", args: [borrowed], result: scalar }, {}, "parameter") === undefined, true);
 });

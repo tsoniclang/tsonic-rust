@@ -18,7 +18,7 @@ for (const surfaces of [[], ["js"]]) {
       const source = artifactText(result, "src/index.rs");
       const signature = source.match(/pub fn apply[\s\S]*?\{/u)?.[0];
       assert.equal(signature !== undefined, true, "one emitted public declaration");
-      assert.match(signature, /transform: &impl rt::CallableImplementation<\(String,\), rt::TsonicResult<String>>/u);
+      assert.match(signature, /transform: &impl rt::CallableImplementation<\(String,\), Output = rt::TsonicResult<String>>/u);
       signatures.push(signature);
     }
     assert.equal(signatures[0], signatures[1], "local observations cannot change an externally callable native ABI");
