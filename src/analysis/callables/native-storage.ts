@@ -18,6 +18,7 @@ import { substituteRustTargetGenerics } from "../../target-model/types/carriers/
 import { rustSourceCallableReturnFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
 import type { RustNativeCallableInput, RustNativeCallableInputPlan } from "./native-inputs.js";
 import type { RustNativeCallableProducerPlan } from "./native-producers.js";
+import type { RustGenericCallablePlan } from "./generic-values.js";
 
 export type RustNativeStorageSelection =
   | { readonly kind: "identity"; readonly carrier: TargetTypeRef }
@@ -41,6 +42,7 @@ export function createRustNativeStoragePlan(input: {
   readonly definitions: RustTypeDefinitions;
   readonly native: RustNativeCallableInputPlan;
   readonly producers: RustNativeCallableProducerPlan;
+  readonly generic: RustGenericCallablePlan;
 }): RustNativeStoragePlan {
   const nodes = new Set(input.storage.nodes);
   const inputs = new Map(input.native.inputs.map(value => [value.subject, value]));
@@ -116,7 +118,12 @@ export function createRustNativeStoragePlan(input: {
             const originCarrier = origin.projection.length === 0
               ? input.facts.getFact(origin.node, rustRuntimeCarrierKey)?.carrier : undefined;
             if (permitsAbsence && isRustAbsenceCarrier(originCarrier)) continue;
-            candidatePhysical = origin.projection.length === 0
+            if (rustGenericCallableValue(current) !== undefined) {
+              const definition = input.generic.definitionFor(current);
+              const implementation = origin.projection.length === 0 ? input.generic.implementationFor(origin.node) : undefined;
+              candidatePhysical = definition !== undefined && implementation !== undefined &&
+                definition.implementations.includes(implementation) ? current : undefined;
+            } else candidatePhysical = origin.projection.length === 0
               ? input.producers.physicalFor(origin.node, current) : undefined;
             if (candidatePhysical === undefined)
               return fail("Native callable storage has a producer without a sealed physical implementation.");

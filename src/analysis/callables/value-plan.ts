@@ -165,7 +165,7 @@ function createRustCallableValuePlan(input: RustCallableValuePlanInput): RustCal
       return selected.kind === "unresolved" ? undefined : selected.carrier;
     } });
   const nativeStorage = createRustNativeStoragePlan({ ast: input.ast, facts: input.facts,
-    storage: input.sourceStorage, definitions: input.typeDefinitions, native, producers: nativeProducers });
+    storage: input.sourceStorage, definitions: input.typeDefinitions, native, producers: nativeProducers, generic });
   const nativeGenericProducers = createRustNativeGenericProducerPlan({ ast: input.ast, nodes: input.sourceStorage.nodes,
     facts: input.facts, storage: input.sourceStorage, generic, native, nativeStorage });
   return Object.freeze({ generic, suspended, frames, native, nativeStorage, nativeProducers, nativeGenericProducers,

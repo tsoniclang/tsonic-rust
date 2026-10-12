@@ -12,7 +12,8 @@ function fixture(text) {
   const { program, source: checked } = analyzeRust({ surfaces: [], files: { "index.ts": text } });
   const source = createTargetSourceProgram(checked);
   const storage = createSourceStorageQuery(source, program.sourceFiles);
-  const input = { ast: source.ast, storage, facts: program.facts, definitions: program.typeDefinitions };
+  const input = { ast: source.ast, storage, facts: program.facts, definitions: program.typeDefinitions,
+    generic: program.callableValues.generic };
   const native = createRustNativeCallableInputPlan({ ...input, usedNames: new Set() });
   const producers = createRustNativeCallableProducerPlan({ ...input, native, nodes: storage.nodes,
     returnCarrierFor: declaration => {

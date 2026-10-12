@@ -20,7 +20,8 @@ function fixture(text, options = {}) {
   const { program, source: checked } = analyzeRust({ surfaces: [], files: { "index.ts": text }, ...options });
   const source = createTargetSourceProgram(checked);
   const storage = createSourceStorageQuery(source, program.sourceFiles);
-  const input = { ast: source.ast, storage, facts: program.facts, definitions: program.typeDefinitions };
+  const input = { ast: source.ast, storage, facts: program.facts, definitions: program.typeDefinitions,
+    generic: program.callableValues.generic };
   const native = createRustNativeCallableInputPlan({ ...input, usedNames: new Set() });
   const producers = createRustNativeCallableProducerPlan({ ...input, native, nodes: storage.nodes,
     returnCarrierFor: declaration => {
@@ -260,6 +261,29 @@ test("physical generic callable forwarding retains its quantified contract", () 
   assert.equal(input.protocol.binding.signature.typeParameters.length, 1);
   selected(current.plan.returnFor(owner), input.implementation, "quantified identity preserved");
   selected(current.plan.valueFor(current.declaration("alias")), input.implementation, "generic alias physical identity");
+});
+
+test("concrete quantified producers retain the existing sealed family through aliases and returns", () => {
+  const current = fixture(`
+    type Identity = <Value>(value: Value) => Value;
+    export function make(): Identity {
+      const original = <Value>(value: Value): Value => value;
+      const alias: Identity = original;
+      return alias;
+    }
+  `);
+  for (const value of [current.plan.returnFor(current.declaration("make")),
+    current.plan.valueFor(current.declaration("original")), current.plan.valueFor(current.declaration("alias"))]) {
+    assert.equal(value.kind, "identity", value.reason);
+    const definition = current.program.callableValues.generic.definitionFor(value.carrier);
+    const implementation = current.program.callableValues.generic.implementationFor(current.initializer("original"));
+    assert.equal(definition !== undefined && implementation !== undefined && definition.implementations.includes(implementation), true,
+      "only the exact existing producer family is retained");
+  }
+  const unavailable = createRustNativeStoragePlan({ ...current.input, native: current.native,
+    generic: { ...current.input.generic, implementationFor: () => undefined } });
+  assert.equal(unavailable.returnFor(current.declaration("make")).kind, "unresolved",
+    "signature equality cannot substitute for a missing producer identity");
 });
 
 test("physical selection rejects ambiguous mutation alternatives and seals concrete producers", () => {
