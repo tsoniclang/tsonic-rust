@@ -9,7 +9,7 @@ export function rustTypeIsLegalInPosition(
   if (position === "general") return false;
   switch (type.kind) {
     case "impl-trait":
-      return !type.bounds.some(rustTypeBoundContainsImplTrait) &&
+      return type.bounds.every(bound => rustOpaqueBoundIsLegal(bound, position)) &&
         !rustGenericArgumentsContainImplTrait(type.captures);
     case "named":
       return (type.genericArguments ?? []).every(argument => argument.kind === "type"
@@ -27,6 +27,23 @@ export function rustTypeIsLegalInPosition(
     default:
       return false;
   }
+}
+
+function rustOpaqueBoundIsLegal(bound: RustTypeBound, position: "parameter" | "return"): boolean {
+  if (bound.kind !== "trait-type" || bound.reference.trait.kind !== "named") {
+    return !rustTypeBoundContainsImplTrait(bound);
+  }
+  return (bound.reference.trait.genericArguments ?? []).every(argument => {
+    if (argument.kind === "associated-equality") {
+      return !rustGenericArgumentsContainImplTrait(argument.genericArguments) &&
+        rustTypeIsLegalInPosition(argument.type, position);
+    }
+    if (argument.kind === "associated-bounds") {
+      return !rustGenericArgumentsContainImplTrait(argument.genericArguments) &&
+        argument.bounds.every(selected => rustOpaqueBoundIsLegal(selected, position));
+    }
+    return !rustGenericArgumentsContainImplTrait([argument]);
+  });
 }
 
 export function rustTypeContainsImplTrait(type: RustType): boolean {

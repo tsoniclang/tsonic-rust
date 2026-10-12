@@ -64,6 +64,29 @@ test("native anonymous signature containers do not admit anonymous storage or ne
     assert.equal(rustTypeIsLegalInPosition(type, "return"), false);
   }
 });
+
+test("anonymous implementation bounds admit exact associated outputs without positional nesting", () => {
+  const output = { kind: "impl-trait", bounds: [{ kind: "trait", path: "core::fmt::Debug" }], outlives: [] };
+  const optional = { kind: "named", path: "Option", genericArguments: [{ kind: "type", type: output }] };
+  const selected = argument => ({ kind: "impl-trait", outlives: [], bounds: [{ kind: "trait-type", reference: {
+    trait: { kind: "named", path: "example::Invocation", genericArguments: [argument] },
+  } }] });
+  const equality = type => ({ kind: "associated-equality", name: "Output", genericArguments: [], type });
+  for (const type of [selected(equality(output)), selected(equality(optional)),
+    selected(equality(selected(equality(output)))), selected({ kind: "associated-bounds", name: "Output", genericArguments: [],
+      bounds: [{ kind: "trait-type", reference: { trait: { kind: "named", path: "Iterator", genericArguments: [equality(output)] } } }] })]) {
+    assert.equal(rustTypeIsLegalInPosition(type, "parameter"), true);
+    assert.equal(rustTypeIsLegalInPosition(type, "return"), true);
+    assert.equal(rustTypeIsLegalInPosition(type, "general"), false);
+  }
+  for (const type of [selected({ kind: "type", type: output }), selected({ kind: "type", type: optional }),
+    selected({ ...equality({ kind: "unit" }), genericArguments: [{ kind: "type", type: output }] }),
+    { ...selected(equality(output)), captures: [{ kind: "type", type: output }] }]) {
+    assert.equal(rustTypeIsLegalInPosition(type, "parameter"), false);
+    assert.equal(rustTypeIsLegalInPosition(type, "return"), false);
+    assert.equal(rustTypeIsLegalInPosition(type, "general"), false);
+  }
+});
 const callable = { kind: "closure", callTrait: "FnMut", args: [scalar], result: scalar };
 const owner = rustNamedTargetType("test.adapter", "example::Adapter", [{ kind: "type", type: callable }]);
 
