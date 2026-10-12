@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { Node_Expression } from "@tsonic/target-api/source";
 import type { RustSourceCallEffectsFact } from "../../../../analysis/facts/keys.js";
 import type { RustNativeCallableCall, RustNativeCallableInput } from "../../../../analysis/callables/native-inputs.js";
 import { closedMetadataEquals } from "../../../../target-model/metadata/closed-data.js";
@@ -7,6 +8,8 @@ import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { diagnosticInput, type RustPlanContext } from "../../program/plan-context.js";
 import { rustPropagateNativeError } from "../../program/fallible-boundaries.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
+import { createRustSharedReferenceArgument } from "../input-shaping.js";
+import { effectivePlannedExpressionCarrier } from "../fundamentals.js";
 
 export function rustNativeInputEffectsMatch(
   call: RustNativeCallableCall,
@@ -27,12 +30,17 @@ export function planRustNativeInputInvocation(
   genericArguments: readonly RustCallGenericArgument[] | undefined,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  return planRustNativeProtocolInvocation(call.input, callable, args, genericArguments, context);
+  const callee = Node_Expression(context.input.program.source.ast, call.node);
+  if (callee === undefined) return undefined;
+  const carrier = effectivePlannedExpressionCarrier(callee, context);
+  if (carrier === undefined) return undefined;
+  const receiver = carrier.kind === "reference" ? callable : createRustSharedReferenceArgument(context, callable, callee);
+  return planRustNativeProtocolInvocation(call.input, receiver, args, genericArguments, context);
 }
 
 export function planRustNativeProtocolInvocation(
   input: RustNativeCallableInput,
-  callable: RustExpr,
+  receiver: RustExpr,
   args: readonly RustExpr[],
   genericArguments: readonly RustCallGenericArgument[] | undefined,
   context: RustPlanContext,
@@ -43,7 +51,7 @@ export function planRustNativeProtocolInvocation(
   const trait = rustTypeFromCarrierInContext(input.trait, context);
   return owner === undefined || trait === undefined ? undefined : {
     kind: "associated-call", owner, trait, method: "invoke",
-    args: [{ kind: "reference", expr: callable }, ...args],
+    args: [receiver, ...args],
     ...(genericArguments === undefined ? {} : { genericArguments }),
   };
 }

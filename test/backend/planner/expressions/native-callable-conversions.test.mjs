@@ -10,10 +10,28 @@ import { selectRustCallableConversion } from "../../../../dist/target-model/conv
 import { printRustExpr } from "../../../../dist/print/source/expressions/core.js";
 import { nativeFallibleAdapterFixture } from "../../../helpers/physical-callable-adapters.mjs";
 import { Node_Initializer } from "@tsonic/target-api/source";
-import { planRustNativeProtocolInvocation } from "../../../../dist/backend/planner/expressions/calls/native-input.js";
+import { planRustNativeInputInvocation, planRustNativeProtocolInvocation } from "../../../../dist/backend/planner/expressions/calls/native-input.js";
 
 const failure = rustNamedTargetType("fixture:ProducerFailure", "ProducerFailure", []);
 const integer = rustSourcePrimitiveTargetType("int32");
+
+for (const retained of [false, true]) {
+  test(`native protocol invocation borrows its ${retained ? "owned" : "already borrowed"} exact input once`, () => {
+    const current = nativeClosureProducerFixture({ source: `
+      import type { int32 } from "@tsonic/core/types.js";
+      export ${retained ? "async " : ""}function invoke(callback: () => int32): ${retained ? "Promise<int32>" : "int32"} {
+        return callback();
+      }
+      export function create(): () => int32 { return (): int32 => 3; }
+    ` });
+    const calls = current.program.callableValues.native.calls;
+    assert.equal(calls.length, 1);
+    const value = { kind: "path", path: "callback" };
+    const planned = planRustNativeInputInvocation(calls[0], value, [], undefined, current.context);
+    assert.equal(planned !== undefined, true);
+    assert.deepEqual(planned.args, [retained ? { kind: "reference", expr: value } : value]);
+  });
+}
 
 function fixture(throwing = false) {
   const current = nativeClosureProducerFixture(throwing ? { selectFacts: nativeClosureProducerErrorFacts(failure) } : {});
@@ -46,7 +64,7 @@ for (const throwing of [false, true]) {
       assert.equal((text.match(/rt::Callable::<[^\n]+>::new/gu) ?? []).length, retained ? 1 : 0);
       assert.match(text, new RegExp(`Ok::<_, ${throwing ? "ProducerFailure" : "core::convert::Infallible"}>`, "u"));
       if (retained) assert.match(text, new RegExp(
-        `rt::Callable::<\\(i32,\\), Result<i32, ${throwing ? "ProducerFailure" : "core::convert::Infallible"}>>::new`, "u"));
+        `rt::Callable::<'_, \\(i32,\\), Result<i32, ${throwing ? "ProducerFailure" : "core::convert::Infallible"}>>::new`, "u"));
     });
   }
 }

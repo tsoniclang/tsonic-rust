@@ -17,6 +17,7 @@ import { planRustAbsentValue } from "./optional-storage.js";
 import { lowerRustValueConversion } from "./value-conversions.js";
 import { rustModuleCallableStorageFactKey } from "../../../analysis/callables/module-values.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
+import { createRustSharedReferenceArgument } from "./input-shaping.js";
 import { rustNativeCallableOperand, type RustNativeCallablePhysicalSource } from "../../../analysis/callables/native-conversions.js";
 import { planRustNativeProtocolInvocation } from "./calls/native-input.js";
 import { planRustNativeErrorJoin } from "../types/native-error-joins.js";
@@ -96,6 +97,7 @@ function planSelectedRustCallableConversion(
   })) : [];
   if (nativeParameters.some(parameter => parameter.type === undefined)) return undefined;
   const producer = inlineCallableProducer(expression, sourceType);
+  const borrowed = input && !producer.inline;
   const arguments_: RustExpr[] = [];
   for (const [index, parameter] of conversion.arguments.entries()) {
     const value = lowerValue(parameter, native ? { kind: "path", path: nativeParameters[index]!.name } : {
@@ -106,7 +108,8 @@ function planSelectedRustCallableConversion(
   }
   const tuple: RustExpr = { kind: "tuple-literal", elements: arguments_ };
   const invocation: RustExpr | undefined = source.input !== undefined
-    ? planRustNativeProtocolInvocation(source.input, { kind: "path", path: callable }, arguments_, undefined, context)
+    ? planRustNativeProtocolInvocation(source.input, borrowed ? { kind: "path", path: callable }
+      : { kind: "reference", expr: { kind: "path", path: callable } }, arguments_, undefined, context)
     : producer.inline
     ? { kind: "invoke", callee: { kind: "path", path: callable }, args: [tuple] }
     : { kind: "method-call", receiver: { kind: "path", path: callable },
@@ -137,9 +140,9 @@ function planSelectedRustCallableConversion(
   const closure: RustExpr = {
     kind: "closure", move: true, params: native ? nativeParameters : [{ name: argumentsName, byRefCopy: false, type: argumentsType }], body,
   };
-  const value = input && !producer.inline
-    ? { kind: "reference" as const, expr: source.input === undefined
-      ? planRustNonConsumingValue(node, producer.value, context) : producer.value }
+  const value = borrowed
+    ? createRustSharedReferenceArgument(context,
+      planRustNonConsumingValue(node, producer.value, context), node)
     : producer.value;
   const adapted: RustExpr = { kind: "block", body: { statements: [...producer.statements, {
     kind: "let", mutable: false, name: callable, init: value,
