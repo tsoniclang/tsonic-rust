@@ -14,6 +14,7 @@ import { createRustSourceErrorEffectSelection } from "../../../dist/analysis/res
 import { createRustEffectsWorkBudget } from "../../../dist/analysis/resources/effects-work-budget.js";
 import { sourcePackageCallbackErrorFiles, sourcePackageCallbackErrorGraph }
   from "../../../../tsonic/test/fixtures/source-package-callback-errors.mjs";
+import { asyncCallableInterfaceFiles } from "../../../../tsonic/test/fixtures/callable-interfaces.mjs";
 
 function fixture(text, options) {
   const context = analyzeRustErrorEffects(text, options);
@@ -191,3 +192,17 @@ test("direct native callback awaits keep native identities and do not manufactur
   assert.equal(effects.nativeErrors.length, 1);
   assert.equal(effects.nativeErrors[0].identity, native.awaitErrorSources[0]);
 });
+
+for (const surfaces of [[], ["js"]]) {
+  test(`the original async callable-interface fixture retains exact await errors on ${surfaces[0] ?? "native"}`, () => {
+    const current = fixture("", { files: asyncCallableInterfaceFiles, surfaces });
+    const awaited = current.nodes.filter(node => current.ast.kindName(node) === "KindAwaitExpression");
+    assert.equal(awaited.length > 0, true);
+    for (const expression of awaited) {
+      assert.equal(current.context.facts.get(expression, rustAwaitSourceErrorEffectsFactKey) !== undefined, true,
+        "every original await has an exact source-edge selection, possibly the empty native-input set");
+      assert.equal(current.context.facts.get(expression, rustAwaitValueFactKey) !== undefined, true,
+        "the full physical await contract remains required");
+    }
+  });
+}

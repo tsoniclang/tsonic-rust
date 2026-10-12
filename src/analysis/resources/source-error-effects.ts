@@ -16,7 +16,8 @@ import { rustNativeCallableErrorType } from "../callables/native-protocols.js";
 import { isRustAbsenceCarrier } from "../../target-model/types/carriers/native.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 import type { SourceStorageBindings } from "@tsonic/target-api/analysis";
-import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
+import { rustCallableProtocol, rustNativeCallableProtocol } from "../../target-model/types/carriers/callables.js";
+import { rustGenericCallableProtocol } from "../../target-model/types/carriers/generic-callables.js";
 import { inferRustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { rustLifetimeKey, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import type { RustTargetConstArgument } from "../../target-model/types/model.js";
@@ -56,12 +57,18 @@ export function createRustSourceErrorEffectSelection(walk: RustFactWalk): RustSo
     const lifetimes = new Map<string, RustLifetimeRef>(generics.lifetimes);
     const consts = new Map<string, RustTargetConstArgument>(generics.consts);
     const bindSignature = (pattern: TargetTypeRef, actual: TargetTypeRef): boolean => {
-      const formal = rustCallableProtocol(rustOptionElementCarrier(pattern) ?? pattern);
-      const supplied = rustCallableProtocol(rustOptionElementCarrier(actual) ?? actual);
+      const formalCarrier = rustOptionElementCarrier(pattern) ?? pattern;
+      const actualCarrier = rustOptionElementCarrier(actual) ?? actual;
+      const formal = rustGenericCallableProtocol(formalCarrier) ?? rustCallableProtocol(formalCarrier) ??
+        rustNativeCallableProtocol(formalCarrier);
+      const supplied = rustGenericCallableProtocol(actualCarrier) ?? rustCallableProtocol(actualCarrier) ??
+        rustNativeCallableProtocol(actualCarrier);
       if (formal === undefined || supplied === undefined) return false;
       const template = substituteRustTargetGenerics({ kind: "tuple", elements: [...formal.parameters, formal.result] },
         types, lifetimes, consts);
       const references = rustTargetGenericReferences(template);
+      if (references.typeIdentities.length === 0 && references.lifetimeIdentities.length === 0 &&
+        references.constIdentities.length === 0) return true;
       const inferred = inferRustTargetGenericBindings(template,
         { kind: "tuple", elements: [...supplied.parameters, supplied.result] }, {
           typeIdentities: new Set(references.typeIdentities), lifetimeIdentities: new Set(references.lifetimeIdentities),
