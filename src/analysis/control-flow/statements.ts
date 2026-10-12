@@ -67,7 +67,6 @@ import type { RustTargetOperationFact } from "../facts/keys.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustCompileTimeSourceKey } from "../../target-model/facts/source-declarations.js";
 import { recordRustNativeGuardResult, recordRustNativeUnreachable } from "./native-control-flow.js";
-import { rustDirectLexicalCallableBinding } from "../../policy/ownership/source-lexical-callable.js";
 
 export function recordFunctionBodyFacts(walk: RustFactWalk, declaration: Node, sourceFile: SourceFile): void {
   const { ast } = walk.context;
@@ -136,7 +135,7 @@ function recordVariableDeclarationListFacts(
         walk.context.facts.resolve(declaration, rustModuleBindingFactKey)
       : undefined;
     const initializer = Node_Initializer(walk.context.ast, declaration);
-    const lexical = initializer !== undefined && rustDirectLexicalCallableBinding(initializer, walk.context.source) === declaration;
+    const lexical = initializer !== undefined && walk.context.sourceCallables.directLexicalBinding(initializer) === declaration;
     if (nativeCallable?.storage === "native-callable" || lexical) {
       recordFunctionBodyFacts(
         walk,

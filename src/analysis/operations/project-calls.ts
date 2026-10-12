@@ -52,7 +52,6 @@ import { rustRetainedCallLifetimes, rustRetainedCallResult } from "../callables/
 import { rustRetainedCallLifetimesFactKey } from "../facts/retained-environments.js";
 import { rustMemberAccessReceiver } from "../../target-model/syntax/expressions.js";
 import { recordRustComputedCallEvaluation } from "./computed-members.js";
-import { rustDirectLexicalCallableBinding } from "../../policy/ownership/source-lexical-callable.js";
 
 export function applySelectedProjectSourceCall(
   walk: RustFactWalk,
@@ -285,7 +284,7 @@ export function applySelectedProjectSourceCall(
   const directCallableDeclaration = calleeReferenceDeclaration === selectedDeclaration ||
     (calleeImplementation?.kind === "resolved" &&
       calleeImplementation.implementation.declaration === selectedDeclaration);
-  const lexicalBinding = rustDirectLexicalCallableBinding(selectedDeclaration, walk.context.source);
+  const lexicalBinding = walk.context.sourceCallables.directLexicalBinding(selectedDeclaration);
   const directLexical = lexicalBinding !== undefined && lexicalBinding === calleeReferenceDeclaration;
   const callableCalleeCarrier = expressionKind === KindNewExpression || directModuleFunction || directLexical ||
     declarationKind === KindFunctionDeclaration && calleeReferenceDeclaration === selectedDeclaration

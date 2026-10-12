@@ -3,9 +3,40 @@ import { Node_Expression, Node_Initializer, sourceDeclarationIsModuleScoped, sou
   sourceMayReadBeforeInitialization,
   type TargetSourceProgram } from "@tsonic/target-api/source";
 
-export function rustDirectLexicalCallableBinding(
+export interface RustSourceLexicalCallableQueries {
+  bindingFor(declaration: Node): Node | undefined;
+  callsFor(binding: Node, implementation: Node): readonly Node[] | undefined;
+}
+
+export function createRustSourceLexicalCallableQueries(source: TargetSourceProgram): RustSourceLexicalCallableQueries {
+  const bindings = new WeakMap<Node, Node | null>();
+  const calls = new WeakMap<Node, WeakMap<Node, readonly Node[] | null>>();
+  const callsFor = (binding: Node, implementation: Node): readonly Node[] | undefined => {
+    const implementations = calls.get(binding) ?? new WeakMap<Node, readonly Node[] | null>();
+    const cached = implementations.get(implementation);
+    if (cached !== undefined) return cached ?? undefined;
+    const selected = selectSourceDirectCalls(binding, implementation, source);
+    implementations.set(implementation, selected ?? null);
+    calls.set(binding, implementations);
+    return selected;
+  };
+  return Object.freeze({
+    callsFor,
+    bindingFor(declaration: Node): Node | undefined {
+      if (!source.ast.is.IsArrowFunction(declaration)) return undefined;
+      const cached = bindings.get(declaration);
+      if (cached !== undefined) return cached ?? undefined;
+      const selected = selectDirectLexicalCallableBinding(declaration, source, callsFor);
+      bindings.set(declaration, selected ?? null);
+      return selected;
+    },
+  });
+}
+
+function selectDirectLexicalCallableBinding(
   declaration: Node,
   source: TargetSourceProgram,
+  callsFor: RustSourceLexicalCallableQueries["callsFor"],
 ): Node | undefined {
   const { ast, navigation } = source;
   if (!ast.is.IsArrowFunction(declaration) || ast.hasModifierKind(declaration, "async")) return undefined;
@@ -16,12 +47,12 @@ export function rustDirectLexicalCallableBinding(
     !ast.is.IsIdentifier(ast.name(binding)!)) return undefined;
   if (navigation.declarationUseSummary(binding).captured ||
     sourceMayReadBeforeInitialization(binding, ast, navigation) ||
-    rustSourceDirectCalls(binding, declaration, source) === undefined) return undefined;
+    callsFor(binding, declaration) === undefined) return undefined;
   const captures = sourceLexicalCaptures(declaration, [declaration], ast, navigation);
   return captures.receivers.length === 0 ? binding : undefined;
 }
 
-export function rustSourceDirectCalls(
+function selectSourceDirectCalls(
   binding: Node,
   implementation: Node,
   source: TargetSourceProgram,

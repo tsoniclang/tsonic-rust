@@ -62,8 +62,6 @@ import { selectRustInferredReturn } from "./inferred-return.js";
 import { rustOptionalStorageValue } from "../../target-model/types/projections.js";
 import { selectRustClosedCallableInputs } from "./contextual-inputs.js";
 import { recordRustAsyncBodyFacts } from "./async-results.js";
-import { rustSourceBorrowedReturnParameter } from "../../policy/ownership/source-borrowed-return.js";
-import { rustDirectLexicalCallableBinding } from "../../policy/ownership/source-lexical-callable.js";
 
 export function recordFunctionSignatureFacts(walk: RustFactWalk, declaration: Node): void {
   recordCallableParameterSignatureFacts(walk, declaration);
@@ -327,7 +325,7 @@ function recordCallableValueSignatureFacts(
   const { ast } = walk.context;
   const nativeCallable = walk.moduleBindings.nativeCallable(declaration);
   if (nativeCallable?.callableDeclaration === expression && Node_Type(ast, declaration) === undefined ||
-    rustDirectLexicalCallableBinding(expression, walk.context.source) === declaration) {
+    walk.context.sourceCallables.directLexicalBinding(expression) === declaration) {
     recordFunctionSignatureFacts(walk, expression);
     return;
   }
@@ -534,7 +532,7 @@ export function recordCallableReturnFact(
   if (retained?.environment !== undefined) walk.context.facts.set(declaration, rustRetainedEnvironmentFactKey,
     retained.environment, [{ message: "rust returned owned environment" }]);
   if (carrier !== undefined) {
-    const borrowedParameter = rustSourceBorrowedReturnParameter(declaration, rustResolutionContext(walk, declaration));
+    const borrowedParameter = walk.context.sourceCallables.borrowedReturnParameter(declaration);
     const borrowedAbi = borrowedParameter === undefined ? undefined
       : walk.context.facts.get(borrowedParameter, rustSourceParameterAbiFactKey);
     const completion = walk.context.semanticsFor(declaration).operations.callableCompletion(declaration);

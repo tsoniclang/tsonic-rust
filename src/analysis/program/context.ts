@@ -83,6 +83,7 @@ import { createRustRetainedErrorDemandSelection } from "../objects/retained-erro
 import { createRustSourceProfileRegistry } from "../facts/source-profile-registry.js";
 import { createRustSourceProfileStorageEffects } from "../../policy/operations/source-profiles/source-storage-effects.js";
 import { createRustCallableOwnershipRegistry, type RustCallableOwnershipRegistry } from "../callables/ownership-plan.js";
+import { createRustSourceCallableQueries } from "../../policy/ownership/source-borrowed-return.js";
 
 export interface RustAnalysisContext extends RustSourcePolicyContext {
   readonly sourceStorage: SourceStorageQueries;
@@ -173,6 +174,7 @@ export function createRustAnalysisContext(
   return Object.freeze({
     callableRepresentation: "storage" as const,
     sourceStorage,
+    sourceCallables: createRustSourceCallableQueries(sourceStorage),
     callableOwnership: createRustCallableOwnershipRegistry(),
     errorStorageDemands: createRustErrorStorageDemandQuery(input.source,
       sourceProfiles, sourceStorage,

@@ -566,7 +566,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
   recordFutureValueFacts(walk, projectSourceFiles);
   recordRustDeferredProducerEffects(walk);
   const lexical = createRustLexicalFunctionQueries(context.source, context.sourceFiles, context.facts,
-    context.sourceLifetimes, context.runtimeValueUses);
+    context.sourceLifetimes, context.runtimeValueUses, context.sourceCallables);
   recordRustLexicalValueEnvironments(walk, lexical);
   return lexical;
 }

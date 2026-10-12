@@ -1,21 +1,48 @@
 import type { Node } from "@tsonic/tsts";
 import { forEachSourceImmediateEvaluationChild, sourceBindingHasMutableExposure,
   type TargetSourceProgram } from "@tsonic/target-api/source";
-import type { RustTargetTypeResolutionContext } from "../types/resolution/model.js";
-import { rustDirectLexicalCallableBinding, rustSourceDirectCalls } from "./source-lexical-callable.js";
+import type { SourceStorageQueries } from "@tsonic/target-api/analysis";
+import { createRustSourceLexicalCallableQueries,
+  type RustSourceLexicalCallableQueries } from "./source-lexical-callable.js";
 import { rustSourceValueWrapperContains } from "./source-value-wrappers.js";
 
-export function rustSourceBorrowedReturnParameter(
+export interface RustSourceCallableQueries {
+  directLexicalBinding(declaration: Node): Node | undefined;
+  borrowedReturnParameter(declaration: Node): Node | undefined;
+}
+
+export function createRustSourceCallableQueries(sourceStorage: SourceStorageQueries): RustSourceCallableQueries {
+  const source = sourceStorage.source;
+  const lexical = createRustSourceLexicalCallableQueries(source);
+  const returns = new WeakMap<Node, Node | null>();
+  const stableBindings = new WeakMap<Node, boolean>();
+  return Object.freeze({
+    directLexicalBinding: lexical.bindingFor,
+    borrowedReturnParameter(declaration: Node): Node | undefined {
+      if (!source.ast.is.IsArrowFunction(declaration) && !source.ast.is.IsFunctionDeclaration(declaration)) return undefined;
+      const cached = returns.get(declaration);
+      if (cached !== undefined) return cached ?? undefined;
+      const selected = selectSourceBorrowedReturnParameter(declaration, sourceStorage, lexical, stableBindings);
+      returns.set(declaration, selected ?? null);
+      return selected;
+    },
+  });
+}
+
+function selectSourceBorrowedReturnParameter(
   declaration: Node,
-  context: RustTargetTypeResolutionContext,
+  sourceStorage: SourceStorageQueries,
+  lexical: RustSourceLexicalCallableQueries,
+  stableBindings: WeakMap<Node, boolean>,
 ): Node | undefined {
-  const { ast, sourceStorage, source } = context;
+  const source = sourceStorage.source;
+  const { ast } = source;
   const binding = ast.is.IsFunctionDeclaration(declaration) ? declaration
-    : rustDirectLexicalCallableBinding(declaration, source);
+    : lexical.bindingFor(declaration);
   if (binding === undefined) return undefined;
   if (ast.body(declaration) === undefined || ast.hasModifierKind(declaration, "async") ||
-    context.semanticsFor(declaration).operations.generator(declaration) !== undefined ||
-    context.semanticsFor(declaration).operations.callableCompletion(declaration)?.canFallThrough !== false) return undefined;
+    source.semantics.forNode(declaration).operations.generator(declaration) !== undefined ||
+    source.semantics.forNode(declaration).operations.callableCompletion(declaration)?.canFallThrough !== false) return undefined;
   const result = sourceStorage.subject(declaration, "return");
   const bindings = sourceStorage.bindingsForDeclaration(declaration);
   if (result.kind !== "resolved" || bindings.kind !== "resolved") return undefined;
@@ -30,7 +57,7 @@ export function rustSourceBorrowedReturnParameter(
     summary.yielded || summary.passedAsArgument || summary.aliasedOrStored || summary.exported ||
     summary.hasUnclassifiedValueUse || !summary.returned || summary.uses.some(use => use.throughMember ||
       !["return", "comparison", "condition", "type-only"].includes(use.role))) return undefined;
-  const calls = rustSourceDirectCalls(binding, declaration, source);
+  const calls = lexical.callsFor(binding, declaration);
   if (calls === undefined) return undefined;
   for (const call of calls) {
     const selected = source.semantics.forNode(call).operations.call(call);
@@ -39,7 +66,7 @@ export function rustSourceBorrowedReturnParameter(
     if (inputs?.length !== 1 || inputs[0]!.sourceForm !== "value" || inputs[0]!.sourceParameterForm !== "parameter") return undefined;
     const inputIndex = inputs[0]!.sourceArgumentIndex;
     const actual = selected!.sourceArguments[inputIndex]?.expression;
-    if (actual === undefined || !borrowedInputIsStable(actual, source) || selected!.sourceArguments.some((argument, index) =>
+    if (actual === undefined || !borrowedInputIsStable(actual, source, stableBindings) || selected!.sourceArguments.some((argument, index) =>
       index !== inputIndex && mayInterfere(argument.expression, source))) return undefined;
     const resultFlow = source.navigation.expressionValueFlow(call);
     if (resultFlow.escapes || resultFlow.bindingAliased || resultFlow.aliasDeclarations.length !== 0 ||
@@ -66,7 +93,9 @@ export function rustSourceBorrowedReturnParameter(
   return parameter;
 }
 
-function borrowedInputIsStable(expression: Node, source: TargetSourceProgram): boolean {
+function borrowedInputIsStable(
+  expression: Node, source: TargetSourceProgram, stableBindings: WeakMap<Node, boolean>,
+): boolean {
   const { ast, navigation } = source;
   const pending = [expression];
   const visited = new Set<Node>();
@@ -83,10 +112,15 @@ function borrowedInputIsStable(expression: Node, source: TargetSourceProgram): b
       const declaration = selected.declaration;
       if (ast.is.IsVariableDeclaration(declaration) || ast.is.IsParameterDeclaration(declaration) ||
         ast.is.IsBindingElement(declaration)) {
-        const summary = navigation.declarationUseSummary(declaration);
-        if (!selected.project || summary.bindingWritten || summary.memberWritten || summary.captured ||
-          summary.aliasedOrStored || summary.exported || summary.receiverUsed ||
-          sourceBindingHasMutableExposure(source, summary, enter)) return false;
+        let stable = stableBindings.get(declaration);
+        if (stable === undefined) {
+          const summary = navigation.declarationUseSummary(declaration);
+          stable = selected.project && !summary.bindingWritten && !summary.memberWritten && !summary.captured &&
+            !summary.aliasedOrStored && !summary.exported && !summary.receiverUsed &&
+            !sourceBindingHasMutableExposure(source, summary, enter);
+          stableBindings.set(declaration, stable);
+        }
+        if (!stable) return false;
       }
     }
     forEachSourceImmediateEvaluationChild(ast, node, child => pending.push(child));

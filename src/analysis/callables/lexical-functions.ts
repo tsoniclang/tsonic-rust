@@ -12,7 +12,7 @@ import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
 import { resolveRustEnclosingGenericParameters } from "../../policy/types/resolution/generic-environment.js";
 import { rustCompileTimeSourceKey } from "../../target-model/facts/source-declarations.js";
 import type { RustRuntimeValueUsePlan } from "../program/runtime-value-uses.js";
-import { rustDirectLexicalCallableBinding } from "../../policy/ownership/source-lexical-callable.js";
+import type { RustSourceCallableQueries } from "../../policy/ownership/source-borrowed-return.js";
 
 export interface RustLexicalFunctionCapture {
   readonly declaration: Node;
@@ -42,6 +42,7 @@ export function createRustLexicalFunctionQueries(
   facts: RustPlanQueries,
   lifetimes: RustLifetimeIndex,
   runtimeValueUses: RustRuntimeValueUsePlan,
+  sourceCallables: RustSourceCallableQueries,
 ): RustLexicalFunctionQueries {
   const { ast, navigation } = source;
   const declarations: Node[] = [];
@@ -51,7 +52,7 @@ export function createRustLexicalFunctionQueries(
     if (++steps > maximumLexicalCaptureSteps) return exhausted();
     const node = pending.pop()!;
     if (ast.is.IsFunctionDeclaration(node) && !sourceDeclarationIsModuleScoped(node, ast) && ast.body(node) !== undefined ||
-      rustDirectLexicalCallableBinding(node, source) !== undefined) {
+      sourceCallables.directLexicalBinding(node) !== undefined) {
       declarations.push(node);
       if (declarations.length > maximumLexicalFunctions) return exhausted();
     }
@@ -209,7 +210,7 @@ export function createRustLexicalFunctionQueries(
     });
     return Object.freeze({ forDeclaration: (declaration: Node) =>
       ast.is.IsFunctionDeclaration(declaration) && !sourceDeclarationIsModuleScoped(declaration, ast) ||
-        rustDirectLexicalCallableBinding(declaration, source) !== undefined ? selection : undefined,
+        sourceCallables.directLexicalBinding(declaration) !== undefined ? selection : undefined,
       valueDeclarationsAt: () => Object.freeze([]) });
   }
 }

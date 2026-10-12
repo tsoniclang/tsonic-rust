@@ -3,11 +3,10 @@ import test from "node:test";
 import { createCompilerSessionFromFiles, formatDiagnostics } from "@tsonic/tsts";
 import { createTargetSourceProgram, Node_Initializer } from "@tsonic/target-api/source";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
-import { rustSourceBorrowedReturnParameter } from "../../../dist/policy/ownership/source-borrowed-return.js";
-import { rustDirectLexicalCallableBinding } from "../../../dist/policy/ownership/source-lexical-callable.js";
+import { createRustSourceCallableQueries } from "../../../dist/policy/ownership/source-borrowed-return.js";
 import { closedUnionCallbackCompletionSource } from "../../../../tsonic/test/fixtures/closed-union-callback-completion.mjs";
 
-function fixture(text, name = "read", valid = true) {
+function checkedFixture(text, name = "read", valid = true) {
   const checked = createCompilerSessionFromFiles({ currentDirectory: "/project",
     files: { "/project/index.ts": text },
     compilerOptions: { strict: true, target: "es2022", module: "esnext" } }).checkSource();
@@ -20,11 +19,129 @@ function fixture(text, name = "read", valid = true) {
     (source.ast.is.IsVariableDeclaration(node) || source.ast.is.IsFunctionDeclaration(node)));
   const declaration = source.ast.is.IsVariableDeclaration(binding) ? Node_Initializer(source.ast, binding) : binding;
   assert.equal(declaration !== undefined, true, "exact callable declaration");
-  return { declaration, parameter: source.ast.parameters(declaration)[0],
-    direct: rustDirectLexicalCallableBinding(declaration, source) === binding,
-    selected: rustSourceBorrowedReturnParameter(declaration, {
-      ast: source.ast, source, sourceStorage, semanticsFor: source.semantics.forNode,
-    }) };
+  return { sourceStorage, binding, declaration, parameter: source.ast.parameters(declaration)[0] };
+}
+
+function fixture(text, name = "read", valid = true) {
+  const current = checkedFixture(text, name, valid);
+  const { declaration, binding, sourceStorage } = current;
+  const queries = createRustSourceCallableQueries(sourceStorage);
+  return { ...current,
+    direct: queries.directLexicalBinding(declaration) === binding,
+    selected: queries.borrowedReturnParameter(declaration) };
+}
+
+function observedQueries(current) {
+  const { sourceStorage } = current;
+  const { source } = sourceStorage;
+  const reads = { summaries: 0, selectedCalls: 0, sourceFacts: 0, parents: 0, returnOrigins: 0 };
+  const observedSource = Object.freeze({ ...source,
+    ast: Object.freeze({ ...source.ast, parent(node) {
+      reads.parents++;
+      return source.ast.parent(node);
+    } }),
+    navigation: Object.freeze({ ...source.navigation, declarationUseSummary(node) {
+      reads.summaries++;
+      return source.navigation.declarationUseSummary(node);
+    } }),
+    sourceFacts: Object.freeze({ ...source.sourceFacts, getFact(...arguments_) {
+      reads.sourceFacts++;
+      return source.sourceFacts.getFact(...arguments_);
+    } }),
+    semantics: Object.freeze({ ...source.semantics, forNode(node) {
+      const semantics = source.semantics.forNode(node);
+      return { ...semantics, operations: { ...semantics.operations, call(call) {
+        reads.selectedCalls++;
+        return semantics.operations.call(call);
+      } } };
+    } }),
+  });
+  const queries = createRustSourceCallableQueries(Object.freeze({ ...sourceStorage,
+    source: observedSource,
+    boundOriginsFor(...arguments_) {
+      reads.returnOrigins++;
+      return sourceStorage.boundOriginsFor(...arguments_);
+    },
+  }));
+  return { queries, reads };
+}
+
+function repeatedCalls(count) {
+  return `export function run(value: string): boolean {
+    const read = (input: string): string => input;
+    ${Array.from({ length: count }, () => 'if (read(value) !== value) return false;').join("\n")}
+    return true;
+  }`;
+}
+
+test("source callable queries share immutable lexical and paired-return proofs within one analysis", () => {
+  const current = checkedFixture(repeatedCalls(64));
+  const { queries, reads } = observedQueries(current);
+  assert.equal(Object.isFrozen(queries), true);
+  assert.equal(queries.directLexicalBinding(current.declaration) === current.binding, true, "exact lexical binding");
+  const lexicalCalls = reads.selectedCalls;
+  assert.equal(lexicalCalls, 64, "each checked direct call is qualified once");
+  assert.equal(queries.borrowedReturnParameter(current.declaration) === current.parameter, true, "exact returned input");
+  assert.equal(reads.selectedCalls - lexicalCalls, 64, "paired-return proof reuses qualified direct calls");
+  assert.equal(reads.returnOrigins, 1, "one exact return-origin proof");
+  assert.equal(reads.sourceFacts > 0, true, "mutable-exposure safety remains checked");
+  const first = { ...reads };
+  for (let iteration = 0; iteration < 128; iteration++) {
+    assert.equal(queries.directLexicalBinding(current.declaration) === current.binding, true);
+    assert.equal(queries.borrowedReturnParameter(current.declaration) === current.parameter, true);
+  }
+  assert.deepEqual(reads, first, "repeated call-site and ABI consumers do not rescan source evidence");
+});
+
+test("source callable proof work grows linearly with distinct direct calls and shared actual inputs", () => {
+  const small = checkedFixture(repeatedCalls(32));
+  const large = checkedFixture(repeatedCalls(64));
+  const first = observedQueries(small);
+  const second = observedQueries(large);
+  assert.equal(first.queries.borrowedReturnParameter(small.declaration) === small.parameter, true);
+  assert.equal(second.queries.borrowedReturnParameter(large.declaration) === large.parameter, true);
+  for (const key of Object.keys(first.reads)) {
+    assert.equal(first.reads[key] > 0, true, `${key} is actually observed`);
+    assert.equal(second.reads[key] <= 2 * first.reads[key], true, `${key} has no calls-times-uses rescan`);
+  }
+  assert.equal(first.reads.selectedCalls, 64);
+  assert.equal(second.reads.selectedCalls, 128);
+});
+
+test("source callable query factories never share proofs between analyses", () => {
+  const current = checkedFixture(repeatedCalls(4));
+  const first = observedQueries(current);
+  const second = observedQueries(current);
+  assert.equal(first.queries.borrowedReturnParameter(current.declaration) === current.parameter, true);
+  assert.equal(Object.values(second.reads).every(value => value === 0), true, "the second analysis has not run");
+  assert.equal(second.queries.borrowedReturnParameter(current.declaration) === current.parameter, true);
+  assert.deepEqual(second.reads, first.reads, "even reused immutable source nodes receive a separate analysis cache");
+  const changed = fixture(`export function run(value: string) {
+    const read = (input: string): string => { input = "changed"; return input; };
+    return read(value) === value;
+  }`);
+  assert.equal(changed.selected === undefined, true, "equal authored identities do not reuse another program's proof");
+});
+
+for (const [name, text, lexical] of [
+  ["escaping callable", `export function run() { const read = (value: string) => value; return read; }`, false],
+  ["owned mutated input", `export function run(value: string) {
+    const read = (input: string): string => { input = "changed"; return input; };
+    return read(value) === value;
+  }`, true],
+]) {
+  test(`source callable queries retain negative proof results for ${name}`, () => {
+    const current = checkedFixture(text);
+    const { queries, reads } = observedQueries(current);
+    assert.equal(queries.directLexicalBinding(current.declaration) === current.binding, lexical);
+    assert.equal(queries.borrowedReturnParameter(current.declaration) === undefined, true);
+    const first = { ...reads };
+    for (let iteration = 0; iteration < 128; iteration++) {
+      assert.equal(queries.directLexicalBinding(current.declaration) === current.binding, lexical);
+      assert.equal(queries.borrowedReturnParameter(current.declaration) === undefined, true);
+    }
+    assert.deepEqual(reads, first, "rejection is memoized without weakening the proof");
+  });
 }
 
 test("checked original native completion observer returns its exact borrowed input", () => {

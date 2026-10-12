@@ -61,7 +61,6 @@ import type {
 import type { Node } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "../model.js";
 import type { RustSelectedTargetSignature, RustTargetMember, TargetTypeRef } from "../../../../target-model/types/model.js";
-import { rustDirectLexicalCallableBinding } from "../../../../policy/ownership/source-lexical-callable.js";
 
 export function selectRustCheckedCall(
   request: RustCheckedCallSelectionInput,
@@ -406,7 +405,7 @@ export function selectRustCheckedCall(
     const nativeCallable = binding?.storage === "native-callable" &&
       (binding.callableDeclaration === sourceDeclaration ||
         declarationKind === "KindFunctionType" || declarationKind === "KindCallSignature");
-    const lexicalBinding = rustDirectLexicalCallableBinding(sourceDeclaration, context.source);
+    const lexicalBinding = context.sourceCallables.directLexicalBinding(sourceDeclaration);
     const directLexical = lexicalBinding !== undefined && lexicalBinding === reference?.declaration;
     const calleeKind = calleeDeclaration === undefined ? undefined : context.ast.kindName(calleeDeclaration);
     const storedCallable = calleeKind !== undefined && ["KindVariableDeclaration", "KindParameter",

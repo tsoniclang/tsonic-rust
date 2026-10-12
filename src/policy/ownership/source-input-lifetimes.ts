@@ -3,7 +3,6 @@ import { sourceNodeIdentity } from "@tsonic/target-api/source";
 import type { RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import type { RustTargetTypeResolutionContext } from "../types/resolution/model.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
-import { rustSourceBorrowedReturnParameter } from "./source-borrowed-return.js";
 
 export function rustSourceInputLifetime(
   parameter: Node,
@@ -12,7 +11,7 @@ export function rustSourceInputLifetime(
   const { ast } = context;
   const owner = ast.parent(parameter);
   if (!ast.is.IsParameterDeclaration(parameter) || owner === undefined) return undefined;
-  const returned = rustSourceBorrowedReturnParameter(owner, context) === parameter;
+  const returned = context.sourceCallables.borrowedReturnParameter(owner) === parameter;
   if (!returned && (!ast.is.IsFunctionDeclaration(owner) ||
     !ast.hasModifierKind(owner, "async") && context.semanticsFor(owner).operations.generator(owner) === undefined)) return undefined;
   const identity = sourceNodeIdentity(ast, owner);
