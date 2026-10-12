@@ -10,6 +10,7 @@ import {
 import { rustGenericCallableValue } from "./generic-callables.js";
 import { rustFrameCallableValue } from "./frame-callables.js";
 import { rustClassConstructorFreeArguments } from "./class-constructors.js";
+import { rustProducerErrorReference } from "./producer-errors.js";
 import type {
   RustTargetConstArgument,
   RustTargetGenericArgument,
@@ -51,6 +52,7 @@ export interface RustTargetGenericReferences {
   readonly hasUnnameableLifetime: boolean;
   readonly elisionInputs: readonly RustLifetimeRef[];
   readonly constIdentities: readonly string[];
+  readonly constParameters: readonly Extract<RustTargetConstArgument, { readonly kind: "parameter" }>[];
 }
 
 export function rustTargetGenericReferences(
@@ -65,7 +67,7 @@ export function rustTargetGenericReferences(
     RustLifetimeRef,
     { readonly kind: "call-scoped-elision" }
   >>();
-  const constIdentities = new Set<string>();
+  const constParameters = new Map<string, Extract<RustTargetConstArgument, { readonly kind: "parameter" }>>();
   let hasUnnameableLifetime = false;
   const elisionLifetimes = new Map<string, RustLifetimeRef>();
   const anonymousElisions: RustLifetimeRef[] = [];
@@ -84,7 +86,9 @@ export function rustTargetGenericReferences(
       .map(([, lifetime]) => lifetime)),
     hasUnnameableLifetime,
     elisionInputs: Object.freeze([...elisionLifetimes.values(), ...anonymousElisions]),
-    constIdentities: Object.freeze([...constIdentities].sort()),
+    constIdentities: Object.freeze([...constParameters.keys()].sort()),
+    constParameters: Object.freeze([...constParameters].sort(([left], [right]) => left.localeCompare(right, "en"))
+      .map(([, parameter]) => parameter)),
   });
 
   function visitLifetime(
@@ -120,7 +124,11 @@ export function rustTargetGenericReferences(
   }
 
   function visitConst(value: RustTargetConstArgument): void {
-    if (value.kind === "parameter") constIdentities.add(value.identity);
+    if (value.kind !== "parameter") return;
+    const existing = constParameters.get(value.identity);
+    if (existing !== undefined && existing.name !== value.name)
+      throw new Error("One Rust const identity has contradictory target names.");
+    constParameters.set(value.identity, value);
   }
 
   function visitArguments(
@@ -213,6 +221,11 @@ export function rustTargetGenericReferences(
         visitArguments(value.genericArguments, bound);
         return;
       case "target-specific": {
+        const producerError = rustProducerErrorReference(value);
+        if (producerError !== undefined) {
+          visitArguments(producerError.genericArguments, bound);
+          return;
+        }
         const constructorArguments = rustClassConstructorFreeArguments(value);
         if (constructorArguments !== undefined) {
           visitArguments(constructorArguments, bound);

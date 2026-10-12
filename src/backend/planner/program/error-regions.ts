@@ -4,14 +4,23 @@ import { rustErrorEffectsFactKey, type RustErrorEffectsFact } from "../../../ana
 import { allocateRustGeneratedName } from "../../../target-model/names/generated.js";
 import type { RustItem } from "../../target-ast/nodes.js";
 import { planRustNativeErrorJoin } from "../types/native-error-joins.js";
-import { rustTypeFromCarrierInContext } from "../types/render.js";
+import { rustTypeFromCarrierInContext, type RustTypeRenderingContext } from "../types/render.js";
 import { rustErrorType, rustNativeFallibleBoundary, rustPackageFallibleBoundary,
   type RustFallibleBoundary } from "./fallible-boundaries.js";
 import { rustErrorBoundaryForDeclaration, type RustPlanContext } from "./plan-context.js";
+import type { RustProducerErrorReference } from "../../../target-model/types/carriers/producer-errors.js";
+import type { RustTargetConstArgument, TargetTypeRef } from "../../../target-model/types/model.js";
+import { substituteRustTargetGenerics } from "../../../target-model/types/carriers/substitution.js";
+import { rustLifetimeKey, type RustLifetimeRef } from "../../../target-model/lifetimes/index.js";
+import { rustAsyncFunctionFactKey, rustGeneratorFactKey, rustSourceCallableReturnFactKey, rustSourceCallEffectsFactKey } from "../../../analysis/facts/keys.js";
+import { rustNativeCallableCompletion } from "../../../target-model/types/callable-completions.js";
+import type { RustType } from "../../target-ast/nodes.js";
 
 export interface RustErrorRegionCatalog {
   nameFor(fileName: string, arity: number): string | undefined;
   itemsFor(fileName: string): readonly RustItem[];
+  producerErrorType(reference: RustProducerErrorReference, context: RustTypeRenderingContext,
+    render: (carrier: TargetTypeRef) => RustType | undefined): RustType | undefined;
 }
 
 export function createRustErrorRegionCatalog(program: RustTargetProgram): RustErrorRegionCatalog {
@@ -57,6 +66,45 @@ export function createRustErrorRegionCatalog(program: RustTargetProgram): RustEr
   return Object.freeze({
     nameFor: (fileName: string, arity: number) => names.get(fileName)?.get(arity),
     itemsFor: (fileName: string) => declarations.get(fileName) ?? empty,
+    producerErrorType(reference: RustProducerErrorReference, context: RustTypeRenderingContext,
+      render: (carrier: TargetTypeRef) => RustType | undefined): RustType | undefined {
+      const producer = program.callableValues.nativeProducers.forIdentity(reference.identity);
+      if (producer === undefined || producer.fileName !== reference.fileName ||
+        producer.environment.length !== reference.genericArguments.length) return undefined;
+      const types = new Map<string, TargetTypeRef>();
+      const lifetimes = new Map<string, RustLifetimeRef>();
+      const consts = new Map<string, RustTargetConstArgument>();
+      for (const [index, parameter] of producer.environment.entries()) {
+        const argument = reference.genericArguments[index]!;
+        if (parameter.kind === "type" && parameter.type.kind === "type-parameter" && argument.kind === "type")
+          types.set(parameter.type.identity, argument.type);
+        else if (parameter.kind === "lifetime" && argument.kind === "lifetime")
+          lifetimes.set(rustLifetimeKey(parameter.lifetime), argument.lifetime);
+        else if (parameter.kind === "const" && parameter.value.kind === "parameter" && argument.kind === "const")
+          consts.set(parameter.value.identity, argument.value);
+        else return undefined;
+      }
+      const asynchronous = program.facts.getFact(producer.declaration, rustAsyncFunctionFactKey);
+      const suspended = asynchronous !== undefined || program.facts.getFact(producer.declaration, rustGeneratorFactKey) !== undefined;
+      const infallible: RustType = { kind: "named", path: "core::convert::Infallible" };
+      if (reference.channel === "invoke" && suspended) return infallible;
+      if (reference.channel !== "invoke") {
+        const result = program.facts.getFact(producer.declaration, rustSourceCallableReturnFactKey)?.returnCarrier;
+        const completion = result === undefined ? undefined : rustNativeCallableCompletion(result, program.typeDefinitions);
+        if (completion?.futures[reference.channel] === undefined) return undefined;
+        if (asynchronous === undefined) {
+          const effects = program.facts.getFact(producer.declaration, rustSourceCallEffectsFactKey);
+          return effects?.awaiting === "infallible" ? infallible : undefined;
+        }
+      }
+      const effects = program.facts.getFact(producer.declaration, rustErrorEffectsFactKey);
+      if (effects === undefined) return undefined;
+      const selected = planRustSelectedErrorRegion(producer.declaration, { ...effects,
+        nativeErrors: effects.nativeErrors.map(source => ({ ...source,
+          errorType: substituteRustTargetGenerics(source.errorType, types, lifetimes, consts) })),
+      }, context, render);
+      return selected === undefined ? undefined : selected.boundary?.errorType ?? infallible;
+    },
   });
 }
 
@@ -72,7 +120,8 @@ export function planRustErrorRegion(
 export function planRustSelectedErrorRegion(
   declaration: Node,
   effects: RustErrorEffectsFact,
-  context: RustPlanContext,
+  context: RustTypeRenderingContext,
+  render: (carrier: TargetTypeRef) => RustType | undefined = carrier => rustTypeFromCarrierInContext(carrier, context),
 ): { readonly boundary: RustFallibleBoundary | undefined } | undefined {
   const owner = effects.localErrors ? rustErrorBoundaryForDeclaration(declaration, context) : undefined;
   if (effects.localErrors && owner === undefined) return undefined;
@@ -88,7 +137,7 @@ export function planRustSelectedErrorRegion(
   const external = context.externalCrateNameByFileName.get(fileName);
   const referencePath = `${external !== undefined && external !== context.crateName ? external : "crate"}::${moduleName}::${name}`;
   const nativeSources = effects.nativeErrors.map((source, index) => {
-    const errorType = rustTypeFromCarrierInContext(source.errorType, context);
+    const errorType = render(source.errorType);
     return errorType === undefined ? undefined : { identity: source.identity,
       variant: `Error${index + (owner === undefined ? 0 : 1)}`, errorType };
   });

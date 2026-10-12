@@ -1,5 +1,5 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import type { SourceStorageBindings, SourceStorageBindingsSelection, SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
+import type { SourceStorageBindings, SourceStorageBindingsSelection, SourceStorageQueries, SourceStorageSubject, SourceStorageSubjectsSelection } from "@tsonic/target-api/analysis";
 import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
@@ -17,6 +17,7 @@ import { rustTargetGenericBindingsForArguments } from "../../target-model/types/
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { rustSourceCallableReturnFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
 import type { RustNativeCallableInput, RustNativeCallableInputPlan } from "./native-inputs.js";
+import type { RustNativeCallableProducerPlan } from "./native-producers.js";
 
 export type RustNativeStorageSelection =
   | { readonly kind: "identity"; readonly carrier: TargetTypeRef }
@@ -30,6 +31,7 @@ export interface RustNativeStoragePlan {
   subjectFor(subject: SourceStorageSubject, carrier: TargetTypeRef, owner?: Node): RustNativeStorageSelection;
   invocationReturnFor(implementation: Node, invocation: Node, owner?: Node): RustNativeStorageSelection;
   invocationInputFor(input: RustNativeCallableInput, invocation: Node, owner?: Node): RustNativeStorageSelection;
+  invocationOriginsFor(input: RustNativeCallableInput, invocation: Node, owner?: Node): SourceStorageSubjectsSelection;
 }
 
 export function createRustNativeStoragePlan(input: {
@@ -38,6 +40,7 @@ export function createRustNativeStoragePlan(input: {
   readonly facts: RustPlanQueries;
   readonly definitions: RustTypeDefinitions;
   readonly native: RustNativeCallableInputPlan;
+  readonly producers: RustNativeCallableProducerPlan;
 }): RustNativeStoragePlan {
   const nodes = new Set(input.storage.nodes);
   const inputs = new Map(input.native.inputs.map(value => [value.subject, value]));
@@ -104,26 +107,31 @@ export function createRustNativeStoragePlan(input: {
       if (rustCallableProtocol(current) !== undefined || rustGenericCallableValue(current) !== undefined) {
         const origins = input.storage.boundOriginsFor(selectedSubject, bindings);
         if (origins.kind === "unresolved") return fail(origins.reason);
-        let selected: RustNativeCallableInput | undefined;
+        let physical: TargetTypeRef | undefined;
         for (const origin of origins.subjects) {
           if (!step(depth)) return undefined;
           const candidate = inputs.get(origin);
+          let candidatePhysical: TargetTypeRef | undefined;
           if (candidate === undefined) {
             const originCarrier = origin.projection.length === 0
               ? input.facts.getFact(origin.node, rustRuntimeCarrierKey)?.carrier : undefined;
             if (permitsAbsence && isRustAbsenceCarrier(originCarrier)) continue;
-            return fail("Native callable storage has a producer without a sealed physical implementation.");
+            candidatePhysical = origin.projection.length === 0
+              ? input.producers.physicalFor(origin.node, current) : undefined;
+            if (candidatePhysical === undefined)
+              return fail("Native callable storage has a producer without a sealed physical implementation.");
+          } else {
+            const candidateCarrier = callableValueCarrier(candidate.carrier);
+            if (candidateCarrier === undefined || !sameCallableContract(current, candidateCarrier))
+              return fail("Native callable storage conflicts with its exact input callable contract.");
+            selectedInputs.add(candidate);
+            candidatePhysical = candidate.implementation;
           }
-          const candidateCarrier = callableValueCarrier(candidate.carrier);
-          if (candidateCarrier === undefined || !sameCallableContract(current, candidateCarrier))
-            return fail("Native callable storage conflicts with its exact input callable contract.");
-          if (selected !== undefined && selected !== candidate)
+          if (physical !== undefined && !rustTargetTypeRefEquals(physical, candidatePhysical))
             return fail("Native callable storage has distinct physical input alternatives requiring a sealed join.");
-          selected = candidate;
+          physical = candidatePhysical;
         }
-        if (selected === undefined) return fail("Native callable storage has no selected physical input implementation.");
-        selectedInputs.add(selected);
-        return selected.implementation;
+        return physical ?? fail("Native callable storage has no selected physical input implementation.");
       }
       if (current.kind === "array" || current.kind === "slice") {
         const component = project(selectedSubject, { kind: "array-element" });
@@ -147,7 +155,7 @@ export function createRustNativeStoragePlan(input: {
     };
     const physical = visit(carrier, subject, 0, false);
     return physical === undefined ? unresolved(reason ?? "Native callable storage has no exact physical selection.")
-      : selectedInputs.size === 0 ? Object.freeze({ kind: "identity", carrier })
+      : rustTargetTypeRefEquals(physical, carrier) ? Object.freeze({ kind: "identity", carrier })
         : Object.freeze({ kind: "selected", carrier: physical, inputs: Object.freeze([...selectedInputs]) });
   };
   return Object.freeze({
@@ -196,6 +204,11 @@ export function createRustNativeStoragePlan(input: {
       return generics === undefined ? unresolved("Native invocation input has no exact selected generic arguments.")
         : select(selected.subject, substituteRustTargetGenerics(selected.carrier, generics.types,
           generics.lifetimes, generics.consts), bindings.bindings);
+    },
+    invocationOriginsFor(selected: RustNativeCallableInput, invocation: Node, owner?: Node): SourceStorageSubjectsSelection {
+      if (!ownedInputs.has(selected)) return unresolved("Native invocation input requires its exact owned input identity.");
+      const bindings = invocationBindingsFor(selected.owner, invocation, owner);
+      return bindings.kind === "unresolved" ? bindings : input.storage.boundOriginsFor(selected.subject, bindings.bindings);
     },
   });
 }

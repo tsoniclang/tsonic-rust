@@ -12,6 +12,7 @@ import type { RustLifetimeRef } from "../../lifetimes/index.js";
 import { rustGenericCallableCarrier, rustGenericCallableValue } from "./generic-callables.js";
 import { rustFrameCallableCarrier, rustFrameCallableValue } from "./frame-callables.js";
 import { rustSourceOptionalTargetType } from "../projections.js";
+import { rustProducerErrorReference, rustProducerErrorTargetType } from "./producer-errors.js";
 
 export function substituteRustTargetTypeParameters(
   type: TargetTypeRef,
@@ -342,6 +343,11 @@ function substituteCarrierParts(
             }),
       };
     case "target-specific": {
+      const producerError = rustProducerErrorReference(type);
+      if (producerError !== undefined) return rustProducerErrorTargetType({ ...producerError,
+        genericArguments: substituteGenericArguments(producerError.genericArguments, substitutions,
+          lifetimeSubstitutions, constSubstitutions, normalize),
+      });
       const constructor = rustClassConstructorContract(type);
       if (constructor !== undefined) {
         const arguments_ = rustSourceTypeCarrierValue(constructor.instance)!.genericArguments;

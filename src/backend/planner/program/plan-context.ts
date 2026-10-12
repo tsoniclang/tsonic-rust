@@ -143,7 +143,9 @@ export interface RustPlanContext {
 
 export function rustErrorBoundaryForDeclaration(
   declaration: Node,
-  context: RustPlanContext,
+  context: Pick<RustPlanContext, "sourcePackageErrors" | "sourcePackageComponentId"> & {
+    readonly input: { readonly program: { readonly source: { readonly ast: import("@tsonic/tsts").AstReader } } };
+  },
 ): RustSourcePackageErrorBoundary | undefined {
   const sourceFile = context.input.program.source.ast.getSourceFile(declaration);
   const fileName = sourceFile === undefined

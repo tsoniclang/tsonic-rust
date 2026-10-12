@@ -24,6 +24,7 @@ import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { createRustNativeCallableInputPlan, type RustNativeCallableInputPlan } from "./native-inputs.js";
 import { createRustNativeStoragePlan, type RustNativeStoragePlan } from "./native-storage.js";
+import { createRustNativeCallableProducerPlan, type RustNativeCallableProducerPlan } from "./native-producers.js";
 
 export interface RustCallableValuePlan {
   readonly generic: RustGenericCallablePlan;
@@ -31,6 +32,7 @@ export interface RustCallableValuePlan {
   readonly frames: RustFrameCallablePlan;
   readonly native: RustNativeCallableInputPlan;
   readonly nativeStorage: RustNativeStoragePlan;
+  readonly nativeProducers: RustNativeCallableProducerPlan;
   readonly issues: readonly RustSourceCallableSpecializationIssue[];
 }
 
@@ -73,6 +75,7 @@ export function createRustCallableValuePlanRegistry(): RustCallableValuePlanRegi
     get frames() { return requireCurrent().frames; },
     get native() { return requireCurrent().native; },
     get nativeStorage() { return requireCurrent().nativeStorage; },
+    get nativeProducers() { return requireCurrent().nativeProducers; },
     get issues() { return requireCurrent().issues; },
   });
 }
@@ -152,8 +155,14 @@ function createRustCallableValuePlan(input: RustCallableValuePlanInput): RustCal
   const frames = createRustFrameCallablePlan({ ...input, usedNames });
   const native = createRustNativeCallableInputPlan({ ast: input.ast, facts: input.facts,
     storage: input.sourceStorage, definitions: input.typeDefinitions, usedNames });
+  const nativeProducers = createRustNativeCallableProducerPlan({ ast: input.ast, facts: input.facts,
+    nodes: input.sourceStorage.nodes, native, definitions: input.typeDefinitions,
+    returnCarrierFor: declaration => {
+      const selected = nativeStorage.returnFor(declaration);
+      return selected.kind === "unresolved" ? undefined : selected.carrier;
+    } });
   const nativeStorage = createRustNativeStoragePlan({ ast: input.ast, facts: input.facts,
-    storage: input.sourceStorage, definitions: input.typeDefinitions, native });
-  return Object.freeze({ generic, suspended, frames, native, nativeStorage,
+    storage: input.sourceStorage, definitions: input.typeDefinitions, native, producers: nativeProducers });
+  return Object.freeze({ generic, suspended, frames, native, nativeStorage, nativeProducers,
     issues: Object.freeze([...generic.issues, ...suspended.issues, ...frames.issues]) });
 }

@@ -31,6 +31,8 @@ import { rustGenericCallableValue } from "../../../target-model/types/carriers/g
 import { rustFrameCallableValue } from "../../../target-model/types/carriers/frame-callables.js";
 import { rustFrameCallableTypes } from "./frame-callables.js";
 import { rustClassConstructorInstance } from "../../../target-model/types/carriers/class-constructors.js";
+import { rustProducerErrorReference, type RustProducerErrorReference } from "../../../target-model/types/carriers/producer-errors.js";
+import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { rustRuntimeUnionContract } from "../../../target-model/types/carriers/runtime-unions.js";
 import { rustClassEnvironmentHandleType } from "../objects/class-environment-types.js";
 import { rustLifetimeToAst } from "./lifetime-syntax.js";
@@ -70,6 +72,7 @@ interface RustSourceTypeRendering {
   readonly pathFor: (value: { readonly fileName: string; readonly typeName: string }) => string | undefined;
   readonly additionalArgumentsFor: (carrier: TargetTypeRef) => readonly RustGenericArgument[];
   readonly programErrorType?: () => RustType | undefined;
+  readonly producerErrorType?: (reference: RustProducerErrorReference) => RustType | undefined;
 }
 
 export function rustTypeFromCarrier(
@@ -80,6 +83,8 @@ export function rustTypeFromCarrier(
   if (carrier === undefined) {
     return undefined;
   }
+  const producerError = rustProducerErrorReference(carrier);
+  if (producerError !== undefined) return resolveSourceTypePath?.producerErrorType?.(producerError);
   if (carrier.kind === "trait-ref") {
     const reference = rustTraitReferenceFromCarrier(carrier, resolveSourceTypePath, resolveStructuralShape);
     return (reference?.binder?.length ?? 0) === 0 ? reference?.trait : undefined;
@@ -514,7 +519,10 @@ export interface RustTypeRenderingContext {
     readonly typeParameterSubstitutions?: ReadonlyMap<string, TargetTypeRef>;
     readonly lifetimeSubstitutions?: ReadonlyMap<string, RustLifetimeRef>;
     readonly input: {
+      readonly errorRegions: import("../program/error-regions.js").RustErrorRegionCatalog;
       readonly program: {
+        readonly source: import("@tsonic/target-api/analysis").TargetSourceSyntaxProgram;
+        readonly facts: import("../../../target-model/facts/selections.js").RustPlanQueries;
         readonly typeDefinitions: import("../../../target-model/types/source-union-definitions.js").RustTypeDefinitions;
         readonly names: import("../../../target-model/names/model.js").RustNamePlan;
         readonly structuralShapes: import("../../../analysis/objects/structural-shape-plan.js").RustStructuralShapePlan;
@@ -618,12 +626,25 @@ export function rustTypeFromCarrierInContext(
       genericArguments: typeGenericArguments([stateType]),
     };
   };
+  const resolvingProducerErrors = new Set<string>();
+  let producerErrorWork = 4096;
   const sourceRendering: RustSourceTypeRendering = {
     typeParameterNames: context.typeParameterNames, typeDefinitions: context.input.program.typeDefinitions,
     pathFor: resolveSourceTypePath, additionalArgumentsFor: type => rustOptionalStorageTypeArguments(type, context),
     programErrorType: () => {
       const boundary = context.sourcePackageErrors === undefined ? undefined : rustCurrentErrorBoundary(context);
       return boundary === undefined ? undefined : rustErrorType(boundary);
+    },
+    producerErrorType: reference => {
+      const key = closedMetadataKey(reference);
+      if (producerErrorWork-- <= 0 || resolvingProducerErrors.size >= 128 || resolvingProducerErrors.has(key)) return undefined;
+      resolvingProducerErrors.add(key);
+      try {
+        return context.input.errorRegions.producerErrorType(reference, context,
+          carrier => rustTypeFromCarrier(carrier, sourceRendering, resolveStructuralShape));
+      } finally {
+        resolvingProducerErrors.delete(key);
+      }
     },
   };
   const rendered = rustTypeFromCarrier(selectedCarrier, sourceRendering, resolveStructuralShape);

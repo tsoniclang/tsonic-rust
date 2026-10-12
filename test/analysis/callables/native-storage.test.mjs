@@ -5,6 +5,9 @@ import { createTargetSourceProgram, Node_Initializer } from "@tsonic/target-api/
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { createRustNativeCallableInputPlan } from "../../../dist/analysis/callables/native-inputs.js";
 import { createRustNativeStoragePlan } from "../../../dist/analysis/callables/native-storage.js";
+import { createRustNativeCallableProducerPlan } from "../../../dist/analysis/callables/native-producers.js";
+import { rustNamedTypeCarrierValue } from "../../../dist/target-model/types/carriers/native.js";
+import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 import { rustRuntimeCarrierKey } from "../../../dist/target-model/facts/selections.js";
 import { rustSourceParameterAbiFactKey } from "../../../dist/analysis/facts/keys.js";
 import { rustOptionElementCarrier } from "../../../dist/target-model/types/carriers/optional.js";
@@ -19,6 +22,12 @@ function fixture(text, options = {}) {
   const storage = createSourceStorageQuery(source, program.sourceFiles);
   const input = { ast: source.ast, storage, facts: program.facts, definitions: program.typeDefinitions };
   const native = createRustNativeCallableInputPlan({ ...input, usedNames: new Set() });
+  const producers = createRustNativeCallableProducerPlan({ ...input, native, nodes: storage.nodes,
+    returnCarrierFor: declaration => {
+      const selected = plan.returnFor(declaration);
+      return selected.kind === "unresolved" ? undefined : selected.carrier;
+    } });
+  input.producers = producers;
   const plan = createRustNativeStoragePlan({ ...input, native });
   const declaration = name => storage.nodes.find(node => source.ast.name(node) !== undefined &&
     source.ast.text(source.ast.name(node)) === name &&
@@ -110,8 +119,15 @@ test("invocation input forwarding binds exact callee inputs rather than caller s
     assert.equal(value.carrier.lifetime === callee.carrier.lifetime, true);
     assert.equal(inputs[index].protocol.identity !== callee.protocol.identity, true, "callee trait remains its own contract");
   }
-  assert.equal(current.plan.invocationInputFor(callee, current.initializer("supplied")).kind, "unresolved",
-    "an unsealed producer cannot supply a guessed physical error channel");
+  const supplied = current.plan.invocationInputFor(callee, current.initializer("supplied"));
+  assert.equal(supplied.kind, "selected", "concrete producer has its sealed physical error channel");
+  assert.equal(supplied.inputs.length, 0, "a concrete producer is never rebranded as a formal input");
+  const produced = rustNamedTypeCarrierValue(supplied.carrier.referent);
+  const result = rustNamedTypeCarrierValue(produced.genericArguments[1].type);
+  const error = rustProducerErrorReference(result.genericArguments[1].type);
+  assert.equal(error.channel, "invoke");
+  assert.equal(current.input.producers.forIdentity(error.identity).declaration ===
+    current.source.ast.arguments(current.initializer("supplied"))[0], true);
   assert.equal(current.plan.invocationInputFor(inputs[0], current.initializer("first")).kind, "unresolved",
     "input must belong to the invocation's exact selected implementation");
   let getterReads = 0;
@@ -147,7 +163,12 @@ test("physical captured forwarding retains outer inputs without mistaking a new 
   const closure = current.storage.nodes.find(node => current.source.ast.is.IsArrowFunction(node));
   selected(current.plan.valueFor(current.declaration("captured")), inputs[1].implementation, "captured exact outer input");
   selected(current.plan.returnFor(closure), inputs[1].implementation, "nested return retains capture binding");
-  assert.equal(current.plan.returnFor(owner).kind, "unresolved", "new concrete producer requires sealed physical evidence");
+  const outward = current.plan.returnFor(owner);
+  assert.equal(outward.kind, "selected", "concrete closure retains a sealed producer-owned signature");
+  const callable = rustNamedTypeCarrierValue(outward.carrier);
+  const result = rustNamedTypeCarrierValue(callable.genericArguments[1].type);
+  assert.equal(result.genericArguments[0].type === inputs[1].implementation, true,
+    "returned captured callback retains its exact physical input, not a logical runtime signature");
 });
 
 test("physical member and array reads use exact projected owner identities", () => {
@@ -241,7 +262,7 @@ test("physical generic callable forwarding retains its quantified contract", () 
   selected(current.plan.valueFor(current.declaration("alias")), input.implementation, "generic alias physical identity");
 });
 
-test("physical selection rejects mutation alternatives and unsealed concrete producers", () => {
+test("physical selection rejects ambiguous mutation alternatives and seals concrete producers", () => {
   const current = fixture(`
     export function choose(left: () => number, right: () => number): () => number {
       left = right; const selected = left; return selected;
@@ -250,9 +271,15 @@ test("physical selection rejects mutation alternatives and unsealed concrete pro
     export function concrete(): () => number { const supplied = create(); return supplied; }
   `);
   for (const result of [current.plan.returnFor(current.declaration("choose")),
-    current.plan.valueFor(current.declaration("selected")), current.plan.returnFor(current.declaration("create")),
-    current.plan.invocationReturnFor(current.declaration("create"), current.initializer("supplied"))])
+    current.plan.valueFor(current.declaration("selected"))])
     assert.equal(result.kind, "unresolved", "no signature-based choice, closed error guess, or silent fallback");
+  const created = current.plan.returnFor(current.declaration("create"));
+  const returned = current.plan.invocationReturnFor(current.declaration("create"), current.initializer("supplied"));
+  assert.equal(created.kind, "selected");
+  assert.equal(returned.kind, "selected");
+  assert.deepEqual(returned.carrier, created.carrier, "one exact producer survives the selected return boundary");
+  const result = rustNamedTypeCarrierValue(rustNamedTypeCarrierValue(created.carrier).genericArguments[1].type);
+  assert.equal(rustProducerErrorReference(result.genericArguments[1].type).channel, "invoke");
 });
 
 test("physical storage validates token ownership, exact contracts and finite projection budgets", () => {
