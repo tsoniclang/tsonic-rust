@@ -3,8 +3,8 @@ import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { createRustNativeGenericProducerPlan } from "../../../dist/analysis/callables/native-generic-producers.js";
 
-function fixture(text) {
-  const { program } = analyzeRust({ surfaces: [], files: { "index.ts": text } });
+function fixture(text, configuration = {}) {
+  const { program } = analyzeRust({ surfaces: [], ...configuration, files: { "index.ts": text } });
   const source = program.source;
   const nodes = [];
   const visit = node => {
@@ -110,4 +110,42 @@ test("unresolved concrete storage is explicit and cannot be replaced by equal-si
   assert.equal(plan.bindings.length, 0);
   assert.equal(plan.unresolved.length, 1);
   assert.equal(plan.unresolved[0].reason, "unavailable exact binding");
+});
+
+test("open producer enumeration preserves symbolic obligations and never substitutes an available family for an unknown input", () => {
+  const current = fixture(`
+    type Identity = <Value>(value: Value) => Value;
+    export function retain(callback: Identity): Identity { return callback; }
+    export function forward(callback: Identity): Identity { return retain(callback); }
+    export function known(): Identity {
+      const callback = <Value>(value: Value): Value => value;
+      return forward(callback);
+    }
+  `, { target: { id: "rust", options: { outputType: "lib" } } });
+  const retained = current.native.inputsFor(current.declaration("retain"))[0];
+  const forwarded = current.native.inputsFor(current.declaration("forward"))[0];
+  const origins = current.options.nativeStorage.implementationOriginsFor(retained);
+  assert.equal(origins.kind, "open");
+  assert.equal(origins.boundaries.length > 0, true);
+  assert.equal(origins.producers.length > 0, true, "known concrete producers may still require legal native impls");
+  const symbolic = current.options.nativeStorage.parameterFor(forwarded.subject.node, forwarded.carrier);
+  assert.equal(symbolic.kind, "selected");
+  assert.equal(symbolic.carrier === forwarded.implementation, true, "the public input remains its own unknown C");
+  assert.equal(current.plan.open.some(entry => entry.input === retained && entry.inputs.includes(forwarded)), true);
+  assert.equal(current.plan.forwardingFor(current.declaration("forward")).some(entry =>
+    entry.input === forwarded && entry.trait.id === retained.protocol.identity), true);
+  const missing = createRustNativeGenericProducerPlan({ ...current.options, nativeStorage: {
+    ...current.options.nativeStorage,
+    implementationOriginsFor(input) {
+      return input === retained ? { kind: "open", producers: [], boundaries: origins.boundaries }
+        : current.options.nativeStorage.implementationOriginsFor(input);
+    },
+    invocationOriginsFor(input, invocation, owner) {
+      return input === retained ? { kind: "unresolved", reason: "missing exact abstract input binding" }
+        : current.options.nativeStorage.invocationOriginsFor(input, invocation, owner);
+    },
+  } });
+  assert.equal(missing.unresolved.some(entry => entry.input === retained && entry.reason === "missing exact abstract input binding"), true);
+  assert.equal(missing.forProtocol(retained.protocol).some(binding => binding.inputs.includes(retained)), false,
+    "a known equal-signature implementation cannot replace a missing exact invocation binding");
 });
