@@ -68,3 +68,32 @@ test("quantified callbacks forward across independent source crates with their e
   assert.doesNotMatch(generated, /Box<|dyn /u);
   validateGeneratedProject("native_protocol_packages", result.artifacts, { run: true });
 });
+
+test("a downstream protocol implements its imported physical producer without a reverse crate dependency", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: [],
+    target: { id: "rust", options: { outputType: "bin", crateName: "native_protocol_imported" } },
+    sourcePackages: sourcePackageGraphFixture(["index.ts"], {
+      "@acme/producer": { files: ["index.ts"], dependencies: [] },
+    }),
+    files: {
+      "node_modules/@acme/producer/package.json": JSON.stringify({ name: "@acme/producer", version: "1.0.0", type: "module", exports: { ".": "./index.ts" } }),
+      "node_modules/@acme/producer/index.ts": `
+        export type Identity = <Value>(value: Value) => Value;
+        export function make(): Identity { return <Value>(value: Value): Value => value; }
+      `,
+      "index.ts": `
+        import { make } from "@acme/producer";
+        import type { Identity } from "@acme/producer";
+        function invoke(callback: Identity): number { return callback<number>(11); }
+        export function main(): void {
+          if (invoke(make()) !== 11) throw new Error("imported producer");
+        }
+      `,
+    },
+  });
+  assert.deepEqual(result.diagnostics.map(({ code, message }) => ({ code, message })), []);
+  const generated = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
+  assert.equal([...generated.matchAll(/pub trait NativeCallable_[a-f\d]+/gu)].length, 1);
+  assert.doesNotMatch(generated, /Box<|dyn /u);
+  validateGeneratedProject("native_protocol_imported", result.artifacts, { run: true });
+});
