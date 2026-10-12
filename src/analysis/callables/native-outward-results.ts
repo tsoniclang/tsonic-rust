@@ -52,13 +52,14 @@ export function createRustNativeOutwardResults(input: {
       const completion = rustNativeCallableCompletion(physical, input.definitions);
       if (completion === undefined) return physical;
       return instantiateRustNativeCompletion(completion, future => {
-        const channel = input.producers.deferredFor(declaration, future.ordinal);
-        if (channel === undefined) return undefined;
         if (future.carrier.kind === "target-named" && future.carrier.id === rustJsPromiseTargetId) {
           const lifetime = future.carrier.genericArguments?.[0];
-          return lifetime?.kind !== "lifetime" ? undefined
-            : rustJsPromiseTargetTypeWithLifetime(future.output, lifetime.lifetime, channel.errorCarrier);
+          const error = input.producers.errorFor(declaration, future.ordinal);
+          return lifetime?.kind !== "lifetime" || error === undefined ? undefined
+            : rustJsPromiseTargetTypeWithLifetime(future.output, lifetime.lifetime, error);
         }
+        const channel = input.producers.deferredFor(declaration, future.ordinal);
+        if (channel === undefined) return undefined;
         const output = channel.awaiting === "fallible"
           ? rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([future.output, channel.errorCarrier]))
           : future.output;
