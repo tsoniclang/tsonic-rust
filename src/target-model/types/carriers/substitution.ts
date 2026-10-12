@@ -375,6 +375,11 @@ function substituteCarrierParts(
         signature: callable.signature,
         environment: callable.environment.map(argument => substituteRustTargetGenerics(
           argument, substitutions, lifetimeSubstitutions, constSubstitutions, normalize)),
+        ...(callable.physical === undefined ? {} : { physical: { ...callable.physical,
+          members: callable.physical.members.map(member => ({ ...member,
+            arguments: substituteGenericArguments(member.arguments, substitutions,
+              lifetimeSubstitutions, constSubstitutions, normalize) })),
+        } }),
       });
       const frame = rustFrameCallableValue(type);
       if (frame !== undefined) return rustFrameCallableCarrier({

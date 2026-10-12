@@ -37,6 +37,7 @@ export interface RustCallableValuePlan {
   readonly nativeCaptures: RustNativeCapturePlan;
   readonly nativeProducers: RustNativeCallableProducerPlan;
   readonly nativeGenericProducers: RustNativeGenericProducerPlan;
+  readonly nativeCaptures: RustNativeCapturePlan;
   readonly issues: readonly RustSourceCallableSpecializationIssue[];
 }
 
@@ -82,6 +83,7 @@ export function createRustCallableValuePlanRegistry(): RustCallableValuePlanRegi
     get nativeCaptures() { return requireCurrent().nativeCaptures; },
     get nativeProducers() { return requireCurrent().nativeProducers; },
     get nativeGenericProducers() { return requireCurrent().nativeGenericProducers; },
+    get nativeCaptures() { return requireCurrent().nativeCaptures; },
     get issues() { return requireCurrent().issues; },
   });
 }
@@ -167,6 +169,8 @@ function createRustCallableValuePlan(input: RustCallableValuePlanInput): RustCal
   const nativeStorage = createRustNativeStoragePlan({ ast: input.ast, facts: input.facts,
     storage: input.sourceStorage, definitions: input.typeDefinitions, native, producers: nativeProducers, generic });
   const nativeCaptures = createRustNativeCapturePlan({ facts: input.facts, storage: input.sourceStorage, nativeStorage });
+  generic.initializePhysical({ ast: input.ast, storage: input.sourceStorage, captures: nativeCaptures, native,
+    boundSubjectFor: (subject, carrier, bindings) => nativeStorage.boundSubjectFor(subject, carrier, bindings) });
   const suspended = createRustSuspendedCallablePlan(input.ast, input.sourceFiles, input.facts, input.names, input.lifetimes, nativeCaptures);
   for (const implementation of suspended.implementations) usedNames.add(implementation.stateName);
   const frames = createRustFrameCallablePlan({ ...input, usedNames });

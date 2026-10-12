@@ -240,6 +240,7 @@ export function rustTargetGenericReferences(
         const callable = rustGenericCallableValue(value);
         if (callable !== undefined) {
           callable.environment.forEach(argument => visitType(argument, bound));
+          callable.physical?.members.forEach(member => visitArguments(member.arguments, bound));
           return;
         }
         const frame = rustFrameCallableValue(value);

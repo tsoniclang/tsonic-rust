@@ -110,6 +110,16 @@ export function createRustNativeStoragePlan(input: {
       if (rustCallableProtocol(current) !== undefined || rustGenericCallableValue(current) !== undefined) {
         const origins = input.storage.boundOriginsFor(selectedSubject, bindings);
         if (origins.kind === "unresolved") return fail(origins.reason);
+        if (rustGenericCallableValue(current) !== undefined && origins.subjects.every(origin => !inputs.has(origin))) {
+          const producers = input.storage.storageProducersFor(selectedSubject, bindings);
+          if (producers.kind !== "complete") return fail(producers.kind === "unresolved" ? producers.reason
+            : "A generic callable physical environment requires its exact closed source producers.");
+          const present = producers.producers.filter(producer => !permitsAbsence || producer.subject.projection.length !== 0 ||
+            !isRustAbsenceCarrier(input.facts.getFact(producer.subject.node, rustRuntimeCarrierKey)?.carrier));
+          const ownerFileName = input.ast.getFileName(input.ast.getSourceFile(selectedSubject.node));
+          const physical = input.generic.physical.carrierFor(current, ownerFileName, present);
+          return physical ?? fail("A generic callable producer lacks its exact bound physical capture environment.");
+        }
         let physical: TargetTypeRef | undefined;
         for (const origin of origins.subjects) {
           if (!step(depth)) return undefined;
@@ -119,12 +129,7 @@ export function createRustNativeStoragePlan(input: {
             const originCarrier = origin.projection.length === 0
               ? input.facts.getFact(origin.node, rustRuntimeCarrierKey)?.carrier : undefined;
             if (permitsAbsence && isRustAbsenceCarrier(originCarrier)) continue;
-            if (rustGenericCallableValue(current) !== undefined) {
-              const definition = input.generic.definitionFor(current);
-              const implementation = origin.projection.length === 0 ? input.generic.implementationFor(origin.node) : undefined;
-              candidatePhysical = definition !== undefined && implementation !== undefined &&
-                definition.implementations.includes(implementation) ? current : undefined;
-            } else candidatePhysical = origin.projection.length === 0
+            candidatePhysical = origin.projection.length === 0
               ? input.producers.physicalFor(origin.node, current) : undefined;
             if (candidatePhysical === undefined)
               return fail("Native callable storage has a producer without a sealed physical implementation.");

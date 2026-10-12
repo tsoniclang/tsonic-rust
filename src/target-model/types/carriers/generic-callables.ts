@@ -6,11 +6,13 @@ import {
 } from "./callable-signatures.js";
 import { rustFutureOutputCarrier, rustFutureTargetId } from "./primitives.js";
 import { rustOptionElementCarrier } from "./optional.js";
+import { isRustGenericCallableStorage, type RustGenericCallableStorage } from "./generic-callable-storage.js";
 
 export interface RustGenericCallableValue {
   readonly origin: RustCallableOrigin;
   readonly signature: RustCallableSignature;
   readonly environment: readonly TargetTypeRef[];
+  readonly physical?: RustGenericCallableStorage;
 }
 
 export function rustGenericCallableTargetType(
@@ -35,10 +37,11 @@ export function rustGenericCallableValue(carrier: TargetTypeRef | undefined): Ru
   if (carrier?.kind !== "target-specific" || carrier.target !== "rust" || carrier.name !== "generic-callable") return undefined;
   const value = carrier.value;
   if (typeof value !== "object" || value === null || Array.isArray(value) ||
-    !hasExactObjectKeys(value, ["environment", "signature", "origin"])) return undefined;
+    !hasExactObjectKeys(value, ["environment", "signature", "origin"], ["physical"])) return undefined;
   const selected = value as Partial<RustGenericCallableValue>;
   const binding = { signature: selected.signature, environment: selected.environment };
   if (!isRustCallableOrigin(selected.origin) || !isRustCallableSignatureBinding(binding) ||
+    selected.physical !== undefined && !isRustGenericCallableStorage(selected.physical) ||
     binding.signature.typeParameters.length === 0 && rustNativeFutureCallableResult(binding.signature.result) === undefined) return undefined;
   return selected as RustGenericCallableValue;
 }

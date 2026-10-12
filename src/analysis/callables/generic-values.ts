@@ -20,6 +20,8 @@ import type { RustGenericCallableConversion } from "../../target-model/conversio
 import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustReceiverIndependentMethodFactKey } from "../facts/operations/keys.js";
+import { createRustGenericCallablePhysicalPlan, type RustGenericCallablePhysicalInput,
+  type RustGenericCallablePhysicalPlan } from "./generic-physical.js";
 
 export interface RustGenericCallableImplementation {
   readonly declaration: Node;
@@ -52,6 +54,11 @@ export interface RustGenericCallablePlan {
   readonly issues: readonly RustSourceCallableSpecializationIssue[];
   definitionFor(carrier: TargetTypeRef): RustGenericCallableDefinition | undefined;
   implementationFor(declaration: Node): RustGenericCallableImplementation | undefined;
+  readonly physical: RustGenericCallablePhysicalPlan;
+}
+
+export interface RustGenericCallableRegistry extends RustGenericCallablePlan {
+  initializePhysical(input: RustGenericCallablePhysicalInput): void;
 }
 
 export function createRustGenericCallablePlan(
@@ -59,7 +66,7 @@ export function createRustGenericCallablePlan(
   navigation: SourceProgramNavigation,
   adapterFlows: readonly { readonly subject: Node; readonly conversion: RustGenericCallableConversion }[] = [],
   closedSourceFiles: ReadonlySet<SourceFile> = new Set(),
-): RustGenericCallablePlan {
+): RustGenericCallableRegistry {
   const groups = new Map<string, { origin: RustCallableOrigin; signature: RustCallableSignature; implementations: RustGenericCallableImplementation[] }>();
   const implementations = new Map<Node, RustGenericCallableImplementation>();
   const issues: RustSourceCallableSpecializationIssue[] = [];
@@ -183,12 +190,21 @@ export function createRustGenericCallablePlan(
     });
   });
   const byFamily = new Map(definitions.map(definition => [definition.identity, definition]));
-  return Object.freeze({ definitions: Object.freeze(definitions), issues: Object.freeze(issues),
-    definitionFor(carrier: TargetTypeRef) {
+  const definitionFor = (carrier: TargetTypeRef): RustGenericCallableDefinition | undefined => {
       const value = rustGenericCallableValue(carrier);
       if (value === undefined) return undefined;
       const selected = byFamily.get(flow.familyFor(carrier)!);
       return selected === undefined || closedMetadataKey(selected.signature) !== closedMetadataKey(value.signature) ? undefined : selected;
+  };
+  let physical: RustGenericCallablePhysicalPlan | undefined;
+  return Object.freeze({ definitions: Object.freeze(definitions), issues: Object.freeze(issues), definitionFor,
+    initializePhysical(input: RustGenericCallablePhysicalInput): void {
+      if (physical !== undefined) throw new Error("A generic callable physical environment is initialized exactly once.");
+      physical = createRustGenericCallablePhysicalPlan(definitions, definitionFor, input);
+    },
+    get physical(): RustGenericCallablePhysicalPlan {
+      if (physical === undefined) throw new Error("Generic callable physical storage requires its finalized declaration inputs.");
+      return physical;
     },
     implementationFor: (declaration: Node) => implementations.get(declaration),
   });
