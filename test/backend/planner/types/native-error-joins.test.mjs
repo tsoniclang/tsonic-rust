@@ -145,3 +145,22 @@ test("native hygiene preserves explicitly selected raw identifiers without exter
   assert.equal(printRustExpr(joined.inject({ identity: "source", errorType: named("BorrowedError") }, path("error"))),
     "r#match::<BorrowedError, BorrowedError>::r#type(error)");
 });
+
+test("joined error correspondence preserves source variants across modules and equal payload types", () => {
+  const joined = plan([first, second], { referencePath: "dependency::errors::JoinedErrors" });
+  assert.equal(joined.items[0].name, "JoinedErrors");
+  assert.equal(joined.errorType.path, "dependency::errors::JoinedErrors");
+  const visited = [];
+  const selected = joined.mapError(path("failure"), "payload", (source, payload) => {
+    visited.push(source.identity);
+    return { kind: "call", path: source.identity === first.identity ? "target_first" : "target_second", args: [payload] };
+  });
+  assert.deepEqual(visited, [first.identity, second.identity]);
+  assert.match(printRustExpr(selected), /dependency::errors::JoinedErrors::First\(payload\) => target_first\(payload\)/u);
+  assert.match(printRustExpr(selected), /dependency::errors::JoinedErrors::Second\(payload\) => target_second\(payload\)/u);
+  assert.equal(joined.mapError(path("failure"), "payload", source => source.identity === first.identity
+    ? path("mapped") : undefined) === undefined, true);
+  assert.equal(joined.mapError(path("failure"), "type", () => path("mapped")) === undefined, true);
+  for (const referencePath of ["", "owner::", "owner::::JoinedErrors", "owner;exit()", "owner::type"])
+    assert.equal(plan([first, second], { referencePath }) === undefined, true, referencePath);
+});

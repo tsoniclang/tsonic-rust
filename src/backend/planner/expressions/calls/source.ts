@@ -61,6 +61,8 @@ import { rustLintAttributes } from "../../../target-ast/normalization/lint-polic
 import { rustMemberAccessReceiver } from "../../../../target-model/syntax/expressions.js";
 import { planRustNativeInputInvocation, planRustNativeInputPropagation, rustNativeInputEffectsMatch } from "./native-input.js";
 import { rustPropagateLocalError } from "../../program/fallible-boundaries.js";
+import { rustSourceErrorEffectsFactKey } from "../../../../analysis/facts/source-error-effects.js";
+import { planRustSourceErrorPropagation } from "./source-errors.js";
 
 export function sourceCallEffectsMatch(
   fact: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>,
@@ -218,6 +220,12 @@ export function planSelectedSourceCall(
         [parameter.identity, targetTypeArguments[index]!] as const));
       targetAstGenericArguments.push(...rustOptionalStorageCallArguments(selectedDeclaration, substitutions, context));
     }
+  }
+  if (selectedDeclaration !== undefined && fact.target.form !== "callable" &&
+    targetAstGenericArguments.length > 0 && callableSpecialization === undefined) {
+    const native = context.input.program.callableValues.native;
+    const inputs = new Set([...native.inputsFor(selectedDeclaration), ...native.capturesFor(selectedDeclaration)]);
+    for (const _input of inputs) targetAstGenericArguments.push({ kind: "type", type: { kind: "infer" } });
   }
   const callGenericArguments = targetAstGenericArguments.length === 0 ||
       callableSpecialization !== undefined
@@ -509,6 +517,18 @@ export function planSelectedSourceCall(
   }
   if (effects.invocation === "infallible") {
     return isRustNeverCarrier(fact.resultCarrier) ? rustBottomExpression(planned) : planned;
+  }
+  const sourceErrors = context.input.program.facts.getFact(node, rustSourceErrorEffectsFactKey);
+  if (selectedDeclaration !== undefined) {
+    const edges = sourceErrors?.edges.filter(edge => edge.kind === "invoke" && edge.declaration === selectedDeclaration) ?? [];
+    if (edges.length !== 1) {
+      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+        "rust.backend.source-call-error-correspondence", "The selected source call has no unique exact invocation error edge."));
+      return undefined;
+    }
+    const result = planRustSourceErrorPropagation(node, edges[0]!, planned, context);
+    return result === undefined ? undefined : isRustNeverCarrier(fact.resultCarrier)
+      ? rustBottomAfterEffect(result, "fallible never call returned") : result;
   }
   const resultErrorType = rustActiveErrorType(context);
   const genericDefinition = callableCarrier === undefined ? undefined

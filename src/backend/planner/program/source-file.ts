@@ -159,7 +159,8 @@ export function planRustSourceFile(
   const context: RustPlanContext = { ...baseContext, objectLiteralImplementations };
   const baseModule = planModuleItems(context, syntheticNames);
   const plannedModule = { ...baseModule,
-    items: [...objectLiteralImplementations.items, ...baseModule.items, ...planRustTypeFamilyImplementations(context),
+    items: [...input.errorRegions.itemsFor(input.program.source.ast.getFileName(sourceFile)),
+      ...objectLiteralImplementations.items, ...baseModule.items, ...planRustTypeFamilyImplementations(context),
       ...planRustGenericCallableItems(context), ...planRustNativeCallableProtocolItems(context),
       ...planRustFrameCallableItems(context), ...planRustSuspendedCallableItems(context)] };
   const initializationRequirement = input.program.moduleInitialization.requirementFor(sourceFile);

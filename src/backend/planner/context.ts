@@ -7,12 +7,14 @@ import type {
 } from "./artifacts/index.js";
 import { createRustPlannerLiveness } from "./liveness/plan.js";
 import type { RustPlannerLiveness } from "./liveness/plan.js";
+import { createRustErrorRegionCatalog, type RustErrorRegionCatalog } from "./program/error-regions.js";
 
 export interface RustPlanningContext {
   readonly host: RustTargetProgram["host"];
   readonly program: RustTargetProgram;
   readonly artifacts: RustArtifactGraph;
   readonly liveness: RustPlannerLiveness;
+  readonly errorRegions: RustErrorRegionCatalog;
 }
 
 export function createRustPlanningContext(
@@ -23,5 +25,6 @@ export function createRustPlanningContext(
     program,
     artifacts: createRustArtifactGraph(),
     liveness: createRustPlannerLiveness(program),
+    errorRegions: createRustErrorRegionCatalog(program),
   });
 }

@@ -9,14 +9,12 @@ import {
   diagnosticInput,
   isValidRustIdentifier,
   rustCurrentErrorBoundary,
-  rustErrorBoundaryForDeclaration,
-  rustErrorType,
   rustSourceItemIsPubliclyReachable,
 } from "../../program/plan-context.js";
 import { rustAuthoredDeadCodeDisposition } from "../../liveness/directives.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustReturnTypeFromCarrierInContext } from "../../types/render.js";
-import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey, rustSourceCallableReturnFactKey, rustTargetOperationFactKey } from "../../../../analysis/facts/keys.js";
+import { rustAsyncFunctionFactKey, rustGeneratorFactKey, rustSourceCallableReturnFactKey, rustTargetOperationFactKey } from "../../../../analysis/facts/keys.js";
 import { requireRustCarrierRequirements } from "../../types/generic-requirements.js";
 import {
   planRustCallableGenerics,
@@ -47,6 +45,7 @@ import { planRustCallableLeadingParameters } from "./leading-parameters.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { planRustLexicalFunctionEnvironment } from "./lexical-functions.js";
 import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.js";
+import { planRustErrorRegion } from "../../program/error-regions.js";
 
 
 export function planFunctionDeclarations(
@@ -212,18 +211,17 @@ function planRustFunctionItem(
   const sourceReturn = context.input.program.facts.getFact(node, rustSourceCallableReturnFactKey);
   const returnCarrier = generatorFact?.resultCarrier ?? asyncFact?.outputCarrier ??
     sourceReturn?.returnCarrier;
-  const fallible = context.input.program.facts.getFact(node, rustFallibleFactKey) !== undefined;
-  const callableErrorBoundary = fallible
-    ? rustErrorBoundaryForDeclaration(node, context)
-    : undefined;
-  const bodyErrorBoundary = callableErrorBoundary ?? (generatorFact === undefined
-    ? undefined
-    : rustCurrentErrorBoundary(context));
-  if ((fallible || generatorFact !== undefined) && bodyErrorBoundary === undefined) {
+  const errorRegion = planRustErrorRegion(node, context);
+  const fallible = errorRegion?.boundary !== undefined;
+  const callableErrorBoundary = errorRegion?.boundary;
+  const generatorErrorOwner = generatorFact === undefined ? undefined : rustCurrentErrorBoundary(context);
+  const bodyErrorBoundary = callableErrorBoundary ?? (generatorErrorOwner === undefined
+    ? undefined : rustPackageFallibleBoundary(generatorErrorOwner));
+  if (errorRegion === undefined || generatorFact !== undefined && bodyErrorBoundary === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.function-error-boundary",
-      "Function has no exact source-package error boundary.",
+      "Function has no exact finalized native error region.",
     ));
     return undefined;
   }
@@ -319,7 +317,7 @@ function planRustFunctionItem(
             protocol: generatorFact,
           },
         }),
-    ...(bodyErrorBoundary === undefined ? {} : { fallibleBoundary: rustPackageFallibleBoundary(bodyErrorBoundary) }),
+    fallibleBoundary: bodyErrorBoundary,
   };
   const parameterStatements = planRustCallableParameterPrelude(
     parameterPlan,
@@ -379,7 +377,7 @@ function planRustFunctionItem(
         statements: [...parameterStatements, {
           kind: "tail",
           expr: planRustGeneratorBody(body, generatorFact, generatorControllerName!,
-            rustErrorType(bodyErrorBoundary!)),
+            bodyErrorBoundary!.errorType),
         }],
       },
     };
@@ -400,7 +398,7 @@ function planRustFunctionItem(
       ? {
           fallible: true,
           hasReturnValue: returnType !== undefined,
-          errorType: rustErrorType(callableErrorBoundary!),
+          errorType: callableErrorBoundary!.errorType,
           inferErrorTypeFromReturnType: true,
         }
       : { fallible: false, hasReturnValue: returnType !== undefined },
@@ -417,7 +415,7 @@ function planRustFunctionItem(
     ...(isUnsafe ? { isUnsafe: true } : {}),
     ...(callableErrorBoundary === undefined || returnsJsPromise
       ? {}
-      : { errorType: rustErrorType(callableErrorBoundary) }),
+      : { errorType: callableErrorBoundary.errorType }),
     generics,
     params,
     ...(emittedReturnType === undefined ? {} : { returnType: emittedReturnType }),

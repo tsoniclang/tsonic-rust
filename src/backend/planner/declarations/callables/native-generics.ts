@@ -4,6 +4,10 @@ import type { RustGenericParameter, RustGenerics } from "../../../target-ast/nod
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import type { RustCallableGenericPlan } from "./generics.js";
+import { rustErrorEffectsFactKey } from "../../../../analysis/facts/error-effects.js";
+import { rustTargetTypeChildren } from "../../../../target-model/types/carriers/children.js";
+import type { TargetTypeRef } from "../../../../target-model/types/model.js";
+import { closedMetadataKey } from "../../../../target-model/metadata/closed-data.js";
 
 export function planRustNativeCallableGenerics(
   declaration: Node,
@@ -18,12 +22,29 @@ export function planRustNativeCallableGenerics(
   for (const input of inputs) typeParameterNames.set(input.implementation.identity,
     allocateRustGeneratedName(usedNames, input.implementation.name));
   const context: RustPlanContext = { ...source.context, typeParameterNames };
+  const bounds = new Map(inputs.map(input => [input.implementation.identity, new Map<string, TargetTypeRef>()]));
+  const collect = (type: TargetTypeRef, visited: Set<TargetTypeRef>): void => {
+    if (visited.has(type)) return;
+    visited.add(type);
+    if (type.kind === "associated-type" && type.owner.kind === "type-parameter" && type.trait !== undefined)
+      bounds.get(type.owner.identity)?.set(closedMetadataKey(type.trait), type.trait);
+    for (const child of rustTargetTypeChildren(type)) collect(child, visited);
+  };
+  const visit = (node: Node): void => {
+    for (const error of context.input.program.facts.getFact(node, rustErrorEffectsFactKey)?.nativeErrors ?? [])
+      collect(error.errorType, new Set());
+    const call = native.callFor(node);
+    if (call !== undefined) bounds.get(call.input.implementation.identity)?.set(
+      closedMetadataKey(call.input.protocol.trait), call.input.protocol.trait);
+    context.input.program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  visit(declaration);
   const parameters: RustGenericParameter[] = [];
   for (const input of inputs) {
-    const trait = rustTypeFromCarrierInContext(input.protocol.trait, context);
-    if (trait === undefined) return undefined;
+    const traits = [...bounds.get(input.implementation.identity)!.values()].map(trait => rustTypeFromCarrierInContext(trait, context));
+    if (traits.some(trait => trait === undefined)) return undefined;
     parameters.push({ kind: "type", name: typeParameterNames.get(input.implementation.identity)!,
-      bounds: [{ kind: "trait-type", reference: { trait } }] });
+      bounds: traits.map(trait => ({ kind: "trait-type", reference: { trait: trait! } })) });
   }
   const generics: RustGenerics = { parameters: [...sourceGenerics.parameters, ...parameters],
     wherePredicates: sourceGenerics.wherePredicates };

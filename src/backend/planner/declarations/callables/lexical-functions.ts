@@ -27,7 +27,9 @@ export function planRustLexicalFunctionEnvironment(declaration: Node, context: R
   for (const capture of selection.captures) {
     const carrier = context.input.program.facts.getRuntimeCarrierFact(capture.declaration)?.carrier ??
       context.input.program.facts.getRuntimeCarrierFact(capture.reference)?.carrier;
-    const valueType = carrier === undefined ? undefined : rustTypeFromCarrierInContext(carrier, context);
+    const physical = context.input.program.callableValues.nativeStorage.valueFor(capture.reference);
+    const physicalCarrier = physical.kind === "unresolved" ? undefined : physical.carrier;
+    const valueType = physicalCarrier === undefined ? undefined : rustTypeFromCarrierInContext(physicalCarrier, context);
     const storage = context.input.program.facts.getFact(capture.declaration, rustBindingStorageFactKey);
     if (valueType === undefined || carrier === undefined) return undefined;
     const physicalType: RustType = storage?.storage === "location"

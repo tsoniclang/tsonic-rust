@@ -12,6 +12,11 @@ import { rustNativeFutureType } from "../../types/native-futures.js";
 export function resolveRustCallableOutwardReturnType(
   declaration: Node, carrier: TargetTypeRef | undefined, context: RustPlanContext,
 ): RustType | undefined {
+  if (carrier !== undefined) {
+    const physical = context.input.program.callableValues.nativeStorage.returnFor(declaration);
+    if (physical.kind === "selected") return rustReturnTypeFromCarrierInContext(physical.carrier, context);
+    if (physical.kind === "unresolved") return undefined;
+  }
   const native = carrier === undefined ? undefined : rustNativeFutureCallableResult(carrier);
   if (native === undefined) return rustReturnTypeFromCarrierInContext(carrier, context);
   const effects = context.input.program.facts.getFact(declaration, rustSourceCallEffectsFactKey);
