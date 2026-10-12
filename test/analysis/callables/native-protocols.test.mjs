@@ -42,7 +42,7 @@ test("native future protocols preserve source generics separately from implement
   assert.equal(selected.binding.signature.typeParameters.length, 0);
   assert.equal(selected.binding.signature.environmentParameters.length, 1);
   assert.equal(rustTargetTypeRefEquals(selected.binding.environment[0], value), true);
-  const result = rustNativeCallableProtocolResult(selected);
+  const result = rustNativeCallableProtocolResult(selected, emptyRustTypeDefinitions);
   assert.equal(result !== undefined, true);
   const invocation = result.value.genericArguments[1].type;
   assert.equal(invocation.name, "InvocationError");

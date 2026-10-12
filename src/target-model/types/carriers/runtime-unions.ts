@@ -1,10 +1,11 @@
 import type { TargetTypeRef } from "../model.js";
-import { rustTargetTypeRefEquals } from "../equality.js";
+import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../equality.js";
 import { rustJsIntlGroupingTargetId, rustJsNumericTargetId, rustJsStringNumberTargetId, rustJsPromiseResolutionTargetId } from "./source-types.js";
 import { rustBigIntTargetType, rustSourcePrimitiveTargetType, rustStringTargetType } from "./native.js";
 import { rustOnlyTypeGenericArguments } from "../generic-arguments.js";
 import { rustJsPromiseTargetTypeWithLifetime } from "./js.js";
 import { rustStaticLifetime } from "../../lifetimes/index.js";
+import { isDenseDataArray, snapshotClosedMetadata } from "../../metadata/closed-data.js";
 
 export type RustRuntimeUnionVariant =
   | { readonly kind: "payload"; readonly name: string }
@@ -63,4 +64,23 @@ export function rustRuntimeUnionContract(carrier: TargetTypeRef | undefined): Ru
 export function rustRuntimeUnionProjection(source: TargetTypeRef, selected: TargetTypeRef): RustRuntimeUnionVariant | undefined {
   return rustRuntimeUnionContract(source)?.alternatives.find(alternative =>
     rustTargetTypeRefEquals(alternative.carrier, selected))?.variant;
+}
+
+export function instantiateRustRuntimeUnionPayloads(
+  carrier: TargetTypeRef,
+  payloads: readonly TargetTypeRef[],
+): TargetTypeRef | undefined {
+  const contract = rustRuntimeUnionContract(carrier);
+  if (contract === undefined || !isDenseDataArray(payloads) || payloads.length !== contract.alternatives.length ||
+    payloads.some(payload => !isRustTargetTypeRef(payload))) return undefined;
+  let selected = carrier;
+  if (carrier.kind === "target-named" && carrier.id === rustJsPromiseResolutionTargetId) {
+    const promise = payloads[1];
+    const error = promise?.kind === "target-named" ? promise.genericArguments?.[2] : undefined;
+    if (error?.kind !== "type") return undefined;
+    selected = { ...carrier, genericArguments: [{ kind: "type", type: payloads[0]! }, error] };
+  }
+  const result = rustRuntimeUnionContract(selected);
+  return result === undefined || result.alternatives.some((alternative, index) =>
+    !rustTargetTypeRefEquals(alternative.carrier, payloads[index])) ? undefined : snapshotClosedMetadata(selected);
 }

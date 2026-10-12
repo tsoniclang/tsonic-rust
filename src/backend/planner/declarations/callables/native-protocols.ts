@@ -27,7 +27,7 @@ export function planRustNativeCallableProtocol(
 ): RustItem | undefined {
   const signature = protocol.binding.signature;
   const parameters = protocol.method.parameters.map(parameter => rustTypeFromCarrierInContext(parameter, context, "parameter"));
-  const result = rustNativeCallableProtocolResult(protocol);
+  const result = rustNativeCallableProtocolResult(protocol, context.input.program.typeDefinitions);
   const returnType = result === undefined ? undefined : rustTypeFromCarrierInContext(result, context, "return");
   if (parameters.some(parameter => parameter === undefined) || returnType === undefined) return undefined;
   const methodGenerics = { ...emptyRustGenerics, parameters: [

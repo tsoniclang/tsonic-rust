@@ -1,14 +1,15 @@
 import type { RustTargetGenericArgument, TargetTypeRef } from "./model.js";
 import { rustAwaitSelection, rustAwaitSelectionLeaves, type RustAwaitSelection } from "./await.js";
 import type { RustTypeDefinitions } from "./source-union-definitions.js";
-import { emptyRustTypeDefinitions } from "./source-union-definitions.js";
-import { mapRustTargetTypes } from "./carriers/substitution.js";
+import { emptyRustTypeDefinitions, instantiateRustSourceUnionPayloads } from "./source-union-definitions.js";
 import { rustFutureTargetId } from "./carriers/primitives.js";
 import { rustJsPromiseTargetId } from "./carriers/source-types.js";
 import { rustNamedTargetType } from "./carriers/native.js";
 import { rustTypeGenericArguments } from "./generic-arguments.js";
 import { closedMetadataKey, snapshotClosedMetadata } from "../metadata/closed-data.js";
 import { isRustTargetTypeRef } from "./equality.js";
+import { instantiateRustRuntimeUnionPayloads } from "./carriers/runtime-unions.js";
+import { rustSourceUnionCarrierValue } from "./carriers/source-types.js";
 
 export interface RustNativeCompletionFuture {
   readonly carrier: TargetTypeRef;
@@ -44,6 +45,7 @@ export function rustNativeCallableCompletion(
 export function instantiateRustNativeCompletion(
   completion: RustNativeCallableCompletion,
   select: (future: RustNativeCompletionFuture) => TargetTypeRef | undefined,
+  definitions: RustTypeDefinitions,
 ): TargetTypeRef | undefined {
   const selected = new Map<string, TargetTypeRef>();
   for (const future of completion.futures) {
@@ -51,7 +53,22 @@ export function instantiateRustNativeCompletion(
     if (replacement === undefined || !isRustTargetTypeRef(replacement)) return undefined;
     selected.set(closedMetadataKey(future.carrier), replacement);
   }
-  return mapRustTargetTypes(completion.result, (type, source) => selected.get(closedMetadataKey(source)) ?? type);
+  const visit = (selection: RustAwaitSelection): TargetTypeRef | undefined => {
+    if (selection.kind === "leaf") return selection.value.future === undefined ? selection.value.carrier
+      : selected.get(closedMetadataKey(selection.value.future.futureCarrier));
+    if (selection.kind === "optional") {
+      const present = visit(selection.present);
+      return present === undefined || selection.carrier.kind !== "target-named" ? undefined
+        : { ...selection.carrier, genericArguments: rustTypeGenericArguments([present]) };
+    }
+    const payloads = selection.alternatives.map(alternative => visit(alternative.selection));
+    if (payloads.some(payload => payload === undefined)) return undefined;
+    return rustSourceUnionCarrierValue(selection.carrier) === undefined
+      ? instantiateRustRuntimeUnionPayloads(selection.carrier, payloads as TargetTypeRef[])
+      : instantiateRustSourceUnionPayloads(selection.carrier, payloads as TargetTypeRef[], definitions);
+  };
+  const result = visit(completion.selection);
+  return result === undefined ? undefined : snapshotClosedMetadata(result);
 }
 
 export function rustNativeCompletionFutureType(input: {

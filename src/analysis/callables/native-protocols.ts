@@ -84,6 +84,7 @@ export function rustNativeCallableMethodArguments(protocol: RustNativeCallablePr
 
 export function rustNativeCallableProtocolResult(
   protocol: RustNativeCallableProtocol,
+  definitions: RustTypeDefinitions,
 ): TargetTypeRef | undefined {
   const self: TargetTypeRef = { kind: "type-parameter", identity: `${protocol.identity}:Self`, name: "Self" };
   const arguments_ = rustNativeCallableMethodArguments(protocol);
@@ -101,7 +102,7 @@ export function rustNativeCallableProtocolResult(
       }
       return rustNativeCompletionFutureType({ identity: `${protocol.identity}:future:${future.ordinal}`,
         output: future.output, error: selectedError, captures });
-    });
+    }, definitions);
   return completion === undefined ? undefined : rustNamedTargetType(`${protocol.identity}:result`, "Result",
     rustTypeGenericArguments([completion, error("InvocationError")]));
 }
