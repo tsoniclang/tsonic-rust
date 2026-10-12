@@ -1,9 +1,9 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustCallableConversion } from "../../../target-model/conversions/callable.js";
-import { rustCallableConversionPhysical, rustCallablePhysicalSignature, type RustCallablePhysicalConversion,
-  type RustCallablePhysicalSignature, type RustCallablePhysicalValueConversion } from "../../../target-model/conversions/callable-physical.js";
-import { rustCallableInputProtocol, rustNamedTypeCarrierValue, rustOnlyTypeGenericArguments } from "../../../target-model/types/index.js";
+import { rustCallableConversionPhysical, type RustCallablePhysicalConversion,
+  type RustCallablePhysicalValueConversion } from "../../../target-model/conversions/callable-physical.js";
+import { rustCallableInputProtocol } from "../../../target-model/types/index.js";
 import { rustTypeEquals } from "../../target-ast/inspection/type-equality.js";
 import type { RustExpr, RustStmt, RustType } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
@@ -17,19 +17,10 @@ import { planRustAbsentValue } from "./optional-storage.js";
 import { lowerRustValueConversion } from "./value-conversions.js";
 import { rustModuleCallableStorageFactKey } from "../../../analysis/callables/module-values.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
-import type { RustNativeCallableInput } from "../../../analysis/callables/native-inputs.js";
-import { rustNativeCallableProtocolResult } from "../../../analysis/callables/native-protocols.js";
-import { mapRustTargetTypes, substituteRustTargetTypeParameters } from "../../../target-model/types/carriers/substitution.js";
+import { rustNativeCallableOperand, type RustNativeCallablePhysicalSource } from "../../../analysis/callables/native-conversions.js";
 import { planRustNativeProtocolInvocation } from "./calls/native-input.js";
 import { planRustNativeErrorJoin } from "../types/native-error-joins.js";
 import { rustNativeErrorJoinIdentity } from "../../../target-model/types/native-error-joins.js";
-import { rustValueCarrierBeforeContextualConversion } from "../../../analysis/facts/value-carrier-queries.js";
-
-interface PhysicalCallableSource {
-  readonly carrier: TargetTypeRef;
-  readonly signature: RustCallablePhysicalSignature;
-  readonly input?: RustNativeCallableInput;
-}
 
 export function planRustCallableInputProducer(
   expression: RustExpr, source: TargetTypeRef, context: RustPlanContext,
@@ -70,7 +61,7 @@ export function planRustCallableConversion(
 
 function planSelectedRustCallableConversion(
   conversion: RustCallablePhysicalConversion,
-  source: PhysicalCallableSource,
+  source: RustNativeCallablePhysicalSource,
   expression: RustExpr,
   fileName: string,
   node: Node,
@@ -176,40 +167,11 @@ function physicalCallableSource(
   source: TargetTypeRef,
   node: Node,
   context: RustPlanContext,
-): PhysicalCallableSource | undefined {
-  const reference = context.input.program.facts.getFact(node, rustDirectCallableReferenceFactKey);
-  if (reference !== undefined) {
-    if (!rustTargetTypeRefEquals(reference.carrier, source)) return undefined;
-    const physical = context.input.program.callableValues.nativeProducers.physicalFor(reference.sourceDeclaration, source);
-    const signature = physical === undefined ? undefined : rustCallablePhysicalSignature(physical);
-    return physical === undefined || signature === undefined ? undefined : { carrier: physical, signature };
-  }
-  if (!rustTargetTypeRefEquals(rustValueCarrierBeforeContextualConversion(context.input.program.facts, node), source)) return undefined;
-  const physical = context.input.program.callableValues.nativeStorage.valueFor(node);
-  if (physical.kind === "unresolved") return undefined;
-  const signature = rustCallablePhysicalSignature(physical.carrier);
-  if (signature !== undefined) return { carrier: physical.carrier, signature };
-  const inputs = physical.kind === "selected" ? physical.inputs.filter(input =>
-    rustTargetTypeRefEquals(input.implementation, physical.carrier)) : [];
-  if (inputs.length !== 1) return undefined;
-  const input = inputs[0]!;
-  const protocol = input.protocol;
-  if (!rustTargetTypeRefEquals(input.carrier, source) || protocol.binding.signature.typeParameters.length !== 0 ||
-    protocol.method.binder.parameters.length !== 0) return undefined;
-  const types = new Map(protocol.binding.signature.environmentParameters.map((parameter, index) =>
-    [parameter.identity, protocol.binding.environment[index]!]));
-  const selectedResult = rustNativeCallableProtocolResult(protocol, context.input.program.typeDefinitions);
-  if (selectedResult === undefined) return undefined;
-  const result = mapRustTargetTypes(substituteRustTargetTypeParameters(selectedResult, types), (carrier, original) => {
-    if (carrier.kind === "associated-type" && original.kind === "associated-type" && original.owner.kind === "type-parameter" &&
-      original.owner.identity === `${protocol.identity}:Self`) return { ...carrier, owner: input.implementation, trait: protocol.trait };
-    return carrier.kind === "type-parameter" && carrier.identity === `${protocol.identity}:Self` ? input.implementation : carrier;
-  });
-  const arguments_ = rustOnlyTypeGenericArguments(rustNamedTypeCarrierValue(result)?.genericArguments);
-  return arguments_?.length !== 2 ? undefined : { carrier: physical.carrier, input,
-    signature: { parameters: protocol.method.parameters.map(parameter => substituteRustTargetTypeParameters(parameter, types)),
-      result: arguments_[0]!, error: arguments_[1]! },
-  };
+): RustNativeCallablePhysicalSource | undefined {
+  const program = context.input.program;
+  return rustNativeCallableOperand(source, node, { facts: program.facts,
+    storage: program.callableValues.nativeStorage, producers: program.callableValues.nativeProducers,
+    definitions: program.typeDefinitions });
 }
 
 function inlineCallableProducer(
