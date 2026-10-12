@@ -32,6 +32,8 @@ import { createRustNativeGenericProducerPlan, type RustNativeGenericProducerPlan
 import { createRustNativeCapturePlan, type RustNativeCapturePlan } from "./native-captures.js";
 import { createRustGenericCallableDispatchPlan, type RustGenericCallableDispatchPlan } from "./generic-dispatch.js";
 import type { RustLexicalFunctionQueries } from "./lexical-functions.js";
+import { createRustGenericCallableCompletionPlan, type RustGenericCallableCompletionInput,
+  type RustGenericCallableCompletionPlan } from "./generic-completions.js";
 
 export interface RustCallableValuePlan {
   readonly generic: RustGenericCallablePlan;
@@ -43,6 +45,7 @@ export interface RustCallableValuePlan {
   readonly nativeProducers: RustNativeCallableProducerPlan;
   readonly nativeGenericProducers: RustNativeGenericProducerPlan;
   readonly genericDispatch: RustGenericCallableDispatchPlan;
+  readonly genericCompletions: RustGenericCallableCompletionPlan;
   readonly issues: readonly RustSourceCallableSpecializationIssue[];
 }
 
@@ -66,11 +69,17 @@ export interface RustCallableValuePlanInput {
 
 export interface RustCallableValuePlanRegistry extends RustCallableValuePlan {
   initialize(input: RustCallableValuePlanInput): RustCallableValuePlan;
+  initializeCompletions(input: RustGenericCallableCompletionInput): void;
   seal(): RustCallableValuePlan;
 }
 
 export function createRustCallableValuePlanRegistry(): RustCallableValuePlanRegistry {
   let current: RustCallableValuePlan | undefined;
+  let completions: RustGenericCallableCompletionPlan | undefined;
+  const requireCompletions = (): RustGenericCallableCompletionPlan => {
+    if (completions === undefined) throw new Error("Generic callable completions require sealed producer effects and component owners.");
+    return completions;
+  };
   const requireCurrent = (): RustCallableValuePlan => {
     if (current === undefined) throw new Error("Rust callable values must be finalized after their selected adapters and before effect analysis.");
     return current;
@@ -78,8 +87,14 @@ export function createRustCallableValuePlanRegistry(): RustCallableValuePlanRegi
   return Object.freeze({
     initialize(input: RustCallableValuePlanInput) {
       if (current !== undefined) throw new Error("Rust callable value representations can be initialized only once.");
-      current = createRustCallableValuePlan(input);
+      current = createRustCallableValuePlan(input, requireCompletions);
       return current;
+    },
+    initializeCompletions(input: RustGenericCallableCompletionInput): void {
+      const current = requireCurrent();
+      if (completions !== undefined || input.physical !== current.generic.physical || input.producers !== current.nativeProducers)
+        throw new Error("Generic callable completions finalize exactly once from their owned physical family and producer plans.");
+      completions = createRustGenericCallableCompletionPlan(input);
     },
     seal: requireCurrent,
     get generic() { return requireCurrent().generic; },
@@ -91,11 +106,13 @@ export function createRustCallableValuePlanRegistry(): RustCallableValuePlanRegi
     get nativeProducers() { return requireCurrent().nativeProducers; },
     get nativeGenericProducers() { return requireCurrent().nativeGenericProducers; },
     get genericDispatch() { return requireCurrent().genericDispatch; },
+    get genericCompletions() { return requireCompletions(); },
     get issues() { return requireCurrent().issues; },
   });
 }
 
-function createRustCallableValuePlan(input: RustCallableValuePlanInput): RustCallableValuePlan {
+function createRustCallableValuePlan(input: RustCallableValuePlanInput,
+  completions: () => RustGenericCallableCompletionPlan): RustCallableValuePlan {
   const flows: { subject: Node; conversion: RustGenericCallableConversion }[] = [];
   const usedNames = new Set<string>();
   const recordField = (subject: Node, source: TargetTypeRef | undefined, target: TargetTypeRef | undefined): void => {
@@ -201,6 +218,6 @@ function createRustCallableValuePlan(input: RustCallableValuePlanInput): RustCal
   const genericDispatch = createRustGenericCallableDispatchPlan({ ...input,
     nodes: input.sourceStorage.nodes, generic, nativeStorage, nativeGenericProducers });
   return Object.freeze({ generic, suspended, frames, native, nativeStorage, nativeCaptures, nativeProducers, nativeGenericProducers,
-    genericDispatch,
+    genericDispatch, get genericCompletions() { return completions(); },
     issues: Object.freeze([...generic.issues, ...suspended.issues, ...frames.issues]) });
 }

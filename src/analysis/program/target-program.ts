@@ -122,6 +122,11 @@ export function analyzeRustTargetProgram(
   if (sourcePackageComponents.kind === "rejected") {
     return rejectedTargetStage(sourcePackageComponents.diagnostics);
   }
+  context.callableValues.initializeCompletions({ ast: context.ast, sourceLifetimes: context.sourceLifetimes,
+    facts: context.facts, physical: context.callableValues.generic.physical,
+    producers: context.callableValues.nativeProducers, definitions: context.typeDefinitions,
+    components: sourcePackageComponents.plan });
+  context.structuralShapes.initializeUnions(context.typeDefinitions.generatedUnions());
 
   const classValues = context.classValues.seal(context);
   const moduleInitialization = createRustModuleInitializationPlan(context, classValues);

@@ -567,7 +567,6 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
   recordResourceManagementFacts(walk, projectSourceFiles);
   recordFutureValueFacts(walk, projectSourceFiles);
   recordRustDeferredProducerEffects(walk);
-  context.structuralShapes.initializeUnions(context.typeDefinitions.generatedUnions());
   return lexical;
 }
 
