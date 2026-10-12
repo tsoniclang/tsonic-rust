@@ -30,6 +30,7 @@ import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagno
 import { parseSourceIntegerLiteral } from "../../../target-model/syntax/literals.js";
 import { planExpression } from "./entry.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
+import { planRustProviderRecordAbsentFields } from "./provider-record-absence.js";
 import { planRustRecordSpread } from "./record-spreads.js";
 import { rustObjectLiteralRequiresDispatchImplementation } from "../objects/object-literal-implementations.js";
 import { constructRustStructuralLiteral } from "../objects/object-literals/structural.js";
@@ -556,7 +557,8 @@ function planProviderRecordLiteral(
     type?.kind !== "named" ||
     properties.length !== fact.fields.length ||
     fact.fields.some((field, index) => field.property !== properties[index]) ||
-    new Set(fact.fields.map((field) => field.targetName)).size !== fact.fields.length
+    new Set([...fact.fields, ...fact.absentFields].map((field) => field.targetName)).size !==
+      fact.fields.length + fact.absentFields.length || fact.completion === "default" && fact.absentFields.length !== 0
   ) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -585,6 +587,8 @@ function planProviderRecordLiteral(
     ));
     return undefined;
   }
+  const absentFields = planRustProviderRecordAbsentFields(fact.absentFields, context);
+  if (absentFields === undefined) return undefined;
   if (fields.length === 0 && fact.completion === "default") {
     return { kind: "associated-call", owner: type,
       trait: { kind: "named", path: "core::default::Default" }, method: "default", args: [] };
@@ -592,10 +596,10 @@ function planProviderRecordLiteral(
   return {
     kind: "struct-literal",
     path: type.path,
-    fields: fields as readonly {
+    fields: [...fields as readonly {
       readonly name: string;
       readonly value: RustExpr;
-    }[],
+    }[], ...absentFields],
     ...(fact.completion === "default"
       ? {
           base: {

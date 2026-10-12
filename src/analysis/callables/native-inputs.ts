@@ -8,8 +8,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
-import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustGenericCallableSignaturesMatch } from "../../target-model/conversions/generic-callable.js";
+import { rustCallableInvocationSignaturesMatch } from "../../target-model/conversions/callable-input.js";
 import { rustSourceParameterAbiFactKey, rustSourceCallableReturnFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
 import { isRustNeverCarrier } from "../../target-model/types/carriers/js.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
@@ -93,8 +92,7 @@ export function createRustNativeCallableInputPlan(input: {
     const existing = members.get(subject);
     if (existing !== undefined) {
       const contract = rustOptionElementCarrier(existing.carrier) ?? existing.carrier;
-      return rustTargetTypeRefEquals(contract, selected) ||
-        rustGenericCallableSignaturesMatch(contract, selected) ? existing : undefined;
+      return rustCallableInvocationSignaturesMatch(contract, selected) ? existing : undefined;
     }
     if (!collecting) return undefined;
     const identity = sourceNodeIdentity(input.ast, subject.node);

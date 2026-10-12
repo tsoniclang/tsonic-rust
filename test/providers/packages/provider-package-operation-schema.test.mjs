@@ -603,9 +603,13 @@ test("provider type metadata admits only explicit field or opaque default constr
   assert.doesNotThrow(() => createRustProviderPackage(definition({
     ...base, types: [{ ...base.types[0], objectLiteralConstruction: { kind: "default" } }],
   })));
+  assert.doesNotThrow(() => createRustProviderPackage(definition({
+    ...base, types: [{ ...base.types[0], objectLiteralConstruction: { kind: "struct" } }],
+  })));
 
   for (const objectLiteralConstruction of [
     { kind: "guess" },
+    { kind: "struct", fallback: true },
     { kind: "struct-default", fallback: true },
     { kind: "default", fallback: true },
     { kind: "default", path: "guessed_factory" },

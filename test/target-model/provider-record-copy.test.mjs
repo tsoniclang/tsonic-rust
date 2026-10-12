@@ -2,14 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { rustProviderRecordCopyMatches } from "../../dist/target-model/conversions/provider-record.js";
 import { rustContextualValueConversionIsFallible } from "../../dist/target-model/conversions/contextual.js";
-import { rustStructuralObjectTargetType, rustNamedTargetType, rustSourcePrimitiveTargetType } from "../../dist/target-model/types/index.js";
+import { rustStructuralObjectTargetType, rustNamedTargetType, rustSourcePrimitiveTargetType, rustSourceOptionalTargetType } from "../../dist/target-model/types/index.js";
 
 const number = rustSourcePrimitiveTargetType("float64");
 const boolean = rustSourcePrimitiveTargetType("bool");
 const field = (sourceName, type = number) => ({ sourceName, type, presence: "required", readonly: false });
 const source = rustStructuralObjectTargetType("index.ts", [field("user"), field("system")]);
 const target = rustNamedTargetType("test.Cpu", "test::Cpu");
-const conversion = { kind: "provider-record-copy", source, target, completion: "complete", fields: [
+const conversion = { kind: "provider-record-copy", source, target, completion: "complete", absentFields: [], fields: [
   { storageIndex: 0, sourceCarrier: number, carrier: number, targetName: "system_time" },
   { storageIndex: 1, sourceCarrier: number, carrier: number, targetName: "user_time" },
 ] };
@@ -55,4 +55,23 @@ test("provider numeric field copies seal the exact checked conversion", () => {
       { ...selected.fields[0], ...mutation }, selected.fields[1],
     ] }, source, target), false);
   }
+});
+
+test("native provider absence fields retain exact Option storage without an aggregate Default", () => {
+  const absent = { targetName: "optional", carrier: rustSourceOptionalTargetType(number) };
+  const selected = { ...conversion, absentFields: [absent] };
+  assert.equal(rustProviderRecordCopyMatches(selected, source, target), true);
+  assert.equal(rustContextualValueConversionIsFallible(selected), false);
+  for (const changed of [
+    { ...absent, carrier: number }, { ...absent, carrier: boolean }, { ...absent, targetName: "" },
+    { ...absent, targetName: "system_time" }, { ...absent, extra: true },
+  ]) assert.equal(rustProviderRecordCopyMatches({ ...selected, absentFields: [changed] }, source, target), false);
+  assert.equal(rustProviderRecordCopyMatches({ ...selected, absentFields: [absent, absent] }, source, target), false);
+  assert.equal(rustProviderRecordCopyMatches({ ...selected, completion: "default" }, source, target), false);
+  assert.equal(rustProviderRecordCopyMatches({ ...selected, absentFields: undefined }, source, target), false,
+    "superseded incomplete facts are never accepted as another path");
+  let reads = 0;
+  const forged = Object.defineProperty({}, "carrier", { get() { reads++; return absent.carrier; } });
+  assert.equal(rustProviderRecordCopyMatches({ ...selected, absentFields: [forged] }, source, target), false);
+  assert.equal(reads, 0);
 });

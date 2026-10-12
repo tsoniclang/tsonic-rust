@@ -1,8 +1,6 @@
 import { ObjectLiteralProperty_Value } from "@tsonic/target-api/source";
 import type { Node, SourceFile } from "@tsonic/tsts";
-import {
-  rustUnitTargetType,
-} from "../../target-model/types/index.js";
+import { rustOptionElementCarrier } from "../../target-model/types/index.js";
 import {
   selectRustProviderObjectLiteralConstruction,
 } from "../../policy/types/resolution/providers.js";
@@ -11,14 +9,9 @@ import {
 } from "../../policy/evidence/selected-source.js";
 import {
   rustProviderOperationOwnerMatches,
-  selectRustProviderOperation,
 } from "../../policy/operations/provider-selection.js";
-import {
-  providerOperationTemplate,
-} from "../operations/provider/result.js";
-import {
-  instantiateProviderOperationTemplate,
-} from "../operations/provider/calls/template-instantiation.js";
+import { selectRustProviderRecordField, selectRustProviderRecordFields } from "../operations/provider/calls/record-fields.js";
+import type { RustProviderRecordAbsentField } from "../../target-model/conversions/provider-record-absence.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
@@ -65,12 +58,12 @@ export function resolveProviderRecordLiteral(
     }
     setRustOperationFact(walk, expression, {
       kind: "provider-record-literal", operationId: "tsonic.rust.provider.default",
-      resultCarrier, completion: "default", fields: [],
+      resultCarrier, completion: "default", absentFields: [], fields: [],
     });
     setCarrierFact(walk, expression, resultCarrier);
     return { kind: "selected", carrier: resultCarrier };
   }
-  const targetFields = providerRecordTargetFields(walk, typeRow);
+  const targetFields = selectRustProviderRecordFields(typeRow, resultCarrier, walk.operationOptions, walk.context.typeDefinitions);
   if (targetFields === undefined) {
     return rejectProviderRecordLiteral(
       walk,
@@ -133,71 +126,21 @@ export function resolveProviderRecordLiteral(
         "Provider object-literal property evidence does not resolve to one exact member owned by the selected provider type.",
       );
     }
-    const readSelection = selectRustProviderOperation(
-      walk.providerRows,
-      declarationIdentity.identity,
-      "property",
-    );
-    const writeSelection = selectRustProviderOperation(
-      walk.providerRows,
-      declarationIdentity.identity,
-      "property-set",
-    );
-    if (
-      readSelection.kind !== "selected" ||
-      writeSelection.kind !== "selected"
-    ) {
-      return rejectProviderRecordLiteral(
-        walk,
-        property,
-        "Provider object-literal members require one exact readable and writable provider relation.",
-      );
-    }
     const selectedMemberCarrier = resolveRustTargetTypeRef(
       selected.sourceSelectedType,
       resolutionContext,
       walk.operationOptions,
     );
-    const read = instantiateProviderOperationTemplate(
-      providerOperationTemplate(readSelection.row, "property"),
-      {
-        sourceReceiverCarrier: resultCarrier,
-        sourceResultCarrier: selectedMemberCarrier,
-      }, walk.context.typeDefinitions,
-    )?.template;
-    const write = instantiateProviderOperationTemplate(
-      providerOperationTemplate(writeSelection.row, "property-set"),
-      {
-        sourceReceiverCarrier: resultCarrier,
-        sourceParameterCarriers: [selectedMemberCarrier],
-      }, walk.context.typeDefinitions,
-    )?.template;
-    const storageCarrier = read?.resultCarrier;
-    const targetName = read?.target.form === "field"
-      ? read.target.name
-      : undefined;
-    if (
-      selectedMemberCarrier === undefined ||
-      read === undefined ||
-      write === undefined ||
-      read.receiverCarrier === undefined ||
-      write.receiverCarrier === undefined ||
-      !rustTargetTypeRefEquals(read.receiverCarrier, resultCarrier) ||
-      !rustTargetTypeRefEquals(write.receiverCarrier, resultCarrier) ||
-      targetName === undefined ||
-      write.target.form !== "field" ||
-      write.target.name !== targetName ||
-      write.parameterCarriers?.length !== 1 ||
-      storageCarrier === undefined ||
-      !rustTargetTypeRefEquals(write.parameterCarriers[0], storageCarrier) ||
-      !rustTargetTypeRefEquals(write.resultCarrier, rustUnitTargetType())
-    ) {
+    const field = selectedMemberCarrier === undefined ? undefined : selectRustProviderRecordField(
+      declarationIdentity.identity, resultCarrier, walk.operationOptions, walk.context.typeDefinitions, selectedMemberCarrier);
+    if (field === undefined) {
       return rejectProviderRecordLiteral(
         walk,
         property,
         "Provider object-literal member relations do not form one exact native field storage contract.",
       );
     }
+    const { carrier: storageCarrier, targetName } = field;
     const valueCarrier = resolveExpressionCarrier(
       walk,
       value,
@@ -229,59 +172,49 @@ export function resolveProviderRecordLiteral(
     );
   }
   const authoredFields = new Set(fields.map((field) => field.targetName));
-  if (fields.some((field) => !targetFields.includes(field.targetName))) {
+  if (fields.some((field) => !targetFields.some(target => target.targetName === field.targetName))) {
     return rejectProviderRecordLiteral(
       walk,
       expression,
       "Provider object-literal fields conflict with the type's exact native construction inventory.",
     );
   }
+  const absentFields: RustProviderRecordAbsentField[] = [];
+  if (typeRow.objectLiteralConstruction?.kind === "struct") {
+    const semantics = walk.context.semanticsFor(expression);
+    const contextual = semantics.types.contextualValueSelection(expression);
+    const authoredType = semantics.types.expressionType(expression);
+    const correspondence = contextual.kind !== "selected" || authoredType === undefined ? undefined
+      : semantics.types.structuralMembers(authoredType, contextual.type);
+    if (correspondence?.kind !== "available") return rejectProviderRecordLiteral(walk, expression,
+      "Native provider struct construction requires its exact checked member correspondence.");
+    const omittedMembers = new Set<string>();
+    for (const pair of correspondence.members) {
+      if (pair.kind !== "absent" || !pair.destination.property.optional) continue;
+      const identity = resolveSelectedProviderDeclaration(walk.context, pair.destination.property.symbol,
+        pair.destination.declarations.map(subject => ({ subject, precision: "declaration" as const })));
+      if (identity.kind !== "selected" || identity.identity.memberId === undefined ||
+        identity.identity.exportId !== typeRow.exportId || !rustProviderOperationOwnerMatches(typeRow, identity.identity))
+        return rejectProviderRecordLiteral(walk, expression, "An absent native field requires its exact optional provider identity.");
+      omittedMembers.add(identity.identity.memberId);
+    }
+    for (const field of targetFields) {
+      if (authoredFields.has(field.targetName)) continue;
+      if (!omittedMembers.has(field.memberId) || rustOptionElementCarrier(field.carrier) === undefined)
+        return rejectProviderRecordLiteral(walk, expression, "An omitted native struct field requires checked optional Option storage.");
+      absentFields.push(Object.freeze({ targetName: field.targetName, carrier: field.carrier }));
+    }
+  }
   setRustOperationFact(walk, expression, {
     kind: "provider-record-literal",
     operationId: `tsonic.rust.provider-record.${typeRow.providerPackageId}.${typeRow.providerModuleId}.${typeRow.exportId}`,
     resultCarrier,
-    completion: authoredFields.size === targetFields.length ? "complete" : "default",
+    completion: typeRow.objectLiteralConstruction?.kind === "struct" || authoredFields.size === targetFields.length ? "complete" : "default",
+    absentFields: Object.freeze(absentFields),
     fields: Object.freeze(fields),
   });
   setCarrierFact(walk, expression, resultCarrier);
   return { kind: "selected", carrier: resultCarrier };
-}
-
-function providerRecordTargetFields(
-  walk: RustFactWalk,
-  typeRow: import("../../providers/packages/model.js").RustProviderTypeRow,
-): readonly string[] | undefined {
-  const rows = walk.providerRows.filter((row) =>
-    row.providerId === typeRow.providerId &&
-    row.providerVersion === typeRow.providerVersion &&
-    row.providerModuleId === typeRow.providerModuleId &&
-    row.exportId === typeRow.exportId &&
-    (row.operationKind === "property" || row.operationKind === "property-set"));
-  const reads = rows.filter((row) => row.operationKind === "property");
-  const writes = rows.filter((row) => row.operationKind === "property-set");
-  if (reads.length === 0 || reads.length !== writes.length) {
-    return undefined;
-  }
-  const fields: string[] = [];
-  for (const read of reads) {
-    const matchingWrites = writes.filter((write) => write.memberId === read.memberId);
-    const write = matchingWrites.length === 1 ? matchingWrites[0] : undefined;
-    if (read.memberId === undefined || read.target.form !== "field" ||
-      read.receiverCarrier === undefined || write === undefined ||
-      write.target.form !== "field" || write.target.name !== read.target.name ||
-      write.receiverCarrier === undefined ||
-      !rustTargetTypeRefEquals(read.receiverCarrier, write.receiverCarrier) ||
-      write.parameterCarriers?.length !== 1 ||
-      !rustTargetTypeRefEquals(read.resultCarrier, write.parameterCarriers[0]!) ||
-      !rustTargetTypeRefEquals(write.resultCarrier, rustUnitTargetType())) {
-      return undefined;
-    }
-    fields.push(read.target.name);
-  }
-  return new Set(fields).size === fields.length &&
-      writes.every((write) => reads.some((read) => read.memberId === write.memberId))
-    ? Object.freeze(fields)
-    : undefined;
 }
 
 function rejectProviderRecordLiteral(
@@ -296,7 +229,7 @@ function rejectProviderRecordLiteral(
     node,
     [
       "target.capability=rust.provider-object-literal.exact-relations",
-      "target.construction=struct-default",
+      "target.construction=native-provider-record",
     ],
   );
   return { kind: "rejected" };

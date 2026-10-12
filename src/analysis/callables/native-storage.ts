@@ -10,7 +10,7 @@ import { instantiateRustSourceUnionPayloads } from "../../target-model/types/sou
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
-import { rustGenericCallableSignaturesMatch } from "../../target-model/conversions/generic-callable.js";
+import { rustCallableInvocationSignaturesMatch } from "../../target-model/conversions/callable-input.js";
 import { rustCallableConversionPhysical } from "../../target-model/conversions/callable-physical.js";
 import { substituteRustCallableConversion } from "../../target-model/conversions/substitution.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
@@ -105,6 +105,9 @@ export function createRustNativeStoragePlan(input: {
   const futures = createRustNativeFutureInputPlan({ ...input, bindingsFor });
   const genericInvocationBindingsFor = (declaration: Node, invocation: Node, bindings: SourceStorageBindings,
     arguments_: readonly RustTargetGenericArgument[]): RustNativeStorageGenericSelection | undefined => {
+    const operation = input.facts.getFact(invocation, rustTargetOperationFactKey);
+    const carrier = rustSourceCallCallableStorageCarrier(operation, input.structuralShapes);
+    if (input.native.callFor(invocation) !== undefined || rustGenericCallableValue(carrier) === undefined) return undefined;
     const selected = selectRustGenericCallableInvocationStorage(invocation, { ...input, nativeStorage: {
       invocationCallableFor: node => invocationCallableFor(node, bindings),
     } });
@@ -175,7 +178,7 @@ export function createRustNativeStoragePlan(input: {
     };
     const formalCarrier = (candidate: RustNativeCallableInput, current: TargetTypeRef): TargetTypeRef | undefined => {
       const candidateCarrier = callableValueCarrier(candidate.carrier);
-      if (candidateCarrier === undefined || !sameCallableContract(current, candidateCarrier))
+      if (candidateCarrier === undefined || !rustCallableInvocationSignaturesMatch(current, candidateCarrier))
         return fail("Native callable storage conflicts with its exact input callable contract.");
       selectedInputs.add(candidate);
       return candidate.implementation;
@@ -289,7 +292,7 @@ export function createRustNativeStoragePlan(input: {
             const { types, lifetimes, consts } = generics.bindings;
             const conversion = substituteRustCallableConversion(fact.conversion, types, lifetimes, consts);
             const target = callableValueCarrier(conversion.target);
-            if (target === undefined || !sameCallableContract(current, target))
+            if (target === undefined || !rustCallableInvocationSignaturesMatch(current, target))
               return fail("Native callable conversion storage conflicts with its selected activation signature.");
             const operand = visit(conversion.source, origin, frontier.bindings, depth + 1, false, "input");
             const source = operand === undefined ? undefined : rustNativeCallablePhysicalSource(conversion.source,
@@ -311,7 +314,7 @@ export function createRustNativeStoragePlan(input: {
               const { types, lifetimes, consts } = generics.bindings;
               const boundCarrier = originCarrier === undefined ? undefined
                 : callableValueCarrier(substituteRustTargetGenerics(originCarrier, types, lifetimes, consts));
-              const produced = originCarrier === undefined || boundCarrier === undefined || !sameCallableContract(current, boundCarrier)
+              const produced = originCarrier === undefined || boundCarrier === undefined || !rustCallableInvocationSignaturesMatch(current, boundCarrier)
                 ? undefined : input.producers.physicalFor(origin.node, originCarrier);
               candidatePhysical = produced === undefined ? undefined : substituteRustTargetGenerics(produced, types, lifetimes, consts);
             }
@@ -551,15 +554,4 @@ function callableValueCarrier(carrier: TargetTypeRef): TargetTypeRef | undefined
     else return current;
   }
   return undefined;
-}
-
-function sameCallableContract(left: TargetTypeRef, right: TargetTypeRef): boolean {
-  if (rustGenericCallableValue(left) !== undefined || rustGenericCallableValue(right) !== undefined)
-    return rustGenericCallableSignaturesMatch(left, right);
-  const expected = rustCallableProtocol(left);
-  const actual = rustCallableProtocol(right);
-  return expected !== undefined && actual !== undefined &&
-    expected.parameters.length === actual.parameters.length &&
-    expected.parameters.every((parameter, index) => rustTargetTypeRefEquals(parameter, actual.parameters[index])) &&
-    rustTargetTypeRefEquals(expected.result, actual.result);
 }

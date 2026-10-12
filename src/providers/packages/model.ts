@@ -92,7 +92,7 @@ export interface RustProviderTypeDefinition {
   readonly targetCarrier: TargetTypeRef;
   readonly typeRequirements?: readonly RustProviderTypeParameterRequirement[];
   readonly objectLiteralConstruction?: {
-    readonly kind: "struct-default" | "default";
+    readonly kind: "struct" | "struct-default" | "default";
   };
 }
 

@@ -139,8 +139,7 @@ export function createRustSourceErrorEffectSelection(walk: RustFactWalk): RustSo
         if (!available.has(input)) return undefined;
         continue;
       }
-      const absenceWitness = storageBindings === undefined
-        ? walk.context.callableValues.nativeStorage.invocationWitnessFor(input, node) : undefined;
+      const absenceWitness = walk.context.callableValues.nativeStorage.invocationWitnessFor(input, node);
       if (absenceWitness !== undefined) {
         absentInputs.add(identity);
         types.set(identity, absenceWitness);

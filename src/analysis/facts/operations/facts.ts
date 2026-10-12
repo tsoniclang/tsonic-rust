@@ -478,6 +478,7 @@ export type RustTargetOperationFact =
       readonly operationId: string;
       readonly resultCarrier: TargetTypeRef;
       readonly completion: "complete" | "default";
+      readonly absentFields: readonly import("../../../target-model/conversions/provider-record-absence.js").RustProviderRecordAbsentField[];
       readonly fields: readonly {
         readonly property: Node;
         readonly expression: Node;

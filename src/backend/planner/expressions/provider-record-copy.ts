@@ -9,6 +9,7 @@ import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { readRustStoredObjectField } from "../objects/project-storage.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { applyRustValueConversion } from "./value-conversions.js";
+import { planRustProviderRecordAbsentFields } from "./provider-record-absence.js";
 
 export function planProviderRecordCopy(
   conversion: RustProviderRecordCopy,
@@ -31,10 +32,11 @@ export function planProviderRecordCopy(
     const value = applyRustValueConversion(context, source, field.conversion, node, false);
     return value === undefined ? undefined : { name: field.targetName, value };
   });
-  if (fields.some(field => field === undefined)) return undefined;
+  const absentFields = planRustProviderRecordAbsentFields(conversion.absentFields, context);
+  if (fields.some(field => field === undefined) || absentFields === undefined) return undefined;
   return rustValueBlock([{ name, value: expression }], {
     kind: "struct-literal", path: target.path,
-    fields: fields as { readonly name: string; readonly value: RustExpr }[],
+    fields: [...fields as { readonly name: string; readonly value: RustExpr }[], ...absentFields],
     ...(conversion.completion === "default"
       ? { base: { kind: "call" as const, path: "Default::default", args: [] } }
       : {}),
