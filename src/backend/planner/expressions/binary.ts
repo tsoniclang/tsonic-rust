@@ -19,6 +19,7 @@ import {
   sourceBooleanShortCircuitBranch,
 } from "@tsonic/target-api/source";
 import { diagnosticInput, registerAliasFromPath, rustActiveErrorType } from "../program/plan-context.js";
+import { rustPropagateLocalError } from "../program/fallible-boundaries.js";
 import { rustTargetRuntimeErrorType } from "../types/error-boundary.js";
 import { effectivePlannedExpressionCarrier, expressionCarrier, requireExpressionCarrier, rustOperationFact, selectedOperationMatches } from "./fundamentals.js";
 import { isRustAssignmentOperator, isRustBinaryOperator } from "../../../target-model/syntax/tokens.js";
@@ -559,11 +560,6 @@ export function planRustOperatorCallExpression(
     args: operands as readonly RustExpr[],
   };
   return fact.fallible
-    ? {
-        kind: "try",
-        expr: call,
-        resultErrorType: activeErrorType!,
-        operandErrorType: rustTargetRuntimeErrorType,
-      }
+    ? rustPropagateLocalError(context.fallibleBoundary!, rustTargetRuntimeErrorType, call)
     : call;
 }

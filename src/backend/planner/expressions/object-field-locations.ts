@@ -1,4 +1,5 @@
 import { rustValueBlock } from "../../target-ast/value-block.js";
+import { rustPackageFallibleBoundary } from "../program/fallible-boundaries.js";
 import type { Node } from "@tsonic/tsts";
 import { Node_Expression } from "@tsonic/target-api/source";
 import { rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
@@ -39,7 +40,7 @@ export function planRustReferenceObjectFieldLocation(
     context.syntheticNames === undefined || !sourceFieldSelectedOperationMatches(expression, operation, context)) return undefined;
   const receiver = planExpression(receiverNode, context);
   if (receiver === undefined) return undefined;
-  const callbackContext: RustPlanContext = { ...context, fallibleBoundary: boundary };
+  const callbackContext: RustPlanContext = { ...context, fallibleBoundary: rustPackageFallibleBoundary(boundary) };
   const dispatch = operation.declaration === undefined ? undefined
     : context.input.program.projectFieldDispatch.planFor(operation.declaration);
   const roles = dispatch === undefined ? undefined : planRustProjectFieldDispatchRoles(dispatch, callbackContext);

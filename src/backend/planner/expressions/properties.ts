@@ -4,11 +4,11 @@ import { planRustSourceIndexRead } from "../objects/indexed-records.js";
 import {
   diagnosticInput,
   isValidRustIdentifier,
-  rustActiveErrorType,
   rustErrorBoundaryForProjectMember,
   rustErrorType,
   sourceTypePath,
 } from "../program/plan-context.js";
+import { rustPropagateLocalError } from "../program/fallible-boundaries.js";
 import { effectiveMemberResultCarrier, planOptionalChainExpression } from "./special.js";
 import { effectivePlannedExpressionCarrier, requireExpressionCarrier, rustOperationFact, selectedOperationMatches } from "./fundamentals.js";
 import { finishProviderOperationExpression, planProviderOperationExpression } from "./conversions.js";
@@ -647,9 +647,9 @@ export function finishRustSourceAccessorEffect(
   if (effect === "infallible") {
     return expression;
   }
-  const resultErrorType = rustActiveErrorType(context);
+  const region = context.fallibleBoundary;
   const operandBoundary = rustErrorBoundaryForProjectMember(selectedDeclaration, context);
-  if (resultErrorType === undefined) {
+  if (region === undefined) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
       "rust.error.accessor",
@@ -665,12 +665,7 @@ export function finishRustSourceAccessorEffect(
     ));
     return undefined;
   }
-  return {
-    kind: "try",
-    expr: expression,
-    resultErrorType,
-    operandErrorType: rustErrorType(operandBoundary),
-  };
+  return rustPropagateLocalError(region, rustErrorType(operandBoundary), expression);
 }
 
 export function sourceUnionFieldSelectedOperationMatches(

@@ -1,4 +1,5 @@
 import { rustHiddenAttribute } from "../../target-ast/attributes.js";
+import { rustPackageFallibleBoundary } from "./fallible-boundaries.js";
 import { rustModuleCallableStorageFactKey } from "../../../analysis/callables/module-values.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { planRustNativeCallableProtocolItems } from "../declarations/callables/native-protocols.js";
@@ -276,7 +277,7 @@ function planModuleItems(
     functionReturnType: { kind: "unit" },
     functionAbsenceReturnCarrier: undefined,
     ...(asynchronous ? { asyncContext: true } : {}),
-    ...(errorBoundary === undefined ? {} : { fallibleBoundary: errorBoundary }),
+    fallibleBoundary: errorBoundary === undefined ? undefined : rustPackageFallibleBoundary(errorBoundary),
   };
   for (const statement of ast.statements(context.sourceFile)) {
     if (statement === undefined) {

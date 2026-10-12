@@ -5,6 +5,7 @@ import type { RustStructuralShapeField } from "../../../analysis/objects/structu
 import type { RustAssignmentOperator } from "../../../target-model/syntax/tokens.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustCurrentErrorBoundary, rustErrorType } from "../program/plan-context.js";
+import { rustPropagateLocalError } from "../program/fallible-boundaries.js";
 import { rustStructuralObjectCarrierValue, rustProgramErrorTargetType } from "../../../target-model/types/index.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
@@ -27,9 +28,8 @@ export function rustRecordFieldSelector(field: RustStructuralShapeField, mutable
 
 export function rustRecordFieldResult(expression: RustExpr, context: RustPlanContext): RustExpr | undefined {
   const boundary = rustCurrentErrorBoundary(context);
-  return boundary === undefined || context.fallibleBoundary === undefined ? undefined : {
-    kind: "try", expr: expression, resultErrorType: rustErrorType(context.fallibleBoundary), operandErrorType: rustErrorType(boundary),
-  };
+  return boundary === undefined || context.fallibleBoundary === undefined ? undefined
+    : rustPropagateLocalError(context.fallibleBoundary, rustErrorType(boundary), expression);
 }
 
 export function readRustBoundRecordField(

@@ -1,6 +1,8 @@
 import type { RustFallibleErrorBoundary } from "../../../target-model/operations/error-boundary.js";
 import type { RustExpr, RustType } from "../../target-ast/nodes.js";
 import { rustRuntimeErrorTypeIdentity } from "../program/source-package-errors.js";
+import { rustErrorType, rustLocalErrorOwner, rustPropagateLocalError,
+  type RustFallibleBoundary } from "../program/fallible-boundaries.js";
 
 export const rustTargetRuntimeErrorType: RustType = Object.freeze({
   kind: "named",
@@ -14,15 +16,33 @@ export function applyRustErrorBoundary(
   currentErrorType: RustType,
   providerErrorType?: RustType,
 ): RustExpr {
-  if (boundary === "provider-native" && providerErrorType === undefined) {
-    throw new Error("A provider-native Rust error boundary requires one exact provider error type.");
-  }
   return {
     kind: "try",
     expr: expression,
     resultErrorType: currentErrorType,
-    operandErrorType: boundary === "provider-native"
-      ? providerErrorType!
-      : boundary === "target-runtime" ? rustTargetRuntimeErrorType : currentErrorType,
+    operandErrorType: rustErrorBoundaryOperandType(boundary, currentErrorType, providerErrorType),
   };
+}
+
+export function applyRustLocalErrorBoundary(
+  expression: RustExpr,
+  boundary: RustFallibleErrorBoundary,
+  region: RustFallibleBoundary,
+  providerErrorType?: RustType,
+): RustExpr | undefined {
+  const owner = rustLocalErrorOwner(region);
+  return owner === undefined ? undefined : rustPropagateLocalError(region,
+    rustErrorBoundaryOperandType(boundary, rustErrorType(owner), providerErrorType), expression);
+}
+
+function rustErrorBoundaryOperandType(
+  boundary: RustFallibleErrorBoundary,
+  currentErrorType: RustType,
+  providerErrorType?: RustType,
+): RustType {
+  if (boundary === "provider-native" && providerErrorType === undefined) {
+    throw new Error("A provider-native Rust error boundary requires one exact provider error type.");
+  }
+  return boundary === "provider-native" ? providerErrorType!
+    : boundary === "target-runtime" ? rustTargetRuntimeErrorType : currentErrorType;
 }

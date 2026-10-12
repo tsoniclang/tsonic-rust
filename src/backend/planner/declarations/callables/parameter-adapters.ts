@@ -5,7 +5,8 @@ import { isRustCopyCarrier, isRustJsArrayCarrier, isRustStringCarrier, rustCarri
 import type { RustExpr, RustFunctionParam, RustStmt, RustType } from "../../../target-ast/nodes.js";
 import { planRustAbsentValue } from "../../expressions/optional-storage.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
-import { rustActiveErrorType, type RustPlanContext } from "../../program/plan-context.js";
+import type { RustPlanContext } from "../../program/plan-context.js";
+import { rustPropagateLocalError } from "../../program/fallible-boundaries.js";
 import { rustTargetRuntimeErrorType } from "../../types/error-boundary.js";
 import { requireRustCarrierRequirements } from "../../types/generic-requirements.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
@@ -147,10 +148,12 @@ export function planRustCallableArguments(
       value = { kind: "method-call", receiver: iterated, method: "collect",
         genericArguments: [{ kind: "type", type: collectedType }], args: [] };
       if (fallible) {
-        const errorType = rustActiveErrorType(context);
-        if (errorType === undefined) return undefined;
+        const region = context.fallibleBoundary;
+        if (region === undefined) return undefined;
         context.usedAliases?.add("rt");
-        value = { kind: "try", expr: value, resultErrorType: errorType, operandErrorType: rustTargetRuntimeErrorType };
+        const propagated = rustPropagateLocalError(region, rustTargetRuntimeErrorType, value);
+        if (propagated === undefined) return undefined;
+        value = propagated;
       }
     }
     return isRustJsArrayCarrier(adapter.target.parameterCarrier)

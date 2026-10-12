@@ -1,4 +1,5 @@
 import { rustValueBlock } from "../../target-ast/value-block.js";
+import { rustPropagateLocalError } from "../program/fallible-boundaries.js";
 import { cloneRustExpression } from "../../target-ast/expressions.js";
 import type { RustBindingStorageFact } from "../../../analysis/facts/operations/keys.js";
 import type { Node } from "@tsonic/tsts";
@@ -70,8 +71,7 @@ export function fallibleLocationAccess(node: Node, expression: RustExpr, context
   if (operandBoundary === undefined || context.fallibleBoundary === undefined) {
     return rejectLocationStorage(node, context, "A source pointer access requires its exact retained callback error boundary.");
   }
-  return { kind: "try", expr: expression,
-    resultErrorType: rustErrorType(context.fallibleBoundary), operandErrorType: rustErrorType(operandBoundary) };
+  return rustPropagateLocalError(context.fallibleBoundary, rustErrorType(operandBoundary), expression);
 }
 
 export function planRustIdentifierValue(

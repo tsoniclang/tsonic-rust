@@ -16,8 +16,8 @@ import {
   registerAliasFromPath,
   rustCurrentErrorBoundary,
   rustActiveErrorType,
-  rustErrorType,
 } from "../program/plan-context.js";
+import { rustPackageFallibleBoundary, rustLocalErrorOwner, rustInjectLocalError } from "../program/fallible-boundaries.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planBlockLike } from "./core.js";
 import { planExpression } from "../expressions/index.js";
@@ -50,6 +50,12 @@ export function planThrowStatement(node: Node, context: RustPlanContext): readon
     ));
     return undefined;
   }
+  const localOwner = rustLocalErrorOwner(activeBoundary);
+  if (localOwner === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+      "rust.error.throw-channel", "A local throw requires its exact source-package error channel."));
+    return undefined;
+  }
   const expression = Node_Expression(context.input.program.source.ast, node);
   if (expression === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -72,10 +78,10 @@ export function planThrowStatement(node: Node, context: RustPlanContext): readon
     return undefined;
   }
   context.usedAliases?.add("rt");
-  registerAliasFromPath(context, activeBoundary.errorTypePath);
+  registerAliasFromPath(context, localOwner.errorTypePath);
   let error: RustExpr;
   if (fact.error.kind === "program") {
-    if (activeBoundary.componentId !== context.sourcePackageComponentId) {
+    if (localOwner.componentId !== context.sourcePackageComponentId) {
       context.diagnostics.push(unsupportedConstructDiagnostic(
         diagnosticInput(context, expression),
         "rust.error.cross-package-rethrow",
@@ -85,11 +91,17 @@ export function planThrowStatement(node: Node, context: RustPlanContext): readon
     }
     error = value;
   } else {
-    const constructed = planRustProgramErrorConstruction(fact.error.conversion, value, expression, context, activeBoundary);
+    const constructed = planRustProgramErrorConstruction(fact.error.conversion, value, expression, context, localOwner);
     if (constructed === undefined) return undefined;
     error = constructed;
   }
-  return [{ kind: "throw", error }];
+  const injected = rustInjectLocalError(activeBoundary, error);
+  if (injected === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+      "rust.error.throw-channel", "A local throw conflicts with its exact source-package error channel."));
+    return undefined;
+  }
+  return [{ kind: "throw", error: injected }];
 }
 
 export function planTryStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
@@ -118,9 +130,9 @@ export function planTryStatement(node: Node, context: RustPlanContext): readonly
   const outwardFallible = context.fallibleBoundary !== undefined;
   const errorType = rustActiveErrorType(context);
   const bodyFallible = catchBlock !== undefined || outwardFallible;
-  const bodyErrorBoundary = catchBlock === undefined
-    ? context.fallibleBoundary
-    : rustCurrentErrorBoundary(context);
+  const catchOwner = catchBlock === undefined ? undefined : rustCurrentErrorBoundary(context);
+  const bodyErrorBoundary = catchBlock === undefined ? context.fallibleBoundary
+    : catchOwner === undefined ? undefined : rustPackageFallibleBoundary(catchOwner);
   if (bodyFallible && bodyErrorBoundary === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -133,7 +145,7 @@ export function planTryStatement(node: Node, context: RustPlanContext): readonly
   const body = planBlockLike(tryBlock, {
     ...context,
     completionBoundary: bodyBoundary,
-    ...(bodyErrorBoundary === undefined ? {} : { fallibleBoundary: bodyErrorBoundary }),
+    fallibleBoundary: bodyErrorBoundary,
   });
   if (body === undefined) {
     return undefined;
@@ -231,7 +243,7 @@ export function planTryStatement(node: Node, context: RustPlanContext): readonly
     errorType,
     asynchronous: bodyBoundary.asynchronous,
     body: bodyTerminates ? tailCompletionExits(body) : body,
-    bodyErrorType: bodyErrorBoundary === undefined ? undefined : rustErrorType(bodyErrorBoundary),
+    bodyErrorType: bodyErrorBoundary?.errorType,
     bodyTerminates,
     ...(plannedCatch === undefined ? {} : { catchClause: plannedCatch }),
     ...(plannedFinally === undefined ? {} : { finallyClause: plannedFinally }),

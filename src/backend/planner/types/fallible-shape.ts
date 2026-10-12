@@ -2,23 +2,19 @@ import type {
   RustBlock,
   RustExpr,
   RustStmt,
-  RustType,
 } from "../../target-ast/nodes.js";
 import { rustTypeEquals } from "../../target-ast/inspection/type-equality.js";
 import { rustBlockTerminates } from "../../target-ast/normalization/block-flow.js";
 import { rustStatementExpressions } from "../../target-ast/inspection/source-usage.js";
 import { mapRustExpressionChildren } from "../../target-ast/expression-children.js";
-
-export interface RustFallibleBoundary {
-  readonly errorType: RustType;
-}
+import type { RustFallibleBoundary } from "../program/fallible-boundaries.js";
 
 export type RustFallibleShapeOptions =
   | {
       readonly fallible: false;
       readonly hasReturnValue: boolean;
     }
-  | (RustFallibleBoundary & {
+  | (Pick<RustFallibleBoundary, "errorType"> & {
       readonly fallible: true;
       readonly hasReturnValue: boolean;
       readonly inferErrorTypeFromReturnType: boolean;
@@ -129,14 +125,14 @@ export function rustExpressionUsesTryInCurrentRegion(expression: RustExpr): bool
 
 export function applyRustFallibleResultExpression(
   expression: RustExpr,
-  boundary: RustFallibleBoundary,
+  boundary: Pick<RustFallibleBoundary, "errorType">,
 ): RustExpr {
   return applyRustResultExpression(expression, boundary, false);
 }
 
 function applyRustResultExpression(
   expression: RustExpr,
-  boundary: RustFallibleBoundary,
+  boundary: Pick<RustFallibleBoundary, "errorType">,
   inferErrorTypeFromReturnType: boolean,
 ): RustExpr {
   if (expression.kind === "bottom") {

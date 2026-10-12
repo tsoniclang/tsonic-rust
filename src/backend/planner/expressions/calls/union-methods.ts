@@ -7,7 +7,8 @@ import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js
 import type { RustCallGenericArgument, RustExpr, RustPattern } from "../../../target-ast/nodes.js";
 import { rustTargetGenericBindingsForArguments, substituteRustTargetGenerics, type TargetTypeRef } from "../../../../target-model/types/index.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import { rustActiveErrorType, rustErrorBoundaryForProjectMember, rustErrorType } from "../../program/plan-context.js";
+import { rustErrorBoundaryForProjectMember, rustErrorType } from "../../program/plan-context.js";
+import { rustPropagateLocalError } from "../../program/fallible-boundaries.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { rustUnionTypePathInContext } from "../../types/render.js";
 import { planExpression } from "../entry.js";
@@ -76,10 +77,12 @@ export function planRustUnionMethodCall(
       expression = planned;
     }
     if (effects.unionBranches[index]!.invocation === "fallible") {
-      const resultErrorType = rustActiveErrorType(context);
+      const region = context.fallibleBoundary;
       const operandBoundary = rustErrorBoundaryForProjectMember(method.declaration, context);
-      if (resultErrorType === undefined || operandBoundary === undefined) return undefined;
-      expression = { kind: "try", expr: expression, resultErrorType, operandErrorType: rustErrorType(operandBoundary) };
+      if (region === undefined || operandBoundary === undefined) return undefined;
+      const propagated = rustPropagateLocalError(region, rustErrorType(operandBoundary), expression);
+      if (propagated === undefined) return undefined;
+      expression = propagated;
     }
     const result = fact.resultCarrier;
     if (method.resultConversion === undefined) {

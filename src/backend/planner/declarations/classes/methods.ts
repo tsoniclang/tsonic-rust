@@ -1,3 +1,4 @@
+import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.js";
 import {
   rustAsyncFunctionFactKey,
   rustFallibleFactKey,
@@ -242,7 +243,7 @@ export function planProjectMethod(
             protocol: generatorFact,
           },
         }),
-    ...(bodyErrorBoundary === undefined ? {} : { fallibleBoundary: bodyErrorBoundary }),
+    fallibleBoundary: bodyErrorBoundary === undefined ? undefined : rustPackageFallibleBoundary(bodyErrorBoundary),
   };
   const parameterStatements = planRustCallableParameterPrelude(
     parameterPlan,

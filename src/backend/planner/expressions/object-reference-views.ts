@@ -1,4 +1,5 @@
 import { rustValueBlock } from "../../target-ast/value-block.js";
+import { rustPackageFallibleBoundary } from "../program/fallible-boundaries.js";
 import type { RustObjectReferenceView } from "../../../analysis/facts/object-reference-views.js";
 import { rustClassConstructorInstance } from "../../../target-model/types/carriers/class-constructors.js";
 import type { RustExpr } from "../../target-ast/nodes.js";
@@ -29,7 +30,7 @@ export function planRustObjectReferenceView(
   const boundary = rustCurrentErrorBoundary(context);
   if (shape === undefined || shape.fields.length !== fact.fields.length || boundary === undefined ||
     context.syntheticNames === undefined) return undefined;
-  const callbackContext: RustPlanContext = { ...context, fallibleBoundary: boundary };
+  const callbackContext: RustPlanContext = { ...context, fallibleBoundary: rustPackageFallibleBoundary(boundary) };
   const ownerName = allocateRustSyntheticName(context.syntheticNames, "view_owner");
   const owner: RustExpr = {kind: "path", path: ownerName};
   const clone = (expression: RustExpr): RustExpr => ({kind: "method-call", receiver: expression, method: "clone", args: []});

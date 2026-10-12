@@ -1,4 +1,5 @@
 import { rustValueBlock } from "../../target-ast/value-block.js";
+import { rustPackageFallibleBoundary } from "../program/fallible-boundaries.js";
 import type { Node } from "@tsonic/tsts";
 import { emptyRustGenerics, type RustImplFunction, type RustItem } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
@@ -60,7 +61,7 @@ export function planRustClassValueImplementations(declaration: Node, context: Ru
       if (type === undefined || storage.property === undefined) return undefined;
       const syntheticNames = createRustSyntheticNameState(context.input.program.source.ast, field.declaration, ["value"]);
       const local = rustClassEnvironmentContext(environment, { kind: "path", path: "self" },
-        { ...context, syntheticNames, fallibleBoundary: boundary });
+        { ...context, syntheticNames, fallibleBoundary: rustPackageFallibleBoundary(boundary) });
       const fact = { kind: "source-static-field" as const, declaration: field.declaration,
         storageFileName: field.fileName, storageName: field.targetName, resultCarrier: storage.carrier };
       const read = readRustSourceStaticField(fact, local);

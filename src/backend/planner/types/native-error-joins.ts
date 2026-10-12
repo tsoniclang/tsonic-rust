@@ -14,6 +14,7 @@ export type RustNativeErrorJoinSelection = Pick<RustNativeErrorJoinSource, "iden
 export interface RustNativeErrorJoinPlan {
   readonly errorType: RustType | undefined;
   readonly items: readonly RustItem[];
+  accepts(source: RustNativeErrorJoinSelection): boolean;
   inject(source: RustNativeErrorJoinSelection, error: RustExpr): RustExpr | undefined;
   propagate(source: RustNativeErrorJoinSelection, result: RustExpr): RustExpr | undefined;
 }
@@ -50,6 +51,9 @@ export function planRustNativeErrorJoin(input: {
     return selected !== undefined && rustTypeEquals(selected.errorType, source.errorType) ? selected : undefined;
   };
   return Object.freeze({ errorType, items,
+    accepts(source: RustNativeErrorJoinSelection): boolean {
+      return select(source) !== undefined;
+    },
     inject(source: RustNativeErrorJoinSelection, error: RustExpr): RustExpr | undefined {
       const selected = select(source);
       return selected === undefined || errorType === undefined ? undefined : sources.size === 1 ? error

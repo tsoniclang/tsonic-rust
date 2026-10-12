@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustCallableParameterAbi } from "../../../../analysis/facts/callable-adapters.js";
 import { rustProjectCallableAdaptersKey } from "../../../../analysis/facts/project-callable-adapters.js";
@@ -49,7 +50,8 @@ export function planRootCallableForwarder(
     return reject();
   }
   const syntheticNames = createRustSyntheticNameState(context.input.program.source.ast, contract, shape.params.map(parameter => parameter.name));
-  const selectedContext = { ...context, syntheticNames, fallibleBoundary: boundary };
+  const selectedContext = { ...context, syntheticNames,
+    fallibleBoundary: boundary === undefined ? undefined : rustPackageFallibleBoundary(boundary) };
   const parameters = shape.params.map(parameter => ({
     ...parameter,
     mutable: false,

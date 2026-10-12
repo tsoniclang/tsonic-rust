@@ -1,3 +1,4 @@
+import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.js";
 import {
   readRustProjectObjectField,
   readRustProjectMethodOverride,
@@ -271,7 +272,7 @@ export function planContractImplementation(
       }
       const adapterContext: RustPlanContext = {
         ...context,
-        fallibleBoundary: methodErrorBoundary,
+        fallibleBoundary: methodErrorBoundary === undefined ? undefined : rustPackageFallibleBoundary(methodErrorBoundary),
       };
       const implementationBinding: RustExpr = {
         kind: "path",

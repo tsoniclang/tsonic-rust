@@ -6,7 +6,8 @@ import {
   rustStructuralObjectCarrierValue,
 } from "../../../target-model/types/index.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
-import { applyRustErrorBoundary, rustTargetRuntimeErrorType } from "../types/error-boundary.js";
+import { applyRustLocalErrorBoundary, rustTargetRuntimeErrorType } from "../types/error-boundary.js";
+import { rustPropagateLocalError } from "../program/fallible-boundaries.js";
 import {
   diagnosticInput,
   registerAliasFromPath,
@@ -100,8 +101,8 @@ export function applyRustValueConversion(
   if (!contract.fallible) {
     return converted;
   }
-  const activeErrorType = rustActiveErrorType(context);
-  if (activeErrorType === undefined) {
+  const region = context.fallibleBoundary;
+  if (region === undefined) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node ?? context.sourceFile),
       "rust.backend.value-conversion",
@@ -119,7 +120,7 @@ export function applyRustValueConversion(
     ));
     return undefined;
   }
-  return applyRustErrorBoundary(converted, contract.errorBoundary, activeErrorType, providerErrorType);
+  return applyRustLocalErrorBoundary(converted, contract.errorBoundary, region, providerErrorType);
 }
 
 export function lowerRustValueConversion(
@@ -245,12 +246,10 @@ export function lowerRustValueConversion(
           callbackArguments.push(projected);
           continue;
         }
-        callbackArguments.push({
-          kind: "try",
-          expr: projected,
-          resultErrorType: activeErrorType!,
-          operandErrorType: rustTargetRuntimeErrorType,
-        });
+        const propagated = context.fallibleBoundary === undefined ? undefined
+          : rustPropagateLocalError(context.fallibleBoundary, rustTargetRuntimeErrorType, projected);
+        if (propagated === undefined) return undefined;
+        callbackArguments.push(propagated);
       }
       const callbackExpression: RustExpr = { kind: "path", path: callbackName };
       const invocation: RustExpr = rustCallableProtocol(contract.source) === undefined

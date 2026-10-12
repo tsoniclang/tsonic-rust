@@ -19,7 +19,7 @@ import {
   planRustProjectUpcast,
 } from "../../expressions/index.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import { rustActiveErrorType } from "../../program/plan-context.js";
+import { rustPropagateLocalError } from "../../program/fallible-boundaries.js";
 import { rustTargetRuntimeErrorType } from "../../types/error-boundary.js";
 import {
   allocateRustSyntheticName,
@@ -44,15 +44,8 @@ export function applyRustCallableValueAdapter(
   if (!raw.fallible) {
     return raw.expression;
   }
-  const activeErrorType = rustActiveErrorType(context);
-  return activeErrorType !== undefined
-    ? {
-        kind: "try",
-        expr: raw.expression,
-        resultErrorType: activeErrorType,
-        operandErrorType: rustTargetRuntimeErrorType,
-      }
-    : undefined;
+  return context.fallibleBoundary === undefined ? undefined
+    : rustPropagateLocalError(context.fallibleBoundary, rustTargetRuntimeErrorType, raw.expression);
 }
 
 export function applyRustCallableValueAdapterRaw(

@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { rustPackageFallibleBoundary } from "../program/fallible-boundaries.js";
 import type { RustFrameCallableBinding, RustFrameCallableDefinition } from "../../../analysis/callables/frame-values.js";
 import type { RustExpr, RustStmt, RustType } from "../../target-ast/nodes.js";
 import { rustValueBlock } from "../../target-ast/value-block.js";
@@ -153,7 +154,7 @@ export function rustFrameBindingLocation(
       }
       const boundary = rustCurrentErrorBoundary(addressContext);
       if (boundary === undefined) return undefined;
-      const callbackContext = { ...addressContext, fallibleBoundary: boundary };
+      const callbackContext = { ...addressContext, fallibleBoundary: rustPackageFallibleBoundary(boundary) };
       const withOwner = (expression: RustExpr): RustLiveFrameOwner => ({ ...owner, expression, borrowed: false });
       const value = planRustProjectedObjectLocation(rustFrameOwnerReference(owner), member, callbackContext,
         reader => rustFrameBindingLocation(binding, withOwner(reader), callbackContext).read,

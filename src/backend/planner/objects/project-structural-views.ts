@@ -1,4 +1,5 @@
 import { rustValueBlock } from "../../target-ast/value-block.js";
+import { rustPackageFallibleBoundary } from "../program/fallible-boundaries.js";
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { emptyRustGenerics, type RustExpr, type RustImplFunction, type RustItem } from "../../target-ast/nodes.js";
@@ -62,7 +63,7 @@ export function planRustProjectStructuralImplementations(declaration: Node, cont
       const field = shape.fields[member.storageIndex];
       if (field === undefined) return undefined;
       const syntheticNames = createRustSyntheticNameState(context.input.program.source.ast, member.declaration, []);
-      const local = { ...context, syntheticNames, fallibleBoundary: boundary };
+      const local = { ...context, syntheticNames, fallibleBoundary: rustPackageFallibleBoundary(boundary) };
       const callable = member.callable;
       if (callable !== undefined) {
         const protocol = rustCallableProtocol(callable.carrier);

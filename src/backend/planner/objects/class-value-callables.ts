@@ -1,4 +1,5 @@
 import type { RustClassValueCallable } from "../../../analysis/objects/class-value-callables.js";
+import { rustPackageFallibleBoundary } from "../program/fallible-boundaries.js";
 import { rustFallibleFactKey } from "../../../analysis/facts/keys.js";
 import type { RustExpr, RustFunctionParam, RustImplFunction } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
@@ -18,7 +19,7 @@ export function planRustClassValueForwarder(
   const returnType = rustTypeFromCarrierInContext(callable.resultAdapter.targetCarrier, context);
   if (boundary === undefined || owner === undefined || returnType === undefined) return undefined;
   const syntheticNames = createRustSyntheticNameState(context.input.program.source.ast, callable.declaration, []);
-  const localContext = { ...context, syntheticNames, fallibleBoundary: boundary };
+  const localContext = { ...context, syntheticNames, fallibleBoundary: rustPackageFallibleBoundary(boundary) };
   const parameters = callable.parameters.map(parameter => {
     const type = rustTypeFromCarrierInContext(parameter.parameterCarrier, localContext);
     return type === undefined ? undefined : { name: allocateRustSyntheticName(syntheticNames, "argument"), type };

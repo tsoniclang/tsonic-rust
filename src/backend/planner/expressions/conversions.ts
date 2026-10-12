@@ -13,9 +13,9 @@ import {
   isRustFinalizedTaggedArrayInput,
   validateRustFinalizedOperationAbi,
 } from "../../../analysis/facts/finalized-operation-abi.js";
-import { applyRustErrorBoundary } from "../types/error-boundary.js";
+import { applyRustLocalErrorBoundary } from "../types/error-boundary.js";
 import { applyRustProviderEvaluationScope, planRustProviderEvaluationScope } from "../project/provider-evaluation-scope.js";
-import { diagnosticInput, registerAliasFromPath, rustActiveErrorType } from "../program/plan-context.js";
+import { diagnosticInput, registerAliasFromPath } from "../program/plan-context.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planExpression } from "./entry.js";
 import { planRustNonConsumingValue, rustExpressionReadsStorage } from "./typed-locations.js";
@@ -567,8 +567,8 @@ export function finishProviderOperationExpression(
 ): RustExpr | undefined {
   let raw = expression;
   if (fact.abi.effects.invocation === "fallible") {
-    const activeErrorType = rustActiveErrorType(context);
-    if (activeErrorType === undefined) {
+    const region = context.fallibleBoundary;
+    if (region === undefined) {
       context.diagnostics.push(unsupportedConstructDiagnostic(
         diagnosticInput(context, node),
         "rust.error.call",
@@ -584,12 +584,14 @@ export function finishProviderOperationExpression(
       ));
       return undefined;
     }
-    raw = applyRustErrorBoundary(
+    const propagated = applyRustLocalErrorBoundary(
       raw,
       fact.abi.effects.errorBoundary,
-      activeErrorType,
+      region,
       rustTypeFromCarrierInContext(fact.abi.effects.errorCarrier, context),
     );
+    if (propagated === undefined) return undefined;
+    raw = propagated;
   }
   if (fact.abi.result.kind === "async") {
     return raw;

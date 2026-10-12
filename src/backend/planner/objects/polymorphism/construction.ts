@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
 import { rustFallibleFactKey } from "../../../../analysis/facts/keys.js";
 import type { RustExpr, RustImplFunction, RustType } from "../../../target-ast/nodes.js";
@@ -64,7 +65,7 @@ export function planProjectClassConstructor(
       { kind: "path", path: environment.parameterName }, context)),
     syntheticNames, controlFlow: { nextLoopId: 0 }, functionReturnType: wrapperType,
     functionAbsenceReturnCarrier: undefined,
-    ...(boundary === undefined ? {} : { fallibleBoundary: boundary }),
+    fallibleBoundary: boundary === undefined ? undefined : rustPackageFallibleBoundary(boundary),
   };
   const carrier = context.input.program.projectTypes.openCarrier(definition);
   const materialize = (values: ReadonlyMap<Node, RustExpr>, retainedIdentity?: RustExpr): RustExpr => {

@@ -1,4 +1,5 @@
 import type { RustSourceTypeFamilyImplementation } from "../../../../target-model/types/type-families.js";
+import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.js";
 import { rustProgramErrorTargetType } from "../../../../target-model/types/index.js";
 import { rustTargetGenericReferences } from "../../../../target-model/types/carriers/generic-references.js";
 import type { RustGenerics, RustItem, RustType } from "../../../target-ast/nodes.js";
@@ -47,7 +48,7 @@ export function planRustIndexedFieldImplementation(
       { kind: "type", name: "Storage", generics: emptyRustGenerics, type: storage }],
   }];
   for (const access of field.sharedWrite ? ["read", "write"] as const : ["read"] as const) {
-    const bodyContext: RustPlanContext = { ...context, fallibleBoundary: boundary,
+    const bodyContext: RustPlanContext = { ...context, fallibleBoundary: rustPackageFallibleBoundary(boundary),
       syntheticNames: createRustSyntheticNameState(context.input.program.source.ast, context.sourceFile,
         ["owner", "_key", "value"]),
     };

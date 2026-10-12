@@ -13,6 +13,8 @@ import {
   type RustSourcePackageErrorPlan,
 } from "./source-package-errors.js";
 import { rustSourceItemIdentity } from "./source-package-facades.js";
+import type { RustFallibleBoundary } from "./fallible-boundaries.js";
+export { rustErrorType } from "./fallible-boundaries.js";
 import type { RustBlock, RustErrorDomain, RustExpr, RustItem, RustStmt, RustType } from "../../target-ast/nodes.js";
 import {
   isValidRustIdentifier,
@@ -104,10 +106,7 @@ export interface RustPlanContext {
   readonly functionAbsenceReturnCarrier?: TargetTypeRef;
   readonly asyncContext?: boolean;
   readonly explicitUnsafeContextDepth?: number;
-  // Exact Result error ABI for the active function or synthetic try region.
-  // Its owner can differ from the source file when implementing a contract
-  // declared by another source-package component.
-  readonly fallibleBoundary?: RustSourcePackageErrorBoundary;
+  readonly fallibleBoundary?: RustFallibleBoundary;
   // Structured import requirements: runtime alias prefixes used by planned
   // operations and rendered types. Never inferred from printed text.
   readonly usedAliases?: Set<string>;
@@ -204,22 +203,10 @@ export function rustCurrentErrorBoundary(
   );
 }
 
-export function rustErrorType(
-  boundary: RustSourcePackageErrorBoundary,
-): RustType {
-  return {
-    kind: "named",
-    path: boundary.errorTypePath,
-    identity: boundary.errorTypeIdentity,
-  };
-}
-
 export function rustActiveErrorType(
   context: Pick<RustPlanContext, "fallibleBoundary">,
 ): RustType | undefined {
-  return context.fallibleBoundary === undefined
-    ? undefined
-    : rustErrorType(context.fallibleBoundary);
+  return context.fallibleBoundary?.errorType;
 }
 
 export function rustSourceItemIsPubliclyReachable(

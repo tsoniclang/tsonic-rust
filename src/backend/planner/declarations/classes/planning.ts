@@ -1,4 +1,5 @@
 import { rustDeriveAttributes, rustHiddenAttribute } from "../../../target-ast/attributes.js";
+import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.js";
 import { planRustAuthoredStructScope } from "../scoped-types.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
 import { applyFallibleShape } from "../../types/fallible-shape.js";
@@ -532,7 +533,7 @@ function planConstructor(
     controlFlow: { nextLoopId: 0 },
     functionReturnType: classType,
     functionAbsenceReturnCarrier: undefined,
-    ...(errorBoundary === undefined ? {} : { fallibleBoundary: errorBoundary }),
+    fallibleBoundary: errorBoundary === undefined ? undefined : rustPackageFallibleBoundary(errorBoundary),
   };
   const parameterStatements = planRustCallableParameterPrelude(
     parameterPlan,
