@@ -2,10 +2,11 @@ import type { Node } from "@tsonic/tsts";
 import type { RustSourcePolicyContext } from "../model/context.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustLifetimeRef } from "../../target-model/lifetimes/index.js";
-import { rustCallableProtocol, rustNativeCallableProtocol } from "../../target-model/types/carriers/callables.js";
+import { rustCallableProtocol, rustCallableTargetType, rustNativeCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustGenericCallableProtocol } from "../../target-model/types/carriers/generic-callables.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
+import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 
 export interface RustRetainedEnvironment {
   readonly lifetime: Extract<RustLifetimeRef, { readonly kind: "parameter" }>;
@@ -39,6 +40,23 @@ export function rustRetainedEnvironment(
   const selected = context.retainedEnvironments.environmentFor(declaration);
   return selected.kind === "selected" && !selected.environment.parameters.some(parameter => openParameters.has(parameter))
     ? none : selected;
+}
+
+export function closeRustRetainedParameter(
+  parameter: Node, carrier: TargetTypeRef, context: RustSourcePolicyContext,
+): TargetTypeRef | undefined {
+  if (!rustHasOpenOwnedStorage(carrier)) return carrier;
+  const declaration = context.ast.parent(parameter);
+  if (declaration === undefined || !context.ast.parameters(declaration).includes(parameter)) return undefined;
+  const selected = context.retainedEnvironments.environmentFor(declaration);
+  if (selected.kind === "unresolved") return undefined;
+  if (selected.kind === "none" || !selected.environment.parameters.includes(parameter)) return carrier;
+  return mapRustTargetTypes(carrier, (current, original) => {
+    if (original.kind === "reference" || original.kind === "function-pointer" || original.kind === "closure") return original;
+    const protocol = rustCallableProtocol(original);
+    return protocol === undefined ? current : protocol.lifetime?.kind === "placeholder"
+      ? rustCallableTargetType(protocol.parameters, protocol.result, selected.environment.lifetime) : original;
+  });
 }
 
 export function rustHasOpenOwnedStorage(carrier: TargetTypeRef): boolean {

@@ -8,7 +8,7 @@ import { createRustNativeStoragePlan } from "../../../dist/analysis/callables/na
 import { createRustNativeCallableProducerPlan } from "../../../dist/analysis/callables/native-producers.js";
 import { createRustGenericCallablePlan } from "../../../dist/analysis/callables/generic-values.js";
 import { createRustNativeCapturePlan } from "../../../dist/analysis/callables/native-captures.js";
-import { rustNamedTypeCarrierValue } from "../../../dist/target-model/types/carriers/native.js";
+import { rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 import { rustRuntimeCarrierKey } from "../../../dist/target-model/facts/selections.js";
 import { rustSourceParameterAbiFactKey } from "../../../dist/analysis/facts/keys.js";
@@ -131,9 +131,9 @@ test("invocation input forwarding binds exact callee inputs rather than caller s
   const supplied = current.plan.invocationInputFor(callee, current.initializer("supplied"));
   assert.equal(supplied.kind, "selected", "concrete producer has its sealed physical error channel");
   assert.equal(supplied.inputs.length, 0, "a concrete producer is never rebranded as a formal input");
-  const produced = rustNamedTypeCarrierValue(supplied.carrier.referent);
-  const result = rustNamedTypeCarrierValue(produced.genericArguments[1].type);
-  const error = rustProducerErrorReference(result.genericArguments[1].type);
+  const produced = rustCallablePhysicalSignature(supplied.carrier.referent);
+  assert.equal(produced !== undefined, true, "concrete producer has the canonical exact callable signature");
+  const error = rustProducerErrorReference(produced.error);
   assert.equal(error.channel, "invoke");
   assert.equal(current.input.producers.forIdentity(error.identity).declaration ===
     current.source.ast.arguments(current.initializer("supplied"))[0], true);
@@ -174,9 +174,9 @@ test("physical captured forwarding retains outer inputs without mistaking a new 
   selected(current.plan.returnFor(closure), inputs[1].implementation, "nested return retains capture binding");
   const outward = current.plan.returnFor(owner);
   assert.equal(outward.kind, "selected", "concrete closure retains a sealed producer-owned signature");
-  const callable = rustNamedTypeCarrierValue(outward.carrier);
-  const result = rustNamedTypeCarrierValue(callable.genericArguments[1].type);
-  assert.equal(result.genericArguments[0].type === inputs[1].implementation, true,
+  const callable = rustCallablePhysicalSignature(outward.carrier);
+  assert.equal(callable !== undefined, true, "returned closure has the canonical exact callable signature");
+  assert.equal(callable.result === inputs[1].implementation, true,
     "returned captured callback retains its exact physical input, not a logical runtime signature");
 });
 
@@ -311,8 +311,9 @@ test("physical selection rejects ambiguous mutation alternatives and seals concr
   assert.equal(created.kind, "selected");
   assert.equal(returned.kind, "selected");
   assert.deepEqual(returned.carrier, created.carrier, "one exact producer survives the selected return boundary");
-  const result = rustNamedTypeCarrierValue(rustNamedTypeCarrierValue(created.carrier).genericArguments[1].type);
-  assert.equal(rustProducerErrorReference(result.genericArguments[1].type).channel, "invoke");
+  const callable = rustCallablePhysicalSignature(created.carrier);
+  assert.equal(callable !== undefined, true, "created closure has the canonical exact callable signature");
+  assert.equal(rustProducerErrorReference(callable.error).channel, "invoke");
 });
 
 test("physical storage validates token ownership, exact contracts and finite projection budgets", () => {

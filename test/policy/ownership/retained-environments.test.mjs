@@ -4,9 +4,9 @@ import { createTargetSourceProgram, sourceProjectFiles } from "@tsonic/target-ap
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { createRustSession, checkRustSession } from "../../helpers/rust-session.mjs";
 import { createRustRetainedEnvironmentQueries } from "../../../dist/policy/ownership/retained-environment-queries.js";
-import { rustRetainedEnvironment } from "../../../dist/policy/ownership/retained-environments.js";
+import { closeRustRetainedParameter, rustRetainedEnvironment } from "../../../dist/policy/ownership/retained-environments.js";
 import { emptyRustLifetimeIndex } from "../../../dist/target-model/lifetimes/index.js";
-import { rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
+import { rustCallableProtocol, rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
 
 function fixture(text, configure = input => input, maximumSteps) {
   const checked = checkRustSession(createRustSession({ surfaces: ["js"], files: { "index.ts": text } }));
@@ -99,4 +99,48 @@ test("retention fails closed on missing checked uses and finite work exhaustion 
     source: { ...input.source, navigation: { ...input.source.navigation, parameterUseSummary: () => undefined } },
   }));
   assert.equal(queries.environmentFor(declarations.get("outer")).kind, "unresolved");
+});
+
+test("retained owned inputs bind only their environment and preserve nested invocation and reference contracts", () => {
+  const context = fixture(`
+export function retain(callback: (inner: () => number) => () => number, unused: () => number): (inner: () => number) => () => number { return callback; }
+`);
+  const owner = context.declarations.get("retain");
+  const parameters = context.source.ast.parameters(owner);
+  const environment = context.queries.environmentFor(owner);
+  assert.equal(environment.kind, "selected");
+  const policy = { ...context, ast: context.source.ast, retainedEnvironments: context.queries };
+  const scalar = { kind: "source-primitive", name: "float64" };
+  const nested = rustCallableTargetType([], scalar);
+  const callback = rustCallableTargetType([nested], nested);
+  const selected = closeRustRetainedParameter(parameters[0], callback, policy);
+  const protocol = rustCallableProtocol(selected);
+  assert.equal(protocol !== undefined, true);
+  assert.equal(protocol.lifetime === environment.environment.lifetime, true);
+  assert.equal(protocol.parameters[0] === nested, true, "nested input contract retains its independent lifetime");
+  assert.equal(protocol.result === nested, true, "nested output contract retains its independent lifetime");
+  assert.equal(closeRustRetainedParameter(parameters[1], callback, policy) === callback, true,
+    "an unretained input receives no generated lifetime constraint");
+  const explicit = { kind: "parameter", identity: "authored-region", name: "region" };
+  const authored = rustCallableTargetType([], scalar, explicit);
+  const reference = { kind: "reference", mutable: false, referent: callback, lifetime: explicit };
+  assert.equal(closeRustRetainedParameter(parameters[0], authored, policy) === authored, true);
+  assert.equal(closeRustRetainedParameter(parameters[0], reference, policy) === reference, true,
+    "an explicit reference is not turned into owned retained storage");
+  const pair = { kind: "tuple", elements: [callback, reference] };
+  const closedPair = closeRustRetainedParameter(parameters[0], pair, policy);
+  assert.equal(closedPair.kind, "tuple");
+  assert.equal(rustCallableProtocol(closedPair.elements[0]).lifetime === environment.environment.lifetime, true);
+  assert.equal(closedPair.elements[1] === reference, true);
+});
+
+test("retained parameter closure rejects absent owner evidence instead of assigning static storage", () => {
+  const context = fixture("export function retain(callback: () => number): () => number { return callback; }");
+  const owner = context.declarations.get("retain");
+  const parameter = context.source.ast.parameters(owner)[0];
+  const callback = rustCallableTargetType([], { kind: "source-primitive", name: "float64" });
+  const policy = { ...context, ast: context.source.ast,
+    retainedEnvironments: { ...context.queries, environmentFor: () => ({ kind: "unresolved", reason: "test evidence unavailable" }) } };
+  assert.equal(closeRustRetainedParameter(parameter, callback, policy) === undefined, true);
+  assert.equal(closeRustRetainedParameter(owner, callback, policy) === undefined, true);
 });
