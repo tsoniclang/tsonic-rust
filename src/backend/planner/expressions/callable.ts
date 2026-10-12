@@ -7,7 +7,7 @@ import {
   diagnosticInput,
   isValidRustIdentifier,
   rustActiveErrorType,
-  rustCurrentErrorBoundary,
+  rustErrorBoundaryForDeclaration,
 } from "../program/plan-context.js";
 import {
   isRustUnitCarrier,
@@ -25,7 +25,6 @@ import { planRustAbsentValue } from "./optional-storage.js";
 import {
   rustAsyncFunctionFactKey,
   rustClosureCaptureFactKey,
-  rustFallibleFactKey,
   rustGeneratorFactKey,
   rustMutatedBindingFactKey,
   rustMutatedReferentFactKey,
@@ -66,6 +65,7 @@ import { finalizedConversionIsValid } from "../../../analysis/facts/finalized-op
 import { applyFinalizedValueConversion } from "./value-conversions.js";
 import { planRustCapturedReceiverFields, planRustCapturedReceivers, rustRecursiveReceiverFieldContext,
   validateRustRecursiveReceiverField } from "./receiver-captures.js";
+import { planRustErrorRegion } from "../program/error-regions.js";
 
 export function planCallableExpression(
   node: Node,
@@ -260,7 +260,13 @@ export function planRustCallableExpressionBody(
   if (bodyNode === undefined) {
     return undefined;
   }
-  const fallible = context.input.program.facts.getFact(node, rustFallibleFactKey) !== undefined;
+  const errorRegion = planRustErrorRegion(node, { ...context, callableDeclaration: node, fallibleBoundary: undefined });
+  if (errorRegion === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+      "rust.backend.closure-error-boundary", "Callable expression has no exact finalized native error region."));
+    return undefined;
+  }
+  const fallible = errorRegion.boundary !== undefined;
   const generator = context.input.program.facts.getFact(node, rustGeneratorFactKey);
   const asynchronous = context.input.program.facts.getFact(node, rustAsyncFunctionFactKey);
   const suspended = generator !== undefined || asynchronous !== undefined;
@@ -276,21 +282,35 @@ export function planRustCallableExpressionBody(
     return undefined;
   }
   const resultIsFallible = callableProtocol !== undefined || nativeClosureProtocol?.fallible === true || fallible;
-  const bodyIsFallible = suspended ? fallible : resultIsFallible;
-  const localErrorOwner = rustCurrentErrorBoundary(context);
-  const callableErrorBoundary = resultIsFallible || generator !== undefined
-    ? context.fallibleBoundary ?? (localErrorOwner === undefined ? undefined : rustPackageFallibleBoundary(localErrorOwner))
-    : undefined;
-  if ((resultIsFallible || generator !== undefined) && callableErrorBoundary === undefined) {
+  const asynchronousCallable = asynchronous !== undefined && callableProtocol !== undefined;
+  const bodyIsFallible = suspended ? fallible || asynchronousCallable : resultIsFallible;
+  const generatorErrorOwner = generator === undefined ? undefined : rustErrorBoundaryForDeclaration(node, context);
+  const callableErrorBoundary = generator === undefined ? errorRegion.boundary
+    : generatorErrorOwner === undefined ? undefined : rustPackageFallibleBoundary(generatorErrorOwner);
+  const producerContext = { ...context, callableDeclaration: node, fallibleBoundary: callableErrorBoundary };
+  const invocationErrorCarrier = resultIsFallible
+    ? context.input.program.callableValues.nativeProducers.errorFor(node, "invoke") : undefined;
+  const invocationErrorType = invocationErrorCarrier === undefined ? undefined
+    : rustTypeFromCarrierInContext(invocationErrorCarrier, producerContext);
+  if (resultIsFallible && invocationErrorType === undefined || generator !== undefined && callableErrorBoundary === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.closure-error-boundary",
-      "Callable expression has no exact source-package error boundary.",
+      "Callable expression has no exact producer-owned invocation or suspension error channel.",
     ));
     return undefined;
   }
   if (resultIsFallible) {
     context.usedAliases?.add("rt");
+  }
+  const physicalCarrier = callableProtocol === undefined ? undefined
+    : context.input.program.callableValues.nativeProducers.physicalFor(node, constructionCarrier);
+  const callableType = physicalCarrier === undefined || borrowedInput ? undefined
+    : rustCallableConstructionType(physicalCarrier, producerContext);
+  if (callableProtocol !== undefined && (physicalCarrier === undefined || !borrowedInput && callableType === undefined)) {
+    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+      "rust.backend.closure-construction-carrier", "Callable construction requires its exact producer-owned physical carrier."));
+    return undefined;
   }
   const controllerName = generator === undefined || context.syntheticNames === undefined
     ? undefined : allocateRustSyntheticName(context.syntheticNames, "generator");
@@ -372,7 +392,7 @@ export function planRustCallableExpressionBody(
     capturedBindings.push({
       declaration: captureFact.recursiveDeclaration,
       expression: ownedStateName === undefined ? { kind: "path", path: recursiveName! } : {
-        kind: "associated-call", owner: rustCallableConstructionType(constructionCarrier, context)!,
+        kind: "associated-call", owner: callableType!,
         method: "from_shared", args: [{
           kind: "method-call", receiver: { kind: "path", path: ownedStateName }, method: "clone", args: [],
         }],
@@ -516,6 +536,7 @@ export function planRustCallableExpressionBody(
     return undefined;
   }
   const bodyWithBindings = { statements: [...bindingStatements, ...block.statements] };
+  const bodyErrorType = suspended && fallible ? rustActiveErrorType(callableClosureContext) : invocationErrorType;
   const loweredBody = generator === undefined ? applyFallibleShape(applyRustTailShape(
     bodyWithBindings,
     !isRustUnitCarrier(bodyResultCarrier),
@@ -523,8 +544,8 @@ export function planRustCallableExpressionBody(
     ? {
         fallible: true,
         hasReturnValue: !isRustUnitCarrier(bodyResultCarrier),
-        errorType: rustActiveErrorType(callableClosureContext)!,
-        inferErrorTypeFromReturnType: false,
+        errorType: bodyErrorType!,
+        inferErrorTypeFromReturnType: nativeClosureProtocol?.fallible === true && !fallible,
       }
     : { fallible: false, hasReturnValue: !isRustUnitCarrier(bodyResultCarrier) }) : block;
   let finalizedBlock: RustBlock = loweredBody;
@@ -556,7 +577,7 @@ export function planRustCallableExpressionBody(
   if (suspended && resultIsFallible && asynchronous?.kind !== "native-future") {
     finalizedBlock = applyFallibleShape(finalizedBlock, {
       fallible: true, hasReturnValue: true,
-      errorType: rustActiveErrorType(callableClosureContext)!, inferErrorTypeFromReturnType: false,
+      errorType: invocationErrorType!, inferErrorTypeFromReturnType: false,
     });
   }
   const onlyStatement = finalizedBlock.statements.length === 1
@@ -588,10 +609,6 @@ export function planRustCallableExpressionBody(
       ? closure
       : rustValueBlock(captureBindings, closure);
   }
-  const callableType = rustCallableConstructionType(
-    constructionCarrier,
-    context,
-  );
   if (callableType === undefined) {
     return undefined;
   }

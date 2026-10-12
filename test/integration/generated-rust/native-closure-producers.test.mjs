@@ -1,0 +1,149 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { spawnSync } from "node:child_process";
+import { realpathSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { nativeClosureProducerFixture, printNativeClosureProducer, nativeClosureProducerErrorFacts }
+  from "../../helpers/native-closure-producers.mjs";
+import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
+import { runCargo, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
+import { rustCallableConstructionType } from "../../../dist/backend/planner/expressions/fundamentals.js";
+import { rustNamedTargetType, rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/carriers/native.js";
+import { rustNativeCompletionFutureType } from "../../../dist/target-model/types/callable-completions.js";
+import { rustTypeGenericArguments } from "../../../dist/target-model/types/generic-arguments.js";
+import { printRustExpr } from "../../../dist/print/source/expressions/core.js";
+
+const repository = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+const workspace = dirname(realpathSync(resolve(repository, "../tsonic")));
+const runtime = resolve(workspace, "rust-runtime/crates/tsonic_rust_runtime");
+const javascript = resolve(workspace, "rust-js/crates/tsonic_rust_js");
+const failure = rustNamedTargetType("fixture:ProducerFailure", "ProducerFailure", []);
+const promiseFailure = rustNamedTargetType("fixture:PromiseFailure", "PromiseFailure", []);
+
+function fixtureSource() {
+  const pureFixture = nativeClosureProducerFixture();
+  const pure = printNativeClosureProducer(pureFixture);
+  const throws = printNativeClosureProducer(nativeClosureProducerFixture({
+    selectFacts: nativeClosureProducerErrorFacts(failure),
+    body: context => ({ kind: "try", expr: { kind: "call", path: "fail", args: [] },
+      operandErrorType: context.fallibleBoundary.errorType, resultErrorType: context.fallibleBoundary.errorType }),
+  }));
+  const pending = printNativeClosureProducer(nativeClosureProducerFixture({ asynchronous: true, surfaces: ["js"] }));
+  const rejected = printNativeClosureProducer(nativeClosureProducerFixture({ asynchronous: true, surfaces: ["js"],
+    selectFacts: nativeClosureProducerErrorFacts(promiseFailure),
+    body: context => ({ kind: "try", expr: { kind: "call", path: "reject", args: [] },
+      operandErrorType: context.fallibleBoundary.errorType, resultErrorType: context.fallibleBoundary.errorType }),
+  }));
+  const integer = rustSourcePrimitiveTargetType("int32");
+  const infallible = rustNamedTargetType("rust.core.Infallible", "core::convert::Infallible", []);
+  const future = rustNativeCompletionFutureType({ identity: "fixture:future", output: integer, error: failure, captures: [] });
+  const result = rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([future, infallible]));
+  const carrier = rustNamedTargetType("rust.runtime.Callable", "rt::Callable",
+    rustTypeGenericArguments([{ kind: "tuple", elements: [] }, result]));
+  const owner = rustCallableConstructionType(carrier, pureFixture.context);
+  assert.equal(owner !== undefined, true, "anonymous constructor payload is representable");
+  const constructor = printRustExpr({ kind: "associated-call", owner, method: "new", args: [{
+    kind: "closure", params: [{ name: "_arguments", byRefCopy: false, type: { kind: "unit" } }], move: true,
+    body: { kind: "call", path: "Ok", genericArguments: [{ kind: "type", type: { kind: "infer" } },
+      { kind: "type", type: { kind: "named", path: "Infallible" } }], args: [{
+      kind: "async-block", move: true,
+      body: { statements: [{ kind: "tail", expr: { kind: "call", path: "fail", args: [] } }] },
+    }] },
+  }] });
+  assert.doesNotMatch([pure, throws, pending, rejected, constructor].join("\n"),
+    /ConsumerFailure|TsonicError|TsonicResult|Box::|\.clone\(/u);
+  return `
+use tsonic_rust_runtime as rt;
+use tsonic_rust_js::abi as js_abi;
+use core::convert::Infallible;
+
+${nativeOwnershipCostSupport}
+
+#[derive(Debug, PartialEq, Eq)]
+struct ProducerFailure(core::marker::PhantomPinned);
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct PromiseFailure;
+
+fn fail() -> Result<i32, ProducerFailure> { Err(ProducerFailure(core::marker::PhantomPinned)) }
+fn reject() -> Result<i32, PromiseFailure> { Err(PromiseFailure) }
+fn complete<Value>(future: impl core::future::Future<Output = Value>) -> Value {
+    let mut future = core::pin::pin!(future);
+    match future.as_mut().poll(&mut core::task::Context::from_waker(core::task::Waker::noop())) {
+        core::task::Poll::Ready(value) => value,
+        core::task::Poll::Pending => panic!("fixture future did not complete"),
+    }
+}
+
+fn main() {
+    let (pure, generated_cost) = measure(|| ${pure});
+    let (direct, direct_cost) = measure(|| rt::Callable::new(|(): ()| Ok::<_, Infallible>(3i32)));
+    assert_eq!(generated_cost, direct_cost);
+    let (result, invoke_cost) = measure(|| pure.call(()));
+    assert_eq!(result, Ok(3));
+    assert_eq!(direct.call(()), result);
+    assert_eq!(invoke_cost, Cost::default());
+
+    let throwing = ${throws};
+    let (result, invoke_cost) = measure(|| throwing.call(()));
+    assert_eq!(result, Err(ProducerFailure(core::marker::PhantomPinned)));
+    assert_eq!(invoke_cost, Cost::default());
+
+    let pending = ${pending};
+    let (result, generated_cost) = measure(|| complete(pending.call(()).unwrap().into_result()));
+    let (direct, direct_cost) = measure(|| complete(js_abi::JsPromise::from_fallible_factory(move || async move {
+        Ok::<_, Infallible>(3i32)
+    }).into_result()));
+    assert_eq!(result, Ok(3));
+    assert_eq!(result, direct);
+    assert_eq!(generated_cost, direct_cost);
+
+    let rejected = ${rejected};
+    assert_eq!(complete(rejected.call(()).unwrap().into_result()), Err(PromiseFailure));
+    let native = ${constructor};
+    let (result, future_cost) = measure(|| complete(native.call(()).unwrap()));
+    assert_eq!(result, Err(ProducerFailure(core::marker::PhantomPinned)));
+    assert_eq!(future_cost, Cost::default());
+    println!("PASS: producer-owned closure errors, suspended separation and native allocation parity");
+}
+
+#[cfg(wrong_invocation_error)]
+fn invalid() { let _: rt::Callable<(), Result<i32, ProducerFailure>> = ${pure}; }
+
+#[cfg(wrong_suspension_error)]
+fn invalid() {
+    let selected = ${rejected};
+    let _: js_abi::JsPromise<'static, i32, ProducerFailure> = selected.call(()).unwrap();
+}
+`;
+}
+
+test("closure emission executes exact owned errors without added allocation or error Clone bounds", { timeout: 300_000 }, () => {
+  const controls = ["wrong_invocation_error", "wrong_suspension_error"];
+  const project = writeGeneratedProject("native-closure-producers", [
+    { path: "Cargo.toml", text: `[package]\nname = "native_closure_producers"\nversion = "0.0.0"\nedition = "2024"\n
+[dependencies]
+tsonic_rust_runtime = { path = ${JSON.stringify(runtime)} }
+tsonic_rust_js = { path = ${JSON.stringify(javascript)} }
+[patch.crates-io]
+tsonic_rust_runtime = { path = ${JSON.stringify(runtime)} }
+[lints.rust]
+unexpected_cfgs = { level = "deny", check-cfg = [${controls.map(control => JSON.stringify(`cfg(${control})`)).join(", ")}] }
+` },
+    { path: "src/main.rs", text: fixtureSource() },
+  ]);
+  runCargo(project, ["generate-lockfile", "--offline"]);
+  runCargo(project, ["rustc", "--offline", "--locked", "--", "-D", "warnings"]);
+  assert.match(runCargo(project, ["run", "--offline", "--locked", "--quiet"]).stdout, /PASS: producer-owned closure errors/u);
+  for (const control of controls) {
+    const rejected = spawnSync("cargo", ["rustc", "--offline", "--locked", "--message-format=json", "--", "--emit=metadata", "--cfg", control], {
+      cwd: project, encoding: "utf8", timeout: 60_000, maxBuffer: 1_048_576,
+      env: { ...process.env, CARGO_TERM_COLOR: "never" },
+    });
+    assert.equal(rejected.signal, null, control);
+    assert.equal(rejected.status !== 0, true, control);
+    const messages = rejected.stdout.split("\n").filter(line => line.startsWith("{")).map(line => JSON.parse(line));
+    assert.equal(messages.some(message => message.reason === "compiler-message" && message.message.code?.code === "E0308"),
+      true, `${control}: native Rust rejects the wrong exact error channel`);
+  }
+});

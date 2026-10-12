@@ -28,6 +28,7 @@ import { rustValueConversionContract } from "../../../target-model/conversions/c
 import { diagnosticInput, rustActiveErrorType } from "../program/plan-context.js";
 import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
 import { isFloatCarrier, rustTypeFromCarrierInContext } from "../types/render.js";
+import { rustTypeContainsImplTrait } from "../types/type-observations.js";
 import { isRustBigIntCarrier, isRustIntegerCarrier, isRustStringCarrier, rustPrimitiveTypeName } from "../../../target-model/types/index.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { negateRustBooleanExpression, rustStringConcat } from "../../target-ast/expressions.js";
@@ -50,7 +51,12 @@ export function rustCallableConstructionType(
   carrier: TargetTypeRef,
   context: RustPlanContext,
 ): RustType | undefined {
-  return rustTypeFromCarrierInContext(carrier, context);
+  const type = rustTypeFromCarrierInContext(carrier, context, "return");
+  return type?.kind !== "named" || type.genericArguments === undefined ? type : {
+    ...type,
+    genericArguments: type.genericArguments.map(argument => argument.kind === "type" && rustTypeContainsImplTrait(argument.type)
+      ? { kind: "type", type: { kind: "infer" } } : argument),
+  };
 }
 
 export function planGeneratorResumeExpression(
