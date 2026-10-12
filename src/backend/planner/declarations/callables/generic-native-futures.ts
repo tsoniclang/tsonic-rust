@@ -2,6 +2,7 @@ import type { RustGenericCallableDefinition, RustGenericCallableImplementation }
 import type { RustGenericCallableEffectsFact } from "../../../../analysis/facts/generic-callable-effects.js";
 import type { RustExpr, RustItem, RustPattern, RustType } from "../../../target-ast/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/nodes.js";
+import { rustNativeFutureType } from "../../types/native-futures.js";
 
 export interface RustGenericNativeFutureInvocation {
   readonly implementation: RustGenericCallableImplementation;
@@ -33,7 +34,7 @@ export function planRustGenericNativeFutureDispatch(input: {
   const wrapping = (value: RustExpr): RustExpr => effects.invocation === "fallible"
     ? { kind: "call", path: "Ok", args: [value] } : value;
   const absent: RustExpr = wrapping({ kind: "path", path: "None" });
-  const ready: RustType = { kind: "named", path: "core::future::Ready", genericArguments: [{ kind: "type", type: futureOutput }] };
+  const ready = rustNativeFutureType(futureOutput, { kind: "ready" });
   if (active.length === 0) {
     return { items: [], returnType: returnedType(ready), body: { statements: [{ kind: "tail", expr: {
       kind: "match", expression: { kind: "path", path: "self" }, arms: invocations.map(invocation => ({
@@ -41,11 +42,8 @@ export function planRustGenericNativeFutureDispatch(input: {
       })),
     } }] } };
   }
-  const futureType: RustType = { kind: "impl-trait", bounds: [{ kind: "trait-type", reference: { trait: {
-    kind: "named", path: "core::future::Future", genericArguments: [
-      { kind: "associated-equality", name: "Output", genericArguments: [], type: futureOutput },
-    ],
-  } } }], outlives: [], captures: input.captures.map(type => ({ kind: "type", type })) };
+  const futureType = rustNativeFutureType(futureOutput, { kind: "opaque",
+    captures: input.captures.map(type => ({ kind: "type", type })) });
   if (active.length === 1) {
     return { items: [], returnType: returnedType(futureType), body: { statements: [{ kind: "tail", expr: {
       kind: "match", expression: { kind: "path", path: "self" }, arms: invocations.map(invocation => {

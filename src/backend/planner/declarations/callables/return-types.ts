@@ -7,6 +7,7 @@ import type { RustType } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustReturnTypeFromCarrierInContext, rustTypeFromCarrierInContext } from "../../types/render.js";
 import { rustCurrentErrorBoundary, rustErrorType } from "../../program/plan-context.js";
+import { rustNativeFutureType } from "../../types/native-futures.js";
 
 export function resolveRustCallableOutwardReturnType(
   declaration: Node, carrier: TargetTypeRef | undefined, context: RustPlanContext,
@@ -24,13 +25,7 @@ export function resolveRustCallableOutwardReturnType(
       ] } : output;
   const completion = context.input.program.facts.getFact(declaration, rustSourceCallableReturnFactKey)?.implementationCompletion;
   if (completion === "absence" && !native.optional) return undefined;
-  const future: RustType = completion !== undefined
-    ? { kind: "named", path: "core::future::Ready", genericArguments: [{ kind: "type", type: futureOutput }] }
-    : { kind: "impl-trait", bounds: [{ kind: "trait-type", reference: { trait: {
-        kind: "named", path: "core::future::Future", genericArguments: [
-          { kind: "associated-equality", name: "Output", genericArguments: [], type: futureOutput },
-        ],
-      } } }], outlives: [] };
+  const future = rustNativeFutureType(futureOutput, { kind: completion !== undefined ? "ready" : "opaque" });
   return native.optional ? { kind: "named", path: "Option", genericArguments: [{ kind: "type", type: future }] } : future;
 }
 
