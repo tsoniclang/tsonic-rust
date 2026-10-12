@@ -23,12 +23,14 @@ import type { SourceStorageQueries } from "@tsonic/target-api/analysis";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { createRustNativeCallableInputPlan, type RustNativeCallableInputPlan } from "./native-inputs.js";
+import { createRustNativeStoragePlan, type RustNativeStoragePlan } from "./native-storage.js";
 
 export interface RustCallableValuePlan {
   readonly generic: RustGenericCallablePlan;
   readonly suspended: RustSuspendedCallablePlan;
   readonly frames: RustFrameCallablePlan;
   readonly native: RustNativeCallableInputPlan;
+  readonly nativeStorage: RustNativeStoragePlan;
   readonly issues: readonly RustSourceCallableSpecializationIssue[];
 }
 
@@ -70,6 +72,7 @@ export function createRustCallableValuePlanRegistry(): RustCallableValuePlanRegi
     get suspended() { return requireCurrent().suspended; },
     get frames() { return requireCurrent().frames; },
     get native() { return requireCurrent().native; },
+    get nativeStorage() { return requireCurrent().nativeStorage; },
     get issues() { return requireCurrent().issues; },
   });
 }
@@ -149,6 +152,8 @@ function createRustCallableValuePlan(input: RustCallableValuePlanInput): RustCal
   const frames = createRustFrameCallablePlan({ ...input, usedNames });
   const native = createRustNativeCallableInputPlan({ ast: input.ast, facts: input.facts,
     storage: input.sourceStorage, definitions: input.typeDefinitions, usedNames });
-  return Object.freeze({ generic, suspended, frames, native,
+  const nativeStorage = createRustNativeStoragePlan({ ast: input.ast, facts: input.facts,
+    storage: input.sourceStorage, definitions: input.typeDefinitions, native });
+  return Object.freeze({ generic, suspended, frames, native, nativeStorage,
     issues: Object.freeze([...generic.issues, ...suspended.issues, ...frames.issues]) });
 }
