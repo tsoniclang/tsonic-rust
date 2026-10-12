@@ -18,7 +18,7 @@ export function planRustGenericCallableValue(
 ): RustExpr | undefined {
   const plan = context.input.program.callableValues.generic;
   const implementation = plan.implementationFor(node);
-  const selected = context.input.program.callableValues.nativeStorage.valueFor(node);
+  const selected = context.input.program.callableValues.nativeStorage.operandFor(node);
   const physical = selected.kind === "unresolved" ? undefined : selected.carrier;
   const definition = physical === undefined ? undefined : plan.physical.definitionFor(physical);
   const member = definition?.members.length === 1 ? definition.members[0] : undefined;

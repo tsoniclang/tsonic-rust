@@ -10,9 +10,13 @@ export function planRustGenericCallableFlow(
   node: Node, conversion: RustGenericCallableConversion, expression: RustExpr, context: RustPlanContext,
 ): RustExpr | undefined {
   if (!rustGenericCallableConversionMatches(conversion, conversion.source, conversion.target)) return undefined;
-  const selection = context.input.program.callableValues.nativeStorage.valueFor(node);
+  const storage = context.input.program.callableValues.nativeStorage;
+  const selection = storage.operandFor(node);
   if (selection.kind === "unresolved") return undefined;
-  const destination = context.valueDestinations?.get(node) ?? selection.carrier;
+  const demanded = context.valueDestinations?.get(node);
+  const selected = demanded === undefined ? storage.valueFor(node) : { kind: "identity" as const, carrier: demanded };
+  if (selected.kind === "unresolved") return undefined;
+  const destination = selected.carrier;
   if (rustTargetTypeRefEquals(selection.carrier, destination)) return expression;
   const physical = context.input.program.callableValues.generic.physical;
   const transition = physical.conversionFor(selection.carrier, destination);
