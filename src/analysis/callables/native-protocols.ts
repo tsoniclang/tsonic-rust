@@ -20,6 +20,7 @@ export interface RustNativeCallableProtocol {
   readonly identity: string;
   readonly ownerFileName: string;
   readonly targetName: string;
+  readonly boundProducerName?: string;
   readonly binding: RustCallableSignatureBinding;
   readonly method: {
     readonly parameters: readonly TargetTypeRef[];
@@ -51,6 +52,9 @@ export function createRustNativeCallableProtocol(input: {
     `NativeCallable_${createHash("sha256").update(identity).digest("hex").slice(0, 16)}`);
   const completion = rustNativeCallableCompletion(method.result, input.definitions);
   return snapshotClosedMetadata({ identity, ownerFileName: input.ownerFileName, targetName, binding, method,
+    ...(method.binder.parameters.length === 0 ? {} : {
+      boundProducerName: allocateRustGeneratedName(input.usedNames, `${targetName}Bound`),
+    }),
     ...(completion === undefined ? {} : { completion }),
     trait: { kind: "trait-ref", id: identity, path: targetName,
       sourceItem: { fileName: input.ownerFileName, typeName: targetName },
