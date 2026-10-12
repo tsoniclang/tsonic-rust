@@ -12,7 +12,8 @@ import {
   rustSourceUnionCarrierValue,
   rustStructuralObjectCarrierValue,
 } from "./source-types.js";
-import { rustTargetTypeRefEquals } from "../equality.js";
+import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../equality.js";
+import { rustProgramErrorOwner } from "./program-errors.js";
 import type {
   RustTargetConstArgument,
   RustTargetGenericArgument,
@@ -57,6 +58,10 @@ export function rustTargetTypePatternsAreNominallyDisjoint(
       disjointArguments(leftSource.genericArguments, rightSource.genericArguments);
   }
   if (left.kind === "target-named" && right.kind === "target-named" && left.id === right.id) {
+    const leftOwner = rustProgramErrorOwner(left);
+    const rightOwner = rustProgramErrorOwner(right);
+    if (leftOwner?.kind === "physical" && rightOwner?.kind === "physical" &&
+      !closedMetadataEquals(leftOwner, rightOwner)) return true;
     return disjointArguments(left.genericArguments ?? [], right.genericArguments ?? []);
   }
   const leftNamed = rustNamedTypeCarrierValue(left);
@@ -113,6 +118,7 @@ export function inferRustTargetGenericBindings(
   parameters: RustTargetGenericParameterSet,
   options: RustTargetGenericInferenceOptions = {},
 ): RustTargetGenericBindings | undefined {
+  if (!isRustTargetTypeRef(pattern) || !isRustTargetTypeRef(actual)) return undefined;
   const types = new Map<string, TargetTypeRef>();
   const lifetimes = new Map<string, RustLifetimeRef>();
   const consts = new Map<string, RustTargetConstArgument>();
@@ -235,7 +241,8 @@ export function inferRustTargetGenericBindings(
     }
     switch (left.kind) {
       case "target-named": {
-        if (right.kind !== "target-named" || left.id !== right.id) {
+        if (right.kind !== "target-named" || left.id !== right.id ||
+          !closedMetadataEquals(left.errorOwner, right.errorOwner)) {
           return false;
         }
         return matchGenericArguments(
