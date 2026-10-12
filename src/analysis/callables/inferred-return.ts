@@ -18,6 +18,8 @@ import { selectRustConditionalNumericCarrier } from "../../policy/types/conditio
 import { resolveRustBranchUnion } from "../../policy/types/resolution/branch-unions.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustNativeCallableResultMatches } from "../../policy/ownership/callable-result-contract.js";
+import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
+import { rustNativeRepresentationMatches } from "../../target-model/conversions/native-representation.js";
 
 export function selectRustInferredReturn(
   walk: RustFactWalk,
@@ -28,8 +30,9 @@ export function selectRustInferredReturn(
   const scalar = rustOptionElementCarrier(baseline) ?? baseline;
   const annotated = Node_Type(ast, declaration) !== undefined;
   const callableResult = rustCallableProtocol(scalar);
+  const inferredLifetime = scalar !== undefined && rustTargetGenericReferences(scalar).hasUnnameableLifetime;
   if (baseline === undefined || scalar === undefined ||
-    (annotated && callableResult === undefined) || ast.body(declaration) === undefined ||
+    (annotated && callableResult === undefined && !inferredLifetime) || ast.body(declaration) === undefined ||
     walk.context.semanticsFor(declaration).operations.generator(declaration) !== undefined) return baseline;
   const numericResult = isRustNumericCarrier(scalar) || isRustBigIntCarrier(scalar);
   if (walk.inferredReturns.has(declaration)) return walk.inferredReturns.get(declaration);
@@ -55,6 +58,7 @@ export function selectRustInferredReturn(
           protocol.parameters.some((parameter, index) => !rustTargetTypeRefEquals(parameter, callableResult.parameters[index])) ||
           !rustNativeCallableResultMatches(protocol.result, callableResult.result)) return baseline;
       }
+      if (annotated && callableResult === undefined && !rustNativeRepresentationMatches(value, scalar)) return baseline;
       selected = selected === undefined ? value : rustTargetTypeRefEquals(selected, value)
         ? selected : numericResult ? selectRustNumericBinaryPromotion(selected, value)?.carrier : undefined;
       if (selected === undefined) break;
