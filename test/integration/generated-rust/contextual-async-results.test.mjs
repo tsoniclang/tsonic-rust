@@ -63,7 +63,7 @@ mod contextual_async_cost {
     ${nativeOwnershipCostSupport}
 
     type CompletionPromise = js_abi::JsPromise<'static, Option<i32>, rt::TsonicError>;
-    type CompletionHandler = rt::Callable<(), Result<CompletionPromise, rt::TsonicError>>;
+    type CompletionHandler = rt::Callable<'static, (), Result<CompletionPromise, rt::TsonicError>>;
 
     fn handwritten() -> CompletionHandler {
         rt::Callable::new(|()| Ok(js_abi::JsPromise::from_infallible_factory(|| async { None })))

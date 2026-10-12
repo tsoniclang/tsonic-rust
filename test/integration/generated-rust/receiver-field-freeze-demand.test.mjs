@@ -110,7 +110,7 @@ mod capture_costs {
 
     struct NativeReadOnlyState {
         value: Rc<Cell<f64>>,
-        read: rt::Callable<(), rt::TsonicResult<f64>>,
+        read: rt::Callable<'static, (), rt::TsonicResult<f64>>,
     }
 
     fn native_read_only() -> rt::ObjectRef<NativeReadOnlyState> {
@@ -122,7 +122,7 @@ mod capture_costs {
 
     struct NativeImmutableState {
         value: f64,
-        read: rt::Callable<(), rt::TsonicResult<f64>>,
+        read: rt::Callable<'static, (), rt::TsonicResult<f64>>,
     }
 
     fn native_immutable() -> rt::ObjectRef<NativeImmutableState> {
@@ -184,8 +184,8 @@ mod capture_costs {
 
     struct NativeMixedState {
         value: Rc<Cell<f64>>,
-        read: rt::Callable<(), rt::TsonicResult<f64>>,
-        change: rt::Callable<(), rt::TsonicResult<()>>,
+        read: rt::Callable<'static, (), rt::TsonicResult<f64>>,
+        change: rt::Callable<'static, (), rt::TsonicResult<()>>,
     }
 
     fn native_mixed() -> rt::ObjectRef<NativeMixedState> {
@@ -238,7 +238,7 @@ mod capture_costs {
 
     struct NativeUnselectedState {
         value: Rc<Cell<f64>>,
-        change: rt::Callable<(), rt::TsonicResult<()>>,
+        change: rt::Callable<'static, (), rt::TsonicResult<()>>,
     }
 
     fn native_unselected() -> rt::ObjectRef<NativeUnselectedState> {
@@ -277,7 +277,7 @@ mod capture_costs {
 
     struct NativeShallowState {
         child: Rc<RefCell<rt::ObjectHandle<NativeChild>>>,
-        change: rt::Callable<(), rt::TsonicResult<()>>,
+        change: rt::Callable<'static, (), rt::TsonicResult<()>>,
     }
 
     fn native_shallow() -> rt::ObjectRef<NativeShallowState> {

@@ -7,6 +7,7 @@ import { rustValueConversionContract } from "./contracts.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../types/source-union-definitions.js";
 import { hasExactObjectKeys, isClosedMetadata, isDenseDataArray, snapshotClosedMetadata } from "../metadata/closed-data.js";
 import { rustCallableInputMatches } from "./callable-input.js";
+import { rustNativeRepresentationMatches } from "./native-representation.js";
 
 export type RustCallableValueConversion =
   | { readonly kind: "identity" }
@@ -56,6 +57,7 @@ export function rustCallableConversionMatches(
   if (!isClosedMetadata(conversion) || !hasExactObjectKeys(conversion, ["kind", "source", "target", "parameters", "result"]) ||
     conversion.kind !== "callable-adapter" || !isDenseDataArray(conversion.parameters) ||
     !isRustTargetTypeRef(source) || !isRustTargetTypeRef(target) || rustCallableInputMatches(source, target) ||
+    rustNativeRepresentationMatches(source, target) ||
     rustCallableInputProtocol(source) !== undefined && rustCallableInputProtocol(target) === undefined) return false;
   const sourceCallable = rustCallableProtocol(source);
   const targetCallable = callableConversionTarget(target);
@@ -77,6 +79,7 @@ export function selectRustCallableConversion(
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): RustCallableConversion | undefined {
   if (!isRustTargetTypeRef(source) || !isRustTargetTypeRef(target) || rustCallableInputMatches(source, target) ||
+    rustNativeRepresentationMatches(source, target) ||
     rustCallableInputProtocol(source) !== undefined && rustCallableInputProtocol(target) === undefined) return undefined;
   const sourceCallable = rustCallableProtocol(source);
   const targetCallable = callableConversionTarget(target);

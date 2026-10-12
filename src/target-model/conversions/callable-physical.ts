@@ -4,7 +4,7 @@ import { rustCallableInputProtocol, rustCallableProtocol, rustClosureProtocol } 
 import { rustNamedTargetType, rustNamedTypeCarrierValue } from "../types/carriers/native.js";
 import { rustCallableTargetId } from "../types/carriers/source-types.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../types/equality.js";
-import { rustOnlyTypeGenericArguments, rustTypeGenericArguments } from "../types/generic-arguments.js";
+import { rustOnlyTypeGenericArguments, rustTypeGenericArguments, rustLifetimeGenericArgument } from "../types/generic-arguments.js";
 import type { TargetTypeRef } from "../types/model.js";
 import { rustNativeErrorJoinTargetType, type RustNativeErrorSource } from "../types/native-error-joins.js";
 import type { RustTypeDefinitions } from "../types/source-union-definitions.js";
@@ -35,7 +35,8 @@ export interface RustCallablePhysicalConversion extends RustCallablePhysicalSign
 export function rustCallablePhysicalSignature(carrier: TargetTypeRef): RustCallablePhysicalSignature | undefined {
   if (!isRustTargetTypeRef(carrier)) return undefined;
   const named = rustNamedTypeCarrierValue(carrier);
-  const arguments_ = named?.id === rustCallableTargetId ? rustOnlyTypeGenericArguments(named.genericArguments) : undefined;
+  const arguments_ = named?.id === rustCallableTargetId && named.genericArguments?.[0]?.kind === "lifetime"
+    ? rustOnlyTypeGenericArguments(named.genericArguments.slice(1)) : undefined;
   const tuple = arguments_?.length === 2 ? arguments_[0]
     : carrier.kind === "closure" && carrier.fallible !== true && carrier.args.length === 1 ? carrier.args[0] : undefined;
   const resultCarrier = tuple?.kind === "tuple" ? arguments_?.[1] ?? (carrier.kind === "closure" ? carrier.result : undefined) : undefined;
@@ -157,6 +158,8 @@ function physicalTarget(logical: TargetTypeRef, signature: RustCallablePhysicalS
   if (rustCallableInputProtocol(logical) !== undefined) return { kind: "closure", args: [tuple], result };
   if (logical.kind === "closure") return rustTargetTypeRefEquals(signature.error, rustRuntimeErrorTargetType())
     ? { ...logical, args: signature.parameters, result, fallible: false } : undefined;
-  return logical.kind !== "target-named" || logical.id !== rustCallableTargetId ? undefined
-    : rustNamedTargetType(rustCallableTargetId, "rt::Callable", rustTypeGenericArguments([tuple, result]));
+  const lifetime = rustCallableProtocol(logical)?.lifetime;
+  return logical.kind !== "target-named" || logical.id !== rustCallableTargetId || lifetime === undefined ? undefined
+    : rustNamedTargetType(rustCallableTargetId, "rt::Callable", [rustLifetimeGenericArgument(lifetime),
+      ...rustTypeGenericArguments([tuple, result])]);
 }

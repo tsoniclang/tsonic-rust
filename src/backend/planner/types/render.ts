@@ -112,7 +112,9 @@ export function rustTypeFromCarrier(
   }
   if (carrier.kind === "target-named" &&
     (carrier.id === rustCallableTargetId || carrier.id === rustCallableInputTargetId)) {
-    const callableTypeArguments = rustOnlyTypeGenericArguments(carrier.genericArguments);
+    const lifetime = carrier.id === rustCallableTargetId ? carrier.genericArguments?.[0] : undefined;
+    if (carrier.id === rustCallableTargetId && lifetime?.kind !== "lifetime") return undefined;
+    const callableTypeArguments = rustOnlyTypeGenericArguments(lifetime === undefined ? carrier.genericArguments : carrier.genericArguments?.slice(1));
     const [argumentsCarrier, resultCarrier] = callableTypeArguments ?? [];
     if (callableTypeArguments?.length !== 2 || argumentsCarrier?.kind !== "tuple" ||
       resultCarrier === undefined) {
@@ -138,19 +140,19 @@ export function rustTypeFromCarrier(
         outlives: [],
       };
     }
-    return argumentsType === undefined || resultType === undefined
+    return argumentsType === undefined || resultType === undefined || lifetime?.kind !== "lifetime"
       ? undefined
       : {
           kind: "named",
           path: "rt::Callable",
-          genericArguments: typeGenericArguments([
+          genericArguments: [{ kind: "lifetime", lifetime: rustLifetimeToAst(lifetime.lifetime) }, ...typeGenericArguments([
             argumentsType,
             {
               kind: "named",
               path: "rt::TsonicResult",
               genericArguments: typeGenericArguments([resultType]),
             },
-          ]),
+          ])],
         };
   }
   if (carrier.kind === "target-named") {

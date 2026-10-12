@@ -280,7 +280,7 @@ export function retained(value: string): () => string { return () => value; }
 use terminal_capture_cost::index;
 use tsonic_rust_runtime as rt;
 
-fn handwritten(value: String) -> rt::Callable<(), rt::TsonicResult<String>> {
+fn handwritten(value: String) -> rt::Callable<'static, (), rt::TsonicResult<String>> {
     rt::Callable::new(move |()| Ok(value.clone()))
 }
 
@@ -326,7 +326,7 @@ use captured_append_cost::index;
 use std::cell::RefCell;
 use tsonic_rust_runtime as rt;
 
-fn handwritten(value: String) -> rt::Callable<(), rt::TsonicResult<usize>> {
+fn handwritten(value: String) -> rt::Callable<'static, (), rt::TsonicResult<usize>> {
     let value = RefCell::new(value);
     rt::Callable::new(move |()| {
         value.borrow_mut().push('!');

@@ -42,7 +42,7 @@ use tsonic_rust_runtime::{Callable, TsonicError};
 #[test]
 fn exact_infallible_stored_and_returned_adapters() {
     native_conversion_storage::initialize();
-    let callback: Callable<(i32, i32), Result<i32, Infallible>> = index::chained();
+    let callback: Callable<'_, (i32, i32), Result<i32, Infallible>> = index::chained();
     assert_eq!(callback.call((5, 7)).unwrap(), 3);
     assert_eq!(callback.call((8, 9)).unwrap(), 3);
 }
@@ -50,7 +50,7 @@ fn exact_infallible_stored_and_returned_adapters() {
 #[test]
 fn earlier_conversion_failure_survives_result_discard() {
     native_conversion_storage::initialize();
-    let callback: Callable<(f64, i32), Result<(), index::NativeErrors2<Infallible, TsonicError>>> = index::checked();
+    let callback: Callable<'_, (f64, i32), Result<(), index::NativeErrors2<Infallible, TsonicError>>> = index::checked();
     assert!(callback.call((3.0, 5)).is_ok());
     assert!(matches!(callback.call((3.5, 5)), Err(index::NativeErrors2::Error1(_))));
     assert!(matches!(callback.call((f64::INFINITY, 5)), Err(index::NativeErrors2::Error1(_))));
@@ -59,7 +59,7 @@ fn earlier_conversion_failure_survives_result_discard() {
 #[test]
 fn instantiated_formal_adapter_keeps_producer_error() {
     native_conversion_storage::initialize();
-    let callback: Callable<(i32, i32), Result<i32, Infallible>> = index::adaptedInput();
+    let callback: Callable<'_, (i32, i32), Result<i32, Infallible>> = index::adaptedInput();
     assert_eq!(callback.call((1, 2)).unwrap(), 11);
 }
 `);

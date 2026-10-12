@@ -186,6 +186,7 @@ function planFrameEntry(
   }
   if (argumentTypes === undefined || resultType === undefined) return undefined;
   const independentType: RustType = { kind: "named", path: "rt::Callable", genericArguments: [
+    { kind: "lifetime", lifetime: { kind: "static" } },
     { kind: "type", type: { kind: "tuple", elements: argumentTypes } }, { kind: "type", type: resultType },
   ] };
   if (entry.hasIndependent) {

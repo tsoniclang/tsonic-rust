@@ -286,6 +286,7 @@ export function rustProjectMethodPropertyCallableType(
     kind: "named",
     path: "rt::Callable",
     genericArguments: [
+      { kind: "lifetime", lifetime: { kind: "static" } },
       {
         kind: "type",
         type: {

@@ -108,7 +108,7 @@ fn main() {
 }
 
 #[cfg(wrong_invocation_error)]
-fn invalid() { let _: rt::Callable<(), Result<i32, ProducerFailure>> = ${pure}; }
+fn invalid() { let _: rt::Callable<'_, (), Result<i32, ProducerFailure>> = ${pure}; }
 
 #[cfg(wrong_suspension_error)]
 fn invalid() {

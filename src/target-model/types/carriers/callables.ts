@@ -19,7 +19,7 @@ import {
   rustOnlyTypeGenericArguments,
   rustTypeGenericArguments,
 } from "../generic-arguments.js";
-import type { RustLifetimeRef } from "../../lifetimes/index.js";
+import { rustPlaceholderLifetime, type RustLifetimeRef } from "../../lifetimes/index.js";
 import { rustGenericCallableProtocol, rustGenericCallableTargetType, rustGenericCallableValue } from "./generic-callables.js";
 import { rustFrameCallableProtocol, rustFrameCallableValue } from "./frame-callables.js";
 
@@ -45,11 +45,13 @@ export function rustRawPointerTargetType(): TargetTypeRef {
 export function rustCallableTargetType(
   parameters: readonly TargetTypeRef[],
   result: TargetTypeRef,
+  lifetime: RustLifetimeRef = rustPlaceholderLifetime,
 ): TargetTypeRef {
   return {
     kind: "target-named",
     id: rustCallableTargetId,
-    genericArguments: rustTypeGenericArguments([{ kind: "tuple", elements: parameters }, result]),
+    genericArguments: [rustLifetimeGenericArgument(lifetime),
+      ...rustTypeGenericArguments([{ kind: "tuple", elements: parameters }, result])],
   };
 }
 
@@ -89,7 +91,7 @@ export function rustCallableInputProtocol(carrier: TargetTypeRef | undefined):
 
 export function rustCallableProtocol(
   carrier: TargetTypeRef | undefined,
-): { readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef } | undefined {
+): { readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef; readonly lifetime?: RustLifetimeRef } | undefined {
   const frame = rustFrameCallableProtocol(carrier);
   if (frame !== undefined) return frame;
   if (carrier?.kind === "reference") return rustCallableInputProtocol(carrier);
@@ -97,11 +99,13 @@ export function rustCallableProtocol(
     carrier.id !== rustCallableTargetId && carrier.id !== rustCallableInputTargetId) {
     return undefined;
   }
-  const arguments_ = rustOnlyTypeGenericArguments(carrier.genericArguments);
+  const lifetime = carrier.id === rustCallableTargetId ? carrier.genericArguments?.[0] : undefined;
+  if (carrier.id === rustCallableTargetId && lifetime?.kind !== "lifetime") return undefined;
+  const arguments_ = rustOnlyTypeGenericArguments(lifetime === undefined ? carrier.genericArguments : carrier.genericArguments?.slice(1));
   if (arguments_?.length !== 2) return undefined;
   const [argumentsCarrier, result] = arguments_;
   return argumentsCarrier?.kind === "tuple" && result !== undefined
-    ? { parameters: argumentsCarrier.elements, result }
+    ? { parameters: argumentsCarrier.elements, result, ...(lifetime?.kind === "lifetime" ? { lifetime: lifetime.lifetime } : {}) }
     : undefined;
 }
 

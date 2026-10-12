@@ -65,7 +65,7 @@ function planImplementation(implementation: RustSuspendedCallableImplementation,
   const physical = context.input.program.callableValues.nativeProducers.physicalFor(declaration, implementation.carrier);
   const callableType = physical === undefined ? undefined : rustTypeFromCarrierInContext(
     implementation.elision === undefined ? physical : substituteElidedLifetime(physical, implementation.elision.lifetime), scoped);
-  const resultArgument = callableType?.kind === "named" ? callableType.genericArguments?.[1] : undefined;
+  const resultArgument = callableType?.kind === "named" ? callableType.genericArguments?.[2] : undefined;
   const resultType = resultArgument?.kind === "type" ? resultArgument.type : undefined;
   const target = rustSuspendedCallableStateType(implementation, scoped);
   const storage = [...implementation.captures.map((capture, index) => rustCallableCaptureStorageType(capture,

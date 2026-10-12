@@ -40,7 +40,7 @@ mod native_lifetime_control {
   runCargo(project, ["test", "--locked", "--offline"]);
   appendFileSync(join(project, "src/index.rs"), `
 pub fn escape<'region>(value: &'region i32)
-    -> rt::Callable<(), rt::TsonicResult<js_abi::JsPromise<'static, ${output}, rt::TsonicError>>> {
+    -> rt::Callable<'static, (), rt::TsonicResult<js_abi::JsPromise<'static, ${output}, rt::TsonicError>>> {
     let pending: js_abi::JsPromise<'static, i32, rt::TsonicError> = borrowed_read(value);
     rt::Callable::new(move |()| {
         let pending = pending.clone();

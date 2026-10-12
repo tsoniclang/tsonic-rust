@@ -142,6 +142,7 @@ export function createImplementationPlan(
           kind: "named",
           path: "rt::Callable",
           genericArguments: [
+            { kind: "lifetime", lifetime: { kind: "static" } },
             {
               kind: "type",
               type: { kind: "tuple", elements: [wrapperType] },
@@ -158,6 +159,7 @@ export function createImplementationPlan(
                 kind: "named" as const,
                 path: "rt::Callable",
                 genericArguments: [
+                  { kind: "lifetime" as const, lifetime: { kind: "static" as const } },
                   {
                     kind: "type" as const,
                     type: {
@@ -211,6 +213,7 @@ export function createImplementationPlan(
         kind: "named",
         path: "rt::Callable",
         genericArguments: [
+          { kind: "lifetime", lifetime: { kind: "static" } },
           {
             kind: "type",
             type: {
