@@ -16,8 +16,10 @@ export function planRustNativeCallableGenerics(
 ): RustCallableGenericPlan | undefined {
   const native = source.context.input.program.callableValues.native;
   const { nativeStorage } = source.context.input.program.callableValues;
+  const environment = nativeStorage.futureEnvironmentFor(declaration);
+  if (environment.kind === "unresolved") return undefined;
   const inputs = [...new Map([...native.inputsFor(declaration), ...native.capturesFor(declaration),
-    ...nativeStorage.futureInputsFor(declaration), ...nativeStorage.futureCapturesFor(declaration)]
+    ...environment.inputs, ...environment.captures]
     .map(input => [input.implementation.identity, input] as const)).values()];
   if (inputs.length === 0) return source;
   const sourceGenerics = source.finalizeGenerics();

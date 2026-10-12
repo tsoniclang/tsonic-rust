@@ -15,7 +15,9 @@ function fixture(substitutions = new Map()) {
     inputsFor: owner => owner === declaration ? [input] : [], capturesFor: () => [],
     callFor: node => node === declaration ? { input } : undefined };
   context.input.program.callableValues.nativeGenericProducers.forwardingFor = () => [];
-  context.input.program.callableValues.nativeStorage = { futureInputsFor: () => [], futureCapturesFor: () => [] };
+  context.input.program.callableValues.nativeStorage = {
+    futureEnvironmentFor: () => ({ kind: "resolved", inputs: [], captures: [] }),
+  };
   context.input.program.source = { ast: { forEachChild() {} } };
   context.input.program.facts = { getFact() {} };
   context.typeParameterSubstitutions = substitutions;
@@ -92,8 +94,7 @@ test("unobserved Future inputs and captures declare exact implementation paramet
   program.callableValues.native.callFor = () => undefined;
   const first = { implementation: { kind: "type-parameter", identity: "future:first", name: "Future0" } };
   const second = { implementation: { kind: "type-parameter", identity: "future:second", name: "Future0" } };
-  program.callableValues.nativeStorage.futureInputsFor = () => [first];
-  program.callableValues.nativeStorage.futureCapturesFor = () => [first, second];
+  program.callableValues.nativeStorage.futureEnvironmentFor = () => ({ kind: "resolved", inputs: [first], captures: [first, second] });
   const selected = planRustNativeCallableGenerics(current.declaration, current.source);
   assert.equal(selected !== undefined, true);
   const generics = selected.finalizeGenerics();
@@ -108,13 +109,21 @@ test("substituted Future captures are not redeclared or constrained merely for t
   const program = current.source.context.input.program;
   program.callableValues.native.inputsFor = () => [];
   program.callableValues.native.callFor = () => undefined;
-  program.callableValues.nativeStorage.futureCapturesFor = () => [{ implementation: {
+  program.callableValues.nativeStorage.futureEnvironmentFor = () => ({ kind: "resolved", inputs: [], captures: [{ implementation: {
     kind: "type-parameter", identity: "future:captured", name: "Future0",
-  } }];
+  } }] });
   const selected = planRustNativeCallableGenerics(current.declaration, current.source);
   assert.equal(selected !== undefined, true);
   assert.equal(selected.finalizeGenerics().parameters.length, 0);
   assert.equal(selected.finalizeGenerics().wherePredicates.length, 0);
+});
+
+test("unresolved Future environments reject without silently omitting implementation parameters", () => {
+  const current = fixture();
+  current.source.context.input.program.callableValues.nativeStorage.futureEnvironmentFor = () => ({
+    kind: "unresolved", reason: "missing exact capture identity",
+  });
+  assert.equal(planRustNativeCallableGenerics(current.declaration, current.source) === undefined, true);
 });
 
 test("callable payload bindings retain exact selected physical carriers without changing capture storage", () => {
