@@ -10,7 +10,6 @@ import { diagnosticInput, registerAliasFromPath, rustActiveErrorType } from "../
 import { rustPropagateLocalError } from "../program/fallible-boundaries.js";
 import { expressionCarrier, providerSelectedCallMatches, requireExpressionCarrier, rustOperationFact } from "./fundamentals.js";
 import { finishProviderOperationExpression, planProviderOperationExpression } from "./conversions.js";
-import { planRustCallArguments } from "./input-shaping.js";
 import {
   KindCallExpression,
   KindPropertyAccessExpression,
@@ -19,7 +18,6 @@ import {
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planExpression, planRawExpression } from "./entry.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
-import { planSelectedSourceCall } from "./calls/source.js";
 import { readRustStructuralObjectMethodStorage } from "../objects/project-storage.js";
 import { requireProviderArgumentPassingFacts } from "./calls/arguments.js";
 import { isRustUnitCarrier, rustOptionElementCarrier, rustOptionNestingDepth, rustStructuralMethodCallableCarrier } from "../../../target-model/types/index.js";
@@ -75,10 +73,7 @@ export function planNewExpression(node: Node, context: RustPlanContext): RustExp
     if (!requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.source-constructor-carrier")) {
       return undefined;
     }
-    const args = planRustCallArguments(node, context);
-    return args === undefined
-      ? undefined
-      : planSelectedSourceCall(node, Node_Expression(context.input.program.source.ast, node), args, fact, context);
+    return planCallExpression(node, context);
   }
   if (fact === undefined || fact.kind !== "provider-operation" || fact.abi.operationKind !== "constructor") {
     context.diagnostics.push(missingFactDiagnostic(

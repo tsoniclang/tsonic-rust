@@ -59,6 +59,8 @@ import { rustTargetOperationIsFallible } from "../facts/target-operation.js";
 import { analyzeRustErrorTransport } from "./error-transport.js";
 import { analyzeRustBorrowedInitializers } from "../storage/borrowed-initializers.js";
 import { createRustProviderMutableInputPlan } from "../storage/provider-mutable-inputs.js";
+import { analyzeRustRetainedCallableInputs } from "../callables/retained-inputs.js";
+import { analyzeRustGenericCallableErrors } from "../callables/generic-errors.js";
 
 export function analyzeRustTargetProgram(
   request: RustTargetAnalysisRequest,
@@ -156,6 +158,10 @@ export function analyzeRustTargetProgram(
       evidence: ["target.capability=rust.native-provider.disjoint-mutable-storage"] });
   }
   if (context.diagnostics.length > 0) return rejectedTargetStage(context.diagnostics);
+  const retainedCallableInputs = analyzeRustRetainedCallableInputs({ ast: context.ast, facts: context.facts,
+    storage: context.sourceStorage, native: context.callableValues.native, nativeStorage: context.callableValues.nativeStorage,
+    components: sourcePackageComponents.plan });
+  if (retainedCallableInputs.kind === "rejected") return retainedCallableInputs;
   const facts = context.facts.seal();
   const projectConstructions = analyzeRustProjectConstructions({ ast: context.ast, facts,
     typeDefinitions: context.typeDefinitions,
@@ -294,7 +300,12 @@ export function analyzeRustTargetProgram(
   const errorTransport = analyzeRustErrorTransport({ ast: context.ast, projectTypes, typeDefinitions,
     sourcePackageComponents: sourcePackageComponents.plan, errorStorageDemands: context.errorStorageDemands });
   if (errorTransport.kind === "rejected") return rejectedTargetStage(errorTransport.diagnostics);
+  const genericCallableErrors = analyzeRustGenericCallableErrors({ ast: context.ast, sourceLifetimes: context.sourceLifetimes,
+    physical: context.callableValues.generic.physical, producers: context.callableValues.nativeProducers,
+    effectsFor: declaration => facts.getFact(declaration, rustSourceCallEffectsFactKey) });
+  if (genericCallableErrors.kind === "rejected") return genericCallableErrors;
   const program: RustTargetProgram = Object.freeze({
+    genericCallableErrors: genericCallableErrors.value,
     captureStorage: analyzeRustCaptureStorage({ ast: context.ast, sourceFiles: context.sourceFiles, facts }),
     lexicalFunctions,
     errorStorageDemands: context.errorStorageDemands,
@@ -331,6 +342,7 @@ export function analyzeRustTargetProgram(
     borrowedInitializers: analyzeRustBorrowedInitializers(context.ast, context.sourceFiles, facts),
     borrowStability: borrowStability.plan,
     providerMutableInputs,
+    retainedCallableInputs: retainedCallableInputs.value,
     structuralShapes: context.structuralShapes.seal(),
     frozenDataWrites: context.frozenDataWrites.seal(),
     classValues,

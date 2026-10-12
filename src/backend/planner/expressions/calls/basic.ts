@@ -143,6 +143,7 @@ function planCallExpressionInner(node: Node, context: RustPlanContext, resultUse
       argumentPlan.arguments,
       fact,
       context,
+      argumentPlan.borrowedInputs,
     );
     const planned = native === undefined || fact.resultProjection === undefined ? native
       : planRustValueProjection(node, native, fact.resultProjection, context, "move");

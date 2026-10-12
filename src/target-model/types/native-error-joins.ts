@@ -10,15 +10,10 @@ export interface RustNativeErrorSource<Type> {
   readonly errorType: Type;
 }
 
-export type RustNativeErrorJoinShape<Type> =
-  | { readonly kind: "empty"; readonly sources: readonly [] }
-  | { readonly kind: "single"; readonly sources: readonly [RustNativeErrorSource<Type>] }
-  | { readonly kind: "joined"; readonly sources: readonly RustNativeErrorSource<Type>[] };
-
-export function selectRustNativeErrorJoin<Type>(
+export function snapshotRustNativeErrorSources<Type>(
   sources: readonly RustNativeErrorSource<Type>[],
   validate: (type: Type) => boolean,
-): RustNativeErrorJoinShape<Type> | undefined {
+): readonly RustNativeErrorSource<Type>[] | undefined {
   if (!isDenseDataArray(sources) || sources.length > 4096) return undefined;
   const identities = new Set<string>();
   const variants = new Set<string>();
@@ -35,9 +30,7 @@ export function selectRustNativeErrorJoin<Type>(
     variants.add(variant);
     selected.push(Object.freeze({ ...source }));
   }
-  return selected.length === 0 ? Object.freeze({ kind: "empty", sources: Object.freeze([] as const) })
-    : selected.length === 1 ? Object.freeze({ kind: "single", sources: Object.freeze([selected[0]!] as const) })
-      : Object.freeze({ kind: "joined", sources: Object.freeze(selected) });
+  return Object.freeze(selected);
 }
 
 export interface RustNativeErrorJoinReference {
@@ -54,12 +47,12 @@ export function rustNativeErrorJoinTargetType(
   errors: readonly TargetTypeRef[],
 ): TargetTypeRef | undefined {
   if (typeof fileName !== "string" || fileName.length === 0 || !isDenseDataArray(errors) || !boundedJoinData(errors)) return undefined;
-  const selection = selectRustNativeErrorJoin(errors.map((errorType, index) => ({
+  const sources = snapshotRustNativeErrorSources(errors.map((errorType, index) => ({
     identity: String(index), variant: `Error${index}`, errorType,
   })), isRustTargetTypeRef);
-  if (selection === undefined) return undefined;
-  return selection.kind === "empty" ? Object.freeze({ kind: "target-named", id: rustInfallibleTargetId })
-    : selection.kind === "single" ? snapshotClosedMetadata(selection.sources[0].errorType)
+  if (sources === undefined) return undefined;
+  return sources.length === 0 ? Object.freeze({ kind: "target-named", id: rustInfallibleTargetId })
+    : sources.length === 1 ? snapshotClosedMetadata(sources[0]!.errorType)
       : snapshotClosedMetadata({ kind: "target-specific", target: "rust", name: "native-error-join",
         value: { fileName, errors } });
 }

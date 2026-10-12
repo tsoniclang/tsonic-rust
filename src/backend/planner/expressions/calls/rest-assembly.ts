@@ -5,16 +5,35 @@ import type { RustExpr } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { Node } from "@tsonic/tsts";
 import { createRustSharedReferenceArgument } from "../input-shaping.js";
-import { planRustNonConsumingValue } from "../typed-locations.js";
+import { rustExpressionReadsStorage } from "../typed-locations.js";
+import { planExpression } from "../entry.js";
+import { isRustStringCarrier } from "../../../../target-model/types/index.js";
+import { rustSourceParameterAbiFactKey } from "../../../../analysis/facts/keys.js";
 
 export function planRustBorrowedSingletonSlice(
   node: Node,
-  value: RustExpr,
   context: RustPlanContext,
-): RustExpr {
+): RustExpr | undefined {
+  const value = planExpression(node, context, "value", "shared-place");
+  if (value === undefined) return undefined;
   return { kind: "call", path: "core::slice::from_ref", args: [
-    createRustSharedReferenceArgument(context, planRustNonConsumingValue(node, value, context), node),
+    createRustSharedReferenceArgument(context, value, node),
   ] };
+}
+
+export function canBorrowRustSingletonSlice(
+  node: Node, context: RustPlanContext, later: readonly Node[],
+): boolean {
+  if (!rustExpressionReadsStorage(node, context) || context.expressionOverrides?.has(node) === true) return false;
+  if (!context.input.program.valueLifetimes.canBorrowStableValue(node) &&
+    later.some(value => !context.input.program.borrowStability.canBorrowAcross(node, value))) return false;
+  const declaration = context.input.program.sourceNavigation.sourceReferenceFor(node)?.declaration;
+  const parameter = context.input.program.facts.getFact(node, rustSourceParameterAbiFactKey) ??
+    context.input.program.facts.getFact(declaration, rustSourceParameterAbiFactKey);
+  if (parameter?.mode === "ref" && isRustStringCarrier(parameter.valueCarrier)) return false;
+  const captured = [...context.capturedBindings ?? []].reverse().find(value => value.declaration === declaration);
+  const borrowed = captured?.borrowedCarrier;
+  return borrowed?.kind !== "reference" || borrowed.mutable || !isRustStringCarrier(borrowed.referent);
 }
 
 export function planRustRestAssembly(

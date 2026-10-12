@@ -28,7 +28,7 @@ import {
   planRustCallArguments,
 } from "../input-shaping.js";
 import { planExpression } from "../entry.js";
-import { planRustNonConsumingValue, rustExpressionReadsStorage } from "../typed-locations.js";
+import { planRustNonConsumingValue } from "../typed-locations.js";
 import { rustArgumentPassingMode } from "../../../../analysis/facts/parameter-passing.js";
 import { rustFinalizedCarrierTransitionMatches } from "../../../../analysis/facts/target-operation.js";
 import {
@@ -41,7 +41,8 @@ import {
 } from "../../../../target-model/types/equality.js";
 import { rustValueCarrierTransitionTarget } from "../../../../analysis/facts/value-carrier-queries.js";
 import { rustSpreadElementCarrier } from "../../../../target-model/operations/rest-assembly.js";
-import { planRustBorrowedSingletonSlice, planRustRestAssembly } from "./rest-assembly.js";
+import { planRustRestAssembly } from "./rest-assembly.js";
+import { planRustSourceCallArgumentValue } from "./singleton-slices.js";
 import { validateRustFinalizedOperationAbi } from "../../../../analysis/facts/finalized-operation-abi.js";
 import type { Node } from "@tsonic/tsts";
 import { planRustAbsentValue } from "../optional-storage.js";
@@ -60,6 +61,7 @@ export function shapeRustSourceCallParameters(
   arguments_: readonly RustExpr[],
   fact: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>,
   context: RustPlanContext,
+  borrowedInputs: ReadonlyMap<Node, RustExpr> = new Map(),
 ): readonly RustExpr[] | undefined {
   const shaped: RustExpr[] = [];
   for (const [parameterIndex, parameter] of fact.parameters.entries()) {
@@ -119,6 +121,7 @@ export function shapeRustSourceCallParameters(
       argumentNodes,
       arguments_,
       context,
+      borrowedInputs,
     );
     if (value === undefined) {
       return undefined;
@@ -183,6 +186,7 @@ export function planRustSourceCallArgumentEvaluation(
 ): {
   readonly arguments: readonly RustExpr[];
   readonly bindings: readonly { readonly name: string; readonly value: RustExpr }[];
+  readonly borrowedInputs: ReadonlyMap<Node, RustExpr>;
 } | undefined {
   const rawArguments = context.input.program.source.ast.arguments(call);
   if (!isDenseDataArray(rawArguments) || rawArguments.some((argument) => argument === undefined)) {
@@ -196,11 +200,13 @@ export function planRustSourceCallArgumentEvaluation(
   const argumentNodes = rawArguments as readonly Node[];
   const hasSpread = fact.parameters.some((parameter) =>
     parameter.inputs.some((input) => input.sourceForm !== "value"));
-  const planned = argumentNodes.map((argument) => {
+  const borrowedInputs = new Map<Node, RustExpr>();
+  const planned = argumentNodes.map((argument, index) => {
     const source = context.input.program.source.ast.kindName(argument) === KindSpreadElement
       ? Node_Expression(context.input.program.source.ast, argument)
       : argument;
-    return source === undefined ? undefined : planExpression(source, context);
+    return source === undefined ? undefined : hasSpread ? planExpression(source, context)
+      : planRustSourceCallArgumentValue(source, index, argumentNodes, fact, context, borrowedInputs);
   });
   if (planned.some((argument) => argument === undefined)) {
     return undefined;
@@ -209,6 +215,7 @@ export function planRustSourceCallArgumentEvaluation(
     return {
       arguments: planned as readonly RustExpr[],
       bindings: [],
+      borrowedInputs,
     };
   }
   if (context.syntheticNames === undefined) {
@@ -226,6 +233,7 @@ export function planRustSourceCallArgumentEvaluation(
   return {
     arguments: bindings.map((binding) => ({ kind: "path", path: binding.name })),
     bindings,
+    borrowedInputs,
   };
 }
 
@@ -263,7 +271,11 @@ export function planRustSelectedSourceCallArguments(
     return undefined;
   }
   const argumentNodes = rawArguments as readonly Node[];
-  const arguments_ = planRustCallArguments(call, context);
+  const borrowedInputs = new Map<Node, RustExpr>();
+  const arguments_ = planRustCallArguments(call, context, (argument, current) => {
+    const index = argumentNodes.indexOf(argument);
+    return planRustSourceCallArgumentValue(argument, index, argumentNodes, fact, current, borrowedInputs);
+  });
   return arguments_ === undefined
     ? undefined
     : shapeRustSourceCallParameters(
@@ -271,6 +283,7 @@ export function planRustSelectedSourceCallArguments(
         arguments_,
         fact,
         context,
+        borrowedInputs,
       );
 }
 
@@ -281,6 +294,7 @@ function shapeRustSourceCallInput(
   argumentNodes: readonly Node[],
   arguments_: readonly RustExpr[],
   context: RustPlanContext,
+  borrowedInputs: ReadonlyMap<Node, RustExpr> = new Map(),
 ): RustExpr | undefined {
   const argumentNode = argumentNodes[input.sourceArgumentIndex];
   const argument = arguments_[input.sourceArgumentIndex];
@@ -331,23 +345,7 @@ function shapeRustSourceCallInput(
   }
   const mutable = parameter.mode === "mut-ref";
   const sourceParameterAbi = context.input.program.facts.getFact(argumentNode, rustSourceParameterAbiFactKey);
-  const ast = context.input.program.source.ast;
-  if (!mutable && selectedInput.kind === "vec-literal" && selectedInput.elements.length === 1 &&
-    rustSliceElementCarrier(parameter.parameterCarrier) !== undefined && ast.is.IsArrayLiteralExpression(argumentNode)) {
-    const element = ast.elements(argumentNode)[0];
-    const construction = context.input.program.facts.getFact(argumentNode, rustTargetOperationFactKey);
-    const value = selectedInput.elements[0]!;
-    const elementAbi = element === undefined ? undefined
-      : context.input.program.facts.getFact(element, rustSourceParameterAbiFactKey);
-    if (element !== undefined && construction?.kind === "array-literal" && construction.lane === "native" &&
-      construction.contributions.length === 1 && construction.contributions[0]?.kind === "value" &&
-      rustExpressionReadsStorage(element, context) &&
-      (value.kind === "path" || value.kind === "method-call" && value.method === "clone" && value.args.length === 0) &&
-      (elementAbi === undefined || elementAbi.parameterCarrier.kind === "reference" &&
-        rustTargetTypeRefEquals(elementAbi.parameterCarrier.referent, construction.elementCarrier))) {
-      return planRustBorrowedSingletonSlice(element, value, context);
-    }
-  }
+  if (borrowedInputs.get(argumentNode) === selectedInput) return selectedInput;
   const nonConsumingInput = planRustNonConsumingValue(argumentNode, selectedInput, context);
   return sourceParameterAbi?.mode === parameter.mode &&
       rustTargetTypeRefEquals(sourceParameterAbi.parameterCarrier, parameter.parameterCarrier)

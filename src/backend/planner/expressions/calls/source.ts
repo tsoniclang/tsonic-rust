@@ -114,6 +114,7 @@ export function planSelectedSourceCall(
   args: readonly RustExpr[],
   fact: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>,
   context: RustPlanContext,
+  borrowedInputs: ReadonlyMap<Node, RustExpr>,
 ): RustExpr | undefined {
   const selected = context.input.program.facts.getSelectedTargetCall(node);
   const selectedMatches = selected !== undefined && sourceCallSelectedMemberMatches(
@@ -158,6 +159,7 @@ export function planSelectedSourceCall(
     args,
     fact,
     context,
+    borrowedInputs,
   );
   if (shaped === undefined) {
     return undefined;

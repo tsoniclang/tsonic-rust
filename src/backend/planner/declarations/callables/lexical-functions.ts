@@ -37,10 +37,17 @@ export function planRustLexicalFunctionEnvironment(declaration: Node, context: R
       : storage === undefined ? valueType : rustInlineBindingStorageType(storage.storage, valueType);
     const name = allocateRustSyntheticName(context.syntheticNames, "capture");
     const owned = lexicalCaptureIsOwned(declaration, selection, capture, carrier, storage === undefined, context);
-    parameters.push({ name, type: owned ? physicalType : { kind: "reference", referent: physicalType,
-      mutable: storage === undefined && capture.mutable } });
+    const borrowedCarrier: TargetTypeRef | undefined = owned || storage !== undefined ? undefined : {
+      kind: "reference", referent: physicalCarrier!, mutable: capture.mutable,
+    };
+    const parameterType = borrowedCarrier === undefined ? owned ? physicalType : {
+      kind: "reference" as const, referent: physicalType, mutable: false,
+    } : rustTypeFromCarrierInContext(borrowedCarrier, context);
+    if (parameterType === undefined) return undefined;
+    parameters.push({ name, type: parameterType });
     capturedBindings.push({ declaration: capture.declaration, expression: { kind: "path", path: name },
       storage: storage?.storage ?? "value", valueCarrier: carrier,
+      ...(borrowedCarrier === undefined ? {} : { borrowedCarrier }),
       ...(owned ? {} : { borrowed: storage === undefined && capture.mutable ? "mutable" as const : "shared" as const }) });
     if (storage?.storage === "location") context.usedAliases?.add("rt");
   }

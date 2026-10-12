@@ -16,6 +16,7 @@ import {
   KindSatisfiesExpression,
   KindSpreadElement,
   Node_Expression,
+  Node_Type,
   ObjectLiteralProperty_Value,
   asSourceNode,
 } from "@tsonic/target-api/source";
@@ -33,6 +34,7 @@ import { rustOptionalStorageValue, rustSourceOptionalTargetType } from "../../ta
 import { resolveParameterAbi } from "../declarations/types-and-bindings.js";
 import { resolveFunctionExpressionSignature } from "../callables/closures.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
+import { rustCallableProtocol, rustClosureProtocol } from "../../target-model/types/carriers/callables.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type {
@@ -156,7 +158,11 @@ function reconcileProjectSourceArgumentTypeParameters(
   if (parameterNames.size === 0) return reconciled;
   const bindings = selected.sourceArgumentBindings;
   if (bindings === undefined) return reconciled;
-  for (const [argumentIndex, argument] of callArguments.entries()) {
+  const contextual = (argument: Node): boolean => walk.context.ast.is.IsArrowFunction(argument) ||
+    walk.context.ast.is.IsFunctionExpression(argument);
+  const ordered = [...callArguments.entries()].sort((left, right) =>
+    Number(contextual(left[1])) - Number(contextual(right[1])));
+  for (const [argumentIndex, argument] of ordered) {
     if (isUnannotatedRustNumericLiteral(argument, walk.context.ast)) continue;
     const matches = bindings.filter((binding) =>
       binding.sourceArgumentIndex === argumentIndex);
@@ -242,6 +248,17 @@ function projectSourceArgumentInferencePairs(
   if (ast.kindName(argument) === KindParenthesizedExpression || ast.kindName(argument) === KindSatisfiesExpression) {
     const inner = Node_Expression(ast, argument);
     return inner === undefined ? undefined : projectSourceArgumentInferencePairs(walk, inner, pattern);
+  }
+  if (ast.is.IsArrowFunction(argument) || ast.is.IsFunctionExpression(argument)) {
+    const actual = actualCarrier ?? resolveProjectSourceInferenceCarrier(walk, argument);
+    const expected = rustCallableProtocol(pattern) ?? rustClosureProtocol(pattern);
+    const selected = rustCallableProtocol(actual) ?? rustClosureProtocol(actual);
+    const parameters = ast.parameters(argument);
+    if (expected === undefined || selected === undefined || expected.parameters.length !== selected.parameters.length ||
+      parameters.some(parameter => parameter === undefined)) return undefined;
+    return [{ pattern: expected.result, actual: selected.result }, ...parameters.flatMap((parameter, index) =>
+      Node_Type(ast, parameter) === undefined || expected.parameters[index] === undefined ? []
+        : [{ pattern: expected.parameters[index]!, actual: selected.parameters[index]! }])];
   }
   if (ast.kindName(argument) === KindArrayLiteralExpression) {
     const element = rustJsArrayLikeElementTargetType(pattern) ?? rustFixedArrayCarrierValue(pattern)?.element ??

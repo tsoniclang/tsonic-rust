@@ -1,0 +1,69 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
+import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
+import { retainedPointerInputSource as source, reorderedPointerInputSource, widePointerInputSource,
+  incompatiblePointerInputSources } from "../../../../tsonic/test/fixtures/retained-pointer-inputs.mjs";
+
+test("retained native requirements propagate through exact aliases and caller inputs, not unrelated callbacks", () => {
+  const { program } = analyzeRust({ files: { "index.ts": source } });
+  const ast = program.source.ast;
+  const requirements = program.retainedCallableInputs;
+  const inputs = program.callableValues.native.inputs;
+  assert.equal(inputs.length, 5, "two retained, two forwarded, one invocation-only formal");
+  for (const input of inputs) {
+    const name = ast.text(ast.name(input.owner));
+    const errors = requirements.forInput(input);
+    assert.equal(errors.length, name === "immediate" ? 0 : 1, name);
+    assert.equal(Object.isFrozen(errors), true, "published requirements are immutable");
+    assert.equal(requirements.forInput({ ...input }).length, 0, "foreign evidence cannot carry a constraint");
+  }
+  const nodes = [];
+  const visit = node => { nodes.push(node); ast.forEachChild(node, visit); };
+  program.sourceFiles.forEach(visit);
+  const boundaries = nodes.flatMap(node => [1, 2].flatMap(index => {
+    const selected = requirements.forBoundary(node, index);
+    return selected === undefined ? [] : [{ node, selected }];
+  }));
+  assert.equal(boundaries.length, 2);
+  for (const { selected } of boundaries) {
+    assert.equal(Object.isFrozen(selected) && Object.isFrozen(selected.inputs), true);
+    assert.equal(selected.inputs.length, 1, "exact native input rather than a signature match");
+    assert.equal(requirements.forInput(selected.inputs[0])[0] === selected.errorCarrier, true);
+  }
+  assert.equal(requirements.forBoundary({}, 1) === undefined, true);
+});
+
+for (const surfaces of [undefined, ["js"]]) {
+  test(`native retained callback constraints execute through aliases and forwarding in ${surfaces?.[0] ?? "native"}`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces,
+      target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": source } });
+    assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => `${row.code}: ${row.message}`).join("\n"));
+    const code = artifactText(result, "src/index.rs");
+    assert.match(code, /InvocationError:\s*core::convert::Into</u);
+    assert.match(code, /::invoke\(/u);
+    assert.doesNotMatch(code, /panic_any|catch_unwind|transmute|downcast|\bunsafe\b/u);
+    validateGeneratedProject(`retained-input-forwarding-${surfaces?.[0] ?? "native"}`, result.artifacts, { run: true });
+  });
+}
+
+for (const [name, text] of [["reordered", reorderedPointerInputSource], ["int64", widePointerInputSource]]) {
+  test(`native contextual callback inference retains ${name} source metadata`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": text } });
+    assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\n"));
+    const code = artifactText(result, "src/index.rs");
+    if (name === "int64") {
+      assert.match(code, /Location<i64,/u);
+      assert.doesNotMatch(code, /9007199254740992|as f64|i64_to_f64/u);
+    }
+    validateGeneratedProject(`retained-input-${name}`, result.artifacts, { run: true });
+  });
+}
+
+for (const [index, text] of incompatiblePointerInputSources.entries()) {
+  test(`independent conflicting callback carrier ${index} cannot reinterpret native pointer storage`, () => {
+    const { result } = compileRust({ files: { "index.ts": text } });
+    assert.equal(result.diagnostics.length > 0, true, "an incompatible native carrier remains rejected");
+    assert.equal(result.artifacts.length, 0, "no invalid native output is published");
+  });
+}

@@ -7,6 +7,33 @@ import type { RustGenericCallableEffectsFact } from "../facts/generic-callable-e
 import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember } from "./generic-physical.js";
 import type { RustNativeCallableProducerPlan } from "./native-producers.js";
 import { rustGenericCallableMemberBindings, type RustGenericCallableBindingContext } from "./generic-bindings.js";
+import { createRustEffectsWorkBudget } from "../resources/effects-work-budget.js";
+import { rejectedTargetStage, resolvedTargetStage, type TargetStageResult } from "@tsonic/target-api/artifacts";
+
+export interface RustGenericCallableErrorIndex {
+  forDefinition(definition: RustGenericCallablePhysicalDefinition): RustGenericCallableErrorSelection | undefined;
+}
+
+export function analyzeRustGenericCallableErrors(
+  input: Parameters<typeof selectRustGenericCallableErrors>[1],
+): TargetStageResult<RustGenericCallableErrorIndex> {
+  const budget = createRustEffectsWorkBudget();
+  const selections = new Map<RustGenericCallablePhysicalDefinition, RustGenericCallableErrorSelection>();
+  const failure = budget.run(() => {
+    for (const definition of input.physical.definitions()) {
+      budget.step();
+      if (definition.members.length !== 0) budget.step(definition.members.length);
+      const selection = selectRustGenericCallableErrors(definition, input);
+      if (selection !== undefined) {
+        for (const source of [...selection.invocation, ...selection.awaiting]) budget.metadata(source);
+        selections.set(definition, selection);
+      }
+    }
+  });
+  return failure === undefined ? resolvedTargetStage(Object.freeze({
+    forDefinition: (definition: RustGenericCallablePhysicalDefinition) => selections.get(definition),
+  })) : rejectedTargetStage([{ ...failure, category: "error", source: "tsonic-rust" }]);
+}
 
 export interface RustGenericCallableMemberErrors {
   readonly effects: RustSourceCallEffectsFact;

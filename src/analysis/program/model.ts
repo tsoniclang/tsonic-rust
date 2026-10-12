@@ -62,6 +62,7 @@ export interface RustPlanningHost {
 }
 
 export interface RustTargetProgram {
+  readonly genericCallableErrors: import("../callables/generic-errors.js").RustGenericCallableErrorIndex;
   readonly callableOwnership: import("../callables/ownership-plan.js").RustCallableOwnershipPlan;
   readonly lexicalFunctions: import("../callables/lexical-functions.js").RustLexicalFunctionQueries;
   readonly errorStorageDemands: import("@tsonic/target-api/analysis").SourceErrorStorageDemandQueries;
@@ -91,6 +92,7 @@ export interface RustTargetProgram {
   readonly borrowedInitializers: import("../storage/borrowed-initializers.js").RustBorrowedInitializerQueries;
   readonly borrowStability: import("./borrow-stability.js").RustBorrowStabilityPlan;
   readonly providerMutableInputs: import("../storage/provider-mutable-inputs.js").RustProviderMutableInputPlan;
+  readonly retainedCallableInputs: import("../callables/retained-inputs.js").RustRetainedCallableInputPlan;
   readonly structuralShapes: RustStructuralShapePlan;
   readonly frozenDataWrites: import("../objects/frozen-data-writes.js").RustFrozenDataWritePlan;
   readonly classValues: import("../objects/class-values.js").RustClassValuePlan;

@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { allocateRustGeneratedName } from "../../../../target-model/names/generated.js";
-import type { RustGenericParameter, RustGenerics, RustWherePredicate } from "../../../target-ast/nodes.js";
+import type { RustGenericParameter, RustGenerics, RustWherePredicate, RustTypeBound } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import type { RustCallableGenericPlan } from "./generics.js";
@@ -9,6 +9,7 @@ import { rustTargetTypeChildren } from "../../../../target-model/types/carriers/
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { closedMetadataKey } from "../../../../target-model/metadata/closed-data.js";
 import { rustContextualValueConversionFactKey, rustSourceCallableReturnFactKey } from "../../../../analysis/facts/keys.js";
+import { rustNativeCallableInputPhysicalSignature } from "../../../../analysis/callables/native-conversions.js";
 
 export function planRustNativeCallableGenerics(
   declaration: Node,
@@ -74,7 +75,23 @@ export function planRustNativeCallableGenerics(
   for (const input of inputs) {
     const traits = [...bounds.get(input.implementation.identity)!.values()].map(trait => rustTypeFromCarrierInContext(trait, context));
     if (traits.some(trait => trait === undefined)) return undefined;
-    const selectedBounds = traits.map(trait => ({ kind: "trait-type" as const, reference: { trait: trait! } }));
+    const selectedBounds: RustTypeBound[] = traits.map(trait => ({ kind: "trait-type" as const, reference: { trait: trait! } }));
+    const callableInput = callableInputs.find(selected => selected === input);
+    const retained = callableInput === undefined ? [] : context.input.program.retainedCallableInputs.forInput(callableInput);
+    if (retained.length > 0) {
+      selectedBounds.push({ kind: "lifetime", lifetime: { kind: "static" } });
+      const signature = callableInput !== undefined ? rustNativeCallableInputPhysicalSignature(callableInput, [],
+        context.input.program.typeDefinitions) : undefined;
+      const error = signature === undefined ? undefined : rustTypeFromCarrierInContext(signature.error, context);
+      if (error === undefined) return undefined;
+      for (const target of retained) {
+        const type = rustTypeFromCarrierInContext(target, context);
+        if (type === undefined) return undefined;
+        predicates.push({ kind: "type", type: error, bounds: [{ kind: "trait-type", reference: {
+          trait: { kind: "named", path: "core::convert::Into", genericArguments: [{ kind: "type", type }] },
+        } }] });
+      }
+    }
     if (context.typeParameterSubstitutions?.has(input.implementation.identity) === true) {
       const type = rustTypeFromCarrierInContext(input.implementation, context);
       if (type === undefined) return undefined;

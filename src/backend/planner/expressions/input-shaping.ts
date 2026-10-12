@@ -19,6 +19,7 @@ import { rustErrorFieldSharedView } from "./error-field-borrows.js";
 export function planRustCallArguments(
   node: Node,
   context: RustPlanContext,
+  planArgument: (argument: Node, context: RustPlanContext) => RustExpr | undefined = planExpression,
 ): readonly RustExpr[] | undefined {
   const arguments_: RustExpr[] = [];
   for (const argument of context.input.program.source.ast.arguments(node)) {
@@ -30,7 +31,7 @@ export function planRustCallArguments(
       ));
       return undefined;
     }
-    const planned = planExpression(argument, context);
+    const planned = planArgument(argument, context);
     if (planned === undefined) {
       return undefined;
     }

@@ -1,10 +1,8 @@
 import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember } from "../../../../analysis/callables/generic-physical.js";
-import { rustSourceCallEffectsFactKey } from "../../../../analysis/facts/keys.js";
 import type { RustSourceCallEffectsFact } from "../../../../analysis/facts/object-methods.js";
 import type { RustGenericCallableEffectsFact } from "../../../../analysis/facts/generic-callable-effects.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
-import { selectRustGenericCallableErrors } from "../../../../analysis/callables/generic-errors.js";
 import type { RustNativeErrorSource } from "../../../../target-model/types/native-error-joins.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { planRustNativeErrorJoin, type RustNativeErrorJoinPlan, type RustNativeErrorJoinSelection,
@@ -28,11 +26,7 @@ export function planRustGenericCallableErrors(
   context: RustPlanContext,
 ): RustGenericCallableErrorPlan | undefined {
   const { program } = context.input;
-  const selected = selectRustGenericCallableErrors(definition, {
-    ast: program.source.ast, sourceLifetimes: program.sourceLifetimes,
-    physical: program.callableValues.generic.physical, producers: program.callableValues.nativeProducers,
-    effectsFor: declaration => program.facts.getFact(declaration, rustSourceCallEffectsFactKey),
-  });
+  const selected = program.genericCallableErrors.forDefinition(definition);
   if (selected === undefined) return undefined;
   const selections = new Map<RustGenericCallablePhysicalMember, RustGenericCallableProducerErrors>();
   for (const member of definition.members) {

@@ -109,11 +109,16 @@ export function planRustIdentifierValue(
   }
   if (captured?.borrowed !== undefined) {
     const referent = value.kind === "reference" ? value.expr : undefined;
+    const borrowed = captured.borrowedCarrier;
+    if (borrowed?.kind === "reference" && !borrowed.mutable && isRustStringCarrier(borrowed.referent)) {
+      return access === "value" ? { kind: "owned-string-from-borrowed-str", expression: value } : value;
+    }
+    if (access !== "value") return referent ?? { kind: "dereference", pointer: value };
     return rustCarrierHasCopyContract(captured.valueCarrier, context)
       ? referent ?? { kind: "dereference", pointer: value }
       : cloneRustExpression(referent ?? value);
   }
-  return planRustValueRead(node, value, context);
+  return access === "value" ? planRustValueRead(node, value, context) : value;
 }
 
 export function planRustValueRead(

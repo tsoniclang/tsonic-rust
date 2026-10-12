@@ -182,9 +182,9 @@ export function main(): void {
 
   assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
-  assert.match(output, /fn read\([^)]*&String\) -> String/u);
+  assert.match(output, /fn read\([^)]*&str\) -> String/u);
   assert.match(output, /read\(&value\)/u);
-  assert.match(output, /capture\.clone\(\)/u);
+  assert.match(output, /String::from\(capture\)/u);
   assert.doesNotMatch(output, /rt::Location::allocate|RefCell/u);
   validateGeneratedProject("captured-string-updates", result.artifacts, { run: true });
 });
@@ -218,6 +218,7 @@ export function main(): void {
   assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /fn write\([^)]*&mut String[^)]*&mut bool\)/u);
+  assert.match(output, /fn read\([^)]*&str\) -> String/u);
   assert.match(output, /write\([^;]*&mut value, &mut ready\)/u);
   assert.match(output, /read\(ready, &value\)/u);
   assert.doesNotMatch(output, /rt::Location::allocate|RefCell|\.store\(/u);
