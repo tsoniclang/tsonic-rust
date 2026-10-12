@@ -39,6 +39,11 @@ export function planRustNativeCallableGenerics(
     context.input.program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   visit(declaration);
+  for (const forwarding of context.input.program.callableValues.nativeGenericProducers.forwardingFor(declaration)) {
+    const selected = bounds.get(forwarding.input.implementation.identity);
+    if (selected === undefined) return undefined;
+    selected.set(closedMetadataKey(forwarding.trait), forwarding.trait);
+  }
   const parameters: RustGenericParameter[] = [];
   for (const input of inputs) {
     const traits = [...bounds.get(input.implementation.identity)!.values()].map(trait => rustTypeFromCarrierInContext(trait, context));

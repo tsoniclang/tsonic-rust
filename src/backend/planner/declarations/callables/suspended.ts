@@ -1,5 +1,5 @@
 import type { RustSuspendedCallableImplementation } from "../../../../analysis/callables/suspended-values.js";
-import { rustCallableProtocol, rustCallableTargetType, rustLocationTargetType } from "../../../../target-model/types/index.js";
+import { rustCallableProtocol, rustLocationTargetType } from "../../../../target-model/types/index.js";
 import { rustStaticLifetime } from "../../../../target-model/lifetimes/index.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import type { RustBlock, RustGenericParameter, RustItem, RustType } from "../../../target-ast/nodes.js";
@@ -62,8 +62,9 @@ function planImplementation(implementation: RustSuspendedCallableImplementation,
   if (implementation.elision !== undefined && bound?.parameterIndex !== implementation.elision.parameterIndex) return undefined;
   const invocation = bound ?? protocol;
   const argumentsType = invocation === undefined ? undefined : rustTypeFromCarrierInContext({ kind: "tuple", elements: invocation.parameters }, scoped);
-  const callableType = invocation === undefined ? undefined : rustTypeFromCarrierInContext(
-    bound === undefined ? implementation.carrier : rustCallableTargetType(bound.parameters, bound.result), scoped);
+  const physical = context.input.program.callableValues.nativeProducers.physicalFor(declaration, implementation.carrier);
+  const callableType = physical === undefined ? undefined : rustTypeFromCarrierInContext(
+    implementation.elision === undefined ? physical : substituteElidedLifetime(physical, implementation.elision.lifetime), scoped);
   const resultArgument = callableType?.kind === "named" ? callableType.genericArguments?.[1] : undefined;
   const resultType = resultArgument?.kind === "type" ? resultArgument.type : undefined;
   const target = rustSuspendedCallableStateType(implementation, scoped);

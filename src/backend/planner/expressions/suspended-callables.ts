@@ -6,7 +6,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { diagnosticInput, rustSourceBindingPath } from "../program/plan-context.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { rustTypeFromCarrierInContext } from "../types/render.js";
+import { rustCallableConstructionType } from "./fundamentals.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { planRustCaptureValue } from "./typed-locations.js";
 import { rustSuspendedCallableStateType } from "../types/suspended-callables.js";
@@ -14,7 +14,9 @@ import { planRustCapturedReceiverFields, planRustCapturedReceivers } from "./rec
 
 export function planRustSuspendedCallableConstruction(node: Node, context: RustPlanContext): RustExpr | undefined {
   const implementation = context.input.program.callableValues.suspended.implementationFor(node);
-  const ownerType = implementation === undefined ? undefined : rustTypeFromCarrierInContext(implementation.carrier, context);
+  const carrier = implementation === undefined ? undefined :
+    context.input.program.callableValues.nativeProducers.physicalFor(node, implementation.carrier);
+  const ownerType = carrier === undefined ? undefined : rustCallableConstructionType(carrier, context);
   const stateType = implementation === undefined ? undefined : rustSuspendedCallableStateType(implementation, context);
   if (implementation === undefined || ownerType === undefined || stateType === undefined || context.syntheticNames === undefined) {
     context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),

@@ -25,6 +25,7 @@ import type { RustTypeDefinitions } from "../../target-model/types/source-union-
 import { createRustNativeCallableInputPlan, type RustNativeCallableInputPlan } from "./native-inputs.js";
 import { createRustNativeStoragePlan, type RustNativeStoragePlan } from "./native-storage.js";
 import { createRustNativeCallableProducerPlan, type RustNativeCallableProducerPlan } from "./native-producers.js";
+import { createRustNativeGenericProducerPlan, type RustNativeGenericProducerPlan } from "./native-generic-producers.js";
 
 export interface RustCallableValuePlan {
   readonly generic: RustGenericCallablePlan;
@@ -33,6 +34,7 @@ export interface RustCallableValuePlan {
   readonly native: RustNativeCallableInputPlan;
   readonly nativeStorage: RustNativeStoragePlan;
   readonly nativeProducers: RustNativeCallableProducerPlan;
+  readonly nativeGenericProducers: RustNativeGenericProducerPlan;
   readonly issues: readonly RustSourceCallableSpecializationIssue[];
 }
 
@@ -76,6 +78,7 @@ export function createRustCallableValuePlanRegistry(): RustCallableValuePlanRegi
     get native() { return requireCurrent().native; },
     get nativeStorage() { return requireCurrent().nativeStorage; },
     get nativeProducers() { return requireCurrent().nativeProducers; },
+    get nativeGenericProducers() { return requireCurrent().nativeGenericProducers; },
     get issues() { return requireCurrent().issues; },
   });
 }
@@ -163,6 +166,8 @@ function createRustCallableValuePlan(input: RustCallableValuePlanInput): RustCal
     } });
   const nativeStorage = createRustNativeStoragePlan({ ast: input.ast, facts: input.facts,
     storage: input.sourceStorage, definitions: input.typeDefinitions, native, producers: nativeProducers });
-  return Object.freeze({ generic, suspended, frames, native, nativeStorage, nativeProducers,
+  const nativeGenericProducers = createRustNativeGenericProducerPlan({ ast: input.ast, nodes: input.sourceStorage.nodes,
+    facts: input.facts, storage: input.sourceStorage, generic, native, nativeStorage });
+  return Object.freeze({ generic, suspended, frames, native, nativeStorage, nativeProducers, nativeGenericProducers,
     issues: Object.freeze([...generic.issues, ...suspended.issues, ...frames.issues]) });
 }

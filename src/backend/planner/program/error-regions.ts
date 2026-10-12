@@ -42,6 +42,9 @@ export function createRustErrorRegionCatalog(program: RustTargetProgram): RustEr
       ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
     };
     visit(file);
+    const producerArities = program.callableValues.nativeGenericProducers.errorAritiesFor(fileName);
+    if (producerArities === undefined) throw new Error("Native generic producers require sealed exact error channels.");
+    for (const arity of producerArities) arities.add(arity);
     for (const input of program.callableValues.native.inputs) {
       if (input.protocol.ownerFileName !== fileName) continue;
       usedNames.add(input.protocol.targetName);
