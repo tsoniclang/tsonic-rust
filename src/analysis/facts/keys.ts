@@ -29,6 +29,8 @@ export { rustSourceCallableReturnFactKey } from "../../target-model/facts/source
 export type { RustSourceCallableReturnFact } from "../../target-model/facts/source-declarations.js";
 export { rustErrorEffectsFactKey } from "./error-effects.js";
 export type { RustErrorEffectsFact, RustNativeErrorEffect } from "./error-effects.js";
+export { rustSourceErrorEffectsFactKey } from "./source-error-effects.js";
+export type { RustSourceErrorEffectsFact, RustSourceErrorEffectEdge } from "./source-error-effects.js";
 export {
   rustFallibleFactKey,
   rustFutureValueFactKey,
