@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { rustPackageFallibleBoundary } from "../../../../dist/backend/planner/program/fallible-boundaries.js";
 import { applyFinalizedValueConversion } from "../../../../dist/backend/planner/expressions/value-conversions.js";
 import { finalizeValueConversion } from "../../../../dist/analysis/facts/finalized-operation/conversions.js";
 import { rustJsValueTargetType, rustJsArrayTargetType, rustStringTargetType } from "../../../../dist/target-model/types/index.js";
@@ -47,7 +48,8 @@ test("finalized fallible conversions retain their exact operand error type", () 
   const context = { input: { program: { source: { ast: fakeAstReader([sourceFile]) },
     typeDefinitions: emptyRustTypeDefinitions, configuration: { edition: "2024" },
   } }, sourceFile, diagnostics: [], usedAliases: new Set(),
-    fallibleBoundary: { errorTypePath: "crate::CurrentError", errorTypeIdentity: "test:CurrentError" } };
+    fallibleBoundary: rustPackageFallibleBoundary({ componentId: "test", errorDomain: "project",
+      errorTypePath: "crate::CurrentError", errorTypeIdentity: "test:CurrentError" }) };
   const array = rustJsArrayTargetType(rustStringTargetType());
   const recovery = selectRustSourceValueConversion(rustJsValueTargetType(), array);
   const cases = [

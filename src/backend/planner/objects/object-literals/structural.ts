@@ -6,7 +6,8 @@ import { isRustCopyCarrier, rustCallableProtocol, rustCallableTargetType,
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { emptyRustGenerics, type RustExpr, type RustImplFunction, type RustItem, type RustStructField,
   type RustType } from "../../../target-ast/nodes.js";
-import type { RustPlanContext } from "../../program/plan-context.js";
+import { rustCurrentErrorBoundary, type RustPlanContext } from "../../program/plan-context.js";
+import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.js";
 import { allocateRustSyntheticTypeName, type RustSyntheticNameState } from "../../names/synthetic.js";
 import { rustSelfParameter } from "../../declarations/callables/self-parameter.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
@@ -115,7 +116,13 @@ export function createStructuralLiteralImplementation(
           body: { statements: [{ kind: "assign", target: selected(field.targetName), operator: "=", value: { kind: "path", path: "value" } }] },
         }] };
         const freeze = context.input.program.frozenDataWrites.receiverFor("structural-object", carrier, storageIndex);
-        if (freeze !== undefined) write = checkRustDataWrite("receiver", { kind: "path", path: "self" }, write, errorType);
+        if (freeze !== undefined) {
+          const owner = rustCurrentErrorBoundary(context);
+          const checked = owner === undefined ? undefined
+            : checkRustDataWrite("receiver", { kind: "path", path: "self" }, write, rustPackageFallibleBoundary(owner));
+          if (checked === undefined) return undefined;
+          write = checked;
+        }
         setter = { kind: "evaluate-then", effect: write, discard: "unit", value: { kind: "call", path: "Ok", args: [{ kind: "tuple-literal", elements: [] }] } };
       }
     }

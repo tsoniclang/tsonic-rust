@@ -366,6 +366,9 @@ function planProjectExternalErrorImplementations(
     return undefined;
   }
   const self = { kind: "path" as const, path: "self" };
+  const errorName = readRustProjectDispatchedField(self, nameRead);
+  const errorMessage = readRustProjectDispatchedField(self, messageRead);
+  if (errorName === undefined || errorMessage === undefined) return undefined;
   return [{
     kind: "impl",
     generics: rustProjectRepresentationGenerics(representation, context),
@@ -412,10 +415,7 @@ function planProjectExternalErrorImplementations(
             kind: "format-write",
             writer: { kind: "path", path: "formatter" },
             format: "{}: {}",
-            args: [
-              readRustProjectDispatchedField(self, nameRead),
-              readRustProjectDispatchedField(self, messageRead),
-            ],
+            args: [errorName, errorMessage],
           },
         }],
       },

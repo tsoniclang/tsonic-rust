@@ -10,7 +10,7 @@ import type { RustAssignmentOperator } from "../../../target-model/syntax/tokens
 import type { RustExpr, RustCallGenericArgument } from "../../target-ast/nodes.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { rustActiveErrorType } from "../program/plan-context.js";
+import { rustPropagateLocalError } from "../program/fallible-boundaries.js";
 import { rustTargetRuntimeErrorType } from "../types/error-boundary.js";
 import { checkRustDataWrite } from "./data-writes.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
@@ -178,16 +178,17 @@ export function readRustStoredObjectField(
       return undefined;
     }
     if (context.input.program.structuralShapes.definitionForCarrier(receiverCarrier)?.dispatchName !== undefined) {
-      const error = rustActiveErrorType(context);
+      const region = context.fallibleBoundary;
       const operand = rustTypeFromCarrierInContext(rustProgramErrorTargetType(), context);
-      if (field.property === undefined || error === undefined || operand === undefined || projection.length !== 0 ||
+      if (field.property === undefined || region === undefined || operand === undefined || projection.length !== 0 ||
         context.syntheticNames === undefined) return undefined;
       const name = allocateRustSyntheticName(context.syntheticNames, "property_receiver");
       const dispatch: RustExpr = { kind: "field", receiver: { kind: "path", path: name }, name: "dispatch" };
-      return rustValueBlock([{ name, value: { kind: "reference", expr: receiver } }], { kind: "try", expr: {
+      const selected = rustPropagateLocalError(region, operand, {
         kind: "method-call", receiver: field.property.selfMode === "ref" ? dispatch : cloneExpression(dispatch),
         method: field.property.getterTargetName, args: [],
-      }, resultErrorType: error, operandErrorType: operand });
+      });
+      return selected === undefined ? undefined : rustValueBlock([{ name, value: { kind: "reference", expr: receiver } }], selected);
     }
     if (field.method === true && field.receiverIndependent !== true) {
       return undefined;
@@ -361,16 +362,17 @@ export function writeRustStoredObjectField(
     return writeRustStoredObjectFieldStorage(storage, receiverCarrier, receiver, storageIndex, operator, value, context, projection, receiverIsBorrowed);
   }
   if (check === undefined) return writeRustStoredObjectFieldStorage(storage, receiverCarrier, receiver, storageIndex, operator, value, context, projection, receiverIsBorrowed);
-  const errorType = rustActiveErrorType(context);
-  if (errorType === undefined || context.syntheticNames === undefined) return undefined;
+  const region = context.fallibleBoundary;
+  if (region === undefined || context.syntheticNames === undefined) return undefined;
   const receiverName = allocateRustSyntheticName(context.syntheticNames, "field_owner");
   const valueName = allocateRustSyntheticName(context.syntheticNames, "field_value");
   const selected: RustExpr = { kind: "path", path: receiverName };
   const effect = writeRustStoredObjectFieldStorage(storage, receiverCarrier, selected, storageIndex, operator,
     { kind: "path", path: valueName }, context, projection, receiverIsBorrowed);
-  return effect === undefined ? undefined : rustValueBlock([
+  const checked = effect === undefined ? undefined : checkRustDataWrite(check, selected, effect, region);
+  return checked === undefined ? undefined : rustValueBlock([
     { name: receiverName, value: receiverIsBorrowed ? receiver : cloneExpression(receiver) }, { name: valueName, value },
-  ], checkRustDataWrite(check, selected, effect, errorType));
+  ], checked);
 }
 
 function writeRustStoredObjectFieldStorage(
@@ -390,14 +392,14 @@ function writeRustStoredObjectFieldStorage(
       return undefined;
     }
     if (context.input.program.structuralShapes.definitionForCarrier(receiverCarrier)?.dispatchName !== undefined) {
-      const error = rustActiveErrorType(context);
+      const region = context.fallibleBoundary;
       const operand = rustTypeFromCarrierInContext(rustProgramErrorTargetType(), context);
-      if (field.property?.setterTargetName === undefined || error === undefined || operand === undefined ||
+      if (field.property?.setterTargetName === undefined || region === undefined || operand === undefined ||
         projection.length !== 0 || operator !== "=") return undefined;
       const dispatch: RustExpr = { kind: "field", receiver, name: "dispatch" };
-      return { kind: "try", expr: { kind: "method-call", receiver: field.property.selfMode === "ref" ? dispatch
+      return rustPropagateLocalError(region, operand, { kind: "method-call", receiver: field.property.selfMode === "ref" ? dispatch
         : cloneExpression(dispatch),
-        method: field.property.setterTargetName, args: [value] }, resultErrorType: error, operandErrorType: operand };
+        method: field.property.setterTargetName, args: [value] });
     }
     if (field.method === true && field.receiverIndependent !== true || field.readonly && projection.length === 0) {
       return undefined;
@@ -464,12 +466,13 @@ export function mutateRustStoredObjectField(
     return mutateRustStoredObjectFieldStorage(storage, receiverCarrier, receiver, storageIndex, mutation, context);
   }
   if (check === undefined) return mutateRustStoredObjectFieldStorage(storage, receiverCarrier, receiver, storageIndex, mutation, context);
-  const errorType = rustActiveErrorType(context);
-  if (errorType === undefined || context.syntheticNames === undefined) return undefined;
+  const region = context.fallibleBoundary;
+  if (region === undefined || context.syntheticNames === undefined) return undefined;
   const receiverName = allocateRustSyntheticName(context.syntheticNames, "field_owner");
   const selected: RustExpr = { kind: "path", path: receiverName };
   const effect = mutateRustStoredObjectFieldStorage(storage, receiverCarrier, selected, storageIndex, mutation, context);
-  return effect === undefined ? undefined : rustValueBlock([{ name: receiverName, value: cloneExpression(receiver) }], checkRustDataWrite(check, selected, effect, errorType));
+  const checked = effect === undefined ? undefined : checkRustDataWrite(check, selected, effect, region);
+  return checked === undefined ? undefined : rustValueBlock([{ name: receiverName, value: cloneExpression(receiver) }], checked);
 }
 
 function mutateRustStoredObjectFieldStorage(
@@ -694,9 +697,10 @@ function writeRustStructuralObjectProperty(
     { kind: "call", path: "Some", args: [selectedValue] },
   );
   if (context.input.program.frozenDataWrites.receiverFor("structural-object", receiverCarrier, storageIndex) !== undefined) {
-    const errorType = rustActiveErrorType(context);
-    if (errorType === undefined) return undefined;
-    storedWrite = checkRustDataWrite("receiver", receiverPath, storedWrite, errorType);
+    const region = context.fallibleBoundary;
+    const checked = region === undefined ? undefined : checkRustDataWrite("receiver", receiverPath, storedWrite, region);
+    if (checked === undefined) return undefined;
+    storedWrite = checked;
   }
   const write: RustExpr = {
     kind: "match",
@@ -794,19 +798,12 @@ function callRustStructuralObjectAccessor(
   arguments_: readonly RustExpr[],
   context: RustPlanContext,
 ): RustExpr | undefined {
-  const resultErrorType = rustActiveErrorType(context);
-  if (resultErrorType === undefined) {
+  const region = context.fallibleBoundary;
+  if (region === undefined) {
     return undefined;
   }
-  return {
-    kind: "try",
-    resultErrorType,
-    operandErrorType: rustTargetRuntimeErrorType,
-    expr: {
-      kind: "method-call",
-      receiver: { kind: "path", path: bindingName },
-      method: "call",
-      args: [{ kind: "tuple-literal", elements: arguments_ }],
-    },
-  };
+  return rustPropagateLocalError(region, rustTargetRuntimeErrorType, {
+    kind: "method-call", receiver: { kind: "path", path: bindingName }, method: "call",
+    args: [{ kind: "tuple-literal", elements: arguments_ }],
+  });
 }

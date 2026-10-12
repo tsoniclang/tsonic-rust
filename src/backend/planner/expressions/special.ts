@@ -7,6 +7,7 @@ import {
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { applyRustFallibleResultExpression, rustExpressionUsesTryInCurrentRegion } from "../types/fallible-shape.js";
 import { diagnosticInput, registerAliasFromPath, rustActiveErrorType } from "../program/plan-context.js";
+import { rustPropagateLocalError } from "../program/fallible-boundaries.js";
 import { expressionCarrier, providerSelectedCallMatches, requireExpressionCarrier, rustOperationFact } from "./fundamentals.js";
 import { finishProviderOperationExpression, planProviderOperationExpression } from "./conversions.js";
 import { planRustCallArguments } from "./input-shaping.js";
@@ -44,8 +45,8 @@ export function planRegExpCreate(node: Node, context: RustPlanContext): RustExpr
     ));
     return undefined;
   }
-  const activeErrorType = rustActiveErrorType(context);
-  if (activeErrorType === undefined) {
+  const region = context.fallibleBoundary;
+  if (region === undefined) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
       "rust.error.call",
@@ -54,19 +55,14 @@ export function planRegExpCreate(node: Node, context: RustPlanContext): RustExpr
     return undefined;
   }
   registerAliasFromPath(context, "js_abi::regexp_new_native");
-  return {
-    kind: "try",
-    resultErrorType: activeErrorType,
-    operandErrorType: { kind: "named", path: "js_abi::JsError" },
-    expr: {
-      kind: "call",
-      path: "js_abi::regexp_new_native",
-      args: [
-        { kind: "str-literal", value: fact.pattern },
-        { kind: "str-literal", value: fact.flags },
-      ],
-    },
-  };
+  return rustPropagateLocalError(region, { kind: "named", path: "js_abi::JsError" }, {
+    kind: "call",
+    path: "js_abi::regexp_new_native",
+    args: [
+      { kind: "str-literal", value: fact.pattern },
+      { kind: "str-literal", value: fact.flags },
+    ],
+  });
 }
 
 export function planNewExpression(node: Node, context: RustPlanContext): RustExpr | undefined {

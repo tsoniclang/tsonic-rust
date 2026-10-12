@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { rustPackageFallibleBoundary } from "../../../../dist/backend/planner/program/fallible-boundaries.js";
 import { planRustProgramErrorClosedValue } from "../../../../dist/backend/planner/expressions/program-error-values.js";
 import { planRustErrorVariants } from "../../../../dist/backend/planner/program/error-variants.js";
 import { analyzeRustErrorTransport } from "../../../../dist/analysis/program/error-transport.js";
@@ -92,8 +93,8 @@ test("project transport exhaustively preserves same-carrier payloads and Error c
 
 test("program carrier admission uses its component-owned value domain, not an outward propagation ABI", () => {
   const input = context("project", [rustTsValueTargetType()], true);
-  input.fallibleBoundary = { componentId: "unrelated", errorDomain: "project",
-    errorTypePath: "unrelated_crate::program::TsonicError", errorTypeIdentity: "unrelated:error" };
+  input.fallibleBoundary = rustPackageFallibleBoundary({ componentId: "unrelated", errorDomain: "project",
+    errorTypePath: "unrelated_crate::program::TsonicError", errorTypeIdentity: "unrelated:error" });
   seal(input);
   const result = planRustProgramErrorClosedValue({ kind: "path", path: "original" },
     rustTsValueTargetType(), undefined, input);

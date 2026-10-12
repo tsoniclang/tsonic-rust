@@ -1,9 +1,9 @@
 import type { RustProjectFieldDispatchPlan } from "../../../analysis/project-types/field-dispatch.js";
 import type { RustType } from "../../target-ast/nodes.js";
+import { rustLocalErrorOwner, type RustFallibleBoundary } from "../program/fallible-boundaries.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import {
   diagnosticInput,
-  rustActiveErrorType,
   rustErrorBoundaryForProjectMember,
   rustErrorType,
   type RustPlanContext,
@@ -17,7 +17,7 @@ export type RustPlannedProjectFieldDispatchRole =
   | {
       readonly selfMode: "ref" | "rc";
       readonly fallible: true;
-      readonly resultErrorType: RustType;
+      readonly region: RustFallibleBoundary;
       readonly operandErrorType: RustType;
     };
 
@@ -44,8 +44,8 @@ export function planRustProjectFieldDispatchRole(
   const selected = plan[access];
   if (selected === undefined) return undefined;
   if (!selected.fallible) return { selfMode: selected.selfMode, fallible: false };
-  const resultErrorType = rustActiveErrorType(context);
-  if (resultErrorType === undefined) {
+  const region = context.fallibleBoundary;
+  if (region === undefined || rustLocalErrorOwner(region) === undefined) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, plan.declaration),
       "rust.error.project-field-dispatch",
@@ -66,7 +66,7 @@ export function planRustProjectFieldDispatchRole(
   return {
     selfMode: selected.selfMode,
     fallible: true,
-    resultErrorType,
+    region,
     operandErrorType,
   };
 }

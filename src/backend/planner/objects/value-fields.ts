@@ -112,7 +112,9 @@ export function planRustValueFieldLocation(
         const readRole = dispatch === undefined ? undefined : planRustProjectFieldDispatchRole(dispatch, "read", context);
         if (readRole === undefined) return undefined;
         const writeName = allocateRustSyntheticName(context.syntheticNames, "field_write_receiver");
-        return { bindings, read: readRustProjectDispatchedField(receiver, selectedField.dispatch.read, readRole),
+        const read = readRustProjectDispatchedField(receiver, selectedField.dispatch.read, readRole);
+        if (read === undefined) return undefined;
+        return { bindings, read,
           write: (value, writeContext) => {
             const writeRole = dispatch === undefined ? undefined : planRustProjectFieldDispatchRole(dispatch, "write", writeContext);
             return selectedField.dispatch?.write === undefined || writeRole === undefined ? undefined

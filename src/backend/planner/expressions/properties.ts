@@ -191,14 +191,11 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
       context.syntheticNames,
       "dispatch_receiver",
     );
-    return rustValueBlock([{
+    const read = readRustProjectDispatchedField({ kind: "path", path: receiverName }, fact.dispatch.read, dispatchRead);
+    return read === undefined ? undefined : rustValueBlock([{
         name: receiverName,
         value: planRustSharedReceiver(receiverNode, plannedReceiver, context),
-      }], readRustProjectDispatchedField(
-        { kind: "path", path: receiverName },
-        fact.dispatch.read,
-        dispatchRead,
-      ));
+      }], read);
   }
   if (fact !== undefined && fact.kind === "source-union-field") {
     return planRustSourceUnionFieldRead(node, fact, context);

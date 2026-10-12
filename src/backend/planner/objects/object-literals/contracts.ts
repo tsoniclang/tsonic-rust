@@ -156,8 +156,8 @@ export function planContractImplementation(
       const check = stateField === undefined ? undefined
         : context.input.program.frozenDataWrites.receiverForDeclaration(field.declaration);
       if (writeValue !== undefined && check !== undefined) {
-        if (fieldErrorType === undefined) return undefined;
-        writeValue = checkRustDataWrite(check, { kind: "path", path: "self" }, writeValue, fieldErrorType);
+        if (fieldErrorBoundary === undefined) return undefined;
+        writeValue = checkRustDataWrite(check, { kind: "path", path: "self" }, writeValue, rustPackageFallibleBoundary(fieldErrorBoundary));
       }
       if (writeValue === undefined || !dispatch.write.fallible && accessor !== undefined) {
         return undefined;

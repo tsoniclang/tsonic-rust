@@ -7,7 +7,7 @@ import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustCapturedFieldOwner } from "../objects/value-fields.js";
 import { rustCapturedFieldLocation, rustCapturedFieldStorage, rustCapturedFieldType } from "../objects/captured-fields.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
-import { diagnosticInput, rustActiveErrorType } from "../program/plan-context.js";
+import { diagnosticInput } from "../program/plan-context.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -216,11 +216,12 @@ export function rustCapturedReceiverFieldContext(
       const location = rustCapturedFieldLocation(capture.storage, owner, carrier);
       if (guarded) identities.set(reference, identity);
       locations.set(reference, !guarded ? location : { ...location, write: (value, writeContext) => {
-        const errorType = rustActiveErrorType(writeContext);
-        if (errorType === undefined || writeContext.syntheticNames === undefined) return undefined;
+        const region = writeContext.fallibleBoundary;
+        if (region === undefined || writeContext.syntheticNames === undefined) return undefined;
         const name = allocateRustSyntheticName(writeContext.syntheticNames, "field_value");
         const effect = location.write({ kind: "path", path: name }, writeContext);
-        return effect === undefined ? undefined : rustValueBlock([{ name, value }], checkRustDataWrite("receiver", identity, effect, errorType));
+        const checked = effect === undefined ? undefined : checkRustDataWrite("receiver", identity, effect, region);
+        return checked === undefined ? undefined : rustValueBlock([{ name, value }], checked);
       } });
     }
   }

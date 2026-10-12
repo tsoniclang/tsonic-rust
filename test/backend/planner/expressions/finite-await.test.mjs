@@ -1,6 +1,7 @@
 import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { rustPackageFallibleBoundary } from "../../../../dist/backend/planner/program/fallible-boundaries.js";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
 import { rustTargetOperationFactKey } from "../../../../dist/analysis/facts/keys.js";
 import { rustAwaitValueFactKey } from "../../../../dist/analysis/facts/await-values.js";
@@ -33,8 +34,8 @@ function contextFor(program, node, facts = program.facts) {
       componentId: "test", errorDomain: "runtime", errorTypeIdentity: rustRuntimeErrorTypeIdentity,
     }]]) },
     usedAliases: new Set(), syntheticNames: createRustSyntheticNameState(ast, node, []),
-    fallibleBoundary: { componentId: "test", errorDomain: "runtime",
-      errorTypePath: "rt::TsonicError", errorTypeIdentity: "tsonic-rust-runtime:TsonicError" } };
+    fallibleBoundary: rustPackageFallibleBoundary({ componentId: "test", errorDomain: "runtime",
+      errorTypePath: "rt::TsonicError", errorTypeIdentity: "tsonic-rust-runtime:TsonicError" }) };
 }
 
 test("finite await planner emits native branch selection and preserves one operand evaluation", () => {

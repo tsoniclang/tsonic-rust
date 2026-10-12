@@ -13,7 +13,7 @@ import {
   writeRustProjectMethodOverride,
 } from "../objects/project-objects.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { diagnosticInput, rustActiveErrorType } from "../program/plan-context.js";
+import { diagnosticInput } from "../program/plan-context.js";
 import { checkRustDataWrite } from "../objects/data-writes.js";
 import {
   KindIdentifier,
@@ -153,9 +153,10 @@ export function planRustSourceMethodPropertyAssignment(
   }
   const check = context.input.program.frozenDataWrites.receiverForDeclaration(method.declaration);
   if (check !== undefined) {
-    const errorType = rustActiveErrorType(context);
-    if (errorType === undefined) return undefined;
-    write = checkRustDataWrite(check, receiver, write, errorType);
+    const region = context.fallibleBoundary;
+    const checked = region === undefined ? undefined : checkRustDataWrite(check, receiver, write, region);
+    if (checked === undefined) return undefined;
+    write = checked;
   }
   return [{
     kind: "expr",

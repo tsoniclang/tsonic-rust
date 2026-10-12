@@ -6,7 +6,7 @@ import { rustValueBlock } from "../../target-ast/value-block.js";
 import type { RustValueFieldLocation } from "../objects/value-fields.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { diagnosticInput, rustActiveErrorType, rustCurrentErrorBoundary } from "../program/plan-context.js";
+import { diagnosticInput, rustCurrentErrorBoundary } from "../program/plan-context.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustFrameCallableTypes } from "../types/frame-callables.js";
@@ -175,9 +175,9 @@ export function rustFrameBindingLocation(
         { kind: "field", receiver: data, name: binding.fieldName }, value, context, mutable), mutable);
       const checked = owner.data.kind === "object" &&
         writeContext.input.program.frozenDataWrites.receiverForDeclaration(binding.declaration) !== undefined;
-      const errorType = checked ? rustActiveErrorType(writeContext) : undefined;
-      return effect === undefined || checked && errorType === undefined ? undefined
-        : errorType === undefined ? effect : checkRustDataWrite("receiver", owner.expression, effect, errorType);
+      const region = checked ? writeContext.fallibleBoundary : undefined;
+      return effect === undefined || checked && region === undefined ? undefined
+        : region === undefined ? effect : checkRustDataWrite("receiver", owner.expression, effect, region);
     },
     ...(binding.initialization !== "deferred" ? {} : { initialize: (value: RustExpr) => projectRustFrameOwnerData(owner,
       data => initializeRustFrameBindingValue(binding, select(data).field, value)) }),

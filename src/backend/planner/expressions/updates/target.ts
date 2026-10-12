@@ -157,28 +157,23 @@ export function planRustSourceFieldUpdate(
     return undefined;
   }
   const resultName = allocateRustSyntheticName(context.syntheticNames, "update_result");
+  const read = readRustProjectDispatchedField(receiverPath, field.dispatch.read, dispatchRoles.read);
+  const write = writeRustProjectDispatchedField(receiverPath,
+    allocateRustSyntheticName(context.syntheticNames, "dispatch_receiver"), field.dispatch.read,
+    field.dispatch.write, "=", fieldPath, { read: dispatchRoles.read, write: dispatchRoles.write });
+  if (read === undefined || write === undefined) return undefined;
   return rustValueBlock([
       { name: receiverName, value: receiver },
       {
         name: fieldName,
         mutable: true,
-        value: readRustProjectDispatchedField(receiverPath, field.dispatch.read, {
-          ...dispatchRoles.read,
-        }),
+        value: read,
       },
       ...projection.bindings,
       { name: resultName, value: updated },
     ], {
       kind: "evaluate-then",
-      effect: writeRustProjectDispatchedField(
-        receiverPath,
-        allocateRustSyntheticName(context.syntheticNames, "dispatch_receiver"),
-        field.dispatch.read,
-        field.dispatch.write,
-        "=",
-        fieldPath,
-        { read: dispatchRoles.read, write: dispatchRoles.write },
-      ),
+      effect: write,
       discard: "unit",
       value: { kind: "path", path: resultName },
     });

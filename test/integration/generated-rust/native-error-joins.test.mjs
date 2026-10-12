@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { planRustNativeErrorJoin } from "../../../dist/backend/planner/types/native-error-joins.js";
+import { rustErrorType, rustNativeFallibleBoundary, rustInjectLocalError,
+  rustInjectNativeError, rustPropagateLocalError, rustPropagateNativeError } from "../../../dist/backend/planner/program/fallible-boundaries.js";
 import { applyRustFallibleResultExpression } from "../../../dist/backend/planner/types/fallible-shape.js";
 import { lowerRustCompletionScope } from "../../../dist/backend/target-ast/normalization/completion-regions.js";
 import { finalizeRustSourceStyle } from "../../../dist/backend/target-ast/normalization/source-style.js";
@@ -30,29 +32,33 @@ const join = planRustNativeErrorJoin({ identity: "native:joined", name: "JoinedE
 
 function nativeFunctions() {
   assert.equal(join !== undefined, true);
+  const region = rustNativeFallibleBoundary(join);
+  assert.equal(region !== undefined, true);
   const localCheck = { kind: "expr", expr: { kind: "if-let", expression: path("local"),
     pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: "error" }] },
-    whenTrue: { kind: "return-expression", expr: call("Err", [join.inject(local, path("error"))]) } } };
+    whenTrue: { kind: "return-expression", expr: call("Err", [rustInjectNativeError(region, local, path("error"))]) } } };
   const joined = { kind: "function", name: "invoke_joined", visibility: "private", generics, returnType: number, errorType: join.errorType,
     params: [{ name: "local", type: named("Option", borrowedError) },
       { name: "left", type: reference(named("LeftCallback")) }, { name: "right", type: reference(named("RightCallback")) }],
     body: { statements: [localCheck,
-      { kind: "let", name: "first", mutable: false, init: join.propagate(left, invoke("left")) },
-      { kind: "let", name: "second", mutable: false, init: join.propagate(right, invoke("right")) },
+      { kind: "let", name: "first", mutable: false, init: rustPropagateNativeError(region, left, invoke("left")) },
+      { kind: "let", name: "second", mutable: false, init: rustPropagateNativeError(region, right, invoke("right")) },
       { kind: "tail", expr: call("Ok", [{ kind: "binary", operator: "+", left: path("first"), right: path("second") }]) },
     ] } };
   const single = source("only", "Only", associatedError("Callback"));
   const singleGenerics = { parameters: [producerParameter("Callback")], wherePredicates: [] };
   const exact = planRustNativeErrorJoin({ identity: "native:single", name: "UnusedSingleError", visibility: "private",
     generics: singleGenerics, sources: [single] });
+  const exactRegion = rustNativeFallibleBoundary(exact);
+  assert.equal(exactRegion !== undefined, true);
   const pureGenerics = { parameters: [{ kind: "type", name: "Callback", bounds: [{ kind: "callable", trait: "Fn", binder: [],
     parameters: [], result: number }] }], wherePredicates: [] };
   const pure = planRustNativeErrorJoin({ identity: "native:pure", name: "UnusedPureError", visibility: "private",
     generics: pureGenerics, sources: [] });
   const completion = { kind: "try-scope", bodyName: "body_flow", flowName: "flow", finallyName: "finally_flow",
     returnType: { kind: "unit" }, errorType: join.errorType, bodyErrorType: join.errorType, asynchronous: false,
-    body: { statements: [{ kind: "expr", expr: join.propagate(left, invoke("left")) },
-      { kind: "expr", expr: join.propagate(right, invoke("right")) }] }, bodyTerminates: false,
+    body: { statements: [{ kind: "expr", expr: rustPropagateNativeError(region, left, invoke("left")) },
+      { kind: "expr", expr: rustPropagateNativeError(region, right, invoke("right")) }] }, bodyTerminates: false,
     finallyClause: { errorType: undefined, terminates: false, body: { statements: [{ kind: "expr", expr: {
       kind: "method-call", receiver: path("finalized"), method: "set", args: [{ kind: "binary", operator: "+",
         left: { kind: "method-call", receiver: path("finalized"), method: "get", args: [] }, right: { kind: "int-literal", text: "1" } }],
@@ -60,7 +66,7 @@ function nativeFunctions() {
   return [...join.items, ...exact.items, ...pure.items, joined,
     { kind: "function", name: "invoke_single", visibility: "private", generics: singleGenerics, returnType: number, errorType: exact.errorType,
       params: [{ name: "callback", type: reference(named("Callback")) }], body: { statements: [{ kind: "tail",
-        expr: applyRustFallibleResultExpression(exact.propagate(single, invoke("callback")), { errorType: exact.errorType }) }] } },
+        expr: applyRustFallibleResultExpression(rustPropagateNativeError(exactRegion, single, invoke("callback")), exactRegion) }] } },
     { kind: "function", name: "invoke_pure", visibility: "private", generics: pureGenerics, returnType: number,
       params: [{ name: "callback", type: named("Callback") }], body: { statements: [{ kind: "tail",
         expr: { kind: "invoke", callee: path("callback"), args: [] } }] } },
@@ -69,6 +75,34 @@ function nativeFunctions() {
         { name: "finalized", type: { kind: "reference", mutable: false, referent: named("core::cell::Cell", number) } }],
       body: { statements: [lowerRustCompletionScope(completion), { kind: "tail", expr: call("Ok", [{ kind: "tuple-literal", elements: [] }]) }] } },
   ];
+}
+
+function packageRegionFunctions() {
+  const owner = { componentId: "fixture:source-package", errorDomain: "project",
+    errorTypeIdentity: "fixture:local-failure", errorTypePath: "LocalFailure" };
+  const local = source("package:local", "Local", rustErrorType(owner));
+  const generics = { parameters: [producerParameter("LeftCallback"), producerParameter("RightCallback")], wherePredicates: [] };
+  const joined = planRustNativeErrorJoin({ identity: "fixture:package-join", name: "PackageErrors", visibility: "private", generics,
+    sources: [local, left, right] });
+  const region = rustNativeFallibleBoundary(joined, { owner, source: local });
+  assert.equal(region !== undefined, true);
+  return [...joined.items, {
+    kind: "function", name: "invoke_package", visibility: "private", generics, returnType: number, errorType: region.errorType,
+    params: [{ name: "local", type: named("Result", number, named("OperationFailure")) },
+      { name: "left", type: reference(named("LeftCallback")) }, { name: "right", type: reference(named("RightCallback")) }],
+    body: { statements: [
+      { kind: "let", name: "first", mutable: false, init: rustPropagateLocalError(region, named("OperationFailure"), path("local")) },
+      { kind: "let", name: "second", mutable: false, init: rustPropagateNativeError(region, left, invoke("left")) },
+      { kind: "let", name: "third", mutable: false, init: rustPropagateNativeError(region, right, invoke("right")) },
+      { kind: "tail", expr: call("Ok", [{ kind: "binary", operator: "+", left: path("first"), right: {
+        kind: "binary", operator: "+", left: path("second"), right: path("third"),
+      } }]) },
+    ] },
+  }, {
+    kind: "function", name: "inject_package", visibility: "private", generics, returnType: region.errorType,
+    params: [{ name: "error", type: local.errorType }],
+    body: { statements: [{ kind: "tail", expr: rustInjectLocalError(region, path("error")) }] },
+  }];
 }
 
 function genericAssociatedFunctions() {
@@ -94,6 +128,10 @@ test("native joined errors preserve associated borrows, moves, distinct sources 
   assert.doesNotMatch(emitted, /TsonicError|TsonicResult|::from\(|\.clone\(|Default|Box|dyn |'static|UnusedPureError|UnusedSingleError/u);
   assert.match(emitted, /fn invoke_pure<Callback: Fn\(\) -> u32>\(callback: Callback\) -> u32/u);
   assert.match(emitted, /map_err\(JoinedErrors::<'scope, LeftCallback, RightCallback>::Left\)/u);
+  const packageEmitted = printRustSourceFile(finalizeRustSourceStyle({ headerComment: "exact local package routing",
+    items: packageRegionFunctions() }));
+  assert.match(packageEmitted, /local\s*\.map_err\(LocalFailure::from\)\s*\.map_err\(PackageErrors::<LeftCallback, RightCallback>::Local\)\?/u);
+  assert.doesNotMatch(packageEmitted, /TsonicError|TsonicResult|PackageErrors[^\n]*::from|\.clone\(|Default|Box|dyn |'static/u);
   const source = `use tsonic_rust_runtime as rt;
 use core::cell::Cell;
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -140,7 +178,13 @@ impl<'scope> Invocation for Callback<'scope> {
 trait ErrorFactory { type Error<'scope>; }
 struct Factory;
 impl ErrorFactory for Factory { type Error<'scope> = BorrowedError<'scope>; }
+struct OperationFailure { value: u32 }
+struct LocalFailure { value: u32 }
+impl From<OperationFailure> for LocalFailure {
+    fn from(error: OperationFailure) -> Self { Self { value: error.value } }
+}
 ${emitted}
+${packageEmitted}
 fn main() {
     let control = ALLOCATIONS.load(Ordering::SeqCst);
     let allocated = Box::new(std::hint::black_box(7_u32));
@@ -172,6 +216,34 @@ fn main() {
         assert_eq!(drops.get(), u32::from(branch < 3));
         assert_eq!(left_calls.get(), u32::from(branch > 0));
         assert_eq!(right_calls.get(), u32::from(branch > 1));
+    }
+    for branch in 0..4 {
+        let (mut left_value, mut right_value) = (20, 30);
+        let pointers = [std::ptr::from_ref(&left_value), std::ptr::from_ref(&right_value)];
+        let drops = Cell::new(0);
+        let left_calls = Cell::new(0);
+        let right_calls = Cell::new(0);
+        let local = if branch == 0 { Err(OperationFailure { value: 41 }) } else { Ok(2) };
+        let mut left = Callback { pending: if branch == 1 { Some(BorrowedError { value: &mut left_value, drops: &drops }) } else { None }, calls: &left_calls };
+        let mut right = Callback { pending: if branch == 2 { Some(BorrowedError { value: &mut right_value, drops: &drops }) } else { None }, calls: &right_calls };
+        let error = match invoke_package(local, &mut left, &mut right) {
+            Err(PackageErrors::Local(error)) => { assert_eq!(branch, 0); assert_eq!(error.value, 41); None }
+            Err(PackageErrors::Left(error)) => { assert_eq!(branch, 1); Some(error) }
+            Err(PackageErrors::Right(error)) => { assert_eq!(branch, 2); Some(error) }
+            Ok(value) => { assert_eq!(branch, 3); assert_eq!(value, 10); None }
+        };
+        if let Some(error) = error {
+            assert_eq!(std::ptr::from_ref(&*error.value), pointers[branch - 1]);
+            *error.value += 1;
+            drop(error);
+        }
+        assert_eq!(drops.get(), u32::from(branch == 1 || branch == 2));
+        assert_eq!(left_calls.get(), u32::from(branch > 0));
+        assert_eq!(right_calls.get(), u32::from(branch > 1));
+    }
+    match inject_package::<Callback<'_>, Callback<'_>>(LocalFailure { value: 17 }) {
+        PackageErrors::Local(error) => assert_eq!(error.value, 17),
+        _ => panic!("wrong injected package variant"),
     }
     let drops = Cell::new(0);
     let calls = Cell::new(0);

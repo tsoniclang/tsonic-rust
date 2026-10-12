@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { rustPackageFallibleBoundary } from "../../../../dist/backend/planner/program/fallible-boundaries.js";
 import { rustRawLocationRoot, planRustSourceLocationStorage } from "../../../../dist/backend/planner/expressions/typed-locations.js";
 import { planRustProjectedObjectLocation } from "../../../../dist/backend/planner/expressions/object-field-locations.js";
 import { writeRustProjectDispatchedField } from "../../../../dist/backend/planner/objects/project-objects.js";
@@ -52,7 +53,8 @@ test("prepared field addresses retain their exact member and current failure dom
 });
 
 test("native projected addresses clone one auto-borrowed owner and select each physical callback once", () => {
-  const context = { fallibleBoundary: { errorTypePath: "ExactError", errorTypeIdentity: "exact-error" },
+  const context = { fallibleBoundary: rustPackageFallibleBoundary({ componentId: "test", errorDomain: "project",
+    errorTypePath: "ExactError", errorTypeIdentity: "exact-error" }),
     syntheticNames: createRustSyntheticNameState({ kindName: () => "KindBlock", forEachChild: () => {} }, {}, []),
     usedAliases: new Set() };
   const owner = { kind: "path", path: "owner" };

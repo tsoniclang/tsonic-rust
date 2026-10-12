@@ -1,4 +1,5 @@
 import { rustValueBlock } from "../../target-ast/value-block.js";
+import { rustPropagateLocalError } from "../program/fallible-boundaries.js";
 import { cloneRustExpression } from "../../target-ast/expressions.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustAssignmentOperator } from "../../../target-model/syntax/tokens.js";
@@ -699,7 +700,7 @@ export function readRustProjectDispatchedField(
   receiver: RustExpr,
   readSlot: string,
   role: RustPlannedProjectFieldDispatchRole = { selfMode: "ref", fallible: false },
-): RustExpr {
+): RustExpr | undefined {
   const dispatch: RustExpr = {
     kind: "field",
     receiver,
@@ -715,12 +716,7 @@ export function readRustProjectDispatchedField(
     args: [],
   };
   return role.fallible
-    ? {
-        kind: "try",
-        expr: call,
-        resultErrorType: role.resultErrorType,
-        operandErrorType: role.operandErrorType,
-      }
+    ? rustPropagateLocalError(role.region, role.operandErrorType, call)
     : call;
 }
 
@@ -738,14 +734,16 @@ export function writeRustProjectDispatchedField(
     read: { selfMode: "ref", fallible: false },
     write: { selfMode: "ref", fallible: false },
   },
-): RustExpr {
+): RustExpr | undefined {
   const selectedReceiver: RustExpr = { kind: "path", path: receiverBinding };
+  const read = operator === "=" ? undefined : readRustProjectDispatchedField(selectedReceiver, readSlot, roles.read);
+  if (operator !== "=" && read === undefined) return undefined;
   const selectedValue = operator === "="
     ? value
     : {
         kind: "binary" as const,
         operator: operator.slice(0, -1) as "+" | "-" | "*" | "/" | "%",
-        left: readRustProjectDispatchedField(selectedReceiver, readSlot, roles.read),
+        left: read!,
         right: value,
       };
   const dispatch: RustExpr = {
@@ -762,13 +760,8 @@ export function writeRustProjectDispatchedField(
     method: writeSlot,
     args: [selectedValue],
   };
-  return rustValueBlock([{ name: receiverBinding, value: receiver.kind === "reference"
-    ? receiver : { kind: "reference", expr: receiver } }], roles.write.fallible
-      ? {
-          kind: "try",
-          expr: writeCall,
-          resultErrorType: roles.write.resultErrorType,
-          operandErrorType: roles.write.operandErrorType,
-        }
-      : writeCall);
+  const write = roles.write.fallible
+    ? rustPropagateLocalError(roles.write.region, roles.write.operandErrorType, writeCall) : writeCall;
+  return write === undefined ? undefined : rustValueBlock([{ name: receiverBinding, value: receiver.kind === "reference"
+    ? receiver : { kind: "reference", expr: receiver } }], write);
 }

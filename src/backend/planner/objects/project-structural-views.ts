@@ -182,7 +182,9 @@ export function planRustProjectStructuralImplementations(declaration: Node, cont
             }] };
           }
           if (context.input.program.frozenDataWrites.receiverForDeclaration(member.declaration) !== undefined) {
-            write = checkRustDataWrite("receiver", { kind: "path", path: "self" }, write, rustErrorType(boundary));
+            const checked = checkRustDataWrite("receiver", { kind: "path", path: "self" }, write, rustPackageFallibleBoundary(boundary));
+            if (checked === undefined) return undefined;
+            write = checked;
           }
           functions.push({ kind: "function", name: field.property.setterTargetName, visibility: "private", generics: emptyRustGenerics,
             selfParam: rustSelfParameter(field.property.selfMode), params: [{ name: "value", type }], returnType: { kind: "unit" }, errorType: rustErrorType(boundary),

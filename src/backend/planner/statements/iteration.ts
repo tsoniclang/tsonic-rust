@@ -1,3 +1,4 @@
+import { rustPropagateLocalError } from "../program/fallible-boundaries.js";
 import {
   planExpression,
   planFinalizedSourceInput,
@@ -498,18 +499,16 @@ export function planForOfStatement(
     }
     loopBinding = allocateRustSyntheticName(context.syntheticNames, "fallible_item");
     loopBindingMutable = false;
+    const item = rustPropagateLocalError(context.fallibleBoundary!, { kind: "named", path: "js_abi::JsError" },
+      { kind: "path", path: loopBinding });
+    if (item === undefined) return undefined;
     body = {
       statements: [
         {
           kind: "let",
           name: binding,
           mutable: bindingMutable,
-          init: {
-            kind: "try",
-            resultErrorType: activeErrorType,
-            operandErrorType: { kind: "named", path: "js_abi::JsError" },
-            expr: { kind: "path", path: loopBinding },
-          },
+          init: item,
         },
         ...body.statements,
       ],

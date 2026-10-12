@@ -1,3 +1,4 @@
+import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.js";
 import {
   projectFieldStoragePath,
   projectMemberImplementation,
@@ -364,10 +365,10 @@ function planRootContractFunctions(
                     rustCapturedFieldStorage(implementation.declaration, context),
                   );
               const check = context.input.program.frozenDataWrites.receiverForDeclaration(implementation.declaration);
-              return expression === undefined || check !== undefined && fieldErrorType === undefined
-                ? undefined
-                : { expression: check === undefined ? expression : checkRustDataWrite(check,
-                    { kind: "path", path: "self" }, expression, fieldErrorType!) };
+              const checked = expression === undefined || check !== undefined && fieldErrorBoundary === undefined
+                ? undefined : check === undefined ? expression : checkRustDataWrite(check,
+                  { kind: "path", path: "self" }, expression, rustPackageFallibleBoundary(fieldErrorBoundary!));
+              return checked === undefined ? undefined : { expression: checked };
             })()
         : implementation.kind !== "accessor" || implementation.setter === undefined
           ? undefined
