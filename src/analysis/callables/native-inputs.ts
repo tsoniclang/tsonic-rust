@@ -10,7 +10,8 @@ import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../tar
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustGenericCallableSignaturesMatch } from "../../target-model/conversions/generic-callable.js";
-import { rustSourceParameterAbiFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
+import { rustSourceParameterAbiFactKey, rustSourceCallableReturnFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
+import { isRustNeverCarrier } from "../../target-model/types/carriers/js.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { createRustNativeCallableProtocolRegistry, type RustNativeCallableProtocol, type RustNativeCallableProtocolBinding } from "./native-protocols.js";
 import { rustNativeCallableErrorType } from "./native-protocols.js";
@@ -90,8 +91,11 @@ export function createRustNativeCallableInputPlan(input: {
     if (rustGenericCallableProtocol(selected) === undefined && rustCallableProtocol(selected) === undefined) return undefined;
     const members = inputs.get(owner) ?? new Map<SourceStorageSubject, RustNativeCallableInput>();
     const existing = members.get(subject);
-    if (existing !== undefined) return rustTargetTypeRefEquals(existing.carrier, carrier) ||
-      rustGenericCallableSignaturesMatch(existing.carrier, carrier) ? existing : undefined;
+    if (existing !== undefined) {
+      const contract = rustOptionElementCarrier(existing.carrier) ?? existing.carrier;
+      return rustTargetTypeRefEquals(contract, selected) ||
+        rustGenericCallableSignaturesMatch(contract, selected) ? existing : undefined;
+    }
     if (!collecting) return undefined;
     const identity = sourceNodeIdentity(input.ast, subject.node);
     const file = input.ast.getSourceFile(subject.node);
@@ -121,6 +125,8 @@ export function createRustNativeCallableInputPlan(input: {
     const parameters = new Set<RustNativeCallableInput>();
     const implementations = new Set<SourceStorageSubject>();
     for (const origin of origins.subjects) {
+      if (origin.kind === "return" && origin.projection.length === 0 &&
+        isRustNeverCarrier(input.facts.getFact(origin.node, rustSourceCallableReturnFactKey)?.returnCarrier)) continue;
       if (origin.kind !== "input") {
         implementations.add(origin);
         continue;

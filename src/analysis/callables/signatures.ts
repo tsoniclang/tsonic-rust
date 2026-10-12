@@ -247,6 +247,7 @@ function finalizedNativeCallableValue(
     carrier: higherRankedCarrier ?? rustCallableTargetType(
       closed.map((abi) => abi.parameterCarrier),
       resultCarrier,
+      { kind: "static" },
     ),
     parameterCarriers: closed.map((abi) => abi.parameterCarrier),
     resultCarrier,

@@ -128,7 +128,8 @@ export interface RustStructuralStorageLookup {
   field(
     carrier: TargetTypeRef,
     storageIndex: number,
-  ): { readonly storage: "stored" | "property" | "bound"; readonly presence: "required" | "optional"; readonly methodStorageCarrier?: TargetTypeRef } | undefined;
+  ): { readonly storage: "stored" | "property" | "bound"; readonly presence: "required" | "optional";
+    readonly methodStorageCarrier?: TargetTypeRef; readonly nativeMethod?: true } | undefined;
 }
 
 export interface RustProjectFieldDispatchLookup {

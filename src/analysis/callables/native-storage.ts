@@ -19,7 +19,7 @@ import { rustTargetTypeChildren } from "../../target-model/types/carriers/childr
 import { isRustAbsenceCarrier } from "../../target-model/types/carriers/native.js";
 import { isRustNativeFutureCarrier } from "../../target-model/types/carriers/primitives.js";
 import { rustUnionAlternatives } from "../../target-model/types/union-relations.js";
-import { rustSourceUnionCarrierValue } from "../../target-model/types/carriers/source-types.js";
+import { rustSourceUnionCarrierValue, rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
 import { instantiateRustRuntimeUnionPayloads } from "../../target-model/types/carriers/runtime-unions.js";
 import { rustTargetGenericBindingsForArguments } from "../../target-model/types/generic-arguments.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
@@ -140,7 +140,20 @@ export function createRustNativeStoragePlan(input: {
       visited.add(type);
       if (rustCallableProtocol(type) !== undefined || rustGenericCallableValue(type) !== undefined || isRustNativeFutureCarrier(type)) return true;
       const variants = input.definitions.sourceUnionVariants(type);
-      for (const child of [...rustTargetTypeChildren(type), ...(variants?.map(variant => variant.carrier) ?? [])]) {
+      const shape = rustStructuralObjectCarrierValue(type);
+      const children: TargetTypeRef[] = [];
+      if (shape !== undefined) {
+        for (const [index, sourceField] of shape.fields.entries()) {
+          const field = input.structuralShapes.field(type, index);
+          if (field === undefined) {
+            fail("Native aggregate storage requires its exact structural field layout owner.");
+            return undefined;
+          }
+          if (field.storage === "stored" && field.nativeMethod !== true)
+            children.push(field.methodStorageCarrier ?? sourceField.type);
+        }
+      } else if (type.kind !== "function-pointer") children.push(...rustTargetTypeChildren(type));
+      for (const child of [...children, ...(variants?.map(variant => variant.carrier) ?? [])]) {
         const selected = containsCallable(child, depth + 1, visited);
         if (selected !== false) return selected;
       }

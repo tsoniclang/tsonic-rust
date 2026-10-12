@@ -370,3 +370,33 @@ test("non-callable storage remains an exact identity without inspecting unrelate
   assert.equal(plan.returnFor(owner).kind, "identity");
   assert.equal(originQueries, 0);
 });
+
+test("structural native dispatch signatures are not stored callable payloads and require exact field ownership", () => {
+  const current = fixture(`
+    interface Box { readonly value: number; }
+    interface Factory { new(value: number): Box; accepts(value: number): boolean; }
+    class Value implements Box {
+      readonly value: number;
+      constructor(value: number) { this.value = value; }
+      static accepts(value: number): boolean { return value >= 0; }
+    }
+    export function run(): boolean {
+      const selected: Factory = Value;
+      return new selected(3).value === 3;
+    }
+  `);
+  const value = current.declaration("selected");
+  assert.equal(current.plan.valueFor(value).kind, "identity", "the native dispatch layout already owns its signatures");
+  for (const [name, field] of [
+    ["missing", () => undefined],
+    ["stored", (carrier, index) => {
+      const selected = current.input.structuralShapes.field(carrier, index);
+      return selected === undefined ? undefined : { ...selected, nativeMethod: undefined };
+    }],
+  ]) {
+    const plan = createRustNativeStoragePlan({ ...current.input, native: current.native, structuralShapes: { field } });
+    const selected = plan.valueFor(value);
+    assert.equal(selected.kind, "unresolved", name);
+    assert.match(selected.reason, /layout owner/u, name);
+  }
+});

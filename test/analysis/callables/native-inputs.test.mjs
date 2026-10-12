@@ -3,6 +3,7 @@ import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { rustSourceParameterAbiFactKey } from "../../../dist/analysis/facts/keys.js";
 import { Node_Initializer } from "@tsonic/target-api/source";
+import { nullishNeverSource } from "../../../../tsonic/test/fixtures/nullish-never.mjs";
 
 function analyze(text) {
   const { program } = analyzeRust({ surfaces: [], files: { "index.ts": text } });
@@ -57,4 +58,17 @@ test("native callable inputs retain both parameter mutation alternatives without
   assert.equal(selected.inputs.length, 2);
   assert.equal(inputs.every(input => selected.inputs.includes(input)), true);
   assert.equal(selected.implementations.length, 0);
+});
+
+test("optional narrowing preserves native callable input identity and excludes a never-producing alternative", () => {
+  const { native, declarations } = analyze(nullishNeverSource);
+  for (const name of ["invoke", "required"]) {
+    const declaration = declarations.get(name);
+    const inputs = native.inputsFor(declaration);
+    assert.equal(inputs.length, 1, name);
+    const calls = native.calls.filter(call => call.input.owner === declaration);
+    assert.equal(calls.length, 1, name);
+    assert.equal(calls[0].input === inputs[0], true, "narrowing retains the exact original formal");
+    assert.equal(native.callFor(calls[0].node) === calls[0], true, "the invocation is a sealed native protocol call");
+  }
 });
