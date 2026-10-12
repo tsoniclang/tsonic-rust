@@ -2,25 +2,29 @@ import type { Node } from "@tsonic/tsts";
 import { asSourceNode } from "@tsonic/target-api/source";
 import { rustAsyncFunctionFactKey, rustDeferredProducerEffectsFactKey, rustSourceCallableReturnFactKey,
   rustTargetOperationFactKey, type RustDeferredProducerEffectsFact } from "../facts/keys.js";
+import { mergeRustDeferredProducerChannels, type RustDeferredProducerChannel } from "../facts/deferred-producer-effects.js";
 import { appendRustDiagnostic, type RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustNativeCallableCompletion } from "../../target-model/types/callable-completions.js";
 import { rustAwaitSelection, rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 import { rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";
-import { rustNamedTargetType } from "../../target-model/types/carriers/native.js";
+import { rustRuntimeErrorTargetType } from "../../target-model/operations/error-boundary.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustTargetGenericBindingsForArguments } from "../../target-model/types/generic-arguments.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { rustStoredFutureValues, type RustStoredFutureValue } from "./future-storage.js";
 import { createRustEffectsWorkBudget } from "./effects-work-budget.js";
+import type { RustNativeCallableInput } from "../callables/native-inputs.js";
 
 const infallible: TargetTypeRef = Object.freeze({ kind: "target-named", id: rustInfallibleTargetId });
 const noFuture: RustDeferredProducerEffectsFact = Object.freeze({ kind: "no-future" });
+const noFutureChannel: RustDeferredProducerChannel = Object.freeze({ awaiting: "infallible", errorCarrier: infallible });
 
 export function recordRustDeferredProducerEffects(walk: RustFactWalk): void {
   const { facts, sourceStorage: storage, callableValues, typeDefinitions: definitions } = walk.context;
   const completed = new Map<Node, RustDeferredProducerEffectsFact>();
+  const inputs = new Map(callableValues.native.inputs.map(input => [input.implementation.identity, input]));
   const budget = createRustEffectsWorkBudget();
   const failure = budget.run(() => {
     for (const producer of callableValues.nativeProducers.producers) {
@@ -41,28 +45,29 @@ export function recordRustDeferredProducerEffects(walk: RustFactWalk): void {
       const subject = storage.subject(declaration, "return");
       const bindings = callableValues.native.bindingsFor(declaration);
       if (completion === undefined || subject.kind === "unresolved" || bindings === undefined) continue;
-      const errors: TargetTypeRef[] = [];
+      const channels: RustDeferredProducerChannel[] = [];
       for (const future of completion.futures) {
         budget.step();
         const values = rustStoredFutureValues(walk, declaration, subject.subject, future.carrier, bindings);
         if (values === undefined) break;
-        let error: TargetTypeRef | undefined = values.length === 0 ? infallible : undefined;
+        const candidates: RustDeferredProducerChannel[] = values.length === 0 ? [noFutureChannel] : [];
         let exact = true;
         for (const value of values) {
           budget.step();
-          const selected = errorForStoredFuture(walk, value);
-          if (selected === undefined || error !== undefined && !rustTargetTypeRefEquals(error, selected)) {
+          const errorCarrier = errorForStoredFuture(walk, value, inputs);
+          if (errorCarrier === undefined) {
             exact = false;
             break;
           }
-          budget.metadata(selected);
-          error = selected;
+          budget.metadata(errorCarrier);
+          candidates.push({ awaiting: value.value.awaiting, errorCarrier });
         }
-        if (!exact || error === undefined) break;
-        errors.push(error);
+        const channel = exact ? mergeRustDeferredProducerChannels(candidates) : undefined;
+        if (channel === undefined) break;
+        channels.push(channel);
       }
-      if (errors.length === completion.futures.length)
-        completed.set(declaration, snapshotClosedMetadata({ kind: "futures", errors }));
+      if (channels.length === completion.futures.length)
+        completed.set(declaration, snapshotClosedMetadata({ kind: "futures", channels }));
     }
   });
   if (failure !== undefined) {
@@ -75,11 +80,12 @@ export function recordRustDeferredProducerEffects(walk: RustFactWalk): void {
     [{ message: "rust exact deferred producer channel" }]);
 }
 
-function errorForStoredFuture(walk: RustFactWalk, selected: RustStoredFutureValue): TargetTypeRef | undefined {
+function errorForStoredFuture(walk: RustFactWalk, selected: RustStoredFutureValue,
+  inputs: ReadonlyMap<string, RustNativeCallableInput>): TargetTypeRef | undefined {
   const { value } = selected;
   if (value.awaiting === "infallible") return infallible;
   if (value.errorBoundary === "provider-native" || value.errorBoundary === "source-native") return value.errorCarrier;
-  if (value.errorBoundary === "target-runtime") return rustNamedTargetType("rust.runtime.TsonicError", "rt::TsonicError");
+  if (value.errorBoundary === "target-runtime") return rustRuntimeErrorTargetType();
   if (value.errorBoundary !== "source-program") return undefined;
   const { facts, ast, source, sourceStorage: storage, callableValues, typeDefinitions: definitions } = walk.context;
   const node = selected.producer.subject.node;
@@ -100,7 +106,6 @@ function errorForStoredFuture(walk: RustFactWalk, selected: RustStoredFutureValu
   const activation = storage.bindingsForInvocation(owner, node, selected.producer.bindings);
   if (error === undefined || activation.kind !== "resolved") return undefined;
   const types = new Map(arguments_.types);
-  const inputs = new Map(callableValues.native.inputs.map(input => [input.implementation.identity, input]));
   for (const parameter of producer.environment) {
     if (parameter.kind !== "type" || parameter.type.kind !== "type-parameter") continue;
     const input = inputs.get(parameter.type.identity);

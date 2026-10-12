@@ -1,31 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { compileRust } from "../../helpers/rust-session.mjs";
-import { createRustAnalysisContext } from "../../../dist/analysis/program/context.js";
-import { analyzeRustProgram } from "../../../dist/analysis/program/analyze.js";
-import { analyzeRustRuntimeReferences, analyzeRustDispatchContextCatalog } from "../../../dist/analysis/runtime/index.js";
+import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { rustDeferredProducerEffectsFactKey, rustErrorEffectsFactKey, rustSourceCallableReturnFactKey }
   from "../../../dist/analysis/facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 import { rustInfallibleTargetId } from "../../../dist/target-model/types/carriers/source-types.js";
 import { rustNativeCallableCompletion } from "../../../dist/target-model/types/callable-completions.js";
+import { mergeRustDeferredProducerChannels } from "../../../dist/analysis/facts/deferred-producer-effects.js";
+import { finiteCompletionSequencingSource } from "../../../../tsonic/test/fixtures/finite-completion-sequencing.mjs";
 import { sourcePackageCallbackErrorFiles, sourcePackageCallbackErrorGraph }
   from "../../../../tsonic/test/fixtures/source-package-callback-errors.mjs";
 
 function fixture(text, options = {}) {
-  let context;
-  const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": text }, ...options, compileTarget(request) {
-    const references = analyzeRustRuntimeReferences(request.input.runtimeReferences, request.configuration.foundation);
-    assert.equal(references.kind, "resolved");
-    const dispatch = analyzeRustDispatchContextCatalog(request.providerSemantics.dispatchContexts, references.plan.activeCrates);
-    assert.equal(dispatch.kind, "resolved");
-    context = createRustAnalysisContext(request.input, request.providerSemantics, request.jsEnabled,
-      request.rootPublishesLibrary, dispatch.plan);
-    analyzeRustProgram(context);
-    return { kind: "resolved", value: { artifacts: [] }, diagnostics: context.diagnostics };
-  } });
-  assert.deepEqual(result.diagnostics.map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`), []);
+  const context = analyzeRustErrorEffects(text, options);
   const ast = context.ast;
   const declarations = context.callableValues.nativeProducers.producers.map(producer => producer.declaration);
   const declaration = name => {
@@ -66,7 +54,11 @@ test("direct, captured and forwarded input futures retain the actual caller erro
     assert.equal(error.trait.id, protocol.trait.id, name);
     assert.equal(error.name, "AwaitError0");
     const fact = current.context.facts.get(current.declaration(name), rustDeferredProducerEffectsFactKey);
-    assert.equal(Object.isFrozen(fact) && Object.isFrozen(fact.errors) && Object.isFrozen(error), true);
+    assert.equal(Object.isFrozen(fact) && Object.isFrozen(fact.channels) && Object.isFrozen(fact.channels[0]) &&
+      Object.isFrozen(error), true);
+    assert.equal(fact.channels[0].awaiting, "fallible");
+    assert.equal(current.context.callableValues.nativeProducers.deferredFor(current.declaration(name), 0),
+      fact.channels[0]);
   }
 });
 
@@ -106,6 +98,10 @@ test("sync returns of async source calls retain stable producer ownership and pu
   assert.equal(reference.fileName, failed.fileName);
   assert.equal(reference.channel, 0);
   assert.equal(current.error("pendingSuccess").id, rustInfallibleTargetId);
+  assert.equal(current.context.callableValues.nativeProducers.deferredFor(current.declaration("pendingSuccess"), 0).awaiting,
+    "infallible");
+  assert.equal(current.context.callableValues.nativeProducers.deferredFor(current.declaration("pendingFailure"), 0).awaiting,
+    "fallible");
   const effects = current.context.facts.get(current.declaration("pendingFailure"), rustErrorEffectsFactKey);
   assert.equal(effects.localErrors, false, "constructing the Future does not execute its body");
   assert.equal(effects.nativeErrors.length, 0);
@@ -152,6 +148,7 @@ test("no-Future evidence is explicit, while absent facts, foreign owners and inv
   for (const name of ["scalar", "empty", "diverging"]) {
     assert.equal(current.context.facts.get(current.declaration(name), rustDeferredProducerEffectsFactKey).kind, "no-future");
     assert.equal(current.error(name).id, rustInfallibleTargetId);
+    assert.equal(producers.deferredFor(current.declaration(name), 0).awaiting, "infallible");
   }
   assert.equal(producers.deferredErrorFor(current.declaration("asyncBody"), 0) === undefined, true,
     "the async body error remains the separate owning declaration's channel");
@@ -159,6 +156,33 @@ test("no-Future evidence is explicit, while absent facts, foreign owners and inv
   for (const ordinal of [-1, 0.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, 1])
     assert.equal(producers.deferredErrorFor(current.declaration("retained"), ordinal) === undefined, true,
       `reject invalid/unselected future ordinal ${ordinal}`);
+});
+
+test("deferred channel merging preserves the physical Result shape even when its error is Infallible", () => {
+  const errorCarrier = { kind: "target-named", id: rustInfallibleTargetId };
+  const plain = { awaiting: "infallible", errorCarrier };
+  const result = { awaiting: "fallible", errorCarrier };
+  assert.equal(mergeRustDeferredProducerChannels([plain, plain]), plain);
+  assert.equal(mergeRustDeferredProducerChannels([result, { ...result }]), result);
+  assert.equal(mergeRustDeferredProducerChannels([plain, result]) === undefined, true,
+    "Future<T> and Future<Result<T, Infallible>> require different awaiting operations");
+  assert.equal(mergeRustDeferredProducerChannels([result, plain]) === undefined, true);
+  assert.equal(mergeRustDeferredProducerChannels([]) === undefined, true,
+    "absence of producer evidence is not evidence of a plain Future");
+  assert.equal(mergeRustDeferredProducerChannels([result, { ...result,
+    errorCarrier: { kind: "type-parameter", identity: "exact-error", name: "Error" } }]) === undefined, true,
+    "equal physical shapes must also retain exact error identity");
+});
+
+test("a mixed completion retains its selected Future's shape rather than the declaration awaiting flag", () => {
+  const current = fixture(finiteCompletionSequencingSource);
+  const channel = current.context.callableValues.nativeProducers.deferredFor(current.declaration("mutate"), 0);
+  assert.equal(channel !== undefined, true);
+  assert.equal(channel.awaiting, "fallible");
+  assert.equal(channel.errorCarrier.kind, "associated-type");
+  assert.equal(channel.errorCarrier.name, "AwaitError0");
+  const input = current.context.callableValues.native.inputsFor(current.declaration("snapshot"))[0];
+  assert.equal(rustTargetTypeRefEquals(channel.errorCarrier.owner, input.implementation), true);
 });
 
 test("bound physical subject selection requires the exact owned storage bindings", () => {

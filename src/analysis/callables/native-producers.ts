@@ -15,6 +15,7 @@ import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustAsyncFunctionFactKey, rustClosureCaptureFactKey, rustSourceCallableReturnFactKey, rustSourceParameterAbiFactKey,
   rustTargetOperationFactKey, rustDeferredProducerEffectsFactKey } from "../facts/keys.js";
 import { rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";
+import type { RustDeferredProducerChannel } from "../facts/deferred-producer-effects.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
 
 export interface RustNativeCallableProducer {
@@ -29,6 +30,7 @@ export interface RustNativeCallableProducerPlan {
   forDeclaration(declaration: Node): RustNativeCallableProducer | undefined;
   forIdentity(identity: string): RustNativeCallableProducer | undefined;
   errorFor(declaration: Node, channel: "invoke" | number): TargetTypeRef | undefined;
+  deferredFor(declaration: Node, ordinal: number): RustDeferredProducerChannel | undefined;
   deferredErrorFor(declaration: Node, ordinal: number): TargetTypeRef | undefined;
   physicalFor(declaration: Node, carrier: TargetTypeRef): TargetTypeRef | undefined;
 }
@@ -80,16 +82,19 @@ export function createRustNativeCallableProducerPlan(input: {
       identity: producer.identity, fileName: producer.fileName, channel, genericArguments: producer.environment,
     });
   };
+  const noFuture: RustDeferredProducerChannel = Object.freeze({ awaiting: "infallible",
+    errorCarrier: Object.freeze({ kind: "target-named", id: rustInfallibleTargetId }) });
+  const deferredFor = (declaration: Node, ordinal: number): RustDeferredProducerChannel | undefined => {
+    if (!byDeclaration.has(declaration) || !Number.isSafeInteger(ordinal) || ordinal < 0) return undefined;
+    const selected = input.facts.getFact(declaration, rustDeferredProducerEffectsFactKey);
+    return selected?.kind === "no-future" ? noFuture : selected?.channels[ordinal];
+  };
   const resolving = new Set<string>();
   return Object.freeze({ producers: Object.freeze([...byDeclaration.values()]), errorFor,
     forDeclaration: (declaration: Node) => byDeclaration.get(declaration),
     forIdentity: (identity: string) => byIdentity.get(identity),
-    deferredErrorFor(declaration: Node, ordinal: number): TargetTypeRef | undefined {
-      if (!byDeclaration.has(declaration) || !Number.isSafeInteger(ordinal) || ordinal < 0) return undefined;
-      const selected = input.facts.getFact(declaration, rustDeferredProducerEffectsFactKey);
-      return selected?.kind === "no-future" ? Object.freeze({ kind: "target-named", id: rustInfallibleTargetId })
-        : selected?.errors[ordinal];
-    },
+    deferredFor,
+    deferredErrorFor: (declaration: Node, ordinal: number) => deferredFor(declaration, ordinal)?.errorCarrier,
     physicalFor(declaration: Node, carrier: TargetTypeRef): TargetTypeRef | undefined {
       const producer = byDeclaration.get(declaration);
       const signature = rustCallableProtocol(carrier);

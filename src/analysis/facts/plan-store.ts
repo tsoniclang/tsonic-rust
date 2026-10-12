@@ -146,8 +146,8 @@ export function createRustPlanBuilder(
           rustFoundationForCarrier(fact.errorCarrier));
       } else if (key === rustDeferredProducerEffectsFactKey) {
         const fact = get(subject, rustDeferredProducerEffectsFactKey)!;
-        if (fact.kind === "futures") for (const error of fact.errors)
-          minimumFoundation = maximumRustFoundation(minimumFoundation, rustFoundationForCarrier(error));
+        if (fact.kind === "futures") for (const channel of fact.channels)
+          minimumFoundation = maximumRustFoundation(minimumFoundation, rustFoundationForCarrier(channel.errorCarrier));
       } else if (key === rustAwaitValueFactKey) {
         for (const leaf of rustAwaitSelectionLeaves(get(subject, rustAwaitValueFactKey)!.selection)) {
           if (leaf.completion.kind === "value") minimumFoundation = maximumRustFoundation(minimumFoundation,
