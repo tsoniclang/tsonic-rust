@@ -15,9 +15,9 @@ const nativeError = { kind: "associated-type", owner: implementation, name: "Awa
 
 test("native completion contracts retain finite immediate, absent and pending branches", () => {
   const definitions = createRustTypeDefinitionRegistry();
-  const value = rustSourceUnionTargetType("/index.ts", "Completion", [integer, pending].map(type => ({ kind: "type", type })), "generated");
+  const value = rustSourceUnionTargetType("/index.ts", "Union2", [integer, pending].map(type => ({ kind: "type", type })), "generated");
   assert.equal(definitions.registerSourceUnion({ carrier: value,
-    variants: [{ name: "Immediate", carrier: integer }, { name: "Pending", carrier: pending }] }, false), true);
+    variants: [{ name: "Variant0", carrier: integer }, { name: "Variant1", carrier: pending }] }, false), true);
   const result = rustSourceOptionalTargetType(value);
   const selected = rustNativeCallableCompletion(result, definitions);
   assert.equal(selected !== undefined, true);
@@ -28,7 +28,7 @@ test("native completion contracts retain finite immediate, absent and pending br
   const native = rustNativeCompletionFutureType({ identity: "callback-completion", output: unit,
     error: nativeError, captures: [{ kind: "type", type: implementation }] });
   const instantiated = instantiateRustNativeCompletion(selected, () => native);
-  const expected = rustSourceOptionalTargetType(rustSourceUnionTargetType("/index.ts", "Completion",
+  const expected = rustSourceOptionalTargetType(rustSourceUnionTargetType("/index.ts", "Union2",
     [integer, native].map(type => ({ kind: "type", type })), "generated"));
   assert.equal(rustTargetTypeRefEquals(instantiated, expected), true);
   assert.equal(Object.isFrozen(selected), true);
@@ -38,9 +38,9 @@ test("native completion contracts retain finite immediate, absent and pending br
 test("native completion channels preserve different outputs and exact associated errors", () => {
   const definitions = createRustTypeDefinitionRegistry();
   const other = rustFutureTargetType(integer);
-  const value = rustSourceUnionTargetType("/index.ts", "Completion", [pending, other].map(type => ({ kind: "type", type })), "generated");
+  const value = rustSourceUnionTargetType("/index.ts", "Union2", [pending, other].map(type => ({ kind: "type", type })), "generated");
   assert.equal(definitions.registerSourceUnion({ carrier: value,
-    variants: [{ name: "Void", carrier: pending }, { name: "Integer", carrier: other }] }, false), true);
+    variants: [{ name: "Variant0", carrier: pending }, { name: "Variant1", carrier: other }] }, false), true);
   const selected = rustNativeCallableCompletion(value, definitions);
   assert.equal(selected.futures.length, 2);
   assert.deepEqual(selected.futures.map(future => future.ordinal), [0, 1]);

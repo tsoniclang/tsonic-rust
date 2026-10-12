@@ -704,7 +704,7 @@ export function rustCallTypeFromCarrierInContext(
     : rustTypeFromCarrierInContext(carrier, context, "inferred-call");
 }
 
-function rustLifetimeBinderToAst(
+export function rustLifetimeBinderToAst(
   binder: RustLifetimeBinder,
 ): readonly RustLifetimeParameter[] {
   return Object.freeze(binder.parameters.map((parameter) => ({

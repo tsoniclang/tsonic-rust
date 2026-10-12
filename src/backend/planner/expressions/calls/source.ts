@@ -59,15 +59,21 @@ import { propagateRustBottomOperand } from "../bottom-operands.js";
 import { rustOptionalStorageCallArguments } from "../../types/type-projections.js";
 import { rustLintAttributes } from "../../../target-ast/normalization/lint-policy.js";
 import { rustMemberAccessReceiver } from "../../../../target-model/syntax/expressions.js";
+import { planRustNativeInputInvocation, planRustNativeInputPropagation, rustNativeInputEffectsMatch } from "./native-input.js";
+import { rustPropagateLocalError } from "../../program/fallible-boundaries.js";
 
 export function sourceCallEffectsMatch(
   fact: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>,
   effects: import("../../../../analysis/facts/keys.js").RustSourceCallEffectsFact | undefined,
+  nativeInput?: import("../../../../analysis/callables/native-inputs.js").RustNativeCallableCall,
 ): boolean {
   if (effects === undefined ||
     (effects.invocation !== "infallible" && effects.invocation !== "fallible") ||
     (effects.awaiting !== "not-applicable" && effects.awaiting !== "infallible" && effects.awaiting !== "fallible")) {
     return false;
+  }
+  if (nativeInput !== undefined || effects.nativeInput !== undefined) {
+    return fact.target.form === "callable" && nativeInput !== undefined && rustNativeInputEffectsMatch(nativeInput, effects);
   }
   const isAsync = rustAwaitCarrier(fact.resultCarrier) !== undefined;
   if (fact.target.form === "union-method") {
@@ -129,6 +135,7 @@ export function planSelectedSourceCall(
     return undefined;
   }
   const argumentNodes = rawArgumentNodes as readonly Node[];
+  const nativeInput = context.input.program.callableValues.native.callFor(node);
   if (argumentNodes.length !== args.length) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -398,6 +405,10 @@ export function planSelectedSourceCall(
         break;
       }
       const callable = planRustNonConsumingValue(callee, plannedCallable, context);
+      if (nativeInput !== undefined) {
+        planned = planRustNativeInputInvocation(nativeInput, callable, shaped, callGenericArguments, context);
+        break;
+      }
       if (fact.target.carrier.kind === "function-pointer" ||
         fact.target.carrier.kind === "closure") {
         planned = { kind: "invoke", callee: callable, args: shaped };
@@ -473,7 +484,12 @@ export function planSelectedSourceCall(
     return undefined;
   }
   const callableCarrier = rustSourceCallCallableStorageCarrier(fact, context.input.program.structuralShapes);
-  if (rustGenericCallableValue(callableCarrier) !== undefined) {
+  if (nativeInput !== undefined && !rustNativeInputEffectsMatch(nativeInput, effects)) {
+    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+      "rust.backend.native-callable-effects", "Native invocation effects conflict with the sealed input implementation contract."));
+    return undefined;
+  }
+  if (nativeInput === undefined && rustGenericCallableValue(callableCarrier) !== undefined) {
     const definition = context.input.program.callableValues.generic.definitionFor(callableCarrier!);
     if (definition === undefined || !definition.implementations.every(implementation => {
       const selected = context.input.program.facts.getFact(implementation.declaration, rustGenericCallableEffectsFactKey);
@@ -486,6 +502,11 @@ export function planSelectedSourceCall(
   }
   if (context.syntheticNames !== undefined) planned = propagateRustBottomOperand(planned, context.syntheticNames);
   if (planned.kind === "bottom" || fact.target.form === "union-method") return planned;
+  if (nativeInput !== undefined) {
+    const result = planRustNativeInputPropagation(node, nativeInput, planned, context);
+    return result === undefined ? undefined : isRustNeverCarrier(fact.resultCarrier)
+      ? rustBottomAfterEffect(result, "fallible never call returned") : result;
+  }
   if (effects.invocation === "infallible") {
     return isRustNeverCarrier(fact.resultCarrier) ? rustBottomExpression(planned) : planned;
   }
@@ -516,12 +537,12 @@ export function planSelectedSourceCall(
     ));
     return undefined;
   }
-  const propagated: RustExpr = {
-    kind: "try",
-    expr: planned,
-    resultErrorType,
-    operandErrorType: rustErrorType(operandBoundary),
-  };
+  const propagated = rustPropagateLocalError(context.fallibleBoundary!, rustErrorType(operandBoundary), planned);
+  if (propagated === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+      "rust.backend.source-call-error-channel", "A source call requires its exact local error channel in the active region."));
+    return undefined;
+  }
   return isRustNeverCarrier(fact.resultCarrier)
     ? rustBottomAfterEffect(propagated, "fallible never call returned")
     : propagated;

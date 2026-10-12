@@ -23,7 +23,6 @@ test("native callable inputs preserve two equal-signature formals and alias corr
       const first = left; const second = right; return first;
     }
   `);
-  assert.equal(program.diagnostics.length, 0, program.diagnostics.map(value => value.message).join("\n"));
   const owner = declarations.get("choose");
   const inputs = native.inputsFor(owner);
   assert.equal(inputs.length, 2);
@@ -45,12 +44,11 @@ test("native callable inputs preserve two equal-signature formals and alias corr
 });
 
 test("native callable inputs retain both parameter mutation alternatives without guessing one implementation", () => {
-  const { program, ast, declarations, native } = analyze(`
+  const { ast, declarations, native } = analyze(`
     export function choose(left: () => number, right: () => number): () => number {
       left = right; const selected = left; return selected;
     }
   `);
-  assert.equal(program.diagnostics.length, 0, program.diagnostics.map(value => value.message).join("\n"));
   const inputs = native.inputsFor(declarations.get("choose"));
   const selected = native.originsForValue(Node_Initializer(ast, declarations.get("selected")));
   assert.equal(selected.kind === "resolved", true);

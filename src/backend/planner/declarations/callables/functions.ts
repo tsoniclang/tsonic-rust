@@ -46,6 +46,7 @@ import { planRustGeneratorBody } from "./generator-body.js";
 import { planRustCallableLeadingParameters } from "./leading-parameters.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { planRustLexicalFunctionEnvironment } from "./lexical-functions.js";
+import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.js";
 
 
 export function planFunctionDeclarations(
@@ -318,7 +319,7 @@ function planRustFunctionItem(
             protocol: generatorFact,
           },
         }),
-    ...(bodyErrorBoundary === undefined ? {} : { fallibleBoundary: bodyErrorBoundary }),
+    ...(bodyErrorBoundary === undefined ? {} : { fallibleBoundary: rustPackageFallibleBoundary(bodyErrorBoundary) }),
   };
   const parameterStatements = planRustCallableParameterPrelude(
     parameterPlan,

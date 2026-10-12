@@ -1,4 +1,5 @@
 import { rustValueBlock } from "../../target-ast/value-block.js";
+import { rustPackageFallibleBoundary } from "../program/fallible-boundaries.js";
 import {
   applyFallibleShape,
 } from "../types/fallible-shape.js";
@@ -7,7 +8,6 @@ import {
   isValidRustIdentifier,
   rustActiveErrorType,
   rustCurrentErrorBoundary,
-  rustErrorType,
 } from "../program/plan-context.js";
 import {
   isRustUnitCarrier,
@@ -277,8 +277,9 @@ export function planRustCallableExpressionBody(
   }
   const resultIsFallible = callableProtocol !== undefined || nativeClosureProtocol?.fallible === true || fallible;
   const bodyIsFallible = suspended ? fallible : resultIsFallible;
+  const localErrorOwner = rustCurrentErrorBoundary(context);
   const callableErrorBoundary = resultIsFallible || generator !== undefined
-    ? context.fallibleBoundary ?? rustCurrentErrorBoundary(context)
+    ? context.fallibleBoundary ?? (localErrorOwner === undefined ? undefined : rustPackageFallibleBoundary(localErrorOwner))
     : undefined;
   if ((resultIsFallible || generator !== undefined) && callableErrorBoundary === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -530,7 +531,7 @@ export function planRustCallableExpressionBody(
   if (generator !== undefined) {
     context.usedAliases?.add("rt");
     finalizedBlock = { statements: [...bindingStatements, {
-      kind: "tail", expr: planRustGeneratorBody(loweredBody, generator, controllerName!, rustErrorType(callableErrorBoundary!)),
+      kind: "tail", expr: planRustGeneratorBody(loweredBody, generator, controllerName!, callableErrorBoundary!.errorType),
     }] };
   } else if (asynchronous?.kind === "js-promise") {
     context.usedAliases?.add("js_abi");

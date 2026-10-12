@@ -4,11 +4,12 @@ import { rustAwaitValueRequirements } from "../../../analysis/facts/await-values
 import type { RustAwaitSelection } from "../../../target-model/types/await.js";
 import { rustJsPromiseTargetId, isRustNeverCarrier, isRustUnitCarrier } from "../../../target-model/types/index.js";
 import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
-import { diagnosticInput, rustActiveErrorType, type RustPlanContext } from "../program/plan-context.js";
+import { diagnosticInput, type RustPlanContext } from "../program/plan-context.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
-import { applyRustErrorBoundary } from "../types/error-boundary.js";
+import { applyRustLocalErrorBoundary } from "../types/error-boundary.js";
+import { rustPropagateNativeError } from "../program/fallible-boundaries.js";
 import { rustBottomAfterEffect, rustBottomExpression } from "../types/fallible-shape.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { applyFinalizedValueConversion } from "./value-conversions.js";
@@ -34,8 +35,8 @@ export function planRustAwaitBranches(
         ? { kind: "method-call", receiver: value, method: future.awaiting === "fallible" ? "into_result" : "into_value", args: [] }
         : value };
       if (future.awaiting === "fallible") {
-        const activeErrorType = rustActiveErrorType(context);
-        if (activeErrorType === undefined) {
+        const region = context.fallibleBoundary;
+        if (region === undefined) {
           context.diagnostics.push(unsupportedConstructDiagnostic(diagnosticInput(context, node),
             "rust.error.call", "Fallible awaits require a finalized fallible lowering context."));
           return undefined;
@@ -45,8 +46,17 @@ export function planRustAwaitBranches(
             "rust.backend.await-error-boundary", "A finalized fallible Rust future requires one exact error boundary."));
           return undefined;
         }
-        output = applyRustErrorBoundary(output, future.errorBoundary, activeErrorType,
-          rustTypeFromCarrierInContext(future.errorCarrier, context));
+        const operandError = rustTypeFromCarrierInContext(future.errorCarrier, context);
+        const propagated = future.errorBoundary === "source-native"
+          ? operandError === undefined || future.errorSource === undefined ? undefined
+            : rustPropagateNativeError(region, { identity: future.errorSource, errorType: operandError }, output)
+          : applyRustLocalErrorBoundary(output, future.errorBoundary, region, operandError);
+        if (propagated === undefined) {
+          context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+            "rust.backend.await-error-channel", "A fallible await requires its exact selected error channel in the active region."));
+          return undefined;
+        }
+        output = propagated;
       }
       const converted = applyFinalizedValueConversion(context, output, future.awaitedConversion, node);
       if (converted === undefined) return undefined;

@@ -85,7 +85,8 @@ function planCallExpressionInner(node: Node, context: RustPlanContext, resultUse
   const sourceCallEffects = fact?.kind === "source-call"
     ? context.input.program.facts.getFact(node, rustSourceCallEffectsFactKey)
     : undefined;
-  if (fact?.kind === "source-call" && !sourceCallEffectsMatch(fact, sourceCallEffects)) {
+  if (fact?.kind === "source-call" && !sourceCallEffectsMatch(fact, sourceCallEffects,
+    context.input.program.callableValues.native.callFor(node))) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.source-call-effects",
