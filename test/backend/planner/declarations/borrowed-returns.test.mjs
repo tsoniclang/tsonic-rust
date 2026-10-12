@@ -34,6 +34,19 @@ const ownedSource = `export function main(): void {
   if (escaped !== "owned past scope") throw new Error("result outlives input");
 }`;
 
+const interferenceSource = `export function main(): void {
+  let captured = "first";
+  let calls = 0;
+  const capturedRead = (input: string): string => { calls++; captured = "changed"; return input; };
+  const capturedMatches = capturedRead(captured) === "first" && captured === "changed" && calls === 1;
+  let compared = "before";
+  const comparedRead = (input: string): string => input;
+  const change = (): string => { calls++; compared = "after"; return compared; };
+  const comparisonMatches = comparedRead(compared) !== change() && compared === "after" && calls === 2;
+  if (!capturedMatches || !comparisonMatches)
+    throw new Error("comparison changed the input snapshot or evaluation order");
+}`;
+
 test("fallible lexical identity loans retain native error and call evaluation order", () => {
   const { result } = compileRust({ surfaces: [], target: { id: "rust", options: { outputType: "bin" } },
     files: { "index.ts": `export function main(): void {
@@ -59,7 +72,7 @@ test("fallible lexical identity loans retain native error and call evaluation or
 });
 
 for (const surface of ["native", "js"]) {
-  for (const [name, source] of [["borrowed", borrowedSource], ["owned", ownedSource]]) {
+  for (const [name, source] of [["borrowed", borrowedSource], ["owned", ownedSource], ["interference", interferenceSource]]) {
     test(`${surface} ${name} lexical results preserve exact native ownership and lifetimes`, () => {
       const { result } = compileRust({ files: { "index.ts": source },
         surfaces: surface === "js" ? ["js"] : [], target: { id: "rust", options: { outputType: "bin" } } });
@@ -71,10 +84,14 @@ for (const surface of ["native", "js"]) {
             true, `${functionName} has a per-invocation native input/output loan`);
         }
         assert.equal(/clone\(|Callable|RefCell|Rc<|Box</u.test(generated), false, "identity observation stays allocation/copy free");
-      } else {
+      } else if (name === "owned") {
         assert.match(generated, /fn read\(input: String\) -> String/u);
         assert.match(generated, /fn mutate\(mut input: String\) -> String/u);
         assert.doesNotMatch(generated, /fn (?:read|mutate)<'input>/u);
+      } else {
+        assert.match(generated, /fn capturedRead\(input: String,/u);
+        assert.match(generated, /fn comparedRead\(input: String\) -> String/u);
+        assert.doesNotMatch(generated, /fn (?:capturedRead|comparedRead)<'input>/u);
       }
       validateGeneratedProject(`lexical-${name}-return-${surface}`, result.artifacts, { run: true });
     });

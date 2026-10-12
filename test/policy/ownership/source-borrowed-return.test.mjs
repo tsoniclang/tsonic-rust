@@ -66,6 +66,17 @@ for (const [name, source, valid] of [
 
 for (const [name, body] of [
   ["parameter mutation", `const read = (input: string): string => { input = "changed"; return input; }; return read(value) === value;`],
+  ["captured input mutation", `const read = (input: string): string => { value = "changed"; return input; }; return read(value) === "first";`],
+  ["comparison operand mutation", `const read = (input: string): string => input; return read(value) === (value = "changed");`],
+  ["comparison operand invocation", `const read = (input: string): string => input; const change = (): string => { value = "changed"; return value; }; return read(value) === change();`],
+  ["transitive captured mutation", `function change(): void { value = "changed"; } const read = (input: string): string => { change(); return input; }; return read(value) === "first";`],
+  ["aliased field input", `const box = { value }; const alias = box; const read = (input: string): string => { box.value = "changed"; return input; }; return read(alias.value) === "first";`],
+  ["aliased element input", `const values = [value]; const alias = values; const read = (input: string): string => { values[0] = "changed"; return input; }; return read(alias[0]!) === "first";`],
+  ["effectful additional argument", `const read = (input: string, other: string): string => input; return read(value, value = "changed") === "first";`],
+  ["invoking comparison consumer", `const read = (input: string): string => input; const other = (): string => "first"; return read("first") === other();`],
+  ["invoking additional argument", `const read = (input: string, other: string): string => input; const other = (): string => "first"; return read("first", other()) === "first";`],
+  ["logical value propagation", `const read = (input: string): string => input; const other = (): string => "first"; return (read(value) || "") === other();`],
+  ["conditional value propagation", `const read = (input: string): string => input; return (value.length > 0 ? read(value) : "") === "first";`],
   ["parameter capture", `const read = (input: string): string => { const captured = () => input; captured(); return input; }; return read(value) === value;`],
   ["different return origin", `const read = (input: string): string => input.length > 0 ? input : "fallback"; return read(value) === value;`],
   ["escaping returned value", `const read = (input: string): string => input; return read(value);`],
