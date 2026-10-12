@@ -1,12 +1,14 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import { rustCallablePhysicalSignature, type RustCallablePhysicalSignature } from "../../target-model/conversions/callable-physical.js";
-import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustTargetGenericArgument, RustTargetGenericParameter, TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustNamedTypeCarrierValue } from "../../target-model/types/carriers/native.js";
-import { rustOnlyTypeGenericArguments } from "../../target-model/types/generic-arguments.js";
-import { mapRustTargetTypes, substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
+import { rustOnlyTypeGenericArguments, rustTargetGenericBindingsForArguments } from "../../target-model/types/generic-arguments.js";
+import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
+import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
+import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { rustDirectCallableReferenceFactKey } from "../facts/keys.js";
 import { rustValueCarrierBeforeContextualConversion } from "../facts/value-carrier-queries.js";
 import type { RustNativeCallableInput } from "./native-inputs.js";
@@ -35,19 +37,41 @@ export function rustNativeCallablePhysicalSource(
   const protocol = input.protocol;
   if (!rustTargetTypeRefEquals(input.carrier, source) || protocol.signature.typeParameters.length !== 0 ||
     protocol.method.binder.parameters.length !== 0) return undefined;
-  const types = new Map(protocol.signature.environmentParameters.map((parameter, index) =>
-    [parameter.identity, input.environment[index]!]));
+  const selected = rustNativeCallableInputPhysicalSignature(input, [], definitions);
+  return selected === undefined ? undefined : Object.freeze({ carrier: storage.carrier, input, signature: selected });
+}
+
+export function rustNativeCallableInputPhysicalSignature(
+  input: RustNativeCallableInput,
+  methodArguments: readonly RustTargetGenericArgument[],
+  definitions: RustTypeDefinitions,
+): RustCallablePhysicalSignature | undefined {
+  const protocol = input.protocol;
+  const parameters: readonly RustTargetGenericParameter[] = [
+    ...protocol.method.binder.parameters.map(parameter => ({ kind: "lifetime" as const,
+      sourceName: parameter.lifetime.name, targetIdentity: rustLifetimeKey(parameter.lifetime) })),
+    ...protocol.signature.typeParameters.map(parameter => ({ kind: "type" as const,
+      sourceName: parameter.name, targetIdentity: parameter.identity })),
+    ...protocol.signature.environmentParameters.map(parameter => ({ kind: "type" as const,
+      sourceName: parameter.name, targetIdentity: parameter.identity })),
+  ];
+  if (methodArguments.length !== protocol.method.binder.parameters.length + protocol.signature.typeParameters.length ||
+    input.environment.length !== protocol.signature.environmentParameters.length || input.trait.id !== protocol.identity) return undefined;
+  const arguments_ = [...methodArguments, ...input.environment.map(type => ({ kind: "type" as const, type }))];
+  const bindings = rustTargetGenericBindingsForArguments(parameters, arguments_);
+  if (bindings === undefined) return undefined;
   const selectedResult = rustNativeCallableProtocolResult(protocol, definitions);
   if (selectedResult === undefined) return undefined;
-  const result = mapRustTargetTypes(substituteRustTargetTypeParameters(selectedResult, types), (carrier, original) => {
+  const result = substituteRustTargetGenerics(selectedResult, bindings.types, bindings.lifetimes, bindings.consts, (carrier, original) => {
     if (carrier.kind === "associated-type" && original.kind === "associated-type" && original.owner.kind === "type-parameter" &&
       original.owner.identity === `${protocol.identity}:Self`) return { ...carrier, owner: input.implementation, trait: input.trait };
     return carrier.kind === "type-parameter" && carrier.identity === `${protocol.identity}:Self` ? input.implementation : carrier;
   });
-  const arguments_ = rustOnlyTypeGenericArguments(rustNamedTypeCarrierValue(result)?.genericArguments);
-  return arguments_?.length !== 2 ? undefined : Object.freeze({ carrier: storage.carrier, input,
-    signature: Object.freeze({ parameters: Object.freeze(protocol.method.parameters.map(parameter =>
-      substituteRustTargetTypeParameters(parameter, types))), result: arguments_[0]!, error: arguments_[1]! }),
+  const resultArguments = rustOnlyTypeGenericArguments(rustNamedTypeCarrierValue(result)?.genericArguments);
+  return resultArguments?.length !== 2 ? undefined : snapshotClosedMetadata({
+    parameters: Object.freeze(protocol.method.parameters.map(parameter =>
+      substituteRustTargetGenerics(parameter, bindings.types, bindings.lifetimes, bindings.consts))),
+    result: resultArguments[0]!, error: resultArguments[1]!,
   });
 }
 

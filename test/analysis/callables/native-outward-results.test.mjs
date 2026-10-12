@@ -2,10 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { createRustNativeOutwardResults } from "../../../dist/analysis/callables/native-outward-results.js";
-import { rustAsyncFunctionFactKey, rustErrorEffectsFactKey } from "../../../dist/analysis/facts/keys.js";
+import { rustAsyncFunctionFactKey, rustErrorEffectsFactKey, rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustNamedTypeCarrierValue } from "../../../dist/target-model/types/carriers/native.js";
+import { rustNativeCallableInputPhysicalSignature } from "../../../dist/analysis/callables/native-conversions.js";
+import { rustNativeCallableInvocationArguments } from "../../../dist/analysis/callables/native-invocations.js";
+import { rustPhysicalPayloadFor } from "../../../dist/target-model/types/physical-payloads.js";
 
 function fixture(text, surfaces = []) {
   const context = analyzeRustErrorEffects(text, { surfaces });
@@ -73,6 +76,29 @@ test("outward carrier queries fail closed before finalized native effects and do
   assert.equal(rustTargetTypeRefEquals(selected.invocationFor(declaration), current.producers.invocationResultFor(declaration)), true);
 });
 
+test("sync JS Promise output retains a resolvable producer error reference before deferred-effect sealing", () => {
+  const current = fixture(`export function forward(callback: () => Promise<string>): Promise<string> { return callback(); }`, ["js"]);
+  const declaration = current.declaration("forward");
+  const selected = createRustNativeOutwardResults({ facts: current.context.facts,
+    definitions: current.context.typeDefinitions, producers: {
+      forDeclaration: current.producers.forDeclaration, errorFor: current.producers.errorFor,
+      deferredFor() { throw new Error("JS output shape must not query unfinished deferred effects"); },
+    }, returnCarrierFor(node) {
+      const result = current.context.callableValues.nativeStorage.returnFor(node);
+      return result.kind === "unresolved" ? undefined : result.carrier;
+    },
+  });
+  const carrier = selected.invocationFor(declaration);
+  assert.equal(carrier?.id, "rust.js.JsPromise");
+  const error = rustProducerErrorReference(carrier.genericArguments[2].type);
+  assert.equal(error?.channel, 0);
+  assert.equal(current.producers.forIdentity(error.identity)?.declaration === declaration, true);
+  const resolved = current.producers.deferredErrorFor(declaration, error.channel);
+  const [input] = current.context.callableValues.native.inputsFor(declaration);
+  assert.equal(resolved?.kind, "associated-type");
+  assert.equal(rustTargetTypeRefEquals(resolved.owner, input.implementation), true, "late resolution keeps the actual input error");
+});
+
 test("outward result recursion is bounded at the producer owner", () => {
   const current = fixture(`export function pure(): string { return "value"; }`);
   const declaration = current.declaration("pure");
@@ -81,4 +107,54 @@ test("outward result recursion is bounded at the producer owner", () => {
     returnCarrierFor(node) { return selected.returnFor(node); },
   });
   assert.equal(selected.returnFor(declaration) === undefined, true, "recursive result selection fails closed");
+});
+
+test("direct stored native Future producers and forwarded generic values retain the exact native output", () => {
+  const current = fixture(`import type { int32 } from "@tsonic/core/types.js";
+    export async function pure(): Promise<int32> { return 3; }
+    export async function failed(): Promise<int32> { throw "failure"; }
+    export function forwardPure(): Promise<int32> { const value = pure(); return value; }
+    export function forwardFailure(): Promise<int32> { return failed(); }
+    export async function generic<Value>(value: Value): Promise<Value> { return value; }
+    export function selected(value: int32): Promise<int32> { return generic(value); }`);
+  for (const [name, result] of [["forwardPure", "int32"], ["forwardFailure", "rust.core.Result"], ["selected", "int32"]]) {
+    const output = futureOutput(current.producers.outwardReturnFor(current.declaration(name)));
+    assert.equal(rustNamedTypeCarrierValue(output)?.id ?? output.name, result, name);
+  }
+  const error = rustProducerErrorReference(rustNamedTypeCarrierValue(futureOutput(
+    current.producers.outwardReturnFor(current.declaration("forwardFailure")))).genericArguments[1].type);
+  assert.equal(current.producers.forIdentity(error.identity)?.declaration === current.declaration("failed"), true,
+    "a transported Future does not become a new producer");
+});
+
+test("callback Future physical storage reuses canonical protocol completion including selected generic arguments", () => {
+  const current = fixture(`import type { int32 } from "@tsonic/core/types.js";
+    type Outcome = string | Promise<int32> | undefined;
+    export function direct(callback: () => Promise<int32>): Promise<int32> { return callback(); }
+    export function selected(callback: <Value>(value: Value) => Promise<Value>, value: int32): Promise<int32> {
+      return callback(value);
+    }
+    export function union(callback: () => Outcome): Outcome { return callback(); }`);
+  const { native, nativeStorage } = current.context.callableValues;
+  assert.equal(native.calls.length, 3);
+  for (const call of native.calls) {
+    const operation = current.context.facts.get(call.node, rustTargetOperationFactKey);
+    const arguments_ = rustNativeCallableInvocationArguments(call.input, operation);
+    assert.equal(arguments_ !== undefined, true);
+    const signature = rustNativeCallableInputPhysicalSignature(call.input, arguments_, current.context.typeDefinitions);
+    assert.equal(signature !== undefined, true);
+    const physical = nativeStorage.valueFor(call.node);
+    assert.equal(physical.kind, "selected", physical.reason ?? "exact invocation storage");
+    assert.equal(rustTargetTypeRefEquals(physical.carrier, signature.result), true, "one protocol output owner");
+    assert.equal(rustNativeCallableInputPhysicalSignature(call.input,
+      [...arguments_, { kind: "type", type: { kind: "source-primitive", name: "int32" } }], current.context.typeDefinitions) === undefined,
+    true, "method arity remains exact");
+    const [future] = call.completion.futures;
+    const selected = rustPhysicalPayloadFor(operation.resultCarrier, physical.carrier, future.carrier, current.context.typeDefinitions);
+    const result = rustNamedTypeCarrierValue(futureOutput(selected));
+    assert.equal(result?.id, "rust.core.Result");
+    assert.equal(rustTargetTypeRefEquals(result.genericArguments[0].type, future.output), true, "actual method output argument");
+    assert.equal(result.genericArguments[1].type.name, "AwaitError0");
+    assert.equal(rustTargetTypeRefEquals(result.genericArguments[1].type.owner, call.input.implementation), true);
+  }
 });

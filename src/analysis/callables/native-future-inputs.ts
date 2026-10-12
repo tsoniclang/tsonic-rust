@@ -1,6 +1,6 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceStorageBindings, SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
-import { sourceEnclosingCallable, sourceNodeIdentity } from "@tsonic/target-api/source";
+import { sourceNodeIdentity } from "@tsonic/target-api/source";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -9,7 +9,9 @@ import { isRustNativeFutureCarrier } from "../../target-model/types/carriers/pri
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { rustUnionAlternatives } from "../../target-model/types/union-relations.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
-import { rustSourceParameterAbiFactKey } from "../facts/keys.js";
+import { isRustTargetTypeRef } from "../../target-model/types/equality.js";
+import { rustClosureCaptureFactKey, rustSourceParameterAbiFactKey } from "../facts/keys.js";
+import type { RustLexicalFunctionQueries } from "./lexical-functions.js";
 
 export interface RustNativeFutureInput {
   readonly owner: Node;
@@ -18,11 +20,14 @@ export interface RustNativeFutureInput {
   readonly implementation: Extract<TargetTypeRef, { readonly kind: "type-parameter" }>;
 }
 
+export type RustNativeFutureEnvironmentSelection =
+  | { readonly kind: "resolved"; readonly inputs: readonly RustNativeFutureInput[];
+      readonly captures: readonly RustNativeFutureInput[] }
+  | { readonly kind: "unresolved"; readonly reason: string };
+
 export interface RustNativeFutureInputPlan {
-  inputsFor(declaration: Node): readonly RustNativeFutureInput[];
-  capturesFor(declaration: Node): readonly RustNativeFutureInput[];
+  forDeclaration(declaration: Node): RustNativeFutureEnvironmentSelection;
   forSubject(subject: SourceStorageSubject): readonly RustNativeFutureInput[];
-  failureReason(): string | undefined;
 }
 
 export function createRustNativeFutureInputPlan(input: {
@@ -30,12 +35,15 @@ export function createRustNativeFutureInputPlan(input: {
   readonly storage: SourceStorageQueries;
   readonly facts: RustPlanQueries;
   readonly definitions: RustTypeDefinitions;
+  readonly lexicalFunctions: RustLexicalFunctionQueries;
   readonly bindingsFor: (declaration: Node) => SourceStorageBindings | undefined;
 }): RustNativeFutureInputPlan {
   const subjects = new Map<SourceStorageSubject, Map<string, RustNativeFutureInput>>();
   const owners = new Map<Node, RustNativeFutureInput[]>();
   const captures = new Map<Node, Set<RustNativeFutureInput>>();
-  let failure: string | undefined;
+  const nodes = new Set(input.storage.nodes);
+  const failures = new Map<Node, string>();
+  const fail = (owner: Node, reason: string): void => { if (!failures.has(owner)) failures.set(owner, reason); };
   const select = (subject: SourceStorageSubject, carrier: TargetTypeRef): RustNativeFutureInput | undefined => {
     if (subject.kind !== "input" || !isRustNativeFutureCarrier(carrier)) return undefined;
     const owner = input.ast.parent(subject.node);
@@ -61,14 +69,13 @@ export function createRustNativeFutureInputPlan(input: {
     owners.set(owner, declarations);
     return value;
   };
-  const inspect = (node: Node, carrier: TargetTypeRef, subject: SourceStorageSubject, formal: boolean): void => {
+  const inspect = (owner: Node, carrier: TargetTypeRef, subject: SourceStorageSubject, formal: boolean): void => {
     let remaining = 4096;
-    const owner = sourceEnclosingCallable(node, input.ast);
-    const bindings = owner === undefined ? undefined : input.bindingsFor(owner);
+    const bindings = formal ? undefined : input.bindingsFor(owner);
     const visit = (current: TargetTypeRef, selected: SourceStorageSubject, depth: number,
       ancestors: ReadonlySet<string>): void => {
       if (remaining-- <= 0 || depth > 128) {
-        failure ??= "Native Future input discovery exceeds its bounded carrier projection budget.";
+        fail(owner, "Native Future input discovery exceeds its bounded carrier projection budget.");
         return;
       }
       const identity = closedMetadataKey(current);
@@ -84,14 +91,31 @@ export function createRustNativeFutureInputPlan(input: {
         return;
       }
       if (isRustNativeFutureCarrier(current)) {
-        if (formal) { select(selected, current); return; }
-        if (bindings === undefined || owner === undefined) return;
+        if (formal) {
+          if (select(selected, current) === undefined)
+            fail(owner, "Native Future input requires its exact owned formal identity.");
+          return;
+        }
+        if (bindings === undefined) {
+          fail(owner, "Native Future capture requires exact declaration-local bindings.");
+          return;
+        }
         const origins = input.storage.boundOriginsFor(selected, bindings);
-        if (origins.kind === "unresolved") return;
+        if (origins.kind === "unresolved") { fail(owner, origins.reason); return; }
         for (const origin of origins.subjects) {
-          if (remaining-- <= 0) { failure ??= "Native Future input discovery exceeds its bounded carrier projection budget."; return; }
+          if (remaining-- <= 0) {
+            fail(owner, "Native Future input discovery exceeds its bounded carrier projection budget.");
+            return;
+          }
+          const checked = input.storage.typeFor(origin);
+          if (checked.kind === "unresolved") { fail(owner, checked.reason); return; }
+          if (origin.kind !== "input") continue;
           const parameter = subjects.get(origin)?.get(closedMetadataKey(current));
-          if (parameter === undefined || parameter.owner === owner) continue;
+          if (parameter === undefined) {
+            fail(owner, "Native Future capture has no exact registered formal payload.");
+            return;
+          }
+          if (parameter.owner === owner) continue;
           const values = captures.get(owner) ?? new Set<RustNativeFutureInput>();
           values.add(parameter);
           captures.set(owner, values);
@@ -106,7 +130,7 @@ export function createRustNativeFutureInputPlan(input: {
       const project = (component: SourceStorageSubject["projection"][number], child: TargetTypeRef): void => {
         const result = input.storage.subject(selected.node, selected.kind, [...selected.projection, component]);
         if (result.kind === "resolved") visit(child, result.subject, depth + 1, next);
-        else failure ??= result.reason;
+        else fail(owner, result.reason);
       };
       if (current.kind === "array" || current.kind === "slice") project({ kind: "array-element" }, current.element);
       else if (current.kind === "tuple")
@@ -118,23 +142,52 @@ export function createRustNativeFutureInputPlan(input: {
     if (!input.ast.is.IsParameterDeclaration(node)) continue;
     const carrier = input.facts.getFact(node, rustSourceParameterAbiFactKey)?.parameterCarrier;
     if (carrier === undefined) continue;
+    const owner = input.ast.parent(node);
+    if (owner === undefined || !input.ast.parameters(owner).includes(node)) continue;
+    if (!isRustTargetTypeRef(carrier)) {
+      fail(owner, "Native Future input discovery requires a valid finalized carrier.");
+      continue;
+    }
     const subject = input.storage.subject(node, "input");
-    if (subject.kind === "resolved") inspect(node, carrier, subject.subject, true);
+    if (subject.kind === "resolved") inspect(owner, carrier, subject.subject, true);
+    else fail(owner, subject.reason);
   }
-  for (const node of input.storage.nodes) {
-    const carrier = input.facts.getFact(node, rustRuntimeCarrierKey)?.carrier;
-    if (carrier === undefined) continue;
-    const subject = input.storage.subjectFor(node);
-    if (subject.kind === "resolved") inspect(node, carrier, subject.subject, false);
+  for (const declaration of input.storage.nodes) {
+    const fact = input.facts.getFact(declaration, rustClosureCaptureFactKey);
+    const lexical = input.lexicalFunctions.forDeclaration(declaration);
+    if (lexical?.kind === "unresolved") { fail(declaration, lexical.reason); continue; }
+    const selected = [...fact?.captures ?? [], ...fact?.receiverFields ?? [], ...fact?.receivers ?? [],
+      ...lexical?.captures.map(capture => ({ reference: capture.reference,
+        carrier: input.facts.getFact(capture.declaration, rustRuntimeCarrierKey)?.carrier ??
+          input.facts.getFact(capture.reference, rustRuntimeCarrierKey)?.carrier })) ?? []];
+    for (const capture of selected) {
+      if (!nodes.has(capture.reference) || !isRustTargetTypeRef(capture.carrier)) {
+        fail(declaration, "Native Future capture requires its exact owned reference and valid finalized carrier.");
+        continue;
+      }
+      const subject = input.storage.subjectFor(capture.reference);
+      if (subject.kind === "resolved") inspect(declaration, capture.carrier, subject.subject, false);
+      else fail(declaration, subject.reason);
+    }
   }
   const empty: readonly RustNativeFutureInput[] = Object.freeze([]);
-  const inputsByOwner = new Map([...owners].map(([owner, values]) => [owner, Object.freeze(values)]));
-  const capturesByOwner = new Map([...captures].map(([owner, values]) => [owner, Object.freeze([...values])]));
   const inputsBySubject = new Map([...subjects].map(([subject, values]) => [subject, Object.freeze([...values.values()])]));
+  const environments = new Map<Node, RustNativeFutureEnvironmentSelection>();
+  const environmentFor = (declaration: Node): RustNativeFutureEnvironmentSelection => {
+    const previous = environments.get(declaration);
+    if (previous !== undefined) return previous;
+    const reason = !nodes.has(declaration) || input.ast.body(declaration) === undefined
+      ? "Native Future environment requires an owned callable declaration."
+      : failures.get(declaration) ?? [...captures.get(declaration) ?? []].map(capture => failures.get(capture.owner))
+        .find(failure => failure !== undefined);
+    const selected: RustNativeFutureEnvironmentSelection = reason === undefined ? Object.freeze({ kind: "resolved",
+      inputs: Object.freeze(owners.get(declaration) ?? []), captures: Object.freeze([...captures.get(declaration) ?? []]) })
+      : Object.freeze({ kind: "unresolved", reason });
+    if (nodes.has(declaration)) environments.set(declaration, selected);
+    return selected;
+  };
   return Object.freeze({
-    inputsFor: (declaration: Node) => inputsByOwner.get(declaration) ?? empty,
-    capturesFor: (declaration: Node) => capturesByOwner.get(declaration) ?? empty,
+    forDeclaration: environmentFor,
     forSubject: (subject: SourceStorageSubject) => inputsBySubject.get(subject) ?? empty,
-    failureReason: () => failure,
   });
 }

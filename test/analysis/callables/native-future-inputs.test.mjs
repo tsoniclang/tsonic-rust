@@ -26,6 +26,13 @@ function requireSelected(value, label) {
   return value.carrier;
 }
 
+function requireEnvironment(current, declaration) {
+  const selected = current.plan.futureEnvironmentFor(declaration);
+  assert.equal(selected.kind, "resolved", selected.reason ?? "exact Future environment");
+  assert.equal(Object.isFrozen(selected), true);
+  return selected;
+}
+
 function contains(carrier, expected, definitions) {
   if (carrier.kind === "reference") return contains(carrier.referent, expected, definitions);
   const optional = rustOptionElementCarrier(carrier);
@@ -40,7 +47,7 @@ test("unobserved native Future inputs preserve one exact opaque implementation t
       const first = left; const second = right; return first;
     }`);
   const owner = current.declaration("retain");
-  const inputs = current.plan.futureInputsFor(owner);
+  const { inputs } = requireEnvironment(current, owner);
   assert.equal(inputs.length, 2);
   assert.equal(Object.isFrozen(inputs) && inputs.every(Object.isFrozen), true);
   assert.equal(inputs[0].implementation.identity === inputs[1].implementation.identity, false, "input identity is not signature identity");
@@ -60,7 +67,7 @@ test("native Future input storage uses canonical optional union payloads without
     export function read(value: Outcome): Outcome { const selected = value; return selected; }`);
   const owner = current.declaration("read");
   const parameter = current.ast.parameters(owner)[0];
-  const [input] = current.plan.futureInputsFor(owner);
+  const [input] = requireEnvironment(current, owner).inputs;
   assert.equal(input !== undefined, true);
   const abi = current.program.facts.getFact(parameter, rustSourceParameterAbiFactKey);
   for (const value of [current.plan.parameterFor(parameter, abi.parameterCarrier), current.plan.returnFor(owner),
@@ -73,7 +80,7 @@ test("native Future input storage uses canonical optional union payloads without
 test("the original callback completion reader retains its exact Future payload at the source storage owner", () => {
   const current = fixture(closedUnionCallbackCompletionSource);
   const owner = current.initializer("read");
-  const [input] = current.plan.futureInputsFor(owner);
+  const [input] = requireEnvironment(current, owner).inputs;
   assert.equal(input !== undefined, true, "original read has one exact formal Future payload");
   const parameter = current.ast.parameters(owner)[0];
   const abi = current.program.facts.getFact(parameter, rustSourceParameterAbiFactKey);
@@ -88,7 +95,7 @@ test("native Future input substitution preserves the caller implementation acros
     export function retain<Value>(value: Promise<Value>): Promise<Value> { return value; }
     export function forward(value: Promise<int32>): Promise<int32> { const selected = retain(value); return selected; }`);
   const owner = current.declaration("forward");
-  const [input] = current.plan.futureInputsFor(owner);
+  const [input] = requireEnvironment(current, owner).inputs;
   const result = requireSelected(current.plan.returnFor(owner), "forwarded input");
   assert.equal(rustTargetTypeRefEquals(result, input.implementation), true);
   const invoked = requireSelected(current.plan.invocationReturnFor(current.declaration("retain"), current.initializer("selected")),
@@ -104,7 +111,7 @@ test("native Future tuple and array projections retain separate exact formal lea
       const first = pair[0]; const second = pair[1]; const element = values[0]; return first;
     }`);
   const owner = current.declaration("select");
-  const inputs = current.plan.futureInputsFor(owner);
+  const { inputs } = requireEnvironment(current, owner);
   assert.equal(inputs.length, 3);
   for (const [index, name] of ["first", "second", "element"].entries()) {
     const value = requireSelected(current.plan.valueFor(current.initializer(name)), name);
@@ -121,8 +128,8 @@ test("captured native Future input storage retains its outer source identity wit
     }`);
   const owner = current.declaration("retain");
   const closure = current.nodes.find(node => current.ast.is.IsArrowFunction(node));
-  const [input] = current.plan.futureInputsFor(owner);
-  const captures = current.plan.futureCapturesFor(closure);
+  const [input] = requireEnvironment(current, owner).inputs;
+  const { captures } = requireEnvironment(current, closure);
   assert.equal(captures.length, 1);
   assert.equal(captures[0] === input, true, "exact outer input capture");
   assert.equal(current.program.callableValues.native.inputsFor(owner).length, 0, "Future is not a callable protocol");
@@ -138,7 +145,7 @@ test("native Future physical storage rejects incompatible alternatives and forei
     }`);
   assert.equal(current.plan.returnFor(current.declaration("choose")).kind, "unresolved", "different opaque types require a native join");
   const foreign = fixture("export function foreign(): void {}");
-  assert.equal(current.plan.futureInputsFor(foreign.declaration("foreign")).length, 0);
+  assert.equal(current.plan.futureEnvironmentFor(foreign.declaration("foreign")).kind, "unresolved");
   assert.equal(current.plan.parameterFor(foreign.declaration("foreign"), { kind: "source-primitive", name: "int32" }).kind,
     "unresolved", "only owned exact formal parameters are accepted");
 });

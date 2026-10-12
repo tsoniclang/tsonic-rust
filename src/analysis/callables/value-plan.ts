@@ -31,6 +31,7 @@ import { createRustNativeCallableProducerPlan, type RustNativeCallableProducerPl
 import { createRustNativeGenericProducerPlan, type RustNativeGenericProducerPlan } from "./native-generic-producers.js";
 import { createRustNativeCapturePlan, type RustNativeCapturePlan } from "./native-captures.js";
 import { createRustGenericCallableDispatchPlan, type RustGenericCallableDispatchPlan } from "./generic-dispatch.js";
+import type { RustLexicalFunctionQueries } from "./lexical-functions.js";
 
 export interface RustCallableValuePlan {
   readonly generic: RustGenericCallablePlan;
@@ -60,6 +61,7 @@ export interface RustCallableValuePlanInput {
   readonly projectTypes: RustProjectTypePolicy;
   readonly objectRepresentations: import("../project-types/object-representation.js").RustObjectRepresentationPlan;
   readonly typeDefinitions: RustTypeDefinitions;
+  readonly lexicalFunctions: RustLexicalFunctionQueries;
 }
 
 export interface RustCallableValuePlanRegistry extends RustCallableValuePlan {
@@ -172,7 +174,8 @@ function createRustCallableValuePlan(input: RustCallableValuePlanInput): RustCal
       return selected.kind === "unresolved" ? undefined : selected.carrier;
     } });
   const nativeStorage = createRustNativeStoragePlan({ ast: input.ast, facts: input.facts,
-    storage: input.sourceStorage, definitions: input.typeDefinitions, native, producers: nativeProducers, generic });
+    storage: input.sourceStorage, definitions: input.typeDefinitions, native, producers: nativeProducers, generic,
+    lexicalFunctions: input.lexicalFunctions });
   const nativeCaptures = createRustNativeCapturePlan({ facts: input.facts, storage: input.sourceStorage, nativeStorage });
   generic.initializePhysical({ ast: input.ast, storage: input.sourceStorage, captures: nativeCaptures, native,
     boundSubjectFor: (subject, carrier, bindings) => nativeStorage.boundSubjectFor(subject, carrier, bindings) });

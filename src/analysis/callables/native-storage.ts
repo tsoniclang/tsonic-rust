@@ -22,15 +22,19 @@ import { rustSourceUnionCarrierValue } from "../../target-model/types/carriers/s
 import { instantiateRustRuntimeUnionPayloads } from "../../target-model/types/carriers/runtime-unions.js";
 import { rustTargetGenericBindingsForArguments } from "../../target-model/types/generic-arguments.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
+import { rustPhysicalPayloadFor } from "../../target-model/types/physical-payloads.js";
+import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { rustContextualValueConversionFactKey, rustSourceCallableReturnFactKey, rustSourceParameterAbiFactKey,
   rustTargetOperationFactKey } from "../facts/keys.js";
 import { rustEffectiveValueCarrier, rustValueCarrierBeforeContextualConversion } from "../facts/value-carrier-queries.js";
-import { rustNativeCallablePhysicalSource } from "./native-conversions.js";
+import { rustNativeCallablePhysicalSource, rustNativeCallableInputPhysicalSignature } from "./native-conversions.js";
+import { rustNativeCallableInvocationArguments } from "./native-invocations.js";
 import { createRustNativeStorageGenericSelection } from "./native-storage-generics.js";
-import { createRustNativeFutureInputPlan, type RustNativeFutureInput } from "./native-future-inputs.js";
+import { createRustNativeFutureInputPlan, type RustNativeFutureEnvironmentSelection } from "./native-future-inputs.js";
 import type { RustNativeCallableInput, RustNativeCallableInputPlan } from "./native-inputs.js";
 import type { RustNativeCallableProducerPlan } from "./native-producers.js";
 import type { RustGenericCallablePlan } from "./generic-values.js";
+import type { RustLexicalFunctionQueries } from "./lexical-functions.js";
 
 export type RustNativeStorageSelection =
   | { readonly kind: "identity"; readonly carrier: TargetTypeRef }
@@ -38,8 +42,7 @@ export type RustNativeStorageSelection =
   | { readonly kind: "unresolved"; readonly reason: string };
 
 export interface RustNativeStoragePlan {
-  futureInputsFor(declaration: Node): readonly RustNativeFutureInput[];
-  futureCapturesFor(declaration: Node): readonly RustNativeFutureInput[];
+  futureEnvironmentFor(declaration: Node): RustNativeFutureEnvironmentSelection;
   parameterFor(parameter: Node, carrier: TargetTypeRef): RustNativeStorageSelection;
   returnFor(declaration: Node): RustNativeStorageSelection;
   valueFor(node: Node): RustNativeStorageSelection;
@@ -60,6 +63,7 @@ export function createRustNativeStoragePlan(input: {
   readonly native: RustNativeCallableInputPlan;
   readonly producers: RustNativeCallableProducerPlan;
   readonly generic: RustGenericCallablePlan;
+  readonly lexicalFunctions: RustLexicalFunctionQueries;
 }): RustNativeStoragePlan {
   const nodes = new Set(input.storage.nodes);
   const inputs = new Map(input.native.inputs.map(value => [value.subject, value]));
@@ -91,6 +95,9 @@ export function createRustNativeStoragePlan(input: {
   const select = (subject: SourceStorageSubject, carrier: TargetTypeRef,
     bindings: SourceStorageBindings | undefined, position: "value" | "input" = "value"): RustNativeStorageSelection => {
     if (bindings === undefined) return unresolved("Native callable storage has no exact declaration-local bindings.");
+    const owner = ownerFor(subject.node);
+    const environment = owner === undefined ? undefined : futures.forDeclaration(owner);
+    if (environment?.kind === "unresolved") return environment;
     const checked = input.storage.typeFor(subject);
     if (checked.kind === "unresolved") return checked;
     if (!isRustTargetTypeRef(carrier)) return unresolved("Native callable storage requires a valid selected carrier.");
@@ -127,6 +134,60 @@ export function createRustNativeStoragePlan(input: {
       selectedInputs.add(candidate);
       return candidate.implementation;
     };
+    const producerFuture = (origin: SourceStorageSubject, bindings: SourceStorageBindings,
+      current: TargetTypeRef, depth: number): TargetTypeRef | undefined => {
+      if (origin.kind !== "value" || origin.projection.length !== 0) return undefined;
+      const operation = input.facts.getFact(origin.node, rustTargetOperationFactKey);
+      if (operation?.kind !== "source-call") return undefined;
+      const caller = genericsFor(ownerFor(origin.node), bindings, depth + 1);
+      if (caller.kind === "unresolved") return fail(caller.reason);
+      const logical = substituteRustTargetGenerics(operation.resultCarrier, caller.bindings.types,
+        caller.bindings.lifetimes, caller.bindings.consts);
+      const nativeCall = input.native.callFor(origin.node);
+      if (nativeCall !== undefined) {
+        const selected = nativeCall.input;
+        const arguments_ = rustNativeCallableInvocationArguments(selected, operation);
+        const signature = arguments_ === undefined ? undefined
+          : rustNativeCallableInputPhysicalSignature(selected, arguments_, input.definitions);
+        if (signature === undefined) return undefined;
+        const carrier = substituteRustTargetGenerics(selected.carrier, caller.bindings.types,
+          caller.bindings.lifetimes, caller.bindings.consts);
+        const physical = visit(carrier, selected.subject, bindings, depth + 1, false);
+        const leaf = callableValueCarrier(carrier);
+        const implementation = physical === undefined || leaf === undefined ? undefined
+          : rustPhysicalPayloadFor(carrier, physical, leaf, input.definitions);
+        if (implementation === undefined) return undefined;
+        const types = new Map(caller.bindings.types);
+        types.set(selected.implementation.identity, implementation);
+        const result = substituteRustTargetGenerics(signature.result, types, caller.bindings.lifetimes, caller.bindings.consts);
+        return rustPhysicalPayloadFor(logical, result, current, input.definitions);
+      }
+      const implementations = input.storage.invocationImplementationsFor(origin.node, bindings);
+      if (implementations.kind !== "resolved" || implementations.nodes.length !== 1) return undefined;
+      const declaration = implementations.nodes[0]!;
+      const activation = input.storage.bindingsForInvocation(declaration, origin.node, bindings);
+      if (activation.kind === "unresolved") return fail(activation.reason);
+      const generic = genericsFor(declaration, activation.bindings, depth + 1);
+      if (generic.kind === "unresolved") return fail(generic.reason);
+      const types = new Map(generic.bindings.types);
+      const futuresForDeclaration = futures.forDeclaration(declaration);
+      if (futuresForDeclaration.kind === "unresolved") return fail(futuresForDeclaration.reason);
+      for (const formal of [...input.native.inputsFor(declaration), ...input.native.capturesFor(declaration),
+        ...futuresForDeclaration.inputs, ...futuresForDeclaration.captures]) {
+        if (!step(depth)) return undefined;
+        const logical = substituteRustTargetGenerics(formal.carrier, types, generic.bindings.lifetimes, generic.bindings.consts);
+        const physical = visit(logical, formal.subject, activation.bindings, depth + 1, false);
+        const leaf = callableValueCarrier(logical);
+        const selected = physical === undefined || leaf === undefined ? undefined
+          : rustPhysicalPayloadFor(logical, physical, leaf, input.definitions);
+        if (selected === undefined) return undefined;
+        types.set(formal.implementation.identity, selected);
+      }
+      const produced = input.producers.invocationResultFor(declaration);
+      if (produced === undefined) return undefined;
+      const physical = substituteRustTargetGenerics(produced, types, generic.bindings.lifetimes, generic.bindings.consts);
+      return rustPhysicalPayloadFor(logical, physical, current, input.definitions);
+    };
     const visit = (current: TargetTypeRef, selectedSubject: SourceStorageSubject,
       bindings: SourceStorageBindings, depth: number, permitsAbsence: boolean,
       position: "value" | "input" = "value"): TargetTypeRef | undefined => {
@@ -143,8 +204,6 @@ export function createRustNativeStoragePlan(input: {
         return referent === undefined ? undefined : referent === current.referent ? current : Object.freeze({ ...current, referent });
       }
       if (isRustNativeFutureCarrier(current)) {
-        const failure = futures.failureReason();
-        if (failure !== undefined) return fail(failure);
         const origins = input.storage.boundValueFrontierFor(selectedSubject, bindings, [], position);
         if (origins.kind === "unresolved") return fail(origins.reason);
         let physical: TargetTypeRef | undefined;
@@ -155,12 +214,13 @@ export function createRustNativeStoragePlan(input: {
           if (generics?.kind === "unresolved") return fail(generics.reason);
           const matching = generics === undefined ? [] : candidates.filter(candidate => rustTargetTypeRefEquals(current,
             substituteRustTargetGenerics(candidate.carrier, generics.bindings.types, generics.bindings.lifetimes, generics.bindings.consts)));
-          const candidate = matching.length === 1 ? matching[0] : undefined;
+          const candidate = matching.length === 1 ? matching[0]!.implementation
+            : candidates.length === 0 ? producerFuture(origin.subject, origin.bindings, current, depth + 1) : undefined;
           if (candidate === undefined)
             return fail("Native Future storage requires its exact physical input or producer contract.");
-          if (physical !== undefined && !rustTargetTypeRefEquals(physical, candidate.implementation))
+          if (physical !== undefined && !rustTargetTypeRefEquals(physical, candidate))
             return fail("Native Future storage has distinct physical alternatives requiring a sealed join.");
-          physical = candidate.implementation;
+          physical = Object.isFrozen(candidate) ? candidate : snapshotClosedMetadata(candidate);
         }
         return physical ?? fail("Native Future storage has no exact physical input implementation.");
       }
@@ -292,8 +352,7 @@ export function createRustNativeStoragePlan(input: {
         : Object.freeze({ kind: "selected", carrier: physical, inputs: Object.freeze([...selectedInputs]) });
   };
   return Object.freeze({
-    futureInputsFor: futures.inputsFor,
-    futureCapturesFor: futures.capturesFor,
+    futureEnvironmentFor: futures.forDeclaration,
     parameterFor(parameter: Node, carrier: TargetTypeRef): RustNativeStorageSelection {
       const owner = input.ast.parent(parameter);
       if (!nodes.has(parameter) || owner === undefined || !input.ast.parameters(owner).includes(parameter))

@@ -550,12 +550,15 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
   // structural storage plan produced while walking bodies.
   recordRustProjectCallableAdapterFacts(walk);
   recordRustModuleCallableStorage(walk);
+  const lexical = createRustLexicalFunctionQueries(context.source, context.sourceFiles, context.facts,
+    context.sourceLifetimes, context.runtimeValueUses, context.sourceCallables);
+  recordRustLexicalValueEnvironments(walk, lexical);
   const callableValues = context.callableValues.initialize({ ast, sourceFiles: context.sourceFiles, facts: context.facts,
     sourcePackages: context.sourcePackages,
     names: context.names, navigation: context.source.navigation, lifetimes: context.sourceLifetimes,
     classValueAdapters: context.classValues.valueAdapters(), closedSourceFiles, ownership: callableOwnership, sourceStorage: context.sourceStorage,
     projectTypes: context.projectTypes, objectRepresentations: context.objectRepresentations,
-    typeDefinitions: context.typeDefinitions });
+    typeDefinitions: context.typeDefinitions, lexicalFunctions: lexical });
   for (const issue of callableValues.issues) {
     appendRustDiagnostic(walk, "RUST_CALLABLE_VALUE_NOT_CLOSED", issue.message, issue.subject,
       ["target.capability=rust.callable-value.exact-implementation"]);
@@ -565,9 +568,6 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
   recordFutureValueFacts(walk, projectSourceFiles);
   recordRustDeferredProducerEffects(walk);
   context.structuralShapes.initializeUnions(context.typeDefinitions.generatedUnions());
-  const lexical = createRustLexicalFunctionQueries(context.source, context.sourceFiles, context.facts,
-    context.sourceLifetimes, context.runtimeValueUses, context.sourceCallables);
-  recordRustLexicalValueEnvironments(walk, lexical);
   return lexical;
 }
 
