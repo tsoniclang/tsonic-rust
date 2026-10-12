@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { allocateRustGeneratedName } from "../../../../target-model/names/generated.js";
-import type { RustGenericParameter, RustGenerics } from "../../../target-ast/nodes.js";
+import type { RustGenericParameter, RustGenerics, RustWherePredicate } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import type { RustCallableGenericPlan } from "./generics.js";
@@ -19,8 +19,10 @@ export function planRustNativeCallableGenerics(
   const sourceGenerics = source.finalizeGenerics();
   const typeParameterNames = new Map(source.context.typeParameterNames);
   const usedNames = new Set([...typeParameterNames.values(), ...sourceGenerics.parameters.map(parameter => parameter.name)]);
-  for (const input of inputs) typeParameterNames.set(input.implementation.identity,
-    allocateRustGeneratedName(usedNames, input.implementation.name));
+  for (const input of inputs) {
+    if (source.context.typeParameterSubstitutions?.has(input.implementation.identity) === true) continue;
+    typeParameterNames.set(input.implementation.identity, allocateRustGeneratedName(usedNames, input.implementation.name));
+  }
   const context: RustPlanContext = { ...source.context, typeParameterNames };
   const bounds = new Map(inputs.map(input => [input.implementation.identity, new Map<string, TargetTypeRef>()]));
   const collect = (type: TargetTypeRef, visited: Set<TargetTypeRef>): void => {
@@ -45,13 +47,18 @@ export function planRustNativeCallableGenerics(
     selected.set(closedMetadataKey(forwarding.trait), forwarding.trait);
   }
   const parameters: RustGenericParameter[] = [];
+  const predicates: RustWherePredicate[] = [...sourceGenerics.wherePredicates];
   for (const input of inputs) {
     const traits = [...bounds.get(input.implementation.identity)!.values()].map(trait => rustTypeFromCarrierInContext(trait, context));
     if (traits.some(trait => trait === undefined)) return undefined;
-    parameters.push({ kind: "type", name: typeParameterNames.get(input.implementation.identity)!,
-      bounds: traits.map(trait => ({ kind: "trait-type", reference: { trait: trait! } })) });
+    const selectedBounds = traits.map(trait => ({ kind: "trait-type" as const, reference: { trait: trait! } }));
+    if (context.typeParameterSubstitutions?.has(input.implementation.identity) === true) {
+      const type = rustTypeFromCarrierInContext(input.implementation, context);
+      if (type === undefined) return undefined;
+      if (selectedBounds.length > 0) predicates.push({ kind: "type", type, bounds: selectedBounds });
+    } else parameters.push({ kind: "type", name: typeParameterNames.get(input.implementation.identity)!, bounds: selectedBounds });
   }
   const generics: RustGenerics = { parameters: [...sourceGenerics.parameters, ...parameters],
-    wherePredicates: sourceGenerics.wherePredicates };
+    wherePredicates: predicates };
   return { ...source, context, finalizeGenerics: () => generics };
 }

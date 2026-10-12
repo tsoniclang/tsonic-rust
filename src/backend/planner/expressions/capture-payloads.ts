@@ -30,7 +30,7 @@ export function rustCallablePayloadContext(
   const fields = rustCapturedReceiverFieldContext(payload.receiverFields, { ...context,
     capturedBindings: payload.captures.map((capture, index) => ({
       declaration: capture.declaration, expression: { kind: "reference", expr: field(index) },
-      storage: capture.storage, valueCarrier: capture.carrier, borrowed: "shared",
+      storage: capture.storage, valueCarrier: capture.storageCarrier ?? capture.carrier, borrowed: "shared",
     })),
   }, index => field(payload.captures.length + index));
   return rustCapturedReceiverContext(payload.receivers, fields,
