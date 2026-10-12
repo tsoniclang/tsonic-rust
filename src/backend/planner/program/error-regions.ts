@@ -9,12 +9,9 @@ import { rustErrorType, rustNativeFallibleBoundary, rustPackageFallibleBoundary,
   type RustFallibleBoundary } from "./fallible-boundaries.js";
 import { rustErrorBoundaryForDeclaration, type RustPlanContext } from "./plan-context.js";
 import type { RustProducerErrorReference } from "../../../target-model/types/carriers/producer-errors.js";
-import type { RustTargetConstArgument, TargetTypeRef } from "../../../target-model/types/model.js";
-import { substituteRustTargetGenerics } from "../../../target-model/types/carriers/substitution.js";
-import { rustLifetimeKey, type RustLifetimeRef } from "../../../target-model/lifetimes/index.js";
-import { rustAsyncFunctionFactKey, rustContextualValueConversionFactKey, rustGeneratorFactKey,
-  rustSourceCallableReturnFactKey } from "../../../analysis/facts/keys.js";
-import { rustNativeCallableCompletion } from "../../../target-model/types/callable-completions.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { rustContextualValueConversionFactKey } from "../../../analysis/facts/keys.js";
+import { selectRustProducerError } from "../../../analysis/callables/producer-errors.js";
 import type { RustType } from "../../target-ast/nodes.js";
 import { rustNativeErrorJoinIdentity, type RustNativeErrorJoinReference } from "../../../target-model/types/native-error-joins.js";
 import { rustCallableConversionErrorArities } from "../../../target-model/conversions/callable-physical.js";
@@ -114,43 +111,12 @@ export function createRustErrorRegionCatalog(program: RustTargetProgram): RustEr
     },
     producerErrorType(reference: RustProducerErrorReference, context: RustTypeRenderingContext,
       render: (carrier: TargetTypeRef) => RustType | undefined): RustType | undefined {
-      const producer = program.callableValues.nativeProducers.forIdentity(reference.identity);
-      if (producer === undefined || producer.fileName !== reference.fileName ||
-        producer.environment.length !== reference.genericArguments.length) return undefined;
-      const types = new Map<string, TargetTypeRef>();
-      const lifetimes = new Map<string, RustLifetimeRef>();
-      const consts = new Map<string, RustTargetConstArgument>();
-      for (const [index, parameter] of producer.environment.entries()) {
-        const argument = reference.genericArguments[index]!;
-        if (parameter.kind === "type" && parameter.type.kind === "type-parameter" && argument.kind === "type")
-          types.set(parameter.type.identity, argument.type);
-        else if (parameter.kind === "lifetime" && argument.kind === "lifetime")
-          lifetimes.set(rustLifetimeKey(parameter.lifetime), argument.lifetime);
-        else if (parameter.kind === "const" && parameter.value.kind === "parameter" && argument.kind === "const")
-          consts.set(parameter.value.identity, argument.value);
-        else return undefined;
-      }
-      const asynchronous = program.facts.getFact(producer.declaration, rustAsyncFunctionFactKey);
-      const suspended = asynchronous !== undefined || program.facts.getFact(producer.declaration, rustGeneratorFactKey) !== undefined;
-      const infallible: RustType = { kind: "named", path: "core::convert::Infallible" };
-      if (reference.channel === "invoke" && suspended) return infallible;
-      if (reference.channel !== "invoke") {
-        const result = asynchronous?.futureCarrier ??
-          program.facts.getFact(producer.declaration, rustSourceCallableReturnFactKey)?.returnCarrier;
-        const completion = result === undefined ? undefined : rustNativeCallableCompletion(result, program.typeDefinitions);
-        if (completion?.futures[reference.channel] === undefined) return undefined;
-        if (asynchronous === undefined) {
-          const error = program.callableValues.nativeProducers.deferredErrorFor(producer.declaration, reference.channel);
-          return error === undefined ? undefined : render(substituteRustTargetGenerics(error, types, lifetimes, consts));
-        }
-      }
-      const effects = program.facts.getFact(producer.declaration, rustErrorEffectsFactKey);
-      if (effects === undefined) return undefined;
-      const selected = planRustSelectedErrorRegion(producer.declaration, { ...effects,
-        nativeErrors: effects.nativeErrors.map(source => ({ ...source,
-          errorType: substituteRustTargetGenerics(source.errorType, types, lifetimes, consts) })),
-      }, context, render);
-      return selected === undefined ? undefined : selected.boundary?.errorType ?? infallible;
+      const selected = selectRustProducerError(reference, { producers: program.callableValues.nativeProducers,
+        facts: program.facts, definitions: program.typeDefinitions });
+      if (selected === undefined) return undefined;
+      if (selected.kind === "carrier") return render(selected.carrier);
+      const region = planRustSelectedErrorRegion(selected.declaration, selected.effects, context, render);
+      return region === undefined ? undefined : region.boundary?.errorType ?? { kind: "named", path: "core::convert::Infallible" };
     },
   });
 }
