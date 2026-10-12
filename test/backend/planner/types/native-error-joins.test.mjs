@@ -1,0 +1,151 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { planRustNativeErrorJoin } from "../../../../dist/backend/planner/types/native-error-joins.js";
+import { emptyRustGenerics } from "../../../../dist/backend/target-ast/nodes.js";
+import { rustTypeEquals } from "../../../../dist/backend/target-ast/inspection/type-equality.js";
+import { applyRustFallibleResultExpression } from "../../../../dist/backend/planner/types/fallible-shape.js";
+import { printRustExpr } from "../../../../dist/print/source/expressions/core.js";
+import { printRustType } from "../../../../dist/print/source/types.js";
+
+const named = path => ({ kind: "named", path });
+const path = name => ({ kind: "path", path: name });
+const source = (identity, variant, errorType = named("BorrowedError")) => ({ identity, variant, errorType });
+const plan = (sources, options = {}) => planRustNativeErrorJoin({ identity: "region:joined-errors", name: "JoinedErrors",
+  visibility: "private", generics: emptyRustGenerics, sources, ...options });
+const first = source("callback:first", "First");
+const second = source("callback:second", "Second");
+
+test("zero native error sources preserve pure code without an error type or items", () => {
+  const joined = plan([]);
+  assert.equal(joined !== undefined, true);
+  assert.equal(joined.errorType === undefined, true);
+  assert.equal(joined.items.length, 0);
+  assert.equal(joined.inject(first, path("error")) === undefined, true);
+  assert.equal(joined.propagate(first, path("result")) === undefined, true);
+});
+
+test("one exact source moves its error unchanged and propagates without conversion", () => {
+  const errorType = { kind: "qualified", owner: named("Producer"), trait: named("Invocation"), member: "Error" };
+  const selected = source("callback:only", "Only", errorType);
+  const joined = plan([selected]);
+  const error = path("error");
+  const result = path("result");
+  assert.equal(joined.errorType === errorType, true);
+  assert.equal(joined.items.length, 0);
+  assert.equal(joined.inject(selected, error) === error, true);
+  const propagated = joined.propagate(selected, result);
+  assert.equal(propagated.expr === result, true);
+  assert.equal(propagated.operandErrorType === errorType, true);
+  assert.equal(propagated.resultErrorType === errorType, true);
+  assert.equal(applyRustFallibleResultExpression(propagated, { errorType }) === result, true);
+});
+
+test("multiple formal sources retain distinct variants when their actual error types coincide", () => {
+  const joined = plan([first, second]);
+  assert.equal(joined.items.length, 1);
+  assert.equal(joined.items[0].kind, "enum");
+  assert.deepEqual(joined.items[0].variants.map(variant => variant.name), ["First", "Second"]);
+  assert.equal(rustTypeEquals(joined.items[0].variants[0].fields[0], joined.items[0].variants[1].fields[0]), true);
+  assert.equal(joined.items[0].attrs === undefined, true);
+  assert.equal(joined.items[0].generics, emptyRustGenerics);
+  assert.equal(printRustExpr(joined.inject(first, path("error"))), "JoinedErrors::First(error)");
+  assert.equal(printRustExpr(joined.inject(second, path("error"))), "JoinedErrors::Second(error)");
+});
+
+test("native joins map a selected error once before an exactly typed try", () => {
+  const joined = plan([first, second]);
+  const result = { kind: "call", path: "invoke", args: [] };
+  for (const selected of [first, second]) {
+    const propagated = joined.propagate(selected, result);
+    assert.equal(propagated.kind, "try");
+    assert.equal(propagated.expr.receiver === result, true);
+    assert.equal(propagated.operandErrorType === joined.errorType, true);
+    assert.equal(propagated.resultErrorType === joined.errorType, true);
+    assert.equal(printRustExpr(propagated), `invoke().map_err(JoinedErrors::${selected.variant})?`);
+    const returned = applyRustFallibleResultExpression(propagated, { errorType: joined.errorType });
+    assert.equal(returned === propagated.expr, true);
+    assert.doesNotMatch(printRustExpr(returned), /from|clone|default/iu);
+  }
+});
+
+test("associated errors retain native lifetime, type, const and where-clause context", () => {
+  const lifetime = { kind: "named", name: "scope" };
+  const generics = { parameters: [
+    { kind: "lifetime", name: "scope", outlives: [] },
+    { kind: "type", name: "Producer", bounds: [{ kind: "trait", path: "Invocation" }] },
+    { kind: "const", name: "COUNT", type: { kind: "primitive", name: "usize" } },
+  ], wherePredicates: [{ kind: "type", type: named("Producer"), bounds: [{ kind: "lifetime", lifetime }] }] };
+  const associated = { kind: "qualified", owner: named("Producer"), trait: named("Invocation"), member: "Error",
+    genericArguments: [{ kind: "lifetime", lifetime }] };
+  const local = { kind: "reference", mutable: true, referent: { kind: "fixed-array", element: { kind: "primitive", name: "u8" },
+    length: { kind: "path", path: "COUNT" } }, lifetime };
+  const joined = plan([source("local", "Local", local), source("producer", "Producer", associated)], { generics });
+  assert.equal(joined.items[0].generics === generics, true);
+  assert.equal(joined.items[0].variants[1].fields[0] === associated, true);
+  assert.equal(printRustType(joined.errorType), "JoinedErrors<'scope, Producer, COUNT>");
+  assert.equal(printRustType(associated), "<Producer as Invocation>::Error<'scope>");
+});
+
+test("source selection rejects foreign identities and inconsistent exact carriers without a fallback", () => {
+  for (const selectedSources of [[first], [first, second]]) {
+    const joined = plan(selectedSources);
+    for (const candidate of [source("foreign", "First"), { ...first, errorType: named("OtherError") },
+      { ...first, errorType: { kind: "reference", referent: first.errorType, mutable: false } }]) {
+      assert.equal(joined.inject(candidate, path("error")) === undefined, true);
+      assert.equal(joined.propagate(candidate, path("result")) === undefined, true);
+    }
+  }
+});
+
+test("native source checks use semantic type identity rather than spelling", () => {
+  const original = { kind: "named", path: "owner::Failure", identity: "package:failure" };
+  const joined = plan([source("source", "Source", original), second]);
+  const alias = { identity: "source", errorType: { ...original, path: "reexport::Failure" } };
+  assert.equal(joined.inject(alias, path("error")) !== undefined, true);
+  for (const changed of [{ ...original, identity: "other:failure" }, { kind: "named", path: original.path }]) {
+    assert.equal(joined.inject({ ...alias, errorType: changed }, path("error")) === undefined, true);
+  }
+});
+
+test("associated source checks retain exact owner, trait, member and lifetime substitutions", () => {
+  const errorType = { kind: "qualified", owner: named("Producer"), trait: named("Invocation"), member: "AwaitError",
+    genericArguments: [{ kind: "lifetime", lifetime: { kind: "named", name: "scope" } }] };
+  const selected = source("associated", "Associated", errorType);
+  const joined = plan([selected, second]);
+  for (const replacement of [
+    { ...errorType, owner: named("OtherProducer") }, { ...errorType, trait: named("OtherProtocol") },
+    { ...errorType, member: "InvocationError" }, { ...errorType, genericArguments: [] },
+    { ...errorType, genericArguments: [{ kind: "lifetime", lifetime: { kind: "static" } }] },
+  ]) {
+    const candidate = { ...selected, errorType: replacement };
+    assert.equal(joined.inject(candidate, path("error")) === undefined, true);
+    assert.equal(joined.propagate(candidate, path("result")) === undefined, true);
+  }
+});
+
+test("ambiguous source identities, variant names and invalid declaration names reject", () => {
+  for (const [label, sources, options] of [
+    ["empty identity", [first], { identity: "" }],
+    ["path instead of name", [first], { name: "module::Join" }],
+    ["reserved name", [first], { name: "type" }],
+    ["empty source", [source("", "First")], {}],
+    ["same identity", [first, { ...second, identity: first.identity }], {}],
+    ["same variant", [first, { ...second, variant: first.variant }], {}],
+    ["raw variant alias", [first, { ...second, variant: "r#First" }], {}],
+    ["invalid variant", [source("source", "crate")], {}],
+    ["inferred carrier", [source("source", "Source", { kind: "infer" })], {}],
+    ["opaque enum field", [source("source", "Source", { kind: "impl-trait", bounds: [], outlives: [] })], {}],
+    ["invalid binder", [first], { generics: { parameters: [{ kind: "type", name: "_", bounds: [] }], wherePredicates: [] } }],
+    ["duplicate binder", [first], { generics: { parameters: [{ kind: "type", name: "Value", bounds: [] },
+      { kind: "const", name: "r#Value", type: { kind: "primitive", name: "usize" } }], wherePredicates: [] } }],
+  ]) assert.equal(plan(sources, options) === undefined, true, label);
+});
+
+test("native hygiene preserves explicitly selected raw identifiers and lifetime namespaces", () => {
+  const joined = plan([source("source", "r#type"), source("next", "Next")], { name: "r#match",
+    generics: { parameters: [{ kind: "lifetime", name: "scope", outlives: [] },
+      { kind: "type", name: "scope", bounds: [] }], wherePredicates: [] } });
+  assert.equal(joined !== undefined, true);
+  assert.equal(printRustExpr(joined.inject({ identity: "source", errorType: named("BorrowedError") }, path("error"))),
+    "r#match::<'scope, scope>::r#type(error)");
+});
