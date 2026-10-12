@@ -1,9 +1,8 @@
 import type { Node } from "@tsonic/tsts";
-import { Node_Expression } from "@tsonic/target-api/source";
 import type { RustAnalysisContext } from "../program/context.js";
 import type { RustGenericCallableInvocationFact } from "../facts/generic-callable-effects.js";
 import type { RustSourceCallEffectsFact } from "../facts/object-methods.js";
-import { rustTargetOperationFactKey } from "../facts/keys.js";
+import { selectRustGenericCallableInvocationStorage } from "../callables/generic-dispatch.js";
 import { rustGenericCallableInvocationBindings } from "../callables/generic-bindings.js";
 import { selectRustGenericCallableErrors } from "../callables/generic-errors.js";
 import { closedMetadataKey, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
@@ -13,15 +12,16 @@ export function selectRustGenericCallableInvocation(
   node: Node, context: RustAnalysisContext,
   effectsFor: (declaration: Node) => RustSourceCallEffectsFact | undefined,
 ): RustGenericCallableInvocationFact | undefined {
-  const operation = context.facts.get(node, rustTargetOperationFactKey);
-  const callee = Node_Expression(context.ast, node);
-  const storage = callee === undefined ? undefined : context.callableValues.nativeStorage.valueFor(callee);
-  if (operation?.kind !== "source-call" || storage === undefined || storage.kind === "unresolved") return undefined;
+  const storage = selectRustGenericCallableInvocationStorage(node, {
+    ast: context.ast, facts: context.facts, generic: context.callableValues.generic,
+    nativeStorage: context.callableValues.nativeStorage,
+  });
+  if (storage === undefined) return undefined;
+  const { operation, definition } = storage;
   const { physical } = context.callableValues.generic;
-  const definition = physical.definitionFor(storage.carrier);
-  const bindings = definition === undefined ? undefined : rustGenericCallableInvocationBindings(
+  const bindings = rustGenericCallableInvocationBindings(
     definition, storage.carrier, operation.targetGenericArguments ?? [], physical);
-  if (definition === undefined || bindings === undefined) return undefined;
+  if (bindings === undefined) return undefined;
   const selected = selectRustGenericCallableErrors(definition, {
     ast: context.ast, sourceLifetimes: context.sourceLifetimes, physical,
     producers: context.callableValues.nativeProducers, effectsFor,

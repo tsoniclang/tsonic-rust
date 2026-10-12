@@ -79,6 +79,7 @@ export function nameRustSignatureTypes(
     const callable: Callable = { ...item, params: item.params.map(parameter => ({ ...parameter,
       type: nameType(parameter.type, parameter.name),
     })), ...(item.returnType === undefined ? {} : { returnType: nameType(item.returnType, "Result") }),
+      ...(item.errorType === undefined ? {} : { errorType: nameType(item.errorType, "Error") }),
     };
     return { callable, nameType };
   };

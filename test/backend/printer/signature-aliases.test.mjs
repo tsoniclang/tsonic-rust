@@ -21,6 +21,31 @@ const makeFunction = (name, visibility = "private") => ({ kind: "function", name
   body: { statements: [{ kind: "tail", expr: { kind: "path", path: "values" } }] },
 });
 
+test("fallible function and method error signatures share the existing exact alias owner", () => {
+  const callable = { ...makeFunction("read", "public"), params: [],
+    returnType: { kind: "unit" }, errorType: nested };
+  const { visibility: _visibility, body: _body, ...signature } = callable;
+  const trait = { kind: "trait", name: "Reader", visibility: "public", generics: emptyRustGenerics,
+    members: [signature] };
+  const implementation = { kind: "impl", target: named("ReaderImpl"), generics: emptyRustGenerics,
+    members: [callable] };
+  const result = nameSignatureScope([callable, trait, implementation]);
+  assert.equal(result.aliases.length, 1);
+  const alias = result.aliases[0];
+  assert.deepEqual(alias.target, nested);
+  assert.equal(alias.visibility, "public");
+  assert.deepEqual(alias.generics.parameters, [{ kind: "type", name: "Item", bounds: [] }]);
+  for (const selected of [result.items[0], result.items[1].members[0], result.items[2].members[0]]) {
+    assert.deepEqual(selected.errorType, named(alias.name, [{ kind: "named", path: "Item" }]));
+    assert.deepEqual(selected.returnType, { kind: "unit" });
+    assert.deepEqual(selected.generics, callable.generics);
+  }
+  assert.deepEqual(result.items[0].body, callable.body);
+  assert.deepEqual(nameRustSignatureTypes([...result.aliases, ...result.items]), [...result.aliases, ...result.items]);
+  const unnameable = { ...callable, errorType: named("Vec", [nested, named("Self")]) };
+  assert.deepEqual(nameRustSignatureTypes([unnameable]), [unnameable]);
+});
+
 test("public signature closure removes only obsolete reachability dispositions", () => {
   const exposed = { kind: "struct", name: "Envelope", visibility: "public", generics: emptyRustGenerics,
     fields: [{ name: "value", visibility: "public", type: named("Variants") }] };

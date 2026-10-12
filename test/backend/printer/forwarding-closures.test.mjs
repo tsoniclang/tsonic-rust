@@ -39,3 +39,20 @@ test("forwarding does not erase captures, dereferences, effects or argument orde
     assert.equal(collapseRustForwardingClosure(closure), closure);
   }
 });
+
+test("exact associated forwarding preserves the native owner and selected trait", () => {
+  const owner = { kind: "named", path: "NativeErrors", genericArguments };
+  for (const trait of [undefined, { kind: "named", path: "From", genericArguments }]) {
+    const body = { kind: "associated-call", owner, method: "Error", args: [path("error")],
+      ...(trait === undefined ? {} : { trait }) };
+    const closure = { kind: "closure", params: [parameter("error")], body };
+    assert.deepEqual(collapseRustForwardingClosure(closure), {
+      kind: "associated-value", owner, name: "Error", ...(trait === undefined ? {} : { trait }),
+    });
+    for (const changed of [
+      { ...closure, params: [{ name: "error", type: { kind: "named", path: "Error" } }] },
+      { ...closure, body: { ...body, args: [path("captured")] } },
+      { ...closure, body: { ...body, genericArguments } },
+    ]) assert.equal(collapseRustForwardingClosure(changed), changed);
+  }
+});

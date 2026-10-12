@@ -137,6 +137,20 @@ function planDefinition(definition: RustGenericCallablePhysicalDefinition, conte
   const environment = rustGenericCallableEnvironmentGenerics(parameters, context);
   const arguments_ = parameters.map(parameter => rustTargetGenericArgumentToAstInContext(parameter, context));
   if (environment === undefined || arguments_.some(argument => argument === undefined)) return undefined;
+  const variants = definition.members.map(member => {
+    const implementation = member.implementation;
+    const path = rustGenericCallableImplementationPath(implementation, implementation.stateName, context);
+    const selected = rustGenericCallableStorageArguments(definition.signature.environmentParameters, member.arguments)
+      .map(argument => rustTargetGenericArgumentToAstInContext(argument, context));
+    const state: RustType = { kind: "named", path: path ?? "", genericArguments: selected as NonNullable<typeof selected[number]>[] };
+    return path === undefined || selected.some(argument => argument === undefined) ? undefined : { name: member.variantName,
+      fields: [implementation.storage === "shared" ? shared(state) : state],
+    };
+  });
+  if (variants.some(variant => variant === undefined)) return undefined;
+  const target: RustType = { kind: "named", path: definition.targetName, genericArguments: arguments_ as NonNullable<typeof arguments_[number]>[] };
+  const storage = genericCallableStorageItems(definition, environment, target, variants as NonNullable<typeof variants[number]>[]);
+  if (!context.input.program.callableValues.genericDispatch.requiredFor(definition)) return storage;
   const signatureCarrier = rustGenericCallableCarrier({ origin: definition.origin, signature: definition.signature,
     environment: definition.signature.environmentParameters,
   });
@@ -149,17 +163,6 @@ function planDefinition(definition: RustGenericCallablePhysicalDefinition, conte
   const parameterTypes = protocol.parameters.map(parameter => rustTypeFromCarrierInContext(parameter, context));
   const output = rustTypeFromCarrierInContext(payload, context);
   if (parameterTypes.some(type => type === undefined) || output === undefined) return undefined;
-  const variants = definition.members.map(member => {
-    const implementation = member.implementation;
-    const path = rustGenericCallableImplementationPath(implementation, implementation.stateName, context);
-    const selected = rustGenericCallableStorageArguments(definition.signature.environmentParameters, member.arguments)
-      .map(argument => rustTargetGenericArgumentToAstInContext(argument, context));
-    const state: RustType = { kind: "named", path: path ?? "", genericArguments: selected as NonNullable<typeof selected[number]>[] };
-    return path === undefined || selected.some(argument => argument === undefined) ? undefined : { name: member.variantName,
-      fields: [implementation.storage === "shared" ? shared(state) : state],
-    };
-  });
-  if (variants.some(variant => variant === undefined)) return undefined;
   const capturePredicates = rustGenericCallableCapturePredicates(definition, context);
   if (capturePredicates === undefined) return undefined;
   const predicates = new Map<string, RustWherePredicate>(capturePredicates.map(predicate => [closedMetadataKey(predicate), predicate]));
@@ -226,7 +229,6 @@ function planDefinition(definition: RustGenericCallablePhysicalDefinition, conte
     arms.push({ pattern, expression: converted?.kind === "try" ? converted.expr :
       methodFallible ? { kind: "call", path: "Ok", args: [call] } : call });
   }
-  const target: RustType = { kind: "named", path: definition.targetName, genericArguments: arguments_ as NonNullable<typeof arguments_[number]>[] };
   const generics = environment;
   const methodFallible = effects.invocation === "fallible";
   const methodOutput: RustType = methodFallible
@@ -240,7 +242,7 @@ function planDefinition(definition: RustGenericCallablePhysicalDefinition, conte
     invocations: nativeInvocations,
   });
   if (nativeFuture !== undefined && native === undefined) return undefined;
-  return [...genericCallableStorageItems(definition, generics, target, variants as NonNullable<typeof variants[number]>[]),
+  return [...storage,
   ...(native?.items ?? []),
   { kind: "impl", target, generics, members: [{ kind: "function",
     name: "call", visibility: "public", selfParam: { kind: "reference", mutable: false },

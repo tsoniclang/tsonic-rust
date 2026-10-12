@@ -30,6 +30,7 @@ import { createRustNativeStoragePlan, type RustNativeStoragePlan } from "./nativ
 import { createRustNativeCallableProducerPlan, type RustNativeCallableProducerPlan } from "./native-producers.js";
 import { createRustNativeGenericProducerPlan, type RustNativeGenericProducerPlan } from "./native-generic-producers.js";
 import { createRustNativeCapturePlan, type RustNativeCapturePlan } from "./native-captures.js";
+import { createRustGenericCallableDispatchPlan, type RustGenericCallableDispatchPlan } from "./generic-dispatch.js";
 
 export interface RustCallableValuePlan {
   readonly generic: RustGenericCallablePlan;
@@ -40,6 +41,7 @@ export interface RustCallableValuePlan {
   readonly nativeCaptures: RustNativeCapturePlan;
   readonly nativeProducers: RustNativeCallableProducerPlan;
   readonly nativeGenericProducers: RustNativeGenericProducerPlan;
+  readonly genericDispatch: RustGenericCallableDispatchPlan;
   readonly issues: readonly RustSourceCallableSpecializationIssue[];
 }
 
@@ -86,6 +88,7 @@ export function createRustCallableValuePlanRegistry(): RustCallableValuePlanRegi
     get nativeCaptures() { return requireCurrent().nativeCaptures; },
     get nativeProducers() { return requireCurrent().nativeProducers; },
     get nativeGenericProducers() { return requireCurrent().nativeGenericProducers; },
+    get genericDispatch() { return requireCurrent().genericDispatch; },
     get issues() { return requireCurrent().issues; },
   });
 }
@@ -192,6 +195,9 @@ function createRustCallableValuePlan(input: RustCallableValuePlanInput): RustCal
   const frames = createRustFrameCallablePlan({ ...input, usedNames });
   const nativeGenericProducers = createRustNativeGenericProducerPlan({ ast: input.ast, nodes: input.sourceStorage.nodes,
     facts: input.facts, generic, native, nativeStorage });
+  const genericDispatch = createRustGenericCallableDispatchPlan({ ...input,
+    nodes: input.sourceStorage.nodes, generic, nativeStorage, nativeGenericProducers });
   return Object.freeze({ generic, suspended, frames, native, nativeStorage, nativeCaptures, nativeProducers, nativeGenericProducers,
+    genericDispatch,
     issues: Object.freeze([...generic.issues, ...suspended.issues, ...frames.issues]) });
 }
