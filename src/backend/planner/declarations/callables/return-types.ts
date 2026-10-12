@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustGeneratorFact } from "../../../../analysis/facts/keys.js";
+import type { RustAsyncFunctionFact, RustGeneratorFact } from "../../../../analysis/facts/keys.js";
 import { rustSourceCallEffectsFactKey, rustSourceCallableReturnFactKey } from "../../../../analysis/facts/keys.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { rustNativeFutureCallableResult } from "../../../../target-model/types/carriers/generic-callables.js";
@@ -8,6 +8,17 @@ import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustReturnTypeFromCarrierInContext, rustTypeFromCarrierInContext } from "../../types/render.js";
 import { rustCurrentErrorBoundary, rustErrorType } from "../../program/plan-context.js";
 import { rustNativeFutureType } from "../../types/native-futures.js";
+import { rustJsPromiseTargetTypeWithLifetime } from "../../../../target-model/types/carriers/js.js";
+
+export function resolveRustJsPromiseReturnType(
+  declaration: Node, asynchronous: Extract<RustAsyncFunctionFact, { readonly kind: "js-promise" }>, context: RustPlanContext,
+): RustType | undefined {
+  const lifetime = asynchronous.futureCarrier.kind === "target-named" ? asynchronous.futureCarrier.genericArguments?.[0] : undefined;
+  const output = context.input.program.callableValues.nativeStorage.returnFor(declaration);
+  const error = context.input.program.callableValues.nativeProducers.errorFor(declaration, 0);
+  return lifetime?.kind !== "lifetime" || output.kind === "unresolved" || error === undefined ? undefined
+    : rustReturnTypeFromCarrierInContext(rustJsPromiseTargetTypeWithLifetime(output.carrier, lifetime.lifetime, error), context);
+}
 
 export function resolveRustCallableOutwardReturnType(
   declaration: Node, carrier: TargetTypeRef | undefined, context: RustPlanContext,

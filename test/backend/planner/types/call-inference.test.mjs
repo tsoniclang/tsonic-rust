@@ -144,6 +144,9 @@ test("canonical physical union payloads retain enclosing anonymous type position
       structuralShapesModuleName: "shapes", externalCrateNameByFileName: new Map(), externalStructuralShapeModuleByFileName: new Map(),
       input: { program: { typeDefinitions: registry.seal(), names: { nameForSourceType: (_file, name) => name },
         callableValues: { native: { protocolForSourceItem: () => undefined } }, structuralShapes: generated } } };
+    assert.equal(rustUnionTypePathInContext(carrier, scope), origin === "authored" ? "Completion"
+      : `crate::shapes::${generated.unionForCarrier(carrier).targetName}`,
+      "a nominal union pattern does not require a concrete Future payload annotation");
     for (const position of ["parameter", "return"]) {
       const rendered = rustTypeFromCarrierInContext(physical, scope, position);
       assert.equal(rendered?.kind, "named", `${origin}:${position}`);

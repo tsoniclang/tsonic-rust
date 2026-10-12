@@ -13,7 +13,6 @@ import {
 } from "../../program/plan-context.js";
 import { rustAuthoredDeadCodeDisposition } from "../../liveness/directives.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import { rustReturnTypeFromCarrierInContext } from "../../types/render.js";
 import { rustAsyncFunctionFactKey, rustGeneratorFactKey, rustSourceCallableReturnFactKey, rustTargetOperationFactKey } from "../../../../analysis/facts/keys.js";
 import { requireRustCarrierRequirements } from "../../types/generic-requirements.js";
 import {
@@ -33,7 +32,7 @@ import {
   planRustCallableParameterPrelude,
   planRustCallableParameters,
 } from "./parameters.js";
-import { resolveRustCallableBodyReturnType, resolveRustCallableOutwardReturnType } from "./return-types.js";
+import { resolveRustCallableBodyReturnType, resolveRustCallableOutwardReturnType, resolveRustJsPromiseReturnType } from "./return-types.js";
 import { rustDeclarationRequiresUnsafe } from "../../safety/explicit-safety.js";
 import { rustSafetyAttributesForDeclaration } from "../../safety/explicit-safety.js";
 import { applyFallibleShape } from "../../types/fallible-shape.js";
@@ -239,7 +238,7 @@ function planRustFunctionItem(
     return undefined;
   }
   const emittedReturnType = returnsJsPromise
-    ? rustReturnTypeFromCarrierInContext(asyncFact.futureCarrier, context)
+    ? resolveRustJsPromiseReturnType(node, asyncFact, context)
     : returnType;
   if (returnsJsPromise && emittedReturnType === undefined) {
     context.diagnostics.push(missingFactDiagnostic(

@@ -25,7 +25,7 @@ import {
   rustSourceUnionCarrierValue,
   rustStructuralObjectCarrierValue,
 } from "../../../target-model/types/index.js";
-import { rustSourceItemIdentity } from "../program/source-package-facades.js";
+import { rustSourceTypePathInContext, rustStructuralTypePathInContext } from "./paths.js";
 import { rustExplicitNamedTypeArguments } from "./generic-defaults.js";
 import { rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
 import { rustFrameCallableValue } from "../../../target-model/types/carriers/frame-callables.js";
@@ -540,7 +540,7 @@ export interface RustTypeRenderingContext {
 export function rustTypeFromCarrierInContext(
   carrier: TargetTypeRef | undefined,
   context: RustTypeRenderingContext,
-  position: "general" | "parameter" | "return" | "inferred-call" | "absence" | "pattern" = "general",
+  position: "general" | "parameter" | "return" | "inferred-call" | "absence" = "general",
 ): RustType | undefined {
   const instantiatedCarrier = carrier === undefined ||
       context.typeParameterSubstitutions === undefined &&
@@ -553,26 +553,6 @@ export function rustTypeFromCarrierInContext(
       );
   const selectedCarrier = position === "absence" && instantiatedCarrier !== undefined
     ? rustCallableInputAbsenceWitness(instantiatedCarrier) : instantiatedCarrier;
-  const resolveSourceTypePath = (value: { readonly fileName: string; readonly typeName: string }): string | undefined => {
-    const moduleName = context.moduleNameByFileName.get(value.fileName);
-    if (moduleName === undefined) {
-      return undefined;
-    }
-    const protocol = context.input.program.callableValues.native.protocolForSourceItem(value.fileName, value.typeName);
-    const typeName = protocol === undefined
-      ? context.input.program.names.nameForSourceType(value.fileName, value.typeName) : protocol.targetName;
-    if (typeName === undefined) {
-      return undefined;
-    }
-    const externalCrate = context.externalCrateNameByFileName.get(value.fileName);
-    return protocol !== undefined
-      ? `${externalCrate !== undefined && externalCrate !== context.crateName ? externalCrate : "crate"}::${moduleName}::${typeName}`
-      : externalCrate !== undefined && externalCrate !== context.crateName
-      ? context.externalItemPathByIdentity.get(
-          rustSourceItemIdentity(value.fileName, typeName),
-        )
-      : moduleName === context.moduleName ? typeName : `crate::${moduleName}::${typeName}`;
-  };
   const resolveStructuralShape = (shapeCarrier: TargetTypeRef): RustType | undefined => {
     if (rustFrameCallableValue(shapeCarrier) !== undefined) return rustFrameCallableTypes(shapeCarrier, context)?.rootType;
     const instance = rustClassConstructorInstance(shapeCarrier);
@@ -602,19 +582,11 @@ export function rustTypeFromCarrierInContext(
     if (genericArguments === undefined) {
       return undefined;
     }
-    const externalShapeModule = context.externalStructuralShapeModuleByFileName.get(
-      definition.ownerFileName,
-    );
-    const externalShapeCrate = context.externalCrateNameByFileName.get(
-      definition.ownerFileName,
-    );
+    const path = rustStructuralTypePathInContext(shapeCarrier, context);
+    if (path === undefined) return undefined;
     const stateType: RustType = {
       kind: "named",
-      path: externalShapeModule !== undefined && externalShapeCrate !== context.crateName
-        ? `${externalShapeModule}::${definition.targetName}`
-        : context.moduleName === context.structuralShapesModuleName
-        ? definition.targetName
-        : `crate::${context.structuralShapesModuleName}::${definition.targetName}`,
+      path,
       ...(genericArguments.length === 0
         ? {}
         : { genericArguments: genericArguments as readonly RustGenericArgument[] }),
@@ -630,7 +602,7 @@ export function rustTypeFromCarrierInContext(
   let producerErrorWork = 4096;
   const sourceRendering: RustSourceTypeRendering = {
     typeParameterNames: context.typeParameterNames, typeDefinitions: context.input.program.typeDefinitions,
-    pathFor: resolveSourceTypePath, additionalArgumentsFor: type => rustOptionalStorageTypeArguments(type, context),
+    pathFor: value => rustSourceTypePathInContext(value, context), additionalArgumentsFor: type => rustOptionalStorageTypeArguments(type, context),
     programErrorType: () => {
       const boundary = context.sourcePackageErrors === undefined ? undefined : rustCurrentErrorBoundary(context);
       return boundary === undefined ? undefined : rustErrorType(boundary);
@@ -648,11 +620,6 @@ export function rustTypeFromCarrierInContext(
     },
   };
   const rendered = rustTypeFromCarrier(selectedCarrier, sourceRendering, resolveStructuralShape);
-  if (position === "pattern") {
-    if (rendered?.kind !== "named" || !rustTypeIsLegalInPosition(rendered, "return")) return undefined;
-    registerAliasFromPath(context, rendered.path);
-    return { kind: "named", path: rendered.path };
-  }
   if (position === "inferred-call" && rendered !== undefined && rustTypeContainsImplTrait(rendered)) {
     return { kind: "infer" };
   }
@@ -673,9 +640,12 @@ export function rustParameterTypeFromCarrierInContext(
 }
 
 export function rustUnionTypePathInContext(carrier: TargetTypeRef, context: RustTypeRenderingContext): string | undefined {
-  if (rustSourceUnionCarrierValue(carrier) === undefined && rustRuntimeUnionContract(carrier) === undefined) return undefined;
-  const type = rustTypeFromCarrierInContext(carrier, context, "pattern");
-  return type?.kind === "named" ? type.path : undefined;
+  const union = rustSourceUnionCarrierValue(carrier);
+  const path = union !== undefined
+    ? union.origin === "generated" ? rustStructuralTypePathInContext(carrier, context) : rustSourceTypePathInContext(union, context)
+    : carrier.kind === "target-named" && rustRuntimeUnionContract(carrier) !== undefined ? rustBuiltInCarrierRenderPaths[carrier.id] : undefined;
+  if (path !== undefined) registerAliasFromPath(context, path);
+  return path;
 }
 
 export function rustReturnTypeFromCarrierInContext(
