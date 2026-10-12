@@ -64,6 +64,7 @@ import { rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 import type { RustGenericRequirement } from "./generic-requirements.js";
 import { normalizeRustGenericRequirements } from "./generic-requirement-contract.js";
 import type { RustGenericCallablePlan } from "../callables/generic-values.js";
+import type { RustNativeCallableInputPlan } from "../callables/native-inputs.js";
 import type { RustFrameCallablePlan } from "../callables/frame-values.js";
 import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
 import type { RustProjectStructuralView } from "../objects/project-structural-views.js";
@@ -88,6 +89,7 @@ interface ClassifyCallableInput {
   readonly projectTypes: RustProjectTypePolicy;
   readonly objectRepresentations: RustObjectRepresentationPlan;
   readonly genericCallables: RustGenericCallablePlan;
+  readonly nativeCallables: RustNativeCallableInputPlan;
   readonly frameCallables: RustFrameCallablePlan;
   readonly structuralShapes: RustStructuralShapePlan;
   readonly structuralViewsFor: (declaration: Node) => readonly RustProjectStructuralView[];
@@ -666,16 +668,17 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       const selected = facts.getSelectedTargetCall(node);
       const callableCarrier = rustSourceCallCallableStorageCarrier(operation, input.structuralShapes);
       const genericCallable = rustGenericCallableValue(callableCarrier);
-      const genericDefinition = callableCarrier === undefined ? undefined : input.genericCallables.definitionFor(callableCarrier);
+      const nativeCall = input.nativeCallables.callFor(node);
+      const genericDefinition = callableCarrier === undefined || nativeCall !== undefined ? undefined : input.genericCallables.definitionFor(callableCarrier);
       const frameEntry = callableCarrier === undefined ? undefined : input.frameCallables.entryFor(callableCarrier);
-      if (genericCallable !== undefined && genericDefinition === undefined) {
+      if (genericCallable !== undefined && genericDefinition === undefined && nativeCall === undefined) {
         return "A quantified call has no exact sealed implementation family for its generic obligations.";
       }
       if (rustFrameCallableValue(callableCarrier) !== undefined && frameEntry === undefined) {
         return "A frame call has no exact sealed implementation entry for its generic obligations.";
       }
-      const physical = frameEntry === undefined && genericDefinition === undefined && operation.target.form === "callable"
-        ? rustCallableProtocol(callableCarrier) ?? rustNativeCallableProtocol(callableCarrier) : undefined;
+      const physical = nativeCall?.input.protocol.method ?? (frameEntry === undefined && genericDefinition === undefined && operation.target.form === "callable"
+        ? rustCallableProtocol(callableCarrier) ?? rustNativeCallableProtocol(callableCarrier) : undefined);
       if (physical !== undefined && callableCarrier !== undefined) {
         const error = collectType(callableCarrier);
         if (error !== undefined) return error;
