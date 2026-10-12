@@ -61,7 +61,8 @@ export function planRustSourceErrorPropagation(
       { identity: channel.target.identity, errorType: targetType }, payload);
   });
   if (mapped === undefined) return reject(node, context);
-  const result: RustExpr = { kind: "method-call", receiver: expression, method: "map_err",
+  const result: RustExpr = mapped === error && rustTypeEquals(operand.errorType, active.errorType) ? expression
+    : { kind: "method-call", receiver: expression, method: "map_err",
     args: [{ kind: "closure", params: [{ name: errorName }], body: mapped }] };
   return { kind: "try", expr: result, operandErrorType: active.errorType, resultErrorType: active.errorType };
 }

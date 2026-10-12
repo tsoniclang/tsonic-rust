@@ -6,6 +6,8 @@ import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { createRustNativeCallableInputPlan } from "../../../dist/analysis/callables/native-inputs.js";
 import { createRustNativeStoragePlan } from "../../../dist/analysis/callables/native-storage.js";
 import { createRustNativeCallableProducerPlan } from "../../../dist/analysis/callables/native-producers.js";
+import { createRustGenericCallablePlan } from "../../../dist/analysis/callables/generic-values.js";
+import { createRustNativeCapturePlan } from "../../../dist/analysis/callables/native-captures.js";
 import { rustNamedTypeCarrierValue } from "../../../dist/target-model/types/carriers/native.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 import { rustRuntimeCarrierKey } from "../../../dist/target-model/facts/selections.js";
@@ -20,9 +22,10 @@ function fixture(text, options = {}) {
   const { program, source: checked } = analyzeRust({ surfaces: [], files: { "index.ts": text }, ...options });
   const source = createTargetSourceProgram(checked);
   const storage = createSourceStorageQuery(source, program.sourceFiles);
+  const generic = createRustGenericCallablePlan(source.ast, program.sourceFiles, program.facts, program.names, source.navigation);
   const input = { ast: source.ast, storage, facts: program.facts, definitions: program.typeDefinitions,
-    generic: program.callableValues.generic };
-  const native = createRustNativeCallableInputPlan({ ...input, sourcePackages: program.sourcePackages, usedNames: new Set() });
+    generic };
+  const native = createRustNativeCallableInputPlan({ ...input, sourcePackages: program.host.sourcePackages, usedNames: new Set() });
   const producers = createRustNativeCallableProducerPlan({ ...input, native, nodes: storage.nodes,
     returnCarrierFor: declaration => {
       const selected = plan.returnFor(declaration);
@@ -30,6 +33,9 @@ function fixture(text, options = {}) {
     } });
   input.producers = producers;
   const plan = createRustNativeStoragePlan({ ...input, native });
+  const captures = createRustNativeCapturePlan({ ...input, nativeStorage: plan });
+  generic.initializePhysical({ ...input, native, captures,
+    boundSubjectFor: (subject, carrier, bindings) => plan.boundSubjectFor(subject, carrier, bindings) });
   const declaration = name => storage.nodes.find(node => source.ast.name(node) !== undefined &&
     source.ast.text(source.ast.name(node)) === name &&
     (source.ast.is.IsFunctionDeclaration(node) || source.ast.is.IsVariableDeclaration(node) ||
@@ -118,7 +124,9 @@ test("invocation input forwarding binds exact callee inputs rather than caller s
     assert.equal(value.carrier.referent === inputs[index].implementation, true, name);
     assert.equal(value.carrier.mutable, callee.carrier.mutable);
     assert.equal(value.carrier.lifetime === callee.carrier.lifetime, true);
-    assert.equal(inputs[index].protocol.identity !== callee.protocol.identity, true, "callee trait remains its own contract");
+    assert.equal(inputs[index].protocol === callee.protocol, true, "identical native contracts reuse their canonical trait");
+    assert.equal(inputs[index].implementation.identity !== callee.implementation.identity, true,
+      "contract interning never merges distinct caller and callee input identities");
   }
   const supplied = current.plan.invocationInputFor(callee, current.initializer("supplied"));
   assert.equal(supplied.kind, "selected", "concrete producer has its sealed physical error channel");
@@ -274,14 +282,15 @@ test("concrete quantified producers retain the existing sealed family through al
   `);
   for (const value of [current.plan.returnFor(current.declaration("make")),
     current.plan.valueFor(current.declaration("original")), current.plan.valueFor(current.declaration("alias"))]) {
-    assert.equal(value.kind, "identity", value.reason);
-    const definition = current.program.callableValues.generic.definitionFor(value.carrier);
-    const implementation = current.program.callableValues.generic.implementationFor(current.initializer("original"));
-    assert.equal(definition !== undefined && implementation !== undefined && definition.implementations.includes(implementation), true,
+    assert.equal(value.kind, "selected", value.reason);
+    const definition = current.input.generic.physical.definitionFor(value.carrier);
+    const implementation = current.input.generic.implementationFor(current.initializer("original"));
+    assert.equal(definition !== undefined && implementation !== undefined && definition.members.length === 1 &&
+      definition.members[0].implementation === implementation, true,
       "only the exact existing producer family is retained");
   }
   const unavailable = createRustNativeStoragePlan({ ...current.input, native: current.native,
-    generic: { ...current.input.generic, implementationFor: () => undefined } });
+    generic: { ...current.input.generic, physical: { ...current.input.generic.physical, carrierFor: () => undefined } } });
   assert.equal(unavailable.returnFor(current.declaration("make")).kind, "unresolved",
     "signature equality cannot substitute for a missing producer identity");
 });

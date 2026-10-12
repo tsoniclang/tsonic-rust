@@ -16,7 +16,7 @@ function fixture(text) {
   const storage = createSourceStorageQuery(source, program.sourceFiles);
   const input = { ast: source.ast, storage, facts: program.facts, definitions: program.typeDefinitions,
     generic: program.callableValues.generic };
-  const native = createRustNativeCallableInputPlan({ ...input, sourcePackages: program.sourcePackages, usedNames: new Set() });
+  const native = createRustNativeCallableInputPlan({ ...input, sourcePackages: program.host.sourcePackages, usedNames: new Set() });
   const producers = createRustNativeCallableProducerPlan({ ...input, native, nodes: storage.nodes,
     returnCarrierFor: declaration => {
       const selected = nativeStorage.returnFor(declaration);

@@ -52,7 +52,7 @@ export function planRustNativeCallableGenerics(
     }
     const call = native.callFor(node);
     if (call !== undefined) bounds.get(call.input.implementation.identity)?.set(
-      closedMetadataKey(call.input.protocol.trait), call.input.protocol.trait);
+      closedMetadataKey(call.input.trait), call.input.trait);
     context.input.program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   visit(declaration);

@@ -9,7 +9,7 @@ function fixture(substitutions = new Map()) {
   const { context, protocol } = nativeProducerFixture({ result: { kind: "source-primitive", name: "float64" } });
   const declaration = {};
   const implementation = { kind: "type-parameter", identity: "exact-input-1", name: "Implementation" };
-  const input = { implementation, protocol };
+  const input = { implementation, protocol, trait: protocol.trait };
   const original = context.input.program.callableValues.native;
   context.input.program.callableValues.native = { ...original,
     inputsFor: owner => owner === declaration ? [input] : [], capturesFor: () => [],
