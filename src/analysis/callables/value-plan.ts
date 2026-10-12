@@ -39,7 +39,6 @@ export interface RustCallableValuePlan {
   readonly nativeCaptures: RustNativeCapturePlan;
   readonly nativeProducers: RustNativeCallableProducerPlan;
   readonly nativeGenericProducers: RustNativeGenericProducerPlan;
-  readonly nativeCaptures: RustNativeCapturePlan;
   readonly issues: readonly RustSourceCallableSpecializationIssue[];
 }
 
@@ -85,7 +84,6 @@ export function createRustCallableValuePlanRegistry(): RustCallableValuePlanRegi
     get nativeCaptures() { return requireCurrent().nativeCaptures; },
     get nativeProducers() { return requireCurrent().nativeProducers; },
     get nativeGenericProducers() { return requireCurrent().nativeGenericProducers; },
-    get nativeCaptures() { return requireCurrent().nativeCaptures; },
     get issues() { return requireCurrent().issues; },
   });
 }
