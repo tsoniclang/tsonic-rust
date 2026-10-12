@@ -20,6 +20,7 @@ import { rustTypeParameterBounds } from "../../types/generic-bounds.js";
 import { rustOptionalStorageParameters } from "../../types/type-projections.js";
 import { allocateRustGeneratedName } from "../../../../target-model/names/generated.js";
 import { rustCallableInputLifetimeParameters } from "../../../../analysis/facts/source-input-lifetimes.js";
+import { planRustNativeCallableGenerics } from "./native-generics.js";
 
 export interface RustCallableGenericPlan {
   readonly context: RustPlanContext;
@@ -63,6 +64,16 @@ export function rustSourceDeclarationGenerics(
 }
 
 export function planRustCallableGenerics(
+  declaration: Node,
+  context: RustPlanContext,
+  specialization?: ReadonlyMap<string, TargetTypeRef>,
+  capturedParameters: readonly RustSourceGenericParameterContract[] = [],
+): RustCallableGenericPlan | undefined {
+  const source = planRustSourceCallableGenerics(declaration, context, specialization, capturedParameters);
+  return source === undefined ? undefined : planRustNativeCallableGenerics(declaration, source);
+}
+
+function planRustSourceCallableGenerics(
   declaration: Node,
   context: RustPlanContext,
   specialization?: ReadonlyMap<string, TargetTypeRef>,

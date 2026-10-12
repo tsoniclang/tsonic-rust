@@ -376,7 +376,7 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
       walk.context.structuralShapes,
       walk.context.projectFieldDispatch,
       walk.context.frozenDataWrites, walk.context.typeDefinitions,
-    ) ||
+    ) || walk.context.callableValues.native.callFor(node) !== undefined ||
       (operation?.kind === "source-call" && operation.target.form === "union-method" &&
         operation.target.variants.some(variant => genericInvocationIsFallible(variant.declaration))) ||
       (operation?.kind === "source-call" &&
@@ -757,14 +757,16 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
             (operation.target.form === "structural-method" || operation.target.form === "constructor-value") &&
               rustCallableProtocol(operation.target.callableCarrier) !== undefined;
           const genericImplementations = genericCallImplementations(operation);
+          const nativeInput = walk.context.callableValues.native.callFor(node);
           if (rustGenericCallableValue(rustSourceCallCallableStorageCarrier(operation, walk.context.structuralShapes)) !== undefined &&
+            nativeInput === undefined &&
             (genericImplementations === undefined || genericImplementations.length === 0)) {
             appendRustDiagnostic(walk, "RUST_GENERIC_CALLABLE_EFFECTS_NOT_CLOSED",
               "A generic invocation has no exact native implementation family for effect classification.", node,
               ["target.capability=rust.generic-callable.effects"]);
           }
-          if (nativeCallable || runtimeCallable || genericImplementations !== undefined || declaration !== undefined) {
-            const isAsync = rustAwaitCarrier(operation.resultCarrier) !== undefined;
+          if (nativeCallable || runtimeCallable || nativeInput !== undefined || genericImplementations !== undefined || declaration !== undefined) {
+            const isAsync = nativeInput?.completion !== undefined || rustAwaitCarrier(operation.resultCarrier) !== undefined;
             const unionBranches = operation.target.form === "union-method"
               ? operation.target.variants.map(variant => ({
                 invocation: genericInvocationIsFallible(variant.declaration) ? "fallible" as const : "infallible" as const,
@@ -774,7 +776,11 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
               : undefined;
             walk.context.facts.set(node, rustSourceCallEffectsFactKey, {
               ...(unionBranches === undefined ? {} : { unionBranches }),
-              invocation: genericImplementations !== undefined
+              ...(nativeInput === undefined ? {} : { nativeInput: {
+                invocationError: nativeInput.invocationError, awaitErrors: nativeInput.awaitErrors,
+                invocationErrorSource: nativeInput.invocationErrorSource, awaitErrorSources: nativeInput.awaitErrorSources,
+              } }),
+              invocation: nativeInput !== undefined ? "fallible" : genericImplementations !== undefined
                 ? genericImplementations.some(implementation => genericInvocationIsFallible(implementation.declaration)) ? "fallible" : "infallible"
                 : runtimeCallable || (unionBranches === undefined
                   ? declaration !== undefined && genericInvocationIsFallible(declaration)
@@ -782,7 +788,7 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
                 ? "fallible"
                 : "infallible",
               awaiting: isAsync
-                ? genericImplementations !== undefined
+                ? nativeInput !== undefined ? "fallible" : genericImplementations !== undefined
                   ? genericImplementations.some(implementation => genericAwaitIsFallible(implementation.declaration)) ? "fallible" : "infallible"
                   : runtimeCallable || (unionBranches === undefined
                     ? declaration !== undefined && genericAwaitIsFallible(declaration)

@@ -546,12 +546,16 @@ export function rustTypeFromCarrierInContext(
     if (moduleName === undefined) {
       return undefined;
     }
-    const typeName = context.input.program.names.nameForSourceType(value.fileName, value.typeName);
+    const protocol = context.input.program.callableValues.native.protocolForSourceItem(value.fileName, value.typeName);
+    const typeName = protocol === undefined
+      ? context.input.program.names.nameForSourceType(value.fileName, value.typeName) : protocol.targetName;
     if (typeName === undefined) {
       return undefined;
     }
     const externalCrate = context.externalCrateNameByFileName.get(value.fileName);
-    return externalCrate !== undefined && externalCrate !== context.crateName
+    return protocol !== undefined
+      ? `${externalCrate !== undefined && externalCrate !== context.crateName ? externalCrate : "crate"}::${moduleName}::${typeName}`
+      : externalCrate !== undefined && externalCrate !== context.crateName
       ? context.externalItemPathByIdentity.get(
           rustSourceItemIdentity(value.fileName, typeName),
         )

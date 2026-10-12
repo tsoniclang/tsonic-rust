@@ -87,6 +87,12 @@ export interface RustSourceCallEffectsFact {
   readonly invocation: "infallible" | "fallible";
   readonly awaiting: "not-applicable" | "infallible" | "fallible";
   readonly unionBranches?: readonly Pick<RustSourceCallEffectsFact, "invocation" | "awaiting">[];
+  readonly nativeInput?: {
+    readonly invocationError: TargetTypeRef;
+    readonly invocationErrorSource: string;
+    readonly awaitErrors: readonly TargetTypeRef[];
+    readonly awaitErrorSources: readonly string[];
+  };
 }
 
 // Total post-fixpoint effects for an exact selected project-source call.
@@ -105,8 +111,9 @@ export interface RustFutureValueFact {
   readonly outputCarrier: TargetTypeRef;
   readonly awaitedConversion: RustFinalizedValueConversion;
   readonly awaiting: "infallible" | "fallible";
-  readonly errorBoundary: RustErrorBoundary;
+  readonly errorBoundary: RustErrorBoundary | "source-native";
   readonly errorCarrier?: TargetTypeRef;
+  readonly errorSource?: string;
 }
 
 // Exact await behavior for one first-class future value. Unlike its runtime

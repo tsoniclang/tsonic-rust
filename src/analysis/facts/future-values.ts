@@ -7,6 +7,7 @@ import { finalizedConversionIsValid, finalizeValueConversion } from "./finalized
 import { rustNativeRepresentationMatches } from "../../target-model/conversions/native-representation.js";
 import { hasExactObjectKeys, isClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { rustAwaitSelection, rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
+import { rustNativeCallableCompletion } from "../../target-model/types/callable-completions.js";
 import type {
   RustFutureValueFact,
   RustSourceCallEffectsFact,
@@ -58,6 +59,8 @@ export function rustFutureValueForOperation(
   if (outputCarrier === undefined) {
     return undefined;
   }
+  if (sourceCallEffects.nativeInput !== undefined) return rustNativeFutureValueForSourceCallBranch(
+    operation, sourceCallEffects, operation.resultCarrier, definitions);
   return {
     outputCarrier,
     awaitedConversion: {
@@ -69,6 +72,25 @@ export function rustFutureValueForOperation(
     awaiting: sourceCallEffects.awaiting,
     errorBoundary: sourceCallEffects.awaiting === "fallible" ? "source-program" : "none",
   };
+}
+
+export function rustNativeFutureValueForSourceCallBranch(
+  operation: RustTargetOperationFact | undefined,
+  effects: RustSourceCallEffectsFact | undefined,
+  branch: TargetTypeRef,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
+): RustFutureValueFact | undefined {
+  if (operation?.kind !== "source-call" || effects?.nativeInput === undefined || effects.awaiting !== "fallible") return undefined;
+  const completion = rustNativeCallableCompletion(operation.resultCarrier, definitions);
+  const future = completion?.futures.find(future => rustTargetTypeRefEquals(future.carrier, branch));
+  const errorCarrier = future === undefined ? undefined : effects.nativeInput.awaitErrors[future.ordinal];
+  const errorSource = future === undefined ? undefined : effects.nativeInput.awaitErrorSources[future.ordinal];
+  if (completion === undefined || completion.futures.length !== effects.nativeInput.awaitErrors.length ||
+    completion.futures.length !== effects.nativeInput.awaitErrorSources.length ||
+    future === undefined || !isRustTargetTypeRef(errorCarrier) || typeof errorSource !== "string" || errorSource.length === 0) return undefined;
+  return { outputCarrier: future.output,
+    awaitedConversion: { kind: "identity", sourceCarrier: future.output, targetCarrier: future.output, fallible: false },
+    awaiting: "fallible", errorBoundary: "source-native", errorCarrier, errorSource };
 }
 
 export function rustFutureValueForSourceStorage(carrier: TargetTypeRef | undefined): RustFutureValueFact | undefined {
@@ -102,15 +124,18 @@ export function rustFutureValueMatchesCarrier(
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): boolean {
   return carrier !== undefined && fact !== null && typeof fact === "object" && isClosedMetadata(fact) && hasExactObjectKeys(fact,
-    fact.errorCarrier === undefined ? ["outputCarrier", "awaitedConversion", "awaiting", "errorBoundary"]
+    fact.errorBoundary === "source-native" ? ["outputCarrier", "awaitedConversion", "awaiting", "errorBoundary", "errorCarrier", "errorSource"]
+      : fact.errorCarrier === undefined ? ["outputCarrier", "awaitedConversion", "awaiting", "errorBoundary"]
       : ["outputCarrier", "awaitedConversion", "awaiting", "errorBoundary", "errorCarrier"]) &&
     finalizedConversionIsValid(fact.awaitedConversion, definitions) &&
     ((fact.awaiting === "infallible" && fact.errorBoundary === "none") ||
       (fact.awaiting === "fallible" && (fact.errorBoundary === "source-program" ||
-        fact.errorBoundary === "target-runtime" || fact.errorBoundary === "provider-native"))) &&
-    (fact.errorBoundary === "provider-native"
+        fact.errorBoundary === "target-runtime" || fact.errorBoundary === "provider-native" || fact.errorBoundary === "source-native"))) &&
+    (fact.errorBoundary === "provider-native" || fact.errorBoundary === "source-native"
       ? isRustTargetTypeRef(fact.errorCarrier)
       : fact.errorCarrier === undefined) &&
+    (fact.errorBoundary === "source-native" ? typeof fact.errorSource === "string" && fact.errorSource.length > 0
+      : fact.errorSource === undefined) &&
     rustTargetTypeRefEquals(rustAwaitCarrier(carrier)?.outputCarrier, fact.outputCarrier) &&
     rustTargetTypeRefEquals(fact.awaitedConversion.targetCarrier, fact.outputCarrier);
 }

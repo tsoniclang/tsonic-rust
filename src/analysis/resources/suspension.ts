@@ -30,6 +30,7 @@ import type { RustFutureValueFact } from "../facts/keys.js";
 import { finalizeRustAwaitValueFact, rustAwaitValueFactKey } from "../facts/await-values.js";
 import { rustEffectiveValueCarrier } from "../facts/value-carrier-queries.js";
 import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
+import { rustFutureValueForStoredBranch } from "./future-storage.js";
 
 export function recordResourceManagementFacts(
   walk: RustFactWalk,
@@ -174,7 +175,7 @@ export function recordFutureValueFacts(walk: RustFactWalk, sourceFiles: readonly
       const knownFuture = resolve(operand);
       const awaiting = finalizeRustAwaitValueFact(carrier, operation.resultCarrier, leaf =>
         knownFuture !== undefined && rustFutureValueMatchesCarrier(knownFuture, leaf, walk.context.typeDefinitions)
-          ? knownFuture : rustFutureValueForSourceStorage(leaf),
+          ? knownFuture : rustFutureValueForStoredBranch(walk, operand, leaf) ?? rustFutureValueForSourceStorage(leaf),
       (source, target) => selectRustSourceValueConversion(source, target, walk.context.typeDefinitions),
       walk.context.typeDefinitions);
       if (awaiting === undefined) {

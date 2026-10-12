@@ -21,11 +21,14 @@ import { createRustFrameCallablePlan, type RustFrameCallablePlan } from "./frame
 import type { RustCallableOwnershipPlan } from "./ownership-plan.js";
 import type { SourceStorageQueries } from "@tsonic/target-api/analysis";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
+import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
+import { createRustNativeCallableInputPlan, type RustNativeCallableInputPlan } from "./native-inputs.js";
 
 export interface RustCallableValuePlan {
   readonly generic: RustGenericCallablePlan;
   readonly suspended: RustSuspendedCallablePlan;
   readonly frames: RustFrameCallablePlan;
+  readonly native: RustNativeCallableInputPlan;
   readonly issues: readonly RustSourceCallableSpecializationIssue[];
 }
 
@@ -42,6 +45,7 @@ export interface RustCallableValuePlanInput {
   readonly sourceStorage: SourceStorageQueries;
   readonly projectTypes: RustProjectTypePolicy;
   readonly objectRepresentations: import("../project-types/object-representation.js").RustObjectRepresentationPlan;
+  readonly typeDefinitions: RustTypeDefinitions;
 }
 
 export interface RustCallableValuePlanRegistry extends RustCallableValuePlan {
@@ -65,6 +69,7 @@ export function createRustCallableValuePlanRegistry(): RustCallableValuePlanRegi
     get generic() { return requireCurrent().generic; },
     get suspended() { return requireCurrent().suspended; },
     get frames() { return requireCurrent().frames; },
+    get native() { return requireCurrent().native; },
     get issues() { return requireCurrent().issues; },
   });
 }
@@ -142,6 +147,8 @@ function createRustCallableValuePlan(input: RustCallableValuePlanInput): RustCal
   }
   for (const implementation of suspended.implementations) usedNames.add(implementation.stateName);
   const frames = createRustFrameCallablePlan({ ...input, usedNames });
-  return Object.freeze({ generic, suspended, frames,
+  const native = createRustNativeCallableInputPlan({ ast: input.ast, facts: input.facts,
+    storage: input.sourceStorage, definitions: input.typeDefinitions, usedNames });
+  return Object.freeze({ generic, suspended, frames, native,
     issues: Object.freeze([...generic.issues, ...suspended.issues, ...frames.issues]) });
 }

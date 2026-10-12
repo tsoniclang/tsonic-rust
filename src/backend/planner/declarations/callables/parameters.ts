@@ -37,6 +37,7 @@ import type { RustBindingExpressionPlanner } from "../../bindings/patterns.js";
 import { rustOptionDefaultValue } from "../../expressions/option-default.js";
 import { rustCarrierReferentMutationRequiresMutableBinding } from "../../../../target-model/types/index.js";
 import { planRustParameterEntryConversion } from "./parameter-entry-conversion.js";
+import { rustNativeCallableInputUsesProtocol } from "../../../../analysis/callables/native-inputs.js";
 
 type RustParameterPrelude =
   | { readonly kind: "statement"; readonly statement: RustStmt }
@@ -85,7 +86,11 @@ export function planRustCallableParameters(
       ? nameNode
       : undefined;
     const abi = context.input.program.facts.getFact(parameter, rustSourceParameterAbiFactKey);
-    const parameterCarrier = abi?.parameterCarrier;
+    const native = context.input.program.callableValues.native;
+    const requiresImplementation = native.inputsFor(callable).some(input => input.subject.node === parameter &&
+      rustNativeCallableInputUsesProtocol(input));
+    const parameterCarrier = abi === undefined ? undefined : requiresImplementation
+      ? native.parameterCarrier(parameter, abi.parameterCarrier) : abi.parameterCarrier;
     const parameterType = rustParameterTypeFromCarrierInContext(parameterCarrier, context);
     const parameterName = pattern === undefined
       ? context.input.program.names.nameForDeclaration(parameter) ?? ""

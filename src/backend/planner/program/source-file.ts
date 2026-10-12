@@ -1,6 +1,7 @@
 import { rustHiddenAttribute } from "../../target-ast/attributes.js";
 import { rustModuleCallableStorageFactKey } from "../../../analysis/callables/module-values.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
+import { planRustNativeCallableProtocolItems } from "../declarations/callables/native-protocols.js";
 import { planRustClassEnvironmentItems } from "../objects/class-environments.js";
 import { planRustClassValueImplementations } from "../objects/constructor-values.js";
 import { planRustProjectStructuralImplementations } from "../objects/project-structural-views.js";
@@ -158,7 +159,8 @@ export function planRustSourceFile(
   const baseModule = planModuleItems(context, syntheticNames);
   const plannedModule = { ...baseModule,
     items: [...objectLiteralImplementations.items, ...baseModule.items, ...planRustTypeFamilyImplementations(context),
-      ...planRustGenericCallableItems(context), ...planRustFrameCallableItems(context), ...planRustSuspendedCallableItems(context)] };
+      ...planRustGenericCallableItems(context), ...planRustNativeCallableProtocolItems(context),
+      ...planRustFrameCallableItems(context), ...planRustSuspendedCallableItems(context)] };
   const initializationRequirement = input.program.moduleInitialization.requirementFor(sourceFile);
   if (initializationRequirement.kind === "unresolved") {
     diagnostics.push(unsupportedConstructDiagnostic(

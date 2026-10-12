@@ -1,0 +1,248 @@
+import type { AstReader, Node } from "@tsonic/tsts";
+import type { SourceStorageBindings, SourceStorageQueries, SourceStorageSubject, SourceStorageProjection } from "@tsonic/target-api/analysis";
+import { sourceEnclosingCallable, sourceNodeIdentity, Node_Expression } from "@tsonic/target-api/source";
+import type { RustPlanQueries } from "../../target-model/facts/selections.js";
+import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
+import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
+import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustGenericCallableSignaturesMatch } from "../../target-model/conversions/generic-callable.js";
+import { rustSourceParameterAbiFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
+import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
+import { createRustNativeCallableProtocol, type RustNativeCallableProtocol } from "./native-protocols.js";
+import { rustNativeCallableErrorType } from "./native-protocols.js";
+import { rustNativeCallableCompletion, type RustNativeCallableCompletion } from "../../target-model/types/callable-completions.js";
+import { rustOptionTargetType } from "../../target-model/types/carriers/optional.js";
+import { rustCallableInputProtocol } from "../../target-model/types/carriers/callables.js";
+import { isRustJsArrayCarrier, rustJsArrayTargetType, rustJsArrayLikeElementTargetType } from "../../target-model/types/carriers/js.js";
+import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
+import { rustNativeCallableInvocationArguments } from "./native-invocations.js";
+
+export interface RustNativeCallableInput {
+  readonly owner: Node;
+  readonly subject: SourceStorageSubject;
+  readonly carrier: TargetTypeRef;
+  readonly implementation: Extract<TargetTypeRef, { readonly kind: "type-parameter" }>;
+  readonly protocol: RustNativeCallableProtocol;
+}
+
+export function rustNativeCallableInputUsesProtocol(input: RustNativeCallableInput): boolean {
+  return input.protocol.completion !== undefined || rustGenericCallableValue(rustOptionElementCarrier(input.carrier) ?? input.carrier) !== undefined;
+}
+
+export type RustNativeCallableOrigins =
+  | { readonly kind: "resolved"; readonly inputs: readonly RustNativeCallableInput[];
+      readonly implementations: readonly SourceStorageSubject[] }
+  | { readonly kind: "unresolved"; readonly reason: string };
+
+export interface RustNativeCallableCall {
+  readonly node: Node;
+  readonly input: RustNativeCallableInput;
+  readonly invocationError: TargetTypeRef;
+  readonly invocationErrorSource: string;
+  readonly completion?: RustNativeCallableCompletion;
+  readonly awaitErrors: readonly TargetTypeRef[];
+  readonly awaitErrorSources: readonly string[];
+}
+
+export interface RustNativeCallableInputPlan {
+  readonly inputs: readonly RustNativeCallableInput[];
+  readonly calls: readonly RustNativeCallableCall[];
+  callFor(node: Node): RustNativeCallableCall | undefined;
+  inputsFor(declaration: Node): readonly RustNativeCallableInput[];
+  capturesFor(declaration: Node): readonly RustNativeCallableInput[];
+  originsFor(declaration: Node, subject: SourceStorageSubject, carrier: TargetTypeRef): RustNativeCallableOrigins;
+  originsForValue(node: Node): RustNativeCallableOrigins;
+  bindingsFor(declaration: Node): SourceStorageBindings | undefined;
+  protocolForSourceItem(fileName: string, typeName: string): RustNativeCallableProtocol | undefined;
+  parameterCarrier(parameter: Node, carrier: TargetTypeRef): TargetTypeRef | undefined;
+}
+
+export function createRustNativeCallableInputPlan(input: {
+  readonly ast: AstReader;
+  readonly storage: SourceStorageQueries;
+  readonly facts: RustPlanQueries;
+  readonly definitions: RustTypeDefinitions;
+  readonly usedNames: Set<string>;
+}): RustNativeCallableInputPlan {
+  const bindings = new Map<Node, SourceStorageBindings | null>();
+  const inputs = new Map<Node, Map<SourceStorageSubject, RustNativeCallableInput>>();
+  const captures = new Map<Node, Set<RustNativeCallableInput>>();
+  const values = new Map<Node, RustNativeCallableOrigins>();
+  let collecting = true;
+  const bindingsFor = (declaration: Node): SourceStorageBindings | undefined => {
+    const existing = bindings.get(declaration);
+    if (existing !== undefined) return existing ?? undefined;
+    const parent = sourceEnclosingCallable(input.ast.parent(declaration), input.ast);
+    const parentBindings = parent === undefined ? undefined : bindingsFor(parent);
+    if (parent !== undefined && parentBindings === undefined) {
+      bindings.set(declaration, null);
+      return undefined;
+    }
+    const selected = input.storage.bindingsForDeclaration(declaration, parentBindings);
+    const result = selected.kind === "resolved" ? selected.bindings : undefined;
+    bindings.set(declaration, result ?? null);
+    return result;
+  };
+  const selectInput = (subject: SourceStorageSubject, carrier: TargetTypeRef): RustNativeCallableInput | undefined => {
+    if (subject.kind !== "input") return undefined;
+    const owner = input.ast.parent(subject.node);
+    if (owner === undefined || !input.ast.parameters(owner).includes(subject.node)) return undefined;
+    const selected = rustOptionElementCarrier(carrier) ?? carrier;
+    if (rustGenericCallableProtocol(selected) === undefined && rustCallableProtocol(selected) === undefined) return undefined;
+    const members = inputs.get(owner) ?? new Map<SourceStorageSubject, RustNativeCallableInput>();
+    const existing = members.get(subject);
+    if (existing !== undefined) return rustTargetTypeRefEquals(existing.carrier, carrier) ||
+      rustGenericCallableSignaturesMatch(existing.carrier, carrier) ? existing : undefined;
+    if (!collecting) return undefined;
+    const identity = sourceNodeIdentity(input.ast, subject.node);
+    const file = input.ast.getSourceFile(subject.node);
+    if (identity === undefined || file === undefined) return undefined;
+    const projection = subject.projection.map(component => component.kind === "array-element" ? "array"
+      : component.kind === "tuple-element" ? `tuple:${component.index}`
+      : sourceNodeIdentity(input.ast, component.declaration));
+    if (projection.some(component => component === undefined)) return undefined;
+    const nativeIdentity = `native-callable:${input.ast.getFileName(file)}:${identity}:${JSON.stringify(projection)}`;
+    const protocol = createRustNativeCallableProtocol({ identity: nativeIdentity,
+      ownerFileName: input.ast.getFileName(file), carrier, definitions: input.definitions, usedNames: input.usedNames });
+    if (protocol === undefined) return undefined;
+    const value: RustNativeCallableInput = Object.freeze({ owner, subject, carrier, protocol,
+      implementation: Object.freeze({ kind: "type-parameter", name: `Implementation${members.size}`,
+        identity: nativeIdentity }),
+    });
+    members.set(subject, value);
+    inputs.set(owner, members);
+    return value;
+  };
+  const originsFor = (declaration: Node, subject: SourceStorageSubject, carrier: TargetTypeRef): RustNativeCallableOrigins => {
+    const selectedBindings = bindingsFor(declaration);
+    if (selectedBindings === undefined) return { kind: "unresolved", reason: "Native callable storage requires an exact declaration-local input boundary." };
+    const origins = input.storage.boundOriginsFor(subject, selectedBindings);
+    if (origins.kind !== "resolved") return origins;
+    const parameters = new Set<RustNativeCallableInput>();
+    const implementations = new Set<SourceStorageSubject>();
+    for (const origin of origins.subjects) {
+      if (origin.kind !== "input") {
+        implementations.add(origin);
+        continue;
+      }
+      const parameter = selectInput(origin, carrier);
+      if (parameter === undefined) return { kind: "unresolved", reason: "Native callable input identity or selected carrier is inconsistent." };
+      parameters.add(parameter);
+      if (collecting && parameter.owner !== declaration) {
+        const selected = captures.get(declaration) ?? new Set<RustNativeCallableInput>();
+        selected.add(parameter);
+        captures.set(declaration, selected);
+      }
+    }
+    return Object.freeze({ kind: "resolved", inputs: Object.freeze([...parameters]),
+      implementations: Object.freeze([...implementations]) });
+  };
+  for (const node of input.storage.nodes) {
+    if (!input.ast.is.IsParameterDeclaration(node)) continue;
+    const carrier = input.facts.getFact(node, rustSourceParameterAbiFactKey)?.valueCarrier ??
+      input.facts.getFact(node, rustRuntimeCarrierKey)?.carrier;
+    if (carrier === undefined) continue;
+    const selected = rustOptionElementCarrier(carrier) ?? carrier;
+    if (rustGenericCallableValue(selected) === undefined && rustCallableProtocol(selected) === undefined) continue;
+    const subject = input.storage.subject(node, "input");
+    if (subject.kind === "resolved") selectInput(subject.subject, carrier);
+  }
+  for (const node of input.storage.nodes) {
+    const carrier = input.facts.getFact(node, rustRuntimeCarrierKey)?.carrier;
+    if (carrier === undefined) continue;
+    const selected = rustOptionElementCarrier(carrier) ?? carrier;
+    if (rustGenericCallableValue(selected) === undefined && rustCallableProtocol(selected) === undefined) continue;
+    const owner = sourceEnclosingCallable(node, input.ast);
+    if (owner === undefined) continue;
+    const subject = input.storage.subjectFor(node);
+    if (subject.kind === "resolved") values.set(node, originsFor(owner, subject.subject, carrier));
+  }
+  collecting = false;
+  const selectedInputs = Object.freeze([...inputs.values()].flatMap(members => [...members.values()]));
+  const protocols = new Map(selectedInputs.map(member => [member.protocol.identity, member.protocol]));
+  const calls = new Map<Node, RustNativeCallableCall>();
+  for (const node of input.storage.invocations) {
+    const operation = input.facts.getFact(node, rustTargetOperationFactKey);
+    if (operation?.kind !== "source-call" || operation.target.form !== "callable") continue;
+    const callee = Node_Expression(input.ast, node);
+    const origins = callee === undefined ? undefined : values.get(callee);
+    if (origins?.kind !== "resolved" || origins.inputs.length !== 1 || origins.implementations.length !== 0) continue;
+    const parameter = origins.inputs[0]!;
+    if (!rustNativeCallableInputUsesProtocol(parameter)) continue;
+    const methodArguments = rustNativeCallableInvocationArguments(parameter.protocol, operation);
+    if (methodArguments === undefined) continue;
+    const completion = rustNativeCallableCompletion(operation.resultCarrier, input.definitions);
+    if ((completion?.futures.length ?? 0) !== (parameter.protocol.completion?.futures.length ?? 0)) continue;
+    const invocationError = rustNativeCallableErrorType(parameter.protocol, parameter.implementation, "invocation", methodArguments)!;
+    const awaitErrors = (completion?.futures ?? []).map(future =>
+      rustNativeCallableErrorType(parameter.protocol, parameter.implementation, future.ordinal, methodArguments)!);
+    const source = `${parameter.implementation.identity}:${closedMetadataKey(methodArguments)}`;
+    calls.set(node, Object.freeze({ node, input: parameter, invocationError,
+      invocationErrorSource: `${source}:invocation`,
+      ...(completion === undefined ? {} : { completion }), awaitErrors: Object.freeze(awaitErrors),
+      awaitErrorSources: Object.freeze(awaitErrors.map((_error, index) => `${source}:await:${index}`)) }));
+  }
+  const declarationInputs = new Map([...inputs].map(([owner, members]) => [owner, Object.freeze([...members.values()])]));
+  const declarationCaptures = new Map([...captures].map(([owner, members]) => [owner, Object.freeze([...members])]));
+  const emptyInputs: readonly RustNativeCallableInput[] = Object.freeze([]);
+  return Object.freeze({ bindingsFor, originsFor, inputs: selectedInputs,
+    calls: Object.freeze([...calls.values()]), callFor: (node: Node) => calls.get(node),
+    inputsFor: (declaration: Node) => declarationInputs.get(declaration) ?? emptyInputs,
+    capturesFor: (declaration: Node) => declarationCaptures.get(declaration) ?? emptyInputs,
+    originsForValue: (node: Node) => values.get(node) ?? Object.freeze({ kind: "unresolved" as const,
+      reason: "The value has no exact sealed declaration-local native callable origins." }),
+    protocolForSourceItem: (fileName: string, typeName: string) => {
+      const protocol = protocols.get(typeName);
+      return protocol?.ownerFileName === fileName ? protocol : undefined;
+    },
+    parameterCarrier(parameter: Node, carrier: TargetTypeRef): TargetTypeRef | undefined {
+      const owner = input.ast.parent(parameter);
+      const members = owner === undefined ? undefined : inputs.get(owner);
+      if (members === undefined || ![...members.keys()].some(subject => subject.node === parameter)) return carrier;
+      let remaining = 4096;
+      const visit = (current: TargetTypeRef, projection: readonly SourceStorageProjection[], depth: number): TargetTypeRef | undefined => {
+        if (remaining-- <= 0 || depth > 128) return undefined;
+        const optional = rustOptionElementCarrier(current);
+        if (optional !== undefined) {
+          const present = visit(optional, projection, depth + 1);
+          return present === undefined ? undefined : { ...rustOptionTargetType(present),
+            ...(current.kind === "target-named" && current.sourceAbsence === true ? { sourceAbsence: true } : {}) };
+        }
+        const subject = input.storage.subject(parameter, "input", projection);
+        const slot = subject.kind === "resolved" ? members.get(subject.subject) : undefined;
+        if (slot !== undefined) return rustCallableInputProtocol(current) !== undefined && current.kind === "reference"
+          ? { ...current, referent: slot.implementation } : slot.implementation;
+        if (current.kind === "reference") {
+          const referent = visit(current.referent, projection, depth + 1);
+          return referent === undefined ? undefined : { ...current, referent };
+        }
+        if (current.kind === "array" || current.kind === "slice") {
+          const element = visit(current.element, [...projection, { kind: "array-element" }], depth + 1);
+          return element === undefined ? undefined : { ...current, element };
+        }
+        if (current.kind === "tuple") {
+          const elements = current.elements.map((element, index) => visit(element,
+            [...projection, { kind: "tuple-element", index }], depth + 1));
+          return elements.some(element => element === undefined) ? undefined : { ...current, elements: elements as TargetTypeRef[] };
+        }
+        if (isRustJsArrayCarrier(current)) {
+          const element = rustJsArrayLikeElementTargetType(current);
+          const selected = element === undefined ? undefined : visit(element, [...projection, { kind: "array-element" }], depth + 1);
+          return selected === undefined ? undefined : rustJsArrayTargetType(selected);
+        }
+        const containsInput = [...members.keys()].some(input => input.node === parameter &&
+          input.projection.length > projection.length && projection.every((component, index) => {
+            const child = input.projection[index];
+            return component.kind === "array-element" ? child?.kind === "array-element"
+              : component.kind === "tuple-element" ? child?.kind === "tuple-element" && component.index === child.index
+              : child?.kind === "member" && component.declaration === child.declaration;
+          }));
+        return containsInput ? undefined : current;
+      };
+      return visit(carrier, [], 0);
+    },
+  });
+}
