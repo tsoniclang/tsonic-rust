@@ -84,6 +84,7 @@ import { createRustSourceProfileRegistry } from "../facts/source-profile-registr
 import { createRustSourceProfileStorageEffects } from "../../policy/operations/source-profiles/source-storage-effects.js";
 import { createRustCallableOwnershipRegistry, type RustCallableOwnershipRegistry } from "../callables/ownership-plan.js";
 import { createRustSourceCallableQueries } from "../../policy/ownership/source-borrowed-return.js";
+import { createRustRetainedEnvironmentQueries } from "../../policy/ownership/retained-environment-queries.js";
 
 export interface RustAnalysisContext extends RustSourcePolicyContext {
   readonly sourceStorage: SourceStorageQueries;
@@ -175,6 +176,8 @@ export function createRustAnalysisContext(
     callableRepresentation: "storage" as const,
     sourceStorage,
     sourceCallables: createRustSourceCallableQueries(sourceStorage),
+    retainedEnvironments: createRustRetainedEnvironmentQueries({ source: input.source, sourceStorage,
+      sourceLifetimes: lifetimes.index ?? emptyRustLifetimeIndex }),
     callableOwnership: createRustCallableOwnershipRegistry(),
     errorStorageDemands: createRustErrorStorageDemandQuery(input.source,
       sourceProfiles, sourceStorage,

@@ -8,6 +8,7 @@ import { rustLifetimeKey } from "../../../../target-model/lifetimes/index.js";
 import type { RustWherePredicate } from "../../../target-ast/nodes.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { closedMetadataKey } from "../../../../target-model/metadata/closed-data.js";
+import { rustGenericsWithAssociatedBounds } from "../../types/generic-bounds.js";
 
 export function planRustRetainedGenerics(declaration: Node, source: RustCallableGenericPlan): RustCallableGenericPlan | undefined {
   const { context } = source;
@@ -39,6 +40,6 @@ export function planRustRetainedGenerics(declaration: Node, source: RustCallable
     predicates.set(closedMetadataKey(predicate), predicate);
   }
   const generics = source.finalizeGenerics();
-  return { ...source, finalizeGenerics: () => ({ ...generics,
-    wherePredicates: [...generics.wherePredicates, ...predicates.values()] }) };
+  return { ...source, finalizeGenerics: () => rustGenericsWithAssociatedBounds(generics.parameters,
+    [...generics.wherePredicates, ...predicates.values()]) };
 }

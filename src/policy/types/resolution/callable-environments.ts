@@ -1,5 +1,4 @@
 import type { Node } from "@tsonic/tsts";
-import { Node_Initializer, sourceLexicalEnvironment } from "@tsonic/target-api/source";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetGenericReferences } from "../../../target-model/types/carriers/generic-references.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
@@ -17,11 +16,7 @@ export function resolveRustCallableEnvironment(
 ): readonly TargetTypeRef[] | undefined {
   const body = declaration === undefined ? undefined : context.ast.body(declaration);
   if (declaration === undefined || body === undefined) return [];
-  const roots = [...context.ast.parameters(declaration).flatMap(parameter => {
-    const initializer = parameter === undefined ? undefined : Node_Initializer(context.ast, parameter);
-    return initializer === undefined ? [] : [initializer];
-  }), body];
-  const lexical = sourceLexicalEnvironment(declaration, roots, context.ast, context.source.navigation);
+  const lexical = context.retainedEnvironments.lexicalFor(declaration);
   if (lexical.kind === "unresolved") return undefined;
   const parameters = new Map<string, Extract<TargetTypeRef, { readonly kind: "type-parameter" }>>();
   for (const reference of [...lexical.captures.filter(capture => !excludedCaptures.has(capture.declaration) &&

@@ -43,20 +43,32 @@ export function rustValueDomainHasTargetType(
       continue;
     }
     if (origin.subject.kind !== "value") return false;
-    let carrier = host.types.resolveNode(origin.subject.node, origin.sourceFile);
-    for (const [index, component] of origin.subject.projection.entries()) {
-      carrier = component.kind === "array-element"
-        ? carrier?.kind === "array" || carrier?.kind === "slice" ? carrier.element
-          : rustFixedArrayCarrierValue(carrier)?.element ?? rustJsArrayLikeElementTargetType(carrier)
-        : component.kind === "tuple-element"
-          ? carrier?.kind === "tuple" ? carrier.elements[component.index] : undefined
-          : carrier === undefined ? undefined
-            : projectedMemberCarrier(host, storage, origin.subject, index, component.declaration, carrier);
-    }
+    const carrier = rustSourceStorageProjectedCarrier(host, origin.subject,
+      host.types.resolveNode(origin.subject.node, origin.sourceFile));
     if (carrier === undefined || !rustTargetTypeRefEquals(carrier, expected)) return false;
     present = true;
   }
   return present && storage.failureReason() === undefined;
+}
+
+export function rustSourceStorageProjectedCarrier(
+  host: RustValueDomainCarrierHost,
+  subject: SourceStorageSubject,
+  root: TargetTypeRef | undefined,
+): TargetTypeRef | undefined {
+  const storage = host.sourceStorage;
+  if (storage === undefined || storage.failureReason() !== undefined) return undefined;
+  let carrier = root;
+  for (const [index, component] of subject.projection.entries()) {
+    carrier = component.kind === "array-element"
+      ? carrier?.kind === "array" || carrier?.kind === "slice" ? carrier.element
+        : rustFixedArrayCarrierValue(carrier)?.element ?? rustJsArrayLikeElementTargetType(carrier)
+      : component.kind === "tuple-element"
+        ? carrier?.kind === "tuple" ? carrier.elements[component.index] : undefined
+        : carrier === undefined ? undefined
+          : projectedMemberCarrier(host, storage, subject, index, component.declaration, carrier);
+  }
+  return carrier;
 }
 
 function projectedMemberCarrier(

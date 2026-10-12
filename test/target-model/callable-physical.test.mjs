@@ -20,6 +20,7 @@ const failure = rustNamedTargetType("fixture:Failure", "Failure");
 const file = "/adapt.ts";
 const select = (source, target) => selectRustCallableConversion(source, target, selectRustExactIntegerConversion);
 const physicalCarrier = ({ parameters, result, error }) => rustNamedTargetType(rustCallableTargetId, "rt::Callable", [
+  { kind: "lifetime", lifetime: { kind: "static" } },
   { kind: "type", type: { kind: "tuple", elements: parameters } },
   { kind: "type", type: rustNamedTargetType("rust.core.Result", "Result", [
     { kind: "type", type: result }, { kind: "type", type: error },

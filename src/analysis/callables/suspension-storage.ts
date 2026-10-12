@@ -40,6 +40,9 @@ export function resolveRustSuspendedCallableStorage(
   }
   const exactParameters = parameters as readonly Node[];
   const capturedParameters = rustSuspendedCapturedParameters(declaration, walk.context);
+  if (capturedParameters === undefined) return {
+    kind: "rejected", reason: "Suspended input retention requires exact checked parameter-use evidence.",
+  };
   const receiverOccurrences: Node[] = [];
   const receiverCaptures = walk.context.objectRepresentations.receiverCaptures;
   const capturedFields = receiverCaptures.capturesFor(declaration);
