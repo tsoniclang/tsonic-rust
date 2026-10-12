@@ -159,7 +159,9 @@ function planDefinition(definition: RustGenericCallablePhysicalDefinition, conte
   if (protocol === undefined || errors === undefined) return undefined;
   const effects = errors.effects;
   const nativeFuture = rustNativeFutureCallableResult(protocol.result);
-  const payload = nativeFuture?.output ?? protocol.result;
+  const completion = context.input.program.callableValues.genericCompletions.forDefinition(definition);
+  if (completion.kind === "unresolved") return undefined;
+  const payload = nativeFuture?.output ?? completion.result;
   const parameterTypes = protocol.parameters.map(parameter => rustTypeFromCarrierInContext(parameter, context));
   const output = rustTypeFromCarrierInContext(payload, context);
   if (parameterTypes.some(type => type === undefined) || output === undefined) return undefined;
@@ -226,8 +228,16 @@ function planDefinition(definition: RustGenericCallablePhysicalDefinition, conte
     if (selected === undefined) return undefined;
     const converted = selected.invocation === undefined ? undefined : errors.invocation.propagate(selected.invocation, call);
     if (selected.invocation !== undefined && converted?.kind !== "try") return undefined;
-    arms.push({ pattern, expression: converted?.kind === "try" ? converted.expr :
-      methodFallible ? { kind: "call", path: "Ok", args: [call] } : call });
+    const memberCompletion = completion.kind === "selected" ? completion.forMember(member) : undefined;
+    if (completion.kind === "selected" && memberCompletion === undefined) return undefined;
+    if (memberCompletion?.variant === undefined) {
+      arms.push({ pattern, expression: converted?.kind === "try" ? converted.expr :
+        methodFallible ? { kind: "call", path: "Ok", args: [call] } : call });
+    } else {
+      const value: RustExpr = { kind: "associated-call", owner: output, method: memberCompletion.variant,
+        args: [converted?.kind === "try" ? { ...converted, nativeReturn: true } : call] };
+      arms.push({ pattern, expression: methodFallible ? { kind: "call", path: "Ok", args: [value] } : value });
+    }
   }
   const generics = environment;
   const methodFallible = effects.invocation === "fallible";
