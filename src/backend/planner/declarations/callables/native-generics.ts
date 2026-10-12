@@ -15,7 +15,10 @@ export function planRustNativeCallableGenerics(
   source: RustCallableGenericPlan,
 ): RustCallableGenericPlan | undefined {
   const native = source.context.input.program.callableValues.native;
-  const inputs = [...new Set([...native.inputsFor(declaration), ...native.capturesFor(declaration)])];
+  const { nativeStorage } = source.context.input.program.callableValues;
+  const inputs = [...new Map([...native.inputsFor(declaration), ...native.capturesFor(declaration),
+    ...nativeStorage.futureInputsFor(declaration), ...nativeStorage.futureCapturesFor(declaration)]
+    .map(input => [input.implementation.identity, input] as const)).values()];
   if (inputs.length === 0) return source;
   const sourceGenerics = source.finalizeGenerics();
   const typeParameterNames = new Map(source.context.typeParameterNames);
@@ -34,7 +37,6 @@ export function planRustNativeCallableGenerics(
       bounds.get(type.owner.identity)?.set(closedMetadataKey(type.trait), type.trait);
     for (const child of rustTargetTypeChildren(type)) collect(child);
   };
-  const { nativeStorage } = context.input.program.callableValues;
   if (context.input.program.facts.getFact(declaration, rustSourceCallableReturnFactKey) !== undefined) {
     const selected = nativeStorage.returnFor(declaration);
     if (selected.kind === "unresolved") return undefined;

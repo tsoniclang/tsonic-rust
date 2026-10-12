@@ -15,6 +15,7 @@ function fixture(substitutions = new Map()) {
     inputsFor: owner => owner === declaration ? [input] : [], capturesFor: () => [],
     callFor: node => node === declaration ? { input } : undefined };
   context.input.program.callableValues.nativeGenericProducers.forwardingFor = () => [];
+  context.input.program.callableValues.nativeStorage = { futureInputsFor: () => [], futureCapturesFor: () => [] };
   context.input.program.source = { ast: { forEachChild() {} } };
   context.input.program.facts = { getFact() {} };
   context.typeParameterSubstitutions = substitutions;
@@ -55,6 +56,7 @@ for (const position of ["return", "conversion"]) {
     const trait = current.input.protocol.trait;
     const carrier = { kind: "associated-type", owner: current.implementation, name: "InvocationError", trait };
     program.callableValues.nativeStorage = {
+      ...program.callableValues.nativeStorage,
       returnFor: () => ({ kind: "selected", carrier, inputs: [current.input] }),
       valueFor: () => ({ kind: "selected", carrier, inputs: [current.input] }),
     };
@@ -81,6 +83,38 @@ test("native generic bounds do not invent obligations for unused inputs", () => 
   const selected = planRustNativeCallableGenerics(current.declaration, current.source);
   assert.equal(selected !== undefined, true);
   assert.equal(selected.finalizeGenerics().parameters[0].bounds.length, 0);
+});
+
+test("unobserved Future inputs and captures declare exact implementation parameters without callable or output bounds", () => {
+  const current = fixture();
+  const program = current.source.context.input.program;
+  program.callableValues.native.inputsFor = () => [];
+  program.callableValues.native.callFor = () => undefined;
+  const first = { implementation: { kind: "type-parameter", identity: "future:first", name: "Future0" } };
+  const second = { implementation: { kind: "type-parameter", identity: "future:second", name: "Future0" } };
+  program.callableValues.nativeStorage.futureInputsFor = () => [first];
+  program.callableValues.nativeStorage.futureCapturesFor = () => [first, second];
+  const selected = planRustNativeCallableGenerics(current.declaration, current.source);
+  assert.equal(selected !== undefined, true);
+  const generics = selected.finalizeGenerics();
+  assert.equal(generics.parameters.length, 2, "a repeated input capture remains one exact implementation");
+  assert.equal(new Set(generics.parameters.map(parameter => parameter.name)).size, 2, "independent inputs cannot share a generated name");
+  assert.equal(generics.parameters.every(parameter => parameter.bounds.length === 0), true, "transport does not impose Future<Output=Result<T,E>>");
+  assert.equal(generics.wherePredicates.length, 0);
+});
+
+test("substituted Future captures are not redeclared or constrained merely for transport", () => {
+  const current = fixture(new Map([["future:captured", { kind: "type-parameter", identity: "outer", name: "Outer" }]]));
+  const program = current.source.context.input.program;
+  program.callableValues.native.inputsFor = () => [];
+  program.callableValues.native.callFor = () => undefined;
+  program.callableValues.nativeStorage.futureCapturesFor = () => [{ implementation: {
+    kind: "type-parameter", identity: "future:captured", name: "Future0",
+  } }];
+  const selected = planRustNativeCallableGenerics(current.declaration, current.source);
+  assert.equal(selected !== undefined, true);
+  assert.equal(selected.finalizeGenerics().parameters.length, 0);
+  assert.equal(selected.finalizeGenerics().wherePredicates.length, 0);
 });
 
 test("callable payload bindings retain exact selected physical carriers without changing capture storage", () => {
