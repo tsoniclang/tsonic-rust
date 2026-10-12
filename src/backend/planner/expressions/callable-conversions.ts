@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustCallableConversionMatches, type RustCallableConversion, type RustCallableValueConversion } from "../../../target-model/conversions/callable.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import { rustCallableInputProtocol, rustCallableProtocol, rustClosureProtocol } from "../../../target-model/types/index.js";
@@ -18,7 +19,7 @@ import { rustModuleCallableStorageFactKey } from "../../../analysis/callables/mo
 import { planRustNonConsumingValue } from "./typed-locations.js";
 
 export function planRustCallableInputProducer(
-  expression: RustExpr, source: import("../../../target-model/types/model.js").TargetTypeRef, context: RustPlanContext,
+  expression: RustExpr, source: TargetTypeRef, context: RustPlanContext,
   node?: Node,
 ): RustExpr | undefined {
   const reference = node === undefined ? undefined : context.input.program.facts.getFact(node, rustDirectCallableReferenceFactKey);
@@ -28,7 +29,8 @@ export function planRustCallableInputProducer(
     if (selected === undefined) return undefined;
     expression = selected;
   }
-  const sourceType = rustCallableConstructionType(source, context);
+  if (node === undefined) return expression;
+  const sourceType = physicalCallableConstructionType(source, node, context);
   if (sourceType === undefined) return undefined;
   const producer = inlineCallableProducer(expression, sourceType);
   return producer.inline ? { kind: "block", body: { statements: [...producer.statements, { kind: "tail", expr: producer.value }] } } : expression;
@@ -59,10 +61,14 @@ function planSelectedRustCallableConversion(
   const input = rustCallableInputProtocol(conversion.target) !== undefined;
   const target = rustCallableProtocol(conversion.target) ?? rustClosureProtocol(conversion.target);
   if (target === undefined) return undefined;
-  const sourceType = rustCallableConstructionType(conversion.source, context);
-  const targetType = rustCallableConstructionType(conversion.target, context);
+  const sourceType = physicalCallableConstructionType(conversion.source, node, context);
+  const constructionType = native || input ? undefined : rustCallableConstructionType(conversion.target, context);
   const argumentsType = rustTypeFromCarrierInContext({ kind: "tuple", elements: target.parameters }, context);
-  if (sourceType === undefined || !native && !input && targetType === undefined || argumentsType === undefined) return undefined;
+  if (sourceType === undefined || argumentsType === undefined) return undefined;
+  const targetType: RustType | undefined = constructionType?.kind === "named" ? {
+    ...constructionType, genericArguments: [{ kind: "type", type: argumentsType }, { kind: "type", type: { kind: "infer" } }],
+  } : undefined;
+  if (!native && !input && targetType === undefined) return undefined;
   const names = context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []);
   const callable = allocateRustSyntheticName(names, "callable");
   const argumentsName = allocateRustSyntheticName(names, source.parameters.length === 0 ? "_arguments" : "arguments");
@@ -126,6 +132,21 @@ function planSelectedRustCallableConversion(
       ? { kind: "try", expr: converted, resultErrorType: rustTargetRuntimeErrorType, operandErrorType: rustTargetRuntimeErrorType }
       : converted;
   }
+}
+
+function physicalCallableConstructionType(
+  source: TargetTypeRef,
+  node: Node,
+  context: RustPlanContext,
+): RustType | undefined {
+  const reference = context.input.program.facts.getFact(node, rustDirectCallableReferenceFactKey);
+  if (reference !== undefined) {
+    if (!rustTargetTypeRefEquals(reference.carrier, source)) return undefined;
+    const physical = context.input.program.callableValues.nativeProducers.physicalFor(reference.sourceDeclaration, source);
+    return physical === undefined ? undefined : rustCallableConstructionType(physical, context);
+  }
+  const physical = context.input.program.callableValues.nativeStorage.valueFor(node);
+  return physical.kind === "unresolved" ? undefined : rustCallableConstructionType(physical.carrier, context);
 }
 
 function inlineCallableProducer(
