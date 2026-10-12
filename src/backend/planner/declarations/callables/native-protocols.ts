@@ -12,11 +12,11 @@ import { planRustNativeCallableMethodGenerics } from "./native-method-generics.j
 export function planRustNativeCallableProtocolItems(context: RustPlanContext): readonly RustItem[] {
   const fileName = context.input.program.source.ast.getFileName(context.sourceFile);
   const items: RustItem[] = [];
-  for (const input of context.input.program.callableValues.native.inputs) {
-    if (input.protocol.ownerFileName !== fileName) continue;
-    const item = planRustNativeCallableProtocol(input.protocol, context);
-    const producers = planRustNativeProducerBridge(input.protocol, context);
-    if (item === undefined || producers === undefined) context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, input.subject.node),
+  for (const protocol of context.input.program.callableValues.native.protocols) {
+    if (protocol.ownerFileName !== fileName) continue;
+    const item = planRustNativeCallableProtocol(protocol, context);
+    const producers = planRustNativeProducerBridge(protocol, context);
+    if (item === undefined || producers === undefined) context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, context.sourceFile),
       "rust.backend.native-callable-protocol", "An exact native callable input protocol could not be rendered."));
     else items.push(item, ...producers);
   }
@@ -27,7 +27,7 @@ export function planRustNativeCallableProtocol(
   protocol: RustNativeCallableProtocol,
   context: RustPlanContext,
 ): RustItem | undefined {
-  const signature = protocol.binding.signature;
+  const signature = protocol.signature;
   const parameters = protocol.method.parameters.map(parameter => rustTypeFromCarrierInContext(parameter, context, "parameter"));
   const result = rustNativeCallableProtocolResult(protocol, context.input.program.typeDefinitions);
   const returnType = result === undefined ? undefined : rustTypeFromCarrierInContext(result, context, "return");

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createRustNativeCallableProtocol } from "../../dist/analysis/callables/native-protocols.js";
+import { createRustNativeCallableProtocolRegistry } from "../../dist/analysis/callables/native-protocols.js";
 import { planRustNativeCallableProtocol } from "../../dist/backend/planner/declarations/callables/native-protocols.js";
 import { planRustNativeProducerBridge } from "../../dist/backend/planner/declarations/callables/native-producer-bridges.js";
 import { createRustTypeDefinitionRegistry } from "../../dist/analysis/project-types/type-definitions.js";
@@ -11,10 +11,9 @@ import { printRustSourceFile } from "./printed-rust-source.mjs";
 export function nativeProducerFixture({
   parameters = [], result, carrier = rustCallableTargetType(parameters, result),
   definitions = createRustTypeDefinitionRegistry(), identity = "producer-proof", usedNames = new Set(),
+  protocols = createRustNativeCallableProtocolRegistry({ definitions, usedNames }),
 } = {}) {
-  const protocol = createRustNativeCallableProtocol({
-    identity, ownerFileName: "/index.ts", carrier, definitions, usedNames,
-  });
+  const protocol = protocols.bind("/index.ts", carrier)?.protocol;
   assert.equal(protocol !== undefined, true, `${identity}: protocol exists`);
   const context = {
     input: { program: {

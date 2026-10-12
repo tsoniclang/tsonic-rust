@@ -31,7 +31,7 @@ function planImplementation(
   definition: RustGenericCallablePhysicalDefinition,
   context: RustPlanContext,
 ): RustItem | undefined {
-  const signature = protocol.binding.signature;
+  const signature = protocol.signature;
   const methodGenerics = planRustNativeCallableMethodGenerics(protocol, context);
   const errors = planRustGenericCallableErrors(definition, context);
   const target = rustTypeFromCarrierInContext(definition.carrier, context);

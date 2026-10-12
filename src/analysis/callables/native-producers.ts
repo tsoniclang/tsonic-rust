@@ -62,7 +62,7 @@ export function createRustNativeCallableProducerPlan(input: {
       }),
       ...[...captures?.captures ?? [], ...captures?.receiverFields ?? [], ...captures?.receivers ?? []].map(capture => capture.carrier),
       ...[...input.native.inputsFor(declaration), ...input.native.capturesFor(declaration)].flatMap(selected =>
-        [selected.implementation, selected.protocol.trait]),
+        [selected.implementation, selected.trait]),
       ...(operation?.kind === "closure" ? [operation.resultCarrier] : []),
     ];
     const references = rustTargetGenericReferences({ kind: "tuple", elements: carriers });

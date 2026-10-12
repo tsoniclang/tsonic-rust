@@ -33,15 +33,15 @@ export function rustNativeCallablePhysicalSource(
   if (inputs.length !== 1) return undefined;
   const input = inputs[0]!;
   const protocol = input.protocol;
-  if (!rustTargetTypeRefEquals(input.carrier, source) || protocol.binding.signature.typeParameters.length !== 0 ||
+  if (!rustTargetTypeRefEquals(input.carrier, source) || protocol.signature.typeParameters.length !== 0 ||
     protocol.method.binder.parameters.length !== 0) return undefined;
-  const types = new Map(protocol.binding.signature.environmentParameters.map((parameter, index) =>
-    [parameter.identity, protocol.binding.environment[index]!]));
+  const types = new Map(protocol.signature.environmentParameters.map((parameter, index) =>
+    [parameter.identity, input.environment[index]!]));
   const selectedResult = rustNativeCallableProtocolResult(protocol, definitions);
   if (selectedResult === undefined) return undefined;
   const result = mapRustTargetTypes(substituteRustTargetTypeParameters(selectedResult, types), (carrier, original) => {
     if (carrier.kind === "associated-type" && original.kind === "associated-type" && original.owner.kind === "type-parameter" &&
-      original.owner.identity === `${protocol.identity}:Self`) return { ...carrier, owner: input.implementation, trait: protocol.trait };
+      original.owner.identity === `${protocol.identity}:Self`) return { ...carrier, owner: input.implementation, trait: input.trait };
     return carrier.kind === "type-parameter" && carrier.identity === `${protocol.identity}:Self` ? input.implementation : carrier;
   });
   const arguments_ = rustOnlyTypeGenericArguments(rustNamedTypeCarrierValue(result)?.genericArguments);

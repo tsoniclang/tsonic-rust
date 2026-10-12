@@ -75,7 +75,7 @@ test("source-produced physical formal signatures retain exact selected input and
     assert.equal(value.signature.error.kind, "associated-type");
     assert.equal(value.signature.error.name, "InvocationError");
     assert.equal(rustTargetTypeRefEquals(value.signature.error.owner, inputs[index].implementation), true);
-    assert.equal(rustTargetTypeRefEquals(value.signature.error.trait, inputs[index].protocol.trait), true);
+    assert.equal(rustTargetTypeRefEquals(value.signature.error.trait, inputs[index].trait), true);
     const wrong = inputs[1 - index];
     assert.equal(rustNativeCallablePhysicalSource(inputs[index].carrier,
       { kind: "selected", carrier: inputs[index].implementation, inputs: [wrong] }, current.program.typeDefinitions) === undefined,
@@ -127,12 +127,12 @@ test("physical callable signatures substitute declaration-generic environments w
   const inputs = current.program.callableValues.native.inputsFor(current.declaration("retain"));
   for (const [index, name] of ["first", "second"].entries()) {
     const input = inputs[index];
-    assert.equal(input.protocol.binding.environment.length, 1, "one actual outer type argument");
+    assert.equal(input.environment.length, 1, "one actual outer type argument");
     const physical = current.operand(current.initializer(name));
     assert.equal(physical.input === input, true);
-    assert.equal(rustTargetTypeRefEquals(physical.signature.result, input.protocol.binding.environment[0]), true);
+    assert.equal(rustTargetTypeRefEquals(physical.signature.result, input.environment[0]), true);
     assert.equal(rustTargetTypeRefEquals(physical.signature.error.trait.genericArguments[0].type,
-      input.protocol.binding.environment[0]), true, "associated error keeps the same selected environment");
+      input.environment[0]), true, "associated error keeps the same selected environment");
   }
 });
 

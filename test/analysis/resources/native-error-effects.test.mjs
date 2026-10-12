@@ -161,7 +161,8 @@ test("call edges rebind two same-signature formals to physical caller inputs wit
     assert.equal(route.target.errorType.kind, "associated-type");
     assert.equal(route.target.errorType.owner.identity, inputs[index].implementation.identity);
     assert.equal(route.target.errorType.trait.id, source.errorType.trait.id);
-    assert.notEqual(route.target.errorType.trait.id, inputs[index].protocol.trait.id);
+    assert.equal(route.target.errorType.trait.id, inputs[index].trait.id);
+    assert.notEqual(route.target.errorType.owner.identity, source.errorType.owner.identity);
     assertChannels(current.effects(call), [route.target]);
     expected.push(route.target);
   }

@@ -83,7 +83,7 @@ export function rustGenericCallableCapturePredicates(
     const memberContext = { ...context, typeParameterSubstitutions: bindings.types, lifetimeSubstitutions: bindings.lifetimes };
     for (const input of capture.inputs) {
       const type = rustTypeFromCarrierInContext(input.implementation, memberContext);
-      const trait = rustTypeFromCarrierInContext(input.protocol.trait, memberContext);
+      const trait = rustTypeFromCarrierInContext(input.trait, memberContext);
       if (type === undefined || trait === undefined) return undefined;
       const predicate: RustWherePredicate = { kind: "type", type, bounds: [{ kind: "trait-type", reference: { trait } }] };
       predicates.set(closedMetadataKey(predicate), predicate);

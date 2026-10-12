@@ -33,7 +33,7 @@ export function rustGenericCallableEnvironment(
   const consts = new Map<string, RustTargetConstArgument>();
   const references = rustTargetGenericReferences({ kind: "tuple", elements: [
     ...capture.captures, ...capture.receiverFields, ...capture.receivers,
-    ...capture.inputs.map(input => input.protocol.trait),
+    ...capture.inputs.map(input => input.trait),
   ] });
   if (references.hasUnnameableLifetime) return undefined;
   const arguments_: readonly RustTargetGenericArgument[] = [

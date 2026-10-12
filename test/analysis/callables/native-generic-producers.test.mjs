@@ -34,7 +34,8 @@ test("generic native producers enumerate exact existing families through aliases
   assert.equal(selected.length, 1);
   assert.equal(selected[0].definition.familyIdentity === current.program.callableValues.generic.definitions[0].identity, true);
   assert.equal(current.program.callableValues.generic.physical.definitionFor(selected[0].definition.carrier) === selected[0].definition, true);
-  assert.equal(selected[0].input.protocol === protocol, true);
+  assert.equal(selected[0].inputs.length, 1);
+  assert.equal(selected[0].inputs[0].protocol === protocol, true);
   assert.equal(current.plan.unresolved.length, 0, current.plan.unresolved.map(value => value.reason).join("; "));
   assert.equal(current.plan.forProtocol(protocol) === selected, true);
   assert.equal(Object.isFrozen(current.plan) && Object.isFrozen(selected) && Object.isFrozen(selected[0]), true);
@@ -57,9 +58,10 @@ test("equal generic signatures retain distinct inputs while selecting their actu
   assert.equal(inputs[0].implementation.identity !== inputs[1].implementation.identity, true);
   for (const input of inputs) {
     const selected = current.plan.forProtocol(input.protocol);
-    assert.equal(selected.length, 1);
-    assert.equal(selected[0].input === input, true);
-    assert.equal(selected[0].definition.implementations.length > 0, true);
+    assert.equal(selected.length, 2);
+    const binding = selected.find(binding => binding.inputs.includes(input));
+    assert.equal(binding !== undefined, true, "exact input evidence is retained on its physical family");
+    assert.equal(binding.definition.members.length, 1);
   }
   assert.equal(current.plan.unresolved.length, 0, current.plan.unresolved.map(value => value.reason).join("; "));
 });
@@ -85,7 +87,7 @@ test("pure forwarding records downstream protocol bounds without depending on es
       assert.equal(relation !== undefined, true, ownerName);
       assert.equal(relation.owner === owner, true);
       assert.equal(relation.trait.id, target.protocol.identity);
-      assert.equal(input.protocol.identity !== relation.trait.id, true);
+      assert.equal(input.protocol.identity === relation.trait.id, true, "equal normalized protocol declarations are shared");
     }
   }
   assert.equal(current.plan.bindings.length, 0, "open formals do not invent concrete family impls");

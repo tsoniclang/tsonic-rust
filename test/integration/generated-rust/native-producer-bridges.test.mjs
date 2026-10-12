@@ -47,7 +47,9 @@ function fixtureSource() {
   const all = [ordinary, second, environment, asynchronous, borrowing, js, mixed,
     borrowedEnvironment, pendingEnvironment, borrowedJs];
   const names = all.map(fixture => fixture.protocol.targetName);
-  const generated = printNativeProducerItems(all.flatMap(nativeProducerItems));
+  const unique = [...new Map(all.map(fixture => [fixture.protocol.identity, fixture])).values()];
+  assert.equal(unique.length, all.length - 1, "the equal ordinary callback contracts share one declaration and impl");
+  const generated = printNativeProducerItems(unique.flatMap(nativeProducerItems));
   assert.doesNotMatch(generated, /TsonicError|TsonicResult|Box|dyn |\.clone\(|async move/u);
   const [ordinaryName, secondName, environmentName, asyncName, borrowName, jsName, mixedName,
     borrowedEnvironmentName, pendingEnvironmentName, borrowedJsName] = names;

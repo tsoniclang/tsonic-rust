@@ -552,6 +552,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
   recordRustProjectCallableAdapterFacts(walk);
   recordRustModuleCallableStorage(walk);
   const callableValues = context.callableValues.initialize({ ast, sourceFiles: context.sourceFiles, facts: context.facts,
+    sourcePackages: context.sourcePackages,
     names: context.names, navigation: context.source.navigation, lifetimes: context.sourceLifetimes,
     classValueAdapters: context.classValues.valueAdapters(), closedSourceFiles, ownership: callableOwnership, sourceStorage: context.sourceStorage,
     projectTypes: context.projectTypes, objectRepresentations: context.objectRepresentations,

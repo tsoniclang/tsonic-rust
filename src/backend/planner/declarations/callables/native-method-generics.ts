@@ -34,7 +34,7 @@ export function planRustNativeCallableMethodGenerics(
   if (!protocol.method.parameters.every(visit)) return undefined;
   return {
     parameters: [...rustLifetimeBinderToAst(protocol.method.binder),
-      ...protocol.binding.signature.typeParameters.map(parameter => ({ kind: "type" as const,
+      ...protocol.signature.typeParameters.map(parameter => ({ kind: "type" as const,
         name: parameter.name, bounds: [],
       }))],
     wherePredicates: [...predicates.values()],

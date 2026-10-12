@@ -40,7 +40,7 @@ export function planRustNativeProtocolInvocation(
   if (!context.input.program.callableValues.native.inputs.includes(input) ||
     args.length !== input.protocol.method.parameters.length) return undefined;
   const owner = rustTypeFromCarrierInContext(input.implementation, context);
-  const trait = rustTypeFromCarrierInContext(input.protocol.trait, context);
+  const trait = rustTypeFromCarrierInContext(input.trait, context);
   return owner === undefined || trait === undefined ? undefined : {
     kind: "associated-call", owner, trait, method: "invoke",
     args: [{ kind: "reference", expr: callable }, ...args],

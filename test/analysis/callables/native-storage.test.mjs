@@ -22,7 +22,7 @@ function fixture(text, options = {}) {
   const storage = createSourceStorageQuery(source, program.sourceFiles);
   const input = { ast: source.ast, storage, facts: program.facts, definitions: program.typeDefinitions,
     generic: program.callableValues.generic };
-  const native = createRustNativeCallableInputPlan({ ...input, usedNames: new Set() });
+  const native = createRustNativeCallableInputPlan({ ...input, sourcePackages: program.sourcePackages, usedNames: new Set() });
   const producers = createRustNativeCallableProducerPlan({ ...input, native, nodes: storage.nodes,
     returnCarrierFor: declaration => {
       const selected = plan.returnFor(declaration);
@@ -258,7 +258,7 @@ test("physical generic callable forwarding retains its quantified contract", () 
   `);
   const owner = current.declaration("retain");
   const input = current.native.inputsFor(owner)[0];
-  assert.equal(input.protocol.binding.signature.typeParameters.length, 1);
+  assert.equal(input.protocol.signature.typeParameters.length, 1);
   selected(current.plan.returnFor(owner), input.implementation, "quantified identity preserved");
   selected(current.plan.valueFor(current.declaration("alias")), input.implementation, "generic alias physical identity");
 });

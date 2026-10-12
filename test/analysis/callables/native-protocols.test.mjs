@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createRustNativeCallableProtocol, rustNativeCallableErrorType, rustNativeCallableProtocolResult }
+import { createRustNativeCallableProtocolRegistry, rustNativeCallableErrorType, rustNativeCallableProtocolResult }
   from "../../../dist/analysis/callables/native-protocols.js";
 import { rustCallableTargetType, rustFutureTargetType, rustSourcePrimitiveTargetType }
   from "../../../dist/target-model/types/index.js";
@@ -9,40 +9,45 @@ import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../../dist/targ
 
 const integer = rustSourcePrimitiveTargetType("int32");
 const implementation = { kind: "type-parameter", identity: "input:left", name: "Left" };
-const input = { ownerFileName: "/source.ts", definitions: emptyRustTypeDefinitions };
-const create = (identity, carrier, usedNames = new Set()) => createRustNativeCallableProtocol({
-  ...input, identity, carrier, usedNames,
-});
+const create = () => createRustNativeCallableProtocolRegistry({ definitions: emptyRustTypeDefinitions, usedNames: new Set() });
 
-test("native callable protocols keep exact input identities independent of equal signatures", () => {
+test("equal native signatures share one protocol while implementation and associated errors stay distinct", () => {
+  const registry = create();
   const carrier = rustCallableTargetType([integer], integer);
-  const usedNames = new Set();
-  const left = create("left", carrier, usedNames);
-  const right = create("right", carrier, usedNames);
+  const left = registry.bind("/source.ts", carrier);
+  const right = registry.bind("/source.ts", carrier);
   assert.equal(left !== undefined && right !== undefined, true);
-  assert.equal(left.identity === right.identity, false);
-  assert.equal(left.targetName === right.targetName, false);
-  assert.equal(left.trait.sourceItem.typeName, left.targetName);
+  assert.equal(left.protocol === right.protocol, true);
+  assert.equal(registry.definitions().length, 1);
+  assert.equal(left.trait.sourceItem.typeName, left.protocol.targetName);
   assert.equal(isRustTargetTypeRef(left.trait), true);
+  const other = { kind: "type-parameter", identity: "input:right", name: "Right" };
   const error = rustNativeCallableErrorType(left, implementation, "invocation", []);
-  assert.equal(isRustTargetTypeRef(error), true);
-  assert.equal(error.owner === implementation, true);
+  const otherError = rustNativeCallableErrorType(right, other, "invocation", []);
+  assert.equal(isRustTargetTypeRef(error) && isRustTargetTypeRef(otherError), true);
+  assert.equal(error.owner === implementation && otherError.owner === other, true);
+  assert.equal(rustTargetTypeRefEquals(error, otherError), false);
   assert.equal(error.trait === left.trait, true);
   assert.equal(error.name, "InvocationError");
   assert.equal(rustNativeCallableErrorType(left, implementation, 0, []) === undefined, true);
-  assert.equal(left.completion === undefined, true);
-  assert.equal(Object.isFrozen(left.binding.signature), true);
+  assert.equal(left.protocol.completion === undefined, true);
+  assert.equal(Object.isFrozen(left.protocol.signature) && Object.isFrozen(left.environment), true);
 });
 
-test("native future protocols preserve source generics separately from implementation and error types", () => {
+test("native future definitions alpha normalize source environments without merging selected arguments", () => {
+  const registry = create();
   const value = { kind: "type-parameter", identity: "source:Value", name: "Value" };
-  const carrier = rustCallableTargetType([value], rustFutureTargetType(value));
-  const selected = create("async-input", carrier);
-  assert.equal(selected !== undefined, true);
-  assert.equal(selected.binding.signature.typeParameters.length, 0);
-  assert.equal(selected.binding.signature.environmentParameters.length, 1);
-  assert.equal(rustTargetTypeRefEquals(selected.binding.environment[0], value), true);
-  const result = rustNativeCallableProtocolResult(selected, emptyRustTypeDefinitions);
+  const other = { kind: "type-parameter", identity: "other:Item", name: "Item" };
+  const selected = registry.bind("/source.ts", rustCallableTargetType([value], rustFutureTargetType(value)));
+  const second = registry.bind("/source.ts", rustCallableTargetType([other], rustFutureTargetType(other)));
+  assert.equal(selected !== undefined && second !== undefined, true);
+  assert.equal(selected.protocol === second.protocol, true);
+  assert.equal(selected.protocol.signature.typeParameters.length, 0);
+  assert.equal(selected.protocol.signature.environmentParameters.length, 1);
+  assert.equal(rustTargetTypeRefEquals(selected.environment[0], value), true);
+  assert.equal(rustTargetTypeRefEquals(second.environment[0], other), true);
+  assert.equal(rustTargetTypeRefEquals(selected.trait, second.trait), false);
+  const result = rustNativeCallableProtocolResult(selected.protocol, emptyRustTypeDefinitions);
   assert.equal(result !== undefined, true);
   const invocation = result.value.genericArguments[1].type;
   assert.equal(invocation.name, "InvocationError");
@@ -50,13 +55,39 @@ test("native future protocols preserve source generics separately from implement
   const output = future.bounds[0].associatedConstraints[0].type;
   assert.equal(output.value.genericArguments[1].type.name, "AwaitError0");
   assert.equal(rustTargetTypeRefEquals(output.value.genericArguments[0].type,
-    selected.binding.signature.environmentParameters[0]), true);
+    selected.protocol.signature.environmentParameters[0]), true);
   assert.deepEqual(future.captures.map(argument => argument.type.name), ["Self", "EnvironmentType0"]);
   for (const channel of [-1, 1, 0.5, NaN, Infinity])
     assert.equal(rustNativeCallableErrorType(selected, implementation, channel, []) === undefined, true);
   assert.equal(rustNativeCallableErrorType(selected, implementation, 0, []).name, "AwaitError0");
 });
 
-test("native callable protocols reject non-callable carriers without creating a guessed signature", () => {
-  assert.equal(create("invalid", integer) === undefined, true);
+test("native protocol identity retains unequal types, lifetime binders and component ownership", () => {
+  const registry = create();
+  const value = registry.bind("/source.ts", rustCallableTargetType([integer], integer));
+  const unsigned = registry.bind("/source.ts", rustCallableTargetType([rustSourcePrimitiveTargetType("uint32")], integer));
+  const borrowed = registry.bind("/source.ts", rustCallableTargetType([
+    { kind: "reference", referent: integer, mutable: false },
+  ], { kind: "reference", referent: integer, mutable: false }));
+  const mutable = registry.bind("/source.ts", rustCallableTargetType([
+    { kind: "reference", referent: integer, mutable: true },
+  ], integer));
+  const dependency = registry.bind("/dependency.ts", rustCallableTargetType([integer], integer));
+  assert.equal([value, unsigned, borrowed, mutable, dependency].every(binding => binding !== undefined), true);
+  assert.equal(new Set([value, unsigned, borrowed, mutable, dependency].map(binding => binding.protocol)).size, 5);
+  assert.equal(borrowed.protocol.method.binder.parameters.length, 1);
+  assert.equal(borrowed.protocol.method.result.lifetime.identity,
+    borrowed.protocol.method.parameters[0].lifetime.identity);
+  const repeat = registry.bind("/source.ts", rustCallableTargetType([
+    { kind: "reference", referent: integer, mutable: false },
+  ], { kind: "reference", referent: integer, mutable: false }));
+  assert.equal(repeat.protocol === borrowed.protocol, true);
+});
+
+test("native protocol registry rejects invalid carriers and ambiguous borrowed result relationships", () => {
+  const registry = create();
+  assert.equal(registry.bind("/source.ts", integer) === undefined, true);
+  const reference = { kind: "reference", referent: integer, mutable: false };
+  assert.equal(registry.bind("/source.ts", rustCallableTargetType([reference, reference], reference)) === undefined, true);
+  assert.equal(registry.definitions().length, 0);
 });

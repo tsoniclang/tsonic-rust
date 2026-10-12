@@ -14,7 +14,7 @@ import type { RustNativeStoragePlan } from "./native-storage.js";
 import type { RustNativeCallableProtocol } from "./native-protocols.js";
 
 export interface RustNativeGenericProducerBinding {
-  readonly input: RustNativeCallableInput;
+  readonly inputs: readonly RustNativeCallableInput[];
   readonly definition: RustGenericCallablePhysicalDefinition;
 }
 
@@ -43,7 +43,7 @@ export function createRustNativeGenericProducerPlan(input: {
   readonly nativeStorage: RustNativeStoragePlan;
 }): RustNativeGenericProducerPlan {
   const nativeInputs = new Map(input.native.inputs.map(selected => [selected.subject, selected]));
-  const bindings = new Map<RustNativeCallableProtocol, Map<RustGenericCallablePhysicalDefinition, RustNativeGenericProducerBinding>>();
+  const bindings = new Map<RustNativeCallableProtocol, Map<RustGenericCallablePhysicalDefinition, Set<RustNativeCallableInput>>>();
   const forwarding = new Map<Node, Map<string, RustNativeGenericProducerForwarding>>();
   const open: { readonly invocation: Node; readonly input: RustNativeCallableInput;
     readonly inputs: readonly RustNativeCallableInput[] }[] = [];
@@ -68,7 +68,7 @@ export function createRustNativeGenericProducerPlan(input: {
         reject(invocation, selected, "Native generic producer forwarding requires exact selected generic arguments.");
         continue;
       }
-      const trait = substituteRustTargetGenerics(selected.protocol.trait, arguments_.types, arguments_.lifetimes, arguments_.consts);
+      const trait = substituteRustTargetGenerics(selected.trait, arguments_.types, arguments_.lifetimes, arguments_.consts);
       for (const subject of symbolic.subjects) {
         const origin = nativeInputs.get(subject);
         if (origin === undefined || owner === undefined) continue;
@@ -76,7 +76,7 @@ export function createRustNativeGenericProducerPlan(input: {
         values.set(`${origin.implementation.identity}:${closedMetadataKey(trait)}`, Object.freeze({ owner, input: origin, trait }));
         forwarding.set(owner, values);
       }
-      const quantified = selected.protocol.binding.signature.typeParameters.length > 0;
+      const quantified = selected.protocol.signature.typeParameters.length > 0;
       const abstractInputs = new Set<RustNativeCallableInput>();
       let hasGenericProducer = false;
       for (const subject of symbolic.subjects) {
@@ -102,12 +102,14 @@ export function createRustNativeGenericProducerPlan(input: {
             : "An exact generic producer invocation lacks a selected physical family.");
           continue;
         }
-        if (!closedMetadataEquals(definition.signature, selected.protocol.binding.signature)) {
+        if (!closedMetadataEquals(definition.signature, selected.protocol.signature)) {
           reject(invocation, selected, "An exact generic producer family conflicts with its selected native protocol contract.");
           continue;
         }
-        const values = bindings.get(selected.protocol) ?? new Map<RustGenericCallablePhysicalDefinition, RustNativeGenericProducerBinding>();
-        values.set(definition, Object.freeze({ input: selected, definition }));
+        const values = bindings.get(selected.protocol) ?? new Map<RustGenericCallablePhysicalDefinition, Set<RustNativeCallableInput>>();
+        const consumers = values.get(definition) ?? new Set<RustNativeCallableInput>();
+        consumers.add(selected);
+        values.set(definition, consumers);
         bindings.set(selected.protocol, values);
       }
       if (quantified && symbolic.subjects.length === 0)
@@ -116,7 +118,8 @@ export function createRustNativeGenericProducerPlan(input: {
         inputs: Object.freeze([...abstractInputs]) }));
     }
   }
-  const selectedBindings = new Map([...bindings].map(([protocol, values]) => [protocol, Object.freeze([...values.values()])]));
+  const selectedBindings = new Map([...bindings].map(([protocol, values]) => [protocol, Object.freeze(
+    [...values].map(([definition, inputs]) => Object.freeze({ definition, inputs: Object.freeze([...inputs]) })))]));
   const selectedForwarding = new Map([...forwarding].map(([owner, values]) => [owner, Object.freeze([...values.values()])]));
   const emptyBindings: readonly RustNativeGenericProducerBinding[] = Object.freeze([]);
   const emptyForwarding: readonly RustNativeGenericProducerForwarding[] = Object.freeze([]);

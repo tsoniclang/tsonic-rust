@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { planRustNativeProducerBridge } from "../../../../dist/backend/planner/declarations/callables/native-producer-bridges.js";
+import { createRustNativeCallableProtocolRegistry } from "../../../../dist/analysis/callables/native-protocols.js";
+import { emptyRustTypeDefinitions } from "../../../../dist/target-model/types/source-union-definitions.js";
 import { rustSourcePrimitiveTargetType, rustFutureTargetType, rustJsPromiseTargetTypeWithLifetime,
   rustSourceOptionalTargetType, rustCallableTargetType, rustStrTargetType }
   from "../../../../dist/target-model/types/index.js";
@@ -133,18 +135,20 @@ test("bridge planning fails closed on an unrenderable input instead of guessing 
   assert.equal(planRustNativeProducerBridge(malformed, fixture.context) === undefined, true);
 });
 
-test("same logical signatures keep independent inputs without leaking recipient errors into bridges", () => {
+test("equal checked signatures share a bridge without consulting recipient errors", () => {
   const usedNames = new Set();
+  const protocols = createRustNativeCallableProtocolRegistry({ definitions: emptyRustTypeDefinitions, usedNames });
   const carrier = rustCallableTargetType([integer], integer);
-  const first = nativeProducerFixture({ carrier, identity: "left", usedNames });
-  const second = nativeProducerFixture({ carrier, identity: "right", usedNames });
-  assert.equal(first.protocol.identity === second.protocol.identity, false);
+  const first = nativeProducerFixture({ carrier, identity: "left", protocols });
+  const second = nativeProducerFixture({ carrier, identity: "right", protocols });
+  assert.equal(first.protocol === second.protocol, true);
+  assert.equal(protocols.definitions().length, 1);
   const expected = printNativeProducerItems(nativeProducerItems(first));
   first.context.sourcePackageErrors = new Proxy({}, { get() { throw Error("ambient boundary consulted"); } });
   first.context.fallibleBoundary = new Proxy({}, { get() { throw Error("active boundary consulted"); } });
   assert.equal(printNativeProducerItems(nativeProducerItems(first)), expected);
   const left = planRustNativeProducerBridge(first.protocol, first.context);
   const right = planRustNativeProducerBridge(second.protocol, second.context);
-  assert.equal(left[0].trait.path === right[0].trait.path, false);
+  assert.equal(left[0].trait.path === right[0].trait.path, true);
   assert.deepEqual(left[0].generics, right[0].generics);
 });

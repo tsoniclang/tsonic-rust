@@ -1,4 +1,5 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
+import type { TargetSourcePackageGraph } from "@tsonic/target-api";
 import type { SourceProgramNavigation } from "@tsonic/target-api/source";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
@@ -45,6 +46,7 @@ export interface RustCallableValuePlan {
 export interface RustCallableValuePlanInput {
   readonly ast: AstReader;
   readonly sourceFiles: readonly SourceFile[];
+  readonly sourcePackages: TargetSourcePackageGraph;
   readonly facts: RustPlanQueries;
   readonly names: RustNamePlan;
   readonly navigation: SourceProgramNavigation;
@@ -158,7 +160,7 @@ function createRustCallableValuePlan(input: RustCallableValuePlanInput): RustCal
       usedNames.add(implementation.stateName);
     }
   }
-  const native = createRustNativeCallableInputPlan({ ast: input.ast, facts: input.facts,
+  const native = createRustNativeCallableInputPlan({ ast: input.ast, facts: input.facts, sourcePackages: input.sourcePackages,
     storage: input.sourceStorage, definitions: input.typeDefinitions, usedNames });
   const nativeProducers = createRustNativeCallableProducerPlan({ ast: input.ast, facts: input.facts,
     nodes: input.sourceStorage.nodes, native, definitions: input.typeDefinitions,

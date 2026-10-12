@@ -23,7 +23,7 @@ export function planRustNativeProducerBridge(
   protocol: RustNativeCallableProtocol,
   context: RustPlanContext,
 ): readonly RustItem[] | undefined {
-  const signature = protocol.binding.signature;
+  const signature = protocol.signature;
   const generic = planRustNativeGenericProducerBridges(protocol, context);
   if (generic === undefined || signature.typeParameters.length !== 0) return generic;
   const lifetimes = rustLifetimeBinderToAst(protocol.method.binder);

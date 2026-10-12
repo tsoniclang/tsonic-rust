@@ -1,21 +1,22 @@
 import type { RustTargetOperationFact } from "../facts/keys.js";
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustNativeCallableProtocol } from "./native-protocols.js";
+import type { RustNativeCallableProtocolBinding } from "./native-protocols.js";
 import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
 import { inferRustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 export function rustNativeCallableInvocationArguments(
-  protocol: RustNativeCallableProtocol,
+  binding: RustNativeCallableProtocolBinding,
   operation: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>,
 ): readonly RustTargetGenericArgument[] | undefined {
   const arguments_ = operation.targetGenericArguments ?? [];
-  const signature = protocol.binding.signature;
+  const protocol = binding.protocol;
+  const signature = protocol.signature;
   if (arguments_.length !== signature.typeParameters.length || arguments_.some(argument => argument.kind !== "type") ||
     operation.parameters.length !== protocol.method.parameters.length) return undefined;
   const substitutions = new Map<string, TargetTypeRef>(signature.environmentParameters.map((parameter, index) =>
-    [parameter.identity, protocol.binding.environment[index]!]));
+    [parameter.identity, binding.environment[index]!]));
   for (const [index, parameter] of signature.typeParameters.entries()) {
     const argument = arguments_[index];
     if (argument?.kind !== "type") return undefined;

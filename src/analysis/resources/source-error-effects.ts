@@ -163,7 +163,8 @@ export function createRustSourceErrorEffectSelection(walk: RustFactWalk): RustSo
         if (protocol === undefined) { valid = false; return type; }
         const channels = ["invocation" as const, ...(protocol.completion?.futures.map(future => future.ordinal) ?? [])];
         const channel = channels.find(channel => {
-          const expected = rustNativeCallableErrorType(protocol, original.owner, channel, original.genericArguments ?? []);
+          const expected = original.trait === undefined ? undefined : rustNativeCallableErrorType(
+            { protocol, trait: original.trait }, original.owner, channel, original.genericArguments ?? []);
           return expected !== undefined && rustTargetTypeRefEquals(expected, original);
         });
         const replacement = channel === undefined ? undefined : walk.context.callableValues.nativeProducers.errorFor(

@@ -1,4 +1,5 @@
 import type { AstReader, Node } from "@tsonic/tsts";
+import type { TargetSourcePackageGraph } from "@tsonic/target-api";
 import type { SourceStorageBindings, SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
 import { sourceEnclosingCallable, sourceNodeIdentity, Node_Expression } from "@tsonic/target-api/source";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
@@ -11,18 +12,17 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustGenericCallableSignaturesMatch } from "../../target-model/conversions/generic-callable.js";
 import { rustSourceParameterAbiFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
-import { createRustNativeCallableProtocol, type RustNativeCallableProtocol } from "./native-protocols.js";
+import { createRustNativeCallableProtocolRegistry, type RustNativeCallableProtocol, type RustNativeCallableProtocolBinding } from "./native-protocols.js";
 import { rustNativeCallableErrorType } from "./native-protocols.js";
 import { rustNativeCallableCompletion, type RustNativeCallableCompletion } from "../../target-model/types/callable-completions.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustNativeCallableInvocationArguments } from "./native-invocations.js";
 
-export interface RustNativeCallableInput {
+export interface RustNativeCallableInput extends RustNativeCallableProtocolBinding {
   readonly owner: Node;
   readonly subject: SourceStorageSubject;
   readonly carrier: TargetTypeRef;
   readonly implementation: Extract<TargetTypeRef, { readonly kind: "type-parameter" }>;
-  readonly protocol: RustNativeCallableProtocol;
 }
 
 export type RustNativeCallableOrigins =
@@ -42,6 +42,7 @@ export interface RustNativeCallableCall {
 
 export interface RustNativeCallableInputPlan {
   readonly inputs: readonly RustNativeCallableInput[];
+  readonly protocols: readonly RustNativeCallableProtocol[];
   readonly calls: readonly RustNativeCallableCall[];
   callFor(node: Node): RustNativeCallableCall | undefined;
   inputsFor(declaration: Node): readonly RustNativeCallableInput[];
@@ -57,8 +58,17 @@ export function createRustNativeCallableInputPlan(input: {
   readonly storage: SourceStorageQueries;
   readonly facts: RustPlanQueries;
   readonly definitions: RustTypeDefinitions;
+  readonly sourcePackages: TargetSourcePackageGraph;
   readonly usedNames: Set<string>;
 }): RustNativeCallableInputPlan {
+  const registry = createRustNativeCallableProtocolRegistry(input);
+  const componentByFile = new Map(input.sourcePackages.packages.flatMap(entry =>
+    entry.sourceFiles.map(fileName => [fileName, entry.componentId] as const)));
+  const ownerByComponent = new Map<string, string>();
+  for (const fileName of input.storage.sourceFiles.map(file => input.ast.getFileName(file)).sort()) {
+    const component = componentByFile.get(fileName);
+    if (component !== undefined && !ownerByComponent.has(component)) ownerByComponent.set(component, fileName);
+  }
   const bindings = new Map<Node, SourceStorageBindings | null>();
   const inputs = new Map<Node, Map<SourceStorageSubject, RustNativeCallableInput>>();
   const captures = new Map<Node, Set<RustNativeCallableInput>>();
@@ -97,10 +107,11 @@ export function createRustNativeCallableInputPlan(input: {
       : sourceNodeIdentity(input.ast, component.declaration));
     if (projection.some(component => component === undefined)) return undefined;
     const nativeIdentity = `native-callable:${input.ast.getFileName(file)}:${identity}:${JSON.stringify(projection)}`;
-    const protocol = createRustNativeCallableProtocol({ identity: nativeIdentity,
-      ownerFileName: input.ast.getFileName(file), carrier, definitions: input.definitions, usedNames: input.usedNames });
+    const component = componentByFile.get(input.ast.getFileName(file));
+    const ownerFileName = component === undefined ? undefined : ownerByComponent.get(component);
+    const protocol = ownerFileName === undefined ? undefined : registry.bind(ownerFileName, carrier);
     if (protocol === undefined) return undefined;
-    const value: RustNativeCallableInput = Object.freeze({ owner, subject, carrier, protocol,
+    const value: RustNativeCallableInput = Object.freeze({ owner, subject, carrier, ...protocol,
       implementation: Object.freeze({ kind: "type-parameter", name: `Implementation${members.size}`,
         identity: nativeIdentity }),
     });
@@ -154,7 +165,8 @@ export function createRustNativeCallableInputPlan(input: {
   }
   collecting = false;
   const selectedInputs = Object.freeze([...inputs.values()].flatMap(members => [...members.values()]));
-  const protocols = new Map(selectedInputs.map(member => [member.protocol.targetName, member.protocol]));
+  const definitions = registry.definitions();
+  const protocols = new Map(definitions.map(protocol => [protocol.targetName, protocol]));
   const calls = new Map<Node, RustNativeCallableCall>();
   for (const node of input.storage.invocations) {
     const operation = input.facts.getFact(node, rustTargetOperationFactKey);
@@ -163,13 +175,13 @@ export function createRustNativeCallableInputPlan(input: {
     const origins = callee === undefined ? undefined : values.get(callee);
     if (origins?.kind !== "resolved" || origins.inputs.length !== 1 || origins.implementations.length !== 0) continue;
     const parameter = origins.inputs[0]!;
-    const methodArguments = rustNativeCallableInvocationArguments(parameter.protocol, operation);
+    const methodArguments = rustNativeCallableInvocationArguments(parameter, operation);
     if (methodArguments === undefined) continue;
     const completion = rustNativeCallableCompletion(operation.resultCarrier, input.definitions);
     if ((completion?.futures.length ?? 0) !== (parameter.protocol.completion?.futures.length ?? 0)) continue;
-    const invocationError = rustNativeCallableErrorType(parameter.protocol, parameter.implementation, "invocation", methodArguments)!;
+    const invocationError = rustNativeCallableErrorType(parameter, parameter.implementation, "invocation", methodArguments)!;
     const awaitErrors = (completion?.futures ?? []).map(future =>
-      rustNativeCallableErrorType(parameter.protocol, parameter.implementation, future.ordinal, methodArguments)!);
+      rustNativeCallableErrorType(parameter, parameter.implementation, future.ordinal, methodArguments)!);
     const source = `${parameter.implementation.identity}:${closedMetadataKey(methodArguments)}`;
     calls.set(node, Object.freeze({ node, input: parameter, invocationError,
       invocationErrorSource: `${source}:invocation`,
@@ -179,7 +191,7 @@ export function createRustNativeCallableInputPlan(input: {
   const declarationInputs = new Map([...inputs].map(([owner, members]) => [owner, Object.freeze([...members.values()])]));
   const declarationCaptures = new Map([...captures].map(([owner, members]) => [owner, Object.freeze([...members])]));
   const emptyInputs: readonly RustNativeCallableInput[] = Object.freeze([]);
-  return Object.freeze({ bindingsFor, originsFor, inputs: selectedInputs,
+  return Object.freeze({ bindingsFor, originsFor, inputs: selectedInputs, protocols: definitions,
     calls: Object.freeze([...calls.values()]), callFor: (node: Node) => calls.get(node),
     inputsFor: (declaration: Node) => declarationInputs.get(declaration) ?? emptyInputs,
     capturesFor: (declaration: Node) => declarationCaptures.get(declaration) ?? emptyInputs,
