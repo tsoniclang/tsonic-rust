@@ -82,6 +82,83 @@ test("source-produced physical formal signatures retain exact selected input and
   }
 });
 
+test("physical callable operands preserve checked member, tuple and array input projections", () => {
+  const current = fixture(`import type { int32 } from "@tsonic/core/types.js";
+    type Callback = () => int32;
+    interface Holder<Value> { readonly callback: Value; }
+    export function project(left: Holder<Callback>, right: Holder<Callback>,
+      pair: [Callback, Callback], many: Callback[]): Callback {
+      const first = left.callback;
+      const second = right.callback;
+      const tupleLeft = pair[0];
+      const tupleRight = pair[1];
+      const element = many[0];
+      return second;
+    }
+  `);
+  const owner = current.declaration("project");
+  const parameters = current.ast.parameters(owner);
+  const inputs = current.program.callableValues.native.inputsFor(owner);
+  for (const [name, parameterIndex, projection, ordinal] of [
+    ["first", 0, "member"], ["second", 1, "member"],
+    ["tupleLeft", 2, "tuple-element", 0], ["tupleRight", 2, "tuple-element", 1],
+    ["element", 3, "array-element"],
+  ]) {
+    const input = inputs.find(input => input.subject.node === parameters[parameterIndex] &&
+      input.subject.projection[0]?.kind === projection &&
+      (ordinal === undefined || input.subject.projection[0].index === ordinal));
+    assert.equal(input !== undefined, true, `${name}: checked projected formal`);
+    const physical = current.operand(current.initializer(name));
+    assert.equal(physical.input === input, true, name);
+    assert.equal(rustTargetTypeRefEquals(physical.signature.error.owner, input.implementation), true, name);
+    assert.equal(physical.signature.error.trait.id, input.protocol.identity);
+    assert.equal(Object.isFrozen(physical) && Object.isFrozen(physical.signature) &&
+      Object.isFrozen(physical.signature.parameters), true, "immutable physical signature selection");
+  }
+});
+
+test("physical callable signatures substitute declaration-generic environments without changing input identity", () => {
+  const current = fixture(`
+    export function retain<Value>(left: () => Value, right: () => Value): () => Value {
+      const first = left; const second = right; return second;
+    }
+  `);
+  const inputs = current.program.callableValues.native.inputsFor(current.declaration("retain"));
+  for (const [index, name] of ["first", "second"].entries()) {
+    const input = inputs[index];
+    assert.equal(input.protocol.binding.environment.length, 1, "one actual outer type argument");
+    const physical = current.operand(current.initializer(name));
+    assert.equal(physical.input === input, true);
+    assert.equal(rustTargetTypeRefEquals(physical.signature.result, input.protocol.binding.environment[0]), true);
+    assert.equal(rustTargetTypeRefEquals(physical.signature.error.trait.genericArguments[0].type,
+      input.protocol.binding.environment[0]), true, "associated error keeps the same selected environment");
+  }
+});
+
+test("physical callable operand queries reject unrelated values, missing owners and ambiguous source alternatives", () => {
+  const current = fixture(`
+    export function choose(left: () => number, right: () => number): () => number {
+      left = right; const selected = left; return selected;
+    }
+    export function original(): number { return 3; }
+    export function create(): () => number { const callback = original; const other = 3; return callback; }
+  `);
+  const node = current.initializer("callback");
+  const source = rustValueCarrierBeforeContextualConversion(current.program.facts, node);
+  assert.equal(current.operand(node).input === undefined, true, "direct source declaration owns its physical signature");
+  assert.equal(rustNativeCallableOperand(source, current.initializer("other"), current.input) === undefined, true,
+    "unrelated checked source node is not a callable operand");
+  assert.equal(rustNativeCallableOperand(source, {}, current.input) === undefined, true,
+    "unowned source node cannot supply an exact physical carrier");
+  assert.equal(rustNativeCallableOperand(source, current.initializer("selected"), current.input) === undefined, true,
+    "distinct formal implementations require a sealed join, never a guessed selection");
+  const selected = current.input.storage.valueFor(current.declaration("callback"));
+  assert.equal(selected.kind, "selected");
+  assert.equal(rustNativeCallablePhysicalSource(source,
+    { kind: "identity", carrier: source }, current.program.typeDefinitions) === undefined, true,
+    "logical callable storage cannot masquerade as exact native Result storage");
+});
+
 test("source-produced stored and returned adapters select the canonical physical conversion contract", () => {
   const current = fixture(`import type { int32 } from "@tsonic/core/types.js";
     export function create(): (unused: int32) => int32 {
