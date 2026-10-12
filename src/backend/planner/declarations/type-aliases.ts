@@ -10,6 +10,8 @@ import type { RustItem } from "../../target-ast/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/nodes.js";
 import { rustSourceDeclarationGenerics } from "./callables/generics.js";
 import type { RustPlanContext } from "../program/plan-context.js";
+import { planRustSourceUnionPayloadTemplate } from "../types/source-union-payloads.js";
+import { rustOptionElementCarrier } from "../../../target-model/types/carriers/optional.js";
 
 export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
   const fact = context.input.program.facts.getRuntimeCarrierFact(node) === undefined
@@ -56,18 +58,6 @@ export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): 
       target,
     }];
   }
-  const runtimeVariantTypes = fact.kind === "runtime"
-    ? fact.variants.map((variant) =>
-        rustTypeFromCarrierInContext(variant.carrier, context))
-    : [];
-  if (runtimeVariantTypes.some((type) => type === undefined)) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.union-variant-carrier",
-      "Runtime union variants require renderable finalized Rust carriers.",
-    ));
-    return undefined;
-  }
   const visibility = ast.hasModifierKind(node, "export") ||
       rustProjectTypeHasPublicImplementationAbi(context, aliasName)
     ? "public" as const
@@ -82,9 +72,19 @@ export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): 
       "rust.backend.union-generics", "Runtime union has no exact renderable generic contract."));
     return undefined;
   }
+  const template = fact.kind === "runtime" ? context.input.program.typeDefinitions
+    .sourceUnionPayloadTemplate(rustOptionElementCarrier(carrier) ?? carrier) : undefined;
+  const payloadPlan = template === undefined ? undefined : planRustSourceUnionPayloadTemplate(template, unionGenerics,
+    selected => rustTypeFromCarrierInContext(selected, context));
+  if (fact.kind === "runtime" && (payloadPlan === undefined || payloadPlan.variants.length !== fact.variants.length ||
+    payloadPlan.variants.some((variant, index) => variant.name !== fact.variants[index]!.name))) {
+    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node), "rust.backend.union-variant-carrier",
+      "Runtime union variants require one exact renderable physical payload template."));
+    return undefined;
+  }
   return [{
     kind: "enum",
-    generics: unionGenerics,
+    generics: payloadPlan?.generics ?? unionGenerics,
     name: aliasName,
     visibility,
     ...(deadCode === undefined ? {} : { deadCode }),
@@ -102,7 +102,7 @@ export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): 
         name: variant.name,
         ...(variantDeadCode === undefined ? {} : { deadCode: variantDeadCode }),
         ...(fact.kind === "runtime"
-          ? { fields: [runtimeVariantTypes[index]!] }
+          ? { fields: payloadPlan!.variants[index]!.fields }
           : {}),
       };
     }),

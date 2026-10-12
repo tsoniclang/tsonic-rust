@@ -51,8 +51,9 @@ export function resolveRustSelectedUnion(
   const carrier = options.sourceTypes.generatedUnionCarrierForVariants(variants.map(variant => variant.carrier)) ?? rustSourceUnionTargetType(
     sorted[0]!.ownerFileName,
     `Union${variants.length}`,
-    variants.map(variant => ({ kind: "type", type: variant.carrier })),
+    [],
     "generated",
+    { kind: "physical", types: variants.map(variant => variant.carrier) },
   );
   const semantics = context.currentSemantics;
   const selectedProperties = semantics.types.propertyInfos(sourceType).map(property => ({

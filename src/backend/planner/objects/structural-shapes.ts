@@ -3,6 +3,7 @@ import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustPlanningContext } from "../context.js";
 import {
   createRustSourceFile,
+  emptyRustGenerics,
 } from "../../target-ast/nodes.js";
 import type {
   RustItem,
@@ -42,6 +43,7 @@ import { rustStructuralShapeGenerics, rustStructuralShapeContext } from "./struc
 import { planRustNumberArrayUnionImplementation } from "./number-array-unions.js";
 import { planRustConstructorShape } from "./constructor-shapes.js";
 import type { RustSourcePackageErrorPlan } from "../program/source-package-errors.js";
+import { planRustSourceUnionPayloadTemplate } from "../types/source-union-payloads.js";
 
 export function planRustStructuralShapeModule(
   input: RustPlanningContext,
@@ -81,19 +83,19 @@ export function planRustStructuralShapeModule(
   for (const union of unions) {
     const visibility: RustVisibility = publicShapeNames.has(union.targetName) ? "public" : "crate";
     const deadCode = rustStructuralShapeDeadCodeDisposition(context, union.sourceCarriers, visibility === "public");
+    const payloadPlan = planRustSourceUnionPayloadTemplate(union.payloadTemplate, emptyRustGenerics,
+      carrier => rustTypeFromCarrierInContext(carrier, context));
+    if (payloadPlan === undefined) return undefined;
     structs.push({
       kind: "enum",
       name: union.targetName,
       visibility,
       attrs: rustDeriveAttributes(["Clone"]),
       ...(deadCode === undefined ? {} : { deadCode }),
-      generics: {
-        parameters: union.variantNames.map((_, index) => ({ kind: "type", name: `Payload${index}`, bounds: [] })),
-        wherePredicates: [],
-      },
-      variants: union.variantNames.map((name, index) => {
-        const deadCode = rustGeneratedUnionVariantDeadCodeDisposition(context, union.sourceCarriers, name, visibility === "public");
-        return { name, fields: [{ kind: "named" as const, path: `Payload${index}` }],
+      generics: payloadPlan.generics,
+      variants: payloadPlan.variants.map(variant => {
+        const deadCode = rustGeneratedUnionVariantDeadCodeDisposition(context, union.sourceCarriers, variant.name, visibility === "public");
+        return { ...variant,
           ...(deadCode === undefined ? {} : { deadCode }) };
       }),
     });

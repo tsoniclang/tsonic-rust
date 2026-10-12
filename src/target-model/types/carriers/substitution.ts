@@ -408,6 +408,9 @@ function substituteCarrierParts(
           sourceUnion.typeName,
           substituteGenericArguments(sourceUnion.genericArguments, substitutions, lifetimeSubstitutions, constSubstitutions, normalize),
           sourceUnion.origin,
+          sourceUnion.payloads.kind === "source" ? sourceUnion.payloads : { kind: "physical",
+            types: sourceUnion.payloads.types.map(payload => substituteRustTargetGenerics(payload,
+              substitutions, lifetimeSubstitutions, constSubstitutions, normalize)) },
         );
       }
       const namedType = rustNamedTypeCarrierValue(type);

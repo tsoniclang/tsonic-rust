@@ -2,11 +2,12 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTsValueTargetType } from "../../target-model/types/carriers/native.js";
 import { isRustClosedValueCarrier } from "../../target-model/types/carriers/closed-value-kind.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustSourceTypeCarrierValue, rustSourceUnionCarrierValue } from "../../target-model/types/carriers/source-types.js";
+import { rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustSourceUnionTargetType } from "../../target-model/types/carriers/source-types.js";
 import { closedMetadataKey, hasExactObjectKeys, isClosedMetadata, isDenseDataArray, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
-import { instantiateRustSourceUnionVariants, rustSourceUnionDefinitionIdentity, rustGeneratedSourceUnionTemplate,
-  type RustTypeDefinitions, type RustSourceUnionDefinition, type RustProgramErrorOrigin } from "../../target-model/types/source-union-definitions.js";
+import { instantiateRustSourceUnionVariants, rustSourceUnionDefinitionIdentity, createRustSourceUnionPayloadTemplate,
+  type RustTypeDefinitions, type RustSourceUnionDefinition, type RustSourceUnionPayloadTemplate,
+  type RustProgramErrorOrigin } from "../../target-model/types/source-union-definitions.js";
 
 export interface RustTypeDefinitionRegistry extends RustTypeDefinitions {
   registerSourceUnion(definition: RustSourceUnionDefinition, template: boolean): boolean;
@@ -24,19 +25,46 @@ export function createRustTypeDefinitionRegistry(
   const closedValueCarrier = snapshotClosedMetadata(selectedClosedValueCarrier);
   const definitions = new Map<string, RustSourceUnionDefinition>();
   const templates = new Map<string, RustSourceUnionDefinition>();
+  const payloadTemplates = new Map<string, RustSourceUnionPayloadTemplate>();
   const errorOrigins = new Map<string, RustProgramErrorOrigin>();
   let sealed = false;
-  const sourceUnionVariants: RustTypeDefinitions["sourceUnionVariants"] = carrier => {
+  const sourceVariants: RustTypeDefinitions["sourceUnionVariants"] = carrier => {
     if (!isRustTargetTypeRef(carrier)) return undefined;
-    const exact = definitions.get(closedMetadataKey(carrier));
+    const value = rustSourceUnionCarrierValue(carrier);
+    if (value === undefined) return undefined;
+    const logical = value.origin === "authored"
+      ? rustSourceUnionTargetType(value.fileName, value.typeName, value.genericArguments) : carrier;
+    const exact = definitions.get(closedMetadataKey(logical));
     if (exact !== undefined) return exact.variants;
     const identity = rustSourceUnionDefinitionIdentity(carrier);
     const template = identity === undefined ? undefined : templates.get(identity);
     return template === undefined ? undefined : instantiateRustSourceUnionVariants(template, carrier);
   };
+  const sourceUnionPayloadTemplate: RustTypeDefinitions["sourceUnionPayloadTemplate"] = carrier => {
+    const identity = rustSourceUnionDefinitionIdentity(carrier);
+    if (identity === undefined || sourceVariants(carrier) === undefined) return undefined;
+    const existing = payloadTemplates.get(identity);
+    if (existing !== undefined) return existing;
+    const definition = templates.get(identity);
+    const template = definition === undefined ? undefined : createRustSourceUnionPayloadTemplate(definition, sourceVariants);
+    if (template !== undefined) payloadTemplates.set(identity, template);
+    return template;
+  };
+  const sourceUnionVariants: RustTypeDefinitions["sourceUnionVariants"] = carrier => {
+    const variants = sourceVariants(carrier);
+    const value = rustSourceUnionCarrierValue(carrier);
+    if (variants === undefined || value === undefined || value.payloads.kind === "source" || value.origin === "generated") return variants;
+    const template = sourceUnionPayloadTemplate(carrier);
+    const payloads = value.payloads.types;
+    if (template === undefined || payloads.length !== variants.length) return undefined;
+    const indexes = new Set(template.payloadParameters.map(parameter => parameter.variantIndex));
+    if (variants.some((variant, index) => !indexes.has(index) && !rustTargetTypeRefEquals(variant.carrier, payloads[index]))) return undefined;
+    return snapshotClosedMetadata(variants.map((variant, index) => ({ name: variant.name, carrier: payloads[index]! })));
+  };
   return Object.freeze({
     closedValueCarrier,
     sourceUnionVariants,
+    sourceUnionPayloadTemplate,
     programErrorOrigin: (carrier: TargetTypeRef) => isRustTargetTypeRef(carrier) ? errorOrigins.get(closedMetadataKey(carrier)) : undefined,
     registerProgramErrorOrigin(carrier: TargetTypeRef, origin: RustProgramErrorOrigin) {
       if (sealed) throw new Error("Rust type definitions are sealed.");
@@ -58,17 +86,17 @@ export function createRustTypeDefinitionRegistry(
         !hasExactObjectKeys(definition, ["carrier", "variants"]) || !isRustTargetTypeRef(definition.carrier)) return false;
       const value = rustSourceUnionCarrierValue(definition.carrier);
       const identity = rustSourceUnionDefinitionIdentity(definition.carrier);
-      if (identity === undefined || value === undefined || !isDenseDataArray(definition.variants) ||
+      if (identity === undefined || value === undefined || value.origin === "authored" && value.payloads.kind !== "source" ||
+        !isDenseDataArray(definition.variants) ||
         definition.variants.length < 1 ||
         definition.variants.some(variant => variant === null || typeof variant !== "object" ||
           !hasExactObjectKeys(variant, ["name", "carrier"]) || typeof variant.name !== "string" || variant.name.length === 0 ||
           !isRustTargetTypeRef(variant.carrier)) ||
         new Set(definition.variants.map(variant => variant.name)).size !== definition.variants.length ||
-        value.origin === "generated" && (definition.variants.length !== value.genericArguments.length ||
+        value.origin === "generated" && (value.payloads.kind !== "physical" || definition.variants.length !== value.payloads.types.length ||
           definition.variants.some((variant, index) => {
-            const argument = value.genericArguments[index];
-            return variant.name !== `Variant${index}` || argument?.kind !== "type" ||
-              !rustTargetTypeRefEquals(variant.carrier, argument.type);
+            return variant.name !== `Variant${index}` || value.payloads.kind !== "physical" ||
+              !rustTargetTypeRefEquals(variant.carrier, value.payloads.types[index]);
           }))) return false;
       const key = closedMetadataKey(definition.carrier);
       const existing = definitions.get(key);
@@ -79,10 +107,8 @@ export function createRustTypeDefinitionRegistry(
       if (template && value.origin !== "generated" && templates.has(identity) && templates.get(identity) !== existing) return false;
       const normalized = existing ?? snapshotClosedMetadata(definition);
       definitions.set(key, normalized);
-      const generatedTemplate = rustGeneratedSourceUnionTemplate(normalized);
-      if (generatedTemplate !== undefined) {
-        if (!templates.has(identity)) templates.set(identity, generatedTemplate);
-      } else if (template) templates.set(identity, normalized);
+      if (value.origin === "generated" && !templates.has(identity) || template) templates.set(identity, normalized);
+      payloadTemplates.clear();
       return true;
     },
     seal() {
@@ -94,7 +120,7 @@ export function createRustTypeDefinitionRegistry(
       };
       for (const definition of definitions.values()) for (const variant of definition.variants) visit(variant.carrier);
       sealed = true;
-      return Object.freeze({closedValueCarrier, sourceUnionVariants,
+      return Object.freeze({closedValueCarrier, sourceUnionVariants, sourceUnionPayloadTemplate,
         programErrorOrigin: (carrier: TargetTypeRef) => isRustTargetTypeRef(carrier) ? errorOrigins.get(closedMetadataKey(carrier)) : undefined});
     },
   });

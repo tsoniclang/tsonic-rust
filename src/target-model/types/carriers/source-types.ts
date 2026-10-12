@@ -128,7 +128,12 @@ export interface RustSourceUnionCarrierValue {
   readonly fileName: string;
   readonly typeName: string;
   readonly genericArguments: readonly RustTargetGenericArgument[];
+  readonly payloads: RustSourceUnionPayloadSelection;
 }
+
+export type RustSourceUnionPayloadSelection =
+  | { readonly kind: "source" }
+  | { readonly kind: "physical"; readonly types: readonly TargetTypeRef[] };
 
 export function rustSourceTypeCarrier(
   fileName: string,
@@ -329,12 +334,13 @@ export function rustSourceUnionTargetType(
   typeName: string,
   genericArguments: readonly RustTargetGenericArgument[] = noRustSourceTypeGenericArguments,
   origin: RustSourceUnionCarrierValue["origin"] = "authored",
+  payloads: RustSourceUnionPayloadSelection = { kind: "source" },
 ): TargetTypeRef {
   return {
     kind: "target-specific",
     target: "rust",
     name: rustSourceUnionCarrierName,
-    value: { fileName, typeName, genericArguments, origin },
+    value: { fileName, typeName, genericArguments, origin, payloads },
   };
 }
 
@@ -347,7 +353,7 @@ export function rustSourceUnionCarrierValue(
   }
   const value = carrier.value;
   if (typeof value !== "object" || value === null || Array.isArray(value) ||
-    !hasExactObjectKeys(value, ["fileName", "typeName", "genericArguments", "origin"])) {
+    !hasExactObjectKeys(value, ["fileName", "typeName", "genericArguments", "origin", "payloads"])) {
     return undefined;
   }
   const candidate = value as Partial<RustSourceUnionCarrierValue>;
@@ -355,16 +361,22 @@ export function rustSourceUnionCarrierValue(
     typeof candidate.fileName !== "string" || candidate.fileName.length === 0 ||
     typeof candidate.typeName !== "string" || candidate.typeName.length === 0 ||
     !isDenseDataArray(candidate.genericArguments) ||
-    !candidate.genericArguments.every(isRustSourceTypeGenericArgument)) {
+    !candidate.genericArguments.every(isRustSourceTypeGenericArgument) ||
+    candidate.payloads === null || typeof candidate.payloads !== "object" ||
+    !(candidate.payloads.kind === "source" && hasExactObjectKeys(candidate.payloads, ["kind"]) ||
+      candidate.payloads.kind === "physical" && hasExactObjectKeys(candidate.payloads, ["kind", "types"]) &&
+      isDenseDataArray(candidate.payloads.types) && candidate.payloads.types.length > 0 &&
+      candidate.payloads.types.every(isRustTargetTypeRef))) {
     return undefined;
   }
   if (candidate.origin === "generated" &&
-    (candidate.genericArguments.length < 2 || candidate.typeName !== `Union${candidate.genericArguments.length}` ||
-      candidate.genericArguments.some(argument => argument.kind !== "type"))) return undefined;
+    (candidate.genericArguments.length !== 0 || candidate.payloads.kind !== "physical" ||
+      candidate.payloads.types.length < 2 || candidate.typeName !== `Union${candidate.payloads.types.length}`)) return undefined;
   return {
     origin: candidate.origin,
     fileName: candidate.fileName,
     typeName: candidate.typeName,
     genericArguments: candidate.genericArguments,
+    payloads: candidate.payloads,
   };
 }

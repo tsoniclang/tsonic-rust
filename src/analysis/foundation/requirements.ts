@@ -114,6 +114,7 @@ export function rustFoundationForCarrier(carrier: RustTargetTypeRef): RustFounda
         const sourceUnion = rustSourceUnionCarrierValue(current);
         if (sourceUnion !== undefined) {
           sourceUnion.genericArguments.forEach(visitArgument);
+          if (sourceUnion.payloads.kind === "physical") sourceUnion.payloads.types.forEach(visit);
           return;
         }
         const structural = rustStructuralObjectCarrierValue(current);

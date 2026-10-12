@@ -56,6 +56,8 @@ import {
   rustProgramErrorTargetId,
 } from "../../../target-model/types/index.js";
 
+import { rustSourceUnionPayloadArguments, type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
+
 export const rustStrRefType: RustType = {
   kind: "reference",
   referent: { kind: "str" },
@@ -63,6 +65,7 @@ export const rustStrRefType: RustType = {
 };
 
 interface RustSourceTypeRendering {
+  readonly typeDefinitions: RustTypeDefinitions;
   readonly typeParameterNames?: ReadonlyMap<string, string>;
   readonly pathFor: (value: { readonly fileName: string; readonly typeName: string }) => string | undefined;
   readonly additionalArgumentsFor: (carrier: TargetTypeRef) => readonly RustGenericArgument[];
@@ -311,8 +314,9 @@ export function rustTypeFromCarrier(
     if (union !== undefined) {
       if (union.origin === "generated") return resolveStructuralShape?.(carrier);
       const path = resolveSourceTypePath.pathFor(union);
-      const genericArguments = rustGenericArgumentsFromCarrier(
-        union.genericArguments, resolveSourceTypePath, resolveStructuralShape,
+      const arguments_ = rustSourceUnionPayloadArguments(carrier, resolveSourceTypePath.typeDefinitions);
+      const genericArguments = arguments_ === undefined ? undefined : rustGenericArgumentsFromCarrier(
+        arguments_, resolveSourceTypePath, resolveStructuralShape,
       );
       return path === undefined || genericArguments === undefined ? undefined : {
         kind: "named", path,
@@ -583,8 +587,9 @@ export function rustTypeFromCarrierInContext(
     if (definition === undefined) {
       return undefined;
     }
-    const arguments_ = union?.origin === "generated" ? union.genericArguments :
+    const arguments_ = union?.origin === "generated" ? rustSourceUnionPayloadArguments(shapeCarrier, context.input.program.typeDefinitions) :
       context.input.program.structuralShapes.definitionForCarrier(shapeCarrier)!.genericArguments;
+    if (arguments_ === undefined) return undefined;
     const genericArguments = arguments_.map(argument =>
       rustTargetGenericArgumentToAstInContext(argument, context));
     if (genericArguments.some((argument) => argument === undefined)) {
@@ -616,7 +621,7 @@ export function rustTypeFromCarrierInContext(
   };
   const rendered = rustTypeFromCarrier(
     selectedCarrier,
-    { typeParameterNames: context.typeParameterNames,
+    { typeParameterNames: context.typeParameterNames, typeDefinitions: context.input.program.typeDefinitions,
       pathFor: resolveSourceTypePath, additionalArgumentsFor: type => rustOptionalStorageTypeArguments(type, context),
       programErrorType: () => {
         const boundary = context.sourcePackageErrors === undefined ? undefined : rustCurrentErrorBoundary(context);

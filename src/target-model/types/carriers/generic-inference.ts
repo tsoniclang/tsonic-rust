@@ -429,6 +429,11 @@ export function inferRustTargetGenericBindings(
             leftUnion.origin === rightUnion.origin &&
             leftUnion.fileName === rightUnion.fileName &&
             leftUnion.typeName === rightUnion.typeName &&
+            leftUnion.payloads.kind === rightUnion.payloads.kind &&
+            (leftUnion.payloads.kind === "source" || rightUnion.payloads.kind === "physical" &&
+              leftUnion.payloads.types.length === rightUnion.payloads.types.length &&
+              leftUnion.payloads.types.every((payload, index) => rightUnion.payloads.kind === "physical" &&
+                match(payload, rightUnion.payloads.types[index]!, lifetimeContext))) &&
             matchGenericArguments(
               leftUnion.genericArguments, rightUnion.genericArguments,
               (pattern, actual) => match(pattern, actual, lifetimeContext),

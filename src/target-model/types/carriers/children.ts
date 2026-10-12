@@ -39,7 +39,8 @@ export function rustTargetTypeChildren(type: TargetTypeRef): readonly TargetType
       if (shape !== undefined) return [...shape.bases, ...shape.fields.map(field => field.type),
         ...(shape.construction === undefined ? [] : [shape.construction])];
       const union = rustSourceUnionCarrierValue(type);
-      if (union !== undefined) return arguments_(union.genericArguments);
+      if (union !== undefined) return [...arguments_(union.genericArguments),
+        ...(union.payloads.kind === "physical" ? union.payloads.types : [])];
       const named = rustNamedTypeCarrierValue(type);
       if (named !== undefined) return [...arguments_(named.genericArguments), ...arguments_(named.genericDefaults), ...named.upcasts.map(upcast => upcast.target)];
       const fixed = rustFixedArrayCarrierValue(type);

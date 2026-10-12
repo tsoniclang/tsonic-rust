@@ -244,6 +244,7 @@ export function rustTargetGenericReferences(
         const union = rustSourceUnionCarrierValue(value);
         if (union !== undefined) {
           visitArguments(union.genericArguments, bound);
+          if (union.payloads.kind === "physical") union.payloads.types.forEach(type => visitType(type, bound));
           return;
         }
         const named = rustNamedTypeCarrierValue(value);

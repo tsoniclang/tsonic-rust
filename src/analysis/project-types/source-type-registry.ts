@@ -76,7 +76,7 @@ export function createRustSourceTypeRegistry(
   const sourceUnionKey = (carrier: TargetTypeRef): string | undefined => {
     const value = rustSourceUnionCarrierValue(carrier);
     return value === undefined ? undefined :
-      `${value.origin}::${value.fileName}::${value.typeName}::${closedMetadataKey(value.genericArguments)}`;
+      closedMetadataKey(carrier);
   };
 
   const keyForCarrier = (carrier: TargetTypeRef): string | undefined => {
@@ -134,6 +134,7 @@ export function createRustSourceTypeRegistry(
     typeFamilies,
     closedValueCarrier: typeDefinitions.closedValueCarrier,
     sourceUnionVariants: typeDefinitions.sourceUnionVariants,
+    sourceUnionPayloadTemplate: typeDefinitions.sourceUnionPayloadTemplate,
     programErrorOrigin: typeDefinitions.programErrorOrigin,
     reserveSourceUnion(declaration, carrier) {
       const value = rustSourceUnionCarrierValue(rustOptionElementCarrier(carrier) ?? carrier);

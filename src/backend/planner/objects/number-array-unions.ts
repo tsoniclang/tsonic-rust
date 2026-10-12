@@ -7,12 +7,12 @@ export function planRustNumberArrayUnionImplementation(definition: RustGenerated
   const number: RustType = { kind: "primitive", name: "f64" };
   return {
     kind: "impl",
-    generics: { parameters: definition.variantNames.map((_, index) => ({
-      kind: "type", name: `Payload${index}`, bounds: [{ kind: "trait", path: trait }],
+    generics: { parameters: definition.payloadTemplate.payloadParameters.map(({ parameter }) => ({
+      kind: "type", name: parameter.name, bounds: [{ kind: "trait", path: trait }],
     })), wherePredicates: [] },
     trait: { kind: "named", path: trait },
     target: { kind: "named", path: definition.targetName,
-      genericArguments: definition.variantNames.map((_, index) => ({ kind: "type", type: { kind: "named", path: `Payload${index}` } })),
+      genericArguments: definition.payloadTemplate.payloadParameters.map(({ parameter }) => ({ kind: "type", type: { kind: "named", path: parameter.name } })),
     },
     members: ["number_array_length", "number_array_get", "number_array_copy"].map(name => {
       const indexed = name === "number_array_get";
@@ -26,8 +26,8 @@ export function planRustNumberArrayUnionImplementation(definition: RustGenerated
             : { kind: "primitive", name: "usize" },
         body: { statements: [{ kind: "tail", expr: {
           kind: "match", expression: { kind: "path", path: "self" },
-          arms: definition.variantNames.map(variant => ({
-            pattern: { kind: "tuple-variant", path: `Self::${variant}`, elements: [{ kind: "binding", name: "value" }] },
+          arms: definition.payloadTemplate.variants.map(variant => ({
+            pattern: { kind: "tuple-variant", path: `Self::${variant.name}`, elements: [{ kind: "binding", name: "value" }] },
             expression: { kind: "call", path: `${trait}::${name}`, args: arguments_ },
           })),
         } }] },
