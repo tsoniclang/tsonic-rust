@@ -119,6 +119,7 @@ export interface RustPlanContext {
     readonly protocol: RustGeneratorFact;
   };
   readonly expressionOverrides?: ReadonlyMap<Node, RustEffectiveExpressionOverride>;
+  readonly valueDestinations?: ReadonlyMap<Node, TargetTypeRef>;
   readonly construction?: {
     prepare(node: Node, context: RustPlanContext): RustConstructionPreparation | undefined;
     returnFor(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined;
