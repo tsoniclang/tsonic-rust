@@ -131,6 +131,9 @@ export function createRustPlannerLiveness(program: RustTargetProgram): RustPlann
     }
     for (const use of summary.uses) {
       if (use.kind === "source-linkage") continue;
+      const genericImplementation = program.callableValues.generic.implementationFor(selected);
+      if (use.kind === "first-class" && genericImplementation?.creation === "declaration" &&
+        !program.callableValues.genericDispatch.usesDeclarationBody(selected)) continue;
       const owner: DeclarationOwner = runtimeInitializationNodes.has(use.reference)
         ? { kind: "root" }
         : enclosingDeclarationOwner(

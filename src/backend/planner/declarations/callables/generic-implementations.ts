@@ -149,7 +149,9 @@ function planDefinition(definition: RustGenericCallablePhysicalDefinition, conte
   });
   if (variants.some(variant => variant === undefined)) return undefined;
   const target: RustType = { kind: "named", path: definition.targetName, genericArguments: arguments_ as NonNullable<typeof arguments_[number]>[] };
-  const storage = genericCallableStorageItems(definition, environment, target, variants as NonNullable<typeof variants[number]>[]);
+  const storage = genericCallableStorageItems(definition, environment, target, variants as NonNullable<typeof variants[number]>[],
+    context.input.program.callableValues.genericIdentities.forDefinition(definition));
+  if (storage === undefined) return undefined;
   if (!context.input.program.callableValues.genericDispatch.requiredFor(definition)) return storage;
   const signatureCarrier = rustGenericCallableCarrier({ origin: definition.origin, signature: definition.signature,
     environment: definition.signature.environmentParameters,

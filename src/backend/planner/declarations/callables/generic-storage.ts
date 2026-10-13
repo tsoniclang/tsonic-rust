@@ -1,13 +1,16 @@
 import type { RustGenericCallablePhysicalDefinition } from "../../../../analysis/callables/generic-physical.js";
 import { emptyRustGenerics, type RustExpr, type RustGenerics, type RustItem, type RustType } from "../../../target-ast/nodes.js";
 import { rustSelfParameter } from "./self-parameter.js";
+import { rustCallableIdentityPredicate } from "../../../target-ast/callable-identities.js";
+import type { RustGenericCallableIdentitySelection } from "../../../../analysis/callables/generic-identities.js";
 
 export function genericCallableStorageItems(
   definition: RustGenericCallablePhysicalDefinition,
   generics: RustGenerics,
   target: RustType,
   variants: Extract<RustItem, { readonly kind: "enum" }>["variants"],
-): readonly RustItem[] {
+  identity: RustGenericCallableIdentitySelection | undefined,
+): readonly RustItem[] | undefined {
   const receiver: RustExpr = { kind: "path", path: "self" };
   const clone: RustExpr = definition.copy
     ? { kind: "dereference", pointer: receiver }
@@ -29,21 +32,20 @@ export function genericCallableStorageItems(
     items.push({ kind: "impl", trait: { kind: "named", path: "Copy" }, target, generics, members: [] });
   }
   if (!definition.identityObserved) return items;
+  if (identity?.left !== definition || identity.right !== definition) return undefined;
   const equality: RustExpr = { kind: "match", expression: { kind: "tuple-literal", elements: [
     receiver, { kind: "path", path: "other" },
   ] }, arms: [
-    ...definition.members.map(member => ({
-      pattern: { kind: "tuple" as const, elements: ["left", "right"].map(name => ({
+    ...identity.pairs.map(pair => ({
+      pattern: { kind: "tuple" as const, elements: ([["left", pair.left], ["right", pair.right]] as const).map(([name, member]) => ({
         kind: "tuple-variant" as const, path: `Self::${member.variantName}`,
-        elements: [member.implementation.creation === "declaration"
+        elements: [pair.kind === "declaration"
           ? { kind: "wildcard" as const } : { kind: "binding" as const, name }],
       })) },
-      expression: member.implementation.creation === "declaration"
-        ? { kind: "bool-literal" as const, value: true }
-        : { kind: "call" as const, path: "alloc::rc::Rc::ptr_eq",
-          args: ["left", "right"].map(path => ({ kind: "path" as const, path })) },
+      expression: rustCallableIdentityPredicate(pair.kind,
+        { kind: "path", path: "left" }, { kind: "path", path: "right" }),
     })),
-    ...(definition.members.length > 1 ? [{ pattern: { kind: "wildcard" as const },
+    ...(!identity.exhaustive ? [{ pattern: { kind: "wildcard" as const },
       expression: { kind: "bool-literal" as const, value: false } }] : []),
   ] };
   items.push({ kind: "impl", trait: { kind: "named", path: "PartialEq" }, target, generics, members: [{ kind: "function",

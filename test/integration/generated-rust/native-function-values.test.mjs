@@ -54,7 +54,15 @@ test("named native future values add no allocation at first construction or over
     writeFileSync(join(directory, "tests/cost.rs"), `${nativeOwnershipCostSupport}
 #[test]
 fn first_construction_and_every_invocation_stay_native() {
-    let (result, cost) = measure(|| tsonic_rust_runtime::block_on(native_function_values::index::main()));
+    use std::future::Future;
+    let (result, cost) = measure(|| {
+        let mut future = std::pin::pin!(native_function_values::index::main());
+        let mut context = std::task::Context::from_waker(std::task::Waker::noop());
+        match future.as_mut().poll(&mut context) {
+            std::task::Poll::Ready(result) => result,
+            std::task::Poll::Pending => panic!("immediately ready native calls suspended"),
+        }
+    });
     assert!(result.is_ok());
     assert_eq!(cost, Cost::default());
 }
